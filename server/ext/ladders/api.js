@@ -3,7 +3,7 @@
 //
 //   GET /ladders                    the list with counts, open follow-ups,
 //                                   engagement levels, and the builder's
-//                                   pickers (petitions, events, tags)
+//                                   pickers (tags)
 //   GET /ladders/followups          open follow-ups (+ the last done)
 //   GET /ladders/followups/count    { open } for Today
 //   GET /ladders/:id                one ladder + who's on it, and where
@@ -28,13 +28,6 @@ api.use('/ladders', async (c, next) => {
 
 // What the builder can point a trigger at.
 const options = async (db, ws) => ({
-  petitions: (await db.query(
-    'select slug, title, active from petitions where workspace_id = $1 order by created_at desc limit 100', [ws],
-  )).rows,
-  events: (await db.query(
-    `select id, title, starts_at from campaign_events where workspace_id = $1 and deleted_at is null
-     order by starts_at desc limit 100`, [ws],
-  )).rows,
   tags: (await db.query(
     `select t, count(*)::int as n from persons p, jsonb_array_elements_text(
        case when jsonb_typeof(p.tags) = 'array' then p.tags else '[]'::jsonb end) as t
@@ -43,13 +36,8 @@ const options = async (db, ws) => ({
   )).rows.map((r) => r.t),
 });
 
-// "Fix 72 Ave", "Town hall", "host": the thing a trigger names, in words.
-const triggerWhat = (l, opts) => {
-  if (!l.trigger_ref) return null;
-  if (l.trigger_kind === 'petition') return opts.petitions.find((p) => p.slug === l.trigger_ref)?.title || l.trigger_ref;
-  if (l.trigger_kind === 'rsvp') return opts.events.find((e) => e.id === l.trigger_ref)?.title || 'an event';
-  return l.trigger_ref;
-};
+// "host": the tag a trigger names.
+const triggerWhat = (l) => l.trigger_ref || null;
 
 const ladderOut = (l, opts) => ({
   id: l.id,

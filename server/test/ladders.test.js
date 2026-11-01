@@ -1,4 +1,5 @@
-// Ladders of engagement: a trigger puts someone on a ladder once, each step
+// Ladders of engagement: a trigger (a tag got, the newsletter joined, a first
+// gift, a 1 or 2) puts someone on a ladder once, each step
 // runs as a job on the hash chain (wait → email → tag → follow-up), email
 // steps go only to people who said yes to email (skipping who unsubscribed,
 // never asked, has no email, is do-not-contact), wait while email isn't
@@ -102,15 +103,13 @@ before(async () => {
 });
 after(() => { delete process.env.RESEND_API_KEY; });
 
-let thanks; // the petition ladder from the first test
+let thanks; // the "signer" tag ladder from the first test
 let anaRun;
 
-test('petition signed → on the ladder once → wait → email → tag → follow-up, all on the chain', async () => {
-  const pet = await mgr.action('petition.create', { slug: `fix-72-${tag}`, title: 'Fix 72 Ave' });
-  assert.equal(pet.status, 200);
+test('tagged signer → on the ladder once → wait → email → tag → follow-up, all on the chain', async () => {
   thanks = await create({
-    name: 'Thank petition signers',
-    trigger: { kind: 'petition', ref: `fix-72-${tag}` },
+    name: 'Thank new signers',
+    trigger: { kind: 'tag', ref: 'signer' },
     steps: [
       { kind: 'wait', n: 1, unit: 'days' },
       { kind: 'email', subject: 'Thanks, {{first_name}}', body: 'Thank you for signing. — {{ campaign }}' },
@@ -120,28 +119,28 @@ test('petition signed → on the ladder once → wait → email → tag → foll
   });
   assert.equal(thanks.active, false, 'a new ladder starts off');
 
-  // Off: a signature puts no one on it.
-  const early = await pub('POST', `/p/${slug}/fix-72-${tag}`, new URLSearchParams({ name: 'Early Bird', email: mail('early') }));
-  assert.equal(early.status, 200);
+  // Off: a tag puts no one on it.
+  const early = await mgr.createPerson('Early Bird', { email: mail('early'), tags: ['signer'] });
+  assert.ok(early.id);
   assert.equal((await ladder(thanks.id)).people.length, 0, 'nobody is put on a ladder that is off');
 
   await turnOn(thanks.id);
-  const sign = await pub('POST', `/p/${slug}/fix-72-${tag}`, new URLSearchParams({ name: 'Ana Souza', email: mail('ana'), subscribe: '1' }));
-  assert.equal(sign.status, 200);
-  const ana = await personByEmail(mail('ana'));
+  // Ana is on the newsletter list (she said yes to email), then gets the tag.
+  const ana = await mgr.createPerson('Ana Souza', { email: mail('ana') });
+  assert.equal((await mgr.action('subscription.add', { email: mail('ana'), name: 'Ana Souza' })).status, 200);
+  assert.equal((await mgr.action('person.update', { id: ana.id, tags: ['signer'] })).status, 200);
   let run = await runOf(thanks.id, ana.id);
   assert.ok(run, 'the new signer is on the ladder');
   assert.equal(run.status, 'active');
   assert.equal(run.step, 0);
   anaRun = run.id;
 
-  // The enrolment rode the signup's own transaction, as the system.
+  // The enrolment rode the tag's own write.
   const evs = (await mgr.get('/api/events?since=0&limit=1000')).json.events;
   const enrolled = evs.filter((e) => e.entity_type === 'ladder_run' && e.op === 'create' && e.entity_id === run.id);
   assert.equal(enrolled.length, 1);
-  assert.equal(enrolled[0].action, 'public.signup');
-  assert.equal(enrolled[0].actor_id, null);
-  assert.deepEqual([enrolled[0].payload.trigger, enrolled[0].payload.ref], ['petition', `fix-72-${tag}`]);
+  assert.equal(enrolled[0].action, 'person.update');
+  assert.deepEqual([enrolled[0].payload.trigger, enrolled[0].payload.ref], ['tag', 'signer']);
 
   // Step 1: wait a day.
   await runJobs();
@@ -179,13 +178,13 @@ test('petition signed → on the ladder once → wait → email → tag → foll
   assert.equal(fu.open.length, 1);
   assert.equal(fu.open[0].text, 'Call Ana to say thanks');
   assert.equal(fu.open[0].person.id, ana.id);
-  assert.equal(fu.open[0].ladder.name, 'Thank petition signers');
+  assert.equal(fu.open[0].ladder.name, 'Thank new signers');
   assert.equal((await mgr.get('/api/ladders/followups/count')).json.open, 1);
 
   const list = (await mgr.get('/api/ladders')).json;
   const row = list.ladders.find((l) => l.id === thanks.id);
   assert.deepEqual([row.inProgress, row.finished, row.active], [0, 1, true]);
-  assert.equal(row.trigger.what, 'Fix 72 Ave');
+  assert.equal(row.trigger.what, 'signer');
   assert.equal(list.followups, 1);
 
   // Every step is on the chain as the system.
@@ -199,12 +198,17 @@ test('petition signed → on the ladder once → wait → email → tag → foll
 
 test('once per ladder — again only when the ladder allows it', async () => {
   const ana = await personByEmail(mail('ana'));
-  await pub('POST', `/p/${slug}/fix-72-${tag}`, new URLSearchParams({ name: 'Ana Souza', email: mail('ana') }));
+  const tagAgain = async () => {
+    const t = (await personByEmail(mail('ana'))).tags.filter((x) => x !== 'signer');
+    await mgr.action('person.update', { id: ana.id, tags: t });
+    await mgr.action('person.update', { id: ana.id, tags: [...t, 'signer'] });
+  };
+  await tagAgain();
   let runs = (await ladder(thanks.id)).people.filter((p) => p.person.id === ana.id);
-  assert.equal(runs.length, 1, 'signing again does not put her back on');
+  assert.equal(runs.length, 1, 'getting the tag again does not put her back on');
 
   assert.equal((await mgr.action('ladder.update', { id: thanks.id, reentry: true })).status, 200);
-  await pub('POST', `/p/${slug}/fix-72-${tag}`, new URLSearchParams({ name: 'Ana Souza', email: mail('ana') }));
+  await tagAgain();
   runs = (await ladder(thanks.id)).people.filter((p) => p.person.id === ana.id);
   assert.equal(runs.length, 2, 'with "again" on and her last run over, she goes through again');
   // Take her off this second run (desk).
@@ -318,10 +322,10 @@ test('a ladder unsubscribe from someone never on the list: flagged do-not-email,
   // The desk can't put either of them on the list.
   const addDana = await mgr.action('subscription.add', { email: mail('dana') });
   assert.equal(addDana.status, 409);
-  assert.equal(addDana.json.error, 'Unsubscribed — only they can rejoin (signup page)');
+  assert.equal(addDana.json.error, 'Unsubscribed — only they can rejoin');
   const addAna = await mgr.action('subscription.add', { email: mail('ana') });
   assert.equal(addAna.status, 409);
-  assert.match(addAna.json.error, /^Unsubscribed on [A-Z][a-z]{2} \d{1,2} — only they can rejoin \(signup page\)$/);
+  assert.match(addAna.json.error, /^Unsubscribed on [A-Z][a-z]{2} \d{1,2} — only they can rejoin$/);
   assert.equal((await mgr.get('/api/subscriptions')).json.subscriptions.find((x) => x.email === mail('ana')).status, 'unsubscribed');
 
   // An email step skips her as do-not-email.
@@ -334,11 +338,6 @@ test('a ladder unsubscribe from someone never on the list: flagged do-not-email,
   });
   assert.deepEqual((await runOf(nudge.id, dana.id)).skipped.map((x) => x.reason), ['do_not_email']);
   await mgr.action('ladder.setActive', { id: nudge.id, active: false });
-
-  // Her own signup is the way back on: on the list, and the flag lifted.
-  assert.equal((await pub('POST', `/n/${slug}`, new URLSearchParams({ email: mail('dana'), name: 'Dana Never' }))).status, 200);
-  assert.ok(!(await personByEmail(mail('dana'))).tags.includes('do-not-email'));
-  assert.equal((await mgr.get('/api/subscriptions')).json.subscriptions.find((x) => x.email === mail('dana')).status, 'subscribed');
   await verified();
 });
 
@@ -385,11 +384,9 @@ test("email not connected: the run waits, looks again hourly without spending re
     steps: [{ kind: 'email', subject: 'Welcome', body: 'Welcome to {{campaign}}' }],
   });
   await turnOn(news.id);
-  // Joined on the public page, as a new person.
-  const join = await pub('POST', `/n/${slug}`, new URLSearchParams({ email: mail('dee'), name: 'Dee Lee' }));
-  assert.equal(join.status, 200);
-  const dee = await personByEmail(mail('dee'));
-  assert.ok(dee);
+  // Joined the newsletter (added at the desk, as a person already on file).
+  const dee = await mgr.createPerson('Dee Lee', { email: mail('dee') });
+  assert.equal((await mgr.action('subscription.add', { email: mail('dee'), name: 'Dee Lee' })).status, 200);
   await runJobs();
   let run = await runOf(news.id, dee.id);
   assert.equal(run.status, 'active');
@@ -520,37 +517,15 @@ test('off holds everyone in place and cancels their steps; on resumes from the s
   await verified();
 });
 
-test('each trigger: volunteer page, RSVP, first donation only, a 1 or 2 from a volunteer; imports never', async () => {
-  const ev = await mgr.action('cevent.create', {
-    slug: `town-hall-${tag}`, title: 'Town hall', starts_at: new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 16),
-  });
-  assert.equal(ev.status, 200);
+test('each trigger: first donation only, a 1 or 2 from a volunteer; imports never', async () => {
   const mk = async (name, trigger) => {
     const l = await create({ name, trigger, steps: [{ kind: 'tag', tag: `t-${name}` }] });
     await turnOn(l.id);
     return l;
   };
-  const vol = await mk('vol', { kind: 'volunteer' });
-  const rsvp = await mk('rsvp', { kind: 'rsvp', ref: ev.json.event.id });
-  const anyRsvp = await mk('anyrsvp', { kind: 'rsvp' });
   const gift = await mk('gift', { kind: 'donation' });
   const rated = await mk('rated', { kind: 'rating' });
   const tagged = await mk('tagged', { kind: 'tag', ref: 'imported' });
-
-  // Volunteer page: a new person, and an existing one who ticks roles.
-  await pub('POST', `/v/${slug}`, new URLSearchParams({ name: 'Vic New', email: mail('vic'), roles: 'phoning' }));
-  const vic = await personByEmail(mail('vic'));
-  const wes = await mgr.createPerson('Wes Known', { email: mail('wes') });
-  await pub('POST', '/api/public/' + slug + '/signup', { kind: 'volunteer', name: 'Wes Known', email: mail('wes'), roles: ['driver'] });
-  assert.ok(await runOf(vol.id, vic.id), 'new volunteer from the page');
-  assert.ok(await runOf(vol.id, wes.id), 'known person through the website bridge');
-  assert.equal((await ladder(vol.id)).people.filter((p) => p.person.id === vic.id).length, 1, 'once');
-
-  // RSVP on the public page.
-  await pub('POST', `/e/${slug}/town-hall-${tag}`, new URLSearchParams({ name: 'Rita Rsvp', email: mail('rita') }));
-  const rita = await personByEmail(mail('rita'));
-  assert.ok(await runOf(rsvp.id, rita.id), 'that event');
-  assert.ok(await runOf(anyRsvp.id, rita.id), 'any event');
 
   // First donation only.
   const don = await mgr.createPerson('Don Donor');
@@ -595,20 +570,8 @@ test('each trigger: volunteer page, RSVP, first donation only, a 1 or 2 from a v
   assert.equal(await runOf(tagged.id, ivy.id), undefined, 'imports never start a ladder');
 
   await runJobs();
-  for (const l of [vol, rsvp, anyRsvp, gift, rated, tagged]) await mgr.action('ladder.setActive', { id: l.id, active: false });
+  for (const l of [gift, rated, tagged]) await mgr.action('ladder.setActive', { id: l.id, active: false });
   await verified();
-});
-
-test('a new signer who ticks "Email me updates" has joined the newsletter too', async () => {
-  const news = await create({ name: 'News via petition', trigger: { kind: 'newsletter' }, steps: [{ kind: 'tag', tag: 'nl-welcomed' }] });
-  await turnOn(news.id);
-  await pub('POST', `/p/${slug}/fix-72-${tag}`, new URLSearchParams({ name: 'Pia Petition', email: mail('pia'), subscribe: '1' }));
-  await pub('POST', `/p/${slug}/fix-72-${tag}`, new URLSearchParams({ name: 'Quin Quiet', email: mail('quin') }));
-  const pia = await personByEmail(mail('pia'));
-  const quin = await personByEmail(mail('quin'));
-  assert.ok(await runOf(news.id, pia.id), 'ticked → joined the newsletter');
-  assert.equal(await runOf(news.id, quin.id), undefined, 'did not tick → not on it');
-  await mgr.action('ladder.setActive', { id: news.id, active: false });
 });
 
 test('a tag one ladder adds can start another — never the same one again', async () => {
@@ -716,11 +679,11 @@ test('follow-ups: done and undone; delete a ladder; another campaign sees nothin
   assert.equal((await other.action('ladder.followupDone', { id: fu.id })).status, 404);
   assert.equal((await other.get('/api/ladders')).json.ladders.length, 0);
 
-  // Refusals: a ladder that does nothing can't go on; a tag trigger needs a tag; another campaign's petition.
+  // Refusals: a ladder that does nothing can't go on; a tag trigger needs a tag; a trigger nobody has.
   const empty = await create({ name: 'Empty', trigger: { kind: 'newsletter' } });
   assert.equal((await mgr.action('ladder.setActive', { id: empty.id, active: true })).status, 400);
   assert.equal((await mgr.action('ladder.create', { name: 'No tag', trigger: { kind: 'tag' } })).status, 400);
-  assert.equal((await other.action('ladder.create', { name: 'X', trigger: { kind: 'petition', ref: `fix-72-${tag}` } })).status, 400);
+  assert.equal((await other.action('ladder.create', { name: 'X', trigger: { kind: 'petition', ref: 'fix-72' } })).status, 400);
 
   const del = await mgr.action('ladder.delete', { id: thanks.id });
   assert.equal(del.status, 200);

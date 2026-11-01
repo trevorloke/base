@@ -203,8 +203,8 @@ check('kept in this browser: Signs, Shifts, the Inbox — keyed to this campaign
     && has(localKeys, ':q:manager:texting:inbox:/texting/all') && localKeys.every((k) => k.includes(scopeA)),
   localKeys.map((k) => k.split(':').slice(5).join(':')).join(' | '));
 // People lists carry donor tags (donor-prospect, lapsed): this tab only, like money.
-check('anything with money or donors in it is kept for this tab only: Today, profiles, gifts, pledges, People',
-  ['q:manager:brief', `q:manager:person:${tom.id}`, `q:manager:person:${maya.id}`, 'q:manager:gifts', 'q:manager:pledges', 'q:manager:persons:q=&limit=300'].every((n) => has(sessionKeys, `:${n}`))
+check('anything with money or donors in it is kept for this tab only: Today, profiles, gifts, People',
+  ['q:manager:brief', `q:manager:person:${tom.id}`, `q:manager:person:${maya.id}`, 'q:manager:gifts', 'q:manager:persons:q=&limit=300'].every((n) => has(sessionKeys, `:${n}`))
     && sessionKeys.every((k) => k.includes(scopeA)),
   sessionKeys.map((k) => k.split(':').slice(5).join(':')).join(' | '));
 const localText = Object.values(kept.local).join('\n');
@@ -290,8 +290,8 @@ check('Signs with no signal: kept list, Add a sign off — "Adding or changing a
 await D.go('/money');
 await page.waitForSelector('#gift-list, .ops-rows', { timeout: 8000 }).catch(() => {});
 t = await D.text();
-check('Money with no signal (this tab’s copy): gifts listed, Log a gift off — "Gifts and pledges need signal"', KEPT.test(await D.kept())
-  && /Arjun Mehta/.test(t) && await page.locator('.ops-head button:has-text("Log a gift")').isDisabled().catch(() => false) && /Gifts and pledges need signal/.test(t), t.slice(0, 200));
+check('Money with no signal (this tab’s copy): gifts listed, Log a gift off — "Gifts need signal"', KEPT.test(await D.kept())
+  && /Arjun Mehta/.test(t) && await page.locator('.ops-head button:has-text("Log a gift")').isDisabled().catch(() => false) && /Gifts need signal/.test(t), t.slice(0, 200));
 await simple(D, 'Money, no signal (1360)');
 await D.shot('03-money-no-signal');
 await D.go('/inbox');

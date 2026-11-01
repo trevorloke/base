@@ -113,10 +113,8 @@ export const ACTIONS = {
   },
 
   // A void is an event, never a delete: the gift leaves every total but stays
-  // in the books, and restore brings it back. Both keep the gift's pledge in
-  // step in the same transaction (a voided gift reopens a one-time pledge; a
-  // restored one closes it again) — see lib/gifts.js. Answers { id, pledge }
-  // (pledge: the pledge it changed, or null); restore adds flagged/flag_reason.
+  // in the books, and restore brings it back (lib/gifts.js). Answers { id };
+  // restore adds flagged/flag_reason.
   'gift.void': {
     roles: MONEY_ROLES,
     input: z.object({ id: z.uuid() }),

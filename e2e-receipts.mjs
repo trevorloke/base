@@ -10,7 +10,7 @@
 // server's copy does. Printing shows the receipt alone. The donor's own link
 // (/r/<token>, no sign-in) shows that receipt and nothing else. Voiding the
 // gift voids the receipt (number kept), Undo brings it back; a void receipt
-// says VOID on the donor's page. A pledge from the donate page, marked paid,
+// says VOID on the donor's page. A gift for a donor with an address on file
 // gets the next number. A donor with no home address: Log a gift asks for
 // it under More details; left blank, the toast says "receipt needs address"
 // and Money's Needs you lists it ("Needs address") until the address is
@@ -296,26 +296,15 @@ await vp.goto(benDoc.link.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domc
 vt = (await vp.innerText('body')).replace(/\s+/g, ' ');
 check('donor page of a void receipt says VOID', /VOID/.test(vt) && vt.includes(rB.number), vt.slice(0, 120));
 
-// ── 7. A pledge from the donate page, marked paid, gets the next number ──
-await vp.goto(`${BASE}/d/${slug}`, { waitUntil: 'domcontentloaded' });
-await vp.fill('#other', '75');
-await vp.fill('#name', 'Cara Pledge');
-await vp.fill('#email', `cara.${tag}@example.org`);
-await vp.fill('#address', '77 Pledge Way, Surrey');
-for (const box of await vp.locator('input[name^="attest_"]').all()) await box.check();
-await vp.click('button[type="submit"]');
-await sleep(900);
-check('visitor pledged', /thank/i.test(await vp.innerText('body')));
-await D.go('/money');
-const pledgeRow = page.locator('.ops-needs .ops-item', { hasText: 'Cara Pledge' });
-await pledgeRow.getByRole('button', { name: 'Mark paid' }).click();
-await pledgeRow.getByRole('button', { name: /^Mark \$75 paid$/ }).click();
-await page.locator('.toast', { hasText: 'Cara Pledge' }).waitFor({ timeout: 8000 }).catch(() => {});
+// ── 7. A gift logged for a donor whose address is on file gets the next number ──
+const caraP = (await D.api('/actions/person.create', { name: 'Cara Pledge', email: `cara.${tag}@example.org`, address: '77 Pledge Way', city: 'Surrey' })).json.person;
+const giftLog = await D.api('/actions/gift.log', { person_id: caraP.id, amount_cents: 7500, date: `${year}-10-05`, method: 'cheque' });
+check('gift logged for Cara', giftLog.status === 200, JSON.stringify(giftLog.json).slice(0, 120));
 const cara = (await D.api(`/persons?q=${encodeURIComponent('Cara Pledge')}`)).json.persons[0];
 const giftC = await giftOf(D, cara.id);
 const rC = giftC ? (await D.api(`/receipts/gift/${giftC.id}`)).json.receipt : null;
 const docC = rC ? (await D.api(`/receipts/${rC.id}`)).json.doc : null;
-check('pledge marked paid → receipt 0003 with the home address from the donate page', rC?.number === `${year}-0003` && rC.amount_cents === 7500 && docC?.address === '77 Pledge Way, Surrey', `${rC?.number} ${docC?.address}`);
+check('cheque gift → receipt 0003 with the home address on file', rC?.number === `${year}-0003` && rC.amount_cents === 7500 && /77 Pledge Way/.test(docC?.address || ''), `${rC?.number} ${docC?.address}`);
 
 // ── 7b. No home address: asked in the form, flagged in Needs you ──
 const dev = (await D.api('/actions/person.create', { name: 'Dev Noaddress', city: 'Surrey' })).json.person;
@@ -457,7 +446,7 @@ await visitor.close();
 let v = (await D.api('/audit/verify')).json;
 check('hash chain verifies (receipts included)', v.ok === true && v.checked > 10, JSON.stringify(v));
 let ev = (await D.api('/events?since=0&limit=1000')).json.events;
-check('receipts are on the chain with their gifts', ['gift.log', 'gift.void', 'gift.restore', 'pledge.receive', 'receipt.settings'].every((a) => ev.some((e) => e.action === a && (e.entity_type === 'receipt' || e.entity_type === 'receipt_settings'))));
+check('receipts are on the chain with their gifts', ['gift.log', 'gift.void', 'gift.restore', 'receipt.settings'].every((a) => ev.some((e) => e.action === a && (e.entity_type === 'receipt' || e.entity_type === 'receipt_settings'))));
 check('the donor link never enters the log', !ev.some((e) => JSON.stringify(e).includes(one.link.split('/r/')[1])));
 await desk.close();
 

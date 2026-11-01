@@ -28,20 +28,8 @@ const loadLadder = async (tx, ws, id) => {
   return l;
 };
 
-// A petition or event a trigger names must be this campaign's.
-const checkRef = async (tx, ws, trigger) => {
-  if (!trigger.ref) return null;
-  if (trigger.kind === 'petition') {
-    const p = (await tx.query('select slug from petitions where workspace_id = $1 and slug = $2', [ws, trigger.ref])).rows[0];
-    if (!p) throw httpError(400, 'that petition is not in this campaign');
-  }
-  if (trigger.kind === 'rsvp') {
-    const e = (await tx.query('select id from campaign_events where workspace_id = $1 and id = $2 and deleted_at is null', [ws, trigger.ref])).rows[0];
-    if (!e) throw httpError(400, 'that event is not in this campaign');
-  }
-  if (trigger.kind === 'tag' || trigger.kind === 'petition' || trigger.kind === 'rsvp') return trigger.ref;
-  return null; // the others take no detail
-};
+// The detail a trigger keeps: the tag, for "Got a tag"; nothing otherwise.
+const checkRef = async (tx, ws, trigger) => (trigger.kind === 'tag' && trigger.ref ? trigger.ref : null);
 
 const out = (l) => ({
   id: l.id, name: l.name, trigger: { kind: l.trigger_kind, ref: l.trigger_ref || null },

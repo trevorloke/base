@@ -778,13 +778,6 @@ test('clicks from mail scanners still go to the link but are not counted', async
   });
 });
 
-test('the signup page says opens and clicks are counted', async () => {
-  const { slug } = await workspace('Notice', 0);
-  const page = await pub(`/n/${slug}`);
-  assert.equal(page.status, 200);
-  assert.match(await page.text(), /We count opens and clicks in our emails\./);
-});
-
 test('a big list goes out a few hundred per run; meanwhile the rest are "going", not "not sent"', async () => {
   process.env.STARBASE_AB_SEND_PER_RUN = '15';
   try {

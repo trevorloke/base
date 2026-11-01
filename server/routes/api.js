@@ -44,7 +44,7 @@ app.use('*', async (c, next) => {
   const db = await getDb();
   const ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
-  // Public base URL for links in outbound mail (unsubscribe, petitions).
+  // Public base URL for links in outbound mail (unsubscribe).
   ctx.publicUrl = (process.env.STARBASE_PUBLIC_URL || new URL(c.req.url).origin).replace(/\/$/, '');
   c.set('db', db);
   c.set('ctx', ctx);
@@ -60,8 +60,7 @@ const pathPattern = (p) => (p instanceof RegExp ? p : new RegExp(`^/api${p
 // feed (who knocked whom, with notes), or bulk exports.
 const DESK_ONLY_READS = [
   /^\/api\/records\//, /^\/api\/export$/, /^\/api\/events$/, /^\/api\/audit\/verify$/,
-  /^\/api\/subscriptions$/, /^\/api\/blasts$/, /^\/api\/petitions\/[^/]+\/signatures$/,
-  /^\/api\/pledges$/, /^\/api\/campaign-events\/[^/]+\/rsvps$/, /^\/api\/members$/,
+  /^\/api\/subscriptions$/, /^\/api\/blasts$/, /^\/api\/members$/,
   /^\/api\/contacts$/, /^\/api\/shifts\/board$/,
   // Feature modules name their own desk-only reads (paths under /api).
   ...EXTENSIONS.flatMap((e) => (e.deskOnlyReads || []).map(pathPattern)),
@@ -338,44 +337,6 @@ app.get('/members', async (c) => {
   return c.json({ members: rows });
 });
 
-// ── Campaign events + RSVPs ──
-app.get('/campaign-events', async (c) => {
-  const ctx = c.get('ctx');
-  const { rows } = await c.get('db').query(
-    `select e.*,
-       coalesce((select sum(1 + r.guests) from event_rsvps r where r.event_id = e.id and r.status <> 'cancelled'), 0)::int as going,
-       coalesce((select count(*) from event_rsvps r where r.event_id = e.id and r.status = 'attended'), 0)::int as attended
-     from campaign_events e where e.workspace_id = $1 and e.deleted_at is null order by e.starts_at`,
-    [ctx.workspaceId],
-  );
-  return c.json({ events: rows, slug: ctx.workspace.slug });
-});
-
-app.get('/campaign-events/:id/rsvps', async (c) => {
-  if (badId(c)) return c.json({ error: 'not found' }, 404);
-  const ctx = c.get('ctx');
-  const { rows } = await c.get('db').query(
-    `select id, person_id, name, email, phone, guests, status, created_at from event_rsvps
-     where workspace_id = $1 and event_id = $2 order by created_at`,
-    [ctx.workspaceId, c.req.param('id')],
-  );
-  return c.json({ rsvps: rows });
-});
-
-// ── Pledges (money roles) ──
-// last_received_on (YYYY-MM-DD or null): the date of the latest gift received
-// for a monthly pledge — it stays open between months.
-app.get('/pledges', async (c) => {
-  const ctx = c.get('ctx');
-  const { rows } = await c.get('db').query(
-    `select id, person_id, name, email, phone, address, amount_cents, cadence, slate, status, gift_id, stripe_session_id, stripe_subscription_id, created_at,
-            to_char(last_received_on, 'YYYY-MM-DD') as last_received_on
-     from pledges where workspace_id = $1 order by created_at desc limit 500`,
-    [ctx.workspaceId],
-  );
-  return c.json({ pledges: rows, slug: ctx.workspace.slug, stripe: !!process.env.STRIPE_SECRET_KEY });
-});
-
 // ── Team (managers) ──
 app.get('/team', async (c) => {
   const ctx = c.get('ctx');
@@ -507,27 +468,6 @@ app.get('/shifts/:id', async (c) => {
     });
   }
   return c.json({ shift, assignees });
-});
-
-app.get('/petitions', async (c) => {
-  const ctx = c.get('ctx');
-  const { rows } = await c.get('db').query(
-    `select p.*, (select count(*)::int from petition_signatures s where s.petition_id = p.id) as signatures
-     from petitions p where p.workspace_id = $1 order by p.created_at desc`,
-    [ctx.workspaceId],
-  );
-  return c.json({ petitions: rows, slug: ctx.workspace.slug });
-});
-
-app.get('/petitions/:id/signatures', async (c) => {
-  if (badId(c)) return c.json({ error: 'not found' }, 404);
-  const ctx = c.get('ctx');
-  const { rows } = await c.get('db').query(
-    `select id, name, email, phone, address, answer, subscribe, created_at from petition_signatures
-     where workspace_id = $1 and petition_id = $2 order by created_at desc limit 2000`,
-    [ctx.workspaceId, c.req.param('id')],
-  );
-  return c.json({ signatures: rows });
 });
 
 app.get('/subscriptions', async (c) => {
@@ -707,30 +647,14 @@ app.get('/brief', async (c) => {
   const signs = (await db.query(
     `select status, count(*)::int as n from signs where workspace_id = $1 group by status`, [ws],
   )).rows;
-  const events = (await db.query(
-    `select e.id, e.slug, e.title, e.starts_at, e.location, e.capacity, e.public,
-       coalesce((select sum(1 + r.guests) from event_rsvps r where r.event_id = e.id and r.status <> 'cancelled'), 0)::int as going
-     from campaign_events e where e.workspace_id = $1 and e.deleted_at is null and e.starts_at >= now()
-     order by e.starts_at limit 3`, [ws],
-  )).rows;
   const myTurfs = (await db.query(
     `select t.id, t.name from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
      where t.workspace_id = $1 and t.deleted_at is null order by t.created_at`, [ws, ctx.user.id],
   )).rows;
-  // Open pledges: one-time pledges not yet received, plus monthly pledges not
-  // yet received this calendar month (campaign time) — a monthly pledge stays
-  // open between months.
-  const openPledges = (await db.query(
-    `select count(*)::int as n, coalesce(sum(amount_cents), 0)::int as cents from pledges
-     where workspace_id = $1 and status in ('pledged', 'pending')
-       and not (cadence = 'monthly' and last_received_on is not null
-                and last_received_on >= date_trunc('month', now() at time zone $2::text)::date)`,
-    [ws, ctx.workspace.settings?.tz || 'America/Vancouver'],
-  )).rows[0];
   const sampleLoaded = !!(ctx.workspace.settings?.sample);
   const desk = ctx.role !== 'volunteer';
   // The desk's first steps. One of them is whether a gift was ever logged,
-  // so — like money and pledges — a volunteer never receives it.
+  // so — like money — a volunteer never receives it.
   let activation = null;
   if (desk) {
     activation = {
@@ -752,9 +676,7 @@ app.get('/brief', async (c) => {
     ratings: Object.fromEntries(ratings.map((r) => [r.rating, r.n])),
     shifts,
     signs: Object.fromEntries(signs.map((r) => [r.status, r.n])),
-    events,
     myTurfs,
-    pledges: desk ? openPledges : null,
     sampleLoaded,
     providers: { email: emailConfigured(), text: textConfigured() },
     activation,
@@ -774,8 +696,7 @@ app.get('/brief', async (c) => {
 // never a link's secret token (omit).
 const CORE_EXPORT = [
   'contacts', 'signs', 'volunteer_roles', 'shifts', 'shift_assignments', 'turfs', 'turf_members',
-  'petitions', 'petition_signatures', 'subscriptions', 'blasts', { table: 'blast_recipients', omit: ['token'] },
-  'campaign_events', 'event_rsvps', 'pledges',
+  'subscriptions', 'blasts', { table: 'blast_recipients', omit: ['token'] },
 ];
 const exportSpec = (spec) => (typeof spec === 'string' ? { table: spec, omit: [] } : { omit: [], ...spec });
 app.get('/export', async (c) => {

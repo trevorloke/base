@@ -29,7 +29,7 @@
 //   this tab only  on a desk sign-in, anything with money or donors in it:
 //                  Today (raised, gifts over the limit), profiles (gifts),
 //                  People lists (donor tags; searches are answered from
-//                  them) and Money (gifts, pledges, receipts needing an
+//                  them) and Money (gifts, receipts needing an
 //                  address) — and any answer that carries money, whatever
 //                  role this tab still thinks it has (a volunteer just made
 //                  treasurer). Money is the most sensitive thing a campaign
@@ -85,9 +85,8 @@ function planFor(key, me) {
     case 'shifts': return key.length === 1 ? { name: 'shifts', tier: 'local', field: true } : null;
     case 'shift': return key.length === 2 ? { name: `shift:${k1}`, tier: 'local', field: true } : null;
     // Money: desk roles only (the server refuses volunteers these) — the
-    // ledger, pledges and receipts waiting for an address, as Money shows them.
+    // ledger and receipts waiting for an address, as Money shows them.
     case 'records': return desk && k1 === 'gift' ? q('gifts', 'session') : null;
-    case 'pledges': return desk && key.length === 1 ? q('pledges', 'session') : null;
     case 'receipts': return desk && k1 === 'needs' && key.length === 2 ? q('receipts:needs', 'session') : null;
     default: return null;
   }
@@ -146,7 +145,7 @@ function derivePersons(me, plan, qs) {
 // An answer with money in it (a desk's Today or profile, or one a volunteer
 // just made treasurer gets before this tab knows): kept for this tab only.
 const MONEY_IN = {
-  brief: (d) => d?.money != null || d?.pledges != null || (Array.isArray(d?.flagged) && d.flagged.length > 0),
+  brief: (d) => d?.money != null || (Array.isArray(d?.flagged) && d.flagged.length > 0),
   person: (d) => d?.donor != null || (Array.isArray(d?.gifts) && d.gifts.length > 0) || (Array.isArray(d?.totals) && d.totals.length > 0),
 };
 const tierOf = (plan, data) => (plan.moneyIn && MONEY_IN[plan.moneyIn](data) ? 'session' : plan.tier);
@@ -258,7 +257,7 @@ export function watchKeptCopies(queryClient) {
 // from Today, a shift's and Outreach's providers) says so with
 // meta: { side: true } on that useQuery: its time isn't what the screen
 // shows. Only Today and Money draw the brief (offline-copies.test.js checks).
-const SHOWN = new Set(['brief', 'persons', 'person', 'signs', 'shifts', 'shift', 'records', 'pledges',
+const SHOWN = new Set(['brief', 'persons', 'person', 'signs', 'shifts', 'shift', 'records',
   'receipts', 'doors', 'turf', 'turfs']);
 const shown = (key) => SHOWN.has(key[0]) || (key[0] === 'texting' && (key[1] === 'inbox' || key[1] === 'thread'));
 // Watched by a screen that draws it (not only by side reads).

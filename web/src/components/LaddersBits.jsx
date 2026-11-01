@@ -10,22 +10,17 @@ import { apiGet, action } from '../api.js';
 import '../pages/ladders.css';
 
 export const TRIGGERS = [
-  { kind: 'petition', label: 'Signed a petition', ref: 'petition' },
   { kind: 'newsletter', label: 'Joined the newsletter' },
-  { kind: 'volunteer', label: 'Signed up to volunteer' },
-  { kind: 'rsvp', label: 'RSVPed to an event', ref: 'event' },
   { kind: 'donation', label: 'First donation' },
   { kind: 'tag', label: 'Got a tag', ref: 'tag' },
   { kind: 'rating', label: 'Rated 1 or 2' },
 ];
 export const triggerLabel = (kind) => TRIGGERS.find((t) => t.kind === kind)?.label || kind;
-// "Signed a petition · Fix 72 Ave", "RSVPed to an event · any".
+// "Got a tag · host".
 export const triggerLine = (t) => {
   if (!t) return '';
   const label = t.label || triggerLabel(t.kind);
-  if (t.what) return `${label} · ${t.what}`;
-  if (t.kind === 'petition' || t.kind === 'rsvp') return `${label} · any`;
-  return label;
+  return t.what ? `${label} · ${t.what}` : label;
 };
 
 export const STEP_KINDS = [
@@ -92,8 +87,8 @@ export const logLine = (e) => {
   return what;
 };
 
-// Where the screens send "Connect" (Outreach's Links tab, Email & texting open).
-export const CONNECT_TO = '/outreach/links?connect=1';
+// Where the screens send "Connect" (Outreach's Connections tab, Email & texting open).
+export const CONNECT_TO = '/outreach/connect?connect=1';
 
 // "← Ladders", or back to the screen that opened this one when it said who
 // it is (router state, as Results does): Today's "2 follow-ups" → "← Today".
@@ -104,11 +99,9 @@ export function LadBack() {
     : <Link className="ops-back" to="/ladders">← Ladders</Link>;
 }
 
-// ── Starts when: the trigger, and which petition / event / tag ──
+// ── Starts when: the trigger, and which tag ──
 export function TriggerPicker({ value, onChange, options, idp, disabled }) {
   const t = TRIGGERS.find((x) => x.kind === value.kind) || TRIGGERS[0];
-  const petitions = options?.petitions ?? [];
-  const events = options?.events ?? [];
   const tags = options?.tags ?? [];
   return (
     <>
@@ -119,26 +112,6 @@ export function TriggerPicker({ value, onChange, options, idp, disabled }) {
           {TRIGGERS.map((x) => <option key={x.kind} value={x.kind}>{x.label}</option>)}
         </select>
       </div>
-      {t.ref === 'petition' && (
-        <div className="field">
-          <label htmlFor={`${idp}-ref`}>Which petition</label>
-          <select id={`${idp}-ref`} className="input lad-select" value={value.ref || ''} disabled={disabled}
-            onChange={(e) => onChange({ ...value, ref: e.target.value })}>
-            <option value="">Any petition</option>
-            {petitions.map((p) => <option key={p.slug} value={p.slug}>{p.title}</option>)}
-          </select>
-        </div>
-      )}
-      {t.ref === 'event' && (
-        <div className="field">
-          <label htmlFor={`${idp}-ref`}>Which event</label>
-          <select id={`${idp}-ref`} className="input lad-select" value={value.ref || ''} disabled={disabled}
-            onChange={(e) => onChange({ ...value, ref: e.target.value })}>
-            <option value="">Any event</option>
-            {events.map((e) => <option key={e.id} value={e.id}>{e.title}</option>)}
-          </select>
-        </div>
-      )}
       {t.ref === 'tag' && (
         <div className="field">
           <label htmlFor={`${idp}-ref`}>Which tag</label>

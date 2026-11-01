@@ -1,8 +1,7 @@
 // Counts the screens print, checked against what really happened: doors this
 // week are doors (not taps), a walk-list door is done only once knocked, each
-// send says how many were sent / failed / still waiting, open pledges leave
-// out a monthly pledge already received this month, and a shift says when the
-// caller is on it. Emails are unique per run: under test:pg every file shares
+// send says how many were sent / failed / still waiting, and a shift says
+// when the caller is on it. Emails are unique per run: under test:pg every file shares
 // one database and users are global.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -210,55 +209,6 @@ const pub = async (path, form) => {
   });
   return { status: res.status, text: await res.text() };
 };
-const eligible = { attest_individual: '1', attest_resident: '1', attest_own_funds: '1' };
-const campaignToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' });
-
-test('brief: open pledges are one-time pledges not received + monthly pledges not received this month', async () => {
-  delete process.env.STRIPE_SECRET_KEY;
-  const mgr = new Client();
-  const r = await mgr.signup({ workspaceName: 'Pledge Count WS', jurisdiction: 'bc-municipal' });
-  const slug = r.json.workspace.slug;
-  const tag = uniq();
-  const give = async (who, amount, monthly) => {
-    const res = await pub(`/d/${slug}`, {
-      amount, name: who, email: `${who.toLowerCase().replace(/\W+/g, '.')}.${tag}@example.org`, address: '1 Main St',
-      ...(monthly ? { monthly: '1' } : {}), ...eligible,
-    });
-    assert.equal(res.status, 200, res.text.slice(0, 200));
-  };
-  await give('Once Giver', '100', false);
-  await give('Month Giver', '25', true);
-  await give('Month Late', '10', true);
-  const pledges = (await mgr.get('/api/pledges')).json.pledges;
-  const byName = Object.fromEntries(pledges.map((p) => [p.name, p]));
-  assert.equal(byName['Month Giver'].cadence, 'monthly');
-  assert.ok(pledges.every((p) => 'last_received_on' in p && p.last_received_on === null), 'never received yet');
-  const open = async () => (await mgr.get('/api/brief')).json.pledges;
-  assert.deepEqual(await open(), { n: 3, cents: 13500 });
-
-  const db = await getDb();
-  const setLast = (id, sql) => db.query(`update pledges set last_received_on = ${sql} where id = $1`, [id]);
-  // Received this month (campaign time): not open again until next month.
-  await setLast(byName['Month Giver'].id, `(now() at time zone 'America/Vancouver')::date`);
-  assert.deepEqual(await open(), { n: 2, cents: 11000 });
-  // Last received a month ago: this month's gift is still to come.
-  await setLast(byName['Month Late'].id, `((now() at time zone 'America/Vancouver')::date - interval '1 month')::date`);
-  assert.deepEqual(await open(), { n: 2, cents: 11000 });
-  const listed = (await mgr.get('/api/pledges')).json.pledges.find((p) => p.id === byName['Month Giver'].id);
-  assert.equal(listed.last_received_on, campaignToday(), 'YYYY-MM-DD');
-
-  // The real path: receive this month's gift for the late monthly pledge.
-  const rec = await mgr.action('pledge.receive', { id: byName['Month Late'].id, method: 'etransfer', date: campaignToday() });
-  assert.equal(rec.status, 200, JSON.stringify(rec.json));
-  assert.deepEqual(await open(), { n: 1, cents: 10000 }, 'only the one-time pledge is open');
-  const late = (await mgr.get('/api/pledges')).json.pledges.find((p) => p.id === byName['Month Late'].id);
-  assert.equal(late.status, 'pledged', 'a monthly pledge stays open between months');
-  assert.equal(late.last_received_on, campaignToday());
-
-  // The one-time pledge received: nothing open.
-  await mgr.action('pledge.receive', { id: byName['Once Giver'].id, method: 'cheque', date: campaignToday() });
-  assert.deepEqual(await open(), { n: 0, cents: 0 });
-});
 
 test('shifts: mine marks the shifts the caller is actively on (by their login email)', async () => {
   const mgr = new Client();

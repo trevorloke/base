@@ -2,13 +2,9 @@
 // the zod contracts for both, and the words the screens use for them.
 import { z } from 'zod';
 
-// What starts a ladder. `ref` narrows some of them: a petition (by its link
-// name), an event (by id) or a tag (required). No ref = any petition / event.
+// What starts a ladder. `ref` narrows one of them: a tag (required).
 export const TRIGGERS = {
-  petition:   { label: 'Signed a petition', ref: 'petition' },
   newsletter: { label: 'Joined the newsletter' },
-  volunteer:  { label: 'Signed up to volunteer' },
-  rsvp:       { label: 'RSVPed to an event', ref: 'event' },
   donation:   { label: 'First donation' },
   tag:        { label: 'Got a tag', ref: 'tag', refRequired: true },
   rating:     { label: 'Rated 1 or 2' },
@@ -41,7 +37,6 @@ export const triggerSchema = z.object({
   ref: z.string().trim().max(120).nullish(),
 }).superRefine((t, ctx) => {
   if (TRIGGERS[t.kind].refRequired && !t.ref) ctx.addIssue({ code: 'custom', message: 'pick a tag', path: ['ref'] });
-  if (t.kind === 'rsvp' && t.ref && !/^[0-9a-f-]{36}$/i.test(t.ref)) ctx.addIssue({ code: 'custom', message: 'pick an event', path: ['ref'] });
 });
 
 export const parseJson = (v, fallback) => {

@@ -1,7 +1,7 @@
 // Ladders E2E — one fresh in-memory campaign: a desk user finds Ladders
-// under Outreach, builds "Thank petition signers" (pick the petition; steps
+// under Outreach, builds "Thank new signers" (starts on a tag; steps
 // as cards: Tag · Email · Follow-up, one moved up, a Wait), turns it on; a
-// visitor signs the petition on the public page; the job runner tags them,
+// desk tags someone; the job runner tags them,
 // adds the follow-up and — email not connected — the run says "Waiting —
 // email isn't connected" on screen exactly as the server has it. Today's
 // "Needs you" has "1 follow-up"; the follow-up is done and undone; the
@@ -113,7 +113,7 @@ const until = async (fn, ms = 20000) => {
   }
 };
 
-// ── 1. Desk: sign up, a petition, a few people ──
+// ── 1. Desk: sign up, a few people ──
 const desk = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
 await tiles(desk);
 const page = await desk.newPage();
@@ -127,8 +127,6 @@ await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 const me = (await D.api('/auth/me')).json;
 const slug = me.workspace.slug;
 check('desk signed up', !!slug, slug);
-const pet = await D.api('/actions/petition.create', { slug: 'fix-72-ave', title: 'Fix 72 Ave' });
-check('petition created', pet.status === 200);
 const dora = (await D.api('/actions/person.create', { name: 'Dora Door', phone: '604-555-0161', address: '12345 72 Ave', city: 'Surrey', lat: 49.133, lng: -122.851, email: `dora.${tag}@example.org` })).json.person;
 
 // ── 2. Outreach → Ladders ──
@@ -143,11 +141,11 @@ check('Ladders opens empty: one line + one button', /No ladders yet\./.test(t) &
 check('Ladders says what it is under the title', /^Ladders Automatic emails & follow-ups/.test(t), t.slice(0, 60));
 await D.shot('1-ladders-empty');
 
-// ── 3. New ladder: name + Starts when (the petition) ──
+// ── 3. New ladder: name + Starts when (a tag) ──
 await page.getByRole('button', { name: 'New ladder' }).click();
-await page.fill('#lad-new-name', 'Thank petition signers');
-await page.selectOption('#lad-new-kind', 'petition');
-await page.selectOption('#lad-new-ref', 'fix-72-ave');
+await page.fill('#lad-new-name', 'Thank new signers');
+await page.selectOption('#lad-new-kind', 'tag');
+await page.fill('#lad-new-ref', 'signer');
 check('new-ladder form: one yellow (the header button gives way)', (await page.locator('.btn-primary:visible').count()) === 1);
 await D.shot('2-new-ladder');
 await page.getByRole('button', { name: 'Create ladder' }).click();
@@ -155,9 +153,9 @@ await page.waitForURL(/\/ladders\/[0-9a-f-]{36}$/, { timeout: 8000 }).catch(() =
 await sleep(700);
 const ladderId = page.url().split('/').pop();
 let L = (await D.api(`/ladders/${ladderId}`)).json;
-check('ladder created off, starting on the petition', L?.ladder?.active === false && L.ladder.trigger.kind === 'petition' && L.ladder.trigger.ref === 'fix-72-ave', JSON.stringify(L?.ladder?.trigger));
+check('ladder created off, starting on the tag', L?.ladder?.active === false && L.ladder.trigger.kind === 'tag' && L.ladder.trigger.ref === 'signer', JSON.stringify(L?.ladder?.trigger));
 t = await D.text();
-check('builder says what starts it', /Starts when/i.test(t) && /Signed a petition · Fix 72 Ave/.test(t), t.slice(0, 200));
+check('builder says what starts it', /Starts when/i.test(t) && /Got a tag · signer/.test(t), t.slice(0, 200));
 check('Turn on waits for a step', await page.getByRole('button', { name: 'Turn on' }).isDisabled() && /Add a step, then turn it on\./.test(t));
 
 // ── 4. Steps as cards ──
@@ -240,17 +238,14 @@ const statusChip = (await page.locator('.lad-status .chip').innerText().catch(()
 check('Turn on → On (server and screen)', L.ladder.active === true && /^on$/i.test(statusChip) && !(await page.getByRole('button', { name: 'Turn on' }).count()), `${statusChip} · ${t.slice(0, 120)}`);
 check('On is said once (the chip), no extra line', (await page.locator('.ops-done').count()) === 0);
 
-// ── 5. A visitor signs the petition ──
+// ── 5. Ana joins the newsletter and gets the tag ──
 const visitor = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 const vp = await visitor.newPage();
 vp.on('pageerror', (e) => errors.push(`[visitor] ${e.message}`));
-await vp.goto(`${BASE}/p/${slug}/fix-72-ave`, { waitUntil: 'domcontentloaded' });
-await vp.fill('#name', 'Ana Souza');
-await vp.fill('#email', `ana.${tag}@example.org`);
-await vp.check('input[name="subscribe"]'); // she says yes to email
-await vp.click('button[type="submit"]');
-await vp.waitForSelector('text=/Thank you, Ana/', { timeout: 8000 }).catch(() => {});
-check('visitor signed', /Thank you, Ana/.test(await vp.innerText('body')));
+const anaP = (await D.api('/actions/person.create', { name: 'Ana Souza', email: `ana.${tag}@example.org` })).json.person;
+await D.api('/actions/subscription.add', { email: `ana.${tag}@example.org`, name: 'Ana Souza' }); // she says yes to email
+const tagged = await D.api('/actions/person.update', { id: anaP.id, tags: ['signer'] });
+check('Ana tagged signer', tagged.status === 200, JSON.stringify(tagged.json).slice(0, 120));
 
 // The job runner takes her through Tag and Follow-up; Email waits.
 const run = await until(async () => {
@@ -305,9 +300,9 @@ check('profile: engagement chip = server level', chip.trim().toLowerCase() === l
 await page.getByRole('button', { name: /^Ladders/ }).click();
 await sleep(300);
 t = await D.text();
-check('profile: Ladders section says where she is', /Thank petition signers Waiting — email isn’t connected/.test(t) && /Call Ana to say thanks/.test(t), t.slice(t.indexOf('Ladders'), t.indexOf('Ladders') + 160));
+check('profile: Ladders section says where she is', /Thank new signers Waiting — email isn’t connected/.test(t) && /Call Ana to say thanks/.test(t), t.slice(t.indexOf('Ladders'), t.indexOf('Ladders') + 160));
 await D.shot('7-profile');
-await page.locator('.lad-pf-runs a', { hasText: 'Thank petition signers' }).click();
+await page.locator('.lad-pf-runs a', { hasText: 'Thank new signers' }).click();
 await page.waitForURL(`${ADMIN}/ladders/${ladderId}`, { timeout: 8000 }).catch(() => {});
 await sleep(700);
 bk = await back();
@@ -316,8 +311,8 @@ check('ladder from her profile: back says "← Ana Souza"', bk.text === '← Ana
 // ── 8. The list + engagement ──
 await D.go('/ladders');
 t = await D.text();
-const rowText = (await page.locator('.ops-rows .ops-item', { hasText: 'Thank petition signers' }).innerText()).replace(/\s+/g, ' ').trim();
-check('list row: trigger, counts, On', /^Thank petition signers Signed a petition · Fix 72 Ave 1 in progress · 0 finished On$/i.test(rowText), rowText);
+const rowText = (await page.locator('.ops-rows .ops-item', { hasText: 'Thank new signers' }).innerText()).replace(/\s+/g, ' ').trim();
+check('list row: trigger, counts, On', /^Thank new signers Got a tag · signer 1 in progress · 0 finished On$/i.test(rowText), rowText);
 check('list: follow-ups row and email note', /1 follow-up to do/.test(t) && /Email isn’t connected — email steps wait\./.test(t));
 await page.locator('a.lad-fu-link').click();
 await page.waitForURL(`${ADMIN}/follow-ups`, { timeout: 8000 }).catch(() => {});
@@ -461,7 +456,7 @@ await page.locator('form.ot-inline-add').getByRole('button', { name: 'Add' }).cl
 await sleep(700);
 t = await D.text();
 const anaAfter = (await D.api('/subscriptions')).json.subscriptions.find((s) => s.email === `ana.${tag}@example.org`);
-check('Add: "Unsubscribed on <date> — only they can rejoin (signup page)", still off', /Unsubscribed on [A-Z][a-z]{2} \d{1,2} — only they can rejoin \(signup page\)/.test(t) && anaAfter.status === 'unsubscribed', anaAfter.status);
+check('Add: "Unsubscribed on <date> — only they can rejoin", still off', /Unsubscribed on [A-Z][a-z]{2} \d{1,2} — only they can rejoin/.test(t) && anaAfter.status === 'unsubscribed', anaAfter.status);
 await D.shot('12b-subscribers');
 
 // ── 12c. A donor's profile: the level chip never repeats the donor tier ──

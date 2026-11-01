@@ -24,7 +24,6 @@ before(async () => {
 
   donor = await desk.createPerson('Big Donor', { phone: '604-555-0142', email: 'donor@example.org' });
   await desk.action('gift.log', { person_id: donor.id, amount_cents: 120000, date: '2026-03-01' });
-  await desk.action('petition.create', { slug: 'p1', title: 'P1' });
   await desk.action('subscription.add', { email: 'sub@example.org' });
 });
 
@@ -84,10 +83,9 @@ test('volunteer brief never carries flagged gifts or their numbers', async () =>
 });
 
 test('volunteer is refused the money ledger, exports, event log, audit, and supporter lists', async () => {
-  const pet = (await desk.get('/api/petitions')).json.petitions[0];
   for (const path of [
     '/api/records/gift', '/api/export', '/api/events?since=0',
-    '/api/audit/verify', '/api/subscriptions', '/api/blasts', `/api/petitions/${pet.id}/signatures`,
+    '/api/audit/verify', '/api/subscriptions', '/api/blasts',
   ]) {
     const r = await vol.get(path);
     assert.equal(r.status, 403, path);
@@ -98,7 +96,7 @@ test('volunteer is refused the money ledger, exports, event log, audit, and supp
 });
 
 test('volunteer field reads still work; the campaign-wide contact feed is desk-only', async () => {
-  for (const path of ['/api/map/doors', '/api/persons?has=phone', '/api/shifts', '/api/signs', '/api/petitions']) {
+  for (const path of ['/api/map/doors', '/api/persons?has=phone', '/api/shifts', '/api/signs']) {
     assert.equal((await vol.get(path)).status, 200, path);
   }
   // Who knocked whom, with ratings and notes: no volunteer screen uses it.
@@ -193,7 +191,7 @@ test('volunteer filters never match on what they cannot see: no email search, no
 });
 
 test('malformed ids are 404, not 500', async () => {
-  for (const path of ['/api/persons/not-a-uuid', '/api/shifts/123', '/api/petitions/zzz/signatures']) {
+  for (const path of ['/api/persons/not-a-uuid', '/api/shifts/123']) {
     const r = await desk.get(path);
     assert.equal(r.status, 404, path);
   }

@@ -38,7 +38,7 @@ export const runAction = async (db, { workspaceId, actorId, action, clientTs }, 
 
     const result = await handler(tx, emit);
     // Feature modules see this write's events before they are chained (a
-    // ladder enrolling a petition signer, say); what they emit joins them.
+    // ladder enrolling a new subscriber, say); what they emit joins them.
     if (pending.length) await runHooks('events', tx, { workspaceId, actorId, action, emit }, [...pending]);
 
     let seq = Number(ws.event_seq);

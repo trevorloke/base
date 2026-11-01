@@ -21,7 +21,7 @@ function NewLadder({ options, onClose }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
-  const [trigger, setTrigger] = useState({ kind: 'petition', ref: '' });
+  const [trigger, setTrigger] = useState({ kind: 'newsletter', ref: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const submit = async (e) => {
@@ -46,7 +46,7 @@ function NewLadder({ options, onClose }) {
       <div className="field">
         <label htmlFor="lad-new-name">Name</label>
         <input id="lad-new-name" className="input lad-input" required autoFocus maxLength={120} autoComplete="off"
-          placeholder="Thank petition signers" value={name} onChange={(e) => setName(e.target.value)} />
+          placeholder="Welcome new subscribers" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
       <TriggerPicker value={trigger} onChange={setTrigger} options={options} idp="lad-new" disabled={busy} />
       {error && <p className="error" role="alert">{error}</p>}

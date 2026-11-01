@@ -25,7 +25,7 @@ npm start                 # → http://localhost:3200
    by invite from **Settings → Members**. (To start over, delete `data/`.)
 2. On **Today**, press **Load sample data**: 52 Surrey voters across Newton,
    Whalley, Guildford, Fleetwood, Cloverdale, and South Surrey — with ratings,
-   signs, donors, a shift, an event, a petition, and a Newton turf.
+   signs, donors, a shift, and a Newton turf.
    **Clear sample data** removes it all later (your own records stay).
 
 Your data lives in `data/`. Stop with Ctrl-C; it's still there next
@@ -52,19 +52,10 @@ Postgres database (backups included).
 | `STARBASE_PUBLIC_URL` | your address, e.g. `https://starbase.imaginesurrey.ca` — used in invite, unsubscribe, and payment links | **yes** |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | card donations | optional — without it the donate page takes **pledges** |
 | `GOOGLE_MAPS_SERVER_KEY` | Google geocoding (`GEOCODER=google` or `GEOCODER_FALLBACK=google`) and Google Maps tiles (`GOOGLE_MAPS_TILES=1`) | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 
 The whole order of things, from deploy to the public link, is in
 [GOING-LIVE.md](GOING-LIVE.md).
-
-For Stripe, add a webhook in the Stripe dashboard pointing at
-`https://<your address>/api/public/stripe/webhook` with events
-`checkout.session.completed`, `invoice.paid`, `customer.subscription.deleted`
-(a monthly gift cancelled in Stripe closes its pledge) and
-`charge.refunded` (a refund made in Stripe shows here: a donation refunded
-in full is voided). Use **test mode** keys
-(`sk_test_…`) and card `4242 4242 4242 4242` while testing.
 
 For Twilio, set the number's incoming messages webhook to
 `https://<your address>/api/public/twilio/sms` (HTTP POST). Calls through the
@@ -107,7 +98,7 @@ one tap away under **More**.
   (below) and watch them appear within a minute.
 - **Today** — three big numbers (doors this week · support · raised); tap
   *Support* for the breakdown by candidate. **Needs you** lists what's waiting:
-  gifts over the limit, open pledges, shifts short of people,
+  gifts over the limit, shifts short of people,
   signs to put up.
 - **Lists** (Today → More → Lists, or People → *Save as a list* once a
   filter is on) — a saved filter counts who matches as you pick (and how
@@ -124,7 +115,7 @@ one tap away under **More**.
   every table, and the exports: any table as a spreadsheet.
 - **Outreach → Newsletter** — the message takes Markdown: tap **B**,
   **H**, **• List**, **Link**, **Picture** (a photo goes in from your phone)
-  and **Link to…** (Donate, Volunteer, Newsletter signup), then
+  then
   **Preview** to see the email as it will look. **Attach a file** takes a
   PDF or a picture (5 MB each, five at most) and lists it by name with ✕;
   **Send me a test** emails you a copy with everything in it and nothing
@@ -146,16 +137,13 @@ one tap away under **More**.
   says *Tie — sent A*. Opens run high (Apple Mail opens by itself); clicks
   from mail scanners aren't counted.
 - **Outreach → Ladders** (automatic emails & follow-ups) — email steps go
-  only to people who said yes to email (the newsletter, or *Email me updates*
-  on a petition); everyone else shows *Email skipped — didn't ask for email*.
+  only to people who said yes to email (the newsletter); everyone else shows
+  *Email skipped — didn't ask for email*.
   *+ First name* / *+ Campaign* fill in. The email's unsubscribe link asks
   first; once someone unsubscribes, **Newsletter → More → Subscribers** can't
-  add them back — only they can, from the signup page.
-- **Outreach → Links** — set the Imagine Surrey website address; copy the
-  public volunteer page (`/v/imagine-surrey`), newsletter page
-  (`/n/imagine-surrey`), petition, event, and donate (`/d/imagine-surrey`)
-  links; *For your web developer* has the embed code for the website's
-  own forms.
+  add them back — only they can, by signing up again.
+- **Outreach → Connections** — whether email and texting are connected,
+  and the Imagine Surrey website address the public pages link back to.
 - **ImagineU** (the tab) → *Edit* → add a section (*Start here*) and a few
   lessons: a note (words), a video (paste a YouTube link), a document
   (upload a PDF; set *Who sees it* to *Public* and open the link ImagineU
@@ -330,11 +318,6 @@ one tap away under **More**.
 - **Donations** — **Log a gift**; log enough to one donor to cross the annual
   limit (sample: *Arjun Mehta* is already over). Donor tiers on profiles:
   star ($1K+/yr or $100+/mo), superstar ($3K+/yr or $250+/mo).
-- **Donate page** (`/d/imagine-surrey`, in a private window): try without the
-  eligibility boxes (refused), more than the annual limit (refused), then a
-  real pledge → it appears under **Donations → Needs you** → *Mark paid* turns it
-  into a gift (cap-checked). Voiding that gift reopens the pledge; a monthly
-  pledge stays open and is marked paid month by month.
 - **Donations → More → Receipts** — every gift gets a numbered receipt
   (`2026-0001`, no gaps) the moment it's logged, marked paid, or paid by card;
   open a gift on Donations to see *Receipt 2026-0007 · Sent*. Without email
@@ -361,11 +344,6 @@ one tap away under **More**.
   with no signal, and Donations says *No signal*. Make a volunteer a treasurer
   while their app is open: Today's money stays in their tab; make them a
   volunteer again and, after a reload, nothing a treasurer saw is kept.
-
-### Public volunteer page
-- `/v/imagine-surrey` in a private window: tick *Hi-rise building captain* —
-  it asks which building; *Translation* asks the language. Each ticked role is
-  saved with its own detail, and the note lands once on the person's profile.
 
 ### Import your own lists
 **People → More → Import.** Try `samples/surrey-import-test.csv` first —
@@ -448,10 +426,6 @@ latest).
   disclosure's **period**: unset, *This campaign* is the current calendar
   year — confirm the election period with Elections BC and set it under
   Receipts → Settings → More details.
-- Card gifts are dated by the campaign's day (Pacific). Card receipts issued
-  before this fix used the UTC day, so a card gift paid after 4–5 pm
-  Pacific may show the next day: compare card receipts with the Stripe
-  dashboard before filing.
 
 ### Texting and calls — confirm with counsel
 

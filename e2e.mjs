@@ -1,7 +1,7 @@
 // Starbase release E2E — one fresh Imagine Surrey workspace, end to end across
 // every screen: signup → seed Surrey doors → map (rate, outcome, sign, deep
 // link, filters) → people (tags) → Calls → profile → shifts (assign +
-// notify) → outreach (newsletter, press, petition, JSON bridge) → public
+// notify) → outreach (newsletter, press) → public
 // pages → Today → team invite → volunteer on a phone (map, shifts, signs,
 // what they can't reach) → audit chain.
 //
@@ -197,51 +197,20 @@ t = await text();
 check('shift notify shows per-channel results', /email not sent/i.test(t) && /text not sent/i.test(t) && /connect email and text, then Notify again/.test(t) && !/✓ Sent/.test(t) && !/waiting to send/i.test(t), (t.match(/Sam Ortiz.{0,80}/) || [''])[0]);
 await shot('5-shift');
 
-// ── 7. Outreach: newsletter, press, petition, JSON bridge ──
+// ── 7. Outreach: newsletter, press ──
 await act('workspace.update', { website: 'https://imaginesurrey.ca' });
-await act('petition.create', { slug: 'skytrain-to-newton', title: 'Bring SkyTrain to Newton', body: 'Surrey deserves rapid transit south of 72nd.' });
-await go('/outreach/links');
-// The public links are rows with Copy; their addresses + the form endpoint sit under "For your web developer".
-await page.click('button.ot-more:has-text("For your web developer")');
-await sleep(300);
+await act('subscription.add', { email: 'priya@example.org', name: 'Priya Nair' });
+await go('/outreach/connect');
 t = await text();
-check('links tab: bridge snippet + public links', /\/api\/public\/imagine-surrey\/signup/.test(t) && /\/v\/imagine-surrey/.test(t) && /\/n\/imagine-surrey/.test(t));
-await shot('6-links-bridge');
-
-// Public pages, as a visitor (no cookie)
-const visitor = await browser.newContext();
-const vp = await visitor.newPage();
-await vp.goto(`${BASE}/p/imagine-surrey/skytrain-to-newton`, { waitUntil: 'domcontentloaded' });
-const pubTxt = (await vp.innerText('body')).replace(/\s+/g, ' ');
-check('public petition page renders with backlink', /Bring SkyTrain to Newton/.test(pubTxt) && /imaginesurrey\.ca/.test(pubTxt));
-await vp.fill('#name', 'Priya Nair');
-await vp.fill('#email', 'priya@example.org');
-await vp.check('input[name="subscribe"]');
-await vp.click('button[type="submit"]');
-await sleep(500);
-check('petition signed on the public page', /Thank you, Priya/.test(await vp.innerText('body')));
-await vp.screenshot({ path: `${SHOTS}/7-public-petition.png` });
-await vp.goto(`${BASE}/v/imagine-surrey`, { waitUntil: 'domcontentloaded' });
-check('public volunteer page lists the roles', /Zone house captain/.test(await vp.innerText('body')));
-const bridge = await vp.evaluate(async (base) => {
-  const r = await fetch(`${base}/api/public/imagine-surrey/signup`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ kind: 'volunteer', name: 'Website Volunteer', phone: '604-555-0199', roles: ['phoning', 'food'] }),
-  });
-  return r.status;
-}, BASE);
-check('website JSON bridge accepts a volunteer', bridge === 200, bridge);
-await visitor.close();
-
-await go('/people?tag=volunteer-prospect');
-check('website volunteer landed in People', /Website Volunteer/.test(await text()));
+check('connections tab: email and texting status, campaign website', /Email not connected/.test(t) && /Campaign website/.test(t), t.slice(0, 200));
+await shot('6-connections');
 
 await go('/outreach/newsletter');
 // Subscribers sit under "More"; the compose form opens from "Write newsletter".
 await page.click('button.ot-more:has-text("More")');
 await sleep(300);
 t = await text();
-check('newsletter list includes the petition opt-in', /priya@example\.org/.test(t));
+check('newsletter list includes the subscriber added at the desk', /priya@example\.org/.test(t));
 await page.click('button:has-text("Write newsletter")');
 await page.waitForSelector('#newsletter-subject', { timeout: 5000 });
 await page.fill('#newsletter-subject', 'This week in Surrey');

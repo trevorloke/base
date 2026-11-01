@@ -346,30 +346,18 @@ app.post('/geocode', async (c) => {
 // DELETE /sample removes exactly those rows and nothing else. What you made
 // yourself stays, even when it hangs on a sample row — a gift, sign, knock,
 // role, booking, link to someone they know or profile detail you set on a
-// sample voter keeps that voter (no longer marked sample), and a booking you made on the sample shift, an RSVP to the sample
-// town hall or a signature on the sample petition keeps that shift, event or
-// petition. Sample gifts are voided (an event on the books, never a silent
+// sample voter keeps that voter (no longer marked sample), and a booking you
+// made on the sample shift keeps that shift. Sample gifts are voided (an event on the books, never a silent
 // delete); everything else sample-made is deleted with a 'void' event.
 const SAMPLE_TAG = 'sample';
 const SAMPLE_KEYS = ['persons', 'contacts', 'roles', 'gifts', 'signs', 'shifts', 'assignments',
-  'petitions', 'events', 'subscriptions', 'turfs', 'relationships'];
+  'subscriptions', 'turfs', 'relationships'];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const idLists = (src = {}) => Object.fromEntries(SAMPLE_KEYS.map((k) => [
   k, Array.isArray(src[k]) ? [...new Set(src[k].filter((v) => UUID_RE.test(String(v))))] : [],
 ]));
 
 // "sample-town-hall-newton" is taken when a kept sample event still holds it.
-const freeSlug = async (tx, table, workspaceId, base) => {
-  const taken = new Set((await tx.query(
-    `select slug from ${table} where workspace_id = $1 and (slug = $2 or slug like $3)`,
-    [workspaceId, base, `${base}-%`],
-  )).rows.map((r) => r.slug));
-  if (!taken.has(base)) return base;
-  let n = 2;
-  while (taken.has(`${base}-${n}`)) n += 1;
-  return `${base}-${n}`;
-};
-
 app.post('/sample', async (c) => {
   const ctx = c.get('ctx');
   if (ctx.role !== 'manager') return c.json({ error: 'managers only' }, 403);
@@ -489,7 +477,7 @@ app.post('/sample', async (c) => {
       ids.signs.push(sid);
       emit('sign', sid, 'create', { kind, status, sample: true });
     }
-    // An upcoming Saturday shift, a petition, an event, the Newton turf.
+    // An upcoming Saturday shift, the Newton turf.
     const sat = new Date(); sat.setUTCDate(sat.getUTCDate() + ((6 - sat.getUTCDay() + 7) % 7 || 7)); sat.setUTCHours(17, 0, 0, 0);
     const shiftId = newId();
     await tx.query(
@@ -507,26 +495,6 @@ app.post('/sample', async (c) => {
       ids.assignments.push(aid);
       emit('shift_assignment', aid, 'create', { shift_id: shiftId, person_id: id[who], sample: true });
     }
-    const petitionId = newId();
-    await tx.query(
-      `insert into petitions (id, workspace_id, slug, title, body) values ($1, $2, $3,
-        'Bring rapid transit down King George to Newton (sample)', 'Surrey deserves fast, frequent transit south of 72 Avenue. Add your name.')`,
-      [petitionId, W, await freeSlug(tx, 'petitions', W, 'sample-skytrain-to-newton')],
-    );
-    ids.petitions.push(petitionId);
-    emit('petition', petitionId, 'create', { sample: true });
-    const eventId = newId();
-    const th = new Date(Date.now() + 10 * 86400e3); th.setUTCHours(2, 0, 0, 0); // 7pm Pacific, ~10 days out
-    await tx.query(
-      `insert into campaign_events (id, workspace_id, slug, title, description, location, starts_at, ends_at, capacity)
-       values ($1, $2, $3, 'Town hall: Imagine Newton (sample)',
-               'Bring your questions about transit, housing, and safety in Newton.', 'Newton Cultural Centre, 13530 72 Ave',
-               $4, $5, 120)`,
-      [eventId, W, await freeSlug(tx, 'campaign_events', W, 'sample-town-hall-newton'),
-       th.toISOString(), new Date(th.getTime() + 2 * 3600e3).toISOString()],
-    );
-    ids.events.push(eventId);
-    emit('campaign_event', eventId, 'create', { sample: true });
     for (const email of S.subscribers) {
       // An address already on the list is yours: it is left alone, and not recorded.
       const row = (await tx.query(
@@ -559,7 +527,7 @@ app.post('/sample', async (c) => {
 });
 
 // A sample loaded before ids were recorded (settings.sample has only shift,
-// petition, event, turf and sign ids). Every row that load inserted carries
+// turf and sign ids). Every row that load inserted carries
 // its transaction's now() as created_at — the same instant as its
 // 'sample.load' events — so that instant names them exactly; its knocks were
 // back-dated to before it, onto people created in it.
@@ -578,8 +546,6 @@ const legacySampleIds = async (tx, W, marks) => {
     relationships: await created('relationships'),
     signs: marks.signIds,
     shifts: marks.shiftIds,
-    petitions: marks.petitionIds,
-    events: marks.eventIds,
     turfs: marks.turfIds,
   });
 };
@@ -587,11 +553,10 @@ const legacySampleIds = async (tx, W, marks) => {
 const nOf = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 // What a kept record is, in the campaign's words.
 const KINDS = [
-  ['gift', 'gift', 'gifts'], ['pledge', 'pledge', 'pledges'], ['sign', 'sign', 'signs'],
+  ['gift', 'gift', 'gifts'], ['sign', 'sign', 'signs'],
   ['door', 'door knock', 'door knocks'], ['phone', 'call', 'calls'], ['text', 'text', 'texts'],
   ['in_person', 'talk in person', 'talks in person'], ['connection', 'connection', 'connections'],
   ['role', 'volunteer role', 'volunteer roles'], ['booking', 'shift booking', 'shift bookings'],
-  ['rsvp', 'RSVP', 'RSVPs'], ['signature', 'signature', 'signatures'],
   ['field', 'profile detail', 'profile details'],
 ];
 const kindList = (byKind) => KINDS.filter(([k]) => byKind[k]).map(([k, one, many]) => nOf(byKind[k], one, many)).join(', ');
@@ -623,12 +588,10 @@ const clearSample = async (tx, W, emit) => {
   };
   // Voided gifts count too: they are still in the books, and still name their donor.
   await onPerson('gift', `select id, person_id from gifts where workspace_id = $1 and person_id = any($2::uuid[]) and not (id = any($3::uuid[]))`, ids.gifts);
-  await onPerson('pledge', `select id, person_id from pledges where workspace_id = $1 and person_id = any($2::uuid[])`);
   await onPerson('sign', `select id, person_id from signs where workspace_id = $1 and person_id = any($2::uuid[]) and not (id = any($3::uuid[]))`, ids.signs);
   await onPerson('contact', `select id, person_id, channel from contacts where workspace_id = $1 and person_id = any($2::uuid[]) and not (id = any($3::uuid[]))`, ids.contacts);
   await onPerson('role', `select id, person_id from volunteer_roles where workspace_id = $1 and person_id = any($2::uuid[]) and not (id = any($3::uuid[]))`, ids.roles);
   await onPerson('booking', `select id, person_id from shift_assignments where workspace_id = $1 and person_id = any($2::uuid[]) and not (id = any($3::uuid[]))`, ids.assignments);
-  await onPerson('rsvp', `select id, person_id from event_rsvps where workspace_id = $1 and person_id = any($2::uuid[])`);
   // A profile detail you set (ext/fields): the sample's own values are marked sample.
   await onPerson('field', `select id, person_id from person_field_values where workspace_id = $1 and person_id = any($2::uuid[]) and not sample`);
   // A link you made (ext/relationships) keeps the sample people at both ends.
@@ -645,7 +608,7 @@ const clearSample = async (tx, W, emit) => {
     });
   }
 
-  // Sample shifts, events and petitions with your bookings, RSVPs or signatures on them.
+  // Sample shifts with your bookings on them.
   const keepHosts = async (kind, hostSql, childSql, hostIds, exclude = null) => {
     const hosts = await rows(hostSql, [W, hostIds]);
     const children = await rows(childSql, exclude ? [W, hostIds, exclude] : [W, hostIds]);
@@ -656,12 +619,6 @@ const clearSample = async (tx, W, emit) => {
     'select id, title, deleted_at is null as live from shifts where workspace_id = $1 and id = any($2::uuid[])',
     `select id, shift_id as host from shift_assignments
      where workspace_id = $1 and shift_id = any($2::uuid[]) and not (id = any($3::uuid[]))`, ids.shifts, ids.assignments);
-  const events = await keepHosts('rsvp',
-    'select id, title, deleted_at is null as live from campaign_events where workspace_id = $1 and id = any($2::uuid[])',
-    'select id, event_id as host from event_rsvps where workspace_id = $1 and event_id = any($2::uuid[])', ids.events);
-  const petitions = await keepHosts('signature',
-    'select id, title, true as live from petitions where workspace_id = $1 and id = any($2::uuid[])',
-    'select id, petition_id as host from petition_signatures where workspace_id = $1 and petition_id = any($2::uuid[])', ids.petitions);
   // A host you already deleted yourself keeps its records, hidden as you left it.
   const kept = (hosts) => hosts.filter((h) => h.n > 0);
   const told = (hosts) => kept(hosts).filter((h) => h.live);
@@ -695,10 +652,6 @@ const clearSample = async (tx, W, emit) => {
     ids.assignments, (r) => ({ shift_id: r.shift_id, person_id: r.person_id }));
   await drop('shifts', 'shift', 'delete from shifts where workspace_id = $1 and id = any($2::uuid[]) returning id, title',
     gone(shifts), (r) => ({ title: r.title }));
-  await drop('events', 'campaign_event', 'delete from campaign_events where workspace_id = $1 and id = any($2::uuid[]) returning id, title',
-    gone(events), (r) => ({ title: r.title }));
-  await drop('petitions', 'petition', 'delete from petitions where workspace_id = $1 and id = any($2::uuid[]) returning id, title',
-    gone(petitions), (r) => ({ title: r.title }));
   await drop('turfs', 'turf', 'delete from turfs where workspace_id = $1 and id = any($2::uuid[]) returning id, name',
     ids.turfs, (r) => ({ name: r.name }));
   await drop('subscriptions', 'subscription',
@@ -747,23 +700,18 @@ const clearSample = async (tx, W, emit) => {
     parts.push(`Kept ${nOf(keptPeople.size, 'sample person', 'sample people')} with your own records on them (${kindList(byKind)}); they’re no longer marked sample.`);
   }
   for (const s of told(shifts)) parts.push(`Kept the shift “${s.title}”: ${nOf(s.n, 'booking on it is', 'bookings on it are')} yours.`);
-  for (const e of told(events)) parts.push(`Kept the event “${e.title}”: it has ${nOf(e.n, 'RSVP', 'RSVPs')}.`);
-  for (const p of told(petitions)) parts.push(`Kept the petition “${p.title}”: it has ${nOf(p.n, 'signature', 'signatures')}.`);
   parts.push(...said);
   const summary = {
     cleared: leave.length,
     kept: real.size,
     keptPeople: keptPeople.size,
     keptShifts: kept(shifts).length,
-    keptEvents: kept(events).length,
-    keptPetitions: kept(petitions).length,
     removed,
     message: parts.join(' '),
   };
   emit('workspace', W, 'update', {
     sampleCleared: leave.length, removed, kept: real.size,
     keptPeople: [...keptPeople.keys()], keptShifts: kept(shifts).map((s) => s.id),
-    keptEvents: kept(events).map((e) => e.id), keptPetitions: kept(petitions).map((p) => p.id),
   });
   return summary;
 };

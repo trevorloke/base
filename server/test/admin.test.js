@@ -73,7 +73,7 @@ test('permissions: an area taken from a role, or given to one person, changes wh
   const set = await mgr.action('permission.role.set', { role: 'staff', deny: ['money'] });
   assert.equal(set.status, 200, JSON.stringify(set.json));
   assert.ok(!(await areasOf(staff)).includes('money'));
-  assert.equal((await staff.get('/api/pledges')).status, 403);
+  assert.equal((await staff.get('/api/receipts/needs')).status, 403);
   const p = await mgr.createPerson('Donor Example');
   assert.equal((await staff.action('gift.log', { person_id: p.id, amount_cents: 1000, date: '2026-10-01', method: 'cash' })).status, 403);
   assert.ok(!(await staff.get('/api/actions')).json.actions.includes('gift.log'), 'the list of what they may do says so too');
@@ -81,12 +81,12 @@ test('permissions: an area taken from a role, or given to one person, changes wh
   assert.equal((await staff.action('person.create', { name: 'Still Fine' })).status, 200);
 
   // Vic, a volunteer, is given Outreach: the writes and the desk-only reads open for that area only.
-  assert.equal((await vol.action('cevent.create', { slug: 'vic-night', title: 'Vic night', starts_at: new Date(Date.now() + 86400e3).toISOString() })).status, 403);
+  assert.equal((await vol.action('subscription.add', { email: 'vic.adds@example.org' })).status, 403);
   assert.equal((await mgr.action('permission.member.set', { user_id: ids.Vic, grant: ['outreach'] })).status, 200);
   assert.deepEqual(await areasOf(vol), ['outreach']);
-  assert.equal((await vol.action('cevent.create', { slug: 'vic-night', title: 'Vic night', starts_at: new Date(Date.now() + 86400e3).toISOString() })).status, 200);
+  assert.equal((await vol.action('subscription.add', { email: 'vic.adds@example.org' })).status, 200);
   assert.equal((await vol.get('/api/subscriptions')).status, 200, 'an outreach read');
-  assert.equal((await vol.get('/api/pledges')).status, 403, 'money is still not theirs');
+  assert.equal((await vol.get('/api/receipts/needs')).status, 403, 'money is still not theirs');
   assert.equal((await vol.get('/api/export')).status, 403);
 
   // A person's own deny beats the role's grant; "as their role" clears it.

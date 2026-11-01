@@ -10,9 +10,8 @@ const TITLES = {
   contacts: 'Contacts by week', donations: 'Donations by month', subscribers: 'Newsletter list, by month', sends: 'Sends',
 };
 const EXPORTS = [
-  ['people', 'People'], ['contacts', 'Contacts (doors, calls, texts)'], ['gifts', 'Gifts'], ['pledges', 'Pledges'],
-  ['subscribers', 'Newsletter subscribers'], ['signatures', 'Petition signatures'], ['rsvps', 'Event RSVPs'],
-  ['lists', 'Lists (hand-picked)'],
+  ['people', 'People'], ['contacts', 'Contacts (doors, calls, texts)'], ['gifts', 'Gifts'],
+  ['subscribers', 'Newsletter subscribers'], ['lists', 'Lists (hand-picked)'],
 ];
 const cell = (v) => (v instanceof Date || /^\d{4}-\d{2}-\d{2}T/.test(String(v)) ? String(v).slice(0, 10) : typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v ?? ''));
 

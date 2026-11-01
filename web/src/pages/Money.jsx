@@ -1,9 +1,6 @@
 // Donations (the /money screen) — what came in, and what needs the desk.
-//   Top: one big "Raised this year" number, then "Needs you": pledges from the
-//   donate page ("Pledge" chip) to "Mark paid" (→ a gift, cap-checked) or
-//   "Cancel pledge" — a monthly one says "Mark this month paid" (it logs that
-//   month's gift and stays open; once in for the month it waits under More
-//   until next month) — and gifts over the contribution limit ("Over limit":
+//   Top: one big "Raised this year" number, then "Needs you": gifts over
+//   the contribution limit ("Over limit":
 //   "$150 over the $1,250 limit", the legal wording under "Why?", Donor ·
 //   Void right there) — and receipts with no home address ("Needs address":
 //   Street address · Save address right there; the receipt's email waits).
@@ -18,10 +15,7 @@
 //   The ledger: rows of donor, amount, date (+ monthly / over limit chips). Tap
 //   a row for how it was paid, note, the donor's profile and Void ("Void this
 //   gift? Yes · No", then a 7s Undo).
-//   Under "More": the donate page (Copy link · Open · Set up), monthly pledges
-//   already in this month, and paid & closed pledges. Voiding the gift a
-//   pledge was paid with opens that pledge again (the server does it, in the
-//   same step); Undo closes it again.
+//   Under "More": receipts.
 //   Dollars on screen, integer cents on the wire; cursor-paginated load more.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
@@ -335,158 +329,9 @@ function GiftForm({ presetPersonId, onSaved, onClose }) {
   );
 }
 
-// ── Pledges: online donations waiting on the desk ──
-// The donate page (/d/:slug) records a pledge; it becomes a gift when Stripe
-// confirms payment, or when the treasurer marks it received here (e-transfer,
-// cheque…). Receiving runs the same cap check as a desk gift.
-const OPEN_PLEDGE = new Set(['pledged', 'pending']);
-const PLEDGE_STATUS = {
-  pledged:   { label: 'pledged', cls: 'chip chip-warn', title: 'Waiting for the donor to send it' },
-  pending:   { label: 'card started', cls: 'chip chip-warn', title: 'Started paying by card; the card payment isn’t confirmed yet' },
-  paid:      { label: 'paid by card', cls: 'chip chip-ok', title: 'The card payment went through' },
-  received:  { label: 'paid', cls: 'chip chip-ok', title: 'Marked paid at the desk' },
-  cancelled: { label: 'cancelled', cls: 'chip ops-chip-muted', title: 'Cancelled — no gift recorded' },
-};
-const PledgeStatus = ({ status }) => {
-  const s = PLEDGE_STATUS[status] || { label: status, cls: 'chip' };
-  return <span className={s.cls} title={s.title}>{s.label}</span>;
-};
-// A plain fact, so a quiet outline chip — yellow is kept for problems.
 const MonthlyChip = () => <span className="chip">monthly</span>;
-// Monthly pledges stay open; last_received_on (YYYY-MM-DD) is the latest
-// month a gift came in for. Months are this device's calendar.
-const ym = (d) => String(d || '').slice(0, 7);
-const monthWord = (month) => {
-  const [y, m] = String(month).split('-').map(Number);
-  if (!y || !m) return String(month);
-  const name = new Date(y, m - 1, 1).toLocaleDateString('en-CA', { month: 'long' });
-  return y === new Date().getFullYear() ? name : `${name} ${y}`;
-};
-const isMonthly = (p) => p.cadence === 'monthly';
-const paidThisMonth = (p) => isMonthly(p) && OPEN_PLEDGE.has(p.status) && ym(p.last_received_on) === ym(todayISO());
-// The sample dataset tags every gift note "sample"; Today already says so.
 const shownNote = (n) => (n && n.trim().toLowerCase() !== 'sample' ? n : null);
 
-function PledgeRow({ p, onReceived, onChanged }) {
-  const [mode, setMode] = useState(null); // null | 'receive' | 'cancel'
-  const [method, setMethod] = useState('etransfer');
-  const [date, setDate] = useState(todayISO());
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  const open = OPEN_PLEDGE.has(p.status);
-  const monthly = isMonthly(p);
-  const inThisMonth = paidThisMonth(p);
-  const last = monthly && p.last_received_on ? ym(p.last_received_on) : null;
-  // What "Mark paid" records, for the month of the date chosen.
-  const forMonth = !date || ym(date) === ym(todayISO()) ? 'this month' : monthWord(ym(date));
-
-  const receive = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      const res = await action('pledge.receive', { id: p.id, method, date });
-      onReceived(res, p);
-    } catch (err) {
-      setError(err.message);
-      setBusy(false);
-    }
-  };
-
-  const cancel = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      await action('pledge.cancel', { id: p.id });
-      onChanged(`✓ Cancelled ${p.name}’s ${fmtBig(p.amount_cents)} pledge`);
-    } catch (err) {
-      setError(err.message);
-      setBusy(false);
-    }
-  };
-
-  const back = () => { setMode(null); setError(null); };
-  const idp = `pl-${p.id.slice(0, 8)}`;
-  return (
-    <li className="ops-item">
-      <div className="ops-row ops-row--static">
-        <span className="ops-row__main">
-          <span className="ops-row__name">{p.person_id ? <Link to={`/people/${p.person_id}`}>{p.name}</Link> : p.name}</span>
-          <span className="ops-row__sub">
-            {localDay(p.created_at)}
-            {open && !inThisMonth && <span className="chip ops-chip-amber" title="Promised on the donate page — not paid yet">Pledge</span>}
-            {monthly && <MonthlyChip />}
-            <SlateChip slate={p.slate} />
-            {last && (
-              <span className={`chip${inThisMonth ? ' chip-ok' : ''}`} title="The latest month marked paid">
-                {monthWord(last)} paid
-              </span>
-            )}
-            {p.status !== 'pledged' && <PledgeStatus status={p.status} />}
-          </span>
-        </span>
-        <span className="ops-row__end"><span className="ops-row__amt">{fmtMoney(p.amount_cents)}</span></span>
-      </div>
-
-      {open && mode === null && (
-        <div className="ops-pledge-acts">
-          {/* A monthly pledge already in for this month waits for next month. */}
-          {!inThisMonth && (
-            <button type="button" className="btn ops-tap" onClick={() => setMode('receive')}>
-              {monthly ? 'Mark this month paid' : 'Mark paid'}
-            </button>
-          )}
-          <button type="button" className="btn btn-quiet ops-tap" onClick={() => setMode('cancel')}>Cancel pledge</button>
-          {monthly && p.stripe_subscription_id && (
-            <span className="ops-meta">A card subscription: cancel it in Stripe too, or Stripe keeps charging. Cancelled there, it closes here on its own.</span>
-          )}
-        </div>
-      )}
-
-      {open && mode === 'receive' && (
-        <form className="ops-body" onSubmit={receive} aria-label={`Mark ${p.name}’s pledge paid`}>
-          {p.status === 'pending' && <p className="ops-meta">Card checkout started — only if paid another way.</p>}
-          {monthly && <p className="ops-meta">Records {forMonth} · stays open</p>}
-          <div className="form-row">
-            <div className="field">
-              <label htmlFor={`${idp}-method`}>Paid by</label>
-              <select id={`${idp}-method`} className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
-                {METHODS.map((m) => <option key={m} value={m}>{methodWord(m)}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor={`${idp}-date`}>Date paid</label>
-              <input id={`${idp}-date`} className="input mono" type="date" required value={date}
-                max={todayISO()} onChange={(e) => setDate(e.target.value)} />
-            </div>
-          </div>
-          {error && <p className="error" role="alert">{error}</p>}
-          <div className="ops-actions">
-            <button type="submit" className="btn ops-solid ops-tap" disabled={busy || !date}>
-              {busy ? 'Saving…' : `Mark ${fmtBig(p.amount_cents)} paid`}
-            </button>
-            <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={back}>Back</button>
-          </div>
-        </form>
-      )}
-
-      {open && mode === 'cancel' && (
-        <div className="ops-body">
-          <div className="ops-confirm" role="group" aria-label="Confirm cancel">
-            <span>Cancel this pledge?</span>
-            <button type="button" className="btn ops-danger ops-tap" disabled={busy} onClick={cancel}>
-              {busy ? 'Cancelling…' : 'Yes'}
-            </button>
-            <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={back}>No</button>
-          </div>
-          {error && <p className="error" role="alert">{error}</p>}
-        </div>
-      )}
-    </li>
-  );
-}
-
-// ── Donor · Void, with "Void this gift? Yes · No" in place ──
 function GiftActions({ personId, onVoid }) {
   const [confirm, setConfirm] = useState(false);
   if (confirm) {
@@ -576,38 +421,6 @@ function GiftRow({ g, open, onToggle, onVoid }) {
   );
 }
 
-// ── "Donate page · Copy link · Open · Set up" — the link, never the path ──
-function DonateLink({ slug }) {
-  const [copied, setCopied] = useState(null); // null | 'ok' | 'show'
-  const url = slug ? `${window.location.origin}/d/${slug}` : null;
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied('ok');
-    } catch {
-      setCopied('show'); // no clipboard (http, old browser) — show it to copy by hand
-    }
-  };
-  return (
-    <div className="ops-donate">
-      <div className="ops-actions">
-        <span className="ops-donate__label">Donate page</span>
-        {url && (
-          <button type="button" className="btn btn-quiet ops-tap" onClick={copy}>
-            {copied === 'ok' ? 'Copied ✓' : 'Copy link'}
-          </button>
-        )}
-        {url && <a className="btn btn-quiet ops-tap" href={url} target="_blank" rel="noopener noreferrer">Open</a>}
-        <Link className="btn btn-quiet ops-tap" to="/outreach/links">Set up</Link>
-      </div>
-      {copied === 'show' && (
-        <input className="input mono" readOnly value={url} aria-label="Donate page link"
-          onFocus={(e) => e.currentTarget.select()} autoFocus />
-      )}
-    </div>
-  );
-}
-
 // ── The screen ──
 export default function Money() {
   const queryClient = useQueryClient();
@@ -635,7 +448,6 @@ export default function Money() {
     getNextPageParam: (last) => last?.next ?? undefined,
     enabled: canMoney,
   });
-  const pledges = useQuery({ queryKey: ['pledges'], queryFn: () => apiGet('/pledges'), enabled: canMoney });
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief'), enabled: canMoney });
   const receiptNeeds = useQuery({ queryKey: ['receipts', 'needs'], queryFn: () => apiGet('/receipts/needs'), enabled: canMoney });
   // No signal: this tab's last copy (components/KeptCopies.js), read only.
@@ -645,19 +457,12 @@ export default function Money() {
   // Newest gift date first (the ledger itself pages in entry order).
   const rows = (gifts.data?.pages ?? []).flatMap((p) => p?.records ?? []).filter((g) => !voided.has(g.id))
     .sort((a, b) => fmtDate(b.date).localeCompare(fmtDate(a.date)));
-  const allPledges = pledges.data?.pledges ?? [];
-  // Needs you: open pledges, except a monthly one already in for this month
-  // (the same rule as Today's count).
-  const openPledges = allPledges.filter((p) => OPEN_PLEDGE.has(p.status) && !paidThisMonth(p));
-  const monthlyIn = allPledges.filter(paidThisMonth);
-  const closedPledges = allPledges.filter((p) => !OPEN_PLEDGE.has(p.status));
   const flagged = (brief.data?.flagged ?? []).filter((f) => !voided.has(f.id));
   const noAddress = (receiptNeeds.data?.receipts ?? []).filter((r) => !voided.has(r.gift_id));
   // The latest few skip gifts already listed under "Needs you"; "All gifts" shows every one.
   const flaggedIds = new Set(flagged.map((f) => f.id));
   const latest = rows.filter((g) => !flaggedIds.has(g.id)).slice(0, LATEST);
   const personOf = Object.fromEntries(rows.map((g) => [g.id, g.person_id]));
-  const slug = pledges.data?.slug;
 
   // The big number: this calendar year from the ledger once it's all loaded;
   // until then (or past one page) the brief's running total.
@@ -674,16 +479,12 @@ export default function Money() {
   }
   const weekCents = brief.data?.money?.weekCents ?? 0;
 
-  // A gift can carry a pledge with it (voiding one reopens its pledge), so
-  // every gift write refreshes the pledges too.
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['records', 'gift'] });
     queryClient.invalidateQueries({ queryKey: ['brief'] });
     queryClient.invalidateQueries({ queryKey: ['person'] });
-    queryClient.invalidateQueries({ queryKey: ['pledges'] });
     queryClient.invalidateQueries({ queryKey: ['receipts'] }); // a gift's receipt is made, voided and restored with it
   };
-  const refreshPledges = invalidate;
 
   // toast({ text, undo? }) — one at a time, 7s.
   const showToast = (t) => {
@@ -710,38 +511,16 @@ export default function Money() {
     });
   };
 
-  const onReceived = async (res, p) => {
-    const g = res.gift || {};
-    setBanner(overBanner(res, p.name));
-    refreshPledges();
-    // A monthly pledge stays open: say which month came in. Undo voids the
-    // gift, which opens the pledge (or that month) again — and, within the
-    // minute, its receipt email never goes.
-    const month = isMonthly(p) && g.date ? ` for ${monthWord(ym(g.date))}` : '';
-    const note = g.id ? receiptNote(await receiptOf(g.id)) : '';
-    showToast({
-      text: `✓ ${fmtBig(g.amount_cents ?? p.amount_cents)} from ${p.name}${month}${note}`,
-      undo: g.id ? () => voidGift(g.id) : null,
-    });
-  };
-  const onPledgeChanged = (text) => {
-    refreshPledges();
-    showToast({ text });
-  };
-
   // The row leaves at once; the toast waits for the server, so it only ever
-  // says what happened ("Gift voided · pledge open again").
+  // says what happened.
   const voidGift = async (id) => {
     setError(null);
     setOpenId(null);
     setVoided((s) => new Set(s).add(id)); // optimistic remove
     setBanner((b) => (b?.giftId === id ? null : b)); // that gift no longer counts
     try {
-      const res = await action('gift.void', { id });
-      // A one-time pledge paid with this gift is open again (a monthly one
-      // never closed).
-      const reopened = !!res?.pledge?.reopened;
-      showToast({ text: reopened ? 'Gift voided · pledge open again' : 'Gift voided', undo: () => undoVoid(id) });
+      await action('gift.void', { id });
+      showToast({ text: 'Gift voided', undo: () => undoVoid(id) });
       // Its receipt already went to the donor: offer to tell them it's void.
       const r = await receiptOf(id);
       setVoidAsk(r?.void && r.can_send_void ? { id: r.id, number: r.number, name: r.donor_name, giftId: id } : null);
@@ -757,11 +536,10 @@ export default function Money() {
   const undoVoid = async (id) => {
     setError(null);
     try {
-      const res = await action('gift.restore', { id });
+      await action('gift.restore', { id });
       setVoided((s) => { const n = new Set(s); n.delete(id); return n; });
       setVoidAsk((a) => (a?.giftId === id ? null : a));
-      const closedAgain = ['received', 'paid'].includes(res?.pledge?.status);
-      showToast({ text: closedAgain ? '✓ Gift restored · pledge paid' : '✓ Gift restored' });
+      showToast({ text: '✓ Gift restored' });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -780,7 +558,7 @@ export default function Money() {
     );
   }
 
-  const needs = openPledges.length + flagged.length + noAddress.length;
+  const needs = flagged.length + noAddress.length;
 
   return (
     <div className="ops-page">
@@ -794,7 +572,7 @@ export default function Money() {
           )}
         </div>
       </div>
-      {!online && <NeedsSignalLine>Gifts and pledges need signal</NeedsSignalLine>}
+      {!online && <NeedsSignalLine>Gifts need signal</NeedsSignalLine>}
 
       {banner && (
         <div className="banner" role="status">
@@ -820,14 +598,10 @@ export default function Money() {
         {weekCents > 0 && <span className="sub">+{fmtBig(weekCents)} this week</span>}
       </div>
 
-      {pledges.isError && <p className="error">{pledges.error.message}</p>}
       {needs > 0 && (
         <section className="ops-needs" aria-labelledby="needs-head">
           <span className="eyebrow" id="needs-head">Needs you · {needs}</span>
           <ul className="ops-rows">
-            {openPledges.map((p) => (
-              <PledgeRow key={p.id} p={p} onReceived={onReceived} onChanged={onPledgeChanged} />
-            ))}
             {flagged.map((f) => (
               <FlaggedRow key={f.id} f={f} personId={f.person_id ?? personOf[f.id]} onVoid={() => voidGift(f.id)} />
             ))}
@@ -879,27 +653,6 @@ export default function Money() {
         {more && (
           <div id="money-more" className="ops-more-body">
             <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/receipts">Receipts</Link>
-            <DonateLink slug={slug} />
-            {monthlyIn.length > 0 && (
-              <>
-                <span className="eyebrow ops-label">Monthly · in for {monthWord(ym(todayISO()))} · {monthlyIn.length}</span>
-                <ul className="ops-rows">
-                  {monthlyIn.map((p) => (
-                    <PledgeRow key={p.id} p={p} onReceived={onReceived} onChanged={onPledgeChanged} />
-                  ))}
-                </ul>
-              </>
-            )}
-            {closedPledges.length > 0 && (
-              <>
-                <span className="eyebrow ops-label">Paid &amp; closed pledges · {closedPledges.length}</span>
-                <ul className="ops-rows">
-                  {closedPledges.map((p) => (
-                    <PledgeRow key={p.id} p={p} onReceived={onReceived} onChanged={onPledgeChanged} />
-                  ))}
-                </ul>
-              </>
-            )}
           </div>
         )}
       </div>

@@ -32,7 +32,7 @@ button, no paragraphs, everything else one tap away.
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
 | **Lists** | Saved filters (a tag, a rating band, a role, has an email…) and hand-picked lists of people: an audience for an email or text blast, a CSV, a report; People's *Save as a list* starts one |
 | **Reports** | The campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export |
-| **Outreach** | Newsletter + press-release blasts written in Markdown (headings, bold, lists, links, pictures; files attached; *Send me a test*); **email blasts** and **texts** to any list, with the same rules as one-to-one texts (quiet hours, STOP, do-not-contact); petitions; events with RSVP pages; the public links and the JSON bridge for the campaign's website |
+| **Outreach** | Newsletter + press-release blasts written in Markdown (headings, bold, lists, links, pictures; files attached; *Send me a test*); **email blasts** and **texts** to any list, with the same rules as one-to-one texts (quiet hours, STOP, do-not-contact); ladders of engagement; the campaign's connections |
 | **ImagineU** | Training for every role: sections of lessons — notes, documents, videos, audio, pictures, contacts, procedures — each ticked *Done*; the desk edits in place and sees who has done what; a lesson marked public has a page anyone can open at `/learn/<slug>` |
 
 Volunteers get five tabs — **Today · Map · Calls · Shifts · ImagineU** — plus
@@ -175,45 +175,26 @@ than a week after they came off is refused. Contacts are door, phone, text or
 |---|---|---|
 | **Ecanvasser** | map canvass, door cards, household grouping, ratings, no-answer outcomes, signs at the door, place-on-map, call/text lists, turf cutting & assignment, walk lists, survey builder (door and calls), custom person fields, offline field mode, offline desk (each sign-in's last copy of every screen, money and donor lists in the tab only; ratings, notes and tags queued; one outbox across tabs) | — |
 | **Action Builder** | assessments (= the rating scale, its words and Voting-for list edited per campaign), tags, roles, relational notes, relationship graph (My people, Knows with a nudge, Most connected, brought in by), event-logged every touch | — |
-| **Action Network** | newsletter list + signup page + unsubscribe, press list + releases, petitions with public pages, volunteer signup page, event RSVP pages, donation pages (Stripe or pledges), JSON bridge for the campaign's own website, ladders of engagement, A/B subject lines with open/click tracking | — |
+| **Action Network** | newsletter list + unsubscribe, press list + releases, email blasts and texts to lists, ladders of engagement, A/B subject lines with open/click tracking | public forms (petitions, signups, RSVPs, donations) from the campaign's website |
 
-## Public pages and the JSON bridge
+## Public pages
 
-The campaign's website lives elsewhere; Starbase gives it public pages to
-link to and a JSON endpoint to post to. Public pages, no login (workspace
-slug from setup: `imagine-surrey`):
+The campaign's website lives elsewhere, and its forms (petitions, newsletter
+and volunteer signup, RSVPs, donations) will feed Starbase when it is
+integrated. Until then Starbase's only public pages are the ones every
+email needs, no login:
 
-- `/p/:slug/:petition` — petition signature page
-- `/n/:slug` — newsletter signup · `/u/:subscriptionId` — unsubscribe (the link
-  asks; one tap on *Unsubscribe* does it, so mail scanners never unsubscribe anyone)
-- `/v/:slug` — volunteer signup with the 15 roles (a hi-rise captain is asked
-  which building; translators, which language)
-- `/e/:slug/:event` — event page with RSVP · `/d/:slug` — donate
+- `/u/:subscriptionId` — unsubscribe from the newsletter (the link asks; one
+  tap on *Unsubscribe* does it, so mail scanners never unsubscribe anyone)
+- `/bu/:recipientId` — unsubscribe from an email blast to a list (the
+  address is marked do-not-email everywhere)
+- `/lu/:runId` — unsubscribe from a ladder's emails
+- `/learn/:slug` — ImagineU's public lessons
 
-The website can also keep its own forms and post JSON here (CORS-open):
-
-```http
-POST /api/public/:slug/signup
-{ "kind": "newsletter" | "volunteer" | "petition" | "rsvp", "name", "email", "phone",
-  "roles": ["highrise_captain"], "detail_highrise_captain": "<building>",
-  "petition": "<petition-slug>", "answer": "<to the petition's question>",
-  "event": "<event-slug>", "guests": 2, "subscribe": true, "note": "…" }
-
-```
-
-The donate page (`/d/:slug`) takes a contribution to one slate — city
+A gift is logged at the desk (Donations → Log a gift) to one slate — city
 council or school board (`shared/canvass.js` SLATES) — and the annual limit
-is checked per slate: what the person has given that slate this year, plus
-what their monthly pledges to it will still take (a monthly gift counts
-every month left in the calendar year, and must fit a full year on its
-own). Paid by card, Stripe's webhook books the gift; a monthly gift
-cancelled in Stripe (`customer.subscription.deleted`) closes its pledge
-here, and a charge refunded in full voids its gift. A petition may ask
-each signer one question (Outreach → Petitions); the answer stays with
-the signature, in the list and the CSV.
+is checked per contributor per slate.
 
-Every public submission lands in the directory as a Person (deduped by email),
-tagged by source, and is appended to the event log under a system actor.
 
 ## Placing people on the map (geocoding)
 
@@ -238,8 +219,7 @@ progress; the page shows it and works out the time left. With
 ## Sending email and text
 
 A newsletter or press release is written in Markdown: the message field
-has the editor's toolbar (bold, italic, heading, link, list, picture, and
-*Link to…* for the donate, volunteer and newsletter-signup pages) and a
+has the editor's toolbar (bold, italic, heading, link, list, picture) and a
 *Preview* that is the email's layout. A picture is kept in the database and
 served at `/media/:id`, cached a year. Up to five files (PDF, pictures, Word, Excel, PowerPoint, .ics,
 .txt, .csv; 5 MB each) go with every copy; *Send me a test* emails the
@@ -267,7 +247,7 @@ in outbound mail — newsletter unsubscribe footers, invite links, the
 pictures in a message — point at the public host. Every newsletter and ladder email ends with "Sent by <campaign>"
 and the reader's own unsubscribe link, and carries `List-Unsubscribe` /
 `List-Unsubscribe-Post` headers so mail apps show their own Unsubscribe
-button. Someone who unsubscribed can only rejoin from the signup page — the
+button. Someone who unsubscribed can only rejoin by signing up again — the
 desk can't add them back. Ladder emails go only to addresses on the list as
 subscribed. Shift messages render in campaign time
 (`America/Vancouver` unless `settings.tz` says otherwise).
@@ -399,7 +379,7 @@ address and sign-in to 30 tries per address and 10 failures per email per
 origin — a form on another host, even under the campaign's domain, can't
 post with it; the session cookie is `SameSite=Strict`); and every answer carries
 `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and a
-referrer policy. The event log keeps no sign-in, invite or Stripe secrets
+referrer policy. The event log keeps no sign-in or invite secrets
 and no image bytes.
 
 ## Run

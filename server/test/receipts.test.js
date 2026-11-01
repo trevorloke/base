@@ -5,7 +5,6 @@
 // groups contributors over $100; volunteers get none of it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { getDb } from '../db/client.js';
@@ -227,66 +226,6 @@ test('a voided gift voids its receipt (number kept, VOID); a restore un-voids it
     `select action, op from events where workspace_id = $1 and entity_type = 'receipt' and entity_id = $2 order by seq`, [wsId, r.id],
   )).rows;
   assert.deepEqual(ev.map((e) => [e.action, e.op]), [['gift.log', 'create'], ['gift.void', 'void'], ['gift.restore', 'restore']]);
-  await verified(mgr);
-});
-
-const eligible = { attest_individual: '1', attest_resident: '1', attest_own_funds: '1' };
-const stripeSign = (body, secret, t = Math.floor(Date.now() / 1000)) =>
-  `t=${t},v1=${createHmac('sha256', secret).update(`${t}.${body}`).digest('hex')}`;
-
-test('a pledge marked paid and a Stripe payment both get receipts', async () => {
-  // A donor already on file without an address: the pledge's home address is used.
-  await mgr.createPerson('Paula Pledge', { email: mail('paula') });
-  const ok = await pub('POST', `/d/${slug}`, new URLSearchParams({
-    amount: '75', name: 'Paula Pledge', email: mail('paula'), address: '12 Pledge Way, Surrey', ...eligible,
-  }));
-  assert.equal(ok.status, 200);
-  const pledge = (await mgr.get('/api/pledges')).json.pledges.find((p) => p.email === mail('paula'));
-  const paid = await treas.action('pledge.receive', { id: pledge.id, method: 'cheque', date: '2026-10-05' });
-  assert.equal(paid.status, 200, JSON.stringify(paid.json));
-  const r = await receiptFor(mgr, paid.json.gift.id);
-  assert.equal(r.amount_cents, 7500);
-  assert.equal(r.method, 'cheque');
-  const doc = (await one(mgr, r.id)).doc;
-  assert.equal(doc.address, '12 Pledge Way, Surrey');
-  assert.equal(doc.contributor, 'Paula Pledge');
-
-  process.env.STRIPE_SECRET_KEY = 'sk_test_receipts';
-  process.env.STRIPE_WEBHOOK_SECRET = 'whsec_receipts';
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, init) => (String(url) === 'https://api.stripe.com/v1/checkout/sessions'
-    ? new Response(JSON.stringify({ id: `cs_rc_${tag}`, url: 'https://checkout.stripe.test/rc' }), { status: 200 })
-    : realFetch(url, init));
-  try {
-    const go = await pub('POST', `/d/${slug}`, new URLSearchParams({
-      amount: '40', name: 'Carl Card', email: mail('carl'), address: '3 Card St, Surrey', ...eligible,
-    }));
-    assert.equal(go.status, 303);
-    const p = (await mgr.get('/api/pledges')).json.pledges.find((x) => x.email === mail('carl'));
-    const body = JSON.stringify({ id: `evt_rc_${tag}`, type: 'checkout.session.completed', created: Math.floor(Date.now() / 1000), data: { object: {
-      id: `cs_rc_${tag}`, mode: 'payment', payment_status: 'paid', amount_total: 4000, payment_intent: 'pi_rc',
-      metadata: { pledge_id: p.id, workspace_id: wsId },
-    } } });
-    const hook = await pub('POST', '/api/public/stripe/webhook', body, { 'stripe-signature': stripeSign(body, 'whsec_receipts') });
-    assert.equal(hook.status, 200, JSON.stringify(hook.json));
-    const cr = await receiptFor(mgr, hook.json.gift_id);
-    assert.equal(cr.amount_cents, 4000);
-    assert.equal(cr.method, 'card');
-    assert.equal((await one(mgr, cr.id)).doc.address, '3 Card St, Surrey');
-    const ev = (await db.query(
-      `select action, actor_id from events where workspace_id = $1 and entity_type = 'receipt' and entity_id = $2`, [wsId, cr.id],
-    )).rows;
-    assert.deepEqual(ev.map((e) => [e.action, e.actor_id]), [['stripe.payment', null]], 'on the payment’s own write, system actor');
-    // A webhook delivered twice never makes a second receipt.
-    const again = await pub('POST', '/api/public/stripe/webhook', body, { 'stripe-signature': stripeSign(body, 'whsec_receipts') });
-    assert.equal(again.json.duplicate, true);
-    const n = (await db.query('select count(*)::int as n from receipts where workspace_id = $1 and person_id = $2', [wsId, cr.person_id])).rows[0].n;
-    assert.equal(n, 1);
-  } finally {
-    globalThis.fetch = realFetch;
-    delete process.env.STRIPE_SECRET_KEY;
-    delete process.env.STRIPE_WEBHOOK_SECRET;
-  }
   await verified(mgr);
 });
 
@@ -764,51 +703,12 @@ test('a voided receipt the donor already got: send a void notice (once)', async 
   await verified(mgr);
 });
 
-test('card gifts are dated by the campaign’s day, not the UTC day', async () => {
-  process.env.STRIPE_SECRET_KEY = 'sk_test_receipts';
-  process.env.STRIPE_WEBHOOK_SECRET = 'whsec_receipts';
-  const realFetch = globalThis.fetch;
-  let n = 0;
-  globalThis.fetch = async (url, init) => (String(url) === 'https://api.stripe.com/v1/checkout/sessions'
-    ? new Response(JSON.stringify({ id: `cs_tz_${tag}_${n}`, url: 'https://checkout.stripe.test/tz' }), { status: 200 })
-    : realFetch(url, init));
-  const pay = async (who, at) => {
-    n += 1;
-    const go = await pub('POST', `/d/${slug}`, new URLSearchParams({
-      amount: '30', name: who, email: mail(who.toLowerCase().replace(/\W/g, '')), address: '15 Evening Rd, Surrey', ...eligible,
-    }));
-    assert.equal(go.status, 303);
-    const p = (await mgr.get('/api/pledges')).json.pledges.find((x) => x.email === mail(who.toLowerCase().replace(/\W/g, '')));
-    const body = JSON.stringify({ id: `evt_tz_${tag}_${n}`, type: 'checkout.session.completed', created: Math.floor(at / 1000), data: { object: {
-      id: `cs_tz_${tag}_${n}`, mode: 'payment', payment_status: 'paid', amount_total: 3000, payment_intent: `pi_tz_${n}`, created: Math.floor(at / 1000),
-      metadata: { pledge_id: p.id, workspace_id: wsId },
-    } } });
-    const hook = await pub('POST', '/api/public/stripe/webhook', body, { 'stripe-signature': stripeSign(body, 'whsec_receipts') });
-    assert.equal(hook.status, 200, JSON.stringify(hook.json));
-    return receiptFor(mgr, hook.json.gift_id);
-  };
-  try {
-    // 7:30 pm Pacific on Oct 21 is 02:30 UTC on Oct 22.
-    const evening = await pay('Eve Evening', Date.UTC(2026, 9, 22, 2, 30));
-    assert.equal(evening.received_on, '2026-10-21');
-    assert.ok((await one(mgr, evening.id)).doc.received_on === '2026-10-21');
-    // 7 pm Pacific on Dec 31 stays in 2026's series and limit.
-    const nye = await pay('Ned Newyear', Date.UTC(2027, 0, 1, 3, 0));
-    assert.equal(nye.received_on, '2026-12-31');
-    assert.match(nye.number, /^2026-\d{4}$/);
-  } finally {
-    globalThis.fetch = realFetch;
-    delete process.env.STRIPE_SECRET_KEY;
-    delete process.env.STRIPE_WEBHOOK_SECRET;
-  }
-});
-
 test('the books still verify across everything in this file', async () => {
   await verified(mgr);
   const kinds = (await db.query(
     `select distinct action from events where workspace_id = $1 and entity_type in ('receipt', 'receipt_settings') order by 1`, [wsId],
   )).rows.map((r) => r.action);
-  for (const a of ['gift.log', 'gift.void', 'gift.restore', 'pledge.receive', 'stripe.payment', 'receipt.send', 'receipt.autosend', 'receipt.sendVoid', 'receipt.settings', 'person.update']) {
+  for (const a of ['gift.log', 'gift.void', 'gift.restore', 'receipt.send', 'receipt.autosend', 'receipt.sendVoid', 'receipt.settings', 'person.update']) {
     assert.ok(kinds.includes(a), a);
   }
 });

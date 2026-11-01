@@ -1,6 +1,6 @@
 // Engagement level — computed from what people did, never stored:
-//   Contact → Supporter (rated 1 or 2) → Signer (a petition, the newsletter,
-//   an RSVP) → Donor or volunteer (a gift; a volunteer role or a shift) →
+//   Contact → Supporter (rated 1 or 2) → Signer (on the newsletter) →
+//   Donor or volunteer (a gift; a volunteer role or a shift) →
 //   Leader (a captain, host or committee role, or 3+ shifts done).
 // A person is the highest level they reached.
 export const LEVELS = [
@@ -26,19 +26,13 @@ const factsSql = (onePerson) => `
     union
     select person_id from shift_assignments where workspace_id = $1 and status in ('assigned', 'confirmed', 'completed')
   ),
-  signed as (
-    select lower(email) as email from petition_signatures where workspace_id = $1 and email is not null
-    union
-    select email from subscriptions where workspace_id = $1 and status = 'subscribed'
-  ),
-  rsvp as (select distinct person_id from event_rsvps where workspace_id = $1 and person_id is not null and status <> 'cancelled')
+  signed as (select email from subscriptions where workspace_id = $1 and status = 'subscribed')
   select p.id,
     exists (select 1 from lead where lead.person_id = p.id) as leader,
     exists (select 1 from donor where donor.person_id = p.id) as donor,
     exists (select 1 from vol where vol.person_id = p.id) as volunteer,
-    (exists (select 1 from rsvp where rsvp.person_id = p.id)
-      or (p.email is not null and exists (select 1 from signed where signed.email = lower(p.email)))
-      or coalesce(p.tags, '[]'::jsonb) ?| array['petition', 'newsletter', 'event']) as signer,
+    ((p.email is not null and exists (select 1 from signed where signed.email = lower(p.email)))
+      or coalesce(p.tags, '[]'::jsonb) ?| array['newsletter']) as signer,
     coalesce(p.rating in ('1', '2'), false) as supporter
   from persons p
   where p.workspace_id = $1 and p.deleted_at is null ${onePerson ? 'and p.id = $3' : ''}`;

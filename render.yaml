@@ -6,7 +6,7 @@
 
 services:
   # Web service + managed Postgres. After the first deploy, set the secrets
-  # marked sync:false in the Render dashboard (email, SMS, Stripe).
+  # marked sync:false in the Render dashboard (email, SMS).
   - type: web
     name: starbase
     runtime: docker
@@ -34,10 +34,6 @@ services:
       - key: TWILIO_AUTH_TOKEN
         sync: false
       - key: TWILIO_FROM
-        sync: false
-      - key: STRIPE_SECRET_KEY       # card donations (leave unset to take pledges)
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET   # from the Stripe webhook pointing at /api/public/stripe/webhook
         sync: false
       - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google geocoding (GEOCODER=google / GEOCODER_FALLBACK=google) and map tiles (GOOGLE_MAPS_TILES=1)
         sync: false

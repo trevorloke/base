@@ -1,5 +1,5 @@
 // Field + outreach actions: canvassing contacts, signs, volunteer roles,
-// shifts with notifications, petitions, newsletter, email blasts, workspace
+// shifts with notifications, newsletter, email blasts, workspace
 // settings. Same contract as every action: zod input, transactional handler,
 // events emitted for the log.
 import { z } from 'zod';
@@ -563,59 +563,6 @@ export const FIELD_ACTIONS = {
     },
   },
 
-  // ── Petitions ──
-  // A petition may ask the signer one question (question; the sign page and
-  // the website's form show it); each signature keeps the answer.
-  'petition.create': {
-    roles: DESK_ROLES,
-    input: z.object({
-      slug: z.string().trim().regex(/^[a-z0-9-]{2,60}$/, 'lowercase letters, digits, dashes'),
-      title: z.string().trim().min(1).max(300),
-      body: z.string().max(8000).nullish(),
-      question: z.string().trim().max(200).nullish(),
-    }),
-    handler: async (tx, ctx, input, emit) => {
-      const id = newId();
-      try {
-        await tx.query(
-          'insert into petitions (id, workspace_id, slug, title, body, question) values ($1, $2, $3, $4, $5, $6)',
-          [id, ctx.workspaceId, input.slug, input.title, input.body || null, input.question || null],
-        );
-      } catch (e) {
-        if (String(e.message).includes('petitions_workspace_id_slug_key')) {
-          throw httpError(409, `a petition with slug '${input.slug}' already exists`);
-        }
-        throw e;
-      }
-      const payload = { id, ...input };
-      emit('petition', id, 'create', payload);
-      return { petition: payload };
-    },
-  },
-
-  'petition.update': {
-    roles: DESK_ROLES,
-    input: z.object({
-      id: uuid(),
-      title: z.string().trim().min(1).max(300).nullish(),
-      body: z.string().max(8000).nullish(),
-      // '' clears the question; absent leaves it.
-      question: z.string().trim().max(200).nullish(),
-      active: z.boolean().nullish(),
-    }),
-    handler: async (tx, ctx, input, emit) => {
-      const n = await tx.query(
-        `update petitions set title = coalesce($3, title), body = coalesce($4, body),
-         question = case when $6::boolean then nullif($5, '') else question end,
-         active = coalesce($7, active) where id = $1 and workspace_id = $2`,
-        [input.id, ctx.workspaceId, input.title || null, input.body ?? null, input.question ?? null, input.question != null, input.active ?? null],
-      );
-      if (n.affectedRows === 0) throw httpError(404, 'petition not found');
-      emit('petition', input.id, 'update', { title: input.title, active: input.active, ...(input.question != null ? { question: input.question || null } : {}) });
-      return { id: input.id };
-    },
-  },
-
   // ── Newsletter ──
   'subscription.add': {
     roles: DESK_ROLES,
@@ -627,7 +574,7 @@ export const FIELD_ACTIONS = {
       const email = input.email.toLowerCase();
       // Someone who left the list — by their own unsubscribe link, a ladder
       // email's, or the desk's Remove — is off-limits to the desk: only they
-      // can rejoin, from the signup page.
+      // can rejoin, by signing up again themselves.
       const prev = (await tx.query(
         'select status, unsubscribed_at from subscriptions where workspace_id = $1 and email = $2', [ctx.workspaceId, email],
       )).rows[0];
@@ -641,7 +588,7 @@ export const FIELD_ACTIONS = {
         const on = prev?.unsubscribed_at
           ? ` on ${new Date(prev.unsubscribed_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: tz })}`
           : '';
-        throw httpError(409, `Unsubscribed${on} — only they can rejoin (signup page)`);
+        throw httpError(409, `Unsubscribed${on} — only they can rejoin`);
       }
       const id = newId();
       await tx.query(

@@ -2,7 +2,7 @@
 //
 // Issuing: the events hook sees every write's events before they are
 // chained. Every way a gift enters the books — a desk gift (gift.log), a
-// pledge marked paid (pledge.receive), a Stripe payment (stripe.payment), the
+// the
 // sample campaign (sample.load) — goes through lib/gifts.js logGift, which
 // emits ('gift', id, 'create'). The receipt is numbered and written in that
 // same transaction, so the gift and its receipt commit together or not at

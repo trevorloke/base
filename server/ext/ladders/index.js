@@ -1,7 +1,7 @@
 // Ladders of engagement — Action Network / Action Builder style.
 //
-// A ladder is a trigger (signed a petition, joined the newsletter, signed up
-// to volunteer, RSVPed, first donation, got a tag, rated 1 or 2) and a list
+// A ladder is a trigger (joined the newsletter, first donation, got a tag,
+// rated 1 or 2) and a list
 // of steps (Wait · Email · Tag · Remove a tag · Follow-up for staff · Stop).
 // Email steps go only to people who said yes to email (subscribed).
 // When someone does the trigger they are put on every ladder that is on,

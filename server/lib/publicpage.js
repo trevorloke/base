@@ -1,8 +1,7 @@
-// The look of Starbase's own public pages — petition, newsletter, volunteer,
-// unsubscribe, RSVP, donate, a public lesson: one column, the campaign's
-// name on top, thumb-sized inputs, one big button, and a link back to the
-// campaign's website (workspace settings.website) when it has one. The
-// campaign's website itself lives elsewhere; these pages only feed it.
+// The look of Starbase's own public pages — unsubscribe, a public lesson:
+// one column, the campaign's name on top, one big button, and a link back
+// to the campaign's website (workspace settings.website) when it has one.
+// The campaign's website itself lives elsewhere.
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 export const settingsOf = (ws) => (typeof ws?.settings === 'string' ? JSON.parse(ws.settings) : (ws?.settings || {}));
 

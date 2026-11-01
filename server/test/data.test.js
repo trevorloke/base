@@ -136,7 +136,7 @@ test('sample data: loads a full Surrey campaign, safe contacts only, then clears
   assert.equal(brief.sampleLoaded, true);
   assert.ok(brief.field.week > 10);
   assert.ok(brief.flagged.length >= 1, 'the over-cap sample gift is flagged');
-  assert.ok(brief.shifts.length >= 1 && brief.events.length >= 1);
+  assert.ok(brief.shifts.length >= 1);
   assert.equal(brief.myTurfs.length, 1);
   const media = (await fresh.get('/api/persons?tag=media')).json.persons;
   assert.equal(media.length, 3);
@@ -159,7 +159,7 @@ test('sample data: loads a full Surrey campaign, safe contacts only, then clears
   const b2 = (await fresh.get('/api/brief')).json;
   assert.equal(b2.sampleLoaded, false);
   assert.equal(b2.money.totalCents, 0, 'sample money left every total');
-  assert.equal(b2.shifts.length + b2.events.length + b2.myTurfs.length, 0);
+  assert.equal(b2.shifts.length + b2.myTurfs.length, 0);
   assert.equal((await fresh.get('/api/signs')).json.signs.length, 0);
   assert.equal((await fresh.get('/api/records/gift?limit=200')).json.records.length, 0);
   assert.equal((await fresh.get('/api/audit/verify')).json.ok, true);
@@ -261,7 +261,7 @@ const rowsLeft = async (table, ids) => {
   return (await db.query(`select id from ${table} where id = any($1::uuid[])`, [ids])).rows.map((r) => r.id);
 };
 
-test('sample clear: your gift, sign, knock, booking and RSVP stay — with the sample rows they hang on', async () => {
+test('sample clear: your gift, sign, knock and booking stay — with the sample rows they hang on', async () => {
   const m = new Client();
   const s = await m.signup({ workspaceName: 'Keep Mine WS', jurisdiction: 'bc-municipal' });
   const W = s.json.workspace.id;
@@ -272,8 +272,7 @@ test('sample clear: your gift, sign, knock, booking and RSVP stay — with the s
   assert.equal(ids.gifts.length, load.json.gifts);
   assert.equal(ids.signs.length, load.json.signs);
   assert.ok(ids.contacts.length >= 20 && ids.roles.length >= 10 && ids.assignments.length === 3);
-  assert.ok(ids.subscriptions.length === 5 && ids.shifts.length === 1 && ids.events.length === 1);
-  assert.ok(ids.petitions.length === 1 && ids.turfs.length === 1);
+  assert.ok(ids.subscriptions.length === 5 && ids.shifts.length === 1 && ids.turfs.length === 1);
 
   const tom = await named(m, 'Tom Riley');     // sample voter, rated 3 by a sample knock
   const dev = await named(m, 'Dev Patel');
@@ -287,26 +286,18 @@ test('sample clear: your gift, sign, knock, booking and RSVP stay — with the s
   const shift = (await m.get('/api/shifts')).json.shifts.find((x) => /sample/.test(x.title));
   const booking = (await m.action('shift.assign', { shift_id: shift.id, person_id: rachel.id })).json.assignment;
   const db = await getDb();
-  const ev = (await db.query('select slug from campaign_events where id = $1', [ids.events[0]])).rows[0];
-  const rsvp = await app.request(`/e/${s.json.workspace.slug}/${ev.slug}`, {
-    method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({ name: 'Rita Rsvp', email: 'rita.rsvp@example.org' }),
-  });
-  assert.equal(rsvp.status, 200);
-  const rita = await named(m, 'Rita Rsvp');
 
   const clear = await m.req('DELETE', '/api/data/sample');
   assert.equal(clear.status, 200);
   const r = clear.json;
   assert.equal(r.keptPeople, 3);
   assert.equal(r.cleared, ids.persons.length - 3);
-  assert.equal(r.kept, 5, 'gift, sign, knock, booking, RSVP');
-  assert.deepEqual([r.keptShifts, r.keptEvents, r.keptPetitions], [1, 1, 0]);
+  assert.equal(r.kept, 4, 'gift, sign, knock, booking');
+  assert.equal(r.keptShifts, 1);
   assert.equal(r.message, [
     `Sample data cleared — ${ids.persons.length - 3} sample people removed.`,
     'Kept 3 sample people with your own records on them (1 gift, 1 sign, 1 door knock); they’re no longer marked sample.',
     'Kept the shift “Saturday canvass — Newton (sample)”: 1 booking on it is yours.',
-    'Kept the event “Town hall: Imagine Newton (sample)”: it has 1 RSVP.',
   ].join(' '));
 
   // The real gift on a sample voter survives, live; the books hold it alone.
@@ -341,7 +332,7 @@ test('sample clear: your gift, sign, knock, booking and RSVP stay — with the s
   assert.deepEqual((await m.get(`/api/persons/${rosa.id}`)).json.contacts.map((x) => x.id), [knock.id]);
   // Everyone else the sample made is gone; your people (even one tagged "sample") stay.
   const left = (await m.get('/api/persons?limit=2000')).json.persons.map((p) => p.id).sort();
-  assert.deepEqual(left, [tom.id, dev.id, rosa.id, rachel.id, mine.id, rita.id].sort());
+  assert.deepEqual(left, [tom.id, dev.id, rosa.id, rachel.id, mine.id].sort());
   // Every sample-made row is gone, apart from the hosts kept above.
   assert.deepEqual(await rowsLeft('contacts', ids.contacts), []);
   assert.deepEqual(await rowsLeft('volunteer_roles', ids.roles), []);
@@ -349,18 +340,14 @@ test('sample clear: your gift, sign, knock, booking and RSVP stay — with the s
   assert.deepEqual(await rowsLeft('shift_assignments', ids.assignments), []);
   assert.deepEqual(await rowsLeft('subscriptions', ids.subscriptions), []);
   assert.deepEqual(await rowsLeft('turfs', ids.turfs), []);
-  assert.deepEqual(await rowsLeft('petitions', ids.petitions), []);
-  assert.deepEqual(await rowsLeft('campaign_events', ids.events), ids.events, 'the event with an RSVP stays');
   const hidden = (await db.query('select id from persons where id = any($1::uuid[]) and deleted_at is null', [ids.persons])).rows.map((x) => x.id).sort();
   assert.deepEqual(hidden, [tom.id, dev.id, rosa.id].sort());
   assert.equal((await m.get('/api/audit/verify')).json.ok, true, 'the books still verify');
 
-  // Load again: the kept event's link is taken, so the new one gets its own.
+  // Load again, clear again: the same people are left.
   const again = await m.post('/api/data/sample', {});
   assert.equal(again.status, 200);
   const ids2 = (await sampleIds(W)).ids;
-  const ev2 = (await db.query('select slug from campaign_events where id = $1', [ids2.events[0]])).rows[0];
-  assert.equal(ev2.slug, `${ev.slug}-2`);
   const clear2 = (await m.req('DELETE', '/api/data/sample')).json;
   assert.equal(clear2.cleared, ids2.persons.length);
   assert.equal(clear2.kept, 0);
@@ -377,10 +364,10 @@ test('sample clear: a sample loaded before ids were recorded clears exactly too'
   const load = await m.post('/api/data/sample', {});
   assert.equal(load.status, 200);
   const { ids, loadedAt } = await sampleIds(W);
-  // The old shape: only shift, petition, event, turf and sign ids.
+  // The old shape: only shift, turf and sign ids.
   const db = await getDb();
   await db.query(`update workspaces set settings = jsonb_set(settings, '{sample}', $2::jsonb) where id = $1`, [W, JSON.stringify({
-    shiftIds: ids.shifts, petitionIds: ids.petitions, eventIds: ids.events, turfIds: ids.turfs, signIds: ids.signs, loadedAt,
+    shiftIds: ids.shifts, turfIds: ids.turfs, signIds: ids.signs, loadedAt,
   })]);
   const mine = await m.createPerson('Tagged By Me', { tags: ['sample'] });
   const harjit = await named(m, 'Harjit Gill');

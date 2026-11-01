@@ -121,12 +121,7 @@ export const issueReceipt = async (tx, { workspaceId, emit, sample, settings }, 
   if (had) return null;
 
   const person = await personOf(tx, workspaceId, gift.person_id);
-  let address = addressOf(person);
-  if (!address && gift.pledge_id) {
-    // A donate-page pledge always carries the home address the donor typed.
-    const pl = (await tx.query('select address from pledges where id = $1 and workspace_id = $2', [gift.pledge_id, workspaceId])).rows[0];
-    address = trimmed(pl?.address);
-  }
+  const address = addressOf(person);
   const date = isoDay(gift.date);
   const series = sample ? SAMPLE_SERIES : date.slice(0, 4);
   const seq = await nextSeq(tx, workspaceId, series);
@@ -345,7 +340,7 @@ export const donorEmail = async (q, workspaceId, personId) => trimmed((personId 
 )).rows[0] : null)?.email);
 
 // The donor's home address as a Send would print it now (an unsent receipt
-// follows the donor's record; the pledge's address otherwise).
+// follows the donor's record).
 export const currentAddress = async (q, workspaceId, r) => addressOf(await personOf(q, workspaceId, r.person_id)) || trimmed(r.donor_address);
 
 // ── The void notice: a voided receipt the donor already got ──

@@ -51,21 +51,18 @@ test('a limiter sweeps old entries and never keeps more than its cap of keys', (
   assert.equal(lim.count('a'), 0);
 });
 
-test('a spoofed X-Forwarded-For no longer dodges the public rate limit', async () => {
-  // 31 newsletter sign-ups, each claiming a different address on the left —
-  // the proxy's entry on the right is the same every time.
+test('a spoofed X-Forwarded-For no longer dodges the sign-in rate limit', async () => {
+  // 31 sign-in tries, each claiming a different address on the left — the
+  // proxy's entry on the right is the same every time.
   let last;
   for (let i = 0; i < 31; i++) {
-    last = await req(`/n/${slug}`, { method: 'POST', body: { email: `spoof${i}@example.org` },
+    last = await req('/api/auth/login', { method: 'POST', body: { email: `spoof${i}@example.org`, password: 'not-the-password' },
       headers: { 'x-forwarded-for': `1.2.3.${i}, 203.0.113.77` } });
   }
   assert.equal(last.status, 429);
 });
 
 test('request bodies are capped: 256 KB in general, more for an import or a picture', async () => {
-  const big = JSON.stringify({ email: 'x@example.org', note: 'a'.repeat(300 * 1024) });
-  const r = await req(`/n/${slug}`, { method: 'POST', body: big, headers: { 'x-forwarded-for': '203.0.113.80' } });
-  assert.equal(r.status, 413);
   const login = await req('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: 'a'.repeat(300 * 1024), password: 'x' }) });
   assert.equal(login.status, 413);
   // An import of 1,000 rows (about 400 KB) is over 256 KB and goes through.
@@ -132,7 +129,7 @@ test('odd ids and names are a 400 or 404, never a 500', async () => {
 });
 
 test('every answer says: not framed, no sniffing, referrer trimmed — a route’s own choice stands', async () => {
-  for (const path of ['/login', '/api/health', `/p/${slug}/nope`, `/n/${slug}`]) {
+  for (const path of ['/login', '/api/health', '/u/nope', '/learn/nope']) {
     const r = await req(path);
     assert.equal(r.headers.get('x-frame-options'), 'DENY', path);
     assert.equal(r.headers.get('x-content-type-options'), 'nosniff', path);

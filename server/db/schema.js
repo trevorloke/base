@@ -172,31 +172,6 @@ create table if not exists shift_assignments (
 );
 create index if not exists sassign_ws_shift_idx on shift_assignments (workspace_id, shift_id);
 
--- Petitions with public signature pages (/p/:workspace/:petition).
-create table if not exists petitions (
-  id uuid primary key,
-  workspace_id uuid not null references workspaces(id) on delete cascade,
-  slug text not null,
-  title text not null,
-  body text,
-  active boolean not null default true,
-  created_at timestamptz not null default now(),
-  unique (workspace_id, slug)
-);
-
-create table if not exists petition_signatures (
-  id uuid primary key,
-  workspace_id uuid not null references workspaces(id) on delete cascade,
-  petition_id uuid not null references petitions(id) on delete cascade,
-  name text not null,
-  email text,
-  phone text,
-  address text,
-  subscribe boolean not null default false,
-  created_at timestamptz not null default now()
-);
-create index if not exists psig_petition_idx on petition_signatures (workspace_id, petition_id);
-
 -- Newsletter list (public signup at /n/:workspace; one-click unsubscribe /u/:id).
 create table if not exists subscriptions (
   id uuid primary key,
@@ -283,67 +258,6 @@ create table if not exists turf_members (
   primary key (turf_id, user_id)
 );
 
--- Public campaign events (town halls, rallies, house parties) with RSVPs.
-create table if not exists campaign_events (
-  id uuid primary key,
-  workspace_id uuid not null references workspaces(id) on delete cascade,
-  slug text not null,
-  title text not null,
-  description text,
-  location text,
-  starts_at timestamptz not null,
-  ends_at timestamptz,
-  capacity int,
-  public boolean not null default true,
-  created_at timestamptz not null default now(),
-  deleted_at timestamptz,
-  unique (workspace_id, slug)
-);
-create table if not exists event_rsvps (
-  id uuid primary key,
-  workspace_id uuid not null references workspaces(id) on delete cascade,
-  event_id uuid not null references campaign_events(id) on delete cascade,
-  person_id uuid references persons(id) on delete set null,
-  name text not null,
-  email text,
-  phone text,
-  guests int not null default 0,
-  status text not null default 'going' check (status in ('going', 'cancelled', 'attended')),
-  created_at timestamptz not null default now()
-);
-create index if not exists rsvp_event_idx on event_rsvps (workspace_id, event_id);
-
--- Online donations: a pledge is created at the donate page; it becomes a gift
--- when payment is confirmed (Stripe webhook) or the treasurer marks it received.
-create table if not exists pledges (
-  id uuid primary key,
-  workspace_id uuid not null references workspaces(id) on delete cascade,
-  person_id uuid references persons(id) on delete set null,
-  name text not null,
-  email text not null,
-  phone text,
-  address text not null,
-  amount_cents int not null check (amount_cents > 0),
-  cadence text not null default 'one-time' check (cadence in ('one-time', 'monthly')),
-  status text not null default 'pledged' check (status in ('pledged', 'pending', 'paid', 'received', 'cancelled')),
-  attest jsonb not null default '{}',
-  stripe_session_id text,
-  gift_id uuid,
-  -- Monthly pledges stay open: the date of the latest gift received for one.
-  last_received_on date,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-create index if not exists pledges_ws_idx on pledges (workspace_id, status);
-
--- Stripe webhook deliveries already applied (retries must not double-count).
-create table if not exists stripe_events (
-  id text primary key,
-  workspace_id uuid references workspaces(id) on delete cascade,
-  type text not null,
-  created_at timestamptz not null default now()
-);
-
 -- Contribution-cap rules, per jurisdiction and year. Seeded with the BC
 -- provincial annual individual limit; VERIFY the current indexed amount with
 -- Elections BC before relying on it for a filing year. Workspaces may
@@ -386,20 +300,9 @@ create unique index if not exists contacts_client_idx on contacts (workspace_id,
 -- a second one (contact.log visit_of: "Save answers", then the rating): their
 -- outbox ids, so a replay of one is recognised.
 alter table contacts add column if not exists merged_client_ids jsonb not null default '[]';
-alter table pledges add column if not exists last_received_on date;
--- The pledge a gift was received for (pledge.receive), so a void can reopen
--- the pledge and a restore can close it again.
-alter table gifts add column if not exists pledge_id uuid;
 -- A contribution is to one slate (shared/canvass.js SLATES; null = the first);
--- the annual limit is per contributor per slate. A card subscription's id
--- lets Stripe's cancellation close the monthly pledge.
+-- the annual limit is per contributor per slate.
 alter table gifts add column if not exists slate text;
-alter table pledges add column if not exists slate text;
-alter table pledges add column if not exists stripe_subscription_id text;
--- A petition may ask one question; each signature keeps its answer.
-alter table petitions add column if not exists question text;
-alter table petition_signatures add column if not exists answer text;
-create index if not exists gifts_pledge_idx on gifts (workspace_id, pledge_id) where pledge_id is not null;
 -- When an address left the newsletter list (its own link, or the desk's
 -- Remove). Once off, only the person can rejoin — the desk's Add says so.
 alter table subscriptions add column if not exists unsubscribed_at timestamptz;

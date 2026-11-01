@@ -43,19 +43,6 @@ export const donorYearTotal = async (tx, workspaceId, personId, year, slate = DE
   return Number(rows[0].total);
 };
 
-// What a donor's open monthly pledges on a slate will still take this
-// calendar year: a card subscription or a standing pledge pays every month
-// left after this one (a pledge that has not paid yet, this month too).
-export const donorYearCommitted = async (tx, workspaceId, personId, monthIndex, slate = DEFAULT_SLATE) => {
-  const { rows } = await tx.query(
-    `select status, amount_cents from pledges
-     where workspace_id = $1 and person_id = $2 and cadence = 'monthly'
-       and status in ('pledged', 'pending', 'paid') and coalesce(slate, $3) = $4`,
-    [workspaceId, personId, DEFAULT_SLATE, slate || DEFAULT_SLATE],
-  );
-  return rows.reduce((n, p) => n + Number(p.amount_cents) * ((p.status === 'paid' ? 11 : 12) - monthIndex), 0);
-};
-
 // Evaluate a donor's standing for the year of a given gift date, on a slate.
 export const checkCap = async (tx, { workspaceId, personId, date, jurisdiction, settings, slate }) => {
   const year = Number(String(date).slice(0, 4));

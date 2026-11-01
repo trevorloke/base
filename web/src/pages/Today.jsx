@@ -10,19 +10,18 @@
 //     "You 6 · Team 38 doors this week" (brief field.mine: contacts they
 //     logged; field: everyone's). Calls and texts in the same shape, a quiet
 //     "Signs" row (always — the sign crew's way to /signs and "Add a sign"),
-//     other turfs and the upcoming events (with their RSVP pages) sit under
-//     "More". With no signal, "Start canvassing" opens the walk list kept on
+//     other turfs sit under "More". With no signal, "Start canvassing" opens the walk list kept on
 //     this phone (Turfs.jsx's offline copy), else the turf list.
 //   Desk: managers get the dashboard first (pages/Dashboard.jsx: every
 //     team's contacts, the chart, who is out where) — then, for every desk
 //     role, three big numbers (doors this week · support · total raised). Doors
 //     and money are taps to their screens (›); support opens its breakdown in
 //     place (+), opposed by candidate ("McCallum 3 · Locke 2"). Then "Needs
-//     you" (gifts over the limit, open pledges, new volunteers
-//     from the public form, short shifts, signs to put up, new texts — replies
+//     you" (gifts over the limit, new volunteers, short shifts, signs to
+//     put up, new texts — replies
 //     and texts from numbers nobody texted, → the Inbox) — name first, the
 //     amount on the right, every row a tap to where it's fixed — then the
-//     next shift and event. Getting started shows only the steps not done,
+//     next shift. Getting started shows only the steps not done,
 //     and only while the campaign is new. Walk lists, team (managers),
 //     providers, "Verify the records", the export and "Clear sample data" sit
 //     under a quiet "More" at the bottom.
@@ -375,14 +374,13 @@ function NeedsYou({ b, me }) {
   // Texts waiting to be read: replies to yours, and numbers that wrote in.
   const newTexts = Number(useTextingStatus(me).data?.unread) || 0;
   const flagged = b.flagged ?? [];
-  const pledges = Number(b.pledges?.n) || 0;
   const shortShifts = (b.shifts ?? [])
     .filter((s) => s.capacity && (Number(s.filled) || 0) < s.capacity && withinDays(s.starts_at, 7))
     .slice(0, 2);
   const signs = Number(b.signs?.requested) || 0;
   const shownFlags = flagged.length > 3 ? flagged.slice(0, 2) : flagged;
   const moreFlags = flagged.length - shownFlags.length;
-  const empty = !flagged.length && !pledges && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts;
+  const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts;
 
   return (
     <section className="today-section" aria-labelledby="today-needs-h">
@@ -400,11 +398,6 @@ function NeedsYou({ b, me }) {
           {moreFlags > 0 && (
             <LinkRow to="/money" main={<><strong className="mono">{moreFlags}</strong> more {plural(moreFlags, 'gift')}</>}
               chip={OVER_LIMIT} chipCls="chip chip-warn" />
-          )}
-          {pledges > 0 && (
-            <LinkRow to="/money"
-              main={<><strong className="mono">{pledges}</strong> open {plural(pledges, 'pledge')}</>}
-              end={fmtMoney(b.pledges.cents)} />
           )}
           {newVols > 0 && (
             <LinkRow to={`/people?tag=${PROSPECT_TAG}`}
@@ -458,13 +451,6 @@ function WhenRow({ to, kicker, title, when, fill, extra, warn }) {
 function ShiftRow({ shift }) {
   if (!shift) return <LinkRow to="/shifts?new=1" main={<span className="muted">No shifts planned</span>} chip="Plan one" />;
   return <WhenRow to={`/shifts/${shift.id}`} kicker="Next shift" title={shift.title} when={shift.starts_at} />;
-}
-
-function EventRow({ event }) {
-  return (
-    <WhenRow to="/outreach/events" kicker="Next event" title={event.title} when={event.starts_at}
-      fill={`${num(event.going)} going`} />
-  );
 }
 
 // ── Volunteer: which shifts am I on? ──
@@ -579,29 +565,6 @@ function TurfRows({ turfs, statsById }) {
   );
 }
 
-function EventList({ events, wsSlug }) {
-  return (
-    <ul className="today-rows">
-      {events.map((e) => (
-        <li key={e.id} className="today-event">
-          <span className="today-row__main">
-            <span className="today-row__title">{e.title}</span>
-            <span className="today-row__when">{fmtWhen(e.starts_at)}{e.location ? ` · ${e.location}` : ''}</span>
-          </span>
-          <span className="today-fill mono">{num(e.going)} going</span>
-          {wsSlug && e.slug && e.public && (
-            <a className="today-rsvp" href={`/e/${encodeURIComponent(wsSlug)}/${encodeURIComponent(e.slug)}`}
-              target="_blank" rel="noopener noreferrer">
-              RSVP page <span aria-hidden="true">↗</span>
-              <span className="today-sr"> for {e.title} (opens in a new tab)</span>
-            </a>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 // ── No signal: the walk list kept on this phone ──
 // Turfs.jsx keeps each walk list it loads (key below, one day, wiped on sign
 // out) so /turfs/:id opens with no signal. With the brief offline, Today
@@ -686,7 +649,6 @@ function VolunteerToday({ b, me }) {
   const firstOpen = myTurfs.find((t) => (doorsLeft(statsById[t.id])?.left ?? 1) > 0) ?? myTurfs[0];
   const d = firstOpen ? doorsLeft(statsById[firstOpen.id]) : null;
   const others = done ? myTurfs : myTurfs.filter((t) => t !== firstOpen);
-  const events = b.events ?? [];
   const f = b.field ?? {};
   const mine = f.mine ?? {};
   const signs = Number(b.signs?.requested) || 0;
@@ -756,12 +718,6 @@ function VolunteerToday({ b, me }) {
             <TurfRows turfs={others} statsById={statsById} />
           </>
         )}
-        {events.length > 0 && (
-          <>
-            <h3 className="today-subh">Events</h3>
-            <EventList events={events} wsSlug={me.workspace.slug} />
-          </>
-        )}
       </More>
     </div>
   );
@@ -773,7 +729,6 @@ function DeskToday({ b, me, toast }) {
   const [verify, setVerify] = useState(null);
   const isManager = me?.role === 'manager';
   const myTurfs = b.myTurfs ?? [];
-  const events = b.events ?? [];
   const peopleTotal = Number(b.people?.total) || 0;
   const offerSample = isManager && !b.sampleLoaded && peopleTotal < 5;
   const scale = useScale();
@@ -818,7 +773,6 @@ function DeskToday({ b, me, toast }) {
         <h2 className="today-h" id="today-next-h">Coming up</h2>
         <ul className="today-rows">
           <ShiftRow shift={(b.shifts ?? [])[0]} />
-          {events[0] && <EventRow event={events[0]} />}
         </ul>
       </section>
 
@@ -845,7 +799,7 @@ function DeskToday({ b, me, toast }) {
           <LinkRow to="/surveys" main="Surveys" />
           {isManager && <LinkRow to="/settings" main={<>Settings <span className="muted">· members, teams, permissions</span></>} />}
           {b.providers && (!b.providers.email || !b.providers.text) && (
-            <LinkRow to="/outreach/links" main="Connect email & texting" />
+            <LinkRow to="/outreach/connect" main="Connect email & texting" />
           )}
         </ul>
         <div className="today-actions today-morebox__tools">

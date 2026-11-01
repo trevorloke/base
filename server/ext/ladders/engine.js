@@ -1,8 +1,8 @@
 // The ladder engine.
 //
 // Enrolling: the events hook sees every write's events before they are
-// chained. From them it reads what just happened to whom — a petition signed,
-// the newsletter joined, a volunteer signup, an RSVP, a first gift, a tag got,
+// chained. From them it reads what just happened to whom — the newsletter
+// joined, a first gift, a tag got,
 // a 1 or 2 at the door / phone / text — and puts the person on every ladder
 // that is on and starts that way: once per ladder (again only when the ladder
 // allows it and their last run is over). Step 1 is scheduled in the same
@@ -16,8 +16,7 @@
 // off, a duplicate) does nothing.
 //
 // Email steps go only to people who said yes to email: an address on the
-// newsletter list as subscribed (every email opt-in — the newsletter page,
-// "Email me updates" on a petition, the website's form — puts it there).
+// newsletter list as subscribed (every email opt-in puts it there).
 // Everyone else is skipped, and the reason goes in the run's log: no email,
 // unsubscribed, do-not-email, do-not-contact, or "didn't ask for email" (a
 // signer who left the box unticked, a voter rated 1 at the door). With
@@ -137,16 +136,6 @@ const findPerson = async (tx, ws, { email, phone, name }) => {
 
 // A signer who ticked "Email me updates" joins the list in the signature's
 // write, before they exist as a person; the person comes a moment later.
-const justSubscribed = async (tx, ws, email) => {
-  const em = lower(email);
-  if (!em) return false;
-  return (await tx.query(
-    `select 1 from subscriptions where workspace_id = $1 and email = $2 and status = 'subscribed'
-       and created_at > now() - interval '1 hour'`,
-    [ws, em],
-  )).rows.length > 0;
-};
-
 const firstGift = async (tx, ws, personId, giftId) => (await tx.query(
   'select count(*)::int as n from gifts where workspace_id = $1 and person_id = $2 and deleted_at is null and id <> $3',
   [ws, personId, giftId],
@@ -171,27 +160,12 @@ const factsOf = async (tx, meta, events, kinds) => {
   for (const e of events) {
     const p = e.payload || {};
     if (p.sample) continue;
-    if (e.entityType === 'petition_signature' && e.op === 'create') {
-      // A new signer isn't a person yet: the 'public.signup' create below
-      // (tagged petition:<slug>) enrolls them instead.
-      if (kinds.has('petition')) add(await findPerson(tx, ws, p), 'petition', p.petition || null);
-    } else if (e.entityType === 'subscription'
+    if (e.entityType === 'subscription'
         && ((e.op === 'create' && p.status !== 'unsubscribed') || (e.op === 'update' && p.status === 'subscribed'))) {
       if (kinds.has('newsletter') && p.email) add(await findPerson(tx, ws, { email: p.email }), 'newsletter');
     } else if (e.entityType === 'person' && e.op === 'create') {
       const tags = Array.isArray(p.tags) ? p.tags.map(String) : [];
-      if (meta.action === 'public.signup') {
-        for (const t of tags) if (t.startsWith('petition:')) add(e.entityId, 'petition', t.slice('petition:'.length));
-        if (kinds.has('newsletter') && (tags.includes('newsletter') || await justSubscribed(tx, ws, p.email))) add(e.entityId, 'newsletter');
-        if (tags.includes('volunteer-prospect')) add(e.entityId, 'volunteer');
-      }
       for (const t of tags) add(e.entityId, 'tag', t);
-    } else if (e.entityType === 'person' && e.op === 'update' && p.source === 'public' && p.added_note) {
-      add(e.entityId, 'volunteer'); // the volunteer page with a note and no roles ticked
-    } else if (e.entityType === 'volunteer_role' && e.op === 'create' && p.source === 'public') {
-      add(p.person_id, 'volunteer');
-    } else if (e.entityType === 'rsvp' && e.op === 'create') {
-      add(p.person_id, 'rsvp', p.event_id);
     } else if (e.entityType === 'gift' && e.op === 'create' && p.person_id) {
       if (kinds.has('donation') && await firstGift(tx, ws, p.person_id, e.entityId)) add(p.person_id, 'donation');
     } else if (e.entityType === 'contact' && (e.op === 'create' || e.op === 'update') && YES_RATINGS.has(String(p.rating))) {

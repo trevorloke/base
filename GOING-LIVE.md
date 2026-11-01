@@ -32,29 +32,18 @@ Set these before the first sign-in; the rest can wait.
 
 | Variable | Set it to | Needed for |
 |---|---|---|
-| `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` | every link in an email: invites, unsubscribe, receipts, Stripe return pages |
+| `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` | every link in an email: invites, unsubscribe, receipts |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on a domain verified there | email; without it invites are shown to copy and sends wait as *queued* |
 
 Then, as each one is ready:
 
 | Variable | Set it to | Needed for |
 |---|---|---|
-| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | the **live** keys (test keys and card `4242…` until the donate page is checked) | card donations; without them donations are pledges |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
 | `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
-
-Stripe: in the Stripe dashboard add a webhook at
-`https://starbase.imaginesurrey.ca/api/public/stripe/webhook` with the
-events `checkout.session.completed`, `charge.refunded`, `invoice.paid` and
-`customer.subscription.deleted`, and copy its signing secret into
-`STRIPE_WEBHOOK_SECRET`. A refund made in Stripe shows here by itself: a
-donation refunded in full leaves the books as a void does (its receipt is
-voided too). A monthly gift cancelled in Stripe closes its pledge here;
-cancelling a pledge here does not stop Stripe — cancel the subscription in
-the Stripe dashboard.
 
 Twilio: set the number's incoming-message webhook to
 `https://starbase.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST).
@@ -75,8 +64,8 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    are in; under **Teams** group them (a crew per neighbourhood, the phone
    bank); under **Permissions** decide which areas each role, or one person,
    may use.
-4. **Outreach → More → Donations**: the donation instructions (for pledges
-   and e-transfer) and the campaign's website link the public pages use.
+4. **Outreach → Connections**: the campaign's website address, which the
+   public pages (unsubscribe, public lessons) link back to.
 
 ## 5 · The lists and the map
 
@@ -100,11 +89,9 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
 
 ## 6 · Before the public link goes out
 
-- `https://imaginesurrey.ca/` and `/d/imagine-surrey` (donate), `/n/imagine-surrey`,
-  `/v/imagine-surrey` load over https with the campaign's header and footer.
+- `https://starbase.imaginesurrey.ca/` loads over https and signs in.
 - A test newsletter reaches a real inbox with a working unsubscribe link.
-- A test donation (live key, a real card, refunded in Stripe afterwards)
-  lands under **Donations** with a receipt emailed.
+- A test gift logged under **Donations** gets its receipt emailed.
 - Backups: Render's managed Postgres keeps daily backups; **Today → Export
   all data** (managers) downloads everything (message pictures are not in it).
 - Keys: every key above is in Render only, never in the repo or a chat.

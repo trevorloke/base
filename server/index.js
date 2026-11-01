@@ -37,7 +37,7 @@ app.use('*', async (c, next) => {
 });
 app.get('/api/health', (c) => c.json({ ok: true, service: 'starbase', tzdataCurrent: !staleTimeZoneData() }));
 app.route('/api/auth', authRoutes);
-app.route('/', publicRoutes); // /p, /n, /v, /u, /api/public — no auth
+app.route('/', publicRoutes); // /u, /bu — no auth
 for (const e of EXTENSIONS) if (e.publicRoutes) app.route('/', e.publicRoutes);
 app.route('/api', apiRoutes);
 

@@ -38,7 +38,7 @@ const ROW = `r.id, r.number, r.series, r.seq, r.gift_id, r.person_id, r.donor_na
   (nullif(trim(p.email), '') is not null) as has_email`;
 
 // The home address a Send would print now: the donor's record, else the
-// receipt's own (a donate-page pledge's).
+// receipt's own.
 const hasAddressOf = (r) => !!(addressOf({ address: r.p_address, unit: r.p_unit, city: r.p_city, postal: r.p_postal })
   || String(r.donor_address || '').trim());
 const live = (r) => !r.voided_at && !r.sample;
