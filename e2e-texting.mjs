@@ -220,8 +220,8 @@ let server = await startServer({ TWILIO_API_BASE: STUB });
   let t = await D.text();
   const sms = await page.locator('.cl-card a.cl-call[href^="sms:"]').count();
   check('not connected: Text keeps the phone\'s own Messages (sms: link)', sms === 1 && (await page.locator('.tx-send').count()) === 0, `sms links=${sms}`);
-  check('not connected: says "Texting isn’t connected · Connect" once, Connect to the Links tab', count(t, 'Texting isn’t connected · Connect') === 1
-    && (await page.locator('main.page a[href="/admin/outreach/links?connect=1"]').count()) === 1 && !/Twilio/.test(t), t.slice(0, 200));
+  check('not connected: says "Texting isn’t connected · Connect" once, Connect to the Connections tab', count(t, 'Texting isn’t connected · Connect') === 1
+    && (await page.locator('main.page a[href="/admin/outreach/connect?connect=1"]').count()) === 1 && !/Twilio/.test(t), t.slice(0, 200));
   const status = (await D.api('/texting/status')).json;
   check('not connected: the server agrees (no texts, no calls)', status?.sms === false && status?.voice === false, JSON.stringify(status));
   const refused = await D.api('/actions/text.send', { person_id: harjit.id, body: `Hi Harjit, it's Riley with ${CAMPAIGN}.` });
