@@ -272,7 +272,7 @@ const apiList = (await S.api(`/persons?field=${encodeURIComponent(`${F['Language
 const shownNames = await spage.$$eval('.pp-table__name a', (els) => els.map((e) => e.textContent));
 check('chip "Language at home: Punjabi"; the list is the server’s (Harjit)', /Language at home: Punjabi/.test(chip)
   && shownNames.join('|') === apiList.map((p) => p.name).join('|') && shownNames.join('|') === 'Harjit Example', `${chip} · ${shownNames.join('|')}`);
-check('the count says 1 person', /\b1 person\b/.test(await spage.innerText('.pp-count')));
+{ const ct = await spage.innerText('.pp-count'); check('the count says 1 person', /\b1 person\b/.test(ct), JSON.stringify(ct)); }
 await S.shot('06-people-filtered');
 // More → Call list keeps the filter.
 await spage.click('.pp-menu button:has-text("More")');

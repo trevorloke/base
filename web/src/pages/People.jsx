@@ -781,6 +781,7 @@ function PeopleList() {
       {!offline && !failed && (
         <p className="pp-count">
           <strong className="mono">{count}</strong> {rows.length === 1 ? 'person' : 'people'}{partial ? ' in the kept list' : ''}
+          {desk && anyFilter && !partial && ' '}
           {desk && anyFilter && !partial && (
             <Link className="pp-savelist" to={`/lists/new?${new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([k, v]) => v && ['q', 'tag', 'rating', 'role', 'has', 'field'].includes(k))))}`}>
               Save as a list
