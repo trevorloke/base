@@ -12,6 +12,7 @@
 import { Hono } from 'hono';
 import { emailConfigured } from '../../lib/notify.js';
 import { capFor } from '../../lib/cap.js';
+import { DEFAULT_TZ } from '../../lib/org.js';
 import {
   MONEY_ROLES, AGENT_ROLES, loadSettings, statusOf, docOf, campaignName, linkFor, addressOf, isoDay, methodWord,
   canSendOf, canSendVoidOf, wasEmailed, periodOf, SEND_ALL_MAX, NOT_FOR_SEND_ALL,
@@ -20,7 +21,7 @@ import {
 export const api = new Hono();
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const tzOf = (ctx) => ctx.workspace?.settings?.tz || 'America/Vancouver';
+const tzOf = (ctx) => ctx.workspace?.settings?.tz || DEFAULT_TZ;
 
 const deskOnly = async (c, next) => {
   if (!MONEY_ROLES.includes(c.get('ctx').role)) return c.json({ error: 'volunteers cannot view this' }, 403);

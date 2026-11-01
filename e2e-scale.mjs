@@ -98,6 +98,7 @@ const page = await dctx.newPage();
 const D = helpers(page, dctx, 'desk');
 await D.go('/signup');
 await page.fill('#su-name', 'Riley Manager');
+if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', `riley+${tag}@scale.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');

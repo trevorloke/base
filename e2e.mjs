@@ -59,6 +59,7 @@ const go = async (path) => { await page.goto(`${ADMIN}${path}`, { waitUntil: 'do
 // ── 1. First-run setup: always Imagine Surrey, BC municipal ──
 await go('/signup');
 await page.fill('#su-name', 'Trevor Loke');
+if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', 'trevor@imaginesurrey.example');
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');

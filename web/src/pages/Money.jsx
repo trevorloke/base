@@ -23,7 +23,7 @@ import {
   useInfiniteQuery, useQuery, useQueryClient, keepPreviousData,
 } from '@tanstack/react-query';
 import { apiGet, action, fmtMoney, fmtDate, todayISO, dollarsToCents } from '../api.js';
-import { SLATES, DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
+import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
 import ReceiptsGiftLine from '../components/ReceiptsGiftLine.jsx';
 import { AddressRow, VoidNoticeAsk, receiptOf, receiptNote } from '../components/ReceiptsNeeds.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
@@ -40,11 +40,12 @@ const CADENCES = [
   { code: 'one-time', label: 'One-time' },
   { code: 'monthly', label: 'Monthly' },
 ];
-// Which slate a contribution is to (the limit is per slate). A gift to the
-// first slate wears no chip; one to another slate says which.
-const MANY_SLATES = SLATES.length > 1;
-const SlateChip = ({ slate }) => (MANY_SLATES && slate && slate !== DEFAULT_SLATE
-  ? <span className="chip" title="The slate this contribution is to">{slateLabel(slate)}</span> : null);
+// Which slate a contribution is to (the limit is per slate): the deployment's
+// (me.org.slates). A gift to the first slate wears no chip; one to another
+// slate says which.
+const slatesOf = (me) => (Array.isArray(me?.org?.slates) && me.org.slates.length ? me.org.slates : FALLBACK_SLATES);
+const SlateChip = ({ slate, slates }) => (slates.length > 1 && slate && slate !== slates[0].code
+  ? <span className="chip" title="The slate this contribution is to">{slateLabel(slate, slates)}</span> : null);
 // The ledger opens on the latest few; the rest is one tap ("All gifts").
 const LATEST = 3;
 
@@ -201,14 +202,14 @@ function DonorPicker({ value, onChange }) {
 }
 
 // ── Log a gift: donor, amount, date — the rest under "More details" ──
-function GiftForm({ presetPersonId, onSaved, onClose }) {
+function GiftForm({ presetPersonId, slates, onSaved, onClose }) {
   const online = useOnline(); // a gift is cap-checked by the server: never saved offline
   const [donor, setDonor] = useState(null);
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayISO());
   const [method, setMethod] = useState('');
   const [cadence, setCadence] = useState('one-time');
-  const [slate, setSlate] = useState(DEFAULT_SLATE);
+  const [slate, setSlate] = useState(slates[0].code);
   const [note, setNote] = useState('');
   const [address, setAddress] = useState('');
   const [more, setMore] = useState(false);
@@ -247,7 +248,7 @@ function GiftForm({ presetPersonId, onSaved, onClose }) {
         date,
         method: method || undefined,
         cadence,
-        ...(MANY_SLATES ? { slate } : {}),
+        ...(slates.length > 1 ? { slate } : {}),
         note: note.trim() || undefined,
       });
       onSaved(res, donor);
@@ -297,11 +298,11 @@ function GiftForm({ presetPersonId, onSaved, onClose }) {
               </select>
             </div>
           </div>
-          {MANY_SLATES && (
+          {slates.length > 1 && (
             <div className="field">
               <label htmlFor="gift-slate">Slate</label>
               <select id="gift-slate" className="input" value={slate} onChange={(e) => setSlate(e.target.value)}>
-                {SLATES.map((sl) => <option key={sl.code} value={sl.code}>{sl.label}</option>)}
+                {slates.map((sl) => <option key={sl.code} value={sl.code}>{sl.label}</option>)}
               </select>
               <span className="ops-meta">The annual limit is per slate.</span>
             </div>
@@ -388,7 +389,7 @@ function FlaggedRow({ f, personId, onVoid }) {
 }
 
 // ── One ledger row; tap for method, note, donor and Void ──
-function GiftRow({ g, open, onToggle, onVoid }) {
+function GiftRow({ g, slates, open, onToggle, onVoid }) {
   const bodyId = `gift-${g.id}`;
   return (
     <li className="ops-item" data-open={open ? '' : undefined}>
@@ -398,7 +399,7 @@ function GiftRow({ g, open, onToggle, onVoid }) {
           <span className="ops-row__sub">
             {shortDate(g.date)}
             {g.cadence === 'monthly' && <MonthlyChip />}
-            <SlateChip slate={g.slate} />
+            <SlateChip slate={g.slate} slates={slates} />
             {g.flagged && <OverChip title={g.flag_reason} />}
           </span>
         </span>
@@ -426,6 +427,7 @@ export default function Money() {
   const queryClient = useQueryClient();
   const { me } = useOutletContext() ?? {};
   const canMoney = MONEY_ROLES.includes(me?.role);
+  const slates = slatesOf(me);
   const [params, setParams] = useSearchParams();
   const showNew = params.get('new') === '1' && canMoney; // the global 'n' key lands here too
   const presetPersonId = params.get('person');
@@ -589,7 +591,7 @@ export default function Money() {
       )}
 
       {showNew && (
-        <GiftForm presetPersonId={presetPersonId} onSaved={onSaved} onClose={() => setParams({})} />
+        <GiftForm presetPersonId={presetPersonId} slates={slates} onSaved={onSaved} onClose={() => setParams({})} />
       )}
 
       <div className="ops-hero">
@@ -623,6 +625,7 @@ export default function Money() {
             <GiftRow
               key={g.id}
               g={g}
+              slates={slates}
               open={openId === g.id}
               onToggle={() => setOpenId((cur) => (cur === g.id ? null : g.id))}
               onVoid={() => voidGift(g.id)}

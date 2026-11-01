@@ -12,6 +12,7 @@ import { getDb } from './db/client.js';
 import { EXTENSIONS } from './ext.js';
 import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
+import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
 
 export const app = new Hono();
@@ -35,7 +36,7 @@ app.use('*', async (c, next) => {
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 });
-app.get('/api/health', (c) => c.json({ ok: true, service: 'starbase', tzdataCurrent: !staleTimeZoneData() }));
+app.get('/api/health', (c) => c.json({ ok: true, service: 'starbase', env: envName(), organization: orgName(), tzdataCurrent: !staleTimeZoneData() }));
 app.route('/api/auth', authRoutes);
 app.route('/', publicRoutes); // /u, /bu — no auth
 for (const e of EXTENSIONS) if (e.publicRoutes) app.route('/', e.publicRoutes);

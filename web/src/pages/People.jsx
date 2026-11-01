@@ -537,12 +537,12 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Add person (inline, ?new=1)
 // ─────────────────────────────────────────────────────────────────────────────
-const EMPTY = { name: '', kind: 'person', email: '', phone: '', house_number: '', address: '', unit: '', city: 'Surrey', postal: '' };
+const emptyPerson = (me) => ({ name: '', kind: 'person', email: '', phone: '', house_number: '', address: '', unit: '', city: me?.org?.city || 'Surrey', postal: '' });
 
 function AddPersonForm({ onClose }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState(() => emptyPerson(me));
   const [tags, setTags] = useState([]);
   const [more, setMore] = useState(false);
   const act = useAction(undefined, { needsSignal: true });

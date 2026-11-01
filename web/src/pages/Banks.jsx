@@ -164,7 +164,7 @@ function NewBank() {
         </fieldset>
         <label htmlFor={`${id}-s`} className="ws-label">Script (what callers see while they call)</label>
         <textarea id={`${id}-s`} className="input bk-script" rows={6} value={script} maxLength={20_000}
-          placeholder={'Hi, this is ___ with Imagine Surrey. We’re calling neighbours about the election on…'} onChange={(e) => setScript(e.target.value)} />
+          placeholder={'Hi, this is ___ with the campaign. We’re calling neighbours about the election on…'} onChange={(e) => setScript(e.target.value)} />
         {error && <p className="error" role="alert">{error}</p>}
         <div className="lu-form__acts">
           <button type="submit" className="btn btn-primary" disabled={busy || !name.trim() || !callable.length}>Make the bank with {num(callable.length)} {plural(callable.length, 'number')}</button>

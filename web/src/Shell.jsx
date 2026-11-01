@@ -448,7 +448,7 @@ function SignedInShell({ who, mode }) {
             <img className="brand-mark" src="/star.png" alt="" height="32" />
             <span className="brand-text">
               <span className="brand-name">Starbase{mode === 'admin' && <span className="brand-admin"> Admin</span>}</span>
-              <span className="brand-org">{me.workspace.name}</span>
+              <span className="brand-org">{me.workspace.name}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
             </span>
           </NavLink>
           <nav className="links" aria-label="Main">

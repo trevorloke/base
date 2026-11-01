@@ -1,17 +1,35 @@
-# Going live — Imagine Surrey
+# Going live
 
-The order to do things in, once, before the team signs in. Each step says
-where it happens and how to tell it worked. The longer explanations are in
-[TESTING.md](TESTING.md) (deploying, what to test by role) and
-[README.md](README.md) (how each part works).
+The order to do things in, once per client, before the team signs in. Each
+step says where it happens and how to tell it worked. The longer
+explanations are in [TESTING.md](TESTING.md) (deploying, what to test by
+role) and [README.md](README.md) (how each part works).
+
+## 0 · Two environments, one branch each
+
+Every client has a **staging** and a **production** environment, each its
+own Render web service and Postgres database:
+
+| Environment | Deploys | Address | Who uses it |
+|---|---|---|---|
+| staging | every push to `main`, by itself | `https://starbase-staging.onrender.com` (or a `staging.` host) | you, to try a change before anyone else sees it; it says *Staging* on every screen |
+| production | the `production` branch | the campaign's address | the campaign |
+
+**Pushing staging to production.** GitHub → **Actions** → *Promote to
+production* → **Run workflow**. It fast-forwards `production` to what `main`
+is now (or to a commit you name), refuses while CI is red on that commit,
+and never rewrites production; Render then deploys it. Staging and
+production share nothing: test on staging with sample data or a copy, then
+promote the code — the production database is the campaign's alone.
 
 ## 1 · Deploy
 
 1. Render → **New → Blueprint** → this repo, `main`. `render.yaml` creates
-   the `starbase` web service and the `starbase-db` Postgres database.
+   `starbase-staging` (from `main`) and `starbase` (from `production`), each
+   with its own database.
 2. Wait for the first deploy, then open
    `https://<service>.onrender.com/api/health`. It answers
-   `{"ok":true,"service":"starbase","tzdataCurrent":true}`.
+   `{"ok":true,"service":"starbase","env":"staging","organization":"Imagine Surrey","tzdataCurrent":true}`.
    `tzdataCurrent: false` means the server's time-zone rules predate B.C.'s
    permanent UTC-7 (every time after 1 Nov 2026 would show an hour off):
    redeploy on a newer Node image before going further.
@@ -26,13 +44,17 @@ Add the DNS records Render shows; it issues the certificates. The
 campaign's website (`imaginesurrey.ca`) is its own thing, hosted apart; it
 links to Starbase's public pages and posts its forms to the JSON bridge.
 
-## 3 · Settings (Render → starbase → Environment)
+## 3 · Settings (Render → the service → Environment)
 
-Set these before the first sign-in; the rest can wait.
+Set these on both environments before the first sign-in; the rest can wait.
+The campaign's own values (`STARBASE_ORG_NAME` and the rest) are in
+`render.yaml` already; change them there for another client.
 
 | Variable | Set it to | Needed for |
 |---|---|---|
-| `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` | every link in an email: invites, unsubscribe, receipts |
+| `STARBASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
+| `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name on sign-in, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
+| `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on a domain verified there | email; without it invites are shown to copy and sends wait as *queued* |
 
 Then, as each one is ready:
@@ -54,9 +76,11 @@ The first sign-in lands in the **admin** (`/admin/`); the field app at `/` is
 what volunteers get, and what you see under *Field app ↗* in your account menu.
 
 1. Open `https://starbase.imaginesurrey.ca/login` → **Set up Starbase for
-   Imagine Surrey**. The first account is the manager; this creates the
-   Imagine Surrey workspace (BC municipal rules, the 2026 contribution
-   limit seeded) and closes sign-up. Everyone else joins by invite.
+   Imagine Surrey** (the name `STARBASE_ORG_NAME` gives; a deployment that
+   gives none asks for it here). The first account is the manager; this
+   creates the campaign's workspace (its jurisdiction's rules, the
+   contribution limit seeded, its time zone) and closes sign-up. Everyone
+   else joins by invite. Do this on staging first, then on production.
 2. **Today** shows a banner if the server's time-zone data is stale (step 1)
    so a manager can't miss it.
 3. **Admin** (from the account menu, your initials): under **Members**
@@ -87,7 +111,26 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    `https` (every host in section 2 is). A position is kept only while they
    share it, a trail for the day; neither is in the export.
 
-## 6 · Before the public link goes out
+## 6 · A new client
+
+Each client is its own pair of services and its own databases; nothing is
+shared, and the code names no client.
+
+1. Copy the two services and two databases in `render.yaml` under new
+   names (`starbase-<client>-staging`, `starbase-<client>`, and their
+   databases — names are unique per Render account), and set their
+   `STARBASE_*` values: the campaign's name, jurisdiction, time zone, city,
+   slates and first candidates. Commit that on `main`.
+2. Render → **New → Blueprint** → this repo: Render makes the new pair.
+   Put the secrets in (section 3), the domains (section 2), and run the
+   first sign-in on staging, then production (section 4).
+3. One `main` serves every client: a change lands on every client's
+   staging at once, and *Promote to production* moves it to every
+   production at once. A client that must stay on an older version is a
+   second `production-<client>` branch for its production service — avoid
+   it unless they ask.
+
+## 7 · Before the public link goes out
 
 - `https://starbase.imaginesurrey.ca/` loads over https and signs in.
 - A test newsletter reaches a real inbox with a working unsubscribe link.

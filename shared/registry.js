@@ -12,6 +12,7 @@
 // updated_at, deleted_at (soft delete), attrs jsonb (long-tail only).
 
 import { z } from 'zod';
+import { SLATE_CODES, DEFAULT_SLATE } from './canvass.js';
 
 export const RECORD_TYPES = {
   gift: {
@@ -29,7 +30,7 @@ export const RECORD_TYPES = {
       // Which slate the contribution is to (shared/canvass.js SLATES); the
       // annual limit is counted per slate. Unset means the first slate.
       { key: 'slate',        label: 'Slate',  type: 'select',
-        options: ['council', 'school_board'], default: 'council' },
+        options: SLATE_CODES, default: DEFAULT_SLATE },
       { key: 'note',         label: 'Note',   type: 'text' },
     ],
   },

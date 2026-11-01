@@ -1,4 +1,4 @@
-// /api/auth — first-run setup creates user + the Imagine Surrey workspace +
+// /api/auth — first-run setup creates user + the campaign's workspace +
 // manager membership in one transaction; after that, sign-up is closed and
 // everyone else joins by invite (/join). Login binds the session to the
 // user's workspace membership.
@@ -14,7 +14,7 @@ import {
   hashPassword, verifyPassword, dummyVerify,
   createSession, destroySession, loadContext, SESSION_COOKIE,
 } from '../lib/auth.js';
-import { ORG_NAME, ORG_JURISDICTION, openSignupForced, SETUP_CLOSED_MESSAGE } from '../lib/org.js';
+import { JURISDICTIONS, orgName, jurisdiction, timeZone, openSignupForced, setupClosedMessage, orgOut } from '../lib/org.js';
 import { clientIp, makeLimiter, crossSiteWrite } from '../lib/guard.js';
 
 const app = new Hono();
@@ -45,11 +45,12 @@ const signupInput = z.object({
   name: z.string().trim().min(1).max(200),
   email: z.string().email().max(320),
   password: z.string().min(8).max(200),
-  // Always Imagine Surrey on screen; a name and jurisdiction are still taken
-  // (tests make several workspaces to check they stay apart).
-  workspaceName: z.string().trim().min(1).max(200).default(ORG_NAME),
+  // The deployment names the campaign (STARBASE_ORG_NAME); when it doesn't,
+  // the first sign-up does. Tests make several workspaces to check they
+  // stay apart, so a name and jurisdiction are always taken when given.
+  workspaceName: z.string().trim().min(1).max(200).optional(),
   candidate: z.string().trim().max(200).optional(),
-  jurisdiction: z.enum(['bc-municipal', 'bc-provincial', 'federal']).default(ORG_JURISDICTION),
+  jurisdiction: z.enum(JURISDICTIONS).optional(),
 });
 
 // Setup is open until the first workspace exists (or STARBASE_OPEN_SIGNUP=1).
@@ -79,15 +80,16 @@ const uniqueSlug = async (tx, base) => {
 // What the sign-in screens need before anyone is signed in.
 app.get('/setup', async (c) => {
   const db = await getDb();
-  return c.json({ open: await setupOpen(db), organization: ORG_NAME });
+  return c.json({ open: await setupOpen(db), organization: orgName(), org: orgOut() });
 });
 
 app.post('/signup', async (c) => {
   const db = await getDb();
-  if (!(await setupOpen(db))) return c.json({ error: SETUP_CLOSED_MESSAGE }, 403);
+  if (!(await setupOpen(db))) return c.json({ error: setupClosedMessage() }, 403);
   const parsed = signupInput.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0].message }, 400);
-  const input = parsed.data;
+  const input = { ...parsed.data, workspaceName: parsed.data.workspaceName || orgName(), jurisdiction: parsed.data.jurisdiction || jurisdiction() };
+  if (!input.workspaceName) return c.json({ error: 'name the campaign' }, 400);
 
   const email = input.email.toLowerCase();
   const passwordHash = await hashPassword(input.password);
@@ -104,9 +106,9 @@ app.post('/signup', async (c) => {
         [userId, email, input.name, passwordHash],
       );
       await tx.query(
-        'insert into workspaces (id, name, slug, candidate, jurisdiction) values ($1, $2, $3, $4, $5)',
+        'insert into workspaces (id, name, slug, candidate, jurisdiction, settings) values ($1, $2, $3, $4, $5, $6)',
         [workspaceId, input.workspaceName, await uniqueSlug(tx, slugify(input.workspaceName)),
-         input.candidate || null, input.jurisdiction],
+         input.candidate || null, input.jurisdiction, JSON.stringify({ tz: timeZone() })],
       );
       await tx.query(
         'insert into memberships (user_id, workspace_id, role) values ($1, $2, $3)',
@@ -114,7 +116,7 @@ app.post('/signup', async (c) => {
       );
     });
   } catch (e) {
-    if (e instanceof SetupClosed) return c.json({ error: SETUP_CLOSED_MESSAGE }, 403);
+    if (e instanceof SetupClosed) return c.json({ error: setupClosedMessage() }, 403);
     if (String(e.message).includes('users_email_key')) {
       return c.json({ error: 'an account with that email already exists' }, 409);
     }
@@ -130,7 +132,7 @@ app.post('/signup', async (c) => {
   const token = await createSession(db, userId, workspaceId);
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
   const ctx = await loadContext(db, token);
-  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role }, 201);
+  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() }, 201);
 });
 
 app.post('/login', async (c) => {
@@ -163,7 +165,7 @@ app.post('/login', async (c) => {
   const token = await createSession(db, user.id, membership.workspace_id);
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
   const ctx = await loadContext(db, token);
-  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx) });
+  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() });
 });
 
 // ── Invites: look up, then join (new account, or an existing one by password) ──
@@ -223,7 +225,7 @@ app.post('/join', async (c) => {
   const sessionToken = await createSession(db, userId, inv.workspace_id);
   setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
   const ctx = await loadContext(db, sessionToken);
-  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx) });
+  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() });
 });
 
 app.post('/logout', async (c) => {
@@ -237,7 +239,7 @@ app.get('/me', async (c) => {
   const db = await getDb();
   const ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
-  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx) });
+  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() });
 });
 
 export default app;

@@ -9,14 +9,14 @@
 //   GEOCODE_MIN_SCORE minimum BC match score to accept (default 75)
 //   GOOGLE_MAPS_SERVER_KEY  a Google Cloud key with the Geocoding API enabled
 //                     (restrict it to that API and the server's IP — not the
-//                     browser key). Lookups are biased to Surrey and only a
+//                     browser key). Lookups are biased to the campaign's box and only a
 //                     rooftop or street-number match counts as a door.
 
-const DEFAULT_CITY = 'Surrey';
+import { city as defaultCity, province, geoBounds } from './org.js';
 
 const formatAddress = ({ address, unit, city, postal }) => {
   const street = [unit ? `${unit} -` : null, address].filter(Boolean).join(' ');
-  return [street, city || DEFAULT_CITY, 'BC', postal].filter(Boolean).join(', ');
+  return [street, city || defaultCity(), province(), postal].filter(Boolean).join(', ');
 };
 
 const bc = async (q) => {
@@ -34,23 +34,23 @@ const bc = async (q) => {
   if (!f) return null;
   const score = Number(f.properties?.score ?? 0);
   const min = Number(process.env.GEOCODE_MIN_SCORE) || 75;
-  // Precision CIVIC_NUMBER/BLOCK is a real door; LOCALITY means "somewhere in Surrey".
+  // Precision CIVIC_NUMBER/BLOCK is a real door; LOCALITY means "somewhere in the city".
   const precise = ['CIVIC_NUMBER', 'BLOCK'].includes(f.properties?.matchPrecision);
   if (score < min || !precise) return { weak: true, score, matched: f.properties?.fullAddress };
   const [lng, lat] = f.geometry.coordinates;
   return { lat, lng, score, matched: f.properties?.fullAddress };
 };
 
-// Surrey, BC: results are biased to this box and limited to Canada / BC.
-const SURREY_BOUNDS = '49.002,-122.92|49.222,-122.67';
+// Results are biased to the campaign's box (STARBASE_GEO_BOUNDS) and limited
+// to Canada and the province.
 const google = async (q) => {
   const key = process.env.GOOGLE_MAPS_SERVER_KEY;
   if (!key) return { error: 'GOOGLE_MAPS_SERVER_KEY is not set' };
   const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
   url.searchParams.set('address', q);
   url.searchParams.set('region', 'ca');
-  url.searchParams.set('components', 'country:CA|administrative_area:BC');
-  url.searchParams.set('bounds', SURREY_BOUNDS);
+  url.searchParams.set('components', `country:CA|administrative_area:${province()}`);
+  url.searchParams.set('bounds', geoBounds());
   url.searchParams.set('key', key);
   const res = await fetch(url);
   if (!res.ok) return { error: `geocoder ${res.status}` };

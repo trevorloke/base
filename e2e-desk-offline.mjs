@@ -132,6 +132,7 @@ const simple = async (H, name, sel = null) => {
 const signupAs = async (page, D, name, email) => {
   await D.go('/signup');
   await page.fill('#su-name', name);
+  if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
   await page.fill('#su-email', email);
   await page.fill('#su-password', 'surrey-forward-2026');
   await page.click('button[type="submit"]');

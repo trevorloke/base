@@ -1,5 +1,5 @@
 // Sign in: email, password, one button. The first-run setup link shows only
-// until Imagine Surrey is set up (after that, people join by invite).
+// until the campaign is set up (after that, people join by invite).
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -38,7 +38,8 @@ export default function Login({ mode = 'field' }) {
   return (
     <div className="auth-page">
       <span className="brand">Starbase</span>
-      <span className="brand-org">Imagine Surrey</span>
+      {setup.data?.organization && <span className="brand-org">{setup.data.organization}</span>}
+      {setup.data?.org?.env === 'staging' && <span className="env-badge">Staging</span>}
       <h1>Sign in</h1>
       <form onSubmit={submit}>
         <div className="field">
@@ -59,7 +60,7 @@ export default function Login({ mode = 'field' }) {
       {setup.data?.open && (
         <>
           <hr className="hairline" />
-          <p className="muted"><Link to="/signup">Set up Starbase for Imagine Surrey</Link></p>
+          <p className="muted"><Link to="/signup">Set up Starbase{setup.data.organization ? ` for ${setup.data.organization}` : ''}</Link></p>
         </>
       )}
     </div>

@@ -1,5 +1,6 @@
-// First-run setup: Starbase runs for Imagine Surrey only. The first person
-// sets it up (name, email, password) and becomes its manager; once that's
+// First-run setup: Starbase runs for one campaign. The first person sets it
+// up (name, email, password — and the campaign's name, unless the deployment
+// already says it) and becomes its manager; once that's
 // done this page says so and points to Sign in — everyone else joins by invite.
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -16,6 +17,7 @@ const MISSING = {
   'su-name': 'Add your name',
   'su-email': 'Add your email',
   'su-password': 'Password: 8 or more characters',
+  'su-org': 'Name the campaign',
 };
 const missingLine = (el) => {
   if (el.id === 'su-email' && el.validity.typeMismatch) return 'Check your email';
@@ -26,7 +28,7 @@ export default function Signup({ mode = 'field' }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setup = useQuery({ queryKey: ['auth-setup'], queryFn: () => apiGet('/auth/setup'), retry: false });
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', workspaceName: '' });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const saidMissing = useRef(false);
@@ -48,7 +50,8 @@ export default function Signup({ mode = 'field' }) {
     setBusy(true);
     setError(null);
     try {
-      const me = await apiPost('/auth/signup', form);
+      const { workspaceName, ...rest } = form;
+      const me = await apiPost('/auth/signup', workspaceName.trim() ? { ...rest, workspaceName: workspaceName.trim() } : rest);
       queryClient.setQueryData(['me'], me);
       queryClient.invalidateQueries({ queryKey: ['auth-setup'] });
       const go = landing(me, mode);
@@ -62,10 +65,12 @@ export default function Signup({ mode = 'field' }) {
     }
   };
 
+  const org = setup.data?.organization || null;
   const brand = (
     <>
       <span className="brand">Starbase</span>
-      <span className="brand-org">Imagine Surrey</span>
+      {org && <span className="brand-org">{org}</span>}
+      {setup.data?.org?.env === 'staging' && <span className="env-badge">Staging</span>}
     </>
   );
 
@@ -77,7 +82,7 @@ export default function Signup({ mode = 'field' }) {
       <div className="auth-page">
         {brand}
         <h1>Already set up</h1>
-        <p className="muted">Starbase is set up for Imagine Surrey. Ask a manager for an invite.</p>
+        <p className="muted">Starbase is set up{org ? ` for ${org}` : ''}. Ask a manager for an invite.</p>
         <hr className="hairline" />
         <p className="muted"><Link to="/login">Sign in</Link></p>
       </div>
@@ -87,8 +92,15 @@ export default function Signup({ mode = 'field' }) {
   return (
     <div className="auth-page">
       {brand}
-      <h1>Set up Starbase for Imagine Surrey</h1>
+      <h1>Set up Starbase{org ? ` for ${org}` : ''}</h1>
       <form onSubmit={submit} onInvalidCapture={onInvalid}>
+        {!org && (
+          <div className="field">
+            <label htmlFor="su-org">Campaign</label>
+            <input id="su-org" className="input" required autoComplete="organization" style={AUTH_INPUT}
+              placeholder="The campaign's name" value={form.workspaceName} onChange={set('workspaceName')} />
+          </div>
+        )}
         <div className="field">
           <label htmlFor="su-name">Your name</label>
           <input id="su-name" className="input" required autoFocus autoComplete="name" style={AUTH_INPUT}

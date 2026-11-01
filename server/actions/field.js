@@ -24,6 +24,7 @@ import { ATTACH_COUNT, bindAttachments, loadAttachments } from '../ext/abtests/a
 import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
+import { DEFAULT_TZ } from '../lib/org.js';
 
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
@@ -531,7 +532,7 @@ export const FIELD_ACTIONS = {
         [ctx.workspaceId, shift.id],
       )).rows[0].n + 1;
 
-      const message = shiftMessage(shift, ctx.workspace.name, ctx.workspace.settings?.tz || 'America/Vancouver');
+      const message = shiftMessage(shift, ctx.workspace.name, ctx.workspace.settings?.tz || DEFAULT_TZ);
       const results = [];
       for (const a of assignees) {
         const emailRes = a.email
@@ -584,7 +585,7 @@ export const FIELD_ACTIONS = {
         [ctx.workspaceId, email],
       )).rows.length > 0;
       if (optedOut) {
-        const tz = ctx.workspace?.settings?.tz || 'America/Vancouver';
+        const tz = ctx.workspace?.settings?.tz || DEFAULT_TZ;
         const on = prev?.unsubscribed_at
           ? ` on ${new Date(prev.unsubscribed_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: tz })}`
           : '';

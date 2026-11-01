@@ -3,6 +3,7 @@
 // so they always land on the event log with the action that caused them.
 import { newId } from '../../lib/events.js';
 import { textConfigured } from '../../lib/notify.js';
+import { DEFAULT_TZ } from '../../lib/org.js';
 import {
   DEFAULT_TEMPLATE, DEFAULT_FROM, DEFAULT_UNTIL, DEFAULT_WEEKEND_FROM, DEFAULT_WEEKEND_UNTIL,
   NO_TEXT_TAG, NO_CONTACT_TAG, PHONE_DIGITS_SQL, last10, RECENT_DAYS, quietNow, windowWord, now, e164,
@@ -24,7 +25,7 @@ export const settingsFor = async (q, workspaceId) => {
   };
 };
 
-export const tzOf = (workspace) => workspace?.settings?.tz || 'America/Vancouver';
+export const tzOf = (workspace) => workspace?.settings?.tz || DEFAULT_TZ;
 
 // Today's window: { now: true|false, from, until, label: '9 am–9 pm',
 // opens: '9 am' | '10 am tomorrow' (when quiet), weekend, weekdays, weekends }

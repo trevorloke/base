@@ -1,5 +1,6 @@
-// First-run setup: the first sign-up makes the Imagine Surrey workspace;
-// after that sign-up is closed and people join by invite.
+// First-run setup: the deployment names the campaign (STARBASE_ORG_NAME);
+// the first sign-up makes its workspace; after that sign-up is closed and
+// people join by invite. (org.test.js: a deployment that names none.)
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
@@ -10,15 +11,20 @@ before(async () => {
   await freshDb();
   delete process.env.RESEND_API_KEY;
   delete process.env.STARBASE_OPEN_SIGNUP; // the real, closed-after-setup behaviour
+  process.env.STARBASE_ORG_NAME = 'Imagine Surrey';
+  process.env.STARBASE_TZ = 'America/Vancouver';
 });
-after(() => { process.env.STARBASE_OPEN_SIGNUP = '1'; });
+after(() => { process.env.STARBASE_OPEN_SIGNUP = '1'; delete process.env.STARBASE_ORG_NAME; delete process.env.STARBASE_TZ; });
 
 let mgr;
 
 test('setup is open before anything exists, and names Imagine Surrey', async () => {
   const r = await new Client().get('/api/auth/setup');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json, { open: true, organization: 'Imagine Surrey' });
+  assert.equal(r.json.open, true);
+  assert.equal(r.json.organization, 'Imagine Surrey');
+  assert.deepEqual([r.json.org.name, r.json.org.jurisdiction, r.json.org.tz, r.json.org.city, r.json.org.env], ['Imagine Surrey', 'bc-municipal', 'America/Vancouver', 'Surrey', 'local']);
+  assert.deepEqual(r.json.org.slates.map((x) => x.code), ['council', 'school_board']);
 });
 
 test('the first sign-up needs no campaign name: it sets up Imagine Surrey, BC municipal', async () => {
@@ -31,11 +37,14 @@ test('the first sign-up needs no campaign name: it sets up Imagine Surrey, BC mu
   assert.equal(r.json.workspace.name, 'Imagine Surrey');
   assert.equal(r.json.workspace.jurisdiction, 'bc-municipal');
   assert.equal(r.json.workspace.slug, 'imagine-surrey');
+  assert.equal(r.json.workspace.settings.tz, 'America/Vancouver', 'the deployment’s time zone is the campaign’s');
+  assert.equal(r.json.org.name, 'Imagine Surrey', 'every signed-in answer carries the deployment');
 });
 
 test('after setup, sign-up is closed (403) and /setup says so', async () => {
   const setup = await new Client().get('/api/auth/setup');
-  assert.deepEqual(setup.json, { open: false, organization: 'Imagine Surrey' });
+  assert.equal(setup.json.open, false);
+  assert.equal(setup.json.organization, 'Imagine Surrey');
   const r = await new Client().post('/api/auth/signup', {
     name: 'Someone Else', email: 'else@example.org', password: 'another-pass-1', workspaceName: 'Another Campaign',
   });

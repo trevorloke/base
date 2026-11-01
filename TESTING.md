@@ -49,7 +49,9 @@ Postgres database (backups included).
 
 | Variable | What for | Needed to test? |
 |---|---|---|
-| `STARBASE_PUBLIC_URL` | your address, e.g. `https://starbase.imaginesurrey.ca` — used in invite, unsubscribe, and payment links | **yes** |
+| `STARBASE_PUBLIC_URL` | your address, e.g. `https://starbase.imaginesurrey.ca` — used in invite and unsubscribe links | **yes** |
+| `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES` | the campaign this deployment runs for (README → *One deployment per client*) | set them before the first sign-in |
+| `STARBASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
 | `GOOGLE_MAPS_SERVER_KEY` | Google geocoding (`GEOCODER=google` or `GEOCODER_FALLBACK=google`) and Google Maps tiles (`GOOGLE_MAPS_TILES=1`) | optional — the free BC geocoder and OpenStreetMap tiles work without it |

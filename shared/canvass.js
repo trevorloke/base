@@ -74,13 +74,27 @@ export const donorTier = ({ yearCents = 0, monthlyCents = 0 }) => {
 // The slates a contribution goes to. A contribution is to one slate; the
 // annual limit is per contributor per slate (each slate is its own election —
 // city council, school board — and LECFA's limit is per jurisdiction; verify
-// with Elections BC). A gift that names no slate is to the first one.
-export const SLATES = [
+// with Elections BC). A gift that names no slate is to the first one. The
+// server reads them from STARBASE_SLATES ("code:Label,code:Label"); the app
+// takes the server's (me.org.slates) and keeps these as the fallback.
+export const DEFAULT_SLATES = [
   { code: 'council', label: 'City council' },
   { code: 'school_board', label: 'School board' },
 ];
+export const parseSlates = (text) => {
+  const out = [];
+  for (const part of String(text || '').split(',')) {
+    const [code, ...rest] = part.split(':');
+    const c = String(code || '').trim().toLowerCase();
+    const label = rest.join(':').trim();
+    if (!/^[a-z0-9_]{1,30}$/.test(c) || out.some((x) => x.code === c)) continue;
+    out.push({ code: c, label: label || c.replace(/_/g, ' ').replace(/^./, (ch) => ch.toUpperCase()) });
+  }
+  return out.length ? out : null;
+};
+export const SLATES = parseSlates(globalThis.process?.env?.STARBASE_SLATES) || DEFAULT_SLATES;
 export const SLATE_CODES = SLATES.map((s) => s.code);
 export const DEFAULT_SLATE = SLATES[0].code;
-export const slateLabel = (code) => SLATES.find((s) => s.code === (code || DEFAULT_SLATE))?.label || String(code);
+export const slateLabel = (code, slates = SLATES) => slates.find((s) => s.code === (code || slates[0]?.code))?.label || String(code);
 
 export const SHIFT_STATUSES = ['assigned', 'confirmed', 'declined', 'no_show', 'completed'];

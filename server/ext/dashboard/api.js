@@ -19,6 +19,7 @@
 // Days are the workspace's (settings.tz, Vancouver by default).
 import { Hono } from 'hono';
 import { bandOf } from '../../../shared/scale.js';
+import { DEFAULT_TZ } from '../../lib/org.js';
 
 export const api = new Hono();
 export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible'];
@@ -79,7 +80,7 @@ api.get('/dashboard', async (c) => {
   if (ctx.role !== 'manager') return c.json({ error: 'managers only' }, 403);
   const db = c.get('db');
   const ws = ctx.workspaceId;
-  const tz = ctx.workspace.settings?.tz || 'America/Vancouver';
+  const tz = ctx.workspace.settings?.tz || DEFAULT_TZ;
   const period = PERIODS.includes(c.req.query('period')) ? c.req.query('period') : '30d';
   const since = await sinceOf(db, period, tz);
   const startOfToday = await sinceOf(db, 'today', tz);

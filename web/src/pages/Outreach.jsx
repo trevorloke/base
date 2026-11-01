@@ -560,7 +560,7 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
         <label htmlFor={`${kind}-subject`}>{testing ? 'Subject A' : 'Subject'}</label>
         <input id={`${kind}-subject`} className="input" value={subject} maxLength={300} autoFocus
           onChange={(e) => { setSubject(e.target.value); setConfirming(false); }}
-          placeholder={kind === 'press' ? 'Imagine Surrey unveils transit plan' : 'This week on the campaign'} />
+          placeholder={kind === 'press' ? 'Campaign unveils transit plan' : 'This week on the campaign'} />
       </div>
       )}
       {!isText && <AbFields idPrefix={kind} audienceCount={audienceCount} noun={noun} value={ab} links={links}

@@ -8,6 +8,7 @@
 //   Email: set RESEND_API_KEY (+ optional MAIL_FROM, default onboarding@resend.dev)
 //   SMS:   set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM
 
+import { DEFAULT_TZ } from './org.js';
 export const emailConfigured = () => !!process.env.RESEND_API_KEY;
 export const textConfigured = () =>
   !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
@@ -88,7 +89,7 @@ export const sendText = async ({ to, body }) => {
 // both channels.
 // Times render in the campaign's zone, never the server's (a UTC host would
 // otherwise tell Surrey volunteers the wrong hour).
-export const shiftMessage = (shift, workspaceName, timeZone = 'America/Vancouver') => {
+export const shiftMessage = (shift, workspaceName, timeZone = DEFAULT_TZ) => {
   const when = new Date(shift.starts_at).toLocaleString('en-CA', {
     weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone,
   });

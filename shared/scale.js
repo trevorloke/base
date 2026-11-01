@@ -43,13 +43,30 @@ export const DEFAULT_STEPS = Object.freeze([
   { code: '3', band: 'undecided', word: 'Undecided',  label: 'Undecided' },
   { code: '4', band: 'opposed',   word: 'Opposed',    label: 'Opposed — support unknown' },
 ]);
-export const DEFAULT_CANDIDATES = Object.freeze([
+// The opposed candidates a campaign's scale starts with. The server reads
+// STARBASE_CANDIDATES ("4D:McCallum:Opposed — Doug McCallum supporter;4B:Locke")
+// — a code (4 + one or two letters), a name, and a label (or "Opposed — name");
+// the desk edits the list after (Rating scale). Unset: Imagine Surrey's.
+export const SURREY_CANDIDATES = Object.freeze([
   { code: '4D', name: 'McCallum',  label: 'Opposed — Doug McCallum supporter' },
   { code: '4B', name: 'Locke',     label: 'Opposed — Surrey Connect / Brenda Locke' },
   { code: '4F', name: 'Annis',     label: 'Opposed — Surrey First / Linda Annis' },
   { code: '4N', name: 'van Vliet', label: 'Opposed — SurreyNow / Troy van Vliet' },
   { code: '4C', name: 'Randhawa',  label: 'Opposed — Surrey Conservatives / Honveer Randhawa' },
 ]);
+export const parseCandidates = (text) => {
+  const out = [];
+  for (const part of String(text || '').split(';')) {
+    const [code, name, ...rest] = part.split(':');
+    const c = String(code || '').trim().toUpperCase();
+    const n = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 30);
+    const label = rest.join(':').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (!CANDIDATE_CODE_RE.test(c) || !n || out.some((x) => x.code === c)) continue;
+    out.push({ code: c, name: n, label: label || `Opposed — ${n}` });
+  }
+  return out.length ? Object.freeze(out) : null;
+};
+export const DEFAULT_CANDIDATES = parseCandidates(globalThis.process?.env?.STARBASE_CANDIDATES) || SURREY_CANDIDATES;
 const DEFAULT_BY_CODE = new Map(DEFAULT_CANDIDATES.map((c) => [c.code, c]));
 
 // One line of text: trimmed, inner runs of space as one.

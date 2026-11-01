@@ -124,6 +124,7 @@ const yellowCount = (page) => page.locator('main.page .btn-primary:visible').cou
 const signup = async (page, base, { name, email, campaign }) => {
   await page.goto(`${base}/signup`, { waitUntil: 'domcontentloaded' });
   await page.fill('#su-name', name);
+  if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
   await page.fill('#su-email', email);
   await page.fill('#su-password', 'surrey-forward-2026');
   await page.click('button[type="submit"]');

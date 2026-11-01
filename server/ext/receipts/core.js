@@ -10,6 +10,7 @@ import { newId } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import { campaignDay } from '../../lib/gifts.js';
+import { DEFAULT_TZ } from '../../lib/org.js';
 
 export const JOB = 'receipt.email';
 export const SAMPLE_SERIES = 'sample';
@@ -270,7 +271,7 @@ const sentDay = (ts, timeZone) => {
 export const wasEmailed = (r) => Number(r.sent_count || 0) > 0 || ['sent', 'sending'].includes(r.email_status);
 const staleSending = (r) => r.email_status === 'sending'
   && Date.now() - new Date(r.updated_at || 0).getTime() > STALE_SENDING_MS;
-export const statusOf = (r, { emailOn, hasEmail, timeZone = 'America/Vancouver' }) => {
+export const statusOf = (r, { emailOn, hasEmail, timeZone = DEFAULT_TZ }) => {
   if (r.voided_at) {
     if (r.void_sent_at) return { code: 'void', word: 'Void', line: `Void — void notice sent${sentDay(r.void_sent_at, timeZone)}` };
     if (wasEmailed(r)) return { code: 'void', word: 'Void', line: 'Void — the receipt was already emailed' };

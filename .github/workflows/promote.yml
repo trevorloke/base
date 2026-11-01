@@ -1,0 +1,55 @@
+# Promote staging to production: fast-forward the `production` branch to
+# what `main` is now (staging deploys from main; production from
+# production). Run it from the Actions tab — "Promote to production" → Run
+# workflow. It refuses when CI has not passed on main's latest commit, and
+# when production has commits main does not (nothing is ever rewritten).
+name: Promote to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "What to promote (a commit on main; blank = main's latest)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick the commit
+        id: pick
+        run: |
+          set -euo pipefail
+          ref="${{ github.event.inputs.ref }}"
+          sha=$(git rev-parse "${ref:-origin/main}")
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Promoting $sha"
+      - name: Require green CI on that commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="${{ steps.pick.outputs.sha }}"
+          conclusion=$(gh api "repos/${{ github.repository }}/commits/$sha/check-runs?check_name=starbase" \
+            --jq '[.check_runs[] | select(.name == "starbase")] | sort_by(.completed_at) | last | .conclusion // "none"')
+          echo "CI on $sha: $conclusion"
+          [ "$conclusion" = "success" ] || { echo "::error::CI has not passed on $sha (it is: $conclusion). Wait for green, or fix main."; exit 1; }
+      - name: Fast-forward production
+        run: |
+          set -euo pipefail
+          sha="${{ steps.pick.outputs.sha }}"
+          if git rev-parse --verify -q origin/production >/dev/null; then
+            git merge-base --is-ancestor origin/production "$sha" \
+              || { echo "::error::production has commits that main does not. Merge them into main first; production is never rewritten."; exit 1; }
+          fi
+          git push origin "$sha:refs/heads/production"
+          echo "production is now $sha"

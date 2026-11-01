@@ -38,14 +38,18 @@ button, no paragraphs, everything else one tap away.
 Volunteers get five tabs — **Today · Map · Calls · Shifts · ImagineU** — plus
 *Signs to put up* for sign crews; desk-only addresses send them back to Today.
 
-**Setup is one-time.** Starbase runs for Imagine Surrey only: the first
-person to open `/signup` sets it up (name, email, password) and becomes its
-manager — the workspace is *Imagine Surrey*, `bc-municipal`
-(`server/lib/org.js`). After that sign-up is closed (`POST /api/auth/signup`
-→ 403) and Sign in hides the link; `GET /api/auth/setup` says which
-(`{ open, organization }`). `STARBASE_OPEN_SIGNUP=1` keeps it open — the
-test suite sets it, since tests make several workspaces to check they stay
-apart.
+**One campaign per deployment; setup is one-time.** Each client runs on
+its own services and database. The deployment names the campaign and its
+rules (`STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`,
+`STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` — see *Run*);
+the first person to open `/signup` sets it up (name, email, password; the
+campaign's name too, when the deployment left it blank) and becomes its
+manager. After that sign-up is closed (`POST /api/auth/signup` → 403) and
+Sign in hides the link; `GET /api/auth/setup` says which (`{ open,
+organization, org }`). `STARBASE_OPEN_SIGNUP=1` keeps it open — the test
+suite sets it, since tests make several workspaces to check they stay
+apart. `STARBASE_ENV=staging` puts a *Staging* badge on every screen and
+in `/api/health`, so a test environment is never mistaken for the real one.
 
 Managers reach **Admin** from the account menu (their initials):
 - **Members**: invite volunteers and staff by email (or copy the join link
@@ -383,6 +387,30 @@ referrer policy. The event log keeps no sign-in or invite secrets
 and no image bytes.
 
 ## Run
+
+### One deployment per client
+
+Everything a deployment knows about its campaign comes from the
+environment (`server/lib/org.js`); the code names no client.
+
+| Variable | What it sets | Default |
+|---|---|---|
+| `STARBASE_ORG_NAME` | the campaign's name, shown on sign-in and used by the first sign-up | blank: the first sign-up names it |
+| `STARBASE_JURISDICTION` | `bc-municipal`, `bc-provincial` or `federal` — which contribution-limit rules apply (`cap_rules`) | `bc-municipal` |
+| `STARBASE_TZ` | the campaign's time zone (shifts, receipts, quiet hours, the campaign's day) | `America/Vancouver` |
+| `STARBASE_CITY` | the city new addresses default to | `Surrey` |
+| `STARBASE_PROVINCE` | two letters, for geocoding | `BC` |
+| `STARBASE_GEO_BOUNDS` | `lat,lng\|lat,lng`, the box Google geocoding is biased to | Surrey's |
+| `STARBASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
+| `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
+| `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
+
+Two environments per client: **staging** deploys every push to `main`,
+**production** deploys the `production` branch, which the *Promote to
+production* workflow (GitHub → Actions) fast-forwards to `main` once CI is
+green there. `render.yaml` holds the pair for one client; another client is
+another pair with its own names and values (GOING-LIVE.md, *A new client*).
+
 
 Taking it live for the campaign, step by step: [GOING-LIVE.md](GOING-LIVE.md).
 
