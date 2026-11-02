@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Network } from "@meridian/schema";
+import { Network } from "@starsign/schema";
 
 /** One per-network variant. Thread segments are extra posts after the first; empty on networks without threads. */
 export const VariantOutput = z.object({

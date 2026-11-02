@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createTestDb } from "@meridian/db/test";
-import { posts, postVariants, socialAccounts, workspaces, type DbHandle } from "@meridian/db";
+import { createTestDb } from "@starsign/db/test";
+import { posts, postVariants, socialAccounts, workspaces, type DbHandle } from "@starsign/db";
 import { ApprovalDiffs, EventStore, OutcomeScheduler, hashPayload } from "../src/index.ts";
 
 let h: DbHandle;

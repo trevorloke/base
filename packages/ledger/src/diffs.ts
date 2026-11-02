@@ -1,5 +1,5 @@
-import { approvalDiffs, type Db } from "@meridian/db";
-import type { Actor } from "@meridian/schema";
+import { approvalDiffs, type Db } from "@starsign/db";
+import type { Actor } from "@starsign/schema";
 import { newId } from "./ids.ts";
 
 /** Records what a human changed in a draft. Every row is a labeled example of "closer to our voice". */

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Every network Meridian can observe or publish to. Open protocols first-class. */
+/** Every network Starsign can observe or publish to. Open protocols first-class. */
 export const Network = z.enum([
   "x",
   "bluesky",

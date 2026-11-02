@@ -5,13 +5,13 @@ import type { CompleteRequest, CompleteResult, GatewayUsage, ModelGateway } from
 import { estimateCostUsd, priceFor } from "./pricing.ts";
 import { promptVersionTag } from "./prompts/types.ts";
 
-/** The exact model id, no date suffix. Overridable with MERIDIAN_MODEL. */
+/** The exact model id, no date suffix. Overridable with STARSIGN_MODEL. */
 export const DEFAULT_MODEL = "claude-opus-5-5";
 /** Beta header for the `fallbacks: "default"` scalar form (the array form uses the -06-01 header). */
 export const REFUSAL_FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 export function resolveModel(env: NodeJS.ProcessEnv = process.env): string {
-  const m = env.MERIDIAN_MODEL?.trim();
+  const m = env.STARSIGN_MODEL?.trim();
   return m && m.length > 0 ? m : DEFAULT_MODEL;
 }
 

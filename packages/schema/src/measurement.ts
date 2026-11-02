@@ -20,7 +20,7 @@ export const MetricName = z.enum([
   "followers_total",
   "engagements",
   "engagement_rate",
-  /** Meridian-owned: link-layer clicks and downstream conversions. */
+  /** Starsign-owned: link-layer clicks and downstream conversions. */
   "tracked_clicks",
   "conversions",
   "conversion_value",

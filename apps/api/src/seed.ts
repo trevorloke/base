@@ -4,10 +4,10 @@
  * went out (with captured outcomes), a queue of proposals waiting on a human, feed items, alerts, a brief.
  * Deterministic. Safe to re-run: it mints a fresh API key each time and skips the rest if the workspace exists.
  */
-import { createDb, migrate } from "@meridian/db";
-import { ConnectorRegistry, MockConnector } from "@meridian/connectors";
-import { InMemoryScheduler, Meridian, SecretBox, type Principal } from "@meridian/core";
-import type { TrendStage } from "@meridian/schema";
+import { createDb, migrate } from "@starsign/db";
+import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
+import { InMemoryScheduler, Starsign, SecretBox, type Principal } from "@starsign/core";
+import type { TrendStage } from "@starsign/schema";
 
 const SLUG = process.env.SEED_SLUG ?? "acme";
 const realNow = Date.now();
@@ -30,7 +30,7 @@ const handle = await createDb({ url: process.env.DATABASE_URL, pglitePath: proce
 await migrate(handle);
 const mock = new MockConnector();
 mock.now = now;
-const m = new Meridian({ handle, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: SecretBox.fromEnv(), now });
+const m = new Starsign({ handle, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: SecretBox.fromEnv(), now });
 
 const existing = await m.workspaces.bySlug(SLUG);
 if (existing) {
@@ -285,8 +285,8 @@ Owner API key (web app, CLI):   ${ownerKey.secret}
 Agent API key (MCP server):     ${agentKey.secret}
 
 Next:
-  pnpm dev:api                      # http://localhost:4000  (or set MERIDIAN_DEV_WORKSPACE=${ws.slug} to skip the key)
+  pnpm dev:api                      # http://localhost:4000  (or set STARSIGN_DEV_WORKSPACE=${ws.slug} to skip the key)
   pnpm dev:web                      # paste the owner key when asked
-  MERIDIAN_API_KEY=<agent key> pnpm dev:mcp
+  STARSIGN_API_KEY=<agent key> pnpm dev:mcp
 `);
 await handle.close();

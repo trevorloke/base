@@ -1,9 +1,9 @@
 import { Queue, type ConnectionOptions } from "bullmq";
 import { Redis } from "ioredis";
-import type { Scheduler } from "@meridian/core";
+import type { Scheduler } from "@starsign/core";
 
-export const PUBLISH_QUEUE = "meridian-publish";
-export const MAINTENANCE_QUEUE = "meridian-maintenance";
+export const PUBLISH_QUEUE = "starsign-publish";
+export const MAINTENANCE_QUEUE = "starsign-maintenance";
 
 export function createRedis(url = process.env.REDIS_URL ?? "redis://127.0.0.1:6379"): Redis {
   // BullMQ requires maxRetriesPerRequest: null on its connections.

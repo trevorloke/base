@@ -1,5 +1,5 @@
 /**
- * Thin typed wrapper over the Meridian HTTP API (docs/API.md).
+ * Thin typed wrapper over the Starsign HTTP API (docs/API.md).
  * Everything the MCP tools do goes through here, so auth, policy and the ledger stay in the API.
  */
 import type {
@@ -27,14 +27,14 @@ import type {
 import type { Activity, LedgerEvent, Policy, PolicyDecision } from "./types.ts";
 
 export const DEFAULT_API_URL = "http://localhost:4000";
-export const USER_AGENT = "meridian-mcp/0.1.0";
+export const USER_AGENT = "starsign-mcp/0.1.0";
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
 export type QueryValue = string | number | boolean | readonly string[] | undefined | null;
 export type Query = Record<string, QueryValue>;
 
 /** An error from the API: `{ error: { code, message, details } }`, or a transport failure (status 0). */
-export class MeridianApiError extends Error {
+export class StarsignApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details: unknown;
@@ -43,7 +43,7 @@ export class MeridianApiError extends Error {
 
   constructor(args: { status: number; code: string; message: string; details?: unknown; method: string; path: string }) {
     super(args.message);
-    this.name = "MeridianApiError";
+    this.name = "StarsignApiError";
     this.status = args.status;
     this.code = args.code;
     this.details = args.details;
@@ -55,8 +55,8 @@ export class MeridianApiError extends Error {
   toText(): string {
     const head =
       this.status > 0
-        ? `Meridian API error ${this.status} (${this.code}) on ${this.method} ${this.path}: ${this.message}`
-        : `Meridian API unreachable (${this.code}) on ${this.method} ${this.path}: ${this.message}`;
+        ? `Starsign API error ${this.status} (${this.code}) on ${this.method} ${this.path}: ${this.message}`
+        : `Starsign API unreachable (${this.code}) on ${this.method} ${this.path}: ${this.message}`;
     if (this.details === undefined || this.details === null) return head;
     return `${head}\nDetails: ${JSON.stringify(this.details, null, 2)}`;
   }
@@ -99,35 +99,35 @@ export function buildUrl(baseUrl: string, path: string, query?: Query): string {
   return url.toString();
 }
 
-export interface MeridianClientOptions {
-  /** API base URL. Default: `MERIDIAN_API_URL` or http://localhost:4000. */
+export interface StarsignClientOptions {
+  /** API base URL. Default: `STARSIGN_API_URL` or http://localhost:4000. */
   baseUrl?: string;
-  /** Workspace API key (`mer_...`). When absent no Authorization header is sent (the API's dev mode may still accept it). */
+  /** Workspace API key (`star_...`). When absent no Authorization header is sent (the API's dev mode may still accept it). */
   apiKey?: string;
   /** Injectable fetch, for tests. Default: `globalThis.fetch`. */
   fetch?: typeof fetch;
 }
 
-export class MeridianClient {
+export class StarsignClient {
   readonly baseUrl: string;
   readonly apiKey: string | undefined;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(opts: MeridianClientOptions = {}) {
+  constructor(opts: StarsignClientOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_API_URL).replace(/\/+$/, "");
     const key = opts.apiKey?.trim();
     this.apiKey = key ? key : undefined;
     this.fetchImpl = opts.fetch ?? globalThis.fetch;
   }
 
-  /** Reads `MERIDIAN_API_URL` and `MERIDIAN_API_KEY`. */
-  static fromEnv(env: NodeJS.ProcessEnv = process.env): MeridianClient {
-    return new MeridianClient({ baseUrl: env.MERIDIAN_API_URL || DEFAULT_API_URL, apiKey: env.MERIDIAN_API_KEY });
+  /** Reads `STARSIGN_API_URL` and `STARSIGN_API_KEY`. */
+  static fromEnv(env: NodeJS.ProcessEnv = process.env): StarsignClient {
+    return new StarsignClient({ baseUrl: env.STARSIGN_API_URL || DEFAULT_API_URL, apiKey: env.STARSIGN_API_KEY });
   }
 
   /** Same API and fetch, a different workspace key (one HTTP server, many workspaces). */
-  withApiKey(apiKey: string): MeridianClient {
-    return new MeridianClient({ baseUrl: this.baseUrl, apiKey, fetch: this.fetchImpl });
+  withApiKey(apiKey: string): StarsignClient {
+    return new StarsignClient({ baseUrl: this.baseUrl, apiKey, fetch: this.fetchImpl });
   }
 
   // ---- identity -----------------------------------------------------------------------------
@@ -260,10 +260,10 @@ export class MeridianClient {
       res = await doFetch(url, init);
     } catch (err) {
       const cause = err instanceof Error ? (err.cause instanceof Error ? `${err.message}: ${err.cause.message}` : err.message) : String(err);
-      throw new MeridianApiError({
+      throw new StarsignApiError({
         status: 0,
         code: "unavailable",
-        message: `Could not reach the Meridian API at ${this.baseUrl} (${cause}). Is it running? Check MERIDIAN_API_URL.`,
+        message: `Could not reach the Starsign API at ${this.baseUrl} (${cause}). Is it running? Check STARSIGN_API_URL.`,
         method,
         path,
       });
@@ -277,7 +277,7 @@ export class MeridianClient {
         data = JSON.parse(text);
       } catch {
         if (res.ok) {
-          throw new MeridianApiError({
+          throw new StarsignApiError({
             status: res.status,
             code: "invalid_response",
             message: `Expected JSON from ${method} ${path} but got: ${text.slice(0, 200)}`,
@@ -292,7 +292,7 @@ export class MeridianClient {
     if (!res.ok) {
       const body = isApiErrorBody(data) ? data.error : null;
       const fallback = `HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ""}${!body && text ? `: ${text.slice(0, 200)}` : ""}`;
-      throw new MeridianApiError({
+      throw new StarsignApiError({
         status: res.status,
         code: body?.code ?? CODE_FOR_STATUS[res.status] ?? "http_error",
         message: body?.message ?? fallback,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_POLICY, type Policy } from "@meridian/schema";
+import { DEFAULT_POLICY, type Policy } from "@starsign/schema";
 import { evaluatePost, evaluateSubject, gatePost, resolveAutonomy } from "../src/index.ts";
 
 const policy: Policy = {

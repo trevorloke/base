@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
-import type { Db, DbHandle } from "@meridian/db";
-import type { ConnectorRegistry } from "@meridian/connectors";
-import { ApprovalDiffs, EventStore, OutcomeScheduler } from "@meridian/ledger";
-import type { Actor } from "@meridian/schema";
-import type { MemberRole } from "@meridian/policy";
+import type { Db, DbHandle } from "@starsign/db";
+import type { ConnectorRegistry } from "@starsign/connectors";
+import { ApprovalDiffs, EventStore, OutcomeScheduler } from "@starsign/ledger";
+import type { Actor } from "@starsign/schema";
+import type { MemberRole } from "@starsign/policy";
 import type { SecretBox } from "./crypto.ts";
 import type { Scheduler } from "./scheduler.ts";
 
@@ -24,7 +24,7 @@ export interface Principal {
   role?: MemberRole;
 }
 
-export const SYSTEM: Actor = { type: "system", id: "meridian" };
+export const SYSTEM: Actor = { type: "system", id: "starsign" };
 
 export class CoreContext {
   readonly db: Db;

@@ -8,7 +8,7 @@
 //   GET  {baseUrl}/v1/accounts/{id}/mentions?since=<iso>  -> inbound activity
 // Responses are read defensively (several plausible field names each) so a near-miss in naming
 // degrades to missing fields rather than a crash. Re-check against the real docs before production.
-import { ActivityKind, Network, type ActivityInput, type MetricInput, type MetricName } from "@meridian/schema";
+import { ActivityKind, Network, type ActivityInput, type MetricInput, type MetricName } from "@starsign/schema";
 import { asNetworkError, classifyHttpStatus, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
 import type { AccountRef, Connector, ConnectorCapabilities, PublishInput, PublishResult, ValidationIssue } from "./types.ts";
@@ -28,7 +28,7 @@ export interface ZernioHttpFailure {
   body: unknown;
 }
 
-/** ASSUMED analytics field names → Meridian's canonical metric names. */
+/** ASSUMED analytics field names → Starsign's canonical metric names. */
 const METRIC_ALIASES: Record<string, MetricName> = {
   impressions: "impressions",
   views: "impressions",
@@ -74,7 +74,7 @@ export function mapZernioError(status: number, headers: Headers, body: unknown, 
 }
 
 /**
- * Zernio (formerly Late) unified posting API. One API key fronts every network Meridian knows, so
+ * Zernio (formerly Late) unified posting API. One API key fronts every network Starsign knows, so
  * this adapter serves all of them; `account.externalId` is Zernio's id for the connected account.
  *
  * Ids: `externalId` is Zernio's post id, not the network's, because the analytics endpoint is keyed

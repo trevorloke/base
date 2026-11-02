@@ -3,10 +3,10 @@ import { createMiddleware } from "hono/factory";
 import { streamSSE } from "hono/streaming";
 import { and, desc, eq } from "drizzle-orm";
 import { ZodError } from "zod";
-import { approvalDiffs, postOutcomes, postVariants } from "@meridian/db";
-import { CoreError, type Meridian, type Principal } from "@meridian/core";
-import { Policy, type ActivityKind, type Network, type PostStatus } from "@meridian/schema";
-import { gatePost } from "@meridian/policy";
+import { approvalDiffs, postOutcomes, postVariants } from "@starsign/db";
+import { CoreError, type Starsign, type Principal } from "@starsign/core";
+import { Policy, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
+import { gatePost } from "@starsign/policy";
 
 export const VERSION = "0.1.0";
 
@@ -28,7 +28,7 @@ function date(v: string | undefined, fallback: Date): Date {
 const list = (v: string | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const daysAgo = (n: number, now: Date) => new Date(now.getTime() - n * 86_400_000);
 
-export function createApp(m: Meridian, opts: AppOptions = {}) {
+export function createApp(m: Starsign, opts: AppOptions = {}) {
   const app = new Hono<Env>();
 
   app.onError((e, c) => {
@@ -283,7 +283,7 @@ export function createApp(m: Meridian, opts: AppOptions = {}) {
   app.get("/v1/export", async (c) => {
     const p = c.get("principal");
     const data = await m.exports.workspace(p);
-    c.header("Content-Disposition", `attachment; filename="meridian-${data.workspace?.slug ?? p.workspaceId}.json"`);
+    c.header("Content-Disposition", `attachment; filename="starsign-${data.workspace?.slug ?? p.workspaceId}.json"`);
     return c.json(data);
   });
 

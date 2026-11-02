@@ -1,6 +1,6 @@
-import type { BrandContext } from "@meridian/ai";
-import type { Meridian, Principal } from "@meridian/core";
-import type { Actor, Network, Policy } from "@meridian/schema";
+import type { BrandContext } from "@starsign/ai";
+import type { Starsign, Principal } from "@starsign/core";
+import type { Actor, Network, Policy } from "@starsign/schema";
 
 /** The operators, as the ledger names them. Posts are created by "studio" (it drafts), alerts by "watch", briefs by "analyst". */
 export const WATCH_ACTOR: Actor = { type: "operator", id: "watch" };
@@ -18,7 +18,7 @@ export interface ActiveAccount {
 }
 
 /** One active account per network, skipping networks a `network_restriction` red line forbids outright. */
-export async function activeAccountsByNetwork(m: Meridian, workspaceId: string, policy: Policy): Promise<ActiveAccount[]> {
+export async function activeAccountsByNetwork(m: Starsign, workspaceId: string, policy: Policy): Promise<ActiveAccount[]> {
   const restricted = new Set(policy.redLines.flatMap((rl) => (rl.kind === "network_restriction" ? rl.networks : [])));
   const seen = new Set<string>();
   const out: ActiveAccount[] = [];
@@ -31,7 +31,7 @@ export async function activeAccountsByNetwork(m: Meridian, workspaceId: string, 
 }
 
 /** The brand block every prompt is grounded in: workspace profile, voice, red lines, connected networks. */
-export async function buildBrandContext(m: Meridian, workspaceId: string, opts: { policy?: Policy; networks?: Network[] } = {}): Promise<BrandContext> {
+export async function buildBrandContext(m: Starsign, workspaceId: string, opts: { policy?: Policy; networks?: Network[] } = {}): Promise<BrandContext> {
   const ws = await m.workspaces.get(workspaceId);
   const policy = opts.policy ?? (await m.policy.getActive(workspaceId));
   const networks = opts.networks ?? (await activeAccountsByNetwork(m, workspaceId, policy)).map((a) => a.network);

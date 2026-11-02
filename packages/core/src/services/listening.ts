@@ -1,8 +1,8 @@
 import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
-import { activities, socialAccounts, streams } from "@meridian/db";
-import { newId } from "@meridian/ledger";
-import { findPhrases } from "@meridian/policy";
-import { ActivityInput, StreamQuery, type ActivityKind, type Network } from "@meridian/schema";
+import { activities, socialAccounts, streams } from "@starsign/db";
+import { newId } from "@starsign/ledger";
+import { findPhrases } from "@starsign/policy";
+import { ActivityInput, StreamQuery, type ActivityKind, type Network } from "@starsign/schema";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import type { AccountService } from "./accounts.ts";

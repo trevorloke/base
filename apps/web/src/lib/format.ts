@@ -154,7 +154,7 @@ export function actorPhrase(actor: Actor | null | undefined): string {
     case "mcp":
       return `an MCP agent (${actor.id})`;
     case "system":
-      return "Meridian";
+      return "Starsign";
     default:
       return actor.id;
   }

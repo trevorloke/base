@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@meridian/db/test";
-import type { DbHandle } from "@meridian/db";
-import { ConnectorRegistry, MockConnector } from "@meridian/connectors";
-import { InMemoryScheduler, Meridian, SecretBox } from "@meridian/core";
+import { createTestDb } from "@starsign/db/test";
+import type { DbHandle } from "@starsign/db";
+import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
+import { InMemoryScheduler, Starsign, SecretBox } from "@starsign/core";
 import { createApp } from "../src/app.ts";
 
 let h: DbHandle;
 let app: ReturnType<typeof createApp>;
-let m: Meridian;
+let m: Starsign;
 let ownerKey: string;
 let agentKey: string;
 let acctId: string;
@@ -19,7 +19,7 @@ const json = async (r: Response): Promise<any> => r.json();
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Meridian({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
+  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   ownerKey = (await m.workspaces.createApiKey({ workspaceId: ws.id, name: "o", actorType: "human", actorId: "u1", role: "owner" })).secret;
   agentKey = (await m.workspaces.createApiKey({ workspaceId: ws.id, name: "a", actorType: "mcp", actorId: "claude" })).secret;
@@ -31,7 +31,7 @@ afterAll(() => h.close());
 describe("api", () => {
   it("health is open; v1 needs a key unless dev workspace is set", async () => {
     expect((await app.request("/api/health")).status).toBe(200);
-    const bad = await app.request("/v1/me", { headers: { authorization: "Bearer mer_nope" } });
+    const bad = await app.request("/v1/me", { headers: { authorization: "Bearer star_nope" } });
     expect(bad.status).toBe(401);
     const dev = await app.request("/v1/me");
     expect(dev.status).toBe(200);

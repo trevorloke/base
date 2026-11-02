@@ -26,22 +26,22 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.17(hono@4.13.16)
-      '@meridian/connectors':
+      '@starsign/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
-      '@meridian/core':
+      '@starsign/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@meridian/db':
+      '@starsign/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@meridian/policy':
+      '@starsign/policy':
         specifier: workspace:*
         version: link:../../packages/policy
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@meridian/workers':
+      '@starsign/workers':
         specifier: workspace:*
         version: link:../workers
       drizzle-orm:
@@ -60,7 +60,7 @@ importers:
 
   apps/mcp:
     dependencies:
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../../packages/schema
       '@modelcontextprotocol/sdk':
@@ -76,19 +76,19 @@ importers:
 
   apps/operators:
     dependencies:
-      '@meridian/ai':
+      '@starsign/ai':
         specifier: workspace:*
         version: link:../../packages/ai
-      '@meridian/connectors':
+      '@starsign/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
-      '@meridian/core':
+      '@starsign/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@meridian/db':
+      '@starsign/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../../packages/schema
       zod:
@@ -132,16 +132,16 @@ importers:
 
   apps/workers:
     dependencies:
-      '@meridian/connectors':
+      '@starsign/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
-      '@meridian/core':
+      '@starsign/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@meridian/db':
+      '@starsign/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../../packages/schema
       bullmq:
@@ -160,7 +160,7 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^1.3.0
         version: 1.3.0(zod@4.6.7)
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../schema
       zod:
@@ -172,7 +172,7 @@ importers:
       '@atproto/api':
         specifier: ^0.30.0
         version: 0.30.0
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../schema
       zod:
@@ -181,22 +181,22 @@ importers:
 
   packages/core:
     dependencies:
-      '@meridian/connectors':
+      '@starsign/connectors':
         specifier: workspace:*
         version: link:../connectors
-      '@meridian/db':
+      '@starsign/db':
         specifier: workspace:*
         version: link:../db
-      '@meridian/forecast':
+      '@starsign/forecast':
         specifier: workspace:*
         version: link:../forecast
-      '@meridian/ledger':
+      '@starsign/ledger':
         specifier: workspace:*
         version: link:../ledger
-      '@meridian/policy':
+      '@starsign/policy':
         specifier: workspace:*
         version: link:../policy
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../schema
       drizzle-orm:
@@ -211,7 +211,7 @@ importers:
       '@electric-sql/pglite':
         specifier: ^0.4.6
         version: 0.4.6
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../schema
       drizzle-orm:
@@ -230,16 +230,16 @@ importers:
 
   packages/forecast:
     dependencies:
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../schema
 
   packages/ledger:
     dependencies:
-      '@meridian/db':
+      '@starsign/db':
         specifier: workspace:*
         version: link:../db
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../schema
       drizzle-orm:
@@ -248,7 +248,7 @@ importers:
 
   packages/policy:
     dependencies:
-      '@meridian/schema':
+      '@starsign/schema':
         specifier: workspace:*
         version: link:../schema
       zod:

@@ -1,4 +1,4 @@
-import { createDefaultRegistry, type ConnectorRegistry } from "@meridian/connectors";
+import { createDefaultRegistry, type ConnectorRegistry } from "@starsign/connectors";
 
 /**
  * The registry this process boots with: the connectors package's factory (native Bluesky and X adapters, Zernio when

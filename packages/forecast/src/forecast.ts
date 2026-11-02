@@ -1,4 +1,4 @@
-import type { TrendForecast, TrendSource, TrendStage } from "@meridian/schema";
+import type { TrendForecast, TrendSource, TrendStage } from "@starsign/schema";
 import { fitHolt, holtForecast } from "./holt.ts";
 import { classifyStage, kinematics, stepsToPeak, type StageParams } from "./stage.ts";
 import { quantile, resample, type Point } from "./series.ts";

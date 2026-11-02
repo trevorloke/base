@@ -1,13 +1,13 @@
 /**
- * The MCP tools: Meridian's front door for agents.
+ * The MCP tools: Starsign's front door for agents.
  * Agents can see the radar, the feed, the queue, the ledger and the red lines, and propose posts.
  * They cannot approve, publish, change policy or connect accounts: humans do that in the app.
  */
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { ActionClass, ActivityKind, LedgerEventType, Network, PostStatus, Timestamp, TrendStage, type Disclosure } from "@meridian/schema";
-import { MeridianApiError, type MeridianClient } from "./client.ts";
+import { ActionClass, ActivityKind, LedgerEventType, Network, PostStatus, Timestamp, TrendStage, type Disclosure } from "@starsign/schema";
+import { StarsignApiError, type StarsignClient } from "./client.ts";
 import * as fmt from "./format.ts";
 import type { CreatePostBody } from "./types.ts";
 
@@ -36,7 +36,7 @@ export type ToolName = (typeof TOOL_NAMES)[number];
 export const MCP_MODEL_LABEL = "mcp-client";
 
 export interface ToolContext {
-  client: MeridianClient;
+  client: StarsignClient;
   now: () => Date;
 }
 
@@ -140,7 +140,7 @@ export function ok(summary: string, data: unknown): CallToolResult {
 
 /** Never throw raw: every failure becomes an `isError` result the agent can read. */
 export function toolError(err: unknown): CallToolResult {
-  const text = err instanceof MeridianApiError ? err.toText() : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
+  const text = err instanceof StarsignApiError ? err.toText() : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
   return { isError: true, content: [{ type: "text", text }] };
 }
 
@@ -289,7 +289,7 @@ export const handlers = {
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
 const WRITES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
-export function registerTools(server: McpServer, client: MeridianClient, opts: { now?: () => Date } = {}): void {
+export function registerTools(server: McpServer, client: StarsignClient, opts: { now?: () => Date } = {}): void {
   const ctx: ToolContext = { client, now: opts.now ?? (() => new Date()) };
 
   server.registerTool(
@@ -347,7 +347,7 @@ export function registerTools(server: McpServer, client: MeridianClient, opts: {
     "get_queue",
     {
       title: "Approval queue",
-      description: "Posts waiting on a human in the approval queue, oldest first. Read-only: approving and rejecting happen in the Meridian app, never through this server.",
+      description: "Posts waiting on a human in the approval queue, oldest first. Read-only: approving and rejecting happen in the Starsign app, never through this server.",
       annotations: READ_ONLY,
     },
     () => handlers.get_queue(ctx),
@@ -420,7 +420,7 @@ export function registerTools(server: McpServer, client: MeridianClient, opts: {
       description:
         "Propose a post: one idea with one text variant per connected account. The server runs the red lines and the autonomy dial and decides where it lands: " +
         "usually the approval queue (pending_approval), otherwise draft or scheduled, or blocked when a red line is crossed (the block is recorded in the ledger). " +
-        "You cannot approve or publish; humans do that in the Meridian app. Get account ids and voice from get_brand_context and dry-run with check_policy first. " +
+        "You cannot approve or publish; humans do that in the Starsign app. Get account ids and voice from get_brand_context and dry-run with check_policy first. " +
         "The post is recorded as AI-assisted and not yet human-reviewed. The result states plainly where the post landed.",
       inputSchema: inputs.create_post,
       annotations: { ...WRITES, idempotentHint: false },
@@ -485,7 +485,7 @@ export function registerTools(server: McpServer, client: MeridianClient, opts: {
     "get_ledger",
     {
       title: "Ledger",
-      description: "Query the append-only ledger: every fact Meridian asserts (post.created, policy.blocked, post.approval_decided, post.published, outcome.captured, operator.alert...). Filter by event types and subject. Newest first.",
+      description: "Query the append-only ledger: every fact Starsign asserts (post.created, policy.blocked, post.approval_decided, post.published, outcome.captured, operator.alert...). Filter by event types and subject. Newest first.",
       inputSchema: inputs.get_ledger,
       annotations: READ_ONLY,
     },

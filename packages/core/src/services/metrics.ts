@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import { metrics, postOutcomes, posts, postVariants, socialAccounts, trendActions } from "@meridian/db";
-import { MetricInput, type Network } from "@meridian/schema";
+import { metrics, postOutcomes, posts, postVariants, socialAccounts, trendActions } from "@starsign/db";
+import { MetricInput, type Network } from "@starsign/schema";
 import type { CoreContext } from "../context.ts";
 import { SYSTEM } from "../context.ts";
 import { localHour } from "../time.ts";

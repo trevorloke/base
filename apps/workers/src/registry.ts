@@ -1,5 +1,5 @@
-import * as connectors from "@meridian/connectors";
-import type { ConnectorRegistry } from "@meridian/connectors";
+import * as connectors from "@starsign/connectors";
+import type { ConnectorRegistry } from "@starsign/connectors";
 
 /**
  * Build the connector registry from the environment. Uses the native adapters' factory when the

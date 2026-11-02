@@ -1,5 +1,5 @@
-import type { ModelGateway } from "@meridian/ai";
-import type { Meridian } from "@meridian/core";
+import type { ModelGateway } from "@starsign/ai";
+import type { Starsign } from "@starsign/core";
 import { runAnalyst, type AnalystOptions } from "./operators/analyst.ts";
 import { runWatch, type WatchOptions } from "./operators/watch.ts";
 
@@ -60,7 +60,7 @@ export interface TickResult {
 }
 
 /** One pass over every workspace: Watch when its interval has elapsed, Analyst when the weekly brief is due. */
-export async function tick(m: Meridian, gw: ModelGateway, state: ServeState, opts: ServeOptions = {}): Promise<TickResult> {
+export async function tick(m: Starsign, gw: ModelGateway, state: ServeState, opts: ServeOptions = {}): Promise<TickResult> {
   const watchEveryMs = opts.watchEveryMs ?? 30 * 60_000;
   const result: TickResult = { watched: [], briefed: [], errors: [] };
   const now = m.ctx.now();
@@ -95,7 +95,7 @@ export interface ServeHandle {
 }
 
 /** The long-running loop: tick, sleep, repeat. One process serves every workspace. */
-export function serve(m: Meridian, gw: ModelGateway, opts: ServeOptions = {}): ServeHandle {
+export function serve(m: Starsign, gw: ModelGateway, opts: ServeOptions = {}): ServeHandle {
   const tickMs = opts.tickMs ?? 60_000;
   const log = opts.log ?? ((line: string) => console.log(line));
   const state: ServeState = { lastWatchAt: new Map() };

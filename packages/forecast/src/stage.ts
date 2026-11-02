@@ -1,4 +1,4 @@
-import type { TrendStage } from "@meridian/schema";
+import type { TrendStage } from "@starsign/schema";
 import { ewma, mean } from "./series.ts";
 
 export interface Kinematics {

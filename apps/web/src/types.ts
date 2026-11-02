@@ -1,4 +1,4 @@
-// Types mirroring docs/API.md (Meridian HTTP API v1). Kept hand-written so the web app
+// Types mirroring docs/API.md (Starsign HTTP API v1). Kept hand-written so the web app
 // has no build-time dependency on the server packages.
 
 export type Network =

@@ -1,4 +1,4 @@
-import { AUTONOMY_ORDER, type ActionClass, type ActorType, type AutonomyLevel, type Policy } from "@meridian/schema";
+import { AUTONOMY_ORDER, type ActionClass, type ActorType, type AutonomyLevel, type Policy } from "@starsign/schema";
 
 export type MemberRole = "owner" | "approver" | "editor" | "viewer";
 

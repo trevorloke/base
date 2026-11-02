@@ -12,7 +12,7 @@ import { TrendService } from "./services/trends.ts";
 import { WorkspaceService } from "./services/workspaces.ts";
 
 /** The one object every front door (API, MCP, operators, workers) talks to. */
-export class Meridian {
+export class Starsign {
   readonly ctx: CoreContext;
   readonly workspaces: WorkspaceService;
   readonly accounts: AccountService;

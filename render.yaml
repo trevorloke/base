@@ -3,7 +3,7 @@
 # one Postgres (pgvector is available on Render Postgres 16), one Redis (Key Value).
 services:
   - type: web
-    name: meridian-staging
+    name: starsign-staging
     runtime: docker
     plan: starter
     region: oregon
@@ -15,59 +15,59 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase: { name: meridian-staging-db, property: connectionString }
+        fromDatabase: { name: starsign-staging-db, property: connectionString }
       - key: REDIS_URL
-        fromService: { type: keyvalue, name: meridian-staging-redis, property: connectionString }
-      - key: MERIDIAN_MASTER_KEY
+        fromService: { type: keyvalue, name: starsign-staging-redis, property: connectionString }
+      - key: STARSIGN_MASTER_KEY
         generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: MERIDIAN_MODEL
+      - key: STARSIGN_MODEL
         value: claude-opus-5-5
   - type: worker
-    name: meridian-staging-workers
+    name: starsign-staging-workers
     runtime: docker
     plan: starter
     region: oregon
     branch: main
     dockerfilePath: ./Dockerfile
-    dockerCommand: pnpm --filter @meridian/workers start
+    dockerCommand: pnpm --filter @starsign/workers start
     autoDeploy: true
     envVars:
       - key: DATABASE_URL
-        fromDatabase: { name: meridian-staging-db, property: connectionString }
+        fromDatabase: { name: starsign-staging-db, property: connectionString }
       - key: REDIS_URL
-        fromService: { type: keyvalue, name: meridian-staging-redis, property: connectionString }
-      - key: MERIDIAN_MASTER_KEY
-        fromService: { type: web, name: meridian-staging, envVarKey: MERIDIAN_MASTER_KEY }
+        fromService: { type: keyvalue, name: starsign-staging-redis, property: connectionString }
+      - key: STARSIGN_MASTER_KEY
+        fromService: { type: web, name: starsign-staging, envVarKey: STARSIGN_MASTER_KEY }
   - type: worker
-    name: meridian-staging-operators
+    name: starsign-staging-operators
     runtime: docker
     plan: starter
     region: oregon
     branch: main
     dockerfilePath: ./Dockerfile
-    dockerCommand: pnpm --filter @meridian/operators start
+    dockerCommand: pnpm --filter @starsign/operators start
     autoDeploy: true
     envVars:
       - key: DATABASE_URL
-        fromDatabase: { name: meridian-staging-db, property: connectionString }
+        fromDatabase: { name: starsign-staging-db, property: connectionString }
       - key: REDIS_URL
-        fromService: { type: keyvalue, name: meridian-staging-redis, property: connectionString }
-      - key: MERIDIAN_MASTER_KEY
-        fromService: { type: web, name: meridian-staging, envVarKey: MERIDIAN_MASTER_KEY }
+        fromService: { type: keyvalue, name: starsign-staging-redis, property: connectionString }
+      - key: STARSIGN_MASTER_KEY
+        fromService: { type: web, name: starsign-staging, envVarKey: STARSIGN_MASTER_KEY }
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: MERIDIAN_MODEL
+      - key: STARSIGN_MODEL
         value: claude-opus-5-5
   - type: keyvalue
-    name: meridian-staging-redis
+    name: starsign-staging-redis
     plan: starter
     region: oregon
     ipAllowList: []
 
 databases:
-  - name: meridian-staging-db
+  - name: starsign-staging-db
     plan: basic-256mb
     region: oregon
     postgresMajorVersion: "16"

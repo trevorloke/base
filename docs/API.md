@@ -1,14 +1,14 @@
-# Meridian HTTP API v1 (contract)
+# Starsign HTTP API v1 (contract)
 
 Base URL in dev: `http://localhost:4000`. All bodies and responses are JSON. Times are ISO-8601 strings.
 
 ## Authentication
 
-`Authorization: Bearer mer_...` — an API key minted per workspace. The key carries the actor it acts as:
+`Authorization: Bearer star_...` — an API key minted per workspace. The key carries the actor it acts as:
 a human user with a role (`owner | approver | editor | viewer`), or an agent (`mcp` / `operator` actor types) governed by
 the workspace's autonomy dial. Every write is attributed to that actor in the ledger.
 
-Dev convenience: when the server runs with `MERIDIAN_DEV_WORKSPACE=<slug>` and a request has no bearer, it acts as the
+Dev convenience: when the server runs with `STARSIGN_DEV_WORKSPACE=<slug>` and a request has no bearer, it acts as the
 human owner `dev` of that workspace. Never set in production.
 
 Errors: `{ "error": { "code": "not_found|forbidden|invalid|conflict|policy_blocked|unavailable|unauthorized", "message": "...", "details": ... } }`
@@ -29,7 +29,7 @@ with statuses 404 / 403 / 400 / 409 / 422 / 503 / 401.
 - `DELETE /v1/accounts/:id` → `204`
 
 ## Policy (red lines, autonomy)
-- `GET /v1/policy` → `Policy` (see `@meridian/schema` `Policy`)
+- `GET /v1/policy` → `Policy` (see `@starsign/schema` `Policy`)
 - `PUT /v1/policy` body `Policy` without `version` → new `Policy` (owner only; version increments)
 - `GET /v1/policy/history` → `{ version, document, active, createdBy, createdAt }[]`
 - `POST /v1/policy/check` body `{ variants: { network, text }[], scheduledAt?, actionClass?, disclosure? }` → `PolicyDecision` dry run, nothing stored.

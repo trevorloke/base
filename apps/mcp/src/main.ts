@@ -1,7 +1,7 @@
 /**
  * Entry point.
- *   pnpm --filter @meridian/mcp start                 -> stdio (one workspace, key from MERIDIAN_API_KEY)
- *   pnpm --filter @meridian/mcp start -- --http 4001  -> Streamable HTTP at /mcp, stateless; the key comes
+ *   pnpm --filter @starsign/mcp start                 -> stdio (one workspace, key from STARSIGN_API_KEY)
+ *   pnpm --filter @starsign/mcp start -- --http 4001  -> Streamable HTTP at /mcp, stateless; the key comes
  *                                                        from each request's Authorization header, so one
  *                                                        process can serve many workspaces.
  * Logs go to stderr: stdout is the protocol in stdio mode.
@@ -9,17 +9,17 @@
 import { createServer as createHttpServer, type ServerResponse } from "node:http";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { MeridianClient } from "./client.ts";
+import { StarsignClient } from "./client.ts";
 import { createServer } from "./server.ts";
 
 const DEFAULT_HTTP_PORT = 4001;
-const log = (...args: unknown[]) => console.error("[meridian-mcp]", ...args);
+const log = (...args: unknown[]) => console.error("[starsign-mcp]", ...args);
 
 function parseArgs(argv: string[]): { mode: "stdio" } | { mode: "http"; port: number } {
   const i = argv.indexOf("--http");
   if (i === -1) return { mode: "stdio" };
   const next = argv[i + 1];
-  const port = next && /^\d+$/.test(next) ? Number(next) : Number(process.env.MERIDIAN_MCP_PORT ?? DEFAULT_HTTP_PORT);
+  const port = next && /^\d+$/.test(next) ? Number(next) : Number(process.env.STARSIGN_MCP_PORT ?? DEFAULT_HTTP_PORT);
   return { mode: "http", port };
 }
 
@@ -36,18 +36,18 @@ function sendJson(res: ServerResponse, status: number, body: unknown, headers: R
 const rpcError = (code: number, message: string) => ({ jsonrpc: "2.0", error: { code, message }, id: null });
 
 async function runStdio(): Promise<void> {
-  const client = MeridianClient.fromEnv();
-  if (!client.apiKey) log("MERIDIAN_API_KEY is not set: requests go out unauthenticated (only works against a dev API with MERIDIAN_DEV_WORKSPACE).");
+  const client = StarsignClient.fromEnv();
+  if (!client.apiKey) log("STARSIGN_API_KEY is not set: requests go out unauthenticated (only works against a dev API with STARSIGN_DEV_WORKSPACE).");
   const server = createServer(client);
   await server.connect(new StdioServerTransport());
   log(`stdio transport ready; API ${client.baseUrl}`);
 }
 
 function runHttp(port: number): void {
-  const base = MeridianClient.fromEnv();
+  const base = StarsignClient.fromEnv();
   const http = createHttpServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
-    if (url.pathname === "/health") return sendJson(res, 200, { ok: true, server: "meridian-mcp", api: base.baseUrl });
+    if (url.pathname === "/health") return sendJson(res, 200, { ok: true, server: "starsign-mcp", api: base.baseUrl });
     if (url.pathname !== "/mcp") return sendJson(res, 404, { error: { code: "not_found", message: "The MCP endpoint is /mcp" } });
     if (req.method !== "POST") return sendJson(res, 405, rpcError(-32000, "Method not allowed: this server is stateless and accepts POST only"), { allow: "POST" });
 
@@ -56,8 +56,8 @@ function runHttp(port: number): void {
       return sendJson(
         res,
         401,
-        { error: { code: "unauthorized", message: "Send the workspace API key as 'Authorization: Bearer mer_...' (or set MERIDIAN_API_KEY for a single-workspace server)" } },
-        { "www-authenticate": 'Bearer realm="meridian"' },
+        { error: { code: "unauthorized", message: "Send the workspace API key as 'Authorization: Bearer star_...' (or set STARSIGN_API_KEY for a single-workspace server)" } },
+        { "www-authenticate": 'Bearer realm="starsign"' },
       );
     }
 

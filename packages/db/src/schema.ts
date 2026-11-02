@@ -15,7 +15,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
-/** Mirrors @meridian/schema Actor without a cross-package import (db stays a leaf). */
+/** Mirrors @starsign/schema Actor without a cross-package import (db stays a leaf). */
 export type ActorJson = { type: "human" | "operator" | "mcp" | "system"; id: string };
 const now = () => ts("created_at").notNull().defaultNow();
 

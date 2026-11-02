@@ -1,6 +1,6 @@
 import { Queue, Worker } from "bullmq";
 import type { Redis } from "ioredis";
-import { RetryablePublishError, type Meridian } from "@meridian/core";
+import { RetryablePublishError, type Starsign } from "@starsign/core";
 import { captureOutcomes, ingestAll, refreshForecasts } from "./jobs.ts";
 import { connectionFor, MAINTENANCE_QUEUE, PUBLISH_QUEUE } from "./queues.ts";
 
@@ -14,7 +14,7 @@ export interface WorkerHandles {
  * Start the publish worker and the maintenance schedules.
  * Publishing retries on RetryablePublishError only; everything else is final and recorded in the ledger.
  */
-export async function startWorkers(m: Meridian, redis: Redis, opts: { ingestEveryMs?: number; outcomesEveryMs?: number; forecastEveryMs?: number } = {}): Promise<WorkerHandles> {
+export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEveryMs?: number; outcomesEveryMs?: number; forecastEveryMs?: number } = {}): Promise<WorkerHandles> {
   const connection = connectionFor(redis);
 
   const publish = new Worker(

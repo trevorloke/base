@@ -1,5 +1,5 @@
 {
-  "name": "@meridian/workers",
+  "name": "@starsign/workers",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,10 +14,10 @@
     "start": "tsx src/main.ts"
   },
   "dependencies": {
-    "@meridian/connectors": "workspace:*",
-    "@meridian/core": "workspace:*",
-    "@meridian/db": "workspace:*",
-    "@meridian/schema": "workspace:*",
+    "@starsign/connectors": "workspace:*",
+    "@starsign/core": "workspace:*",
+    "@starsign/db": "workspace:*",
+    "@starsign/schema": "workspace:*",
     "bullmq": "^5.30.0",
     "ioredis": "^5.4.0"
   },

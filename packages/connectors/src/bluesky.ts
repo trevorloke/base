@@ -1,6 +1,6 @@
 import { AppBskyRichtextFacet, AtpAgent, AtUri, RichText } from "@atproto/api";
 import type { AppBskyEmbedImages, AppBskyFeedDefs, AppBskyFeedPost, AppBskyNotificationListNotifications, BlobRef, Facet } from "@atproto/api";
-import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@meridian/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
 import { z } from "zod";
 import { downloadMedia, isAfter, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
-import { approvals, posts, postVariants } from "@meridian/db";
-import { ApprovalDecisionInput } from "@meridian/schema";
+import { approvals, posts, postVariants } from "@starsign/db";
+import { ApprovalDecisionInput } from "@starsign/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import type { PolicyService } from "./policy.ts";

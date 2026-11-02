@@ -1,6 +1,6 @@
 /**
- * Shapes of the Meridian HTTP API v1 as documented in docs/API.md.
- * Where `@meridian/schema` already defines the shape (posts, variants, activities, ledger events,
+ * Shapes of the Starsign HTTP API v1 as documented in docs/API.md.
+ * Where `@starsign/schema` already defines the shape (posts, variants, activities, ledger events,
  * policy, policy decisions) we reuse it; the rest is declared here against the contract.
  */
 import type {
@@ -16,9 +16,9 @@ import type {
   PostVariant,
   RedLineSeverity,
   TrendStage,
-} from "@meridian/schema";
+} from "@starsign/schema";
 
-export type { Activity, LedgerEvent, Policy, PolicyDecision, Post, PostVariant } from "@meridian/schema";
+export type { Activity, LedgerEvent, Policy, PolicyDecision, Post, PostVariant } from "@starsign/schema";
 
 /** `{ error: { code, message, details } }` as every non-2xx response carries it. */
 export interface ApiErrorBody {

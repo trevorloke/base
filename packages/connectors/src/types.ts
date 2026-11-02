@@ -1,4 +1,4 @@
-import type { ActivityInput, Media, MetricInput, Network } from "@meridian/schema";
+import type { ActivityInput, Media, MetricInput, Network } from "@starsign/schema";
 
 /** What a connector receives about the account it acts for. Auth is already decrypted by core. */
 export interface AccountRef {

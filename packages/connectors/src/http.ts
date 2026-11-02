@@ -1,4 +1,4 @@
-import type { Media } from "@meridian/schema";
+import type { Media } from "@starsign/schema";
 import { ConnectorError } from "./types.ts";
 
 export type FetchLike = typeof globalThis.fetch;

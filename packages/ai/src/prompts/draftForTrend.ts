@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Network, TrendStage } from "@meridian/schema";
+import type { Network, TrendStage } from "@starsign/schema";
 import { COMMON_RULES, pct, renderBrandContext, renderNetworkLimits, type BrandContext } from "./context.ts";
 import { VariantOutput } from "./shared.ts";
 import { definePrompt } from "./types.ts";

@@ -20,10 +20,10 @@ export function isApiError(e: unknown): e is ApiError {
 /** A short, human sentence for any thrown value. */
 export function errorText(e: unknown): string {
   if (isApiError(e)) {
-    if (e.status === 0) return "Couldn't reach Meridian.";
+    if (e.status === 0) return "Couldn't reach Starsign.";
     if (e.status === 401) return "That key didn't work.";
     if (e.status === 403) return "Your key isn't allowed to do that.";
-    if (e.status >= 500 && e.code.startsWith("http_")) return "Meridian isn't answering right now.";
+    if (e.status >= 500 && e.code.startsWith("http_")) return "Starsign isn't answering right now.";
     return e.message || "Something went wrong.";
   }
   if (e instanceof Error) return e.message;

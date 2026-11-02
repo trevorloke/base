@@ -1,4 +1,4 @@
-import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@meridian/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, downloadMedia, isAfter, isoSeconds, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -380,7 +380,7 @@ function parseAuth(account: AccountRef): XAuth {
   return parsed.data;
 }
 
-/** Native metric names → Meridian's canon. Only metrics X actually returned become rows. */
+/** Native metric names → Starsign's canon. Only metrics X actually returned become rows. */
 function tweetMetrics(t: XTweet, observedAt: string): MetricInput[] {
   const pub = t.public_metrics ?? {};
   const priv = t.non_public_metrics ?? {};

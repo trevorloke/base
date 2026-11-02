@@ -1,14 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FakeGateway, defaultFakeHandlers, type DraftForTrendVars } from "@meridian/ai";
-import { ConnectorRegistry, MockConnector } from "@meridian/connectors";
-import { InMemoryScheduler, Meridian, SecretBox, type Principal } from "@meridian/core";
-import type { DbHandle } from "@meridian/db";
-import { createTestDb } from "@meridian/db/test";
+import { FakeGateway, defaultFakeHandlers, type DraftForTrendVars } from "@starsign/ai";
+import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
+import { InMemoryScheduler, Starsign, SecretBox, type Principal } from "@starsign/core";
+import type { DbHandle } from "@starsign/db";
+import { createTestDb } from "@starsign/db/test";
 import { runAnalyst, runWatch } from "../src/index.ts";
 
 let h: DbHandle;
-let m: Meridian;
+let m: Starsign;
 let gw: FakeGateway;
 const clock = Date.parse("2026-11-02T17:00:00Z"); // Monday 09:00 in Vancouver
 const now = () => new Date(clock);
@@ -60,7 +60,7 @@ beforeAll(async () => {
   h = await createTestDb();
   const mock = new MockConnector();
   mock.now = now;
-  m = new Meridian({ handle: h, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now });
+  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now });
   gw = new FakeGateway(defaultFakeHandlers());
   gw.on("draftForTrend", (vars) => {
     const v = vars as DraftForTrendVars;

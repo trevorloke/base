@@ -28,7 +28,7 @@ const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 /** When true, every call is answered from src/dev/fixtures.ts and no network request is made. */
 export const USE_FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";
 
-export const API_KEY_STORAGE = "meridian.apiKey";
+export const API_KEY_STORAGE = "starsign.apiKey";
 
 export function getApiKey(): string | null {
   try {
@@ -86,7 +86,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError(0, "network", "Couldn't reach Meridian.");
+    throw new ApiError(0, "network", "Couldn't reach Starsign.");
   }
 
   if (res.status === 204) return undefined as T;

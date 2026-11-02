@@ -1,6 +1,6 @@
-/** A fake Meridian API: an injectable `fetch` that records calls and answers from a route table. No network. */
+/** A fake Starsign API: an injectable `fetch` that records calls and answers from a route table. No network. */
 import { vi } from "vitest";
-import type { PolicyDecision } from "@meridian/schema";
+import type { PolicyDecision } from "@starsign/schema";
 import type { Alert, BrandContext, Brief, Post, PostDetail, PostVariant, RadarEntry } from "../src/types.ts";
 
 type FetchInput = Parameters<typeof fetch>[0];

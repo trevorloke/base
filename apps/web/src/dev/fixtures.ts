@@ -658,7 +658,7 @@ const brief: Brief = {
 - Pumpkin spice backlash is rising with a ~6h window. One proposal is waiting on you.
 - Instagram needs reconnecting; 1 queued variant will fail until it is.
 
-Evidence: [lift by stage](https://meridian.local/metrics/lift) · [ledger export](https://meridian.local/export)
+Evidence: [lift by stage](https://starsign.local/metrics/lift) · [ledger export](https://starsign.local/export)
 `,
 };
 

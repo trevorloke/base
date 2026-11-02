@@ -1,11 +1,11 @@
 {
-  "name": "@meridian/mcp",
+  "name": "@starsign/mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": { "dev": "tsx src/main.ts", "start": "tsx src/main.ts" },
   "dependencies": {
-    "@meridian/schema": "workspace:*",
+    "@starsign/schema": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^4.0.0"
   },

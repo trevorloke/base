@@ -1,5 +1,5 @@
 {
-  "name": "@meridian/api",
+  "name": "@starsign/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
-    "@meridian/connectors": "workspace:*",
-    "@meridian/core": "workspace:*",
-    "@meridian/db": "workspace:*",
-    "@meridian/policy": "workspace:*",
-    "@meridian/schema": "workspace:*",
-    "@meridian/workers": "workspace:*",
+    "@starsign/connectors": "workspace:*",
+    "@starsign/core": "workspace:*",
+    "@starsign/db": "workspace:*",
+    "@starsign/policy": "workspace:*",
+    "@starsign/schema": "workspace:*",
+    "@starsign/workers": "workspace:*",
     "drizzle-orm": "^0.45.0",
     "hono": "^4.6.0",
     "zod": "^4.0.0"

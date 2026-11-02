@@ -1,4 +1,4 @@
-import { NETWORK_LIMITS, type Network } from "@meridian/schema";
+import { NETWORK_LIMITS, type Network } from "@starsign/schema";
 import type { FakeHandler } from "./gateway.ts";
 import type { AdaptForNetworkOutput, AdaptForNetworkVars } from "./prompts/adaptForNetwork.ts";
 import type { ClassifyTopicOutput, ClassifyTopicVars } from "./prompts/classifyTopic.ts";
@@ -19,7 +19,7 @@ const num = (v: unknown, fallback = 0): number => (typeof v === "number" && Numb
 const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
 
 /**
- * Deterministic, schema-valid outputs for every prompt. Used by tests and by `MERIDIAN_FAKE_AI=1` development so the
+ * Deterministic, schema-valid outputs for every prompt. Used by tests and by `STARSIGN_FAKE_AI=1` development so the
  * operators run end to end without a model. Everything here is derived from the inputs; nothing is invented.
  */
 export function defaultFakeHandlers(): Record<string, FakeHandler> {

@@ -16,8 +16,8 @@ import { Queue } from "./panels/Queue";
 import { Radar } from "./panels/Radar";
 
 type Theme = "light" | "dark";
-const THEME_STORAGE = "meridian.theme";
-const TAB_STORAGE = "meridian.tab";
+const THEME_STORAGE = "starsign.theme";
+const TAB_STORAGE = "starsign.tab";
 
 // --- Theme ---------------------------------------------------------------
 
@@ -138,8 +138,8 @@ function ConnectPanel({
   return (
     <main className="gate">
       <form className="gate-card" onSubmit={(e) => void submit(e)}>
-        <div className="brand">Meridian</div>
-        <h1>Connect to Meridian</h1>
+        <div className="brand">Starsign</div>
+        <h1>Connect to Starsign</h1>
         <p className="muted">Paste a workspace API key. It stays in this browser.</p>
         <label className="field">
           <span>API key</span>
@@ -148,7 +148,7 @@ function ConnectPanel({
             type="password"
             autoComplete="off"
             spellCheck={false}
-            placeholder="mer_…"
+            placeholder="star_…"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             autoFocus
@@ -343,7 +343,7 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
         <header className="topbar">
           <div className="topbar-left">
             <div className="topbar-id">
-              <span className="brand">Meridian</span>
+              <span className="brand">Starsign</span>
               <span className="ws-name">{me?.workspace.name ?? (offline ? "Offline" : "")}</span>
             </div>
             {newPostAutonomy || USE_FIXTURES ? (

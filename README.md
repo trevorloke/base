@@ -1,10 +1,8 @@
-# Meridian
+# Starsign
 
-**The system of record for attention.** Meridian observes every surface where attention forms, forecasts where it is
+**The system of record for attention.** Starsign observes every surface where attention forms, forecasts where it is
 going (with honest confidence bands), acts through operator agents inside the brand's declared red lines, and proves
 what moved the outcome. It gets smarter with every brand on it.
-
-Working name. Rename freely: it is one string in `package.json` and the `@meridian/*` scope.
 
 - `docs/product-thesis.md` — what this is and why it wins (the five systems, the moat, the 24-month arc)
 - `docs/social-command-center-plan.md` — platform API constraints, costs, build-vs-buy, roadmap
@@ -17,14 +15,14 @@ pnpm install
 pnpm seed            # demo workspace with a week of history; prints two API keys
 pnpm dev:api         # http://localhost:4000  (embedded PGlite at ./.pglite, in-process scheduler)
 pnpm dev:web         # http://localhost:5173  paste the owner key
-MERIDIAN_API_KEY=<agent key> pnpm dev:mcp     # stdio MCP server for Claude / ChatGPT
+STARSIGN_API_KEY=<agent key> pnpm dev:mcp     # stdio MCP server for Claude / ChatGPT
 pnpm test            # 70+ tests, no network, embedded Postgres
 pnpm typecheck
 ```
 
-Set `MERIDIAN_DEV_WORKSPACE=acme` to skip the key locally. Set `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL`
+Set `STARSIGN_DEV_WORKSPACE=acme` to skip the key locally. Set `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL`
 for durable queues; then run `pnpm dev:workers` and `pnpm dev:operators` as separate processes. `ANTHROPIC_API_KEY`
-turns the operators' model calls on (`MERIDIAN_FAKE_AI=1` runs them with a fake gateway).
+turns the operators' model calls on (`STARSIGN_FAKE_AI=1` runs them with a fake gateway).
 
 ## Shape
 

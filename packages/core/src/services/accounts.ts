@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
-import { socialAccounts } from "@meridian/db";
-import type { AccountRef } from "@meridian/connectors";
-import { newId } from "@meridian/ledger";
-import { Network } from "@meridian/schema";
+import { socialAccounts } from "@starsign/db";
+import type { AccountRef } from "@starsign/connectors";
+import { newId } from "@starsign/ledger";
+import { Network } from "@starsign/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 

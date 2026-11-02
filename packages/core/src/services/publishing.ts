@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
-import { posts, postVariants, socialAccounts } from "@meridian/db";
-import { ConnectorError, validateVariant } from "@meridian/connectors";
-import type { Media, Network } from "@meridian/schema";
+import { posts, postVariants, socialAccounts } from "@starsign/db";
+import { ConnectorError, validateVariant } from "@starsign/connectors";
+import type { Media, Network } from "@starsign/schema";
 import { SYSTEM, type CoreContext } from "../context.ts";
 import { RetryablePublishError } from "../errors.ts";
 import type { AccountService } from "./accounts.ts";

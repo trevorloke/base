@@ -1,8 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { apiKeys, members, policies, users, workspaces } from "@meridian/db";
-import { newId } from "@meridian/ledger";
-import { DEFAULT_POLICY, type Actor } from "@meridian/schema";
-import type { MemberRole } from "@meridian/policy";
+import { apiKeys, members, policies, users, workspaces } from "@starsign/db";
+import { newId } from "@starsign/ledger";
+import { DEFAULT_POLICY, type Actor } from "@starsign/schema";
+import type { MemberRole } from "@starsign/policy";
 import type { CoreContext, Principal } from "../context.ts";
 import { randomToken, sha256 } from "../crypto.ts";
 import { CoreError } from "../errors.ts";
@@ -73,7 +73,7 @@ export class WorkspaceService {
 
   /** Mint an API key. The secret is returned once and stored only as a hash. */
   async createApiKey(input: { workspaceId: string; name: string; actorType: "human" | "mcp" | "operator"; actorId: string; role?: MemberRole }) {
-    const secret = randomToken("mer");
+    const secret = randomToken("star");
     const [row] = await this.ctx.db
       .insert(apiKeys)
       .values({

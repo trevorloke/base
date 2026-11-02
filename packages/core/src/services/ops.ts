@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { alerts, briefs, operatorRuns } from "@meridian/db";
-import { newId } from "@meridian/ledger";
-import type { Actor } from "@meridian/schema";
+import { alerts, briefs, operatorRuns } from "@starsign/db";
+import { newId } from "@starsign/ledger";
+import type { Actor } from "@starsign/schema";
 import type { CoreContext, Principal } from "../context.ts";
 
 /** Storage for what operators produce: runs, alerts, briefs. The operators app does the thinking. */

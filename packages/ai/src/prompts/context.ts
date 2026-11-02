@@ -1,4 +1,4 @@
-import { NETWORK_LIMITS, type ActionClass, type AutonomyLevel, type Network, type RedLine } from "@meridian/schema";
+import { NETWORK_LIMITS, type ActionClass, type AutonomyLevel, type Network, type RedLine } from "@starsign/schema";
 
 export interface BrandVoice {
   do: string[];
@@ -15,7 +15,7 @@ export interface BrandProfile {
   competitors: string[];
 }
 
-/** Everything a prompt needs to sound like the brand and stay inside its red lines. The operators app builds it from Meridian. */
+/** Everything a prompt needs to sound like the brand and stay inside its red lines. The operators app builds it from Starsign. */
 export interface BrandContext {
   workspace: { name: string; slug?: string; profile: Record<string, unknown> };
   policy: {

@@ -5,7 +5,7 @@ import { XConnector } from "./x.ts";
 import { ZernioConnector } from "./zernio.ts";
 
 /**
- * The registry a Meridian process boots with. Native adapters are always present (their credentials
+ * The registry a Starsign process boots with. Native adapters are always present (their credentials
  * live on each account, not in the environment); Zernio needs a workspace-wide API key, so it joins
  * only when ZERNIO_API_KEY is set. Env is injectable so tests and tools can build registries without
  * touching process.env.

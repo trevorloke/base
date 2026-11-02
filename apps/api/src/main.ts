@@ -7,7 +7,7 @@ import { createApp, VERSION } from "./app.ts";
 import { boot } from "./boot.ts";
 
 const { m, handle, close } = await boot();
-const app = createApp(m, { devWorkspace: process.env.MERIDIAN_DEV_WORKSPACE });
+const app = createApp(m, { devWorkspace: process.env.STARSIGN_DEV_WORKSPACE });
 
 // Serve the built web app from the same process when it exists (single-container deploys).
 const here = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,7 @@ if (existsSync(dist)) {
 
 const port = Number(process.env.PORT ?? 4000);
 serve({ fetch: app.fetch, port }, () => {
-  console.log(`[api] meridian ${VERSION} on http://localhost:${port} (db=${handle.kind}${process.env.MERIDIAN_DEV_WORKSPACE ? `, dev workspace=${process.env.MERIDIAN_DEV_WORKSPACE}` : ""})`);
+  console.log(`[api] starsign ${VERSION} on http://localhost:${port} (db=${handle.kind}${process.env.STARSIGN_DEV_WORKSPACE ? `, dev workspace=${process.env.STARSIGN_DEV_WORKSPACE}` : ""})`);
 });
 
 const shutdown = async () => {

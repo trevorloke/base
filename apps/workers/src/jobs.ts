@@ -1,10 +1,10 @@
-import type { Meridian } from "@meridian/core";
-import type { Network } from "@meridian/schema";
+import type { Starsign } from "@starsign/core";
+import type { Network } from "@starsign/schema";
 
 const X_READ_PRICE_USD = 0.005; // per post object returned by a metered read
 
 /** Pull activity for every active account across workspaces, honoring per-workspace metered-read caps. */
-export async function ingestAll(m: Meridian): Promise<{ accounts: number; ingested: number }> {
+export async function ingestAll(m: Starsign): Promise<{ accounts: number; ingested: number }> {
   let ingested = 0;
   let accounts = 0;
   for (const ws of await m.workspaces.list()) {
@@ -56,18 +56,18 @@ function readsUsed(connector: unknown): number {
   return typeof v === "number" ? v : 0;
 }
 
-export async function meteredSpendSince(m: Meridian, workspaceId: string, since: Date): Promise<number> {
+export async function meteredSpendSince(m: Starsign, workspaceId: string, since: Date): Promise<number> {
   const events = await m.events.list({ workspaceId, types: ["metric.observed"], limit: 1000 });
   return events
     .filter((e) => new Date(e.occurredAt) >= since && e.data.metric === "metered_read_cost_usd")
     .reduce((a, e) => a + Number(e.data.value ?? 0), 0);
 }
 
-export async function captureOutcomes(m: Meridian) {
+export async function captureOutcomes(m: Starsign) {
   return m.metrics.captureDueOutcomes();
 }
 
-export async function refreshForecasts(m: Meridian): Promise<number> {
+export async function refreshForecasts(m: Starsign): Promise<number> {
   const seen = new Set<string>();
   for (const ws of await m.workspaces.list()) {
     for (const t of await m.trends.listTopics(ws.id)) {
