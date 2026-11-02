@@ -1,0 +1,16 @@
+{
+  "name": "@meridian/operators",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx src/main.ts serve", "start": "tsx src/main.ts serve" },
+  "dependencies": {
+    "@meridian/ai": "workspace:*",
+    "@meridian/connectors": "workspace:*",
+    "@meridian/core": "workspace:*",
+    "@meridian/db": "workspace:*",
+    "@meridian/schema": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": { "tsx": "^4.19.0" }
+}

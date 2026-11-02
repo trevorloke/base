@@ -1,0 +1,18 @@
+{
+  "name": "@meridian/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./test": { "types": "./src/test-utils.ts", "default": "./src/test-utils.ts" }
+  },
+  "scripts": { "migrate": "tsx src/cli.ts migrate" },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.4.6",
+    "@meridian/schema": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": { "@types/pg": "^8.11.0", "tsx": "^4.19.0" }
+}

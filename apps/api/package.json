@@ -1,0 +1,26 @@
+{
+  "name": "@meridian/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@meridian/connectors": "workspace:*",
+    "@meridian/core": "workspace:*",
+    "@meridian/db": "workspace:*",
+    "@meridian/policy": "workspace:*",
+    "@meridian/schema": "workspace:*",
+    "@meridian/workers": "workspace:*",
+    "drizzle-orm": "^0.45.0",
+    "hono": "^4.6.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}

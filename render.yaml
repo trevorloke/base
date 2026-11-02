@@ -1,0 +1,73 @@
+# Render Blueprint — staging deploys every push to `main`; production deploys the `production` branch.
+# Mirrors the Starbase layout: one Docker image, three services from it (api, workers, operators),
+# one Postgres (pgvector is available on Render Postgres 16), one Redis (Key Value).
+services:
+  - type: web
+    name: meridian-staging
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: meridian-staging-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: meridian-staging-redis, property: connectionString }
+      - key: MERIDIAN_MASTER_KEY
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: MERIDIAN_MODEL
+        value: claude-opus-5-5
+  - type: worker
+    name: meridian-staging-workers
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerCommand: pnpm --filter @meridian/workers start
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: meridian-staging-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: meridian-staging-redis, property: connectionString }
+      - key: MERIDIAN_MASTER_KEY
+        fromService: { type: web, name: meridian-staging, envVarKey: MERIDIAN_MASTER_KEY }
+  - type: worker
+    name: meridian-staging-operators
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerCommand: pnpm --filter @meridian/operators start
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: meridian-staging-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: meridian-staging-redis, property: connectionString }
+      - key: MERIDIAN_MASTER_KEY
+        fromService: { type: web, name: meridian-staging, envVarKey: MERIDIAN_MASTER_KEY }
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: MERIDIAN_MODEL
+        value: claude-opus-5-5
+  - type: keyvalue
+    name: meridian-staging-redis
+    plan: starter
+    region: oregon
+    ipAllowList: []
+
+databases:
+  - name: meridian-staging-db
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "16"
