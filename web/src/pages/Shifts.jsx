@@ -713,7 +713,7 @@ function AssigneeRow({ a, open, onToggle, canDesk, busy, onStatus, onRemove, noS
         <span className="ops-row__main">
           <span className="ops-row__name">{a.name}</span>
           {/* The shift's walk lists reach a phone through an app sign-in. */}
-          {noSignIn && <span className="st-signin">No app sign-in — add them to the turf on the map</span>}
+          {noSignIn && <span className="ops-row__sub st-signin">No app sign-in — add them to the turf on the map</span>}
         </span>
         <span className="ops-row__end">
           <span className={`chip${tone ? ` chip-${tone}` : ''}`}>{statusLabel(a.status)}</span>

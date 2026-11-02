@@ -188,6 +188,14 @@ one tap away under **More**.
   or removed with ✕. **Take off** keeps everything filled in (still in *Export all
   data*); *Taken off → Bring back* restores it. The sample adds *Language at
   home*, *Strata council member* and *Union local*.
+- **Shifts → New shift → More details → Turfs** — tap one or more turfs
+  (*Anyone who counts themselves in gets these walk lists*), then *Create
+  shift*. The shift reads *Walk list: Newton block* (or *Walk lists: …*)
+  with *Change turfs*; the list row reads *Saturday canvass · Newton block*
+  and the week board shows a small turf chip. Add someone who has no app
+  sign-in: their row says *No app sign-in — add them to the turf on the
+  map*. A turf the desk gave someone by hand on the Map stays when they
+  leave the shift.
 
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
@@ -261,6 +269,12 @@ one tap away under **More**.
   People or Outreach; typing those addresses lands back on Today. (The
   server enforces this too: their browser never receives other people's
   emails or donor tags.)
+- **Shifts → a shift with turfs** — it says *Walk list: Newton block — Count
+  me in puts it on your phone*. Tap **Count me in**: Today's *Start
+  canvassing* opens Newton block and *Your next shift* reads *… · Newton
+  block*. With no signal it waits on the phone (*Not sent yet*) and the turf
+  arrives once it sends. *Can't make it* takes that walk list back off
+  Today; a turf the desk gave you by hand stays.
 
 ### Staff
 - **People** — search; **Filter** by rating, tag (media, VIP…), or volunteer

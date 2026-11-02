@@ -63,4 +63,4 @@
 .st-walk__line strong { font-weight: 600; }
 .st-walk__hint { color: var(--text-2); }
 .st-walk__edit { display: flex; flex-direction: column; gap: var(--s-3); }
-.st-signin { color: var(--text-3); font-size: 13px; font-weight: 400; }
+.st-signin { display: block; overflow-wrap: anywhere; } /* on .ops-row__sub: the row's own small line */
