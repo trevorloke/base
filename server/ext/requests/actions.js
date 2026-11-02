@@ -21,6 +21,15 @@ const note = () => z.string().trim().max(500).nullish();
 
 const COLS = 'id, person_id, kind, note, asked_by, created_at, done_at, done_by, done_note, client_id';
 
+// What the asker gets back. A volunteer gets what GET /persons/:id/requests
+// gives them (the kind and when) and their own note — never who else asked,
+// what someone else said, or what the office did (a replay of a request
+// the desk has since marked done must not hand back its note).
+const replyFor = (ctx, r) => (ctx.role === 'volunteer' ? {
+  id: r.id, person_id: r.person_id, kind: r.kind, created_at: r.created_at, done: Boolean(r.done_at),
+  ...(r.asked_by === ctx.user.id ? { note: r.note } : {}),
+} : r);
+
 const loadRequest = async (tx, ws, id) => {
   const r = (await tx.query(
     `select ${COLS} from door_requests where id = $1 and workspace_id = $2 for update`, [id, ws],
@@ -49,7 +58,7 @@ export const actions = {
           `select ${COLS} from door_requests where workspace_id = $1 and client_id = $2`,
           [ctx.workspaceId, input.client_id],
         )).rows[0];
-        if (dup) return { request: dup, duplicate: true };
+        if (dup) return { request: replyFor(ctx, dup), duplicate: true };
       }
       const id = newId();
       const text = input.note || null;
@@ -61,7 +70,7 @@ export const actions = {
       emit('door_request', id, 'create', {
         id, person_id: input.person_id, kind: input.kind, note: text, client_id: input.client_id || null,
       });
-      return { request };
+      return { request: replyFor(ctx, request) };
     },
   },
 

@@ -85,7 +85,7 @@ function Ask({ person, toast }) {
   if (!open) {
     return (
       <div className="rq">
-        <button type="button" className="btn rq-open" aria-expanded={false} onClick={() => setOpen(true)}>
+        <button type="button" className="btn rq-open" onClick={() => setOpen(true)}>
           {at ? `Asked the office · ${clockText(at)}` : 'Ask the office'}
         </button>
       </div>

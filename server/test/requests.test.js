@@ -115,6 +115,21 @@ test('the desk reads the open ones and marks them done; volunteers can do neithe
 
   // Done again, for the next test.
   assert.equal((await mgr.action('request.done', { id: ask.id, note: 'called back' })).status, 200);
+  // The phone replays its ask after the office dealt with it: the volunteer
+  // hears it's done, never what the office did.
+  const replay = await vol.action('request.ask', { person_id: dev.id, kind: 'volunteer', client_id: CID });
+  assert.equal(replay.json.duplicate, true);
+  assert.deepEqual(Object.keys(replay.json.request).sort(), ['created_at', 'done', 'id', 'kind', 'note', 'person_id']);
+  assert.equal(replay.json.request.done, true);
+  assert.equal(replay.json.request.note, 'free Saturdays, call after 6', 'their own words');
+  assert.ok(!JSON.stringify(replay.json).includes('called back'));
+  // Someone else's request, replayed by a volunteer (its key found somehow): no note at all.
+  const deskCid = 'b7c1d2e3-f4a5-4b6c-8d7e-9f0a1b2c3d4e';
+  assert.equal((await mgr.action('request.ask', { person_id: ana.id, kind: 'question', note: 'office only words', client_id: deskCid })).status, 200);
+  const theirs = await vol.action('request.ask', { person_id: ana.id, kind: 'question', client_id: deskCid });
+  assert.equal(theirs.json.duplicate, true);
+  assert.ok(!JSON.stringify(theirs.json).includes('office only words'));
+  assert.ok(!('asked_by' in theirs.json.request));
 });
 
 test('a person’s requests: the kind and when for a volunteer, everything for the desk', async () => {
