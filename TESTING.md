@@ -261,6 +261,10 @@ one tap away under **More**.
   People or Outreach; typing those addresses lands back on Today. (The
   server enforces this too: their browser never receives other people's
   emails or donor tags.)
+- **Today → More → All time** — under the week's calls and texts, e.g. *All
+  time: 3 doors · 2 talks · 2 supporters found*: every door you've knocked
+  (a door knocked twice is one), the talks, and the people you rated a yes.
+  It's there with no signal too.
 
 ### Staff
 - **People** — search; **Filter** by rating, tag (media, VIP…), or volunteer
@@ -315,6 +319,14 @@ one tap away under **More**.
   - **Sign out**: a note still typed on a profile or door card is sent first,
     as yours; nothing stays, the next person on that computer sees none of
     it, and another open tab goes to Sign in.
+- **Reports → Field, by turf** (staff and managers) — pick *This week*,
+  *Last 7 days*, *30 days* or *All*: by turf, the doors, how many were
+  knocked (with the share and a bar), talked, yes, no answer, refused, moved,
+  no access, who canvassed and the last knock; by canvasser, doors, talks,
+  yes, days out and when they were last out; and a small table by day. A
+  door knocked twice counts once; calls and texts never count. **Download
+  CSV** gives the turfs, then the canvassers. Reload with wifi off: the last
+  range you loaded shows, the strip saying *No signal · from 9:02 am*.
 
 ### Treasurer
 - **Donations** — **Log a gift**; log enough to one donor to cross the annual
