@@ -30,6 +30,11 @@ const replyFor = (ctx, r) => (ctx.role === 'volunteer' ? {
   ...(r.asked_by === ctx.user.id ? { note: r.note } : {}),
 } : r);
 
+// The office's list is the desk's whatever a volunteer has been granted
+// (GET /requests refuses them the same way): marking done or reopening would
+// hand back what was said and who asked.
+const deskOnly = (ctx) => { if (ctx.role === 'volunteer') throw httpError(403, 'volunteers cannot view this'); };
+
 const loadRequest = async (tx, ws, id) => {
   const r = (await tx.query(
     `select ${COLS} from door_requests where id = $1 and workspace_id = $2 for update`, [id, ws],
@@ -78,6 +83,7 @@ export const actions = {
     roles: DESK,
     input: z.object({ id: z.uuid(), note: note() }),
     handler: async (tx, ctx, input, emit) => {
+      deskOnly(ctx);
       const cur = await loadRequest(tx, ctx.workspaceId, input.id);
       if (cur.done_at) throw httpError(409, 'already done');
       const request = (await tx.query(
@@ -94,6 +100,7 @@ export const actions = {
     roles: DESK,
     input: z.object({ id: z.uuid() }),
     handler: async (tx, ctx, input, emit) => {
+      deskOnly(ctx);
       const cur = await loadRequest(tx, ctx.workspaceId, input.id);
       // Open already (a second tap): nothing to change, nothing on the log.
       if (!cur.done_at) return { request: cur };

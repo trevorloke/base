@@ -96,8 +96,12 @@ export const decide = (perms, area) => {
   if (perms.grant.has(area)) return true;
   return null;
 };
+// A manager-only action (a campaign-wide switch such as Election day or the
+// texting hours) is the Admin area's, whatever its name says: granting
+// People or Outreach lets someone work in that area, not change its settings.
+const managerOnly = (action) => action.roles.length === 1 && action.roles[0] === 'manager';
 export const mayRun = (ctx, name, action) => {
-  const d = decide(ctx.perms, areaOfAction(name));
+  const d = decide(ctx.perms, managerOnly(action) ? 'admin' : areaOfAction(name));
   if (d === false) return false;
   if (action.roles.includes(ctx.role)) return true;
   return d === true;

@@ -1,11 +1,14 @@
 // shift.turfs.set { shift_id, turf_ids }   the shift's turfs, all of them (desk)
 //
-// Area: shifts (the first segment, lib/perms.js). Turfs added: everyone on
+// Area: shifts (the first segment, lib/perms.js) — and Map & turfs too, since
+// putting a turf on a shift hands out its walk list (as turf.assign does): a
+// volunteer granted Shifts alone can't give anyone a turf. Turfs added: everyone on
 // the shift now (assigned or confirmed) with an app sign-in gets them.
 // Turfs taken off: what this shift put on phones comes back off — never a
 // turf given by hand, never one another shift of theirs still holds.
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
+import { areasFor } from '../../lib/perms.js';
 import { ACTIVE, putOn, takeOff, userForPerson } from './walkers.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -15,6 +18,7 @@ export const actions = {
     roles: DESK,
     input: z.object({ shift_id: z.uuid(), turf_ids: z.array(z.uuid()).max(20) }),
     handler: async (tx, ctx, input, emit) => {
+      if (!areasFor(ctx).includes('map')) throw httpError(403, 'giving out walk lists needs Map & turfs');
       const ws = ctx.workspaceId;
       const shift = (await tx.query(
         'select id from shifts where id = $1 and workspace_id = $2 and deleted_at is null for update',
