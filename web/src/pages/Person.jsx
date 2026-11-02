@@ -49,6 +49,7 @@ const TIER_CLASS = { superstar: 'chip pf-tier pf-tier--super', star: 'chip pf-ti
 
 const OUTCOME_LABEL = {
   contacted: 'Talked', no_answer: 'No answer', refused: 'Refused', moved: 'Moved', inaccessible: 'No access',
+  left_lit: 'Left lit',
 };
 const CHANNEL_LABEL = { door: 'Door', phone: 'Phone', text: 'Text', in_person: 'In person' };
 // "Rated 2 · Lean yes", "Rated 4 · Locke" or "No answer" — the field's own words.
