@@ -340,6 +340,34 @@ m = await measure(vpage, '.pass-show__pill, .walk-door__head, .walk-next__btn');
 check('GOTV walk list at 390: one yellow, no sideways scroll, targets ≥ 48px', m.yellow === 1 && m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
 await V.shot('11-walk-gotv');
 
+// ── 6b. Election day + GOTV: a Voted tap with no signal counts the door done at once ──
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' });
+check('Election day on (a manager’s switch)', (await D.api('/actions/vote.settings', { on: true, election_day: today })).status === 200);
+await V.go(`/turfs/${turf.id}`);
+await vpage.waitForSelector('#walk-door-0 .walk-door__head', { timeout: 8000 });
+await sleep(700);
+if ((await openDoor()) !== 'walk-door-0') await vpage.tap('#walk-door-0 .walk-door__head').catch(() => vpage.click('#walk-door-0 .walk-door__head'));
+await vpage.waitForSelector('#walk-door-0.is-open .vt-btn', { timeout: 8000 }).catch(() => {});
+await vctx.setOffline(true);
+await vpage.evaluate(() => window.dispatchEvent(new Event('offline')));
+await sleep(300);
+await vpage.tap('#walk-door-0.is-open .vt-btn').catch(() => vpage.click('#walk-door-0.is-open .vt-btn'));
+await sleep(700);
+check('offline, Ana votes: her door reads done at once and "1 door left" — the tap is still on the phone',
+  !!(await vpage.$('#walk-door-0.is-done')) && (await progress()) === '1 door left' && (await walkApi(V).catch(() => null)) == null,
+  `${await progress()}`);
+await vctx.setOffline(false);
+await vpage.evaluate(() => window.dispatchEvent(new Event('online')));
+let w5 = null;
+for (let i = 0; i < 30; i += 1) { w5 = await walkApi(V).catch(() => null); if (w5 && w5.doors.length === 1) break; await sleep(300); }
+check('back online, sent: the server lists only Ben’s door', w5?.doors.length === 1 && w5.doors[0].address === '13225 72 Ave', JSON.stringify(w5?.doors?.map((d) => d.address)));
+await V.go(`/turfs/${turf.id}`);
+await vpage.waitForSelector('.walk-door', { timeout: 8000 });
+await sleep(700);
+const gotvRows2 = await vpage.$$eval('.walk-door', (els) => els.map((e) => e.querySelector('.walk-door__addr').innerText.trim()));
+check('the reloaded walk list: Ben’s door, "1 door left"', gotvRows2.join('|') === '13225 72 Ave' && (await progress()) === '1 door left', `${gotvRows2.join('|')} · ${await progress()}`);
+await D.api('/actions/vote.settings', { on: false, election_day: today });
+
 // ── 7. /passes on a phone, and the books ──
 const pm = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
 await pm.addCookies((await dctx.cookies()).map((c) => ({ ...c })));
