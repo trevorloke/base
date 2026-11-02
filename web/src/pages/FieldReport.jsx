@@ -6,6 +6,7 @@
 // signal, components/KeptCopies.js 'fieldReport') agree with the pills.
 // Days are the campaign's (the server's zone); the pills count from the
 // browser's today. Reads only (server/ext/fieldreport).
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
@@ -165,7 +166,10 @@ export default function FieldReport() {
   const pTo = params.get('to') || '';
   const from = pFrom === 'all' || DAY.test(pFrom) ? pFrom : RANGES[2].from();
   const to = DAY.test(pTo) ? pTo : today;
-  const on = RANGES.find((r) => r.from() === from && to === today)?.key;
+  // On a Sunday "This week" and "Last 7 days" are the same days: the one tapped is on.
+  const [picked, setPicked] = useState(null);
+  const matches = RANGES.filter((r) => r.from() === from && to === today).map((r) => r.key);
+  const on = matches.includes(picked) ? picked : matches[0];
   const q = useQuery({
     queryKey: ['fieldReport', `${from}:${to}`],
     queryFn: () => apiGet(`/field-report?from=${from}&to=${to}`),
@@ -174,7 +178,7 @@ export default function FieldReport() {
   const t = d?.totals;
   const tz = d?.range?.tz;
   const knocks = (d?.days?.length ?? 0) > 0;
-  const pick = (r) => setParams({ from: r.from(), to: today });
+  const pick = (r) => { setPicked(r.key); setParams({ from: r.from(), to: today }); };
 
   return (
     <div className="ops-page fr-page">

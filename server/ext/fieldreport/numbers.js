@@ -68,9 +68,9 @@ export const rangeOf = (query = {}, tz) => {
 // The campaign's days as moments: [start, end).
 export const boundsOf = async (db, range, tz) => {
   const r = (await db.query(
-    `select case when $1::text = 'all' then null else ($1::text)::date::timestamp at time zone $3::text end as start,
-            (($2::text)::date + 1)::timestamp at time zone $3::text as stop`,
-    [range.from, range.to, zoneOf(tz)],
+    `select ($1::date)::timestamp at time zone $3::text as start,
+            ($2::date + 1)::timestamp at time zone $3::text as stop`,
+    [range.from === 'all' ? null : range.from, range.to, zoneOf(tz)],
   )).rows[0];
   return { start: r.start ? new Date(r.start).toISOString() : null, end: new Date(r.stop).toISOString() };
 };
