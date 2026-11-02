@@ -52,6 +52,7 @@ const PeopleConnected = lazy(() => import('./pages/PeopleConnected.jsx'));
 const Passes = lazy(() => import('./pages/Passes.jsx'));
 const Voted = lazy(() => import('./pages/Voted.jsx'));
 const Requests = lazy(() => import('./pages/Requests.jsx'));
+const FieldReport = lazy(() => import('./pages/FieldReport.jsx'));
 import Join from './pages/Join.jsx';
 
 // No answer from the server (wifi with no internet, a restart) is not a
@@ -88,7 +89,7 @@ function NotForYou({ me }) {
 
 // A desk address typed into the field app (an old bookmark, a link in an
 // email): the admin has it. Volunteers go home, as before.
-const DESK_PATHS = /^\/(people(\/(import|fields|connected))?|money|lists|reports|outreach|ladders|follow-ups|surveys|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|banks\/new)(\/|$)/;
+const DESK_PATHS = /^\/(people(\/(import|fields|connected))?|money|lists|reports|outreach|ladders|follow-ups|surveys|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
 function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
@@ -110,6 +111,7 @@ const ROUTE_AREA = [
   [/^\/passes/, 'map'],
   [/^\/voted/, 'people'],
   [/^\/requests/, 'people'],
+  [/^\/field-report/, 'data'],
 ];
 function DeskOnly() {
   const ctx = useOutletContext();
@@ -208,6 +210,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/passes" element={<Passes />} />
           <Route path="/voted" element={<Voted />} />
           <Route path="/requests" element={<Requests />} />
+          <Route path="/field-report" element={<FieldReport />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
