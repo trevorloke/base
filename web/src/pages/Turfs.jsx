@@ -35,6 +35,7 @@ import RatingButtons, {
   More, OutcomeButtons, OUTCOMES, OUTCOME_LABEL, PersonTabs, RatingChip, focusRating, ratingText, reveal, useScale,
 } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from '../components/SurveyQuestions.jsx';
+import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
 
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
@@ -1007,6 +1008,7 @@ function Door({
               )}
               {sel.phone && <a className="btn walk-act" href={`tel:${dialable(sel.phone)}`}>Call</a>}
               {!sel.pending && <Link className="btn btn-quiet walk-act" to={`/people/${sel.id}`} state={fromHere} onClick={markDoor}>Profile</Link>}
+              {!sel.pending && <RequestAsk person={sel} toast={(t, o) => toast(t, o)} />}
             </div>
             <SignAsk
               idPrefix={`walk-${index}`}
