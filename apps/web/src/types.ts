@@ -394,3 +394,115 @@ export type FeedEvent =
   | { type: "forecast"; data: { topicId: string; stage: TrendStage; confidence: number } };
 
 export type LiveStatus = "live" | "connecting" | "off";
+
+// --- Compose, calendar, connect (v1.1) -----------------------------------
+
+export type ConnectMethod = "app_password" | "oauth" | "api_key" | "none";
+
+/** GET /v1/connectors: which networks this deployment can connect, and how. */
+export interface Connector {
+  name: string;
+  networks: Network[];
+  configured: boolean;
+  connect: ConnectMethod;
+}
+
+export interface ConnectBlueskyInput {
+  identifier: string;
+  appPassword: string;
+  service?: string;
+}
+
+/** POST /v1/accounts/connect/x/start: where to send the person's browser to authorize X. */
+export interface OAuthStart {
+  authorizeUrl: string;
+  expiresAt: string;
+}
+
+export interface AdaptInput {
+  body: string;
+  networks: Network[];
+  topicId?: string;
+}
+
+export interface AdaptedVariant {
+  network: Network;
+  text: string;
+  thread: string[];
+}
+
+export interface AdaptResult {
+  variants: AdaptedVariant[];
+  /** The contract leaves the shape open; the room accepts a sentence or a list of them. */
+  notes: string | string[] | null;
+  usage: { costUsd: number; model: string };
+}
+
+export interface PolicyCheckInput {
+  variants: { network: Network; text: string }[];
+  scheduledAt?: string;
+  actionClass?: ActionClass;
+  disclosure?: Disclosure;
+}
+
+export interface CreateVariantInput {
+  socialAccountId: string;
+  text: string;
+  media?: Media[];
+  thread?: string[];
+}
+
+export interface CreatePostInput {
+  title?: string;
+  body: string;
+  media?: Media[];
+  variants: CreateVariantInput[];
+  scheduledAt?: string;
+  actionClass?: ActionClass;
+  trendTopicId?: string;
+  trendStageAtCreation?: TrendStage;
+  trendForecastId?: string;
+  experimentId?: string;
+  experimentArm?: string;
+  disclosure?: Disclosure;
+  evidence?: Evidence[];
+  flags?: { paid?: boolean };
+}
+
+/** One per-variant problem from a 400 on POST /v1/posts (`details` is a list of these). */
+export interface VariantIssue {
+  code: string;
+  message: string;
+  segment?: number;
+  socialAccountId?: string;
+  network?: string;
+}
+
+/** GET /v1/sources: the trend sources this deployment pulls from. */
+export interface TrendSource {
+  name: string;
+  kind: "sample" | "trending" | "both";
+  configured: boolean;
+  lastRunAt: string | null;
+  lastError: string | null;
+  pointsLast24h: number;
+}
+
+/** GET /v1/trends/discoveries: raw "trending now" terms the scout saw. */
+export interface Discovery {
+  term: string;
+  source: string;
+  value: number | null;
+  url: string | null;
+  observedAt: string;
+  region: string | null;
+}
+
+/** What the composer starts from when it opens from a topic. */
+export interface ComposePrefill {
+  body?: string;
+  topicId?: string;
+  topicName?: string;
+  stage?: TrendStage;
+  forecastId?: string;
+}

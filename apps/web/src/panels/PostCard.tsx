@@ -5,7 +5,7 @@ import { NetworkBadge } from "../components/NetworkBadge";
 import { Pill, StagePill } from "../components/Pill";
 import { RelativeTime } from "../components/RelativeTime";
 import { useToast } from "../components/Toast";
-import { actionClassLabel, actorLabel, evidenceKindLabel, isUrl, NETWORK_MAX_TEXT, networkLabel, plural, truncate } from "../lib/format";
+import { actionClassLabel, actorLabel, evidenceKindLabel, isUrl, NETWORK_MAX_TEXT, networkLabel, plural, truncate, violationText } from "../lib/format";
 import { formatDateTime, relativeTime } from "../lib/time";
 import { useRoom } from "../lib/room";
 
@@ -158,7 +158,7 @@ export function PostCard({ item, onDecided }: { item: PostSummary; onDecided: (i
           <ul className="violations">
             {flagged.map((v, i) => (
               <li key={i}>
-                {v.message}
+                {violationText(v.message)}
                 {v.matches.length ? <span className="mono match">{v.matches.join(", ")}</span> : null}
               </li>
             ))}
@@ -173,7 +173,7 @@ export function PostCard({ item, onDecided }: { item: PostSummary; onDecided: (i
             <ul className="violations">
               {blocked.map((v, i) => (
                 <li key={i}>
-                  {v.message}
+                  {violationText(v.message)}
                   {v.matches.length ? <span className="mono match">{v.matches.join(", ")}</span> : null}
                 </li>
               ))}

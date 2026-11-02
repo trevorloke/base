@@ -14,7 +14,7 @@ import { Sparkline } from "../panels/Sparkline";
 const THIN = 0.4;
 
 export function TopicDrawer({ id, onClose }: { id: string; onClose: () => void }) {
-  const { openPost } = useRoom();
+  const { openPost, openCompose } = useRoom();
   const [data, setData] = useState<TopicDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +58,23 @@ export function TopicDrawer({ id, onClose }: { id: string; onClose: () => void }
       <PanelState error={error} loading={!data && !error} />
       {data ? (
         <>
+          <section className="dsec dsec-act">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() =>
+                openCompose({
+                  topicId: data.topic.id,
+                  topicName: data.topic.name,
+                  stage: fc?.stage,
+                  forecastId: fc?.id,
+                })
+              }
+            >
+              Draft a post on this
+            </button>
+            <span className="muted small">{fc ? `Rides it while it's ${STAGE_LABEL[fc.stage].toLowerCase()}` : "Rides it before there's a forecast"}</span>
+          </section>
           {fc ? (
             <section className="dsec">
               <div className="stat-grid">

@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import type { Account, LiftByStage, Me, Policy, PostSummary, RadarEntry, Stream, Summary } from "./types";
+import type { Account, ComposePrefill, LiftByStage, Me, Policy, PostSummary, RadarEntry, Stream, Summary, TrendSource } from "./types";
 import { api, errorText, getApiKey, isApiError, setApiKey, USE_FIXTURES } from "./api";
 import { BigNumber } from "./components/BigNumber";
 import { Tabs, type TabDef } from "./components/Tabs";
-import { ToastProvider } from "./components/Toast";
+import { ToastProvider, useToast } from "./components/Toast";
+import { AccountsDrawer } from "./drawers/AccountsDrawer";
+import { ComposeDrawer } from "./drawers/ComposeDrawer";
 import { PostDrawer } from "./drawers/PostDrawer";
 import { TopicDrawer } from "./drawers/TopicDrawer";
 import { AUTONOMY_LABEL, lift as formatLift } from "./lib/format";
 import { RoomProvider, type RoomRefs } from "./lib/room";
 import { isoDaysAgo, isoNow } from "./lib/time";
+import { safeTz } from "./lib/tz";
 import { useLive } from "./lib/useLive";
 import { Brief } from "./panels/Brief";
+import { Calendar } from "./panels/Calendar";
 import { Feed } from "./panels/Feed";
 import { Queue } from "./panels/Queue";
 import { Radar } from "./panels/Radar";
@@ -18,6 +22,9 @@ import { Radar } from "./panels/Radar";
 type Theme = "light" | "dark";
 const THEME_STORAGE = "starsign.theme";
 const TAB_STORAGE = "starsign.tab";
+const CENTER_STORAGE = "starsign.center";
+
+type CenterView = "queue" | "calendar";
 
 // --- Theme ---------------------------------------------------------------
 
@@ -173,9 +180,72 @@ function ConnectPanel({
   );
 }
 
+// --- Coming back from a connect flow ---------------------------------------
+
+const CONNECT_ERROR_TEXT: Record<string, string> = {
+  expired: "the sign-in took too long. Try again.",
+  exchange_failed: "X didn't hand over access. Try again.",
+  access_denied: "access wasn't granted on X.",
+};
+
+/**
+ * X's OAuth ends with the server redirecting to "/?connected=x&handle=…" or "/?connect_error=…".
+ * Say how it went once, then take the params out of the address bar.
+ */
+function useConnectReturn(onConnected: () => void) {
+  const toast = useToast();
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const connected = url.searchParams.get("connected");
+    const failed = url.searchParams.get("connect_error");
+    if (!connected && !failed) return;
+    if (connected) {
+      const handle = (url.searchParams.get("handle") ?? "").replace(/^@/, "");
+      const net = connected === "x" ? "X" : connected;
+      toast(handle ? `Connected @${handle} on ${net}` : `Connected an account on ${net}`);
+      onConnected();
+    } else if (failed) {
+      toast(`X connection didn't finish: ${CONNECT_ERROR_TEXT[failed] ?? "something went wrong on the way back."}`, "bad");
+    }
+    for (const k of ["connected", "handle", "connect_error"]) url.searchParams.delete(k);
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  }, [toast, onConnected]);
+}
+
 // --- The room ------------------------------------------------------------
 
-type DrawerState = { kind: "post"; id: string } | { kind: "topic"; id: string } | null;
+type DrawerState =
+  | { kind: "post"; id: string }
+  | { kind: "topic"; id: string }
+  | { kind: "compose"; prefill?: ComposePrefill }
+  | { kind: "accounts" }
+  | null;
+
+function readCenter(): CenterView {
+  try {
+    return localStorage.getItem(CENTER_STORAGE) === "calendar" ? "calendar" : "queue";
+  } catch {
+    return "queue";
+  }
+}
+
+/** The center column's switch: "Queue · Calendar" on desktop; the phone uses the bottom tabs instead. */
+function CenterSwitch({ view, onChange, waiting, title }: { view: CenterView; onChange: (v: CenterView) => void; waiting: number | null; title: string }) {
+  return (
+    <>
+      <h2 className="center-title">{title}</h2>
+      <div className="seg center-seg" role="tablist" aria-label="Center column">
+        <button type="button" role="tab" aria-selected={view === "queue"} className="seg-btn" onClick={() => onChange("queue")}>
+          Queue
+          {waiting ? <span className="tab-badge mono">{waiting}</span> : null}
+        </button>
+        <button type="button" role="tab" aria-selected={view === "calendar"} className="seg-btn" onClick={() => onChange("calendar")}>
+          Calendar
+        </button>
+      </div>
+    </>
+  );
+}
 
 function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTheme: () => void; onDisconnect: (message?: string) => void }) {
   const [me, setMe] = useState<Me | null>(null);
@@ -194,6 +264,9 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [liftRows, setLiftRows] = useState<LiftByStage[] | null>(null);
+  const [sources, setSources] = useState<TrendSource[] | null>(null);
+  const [calendarTick, setCalendarTick] = useState(0);
+  const [center, setCenter] = useState<CenterView>(readCenter);
 
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [tab, setTab] = useState<string>(() => {
@@ -227,11 +300,22 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
   }, [onDisconnect]);
 
   const loadRefs = useCallback(async () => {
-    const [p, a, s] = await Promise.allSettled([api.policy(), api.accounts(), api.streams()]);
+    const [p, a, s, src] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources()]);
     if (p.status === "fulfilled") setPolicy(p.value);
     if (a.status === "fulfilled") setAccounts(a.value);
     if (s.status === "fulfilled") setStreams(s.value);
+    if (src.status === "fulfilled") setSources(src.value);
   }, []);
+
+  const loadAccounts = useCallback(async () => {
+    try {
+      setAccounts(await api.accounts());
+    } catch {
+      // the drawer that changed them shows its own error
+    }
+  }, []);
+
+  useConnectReturn(loadAccounts);
 
   const loadRadar = useCallback(async () => {
     setRadarLoading(true);
@@ -279,6 +363,7 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
     if (postTick === 0) return;
     void loadQueue();
     void loadMetrics();
+    setCalendarTick((t) => t + 1);
   }, [postTick, loadQueue, loadMetrics]);
   useEffect(() => {
     if (forecastTick === 0) return;
@@ -290,25 +375,49 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
     setQueue((q) => q?.filter((item) => item.post.id !== id) ?? null);
   }, []);
 
+  const timezone = safeTz(policy?.timezone);
   const refs = useMemo<RoomRefs>(
     () => ({
       accountsById: new Map(accounts.map((a) => [a.id, a])),
       streamsById: new Map(streams.map((s) => [s.id, s])),
       topicsById: new Map((radar ?? []).map((r) => [r.topic.id, r.topic])),
+      timezone,
       openPost: (id) => setDrawer({ kind: "post", id }),
       openTopic: (id) => setDrawer({ kind: "topic", id }),
+      openCompose: (prefill) => setDrawer({ kind: "compose", prefill }),
     }),
-    [accounts, streams, radar],
+    [accounts, streams, radar, timezone],
   );
 
   const closeDrawer = useCallback(() => setDrawer(null), []);
+  const onPostCreated = useCallback(() => {
+    void loadQueue();
+    setCalendarTick((t) => t + 1);
+  }, [loadQueue]);
+
+  const remember = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // fine
+    }
+  };
+
+  const changeCenter = (v: CenterView) => {
+    setCenter(v);
+    remember(CENTER_STORAGE, v);
+    if (tab === "queue" || tab === "calendar") {
+      setTab(v);
+      remember(TAB_STORAGE, v);
+    }
+  };
 
   const changeTab = (id: string) => {
     setTab(id);
-    try {
-      localStorage.setItem(TAB_STORAGE, id);
-    } catch {
-      // fine
+    remember(TAB_STORAGE, id);
+    if (id === "queue" || id === "calendar") {
+      setCenter(id);
+      remember(CENTER_STORAGE, id);
     }
   };
 
@@ -333,6 +442,7 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
   const tabs: TabDef[] = [
     { id: "radar", label: "Radar" },
     { id: "queue", label: "Queue", badge: waiting ?? undefined },
+    { id: "calendar", label: "Calendar" },
     { id: "feed", label: "Feed" },
     { id: "brief", label: "Brief" },
   ];
@@ -368,6 +478,12 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
             />
           </div>
           <div className="topbar-right">
+            <button type="button" className="btn btn-primary topbar-new" onClick={() => setDrawer({ kind: "compose" })}>
+              New post
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setDrawer({ kind: "accounts" })}>
+              Accounts
+            </button>
             <button type="button" className="btn btn-ghost" onClick={onToggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
               {theme === "dark" ? "Light" : "Dark"}
             </button>
@@ -390,11 +506,21 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
 
         <main className="room" data-tab={tab}>
           <div className="col col-radar" data-panel="radar">
-            <Radar entries={radar} loading={radarLoading} error={radarError} onRetry={() => void loadRadar()} />
+            <Radar entries={radar} loading={radarLoading} error={radarError} onRetry={() => void loadRadar()} sources={sources} />
           </div>
-          <div className="col col-center">
+          <div className="col col-center" data-view={center}>
             <div className="col-queue" data-panel="queue">
-              <Queue items={queue} loading={queueLoading} error={queueError} onRetry={() => void loadQueue()} onDecided={onDecided} />
+              <Queue
+                items={queue}
+                loading={queueLoading}
+                error={queueError}
+                onRetry={() => void loadQueue()}
+                onDecided={onDecided}
+                head={<CenterSwitch view="queue" onChange={changeCenter} waiting={waiting} title="Queue" />}
+              />
+            </div>
+            <div className="col-queue col-calendar" data-panel="calendar">
+              <Calendar refreshTick={calendarTick} head={<CenterSwitch view="calendar" onChange={changeCenter} waiting={waiting} title="Calendar" />} />
             </div>
             <div className="col-feed" data-panel="feed">
               <Feed accounts={accounts} liveTick={live.counters.activity} liveStatus={live.status} />
@@ -409,6 +535,16 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
 
         {drawer?.kind === "post" ? <PostDrawer id={drawer.id} onClose={closeDrawer} /> : null}
         {drawer?.kind === "topic" ? <TopicDrawer id={drawer.id} onClose={closeDrawer} /> : null}
+        {drawer?.kind === "compose" ? (
+          <ComposeDrawer
+            prefill={drawer.prefill}
+            reviewer={me?.actor.type === "human" ? me.actor.id : undefined}
+            onClose={closeDrawer}
+            onCreated={onPostCreated}
+            onOpenAccounts={() => setDrawer({ kind: "accounts" })}
+          />
+        ) : null}
+        {drawer?.kind === "accounts" ? <AccountsDrawer onClose={closeDrawer} onChanged={() => void loadAccounts()} /> : null}
       </div>
     </RoomProvider>
   );

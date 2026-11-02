@@ -1,14 +1,26 @@
-import type { RadarEntry } from "../types";
+import type { RadarEntry, TrendSource } from "../types";
 import { StagePill } from "../components/Pill";
 import { PanelState } from "../components/PanelState";
 import { Sparkline } from "./Sparkline";
-import { pct, plural, STAGE_HINT } from "../lib/format";
-import { hoursLabel } from "../lib/time";
+import { compact, pct, plural, sourceLabel, STAGE_HINT } from "../lib/format";
+import { hoursLabel, relativeTime } from "../lib/time";
 import { useRoom } from "../lib/room";
 
 const THIN = 0.4;
 
-export function Radar({ entries, loading, error, onRetry }: { entries: RadarEntry[] | null; loading: boolean; error: string | null; onRetry: () => void }) {
+export function Radar({
+  entries,
+  loading,
+  error,
+  onRetry,
+  sources,
+}: {
+  entries: RadarEntry[] | null;
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
+  sources: TrendSource[] | null;
+}) {
   const { openTopic } = useRoom();
   return (
     <section className="panel panel-radar" aria-labelledby="radar-title">
@@ -20,7 +32,41 @@ export function Radar({ entries, loading, error, onRetry }: { entries: RadarEntr
         <PanelState loading={loading && !entries} error={error} onRetry={onRetry} empty={entries && entries.length === 0 ? "Nothing on the radar yet." : null} />
         {entries?.map((e) => <RadarRow key={e.topic.id} entry={e} onOpen={() => openTopic(e.topic.id)} />)}
       </div>
+      {sources && sources.length ? <Sources sources={sources} /> : null}
     </section>
+  );
+}
+
+const FRESH_MS = 2 * 3_600_000;
+
+/** Where the radar's numbers come from, and whether each source is keeping up. */
+function Sources({ sources }: { sources: TrendSource[] }) {
+  const now = Date.now();
+  const total = sources.reduce((n, s) => n + s.pointsLast24h, 0);
+  return (
+    <footer className="sources" aria-label="Trend sources">
+      <span className="sources-h">Sources</span>
+      <ul className="sources-list">
+        {sources.map((s) => {
+          const last = s.lastRunAt ? Date.parse(s.lastRunAt) : NaN;
+          const state = !s.configured ? "off" : !s.lastError && Number.isFinite(last) && now - last <= FRESH_MS ? "fresh" : "stale";
+          const why = !s.configured
+            ? "not configured"
+            : s.lastError
+              ? `last pull failed: ${s.lastError}`
+              : s.lastRunAt
+                ? `pulled ${relativeTime(s.lastRunAt, now)}`
+                : "never pulled";
+          return (
+            <li key={s.name} className={`source source-${state}`} title={`${sourceLabel(s.name)}: ${why} · ${s.pointsLast24h} points in 24h`}>
+              <span className="source-dot" aria-hidden="true" />
+              {sourceLabel(s.name)}
+            </li>
+          );
+        })}
+      </ul>
+      <span className="mono sources-n">{compact(total)} points in 24h</span>
+    </footer>
   );
 }
 

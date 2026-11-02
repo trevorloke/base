@@ -1,15 +1,24 @@
 import type {
   Account,
   Activity,
+  AdaptInput,
+  AdaptResult,
   Alert,
   Brief,
+  ConnectBlueskyInput,
+  Connector,
+  CreatePostInput,
   DecideInput,
+  Discovery,
   FeedEvent,
   FeedQuery,
   LiftByStage,
   LiveStatus,
   Me,
+  OAuthStart,
   Policy,
+  PolicyCheckInput,
+  PolicyDecision,
   PostDetail,
   PostFull,
   PostSummary,
@@ -17,6 +26,7 @@ import type {
   Stream,
   Summary,
   TopicDetail,
+  TrendSource,
 } from "./types";
 import { ApiError } from "./lib/errors";
 
@@ -108,6 +118,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 const get = <T,>(path: string) => request<T>("GET", path);
 const post = <T,>(path: string, body?: unknown) => request<T>("POST", path, body);
+const del = <T,>(path: string) => request<T>("DELETE", path);
 const enc = encodeURIComponent;
 
 /** Route a call to the live API or, in fixture mode, to the fixture implementation. */
@@ -158,6 +169,22 @@ export const api = {
   alerts: () => pick(() => get<Alert[]>("/v1/alerts?unacknowledged=1&limit=50"), (f) => f.fixtureApi.alerts()),
   ackAlert: (id: string) => pick(() => post<void>(`/v1/alerts/${enc(id)}/ack`), (f) => f.fixtureApi.ackAlert(id)),
   latestBrief: () => pick(() => get<Brief | null>("/v1/briefs/latest"), (f) => f.fixtureApi.latestBrief()),
+
+  // --- Compose, calendar, connect (v1.1) ---
+  connectors: () => pick(() => get<Connector[]>("/v1/connectors"), (f) => f.fixtureApi.connectors()),
+  connectBluesky: (input: ConnectBlueskyInput) =>
+    pick(() => post<Account>("/v1/accounts/connect/bluesky", input), (f) => f.fixtureApi.connectBluesky(input)),
+  /** Starts X's OAuth flow; the caller sends the browser to `authorizeUrl`. 503 when the server isn't set up for X. */
+  connectXStart: () => pick(() => post<OAuthStart>("/v1/accounts/connect/x/start"), (f) => f.fixtureApi.connectXStart()),
+  deleteAccount: (id: string) => pick(() => del<void>(`/v1/accounts/${enc(id)}`), (f) => f.fixtureApi.deleteAccount(id)),
+
+  adapt: (input: AdaptInput) => pick(() => post<AdaptResult>("/v1/compose/adapt", input), (f) => f.fixtureApi.adapt(input)),
+  policyCheck: (input: PolicyCheckInput) => pick(() => post<PolicyDecision>("/v1/policy/check", input), (f) => f.fixtureApi.policyCheck(input)),
+  createPost: (input: CreatePostInput) => pick(() => post<PostDetail>("/v1/posts", input), (f) => f.fixtureApi.createPost(input)),
+
+  calendar: (from: string, to: string) => pick(() => get<PostSummary[]>(`/v1/calendar${qs({ from, to })}`), (f) => f.fixtureApi.calendar(from, to)),
+  sources: () => pick(() => get<TrendSource[]>("/v1/sources"), (f) => f.fixtureApi.sources()),
+  discoveries: (limit = 50) => pick(() => get<Discovery[]>(`/v1/trends/discoveries${qs({ limit })}`), (f) => f.fixtureApi.discoveries(limit)),
 };
 
 export interface StreamHandlers {

@@ -1410,6 +1410,592 @@ ol.md-list {
   text-align: center;
 }
 
+/* ---------- Segmented control ---------- */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--sunken);
+}
+.seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg-btn:hover {
+  color: var(--fg);
+}
+.seg-btn[aria-selected="true"],
+.seg-btn[aria-checked="true"] {
+  background: var(--panel);
+  color: var(--fg);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.seg-wide .seg-btn {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.panel-head-center {
+  align-items: center;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.panel-queue .panel-head:has(.center-seg) {
+  align-items: center;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.btn-danger,
+.btn-danger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* ---------- Calendar ---------- */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cal-range {
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.cal-nav .btn-small {
+  min-width: 28px;
+}
+.cal-grid {
+  display: flex;
+  flex-direction: column;
+}
+.cal-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+.cal-day {
+  min-width: 0;
+  min-height: 132px;
+  padding: 6px 5px 8px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cal-day:last-child {
+  border-right: 0;
+}
+.cal-past {
+  background: color-mix(in srgb, var(--sunken) 55%, transparent);
+}
+.cal-dayhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.cal-daynum {
+  font-size: 12px;
+  letter-spacing: 0;
+}
+.cal-today .cal-dayhead {
+  color: var(--accent);
+}
+.cal-today .cal-daynum {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.cal-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cal-chip {
+  --tone: var(--accent);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 5px 6px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--tone);
+  background: var(--panel);
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.cal-chip:hover {
+  background: var(--hover);
+}
+.cal-chip-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 5px;
+}
+.cal-time {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--tone);
+  white-space: nowrap;
+}
+.cal-nets {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.netbadge-xs {
+  height: 15px;
+  padding: 0 3px;
+  font-size: 10px;
+}
+.cal-chip-text {
+  overflow-wrap: anywhere;
+  color: var(--fg);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cal-scheduled {
+  --tone: var(--accent);
+}
+.cal-waiting {
+  --tone: var(--warn);
+}
+.cal-out {
+  --tone: var(--good);
+}
+.cal-failed {
+  --tone: var(--danger);
+}
+.cal-chip.cal-waiting,
+.cal-chip.cal-out,
+.cal-chip.cal-failed {
+  background: color-mix(in srgb, var(--tone) 10%, var(--panel));
+  border-color: color-mix(in srgb, var(--tone) 35%, transparent);
+  box-shadow: inset 3px 0 0 var(--tone);
+  padding-left: 8px;
+}
+.cal-chip.cal-out .cal-chip-text {
+  color: var(--fg-muted);
+}
+.cal-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 14px;
+  padding: 7px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+.cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--fg-muted);
+}
+.cal-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cal-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--tone);
+  background: color-mix(in srgb, var(--tone) 18%, transparent);
+}
+.cal-scheduled .cal-swatch {
+  background: transparent;
+}
+.cal-list {
+  display: flex;
+  flex-direction: column;
+}
+.cal-listday {
+  padding: 12px 14px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.cal-todaytag {
+  color: var(--accent);
+}
+.cal-listday li + li {
+  border-top: 1px solid var(--border);
+}
+.cal-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  padding: 9px 0 10px;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.cal-row .cal-time {
+  font-size: 12.5px;
+  padding-left: 8px;
+  box-shadow: inset 3px 0 0 var(--tone);
+  line-height: 20px;
+}
+.cal-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cal-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.cal-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tone);
+}
+.cal-row-text {
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Radar sources ---------- */
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--fg-muted);
+  flex: 0 0 auto;
+}
+.sources-h {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sources-list {
+  display: contents;
+}
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  cursor: default;
+}
+.source-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+}
+.source-fresh .source-dot {
+  background: var(--good);
+}
+.source-stale .source-dot {
+  background: var(--warn);
+}
+.source-off {
+  color: var(--fg-faint);
+}
+.source-off .source-dot {
+  background: transparent;
+  border: 1px solid var(--fg-faint);
+}
+.sources-n {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+/* ---------- Drawer extras ---------- */
+.drawer-wide {
+  width: min(680px, 100%);
+}
+.drawer-foot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 18px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.dsec-act {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---------- Composer ---------- */
+label.section-h {
+  display: block;
+}
+.textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  font: inherit;
+  line-height: var(--lh);
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--fg);
+}
+.textarea:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+.textarea::placeholder,
+.input::placeholder {
+  color: var(--fg-faint);
+}
+.acct-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip-acct {
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px 0 5px;
+  color: var(--fg);
+}
+.chip-acct-on,
+.chip-acct-on:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.chip-acct-off,
+.chip-acct-off:hover {
+  cursor: not-allowed;
+  border-style: dashed;
+  background: var(--panel);
+  color: var(--fg-faint);
+}
+.chip-acct-off .netbadge {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+.chip-acct-why {
+  font-size: 11.5px;
+  color: var(--warn);
+}
+.adapt-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 12px;
+}
+.cv-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cv {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cv .variant-head {
+  margin-bottom: 0;
+}
+.cv-seg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+.cv-media {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.cv-media .input {
+  height: 32px;
+  font-size: 13px;
+  min-width: 0;
+}
+.cv-need {
+  font-size: 12.5px;
+  color: var(--warn);
+}
+.cv-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-left: -6px;
+}
+.when-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.when-hint {
+  margin-top: 10px;
+}
+.verdict {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.verdict-h {
+  font-weight: 600;
+}
+.card-flag .verdict-h {
+  color: var(--warn);
+}
+.card-blocked .verdict-h {
+  color: var(--danger);
+}
+.compose-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.compose-cancel {
+  margin-left: auto;
+}
+
+/* ---------- Accounts ---------- */
+.acct-list li + li {
+  border-top: 1px solid var(--border);
+}
+.acct-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+.acct-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.acct-id {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.acct-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+.acct-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.connect-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.connect-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.connect-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.connect-fields .input {
+  min-width: 0;
+}
+.connect-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.connect-row-error {
+  flex-basis: 100%;
+}
+.soon {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* ---------- Center column: Queue or Calendar ---------- */
+@media (min-width: 1200px) {
+  .col-center[data-view="queue"] [data-panel="calendar"],
+  .col-center[data-view="calendar"] [data-panel="queue"] {
+    display: none;
+  }
+  .col-center[data-view="calendar"] .col-calendar {
+    max-height: 66%;
+  }
+  .center-title,
+  .cal-list {
+    display: none;
+  }
+}
+
 /* ---------- Under 1200px: one column, bottom tabs ---------- */
 @media (max-width: 1199px) {
   .topbar {
@@ -1456,7 +2042,8 @@ ol.md-list {
   .room[data-tab="radar"] [data-panel="radar"],
   .room[data-tab="queue"] [data-panel="queue"],
   .room[data-tab="feed"] [data-panel="feed"],
-  .room[data-tab="brief"] [data-panel="brief"] {
+  .room[data-tab="brief"] [data-panel="brief"],
+  .room[data-tab="calendar"] [data-panel="calendar"] {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
@@ -1468,6 +2055,10 @@ ol.md-list {
   }
   .tabbar {
     display: flex;
+  }
+  .center-seg,
+  .cal-grid {
+    display: none;
   }
   .toast {
     bottom: calc(var(--tabbar-h) + 14px);
@@ -1484,6 +2075,29 @@ ol.md-list {
 @media (max-width: 480px) {
   .topbar-right .btn {
     padding: 0 8px;
+  }
+  .topbar-id {
+    max-width: 100%;
+  }
+  .topbar-id .brand {
+    display: none;
+  }
+  .connect-fields {
+    grid-template-columns: 1fr;
+  }
+  .cv-media {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cv-media .input:nth-child(2) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .acct-row {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .cal-range {
+    display: none;
   }
   .chips-sep {
     display: none;

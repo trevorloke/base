@@ -5,10 +5,17 @@ import type {
   Account,
   Activity,
   ActivityKind,
+  AdaptInput,
+  AdaptResult,
+  AdaptedVariant,
   Alert,
   Approval,
   Brief,
+  ConnectBlueskyInput,
+  Connector,
+  CreatePostInput,
   DecideInput,
+  Discovery,
   FeedQuery,
   Forecast,
   ForecastPoint,
@@ -16,8 +23,12 @@ import type {
   LiftByStage,
   Me,
   Network,
+  OAuthStart,
   Policy,
+  PolicyCheckInput,
+  PolicyDecision,
   Post,
+  PostStatus,
   PostDetail,
   PostFull,
   PostSummary,
@@ -27,6 +38,7 @@ import type {
   Summary,
   TopicDetail,
   TopicSeries,
+  TrendSource,
   TrendStage,
   Variant,
   Violation,
@@ -34,6 +46,8 @@ import type {
 } from "../types";
 import type { StreamHandlers } from "../api";
 import { ApiError } from "../lib/errors";
+import { NETWORK_THREADS, truncate } from "../lib/format";
+import { weekStartMs } from "../lib/tz";
 
 const NOW = Date.now();
 const HOUR = 3_600_000;
@@ -520,6 +534,11 @@ function historyFor(item: PostSummary): LedgerEvent[] {
   out.push(ev("post.approval_requested", post.id, post.createdBy, post.createdAt));
   out.push(ev("post.approval_decided", post.id, { type: "human", id: post.disclosure?.reviewedBy ?? "dev" }, approvedAt, { decision: "approve", edits: post.id === "p_ratio" ? 1 : 0 }));
   if (post.scheduledAt) out.push(ev("post.scheduled", post.id, sys, approvedAt, { at: post.scheduledAt }));
+  if (post.status === "failed" && post.scheduledAt) {
+    out.push(ev("post.publish_started", post.id, sys, post.scheduledAt));
+    for (const v of variants) out.push(ev("variant.failed", post.id, sys, post.scheduledAt, { network: v.network, error: v.error, attempt: v.attemptCount }));
+    out.push(ev("post.failed", post.id, sys, post.scheduledAt, { status: post.status }));
+  }
   if (post.publishedAt) {
     out.push(ev("post.publish_started", post.id, sys, post.publishedAt));
     for (const v of variants) {
@@ -698,6 +717,173 @@ const liftByStage: LiftByStage[] = [
   { stage: "dormant", posts: 4, avgEngagements: 145, lift: 0.9 },
 ];
 
+// --- Calendar (two weeks from this Monday, workspace time) ------------------
+
+const DAY = 24 * HOUR;
+const WEEK_START = weekStartMs(NOW, policy.timezone);
+const CAL_STATUSES: PostStatus[] = ["pending_approval", "approved", "scheduled", "publishing", "published", "partially_published", "failed"];
+
+/** A slot this week that has already happened: spread over the time since Monday, or last week early on Monday. */
+function pastSlot(fraction: number): number {
+  const since = NOW - WEEK_START;
+  return since > 3 * HOUR ? WEEK_START + since * fraction : NOW - (6 + 30 * (1 - fraction)) * HOUR;
+}
+
+function calPost(
+  id: string,
+  title: string,
+  body: string,
+  ms: number,
+  status: PostStatus,
+  targets: [string, Network, string?][],
+  extra: Partial<Post> = {},
+): PostSummary {
+  // A seeded "future" slot that has already passed by the time the page loads simply went out.
+  const effective: PostStatus = ms < NOW && !["published", "failed", "partially_published"].includes(status) ? "published" : status;
+  const wentOut = effective === "published" || effective === "partially_published";
+  return {
+    post: {
+      ...basePost,
+      id,
+      status: effective,
+      title,
+      body,
+      scheduledAt: iso(ms),
+      publishedAt: wentOut ? iso(ms) : null,
+      actionClass: "new_post",
+      createdBy: { type: "human", id: "marta" },
+      trendTopicId: null,
+      trendStageAtCreation: null,
+      disclosure: { aiAssisted: false, aiContributions: [], humanReviewed: true, reviewedBy: "marta" },
+      evidence: [],
+      policyDecision: { verdict: effective === "pending_approval" ? "require_approval" : "allow", violations: [], policyVersion: 3 },
+      createdAt: iso(ms - 2 * DAY),
+      updatedAt: iso(ms - 2 * DAY),
+      ...extra,
+    },
+    variants: targets.map(([accountId, network, text], i) =>
+      variant(`${id}_v${i}`, id, accountId, network, text ?? body, {
+        status: effective === "failed" ? "failed" : wentOut ? (effective === "partially_published" && network === "instagram" ? "failed" : "published") : "pending",
+        error: effective === "failed" || (effective === "partially_published" && network === "instagram") ? IG_ERROR : null,
+        attemptCount: effective === "failed" ? 3 : wentOut ? 1 : 0,
+        publishedAt: wentOut && !(effective === "partially_published" && network === "instagram") ? iso(ms) : null,
+        externalUrl: wentOut && network !== "instagram" ? (network === "x" ? `https://x.com/northwindcoffee/status/${id}` : `https://bsky.app/profile/northwind.coffee/post/${id}`) : null,
+        media: network === "instagram" ? [{ kind: "image", url: `https://images.northwind.coffee/${id}.jpg`, alt: title }] : [],
+      }),
+    ),
+  };
+}
+
+const slot = (day: number, hour: number) => WEEK_START + day * DAY + hour * HOUR;
+const XB: [string, Network][] = [
+  ["acc_x", "x"],
+  ["acc_bsky", "bluesky"],
+];
+
+const calendarSeed: PostSummary[] = [
+  calPost("p_cal_open", "Doors at 7", "Doors at 7 at all four cafés. The Guji is on batch brew until it runs out.", pastSlot(0.35), "published", XB),
+  calPost("p_cal_pour", "The pour", "Forty seconds, one pour, no notes.", pastSlot(0.75), "failed", [["acc_ig", "instagram"]]),
+  calPost("p_cal_guji", "The Guji is back", "The Guji is back on espresso. Bright, a little floral, gone in three weeks.", slot(1, 9.5), "scheduled", XB),
+  calPost("p_cal_latte", "Latte art Thursday", "Every Thursday our baristas pour whatever you ask for. Within reason.", slot(3, 15), "pending_approval", [["acc_ig", "instagram"], ["acc_bsky", "bluesky"]]),
+  calPost("p_cal_sat", "Saturday cuppings", "Saturday cupping at the Pearl, 10am. Free, twelve seats, bring questions.", slot(5, 8), "scheduled", [...XB, ["acc_ig", "instagram"]]),
+  calPost("p_cal_roast", "Roast day", "Roast day. If you smell burnt sugar on Division, that's us.", slot(7, 10), "scheduled", XB),
+  calPost("p_cal_wholesale", "Wholesale, plainly", "We roast for 31 cafés now. If you run one and want to taste, write to us.", slot(9, 11), "pending_approval", [["acc_x", "x"]]),
+  calPost("p_cal_beans", "Bean subscription", "The subscription now ships every two weeks, not every month. Same beans, fresher.", slot(10, 9), "approved", XB),
+  calPost("p_cal_fri", "Friday pastries", "Friday: cardamom buns at the Alberta café. They go by 9.", slot(11, 7.5), "scheduled", [...XB, ["acc_ig", "instagram"]]),
+];
+
+const connectorsSeed: Connector[] = [
+  { name: "bluesky", networks: ["bluesky"], configured: true, connect: "app_password" },
+  { name: "x_api", networks: ["x"], configured: true, connect: "oauth" },
+  { name: "zernio", networks: ["instagram"], configured: false, connect: "oauth" },
+];
+
+const sourcesSeed: TrendSource[] = [
+  { name: "google_trends", kind: "both", configured: true, lastRunAt: ago(0.3), lastError: null, pointsLast24h: 288 },
+  { name: "bluesky_firehose", kind: "both", configured: true, lastRunAt: ago(0.1), lastError: null, pointsLast24h: 1_420 },
+  { name: "wikipedia_pageviews", kind: "sample", configured: true, lastRunAt: ago(7), lastError: null, pointsLast24h: 24 },
+  { name: "youtube_trending", kind: "trending", configured: true, lastRunAt: ago(5), lastError: "quota exceeded for today", pointsLast24h: 60 },
+  { name: "tiktok_creative_center", kind: "trending", configured: false, lastRunAt: null, lastError: null, pointsLast24h: 0 },
+];
+
+const discoveriesSeed: Discovery[] = [
+  { term: "pumpkin spice too early", source: "google_trends", value: 100, url: null, observedAt: ago(0.4), region: "US-OR" },
+  { term: "cold brew ratio", source: "google_trends", value: 64, url: null, observedAt: ago(0.4), region: "US" },
+  { term: "oat milk shortage", source: "bluesky_firehose", value: 212, url: "https://bsky.app/search?q=oat+milk+shortage", observedAt: ago(1.1), region: null },
+  { term: "world coffee day", source: "wikipedia_pageviews", value: 880, url: "https://en.wikipedia.org/wiki/International_Coffee_Day", observedAt: ago(7), region: null },
+];
+
+// --- Red lines, dry run --------------------------------------------------
+
+const NEEDS_APPROVAL: { id: string; kind: string; re: RegExp; message: (m: string) => string }[] = [
+  { id: "rl_comp", kind: "no_competitor_mention", re: /\b(MEC|Blue Bottle|Stumptown|Starbucks)\b/g, message: (m) => `Names a competitor: ${m}` },
+];
+
+function checkPolicy(input: PolicyCheckInput): PolicyDecision {
+  const found = new Map<string, { redLineId: string; kind: string; severity: "block" | "require_approval"; message: string; matches: Set<string> }>();
+  const add = (redLineId: string, kind: string, severity: "block" | "require_approval", message: string, match: string | null) => {
+    const key = `${redLineId}|${message}`;
+    const v = found.get(key) ?? { redLineId, kind, severity, message, matches: new Set<string>() };
+    if (match) v.matches.add(match);
+    found.set(key, v);
+  };
+  for (const v of input.variants) {
+    for (const rule of BLOCKING) for (const m of v.text.match(rule.re) ?? []) add(rule.id, rule.kind, "block", rule.message, m);
+    for (const rule of NEEDS_APPROVAL) for (const m of v.text.match(rule.re) ?? []) add(rule.id, rule.kind, "require_approval", rule.message(m), m);
+  }
+  // Quiet hours are about when something goes out; a draft with no time isn't going anywhere.
+  const hour = input.scheduledAt
+    ? Number(new Intl.DateTimeFormat("en-US", { timeZone: policy.timezone, hour: "numeric", hourCycle: "h23" }).format(new Date(input.scheduledAt)))
+    : 12;
+  if (hour >= 22 || hour < 7) add("rl_quiet", "quiet_hours", "require_approval", "Falls inside quiet hours (10pm–7am Pacific)", null);
+  const violations: Violation[] = [...found.values()].map((v) => ({ ...v, matches: [...v.matches] }));
+  const verdict = violations.some((v) => v.severity === "block") ? "block" : violations.length ? "require_approval" : "allow";
+  return { verdict, violations, policyVersion: policy.version };
+}
+
+// --- Compose, adapted per network -----------------------------------------
+
+function sentences(text: string): string[] {
+  return text.match(/[^.!?]+[.!?]*\s*/g)?.map((x) => x.trim()).filter(Boolean) ?? [text];
+}
+
+/** Pack sentences into segments under `max`; whatever doesn't fit continues as a thread. */
+function packThread(text: string, max: number): { text: string; thread: string[] } {
+  const segs: string[] = [];
+  let cur = "";
+  for (const sentence of sentences(text)) {
+    const next = cur ? `${cur} ${sentence}` : sentence;
+    if (next.length <= max) cur = next;
+    else {
+      if (cur) segs.push(cur);
+      cur = truncate(sentence, max);
+    }
+  }
+  if (cur) segs.push(cur);
+  return { text: segs[0] ?? "", thread: segs.slice(1) };
+}
+
+function adaptFor(network: Network, body: string): AdaptedVariant {
+  const plain = body.replace(/\s+/g, " ").trim();
+  switch (network) {
+    case "x": {
+      const tight = plain.replace(/\band\b/g, "&").replace(/\bwe are\b/gi, "we're");
+      return { network, ...packThread(tight, 270) };
+    }
+    case "bluesky":
+      return { network, ...packThread(plain, 290) };
+    case "threads":
+    case "mastodon":
+      return { network, ...packThread(plain, 480) };
+    case "instagram":
+      return { network, text: `${sentences(plain).join("\n\n")}\n\n#northwindcoffee #portlandcoffee`, thread: [] };
+    case "linkedin":
+      return { network, text: `${plain}\n\nNorthwind Coffee roasts in Portland for four cafés and 31 wholesale partners.`, thread: [] };
+    default:
+      return { network, text: plain, thread: [] };
+  }
+}
+
 // --- Mutable state (the fixture "server") ----------------------------------
 
 const state = {
@@ -706,10 +892,14 @@ const state = {
   feed: clone(feedSeed),
   alerts: clone(alertsSeed),
   liveIndex: 0,
+  calendar: clone(calendarSeed),
+  created: [] as PostSummary[],
+  accounts,
+  createdSeq: 0,
 };
 
 function allPosts(): PostSummary[] {
-  return [...state.queue, ...state.decided, ...published];
+  return [...state.queue, ...state.decided, ...published, ...state.calendar, ...state.created];
 }
 
 function topicActions(topicId: string): TopicDetail["actions"] {
@@ -826,6 +1016,136 @@ export const fixtureApi = {
   },
 
   latestBrief: () => delay(brief),
+
+  // --- Compose, calendar, connect (v1.1) ---
+
+  connectors: () => delay(connectorsSeed),
+
+  connectBluesky: async (input: ConnectBlueskyInput): Promise<Account> => {
+    await delay(null, 600);
+    const handle = input.identifier.trim().replace(/^@/, "");
+    if (!handle || !input.appPassword.trim()) {
+      throw new ApiError(400, "invalid", "Bluesky login failed", { reason: "Enter a handle and an app password." });
+    }
+    if (input.appPassword.trim() === "fail") {
+      throw new ApiError(400, "invalid", "Bluesky login failed", { reason: "Bluesky said the handle or app password is wrong (AuthenticationRequired)." });
+    }
+    if (state.accounts.some((a) => a.network === "bluesky" && a.handle === handle && a.status !== "disabled")) {
+      throw new ApiError(409, "conflict", "That Bluesky account is already connected.");
+    }
+    state.createdSeq += 1;
+    const account: Account = {
+      id: `acc_bsky_${state.createdSeq}`,
+      network: "bluesky",
+      externalId: `did:plc:fixture${state.createdSeq}`,
+      handle: handle.includes(".") ? handle : `${handle}.bsky.social`,
+      displayName: null,
+      connector: "bluesky",
+      status: "active",
+      hasCredentials: true,
+      lastIngestAt: null,
+      config: {},
+    };
+    state.accounts.push(account);
+    return clone(account);
+  },
+
+  /** Fixture mode round-trips locally: "X" sends the browser straight back as if it had said yes. */
+  connectXStart: async (): Promise<OAuthStart> => {
+    await delay(null, 300);
+    return { authorizeUrl: "/?connected=x&handle=northwind", expiresAt: iso(Date.now() + 10 * 60_000) };
+  },
+
+  deleteAccount: async (id: string): Promise<void> => {
+    await delay(null, 260);
+    const idx = state.accounts.findIndex((a) => a.id === id);
+    if (idx < 0) throw new ApiError(404, "not_found", "No such account.");
+    state.accounts.splice(idx, 1);
+  },
+
+  adapt: async (input: AdaptInput): Promise<AdaptResult> => {
+    if (!input.body.trim()) throw new ApiError(400, "invalid", "Write the idea first.");
+    const networks = [...new Set(input.networks)];
+    const variants = networks.map((n) => adaptFor(n, input.body));
+    const threaded = variants.filter((v) => v.thread.length && NETWORK_THREADS.has(v.network));
+    const notes = [
+      "Kept the voice plain: no exclamation marks, no hype.",
+      threaded.length ? `Split into a thread where it ran long.` : null,
+      networks.includes("instagram") ? "Instagram gets line breaks and two tags; it still needs an image." : null,
+    ].filter((x): x is string => !!x);
+    return delay({ variants, notes, usage: { costUsd: 0.0042, model: "claude-opus-5-5" } }, 700);
+  },
+
+  policyCheck: async (input: PolicyCheckInput): Promise<PolicyDecision> => delay(checkPolicy(input), 120),
+
+  createPost: async (input: CreatePostInput): Promise<PostDetail> => {
+    await delay(null, 380);
+    const issues: { code: string; message: string; socialAccountId: string; network: string }[] = [];
+    const targets = input.variants.map((v) => {
+      const account = state.accounts.find((a) => a.id === v.socialAccountId);
+      if (!account) throw new ApiError(404, "not_found", "One of those accounts is gone.");
+      if (account.status === "disabled") throw new ApiError(409, "conflict", `account ${account.handle} is disabled`);
+      if (["instagram", "tiktok", "pinterest", "youtube"].includes(account.network) && !(v.media ?? []).length) {
+        issues.push({ code: "media_required", message: `${account.network} requires at least one media item`, socialAccountId: account.id, network: account.network });
+      }
+      return { v, account };
+    });
+    if (issues.length) throw new ApiError(400, "invalid", "variant validation failed", issues);
+
+    const decision = checkPolicy({
+      variants: targets.map(({ v, account }) => ({ network: account.network, text: [v.text, ...(v.thread ?? [])].join("\n") })),
+      scheduledAt: input.scheduledAt,
+    });
+    const status: PostStatus =
+      decision.verdict === "block" ? "blocked" : decision.verdict === "require_approval" ? "pending_approval" : input.scheduledAt ? "scheduled" : "draft";
+    state.createdSeq += 1;
+    const id = `p_new_${state.createdSeq}`;
+    const now = iso(Date.now());
+    const item: PostSummary = {
+      post: {
+        ...basePost,
+        id,
+        status,
+        title: input.title ?? null,
+        body: input.body,
+        media: input.media ?? [],
+        scheduledAt: input.scheduledAt ?? null,
+        actionClass: input.actionClass ?? "new_post",
+        createdBy: me.actor,
+        trendTopicId: input.trendTopicId ?? null,
+        trendStageAtCreation: input.trendStageAtCreation ?? null,
+        trendForecastId: input.trendForecastId ?? null,
+        disclosure: input.disclosure ?? null,
+        evidence: input.evidence ?? [],
+        policyDecision: decision,
+        createdAt: now,
+        updatedAt: now,
+      },
+      variants: targets.map(({ v, account }, i) =>
+        variant(`${id}_v${i}`, id, account.id, account.network, v.text, { media: v.media ?? [], thread: v.thread ?? [], status: status === "blocked" ? "skipped" : "pending" }),
+      ),
+    };
+    if (status === "pending_approval") state.queue.push(item);
+    else state.created.push(item);
+    return clone({ post: item.post, variants: item.variants, approvals: approvalsFor(item) });
+  },
+
+  calendar: async (from: string, to: string): Promise<PostSummary[]> => {
+    const lo = from ? Date.parse(from) : WEEK_START;
+    const hi = to ? Date.parse(to) : WEEK_START + 14 * DAY;
+    const seen = new Set<string>();
+    const timeOf = (p: Post) => Date.parse(p.publishedAt ?? p.scheduledAt ?? "");
+    const items = allPosts().filter((p) => {
+      if (seen.has(p.post.id)) return false;
+      seen.add(p.post.id);
+      const t = timeOf(p.post);
+      return CAL_STATUSES.includes(p.post.status) && Number.isFinite(t) && t >= lo && t < hi;
+    });
+    return delay(items.sort((a, b) => timeOf(a.post) - timeOf(b.post)));
+  },
+
+  sources: () => delay(sourcesSeed),
+  discoveries: (limit: number) => delay(discoveriesSeed.slice(0, limit)),
 };
 
 /** A pretend live stream: one new mention arrives every 40 seconds. */
