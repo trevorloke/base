@@ -311,12 +311,12 @@ test('brief: field.mine is this week’s contacts the caller logged; the team nu
   await log(mgr, people[3], 'text', '2');
 
   const vf = (await vol.get('/api/brief')).json.field;
-  assert.deepEqual(vf.mine, { doors: 3, calls: 1, texts: 0 }, 'the volunteer sees their own');
+  assert.deepEqual(vf.mine, { doors: 3, calls: 1, texts: 0, lit: 0 }, 'the volunteer sees their own');
   // Doors are distinct doors: the volunteer and the manager both knocked
   // Mine Door 0, which is one door for the team.
   assert.deepEqual([vf.doors, vf.calls, vf.texts, vf.week], [4, 1, 1, 7], 'team numbers count everyone');
   const mf = (await mgr.get('/api/brief')).json.field;
-  assert.deepEqual(mf.mine, { doors: 2, calls: 0, texts: 1 }, 'the manager sees theirs');
+  assert.deepEqual(mf.mine, { doors: 2, calls: 0, texts: 1, lit: 0 }, 'the manager sees theirs');
   assert.deepEqual([mf.doors, mf.calls, mf.texts], [4, 1, 1]);
 
   // Same week boundary as the team count: a knock from last week drops out of both.
@@ -332,7 +332,7 @@ test('brief: field.mine is this week’s contacts the caller logged; the team nu
   const op = await other.createPerson('Elsewhere');
   await other.action('contact.log', { person_id: op.id, channel: 'door', outcome: 'contacted' });
   assert.equal((await vol.get('/api/brief')).json.field.doors, 4);
-  assert.deepEqual((await other.get('/api/brief')).json.field.mine, { doors: 1, calls: 0, texts: 0 });
+  assert.deepEqual((await other.get('/api/brief')).json.field.mine, { doors: 1, calls: 0, texts: 0, lit: 0 });
 });
 
 test('walk list: door_knocked tells a knocked door from one reached only by phone or text', async () => {

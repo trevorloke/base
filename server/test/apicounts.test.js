@@ -56,7 +56,7 @@ test('brief: doors this week are distinct doors — a household rated twice and 
   await vol.action('contact.log', { person_id: harjit.id, channel: 'phone', outcome: 'contacted', rating: '1' });
   await vol.action('contact.log', { person_id: harjit.id, channel: 'text', outcome: 'contacted' });
   b = (await vol.get('/api/brief')).json.field;
-  assert.deepEqual(b.mine, { doors: 1, calls: 2, texts: 1 });
+  assert.deepEqual(b.mine, { doors: 1, calls: 2, texts: 1, lit: 0 });
   assert.equal(b.doors, 1, 'a call is not a door');
 
   // The manager: another unit is another door; someone with no address is
@@ -66,7 +66,7 @@ test('brief: doors this week are distinct doors — a household rated twice and 
   await knock(mgr, nowhere, '2');
   await knock(mgr, simran, '3');
   const mf = (await mgr.get('/api/brief')).json.field;
-  assert.deepEqual(mf.mine, { doors: 3, calls: 0, texts: 0 });
+  assert.deepEqual(mf.mine, { doors: 3, calls: 0, texts: 0, lit: 0 });
   assert.equal(mf.doors, 3, 'team: 7001 140 St, unit 2, and the no-address person');
   const vf = (await vol.get('/api/brief')).json.field;
   assert.ok(vf.mine.doors <= vf.doors, 'You never beats Team');

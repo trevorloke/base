@@ -16,8 +16,11 @@ export const RATING_CODES = RATINGS.map((r) => r.code);
 export const ratingByCode = (c) => RATINGS.find((r) => r.code === c) || null;
 
 // in_person: a talk with someone you know, away from their door ("My people").
+// left_lit: literature left at a door — a visit, not a conversation; the
+// screens offer it at the door only (a phone left_lit is accepted by the enum
+// but never offered).
 export const CHANNELS = ['door', 'phone', 'text', 'in_person'];
-export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible'];
+export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit'];
 
 export const SIGN_KINDS = [
   { code: 'billboard', label: 'Billboard (4×8)' },

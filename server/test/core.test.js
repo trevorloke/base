@@ -147,7 +147,7 @@ test('Today’s texts count texts sent through the app; a rating logged after on
   const v = (await vol.get('/api/brief')).json.field;
   assert.equal(v.mine.texts - before.mine.texts, 4, 'You: 3 first texts + 1 reply');
   assert.equal(v.texts - before.texts, 6, 'Team: Jas’s 4, the desk’s 1, and the one logged by hand');
-  assert.deepEqual(Object.keys(v.mine).sort(), ['calls', 'doors', 'texts'], 'numbers only');
+  assert.deepEqual(Object.keys(v.mine).sort(), ['calls', 'doors', 'lit', 'texts'], 'numbers only');
   const d = (await mgr.get('/api/brief')).json.field;
   assert.equal(d.texts, v.texts);
   assert.equal(d.mine.texts - deskBefore.mine.texts, 2, 'the desk: 1 through the app + 1 logged by hand');
