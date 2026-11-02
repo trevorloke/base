@@ -215,6 +215,7 @@ const FIELDS = [
   { key: 'lng', label: 'Longitude' },
   { key: 'volunteer', label: 'Volunteer (1/0 → tag)' },
   { key: 'donor', label: 'Donor (1/0 → tag)' },
+  { key: 'voted', label: 'Voted (1/0 or a date)' },
   { key: 'instagram', label: 'Instagram' },
   { key: 'x', label: 'X (Twitter)' },
   { key: 'tiktok', label: 'TikTok' },
@@ -222,7 +223,7 @@ const FIELDS = [
 ];
 const SKIP = '';
 const fieldLabel = (key) => FIELDS.find((f) => f.key === key)?.label || key;
-const FIELD_WORD = { socials: 'social handles', email: 'email', phone: 'phone', address: 'address', house_number: 'house number', unit: 'unit', city: 'city', postal: 'postal code', tags: 'tags', rating: 'rating', lat: 'latitude', lng: 'longitude', volunteer: 'volunteer tag', donor: 'donor tag', instagram: 'Instagram', x: 'X', tiktok: 'TikTok', reddit: 'Reddit' };
+const FIELD_WORD = { socials: 'social handles', email: 'email', phone: 'phone', address: 'address', house_number: 'house number', unit: 'unit', city: 'city', postal: 'postal code', tags: 'tags', rating: 'rating', lat: 'latitude', lng: 'longitude', volunteer: 'volunteer tag', donor: 'donor tag', voted: 'voted', instagram: 'Instagram', x: 'X', tiktok: 'TikTok', reddit: 'Reddit' };
 const MULTI = new Set(['tags']); // several columns can feed tags; every other field takes one column
 
 const normHeader = (h) =>
@@ -245,6 +246,7 @@ const EXACT = [
   ['lng', /^(lng|lon|long|longitude|xlong|x)$/],
   ['volunteer', /^(volunteer|isvolunteer|volunteerflag|vol)$/],
   ['donor', /^(donor|isdonor|donorflag)$/],
+  ['voted', /^(voted|hasvoted|didvote|votedyn|voted10)$/],
   ['unit', /^(unit|unitnumber|unitno|apt|aptno|aptnumber|apartment|suite|suiteno|address2|addressline2|street2)$/],
   ['address', /^(address|streetaddress|streetaddress1|address1|addressline1|street|street1|streetname|civicaddress|homeaddress|residentialaddress|mailingaddress|addr)$/],
   ['city', /^(city|town|municipality|locality|cityname)$/],
@@ -274,6 +276,7 @@ const CONTAINS = [
   ['x', /twitter/],
   ['tiktok', /tiktok/],
   ['reddit', /reddit/],
+  ['voted', /^voted/],
   ['name', /^(?!.*(user|file|middle|nick)).*name/],
 ];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

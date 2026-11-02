@@ -29,6 +29,7 @@ import {
   TextingCallButton, TextingRepliesLink, noTexts, textingOn, useTextingStatus, useTextQueue, useTextingPerson,
 } from '../components/TextingCard.jsx';
 import { MyPeopleLink } from '../components/RelationshipsBits.jsx';
+import { VotedRow } from '../components/Voted.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared widgets + helpers (also used by Person.jsx)
@@ -1060,8 +1061,8 @@ function CallsScreen() {
   }, [current?.id]);
   const focusInCard = () => Boolean(cardRef.current?.contains(document.activeElement));
 
-  const showToast = (text, person) => {
-    setToast({ text, person });
+  const showToast = (text, person, act = null) => {
+    setToast({ text, person, act });
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 5000);
   };
@@ -1245,6 +1246,7 @@ function CallsScreen() {
                 <div className="cl-rate">
                   <RatingButtons value={mine} onPick={(code) => log('contacted', code)} disabled={act.busy} />
                 </div>
+                <VotedRow person={current} source="phone" toast={(text, o) => showToast(text, null, o?.act || null)} onMarked={() => invalidatePersonData(queryClient)} />
 
                 <div className="cl-outcomes">
                   {showNoReply && (
@@ -1288,7 +1290,9 @@ function CallsScreen() {
       {toast && (
         <div className="toast cl-toast" role="status">
           <span>{toast.text}</span>
-          <button type="button" className="btn cl-toast__btn" onClick={change}>Change</button>
+          {(toast.act || toast.person) && (
+            <button type="button" className="btn cl-toast__btn" onClick={toast.act ? () => { setToast(null); clearTimeout(toastTimer.current); toast.act.onClick(); } : change}>{toast.act?.label || 'Change'}</button>
+          )}
         </div>
       )}
     </div>

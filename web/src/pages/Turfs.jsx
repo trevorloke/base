@@ -35,6 +35,7 @@ import RatingButtons, {
   More, OutcomeButtons, OUTCOMES, OUTCOME_LABEL, PersonTabs, RatingChip, focusRating, ratingText, reveal, useScale,
 } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from '../components/SurveyQuestions.jsx';
+import { VotedChip, VotedRow } from '../components/Voted.jsx';
 import './turfs.css';
 
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
@@ -905,6 +906,8 @@ function Door({
   // The active survey's questions: answers go with a "talked" tap; a refused tap puts them back.
   const { id: turfId } = useParams();
   const survey = useSurvey({ context: 'door', personId: sel?.id, turfId, lat: door.lat, lng: door.lng });
+  // A "Voted ✓" sent with signal: the list loads again (a door where everyone has voted may leave it).
+  const queryClient = useQueryClient();
   // After "Save answers", the next tap on that person finishes the same knock.
   const tap = async (p, outcome, rating = null) => {
     const answers = outcome === 'contacted' ? survey.take() : [];
@@ -961,6 +964,7 @@ function Door({
             {multi
               ? rated.length > 0 && <span className="chip walk-rated">{rated.length} rated</span>
               : rated.map((p) => <RatingChip key={p.id} code={p.rating} who brief />)}
+            <VotedChip persons={door.persons} />
           </span>
           <span className="walk-sr">
             {door.done ? (phoneOnly ? ' — called, not knocked' : ' — done') : ' — not knocked yet'}{isNext ? ', next door' : ''}
@@ -972,6 +976,7 @@ function Door({
         <div className="walk-panel" id={panelId}>
           <PersonTabs persons={door.persons} value={sel.id} onPick={onPick} />
           {dnc && <p className="walk-dnc"><span className="chip chip-danger">Do not contact</span> Skip {firstName(sel.name)}</p>}
+          <VotedRow person={sel} source="door" toast={toast} onMarked={() => queryClient.invalidateQueries({ queryKey: ['turf', turfId] })} />
           <RatingButtons key={sel.id} value={sel.rating} disabled={Boolean(busy[sel.id] || busy[door.key])} onPick={(code) => talk(sel, code)} />
           <OutcomeButtons
             items={DOOR_OUTCOMES}

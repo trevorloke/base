@@ -24,8 +24,8 @@ button, no paragraphs, everything else one tap away.
 
 | Screen | What it is |
 |---|---|
-| **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you*. Volunteers: one big *Start canvassing* and their next shift |
-| **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. Turfs and walk lists |
+| **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you*; under *More*, **Election day** — the switch that puts *Voted ✓* on every volunteer's screens, and how many supporters have voted, by band and by turf. Volunteers: one big *Start canvassing* and their next shift |
+| **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. Turfs and walk lists. With Election day on, every door card, walk-list door and Calls card has a one-tap *Voted ✓* (offline too, sent once); a voted file from the campaign's website comes in through People → Import |
 | **People** | Everyone, filterable by rating / tag / role / the campaign's own fields; profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time; **My people** is each volunteer's own circle |
 | **Shifts** | Schedule volunteers, assign by role, notify by email + text with instructions and a link; volunteers tap *Count me in* |
 | **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers — the only money Starbase tracks |

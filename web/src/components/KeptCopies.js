@@ -88,6 +88,8 @@ function planFor(key, me) {
     // ledger and receipts waiting for an address, as Money shows them.
     case 'records': return desk && k1 === 'gift' ? q('gifts', 'session') : null;
     case 'receipts': return desk && k1 === 'needs' && key.length === 2 ? q('receipts:needs', 'session') : null;
+    // Election day on or off (ext/voted): the field's "Voted ✓" still shows on a phone that reloads with no signal.
+    case 'voted': return k1 === 'status' && key.length === 2 ? { name: 'voted:status', tier: 'local', field: true } : null;
     default: return null;
   }
 }

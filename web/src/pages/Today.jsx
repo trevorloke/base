@@ -801,6 +801,7 @@ function DeskToday({ b, me, toast }) {
           {b.providers && (!b.providers.email || !b.providers.text) && (
             <LinkRow to="/outreach/connect" main="Connect email & texting" />
           )}
+          <LinkRow to="/voted" main={b.voted?.on ? <>Election day · <strong className="mono">{b.voted.supporters_voted}</strong> of {b.voted.supporters} supporters voted</> : 'Election day'} />
         </ul>
         <div className="today-actions today-morebox__tools">
           <button type="button" className="btn today-tap" onClick={onVerify} disabled={verify?.busy}>Verify the records</button>
