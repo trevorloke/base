@@ -162,6 +162,14 @@ one tap away under **More**.
   (on the bank page) crosses one off without a call.
 - **Settings → Members** — invite a volunteer and a staff member; change a role; remove one (their phone is signed out at once).
 - **Settings → Teams** — make a team, put two people on it, name a lead; on the map, add the whole team to a turf.
+- **Passes** (Turfs → *Pass: none ›*) — **Start a pass**: a name, *What
+  for* (Persuasion · Get out the vote · Lit drop · Find out who's who), *Who*
+  (All doors · Not rated yet · Undecided or not rated · Yes (1–2) · Everyone
+  but opposed) and *Tries* (2). Every turf's *doors left* changes the moment
+  it starts: doors knocked before are back on the lists, doors outside the
+  universe leave them. The pass's card counts *doors knocked · talked · yes*
+  as the team works; **End this pass** (asks in place) puts every knocked
+  door back to done, and starting another pass ends the open one.
 - **Settings → Permissions** — untick Donations for Staff and watch a staffer's Donations tab go; tick Outreach for one volunteer and watch them get it.
 - **Rating scale** (your initials → *Rating scale*) — change the words on 1
   (e.g. *Definitely*; up to 30 letters, a long one wraps on the buttons),
@@ -197,6 +205,14 @@ one tap away under **More**.
   it means). **4** asks *Voting for?* — McCallum · Locke · Annis · van Vliet ·
   Randhawa · Not sure (or the list your manager set; *Not sure* is always
   last). A toast confirms; *Change* fixes a mis-tap.
+- **Try again** (while a manager has a pass open) — Today says which pass
+  is on (*Newton block · Persuasion · October · 38 doors left*). *No answer*
+  keeps the door on the list with an amber *Try again · 1 of 2* chip and the
+  count holds (*38 doors left · 1 to try again*); *Next door* goes to doors
+  not knocked yet first, then the ones to try again. **Show → Try again**
+  lists only those. A second *No answer* (or a talk, *Refused*, *Moved*, *No
+  access*) finishes the door. With no signal the same chips show from the
+  phone's copy, and an offline *No answer* reads *Try again*, never done.
 - **ImagineU** (the fifth tab) — the lessons the campaign put up; open one,
   watch or read it, *Mark as done*. A manager can see what you've done.
 - **Calls → Your call lists** — the phone banks with numbers handed to you;

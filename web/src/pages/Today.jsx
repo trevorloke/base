@@ -547,12 +547,13 @@ const doorsLeft = (stats) => {
   if (!stats) return null;
   const doors = Number(stats.doors) || 0;
   const done = Math.min(doors, Number(stats.doorsDone) || 0);
-  return { doors, done, left: doors - done, pct: doors ? Math.round((done / doors) * 100) : 0 };
+  // again: doors to try again in the open pass (ext/passes) — still in "left".
+  return { doors, done, left: doors - done, pct: doors ? Math.round((done / doors) * 100) : 0, again: Number(stats.doorsAgain) || 0 };
 };
 const leftLabel = (d) => {
   if (!d) return null;
   if (d.doors === 0) return 'No doors yet';
-  return d.left === 0 ? 'All done' : `${d.left} ${plural(d.left, 'door')} left`;
+  return d.left === 0 ? 'All done' : `${d.left} ${plural(d.left, 'door')} left${d.again > 0 ? ` · ${d.again} to try again` : ''}`;
 };
 
 function TurfRows({ turfs, statsById }) {
@@ -675,11 +676,12 @@ function VolunteerToday({ b, me }) {
       ) : (
         <section className="today-go" aria-label="Canvass">
           <Link to={firstOpen ? `/turfs/${firstOpen.id}` : '/map'} className="btn btn-primary today-start">
-            Start canvassing <span aria-hidden="true">→</span>
+            {b.pass?.kind === 'gotv' ? 'Get out the vote' : 'Start canvassing'} <span aria-hidden="true">→</span>
           </Link>
           {firstOpen ? (
             <div className="today-go__meta">
               <span className="today-go__turf">{firstOpen.name}</span>
+              {b.pass && <span className="muted"> · {b.pass.name}</span>}
               {d && <span className="mono">{leftLabel(d)}</span>}
               {d && d.doors > 0 && <span className="today-progress" aria-hidden="true"><span style={{ width: `${d.pct}%` }} /></span>}
             </div>
