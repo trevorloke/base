@@ -123,3 +123,8 @@ Agents may create posts within the autonomy dial and may only schedule, edit or 
   (the trend sources this deployment pulls from).
 - `GET /v1/trends/discoveries?limit=50` → `{ term, source, value: number | null, url: string | null, observedAt, region }[]`
   newest first: raw "trending now" terms the scout saw, before they become topics.
+- `POST /v1/accounts/connect/x/start` → `{ authorizeUrl, expiresAt }` (owner/approver). Send the person's browser to
+  `authorizeUrl`. X returns them to `GET /oauth/x/callback`, which connects the account and redirects to
+  `/?connected=x&handle=<handle>` or `/?connect_error=<reason>` (`expired`, `exchange_failed`, `access_denied`, …).
+  Needs `X_CLIENT_ID` (and `X_CLIENT_SECRET` for confidential clients) and `STARSIGN_PUBLIC_URL`; otherwise `503`.
+  `GET /v1/connectors` reports `configured: false` for X until those exist.

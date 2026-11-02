@@ -1,5 +1,6 @@
-import { and, eq } from "drizzle-orm";
-import { socialAccounts } from "@starsign/db";
+import { createHash, randomBytes } from "node:crypto";
+import { and, eq, lt } from "drizzle-orm";
+import { oauthStates, socialAccounts } from "@starsign/db";
 import { ConnectorError, type AccountRef, type Connector } from "@starsign/connectors";
 import { newId } from "@starsign/ledger";
 import { Network } from "@starsign/schema";
@@ -67,6 +68,50 @@ export class AccountService {
       throw new CoreError("invalid", "could not connect the account", { reason });
     }
     return this.connect(p, { network: input.network, externalId: identity.externalId, handle: identity.handle, displayName: identity.displayName ?? undefined, connector: connector.name, auth: input.auth });
+  }
+
+  /** Begin an OAuth 2.0 + PKCE connection. Returns the URL to send the person to. */
+  async startOAuth(p: Principal, input: { connector: string; network: Network; redirectUri: string }): Promise<{ authorizeUrl: string; expiresAt: string }> {
+    const connector = this.ctx.connectors.get(input.connector);
+    if (!connector?.oauthAuthorizeUrl || !connector.oauthExchange || !connector.networks.includes(input.network)) {
+      throw new CoreError("invalid", `${input.connector} does not connect ${input.network} with OAuth`);
+    }
+    if (connector.connectConfigured === false) throw new CoreError("unavailable", `${input.connector} is not configured on this deployment`);
+    await this.ctx.db.delete(oauthStates).where(lt(oauthStates.expiresAt, this.ctx.now()));
+    const state = randomBytes(24).toString("base64url");
+    const verifier = randomBytes(48).toString("base64url");
+    const challenge = createHash("sha256").update(verifier).digest("base64url");
+    const expiresAt = new Date(this.ctx.now().getTime() + 10 * 60_000);
+    await this.ctx.db.insert(oauthStates).values({
+      state,
+      workspaceId: p.workspaceId,
+      connector: input.connector,
+      network: input.network,
+      verifierCiphertext: this.ctx.secrets.encrypt({ verifier }),
+      redirectUri: input.redirectUri,
+      actor: p.actor,
+      expiresAt,
+    });
+    return { authorizeUrl: connector.oauthAuthorizeUrl({ state, codeChallenge: challenge, redirectUri: input.redirectUri }), expiresAt: expiresAt.toISOString() };
+  }
+
+  /** Finish an OAuth connection. The state is single use and expires; it carries the workspace and the person who started it. */
+  async completeOAuth(input: { state: string; code: string }) {
+    const [row] = await this.ctx.db.delete(oauthStates).where(eq(oauthStates.state, input.state)).returning();
+    if (!row || row.expiresAt.getTime() < this.ctx.now().getTime()) throw new CoreError("invalid", "this connection link has expired; start again", { reason: "expired" });
+    const connector = this.ctx.connectors.get(row.connector);
+    if (!connector?.oauthExchange || !connector.describeAccount) throw new CoreError("invalid", `${row.connector} cannot complete OAuth`);
+    const { verifier } = this.ctx.secrets.decrypt<{ verifier: string }>(row.verifierCiphertext);
+    let auth: Record<string, unknown>;
+    let identity;
+    try {
+      auth = await connector.oauthExchange({ code: input.code, codeVerifier: verifier, redirectUri: row.redirectUri });
+      identity = await connector.describeAccount(auth);
+    } catch {
+      throw new CoreError("invalid", "the network did not accept the authorization", { reason: "exchange_failed" });
+    }
+    const principal: Principal = { workspaceId: row.workspaceId, actor: row.actor };
+    return this.connect(principal, { network: row.network as Network, externalId: identity.externalId, handle: identity.handle, displayName: identity.displayName ?? undefined, connector: connector.name, auth });
   }
 
   async list(workspaceId: string) {

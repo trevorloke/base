@@ -301,3 +301,28 @@ describe("x fetchMetrics", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("x oauth", () => {
+  it("builds a PKCE authorize URL with the needed scopes, exchanges the code and reads who it is", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      if (url.endsWith("/2/oauth2/token")) return new Response(JSON.stringify({ access_token: "at", refresh_token: "rt", expires_in: 7200 }), { status: 200 });
+      if (url.endsWith("/2/users/me")) return new Response(JSON.stringify({ data: { id: "42", username: "acmeoutdoor", name: "Acme" } }), { status: 200 });
+      return new Response("{}", { status: 404 });
+    }) as typeof fetch;
+    const c = new XConnector({ clientId: "cid", fetch: fetchImpl, now: () => new Date("2026-11-02T00:00:00Z") });
+    expect(c.connectConfigured).toBe(true);
+    expect(new XConnector().connectConfigured).toBe(false);
+    const url = new URL(c.oauthAuthorizeUrl({ state: "s1", codeChallenge: "ch", redirectUri: "https://app.example/oauth/x/callback" }));
+    expect(url.origin + url.pathname).toBe("https://x.com/i/oauth2/authorize");
+    expect(url.searchParams.get("scope")).toBe("tweet.read tweet.write users.read media.write offline.access");
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    const auth = await c.oauthExchange({ code: "code1", codeVerifier: "ver", redirectUri: "https://app.example/oauth/x/callback" });
+    expect(auth).toEqual({ accessToken: "at", refreshToken: "rt", userId: "42", expiresAt: "2026-11-02T02:00:00.000Z" });
+    const form = new URLSearchParams(String(calls[0]!.init!.body));
+    expect(form.get("code_verifier")).toBe("ver");
+    expect(form.get("client_id")).toBe("cid");
+    expect(await c.describeAccount({ accessToken: "at" })).toEqual({ externalId: "42", handle: "acmeoutdoor", displayName: "Acme" });
+  });
+});

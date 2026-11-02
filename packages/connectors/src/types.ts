@@ -68,6 +68,12 @@ export interface Connector {
   readonly networks: readonly Network[];
   /** How accounts are connected. Defaults to "none" (only programmatic). */
   readonly connectMethod?: ConnectMethod;
+  /** False when the deployment lacks what connecting needs (e.g. OAuth client id). Defaults to true. */
+  readonly connectConfigured?: boolean;
+  /** OAuth 2.0 + PKCE: the URL to send the person to. */
+  oauthAuthorizeUrl?(p: { state: string; codeChallenge: string; redirectUri: string }): string;
+  /** OAuth 2.0 + PKCE: exchange the code for a credential blob this connector can use. */
+  oauthExchange?(p: { code: string; codeVerifier: string; redirectUri: string }): Promise<Record<string, unknown>>;
   /** Verify credentials and say whose they are. Used when a person connects an account. */
   describeAccount?(auth: Record<string, unknown>): Promise<AccountIdentity>;
   capabilities(network: Network): ConnectorCapabilities;

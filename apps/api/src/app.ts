@@ -23,6 +23,8 @@ export interface AppOptions {
   gateway?: ModelGateway | null;
   /** Trend sources this deployment pulls from (for status reporting). */
   sources?: SourceAdapter[];
+  /** Public base URL of this deployment (OAuth redirects come back here). */
+  publicUrl?: string;
 }
 
 const err = (code: string, message: string, details?: unknown) => ({ error: { code, message, details } });
@@ -57,6 +59,20 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     if (e instanceof SyntaxError) return c.json(err("invalid", "malformed JSON body"), 400);
     console.error("[api]", e);
     return c.json(err("internal", "internal error"), 500);
+  });
+
+  // OAuth callback: authenticated by the single-use state, not by an API key. Always lands back in the room.
+  app.get("/oauth/x/callback", async (c) => {
+    const state = c.req.query("state");
+    const code = c.req.query("code");
+    if (!state || !code) return c.redirect(`/?connect_error=${encodeURIComponent(c.req.query("error") ?? "missing_code")}`);
+    try {
+      const acct = await m.accounts.completeOAuth({ state, code });
+      return c.redirect(`/?connected=x&handle=${encodeURIComponent(acct.handle)}`);
+    } catch (e) {
+      const reason = e instanceof CoreError ? ((e.details as { reason?: string } | undefined)?.reason ?? "failed") : "failed";
+      return c.redirect(`/?connect_error=${encodeURIComponent(reason)}`);
+    }
   });
 
   // Short-lived, single-use tokens for the SSE stream (EventSource cannot send headers; API keys never go in URLs).
@@ -123,7 +139,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
       m.ctx.connectors
         .list()
         .filter((k) => k.name !== "mock")
-        .map((k) => ({ name: k.name, networks: [...k.networks], configured: true, connect: k.connectMethod ?? "none" })),
+        .map((k) => ({ name: k.name, networks: [...k.networks], configured: k.connectConfigured !== false, connect: k.connectMethod ?? "none" })),
     ),
   );
   app.post("/v1/accounts/connect/bluesky", async (c) => {
@@ -132,6 +148,13 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     const body = z.object({ identifier: z.string().min(1), appPassword: z.string().min(1), service: z.string().url().optional() }).parse(await c.req.json());
     const auth = { identifier: body.identifier.replace(/^@/, ""), appPassword: body.appPassword, ...(body.service ? { service: body.service } : {}) };
     return c.json(await m.accounts.connectWithCredentials(p, { connector: "bluesky", network: "bluesky", auth }), 201);
+  });
+
+  app.post("/v1/accounts/connect/x/start", async (c) => {
+    const p = c.get("principal");
+    m.workspaces.requireRole(p, ["owner", "approver"]);
+    if (!opts.publicUrl) throw new CoreError("unavailable", "STARSIGN_PUBLIC_URL is not set, so X cannot send people back here");
+    return c.json(await m.accounts.startOAuth(p, { connector: "x", network: "x", redirectUri: `${opts.publicUrl.replace(/\/+$/, "")}/oauth/x/callback` }));
   });
 
   // ---------------------------------------------------------------- compose & calendar

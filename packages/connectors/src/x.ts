@@ -20,6 +20,8 @@ export interface XConnectorOptions {
   clientId?: string;
   clientSecret?: string;
   baseUrl?: string;
+  /** Where people authorize the app (default https://x.com/i/oauth2/authorize). */
+  authorizeUrl?: string;
   fetch?: FetchLike;
   now?: () => Date;
   /** Upper bound on pages (100 tweets each) walked per timeline; each page costs money. */
@@ -104,8 +106,72 @@ function xStatusOf(err: unknown): number | undefined {
  * rotates refresh tokens and the new pair has to be persisted; on 401 it throws an auth error and
  * core calls refreshAuth() explicitly.
  */
+/** Scopes a Starsign X account needs: read and write posts, read the user, upload images, refresh without the user. */
+export const X_OAUTH_SCOPES = ["tweet.read", "tweet.write", "users.read", "media.write", "offline.access"];
+
 export class XConnector implements Connector {
   readonly connectMethod = "oauth" as const;
+
+  get connectConfigured(): boolean {
+    return !!this.clientId;
+  }
+
+  oauthAuthorizeUrl(p: { state: string; codeChallenge: string; redirectUri: string }): string {
+    if (!this.clientId) throw new ConnectorError("x oauth: X_CLIENT_ID is not configured", "auth", false);
+    const q = new URLSearchParams({
+      response_type: "code",
+      client_id: this.clientId,
+      redirect_uri: p.redirectUri,
+      scope: X_OAUTH_SCOPES.join(" "),
+      state: p.state,
+      code_challenge: p.codeChallenge,
+      code_challenge_method: "S256",
+    });
+    return `${this.authorizeBase}?${q}`;
+  }
+
+  async oauthExchange(p: { code: string; codeVerifier: string; redirectUri: string }): Promise<Record<string, unknown>> {
+    if (!this.clientId) throw new ConnectorError("x oauth: X_CLIENT_ID is not configured", "auth", false);
+    const form = new URLSearchParams({ grant_type: "authorization_code", code: p.code, redirect_uri: p.redirectUri, code_verifier: p.codeVerifier });
+    const headers: Record<string, string> = { "content-type": "application/x-www-form-urlencoded" };
+    if (this.clientSecret) headers.authorization = `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`;
+    else form.set("client_id", this.clientId);
+    let res: Response;
+    try {
+      res = await resolveFetch(this.fetchImpl)(`${this.baseUrl}/2/oauth2/token`, { method: "POST", headers, body: form.toString() });
+    } catch (err) {
+      throw asNetworkError(err, "x oauth");
+    }
+    const body = await readJson(res);
+    if (!res.ok) throw new ConnectorError(`x oauth: code exchange failed (HTTP ${res.status} ${xErrorDetail(body)})`, "auth", false, { status: res.status, body } satisfies XHttpFailure);
+    const token = (body ?? {}) as { access_token?: unknown; refresh_token?: unknown; expires_in?: unknown };
+    if (typeof token.access_token !== "string") throw new ConnectorError("x oauth: token response had no access_token", "unknown", false, body);
+    const me = await this.describeAccount({ accessToken: token.access_token });
+    const auth: XAuth = {
+      accessToken: token.access_token,
+      ...(typeof token.refresh_token === "string" ? { refreshToken: token.refresh_token } : {}),
+      userId: me.externalId,
+      ...(typeof token.expires_in === "number" ? { expiresAt: new Date(this.now().getTime() + token.expires_in * 1000).toISOString() } : {}),
+    };
+    return auth;
+  }
+
+  /** Whose token is this: GET /2/users/me. */
+  async describeAccount(auth: Record<string, unknown>) {
+    const token = typeof auth.accessToken === "string" ? auth.accessToken : null;
+    if (!token) throw new ConnectorError("x: accessToken is required", "auth", false);
+    let res: Response;
+    try {
+      res = await resolveFetch(this.fetchImpl)(`${this.baseUrl}/2/users/me`, { headers: { authorization: `Bearer ${token}` } });
+    } catch (err) {
+      throw asNetworkError(err, "x users/me");
+    }
+    const body = await readJson(res);
+    if (!res.ok) throw mapXError(res.status, res.headers, body, { what: "users/me", creating: false });
+    const data = (body as { data?: { id?: string; username?: string; name?: string } } | null)?.data;
+    if (!data?.id || !data.username) throw new ConnectorError("x users/me: response had no id/username", "unknown", false, body);
+    return { externalId: data.id, handle: data.username, displayName: data.name ?? null };
+  }
   readonly name = "x";
   readonly networks: readonly Network[] = ["x"];
   /** Tweet objects returned by read endpoints since construction. */
@@ -114,6 +180,7 @@ export class XConnector implements Connector {
   private readonly clientId: string | undefined;
   private readonly clientSecret: string | undefined;
   private readonly baseUrl: string;
+  private readonly authorizeBase: string;
   private readonly fetchImpl: FetchLike | undefined;
   private readonly now: () => Date;
   private readonly maxPages: number;
@@ -124,6 +191,7 @@ export class XConnector implements Connector {
     this.clientId = opts.clientId;
     this.clientSecret = opts.clientSecret;
     this.baseUrl = (opts.baseUrl ?? "https://api.x.com").replace(/\/+$/, "");
+    this.authorizeBase = opts.authorizeUrl ?? "https://x.com/i/oauth2/authorize";
     this.fetchImpl = opts.fetch;
     this.now = opts.now ?? (() => new Date());
     this.maxPages = opts.maxPages ?? 5;

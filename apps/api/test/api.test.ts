@@ -219,3 +219,31 @@ describe("compose, calendar, connect, sources", () => {
     expect(Array.isArray(await json(await withSources.request("/v1/trends/discoveries", { headers: auth(ownerKey) })))).toBe(true);
   });
 });
+
+describe("x oauth connect", () => {
+  it("starts with a single-use state, completes via the callback, and rejects replays", async () => {
+    const { XConnector } = await import("@starsign/connectors");
+    const fetchImpl = (async (url: string) => {
+      if (url.endsWith("/2/oauth2/token")) return new Response(JSON.stringify({ access_token: "at", refresh_token: "rt", expires_in: 7200 }), { status: 200 });
+      if (url.endsWith("/2/users/me")) return new Response(JSON.stringify({ data: { id: "4242", username: "acme_x", name: "Acme" } }), { status: 200 });
+      return new Response("{}", { status: 404 });
+    }) as typeof fetch;
+    m.ctx.connectors.register(new XConnector({ clientId: "cid", fetch: fetchImpl }));
+    const noUrl = createApp(m);
+    expect((await noUrl.request("/v1/accounts/connect/x/start", { method: "POST", headers: auth(ownerKey) })).status).toBe(503);
+    const withUrl = createApp(m, { publicUrl: "https://app.example/" });
+    expect((await withUrl.request("/v1/accounts/connect/x/start", { method: "POST", headers: auth(agentKey) })).status).toBe(403);
+    const start = await json(await withUrl.request("/v1/accounts/connect/x/start", { method: "POST", headers: auth(ownerKey) }));
+    const state = new URL(start.authorizeUrl).searchParams.get("state")!;
+    expect(new URL(start.authorizeUrl).searchParams.get("redirect_uri")).toBe("https://app.example/oauth/x/callback");
+    const cb = await withUrl.request(`/oauth/x/callback?state=${state}&code=abc`);
+    expect(cb.status).toBe(302);
+    expect(cb.headers.get("location")).toBe("/?connected=x&handle=acme_x");
+    const accounts = await json(await withUrl.request("/v1/accounts", { headers: auth(ownerKey) }));
+    expect(accounts.find((a: { network: string; handle: string }) => a.network === "x" && a.handle === "acme_x")).toMatchObject({ externalId: "4242", connector: "x", hasCredentials: true });
+    const replay = await withUrl.request(`/oauth/x/callback?state=${state}&code=abc`);
+    expect(replay.headers.get("location")).toBe("/?connect_error=expired");
+    const denied = await withUrl.request(`/oauth/x/callback?error=access_denied&state=zzz`);
+    expect(denied.headers.get("location")).toBe("/?connect_error=access_denied");
+  });
+});

@@ -448,6 +448,19 @@ export const alerts = pgTable(
   (t) => [index("alerts_ws").on(t.workspaceId, t.createdAt)],
 );
 
+/** Pending OAuth authorizations (PKCE). The verifier is encrypted; rows expire after ten minutes. */
+export const oauthStates = pgTable("oauth_states", {
+  state: text("state").primaryKey(),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  connector: text("connector").notNull(),
+  network: text("network").notNull(),
+  verifierCiphertext: text("verifier_ciphertext").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  actor: jsonb("actor").$type<ActorJson>().notNull(),
+  expiresAt: ts("expires_at").notNull(),
+  createdAt: now(),
+});
+
 export const schemaMigrations = pgTable("schema_migrations", {
   name: text("name").primaryKey(),
   appliedAt: ts("applied_at").notNull().default(sql`now()`),
