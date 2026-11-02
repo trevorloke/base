@@ -37,6 +37,7 @@ import { ratingWho, useScale } from '../components/RatingButtons.jsx';
 import { useFollowupCount } from '../components/LaddersCount.js';
 import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
+import { useRequestsCount } from '../components/RequestsCount.js';
 import './today.css';
 
 // The managers' dashboard (its map and chart load with it, not with Today).
@@ -371,6 +372,7 @@ function NeedsYou({ b, me }) {
   });
   const newVols = prospects.data?.persons?.length ?? 0;
   const followups = useFollowupCount(); // ladder follow-ups for staff
+  const requests = useRequestsCount(); // asked for at the doors (ext/requests)
   // Texts waiting to be read: replies to yours, and numbers that wrote in.
   const newTexts = Number(useTextingStatus(me).data?.unread) || 0;
   const flagged = b.flagged ?? [];
@@ -380,7 +382,7 @@ function NeedsYou({ b, me }) {
   const signs = Number(b.signs?.requested) || 0;
   const shownFlags = flagged.length > 3 ? flagged.slice(0, 2) : flagged;
   const moreFlags = flagged.length - shownFlags.length;
-  const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts;
+  const empty = !flagged.length && !newVols && !shortShifts.length && !signs && !followups.n && !newTexts && !requests.n;
 
   return (
     <section className="today-section" aria-labelledby="today-needs-h">
@@ -388,7 +390,7 @@ function NeedsYou({ b, me }) {
       {(b.serverWarnings ?? []).map((w) => <p key={w} className="banner today-warning" role="alert">{w}</p>)}
       {empty ? (
         // Don't say "All caught up" before the volunteer count is in.
-        prospects.isPending || followups.pending ? <p className="today-empty" aria-hidden="true">&nbsp;</p> : <p className="today-empty">All caught up.</p>
+        prospects.isPending || followups.pending || requests.pending ? <p className="today-empty" aria-hidden="true">&nbsp;</p> : <p className="today-empty">All caught up.</p>
       ) : (
         <ul className="today-rows">
           {shownFlags.map((g) => (
@@ -412,6 +414,9 @@ function NeedsYou({ b, me }) {
           )}
           {followups.n > 0 && (
             <LinkRow to="/follow-ups" state={FROM_TODAY} main={<><strong className="mono">{followups.n}</strong> {plural(followups.n, 'follow-up')}</>} />
+          )}
+          {requests.n > 0 && (
+            <LinkRow to="/requests" state={FROM_TODAY} main={<><strong className="mono">{requests.n}</strong> {plural(requests.n, 'request')} from the doors</>} />
           )}
           {newTexts > 0 && (
             <LinkRow to="/inbox" state={FROM_TODAY} main={<><strong className="mono">{newTexts}</strong> new {plural(newTexts, 'text')}</>} />

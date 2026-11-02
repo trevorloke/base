@@ -51,6 +51,7 @@ import QuickDetails from './QuickDetails.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from './SurveyQuestions.jsx';
 import { VotedRow } from './Voted.jsx';
 import { LIT, OUTCOMES } from './RatingButtons.jsx';
+import RequestAsk from './RequestAsk.jsx';
 import { callsCard, noTexts, textingOn, useTextingStatus } from './TextingCard.jsx';
 import '../pages/map.css';
 
@@ -654,6 +655,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
                 refresh();
               }} />
           )}
+          {!sel.pending && <RequestAsk person={sel} toast={toast} />}
           {pending?.id === sel.id && (
             <div className="door-loglink" role="group" aria-label={`Log this ${pending.channel === 'phone' ? 'call' : 'text'}`}>
               <span className="door-loglink__label">Log this {pending.channel === 'phone' ? 'call' : 'text'}</span>

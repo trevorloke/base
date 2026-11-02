@@ -46,6 +46,7 @@ const ACTION_AREA = {
   bank: 'people', list: 'people',
   pass: 'map',
   vote: 'people',
+  request: 'people',
   learn: 'learn',
 };
 // field.values.set is a person's record; field.ping ("I'm here", from the
@@ -71,6 +72,7 @@ const PATH_AREA = [
   [/^\/api\/persons(\/|$)/, 'people'],
   [/^\/api\/passes(\/|$)/, 'map'],
   [/^\/api\/voted(\/|$)/, 'people'],
+  [/^\/api\/requests(\/|$)/, 'people'],
 ];
 export const areaOfPath = (path) => PATH_AREA.find(([re]) => re.test(path))?.[1] || null;
 
