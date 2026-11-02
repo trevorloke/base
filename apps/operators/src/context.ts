@@ -1,0 +1,52 @@
+import type { BrandContext } from "@meridian/ai";
+import type { Meridian, Principal } from "@meridian/core";
+import type { Actor, Network, Policy } from "@meridian/schema";
+
+/** The operators, as the ledger names them. Posts are created by "studio" (it drafts), alerts by "watch", briefs by "analyst". */
+export const WATCH_ACTOR: Actor = { type: "operator", id: "watch" };
+export const STUDIO_ACTOR: Actor = { type: "operator", id: "studio" };
+export const ANALYST_ACTOR: Actor = { type: "operator", id: "analyst" };
+
+export function principalFor(workspaceId: string, actor: Actor): Principal {
+  return { workspaceId, actor };
+}
+
+export interface ActiveAccount {
+  id: string;
+  network: Network;
+  handle: string;
+}
+
+/** One active account per network, skipping networks a `network_restriction` red line forbids outright. */
+export async function activeAccountsByNetwork(m: Meridian, workspaceId: string, policy: Policy): Promise<ActiveAccount[]> {
+  const restricted = new Set(policy.redLines.flatMap((rl) => (rl.kind === "network_restriction" ? rl.networks : [])));
+  const seen = new Set<string>();
+  const out: ActiveAccount[] = [];
+  for (const a of await m.accounts.list(workspaceId)) {
+    if (a.status !== "active" || restricted.has(a.network) || seen.has(a.network)) continue;
+    seen.add(a.network);
+    out.push({ id: a.id, network: a.network as Network, handle: a.handle });
+  }
+  return out;
+}
+
+/** The brand block every prompt is grounded in: workspace profile, voice, red lines, connected networks. */
+export async function buildBrandContext(m: Meridian, workspaceId: string, opts: { policy?: Policy; networks?: Network[] } = {}): Promise<BrandContext> {
+  const ws = await m.workspaces.get(workspaceId);
+  const policy = opts.policy ?? (await m.policy.getActive(workspaceId));
+  const networks = opts.networks ?? (await activeAccountsByNetwork(m, workspaceId, policy)).map((a) => a.network);
+  return {
+    workspace: { name: ws.name, slug: ws.slug, profile: ws.profile },
+    policy: {
+      redLines: policy.redLines,
+      timezone: policy.timezone,
+      autonomy: policy.autonomy,
+      visibleTextForAi: policy.disclosure.visibleTextForAi,
+      competitors: policy.competitors,
+    },
+    networks,
+  };
+}
+
+export const HOUR_MS = 3_600_000;
+export const DAY_MS = 86_400_000;
