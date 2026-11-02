@@ -6,7 +6,7 @@ import { INSTRUCTIONS, SERVER_NAME, SERVER_VERSION, createServer } from "../src/
 import { TOOL_NAMES } from "../src/tools.ts";
 import { NOW, fakeApi, pendingDetail, radar, textOf } from "./helpers.ts";
 
-const WRITE_TOOLS = new Set(["create_post", "schedule_post", "cancel_post"]);
+const WRITE_TOOLS = new Set(["create_post", "schedule_post", "cancel_post", "create_experiment"]);
 
 let cleanup: (() => Promise<void>) | undefined;
 afterEach(async () => {
@@ -37,7 +37,7 @@ describe("starsign MCP server", () => {
     expect(INSTRUCTIONS).toContain("Red lines are enforced server-side");
   });
 
-  it("lists exactly the documented tools, with read-only annotations on everything but the three write tools", async () => {
+  it("lists exactly the documented tools, with read-only annotations on everything but the write tools", async () => {
     const client = await connect(fakeApi([]));
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual([...TOOL_NAMES].sort());
@@ -95,5 +95,20 @@ describe("starsign MCP server", () => {
     expect(unauthorized.isError).toBe(true);
     expect(textOf({ content: unauthorized.content as unknown[] })).toContain("401 (unauthorized)");
     expect(textOf({ content: unauthorized.content as unknown[] })).toContain("unknown api key");
+  });
+});
+
+describe("new tools", () => {
+  it("formats the calendar and an experiment readout", async () => {
+    const client = await connect(
+      fakeApi([
+        { method: "GET", path: "/v1/calendar", body: [{ post: { id: "pst_1", status: "scheduled", scheduledAt: "2026-11-03T16:00:00.000Z", publishedAt: null, body: "Trail report", experimentArm: "named" }, variants: [{ network: "x" }, { network: "bluesky" }] }] },
+        { method: "GET", path: "/v1/experiments/exp_1", body: { experiment: { id: "exp_1", name: "Hook", hypothesis: "Naming the trail wins", status: "running", arms: [], primaryMetric: "engagements@24h" }, readout: { verdict: "not_enough_data", summary: "Not enough measured posts yet.", arms: [{ key: "named", posts: 2, measured: 1, mean: 40 }] } } },
+      ]),
+    );
+    const cal = await client.callTool({ name: "get_calendar", arguments: { days: 7 } });
+    expect((cal.content as { text: string }[])[0]!.text).toMatch(/2026-11-03 16:00Z · scheduled · x\+bluesky · arm named · "Trail report" · pst_1/);
+    const exp = await client.callTool({ name: "get_experiment", arguments: { experimentId: "exp_1" } });
+    expect((exp.content as { text: string }[])[0]!.text).toMatch(/Verdict: not_enough_data[\s\S]*named: 1\/2 measured, mean 40\.0/);
   });
 });

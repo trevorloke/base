@@ -29,6 +29,12 @@ export const TOOL_NAMES = [
   "list_alerts",
   "get_policy",
   "get_ledger",
+  "get_calendar",
+  "get_sources",
+  "get_discoveries",
+  "list_experiments",
+  "get_experiment",
+  "create_experiment",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -121,6 +127,27 @@ export const inputs = {
     subjectType: z.string().min(1).optional().describe("e.g. post, account, policy, trend_topic"),
     subjectId: z.string().min(1).optional().describe("Id of the subject, e.g. a post id"),
     limit: z.number().int().min(1).max(500).default(50).describe("Max events (default 50)"),
+  },
+  get_calendar: {
+    days: z.number().int().min(1).max(92).default(14).describe("How many days ahead, starting today (default 14)"),
+    pastDays: z.number().int().min(0).max(31).default(0).describe("Also include this many past days"),
+  },
+  get_discoveries: {
+    limit: z.number().int().min(1).max(200).default(50).describe("Max terms (default 50)"),
+  },
+  get_experiment: {
+    experimentId: z.string().min(1).describe("Experiment id, as listed by list_experiments"),
+  },
+  create_experiment: {
+    name: z.string().min(1).max(200).describe("Short name, e.g. 'Name the trail vs generic hook'"),
+    hypothesis: z.string().min(1).max(2000).describe("What you expect and why, in one or two sentences"),
+    arms: z
+      .array(z.object({ key: z.string().regex(/^[a-z0-9_-]{1,32}$/).describe("Short key, lowercase"), description: z.string().max(500) }))
+      .min(2)
+      .max(6)
+      .describe("2-6 arms. Then create posts with experimentId and experimentArm set to one of these keys"),
+    primaryMetric: z.enum(["engagements", "impressions", "likes", "replies", "reposts", "link_clicks", "conversions"]).default("engagements"),
+    offset: z.enum(["24h", "72h", "7d"]).default("24h").describe("When outcomes are compared after publishing"),
   },
 };
 
@@ -282,9 +309,57 @@ export const handlers = {
       const events = await ctx.client.getLedger({ types: args.types, subjectType: args.subjectType, subjectId: args.subjectId, limit: args.limit });
       return ok(fmt.formatLedger(events), events);
     }),
-} satisfies Record<ToolName, (ctx: ToolContext, ...args: never[]) => Promise<CallToolResult>>;
+} satisfies Record<Exclude<ToolName, keyof typeof moreHandlers>, (ctx: ToolContext, ...args: never[]) => Promise<CallToolResult>>;
 
 // ---- registration ----------------------------------------------------------------------------
+
+function line(parts: (string | null | undefined | false)[]): string {
+  return parts.filter(Boolean).join(" · ");
+}
+
+type CalendarRow = { post: { id: string; status: string; scheduledAt: string | null; publishedAt: string | null; body: string; experimentArm?: string | null }; variants: { network: string }[] };
+type ExperimentRow = { id: string; name: string; hypothesis: string; status: string; arms: { key: string; description: string }[]; primaryMetric: string };
+type ReadoutShape = { verdict: string; summary: string; arms: { key: string; posts: number; measured: number; mean: number | null }[] };
+
+const moreHandlers = {
+  get_calendar: (ctx: ToolContext, args: Args<typeof inputs.get_calendar>) =>
+    run(async () => {
+      const start = new Date(ctx.now().getTime() - args.pastDays * DAY_MS);
+      start.setUTCHours(0, 0, 0, 0);
+      const to = new Date(start.getTime() + (args.days + args.pastDays) * DAY_MS);
+      const rows = await ctx.client.request<CalendarRow[]>("GET", "/v1/calendar", { query: { from: start.toISOString(), to: to.toISOString() } });
+      const lines = rows.map((r) =>
+        line([(r.post.publishedAt ?? r.post.scheduledAt ?? "").slice(0, 16).replace("T", " ") + "Z", r.post.status, r.variants.map((v) => v.network).join("+"), r.post.experimentArm ? `arm ${r.post.experimentArm}` : null, `"${r.post.body.slice(0, 70)}"`, r.post.id]),
+      );
+      return ok(rows.length ? `${rows.length} posts between ${start.toISOString().slice(0, 10)} and ${to.toISOString().slice(0, 10)}:\n${lines.join("\n")}` : "Nothing scheduled or published in that window.", rows);
+    }),
+  get_sources: (ctx: ToolContext) =>
+    run(async () => {
+      const rows = await ctx.client.request<{ name: string; configured: boolean; lastRunAt: string | null; lastError: string | null; pointsLast24h: number }[]>("GET", "/v1/sources");
+      return ok(rows.map((s) => line([s.name, s.configured ? "configured" : "not configured", s.lastRunAt ? `last run ${s.lastRunAt}` : "never run", `${s.pointsLast24h} points in 24h`, s.lastError ? `error: ${s.lastError}` : null])).join("\n"), rows);
+    }),
+  get_discoveries: (ctx: ToolContext, args: Args<typeof inputs.get_discoveries>) =>
+    run(async () => {
+      const rows = await ctx.client.request<{ term: string; source: string; value: number | null; region: string; context?: string[] }[]>("GET", "/v1/trends/discoveries", { query: { limit: String(args.limit) } });
+      return ok(rows.length ? `Trending now (raw, not yet topics):\n${rows.map((d) => line([d.term, d.source, d.region, d.value !== null ? `size ${d.value}` : null, d.context?.[0]])).join("\n")}` : "No trending terms collected yet.", rows);
+    }),
+  list_experiments: (ctx: ToolContext) =>
+    run(async () => {
+      const rows = await ctx.client.request<ExperimentRow[]>("GET", "/v1/experiments");
+      return ok(rows.length ? rows.map((e) => line([e.name, e.status, `arms ${e.arms.map((a) => a.key).join("/")}`, e.primaryMetric, e.id])).join("\n") : "No experiments yet.", rows);
+    }),
+  get_experiment: (ctx: ToolContext, args: Args<typeof inputs.get_experiment>) =>
+    run(async () => {
+      const r = await ctx.client.request<{ experiment: ExperimentRow; readout: ReadoutShape }>("GET", `/v1/experiments/${encodeURIComponent(args.experimentId)}`);
+      const arms = r.readout.arms.map((a) => `  - ${a.key}: ${a.measured}/${a.posts} measured${a.mean !== null ? `, mean ${a.mean.toFixed(1)}` : ""}`).join("\n");
+      return ok(`${r.experiment.name} (${r.experiment.status})\nHypothesis: ${r.experiment.hypothesis}\nVerdict: ${r.readout.verdict}. ${r.readout.summary}\n${arms}`, r);
+    }),
+  create_experiment: (ctx: ToolContext, args: Args<typeof inputs.create_experiment>) =>
+    run(async () => {
+      const e = await ctx.client.request<ExperimentRow>("POST", "/v1/experiments", { body: args });
+      return ok(`Experiment "${e.name}" is running (${e.id}). Create posts with experimentId "${e.id}" and experimentArm one of: ${e.arms.map((a) => a.key).join(", ")}. They still go through the approval queue.`, e);
+    }),
+};
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
 const WRITES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
@@ -491,4 +566,11 @@ export function registerTools(server: McpServer, client: StarsignClient, opts: {
     },
     (args) => handlers.get_ledger(ctx, args),
   );
+
+  server.registerTool("get_calendar", { title: "Calendar", description: "Posts scheduled, waiting on approval or already out, by time. Use it to avoid crowding a day and to see what is coming.", inputSchema: inputs.get_calendar, annotations: READ_ONLY }, (args) => moreHandlers.get_calendar(ctx, args));
+  server.registerTool("get_sources", { title: "Trend sources", description: "Which trend sources feed the radar (Google Trends, Wikipedia, Hacker News, Bluesky, YouTube, the brand's own feed), whether each is configured and healthy.", annotations: READ_ONLY }, () => moreHandlers.get_sources(ctx));
+  server.registerTool("get_discoveries", { title: "Trending now", description: "Raw terms the sources say are trending right now, before the Scout turns relevant ones into topics. Useful to spot something the radar does not track yet.", inputSchema: inputs.get_discoveries, annotations: READ_ONLY }, (args) => moreHandlers.get_discoveries(ctx, args));
+  server.registerTool("list_experiments", { title: "Experiments", description: "Running and concluded experiments: name, arms, metric.", annotations: READ_ONLY }, () => moreHandlers.list_experiments(ctx));
+  server.registerTool("get_experiment", { title: "Experiment readout", description: "One experiment with its readout: posts and measured outcomes per arm, lift with an 80% interval, and a verdict that names a winner only when the evidence clears.", inputSchema: inputs.get_experiment, annotations: READ_ONLY }, (args) => moreHandlers.get_experiment(ctx, args));
+  server.registerTool("create_experiment", { title: "Start an experiment", description: "Start an experiment with 2-6 arms. Then create posts with experimentId and experimentArm. Concluding happens in the app.", inputSchema: inputs.create_experiment, annotations: { ...WRITES, idempotentHint: false } }, (args) => moreHandlers.create_experiment(ctx, args));
 }
