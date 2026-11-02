@@ -37,6 +37,7 @@ import { ratingWho, useScale } from '../components/RatingButtons.jsx';
 import { useFollowupCount } from '../components/LaddersCount.js';
 import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
+import { turfNames } from '../components/ShiftTurfs.jsx';
 import './today.css';
 
 // The managers' dashboard (its map and chart load with it, not with Today).
@@ -495,18 +496,20 @@ function useMyNextShift(me) {
 // One line: the shift they're booked on — or, if none, the next shift that
 // still needs people ("5 spots left" → that shift, where "Join" is). Never
 // someone else's shift dressed up as theirs.
-function VolunteerShiftRow({ shifts, me }) {
+function VolunteerShiftRow({ shifts, me, turfs }) {
   const { ready, next } = useMyNextShift(me);
   if (!ready) return <li className="today-need today-row--wait" aria-hidden="true" />;
+  // The shift's walk lists (brief.shiftTurfs): "Saturday canvass · Newton block".
+  const names = (s) => turfNames(turfs?.[s.id] || []);
   if (next) {
-    return <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} />;
+    return <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} extra={names(next) || undefined} />;
   }
   const open = shifts.find((s) => !s.capacity || (Number(s.filled) || 0) < s.capacity);
   if (!open) return <LinkRow to="/shifts" main={<span className="muted">No open shifts</span>} />;
   const left = open.capacity ? open.capacity - (Number(open.filled) || 0) : 0;
   return (
     <WhenRow to={`/shifts/${open.id}`} kicker="Open shift" title={open.title} when={open.starts_at}
-      extra={left ? spotsLeft(left) : null} />
+      extra={[left ? spotsLeft(left) : null, names(open)].filter(Boolean).join(' · ') || null} />
   );
 }
 
@@ -690,7 +693,7 @@ function VolunteerToday({ b, me }) {
       )}
 
       <ul className="today-rows today-next">
-        <VolunteerShiftRow shifts={b.shifts ?? []} me={me} />
+        <VolunteerShiftRow shifts={b.shifts ?? []} me={me} turfs={b.shiftTurfs} />
         {signs > 0 && (
           <LinkRow to="/signs" main={<><strong className="mono">{signs}</strong> {plural(signs, 'sign')} to put up</>} />
         )}

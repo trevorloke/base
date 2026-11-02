@@ -32,6 +32,15 @@
 // the signal is back; until then the screen says "Not sent yet", never
 // "You're on", with "Take back" on a "Count me in" still waiting.
 //
+// Turfs (components/ShiftTurfs.jsx, server/ext/shiftturfs): a shift can
+// carry the walk lists it is for — picked under the new shift's "More
+// details", or "Change turfs" on the shift (desk). A row reads "Saturday
+// canvass · Newton block, 72 Ave east"; the shift says "Walk lists: …" and,
+// to a volunteer, "Count me in puts them on your phone" (the server puts
+// whoever joins on those turfs, and Can't make it takes back only what the
+// shift gave). An assignee with no app sign-in can't get them on a phone:
+// their row says so.
+//
 // Desk: "Week · List" under the title. Week (the default) is the slot board
 // (ShiftsBoard.jsx) — drag people into each day's morning, afternoon or
 // evening. The choice is remembered on this device.
@@ -40,7 +49,7 @@
 //   <PersonPicker onPick={(person) => …} />   type-ahead over /api/persons?q= (Signs uses it)
 //   <FillBar filled={n} capacity={m} />       filled / capacity meter
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES, SHIFT_STATUSES } from '@starbase/shared/canvass';
 import { apiGet, action } from '../api.js';
@@ -48,6 +57,7 @@ import { queueAction, undoQueued, useOutbox } from '../offline.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { NeedsSignal, NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import ShiftsBoard from './ShiftsBoard.jsx';
+import { TurfPicker, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import './shifts.css';
 
 // The desk's last choice of List or Week, on this device only.
@@ -427,6 +437,7 @@ function ShiftForm({ onClose }) {
   const [f, setF] = useState({
     title: '', role: '', location: '', starts: '', ends: '', capacity: '', link: '', instructions: '',
   });
+  const [turfIds, setTurfIds] = useState([]);
   const [more, setMore] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -457,9 +468,20 @@ function ShiftForm({ onClose }) {
         link: normalizeLink(f.link),
         capacity,
       });
+      // Its turfs, once it exists. Should that fail, the shift is made: it
+      // opens with the picked turfs waiting under "Change turfs".
+      let turfError = null;
+      if (turfIds.length) {
+        try {
+          await action('shift.turfs.set', { shift_id: res.shift.id, turf_ids: turfIds });
+        } catch (err) {
+          turfError = err.message;
+        }
+        queryClient.invalidateQueries({ queryKey: ['shiftturfs'] });
+      }
       queryClient.invalidateQueries({ queryKey: ['shifts'] });
       queryClient.invalidateQueries({ queryKey: ['brief'] });
-      navigate(`/shifts/${res.shift.id}`);
+      navigate(`/shifts/${res.shift.id}`, turfError ? { state: { turfIds, turfError } } : undefined);
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -520,6 +542,11 @@ function ShiftForm({ onClose }) {
               autoCorrect="off" spellCheck={false} placeholder="Turf map, sign-up doc, call script"
               value={f.link} onChange={set('link')} />
           </div>
+          <div className="field">
+            <label htmlFor="shift-turfs">Turfs</label>
+            <TurfPicker id="shift-turfs" value={turfIds} onChange={setTurfIds} disabled={busy} />
+            <span className="ops-meta">Anyone who counts themselves in gets these walk lists</span>
+          </div>
         </div>
       )}
 
@@ -558,13 +585,14 @@ function useLegacyMyShifts(me, enabled) {
 }
 
 // ── List ──
-function ShiftRow({ s, now, past = false, mine = false, waiting = false }) {
+function ShiftRow({ s, now, past = false, mine = false, waiting = false, turfs }) {
   const full = s.capacity && Number(s.filled) >= s.capacity;
+  const names = turfNames(turfs);
   return (
     <li className="ops-item" data-tone={past ? 'past' : undefined}>
       <Link to={`/shifts/${s.id}`} className="ops-row">
         <span className="ops-row__main">
-          <span className="ops-row__name">{s.title}</span>
+          <span className="ops-row__name">{s.title}{names && <span className="st-row-turfs"> · {names}</span>}</span>
           <span className="ops-row__sub">{whenLine(s, now)}</span>
         </span>
         <span className="ops-row__end">
@@ -598,6 +626,7 @@ function ShiftList({ canDesk, me }) {
   const [showPast, setShowPast] = useState(false);
   const shifts = useQuery({ queryKey: ['shifts'], queryFn: () => apiGet('/shifts'), ...phoneCopy(me, 'shifts') });
   useKeepCopy(me, 'shifts', shifts);
+  const { byShift } = useShiftTurfs(me);
   const listCopy = showingCopy(shifts);
   const outbox = useOutbox();
   const all = shifts.data?.shifts ?? [];
@@ -645,12 +674,12 @@ function ShiftList({ canDesk, me }) {
       {yours.length > 0 && (
         <>
           <span className="eyebrow ops-label">Your shifts</span>
-          <ul className="ops-rows">{yours.map((s) => <ShiftRow key={s.id} s={s} now={now} mine waiting={!!waitingSelf(outbox.items, s.id)} />)}</ul>
+          <ul className="ops-rows">{yours.map((s) => <ShiftRow key={s.id} s={s} now={now} mine waiting={!!waitingSelf(outbox.items, s.id)} turfs={byShift[s.id]} />)}</ul>
           {others.length > 0 && <span className="eyebrow ops-label">Open shifts</span>}
         </>
       )}
       {others.length > 0 && (
-        <ul className="ops-rows">{others.map((s) => <ShiftRow key={s.id} s={s} now={now} waiting={!!waitingSelf(outbox.items, s.id)} />)}</ul>
+        <ul className="ops-rows">{others.map((s) => <ShiftRow key={s.id} s={s} now={now} waiting={!!waitingSelf(outbox.items, s.id)} turfs={byShift[s.id]} />)}</ul>
       )}
 
       {past.length > 0 && (
@@ -661,7 +690,7 @@ function ShiftList({ canDesk, me }) {
           </button>
           {showPast && (
             <ul id="ops-past" className="ops-rows ops-more-body">
-              {past.map((s) => <ShiftRow key={s.id} s={s} now={now} past mine={isMineShift(s)} />)}
+              {past.map((s) => <ShiftRow key={s.id} s={s} now={now} past mine={isMineShift(s)} turfs={byShift[s.id]} />)}
             </ul>
           )}
         </div>
@@ -673,7 +702,7 @@ function ShiftList({ canDesk, me }) {
 }
 
 // ── Detail: one person on the shift; tap to open ──
-function AssigneeRow({ a, open, onToggle, canDesk, busy, onStatus, onRemove }) {
+function AssigneeRow({ a, open, onToggle, canDesk, busy, onStatus, onRemove, noSignIn = false }) {
   const [confirm, setConfirm] = useState(false);
   const bodyId = `as-${a.assignment_id}`;
   const tone = ASSIGN_TONE[a.status];
@@ -681,7 +710,11 @@ function AssigneeRow({ a, open, onToggle, canDesk, busy, onStatus, onRemove }) {
     <li className="ops-item" data-open={open ? '' : undefined}>
       <button type="button" className="ops-row" aria-expanded={open} aria-controls={bodyId}
         onClick={() => { setConfirm(false); onToggle(); }}>
-        <span className="ops-row__main"><span className="ops-row__name">{a.name}</span></span>
+        <span className="ops-row__main">
+          <span className="ops-row__name">{a.name}</span>
+          {/* The shift's walk lists reach a phone through an app sign-in. */}
+          {noSignIn && <span className="st-signin">No app sign-in — add them to the turf on the map</span>}
+        </span>
         <span className="ops-row__end">
           <span className={`chip${tone ? ` chip-${tone}` : ''}`}>{statusLabel(a.status)}</span>
         </span>
@@ -786,12 +819,37 @@ function ShiftDetail({ id, canDesk, me }) {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState(null);
   const [leaving, setLeaving] = useState(false); // "Can't make it? Yes · No"
+  // The shift's turfs: every role reads the kept list; the desk also learns
+  // who on it has no app sign-in (their phone can't get the walk lists).
+  const { byShift } = useShiftTurfs(me);
+  const deskTurfs = useQuery({
+    queryKey: ['shiftturfs', id],
+    queryFn: () => apiGet(`/shiftturfs/${id}`),
+    enabled: canDesk && validId,
+    meta: { side: true },
+  });
+  // "Change turfs": null while closed. A new shift whose turfs didn't save
+  // opens with them waiting here (ShiftForm).
+  const location = useLocation();
+  const navigate = useNavigate();
+  const handed = location.state;
+  const [editTurfs, setEditTurfs] = useState(() => (Array.isArray(handed?.turfIds) ? handed.turfIds : null));
+  const [turfBusy, setTurfBusy] = useState(false);
+  const [turfError, setTurfError] = useState(() => (handed?.turfError ? `Turfs not saved: ${handed.turfError}` : null));
+  const [turfSaved, setTurfSaved] = useState(false);
+  // Read once: a reload doesn't bring it back.
+  useEffect(() => {
+    if (handed?.turfIds) navigate(location.pathname, { replace: true, state: null });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['shift', id] });
     queryClient.invalidateQueries({ queryKey: ['shifts'] });
     queryClient.invalidateQueries({ queryKey: ['brief'] });
     queryClient.invalidateQueries({ queryKey: ['person'] });
+    // Who's on it decides who has its walk lists.
+    queryClient.invalidateQueries({ queryKey: ['shiftturfs'] });
+    queryClient.invalidateQueries({ queryKey: ['turfs'] });
   };
   // Volunteer books or drops their own spot (shift.join / shift.leave),
   // through the outbox: no signal, it waits on the phone ("Not sent yet").
@@ -873,6 +931,27 @@ function ShiftDetail({ id, canDesk, me }) {
   // Desk: the yellow button is the job at hand. Open spots → fill them
   // ("Add volunteer"); full → tell the crew ("Notify everyone").
   const primary = over ? null : full ? 'notify' : 'add';
+  const turfs = (canDesk ? deskTurfs.data?.turfs : null) ?? byShift[shift.id] ?? [];
+  const noSignIn = new Set(turfs.length ? (deskTurfs.data?.no_sign_in ?? []) : []);
+  const saveTurfs = async () => {
+    setTurfError(null);
+    setTurfBusy(true);
+    try {
+      await action('shift.turfs.set', { shift_id: shift.id, turf_ids: editTurfs });
+      setEditTurfs(null);
+      setTurfSaved(true);
+      refresh();
+    } catch (e) {
+      setTurfError(e.message);
+    } finally {
+      setTurfBusy(false);
+    }
+  };
+  // One or many: "Walk list: Newton block" / "Walk lists: Newton block, 72 Ave east".
+  const them = turfs.length === 1 ? 'it' : 'them';
+  const walkHint = canDesk || over ? null
+    : onIt ? `${turfs.length === 1 ? 'it’s' : 'they’re'} on your phone`
+      : !full && canJoin ? `Count me in puts ${them} on your phone` : null;
 
   const setStatus = async (a, status) => {
     setError(null);
@@ -1051,6 +1130,43 @@ function ShiftDetail({ id, canDesk, me }) {
           : <span>{shift.link}</span>)}
       </div>
 
+      {(turfs.length > 0 || canDesk) && (
+        <section className="st-walk" aria-label="Walk lists">
+          {turfs.length > 0 && (
+            <p className="st-walk__line">
+              <strong>{turfs.length === 1 ? 'Walk list' : 'Walk lists'}:</strong> {turfNames(turfs)}
+              {walkHint && <span className="st-walk__hint"> — {walkHint}</span>}
+            </p>
+          )}
+          {canDesk && (editTurfs === null ? (
+            <div className="ops-actions">
+              <button type="button" className="btn btn-quiet ops-tap" disabled={!online}
+                onClick={() => { setEditTurfs(turfs.map((t) => t.id)); setTurfSaved(false); setTurfError(null); }}>
+                {turfs.length ? 'Change turfs' : 'Add turfs'}
+              </button>
+              {!online && <NeedsSignal>Needs signal</NeedsSignal>}
+              {turfSaved && <span className="ops-done" role="status">✓ Saved</span>}
+            </div>
+          ) : (
+            <div className="st-walk__edit">
+              <TurfPicker id="shift-turfs-edit" value={editTurfs} onChange={setEditTurfs} disabled={turfBusy} />
+              <span className="ops-meta">Anyone who counts themselves in gets these walk lists</span>
+              <div className="ops-actions">
+                <button type="button" className="btn ops-solid ops-tap" disabled={turfBusy || !online} onClick={saveTurfs}>
+                  {turfBusy ? 'Saving…' : 'Save'}
+                </button>
+                <button type="button" className="btn btn-quiet ops-tap" disabled={turfBusy}
+                  onClick={() => { setEditTurfs(null); setTurfError(null); }}>
+                  Cancel
+                </button>
+              </div>
+              {!online && <NeedsSignal>Needs signal</NeedsSignal>}
+            </div>
+          ))}
+          {turfError && <p className="error" role="alert">{turfError}</p>}
+        </section>
+      )}
+
       <div className="ops-spots" aria-label={shift.capacity ? `${active.length} of ${shift.capacity} spots filled` : `${active.length} going`}>
         <span className="n">{spotsText(active.length, shift.capacity)}</span>
         <SpotsBar filled={active.length} capacity={shift.capacity} />
@@ -1126,6 +1242,7 @@ function ShiftDetail({ id, canDesk, me }) {
               busy={rowBusy === a.assignment_id}
               onStatus={(status) => setStatus(a, status)}
               onRemove={() => unassign(a)}
+              noSignIn={noSignIn.has(a.assignment_id)}
             />
           ))}
         </ul>
