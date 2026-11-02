@@ -1,5 +1,6 @@
 // Reports — the campaign in numbers, each table downloadable as CSV, and
 // the exports: any table as a spreadsheet, or everything as JSON.
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
@@ -50,6 +51,7 @@ export default function Reports() {
           <span role="listitem"><strong className="mono">{t.newsletter.subscribed}</strong> subscribers <span className="muted">· {t.newsletter.unsubscribed} left</span></span>
         </div>
       )}
+      <p className="rp-links"><Link className="btn ops-tap" to="/field-report">Field, by turf →</Link></p>
       {q.data && Object.entries(q.data.reports).map(([name, r]) => <Report key={name} name={name} r={r} />)}
       <section className="rp-sec" aria-labelledby="rp-exports">
         <div className="rp-sec__head"><h2 id="rp-exports">Exports</h2></div>

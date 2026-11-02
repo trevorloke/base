@@ -88,6 +88,7 @@ function planFor(key, me) {
     // ledger and receipts waiting for an address, as Money shows them.
     case 'records': return desk && k1 === 'gift' ? q('gifts', 'session') : null;
     case 'receipts': return desk && k1 === 'needs' && key.length === 2 ? q('receipts:needs', 'session') : null;
+    case 'fieldReport': return key.length === 2 && typeof k1 === 'string' ? q(`fieldReport:${k1}`, 'local') : null;
     default: return null;
   }
 }
@@ -258,7 +259,7 @@ export function watchKeptCopies(queryClient) {
 // meta: { side: true } on that useQuery: its time isn't what the screen
 // shows. Only Today and Money draw the brief (offline-copies.test.js checks).
 const SHOWN = new Set(['brief', 'persons', 'person', 'signs', 'shifts', 'shift', 'records',
-  'receipts', 'doors', 'turf', 'turfs']);
+  'receipts', 'doors', 'turf', 'turfs', 'fieldReport']);
 const shown = (key) => SHOWN.has(key[0]) || (key[0] === 'texting' && (key[1] === 'inbox' || key[1] === 'thread'));
 // Watched by a screen that draws it (not only by side reads).
 const drawn = (q) => q.observers.some((o) => !o.options?.meta?.side);

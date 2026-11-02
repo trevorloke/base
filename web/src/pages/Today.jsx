@@ -37,6 +37,7 @@ import { ratingWho, useScale } from '../components/RatingButtons.jsx';
 import { useFollowupCount } from '../components/LaddersCount.js';
 import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
+import { MineAllTime } from '../components/FieldReportBits.jsx';
 import './today.css';
 
 // The managers' dashboard (its map and chart load with it, not with Today).
@@ -708,6 +709,7 @@ function VolunteerToday({ b, me }) {
         <MineLine you={mine.calls} team={f.calls} noun="call" small />
         <MineLine you={mine.texts} team={f.texts} noun="text" small />
         {Number(b.inPerson?.week) > 0 && <MineLine you={b.inPerson.mine} team={b.inPerson.week} noun="in-person talk" small />}
+        <MineAllTime all={f.mine_all} />
         {/* Always here, signs waiting or not: the sign crew's way to Add a sign. */}
         <ul className="today-rows">
           <LinkRow to="/signs" main="Signs" />
