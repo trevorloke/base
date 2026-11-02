@@ -1,9 +1,12 @@
 // A shift's turfs — the walk lists it is for (server/ext/shiftturfs).
 //
-//   useShiftTurfs(me)          → { byShift: { [shift_id]: [{ id, name, color }] }, ready }
+//   useShiftTurfs(me, { side })  → { byShift: { [shift_id]: [{ id, name, color }] }, ready }
 //                                GET /shiftturfs, any role; kept on the phone
 //                                (OfflineCache) so the Shifts list and a shift
-//                                opened with no signal still name their turfs
+//                                opened with no signal still name their turfs.
+//                                side: the screen only reads a line of it (a
+//                                shift, the week board) — its time isn't the
+//                                screen's (KeptCopies.js useKeptTime)
 //   <TurfPicker value onChange/>  the campaign's turfs as chips to tick (desk
 //                                only: it reads GET /turfs)
 //   <TurfChips turfs/>         small chips, one per turf, in the turf's colour
@@ -17,12 +20,13 @@ import './shiftturfs.css';
 export const turfNames = (list) => (Array.isArray(list) ? list.map((t) => t.name).filter(Boolean).join(', ') : '');
 
 const NO_TURFS = {};
-export function useShiftTurfs(me) {
+export function useShiftTurfs(me, { side = false } = {}) {
   const q = useQuery({
     queryKey: ['shiftturfs'],
     queryFn: () => apiGet('/shiftturfs'),
     staleTime: 60_000,
     ...phoneCopy(me, 'shiftturfs'),
+    ...(side ? { meta: { side: true } } : {}),
   });
   useKeepCopy(me, 'shiftturfs', q);
   return { byShift: q.data?.shifts ?? NO_TURFS, ready: q.data !== undefined };

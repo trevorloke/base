@@ -821,7 +821,7 @@ function ShiftDetail({ id, canDesk, me }) {
   const [leaving, setLeaving] = useState(false); // "Can't make it? Yes · No"
   // The shift's turfs: every role reads the kept list; the desk also learns
   // who on it has no app sign-in (their phone can't get the walk lists).
-  const { byShift } = useShiftTurfs(me);
+  const { byShift } = useShiftTurfs(me, { side: true });
   const deskTurfs = useQuery({
     queryKey: ['shiftturfs', id],
     queryFn: () => apiGet(`/shiftturfs/${id}`),

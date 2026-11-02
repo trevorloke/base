@@ -114,7 +114,7 @@ export default function ShiftsBoard({ me }) {
     queryFn: () => apiGet(`/shifts/board?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
     placeholderData: keepPreviousData,
   });
-  const { byShift: turfsByShift } = useShiftTurfs(me);
+  const { byShift: turfsByShift } = useShiftTurfs(me, { side: true });
 
   const goWeek = (m) => setParams((cur) => {
     const next = new URLSearchParams(cur);
