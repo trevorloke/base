@@ -17,6 +17,9 @@
 // the person on it. Shifts can't be edited once made, so the board never
 // makes one without the organizer seeing its name and place first.
 //
+// A shift that carries turfs shows them as small chips under its time
+// (components/ShiftTurfs.jsx); "Change turfs" is on the shift's screen.
+//
 // Writes are the same as the shift screen's: shift.create / shift.assign /
 // shift.unassign — capacity, duplicates and permissions are the server's;
 // nothing is emailed or texted until someone presses Notify on the shift.
@@ -33,6 +36,7 @@ import {
 } from '@starbase/shared/dayparts';
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
+import { TurfChips, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import './shifts-board.css';
 
 const roleLabel = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label ?? code;
@@ -110,6 +114,7 @@ export default function ShiftsBoard({ me }) {
     queryFn: () => apiGet(`/shifts/board?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
     placeholderData: keepPreviousData,
   });
+  const { byShift: turfsByShift } = useShiftTurfs(me, { side: true });
 
   const goWeek = (m) => setParams((cur) => {
     const next = new URLSearchParams(cur);
@@ -493,6 +498,7 @@ export default function ShiftsBoard({ me }) {
             <span className="sb-cap" data-full={full ? '' : undefined}>{s.capacity ? `${filled} / ${s.capacity}` : `${filled} on`}</span>
           </span>
         </button>
+        <TurfChips turfs={turfsByShift[s.id]} label={`Turfs for ${s.title}`} card />
         {chips.length > 0 && (
           <ul className="sb-chips" aria-label={`On ${s.title}`}>
             {chips.map((a) => {

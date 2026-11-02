@@ -1,0 +1,66 @@
+/* Shifts on a turf (components/ShiftTurfs.jsx) — the turf picker on a
+   shift, a shift's turf chips and its walk-list line. Classes are st-*.
+   Picked turfs get an ink ring and a check, never yellow: that is the
+   screen's one main button. Every tap target is at least 48px. */
+.st-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-3);
+}
+
+/* ── Picker ── */
+.st-pick { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.st-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 48px;
+  max-width: 100%;
+  padding: 0 14px;
+  border: var(--border-2);
+  border-radius: 999px;
+  background: var(--paper-0);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.st-opt:hover { background: var(--paper-1); }
+.st-opt[aria-pressed='true'] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.st-opt:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.st-opt:disabled { opacity: 0.6; cursor: default; }
+.st-opt__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-opt__check { font-size: 14px; }
+.st-note { margin: 0; color: var(--text-3); font-size: 14px; }
+
+/* ── Chips (the week board's shift cards) ── */
+.st-chips { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.st-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--paper-1);
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.st-chips--card { margin: 0; padding: 0 var(--s-2) var(--s-1); }
+.st-chip .st-dot { width: 8px; height: 8px; }
+.st-chip__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── A shift's walk lists (the shift screen, a row on the list) ── */
+.st-row-turfs { font-weight: 400; color: var(--text-2); }
+.st-walk { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-4); }
+.st-walk__line { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.st-walk__line strong { font-weight: 600; }
+.st-walk__hint { color: var(--text-2); }
+.st-walk__edit { display: flex; flex-direction: column; gap: var(--s-3); }
+.st-signin { display: block; overflow-wrap: anywhere; } /* on .ops-row__sub: the row's own small line */

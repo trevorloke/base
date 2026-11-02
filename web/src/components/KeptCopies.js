@@ -91,6 +91,7 @@ function planFor(key, me) {
     // Election day on or off (ext/voted): the field's "Voted ✓" still shows on a phone that reloads with no signal.
     case 'voted': return k1 === 'status' && key.length === 2 ? { name: 'voted:status', tier: 'local', field: true } : null;
     case 'fieldReport': return key.length === 2 && typeof k1 === 'string' ? q(`fieldReport:${k1}`, 'local') : null;
+    case 'shiftturfs': return key.length === 1 ? { name: 'shiftturfs', tier: 'local', field: true } : null;
     default: return null;
   }
 }
@@ -261,7 +262,7 @@ export function watchKeptCopies(queryClient) {
 // meta: { side: true } on that useQuery: its time isn't what the screen
 // shows. Only Today and Money draw the brief (offline-copies.test.js checks).
 const SHOWN = new Set(['brief', 'persons', 'person', 'signs', 'shifts', 'shift', 'records',
-  'receipts', 'doors', 'turf', 'turfs', 'fieldReport']);
+  'receipts', 'doors', 'turf', 'turfs', 'fieldReport', 'shiftturfs']);
 const shown = (key) => SHOWN.has(key[0]) || (key[0] === 'texting' && (key[1] === 'inbox' || key[1] === 'thread'));
 // Watched by a screen that draws it (not only by side reads).
 const drawn = (q) => q.observers.some((o) => !o.options?.meta?.side);
