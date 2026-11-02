@@ -105,6 +105,7 @@ function xStatusOf(err: unknown): number | undefined {
  * core calls refreshAuth() explicitly.
  */
 export class XConnector implements Connector {
+  readonly connectMethod = "oauth" as const;
   readonly name = "x";
   readonly networks: readonly Network[] = ["x"];
   /** Tweet objects returned by read endpoints since construction. */

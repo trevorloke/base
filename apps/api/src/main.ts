@@ -6,8 +6,8 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { createApp, VERSION } from "./app.ts";
 import { boot } from "./boot.ts";
 
-const { m, handle, close } = await boot();
-const app = createApp(m, { devWorkspace: process.env.STARSIGN_DEV_WORKSPACE });
+const { m, handle, close, gateway, sources } = await boot();
+const app = createApp(m, { devWorkspace: process.env.STARSIGN_DEV_WORKSPACE, gateway, sources });
 
 // Serve the built web app from the same process when it exists (single-container deploys).
 const here = dirname(fileURLToPath(import.meta.url));

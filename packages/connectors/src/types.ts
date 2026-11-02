@@ -53,9 +53,23 @@ export interface AuthRefresh {
   auth: Record<string, unknown>;
 }
 
+/** How a person connects an account through this connector. */
+export type ConnectMethod = "app_password" | "oauth" | "api_key" | "none";
+
+/** Who the credentials belong to, as the network reports it. */
+export interface AccountIdentity {
+  externalId: string;
+  handle: string;
+  displayName: string | null;
+}
+
 export interface Connector {
   readonly name: string;
   readonly networks: readonly Network[];
+  /** How accounts are connected. Defaults to "none" (only programmatic). */
+  readonly connectMethod?: ConnectMethod;
+  /** Verify credentials and say whose they are. Used when a person connects an account. */
+  describeAccount?(auth: Record<string, unknown>): Promise<AccountIdentity>;
   capabilities(network: Network): ConnectorCapabilities;
   /** Pre-flight checks beyond generic limits (e.g. link cards). Return [] when fine. */
   validate?(account: AccountRef, input: PublishInput): ValidationIssue[];

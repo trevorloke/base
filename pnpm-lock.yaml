@@ -26,6 +26,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.17(hono@4.13.16)
+      '@starsign/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@starsign/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
@@ -41,6 +44,9 @@ importers:
       '@starsign/schema':
         specifier: workspace:*
         version: link:../../packages/schema
+      '@starsign/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
       '@starsign/workers':
         specifier: workspace:*
         version: link:../workers
@@ -60,12 +66,12 @@ importers:
 
   apps/mcp:
     dependencies:
-      '@starsign/schema':
-        specifier: workspace:*
-        version: link:../../packages/schema
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.32.2(zod@4.6.7)
+      '@starsign/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       zod:
         specifier: ^4.0.0
         version: 4.6.7
@@ -91,6 +97,9 @@ importers:
       '@starsign/schema':
         specifier: workspace:*
         version: link:../../packages/schema
+      '@starsign/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
       zod:
         specifier: ^4.0.0
         version: 4.6.7
@@ -144,6 +153,9 @@ importers:
       '@starsign/schema':
         specifier: workspace:*
         version: link:../../packages/schema
+      '@starsign/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
       bullmq:
         specifier: ^5.30.0
         version: 5.81.5
@@ -199,6 +211,9 @@ importers:
       '@starsign/schema':
         specifier: workspace:*
         version: link:../schema
+      '@starsign/sources':
+        specifier: workspace:*
+        version: link:../sources
       drizzle-orm:
         specifier: ^0.45.0
         version: 0.45.4(@electric-sql/pglite@0.4.6)(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
@@ -257,6 +272,15 @@ importers:
 
   packages/schema:
     dependencies:
+      zod:
+        specifier: ^4.0.0
+        version: 4.6.7
+
+  packages/sources:
+    dependencies:
+      '@starsign/schema':
+        specifier: workspace:*
+        version: link:../schema
       zod:
         specifier: ^4.0.0
         version: 4.6.7

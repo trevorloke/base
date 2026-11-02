@@ -10,6 +10,8 @@ import { PostService } from "./services/posts.ts";
 import { PublishingService } from "./services/publishing.ts";
 import { TrendService } from "./services/trends.ts";
 import { WorkspaceService } from "./services/workspaces.ts";
+import { BrandService } from "./services/brand.ts";
+import { SourcesService } from "./services/sources.ts";
 
 /** The one object every front door (API, MCP, operators, workers) talks to. */
 export class Starsign {
@@ -25,6 +27,8 @@ export class Starsign {
   readonly trends: TrendService;
   readonly ops: OpsService;
   readonly exports: ExportService;
+  readonly sources: SourcesService;
+  readonly brand: BrandService;
 
   constructor(deps: CoreDeps) {
     this.ctx = new CoreContext(deps);
@@ -39,6 +43,8 @@ export class Starsign {
     this.trends = new TrendService(this.ctx);
     this.ops = new OpsService(this.ctx);
     this.exports = new ExportService(this.ctx);
+    this.sources = new SourcesService(this.ctx, this.trends);
+    this.brand = new BrandService(this.ctx, this.workspaces, this.policy, this.accounts);
   }
 
   get events() {

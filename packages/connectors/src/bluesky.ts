@@ -110,6 +110,23 @@ export function mapBlueskyError(err: unknown, phase: "login" | "call" = "call"):
  * resumes from the last segment that made it onto the network instead of re-posting the root.
  */
 export class BlueskyConnector implements Connector {
+  readonly connectMethod = "app_password" as const;
+
+  /** Log in with the app password and read the account's DID and handle. Throws ConnectorError("auth") on bad credentials. */
+  async describeAccount(rawAuth: Record<string, unknown>) {
+    const parsed = BlueskyAuth.safeParse(rawAuth);
+    if (!parsed.success) throw new ConnectorError("bluesky: identifier and appPassword are required", "auth", false, parsed.error);
+    const agent = this.agentFactory(parsed.data.service);
+    try {
+      await agent.login({ identifier: parsed.data.identifier, password: parsed.data.appPassword });
+    } catch (err) {
+      throw mapBlueskyError(err, "login");
+    }
+    const session = agent.session;
+    if (!session?.did) throw new ConnectorError("bluesky: login succeeded but no session was returned", "unknown", true);
+    return { externalId: session.did, handle: session.handle, displayName: null };
+  }
+
   readonly name = "bluesky";
   readonly networks: readonly Network[] = ["bluesky"];
 

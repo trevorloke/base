@@ -1,7 +1,7 @@
 import { Queue, Worker } from "bullmq";
 import type { Redis } from "ioredis";
 import { RetryablePublishError, type Starsign } from "@starsign/core";
-import { captureOutcomes, ingestAll, refreshForecasts } from "./jobs.ts";
+import { captureOutcomes, ingestAll, pullSources, refreshForecasts } from "./jobs.ts";
 import { connectionFor, MAINTENANCE_QUEUE, PUBLISH_QUEUE } from "./queues.ts";
 
 export interface WorkerHandles {
@@ -14,7 +14,7 @@ export interface WorkerHandles {
  * Start the publish worker and the maintenance schedules.
  * Publishing retries on RetryablePublishError only; everything else is final and recorded in the ledger.
  */
-export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEveryMs?: number; outcomesEveryMs?: number; forecastEveryMs?: number } = {}): Promise<WorkerHandles> {
+export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEveryMs?: number; outcomesEveryMs?: number; forecastEveryMs?: number; sourcesEveryMs?: number } = {}): Promise<WorkerHandles> {
   const connection = connectionFor(redis);
 
   const publish = new Worker(
@@ -40,6 +40,8 @@ export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEver
           return ingestAll(m);
         case "outcomes":
           return captureOutcomes(m);
+        case "sources":
+          return pullSources(m);
         case "forecasts":
           return { topics: await refreshForecasts(m) };
         default:
@@ -52,6 +54,7 @@ export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEver
   const mq = new Queue(MAINTENANCE_QUEUE, { connection });
   await mq.upsertJobScheduler("ingest", { every: opts.ingestEveryMs ?? 5 * 60_000 }, { name: "ingest" });
   await mq.upsertJobScheduler("outcomes", { every: opts.outcomesEveryMs ?? 10 * 60_000 }, { name: "outcomes" });
+  await mq.upsertJobScheduler("sources", { every: opts.sourcesEveryMs ?? 60 * 60_000 }, { name: "sources" });
   await mq.upsertJobScheduler("forecasts", { every: opts.forecastEveryMs ?? 60 * 60_000 }, { name: "forecasts" });
 
   for (const w of [publish, maintenance]) {

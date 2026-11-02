@@ -8,6 +8,9 @@ import { approvalDiffs, postOutcomes, posts, postVariants } from "@starsign/db";
 import { CoreError, type Starsign, type Principal } from "@starsign/core";
 import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
 import { gatePost } from "@starsign/policy";
+import { adaptForNetwork, runPrompt, type BrandContext, type ModelGateway } from "@starsign/ai";
+import type { SourceAdapter } from "@starsign/sources";
+import { Network as NetworkEnum, NETWORK_LIMITS } from "@starsign/schema";
 
 export const VERSION = "0.1.0";
 
@@ -16,6 +19,10 @@ type Env = { Variables: { principal: Principal } };
 export interface AppOptions {
   /** Slug of a workspace that unauthenticated requests act on, as human owner "dev". Dev only. */
   devWorkspace?: string;
+  /** Model gateway for compose assistance. Absent: those routes answer 503. */
+  gateway?: ModelGateway | null;
+  /** Trend sources this deployment pulls from (for status reporting). */
+  sources?: SourceAdapter[];
 }
 
 const err = (code: string, message: string, details?: unknown) => ({ error: { code, message, details } });
@@ -28,6 +35,18 @@ function date(v: string | undefined, fallback: Date): Date {
 }
 const list = (v: string | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const daysAgo = (n: number, now: Date) => new Date(now.getTime() - n * 86_400_000);
+
+/** Monday 00:00 of the week containing `at`, in `timezone`, as a UTC instant. */
+function startOfLocalWeek(at: Date, timezone: string): Date {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, weekday: "short" })
+      .formatToParts(at)
+      .map((x) => [x.type, x.value]),
+  );
+  const dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(String(parts.weekday));
+  const msIntoDay = ((Number(parts.hour) % 24) * 60 + Number(parts.minute)) * 60_000 + at.getUTCSeconds() * 1000 + at.getUTCMilliseconds();
+  return new Date(at.getTime() - msIntoDay - Math.max(0, dow) * 86_400_000);
+}
 
 export function createApp(m: Starsign, opts: AppOptions = {}) {
   const app = new Hono<Env>();
@@ -97,6 +116,60 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     await m.workspaces.revokeApiKey(c.get("principal"), c.req.param("id"));
     return c.body(null, 204);
   });
+
+  // ---------------------------------------------------------------- connectors & connecting
+  app.get("/v1/connectors", (c) =>
+    c.json(
+      m.ctx.connectors
+        .list()
+        .filter((k) => k.name !== "mock")
+        .map((k) => ({ name: k.name, networks: [...k.networks], configured: true, connect: k.connectMethod ?? "none" })),
+    ),
+  );
+  app.post("/v1/accounts/connect/bluesky", async (c) => {
+    const p = c.get("principal");
+    m.workspaces.requireRole(p, ["owner", "approver"]);
+    const body = z.object({ identifier: z.string().min(1), appPassword: z.string().min(1), service: z.string().url().optional() }).parse(await c.req.json());
+    const auth = { identifier: body.identifier.replace(/^@/, ""), appPassword: body.appPassword, ...(body.service ? { service: body.service } : {}) };
+    return c.json(await m.accounts.connectWithCredentials(p, { connector: "bluesky", network: "bluesky", auth }), 201);
+  });
+
+  // ---------------------------------------------------------------- compose & calendar
+  app.post("/v1/compose/adapt", async (c) => {
+    const p = c.get("principal");
+    if (!opts.gateway) throw new CoreError("unavailable", "no model is configured for this deployment");
+    const body = z.object({ body: z.string().min(1).max(10_000), networks: z.array(NetworkEnum).min(1), topicId: z.string().optional(), notes: z.string().max(2000).optional() }).parse(await c.req.json());
+    const brand = (await m.brand.context(p.workspaceId)) as BrandContext;
+    let notes = body.notes;
+    if (body.topicId) {
+      const t = await m.trends.getTopic(body.topicId, p.workspaceId);
+      notes = [notes, `This post rides the trend "${t.name}" (keywords: ${t.keywords.join(", ")}).`].filter(Boolean).join("\n");
+    }
+    const networks = [...new Set(body.networks)];
+    const res = await runPrompt(opts.gateway, adaptForNetwork, { brand, idea: body.body, networks, ...(notes ? { notes } : {}) });
+    // Never hand back a variant for a network that was not asked for, and say plainly when one is over its limit.
+    const variants = res.output.variants.filter((v) => networks.includes(v.network as never));
+    const over = variants.filter((v) => [v.text, ...(v.thread ?? [])].some((seg) => seg.length > NETWORK_LIMITS[v.network as keyof typeof NETWORK_LIMITS].maxText));
+    return c.json({
+      variants: variants.map((v) => ({ network: v.network, text: v.text, thread: v.thread ?? [] })),
+      notes: [res.output.notes, over.length ? `Over the limit, trim before posting: ${over.map((v) => v.network).join(", ")}.` : null].filter(Boolean).join(" "),
+      usage: { costUsd: res.usage.costUsd, model: res.usage.model },
+    });
+  });
+  app.get("/v1/calendar", async (c) => {
+    const p = c.get("principal");
+    const now = m.ctx.now();
+    const policy = await m.policy.getActive(p.workspaceId);
+    const defaultFrom = startOfLocalWeek(now, policy.timezone);
+    const from = date(c.req.query("from"), defaultFrom);
+    const to = date(c.req.query("to"), new Date(from.getTime() + 14 * 86_400_000));
+    if (to.getTime() - from.getTime() > 92 * 86_400_000) throw new CoreError("invalid", "calendar window is at most 92 days");
+    return c.json(await m.posts.calendar(p.workspaceId, from, to));
+  });
+
+  // ---------------------------------------------------------------- sources
+  app.get("/v1/sources", async (c) => c.json(await m.sources.status(opts.sources ?? [])));
+  app.get("/v1/trends/discoveries", async (c) => c.json(await m.sources.discoveries({ limit: Number(c.req.query("limit") ?? 50) })));
 
   // ---------------------------------------------------------------- accounts
   app.get("/v1/accounts", async (c) => c.json(await m.accounts.list(c.get("principal").workspaceId)));

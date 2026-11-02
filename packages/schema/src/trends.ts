@@ -7,6 +7,8 @@ export const TrendSource = z.enum([
   "google_trends_rss",
   "youtube_trending",
   "bluesky_firehose",
+  "bluesky_search",
+  "hacker_news",
   "wikipedia_pageviews",
   "reddit",
   "x",

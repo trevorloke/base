@@ -2,7 +2,7 @@ import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { postOutcomes, trendActions, trendForecasts, trendPoints, trendTopics } from "@starsign/db";
 import { forecastTopic, toForecastRecord, type SourceSeries } from "@starsign/forecast";
 import { newId } from "@starsign/ledger";
-import { TrendPointInput, type TrendSource, type TrendStage } from "@starsign/schema";
+import { TrendPointInput, type Actor, type TrendSource, type TrendStage } from "@starsign/schema";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 
@@ -32,12 +32,25 @@ export function windowText(stage: TrendStage | null, hoursToPeak: number | null)
 export class TrendService {
   constructor(private readonly ctx: CoreContext) {}
 
-  async createTopic(input: { workspaceId: string | null; name: string; keywords: string[]; relevance?: number }) {
+  async createTopic(input: { workspaceId: string | null; name: string; keywords: string[]; relevance?: number; actor?: Actor; why?: string }) {
     const [row] = await this.ctx.db
       .insert(trendTopics)
       .values({ id: newId("top"), workspaceId: input.workspaceId, name: input.name, keywords: input.keywords, relevance: input.relevance ?? null })
       .returning();
+    await this.ctx.events.append({
+      workspaceId: input.workspaceId ?? "global",
+      type: "trend.topic_created",
+      subjectType: "trend_topic",
+      subjectId: row!.id,
+      actor: input.actor ?? SYSTEM,
+      data: { name: input.name, keywords: input.keywords, relevance: input.relevance ?? null, why: input.why ?? null },
+    });
     return row!;
+  }
+
+  /** Every topic in every workspace plus global ones. For the system's samplers, never for a principal. */
+  async allTopics() {
+    return this.ctx.db.select().from(trendTopics).orderBy(trendTopics.createdAt);
   }
 
   /** A topic by id. With a workspaceId, only that workspace's topics and global ones are visible. */

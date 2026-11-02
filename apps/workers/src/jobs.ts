@@ -1,5 +1,6 @@
 import type { Starsign } from "@starsign/core";
 import type { Network } from "@starsign/schema";
+import { createDefaultSources, type SourceAdapter } from "@starsign/sources";
 
 /** Pull activity for every active account across workspaces, honoring per-workspace metered-read caps. */
 export async function ingestAll(m: Starsign): Promise<{ accounts: number; ingested: number }> {
@@ -58,4 +59,11 @@ export async function refreshForecasts(m: Starsign): Promise<number> {
     }
   }
   return seen.size;
+}
+
+/** Sample every topic from every configured trend source, and store what is trending now for the Scout. */
+export async function pullSources(m: Starsign, sources: SourceAdapter[] = createDefaultSources(), region = process.env.STARSIGN_TRENDS_REGION ?? "US") {
+  const results = await m.sources.pull(sources, { region });
+  for (const r of results) if (r.error) console.warn(`[sources] ${r.source}: ${r.error}`);
+  return results;
 }

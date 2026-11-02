@@ -10,11 +10,13 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
+    "@starsign/ai": "workspace:*",
     "@starsign/connectors": "workspace:*",
     "@starsign/core": "workspace:*",
     "@starsign/db": "workspace:*",
     "@starsign/policy": "workspace:*",
     "@starsign/schema": "workspace:*",
+    "@starsign/sources": "workspace:*",
     "@starsign/workers": "workspace:*",
     "drizzle-orm": "^0.45.0",
     "hono": "^4.6.0",

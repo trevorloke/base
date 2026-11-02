@@ -166,3 +166,56 @@ describe("review regressions", () => {
     expect((await strict.request(`/v1/feed/stream?token=${tok.token}`)).status).toBe(401);
   });
 });
+
+describe("compose, calendar, connect, sources", () => {
+  it("compose/adapt answers 503 without a model and adapts per network with one", async () => {
+    expect((await app.request("/v1/compose/adapt", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ body: "idea", networks: ["bluesky"] }) })).status).toBe(503);
+    const { FakeGateway, defaultFakeHandlers } = await import("@starsign/ai");
+    const withAi = createApp(m, { gateway: new FakeGateway(defaultFakeHandlers()) });
+    const res = await withAi.request("/v1/compose/adapt", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ body: "First snow on the North Shore: spikes on.", networks: ["bluesky", "x", "x"] }) });
+    expect(res.status).toBe(200);
+    const body = await json(res);
+    expect(body.variants.map((v: { network: string }) => v.network).sort()).toEqual(["bluesky", "x"]);
+    expect(typeof body.usage.costUsd).toBe("number");
+    expect((await withAi.request("/v1/compose/adapt", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ body: "x", networks: ["myspace"] }) })).status).toBe(400);
+  });
+
+  it("calendar defaults to this week and rejects huge windows", async () => {
+    const res = await app.request("/v1/calendar", { headers: auth(ownerKey) });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(await json(res))).toBe(true);
+    expect((await app.request("/v1/calendar?from=2026-01-01T00:00:00Z&to=2026-12-31T00:00:00Z", { headers: auth(ownerKey) })).status).toBe(400);
+  });
+
+  it("connects Bluesky by verifying the app password, and refuses agents and bad passwords", async () => {
+    const { BlueskyConnector } = await import("@starsign/connectors");
+    const fakeAgent = () => {
+      const agent: { session?: { did: string; handle: string }; login: (o: { identifier: string; password: string }) => Promise<void> } = {
+        async login(o) {
+          if (o.password !== "good-pass") throw Object.assign(new Error("Invalid identifier or password"), { status: 401, error: "AuthenticationRequired" });
+          agent.session = { did: "did:plc:verified", handle: "acme.bsky.social" };
+        },
+      };
+      return agent;
+    };
+    m.ctx.connectors.register(new BlueskyConnector({ agentFactory: fakeAgent as never }));
+    const ok = await app.request("/v1/accounts/connect/bluesky", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ identifier: "@acme.bsky.social", appPassword: "good-pass" }) });
+    expect(ok.status).toBe(201);
+    const acct = await json(ok);
+    expect(acct).toMatchObject({ network: "bluesky", externalId: "did:plc:verified", handle: "acme.bsky.social", connector: "bluesky", hasCredentials: true });
+    const bad = await app.request("/v1/accounts/connect/bluesky", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ identifier: "acme.bsky.social", appPassword: "nope" }) });
+    expect(bad.status).toBe(400);
+    expect((await json(bad)).error.details.reason).toMatch(/not accepted/);
+    expect((await app.request("/v1/accounts/connect/bluesky", { method: "POST", headers: auth(agentKey), body: JSON.stringify({ identifier: "a", appPassword: "good-pass" }) })).status).toBe(403);
+    const connectors = await json(await app.request("/v1/connectors", { headers: auth(ownerKey) }));
+    expect(connectors.find((c: { name: string }) => c.name === "bluesky")).toMatchObject({ connect: "app_password" });
+    expect(connectors.find((c: { name: string }) => c.name === "mock")).toBeUndefined();
+  });
+
+  it("reports sources and discoveries", async () => {
+    const withSources = createApp(m, { sources: [{ name: "hacker_news", configured: true, granularityMs: 3_600_000, sample: async () => [] }] });
+    const s = await json(await withSources.request("/v1/sources", { headers: auth(ownerKey) }));
+    expect(s.map((x: { name: string }) => x.name)).toEqual(["hacker_news", "own_feed"]);
+    expect(Array.isArray(await json(await withSources.request("/v1/trends/discoveries", { headers: auth(ownerKey) })))).toBe(true);
+  });
+});

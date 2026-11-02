@@ -1,6 +1,7 @@
 import type { ModelGateway } from "@starsign/ai";
 import type { Starsign } from "@starsign/core";
 import { runAnalyst, type AnalystOptions } from "./operators/analyst.ts";
+import { runScout, type ScoutOptions } from "./operators/scout.ts";
 import { runWatch, type WatchOptions } from "./operators/watch.ts";
 
 export interface ServeOptions {
@@ -14,11 +15,15 @@ export interface ServeOptions {
   analystHour?: number;
   watch?: WatchOptions;
   analyst?: AnalystOptions;
+  scout?: ScoutOptions;
+  /** How often the Scout clusters trending terms into new topics (default 2h). 0 disables it. */
+  scoutEveryMs?: number;
   log?: (line: string) => void;
 }
 
 export interface ServeState {
   lastWatchAt: Map<string, number>;
+  lastScoutAt?: Map<string, number>;
   /** When the weekly brief last failed per workspace; it is not retried for six hours (a failed brief is a 64k-token call). */
   lastAnalystFailAt?: Map<string, number>;
 }
@@ -59,6 +64,7 @@ export function analystDue(now: Date, timezone: string, latestBriefPeriodEnd: Da
 
 export interface TickResult {
   watched: string[];
+  scouted?: string[];
   briefed: string[];
   /** Workspaces skipped because their monthly model spend cap is reached. */
   capped: string[];
@@ -82,6 +88,18 @@ export async function tick(m: Starsign, gw: ModelGateway, state: ServeState, opt
     } catch (e) {
       result.errors.push(`${ws.slug}: spend check: ${(e as Error).message}`);
       continue;
+    }
+    // Scout before Watch so a topic found this tick is forecast in the same pass.
+    const scoutEveryMs = opts.scoutEveryMs ?? 2 * 60 * 60_000;
+    const lastScout = (state.lastScoutAt ??= new Map()).get(ws.id);
+    if (scoutEveryMs > 0 && (lastScout === undefined || now.getTime() - lastScout >= scoutEveryMs)) {
+      state.lastScoutAt.set(ws.id, now.getTime());
+      try {
+        const s = await runScout(m, gw, ws.id, { log: opts.log, ...opts.scout });
+        if (s.created.length) (result.scouted ??= []).push(ws.slug);
+      } catch (e) {
+        result.errors.push(`${ws.slug}: scout: ${(e as Error).message}`);
+      }
     }
     const last = state.lastWatchAt.get(ws.id);
     if (last === undefined || now.getTime() - last >= watchEveryMs) {

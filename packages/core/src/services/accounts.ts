@@ -51,6 +51,24 @@ export class AccountService {
     return this.redact(row!);
   }
 
+  /**
+   * Connect an account from credentials a person typed (e.g. a Bluesky app password): the connector verifies
+   * them and says whose they are, so nobody can attach credentials to someone else's handle.
+   */
+  async connectWithCredentials(p: Principal, input: { connector: string; network: Network; auth: Record<string, unknown> }) {
+    const connector = this.ctx.connectors.get(input.connector);
+    if (!connector || !connector.networks.includes(input.network)) throw new CoreError("invalid", `connector "${input.connector}" cannot connect ${input.network} here`);
+    if (!connector.describeAccount) throw new CoreError("invalid", `${input.connector} accounts are connected another way`);
+    let identity;
+    try {
+      identity = await connector.describeAccount(input.auth);
+    } catch (e) {
+      const reason = e instanceof ConnectorError && e.kind === "auth" ? "The handle or app password was not accepted." : "The network did not answer; try again in a minute.";
+      throw new CoreError("invalid", "could not connect the account", { reason });
+    }
+    return this.connect(p, { network: input.network, externalId: identity.externalId, handle: identity.handle, displayName: identity.displayName ?? undefined, connector: connector.name, auth: input.auth });
+  }
+
   async list(workspaceId: string) {
     const rows = await this.ctx.db.select().from(socialAccounts).where(eq(socialAccounts.workspaceId, workspaceId));
     return rows.map((r) => this.redact(r));

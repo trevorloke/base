@@ -36,6 +36,17 @@ One `Policy` document per workspace (versioned in `policies`, every change in th
 and the seed all go through `PostService.create`, which goes through the gate. Approvals re-run red lines on the
 edited text, so an edit cannot sneak past them, and every edit is recorded in `approval_diffs` as voice training signal.
 
+## How attention gets in
+
+Every hour the workers' `sources` job samples every topic from every configured source (`packages/sources`):
+keyword interest over time from Google Trends (official alpha API when a key exists), Wikipedia daily pageviews,
+Hacker News mentions per hour, Bluesky posts per hour, and the brand's own feed (mentions, replies and comments
+matching the topic, recomputed over the trailing day so late ingestion lands in the right hour). Sources that list
+"trending now" terms (Google Trends RSS, Wikipedia top articles, the Hacker News front page, YouTube most-popular)
+are stored raw. Every two hours the Scout clusters those terms with the brand's context and starts tracking the
+relevant, new ones (relevance >= 0.6, at most three a run, each with a recorded reason). The forecasts job then
+recomputes every topic. `GET /v1/sources` reports each source's health.
+
 ## Packages
 
 ```

@@ -106,3 +106,20 @@ Agents may create posts within the autonomy dial and may only schedule, edit or 
 
 ## Brand context (for agents)
 - `GET /v1/context` → `{ workspace: { name, profile }, policy: { autonomy, redLines: { id, kind, description, severity }[], timezone }, accounts: Account[], recentTop: Summary.top, voiceExamples: { before, after }[] (last 20 approval diffs), activeTopics: RadarEntry[] (top 10) }`
+
+## Compose, calendar, connect (v1.1)
+
+- `POST /v1/accounts/connect/bluesky` body `{ identifier, appPassword, service? }` → `201 Account` (owner/approver).
+  The server logs in with the app password, reads the account's DID and handle, stores the credentials encrypted.
+  `400 invalid` with `details: { reason }` when the login fails.
+- `GET /v1/connectors` → `{ name, networks: string[], configured: boolean, connect: "app_password" | "oauth" | "api_key" | "none" }[]`
+  (which networks this deployment can connect, and how).
+- `POST /v1/compose/adapt` body `{ body, networks: string[], topicId? }` → `{ variants: { network, text, thread: string[] }[], notes, usage: { costUsd, model } }`.
+  Uses the model gateway with the brand context and red lines. `503 unavailable` when no model is configured.
+- `GET /v1/calendar?from=<iso>&to=<iso>` → `{ post, variants }[]` ordered by time, where time = `publishedAt ?? scheduledAt`,
+  statuses `pending_approval | approved | scheduled | publishing | published | partially_published | failed`.
+  Default window: start of this week (Monday 00:00 workspace time) to +14 days.
+- `GET /v1/sources` → `{ name, kind: "sample" | "trending" | "both", configured: boolean, lastRunAt: string | null, lastError: string | null, pointsLast24h: number }[]`
+  (the trend sources this deployment pulls from).
+- `GET /v1/trends/discoveries?limit=50` → `{ term, source, value: number | null, url: string | null, observedAt, region }[]`
+  newest first: raw "trending now" terms the scout saw, before they become topics.

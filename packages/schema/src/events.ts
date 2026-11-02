@@ -44,6 +44,8 @@ export const LedgerEventType = z.enum([
   "outcome.scheduled",
   "outcome.captured",
   "trend.points_recorded",
+  "trend.topic_created",
+  "source.pulled",
   "trend.forecast_computed",
   "trend.action_recorded",
   "operator.run_started",

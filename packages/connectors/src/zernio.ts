@@ -81,6 +81,7 @@ export function mapZernioError(status: number, headers: Headers, body: unknown, 
  * by it; the network-side id and URL are kept in `raw` and `url`.
  */
 export class ZernioConnector implements Connector {
+  readonly connectMethod = "api_key" as const;
   readonly name = "zernio";
   readonly networks: readonly Network[] = Network.options;
 

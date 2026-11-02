@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { approvals, posts, postVariants, socialAccounts, trendActions, trendForecasts } from "@starsign/db";
 import { validateVariant } from "@starsign/connectors";
 import { newId } from "@starsign/ledger";
@@ -212,6 +212,27 @@ export class PostService {
       .select()
       .from(postVariants)
       .where(inArray(postVariants.postId, rows.map((r) => r.id)));
+    return rows.map((post) => ({ post, variants: vars.filter((v) => v.postId === post.id) }));
+  }
+
+  /** Posts whose time (published, else scheduled) falls in [from, to), oldest first. Drafts, cancelled and blocked are excluded. */
+  async calendar(workspaceId: string, from: Date, to: Date) {
+    const when = sql`coalesce(${posts.publishedAt}, ${posts.scheduledAt})`;
+    const rows = await this.ctx.db
+      .select()
+      .from(posts)
+      .where(
+        and(
+          eq(posts.workspaceId, workspaceId),
+          inArray(posts.status, ["pending_approval", "approved", "scheduled", "publishing", "published", "partially_published", "failed"]),
+          sql`${when} >= ${from}`,
+          sql`${when} < ${to}`,
+        ),
+      )
+      .orderBy(when)
+      .limit(500);
+    if (rows.length === 0) return [];
+    const vars = await this.ctx.db.select().from(postVariants).where(inArray(postVariants.postId, rows.map((r) => r.id)));
     return rows.map((post) => ({ post, variants: vars.filter((v) => v.postId === post.id) }));
   }
 

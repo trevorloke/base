@@ -18,6 +18,7 @@
     "@starsign/core": "workspace:*",
     "@starsign/db": "workspace:*",
     "@starsign/schema": "workspace:*",
+    "@starsign/sources": "workspace:*",
     "bullmq": "^5.30.0",
     "ioredis": "^5.4.0"
   },

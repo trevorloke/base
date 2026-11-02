@@ -37,9 +37,12 @@ packages/ledger      event store (raw + ledger, hash-deduped), outcome snapshot 
 packages/connectors  Connector interface, per-network validation, mock, Bluesky (AT Protocol), X (v2), Zernio
 packages/core        the services: workspaces, accounts, policy, posts, approvals, publishing, listening, metrics, trends, ops, export
 packages/ai          model gateway (Claude) with versioned prompts and a fake for tests
+packages/sources     trend sources: Google Trends (trending-now RSS + official alpha API), Wikipedia pageviews,
+                     Hacker News, Bluesky search, YouTube trending; the brand's own feed is sampled in core
 apps/api             Hono HTTP API + SSE, serves the web build, seed script
 apps/workers         BullMQ: durable publish queue, ingest / outcomes / forecast schedules, metered-read caps
-apps/operators       Watch (forecast → alert → draft into the queue), Analyst (weekly brief), Steward (semantic red lines)
+apps/operators       Scout (trending terms → new topics scored against the brand), Watch (forecast → alert → draft into
+                     the queue), Analyst (weekly brief), Steward (semantic red lines)
 apps/mcp             MCP server: agents see the radar, feed, ledger and red lines; their posts land in the approval queue
 apps/web             the room: Radar · Queue · Feed · Brief on one screen, drawers for detail
 ```
