@@ -44,6 +44,7 @@ const ACTION_AREA = {
   ladder: 'outreach', text: 'outreach', texting: 'outreach', subscription: 'outreach',
   member: 'admin', team: 'admin', permission: 'admin', workspace: 'admin', scale: 'admin', field: 'admin',
   bank: 'people', list: 'people',
+  pass: 'map',
   learn: 'learn',
 };
 // field.values.set is a person's record; field.ping ("I'm here", from the
@@ -67,6 +68,7 @@ const PATH_AREA = [
   [/^\/api\/learn\/progress$/, 'learn'],
   [/^\/api\/(banks|lists)(\/|$)/, 'people'],
   [/^\/api\/persons(\/|$)/, 'people'],
+  [/^\/api\/passes(\/|$)/, 'map'],
 ];
 export const areaOfPath = (path) => PATH_AREA.find(([re]) => re.test(path))?.[1] || null;
 

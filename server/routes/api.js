@@ -24,6 +24,9 @@ import { personsWhere } from '../lib/audience.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
 import { goingRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
+// The open pass (ext/passes) and the door rule it shares with the phone.
+import { openPass } from '../ext/passes/rule.js';
+import { doorState, inPass } from '@starbase/shared/passes';
 
 // A date column as YYYY-MM-DD (both backends hand back a Date at UTC midnight).
 const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
@@ -238,28 +241,38 @@ app.route('/data', dataRoutes); // import · geocode · sample (desk roles; own 
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // door_knocked: anyone ever knocked on this person's door (a 'door' contact),
 // so a walk list can tell a door reached only by phone or text from a knock.
-const loadLocated = async (db, ws) => (await db.query(
+// pass_tries / pass_last_outcome: this person's door contacts in the open
+// pass (passId; ext/passes) — how many count as tries (a lit drop doesn't)
+// and the latest outcome. 0 / null with no pass open.
+const loadLocated = async (db, ws, passId = null) => (await db.query(
   `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags,
           (select max(c.created_at) from contacts c where c.person_id = p.id) as last_contact_at,
           (select c.outcome from contacts c where c.person_id = p.id order by c.created_at desc limit 1) as last_outcome,
-          exists (select 1 from contacts c where c.person_id = p.id and c.channel = 'door') as door_knocked
+          exists (select 1 from contacts c where c.person_id = p.id and c.channel = 'door') as door_knocked,
+          (select count(*)::int from contacts c where c.person_id = p.id and c.channel = 'door' and c.pass_id = $2::uuid and c.outcome <> 'left_lit') as pass_tries,
+          (select c.outcome from contacts c where c.person_id = p.id and c.channel = 'door' and c.pass_id = $2::uuid order by c.created_at desc limit 1) as pass_last_outcome
    from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.lng is not null`,
-  [ws],
+  [ws, passId],
 )).rows.map((p) => ({ ...p, tags: parseJ(p.tags, []), door_knocked: !!p.door_knocked }));
 
-// A door is done once someone there has been knocked (a 'door' contact, any
-// outcome). A call or a text alone never finishes a door: the walk list still
-// sends a canvasser there; the phone mark beside it is information only.
-const doneDoor = (d) => d.persons.some((p) => p.door_knocked);
+// Without a pass a door is done once someone there has been knocked (a
+// 'door' contact, any outcome). A call or a text alone never finishes a door:
+// the walk list still sends a canvasser there; the phone mark beside it is
+// information only. With a pass open (ext/passes) the rule is
+// shared/passes.js doorState: a door in the pass's universe is open, to try
+// again (a no-answer short of the try limit) or done in THIS pass.
+const doneDoor = (d, pass) => doorState(d, pass) === 'done';
 
-const turfStats = (polygon, located) => {
+// The turf's counts over the doors a pass lists (every door with no pass).
+const turfStats = (polygon, located, pass) => {
   const inside = located.filter((p) => pointInPolygon(p.lat, p.lng, polygon));
-  const doors = groupDoors(inside);
+  const doors = groupDoors(inside).filter((d) => inPass(d, pass));
   return {
     doors: doors.length,
-    people: inside.length,
-    doorsDone: doors.filter(doneDoor).length,
-    rated: inside.filter((p) => p.rating).length,
+    people: doors.reduce((n, d) => n + d.persons.length, 0),
+    doorsDone: doors.filter((d) => doneDoor(d, pass)).length,
+    doorsAgain: doors.filter((d) => doorState(d, pass) === 'again').length,
+    rated: doors.reduce((n, d) => n + d.persons.filter((p) => p.rating).length, 0),
   };
 };
 
@@ -278,16 +291,18 @@ app.get('/turfs', async (c) => {
     `select m.turf_id, u.id, u.name from turf_members m join users u on u.id = m.user_id where m.workspace_id = $1`,
     [ctx.workspaceId],
   )).rows;
-  const located = await loadLocated(db, ctx.workspaceId);
+  const pass = await openPass(db, ctx.workspaceId);
+  const located = await loadLocated(db, ctx.workspaceId, pass?.id);
   return c.json({
     turfs: turfs.map((t) => {
       const polygon = parseJ(t.polygon, []);
       return {
         id: t.id, name: t.name, color: t.color, notes: t.notes, polygon, created_at: t.created_at,
         members: members.filter((m) => m.turf_id === t.id).map(({ id, name }) => ({ id, name })),
-        ...turfStats(polygon, located),
+        ...turfStats(polygon, located, pass),
       };
     }),
+    pass,
   });
 });
 
@@ -303,8 +318,9 @@ app.get('/turfs/:id/walk', async (c) => {
     if (!mine) return c.json({ error: 'this turf is not assigned to you' }, 403);
   }
   const polygon = parseJ(t.polygon, []);
-  const located = await loadLocated(db, ctx.workspaceId);
-  const doors = walkOrder(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))));
+  const pass = await openPass(db, ctx.workspaceId);
+  const located = await loadLocated(db, ctx.workspaceId, pass?.id);
+  const doors = walkOrder(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))).filter((d) => inPass(d, pass)));
   const view = forViewer(ctx);
   // Each door's signs (requested or up), matched the way the map matches
   // them — by a person there, or by the address of a door with no unit — so
@@ -322,8 +338,17 @@ app.get('/turfs/:id/walk', async (c) => {
   };
   return c.json({
     turf: { id: t.id, name: t.name, color: t.color, notes: t.notes, polygon },
-    doors: doors.map((d) => ({ ...d, persons: d.persons.map(view), signs: signsAt(d), done: doneDoor(d) })),
-    stats: turfStats(polygon, located),
+    // Each door's state in the open pass (open · again · done) and the most
+    // tries anyone there has had; done is state === 'done' (the old rule
+    // with no pass). pass_tries / pass_last_outcome stay on the person rows
+    // (forViewer keeps them: not an email, not a money tag) — the phone
+    // lays its own knocks over them with the same rule.
+    doors: doors.map((d) => {
+      const state = doorState(d, pass);
+      return { ...d, persons: d.persons.map(view), signs: signsAt(d), state, tries: Math.max(0, ...d.persons.map((p) => p.pass_tries || 0)), done: state === 'done' };
+    }),
+    pass: pass ? { id: pass.id, name: pass.name, kind: pass.kind, who: pass.who, tries: pass.tries, started_at: pass.started_at } : null,
+    stats: turfStats(polygon, located, pass),
   });
 });
 
