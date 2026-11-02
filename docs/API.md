@@ -128,3 +128,13 @@ Agents may create posts within the autonomy dial and may only schedule, edit or 
   `/?connected=x&handle=<handle>` or `/?connect_error=<reason>` (`expired`, `exchange_failed`, `access_denied`, …).
   Needs `X_CLIENT_ID` (and `X_CLIENT_SECRET` for confidential clients) and `STARSIGN_PUBLIC_URL`; otherwise `503`.
   `GET /v1/connectors` reports `configured: false` for X until those exist.
+
+## Experiments (v1.1)
+Any post can be an arm: create the experiment, then create posts with `experimentId` + `experimentArm`.
+- `POST /v1/experiments` body `{ name, hypothesis, arms: { key, description }[] (2-6, keys a-z0-9_-), primaryMetric?: "engagements" | "impressions" | "likes" | "replies" | "reposts" | "link_clicks" | "conversions", offset?: "24h" | "72h" | "7d" }` → `201 Experiment`
+- `GET /v1/experiments` → `Experiment[]` = `{ id, name, hypothesis, status: "running" | "concluded", arms, primaryMetric: "<metric>@<offset>", result, createdAt }`
+- `GET /v1/experiments/:id` → `{ experiment, readout }`, `readout = { metric, offset, arms: { key, description, posts, measured, mean }[], comparisons: { arm, versus, lift, lo, hi, probabilityBetter }[], verdict: "not_enough_data" | "no_clear_winner" | "winner", winner, summary, minPerArm }`.
+  Lift is the ratio of means at the offset with an 80% bootstrap interval; a winner is named only when every interval clears 1.
+  A post's value is the sum over its variants. Concluded experiments return the frozen readout.
+- `POST /v1/experiments/:id/conclude` → `Experiment` (a person, editor or above; freezes the readout, records it in the ledger)
+- Creating a post with an `experimentId` from another workspace, a stopped experiment, or an unknown arm is refused.

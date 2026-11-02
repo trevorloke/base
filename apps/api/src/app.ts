@@ -190,6 +190,16 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     return c.json(await m.posts.calendar(p.workspaceId, from, to));
   });
 
+  // ---------------------------------------------------------------- experiments
+  app.get("/v1/experiments", async (c) => c.json(await m.experiments.list(c.get("principal").workspaceId)));
+  app.post("/v1/experiments", async (c) => c.json(await m.experiments.create(c.get("principal"), await c.req.json()), 201));
+  app.get("/v1/experiments/:id", async (c) => {
+    const p = c.get("principal");
+    const exp = await m.experiments.get(p.workspaceId, c.req.param("id"));
+    return c.json({ experiment: exp, readout: exp.status === "concluded" && exp.result ? exp.result : await m.experiments.readout(p.workspaceId, exp.id) });
+  });
+  app.post("/v1/experiments/:id/conclude", async (c) => c.json(await m.experiments.conclude(c.get("principal"), c.req.param("id"))));
+
   // ---------------------------------------------------------------- sources
   app.get("/v1/sources", async (c) => c.json(await m.sources.status(opts.sources ?? [])));
   app.get("/v1/trends/discoveries", async (c) => c.json(await m.sources.discoveries({ limit: Number(c.req.query("limit") ?? 50) })));

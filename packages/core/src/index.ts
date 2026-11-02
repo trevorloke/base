@@ -8,3 +8,4 @@ export type { PostDetail, PostRow, VariantRow } from "./services/posts.ts";
 export { matchesStream } from "./services/listening.ts";
 export type { BrandContextData } from "./services/brand.ts";
 export type { PullResult, SourceStatus } from "./services/sources.ts";
+export { compareArms, type Readout, type Comparison, type ArmReadout } from "./services/experiments.ts";

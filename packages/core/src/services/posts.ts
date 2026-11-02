@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
-import { approvals, posts, postVariants, socialAccounts, trendActions, trendForecasts } from "@starsign/db";
+import { approvals, experiments, posts, postVariants, socialAccounts, trendActions, trendForecasts } from "@starsign/db";
 import { validateVariant } from "@starsign/connectors";
 import { newId } from "@starsign/ledger";
 import { gatePost, resolveAutonomy, type Subject } from "@starsign/policy";
@@ -40,6 +40,12 @@ export class PostService {
     });
     if (issues.length) throw new CoreError("invalid", "variant validation failed", issues);
 
+    if (input.experimentId) {
+      const [exp] = await this.ctx.db.select().from(experiments).where(and(eq(experiments.id, input.experimentId), eq(experiments.workspaceId, p.workspaceId))).limit(1);
+      if (!exp) throw new CoreError("not_found", `experiment ${input.experimentId}`);
+      if (exp.status !== "running") throw new CoreError("conflict", "that experiment is not running");
+      if (!input.experimentArm || !exp.arms.some((a) => a.key === input.experimentArm)) throw new CoreError("invalid", `experimentArm must be one of: ${exp.arms.map((a) => a.key).join(", ")}`);
+    }
     const policy = await this.policy.getActive(p.workspaceId);
     const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : null;
     const subjects: Subject[] = input.variants.map((v) => ({
