@@ -234,6 +234,16 @@ one tap away under **More**.
 - **More** on a door: note, Call / Text (the phone's own dialer; with Twilio
   connected, the person's card on Calls), request a lawn / large sign or
   billboard (with Undo), add a person at the door.
+- **Left lit** (a lit drop) — on the walk list the row under the rating
+  buttons reads *No answer · Left lit · Refused · Moved · No access*. Hang
+  the piece and tap *Left lit*: the door closes for everyone there, the toast
+  says *Left lit*, no rating is asked and the next door opens; the door's
+  *More* reads *Left lit ·* and the time. With no signal the toast says *Left
+  lit · Saved offline* and it sends once when the signal is back. On the
+  map's door card *Left lit* is there at the door, gone after *Call* or
+  *How you reached them → Phone call*. Today's *More* then says *You 1 ·
+  Team 1 door lit this week*; the profile's History says *Left lit*, never
+  *Talked*.
 - **Calls** — one person at a time: Call or Text, then rate; *No answer*,
   *Refused*, *Skip*.
 - **Texts** (Twilio connected) — Calls → Text: the message is filled in; edit

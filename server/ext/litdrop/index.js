@@ -6,7 +6,7 @@
 // works with no signal), the map's door card for the person picked there.
 // It finishes a door like any door contact, sets no rating, and is never
 // counted as Reached; Today counts the doors lit this week on its own
-// ("You 3 · Team 40 doors lit this week"), and Reports → Contacts by week
+// ("You N · Team N doors lit this week"), and Reports → Contacts by week
 // has a Lit column.
 //
 //   sql.js      contacts.outcome takes 'left_lit' (the core check is widened)
