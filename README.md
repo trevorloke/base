@@ -8,6 +8,8 @@ what moved the outcome. It gets smarter with every brand on it.
 - `docs/social-command-center-plan.md` — platform API constraints, costs, build-vs-buy, roadmap
 - `docs/API.md` — the HTTP contract the web room, the MCP server and agents build against
 
+![The room: Radar, Queue, Feed, Brief](docs/screenshots/room.png)
+
 ## Run it
 
 ```bash
