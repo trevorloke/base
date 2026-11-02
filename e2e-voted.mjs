@@ -303,8 +303,8 @@ check('"2 of 2 supporters voted" — by band: Support 2 · Undecided 1 · Unrate
 const turfRow = await page.$eval('.vt-table tbody tr', (tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.replace(/\s+/g, ' ').trim()));
 check('by turf: Newton block · 2 supporters · 2 voted · 4 people, with a Walk list link', turfRow[0].startsWith('Newton block') && turfRow.slice(1).join('|') === '2|2|4'
   && (await page.getAttribute('.vt-table a.vt-walk', 'href')) === `/admin/turfs/${turf.id}`, turfRow.join(' | '));
-check(`"${sum.total} people voted in all · ${sum.today} marked today" (Harjit's take-back is not a vote)`, sum.total === 4 && sum.today === 5
-  && new RegExp(`${sum.total} people voted in all · ${sum.today} marked today`).test(t), t.slice(0, 300));
+check(`"${sum.total} people voted in all · ${sum.today} today" (people, not marks: Harjit's take-back and second mark are one voter)`, sum.total === 4 && sum.today === 4
+  && new RegExp(`${sum.total} people voted in all · ${sum.today} today`).test(t), t.slice(0, 300));
 check('the summary is the desk’s: a volunteer is refused', (await V.api('/voted/summary')).status === 403);
 await D.full('09-election-day-summary');
 const pm = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });

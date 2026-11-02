@@ -174,8 +174,8 @@ const tableRows = async (sec) => page.$$eval(`#${sec} ~ .fr-wide tbody tr`, (trs
 const turfRows = await tableRows('fr-turfs');
 const newton = turfRows.find((r) => r[0] === 'Newton block') || [];
 const fleet = turfRows.find((r) => r[0] === 'Fleetwood east') || [];
-check('by turf (1360, a table): Newton block · 4 · 3 (75%) · 1 · 1 · 2 · 1 · 0 · 0 · 0 · 2 · a last knock',
-  newton.slice(0, 11).join('|') === 'Newton block|4|3 (75%)|1|1|2|1|0|0|0|2' && /\d:\d\d [ap]\.m\./.test(newton[11] || ''), newton.join('|'));
+check('by turf (1360, a table): Newton block · 4 · 3 (75%) · 1 · 1 · 2 · 1 · 0 · 0 · 0 lit · 0 · 2 · a last knock',
+  newton.slice(0, 12).join('|') === 'Newton block|4|3 (75%)|1|1|2|1|0|0|0|0|2' && /\d:\d\d [ap]\.m\./.test(newton[12] || ''), newton.join('|'));
 check('…Fleetwood east · 2 · 1 (50%) · 1 talked · 1 yes', fleet[1] === '2' && fleet[2] === '1 (50%)' && fleet[3] === '1' && fleet[4] === '1', fleet.join('|'));
 const bar = await page.$eval('.fr-wide tbody tr:first-child .fr-bar > span', (el) => el.style.width).catch(() => '');
 check('…with a thin coverage bar at the coverage', bar === `${api.turfs[0].coverage_pct}%`, bar);

@@ -102,7 +102,7 @@ export default function Voted() {
         <span className="vt-bar" role="progressbar" aria-label="Supporters voted" aria-valuemin={0} aria-valuemax={s.supporters || 0} aria-valuenow={Math.min(s.supporters_voted || 0, s.supporters || 0)}>
           <span className="vt-bar__fill" style={{ width: `${pct}%` }} />
         </span>
-        <p className="vt-line mono">{plural(s.total, 'person', 'people')} voted in all · {num(s.today)} marked today</p>
+        <p className="vt-line mono">{plural(s.total, 'person', 'people')} voted in all · {num(s.today)} today</p>
         <ul className="vt-bands" aria-label="Voted, by rating">
           {BANDS.map(([key, label]) => <li key={key}><span className="chip">{label} · {num(s.by_band?.[key])}</span></li>)}
         </ul>
