@@ -26,6 +26,9 @@ export const actions = {
       voted: z.boolean().default(true),
       source: z.enum(['door', 'phone', 'desk']).default('door'),
       client_id: uuid().nullish(),
+      // When it was tapped (a phone's outbox sends it): a mark that waited
+      // with no signal keeps its own time and day.
+      client_at: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/).max(40).nullish(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
@@ -41,17 +44,30 @@ export const actions = {
         )).rows[0];
         if (dup) return { person_id: dup.person_id, voted: Boolean(dup.voted), duplicate: true };
       }
+      // The mark's time: its tap, never later than now.
+      const tapped = input.client_at ? Date.parse(input.client_at) : NaN;
+      const at = new Date(Number.isNaN(tapped) ? Date.now() : Math.min(tapped, Date.now())).toISOString();
+      // A mark tapped before the person's latest one (it waited on a phone
+      // while someone else changed it) goes in the history but changes
+      // nothing: the latest tap wins, not the latest to arrive.
+      const latest = (await tx.query(
+        'select max(created_at) as at from voted_marks where workspace_id = $1 and person_id = $2', [ws, input.person_id],
+      )).rows[0]?.at;
+      const stale = latest && new Date(latest) > new Date(at);
       const id = newId();
       await tx.query(
-        `insert into voted_marks (id, workspace_id, person_id, voted, source, marked_by, client_id)
-         values ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, ws, input.person_id, input.voted, input.source, ctx.user.id, input.client_id || null],
+        `insert into voted_marks (id, workspace_id, person_id, voted, source, marked_by, client_id, created_at)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [id, ws, input.person_id, input.voted, input.source, ctx.user.id, input.client_id || null, at],
       );
-      const row = (await tx.query(
-        `update persons set voted_at = case when $3 then now() else null end, updated_at = now()
-         where id = $1 and workspace_id = $2 returning voted_at`,
-        [input.person_id, ws, input.voted],
-      )).rows[0];
+      // Marked again: they voted when first marked, not now.
+      const row = stale
+        ? (await tx.query('select voted_at from persons where id = $1 and workspace_id = $2', [input.person_id, ws])).rows[0]
+        : (await tx.query(
+          `update persons set voted_at = case when $3 then coalesce(voted_at, $4::timestamptz) else null end, updated_at = now()
+           where id = $1 and workspace_id = $2 returning voted_at`,
+          [input.person_id, ws, input.voted, at],
+        )).rows[0];
       const voted_at = iso(row?.voted_at);
       emit('voted_mark', id, 'create', { id, person_id: input.person_id, voted: input.voted, source: input.source, client_id: input.client_id || null });
       emit('person', input.person_id, 'update', { voted_at, source: input.source });

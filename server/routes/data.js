@@ -558,6 +558,7 @@ const KINDS = [
   ['in_person', 'talk in person', 'talks in person'], ['connection', 'connection', 'connections'],
   ['role', 'volunteer role', 'volunteer roles'], ['booking', 'shift booking', 'shift bookings'],
   ['field', 'profile detail', 'profile details'],
+  ['request', 'request from the doors', 'requests from the doors'], ['vote', 'voted mark', 'voted marks'],
 ];
 const kindList = (byKind) => KINDS.filter(([k]) => byKind[k]).map(([k, one, many]) => nOf(byKind[k], one, many)).join(', ');
 
@@ -594,6 +595,10 @@ const clearSample = async (tx, W, emit) => {
   await onPerson('booking', `select id, person_id from shift_assignments where workspace_id = $1 and person_id = any($2::uuid[]) and not (id = any($3::uuid[]))`, ids.assignments);
   // A profile detail you set (ext/fields): the sample's own values are marked sample.
   await onPerson('field', `select id, person_id from person_field_values where workspace_id = $1 and person_id = any($2::uuid[]) and not sample`);
+  // A request from the doors (ext/requests) or a Voted mark (ext/voted): the
+  // sample has none of its own, so every one is yours.
+  await onPerson('request', `select id, person_id from door_requests where workspace_id = $1 and person_id = any($2::uuid[])`);
+  await onPerson('vote', `select id, person_id from voted_marks where workspace_id = $1 and person_id = any($2::uuid[])`);
   // A link you made (ext/relationships) keeps the sample people at both ends.
   for (const r of await rows(
     `select id, person_a, person_b from relationships where workspace_id = $1 and removed_at is null

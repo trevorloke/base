@@ -263,3 +263,21 @@ test('the sample loads with the hook on, a sample shift takes a turf, and the sa
   assert.equal((await fresh.req('DELETE', '/api/data/sample')).status, 200);
   assert.equal((await fresh.get('/api/audit/verify')).json.ok, true);
 });
+
+test('a turf the desk took off by hand stays off when the booking is confirmed', async () => {
+  const t = await mkTurf('Hand-off turf');
+  const shift = await mkShift('Confirm shift', 12, [t]);
+  assert.equal((await mgr.action('shift.assign', { shift_id: shift.id, person_id: walkerPersonId })).status, 200);
+  assert.ok((await membersOn(t.id)).includes(walkerId), 'the shift put them on');
+  assert.equal((await mgr.action('turf.unassign', { turf_id: t.id, user_id: walkerId })).status, 200);
+  assert.ok(!(await membersOn(t.id)).includes(walkerId), 'taken off by hand');
+  const { assignment_id: id } = await assignmentOf(shift.id, walkerPersonId);
+  for (const status of ['confirmed', 'assigned', 'completed']) {
+    assert.equal((await mgr.action('shift.setStatus', { id, status })).status, 200);
+    assert.ok(!(await membersOn(t.id)).includes(walkerId), `${status}: still off`);
+  }
+  // A real return (declined, then booked again) is a fresh booking: back on.
+  assert.equal((await mgr.action('shift.setStatus', { id, status: 'declined' })).status, 200);
+  assert.equal((await mgr.action('shift.setStatus', { id, status: 'confirmed' })).status, 200);
+  assert.ok((await membersOn(t.id)).includes(walkerId), 'declined → confirmed puts them back');
+});

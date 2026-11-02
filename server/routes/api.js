@@ -249,8 +249,8 @@ const loadLocated = async (db, ws, passId = null) => (await db.query(
           (select max(c.created_at) from contacts c where c.person_id = p.id) as last_contact_at,
           (select c.outcome from contacts c where c.person_id = p.id order by c.created_at desc limit 1) as last_outcome,
           exists (select 1 from contacts c where c.person_id = p.id and c.channel = 'door') as door_knocked,
-          (select count(*)::int from contacts c where c.person_id = p.id and c.channel = 'door' and c.pass_id = $2::uuid) as pass_tries,
-          (select c.outcome from contacts c where c.person_id = p.id and c.channel = 'door' and c.pass_id = $2::uuid order by c.created_at desc limit 1) as pass_last_outcome
+          (select count(*)::int from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid) as pass_tries,
+          (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid order by c.created_at desc limit 1) as pass_last_outcome
    from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.lng is not null`,
   [ws, passId],
 )).rows.map((p) => ({ ...p, tags: parseJ(p.tags, []), door_knocked: !!p.door_knocked }));

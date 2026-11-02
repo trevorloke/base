@@ -472,3 +472,23 @@ test('import: the campaign’s list — house number + street, latitude/longitud
   // Adding the standard fields again changes nothing.
   assert.deepEqual((await mgr.action('field.standard', {})).json.added, []);
 });
+
+test('sample clear: a request from the doors and a Voted mark on a sample person keep them', async () => {
+  const m = new Client();
+  await m.signup({ workspaceName: 'Keep Asks WS', jurisdiction: 'bc-municipal' });
+  assert.equal((await m.post('/api/data/sample', {})).status, 200);
+  const tom = await named(m, 'Tom Riley');
+  const dev = await named(m, 'Dev Patel');
+  const ask = (await m.action('request.ask', { person_id: tom.id, kind: 'call_back', note: 'after six' })).json.request;
+  assert.equal((await m.action('vote.mark', { person_id: dev.id, voted: true, source: 'desk' })).status, 200);
+  const clear = await m.req('DELETE', '/api/data/sample');
+  assert.equal(clear.status, 200);
+  assert.equal(clear.json.keptPeople, 2);
+  assert.match(clear.json.message, /1 request from the doors/);
+  assert.match(clear.json.message, /1 voted mark/);
+  const db = await getDb();
+  assert.equal((await db.query('select count(*)::int as n from door_requests where id = $1', [ask.id])).rows[0].n, 1, 'the request stays');
+  assert.equal((await db.query('select count(*)::int as n from voted_marks where person_id = $1', [dev.id])).rows[0].n, 1, 'the mark stays');
+  assert.ok((await m.get(`/api/persons/${dev.id}`)).json.person.voted_at, 'Dev still reads voted');
+  assert.equal((await m.get('/api/audit/verify')).json.ok, true);
+});

@@ -26,8 +26,9 @@ export const countsOf = async (db, ctx) => {
      from persons p where p.workspace_id = $1 and p.deleted_at is null`,
     [ws],
   )).rows[0];
+  // People who voted today (a person marked twice is one), not marks.
   const today = (await db.query(
-    `select count(*)::int as n from voted_marks where workspace_id = $1 and voted and created_at >= ${START_OF_TODAY}`,
+    `select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and voted_at >= ${START_OF_TODAY}`,
     [ws, tz],
   )).rows[0].n;
   return { total: r.total, today, supporters: r.supporters, supporters_voted: r.supporters_voted };

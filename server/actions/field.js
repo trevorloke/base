@@ -491,7 +491,9 @@ export const FIELD_ACTIONS = {
         'update shift_assignments set status = $3 where id = $1 and workspace_id = $2',
         [input.id, ctx.workspaceId, input.status],
       );
-      emit('shift_assignment', input.id, 'update', { status: input.status });
+      // from: the status it had — a move between two active statuses
+      // (assigned → confirmed) is not a fresh booking (ext/shiftturfs).
+      emit('shift_assignment', input.id, 'update', { status: input.status, from: cur.status });
       return { id: input.id, status: input.status };
     },
   },

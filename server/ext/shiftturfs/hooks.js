@@ -53,6 +53,9 @@ const onAssignment = async (tx, meta, e) => {
   )).rows[0];
   if (!row) return;
   if (ACTIVE.includes(p.status)) {
+    // Already on the shift (assigned → confirmed): whatever it put on their
+    // phone is there, or the desk took it off by hand and it stays off.
+    if (typeof p.from === 'string' && ACTIVE.includes(p.from)) return;
     if (!(await hasTurfs(tx, ws, row.shift_id))) return;
     const userId = p.self ? meta.actorId : await userForPerson(tx, ws, row.person_id);
     if (userId) await putOn(tx, ws, { assignmentId: e.entityId, shiftId: row.shift_id, userId }, meta.emit);

@@ -73,7 +73,7 @@ api.get('/banks/:id/mine', async (c) => {
   const b = (await db.query('select id, name, script, closed_at from call_banks where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
   if (!b) return c.json({ error: 'not found' }, 404);
   const rows = (await db.query(
-    `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at,
+    `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at,
             p.attrs->>'note' as note, n.done_at, n.position
        from call_bank_numbers n join persons p on p.id = n.person_id
       where n.bank_id = $1 and n.assigned_to = $2 and p.deleted_at is null order by n.position`, [id, ctx.user.id],

@@ -4,8 +4,8 @@
 // map's doors and the people list (a volunteer's included, emails still
 // stripped); the import's Voted column marks from a file and never un-marks;
 // the summary counts by band and by turf for the desk only; Today's brief
-// carries the numbers for everyone; a mark goes with its person, the export
-// carries the marks, and the books verify. test:pg-safe: unique emails and
+// carries the numbers for everyone; a mark keeps its person when the sample
+// clears, the export carries the marks, and the books verify. test:pg-safe: unique emails and
 // names per run, every query scoped to this workspace.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
@@ -192,8 +192,8 @@ test('the summary counts by band and by turf for the desk only; brief.voted is e
   assert.ok(sum.by_band.unrated >= 1);
   assert.equal(sum.total, sum.by_band.support + sum.by_band.undecided + sum.by_band.opposed + sum.by_band.unrated);
   const db = await getDb();
-  const todays = (await db.query('select count(*)::int as n from voted_marks where workspace_id = $1 and voted', [ws])).rows[0].n;
-  assert.equal(sum.today, todays, 'today: every mark made today (all of them, here)');
+  const todays = (await db.query('select count(*)::int as n from persons where workspace_id = $1 and voted_at is not null', [ws])).rows[0].n;
+  assert.equal(sum.today, todays, 'today: the people who voted today (all of them, here), not the marks');
   assert.deepEqual({ on: sum.on, election_day: sum.election_day }, { on: true, election_day: '2026-10-17' });
 
   const KEYS = ['election_day', 'on', 'supporters', 'supporters_voted', 'today', 'total'];
@@ -204,8 +204,9 @@ test('the summary counts by band and by turf for the desk only; brief.voted is e
   assert.deepEqual([bv.on, bv.total, bv.supporters, bv.supporters_voted], [true, sum.total, 2, 1]);
 });
 
-test('a mark goes with its person; the export carries the marks; the books verify', async () => {
-  // The one path that removes a person outright: clearing the sample.
+test('a mark keeps its person when the sample clears; the export carries the marks; the books verify', async () => {
+  // The one path that removes a person outright: clearing the sample. A
+  // Voted mark is the campaign's own record, so its person stays.
   const fresh = new Client();
   const r = await fresh.signup({ workspaceName: `Sample ${tag}`, email: `vt-sample+${tag}@example.org` });
   const fws = r.json.workspace.id;
@@ -219,8 +220,8 @@ test('a mark goes with its person; the export carries the marks; the books verif
   ok(await fresh.action('vote.mark', { person_id: sp.id, source: 'desk' }));
   assert.equal((await db.query('select count(*)::int as n from voted_marks where person_id = $1', [sp.id])).rows[0].n, 1);
   assert.equal((await fresh.req('DELETE', '/api/data/sample')).status, 200);
-  assert.equal((await db.query('select count(*)::int as n from persons where id = $1', [sp.id])).rows[0].n, 0, 'the sample person is gone');
-  assert.equal((await db.query('select count(*)::int as n from voted_marks where person_id = $1', [sp.id])).rows[0].n, 0, 'and the mark with them');
+  assert.equal((await db.query('select count(*)::int as n from persons where id = $1 and deleted_at is null', [sp.id])).rows[0].n, 1, 'the marked person stays');
+  assert.equal((await db.query('select count(*)::int as n from voted_marks where person_id = $1', [sp.id])).rows[0].n, 1, 'and the mark with them');
   assert.equal((await fresh.get('/api/audit/verify')).json.ok, true);
 
   const ex = ok(await mgr.get('/api/export'));
@@ -231,4 +232,27 @@ test('a mark goes with its person; the export carries the marks; the books verif
   assert.equal((await vol.get('/api/export')).status, 403);
   const v = (await mgr.get('/api/audit/verify')).json;
   assert.equal(v.ok, true, JSON.stringify(v));
+});
+
+test('marked twice: one voter, the first time kept; a mark that waited on a phone keeps its tap and never undoes a later change', async () => {
+  const p = await mgr.createPerson(`Twice Example ${tag}`, { phone: '604-555-0166' });
+  const before = ok(await mgr.get('/api/brief')).voted.today;
+  const first = ok(await vol.action('vote.mark', { person_id: p.id, voted: true, source: 'door', client_id: randomUUID() }));
+  await new Promise((r) => setTimeout(r, 30));
+  const second = ok(await staff.action('vote.mark', { person_id: p.id, voted: true, source: 'phone' }));
+  assert.equal(second.voted_at, first.voted_at, 'a caller marking them again doesn’t move the time');
+  assert.equal(ok(await mgr.get('/api/brief')).voted.today, before + 1, 'one person, two marks: Today counts one');
+
+  // Ana tapped "Not voted" in a dead zone, then the desk marked them voted;
+  // her tap arrives last but happened first.
+  const tapped = new Date(Date.now() - 60_000).toISOString();
+  ok(await mgr.action('vote.mark', { person_id: p.id, voted: true, source: 'desk' }));
+  const late = ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door', client_id: randomUUID(), client_at: tapped }));
+  assert.ok(late.voted_at, 'the older tap changes nothing');
+  const hist = await marksOf(mgr, p.id);
+  assert.equal(hist.marks.length, 4, 'every mark is in the history');
+  assert.ok(hist.marks.some((m) => m.voted === false && new Date(m.created_at).getTime() === Date.parse(tapped)), 'with its own time');
+  // A tap from the future (a phone clock running fast) counts as now.
+  const fast = ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door', client_id: randomUUID(), client_at: new Date(Date.now() + 3_600_000).toISOString() }));
+  assert.equal(fast.voted_at, null, 'the newest tap wins');
 });

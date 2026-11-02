@@ -344,3 +344,31 @@ test('a lit drop is a not-home: a try in a persuasion pass, given up when the tr
   assert.equal(doorOf(await walk(vol), '13212 72 Ave').state, 'done');
   ok(await mgr.action('pass.end', { id: lit.id }));
 });
+
+test('a knock counts in the pass open when it was tapped, even if it arrives after that pass ended', async () => {
+  const db = await getDb();
+  const passOf = async (id) => (await db.query('select pass_id from contacts where id = $1 and workspace_id = $2', [id, ws])).rows[0].pass_id;
+  const p1 = await start({ name: 'Persuasion · week one', kind: 'persuasion', who: 'all', tries: 2 });
+  await new Promise((r) => setTimeout(r, 20));
+  const tapped = new Date().toISOString(); // in a dead zone, during week one
+  await new Promise((r) => setTimeout(r, 20));
+  const p2 = await start({ name: 'Persuasion · week two', kind: 'persuasion', who: 'all', tries: 2 });
+  const late = ok(await knock(vol, P.a.id, 'contacted', { rating: '3', client_id: randomUUID(), client_at: tapped }), 'sent after week one ended').contact;
+  assert.equal(await passOf(late.id), p1.id, 'week one’s knock');
+  assert.equal(ok(await mgr.get('/api/passes')).past.find((x) => x.id === p1.id).stats.talked, 1, 'week one counts it');
+  assert.equal(doorOf(await walk(), '13213 72 Ave').state, 'open', 'week two hasn’t knocked there');
+  ok(await mgr.action('pass.end', { id: p2.id }));
+
+  // A phone clock a minute slow, in a campaign whose first pass just began:
+  // the tap still counts in it; one from an hour before doesn't.
+  const m2 = new Client();
+  await m2.signup({ workspaceName: `Skew ${tag}`, email: `pass-skew+${tag}@example.org`, jurisdiction: 'bc-municipal' });
+  const who = await m2.createPerson('Skew Example', { address: '13213 72 Ave', lat, lng });
+  const only = ok(await m2.action('pass.start', { name: 'First pass', kind: 'persuasion' })).pass;
+  const tap = (ms) => m2.action('contact.log', { person_id: who.id, channel: 'door', outcome: 'no_answer', client_id: randomUUID(), client_at: new Date(Date.parse(only.started_at) - ms).toISOString() });
+  const slow = ok(await tap(60_000), 'a minute slow').contact;
+  const stampOf = async (id) => (await db.query('select pass_id from contacts where id = $1', [id])).rows[0].pass_id;
+  assert.equal(await stampOf(slow.id), only.id, 'a minute slow: in the pass');
+  const hour = ok(await tap(3_600_000), 'an hour before').contact;
+  assert.equal(await stampOf(hour.id), null, 'an hour before: no pass');
+});
