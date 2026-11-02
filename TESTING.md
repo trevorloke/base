@@ -196,6 +196,15 @@ one tap away under **More**.
   or removed with ✕. **Take off** keeps everything filled in (still in *Export all
   data*); *Taken off → Bring back* restores it. The sample adds *Language at
   home*, *Strata council member* and *Union local*.
+- **Election day** (Today → More → *Election day*) — switch it **On** (the date
+  fills in as today), **Save**. Every volunteer's walk list, door card and
+  Calls card now has a 48px *Voted ✓*; mark one person yourself from a door
+  card. The row on Today reads *Election day · 1 of N supporters voted* and
+  the screen behind it counts by band and by turf (*Walk list* opens the
+  turf). Then **People → Import** a file with a *Voted* column (1/0, yes/no
+  or a date): it maps to *Voted (1/0 or a date)* and marks the people in it;
+  a 0 never un-marks anyone, and the import's line says *adds voted*. Switch
+  it **Off** and the buttons go; the marks stay.
 
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
@@ -265,6 +274,14 @@ one tap away under **More**.
   number. With no signal, Call is your phone's own dialler (*No signal —
   this calls from your own number*).
 - **Shifts** — *Count me in* on an open shift; *Can't make it* to drop out.
+- **Voted ✓** (once your manager turns Election day on) — on an open door of
+  your walk list, the map's door card or a Calls card, one tap says this
+  person has voted: the toast reads *Voted · Harjit* with *Change* (a
+  take-back), the panel *✓ Voted · 9:12 a.m.* and the door's row *✓ Voted*.
+  With airplane mode on the tap says *Voted · Saved offline* and the row
+  *Voted · Not sent*; back online it sends once (the strip's sheet lists it
+  as *Voted · Harjit · 2:14 pm* until then). With Election day off there is
+  no button.
 - **Signs** (from Today when there are signs to put up) — *Put up ✓*.
 - **Offline**: turn on airplane mode, rate three doors (they say *Saved
   offline*), *Count me in* on a shift (*Take back* undoes it before it

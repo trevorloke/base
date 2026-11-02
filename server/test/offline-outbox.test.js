@@ -146,6 +146,40 @@ test('a lost answer on a direct send queues it; the replay is the same write', a
   assert.equal(Number(after.lat), 49.2);
 });
 
+test('vote.mark queued with no signal is sent once; a second flush is a duplicate', async () => {
+  const p = await c.createPerson('Voted Offline', { address: '7175 124 St', lat: 49.13185, lng: -122.85235 });
+  nav.onLine = false;
+  const r = await ob.queueAction('vote.mark', { person_id: p.id, voted: true, source: 'door' }, { who: p.name });
+  assert.equal(r.queued, true);
+  const item = JSON.parse(store.get('starbase:outbox:v2')).find((i) => i.cid === r.client_id);
+  assert.equal(item.name, 'vote.mark');
+  assert.equal(item.input.client_id, r.client_id, 'keyed by an id made on the phone');
+  assert.match(ob.itemText(item), /^Voted · Voted Offline · /, 'the strip’s sheet, in plain words');
+  assert.equal((await c.get(`/api/voted/persons/${p.id}`)).json.voted_at, null, 'nothing sent yet');
+  nav.onLine = true;
+  assert.equal((await ob.flushOutbox()).sent, 1);
+  let marks = (await c.get(`/api/voted/persons/${p.id}`)).json;
+  assert.ok(marks.voted_at);
+  assert.equal(marks.marks.length, 1);
+  // The same item still in another tab's storage (no lock there), and Change
+  // tapped on the toast before that sends — a take-back is a mark of its own,
+  // append-only. The second flush: the server answers duplicate for the
+  // replay (read as done, still one mark), then the take-back lands.
+  nav.onLine = false;
+  store.set('starbase:outbox:v2', JSON.stringify([...JSON.parse(store.get('starbase:outbox:v2')), { ...item, tries: 1 }]));
+  await ob.queueAction('vote.mark', { person_id: p.id, voted: false, source: 'door' }, { who: p.name });
+  assert.equal(ob.pendingCount(), 2, 'the replay, then the take-back');
+  assert.match(ob.itemText(JSON.parse(store.get('starbase:outbox:v2')).at(-1)), /^Not voted · Voted Offline · /);
+  nav.onLine = true;
+  assert.equal((await ob.flushOutbox()).sent, 2, 'the replay reads as done; the take-back follows it');
+  assert.equal(ob.unsentCount(), 0);
+  marks = (await c.get(`/api/voted/persons/${p.id}`)).json;
+  assert.equal(marks.voted_at, null);
+  assert.deepEqual(marks.marks.map((m) => m.voted), [false, true], 'one mark for one tap, then its take-back');
+  const evs = (await c.get('/api/events?since=0&limit=5000')).json.events.filter((e) => e.action === 'vote.mark' && e.entity_type === 'voted_mark' && e.payload.person_id === p.id);
+  assert.deepEqual(evs.map((e) => e.payload.voted), [true, false]);
+});
+
 test('a refusal on replay is kept with the reason; Try again and Dismiss', async () => {
   const p = await c.createPerson('Up Already', { address: '7180 124 St', lat: 49.1319, lng: -122.8524 });
   const placed = await ob.queueAction('sign.place', { person_id: p.id, kind: 'lawn' });

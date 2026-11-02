@@ -62,9 +62,9 @@ import { action, ApiError } from './api.js';
 // are made on the phone, so a replay is the same link).
 // person.tag: tags put on or taken off on a profile at the desk (desk roles;
 // the server dedupes it on client_id, server/ext/deskoffline).
-export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'relationship.add', 'person.tag', 'person.details'];
+export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'relationship.add', 'person.tag', 'person.details', 'vote.mark'];
 // Keyed by a client_id the server dedupes on.
-const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag'];
+const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark'];
 // The writes that add a person, on an id made here.
 export const NEW_PERSON = ['person.create', 'person.addAtDoor'];
 // What can be taken back while it waits: a sign request (its cancel is
@@ -535,6 +535,7 @@ export function itemText(item, nameOf = () => '') {
     case 'shift.leave': what = 'Can’t make it'; break;
     case 'relationship.add': what = 'Someone you know'; break;
     case 'person.tag': what = tagChangeText(i); break;
+    case 'vote.mark': what = i.voted === false ? 'Not voted' : 'Voted'; break;
     default: what = 'Saved';
   }
   const name = NEW_PERSON.includes(item.name) ? i.name : item.name === 'relationship.add' ? i.person?.name || who : who;

@@ -147,7 +147,7 @@ app.get('/persons', async (c) => {
   // card needs no per-person fetch. Nothing else from attrs is exposed.
   const { rows } = await c.get('db').query(
     `select p.id, p.kind, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
-            p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.attrs->>'note' as note
+            p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note
      from persons p where ${where}
      order by lower(p.name) limit $4`,
     params,
@@ -161,7 +161,7 @@ app.get('/map/doors', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const persons = (await db.query(
-    `select id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, tags
+    `select id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags
      from persons where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
      order by lower(address), lower(name) limit 5000`,
     [ctx.workspaceId],
@@ -183,7 +183,7 @@ app.get('/persons/:id', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const person = (await db.query(
-    `select id, kind, name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, created_at,
+    `select id, kind, name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, voted_at, created_at,
             attrs->>'note' as note
      from persons where id = $1 and workspace_id = $2 and deleted_at is null`,
     [c.req.param('id'), ctx.workspaceId],
@@ -245,7 +245,7 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // pass (passId; ext/passes) — how many count as tries (a lit drop doesn't)
 // and the latest outcome. 0 / null with no pass open.
 const loadLocated = async (db, ws, passId = null) => (await db.query(
-  `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags,
+  `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags, p.voted_at,
           (select max(c.created_at) from contacts c where c.person_id = p.id) as last_contact_at,
           (select c.outcome from contacts c where c.person_id = p.id order by c.created_at desc limit 1) as last_outcome,
           exists (select 1 from contacts c where c.person_id = p.id and c.channel = 'door') as door_knocked,

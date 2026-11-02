@@ -49,6 +49,7 @@ import { SIGN_KINDS } from '@starbase/shared/canvass';
 import RatingButtons, { More, OutcomeButtons, OUTCOME_LABEL, PersonTabs, focusRating, ratingText, useScale } from './RatingButtons.jsx';
 import QuickDetails from './QuickDetails.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from './SurveyQuestions.jsx';
+import { VotedRow } from './Voted.jsx';
 import { callsCard, noTexts, textingOn, useTextingStatus } from './TextingCard.jsx';
 import '../pages/map.css';
 
@@ -603,6 +604,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
             disabled={busy}
             onPick={(code) => log(sel, channel, 'contacted', code)}
           />
+          <VotedRow person={sel} source={channel === 'phone' ? 'phone' : 'door'} toast={(text, o) => toast(text, o?.act || null)} onMarked={refresh} />
           <OutcomeButtons disabled={busy} onPick={(code) => log(sel, channel, code)} />
           <SurveyQuestions key={`questions-${sel.id}`} survey={survey} disabled={busy} onSave={() => log(sel, channel, 'contacted')} />
         </section>

@@ -39,8 +39,9 @@ import RatingButtons, {
   More, OutcomeButtons, OUTCOMES, OUTCOME_LABEL, PersonTabs, RatingChip, focusRating, ratingText, reveal, useScale,
 } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from '../components/SurveyQuestions.jsx';
-import { doorState } from '@starbase/shared/passes';
+import { doorState, inPass } from '@starbase/shared/passes';
 import { PassChip, TryAgainChip, WalkShow, overlayPass } from '../components/PassBits.jsx';
+import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import './turfs.css';
 
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
@@ -402,6 +403,8 @@ function WalkList({ id }) {
       cancelled: new Set(pending.filter((i) => i.name === 'sign.cancel').map((i) => i.input?.id)),
     };
   }, [outbox.items]);
+  // "Voted ✓" taps still on this phone (ext/voted), laid over voted_at.
+  const votes = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
   const doors = useMemo(() => {
     const list = (q.data?.doors ?? []).map((d) => ({ ...d, persons: [...d.persons] }));
     const known = new Set(list.flatMap((d) => d.persons.map((p) => p.id)));
@@ -414,9 +417,11 @@ function WalkList({ id }) {
     return list.map((d) => {
       const persons = d.persons.map((p) => {
         const mine = local[p.id];
+        const vote = votes[p.id];
+        const withVote = vote ? { ...p, voted_at: vote.voted ? vote.at || p.voted_at || new Date().toISOString() : null } : p;
         return mine
-          ? { ...p, rating: mine.rating ?? p.rating, last_outcome: mine.outcome, last_contact_at: mine.at, door_knocked: true, queued: mine.queued }
-          : p;
+          ? { ...withVote, rating: mine.rating ?? p.rating, last_outcome: mine.outcome, last_contact_at: mine.at, door_knocked: true, queued: mine.queued }
+          : withVote;
       });
       const ids = new Set(persons.map((p) => p.id));
       const signs = [
@@ -428,7 +433,11 @@ function WalkList({ id }) {
       // and the door's state from the shared rule — so an offline No answer
       // reads "Try again", not done. Without one: the old rule.
       const laid = pass ? overlayPass({ ...d, persons }, local, pass, q.dataUpdatedAt) : persons;
-      const state = pass ? doorState({ ...d, persons: laid }, pass) : (d.done || persons.some((p) => local[p.id]) ? 'done' : 'open');
+      // A get-out-the-vote door where everyone has now voted (a tap still on
+      // this phone) is done here; the server leaves it off the next list.
+      const state = pass
+        ? (inPass({ persons: laid }, pass) ? doorState({ ...d, persons: laid }, pass) : 'done')
+        : (d.done || persons.some((p) => local[p.id]) ? 'done' : 'open');
       return {
         ...d,
         key: `${norm(d.address)}|${norm(d.unit)}|${d.address ? '' : d.persons[0]?.id}`,
@@ -439,7 +448,7 @@ function WalkList({ id }) {
         tries: Math.max(0, ...laid.map((p) => p.pass_tries || 0)),
       };
     });
-  }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass]);
+  }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass, votes]);
 
   // The latest list, open door and knocks, for handlers that finish after an
   // await (and for the unmount note flush).
@@ -938,6 +947,8 @@ function Door({
   // The active survey's questions: answers go with a "talked" tap; a refused tap puts them back.
   const { id: turfId } = useParams();
   const survey = useSurvey({ context: 'door', personId: sel?.id, turfId, lat: door.lat, lng: door.lng });
+  // A "Voted ✓" sent with signal: the list loads again (a door where everyone has voted may leave it).
+  const queryClient = useQueryClient();
   // After "Save answers", the next tap on that person finishes the same knock.
   const tap = async (p, outcome, rating = null) => {
     const answers = outcome === 'contacted' ? survey.take() : [];
@@ -995,6 +1006,7 @@ function Door({
             {multi
               ? rated.length > 0 && <span className="chip walk-rated">{rated.length} rated</span>
               : rated.map((p) => <RatingChip key={p.id} code={p.rating} who brief />)}
+            <VotedChip persons={door.persons} />
           </span>
           <span className="walk-sr">
             {door.done ? (phoneOnly ? ' — called, not knocked' : ' — done') : ' — not knocked yet'}{isNext ? ', next door' : ''}
@@ -1006,6 +1018,7 @@ function Door({
         <div className="walk-panel" id={panelId}>
           <PersonTabs persons={door.persons} value={sel.id} onPick={onPick} />
           {dnc && <p className="walk-dnc"><span className="chip chip-danger">Do not contact</span> Skip {firstName(sel.name)}</p>}
+          <VotedRow person={sel} source="door" toast={toast} onMarked={() => queryClient.invalidateQueries({ queryKey: ['turf', turfId] })} />
           <RatingButtons key={sel.id} value={sel.rating} disabled={Boolean(busy[sel.id] || busy[door.key])} onPick={(code) => talk(sel, code)} />
           <OutcomeButtons
             items={DOOR_OUTCOMES}
