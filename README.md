@@ -172,6 +172,15 @@ than a week after they came off is refused. Contacts are door, phone, text or
   a do-not-contact profile) and *Most connected* finds the connectors. A
   volunteer's add never matches on, or takes, an email the campaign holds, so
   a possible double is flagged to the desk (*May be the same person as …*).
+- **Lit drops**: *Left lit* is its own outcome (`left_lit`) — literature
+  left at a door, a visit and not a conversation. The walk list's *Left
+  lit* logs it for everyone at the door in one tap (no rating asked; saved
+  on the phone with no signal and sent once), and the map's door card
+  offers it for the person picked, at the door only (never on a call, a
+  text or the Calls card). It finishes the door like a knock but is never
+  *Reached*: Today's *More* counts the doors lit this week (yours and the
+  team's), Reports → *Contacts by week* has a *Lit* column, the dashboard
+  colours the drops apart, and a profile's History reads *Left lit*.
 
 ## Coverage vs. the tools it replaces
 

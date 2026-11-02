@@ -64,7 +64,11 @@ export const OUTCOMES = [
   { code: 'moved', label: 'Moved' },
   { code: 'inaccessible', label: 'No access' },
 ];
-export const OUTCOME_LABEL = { contacted: 'Talked', ...Object.fromEntries(OUTCOMES.map((o) => [o.code, o.label])) };
+export const OUTCOME_LABEL = { contacted: 'Talked', ...Object.fromEntries(OUTCOMES.map((o) => [o.code, o.label])), left_lit: 'Left lit' };
+// Literature left at a door: a visit, not a conversation. Offered at the
+// door only (the walk list, the map's door card on the door channel) —
+// never in OUTCOMES, which the Calls card and the profile render.
+export const LIT = { code: 'left_lit', label: 'Left lit' };
 
 export function OutcomeButtons({ items = OUTCOMES, onPick, disabled = false }) {
   return (

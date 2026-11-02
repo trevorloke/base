@@ -627,15 +627,16 @@ function More({ children }) {
 }
 
 // "You 6 · Team 38 doors this week": their own count first, then everyone's
-// (the brief's field.mine and field). The noun follows the team number.
-function MineLine({ you, team, noun, small }) {
+// (the brief's field.mine and field). The noun follows the team number
+// (many: its plural when adding an s won't do — "doors lit").
+function MineLine({ you, team, noun, many, small }) {
   const t = Number(team) || 0;
   return (
     <p className={`today-mine${small ? ' is-small' : ''}`}>
       <span className="today-mine__pair">You <strong className="today-mine__n">{num(you)}</strong></span>
       <span className="today-mine__dot"> · </span>
       <span className="today-mine__pair">Team <strong className="today-mine__n">{num(t)}</strong></span>
-      {' '}<span className="today-mine__what">{plural(t, noun)} this week</span>
+      {' '}<span className="today-mine__what">{plural(t, noun, many)} this week</span>
     </p>
   );
 }
@@ -710,6 +711,7 @@ function VolunteerToday({ b, me }) {
         <MineLine you={mine.calls} team={f.calls} noun="call" small />
         <MineLine you={mine.texts} team={f.texts} noun="text" small />
         {Number(b.inPerson?.week) > 0 && <MineLine you={b.inPerson.mine} team={b.inPerson.week} noun="in-person talk" small />}
+        {Number(f.lit) > 0 && <MineLine you={mine.lit} team={f.lit} noun="door lit" many="doors lit" small />}
         {/* Always here, signs waiting or not: the sign crew's way to Add a sign. */}
         <ul className="today-rows">
           <LinkRow to="/signs" main="Signs" />

@@ -49,9 +49,11 @@ const TURF_COLORS = ['#2b6cb0', '#7b3fa0', '#b5651d', '#1f7a6d', '#a0306a', '#4c
 // The door's outcome row: "No answer" (logged for everyone at the door —
 // same name as everywhere else) first, then the selected person's refused /
 // moved / no access. One person's own "No answer" sits under More when
-// several people share the door.
+// several people share the door. "Left lit" (literature left, nobody
+// talked to) is for everyone at the door too, so it sits beside it.
 const NOBODY = 'nobody_home';
-const DOOR_OUTCOMES = [{ code: NOBODY, label: OUTCOME_LABEL.no_answer }, ...OUTCOMES.filter((o) => o.code !== 'no_answer')];
+const LIT_DOOR = 'lit_door';
+const DOOR_OUTCOMES = [{ code: NOBODY, label: OUTCOME_LABEL.no_answer }, { code: LIT_DOOR, label: 'Left lit' }, ...OUTCOMES.filter((o) => o.code !== 'no_answer')];
 // Everything a knock changes: this walk list, turf progress, map pins,
 // profiles and lists (ratings), the contact feed, Today.
 const KNOCK_KEYS = ['turfs', 'doors', 'person', 'persons', 'contacts', 'brief'];
@@ -689,6 +691,29 @@ function WalkList({ id }) {
     }
   };
 
+  // "Left lit" at the door: literature left, nobody talked to — a left_lit
+  // for everyone there, one tap, no rating asked. It settles the door too.
+  const leftLit = async (door) => {
+    setBusyKey(door.key, true);
+    let queued = null; // the last queued drop, for its words
+    let failed = 0;
+    let sent = 0;
+    for (const p of door.persons) {
+      const r = await log(p, 'left_lit', null, { quiet: true, batch: true });
+      if (!r.ok) failed += 1;
+      else if (r.queued) queued = r;
+      else sent += 1;
+    }
+    if (sent) refresh(); // once for the door, not once per person
+    setBusyKey(door.key, false);
+    const change = { label: 'Change', onClick: () => reopen(door.key) };
+    if (failed) toast(`${plural(failed, 'knock', 'knocks')} not saved — try again`, { tone: 'error' });
+    else {
+      toast(queued ? queuedSaid(queued, 'Left lit') : 'Left lit', { tone: queued ? 'queued' : 'ok', act: change });
+      if (openRef.current === door.key) advanceFrom(door.key);
+    }
+  };
+
   // ── "Wants a sign?" and "+ Person at this door" (the door's More) ──
   // The list's copy is patched at once after a send; the refetch follows.
   const patchWalk = (fn) => {
@@ -898,6 +923,7 @@ function WalkList({ id }) {
               onNoteFocus={hideToast}
               onLog={(p, outcome, rating = null, answers = null, visitOf = null) => log(p, outcome, rating, { door: d, answers, visitOf })}
               onNobodyHome={() => nobodyHome(d)}
+              onLeftLit={() => leftLit(d)}
               onSign={(p, kind) => askSign(d, p, kind)}
               onAdded={(person) => personAdded(d, person)}
               toast={toast}
@@ -933,7 +959,7 @@ function WalkList({ id }) {
 
 function Door({
   door, index, isNext, open, onToggle, selectedId, onPick, busy, notes, setNote, onNoteFocus, onLog, onNobodyHome,
-  onSign, onAdded, toast,
+  onLeftLit, onSign, onAdded, toast,
   pass,
 }) {
   const [more, setMore] = useState(false);
@@ -1023,7 +1049,7 @@ function Door({
           <OutcomeButtons
             items={DOOR_OUTCOMES}
             disabled={doorBusy}
-            onPick={(code) => (code === NOBODY ? onNobodyHome() : tap(sel, code))}
+            onPick={(code) => (code === NOBODY ? onNobodyHome() : code === LIT_DOOR ? onLeftLit() : tap(sel, code))}
           />
           <SurveyQuestions key={`questions-${sel.id}`} survey={survey} disabled={Boolean(busy[sel.id] || busy[door.key])} onSave={() => talk(sel)} />
           <More id={`walk-more-${index}`} open={more} onToggle={() => setMore((m) => !m)}>

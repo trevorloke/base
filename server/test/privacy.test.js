@@ -47,7 +47,7 @@ test('volunteer brief carries field stats but no money or flags', async () => {
   assert.equal(b.json.money, null);
   assert.deepEqual(b.json.flagged, []);
   assert.ok(b.json.field, 'field stats still present');
-  assert.deepEqual(Object.keys(b.json.field.mine).sort(), ['calls', 'doors', 'texts'], 'their own counts, numbers only');
+  assert.deepEqual(Object.keys(b.json.field.mine).sort(), ['calls', 'doors', 'lit', 'texts'], 'their own counts, numbers only');
   const d = await desk.get('/api/brief');
   assert.equal(d.json.money.totalCents, 120000);
   assert.equal(d.json.flagged.length, 0, 'under the cap: nothing flagged');

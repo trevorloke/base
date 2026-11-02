@@ -261,7 +261,7 @@ test('in person: a talk with someone you know is a contact like any other', asyn
   const b1 = ok(await vol.get('/api/brief'));
   const after = b1.field;
   assert.deepEqual(b1.inPerson, { week: b0.inPerson.week + 1, mine: 1 }, 'in person this week: the team’s and theirs');
-  assert.deepEqual(Object.keys(after.mine).sort(), ['calls', 'doors', 'texts'], 'the core’s own counts keep their shape');
+  assert.deepEqual(Object.keys(after.mine).sort(), ['calls', 'doors', 'lit', 'texts'], 'the core’s own counts keep their shape');
   assert.equal(after.week, before.week + 1, 'every contact counts in the week');
   assert.equal(after.doors, before.doors, 'a talk in person is not a door knocked');
   assert.equal(after.calls, before.calls);

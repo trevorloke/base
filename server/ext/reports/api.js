@@ -48,14 +48,15 @@ const REPORTS = {
     )).rows.map((r) => [day(r.week), r.n]),
   }),
   contacts: async (db, ws) => ({
-    head: ['Week of', 'Doors', 'Calls', 'Texts', 'Reached', 'No answer', 'Refused'],
+    head: ['Week of', 'Doors', 'Calls', 'Texts', 'Reached', 'No answer', 'Refused', 'Lit'],
     rows: (await db.query(
       `select date_trunc('week', created_at)::date as week,
          (count(*) filter (where channel = 'door'))::int as doors, (count(*) filter (where channel = 'phone'))::int as calls,
          (count(*) filter (where channel = 'text'))::int as texts, (count(*) filter (where outcome = 'contacted'))::int as reached,
-         (count(*) filter (where outcome = 'no_answer'))::int as no_answer, (count(*) filter (where outcome = 'refused'))::int as refused
+         (count(*) filter (where outcome = 'no_answer'))::int as no_answer, (count(*) filter (where outcome = 'refused'))::int as refused,
+         (count(*) filter (where outcome = 'left_lit'))::int as lit
        from contacts where workspace_id = $1 and created_at > now() - interval '8 weeks' group by 1 order by 1`, [ws],
-    )).rows.map((r) => [day(r.week), r.doors, r.calls, r.texts, r.reached, r.no_answer, r.refused]),
+    )).rows.map((r) => [day(r.week), r.doors, r.calls, r.texts, r.reached, r.no_answer, r.refused, r.lit]),
   }),
   donations: async (db, ws) => ({
     head: ['Month', 'Gifts', 'Donors', 'Total ($)'],
