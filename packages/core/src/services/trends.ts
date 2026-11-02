@@ -8,6 +8,15 @@ import { CoreError } from "../errors.ts";
 
 const STAGE_WEIGHT: Record<TrendStage, number> = { rising: 1, peaking: 0.7, plateau: 0.4, fading: 0.15, dormant: 0.05 };
 
+/** A post's 24h outcome is the sum over its variants (one post, several networks). Null when nothing is captured yet. */
+function sumOutcomes(bags: (Record<string, number> | null)[]): Record<string, number> | null {
+  const present = bags.filter((b): b is Record<string, number> => !!b);
+  if (present.length === 0) return null;
+  const out: Record<string, number> = {};
+  for (const b of present) for (const [k, v] of Object.entries(b)) out[k] = (out[k] ?? 0) + v;
+  return out;
+}
+
 /** Plain words for the strategist. Null when there is nothing to act on. */
 export function windowText(stage: TrendStage | null, hoursToPeak: number | null): string | null {
   if (stage === "rising") {
@@ -31,10 +40,19 @@ export class TrendService {
     return row!;
   }
 
-  async getTopic(topicId: string) {
+  /** A topic by id. With a workspaceId, only that workspace's topics and global ones are visible. */
+  async getTopic(topicId: string, workspaceId?: string) {
     const [row] = await this.ctx.db.select().from(trendTopics).where(eq(trendTopics.id, topicId)).limit(1);
-    if (!row) throw new CoreError("not_found", `topic ${topicId}`);
+    if (!row || (workspaceId !== undefined && row.workspaceId !== null && row.workspaceId !== workspaceId)) throw new CoreError("not_found", `topic ${topicId}`);
     return row;
+  }
+
+  /** Writes to a topic require owning it. Global topics are written by the system (workers), never by a principal. */
+  private async ownedTopic(p: Principal, topicId: string) {
+    const topic = await this.getTopic(topicId, p.workspaceId);
+    if (topic.workspaceId !== p.workspaceId) throw new CoreError("forbidden", "global topics are maintained by the system");
+    if (p.actor.type === "human" && p.role === "viewer") throw new CoreError("forbidden", "viewers cannot change topics");
+    return topic;
   }
 
   /** Workspace topics plus global ones. */
@@ -47,13 +65,17 @@ export class TrendService {
   }
 
   async setRelevance(p: Principal, topicId: string, relevance: number) {
-    await this.getTopic(topicId);
-    await this.ctx.db.update(trendTopics).set({ relevance }).where(eq(trendTopics.id, topicId));
+    await this.ownedTopic(p, topicId);
+    await this.ctx.db.update(trendTopics).set({ relevance: Math.max(0, Math.min(1, relevance)) }).where(eq(trendTopics.id, topicId));
   }
 
-  async recordPoints(rawPoints: unknown[], actorWorkspaceId?: string): Promise<number> {
+  /** Record observations. With a principal, every topic must belong to that workspace; without one, the system is writing. */
+  async recordPoints(rawPoints: unknown[], principal?: Principal): Promise<number> {
     const pts = rawPoints.map((p) => TrendPointInput.parse(p));
     if (pts.length === 0) return 0;
+    const actor = principal?.actor ?? SYSTEM;
+    const actorWorkspaceId = principal?.workspaceId;
+    if (principal) for (const id of new Set(pts.map((p) => p.topicId))) await this.ownedTopic(principal, id);
     await this.ctx.db.insert(trendPoints).values(pts.map((p) => ({ topicId: p.topicId, source: p.source, region: p.region, value: p.value, observedAt: new Date(p.observedAt) })));
     const byTopic = new Map<string, number>();
     for (const p of pts) byTopic.set(p.topicId, (byTopic.get(p.topicId) ?? 0) + 1);
@@ -64,7 +86,7 @@ export class TrendService {
         type: "trend.points_recorded",
         subjectType: "trend_topic",
         subjectId: topicId,
-        actor: SYSTEM,
+        actor,
         data: { count: n, sources: [...new Set(pts.filter((p) => p.topicId === topicId).map((p) => p.source))] },
       });
     }
@@ -80,8 +102,8 @@ export class TrendService {
   }
 
   /** Recompute the forecast for a topic from its last `lookbackDays` of points. Persists and returns it. */
-  async computeForecast(topicId: string, opts: { lookbackDays?: number; horizonHours?: number; stepMs?: number } = {}) {
-    const topic = await this.getTopic(topicId);
+  async computeForecast(topicId: string, opts: { lookbackDays?: number; horizonHours?: number; stepMs?: number } = {}, principal?: Principal) {
+    const topic = principal ? await this.ownedTopic(principal, topicId) : await this.getTopic(topicId);
     const now = this.ctx.now();
     const since = new Date(now.getTime() - (opts.lookbackDays ?? 14) * 86_400_000);
     const pts = await this.points(topicId, since);
@@ -168,7 +190,7 @@ export class TrendService {
 
   /** Everything about one topic: points per source, forecast, and the workspace's actions with their 24h outcomes. */
   async detail(workspaceId: string, topicId: string, lookbackDays = 14) {
-    const topic = await this.getTopic(topicId);
+    const topic = await this.getTopic(topicId, workspaceId);
     const since = new Date(this.ctx.now().getTime() - lookbackDays * 86_400_000);
     const pts = await this.points(topicId, since);
     const forecast = await this.latestForecast(topicId);
@@ -188,7 +210,7 @@ export class TrendService {
           return acc;
         }, {}),
       ).map(([source, points]) => ({ source, points })),
-      actions: acts.map((a) => ({ ...a, outcome24h: outcomes.find((o) => o.postId === a.postId)?.metrics ?? null })),
+      actions: acts.map((a) => ({ ...a, outcome24h: sumOutcomes(outcomes.filter((o) => o.postId === a.postId).map((o) => o.metrics)) })),
     };
   }
 }

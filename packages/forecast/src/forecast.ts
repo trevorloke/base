@@ -1,7 +1,7 @@
 import type { TrendForecast, TrendSource, TrendStage } from "@starsign/schema";
 import { fitHolt, holtForecast } from "./holt.ts";
 import { classifyStage, kinematics, stepsToPeak, type StageParams } from "./stage.ts";
-import { quantile, resample, type Point } from "./series.ts";
+import { mean, quantile, resampleDetailed, type Point } from "./series.ts";
 
 export const MODEL_VERSION = "holt-damped+kinematics/0.1";
 
@@ -34,26 +34,47 @@ export interface ForecastResult {
   combined: Point[];
   modelVersion: string;
   horizonHours: number;
+  /** Hours between the last real observation and now. 0 when fresh. */
+  staleHours: number;
+  /** Grid buckets with at least one real observation. */
+  observedBuckets: number;
 }
 
-/** Scale each source to its own recent baseline so they can be averaged. */
+/** Scale each source to its own typical level so they can be averaged. Sparse count sources (median 0) scale by their mean. */
 function normalizeSeries(points: Point[]): Point[] {
   if (points.length === 0) return [];
   const vals = points.map((p) => p.v);
-  const med = quantile(vals, 0.5);
-  const scale = Math.max(Math.abs(med), quantile(vals, 0.9) * 0.1, 1e-9);
+  const scale = Math.max(Math.abs(quantile(vals, 0.5)), Math.abs(mean(vals)), 1e-9);
   return points.map((p) => ({ t: p.t, v: p.v / scale }));
 }
 
-/** Combine several sources on a shared grid into one normalized series plus an agreement score. */
-export function combineSources(series: SourceSeries[], stepMs: number, now: number): { combined: Point[]; agreement: number | null } {
-  const usable = series.filter((s) => s.points.length >= 2);
-  if (usable.length === 0) return { combined: [], agreement: null };
+export interface Combined {
+  combined: Point[];
+  agreement: number | null;
+  /** Grid buckets that received at least one real observation from any source. */
+  observedBuckets: number;
+  /** Epoch ms of the last real observation across sources; null when nothing usable. */
+  lastObservedAt: number | null;
+}
+
+/**
+ * Combine several sources on a shared grid into one normalized series plus an agreement score.
+ * The grid ends at the last real observation, never at `now`: carrying a stale value forward would
+ * manufacture a plateau. Points in the future are ignored.
+ */
+export function combineSources(series: SourceSeries[], stepMs: number, now: number): Combined {
+  const usable = series
+    .map((s) => ({ ...s, points: s.points.filter((p) => Number.isFinite(p.v) && Number.isFinite(p.t) && p.t <= now) }))
+    .filter((s) => s.points.length >= 2);
+  if (usable.length === 0) return { combined: [], agreement: null, observedBuckets: 0, lastObservedAt: null };
   const from = Math.min(...usable.map((s) => Math.min(...s.points.map((p) => p.t))));
-  const grids = usable.map((s) => ({
-    w: s.weight ?? 1,
-    g: normalizeSeries(resample(s.points, stepMs, { from, to: now })),
-  }));
+  const to = Math.max(...usable.map((s) => Math.max(...s.points.map((p) => p.t))));
+  const observedIdx = new Set<number>();
+  const grids = usable.map((s) => {
+    const r = resampleDetailed(s.points, stepMs, { from, to });
+    for (const i of r.observed) observedIdx.add(i);
+    return { w: s.weight ?? 1, g: normalizeSeries(r.points) };
+  });
   const len = Math.max(...grids.map((x) => x.g.length));
   const combined: Point[] = [];
   for (let i = 0; i < len; i++) {
@@ -87,7 +108,7 @@ export function combineSources(series: SourceSeries[], stepMs: number, now: numb
     }
     agreement = n ? clamp01(sum / n) : null;
   }
-  return { combined, agreement };
+  return { combined, agreement, observedBuckets: observedIdx.size, lastObservedAt: to };
 }
 
 /**
@@ -99,7 +120,7 @@ export function forecastTopic(series: SourceSeries[], opts: ForecastOptions = {}
   const horizon = opts.horizonSteps ?? 72;
   const now = opts.now ?? Date.now();
   const minHistory = opts.minHistory ?? 24;
-  const { combined, agreement } = combineSources(series, stepMs, now);
+  const { combined, agreement, observedBuckets, lastObservedAt } = combineSources(series, stepMs, now);
   const sources = [...new Set(series.filter((s) => s.points.length >= 2).map((s) => s.source))];
   const horizonHours = Math.round((horizon * stepMs) / 3_600_000);
 
@@ -116,6 +137,8 @@ export function forecastTopic(series: SourceSeries[], opts: ForecastOptions = {}
       combined,
       modelVersion: MODEL_VERSION,
       horizonHours,
+      staleHours: 0,
+      observedBuckets,
     };
   }
 
@@ -145,11 +168,15 @@ export function forecastTopic(series: SourceSeries[], opts: ForecastOptions = {}
   const hoursToPeak = steps === null ? null : Math.max(1, Math.round(Math.min(steps, horizon) * (stepMs / 3_600_000)));
 
   // Confidence: data density, residual noise relative to level, source agreement.
-  // Density gates everything: with little history, nothing else can make us confident.
-  const density = Math.min(1, combined.length / minHistory);
+  // Density gates everything: with little history, nothing else can make us confident. It counts real
+  // observations, not interpolated grid buckets, so two points can never look like a day of data.
+  const density = Math.min(1, observedBuckets / minHistory);
   const noise = Math.min(1, spread / Math.max(Math.abs(k.level), 1e-9));
   const agreementTerm = agreement ?? 0.5; // single source: unknown, not good
-  const confidence = clamp01(Math.pow(density, 0.7) * (0.6 * (1 - noise) + 0.4 * agreementTerm));
+  // Staleness: a forecast from data that stopped arriving is worth less, and says so.
+  const staleSteps = lastObservedAt === null ? 0 : Math.max(0, (now - lastObservedAt) / stepMs);
+  const stalePenalty = staleSteps > k.window ? Math.max(0.3, 1 - (staleSteps - k.window) / minHistory) : 1;
+  const confidence = clamp01(Math.pow(density, 0.7) * (0.6 * (1 - noise) + 0.4 * agreementTerm) * stalePenalty);
 
   return {
     stage,
@@ -163,6 +190,8 @@ export function forecastTopic(series: SourceSeries[], opts: ForecastOptions = {}
     combined,
     modelVersion: MODEL_VERSION,
     horizonHours,
+    staleHours: Math.round((staleSteps * stepMs) / 3_600_000),
+    observedBuckets,
   };
 }
 

@@ -21,6 +21,8 @@ export type RawEventInput = z.input<typeof RawEventInput>;
 
 export const LedgerEventType = z.enum([
   "workspace.created",
+  "apikey.created",
+  "apikey.revoked",
   "account.connected",
   "account.disconnected",
   "policy.updated",

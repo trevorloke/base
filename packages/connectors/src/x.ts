@@ -211,16 +211,27 @@ export class XConnector implements Connector {
     const posted: string[] = this.progress.get(key) ?? [];
     const mediaIds = posted.length === 0 ? await this.uploadImages(account, auth, input.media) : [];
 
-    for (let i = posted.length; i < segments.length; i++) {
-      const parent = posted[posted.length - 1] ?? input.replyToExternalId ?? undefined;
-      const body: Record<string, unknown> = { text: segments[i] ?? "" };
-      if (parent) body.reply = { in_reply_to_tweet_id: parent };
-      if (i === 0 && mediaIds.length > 0) body.media = { media_ids: mediaIds };
-      const res = await this.request<{ data?: { id?: string } }>(account, auth, "POST", "/2/tweets", { json: body, creating: true });
-      const id = res.data?.id;
-      if (!id) throw new ConnectorError("x publish: response carried no tweet id", "unknown", false, res);
-      posted.push(id);
-      this.progress.set(key, posted);
+    try {
+      for (let i = posted.length; i < segments.length; i++) {
+        const parent = posted[posted.length - 1] ?? input.replyToExternalId ?? undefined;
+        const body: Record<string, unknown> = { text: segments[i] ?? "" };
+        if (parent) body.reply = { in_reply_to_tweet_id: parent };
+        if (i === 0 && mediaIds.length > 0) body.media = { media_ids: mediaIds };
+        const res = await this.request<{ data?: { id?: string } }>(account, auth, "POST", "/2/tweets", { json: body, creating: true });
+        const id = res.data?.id;
+        if (!id) throw new ConnectorError("x publish: response carried no tweet id", "unknown", false, res);
+        posted.push(id);
+        this.progress.set(key, posted);
+      }
+    } catch (err) {
+      // Part of the thread is live: tell core which ids exist so the variant is never an orphan on the network.
+      const root = posted[0];
+      if (root) {
+        const ce = err instanceof ConnectorError ? err : new ConnectorError(err instanceof Error ? err.message : String(err), "unknown", true, err);
+        ce.partial = { externalId: root, url: xTweetUrl(account.handle, root), threadExternalIds: [...posted] };
+        throw ce;
+      }
+      throw err;
     }
 
     const root = posted[0];

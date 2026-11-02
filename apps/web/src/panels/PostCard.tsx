@@ -191,9 +191,26 @@ export function PostCard({ item, onDecided }: { item: PostSummary; onDecided: (i
       ) : null}
 
       <footer className="card-actions">
-        <button type="button" className="btn btn-primary" disabled={busy !== null} onClick={() => void decide("approve")}>
-          {busy === "approve" ? "Approving…" : editCount > 0 ? `Approve with ${plural(editCount, "edit")}` : "Approve"}
-        </button>
+        {(() => {
+          const overNet = variants.find((v) => {
+            const max = NETWORK_MAX_TEXT[v.network] ?? 0;
+            return max > 0 && (drafts[v.id] ?? v.text).length > max;
+          });
+          return (
+            <>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={busy !== null || !!overNet}
+                title={overNet ? `${networkLabel(overNet.network)} text is over ${NETWORK_MAX_TEXT[overNet.network]} characters` : undefined}
+                onClick={() => void decide("approve")}
+              >
+                {busy === "approve" ? "Approving…" : editCount > 0 ? `Approve with ${plural(editCount, "edit")}` : "Approve"}
+              </button>
+              {overNet ? <span className="muted small">{networkLabel(overNet.network)} text is over {NETWORK_MAX_TEXT[overNet.network]} characters</span> : null}
+            </>
+          );
+        })()}
         <button type="button" className="btn" disabled={busy !== null} onClick={() => void decide("reject")}>
           {busy === "reject" ? "Rejecting…" : "Reject"}
         </button>

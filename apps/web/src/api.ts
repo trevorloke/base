@@ -190,11 +190,25 @@ export function openFeedStream(h: StreamHandlers): () => void {
   let retry: number | null = null;
   let backoff = 1_000;
 
-  const connect = () => {
+  const connect = async () => {
     if (closed) return;
-    const key = getApiKey();
-    const url = `${BASE}/v1/feed/stream${key ? `?key=${enc(key)}` : ""}`;
     h.onStatus("connecting");
+    // The API key never travels in a URL: mint a 60-second single-use stream token first.
+    let token: string | null = null;
+    try {
+      const key = getApiKey();
+      const res = await fetch(`${BASE}/v1/feed/stream-token`, { method: "POST", headers: key ? { authorization: `Bearer ${key}` } : {} });
+      if (res.ok) token = ((await res.json()) as { token: string }).token;
+    } catch {
+      token = null;
+    }
+    if (closed) return;
+    if (!token) {
+      retry = window.setTimeout(() => void connect(), backoff);
+      backoff = Math.min(backoff * 2, 30_000);
+      return;
+    }
+    const url = `${BASE}/v1/feed/stream?token=${enc(token)}`;
     const source = new EventSource(url);
     es = source;
     source.onopen = () => {
@@ -218,14 +232,14 @@ export function openFeedStream(h: StreamHandlers): () => void {
         source.close();
         if (es === source) es = null;
         if (!closed) {
-          retry = window.setTimeout(connect, backoff);
+          retry = window.setTimeout(() => void connect(), backoff);
           backoff = Math.min(backoff * 2, 30_000);
         }
       }
     };
   };
 
-  connect();
+  void connect();
   return () => {
     closed = true;
     if (retry !== null) window.clearTimeout(retry);

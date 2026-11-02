@@ -20,7 +20,15 @@ export function xWeightedLength(s: string): number {
   for (const ch of withoutUrls) {
     const cp = ch.codePointAt(0) ?? 0;
     // Ranges weighted 2 in X's config (CJK, Hangul, fullwidth, emoji above BMP).
-    const heavy = (cp >= 0x1100 && cp <= 0x11ff) || (cp >= 0x2e80 && cp <= 0xa4cf) || (cp >= 0xac00 && cp <= 0xd7af) || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe30 && cp <= 0xfe4f) || (cp >= 0xff00 && cp <= 0xffef) || cp >= 0x20000;
+    const heavy =
+      (cp >= 0x1100 && cp <= 0x11ff) ||
+      (cp >= 0x2600 && cp <= 0x27bf) || // misc symbols, dingbats (☀ ✅ …)
+      (cp >= 0x2e80 && cp <= 0xa4cf) ||
+      (cp >= 0xac00 && cp <= 0xd7af) ||
+      (cp >= 0xf900 && cp <= 0xfaff) ||
+      (cp >= 0xfe30 && cp <= 0xfe4f) ||
+      (cp >= 0xff00 && cp <= 0xffef) ||
+      cp >= 0x1f000; // emoji and everything above the BMP
     n += heavy ? 2 : 1;
   }
   return n + urls * 23;

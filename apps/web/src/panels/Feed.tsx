@@ -37,15 +37,21 @@ export function Feed({ accounts, liveTick, liveStatus }: { accounts: Account[]; 
   const itemsRef = useRef<Activity[] | null>(null);
   itemsRef.current = items;
 
+  // A late response from a previous filter must never overwrite the current one.
+  const gen = useRef(0);
   const load = useCallback(async () => {
+    const g = ++gen.current;
     setLoading(true);
     setError(null);
     try {
-      setItems(await api.feed(query));
+      const rows = await api.feed(query);
+      if (g !== gen.current) return;
+      setItems(rows);
     } catch (e) {
+      if (g !== gen.current) return;
       setError(errorText(e));
     } finally {
-      setLoading(false);
+      if (g === gen.current) setLoading(false);
     }
   }, [query]);
 
@@ -53,18 +59,24 @@ export function Feed({ accounts, liveTick, liveStatus }: { accounts: Account[]; 
     void load();
   }, [load]);
 
-  /** Fetch what arrived since the newest row and put it on top. */
+  /**
+   * Re-read the first page and merge anything new by id. Items are ordered by when they happened, not when
+   * they were ingested, so a late-ingested older item still appears (a "since newest" query would miss it).
+   */
   const refreshSince = useCallback(async () => {
-    const current = itemsRef.current;
-    const since = current?.[0]?.occurredAt;
+    const g = gen.current;
     try {
-      const incoming = await api.feed(since ? { ...query, since } : query);
-      if (!incoming.length) return;
-      const seen = new Set((current ?? []).map((a) => a.id));
-      const add = incoming.filter((a) => !seen.has(a.id));
-      if (!add.length) return;
-      setItems([...add, ...(current ?? [])]);
-      setFresh((f) => new Set([...f, ...add.map((a) => a.id)]));
+      const incoming = await api.feed({ ...query, limit: 60 });
+      if (g !== gen.current || !incoming.length) return;
+      let added: string[] = [];
+      setItems((current) => {
+        const seen = new Set((current ?? []).map((a) => a.id));
+        const add = incoming.filter((a) => !seen.has(a.id));
+        added = add.map((a) => a.id);
+        if (!add.length) return current;
+        return [...add, ...(current ?? [])].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt));
+      });
+      if (added.length) setFresh((f) => new Set([...f, ...added]));
     } catch {
       // the next event or poll will try again
     }

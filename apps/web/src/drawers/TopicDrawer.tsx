@@ -78,7 +78,7 @@ export function TopicDrawer({ id, onClose }: { id: string; onClose: () => void }
                   <span className="section-h">Next 24h</span>
                   <span className="muted small">{thin ? "thin data: the band is a rough guess" : "band: where the value is likely to land"}</span>
                 </div>
-                <Sparkline forecast={fc.curve} stage={fc.stage} thin={thin} width={440} height={120} className="spark-big" title={`${data.topic.name}: forecast for the next 24h`} />
+                <Sparkline forecast={fc.curve.slice(0, 24)} stage={fc.stage} thin={thin} width={440} height={120} className="spark-big" title={`${data.topic.name}: forecast for the next 24h`} />
                 <div className="chart-axis mono">
                   <span>now</span>
                   <span>+12h</span>
@@ -92,6 +92,9 @@ export function TopicDrawer({ id, onClose }: { id: string; onClose: () => void }
             <h3 className="section-h">Sources, last 48h</h3>
             {data.series.length === 0 ? <p className="muted">No observations yet.</p> : null}
             {data.series.map((s) => {
+              const cutoff = Date.now() - 48 * 3_600_000;
+              const recent = s.points.filter((p) => Date.parse(p.t) >= cutoff);
+              const shown = recent.length >= 2 ? recent : s.points.slice(-48);
               const last = s.points[s.points.length - 1];
               return (
                 <div key={s.source} className="source-row">
@@ -99,7 +102,7 @@ export function TopicDrawer({ id, onClose }: { id: string; onClose: () => void }
                     <span className="source-name">{sourceLabel(s.source)}</span>
                     <span className="mono muted">{last ? compact(last.v) : "—"}</span>
                   </div>
-                  <Sparkline forecast={[]} history={s.points} width={440} height={36} className="spark-wide" title={`${sourceLabel(s.source)}, last 48h`} />
+                  <Sparkline forecast={[]} history={shown} width={440} height={36} className="spark-wide" title={`${sourceLabel(s.source)}, last 48h`} />
                 </div>
               );
             })}

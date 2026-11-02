@@ -2,10 +2,11 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { streamSSE } from "hono/streaming";
 import { and, desc, eq } from "drizzle-orm";
-import { ZodError } from "zod";
-import { approvalDiffs, postOutcomes, postVariants } from "@starsign/db";
+import { randomBytes } from "node:crypto";
+import { z, ZodError } from "zod";
+import { approvalDiffs, postOutcomes, posts, postVariants } from "@starsign/db";
 import { CoreError, type Starsign, type Principal } from "@starsign/core";
-import { Policy, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
+import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
 import { gatePost } from "@starsign/policy";
 
 export const VERSION = "0.1.0";
@@ -34,16 +35,30 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   app.onError((e, c) => {
     if (e instanceof CoreError) return c.json(err(e.code, e.message, e.details), e.httpStatus as 400);
     if (e instanceof ZodError) return c.json(err("invalid", "validation failed", e.issues), 400);
+    if (e instanceof SyntaxError) return c.json(err("invalid", "malformed JSON body"), 400);
     console.error("[api]", e);
     return c.json(err("internal", "internal error"), 500);
   });
+
+  // Short-lived, single-use tokens for the SSE stream (EventSource cannot send headers; API keys never go in URLs).
+  const streamTokens = new Map<string, { principal: Principal; expires: number }>();
+  const STREAM_TOKEN_TTL_MS = 60_000;
 
   app.get("/api/health", (c) => c.json({ ok: true, version: VERSION, db: m.ctx.db.constructor.name.toLowerCase().includes("pglite") ? "pglite" : "postgres" }));
 
   const auth = createMiddleware<Env>(async (c, next) => {
     const header = c.req.header("authorization");
-    let key = header?.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : undefined;
-    if (!key && c.req.path.endsWith("/feed/stream")) key = c.req.query("key") ?? undefined; // EventSource cannot send headers
+    const key = header?.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : undefined;
+    if (!key && c.req.path.endsWith("/feed/stream")) {
+      const token = c.req.query("token");
+      const entry = token ? streamTokens.get(token) : undefined;
+      if (token) streamTokens.delete(token); // single use
+      if (entry && entry.expires > m.ctx.now().getTime()) {
+        c.set("principal", entry.principal);
+        return next();
+      }
+      if (token) return c.json(err("unauthorized", "stream token expired or already used"), 401);
+    }
     if (key) {
       const p = await m.workspaces.authenticate(key);
       if (!p) return c.json(err("unauthorized", "invalid api key"), 401);
@@ -70,6 +85,17 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   app.patch("/v1/workspace/profile", async (c) => {
     const body = (await c.req.json()) as { profile: Record<string, unknown> };
     return c.json(await m.workspaces.updateProfile(c.get("principal"), body.profile ?? {}));
+  });
+
+  // ---------------------------------------------------------------- api keys
+  app.get("/v1/keys", async (c) => {
+    const p = c.get("principal");
+    m.workspaces.requireRole(p, ["owner"]);
+    return c.json(await m.workspaces.listApiKeys(p.workspaceId));
+  });
+  app.delete("/v1/keys/:id", async (c) => {
+    await m.workspaces.revokeApiKey(c.get("principal"), c.req.param("id"));
+    return c.body(null, 204);
   });
 
   // ---------------------------------------------------------------- accounts
@@ -99,7 +125,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     const p = c.get("principal");
     const body = (await c.req.json()) as { variants: { network: string; text: string }[]; scheduledAt?: string; actionClass?: string; disclosure?: unknown };
     const policy = await m.policy.getActive(p.workspaceId);
-    const at = body.scheduledAt ? new Date(body.scheduledAt) : null;
+    const at = body.scheduledAt ? date(body.scheduledAt, m.ctx.now()) : null;
     const gate = gatePost({
       policy,
       actionClass: (body.actionClass as never) ?? "new_post",
@@ -127,8 +153,8 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     return c.json({ ...detail, history: await m.events.history("post", detail.post.id) });
   });
   app.post("/v1/posts/:id/schedule", async (c) => {
-    const body = (await c.req.json()) as { at: string };
-    return c.json(await m.posts.schedule(c.get("principal"), c.req.param("id"), date(body.at, m.ctx.now())));
+    const body = z.object({ at: Timestamp }).parse(await c.req.json()); // never default a missing time to "now"
+    return c.json(await m.posts.schedule(c.get("principal"), c.req.param("id"), new Date(body.at)));
   });
   app.post("/v1/posts/:id/publish-now", async (c) => c.json(await m.posts.publishNow(c.get("principal"), c.req.param("id"))));
   app.post("/v1/posts/:id/cancel", async (c) => c.json(await m.posts.cancel(c.get("principal"), c.req.param("id"))));
@@ -158,6 +184,14 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   app.get("/v1/feed/counts", async (c) => {
     const p = c.get("principal");
     return c.json(await m.listening.counts(p.workspaceId, date(c.req.query("since"), daysAgo(7, m.ctx.now()))));
+  });
+  app.post("/v1/feed/stream-token", (c) => {
+    const p = c.get("principal");
+    const now = m.ctx.now().getTime();
+    for (const [t, e] of streamTokens) if (e.expires <= now) streamTokens.delete(t);
+    const token = randomBytes(24).toString("base64url");
+    streamTokens.set(token, { principal: p, expires: now + STREAM_TOKEN_TTL_MS });
+    return c.json({ token, expiresInSeconds: STREAM_TOKEN_TTL_MS / 1000 });
   });
   app.get("/v1/feed/stream", (c) => {
     const p = c.get("principal");
@@ -191,7 +225,9 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   });
   app.post("/v1/ingest/items", async (c) => {
     const p = c.get("principal");
+    m.workspaces.requireRole(p, ["owner", "approver", "editor"]);
     const body = (await c.req.json()) as { accountId?: string | null; items: unknown[] };
+    if (body.accountId) await m.accounts.get(p.workspaceId, body.accountId); // must be ours
     return c.json(await m.listening.ingestItems(p.workspaceId, body.accountId ?? null, body.items ?? []));
   });
   app.post("/v1/ingest/:accountId", async (c) => {
@@ -213,9 +249,34 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     return c.json(await m.metrics.liftByStage(p.workspaceId, date(c.req.query("from"), daysAgo(30, now)), date(c.req.query("to"), now)));
   });
   app.get("/v1/metrics/series", async (c) => {
+    const p = c.get("principal");
     const q = c.req.query();
     const now = m.ctx.now();
     if (!q.entityType || !q.entityId || !q.metric) throw new CoreError("invalid", "entityType, entityId and metric are required");
+    // Metrics rows carry no workspace column, so the entity is resolved inside the caller's workspace first.
+    switch (q.entityType) {
+      case "post_variant": {
+        const [v] = await m.ctx.db
+          .select({ id: postVariants.id })
+          .from(postVariants)
+          .innerJoin(posts, eq(posts.id, postVariants.postId))
+          .where(and(eq(postVariants.externalId, q.entityId), eq(posts.workspaceId, p.workspaceId)))
+          .limit(1);
+        if (!v) throw new CoreError("not_found", "variant");
+        break;
+      }
+      case "social_account":
+        await m.accounts.get(p.workspaceId, q.entityId);
+        break;
+      case "trend_topic":
+        await m.trends.getTopic(q.entityId, p.workspaceId);
+        break;
+      case "workspace":
+        if (q.entityId !== p.workspaceId) throw new CoreError("not_found", "workspace");
+        break;
+      default:
+        throw new CoreError("not_found", `entity type ${q.entityType}`);
+    }
     return c.json(await m.metrics.series(q.entityType, q.entityId, q.metric, date(q.from, daysAgo(30, now)), date(q.to, now)));
   });
   app.get("/v1/metrics/variant/:variantId", async (c) => {
@@ -243,13 +304,13 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   });
   app.get("/v1/trends/topics/:id", async (c) => c.json(await m.trends.detail(c.get("principal").workspaceId, c.req.param("id"))));
   app.post("/v1/trends/topics/:id/forecast", async (c) => {
-    const { combined, ...rest } = await m.trends.computeForecast(c.req.param("id"));
+    const { combined, ...rest } = await m.trends.computeForecast(c.req.param("id"), {}, c.get("principal"));
     return c.json(rest);
   });
   app.post("/v1/trends/points", async (c) => {
     const p = c.get("principal");
     const body = (await c.req.json()) as { points: unknown[] };
-    return c.json({ recorded: await m.trends.recordPoints(body.points ?? [], p.workspaceId) });
+    return c.json({ recorded: await m.trends.recordPoints(body.points ?? [], p) });
   });
 
   // ---------------------------------------------------------------- operators' output

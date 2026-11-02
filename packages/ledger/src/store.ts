@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, desc, eq, gt, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
 import { ledgerEvents, rawEvents, type Db } from "@starsign/db";
 import type { LedgerEvent, LedgerEventInput, RawEventInput } from "@starsign/schema";
 import { newId } from "./ids.ts";
@@ -45,7 +45,7 @@ export class EventStore {
 
   /** Append a raw payload. Returns the id, or the existing id when an identical payload was already stored. */
   async appendRaw(input: RawEventInput): Promise<{ id: string; duplicate: boolean }> {
-    const hash = hashPayload({ source: input.source, kind: input.kind, externalId: input.externalId, payload: input.payload });
+    const hash = hashPayload({ workspaceId: input.workspaceId, source: input.source, kind: input.kind, externalId: input.externalId, payload: input.payload });
     const existing = await this.db.select({ id: rawEvents.id }).from(rawEvents).where(eq(rawEvents.hash, hash)).limit(1);
     if (existing[0]) return { id: existing[0].id, duplicate: true };
     const id = newId("raw");
@@ -105,11 +105,12 @@ export class EventStore {
     if (q.subjectId) conds.push(eq(ledgerEvents.subjectId, q.subjectId));
     if (q.afterSeq !== undefined) conds.push(gt(ledgerEvents.seq, q.afterSeq));
     if (q.beforeSeq !== undefined) conds.push(lt(ledgerEvents.seq, q.beforeSeq));
+    // Forward paging (afterSeq) reads oldest-first so a cursor walks the log; otherwise newest-first.
     const rows = await this.db
       .select()
       .from(ledgerEvents)
       .where(and(...conds))
-      .orderBy(desc(ledgerEvents.seq))
+      .orderBy(q.afterSeq !== undefined ? asc(ledgerEvents.seq) : desc(ledgerEvents.seq))
       .limit(Math.min(q.limit ?? 100, 1000));
     return rows.map(toLedgerEvent);
   }

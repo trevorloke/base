@@ -67,6 +67,8 @@ export interface Connector {
 }
 
 export class ConnectorError extends Error {
+  /** Set when part of a thread reached the network before the failure: the root's ids, so core can keep them. */
+  partial?: { externalId: string; url: string | null; threadExternalIds: string[] };
   constructor(
     message: string,
     public readonly kind: "auth" | "rate_limit" | "rejected" | "network" | "unknown",

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { posts, postVariants, socialAccounts } from "@starsign/db";
 import { ConnectorError, validateVariant } from "@starsign/connectors";
 import type { Media, Network } from "@starsign/schema";
@@ -25,7 +25,13 @@ export class PublishingService {
       return { status: post.status, published: 0, failed: 0 };
     }
     const workspaceId = post.workspaceId;
-    await this.ctx.db.update(posts).set({ status: "publishing", updatedAt: this.ctx.now() }).where(eq(posts.id, postId));
+    // Conditional transition: a cancel that lands between our read and this update wins.
+    const claimed = await this.ctx.db
+      .update(posts)
+      .set({ status: "publishing", updatedAt: this.ctx.now() })
+      .where(and(eq(posts.id, postId), inArray(posts.status, ["scheduled", "publishing", "partially_published", "failed"])))
+      .returning({ id: posts.id });
+    if (claimed.length === 0) return { status: "cancelled", published: 0, failed: 0 };
     await this.ctx.events.append({ workspaceId, type: "post.publish_started", subjectType: "post", subjectId: postId, actor: SYSTEM });
 
     const variants = await this.ctx.db.select().from(postVariants).where(eq(postVariants.postId, postId));
@@ -57,7 +63,9 @@ export class PublishingService {
       }
       await this.ctx.db.update(postVariants).set({ status: "publishing", attemptCount: v.attemptCount + 1 }).where(eq(postVariants.id, v.id));
       try {
-        const result = await connector.publish(ref, { variantId: v.id, text: v.text, media: v.media as Media[], thread: v.thread, idempotencyKey: v.id });
+        const result = await this.accounts.withFreshAuth(account, connector, (fresh) =>
+          connector.publish(fresh, { variantId: v.id, text: v.text, media: v.media as Media[], thread: v.thread, idempotencyKey: v.id }),
+        );
         const publishedAt = this.ctx.now();
         await this.ctx.db
           .update(postVariants)
@@ -74,7 +82,10 @@ export class PublishingService {
         await this.ctx.outcomes.schedule({ workspaceId, postId, variantId: v.id, publishedAt, actor: SYSTEM });
       } catch (e) {
         const ce = e instanceof ConnectorError ? e : new ConnectorError((e as Error).message ?? String(e), "unknown", true, e);
-        if (ce.kind === "auth") await this.accounts.markReauth(account.id);
+        // A thread that failed after its root went out: keep what reached the network so nothing is orphaned.
+        if (ce.partial) {
+          await this.ctx.db.update(postVariants).set({ externalId: ce.partial.externalId, externalUrl: ce.partial.url }).where(eq(postVariants.id, v.id));
+        }
         const canRetry = ce.retryable && v.attemptCount + 1 < MAX_ATTEMPTS;
         await this.fail(workspaceId, { ...v, attemptCount: v.attemptCount + 1 }, `${ce.kind}: ${ce.message}`, canRetry);
         if (canRetry) retryable.push(v.id);
@@ -90,10 +101,11 @@ export class PublishingService {
     else if (published > 0) status = retryable.length ? "publishing" : "partially_published";
     else status = retryable.length || pending ? "publishing" : "failed";
 
+    // Only finish what we still own: if someone cancelled meanwhile, leave their status alone.
     await this.ctx.db
       .update(posts)
       .set({ status, publishedAt: published > 0 ? (post.publishedAt ?? this.ctx.now()) : null, updatedAt: this.ctx.now() })
-      .where(eq(posts.id, postId));
+      .where(and(eq(posts.id, postId), eq(posts.status, "publishing")));
     if (status === "published" || status === "partially_published") {
       await this.ctx.events.append({ workspaceId, type: "post.published", subjectType: "post", subjectId: postId, actor: SYSTEM, data: { published, failed } });
     } else if (status === "failed") {

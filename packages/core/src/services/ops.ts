@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { alerts, briefs, operatorRuns } from "@starsign/db";
 import { newId } from "@starsign/ledger";
 import type { Actor } from "@starsign/schema";
@@ -32,6 +32,16 @@ export class OpsService {
       });
     }
     return row ?? null;
+  }
+
+  /** Month-to-date model spend for a workspace, from operator runs. */
+  async modelSpendThisMonth(workspaceId: string, now = this.ctx.now()): Promise<number> {
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const [row] = await this.ctx.db
+      .select({ total: sql<number>`coalesce(sum(${operatorRuns.costUsd}), 0)` })
+      .from(operatorRuns)
+      .where(and(eq(operatorRuns.workspaceId, workspaceId), gte(operatorRuns.startedAt, monthStart)));
+    return Number(row?.total ?? 0);
   }
 
   async runs(workspaceId: string, limit = 50) {

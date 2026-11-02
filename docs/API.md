@@ -12,7 +12,15 @@ Dev convenience: when the server runs with `STARSIGN_DEV_WORKSPACE=<slug>` and a
 human owner `dev` of that workspace. Never set in production.
 
 Errors: `{ "error": { "code": "not_found|forbidden|invalid|conflict|policy_blocked|unavailable|unauthorized", "message": "...", "details": ... } }`
-with statuses 404 / 403 / 400 / 409 / 422 / 503 / 401.
+with statuses 404 / 403 / 400 / 409 / 422 / 503 / 401. A malformed JSON body is `400 invalid`. A `422 policy_blocked`
+carries `details: { violations: Violation[] }`.
+
+Role gates (`owner`, `approver`, `editor`) apply to humans only; agent keys (`mcp`, `operator`) never pass them.
+Agents may create posts within the autonomy dial and may only schedule, edit or cancel posts they created.
+
+## API keys
+- `GET /v1/keys` → `{ id, name, actorType, actorId, role, lastUsedAt, revokedAt, createdAt }[]` (owner)
+- `DELETE /v1/keys/:id` → 204, revokes the key immediately (owner; recorded in the ledger)
 
 ## Health
 - `GET /api/health` → `{ ok: true, version: "0.1.0", db: "pglite" | "postgres" }` (no auth)
@@ -47,7 +55,7 @@ with statuses 404 / 403 / 400 / 409 / 422 / 503 / 401.
 - `POST /v1/posts` body `CreatePostInput` → `201 PostDetail`. The gate decides the status. A red-line **block** still returns 201 with `post.status = "blocked"` and `post.policyDecision.violations` populated. A refused action (autonomy says the actor may not create) returns 403.
   `CreatePostInput = { title?, body, media?: Media[], variants: { socialAccountId, text, media?, thread?: string[] }[], scheduledAt?, actionClass?: "new_post|reply|dm|repost|campaign", trendTopicId?, trendStageAtCreation?, trendForecastId?, experimentId?, experimentArm?, disclosure?: { aiAssisted, aiContributions?: string[], humanReviewed, reviewedBy?, model?, promptVersion? }, evidence?: { kind, ref, note? }[], flags?: { paid? } }`
 - `GET /v1/posts/:id` → `PostDetail & { history: LedgerEvent[] }`
-- `POST /v1/posts/:id/schedule` body `{ at }` → `PostDetail`
+- `POST /v1/posts/:id/schedule` body `{ at }` (required ISO time; 400 when missing) → `PostDetail`
 - `POST /v1/posts/:id/publish-now` → `PostDetail`
 - `POST /v1/posts/:id/cancel` → `PostDetail`
 - `PATCH /v1/posts/:id/variants` body `{ edits: { [variantId]: text } }` → `PostDetail` (drafts only)
@@ -58,19 +66,20 @@ with statuses 404 / 403 / 400 / 409 / 422 / 503 / 401.
 `kind ∈ own_post | reply | mention | comment | dm | repost | quote | like | follow`
 - `GET /v1/feed?stream=<id>&networks=x,bluesky&kinds=mention,reply&account=<id>&since=<iso>&before=<iso>&limit=100&q=<text>` → `Activity[]` newest first
 - `GET /v1/feed/counts?since=<iso>` → `{ network, kind, n }[]`
-- `GET /v1/feed/stream` → **SSE**. Events: `activity` `{ workspaceId, id, network, kind, matchedStreams }`, `post` `{ workspaceId, postId, status }`, `alert` `{ workspaceId, id, title, severity }`, `forecast` `{ topicId, stage, confidence }`. A `: ping` comment every 25s.
+- `POST /v1/feed/stream-token` → `{ token, expiresInSeconds: 60 }`. Single use. The API key itself is never accepted in a URL.
+- `GET /v1/feed/stream?token=<stream token>` → **SSE**. Events: `activity` `{ workspaceId, id, network, kind, matchedStreams }`, `post` `{ workspaceId, postId, status }`, `alert` `{ workspaceId, id, title, severity }`, `forecast` `{ topicId, stage, confidence }`. A `: ping` comment every 25s.
 - `GET /v1/streams` → `Stream[]` = `{ id, name, query: { keywords, authors, networks, kinds }, createdAt }`
 - `POST /v1/streams` body `{ name, query }` → `Stream`
 - `DELETE /v1/streams/:id` → 204
 - `POST /v1/ingest/:accountId` → `{ ingested, duplicates }` (pull now)
-- `POST /v1/ingest/items` body `{ accountId: string | null, items: ActivityInput[] }` → `{ ingested, duplicates }` (import). `ActivityInput = Activity fields minus ids + { raw }`
+- `POST /v1/ingest/items` body `{ accountId: string | null, items: ActivityInput[] }` → `{ ingested, duplicates }` (import; editor+, account must be the caller's). `ActivityInput = Activity fields minus ids + { raw }`
 
 ## Measurement
 - `GET /v1/metrics/summary?from=<iso>&to=<iso>` → `Summary`:
   `{ window, publishedByNetwork: {network, posts}[], measuredAt24h, totals: {impressions, engagements}, baselineEngagements24h, byNetwork: Group[], byHour: Group[], byTrendStage: Group[], byAuthor: Group[], byExperiment: Group[], top: { postId, variantId, network, text, impressions, engagements, lift }[] }`
   `Group = { key, posts, impressions, engagements, avgEngagements }`
 - `GET /v1/metrics/lift-by-stage?from&to` → `{ stage, posts, avgEngagements, lift }[]`
-- `GET /v1/metrics/series?entityType=post_variant&entityId=<externalId>&metric=impressions&from&to` → `{ value, observedAt, source }[]`
+- `GET /v1/metrics/series?entityType=post_variant&entityId=<externalId>&metric=impressions&from&to` → `{ value, observedAt, source }[]`. The entity must belong to the caller's workspace (404 otherwise).
 - `GET /v1/metrics/variant/:variantId` → `{ latest: { [metric]: number }, outcomes: { offsetLabel, dueAt, capturedAt, status, metrics }[] }`
 
 ## Trends (the radar)
@@ -78,10 +87,10 @@ with statuses 404 / 403 / 400 / 409 / 422 / 503 / 401.
   `{ topic: { id, workspaceId, name, keywords, relevance }, forecast: { id, stage, confidence, velocity, hoursToPeak, computedAt, sources, sourceAgreement, curve: { at, value, lo, hi }[] } | null, actedOn: number, score, window: string | null }`
 - `GET /v1/trends/topics` → `Topic[]`
 - `POST /v1/trends/topics` body `{ name, keywords: string[], relevance?, global?: boolean }` → `Topic`
-- `PATCH /v1/trends/topics/:id` body `{ relevance }` → 204
+- `PATCH /v1/trends/topics/:id` body `{ relevance }` → 204 (workspace-owned topics only; global topics are maintained by the system)
 - `GET /v1/trends/topics/:id` → `{ topic, forecast, series: { source, points: { t, v }[] }[], actions: { postId, stageAtAction, forecastId, createdAt, outcome24h: object | null }[] }`
 - `POST /v1/trends/topics/:id/forecast` → recomputed forecast
-- `POST /v1/trends/points` body `{ points: { topicId, source, value, observedAt, region? }[] }` → `{ recorded }`
+- `POST /v1/trends/points` body `{ points: { topicId, source, value, observedAt, region? }[] }` → `{ recorded }` (topics must belong to the caller's workspace)
 
 ## Operators' output
 - `GET /v1/alerts?unacknowledged=1&limit=50` → `Alert[]` = `{ id, kind, severity: "info|attention|urgent", title, body, evidence, topicId, acknowledgedAt, createdAt }`

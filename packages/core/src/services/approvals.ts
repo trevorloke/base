@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { approvals, posts, postVariants } from "@starsign/db";
-import { ApprovalDecisionInput } from "@starsign/schema";
+import { validateVariant } from "@starsign/connectors";
+import { ApprovalDecisionInput, type Media, type Network } from "@starsign/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import type { PolicyService } from "./policy.ts";
@@ -25,36 +26,38 @@ export class ApprovalService {
     const detail = await this.posts.get(p.workspaceId, postId);
     if (detail.post.status !== "pending_approval") throw new CoreError("conflict", `post is ${detail.post.status}, not pending approval`);
 
-    // Apply edits, recording every diff.
-    if (input.edits) {
-      for (const [variantId, after] of Object.entries(input.edits)) {
-        const v = detail.variants.find((x) => x.id === variantId);
-        if (!v) throw new CoreError("not_found", `variant ${variantId}`);
-        await this.ctx.diffs.record({
-          workspaceId: p.workspaceId,
-          postId,
-          variantId,
-          beforeText: v.text,
-          afterText: after,
-          draftedBy: detail.post.createdBy,
-          editedBy: p.actor,
-        });
-        await this.ctx.db.update(postVariants).set({ text: after }).where(eq(postVariants.id, variantId));
-        v.text = after;
-      }
+    // Edits are validated and gated in memory first; nothing is persisted until the verdict is known,
+    // so a blocked edit never becomes stored text or a "voice example".
+    const before = new Map<string, string>();
+    for (const [variantId, after] of Object.entries(input.edits ?? {})) {
+      const v = detail.variants.find((x) => x.id === variantId);
+      if (!v) throw new CoreError("not_found", `variant ${variantId}`);
+      const issues = validateVariant(v.network as Network, after, v.media as Media[], v.thread);
+      if (issues.length) throw new CoreError("invalid", "edited variant fails validation", issues.map((i) => ({ ...i, variantId })));
+      before.set(variantId, v.text);
+      v.text = after;
     }
+    const persistEdits = async () => {
+      for (const [variantId, prior] of before) {
+        const v = detail.variants.find((x) => x.id === variantId)!;
+        await this.ctx.diffs.record({ workspaceId: p.workspaceId, postId, variantId, beforeText: prior, afterText: v.text, draftedBy: detail.post.createdBy, editedBy: p.actor });
+        await this.ctx.db.update(postVariants).set({ text: v.text }).where(eq(postVariants.id, variantId));
+      }
+    };
 
     const open = detail.approvals.find((a) => a.state === "requested");
     const decidedAt = this.ctx.now();
     const base = { decidedBy: p.actor, decidedAt, note: input.note ?? null };
 
     if (input.decision === "reject") {
+      await persistEdits();
       if (open) await this.ctx.db.update(approvals).set({ ...base, state: "rejected" }).where(eq(approvals.id, open.id));
       await this.ctx.db.update(posts).set({ status: "cancelled", updatedAt: decidedAt }).where(eq(posts.id, postId));
       await this.record(p, postId, "rejected", input.note);
       return this.posts.get(p.workspaceId, postId);
     }
     if (input.decision === "request_changes") {
+      await persistEdits();
       if (open) await this.ctx.db.update(approvals).set({ ...base, state: "changes_requested" }).where(eq(approvals.id, open.id));
       await this.ctx.db.update(posts).set({ status: "draft", updatedAt: decidedAt }).where(eq(posts.id, postId));
       await this.record(p, postId, "changes_requested", input.note);
@@ -67,8 +70,9 @@ export class ApprovalService {
     if (gate.decision.verdict === "block") {
       await this.policy.recordDecision(p.workspaceId, "post", postId, gate.decision, p.actor);
       await this.ctx.events.append({ workspaceId: p.workspaceId, type: "policy.blocked", subjectType: "post", subjectId: postId, actor: p.actor, data: { violations: gate.decision.violations, during: "approval" } });
-      throw new CoreError("policy_blocked", "the edited text crosses a red line", gate.decision.violations);
+      throw new CoreError("policy_blocked", "the edited text crosses a red line", { violations: gate.decision.violations });
     }
+    await persistEdits();
     if (open) await this.ctx.db.update(approvals).set({ ...base, state: "approved" }).where(eq(approvals.id, open.id));
     await this.record(p, postId, "approved", input.note);
     if (detail.post.scheduledAt) {

@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { approvals, posts, postVariants, socialAccounts, trendActions, trendForecasts } from "@starsign/db";
 import { validateVariant } from "@starsign/connectors";
 import { newId } from "@starsign/ledger";
-import { gatePost, type Subject } from "@starsign/policy";
+import { gatePost, resolveAutonomy, type Subject } from "@starsign/policy";
 import { CreatePostInput, type Actor, type Network, type Policy, type PostStatus, type TrendStage } from "@starsign/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
@@ -225,6 +225,7 @@ export class PostService {
   async schedule(p: Principal, postId: string, at: Date) {
     const detail = await this.get(p.workspaceId, postId);
     if (!OPEN_STATUSES.includes(detail.post.status as PostStatus)) throw new CoreError("conflict", `post is ${detail.post.status}`);
+    await this.assertMayModify(p, detail, "edit");
     const policy = await this.policy.getActive(p.workspaceId);
     const gate = this.regate(policy, detail, p, at);
     if (gate.initialStatus === null) throw new CoreError("forbidden", gate.refusedReason ?? "not permitted");
@@ -246,9 +247,32 @@ export class PostService {
     return this.schedule(p, postId, this.ctx.now());
   }
 
+  /**
+   * Who may change an existing post. Viewers never. Editors may edit drafts and cancel their own or unapproved
+   * posts; approved/scheduled posts are cancelled by owners/approvers (or the creator). Agents may only touch
+   * their own posts, and only when autonomy lets them create at all.
+   */
+  private async assertMayModify(p: Principal, detail: PostDetail, action: "cancel" | "edit"): Promise<void> {
+    const createdBy = detail.post.createdBy;
+    const sameActor = createdBy.type === p.actor.type && createdBy.id === p.actor.id;
+    if (p.actor.type === "system") return;
+    if (p.actor.type === "human") {
+      if (!p.role || p.role === "viewer") throw new CoreError("forbidden", "viewers cannot change posts");
+      const committed = ["approved", "scheduled"].includes(detail.post.status);
+      if (action === "cancel" && committed && !["owner", "approver"].includes(p.role) && !sameActor) {
+        throw new CoreError("forbidden", "only an owner, an approver or the creator can cancel an approved post");
+      }
+      return;
+    }
+    const policy = await this.policy.getActive(p.workspaceId);
+    const autonomy = resolveAutonomy(policy, detail.post.actionClass as never, p.actor.type);
+    if (!autonomy.mayCreate || !sameActor) throw new CoreError("forbidden", "agents may only change posts they created");
+  }
+
   async cancel(p: Principal, postId: string) {
     const detail = await this.get(p.workspaceId, postId);
     if (!OPEN_STATUSES.includes(detail.post.status as PostStatus)) throw new CoreError("conflict", `post is ${detail.post.status}`);
+    await this.assertMayModify(p, detail, "cancel");
     await this.ctx.scheduler.cancelPublish(postId);
     await this.ctx.db.update(posts).set({ status: "cancelled", updatedAt: this.ctx.now() }).where(eq(posts.id, postId));
     await this.ctx.events.append({ workspaceId: p.workspaceId, type: "post.cancelled", subjectType: "post", subjectId: postId, actor: p.actor });
@@ -260,6 +284,7 @@ export class PostService {
   async updateVariants(p: Principal, postId: string, edits: Record<string, string>) {
     const detail = await this.get(p.workspaceId, postId);
     if (detail.post.status !== "draft") throw new CoreError("conflict", `only drafts can be edited directly (post is ${detail.post.status})`);
+    await this.assertMayModify(p, detail, "edit");
     for (const [variantId, text] of Object.entries(edits)) {
       const v = detail.variants.find((x) => x.id === variantId);
       if (!v) throw new CoreError("not_found", `variant ${variantId}`);

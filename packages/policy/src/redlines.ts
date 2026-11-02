@@ -85,7 +85,7 @@ export function evaluateRedLine(rl: RedLine, subject: Subject, ctx: EvaluationCo
     case "max_posts_per_day": {
       const applies = rl.networks.length === 0 || rl.networks.includes(subject.network);
       if (!applies) return null;
-      const count = (ctx.postsToday?.[subject.network] ?? 0) + (rl.networks.length === 0 ? (ctx.postsToday?.["*"] ?? 0) : 0);
+      const count = rl.networks.length === 0 ? (ctx.postsToday?.["*"] ?? 0) : (ctx.postsToday?.[subject.network] ?? 0);
       return count >= rl.limit ? violation(rl, `${rl.description}: daily limit of ${rl.limit} reached (${count})`) : null;
     }
     case "network_restriction": {

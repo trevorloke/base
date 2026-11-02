@@ -35,7 +35,7 @@ export class Starsign {
     this.approvals = new ApprovalService(this.ctx, this.posts, this.policy);
     this.publishing = new PublishingService(this.ctx, this.accounts);
     this.listening = new ListeningService(this.ctx, this.accounts);
-    this.metrics = new MetricsService(this.ctx, this.accounts);
+    this.metrics = new MetricsService(this.ctx, this.accounts, this.policy);
     this.trends = new TrendService(this.ctx);
     this.ops = new OpsService(this.ctx);
     this.exports = new ExportService(this.ctx);

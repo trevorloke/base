@@ -126,7 +126,7 @@ for (const spec of topicsSpec) {
       pts.push({ topicId: t.id, source, value: v, observedAt: new Date(realNow - ago * H).toISOString() });
     }
   });
-  await m.trends.recordPoints(pts, ws.id);
+  await m.trends.recordPoints(pts, owner);
   topics[spec.name] = { id: t.id, stage: null, forecastId: null };
 }
 // Forecasts at "now" (the radar needs them); we remember stage per topic for the post history below.

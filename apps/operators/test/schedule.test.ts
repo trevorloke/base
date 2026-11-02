@@ -66,7 +66,7 @@ describe("tick", () => {
 
     clock += 60_000; // one minute later: watch interval not elapsed, brief exists for this ISO week
     const second = await tick(m, gw, state, { watchEveryMs: 30 * 60_000 });
-    expect(second).toEqual({ watched: [], briefed: [], errors: [] });
+    expect(second).toEqual({ watched: [], briefed: [], capped: [], errors: [] });
 
     clock += 30 * 60_000;
     const third = await tick(m, gw, state, { watchEveryMs: 30 * 60_000 });

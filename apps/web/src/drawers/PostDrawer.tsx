@@ -283,10 +283,11 @@ function describeEvent(ev: LedgerEvent): string {
     case "post.approval_requested":
       return "Approval requested";
     case "post.approval_decided": {
-      const edits = typeof d.edits === "number" && d.edits > 0 ? ` with ${plural(d.edits, "edit")}` : "";
-      if (d.decision === "approve") return `Approved by ${who}${edits}`;
-      if (d.decision === "reject") return `Rejected by ${who}`;
-      return `Changes requested by ${who}`;
+      const outcome = typeof d.outcome === "string" ? d.outcome : typeof d.decision === "string" ? d.decision : "";
+      const note = typeof d.note === "string" && d.note ? ` ("${d.note}")` : "";
+      if (outcome === "approved" || outcome === "approve") return `Approved by ${who}${note}`;
+      if (outcome === "rejected" || outcome === "reject") return `Rejected by ${who}${note}`;
+      return `Changes requested by ${who}${note}`;
     }
     case "post.scheduled":
       return typeof d.at === "string" ? `Scheduled for ${formatDateTime(d.at)}` : "Scheduled";
@@ -308,9 +309,10 @@ function describeEvent(ev: LedgerEvent): string {
       return "Outcome check scheduled";
     case "outcome.captured": {
       const parts: string[] = [];
-      if (typeof d.impressions === "number") parts.push(`${compact(d.impressions)} impressions`);
-      if (typeof d.engagements === "number") parts.push(`${compact(d.engagements)} engagements`);
-      if (typeof d.lift === "number") parts.push(`${lift(d.lift)} lift`);
+      const m = (d.metrics && typeof d.metrics === "object" ? d.metrics : d) as Record<string, unknown>;
+      if (typeof m.impressions === "number") parts.push(`${compact(m.impressions)} impressions`);
+      if (typeof m.engagements === "number") parts.push(`${compact(m.engagements)} engagements`);
+      if (typeof m.lift === "number") parts.push(`${lift(m.lift)} lift`);
       const head = typeof d.offset === "string" ? `${d.offset} outcome` : "Outcome";
       return parts.length ? `${head}: ${parts.join(" · ")}` : `${head} captured`;
     }

@@ -1,17 +1,59 @@
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import { metrics, postOutcomes, posts, postVariants, socialAccounts, trendActions } from "@starsign/db";
+import { metrics, postOutcomes, posts, postVariants, rowsOf, socialAccounts, trendActions } from "@starsign/db";
 import { MetricInput, type Network } from "@starsign/schema";
 import type { CoreContext } from "../context.ts";
 import { SYSTEM } from "../context.ts";
 import { localHour } from "../time.ts";
 import type { AccountService } from "./accounts.ts";
+import type { PolicyService } from "./policy.ts";
+
+/** Price of one post object returned by a metered read (X pay-per-use). */
+export const METERED_READ_PRICE_USD = 0.005;
+
+function readsUsed(connector: unknown): number {
+  const v = (connector as { readsUsed?: unknown }).readsUsed;
+  return typeof v === "number" ? v : 0;
+}
 
 /** Measurement: owned time series plus the outcome snapshots that make the ledger comparable across posts. */
 export class MetricsService {
   constructor(
     private readonly ctx: CoreContext,
     private readonly accounts: AccountService,
+    private readonly policy: PolicyService,
   ) {}
+
+  /** Month-to-date metered read spend for a workspace, from the ledger. */
+  async meteredSpendThisMonth(workspaceId: string, now = this.ctx.now()): Promise<number> {
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const rows = rowsOf<{ total: string | number | null }>(
+      await this.ctx.db.execute(
+        sql`SELECT COALESCE(SUM((data->>'value')::double precision), 0) AS total FROM ledger_events WHERE workspace_id = ${workspaceId} AND type = 'metric.observed' AND data->>'metric' = 'metered_read_cost_usd' AND occurred_at >= ${monthStart}`,
+      ),
+    );
+    return Number(rows[0]?.total ?? 0);
+  }
+
+  /** Record the cost of metered reads so caps can be enforced. */
+  async recordMeteredReads(workspaceId: string, accountId: string, network: string, reads: number): Promise<number> {
+    const cost = reads * METERED_READ_PRICE_USD;
+    if (cost <= 0) return 0;
+    await this.ctx.events.append({
+      workspaceId,
+      type: "metric.observed",
+      subjectType: "social_account",
+      subjectId: accountId,
+      actor: SYSTEM,
+      data: { metric: "metered_read_cost_usd", value: cost, reads, network },
+    });
+    return cost;
+  }
+
+  /** Whether a metered connector may read for this workspace right now. */
+  async underMeteredCap(workspaceId: string): Promise<boolean> {
+    const policy = await this.policy.getActive(workspaceId);
+    return (await this.meteredSpendThisMonth(workspaceId)) < policy.spendCaps.xReadsUsdMonthly;
+  }
 
   async record(inputs: unknown[]): Promise<number> {
     const rows = inputs.map((i) => MetricInput.parse(i));
@@ -40,8 +82,15 @@ export class MetricsService {
       if (ext.length === 0 || account.status !== "active") continue;
       try {
         const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
-        if (!connector.capabilities(account.network as Network).fetchMetrics) continue;
-        const got = await connector.fetchMetrics(this.accounts.toRef(account), ext);
+        const caps = connector.capabilities(account.network as Network);
+        if (!caps.fetchMetrics) continue;
+        if (caps.meteredReads && !(await this.underMeteredCap(account.workspaceId))) {
+          console.warn(`[metrics] ${account.handle}: metered reads paused, monthly cap reached`);
+          continue;
+        }
+        const before = readsUsed(connector);
+        const got = await this.accounts.withFreshAuth(account, connector, (ref) => connector.fetchMetrics(ref, ext));
+        if (caps.meteredReads) await this.recordMeteredReads(account.workspaceId, account.id, account.network, readsUsed(connector) - before);
         await this.record(got);
         for (const m of got) {
           const bag = fetched.get(m.entityId) ?? {};

@@ -86,6 +86,7 @@ export class WorkspaceService {
         role: input.role ?? null,
       })
       .returning();
+    await this.ctx.events.append({ workspaceId: input.workspaceId, type: "apikey.created", subjectType: "api_key", subjectId: row!.id, actor: { type: "system", id: "starsign" }, data: { name: input.name, actorType: input.actorType, role: input.role ?? null } });
     return { secret, key: row! };
   }
 
@@ -100,8 +101,27 @@ export class WorkspaceService {
     return { workspaceId: row.workspaceId, actor: { type: row.actorType, id: row.actorId }, role: row.role ?? undefined };
   }
 
+  /** Role gates are for humans. Agents (mcp/operator) never pass them: autonomy covers posting, nothing else. */
   requireRole(p: Principal, roles: MemberRole[]): void {
-    if (p.actor.type !== "human") return; // non-human actors are governed by autonomy, not roles
+    if (p.actor.type !== "human") throw new CoreError("forbidden", `requires a human with role ${roles.join("/")}`);
     if (!p.role || !roles.includes(p.role)) throw new CoreError("forbidden", `requires one of: ${roles.join(", ")}`);
+  }
+
+  /** API keys for a workspace, without hashes. */
+  async listApiKeys(workspaceId: string) {
+    const rows = await this.ctx.db.select().from(apiKeys).where(eq(apiKeys.workspaceId, workspaceId)).orderBy(apiKeys.createdAt);
+    return rows.map(({ keyHash, ...rest }) => rest);
+  }
+
+  /** Revoke a key. Owners only; recorded in the ledger. */
+  async revokeApiKey(p: Principal, keyId: string) {
+    this.requireRole(p, ["owner"]);
+    const [row] = await this.ctx.db
+      .update(apiKeys)
+      .set({ revokedAt: this.ctx.now() })
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.workspaceId, p.workspaceId), isNull(apiKeys.revokedAt)))
+      .returning();
+    if (!row) throw new CoreError("not_found", `api key ${keyId}`);
+    await this.ctx.events.append({ workspaceId: p.workspaceId, type: "apikey.revoked", subjectType: "api_key", subjectId: keyId, actor: p.actor, data: { name: row.name, actorType: row.actorType } });
   }
 }

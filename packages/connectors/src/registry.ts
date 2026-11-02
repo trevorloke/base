@@ -14,11 +14,12 @@ export class ConnectorRegistry {
     return this.byName.get(name);
   }
 
+  /** Strict: the account's connector must be registered and serve the network. No silent fallback to another adapter. */
   resolve(connectorName: string, network: Network): Connector {
     const named = this.byName.get(connectorName);
     if (named && named.networks.includes(network)) return named;
-    for (const c of this.byName.values()) if (c.networks.includes(network)) return c;
-    throw new Error(`no connector for ${network} (requested "${connectorName}")`);
+    if (named) throw new Error(`connector "${connectorName}" does not serve ${network}`);
+    throw new Error(`connector "${connectorName}" is not configured in this deployment`);
   }
 
   list(): Connector[] {

@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { socialAccounts } from "@starsign/db";
-import type { AccountRef } from "@starsign/connectors";
+import { ConnectorError, type AccountRef, type Connector } from "@starsign/connectors";
 import { newId } from "@starsign/ledger";
 import { Network } from "@starsign/schema";
 import type { CoreContext, Principal } from "../context.ts";
@@ -83,6 +83,35 @@ export class AccountService {
       auth: row.authCiphertext ? this.ctx.secrets.decrypt(row.authCiphertext) : null,
       config: row.config,
     };
+  }
+
+  /**
+   * Run a connector call with credentials that are refreshed when they are about to expire or when the
+   * network says they are invalid. Refreshed credentials are persisted immediately (X rotates refresh tokens).
+   */
+  async withFreshAuth<T>(row: typeof socialAccounts.$inferSelect, connector: Connector, fn: (ref: AccountRef) => Promise<T>): Promise<T> {
+    let ref = this.toRef(row);
+    const expiresAt = typeof ref.auth?.expiresAt === "string" ? Date.parse(ref.auth.expiresAt) : NaN;
+    if (connector.refreshAuth && Number.isFinite(expiresAt) && expiresAt - this.ctx.now().getTime() < 5 * 60_000) {
+      const refreshed = await connector.refreshAuth(ref).catch(() => null);
+      if (refreshed) {
+        await this.updateAuth(row.id, refreshed.auth);
+        ref = { ...ref, auth: refreshed.auth };
+      }
+    }
+    try {
+      return await fn(ref);
+    } catch (e) {
+      if (e instanceof ConnectorError && e.kind === "auth") {
+        const refreshed = connector.refreshAuth ? await connector.refreshAuth(ref).catch(() => null) : null;
+        if (refreshed) {
+          await this.updateAuth(row.id, refreshed.auth);
+          return await fn({ ...ref, auth: refreshed.auth });
+        }
+        await this.markReauth(row.id);
+      }
+      throw e;
+    }
   }
 
   async updateAuth(accountId: string, auth: Record<string, unknown>) {

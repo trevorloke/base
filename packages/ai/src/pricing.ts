@@ -43,10 +43,18 @@ export function knownModels(): string[] {
   return Object.keys(MODEL_PRICES);
 }
 
-/** Cost of one call in USD. Unknown models cost 0 and should be flagged by the caller, never guessed. */
+const warnedUnknown = new Set<string>();
+
+/** Cost of one call in USD. Unknown models cost 0 (never guessed) and are flagged once per process. */
 export function estimateCostUsd(model: string, usage: TokenUsage): number {
   const p = priceFor(model);
-  if (!p) return 0;
+  if (!p) {
+    if (!warnedUnknown.has(model)) {
+      warnedUnknown.add(model);
+      console.warn(`[starsign/ai] no price known for model "${model}"; its cost is recorded as $0. Add it to MODEL_PRICES.`);
+    }
+    return 0;
+  }
   const perTok = 1 / 1_000_000;
   return (
     usage.inputTokens * p.inputPerMTok * perTok +

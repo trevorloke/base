@@ -24,7 +24,7 @@ Environment variables read by this server:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `STARSIGN_API_URL` | `http://localhost:4000` | Base URL of the Starsign API |
-| `STARSIGN_API_KEY` | (none) | Workspace API key. Required in stdio mode (without it requests go out unauthenticated, which only works against a dev API running with `STARSIGN_DEV_WORKSPACE`). Optional fallback in HTTP mode. |
+| `STARSIGN_API_KEY` | (none) | Workspace API key. Required in stdio mode (without it requests go out unauthenticated, which only works against a dev API running with `STARSIGN_DEV_WORKSPACE`). Ignored in HTTP mode: every HTTP request must carry its own bearer. |
 | `STARSIGN_MCP_PORT` | `4001` | Port for `--http` when none is given on the command line |
 
 ## Running
@@ -64,7 +64,7 @@ Logs go to stderr; stdout is the protocol.
 pnpm --filter @starsign/mcp start -- --http 4001
 ```
 
-Serves MCP at `http://localhost:4001/mcp` (stateless Streamable HTTP, POST only) plus `GET /health`. The workspace key is read from each request's `Authorization: Bearer star_...` header, so the key identifies the workspace and one process can serve many of them. A request without a bearer gets `401` unless `STARSIGN_API_KEY` is set as a single-workspace fallback.
+Serves MCP at `http://localhost:4001/mcp` (stateless Streamable HTTP, POST only) plus `GET /health`. The workspace key is read from each request's `Authorization: Bearer star_...` header, so the key identifies the workspace and one process can serve many of them. A request without a bearer gets `401`; there is deliberately no process-wide fallback key.
 
 Client configuration:
 

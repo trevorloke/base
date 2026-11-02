@@ -6,7 +6,13 @@ export interface Point {
 
 /** Bucket irregular observations onto a fixed step (ms), averaging within a bucket, interpolating gaps. */
 export function resample(points: Point[], stepMs: number, opts: { from?: number; to?: number } = {}): Point[] {
-  if (points.length === 0) return [];
+  return resampleDetailed(points, stepMs, opts).points;
+}
+
+/** Like resample, but also says which grid indices actually received observations (the rest are interpolated or carried). */
+export function resampleDetailed(points: Point[], stepMs: number, opts: { from?: number; to?: number } = {}): { points: Point[]; observed: Set<number> } {
+  const observed = new Set<number>();
+  if (points.length === 0) return { points: [], observed };
   const sorted = [...points].sort((a, b) => a.t - b.t);
   const from = Math.floor((opts.from ?? sorted[0]!.t) / stepMs) * stepMs;
   const to = Math.floor((opts.to ?? sorted[sorted.length - 1]!.t) / stepMs) * stepMs;
@@ -22,6 +28,7 @@ export function resample(points: Point[], stepMs: number, opts: { from?: number;
   const out: Point[] = [];
   for (let t = from; t <= to; t += stepMs) {
     const e = sums.get(t);
+    if (e) observed.add(out.length);
     out.push({ t, v: e ? e.s / e.n : Number.NaN });
   }
   // linear interpolation of NaN gaps; carry at edges
@@ -39,7 +46,7 @@ export function resample(points: Point[], stepMs: number, opts: { from?: number;
     }
   }
   if (lastIdx >= 0) for (let k = lastIdx + 1; k < out.length; k++) out[k]!.v = out[lastIdx]!.v;
-  return out;
+  return { points: out, observed };
 }
 
 /** Exponentially weighted moving average. alpha in (0,1]; higher = less smoothing. */

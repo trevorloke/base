@@ -2,25 +2,27 @@ import { describe, expect, it, vi } from "vitest";
 import { BlueskyConnector, IdempotencyCache, MockConnector, XConnector, ZernioConnector, createDefaultRegistry } from "../src/index.ts";
 
 describe("createDefaultRegistry", () => {
-  it("always registers the native adapters and the mock, and resolves real adapters before the mock", () => {
+  it("registers the native adapters, the mock outside production, and resolves strictly by connector name", () => {
     const reg = createDefaultRegistry({});
     expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "mock"]);
     expect(reg.get("bluesky")).toBeInstanceOf(BlueskyConnector);
     expect(reg.get("x")).toBeInstanceOf(XConnector);
     expect(reg.get("mock")).toBeInstanceOf(MockConnector);
     expect(reg.get("zernio")).toBeUndefined();
-    // Unknown connector name: the real adapter for the network wins; networks nobody serves fall to the mock.
-    expect(reg.resolve("legacy", "x").name).toBe("x");
-    expect(reg.resolve("legacy", "bluesky").name).toBe("bluesky");
-    expect(reg.resolve("legacy", "tiktok").name).toBe("mock");
+    // Unknown connector names never silently fall back to another adapter.
+    expect(() => reg.resolve("legacy", "x")).toThrow(/not configured/);
+    expect(() => reg.resolve("bluesky", "x")).toThrow(/does not serve/);
+    expect(reg.resolve("x", "x").name).toBe("x");
     expect(reg.resolve("mock", "x").name).toBe("mock");
+    expect(createDefaultRegistry({ NODE_ENV: "production" }).get("mock")).toBeUndefined();
+    expect(createDefaultRegistry({ NODE_ENV: "production", STARSIGN_ENABLE_MOCK: "1" }).get("mock")).toBeInstanceOf(MockConnector);
   });
 
   it("adds Zernio only when ZERNIO_API_KEY is set", () => {
     const reg = createDefaultRegistry({ ZERNIO_API_KEY: "zk", X_CLIENT_ID: "cid", X_CLIENT_SECRET: "sec" });
     expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "zernio", "mock"]);
     expect(reg.get("zernio")).toBeInstanceOf(ZernioConnector);
-    expect(reg.resolve("legacy", "tiktok").name).toBe("zernio");
+    expect(reg.resolve("zernio", "tiktok").name).toBe("zernio");
     expect(reg.get("x")?.capabilities("x")).toMatchObject({ meteredReads: true });
     expect(reg.get("zernio")?.capabilities("tiktok")).toMatchObject({ meteredReads: false });
   });

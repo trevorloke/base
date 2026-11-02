@@ -37,9 +37,13 @@ export class ListeningService {
     if (account.status !== "active") return { ingested: 0, duplicates: 0 };
     const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
     if (!connector.capabilities(account.network as Network).fetchActivity) return { ingested: 0, duplicates: 0 };
-    const items = await connector.fetchActivity(this.accounts.toRef(account), account.lastIngestAt);
+    // Watermark is taken before the fetch, with a 5-minute overlap: items indexed late are picked up next time,
+    // and the hash/unique-index dedupe absorbs anything fetched twice.
+    const watermark = this.ctx.now();
+    const since = account.lastIngestAt ? new Date(account.lastIngestAt.getTime() - 5 * 60_000) : null;
+    const items = await this.accounts.withFreshAuth(account, connector, (ref) => connector.fetchActivity(ref, since));
     const result = await this.ingestItems(account.workspaceId, account.id, items);
-    await this.ctx.db.update(socialAccounts).set({ lastIngestAt: this.ctx.now() }).where(eq(socialAccounts.id, accountId));
+    await this.ctx.db.update(socialAccounts).set({ lastIngestAt: watermark }).where(eq(socialAccounts.id, accountId));
     return result;
   }
 

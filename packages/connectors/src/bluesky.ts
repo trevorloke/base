@@ -186,21 +186,32 @@ export class BlueskyConnector implements Connector {
     // Media only rides on the root post, so there is nothing to upload when resuming past it.
     const embed = posted.length === 0 ? await this.uploadImages(agent, input.media) : undefined;
 
-    for (let i = posted.length; i < segments.length; i++) {
-      const rt = await this.richText(agent, segments[i] ?? "");
-      const prev = posted[posted.length - 1];
-      const root = replyTo?.root ?? posted[0];
-      const reply: AppBskyFeedPost.ReplyRef | undefined = prev && root ? { root, parent: prev } : replyTo;
-      const record: BlueskyPostRecord = {
-        $type: "app.bsky.feed.post",
-        text: rt.text,
-        createdAt: this.now().toISOString(),
-        ...(rt.facets ? { facets: rt.facets } : {}),
-        ...(reply ? { reply } : {}),
-        ...(i === 0 && embed ? { embed } : {}),
-      };
-      posted.push(await agent.post(record));
-      this.progress.set(key, posted);
+    try {
+      for (let i = posted.length; i < segments.length; i++) {
+        const rt = await this.richText(agent, segments[i] ?? "");
+        const prev = posted[posted.length - 1];
+        const root = replyTo?.root ?? posted[0];
+        const reply: AppBskyFeedPost.ReplyRef | undefined = prev && root ? { root, parent: prev } : replyTo;
+        const record: BlueskyPostRecord = {
+          $type: "app.bsky.feed.post",
+          text: rt.text,
+          createdAt: this.now().toISOString(),
+          ...(rt.facets ? { facets: rt.facets } : {}),
+          ...(reply ? { reply } : {}),
+          ...(i === 0 && embed ? { embed } : {}),
+        };
+        posted.push(await agent.post(record));
+        this.progress.set(key, posted);
+      }
+    } catch (err) {
+      // Part of the thread is live: tell core which posts exist so the variant is never an orphan on the network.
+      const live = posted[0];
+      if (live) {
+        const ce = err instanceof ConnectorError ? err : mapBlueskyError(err, "call");
+        ce.partial = { externalId: live.uri, url: blueskyPostUrl(s.handle, live.uri), threadExternalIds: posted.map((p) => p.uri) };
+        throw ce;
+      }
+      throw err;
     }
 
     const rootPost = posted[0];

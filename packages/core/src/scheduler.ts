@@ -24,11 +24,21 @@ export class TimerScheduler implements Scheduler {
   ) {}
   async schedulePublish(postId: string, at: Date): Promise<void> {
     await this.cancelPublish(postId);
-    const delay = Math.max(0, Math.min(at.getTime() - this.now().getTime(), 2 ** 31 - 1));
+    this.arm(postId, at);
+  }
+
+  /** setTimeout caps at ~24.8 days; longer waits re-arm instead of firing early. */
+  private arm(postId: string, at: Date): void {
+    const remaining = at.getTime() - this.now().getTime();
+    const MAX = 2 ** 31 - 1;
     const t = setTimeout(() => {
       this.timers.delete(postId);
+      if (at.getTime() - this.now().getTime() > 1000) {
+        this.arm(postId, at);
+        return;
+      }
       this.run(postId).catch((e) => console.error(`[scheduler] publish ${postId} failed`, e));
-    }, delay);
+    }, Math.max(0, Math.min(remaining, MAX)));
     t.unref?.();
     this.timers.set(postId, t);
   }

@@ -41,6 +41,6 @@ describe("mock connector", () => {
     await expect(c.publish(acct, { variantId: "v", text: "x", media: [], thread: [], idempotencyKey: "k" })).rejects.toMatchObject({ kind: "rate_limit", retryable: true });
     const reg = new ConnectorRegistry().register(c);
     expect(reg.resolve("mock", "x").name).toBe("mock");
-    expect(reg.resolve("missing", "tiktok").name).toBe("mock");
+    expect(() => reg.resolve("missing", "tiktok")).toThrow(/not configured/);
   });
 });

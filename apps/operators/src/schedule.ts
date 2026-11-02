@@ -19,7 +19,11 @@ export interface ServeOptions {
 
 export interface ServeState {
   lastWatchAt: Map<string, number>;
+  /** When the weekly brief last failed per workspace; it is not retried for six hours (a failed brief is a 64k-token call). */
+  lastAnalystFailAt?: Map<string, number>;
 }
+
+const ANALYST_RETRY_MS = 6 * 60 * 60_000;
 
 /** Calendar parts of an instant in a zone. The weekday comes from the local calendar date, not the formatter's label. */
 export function localParts(at: Date, timezone: string): { year: number; month: number; day: number; hour: number; weekday: number } {
@@ -56,15 +60,29 @@ export function analystDue(now: Date, timezone: string, latestBriefPeriodEnd: Da
 export interface TickResult {
   watched: string[];
   briefed: string[];
+  /** Workspaces skipped because their monthly model spend cap is reached. */
+  capped: string[];
   errors: string[];
 }
 
 /** One pass over every workspace: Watch when its interval has elapsed, Analyst when the weekly brief is due. */
 export async function tick(m: Starsign, gw: ModelGateway, state: ServeState, opts: ServeOptions = {}): Promise<TickResult> {
   const watchEveryMs = opts.watchEveryMs ?? 30 * 60_000;
-  const result: TickResult = { watched: [], briefed: [], errors: [] };
+  const result: TickResult = { watched: [], briefed: [], capped: [], errors: [] };
   const now = m.ctx.now();
   for (const ws of await m.workspaces.list()) {
+    // The policy's model spend cap is the brand's money; nothing runs past it.
+    try {
+      const policy = await m.policy.getActive(ws.id);
+      const spent = await m.ops.modelSpendThisMonth(ws.id, now);
+      if (spent >= policy.spendCaps.modelUsdMonthly) {
+        result.capped.push(ws.slug);
+        continue;
+      }
+    } catch (e) {
+      result.errors.push(`${ws.slug}: spend check: ${(e as Error).message}`);
+      continue;
+    }
     const last = state.lastWatchAt.get(ws.id);
     if (last === undefined || now.getTime() - last >= watchEveryMs) {
       state.lastWatchAt.set(ws.id, now.getTime());
@@ -78,11 +96,14 @@ export async function tick(m: Starsign, gw: ModelGateway, state: ServeState, opt
     try {
       const policy = await m.policy.getActive(ws.id);
       const [latest] = await m.ops.briefs(ws.id, 1);
-      if (analystDue(now, policy.timezone, latest?.periodEnd ?? null, { weekday: opts.analystWeekday, hour: opts.analystHour })) {
+      const failedAt = state.lastAnalystFailAt?.get(ws.id);
+      const coolingDown = failedAt !== undefined && now.getTime() - failedAt < ANALYST_RETRY_MS;
+      if (!coolingDown && analystDue(now, policy.timezone, latest?.periodEnd ?? null, { weekday: opts.analystWeekday, hour: opts.analystHour })) {
         await runAnalyst(m, gw, ws.id, { log: opts.log, ...opts.analyst });
         result.briefed.push(ws.slug);
       }
     } catch (e) {
+      (state.lastAnalystFailAt ??= new Map()).set(ws.id, now.getTime());
       result.errors.push(`${ws.slug}: analyst: ${(e as Error).message}`);
     }
   }
@@ -105,8 +126,8 @@ export function serve(m: Starsign, gw: ModelGateway, opts: ServeOptions = {}): S
     if (stopped) return;
     try {
       const r = await tick(m, gw, state, { ...opts, log });
-      if (r.watched.length || r.briefed.length || r.errors.length) {
-        log(`[operators] tick: watched=[${r.watched.join(",")}] briefed=[${r.briefed.join(",")}]${r.errors.length ? ` errors=${JSON.stringify(r.errors)}` : ""}`);
+      if (r.watched.length || r.briefed.length || r.capped.length || r.errors.length) {
+        log(`[operators] tick: watched=[${r.watched.join(",")}] briefed=[${r.briefed.join(",")}]${r.capped.length ? ` capped=[${r.capped.join(",")}]` : ""}${r.errors.length ? ` errors=${JSON.stringify(r.errors)}` : ""}`);
       }
     } catch (e) {
       log(`[operators] tick failed: ${(e as Error).message}`);

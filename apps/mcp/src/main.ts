@@ -51,12 +51,14 @@ function runHttp(port: number): void {
     if (url.pathname !== "/mcp") return sendJson(res, 404, { error: { code: "not_found", message: "The MCP endpoint is /mcp" } });
     if (req.method !== "POST") return sendJson(res, 405, rpcError(-32000, "Method not allowed: this server is stateless and accepts POST only"), { allow: "POST" });
 
-    const key = bearerToken(req.headers.authorization) ?? base.apiKey;
+    // HTTP mode is multi-workspace: the bearer on each request is the identity. No process-wide fallback,
+    // or anyone who can reach the port would act as that workspace's agent.
+    const key = bearerToken(req.headers.authorization);
     if (!key) {
       return sendJson(
         res,
         401,
-        { error: { code: "unauthorized", message: "Send the workspace API key as 'Authorization: Bearer star_...' (or set STARSIGN_API_KEY for a single-workspace server)" } },
+        { error: { code: "unauthorized", message: "Send the workspace API key as 'Authorization: Bearer star_...' on every request" } },
         { "www-authenticate": 'Bearer realm="starsign"' },
       );
     }

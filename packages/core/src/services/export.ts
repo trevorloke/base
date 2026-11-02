@@ -13,7 +13,8 @@ export class ExportService {
     const postRows = await db.select().from(t.posts).where(eq(t.posts.workspaceId, ws));
     const postIds = postRows.map((r) => r.id);
     const variants = postIds.length ? await db.select().from(t.postVariants).where(inArray(t.postVariants.postId, postIds)) : [];
-    const variantIds = variants.map((v) => v.id);
+    // metrics rows are keyed by the network's external post id, not the variant id
+    const variantIds = variants.map((v) => v.externalId).filter((x): x is string => !!x);
     const accounts = (await db.select().from(t.socialAccounts).where(eq(t.socialAccounts.workspaceId, ws))).map(({ authCiphertext, ...rest }) => ({ ...rest, hasCredentials: !!authCiphertext }));
     const topics = await db.select().from(t.trendTopics).where(eq(t.trendTopics.workspaceId, ws));
     const topicIds = topics.map((x) => x.id);
