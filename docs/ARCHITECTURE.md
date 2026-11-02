@@ -82,3 +82,6 @@ everything it proposes. If it needs a new prompt, add one to `packages/ai/src/pr
 4. Every ledger event names an actor.
 5. Every forecast carries a band and a confidence; thin data is visibly thin.
 6. Everything a workspace owns comes out of `GET /v1/export`.
+7. Role gates are for humans; agent keys never pass them. Agents act only through the autonomy dial, on their own posts.
+8. Connector resolution is strict and the mock connector never runs in production: a "published" post always touched a network.
+9. API keys never appear in URLs; the live stream uses single-use, sixty-second tokens.

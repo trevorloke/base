@@ -108,3 +108,19 @@ describe("forecastTopic", () => {
     expect(r.curve).toEqual([]);
   });
 });
+
+describe("honest confidence", () => {
+  it("two observations never look like a day of data, future points are ignored, stale data is discounted", () => {
+    const two = forecastTopic([{ source: "manual", points: [{ t: T0, v: 10 }, { t: T0 + 30 * H, v: 50 }] }], { now: T0 + 31 * H });
+    expect(two.observedBuckets).toBe(2);
+    expect(two.confidence).toBeLessThan(0.25);
+    const future = forecastTopic([{ source: "manual", points: [{ t: T0 + 100 * H, v: 1 }, { t: T0 + 101 * H, v: 2 }] }], { now: T0 });
+    expect(future.curve).toEqual([]);
+    expect(Number.isFinite(future.confidence)).toBe(true);
+    const fresh = forecastTopic([{ source: "google_trends", points: synth(48, (i) => 20 + i * 2, 1, 0) }], { now: T0 + 48 * H });
+    const stale = forecastTopic([{ source: "google_trends", points: synth(48, (i) => 20 + i * 2, 1, 0) }], { now: T0 + 48 * H + 30 * H });
+    expect(stale.staleHours).toBe(31);
+    expect(stale.confidence).toBeLessThan(fresh.confidence);
+    expect(stale.combined[stale.combined.length - 1]!.t).toBe(T0 + 47 * H); // grid ends at the last observation, not at now
+  });
+});

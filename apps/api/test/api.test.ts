@@ -114,3 +114,55 @@ describe("api", () => {
     expect(bad.status).toBe(400);
   });
 });
+
+describe("review regressions", () => {
+  it("agent keys never pass role gates: accounts, profile, global topics, keys", async () => {
+    expect((await app.request("/v1/accounts", { method: "POST", headers: auth(agentKey), body: JSON.stringify({ network: "x", externalId: "9", handle: "h", connector: "mock" }) })).status).toBe(403);
+    expect((await app.request(`/v1/accounts/${acctId}`, { method: "DELETE", headers: auth(agentKey) })).status).toBe(403);
+    expect((await app.request("/v1/workspace/profile", { method: "PATCH", headers: auth(agentKey), body: JSON.stringify({ profile: { description: "pwned" } }) })).status).toBe(403);
+    expect((await app.request("/v1/trends/topics", { method: "POST", headers: auth(agentKey), body: JSON.stringify({ name: "G", keywords: ["g"], global: true }) })).status).toBe(403);
+    expect((await app.request("/v1/keys", { headers: auth(agentKey) })).status).toBe(403);
+    const keys = await json(await app.request("/v1/keys", { headers: auth(ownerKey) }));
+    expect(keys.some((k: { keyHash?: string }) => "keyHash" in k)).toBe(false);
+  });
+
+  it("schedule requires a time; malformed JSON is a 400; cancel is denied to agents on others' posts", async () => {
+    const created = await json(await app.request("/v1/posts", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ body: "d", variants: [{ socialAccountId: acctId, text: "draft" }] }) }));
+    expect((await app.request(`/v1/posts/${created.post.id}/schedule`, { method: "POST", headers: auth(ownerKey), body: JSON.stringify({}) })).status).toBe(400);
+    expect((await app.request(`/v1/posts/${created.post.id}/schedule`, { method: "POST", headers: auth(ownerKey), body: "{not json" })).status).toBe(400);
+    expect((await app.request(`/v1/posts/${created.post.id}/cancel`, { method: "POST", headers: auth(agentKey) })).status).toBe(403);
+    expect((await app.request(`/v1/posts/${created.post.id}/cancel`, { method: "POST", headers: auth(ownerKey) })).status).toBe(200);
+  });
+
+  it("a blocked approval edit is not persisted and the 422 carries violations", async () => {
+    const created = await json(await app.request("/v1/posts", { method: "POST", headers: auth(agentKey), body: JSON.stringify({ body: "ok", variants: [{ socialAccountId: acctId, text: "clean text" }] }) }));
+    const vid = created.variants[0].id;
+    const res = await app.request(`/v1/posts/${created.post.id}/decide`, { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ decision: "approve", edits: { [vid]: "guaranteed win" } }) });
+    expect(res.status).toBe(422);
+    const body = await json(res);
+    expect(body.error.details.violations[0].redLineId).toBe("g");
+    const after = await json(await app.request(`/v1/posts/${created.post.id}`, { headers: auth(ownerKey) }));
+    expect(after.variants[0].text).toBe("clean text");
+    expect(after.post.status).toBe("pending_approval");
+    const ctx = await json(await app.request("/v1/context", { headers: auth(ownerKey) }));
+    expect(ctx.voiceExamples.some((v: { after: string }) => v.after === "guaranteed win")).toBe(false);
+  });
+
+  it("metrics series and topics are workspace-scoped; stream tokens are single use", async () => {
+    const other = await m.workspaces.create({ slug: "other", name: "Other", timezone: "UTC" }, { type: "human", id: "u9" });
+    const otherTopic = await m.trends.createTopic({ workspaceId: other.id, name: "theirs", keywords: ["t"] });
+    expect((await app.request(`/v1/trends/topics/${otherTopic.id}`, { headers: auth(ownerKey) })).status).toBe(404);
+    expect((await app.request("/v1/trends/points", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ points: [{ topicId: otherTopic.id, source: "manual", value: 1, observedAt: new Date().toISOString() }] }) })).status).toBe(404);
+    expect((await app.request("/v1/metrics/series?entityType=post_variant&entityId=nope&metric=impressions", { headers: auth(ownerKey) })).status).toBe(404);
+    expect((await app.request(`/v1/metrics/series?entityType=workspace&entityId=${other.id}&metric=impressions`, { headers: auth(ownerKey) })).status).toBe(404);
+
+    // A strict app (no dev workspace): the API key is never accepted in a URL, tokens are single use.
+    const strict = createApp(m);
+    expect((await strict.request("/v1/feed/stream?key=" + encodeURIComponent(ownerKey))).status).toBe(401);
+    const tok = await json(await strict.request("/v1/feed/stream-token", { method: "POST", headers: auth(ownerKey) }));
+    expect(tok.token).toMatch(/^[A-Za-z0-9_-]{20,}$/);
+    const first = await strict.request(`/v1/feed/stream?token=${tok.token}`);
+    expect(first.status).toBe(200);
+    expect((await strict.request(`/v1/feed/stream?token=${tok.token}`)).status).toBe(401);
+  });
+});

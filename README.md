@@ -62,6 +62,11 @@ data-loyal.
 and Key Value, staging from `main`. Postgres needs the `vector` extension; TimescaleDB is used when present and skipped
 when not.
 
+## Review
+
+`docs/REVIEW.md` records the adversarial review that ran over the codebase, what it found, what was fixed and what
+was deliberately left. Invariants worth defending are listed in `docs/ARCHITECTURE.md`.
+
 ## Status
 
 Phase 0 scaffold, built 2026-11-02. Native connectors post for real once credentials exist; platform reviews (Meta,

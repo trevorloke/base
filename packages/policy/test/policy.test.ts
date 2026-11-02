@@ -124,3 +124,11 @@ describe("gate", () => {
     expect(g.initialStatus).toBe("scheduled");
   });
 });
+
+describe("cadence counting", () => {
+  it("counts the all-network total once when the red line has no network list", () => {
+    const p: Policy = { ...DEFAULT_POLICY, redLines: [{ id: "m", kind: "max_posts_per_day", description: "cap", severity: "block", limit: 4, networks: [] }] };
+    expect(evaluateSubject(p, { network: "x", text: "a", scheduledAt: null }, { postsToday: { x: 2, "*": 2 } }).verdict).toBe("allow");
+    expect(evaluateSubject(p, { network: "x", text: "a", scheduledAt: null }, { postsToday: { x: 2, bluesky: 2, "*": 4 } }).verdict).toBe("block");
+  });
+});
