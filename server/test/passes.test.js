@@ -313,13 +313,34 @@ test('shared/passes: doorState and inUniverse over hand-built people', () => {
   assert.equal(doorState(door({ pass_tries: 1, pass_last_outcome: 'no_answer' }, { pass_tries: 1, pass_last_outcome: 'moved' }), persuasion), 'done', 'anyone’s terminal outcome');
   assert.equal(doorState(door({ pass_tries: 1, pass_last_outcome: 'no_answer' }, { pass_tries: 0, pass_last_outcome: null }), persuasion), 'again');
   assert.equal(doorState(door({ pass_tries: 2, pass_last_outcome: 'no_answer' }), gotv), 'again', 'three tries: two is not the limit');
-  // A lit drop is a visit, not a try: it brings a door back in a persuasion
-  // pass, and finishes it in a lit pass.
-  assert.equal(doorState(door({ pass_tries: 0, pass_last_outcome: 'left_lit' }), persuasion), 'again');
-  assert.equal(doorState(door({ pass_tries: 0, pass_last_outcome: 'left_lit' }), lit), 'done');
+  // A lit drop is a not-home: a try in a persuasion pass (it comes back until
+  // the tries run out), and it finishes the door in a lit pass.
+  assert.equal(doorState(door({ pass_tries: 1, pass_last_outcome: 'left_lit' }), persuasion), 'again');
+  assert.equal(doorState(door({ pass_tries: 2, pass_last_outcome: 'left_lit' }), persuasion), 'done', 'lit twice: the tries ran out');
+  assert.equal(doorState(door({ pass_tries: 1, pass_last_outcome: 'left_lit' }), lit), 'done');
   assert.equal(doorState(door({ pass_tries: 1, pass_last_outcome: 'no_answer' }), lit), 'done', 'any visit finishes a lit door');
   assert.equal(passLine(null), 'No pass open');
   assert.equal(passLine({ kind: 'gotv', who: 'support', tries: 1 }), 'Get out the vote · Yes (1–2) · 1 try');
   assert.deepEqual(KINDS.map((k) => k.code), ['persuasion', 'gotv', 'lit', 'id']);
   assert.deepEqual(WHO.map((w) => w.code), ['all', 'unrated', 'undecided', 'support', 'not_opposed']);
+});
+
+// ── Lit drops inside a pass (ext/litdrop) ──
+test('a lit drop is a not-home: a try in a persuasion pass, given up when the tries run out; it finishes a lit-pass door', async () => {
+  const pass = await start({ name: 'Persuasion · lit drops', kind: 'persuasion', who: 'all', tries: 2 });
+  ok(await knock(vol, P.d.id, 'left_lit'), 'first drop');
+  let w = await walk(vol);
+  let d = doorOf(w, '13212 72 Ave');
+  assert.equal(d.state, 'again', 'nobody home, lit left: the door comes back');
+  assert.equal(d.tries, 1);
+  ok(await knock(vol, P.d.id, 'left_lit'), 'second drop');
+  w = await walk(vol);
+  d = doorOf(w, '13212 72 Ave');
+  assert.equal(d.state, 'done', 'lit left twice: the tries ran out');
+  assert.equal(d.tries, 2);
+  ok(await mgr.action('pass.end', { id: pass.id }));
+  const lit = await start({ name: 'Lit · second round', kind: 'lit', who: 'all', tries: 2 });
+  ok(await knock(vol, P.d.id, 'left_lit'), 'a drop in a lit pass');
+  assert.equal(doorOf(await walk(vol), '13212 72 Ave').state, 'done');
+  ok(await mgr.action('pass.end', { id: lit.id }));
 });

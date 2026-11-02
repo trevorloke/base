@@ -15,7 +15,6 @@
 //                             (serverAt, ms). One the list already carries
 //                             is never counted twice.
 import { Link } from 'react-router-dom';
-import { NOT_A_TRY } from '@starbase/shared/passes';
 import '../pages/passes.css';
 
 export function PassChip({ pass, desk }) {
@@ -57,7 +56,7 @@ export const overlayPass = (door, local, pass, serverAt = 0) => door.persons.map
   return {
     ...p,
     pass_last_outcome: mine.outcome,
-    pass_tries: (p.pass_tries || 0) + (NOT_A_TRY.includes(mine.outcome) ? 0 : 1),
+    pass_tries: (p.pass_tries || 0) + 1,
     door_knocked: true,
   };
 });

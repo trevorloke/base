@@ -242,14 +242,14 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // door_knocked: anyone ever knocked on this person's door (a 'door' contact),
 // so a walk list can tell a door reached only by phone or text from a knock.
 // pass_tries / pass_last_outcome: this person's door contacts in the open
-// pass (passId; ext/passes) — how many count as tries (a lit drop doesn't)
+// pass (passId; ext/passes) — how many tries (every door contact; a lit drop is a not-home too)
 // and the latest outcome. 0 / null with no pass open.
 const loadLocated = async (db, ws, passId = null) => (await db.query(
   `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags, p.voted_at,
           (select max(c.created_at) from contacts c where c.person_id = p.id) as last_contact_at,
           (select c.outcome from contacts c where c.person_id = p.id order by c.created_at desc limit 1) as last_outcome,
           exists (select 1 from contacts c where c.person_id = p.id and c.channel = 'door') as door_knocked,
-          (select count(*)::int from contacts c where c.person_id = p.id and c.channel = 'door' and c.pass_id = $2::uuid and c.outcome <> 'left_lit') as pass_tries,
+          (select count(*)::int from contacts c where c.person_id = p.id and c.channel = 'door' and c.pass_id = $2::uuid) as pass_tries,
           (select c.outcome from contacts c where c.person_id = p.id and c.channel = 'door' and c.pass_id = $2::uuid order by c.created_at desc limit 1) as pass_last_outcome
    from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.lng is not null`,
   [ws, passId],

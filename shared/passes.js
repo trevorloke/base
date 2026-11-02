@@ -12,7 +12,6 @@
 //
 //   KINDS / WHO               the choices, with their words
 //   TERMINAL                  outcomes that finish a door in any pass
-//   NOT_A_TRY                 outcomes that are a visit, not a try (a lit drop)
 //   inUniverse(person, pass)  is this person someone the pass wants knocked
 //   inPass(door, pass)        a door is listed when anyone there is in the universe
 //   doorState(door, pass)     'open' · 'again' · 'done'
@@ -42,9 +41,10 @@ export const WHO_CODES = WHO.map((w) => w.code);
 export const TRIES_MAX = 5;
 
 export const TERMINAL = ['contacted', 'refused', 'moved', 'inaccessible'];
-// A lit drop (outcome 'left_lit', another feature's outcome — a plain string
-// here) is a visit, not a try.
-export const NOT_A_TRY = ['left_lit'];
+// A lit drop (outcome 'left_lit', from ext/litdrop) is a not-home that left
+// something at the door: in a lit-drop pass it finishes the door; in any
+// other pass it counts as a try like a No answer, so a door where canvassers
+// keep leaving lit is given up when its tries run out.
 
 // voted_at: a column another feature adds; undefined here. Someone who has
 // voted is never on a get-out-the-vote list.
@@ -65,8 +65,8 @@ export const inUniverse = (person, pass) => {
 export const inPass = (door, pass) => !pass || door.persons.some((p) => inUniverse(p, pass));
 
 // 'done' | 'again' | 'open'. Without a pass: the old rule (anyone knocked).
-// With one: nobody visited yet → open; a lit drop finishes a door on any
-// visit; a terminal outcome for anyone there finishes it; so does anyone's
+// With one: nobody visited yet → open; in a lit-drop pass any visit finishes
+// the door; a terminal outcome for anyone there finishes it; so does anyone's
 // tries running out; otherwise it comes back ('again').
 export const doorState = (door, pass) => {
   if (!pass) return door.persons.some((p) => p.door_knocked) ? 'done' : 'open';
