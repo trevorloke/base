@@ -442,6 +442,45 @@ test('a volunteer, offline: a new housemate at a door in their turf, then a knoc
   net.cookie = c.cookie;
 });
 
+test('request.ask queued with no signal sends once and a replay is a duplicate', async () => {
+  const p = await c.createPerson('Ask Example', { phone: '604-555-0121', address: '7231 132 St', lat: 49.1351, lng: -122.8551 });
+  const meB = (await vol.get('/api/auth/me')).json;
+  ob.setOutboxOwner(meB);
+  net.cookie = vol.cookie;
+  const asked = async () => (await c.get('/api/requests?open=all')).json.requests.filter((r) => r.person.id === p.id);
+
+  // At the door with no signal: "Ask the office" is kept on the phone, in plain words.
+  nav.onLine = false;
+  const r = await ob.queueAction('request.ask', { person_id: p.id, kind: 'volunteer', note: 'free Saturdays, call after 6' }, { who: p.name });
+  assert.equal(r.queued, true);
+  const item = JSON.parse(store.get('starbase:outbox:v2')).find((i) => i.cid === r.client_id);
+  assert.equal(item.input.client_id, r.client_id, 'keyed by an id made on the phone');
+  assert.match(ob.itemText(item), /^Ask the office · Wants to volunteer · Ask Example · \d{1,2}:\d{2} (am|pm)$/);
+  assert.equal(ob.pendingCount(), 1);
+
+  // Signal back, but the first answer is lost after the server wrote it.
+  nav.onLine = true;
+  net.loseNext = 1;
+  assert.equal((await ob.flushOutbox()).sent, 0);
+  assert.equal((await asked()).length, 1, 'the server has it');
+  assert.equal((await ob.flushOutbox()).sent, 1);
+  assert.equal(ob.unsentCount(), 0);
+  const rows = await asked();
+  assert.equal(rows.length, 1, 'asked once, not twice');
+  assert.equal(rows[0].kind, 'volunteer');
+  assert.equal(rows[0].asked_by_name, 'Outbox Volunteer');
+  // The replay itself: the same request, said so.
+  const again = await vol.action('request.ask', { person_id: p.id, kind: 'volunteer', note: 'free Saturdays, call after 6', client_id: r.client_id });
+  assert.equal(again.status, 200);
+  assert.equal(again.json.duplicate, true);
+  assert.equal(again.json.request.id, rows[0].id);
+  const evs = (await c.get('/api/events?since=0&limit=5000')).json.events.filter((e) => e.action === 'request.ask' && e.payload.person_id === p.id);
+  assert.equal(evs.length, 1, 'one event');
+  assert.equal((await c.get('/api/audit/verify')).json.ok, true);
+  ob.setOutboxOwner(null);
+  net.cookie = c.cookie;
+});
+
 test('a knock on someone added here whose adding was refused: kept, in plain words; Try again brings it along', async () => {
   const lat = 49.1341; const lng = -122.8541;
   const host = await c.createPerson('Door Priya', { address: '7250 124 St', city: 'Surrey', lat, lng });
