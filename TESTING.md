@@ -234,6 +234,12 @@ one tap away under **More**.
 - **More** on a door: note, Call / Text (the phone's own dialer; with Twilio
   connected, the person's card on Calls), request a lawn / large sign or
   billboard (with Undo), add a person at the door.
+- **Ask the office** (under *More* on a walk-list door and on the map's door
+  card) — pick *Call them back · Wants to volunteer · Has a question ·
+  Something else*, type what they said, *Send*: *Sent to the office*, and the
+  button reads *Asked the office · 2:10 pm*. With no signal it says *Ask the
+  office · Saved offline*, the strip's sheet lists *Ask the office · Wants to
+  volunteer · Jasmine Wong · 2:10 pm*, and it sends once when the signal is back.
 - **Calls** — one person at a time: Call or Text, then rate; *No answer*,
   *Refused*, *Skip*.
 - **Texts** (Twilio connected) — Calls → Text: the message is filled in; edit
@@ -315,6 +321,13 @@ one tap away under **More**.
   - **Sign out**: a note still typed on a profile or door card is sent first,
     as yours; nothing stays, the next person on that computer sees none of
     it, and another open tab goes to Sign in.
+- **Requests from the doors** — after a volunteer taps *Ask the office*,
+  Today's *Needs you* says *1 request from the doors*; it opens the list (who,
+  what it's about, what they said, *asked by Priya · Sat 2:10 pm*). *Call*,
+  *Profile*, or *Done ✓* → what you did (optional) → *Done*: *✓ Done*. With
+  none left: *Nothing waiting from the doors.* The *Done* pill shows who did
+  each and when, with *Reopen*. A volunteer never sees what was said or who
+  asked.
 
 ### Treasurer
 - **Donations** — **Log a gift**; log enough to one donor to cross the annual

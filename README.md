@@ -24,7 +24,7 @@ button, no paragraphs, everything else one tap away.
 
 | Screen | What it is |
 |---|---|
-| **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you*. Volunteers: one big *Start canvassing* and their next shift |
+| **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you* (with the requests from the doors canvassers sent with *Ask the office*). Volunteers: one big *Start canvassing* and their next shift |
 | **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. Turfs and walk lists |
 | **People** | Everyone, filterable by rating / tag / role / the campaign's own fields; profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time; **My people** is each volunteer's own circle |
 | **Shifts** | Schedule volunteers, assign by role, notify by email + text with instructions and a link; volunteers tap *Count me in* |
