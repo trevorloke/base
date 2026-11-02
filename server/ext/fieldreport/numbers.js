@@ -28,7 +28,8 @@ import { pointInPolygon, groupDoors } from '../../lib/geo.js';
 import { httpError } from '../../actions/util.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 
-export const KNOWN = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible'];
+// left_lit: a lit drop (ext/litdrop) — its own column, never a talk.
+export const KNOWN = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit'];
 export const DEFAULT_DAYS = 30;
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -144,7 +145,7 @@ export const turfNumbers = async (db, ws, knocks) => {
       // can't make a turf more than done.
       coverage_pct: doors ? Math.min(100, Math.round((100 * n.knocked) / doors)) : 0,
       talked: n.talked, support_found: n.support_found,
-      no_answer: n.no_answer, refused: n.refused, moved: n.moved, inaccessible: n.inaccessible, other: n.other,
+      no_answer: n.no_answer, refused: n.refused, moved: n.moved, inaccessible: n.inaccessible, left_lit: n.left_lit, other: n.other,
       canvassers: n.canvassers, last_knock_at: n.last_at,
     };
   });

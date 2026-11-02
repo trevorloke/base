@@ -13,7 +13,7 @@ import { fieldReport, zoneOf } from './numbers.js';
 
 export const api = new Hono();
 
-const TURF_HEAD = ['Turf', 'Doors', 'Knocked', 'Coverage %', 'Talked', 'Yes', 'No answer', 'Refused', 'Moved', 'No access', 'Other', 'Canvassers', 'Last knock'];
+const TURF_HEAD = ['Turf', 'Doors', 'Knocked', 'Coverage %', 'Talked', 'Yes', 'No answer', 'Refused', 'Moved', 'No access', 'Left lit', 'Other', 'Canvassers', 'Last knock'];
 const CANVASSER_HEAD = ['Canvasser', 'Team', 'Doors', 'Talked', 'Yes', 'Days out', 'Last out'];
 
 const deskOnly = (ctx) => ctx.role === 'volunteer' && decide(ctx.perms, 'data') !== true;
@@ -50,7 +50,7 @@ api.get('/field-report.csv', (c) => answer(c, (r) => {
   const tz = r.range.tz;
   const rows = [
     ...r.turfs.map((t) => [t.name, t.doors, t.knocked, t.coverage_pct, t.talked, t.support_found, t.no_answer, t.refused,
-      t.moved, t.inaccessible, t.other, t.canvassers, stamp(t.last_knock_at, tz)]),
+      t.moved, t.inaccessible, t.left_lit, t.other, t.canvassers, stamp(t.last_knock_at, tz)]),
     [],
     CANVASSER_HEAD,
     ...r.canvassers.map((p) => [p.name, p.team || '', p.doors, p.talked, p.support_found, p.days_out, stamp(p.last_out, tz)]),

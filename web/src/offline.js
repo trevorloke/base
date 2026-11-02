@@ -260,8 +260,9 @@ const alreadyDone = (name, err) => err instanceof ApiError && (
   || (name === 'sign.cancel' && err.status === 404));
 
 // A knock says when it was tapped: a candidate taken off the list since
-// is counted from the tap, however long it waited here (ext/scale).
-const bodyOf = (item) => (item.name === 'contact.log' && item.at && !item.input.client_at
+// is counted from the tap, however long it waited here (ext/scale). A Voted
+// mark too: it keeps its own time and day (ext/voted).
+const bodyOf = (item) => ((item.name === 'contact.log' || item.name === 'vote.mark') && item.at && !item.input.client_at
   ? { ...item.input, client_at: item.at } : item.input);
 
 async function send(item, { replay }) {

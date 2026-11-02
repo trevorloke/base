@@ -127,14 +127,15 @@ test('from=all brings back the old knock; a narrow range leaves it out; a bad da
   assert.throws(() => rangeOf({ from: '2026-1-1' }, TZ), /from and to are dates/);
 });
 
-test('an outcome this report does not know (a feature’s own) counts as other; the rating on the knock, not the person, is support', async () => {
+test('a lit drop has its own column; an outcome this report does not know counts as other; the rating on the knock, not the person, is support', async () => {
   const db = await getDb();
   const at = new Date().toISOString();
   const k = (person, outcome, rating, extra = {}) => ({
     person_id: person.id, outcome, rating, created_by: ids.Jas, created_at: at, day: localDay(new Date(), TZ),
     lat: person.lat, lng: person.lng, address: person.address, unit: null, door: `${person.address.toLowerCase()}|`, ...extra,
   });
-  const [t] = await turfNumbers(db, ws, [k(P.a, 'left_lit', null), k(P.b, 'contacted', '3'), k(P.b, 'contacted', '2'), k(P.far, 'contacted', '1')]);
+  const [t] = await turfNumbers(db, ws, [k(P.a, 'left_lit', null), k(P.a, 'some_new_outcome', null), k(P.b, 'contacted', '3'), k(P.b, 'contacted', '2'), k(P.far, 'contacted', '1')]);
+  assert.equal(t.left_lit, 1, 'Left lit, never a talk');
   assert.equal(t.other, 1);
   assert.equal(t.talked, 2, 'the far door is not in the turf');
   assert.equal(t.knocked, 2);
@@ -154,8 +155,8 @@ test('desk only: volunteers 403 on the report and its CSV; staff 200; the CSV is
   assert.match(res.headers.get('content-disposition'), /field-report-all-\d{4}-\d{2}-\d{2}\.csv/);
   const lines = (await res.text()).replace(/^﻿/, '').split('\r\n');
   assert.ok(lines[0].startsWith('Turf,'), lines[0]);
-  assert.equal(lines[0], 'Turf,Doors,Knocked,Coverage %,Talked,Yes,No answer,Refused,Moved,No access,Other,Canvassers,Last knock');
-  assert.match(lines[1], /^Newton block,4,4,100,1,1,3,1,0,0,0,2,\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  assert.equal(lines[0], 'Turf,Doors,Knocked,Coverage %,Talked,Yes,No answer,Refused,Moved,No access,Left lit,Other,Canvassers,Last knock');
+  assert.match(lines[1], /^Newton block,4,4,100,1,1,3,1,0,0,0,0,2,\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
   assert.equal(lines[2], '');
   assert.equal(lines[3], 'Canvasser,Team,Doors,Talked,Yes,Days out,Last out');
   assert.match(lines[4], /^Jas,Newton crew,2,1,1,1,/);

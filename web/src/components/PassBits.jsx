@@ -7,13 +7,17 @@
 //   <TryAgainChip tries max />  a door's "Try again · 1 of 2" (amber)
 //   <WalkShow value onChange counts />  the walk list's pill row: Show ·
 //                             All · Not knocked (N) · Try again (N)
-//   overlayPass(door, local, pass, serverAt)  the door's people with this
-//                             phone's knocks laid over (local: person id →
-//                             { outcome, at, queued }), so doorState reads a
-//                             knock the server doesn't have yet: a knock
-//                             still in the outbox, or newer than the list
-//                             (serverAt, ms). One the list already carries
-//                             is never counted twice.
+//   waitingTries(items, pass) person id → { n, outcome }: the door knocks
+//                             still in this phone's outbox that count in the
+//                             pass (tapped once it was open, as the server
+//                             stamps them) — every one is a try.
+//   overlayPass(door, local, pass, serverAt, waiting)  the door's people with
+//                             this phone's knocks laid over, so doorState
+//                             reads what the server doesn't have yet: every
+//                             knock still waiting (waiting), and one sent
+//                             since the list loaded (local: person id →
+//                             { outcome, at }, newer than serverAt, ms). One
+//                             the list already carries is never counted twice.
 import { Link } from 'react-router-dom';
 import '../pages/passes.css';
 
@@ -48,15 +52,32 @@ export function WalkShow({ value, onChange, counts }) {
   );
 }
 
-export const overlayPass = (door, local, pass, serverAt = 0) => door.persons.map((p) => {
+// The server counts a tap up to five minutes before the pass began (a slow
+// phone clock): so does the phone.
+const SKEW_MS = 5 * 60_000;
+export const waitingTries = (items = [], pass = null) => {
+  const out = {};
+  if (!pass) return out;
+  const from = Date.parse(pass.started_at) - SKEW_MS;
+  for (const it of items) {
+    if (it.state !== 'pending' || it.name !== 'contact.log' || it.input?.channel !== 'door' || !it.input.person_id) continue;
+    if (it.at && Date.parse(it.at) < from) continue;
+    const pid = it.input.person_id;
+    // The same visit, finished (visit_of): its outcome, not another try.
+    out[pid] = { n: (out[pid]?.n || 0) + (it.input.visit_of ? 0 : 1), outcome: it.input.outcome };
+  }
+  return out;
+};
+
+export const overlayPass = (door, local, pass, serverAt = 0, waiting = {}) => door.persons.map((p) => {
+  if (!pass) return p;
+  const queued = waiting[p.id];
+  if (queued) {
+    return { ...p, pass_last_outcome: queued.outcome, pass_tries: (p.pass_tries || 0) + queued.n, door_knocked: true };
+  }
+  // Sent from here since the list loaded (not in the outbox any more): the
+  // list will carry it on its next load; until then it counts once.
   const mine = local[p.id];
-  if (!mine || !pass) return p;
-  const fresh = mine.queued || !serverAt || !mine.at || Date.parse(mine.at) > serverAt;
-  if (!fresh) return p;
-  return {
-    ...p,
-    pass_last_outcome: mine.outcome,
-    pass_tries: (p.pass_tries || 0) + 1,
-    door_knocked: true,
-  };
+  if (!mine || mine.queued || !mine.at || (serverAt && Date.parse(mine.at) <= serverAt)) return p;
+  return { ...p, pass_last_outcome: mine.outcome, pass_tries: (p.pass_tries || 0) + 1, door_knocked: true };
 });

@@ -7,20 +7,21 @@
 // Days are the campaign's (the server's zone); the pills count from the
 // browser's today. Reads only (server/ext/fieldreport).
 import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
+import { addDays, dayOf, safeZone, weekStart } from '@starbase/shared/dayparts';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import './shifts.css';
 import './field-report.css';
 
-const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const back = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return ymd(d); };
-// This week starts on Monday.
+// The days are the campaign's (its time zone, as the server counts them),
+// not this browser's: a desk in another zone sees the same week. This week
+// starts on Monday.
 const RANGES = [
-  { key: 'week', label: 'This week', from: () => back((new Date().getDay() + 6) % 7) },
-  { key: '7d', label: 'Last 7 days', from: () => back(6) },
-  { key: '30d', label: '30 days', from: () => back(29) },
+  { key: 'week', label: 'This week', from: (today) => weekStart(today) },
+  { key: '7d', label: 'Last 7 days', from: (today) => addDays(today, -6) },
+  { key: '30d', label: '30 days', from: (today) => addDays(today, -29) },
   { key: 'all', label: 'All', from: () => 'all' },
 ];
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,7 +48,7 @@ function Bar({ value }) {
 
 // The rest of a turf's knocks, said only when there are some.
 const restOf = (t) => [
-  [t.no_answer, 'no answer'], [t.refused, 'refused'], [t.moved, 'moved'], [t.inaccessible, 'no access'], [t.other, 'other'],
+  [t.no_answer, 'no answer'], [t.refused, 'refused'], [t.moved, 'moved'], [t.inaccessible, 'no access'], [t.left_lit, 'left lit'], [t.other, 'other'],
 ].filter(([n]) => n > 0).map(([n, w]) => `${num(n)} ${w}`);
 
 function Turfs({ turfs, tz }) {
@@ -75,7 +76,7 @@ function Turfs({ turfs, tz }) {
             <tr>
               <th>Turf</th><th className="num">Doors</th><th>Knocked</th><th className="num">Talked</th><th className="num">Yes</th>
               <th className="num">No answer</th><th className="num">Refused</th><th className="num">Moved</th><th className="num">No access</th>
-              <th className="num">Other</th><th className="num">Canvassers</th><th>Last knock</th>
+              <th className="num">Left lit</th><th className="num">Other</th><th className="num">Canvassers</th><th>Last knock</th>
             </tr>
           </thead>
           <tbody>
@@ -90,6 +91,7 @@ function Turfs({ turfs, tz }) {
                 <td className="mono num">{num(t.refused)}</td>
                 <td className="mono num">{num(t.moved)}</td>
                 <td className="mono num">{num(t.inaccessible)}</td>
+                <td className="mono num">{num(t.left_lit)}</td>
                 <td className="mono num">{num(t.other)}</td>
                 <td className="mono num">{num(t.canvassers)}</td>
                 <td>{when(t.last_knock_at, tz) || '—'}</td>
@@ -161,14 +163,15 @@ function Days({ days }) {
 
 export default function FieldReport() {
   const [params, setParams] = useSearchParams();
-  const today = ymd(new Date());
+  const { me } = useOutletContext() || {};
+  const today = dayOf(new Date(), safeZone(me?.workspace?.settings?.tz || me?.org?.tz));
   const pFrom = params.get('from') || '';
   const pTo = params.get('to') || '';
-  const from = pFrom === 'all' || DAY.test(pFrom) ? pFrom : RANGES[2].from();
+  const from = pFrom === 'all' || DAY.test(pFrom) ? pFrom : RANGES[2].from(today);
   const to = DAY.test(pTo) ? pTo : today;
   // On a Sunday "This week" and "Last 7 days" are the same days: the one tapped is on.
   const [picked, setPicked] = useState(null);
-  const matches = RANGES.filter((r) => r.from() === from && to === today).map((r) => r.key);
+  const matches = RANGES.filter((r) => r.from(today) === from && to === today).map((r) => r.key);
   const on = matches.includes(picked) ? picked : matches[0];
   const q = useQuery({
     queryKey: ['fieldReport', `${from}:${to}`],
@@ -178,7 +181,7 @@ export default function FieldReport() {
   const t = d?.totals;
   const tz = d?.range?.tz;
   const knocks = (d?.days?.length ?? 0) > 0;
-  const pick = (r) => { setPicked(r.key); setParams({ from: r.from(), to: today }); };
+  const pick = (r) => { setPicked(r.key); setParams({ from: r.from(today), to: today }); };
 
   return (
     <div className="ops-page fr-page">

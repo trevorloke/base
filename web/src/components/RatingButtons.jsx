@@ -72,7 +72,7 @@ export const LIT = { code: 'left_lit', label: 'Left lit' };
 
 export function OutcomeButtons({ items = OUTCOMES, onPick, disabled = false }) {
   return (
-    <div className="fk-outcomes" role="group" aria-label="No conversation">
+    <div className="fk-outcomes" role="group" aria-label="No conversation" style={{ '--n': items.length }}>
       {items.map((o) => (
         <button key={o.code} type="button" className="fk-out" disabled={disabled} onClick={() => onPick(o.code)}>
           {o.label}

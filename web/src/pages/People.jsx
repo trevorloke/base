@@ -1246,7 +1246,7 @@ function CallsScreen() {
                 <div className="cl-rate">
                   <RatingButtons value={mine} onPick={(code) => log('contacted', code)} disabled={act.busy} />
                 </div>
-                <VotedRow person={current} source="phone" toast={(text, o) => showToast(text, null, o?.act || null)} onMarked={() => invalidatePersonData(queryClient)} />
+                <VotedRow person={current} source="phone" toast={(text, o) => showToast(text, null, o?.act || null)} onMarked={() => { invalidatePersonData(queryClient); if (bankId) queryClient.invalidateQueries({ queryKey: ['banks', bankId, 'mine'] }); }} />
 
                 <div className="cl-outcomes">
                   {showNoReply && (

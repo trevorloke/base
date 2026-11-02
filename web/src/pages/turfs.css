@@ -154,7 +154,9 @@
 .walk-door.is-done .walk-door__addr { color: var(--text-2); font-weight: 500; }
 .walk-door__names { font-size: 13px; font-weight: 400; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Chips stay on one line (a household shows "2 rated", not a pile of chips) */
-.walk-door__chips { display: flex; flex-wrap: nowrap; justify-content: flex-end; align-items: center; gap: 4px; flex-shrink: 0; }
+/* Try again, Not sent, a rating and Voted can all sit here at once: they wrap
+   onto a second line before they squeeze the address. */
+.walk-door__chips { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; flex: 0 1 auto; max-width: 52%; }
 .walk-door__chips .chip { font-size: 11.5px; }
 .chip.walk-rated { color: var(--text-2); }
 

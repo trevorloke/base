@@ -102,7 +102,7 @@ function OpenPass({ pass, busy, online, onEnd }) {
       <p className="pass-open__stats mono">{statsLine(pass.stats, true)}</p>
       {confirm ? (
         <div className="ops-confirm" role="group" aria-label="End this pass">
-          <span>End this pass? Every door is done until the next one starts.</span>
+          <span>End this pass? Until the next one, a door counts as done once anyone there has been knocked.</span>
           <button type="button" className="btn ops-tap sv-danger" disabled={busy || !online} onClick={onEnd}>Yes</button>
           <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm(false)}>No</button>
         </div>
@@ -162,7 +162,7 @@ export default function Passes() {
     return r.error;
   };
   const end = async () => {
-    const r = await run('pass.end', { id: open.id }, `✓ Ended “${open.name}” — every door is done until the next pass`);
+    const r = await run('pass.end', { id: open.id }, `✓ Ended “${open.name}” — a door anyone was knocked at counts as done until the next pass`);
     if (r.error) setError(r.error);
   };
 

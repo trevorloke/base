@@ -40,7 +40,7 @@ import RatingButtons, {
 } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from '../components/SurveyQuestions.jsx';
 import { doorState, inPass } from '@starbase/shared/passes';
-import { PassChip, TryAgainChip, WalkShow, overlayPass } from '../components/PassBits.jsx';
+import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../components/PassBits.jsx';
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
@@ -326,7 +326,9 @@ function WalkList({ id }) {
   usePhoneCopy(queryClient, q, ck);
   // The open pass (ext/passes), as the server's list carries it.
   const pass = q.data?.pass || null;
-  const [show, setShow] = useState('all'); // the Show pill: all · open · again
+  const [showPick, setShow] = useState('all'); // the Show pill: all · open · again
+  // The pills are a pass's: with none open (the desk ended it) every door shows.
+  const show = pass ? showPick : 'all';
 
   // What this phone logged since the list loaded, by person id:
   // { rating, outcome, at, queued }. Laid over the server's data so the list
@@ -408,6 +410,8 @@ function WalkList({ id }) {
   }, [outbox.items]);
   // "Voted ✓" taps still on this phone (ext/voted), laid over voted_at.
   const votes = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
+  // Knocks still on this phone that count as tries in the open pass.
+  const waiting = useMemo(() => waitingTries(outbox.items, pass), [outbox.items, pass]);
   const doors = useMemo(() => {
     const list = (q.data?.doors ?? []).map((d) => ({ ...d, persons: [...d.persons] }));
     const known = new Set(list.flatMap((d) => d.persons.map((p) => p.id)));
@@ -435,7 +439,7 @@ function WalkList({ id }) {
       // With a pass: this phone's knocks laid over the server's pass fields,
       // and the door's state from the shared rule — so an offline No answer
       // reads "Try again", not done. Without one: the old rule.
-      const laid = pass ? overlayPass({ ...d, persons }, local, pass, q.dataUpdatedAt) : persons;
+      const laid = pass ? overlayPass({ ...d, persons }, local, pass, q.dataUpdatedAt, waiting) : persons;
       // A get-out-the-vote door where everyone has now voted (a tap still on
       // this phone) is done here; the server leaves it off the next list.
       const state = pass
@@ -451,7 +455,7 @@ function WalkList({ id }) {
         tries: Math.max(0, ...laid.map((p) => p.pass_tries || 0)),
       };
     });
-  }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass, votes]);
+  }, [q.data, q.dataUpdatedAt, local, added, waitingSigns, pass, votes, waiting]);
 
   // The latest list, open door and knocks, for handlers that finish after an
   // await (and for the unmount note flush).
@@ -468,8 +472,17 @@ function WalkList({ id }) {
   const allDone = total > 0 && left === 0;
   const people = doors.reduce((n, d) => n + d.persons.length, 0);
   const rated = doors.reduce((n, d) => n + d.persons.filter((p) => p.rating).length, 0);
-  // The Show pill: which doors the list shows.
-  const inShow = (d) => show === 'all' || (show === 'open' ? d.state === 'open' : d.state === 'again');
+  // The Show pill: which doors the list shows. The open door always shows: a
+  // rating that finishes it while a housemate is still to rate, or a toast's
+  // "Change", never takes it out from under the canvasser.
+  const inShow = (d) => show === 'all' || d.key === openKey || (show === 'open' ? d.state === 'open' : d.state === 'again');
+  // Picking a pill shows what it says: an open door it doesn't cover closes
+  // (its note goes, as on any close).
+  const pickShow = (v) => {
+    setShow(v);
+    const d = doors.find((x) => x.key === openKey);
+    if (d && v !== 'all' && d.state !== v) setOpenKey(null);
+  };
   // The next door from `from` round the list (never `from` itself): doors
   // not knocked first, then — with a pass — the ones to try again (the other
   // way round while the list is filtered to Try again: those are the doors
@@ -492,7 +505,12 @@ function WalkList({ id }) {
   // an open door nobody has answered yet it says "Skip →" and goes quiet —
   // the rating buttons are the thing to tap there.
   const openIdx = openKey ? doors.findIndex((d) => d.key === openKey) : -1;
-  const targetIdx = openIdx >= 0 ? pickNext(openIdx) : nextIdx;
+  // The open door can leave the list (everyone there voted, in a get-out-
+  // the-vote pass): Next door carries on from where it was, not the top.
+  const lastOpen = useRef(-1);
+  useLayoutEffect(() => { if (openIdx >= 0) lastOpen.current = openIdx; });
+  const openLeft = Boolean(openKey) && openIdx < 0 && lastOpen.current >= 0;
+  const targetIdx = openIdx >= 0 ? pickNext(openIdx) : openLeft ? pickNext(Math.min(lastOpen.current, doors.length) - 1) : nextIdx;
   const target = targetIdx >= 0 ? doors[targetIdx] : null;
   const skipping = Boolean(target) && openIdx >= 0 && !doors[openIdx].done;
 
@@ -602,6 +620,13 @@ function WalkList({ id }) {
     const i = pickNext(at, list);
     if (i >= 0) { if (!inShow(list[i])) setShow('all'); setOpenKey(list[i].key); setScrollTo(i); return; }
     setOpenKey(null);
+  };
+  // A "Voted ✓" sent with signal: the list loads again (in a get-out-the-
+  // vote pass a door where everyone has voted leaves it), so a note still in
+  // the door's boxes goes first.
+  const voted = (door) => {
+    flushNotes(door.persons);
+    refresh();
   };
   const reopen = (key) => {
     setOpenKey(key);
@@ -868,7 +893,7 @@ function WalkList({ id }) {
             <ProgressBar done={doneCount} total={total} />
           </div>
         )}
-        {pass && total > 0 && <WalkShow value={show} onChange={setShow} counts={{ open: openCount, again: againCount }} />}
+        {pass && total > 0 && <WalkShow value={show} onChange={pickShow} counts={{ open: openCount, again: againCount }} />}
         {target ? (
           <button type="button" ref={nextRef} className={nextCls} aria-label={nextAria} onClick={goNext}>{nextLabel}</button>
         ) : allDone ? (
@@ -913,7 +938,7 @@ function WalkList({ id }) {
               key={d.key}
               door={d}
               index={i}
-              isNext={openIdx < 0 && i === nextIdx}
+              isNext={openIdx < 0 && i === targetIdx}
               open={openKey === d.key}
               onToggle={() => setOpenKey((k) => (k === d.key ? null : d.key))}
               selectedId={picked[d.key]}
@@ -925,6 +950,7 @@ function WalkList({ id }) {
               onLog={(p, outcome, rating = null, answers = null, visitOf = null) => log(p, outcome, rating, { door: d, answers, visitOf })}
               onNobodyHome={() => nobodyHome(d)}
               onLeftLit={() => leftLit(d)}
+              onVoted={() => voted(d)}
               onSign={(p, kind) => askSign(d, p, kind)}
               onAdded={(person) => personAdded(d, person)}
               toast={toast}
@@ -960,7 +986,7 @@ function WalkList({ id }) {
 
 function Door({
   door, index, isNext, open, onToggle, selectedId, onPick, busy, notes, setNote, onNoteFocus, onLog, onNobodyHome,
-  onLeftLit, onSign, onAdded, toast,
+  onLeftLit, onVoted, onSign, onAdded, toast,
   pass,
 }) {
   const [more, setMore] = useState(false);
@@ -974,8 +1000,6 @@ function Door({
   // The active survey's questions: answers go with a "talked" tap; a refused tap puts them back.
   const { id: turfId } = useParams();
   const survey = useSurvey({ context: 'door', personId: sel?.id, turfId, lat: door.lat, lng: door.lng });
-  // A "Voted ✓" sent with signal: the list loads again (a door where everyone has voted may leave it).
-  const queryClient = useQueryClient();
   // After "Save answers", the next tap on that person finishes the same knock.
   const tap = async (p, outcome, rating = null) => {
     const answers = outcome === 'contacted' ? survey.take() : [];
@@ -1036,7 +1060,7 @@ function Door({
             <VotedChip persons={door.persons} />
           </span>
           <span className="walk-sr">
-            {door.done ? (phoneOnly ? ' — called, not knocked' : ' — done') : ' — not knocked yet'}{isNext ? ', next door' : ''}
+            {door.done ? (phoneOnly ? ' — called, not knocked' : ' — done') : door.state === 'again' ? ` — try again, ${door.tries} of ${pass?.tries}` : ' — not knocked yet'}{isNext ? ', next door' : ''}
           </span>
         </button>
       </h2>
@@ -1045,7 +1069,7 @@ function Door({
         <div className="walk-panel" id={panelId}>
           <PersonTabs persons={door.persons} value={sel.id} onPick={onPick} />
           {dnc && <p className="walk-dnc"><span className="chip chip-danger">Do not contact</span> Skip {firstName(sel.name)}</p>}
-          <VotedRow person={sel} source="door" toast={toast} onMarked={() => queryClient.invalidateQueries({ queryKey: ['turf', turfId] })} />
+          <VotedRow person={sel} source="door" toast={toast} onMarked={onVoted} />
           <RatingButtons key={sel.id} value={sel.rating} disabled={Boolean(busy[sel.id] || busy[door.key])} onPick={(code) => talk(sel, code)} />
           <OutcomeButtons
             items={DOOR_OUTCOMES}

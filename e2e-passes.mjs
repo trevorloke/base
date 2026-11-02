@@ -273,7 +273,7 @@ check('the card counts the team’s work: "2 doors knocked · 1 talked · 1 yes"
 await page.click('.pass-open button:has-text("End this pass")');
 await sleep(200);
 t = await D.text();
-check('End this pass asks in place: "End this pass? Every door is done until the next one starts." Yes · No', /End this pass\? Every door is done until the next one starts\./.test(t)
+check('End this pass asks in place: "End this pass? Until the next one, a door counts as done once anyone there has been knocked." Yes · No', /End this pass\? Until the next one, a door counts as done once anyone there has been knocked\./.test(t)
   && !!(await page.$('.pass-open .ops-confirm button:has-text("Yes")')) && !!(await page.$('.pass-open .ops-confirm button:has-text("No")')));
 await page.click('.pass-open .ops-confirm button:has-text("No")');
 check('No keeps it open', !!(await page.$('.pass-open button:has-text("End this pass")')) && !(await page.$('.pass-open .ops-confirm')));
@@ -388,6 +388,48 @@ const exp = (await D.api('/export')).json;
 check('the export carries the passes, and the knocks their pass', exp.canvass_passes?.length === 2 && exp.contacts.filter((c) => c.pass_id).length === 3, `${exp.canvass_passes?.length} · ${exp.contacts.filter((c) => c.pass_id).length}`);
 const v = (await D.api('/audit/verify')).json;
 check('hash chain verifies after the whole journey', v.ok === true && v.checked > 10, JSON.stringify(v));
+
+// ── 8. After the books: the open door stays under Show; offline tries add up ──
+const eve = (await D.api('/actions/person.create', { name: 'Eve Example', phone: '604-555-0145', address: '13212 72 Ave', city: 'Surrey', lat, lng })).json.person;
+const again = (await D.api('/actions/pass.start', { name: 'Persuasion · again', kind: 'persuasion', who: 'all', tries: 2 })).json.pass;
+check('a second persuasion pass, and Eve at Dee’s door (two people there)', !!eve?.id && !!again?.id);
+await V.go(`/turfs/${turf.id}`);
+await vpage.waitForSelector('.walk-door', { timeout: 8000 });
+await sleep(700);
+const order = (await walkApi(V)).doors.map((d) => d.address);
+const deeI = order.indexOf('13212 72 Ave');
+const cyI = order.indexOf('13224 72 Ave');
+await vpage.click('.pass-show__pill:has-text("Not knocked")');
+await sleep(300);
+await vpage.click(`#walk-door-${deeI} .walk-door__head`);
+await vpage.waitForSelector(`#walk-panel-${deeI}`, { timeout: 5000 });
+await vpage.click(`#walk-panel-${deeI} button[aria-label="2: Lean support"]`);
+await sleep(1500);
+check('Show → Not knocked, a talk with one of two at a door: the door is done, and stays open on the list for the housemate',
+  !!(await vpage.$(`#walk-door-${deeI}.is-open #walk-panel-${deeI}`)) && (await walkApi(V)).doors[deeI].state === 'done',
+  `${await openDoor()} · ${order.join('|')}`);
+await vpage.click('.pass-show__pill:has-text("All")');
+await sleep(300);
+await vctx.setOffline(true);
+await vpage.evaluate(() => window.dispatchEvent(new Event('offline')));
+await sleep(300);
+for (let n = 0; n < 2; n += 1) {
+  if ((await openDoor()) !== `walk-door-${cyI}`) await vpage.click(`#walk-door-${cyI} .walk-door__head`);
+  await vpage.waitForSelector(`#walk-panel-${cyI}`, { timeout: 5000 });
+  await vpage.click(`#walk-panel-${cyI} .fk-out:has-text("No answer")`);
+  await sleep(700);
+}
+check('offline, two No answers at Cy’s (2 tries): the door is given up on the phone, no "Try again" chip',
+  !!(await vpage.$(`#walk-door-${cyI}.is-done`)) && (await againChip(cyI)) === '', `${await againChip(cyI)} · ${await progress()}`);
+await vctx.setOffline(false);
+await vpage.evaluate(() => window.dispatchEvent(new Event('online')));
+let wc = null;
+for (let i = 0; i < 30; i += 1) { wc = await walkApi(V).catch(() => null); if (wc?.doors?.[cyI]?.tries === 2) break; await sleep(300); }
+await sleep(800);
+check('back online: the server agrees (2 tries, done), and the phone still reads done, not "Try again · 3 of 2"',
+  wc?.doors[cyI].state === 'done' && wc.doors[cyI].tries === 2 && !!(await vpage.$(`#walk-door-${cyI}.is-done`)) && (await againChip(cyI)) === '',
+  `${wc?.doors[cyI].state} · ${wc?.doors[cyI].tries} · ${await againChip(cyI)}`);
+await D.api('/actions/pass.end', { id: again.id });
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();

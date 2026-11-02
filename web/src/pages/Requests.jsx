@@ -39,8 +39,9 @@ function Back() {
     : <Link className="ops-back" to="/">← Today</Link>;
 }
 
-function Row({ r, online, busy, onDone, onReopen }) {
-  const [confirming, setConfirming] = useState(false);
+// One row's "Done" asks at a time (the list holds which): the page keeps a
+// single yellow button.
+function Row({ r, online, busy, onDone, onReopen, confirming, setConfirming }) {
   const [note, setNote] = useState('');
   const id = useId();
   const done = Boolean(r.done_at);
@@ -105,6 +106,7 @@ export default function Requests() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [toast, setToast] = useState(null);
+  const [asking, setAsking] = useState(null); // the row whose "Done" is asking
   const timer = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -172,7 +174,8 @@ export default function Requests() {
       )}
       {shown.length > 0 && (
         <ul className="ops-rows">
-          {shown.map((r) => <Row key={r.id} r={r} online={online} busy={busy} onDone={markDone} onReopen={(x) => reopen(x)} />)}
+          {shown.map((r) => <Row key={r.id} r={r} online={online} busy={busy} onDone={markDone} onReopen={(x) => reopen(x)}
+            confirming={asking === r.id} setConfirming={(on) => setAsking(on ? r.id : null)} />)}
         </ul>
       )}
       {toast && (

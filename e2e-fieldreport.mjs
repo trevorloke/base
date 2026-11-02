@@ -231,8 +231,8 @@ const csv = await page.evaluate(async (h) => {
 const lines = csv.text.replace(/^\uFEFF/, '').split('\r\n');
 check('…200 text/csv, a download named for the range', csv.status === 200 && /^text\/csv/.test(csv.type) && csv.disp.includes(`field-report-all-${today}.csv`), `${csv.status} ${csv.type} ${csv.disp}`);
 check('…first line is the turf head; the canvassers follow after a blank row',
-  lines[0] === 'Turf,Doors,Knocked,Coverage %,Talked,Yes,No answer,Refused,Moved,No access,Other,Canvassers,Last knock'
-  && lines[1].startsWith('Newton block,4,3,75,1,1,2,1,0,0,0,2,') && lines[3] === '' && lines[4] === 'Canvasser,Team,Doors,Talked,Yes,Days out,Last out'
+  lines[0] === 'Turf,Doors,Knocked,Coverage %,Talked,Yes,No answer,Refused,Moved,No access,Left lit,Other,Canvassers,Last knock'
+  && lines[1].startsWith('Newton block,4,3,75,1,1,2,1,0,0,0,0,2,') && lines[3] === '' && lines[4] === 'Canvasser,Team,Doors,Talked,Yes,Days out,Last out'
   && lines.some((l) => l.startsWith('Jas Volunteer,,3,2,2,1,')), lines.slice(0, 6).join(' / '));
 
 // ── 6. No signal: a reload shows the kept copy ──
