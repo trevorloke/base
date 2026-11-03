@@ -93,9 +93,10 @@ const swReady = (pg) => pg.evaluate(() => navigator.serviceWorker.ready.then(() 
 const KEPT = /No signal · from (\d{1,2}:\d{2} (am|pm)|[A-Z][a-z]{2} \d{1,2})/i;
 const TAPS = '.fr-range, .ops-head .btn, .ops-back';
 // The browser's day (the suite runs in Vancouver, the campaign's zone too).
-const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const daysBack = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return ymd(d); };
-const today = ymd(new Date());
+// Days in the campaign's zone (the server and the page count in it), not
+// this machine's: late in the evening in Vancouver it's already tomorrow in UTC.
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' });
+const daysBack = (n) => { const [y, mo, d] = today.split('-').map(Number); return new Date(Date.UTC(y, mo - 1, d - n)).toISOString().slice(0, 10); };
 
 // ── 1. A manager, two turfs, a volunteer, some knocks ──
 const dctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
@@ -206,7 +207,7 @@ check('…and the pill is on', (await page.innerText('.fr-range[aria-checked="tr
 await page.click('.fr-range:has-text("This week")');
 await sleep(700);
 u = new URL(page.url());
-const monday = daysBack((new Date().getDay() + 6) % 7);
+const monday = daysBack((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7);
 check('"This week": from Monday', u.searchParams.get('from') === monday && u.searchParams.get('to') === today, page.url());
 await page.click('.fr-range:has-text("All")');
 await sleep(900);
