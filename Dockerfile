@@ -7,16 +7,14 @@ RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/*/package.json ./packages/
-COPY apps/*/package.json ./apps/
-# restore the directory layout pnpm expects for workspace packages
-RUN set -e; for f in packages/*.json; do n=$(basename "$f" .json); mkdir -p "packages/$n" && mv "$f" "packages/$n/package.json"; done; \
-    for f in apps/*.json; do n=$(basename "$f" .json); mkdir -p "apps/$n" && mv "$f" "apps/$n/package.json"; done
-RUN pnpm install --frozen-lockfile
+# pnpm fetch needs only the lockfile, so this layer caches until dependencies change.
+# (Copying packages/*/package.json with a wildcard flattens every file onto one name and breaks the workspace.)
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm fetch --frozen-lockfile
 
 FROM deps AS build
 COPY . .
+RUN pnpm install --offline --frozen-lockfile
 RUN pnpm --filter @starsign/web build
 
 FROM base AS runtime
