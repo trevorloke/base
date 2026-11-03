@@ -19,9 +19,14 @@ RUN pnpm --filter @starsign/web build
 
 FROM base AS runtime
 ENV NODE_ENV=production PORT=4000 PGLITE_PATH=/data/pglite
+# Keep the heap inside a 512 MB instance (embedded PGlite needs room outside the JS heap).
+ENV NODE_OPTIONS=--max-old-space-size=320
 COPY --from=build /app /app
 RUN mkdir -p /data && chown -R node:node /data /app
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost:4000/api/health || exit 1
-CMD ["pnpm", "--filter", "@starsign/api", "start"]
+# Run Node directly: going through pnpm adds a second Node process, and corepack re-downloads pnpm
+# for the non-root user on every boot. Same as `pnpm --filter @starsign/api start`.
+WORKDIR /app/apps/api
+CMD ["node", "--import", "tsx", "src/main.ts"]
