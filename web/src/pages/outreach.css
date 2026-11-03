@@ -161,25 +161,6 @@ a.ot-row:hover, button.ot-row:hover { background: var(--paper-1); }
 .ot-body .field { margin-bottom: var(--s-3); }
 .ot-text { white-space: pre-line; color: var(--text-2); margin: 0; }
 .ot-where { color: var(--text-2); overflow-wrap: anywhere; }
-/* "RSVP page" / "Petition page": opens the public page in a new tab */
-.ot-url {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  max-width: 100%;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-1);
-  overflow-wrap: anywhere;
-  text-decoration: underline dotted var(--rule-2);
-  text-underline-offset: 4px;
-}
-.ot-url::after { content: '↗'; content: '↗' / ''; margin-left: 6px; }
-.ot-url:hover { text-decoration-color: var(--ink); }
-.ot-url:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .ot-email { font-family: var(--font-mono); font-size: 13px; overflow-wrap: anywhere; color: inherit; }
 .chip.ot-chip-ghost { color: var(--text-4); border-color: var(--rule); }
 .chip.ot-chip-soon { color: var(--text-1); border-color: var(--ink); }
@@ -284,7 +265,7 @@ a.ot-row:hover, button.ot-row:hover { background: var(--paper-1); }
 
 /* One-line bits */
 .ot-note { color: var(--text-3); font-size: 14px; margin: 0; }
-.ot-note code, .ot-dev-links code {
+.ot-note code {
   font-family: var(--font-mono); font-size: 11.5px; background: var(--paper-1);
   padding: 1px 4px; border-radius: 2px; overflow-wrap: anywhere;
 }
@@ -305,42 +286,6 @@ a.ot-row:hover, button.ot-row:hover { background: var(--paper-1); }
 .ot-inline-add .field { margin-bottom: 0; flex: 1 1 180px; }
 .ot-inline-add .input { min-height: 44px; }
 
-/* ── Petition signatures ── */
-.ot-list--flat { gap: 0; margin: 0; }
-.ot-sig { display: flex; flex-direction: column; gap: 2px; padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); }
-.ot-sig:last-child { border-bottom: 0; }
-.ot-sig__answer { color: var(--ink-2, inherit); font-style: italic; overflow-wrap: anywhere; }
-.ot-sig__name { font-weight: 600; display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; overflow-wrap: anywhere; }
-
-/* ── Events: going / capacity ── */
-.ot-meter { display: flex; flex-direction: column; gap: 4px; max-width: 320px; }
-.ot-meter-n { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-.ot-meter-n strong { font-size: 22px; }
-.ot-meter-n .lbl { color: var(--text-3); text-transform: uppercase; letter-spacing: 0.03em; font-size: 10.5px; }
-.ot-meter-bar { height: 6px; background: var(--paper-1); border: 1px solid var(--rule); border-radius: 999px; overflow: hidden; }
-.ot-meter-bar span { display: block; height: 100%; background: var(--ink); }
-.ot-meter[data-full='true'] .ot-meter-bar span { background: var(--danger); }
-
-/* RSVP list: a row per RSVP, status select on the right — no table, so it
-   never scrolls sideways on a phone at the door. */
-.ot-rsvp-sum { display: flex; gap: var(--s-3); flex-wrap: wrap; align-items: baseline; margin: 0; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
-.ot-rsvps { list-style: none; margin: 0; padding: 0; }
-.ot-rsvp { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); }
-.ot-rsvp:last-child { border-bottom: 0; }
-.ot-rsvp .who { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
-.ot-rsvp .name { font-weight: 600; overflow-wrap: anywhere; }
-.ot-rsvp .name a { text-decoration: none; border-bottom: 1px dotted var(--rule-2); }
-.ot-rsvp .guests { font-family: var(--font-mono); font-size: 12px; font-weight: 400; color: var(--text-3); }
-.ot-rsvp .contact { display: flex; gap: var(--s-1) var(--s-3); flex-wrap: wrap; align-items: baseline; }
-.ot-rsvp .ot-email { font-size: 12px; color: var(--text-2); }
-.ot-rsvp .when { font-family: var(--font-mono); font-size: 11px; color: var(--text-4); }
-.ot-rsvp[data-status='cancelled'] .name { color: var(--text-4); text-decoration: line-through; }
-.ot-rsvp[data-status='attended'] .name::after { content: ' ✓'; color: var(--ok); }
-.input.ot-rsvp-status { flex: 0 0 auto; width: auto; min-width: 128px; min-height: 48px; font-family: var(--font-mono); font-size: 12px; }
-
-/* ── Links: embed code for the developer ── */
-.ot-dev-links { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
-.ot-dev-links li { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
 .ot-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: var(--border-2); border-radius: var(--r-ctrl); overflow: hidden; }
 .ot-seg button {
   min-height: 48px;

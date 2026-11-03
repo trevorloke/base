@@ -1,0 +1,17 @@
+/* Settings → Services */
+.sv2-lead { margin: 0 0 var(--s-4); color: var(--text-2); max-width: 70ch; }
+.sv2-list { list-style: none; margin: 0; padding: 0; border-top: var(--border); }
+.sv2-row { display: flex; gap: var(--s-3); align-items: flex-start; padding: var(--s-3) 0; border-bottom: var(--border); }
+.sv2-row__main { flex: 1 1 auto; min-width: 0; }
+.sv2-row__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.sv2-name { font-weight: 700; }
+.sv2-state--ready { color: var(--ok); }
+.sv2-state--missing { color: var(--danger); }
+.sv2-state--default { color: var(--warn); }
+.sv2-for, .sv2-detail, .sv2-missing, .sv2-said { margin: 4px 0 0; font-size: 14px; color: var(--text-3); overflow-wrap: anywhere; }
+.sv2-detail { color: var(--text-2); }
+.sv2-missing code, .sv2-url { font-size: 13px; background: var(--paper-1); padding: 1px 5px; border-radius: 4px; }
+.sv2-said.is-ok { color: var(--ok); font-weight: 600; }
+.sv2-said.is-bad { color: var(--danger); font-weight: 600; }
+.sv2-check { flex: 0 0 auto; min-height: 48px; }
+.sv2-h { font-size: 16px; margin: var(--s-5) 0 var(--s-2); }

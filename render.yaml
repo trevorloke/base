@@ -10,6 +10,17 @@
 # account, so the copy must rename every service and database.
 #
 # Docs: https://render.com/docs/blueprint-spec
+#
+# Every outside service, its settings and where each key comes from:
+# INTEGRATIONS.md. Settings with sync: false are asked for when the Blueprint
+# is created and set per service after. Optional ones, added under the
+# service's Environment only when wanted:
+#   GEOCODER (bc), GEOCODER_FALLBACK, BC_GEOCODER_KEY   address lookup
+#   GOOGLE_MAPS_TILES=1, GOOGLE_MAPS_TILE_TYPE          Google map tiles
+#   STARBASE_TILE_URL, _ATTRIBUTION, _MAX_ZOOM          another tile provider
+#   TWILIO_VOICE=off                                    texting without calls
+#   STARBASE_CANDIDATES, STARBASE_PROVINCE, STARBASE_GEO_BOUNDS   the campaign
+# Once set: Settings → Services in the admin checks each one.
 
 services:
   - type: web
@@ -54,7 +65,7 @@ services:
         sync: false
       - key: TWILIO_FROM
         sync: false
-      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google geocoding and map tiles
+      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google geocoding and map tiles (INTEGRATIONS.md)
         sync: false
 
   - type: web

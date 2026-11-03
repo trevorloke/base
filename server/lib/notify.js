@@ -68,8 +68,11 @@ export const sendText = async ({ to, body }) => {
     const sid = process.env.TWILIO_ACCOUNT_SID;
     const auth = Buffer.from(`${sid}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
     const form = new URLSearchParams({ To: to, From: process.env.TWILIO_FROM, Body: body });
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+    // The same host and time limit as the texting module (ext/texting/twilio.js).
+    const base = (process.env.TWILIO_API_BASE || 'https://api.twilio.com').replace(/\/$/, '');
+    const res = await fetch(`${base}/2010-04-01/Accounts/${sid}/Messages.json`, {
       method: 'POST',
+      signal: AbortSignal.timeout(15_000),
       headers: {
         Authorization: `Basic ${auth}`,
         'Content-Type': 'application/x-www-form-urlencoded',

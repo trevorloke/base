@@ -202,7 +202,11 @@ email needs, no login:
 - `/bu/:recipientId` — unsubscribe from an email blast to a list (the
   address is marked do-not-email everywhere)
 - `/lu/:runId` — unsubscribe from a ladder's emails
-- `/learn/:slug` — ImagineU's public lessons
+- `/r/:token` — a donation receipt
+- `/learn/:slug` (and `/learn-files/:id`) — ImagineU's public lessons
+- `/media/:id`, `/o/…`, `/c/…` — pictures in emails, and the open and click
+  counts
+- `/api/public/twilio/…` — Twilio's webhooks, signed (INTEGRATIONS.md)
 
 A gift is logged at the desk (Donations → Log a gift) to one slate — city
 council or school board (`shared/canvass.js` SLATES) — and the annual limit
@@ -437,6 +441,9 @@ another pair with its own names and values (GOING-LIVE.md, *A new client*).
 
 
 Taking it live for the campaign, step by step: [GOING-LIVE.md](GOING-LIVE.md).
+Every outside service (email, texting, address lookup, map tiles, hosting),
+its settings and where each key comes from: [INTEGRATIONS.md](INTEGRATIONS.md);
+**Settings → Services** checks each one live.
 
 ```sh
 cd starbase
@@ -454,7 +461,7 @@ server/lib/events.js   runAction: the transactional event-log spine
 server/lib/cap.js      entity-keyed contribution-cap engine
 server/lib/notify.js   email/SMS adapters (Resend/Twilio via fetch)
 server/actions/        the Action registry (index.js core, field.js field+outreach)
-server/routes/         auth · api (reads) · public (pages + JSON bridge)
+server/routes/         auth · api (reads) · public (unsubscribe pages)
 web/                   Vite + React 19 + react-router + TanStack Query + Leaflet
 ```
 

@@ -38,7 +38,9 @@ const TILE_MAX = 1500;
 const TILE_FRESH_MS = 7 * 24 * 3600 * 1000; // re-check a cached tile after a week
 const TILE_AT = 'x-starbase-cached-at';
 
-const NEVER = /^\/(?:api|p|n|v|u|e|d|r|lu|o|c|join|media)(?:\/|$)/;
+// The server's own pages (unsubscribe, receipts, public lessons, tracking,
+// pictures): straight to the network, never the app shell.
+const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files)(?:\/|$)/;
 const isTileHost = (host) => host === 'tile.openstreetmap.org' || host.endsWith('.tile.openstreetmap.org');
 
 // The configured provider, from a template like

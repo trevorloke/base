@@ -42,13 +42,18 @@ promote the code — the production database is the campaign's alone.
 
 Add the DNS records Render shows; it issues the certificates. The
 campaign's website (`imaginesurrey.ca`) is its own thing, hosted apart; it
-links to Starbase's public pages and posts its forms to the JSON bridge.
+links to Starbase's public pages; its forms will feed Starbase once that
+integration is built (INTEGRATIONS.md, *The campaign's website*).
 
 ## 3 · Settings (Render → the service → Environment)
 
 Set these on both environments before the first sign-in; the rest can wait.
-The campaign's own values (`STARBASE_ORG_NAME` and the rest) are in
+Every outside service, its settings and where each key comes from is in
+[INTEGRATIONS.md](INTEGRATIONS.md). The campaign's own values
+(`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are in
 `render.yaml` already; change them there for another client.
+`STARBASE_CANDIDATES` is not: until it's set, a new rating scale starts with
+the candidates the code ships with (`shared/scale.js`).
 
 | Variable | Set it to | Needed for |
 |---|---|---|
@@ -68,7 +73,15 @@ Then, as each one is ready:
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
 
 Twilio: set the number's incoming-message webhook to
-`https://starbase.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST).
+`https://starbase.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST). The
+other addresses Twilio calls back (delivery reports, calls) are sent with
+each text and call, built from `STARBASE_PUBLIC_URL`; nothing else to set.
+
+**Check them.** After the first sign-in (below): **Settings → Services** in
+the admin lists every service, says which settings are missing, and
+**Check** calls each one for real — Resend's key and domain, the Twilio
+number and where its replies go, the address service, Google's tiles, the
+public address and the database.
 
 ## 4 · First sign-in
 

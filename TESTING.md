@@ -39,12 +39,15 @@ time. Delete the folder to start over.
 
 ## 2 · Deploy for the team (Render)
 
-The repo's `render.yaml` includes a **starbase** service with a managed
-Postgres database (backups included).
+The repo's `render.yaml` is a Blueprint for one client's two environments
+(GOING-LIVE.md): **starbase-staging** from `main` and **starbase** from
+`production`, each with its own managed Postgres database (backups
+included). Every setting below, and where its key comes from:
+INTEGRATIONS.md.
 
 1. Render → **New → Blueprint** → pick this repo (`main` branch)
-   → it creates `starbase` + `starbase-db` (both on paid plans — check
-   Render’s current pricing).
+   → it creates `starbase-staging` + `starbase-staging-db` and `starbase` +
+   `starbase-db` (paid plans — check Render’s current pricing).
 2. In the `starbase` service → **Environment**, set:
 
 | Variable | What for | Needed to test? |
@@ -223,6 +226,14 @@ one tap away under **More**.
   take the same box. On a profile, **Edit** (top right) opens the details on
   the name; change one thing and **Save** — only that changes; a new address
   picked moves the pin with it, one typed is found after the save.
+
+- **Settings → Services** (managers) — every outside service: what it's
+  for, *Set up* / *Not set up* (naming the settings missing) / *Using the
+  free default*. **Check** on each makes one real call: Email says whether
+  Resend took the key and the sender's domain is verified; Texting whether
+  the number is on the Twilio account and its replies come here; Address
+  lookup, the map background, the public address and the database answer
+  too. *Coming in* lists the address to give Twilio. Staff can't open it.
 
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:

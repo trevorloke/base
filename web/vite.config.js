@@ -4,14 +4,13 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    // Public pages (/p petition, /n newsletter, /v volunteer, /u unsubscribe,
-    // /e event RSVP, /d donate)
-    // are server-rendered by Hono, so dev proxies them alongside /api.
+    // The server's own pages — unsubscribe (/u, /bu), ladder unsubscribe
+    // (/lu), receipts (/r), public lessons (/learn, /learn-files), email
+    // tracking (/o, /c), pictures (/media) and Google tiles (/tiles) — are
+    // rendered by Hono, so dev proxies them alongside /api.
     proxy: {
       '/api': 'http://localhost:3200',
-      '^/(p|n|v|u|e|d)/': 'http://localhost:3200',
-      // Pictures in messages (blast.picture).
-      '^/media(/|$)': 'http://localhost:3200',
+      '^/(u|bu|lu|r|o|c|learn|learn-files|media|tiles)/': 'http://localhost:3200',
     },
   },
 });
