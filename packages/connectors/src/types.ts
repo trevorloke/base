@@ -1,4 +1,4 @@
-import type { ActivityInput, Media, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, Network, VariantOptions } from "@starsign/schema";
 
 /** What a connector receives about the account it acts for. Auth is already decrypted by core. */
 export interface AccountRef {
@@ -21,8 +21,16 @@ export interface PublishInput {
   thread: string[];
   /** Reply target, when this is a reply. */
   replyToExternalId?: string | null;
+  /** Network-specific options (kind, title, privacy, board, subreddit, first comment...). Defaults to {}. */
+  options?: VariantOptions;
   /** Idempotency key: connectors that support it must not double-post on retry. */
   idempotencyKey: string;
+}
+
+/** Reads media bytes for upload-style APIs (X, Bluesky, LinkedIn, YouTube, TikTok FILE_UPLOAD, Reddit). */
+export interface MediaFetcher {
+  /** Bytes and type of a media item, from Starsign storage when it has an assetId, else by URL. */
+  fetch(media: Media): Promise<{ bytes: Uint8Array; mime: string }>;
 }
 
 export interface PublishResult {
@@ -46,6 +54,44 @@ export interface ConnectorCapabilities {
   fetchMetrics: boolean;
   /** Reading costs money (metered API). Core enforces spend caps when true. */
   meteredReads: boolean;
+  /** Optional richer declarations; absent means false. */
+  reply?: boolean;
+  moderate?: boolean;
+  accountMetrics?: boolean;
+  webhooks?: boolean;
+  video?: boolean;
+  /** Post kinds this network accepts through this connector (default ["post"]). */
+  kinds?: string[];
+}
+
+/** One account a connection produced. A single OAuth login can yield several (Facebook Pages, Instagram, LinkedIn orgs). */
+export interface ConnectedAccount {
+  network: Network;
+  identity: AccountIdentity;
+  auth: Record<string, unknown>;
+  /** Non-secret per-account config (e.g. Mastodon instance, LinkedIn author URN, page id). */
+  config?: Record<string, unknown>;
+}
+
+/** A comment-level action on the network. */
+export interface ModerationInput {
+  externalId: string;
+  action: "hide" | "unhide" | "delete" | "like" | "unlike";
+}
+
+/** Parsed webhook delivery: items routed to the account whose network id matches. */
+export interface WebhookBatch {
+  network: Network;
+  accountExternalId: string;
+  items: ActivityInput[];
+}
+
+export interface WebhookHandler {
+  /** Subscription handshake (e.g. Meta's hub.challenge). Return the body to echo, or null when not a handshake. */
+  challenge?(query: Record<string, string>): string | null;
+  /** Verify the signature over the raw body. Must be constant-time. */
+  verify(headers: Record<string, string>, rawBody: string): boolean;
+  parse(body: unknown): WebhookBatch[];
 }
 
 /** Updated credentials to persist after a refresh. */
@@ -72,8 +118,20 @@ export interface Connector {
   readonly connectConfigured?: boolean;
   /** OAuth 2.0 + PKCE: the URL to send the person to. */
   oauthAuthorizeUrl?(p: { state: string; codeChallenge: string; redirectUri: string }): string;
-  /** OAuth 2.0 + PKCE: exchange the code for a credential blob this connector can use. */
+  /** OAuth 2.0 + PKCE: exchange the code for a credential blob this connector can use (single-account connectors). */
   oauthExchange?(p: { code: string; codeVerifier: string; redirectUri: string }): Promise<Record<string, unknown>>;
+  /**
+   * OAuth: exchange the code and return every account the login can act for. Preferred over oauthExchange
+   * when one login yields several accounts (Meta pages + Instagram, LinkedIn member + organizations).
+   */
+  oauthConnect?(p: { code: string; codeVerifier: string; redirectUri: string; config?: Record<string, unknown> }): Promise<ConnectedAccount[]>;
+  /** Extra inputs a person supplies before OAuth starts (e.g. Mastodon instance URL). */
+  readonly oauthInputs?: readonly { key: string; label: string; placeholder?: string }[];
+  /**
+   * Per-start preparation that needs those inputs (e.g. registering an app on a Mastodon instance).
+   * Returns config to keep with the pending state and an authorize URL override.
+   */
+  oauthPrepare?(p: { inputs: Record<string, string>; redirectUri: string; state: string; codeChallenge: string }): Promise<{ authorizeUrl: string; config: Record<string, unknown> }>;
   /** Verify credentials and say whose they are. Used when a person connects an account. */
   describeAccount?(auth: Record<string, unknown>): Promise<AccountIdentity>;
   capabilities(network: Network): ConnectorCapabilities;
@@ -84,6 +142,16 @@ export interface Connector {
   /** Metrics for the given external post ids, as of now. */
   fetchMetrics(account: AccountRef, externalIds: string[]): Promise<MetricInput[]>;
   refreshAuth?(account: AccountRef): Promise<AuthRefresh | null>;
+  /** Reply to a post or comment on the network. Core routes replies through the policy gate first. */
+  reply?(account: AccountRef, input: { parentExternalId: string; text: string; idempotencyKey: string }): Promise<PublishResult>;
+  /** Hide, delete, like a comment or post. */
+  moderate?(account: AccountRef, input: ModerationInput): Promise<void>;
+  /** Account-level metrics now (followers_total, profile reach...). entityType "social_account", entityId = account id. */
+  fetchAccountMetrics?(account: AccountRef): Promise<MetricInput[]>;
+  /** Inbound webhooks, when the network pushes events. */
+  readonly webhook?: WebhookHandler;
+  /** Set by core at boot so upload-style connectors can read media bytes. */
+  media?: MediaFetcher;
 }
 
 export class ConnectorError extends Error {

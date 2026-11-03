@@ -40,6 +40,8 @@ export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEver
           return ingestAll(m);
         case "outcomes":
           return captureOutcomes(m);
+        case "account-metrics":
+          return m.metrics.captureAccountMetrics();
         case "sources":
           return pullSources(m);
         case "forecasts":
@@ -54,6 +56,7 @@ export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEver
   const mq = new Queue(MAINTENANCE_QUEUE, { connection });
   await mq.upsertJobScheduler("ingest", { every: opts.ingestEveryMs ?? 5 * 60_000 }, { name: "ingest" });
   await mq.upsertJobScheduler("outcomes", { every: opts.outcomesEveryMs ?? 10 * 60_000 }, { name: "outcomes" });
+  await mq.upsertJobScheduler("account-metrics", { every: 6 * 60 * 60_000 }, { name: "account-metrics" });
   await mq.upsertJobScheduler("sources", { every: opts.sourcesEveryMs ?? 60 * 60_000 }, { name: "sources" });
   await mq.upsertJobScheduler("forecasts", { every: opts.forecastEveryMs ?? 60 * 60_000 }, { name: "forecasts" });
 

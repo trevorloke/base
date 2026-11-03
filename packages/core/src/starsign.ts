@@ -13,6 +13,9 @@ import { WorkspaceService } from "./services/workspaces.ts";
 import { BrandService } from "./services/brand.ts";
 import { SourcesService } from "./services/sources.ts";
 import { ExperimentService } from "./services/experiments.ts";
+import { MediaService } from "./services/media.ts";
+import { EngagementService, WebhookService } from "./services/listening.ts";
+import { storageFromEnv } from "./media/storage.ts";
 
 /** The one object every front door (API, MCP, operators, workers) talks to. */
 export class Starsign {
@@ -31,6 +34,9 @@ export class Starsign {
   readonly sources: SourcesService;
   readonly brand: BrandService;
   readonly experiments: ExperimentService;
+  readonly media: MediaService;
+  readonly engagement: EngagementService;
+  readonly webhooks: WebhookService;
 
   constructor(deps: CoreDeps) {
     this.ctx = new CoreContext(deps);
@@ -48,6 +54,12 @@ export class Starsign {
     this.sources = new SourcesService(this.ctx, this.trends);
     this.brand = new BrandService(this.ctx, this.workspaces, this.policy, this.accounts);
     this.experiments = new ExperimentService(this.ctx);
+    this.media = new MediaService(this.ctx, deps.mediaStorage ?? storageFromEnv());
+    this.engagement = new EngagementService(this.ctx, this.posts, this.accounts);
+    this.webhooks = new WebhookService(this.ctx, this.listening);
+    // Upload-style connectors read media bytes through the library.
+    const fetcher = this.media.fetcher();
+    for (const c of this.ctx.connectors.list()) c.media = fetcher;
   }
 
   get events() {

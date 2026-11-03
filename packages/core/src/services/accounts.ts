@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, lt } from "drizzle-orm";
 import { oauthStates, socialAccounts } from "@starsign/db";
-import { ConnectorError, type AccountRef, type Connector } from "@starsign/connectors";
+import { ConnectorError, type AccountRef, type ConnectedAccount, type Connector } from "@starsign/connectors";
 import { newId } from "@starsign/ledger";
 import { Network } from "@starsign/schema";
 import type { CoreContext, Principal } from "../context.ts";
@@ -70,48 +70,96 @@ export class AccountService {
     return this.connect(p, { network: input.network, externalId: identity.externalId, handle: identity.handle, displayName: identity.displayName ?? undefined, connector: connector.name, auth: input.auth });
   }
 
-  /** Begin an OAuth 2.0 + PKCE connection. Returns the URL to send the person to. */
-  async startOAuth(p: Principal, input: { connector: string; network: Network; redirectUri: string }): Promise<{ authorizeUrl: string; expiresAt: string }> {
+  /**
+   * Begin an OAuth connection. Works for every OAuth connector: plain authorize URLs, PKCE, and connectors that
+   * need per-start preparation from person-supplied inputs (e.g. registering an app on a Mastodon instance).
+   */
+  async startOAuth(
+    p: Principal,
+    input: { connector: string; network?: Network; redirectUri: string; inputs?: Record<string, string> },
+  ): Promise<{ authorizeUrl: string; expiresAt: string }> {
     const connector = this.ctx.connectors.get(input.connector);
-    if (!connector?.oauthAuthorizeUrl || !connector.oauthExchange || !connector.networks.includes(input.network)) {
-      throw new CoreError("invalid", `${input.connector} does not connect ${input.network} with OAuth`);
+    const network = input.network ?? connector?.networks[0];
+    const canExchange = !!connector && (!!connector.oauthConnect || !!connector.oauthExchange);
+    const canAuthorize = !!connector && (!!connector.oauthAuthorizeUrl || !!connector.oauthPrepare);
+    if (!connector || !network || !canExchange || !canAuthorize || !connector.networks.includes(network)) {
+      throw new CoreError("invalid", `${input.connector} does not connect ${network ?? "accounts"} with OAuth`);
     }
     if (connector.connectConfigured === false) throw new CoreError("unavailable", `${input.connector} is not configured on this deployment`);
+    for (const field of connector.oauthInputs ?? []) {
+      if (!input.inputs?.[field.key]?.trim()) throw new CoreError("invalid", `${field.label} is required`, { field: field.key });
+    }
     await this.ctx.db.delete(oauthStates).where(lt(oauthStates.expiresAt, this.ctx.now()));
     const state = randomBytes(24).toString("base64url");
     const verifier = randomBytes(48).toString("base64url");
     const challenge = createHash("sha256").update(verifier).digest("base64url");
     const expiresAt = new Date(this.ctx.now().getTime() + 10 * 60_000);
+    let authorizeUrl: string;
+    let config: Record<string, unknown> | null = null;
+    if (connector.oauthPrepare) {
+      try {
+        const prepared = await connector.oauthPrepare({ inputs: input.inputs ?? {}, redirectUri: input.redirectUri, state, codeChallenge: challenge });
+        authorizeUrl = prepared.authorizeUrl;
+        config = prepared.config;
+      } catch (e) {
+        throw new CoreError("invalid", "could not start the connection", { reason: (e as Error).message });
+      }
+    } else {
+      authorizeUrl = connector.oauthAuthorizeUrl!({ state, codeChallenge: challenge, redirectUri: input.redirectUri });
+    }
     await this.ctx.db.insert(oauthStates).values({
       state,
       workspaceId: p.workspaceId,
       connector: input.connector,
-      network: input.network,
+      network,
       verifierCiphertext: this.ctx.secrets.encrypt({ verifier }),
+      configCiphertext: config ? this.ctx.secrets.encrypt(config) : null,
       redirectUri: input.redirectUri,
       actor: p.actor,
       expiresAt,
     });
-    return { authorizeUrl: connector.oauthAuthorizeUrl({ state, codeChallenge: challenge, redirectUri: input.redirectUri }), expiresAt: expiresAt.toISOString() };
+    return { authorizeUrl, expiresAt: expiresAt.toISOString() };
   }
 
-  /** Finish an OAuth connection. The state is single use and expires; it carries the workspace and the person who started it. */
+  /**
+   * Finish an OAuth connection. The state is single use and expires; it carries the workspace and the person who
+   * started it. One login may connect several accounts (a Facebook login yields its Pages and Instagram accounts).
+   */
   async completeOAuth(input: { state: string; code: string }) {
     const [row] = await this.ctx.db.delete(oauthStates).where(eq(oauthStates.state, input.state)).returning();
     if (!row || row.expiresAt.getTime() < this.ctx.now().getTime()) throw new CoreError("invalid", "this connection link has expired; start again", { reason: "expired" });
     const connector = this.ctx.connectors.get(row.connector);
-    if (!connector?.oauthExchange || !connector.describeAccount) throw new CoreError("invalid", `${row.connector} cannot complete OAuth`);
+    if (!connector || (!connector.oauthConnect && !(connector.oauthExchange && connector.describeAccount))) throw new CoreError("invalid", `${row.connector} cannot complete OAuth`);
     const { verifier } = this.ctx.secrets.decrypt<{ verifier: string }>(row.verifierCiphertext);
-    let auth: Record<string, unknown>;
-    let identity;
+    const config = row.configCiphertext ? this.ctx.secrets.decrypt<Record<string, unknown>>(row.configCiphertext) : undefined;
+    let found: ConnectedAccount[];
     try {
-      auth = await connector.oauthExchange({ code: input.code, codeVerifier: verifier, redirectUri: row.redirectUri });
-      identity = await connector.describeAccount(auth);
+      if (connector.oauthConnect) {
+        found = await connector.oauthConnect({ code: input.code, codeVerifier: verifier, redirectUri: row.redirectUri, ...(config ? { config } : {}) });
+      } else {
+        const auth = await connector.oauthExchange!({ code: input.code, codeVerifier: verifier, redirectUri: row.redirectUri });
+        found = [{ network: row.network as Network, identity: await connector.describeAccount!(auth), auth }];
+      }
     } catch {
       throw new CoreError("invalid", "the network did not accept the authorization", { reason: "exchange_failed" });
     }
+    if (found.length === 0) throw new CoreError("invalid", "the login has no accounts Starsign can manage", { reason: "no_accounts" });
     const principal: Principal = { workspaceId: row.workspaceId, actor: row.actor };
-    return this.connect(principal, { network: row.network as Network, externalId: identity.externalId, handle: identity.handle, displayName: identity.displayName ?? undefined, connector: connector.name, auth });
+    const connected = [];
+    for (const a of found) {
+      connected.push(
+        await this.connect(principal, {
+          network: a.network,
+          externalId: a.identity.externalId,
+          handle: a.identity.handle,
+          displayName: a.identity.displayName ?? undefined,
+          connector: connector.name,
+          auth: a.auth,
+          config: a.config,
+        }),
+      );
+    }
+    return connected;
   }
 
   async list(workspaceId: string) {

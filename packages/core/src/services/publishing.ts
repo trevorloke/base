@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { posts, postVariants, socialAccounts } from "@starsign/db";
-import { ConnectorError, validateVariant } from "@starsign/connectors";
-import type { Media, Network } from "@starsign/schema";
+import { ConnectorError, validateVariant, type PublishInput } from "@starsign/connectors";
+import type { Media, Network, VariantOptions } from "@starsign/schema";
 import { SYSTEM, type CoreContext } from "../context.ts";
 import { RetryablePublishError } from "../errors.ts";
 import type { AccountService } from "./accounts.ts";
@@ -53,10 +53,12 @@ export class PublishingService {
         await this.fail(workspaceId, v, (e as Error).message, false);
         continue;
       }
-      const issues = [
-        ...validateVariant(account.network as Network, v.text, v.media as Media[], v.thread),
-        ...(connector.validate?.(ref, { variantId: v.id, text: v.text, media: v.media as Media[], thread: v.thread, idempotencyKey: v.id }) ?? []),
-      ];
+      const options = (v.options ?? {}) as VariantOptions;
+      const input: PublishInput = { variantId: v.id, text: v.text, media: v.media as Media[], thread: v.thread, options, replyToExternalId: v.replyToExternalId, idempotencyKey: v.id };
+      // Replies need no media rule checks; everything else gets generic plus connector-specific validation.
+      const issues = v.replyToExternalId
+        ? []
+        : [...validateVariant(account.network as Network, v.text, v.media as Media[], v.thread), ...(connector.validate?.(ref, input) ?? [])];
       if (issues.length) {
         await this.fail(workspaceId, v, issues.map((i) => i.message).join("; "), false);
         continue;
@@ -64,7 +66,9 @@ export class PublishingService {
       await this.ctx.db.update(postVariants).set({ status: "publishing", attemptCount: v.attemptCount + 1 }).where(eq(postVariants.id, v.id));
       try {
         const result = await this.accounts.withFreshAuth(account, connector, (fresh) =>
-          connector.publish(fresh, { variantId: v.id, text: v.text, media: v.media as Media[], thread: v.thread, idempotencyKey: v.id }),
+          v.replyToExternalId && connector.reply
+            ? connector.reply(fresh, { parentExternalId: v.replyToExternalId, text: v.text, idempotencyKey: v.id })
+            : connector.publish(fresh, input),
         );
         const publishedAt = this.ctx.now();
         await this.ctx.db
@@ -80,6 +84,17 @@ export class PublishingService {
           data: { postId, network: v.network, externalId: result.externalId, url: result.url, attempt: v.attemptCount + 1 },
         });
         await this.ctx.outcomes.schedule({ workspaceId, postId, variantId: v.id, publishedAt, actor: SYSTEM });
+        // First comment: a separate, best-effort step. The post is out either way; a failure is recorded, not retried.
+        if (options.firstComment && !v.replyToExternalId && connector.reply && connector.capabilities(account.network as Network).reply) {
+          try {
+            const c = await this.accounts.withFreshAuth(account, connector, (fresh) =>
+              connector.reply!(fresh, { parentExternalId: result.externalId, text: options.firstComment!, idempotencyKey: `${v.id}:first-comment` }),
+            );
+            await this.ctx.events.append({ workspaceId, type: "variant.first_comment", subjectType: "post_variant", subjectId: v.id, actor: SYSTEM, data: { externalId: c.externalId } });
+          } catch (e) {
+            await this.ctx.events.append({ workspaceId, type: "variant.first_comment", subjectType: "post_variant", subjectId: v.id, actor: SYSTEM, data: { error: (e as Error).message } });
+          }
+        }
       } catch (e) {
         const ce = e instanceof ConnectorError ? e : new ConnectorError((e as Error).message ?? String(e), "unknown", true, e);
         // A thread that failed after its root went out: keep what reached the network so nothing is orphaned.

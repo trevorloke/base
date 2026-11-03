@@ -15,6 +15,8 @@ export interface CoreDeps {
   now?: () => Date;
   /** Optional semantic classifier for red lines marked semantic (wired to the model gateway by the operators app). */
   classifyTopic?: (text: string, keywords: string[], description: string) => number;
+  /** Where uploaded media lives. Defaults to local disk (STARSIGN_MEDIA_DIR / STARSIGN_PUBLIC_URL). */
+  mediaStorage?: import("./media/storage.ts").MediaStorage;
 }
 
 /** Who is asking. Every service call carries one; it decides autonomy and shows up in the ledger. */

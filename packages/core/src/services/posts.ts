@@ -110,6 +110,8 @@ export class PostService {
           text: v.text,
           media: v.media,
           thread: v.thread,
+          options: v.options,
+          replyToExternalId: v.replyToExternalId ?? null,
         })),
       )
       .returning();

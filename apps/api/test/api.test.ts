@@ -238,12 +238,12 @@ describe("x oauth connect", () => {
     expect(new URL(start.authorizeUrl).searchParams.get("redirect_uri")).toBe("https://app.example/oauth/x/callback");
     const cb = await withUrl.request(`/oauth/x/callback?state=${state}&code=abc`);
     expect(cb.status).toBe(302);
-    expect(cb.headers.get("location")).toBe("/?connected=x&handle=acme_x");
+    expect(cb.headers.get("location")).toBe("/?connected=x&handle=acme_x&count=1");
     const accounts = await json(await withUrl.request("/v1/accounts", { headers: auth(ownerKey) }));
     expect(accounts.find((a: { network: string; handle: string }) => a.network === "x" && a.handle === "acme_x")).toMatchObject({ externalId: "4242", connector: "x", hasCredentials: true });
     const replay = await withUrl.request(`/oauth/x/callback?state=${state}&code=abc`);
-    expect(replay.headers.get("location")).toBe("/?connect_error=expired");
+    expect(replay.headers.get("location")).toBe("/?connect_error=expired&connector=x");
     const denied = await withUrl.request(`/oauth/x/callback?error=access_denied&state=zzz`);
-    expect(denied.headers.get("location")).toBe("/?connect_error=access_denied");
+    expect(denied.headers.get("location")).toBe("/?connect_error=access_denied&connector=x");
   });
 });

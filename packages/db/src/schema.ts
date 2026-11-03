@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   bigserial,
   boolean,
   doublePrecision,
@@ -164,6 +165,8 @@ export const postVariants = pgTable(
     text: text("text").notNull(),
     media: jsonb("media").$type<unknown[]>().notNull().default([]),
     thread: jsonb("thread").$type<string[]>().notNull().default([]),
+    options: jsonb("options").$type<Record<string, unknown>>().notNull().default({}),
+    replyToExternalId: text("reply_to_external_id"),
     status: text("status").notNull().default("pending"),
     externalId: text("external_id"),
     externalUrl: text("external_url"),
@@ -448,6 +451,29 @@ export const alerts = pgTable(
   (t) => [index("alerts_ws").on(t.workspaceId, t.createdAt)],
 );
 
+/** Uploaded media. Files live in the storage driver (local disk or S3-compatible); rows describe them. */
+export const mediaAssets = pgTable(
+  "media_assets",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    storageKey: text("storage_key").notNull().unique(),
+    url: text("url").notNull(),
+    kind: text("kind").$type<"image" | "video" | "gif" | "document">().notNull(),
+    mime: text("mime").notNull(),
+    bytes: bigint("bytes", { mode: "number" }).notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    durationSeconds: doublePrecision("duration_seconds"),
+    sha256: text("sha256").notNull(),
+    originalName: text("original_name"),
+    alt: text("alt"),
+    uploadedBy: jsonb("uploaded_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+  },
+  (t) => [index("media_assets_ws").on(t.workspaceId, t.createdAt), index("media_assets_sha").on(t.workspaceId, t.sha256)],
+);
+
 /** Pending OAuth authorizations (PKCE). The verifier is encrypted; rows expire after ten minutes. */
 export const oauthStates = pgTable("oauth_states", {
   state: text("state").primaryKey(),
@@ -457,6 +483,7 @@ export const oauthStates = pgTable("oauth_states", {
   verifierCiphertext: text("verifier_ciphertext").notNull(),
   redirectUri: text("redirect_uri").notNull(),
   actor: jsonb("actor").$type<ActorJson>().notNull(),
+  configCiphertext: text("config_ciphertext"),
   expiresAt: ts("expires_at").notNull(),
   createdAt: now(),
 });

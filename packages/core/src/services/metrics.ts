@@ -118,6 +118,27 @@ export class MetricsService {
     return { captured, skipped };
   }
 
+  /** Account-level metrics (followers, reach) for every active account whose connector reports them. */
+  async captureAccountMetrics(): Promise<{ accounts: number; metrics: number }> {
+    const rows = await this.ctx.db.select().from(socialAccounts).where(eq(socialAccounts.status, "active"));
+    let accounts = 0;
+    let metrics = 0;
+    for (const account of rows) {
+      try {
+        const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
+        const caps = connector.capabilities(account.network as Network);
+        if (!connector.fetchAccountMetrics || !caps.accountMetrics) continue;
+        if (caps.meteredReads && !(await this.underMeteredCap(account.workspaceId))) continue;
+        const got = await this.accounts.withFreshAuth(account, connector, (ref) => connector.fetchAccountMetrics!(ref));
+        metrics += await this.record(got.map((g) => ({ ...g, entityType: "social_account", entityId: account.id })));
+        accounts++;
+      } catch (e) {
+        console.error(`[metrics] account metrics for ${account.handle}:`, (e as Error).message);
+      }
+    }
+    return { accounts, metrics };
+  }
+
   async series(entityType: string, entityId: string, metric: string, from: Date, to: Date) {
     return this.ctx.db
       .select({ value: metrics.value, observedAt: metrics.observedAt, source: metrics.source })

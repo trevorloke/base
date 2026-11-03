@@ -138,6 +138,8 @@ export function variant(overrides: Partial<PostVariant> = {}): PostVariant {
     id: "var_1",
     postId: "pst_1",
     socialAccountId: "acc_x",
+    options: {},
+    replyToExternalId: null,
     network: "x",
     text: "Snow day",
     media: [],

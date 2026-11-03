@@ -9,3 +9,6 @@ export { matchesStream } from "./services/listening.ts";
 export type { BrandContextData } from "./services/brand.ts";
 export type { PullResult, SourceStatus } from "./services/sources.ts";
 export { compareArms, type Readout, type Comparison, type ArmReadout } from "./services/experiments.ts";
+export * from "./media/storage.ts";
+export * from "./media/probe.ts";
+export { MEDIA_LIMITS, type MediaRow } from "./services/media.ts";

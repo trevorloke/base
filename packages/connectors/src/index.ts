@@ -1,4 +1,5 @@
 export * from "./types.ts";
+export * from "./oauth.ts";
 export * from "./validate.ts";
 export * from "./registry.ts";
 export * from "./mock.ts";
