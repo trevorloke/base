@@ -1,0 +1,154 @@
+// Addresses that find their own place on the map.
+//
+//   GET /api/address/suggest?q=13450 104   any role. Up to 5 doors as
+//       someone types: the campaign's own doors that match first (they are on
+//       the map already, and need no outside service), then the geocoder's
+//       (lib/geocode.js suggestAddresses). → { suggestions: [{ house_number,
+//       street, address, unit, city, postal, lat, lng, label, source }],
+//       lookup: 'ok' | 'unavailable' | 'off' }. source 'map' is a door on
+//       file; 'lookup' is the address service's.
+//
+//   Saved with an address and no pin (person.create, person.update, an
+//   address changed by hand): the person is looked up once, just after the
+//   save — a pin copied from someone already on the map at that address, or
+//   the geocoder's — and placed (action person.geocode, on the event log
+//   like every pin). An address it can't place is marked as the background
+//   run marks it (nomatch / weak), for a pin by hand; an outage leaves the
+//   person waiting for the desk's run. A changed address also clears the
+//   old lookup's mark, so a fixed address is looked up again.
+//     GEOCODE_ON_SAVE=off   no lookup on save (the tests' default; the
+//                           desk's background run still places them).
+//   A write of more than five people with addresses (an import) is left
+//   to the background run.
+import { Hono } from 'hono';
+import { getDb } from '../../db/client.js';
+import { runAction } from '../../lib/events.js';
+import { geocodeAddress, suggestAddresses } from '../../lib/geocode.js';
+import { civic } from '../../lib/address.js';
+
+const LIMIT = 5;
+const LOOKUP_MS = 4000;
+const HAND_SIZED = 5;
+const ADDRESS_KEYS = ['address', 'house_number', 'unit', 'city', 'postal'];
+
+const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const keyOf = (s) => `${norm(s.address)}|${norm(s.unit)}`;
+const within = (p, ms) => Promise.race([p, new Promise((r) => { setTimeout(() => r({ error: 'timeout' }), ms); })]);
+const lookupOff = () => (process.env.GEOCODER || '').toLowerCase() === 'off';
+
+export const api = new Hono();
+
+api.get('/address/suggest', async (c) => {
+  const ctx = c.get('ctx');
+  const db = c.get('db');
+  const q = String(c.req.query('q') || '').trim().replace(/\s+/g, ' ').slice(0, 200);
+  if (q.length < 3) return c.json({ suggestions: [], lookup: 'ok' });
+  const like = `%${q.toLowerCase().replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+  const mine = (await db.query(
+    `select distinct on (lower(address), lower(coalesce(unit, ''))) address, house_number, unit, city, postal, lat, lng
+       from persons where workspace_id = $1 and deleted_at is null and lat is not null and address is not null
+        and lower(address) like $2
+      order by lower(address), lower(coalesce(unit, '')), created_at limit $3`,
+    [ctx.workspaceId, like, LIMIT],
+  )).rows.map((r) => {
+    const { house_number, address } = civic({ house_number: r.house_number, address: r.address });
+    const street = house_number && address.startsWith(house_number) ? address.slice(house_number.length).trim() : address;
+    return {
+      house_number: house_number || null, street, address, unit: r.unit || null, city: r.city || null, postal: r.postal || null,
+      lat: Number(r.lat), lng: Number(r.lng),
+      label: [r.unit ? `${r.unit} – ${address}` : address, r.city].filter(Boolean).join(', '),
+      source: 'map',
+    };
+  });
+  let lookup = 'ok';
+  let found = [];
+  if (lookupOff()) lookup = 'off';
+  else if (mine.length < LIMIT) {
+    const r = await within(suggestAddresses(q, { limit: LIMIT }), LOOKUP_MS);
+    if (Array.isArray(r)) found = r; else lookup = 'unavailable';
+  }
+  const seen = new Set(mine.map(keyOf));
+  const theirs = found.map((s) => {
+    const { address } = civic({ house_number: s.house_number, address: s.street });
+    return { ...s, address, source: 'lookup' };
+  }).filter((s) => {
+    const k = keyOf(s);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return c.json({ suggestions: [...mine, ...theirs].slice(0, LIMIT), lookup });
+});
+
+// ── Placed on save ──
+// Who to look up: people whose address this write set or changed, still
+// without a pin once it is done.
+const placeOnSave = async (tx, meta, events) => {
+  const ids = [...new Set(events
+    .filter((e) => e.entityType === 'person' && (e.op === 'create' || e.op === 'update')
+      && ADDRESS_KEYS.some((k) => k in (e.payload || {})) && !('lat' in (e.payload || {})))
+    .map((e) => e.entityId))];
+  if (!ids.length) return;
+  // A fixed address is a new question: the old answer (nomatch, weak,
+  // failed) no longer stands, for this lookup or the desk's background run.
+  const waiting = (await tx.query(
+    `update persons set attrs = attrs - 'geocode'
+      where workspace_id = $1 and id = any($2::uuid[]) and lat is null and address is not null and deleted_at is null
+      returning id`,
+    [meta.workspaceId, ids],
+  )).rows.map((r) => r.id);
+  if (!waiting.length || process.env.GEOCODE_ON_SAVE === 'off' || lookupOff()) return;
+  // A person or two typed in by hand; a file of thousands is the desk's
+  // background run (ext/geocoding), not a lookup each.
+  if (waiting.length > HAND_SIZED) return;
+  // After the write is in (the hook runs inside its transaction).
+  setTimeout(() => { placeSoon(meta.workspaceId, meta.actorId, waiting).catch(() => {}); }, 30);
+};
+
+const sameDoor = (p) => [norm(p.address), norm(p.city)];
+
+export const placeSoon = async (workspaceId, actorId, ids) => {
+  const db = await getDb();
+  for (const id of ids) {
+    let p = null;
+    // The write may still be finishing: a few short waits.
+    for (let i = 0; i < 5 && !p; i += 1) {
+      p = (await db.query(
+        `select id, address, unit, city, postal, lat from persons where id = $1 and workspace_id = $2 and deleted_at is null`,
+        [id, workspaceId],
+      )).rows[0];
+      if (!p) await new Promise((r) => { setTimeout(r, 100); });
+    }
+    if (!p || p.lat != null || !p.address) continue;
+    const [addr, city] = sameDoor(p);
+    const known = (await db.query(
+      `select lat, lng from persons where workspace_id = $1 and deleted_at is null and lat is not null
+         and lower(trim(address)) = $2 and lower(trim(coalesce(city, ''))) = $3 limit 1`,
+      [workspaceId, addr, city],
+    )).rows[0];
+    const r = known ? { lat: Number(known.lat), lng: Number(known.lng), copied: true }
+      : await within(geocodeAddress({ address: p.address, city: p.city, postal: p.postal }), LOOKUP_MS * 2);
+    if (r?.error || r === undefined) continue; // the service is down: the desk's run will try again
+    const at = new Date().toISOString();
+    await runAction(db, { workspaceId, actorId, action: 'person.geocode' }, async (tx, emit) => {
+      // Only if nothing moved meanwhile: still no pin, still this address.
+      if (r && !r.weak) {
+        const geo = r.copied ? { status: 'ok', at, copied: true } : { status: 'ok', at, matched: r.matched, score: r.score ?? null };
+        const { rows } = await tx.query(
+          `update persons set lat = $3, lng = $4, attrs = jsonb_set(attrs, '{geocode}', $5::jsonb), updated_at = now()
+            where id = $1 and workspace_id = $2 and lat is null and address = $6 returning id`,
+          [id, workspaceId, r.lat, r.lng, JSON.stringify(geo), p.address],
+        );
+        if (rows.length) emit('person', id, 'update', { lat: r.lat, lng: r.lng, geocoded: r.matched || null });
+      } else {
+        await tx.query(
+          `update persons set attrs = jsonb_set(attrs, '{geocode}', $3::jsonb)
+            where id = $1 and workspace_id = $2 and lat is null and address = $4`,
+          [id, workspaceId, JSON.stringify({ status: r?.weak ? 'weak' : 'nomatch', at, matched: r?.matched || null }), p.address],
+        );
+      }
+    }).catch(() => {});
+  }
+};
+
+export const hooks = { events: placeOnSave };

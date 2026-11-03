@@ -22,6 +22,7 @@ import { apiGet, action } from '../api.js';
 import { PersonPicker } from './Shifts.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import './shifts.css';
+import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 
 // The registry label carries the size ("Large sign (4×4)"); it rides along as a tooltip.
 const kindSize = (code) => SIGN_KINDS.find((k) => k.code === code)?.label ?? code;
@@ -175,6 +176,7 @@ function PlaceSignForm({ presetPersonId, canCreatePerson, onSaved, onClose }) {
   const [kind, setKind] = useState('lawn');
   const [mode, setMode] = useState('person'); // 'person' | 'address'
   const [person, setPerson] = useState(null);
+  const [pin, setPin] = useState(null); // { lat, lng } from a picked address
   const [address, setAddress] = useState('');
   const [status, setStatus] = useState('requested');
   const [note, setNote] = useState('');
@@ -198,12 +200,20 @@ function PlaceSignForm({ presetPersonId, canCreatePerson, onSaved, onClose }) {
     if (mode === 'person' && !person) { setError('Pick the supporter'); return; }
     if (mode === 'address' && !addr) { setError('Enter the address'); return; }
     setBusy(true);
+    // A typed civic address nobody picked: its pin, if the service knows it
+    // (a corner like "104 Ave & King George Blvd" stays words for the crew).
+    let at = addr ? pin : null;
+    if (addr && !at) {
+      const found = await lookupAddress(addr);
+      if (found) at = { lat: found.lat, lng: found.lng };
+    }
     try {
       const res = await action('sign.place', {
         kind,
         status,
         person_id: mode === 'person' ? person.id : undefined,
         address: addr || undefined,
+        ...(at ? { lat: at.lat, lng: at.lng } : {}),
         note: note.trim() || undefined,
       });
       onSaved(res.sign, mode === 'person' ? person.id : null);
@@ -256,16 +266,17 @@ function PlaceSignForm({ presetPersonId, canCreatePerson, onSaved, onClose }) {
       )}
 
       {(mode === 'address' || person) && (
-        <div className="field">
-          <label htmlFor="sign-address">{mode === 'address' ? 'Address' : 'Different address?'}</label>
-          <input
+        <div>
+          <AddressField
             id="sign-address"
-            className="input"
-            autoComplete="street-address"
+            label={mode === 'address' ? 'Address' : 'Different address?'}
             required={mode === 'address'}
             placeholder={mode === 'address' ? '104 Ave & King George Blvd' : person?.address || 'Street address'}
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            placed={Boolean(pin)}
+            onChange={(v) => { setAddress(v); setPin(null); }}
+            onPick={(a) => { setAddress(a.unit ? `${a.unit} – ${a.address}` : a.address); setPin({ lat: a.lat, lng: a.lng }); }}
+            hint={address.trim() ? 'Pick it from the list to pin it — a corner is fine as typed' : null}
           />
           {mode === 'person' && person && !person.address && !address.trim() && (
             <span className="ops-meta">No address on file — add one here.</span>

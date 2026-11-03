@@ -293,6 +293,7 @@ function clusterDoors(doors, zoom, offZoom = CLUSTER_OFF_ZOOM) {
   return groups.map((g) => g.doors);
 }
 
+const newDoorIcon = () => L.divIcon({ className: 'map-new-wrap', html: '<div class="map-new-pin"></div>', iconSize: [26, 34], iconAnchor: [13, 32] });
 const meIcon = () => L.divIcon({ className: 'map-me-wrap', html: '<div class="map-me-dot"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
 
 // Pan so a latlng is not hidden under the overlays: the filter strip on top
@@ -1029,8 +1030,17 @@ export default function MapPage() {
     setParamsRef.current(turfId ? { turf: turfId } : {}, { replace: true });
   }, []);
 
-  const cancelMode = () => { setMode(null); setPlacing(null); setDraft(EMPTY_DRAFT); setTurfError(null); };
-  const toggleAdd = () => { setMode((m) => (m === 'add' ? null : 'add')); setPlacing(null); setPickerOpen(false); setFilterOpen(false); setDraft(EMPTY_DRAFT); };
+  const cancelMode = () => { setMode(null); setPlacing(null); setAddAt(null); setDraft(EMPTY_DRAFT); setTurfError(null); };
+  const toggleAdd = () => { setMode((m) => (m === 'add' ? null : 'add')); setAddAt(null); setPlacing(null); setPickerOpen(false); setFilterOpen(false); setDraft(EMPTY_DRAFT); select(null); };
+  // The new door's address was picked: its pin, and the map goes there.
+  const placeNew = (ll) => {
+    setAddAt(ll);
+    const map = mapRef.current;
+    if (!ll || !map) return;
+    // In the part of the map the form leaves free (above the sheet on a phone).
+    map.setView([ll.lat, ll.lng], Math.max(map.getZoom(), 17), { animate: false });
+    revealLatLng(map, L.latLng(ll.lat, ll.lng), pageRef.current);
+  };
   const startPlacing = (person) => { setPlacing(person); setMode('place'); setPickerOpen(false); setAddAt(null); setDraft(EMPTY_DRAFT); };
 
   const setTurfsShown = (on) => { setShowTurfs(on); writeTurfsPref(on); };
@@ -1175,19 +1185,30 @@ export default function MapPage() {
     );
   };
 
+  // The new door's pin: where it will go, while its form is open.
+  useEffect(() => {
+    const layer = layersRef.current?.adding;
+    if (!layer) return;
+    layer.clearLayers();
+    if (addAt && mode === 'add') {
+      L.marker([addAt.lat, addAt.lng], { icon: newDoorIcon(), interactive: false, keyboard: false, zIndexOffset: 1500, title: 'The new door' }).addTo(layer);
+    }
+  }, [addAt, mode]);
+
   // Fresh closures for Leaflet's handlers.
   useEffect(() => {
     onMapClickRef.current = (latlng) => {
       if (mode === 'draw') { addPoint(latlng); return; }
       if (mode === 'place' && placing) { locatePerson(placing, wrapped(latlng)); return; }
-      if (mode === 'add') { setAddAt(wrapped(latlng)); setMode(null); return; }
+      if (mode === 'add') { setAddAt(wrapped(latlng)); return; } // drop or move the new door's pin
       if (personParam || turfParam || signSel) select(null); // tap on empty map closes the card
     };
     onLongPressRef.current = (latlng) => {
       if (mode === 'draw' || (mode === 'place' && placing)) return;
       if (!canCreate) { toast('Only staff can add doors'); return; }
       setAddAt(wrapped(latlng));
-      setMode(null);
+      setMode('add');
+      setPlacing(null);
       setPickerOpen(false);
     };
     // Pins swallow map clicks, so place mode has to handle them too: tapping
@@ -1196,7 +1217,7 @@ export default function MapPage() {
     onPinClickRef.current = (door) => {
       if (mode === 'draw') { addPoint(L.latLng(door.lat, door.lng)); return; }
       if (mode === 'place' && placing) { locatePerson(placing, { lat: door.lat, lng: door.lng }); return; }
-      if (mode === 'add') setMode(null);
+      if (mode === 'add') cancelMode();
       if (selectedKeyRef.current === door.key) return;
       select(door.persons[0].id);
     };
@@ -1288,6 +1309,7 @@ export default function MapPage() {
       signs: L.layerGroup().addTo(map),
       doors: L.layerGroup().addTo(map),
       me: L.layerGroup().addTo(map),
+      adding: L.layerGroup().addTo(map), // the new door's pin, while its form is open
     };
     map.on('click', (e) => onMapClickRef.current?.(e.latlng));
     map.on('zoomend', () => setZoom(map.getZoom()));
@@ -1475,7 +1497,7 @@ export default function MapPage() {
   const naming = mode === 'draw' && draft.naming;
   const turfSheetOpen = Boolean(selectedTurf && !mode && !pickerOpen && !addAt && !selectedDoor);
   const signSheetOpen = Boolean(signSel && !mode && !pickerOpen && !addAt && !selectedDoor && !turfSheetOpen);
-  const hasSheet = Boolean(pickerOpen || addAt || naming || (selectedDoor && !mode) || turfSheetOpen || signSheetOpen);
+  const hasSheet = Boolean(pickerOpen || addAt || mode === 'add' || naming || (selectedDoor && !mode) || turfSheetOpen || signSheetOpen);
   const showEmpty = doorsQ.data && doors.length === 0 && !hasSheet && !mode;
   // First visit (volunteers): "Tap a house to start" under the pill, only on
   // the plain map with houses to tap — never over a card, sheet or mode bar.
@@ -1601,7 +1623,7 @@ export default function MapPage() {
           </div>
         ) : mode === 'add' ? (
           <div className="map-mode" role="status">
-            <span>Tap the new door</span>
+            <span>{addAt ? 'Tap the map to move the pin' : 'Type the address, or tap the new door'}</span>
             <button type="button" className="btn" onClick={cancelMode}>Cancel</button>
           </div>
         ) : missingPerson ? (
@@ -1754,13 +1776,14 @@ export default function MapPage() {
 
       {pickerOpen && <PlacePicker unlocated={unlocated} onPick={startPlacing} onClose={() => setPickerOpen(false)} />}
 
-      {addAt && !pickerOpen && (
+      {mode === 'add' && !pickerOpen && (
         <div className="map-sheet">
           <AddDoorForm
             latlng={addAt}
+            onPlace={placeNew}
             toast={toast}
-            onCancel={() => setAddAt(null)}
-            onDone={(id) => { setAddAt(null); centeredOnRef.current = id; select(id); }}
+            onCancel={cancelMode}
+            onDone={(id) => { cancelMode(); centeredOnRef.current = id; select(id); }}
           />
         </div>
       )}

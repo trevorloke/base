@@ -214,6 +214,16 @@ one tap away under **More**.
   map*. A turf the desk gave someone by hand on the Map stays when they
   leave the shift.
 
+- **Addresses that find their place** — Map → **+ Door**: the form opens at
+  once; type *13450 104* and pick the door it offers: the address fills in,
+  *✓ Pinned on the map*, and the map goes there (tap the map to move the
+  pin). Type a full address without picking and **Add door**: it's found
+  when it's saved; one nobody knows says so (tap the map instead). With no
+  signal, tap the map for the pin. **People → Add person** and **Add a sign**
+  take the same box. On a profile, **Edit** (top right) opens the details on
+  the name; change one thing and **Save** — only that changes; a new address
+  picked moves the pin with it, one typed is found after the save.
+
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
   **Today · Map · Calls · Shifts**.

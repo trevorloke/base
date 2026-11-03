@@ -9,7 +9,7 @@
 // and History (open by default). Volunteers see only what a door needs: Details
 // (open), the rating card, one "Last contact" line and Signs. Their back link
 // returns to wherever they came from (walk list, map, Calls).
-import { streetOf } from '../components/address.js';
+import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams, useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -149,7 +149,7 @@ function BackLink({ desk, className = 'eyebrow pf-back' }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Header: name, rating, donor tier, Call · Text · Email · Map
 // ─────────────────────────────────────────────────────────────────────────────
-function Header({ person, donor, me, desk, onLog, contacted, level }) {
+function Header({ person, donor, me, desk, onLog, contacted, level, onEdit }) {
   const texting = useTextingStatus(me);
   // true / false, or null while nobody knows (no signal, nothing kept): then
   // the Calls card, which says so — never a guess at the phone's own apps.
@@ -173,10 +173,13 @@ function Header({ person, donor, me, desk, onLog, contacted, level }) {
   return (
     <header className="pf-head">
       <BackLink desk={desk} />
-      <h1>
-        {person.name}
-        {person.kind === 'org' && <> <span className="chip chip-ghost">org</span></>}
-      </h1>
+      <div className="pf-title">
+        <h1>
+          {person.name}
+          {person.kind === 'org' && <> <span className="chip chip-ghost">org</span></>}
+        </h1>
+        {desk && <button type="button" className="btn btn-quiet pp-btn pf-edit" onClick={onEdit}>Edit</button>}
+      </div>
       <div className="pf-meta">
         {r && <RatingChip code={person.rating} who />}
         {(!r || !named || when) && (
@@ -338,33 +341,59 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Details: contact lines, socials, household, and Edit
 // ─────────────────────────────────────────────────────────────────────────────
-function EditDetailsForm({ person, refresh, onClose }) {
-  const [form, setForm] = useState({
+// The whole form at once, opened from the header's Edit or Details' "Edit
+// details" (focus: the field to start in). Only what changed is sent, so a
+// change someone else made meanwhile to another field stands. The address is
+// one line with the doors it matches under it (AddressField): a pick moves
+// the pin with the save; a new address nobody picked is looked up when it's
+// saved, and the server keeps looking if it can't be found yet.
+const EDIT_KEYS = ['name', 'kind', 'phone', 'email', 'address', 'unit', 'city', 'postal'];
+function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
+  const start = {
     name: person.name || '', kind: person.kind || 'person', phone: person.phone || '', email: person.email || '',
-    house_number: person.house_number || '', address: streetOf(person), unit: person.unit || '', city: person.city || '', postal: person.postal || '',
-  });
+    address: person.address || '', unit: person.unit || '', city: person.city || '', postal: person.postal || '',
+  };
+  const [form, setForm] = useState(start);
+  const [pin, setPin] = useState(null); // { lat, lng } from a picked address
   const act = useAction(refresh, { needsSignal: true });
+  const formRef = useRef(null);
+  useEffect(() => { formRef.current?.scrollIntoView?.({ block: 'nearest' }); }, []);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const v = (s) => (s && s.trim() ? s.trim() : null);
+  const moved = v(form.address) !== v(start.address) || v(form.unit) !== v(start.unit);
+  const located = person.lat != null && person.lng != null;
 
   const submit = async (e) => {
     e.preventDefault();
-    const res = await act.run('person.update', {
-      id: person.id,
-      name: form.name.trim(),
-      kind: form.kind,
-      phone: v(form.phone), email: v(form.email),
-      house_number: v(form.house_number), address: v(form.address), unit: v(form.unit), city: v(form.city), postal: v(form.postal),
-    });
-    if (res) onClose();
+    const patch = {};
+    for (const k of EDIT_KEYS) {
+      const next = k === 'name' || k === 'kind' ? form[k].trim() : v(form[k]);
+      const was = k === 'name' || k === 'kind' ? start[k].trim() : v(start[k]);
+      if (next !== was) patch[k] = next;
+    }
+    if (!Object.keys(patch).length) { onClose(); return; }
+    if ('address' in patch) patch.house_number = null; // the number is read off the line
+    let at = moved ? pin : null;
+    if (moved && !at && patch.address) {
+      const found = await lookupAddress(form.address);
+      if (found) at = { lat: found.lat, lng: found.lng };
+    }
+    if (at) Object.assign(patch, { lat: at.lat, lng: at.lng });
+    const res = await act.run('person.update', { id: person.id, ...patch });
+    if (!res) return;
+    onClose(moved && patch.address && !at ? 'Saved — finding the new address on the map' : 'Saved');
   };
 
+  const addrHint = !moved ? null
+    : !form.address.trim() ? 'No address: the pin comes off the map'
+      : located ? 'The pin moves to the new address when you save' : 'Found on the map when you save';
+
   return (
-    <form className="inline-form" onSubmit={submit}>
+    <form className="inline-form pf-edit-form" onSubmit={submit} ref={formRef} aria-label="Edit details">
       <div className="form-row">
         <div className="field">
           <label htmlFor="ed-name">Name</label>
-          <input id="ed-name" className="input" required maxLength={300} value={form.name} onChange={set('name')} />
+          <input id="ed-name" className="input" required maxLength={300} autoFocus={focus === 'name'} value={form.name} onChange={set('name')} />
         </div>
         <div className="field" style={{ flex: '0 1 150px' }}>
           <label htmlFor="ed-kind">Kind</label>
@@ -377,26 +406,26 @@ function EditDetailsForm({ person, refresh, onClose }) {
       <div className="form-row">
         <div className="field">
           <label htmlFor="ed-phone">Phone</label>
-          <input id="ed-phone" className="input mono" type="tel" inputMode="tel" maxLength={40} value={form.phone} onChange={set('phone')} />
+          <input id="ed-phone" className="input mono" type="tel" inputMode="tel" maxLength={40} autoFocus={focus === 'phone'} value={form.phone} onChange={set('phone')} />
         </div>
         <div className="field">
           <label htmlFor="ed-email">Email</label>
-          <input id="ed-email" className="input" type="email" maxLength={320} value={form.email} onChange={set('email')} />
+          <input id="ed-email" className="input" type="email" maxLength={320} autoFocus={focus === 'email'} value={form.email} onChange={set('email')} />
         </div>
       </div>
       <div className="form-row">
-        <div className="field" style={{ flex: '0 1 100px' }}>
-          <label htmlFor="ed-house">House no.</label>
-          <input id="ed-house" className="input mono" maxLength={20} inputMode="numeric" value={form.house_number} onChange={set('house_number')} />
-        </div>
-        <div className="field" style={{ flex: '2 1 180px' }}>
-          <label htmlFor="ed-address">Street</label>
-          <input id="ed-address" className="input" maxLength={1000} value={form.address} onChange={set('address')} placeholder="104 Ave" />
+        <div style={{ flex: '3 1 220px' }}>
+          <AddressField id="ed-address" value={form.address} autoFocus={focus === 'address'} placed={moved && Boolean(pin)}
+            onChange={(val) => { setForm((f) => ({ ...f, address: val })); setPin(null); }}
+            onPick={(a) => { setForm((f) => ({ ...f, address: a.address, unit: a.unit || f.unit, city: a.city || f.city, postal: a.postal || f.postal })); setPin({ lat: a.lat, lng: a.lng }); }}
+            hint={addrHint} />
         </div>
         <div className="field" style={{ flex: '0 1 90px' }}>
           <label htmlFor="ed-unit">Unit</label>
           <input id="ed-unit" className="input" maxLength={40} value={form.unit} onChange={set('unit')} />
         </div>
+      </div>
+      <div className="form-row">
         <div className="field">
           <label htmlFor="ed-city">City</label>
           <input id="ed-city" className="input" maxLength={120} value={form.city} onChange={set('city')} />
@@ -409,7 +438,7 @@ function EditDetailsForm({ person, refresh, onClose }) {
       {act.error && <p className="error">{act.error}</p>}
       <div className="form-actions">
         <button type="submit" className="btn btn-primary pp-btn" disabled={act.busy}>Save</button>
-        <button type="button" className="btn btn-quiet pp-btn" onClick={onClose}>Cancel</button>
+        <button type="button" className="btn btn-quiet pp-btn" onClick={() => onClose()}>Cancel</button>
       </div>
     </form>
   );
@@ -499,11 +528,15 @@ function Socials({ person, refresh, desk }) {
   );
 }
 
-function Details({ person, household, refresh, desk, me }) {
-  const [editing, setEditing] = useState(false);
+// editing: null, or the field the form opens on (the header's Edit, a tap on
+// a line, or "Edit details" — the page holds it so the header can open it).
+function Details({ person, household, refresh, desk, me, editing, setEditing }) {
+  const [saved, setSaved] = useState(null);
   // The number dials from your own phone only when calls through the campaign are off.
   const ownDialler = textingOn(useTextingStatus(me)).voice === false;
-  if (desk && editing) return <EditDetailsForm person={person} refresh={refresh} onClose={() => setEditing(false)} />;
+  if (desk && editing) {
+    return <EditDetailsForm key={editing} person={person} refresh={refresh} focus={editing} onClose={(said) => { setEditing(null); setSaved(said || null); }} />;
+  }
   const addr = [
     [person.address, person.unit ? `#${person.unit}` : null].filter(Boolean).join(' '),
     [person.city, person.postal].filter(Boolean).join('  '),
@@ -573,7 +606,8 @@ function Details({ person, household, refresh, desk, me }) {
 
       {desk && (
         <div className="pf-row-acts">
-          <button type="button" className="btn pp-btn" onClick={() => setEditing(true)}>Edit details</button>
+          {saved && <span className="pf-saved" role="status">✓ {saved}</span>}
+          <button type="button" className="btn pp-btn" onClick={() => setEditing('name')}>Edit details</button>
         </div>
       )}
     </>
@@ -831,6 +865,7 @@ export default function Person() {
   const [savedChannel, setChannel] = useChannel(id);
   // Desks open on the history; volunteers on phone + address.
   const [open, setOpen] = useState(() => (desk ? { history: true } : { details: true }));
+  const [editing, setEditing] = useState(null); // the details form, open on this field (desk)
   const ratingRef = useRef(null);
   const toggle = (key) => () => setOpen((o) => ({ ...o, [key]: !o[key] }));
   const scale = useScale();
@@ -897,7 +932,8 @@ export default function Person() {
 
   return (
     <div className="pf-page">
-      <Header person={person} donor={donor} me={me} desk={desk} onLog={onLog} contacted={contacts.length > 0} level={ladders.data?.level} />
+      <Header person={person} donor={donor} me={me} desk={desk} onLog={onLog} contacted={contacts.length > 0} level={ladders.data?.level}
+        onEdit={() => { setOpen((o) => ({ ...o, details: true })); setEditing('name'); }} />
       {waiting > 0 && (
         <p className="ds-waiting" role="status">Saved on {device} — {online ? 'sends soon' : 'sends when you’re back online'}</p>
       )}
@@ -915,7 +951,7 @@ export default function Person() {
 
       <div className="pf-sections">
         <Section title="Details" open={!!open.details} onToggle={toggle('details')}>
-          <Details person={person} household={household} refresh={refresh} desk={desk} me={me} />
+          <Details person={person} household={household} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing} />
         </Section>
         {/* The campaign's own fields (People → More → Profile fields); with no signal and no copy, it says so. */}
         {(fields.data?.fields?.length > 0 || noSignal(fields)) && (

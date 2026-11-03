@@ -7,6 +7,9 @@ import { app } from '../index.js';
 // many workspaces to check they stay apart, so keep it open here.
 // setup.test.js turns it off to test the real thing.
 process.env.STARBASE_OPEN_SIGNUP = '1';
+// No address lookups on save (ext/addresses) unless a test asks: nothing
+// here reaches a real geocoder.
+if (process.env.GEOCODE_ON_SAVE === undefined) process.env.GEOCODE_ON_SAVE = 'off';
 
 export const freshDb = async () => {
   _resetDbForTest();

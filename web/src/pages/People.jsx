@@ -30,6 +30,7 @@ import {
 } from '../components/TextingCard.jsx';
 import { MyPeopleLink } from '../components/RelationshipsBits.jsx';
 import { VotedRow } from '../components/Voted.jsx';
+import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared widgets + helpers (also used by Person.jsx)
@@ -538,12 +539,13 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Add person (inline, ?new=1)
 // ─────────────────────────────────────────────────────────────────────────────
-const emptyPerson = (me) => ({ name: '', kind: 'person', email: '', phone: '', house_number: '', address: '', unit: '', city: me?.org?.city || 'Surrey', postal: '' });
+const emptyPerson = (me) => ({ name: '', kind: 'person', email: '', phone: '', address: '', unit: '', city: me?.org?.city || 'Surrey', postal: '' });
 
-function AddPersonForm({ onClose }) {
+function AddPersonForm({ onClose, me }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [form, setForm] = useState(() => emptyPerson(me));
+  const [pin, setPin] = useState(null); // { lat, lng } from a picked address
   const [tags, setTags] = useState([]);
   const [more, setMore] = useState(false);
   const act = useAction(undefined, { needsSignal: true });
@@ -553,16 +555,24 @@ function AddPersonForm({ onClose }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return;
+    // A typed address nobody picked: the first door that matches it, if the
+    // service knows it (the server looks again when it can't).
+    let at = pin;
+    let { city, postal } = form;
+    if (!at && form.address.trim()) {
+      const found = await lookupAddress(form.address);
+      if (found) { at = { lat: found.lat, lng: found.lng }; city = found.city || city; postal = postal || found.postal || ''; }
+    }
     const res = await act.run('person.create', {
       name: form.name.trim(),
       kind: form.kind,
       email: opt(form.email),
       phone: opt(form.phone),
-      house_number: opt(form.house_number),
       address: opt(form.address),
       unit: opt(form.unit),
-      city: opt(form.city),
-      postal: opt(form.postal),
+      city: opt(city),
+      postal: opt(postal),
+      ...(at ? { lat: at.lat, lng: at.lng } : {}),
       tags,
     });
     if (!res?.person?.id) return;
@@ -589,16 +599,10 @@ function AddPersonForm({ onClose }) {
           <input id="np-email" className="input" type="email" maxLength={320} value={form.email} onChange={set('email')} />
         </div>
       </div>
-      <div className="form-row">
-        <div className="field" style={{ flex: '0 1 110px' }}>
-          <label htmlFor="np-house">House no.</label>
-          <input id="np-house" className="input mono" maxLength={20} inputMode="numeric" value={form.house_number} onChange={set('house_number')} placeholder="13450" />
-        </div>
-        <div className="field">
-          <label htmlFor="np-address">Street</label>
-          <input id="np-address" className="input" maxLength={1000} value={form.address} onChange={set('address')} placeholder="104 Ave" />
-        </div>
-      </div>
+      <AddressField id="np-address" value={form.address} placed={Boolean(pin)}
+        onChange={(v) => { setForm((f) => ({ ...f, address: v })); setPin(null); }}
+        onPick={(a) => { setForm((f) => ({ ...f, address: a.address, unit: a.unit || f.unit, city: a.city || f.city, postal: a.postal || f.postal })); setPin({ lat: a.lat, lng: a.lng }); }}
+        hint={form.address.trim() ? 'Found on the map when you save' : null} />
       <button type="button" className="pp-moredetails disclose disclose--inline" aria-expanded={more} onClick={() => setMore((v) => !v)}>
         More details
       </button>
@@ -757,7 +761,7 @@ function PeopleList() {
       </div>
       {desk && !showNew && !online && <NeedsSignalLine>Adding people needs signal</NeedsSignalLine>}
 
-      {showNew && <AddPersonForm onClose={() => update({ new: null })} />}
+      {showNew && <AddPersonForm me={me} onClose={() => update({ new: null })} />}
 
       <div className="pp-bar">
         <label className="pp-search">

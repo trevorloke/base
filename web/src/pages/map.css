@@ -895,3 +895,16 @@
 
 /* An orphan sign's sheet */
 .chip.sign-sheet__chip, .btn.sign-sheet__act { align-self: flex-start; }
+
+/* The new door's pin while its form is open: a navy drop with a gold dot. */
+.map-new-wrap { background: transparent; border: 0; }
+.map-new-pin {
+  width: 26px; height: 26px; margin: 0 auto;
+  background: var(--navy); border: 3px solid #fff; border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg); box-shadow: 0 2px 6px rgba(0, 34, 77, 0.35);
+  position: relative;
+}
+.map-new-pin::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
+  background: var(--gold); border-radius: 50%;
+}

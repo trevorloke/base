@@ -52,6 +52,8 @@ import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } fro
 import { VotedRow } from './Voted.jsx';
 import { LIT, OUTCOMES } from './RatingButtons.jsx';
 import RequestAsk from './RequestAsk.jsx';
+import AddressField, { lookupAddress } from './AddressField.jsx';
+import { useOnline } from './NoSignal.jsx';
 import { callsCard, noTexts, textingOn, useTextingStatus } from './TextingCard.jsx';
 import '../pages/map.css';
 
@@ -156,30 +158,14 @@ function useRefresh() {
   };
 }
 
-function PersonFields({ idPrefix, form, set, withAddress }) {
+function PersonFields({ idPrefix, form, set, focusName = true }) {
   const [more, setMore] = useState(false);
   return (
     <>
       <div className="field">
         <label htmlFor={`${idPrefix}-name`}>Name</label>
-        <input id={`${idPrefix}-name`} className="input" required autoFocus maxLength={300} autoComplete="off" value={form.name} onChange={set('name')} />
+        <input id={`${idPrefix}-name`} className="input" required autoFocus={focusName} maxLength={300} autoComplete="off" value={form.name} onChange={set('name')} />
       </div>
-      {withAddress && (
-        <div className="form-row">
-          <div className="field" style={{ flex: '1 1 90px' }}>
-            <label htmlFor={`${idPrefix}-house`}>House no.</label>
-            <input id={`${idPrefix}-house`} className="input mono" maxLength={20} inputMode="numeric" autoComplete="off" placeholder="12345" value={form.house_number} onChange={set('house_number')} />
-          </div>
-          <div className="field" style={{ flex: '3 1 160px' }}>
-            <label htmlFor={`${idPrefix}-address`}>Street</label>
-            <input id={`${idPrefix}-address`} className="input" required maxLength={1000} autoComplete="off" placeholder="72 Ave" value={form.address} onChange={set('address')} />
-          </div>
-          <div className="field" style={{ flex: '1 1 80px' }}>
-            <label htmlFor={`${idPrefix}-unit`}>Unit</label>
-            <input id={`${idPrefix}-unit`} className="input" maxLength={40} autoComplete="off" value={form.unit} onChange={set('unit')} />
-          </div>
-        </div>
-      )}
       {more || form.phone ? (
         <div className="field">
           <label htmlFor={`${idPrefix}-phone`}>Phone</label>
@@ -285,14 +271,31 @@ export function AddPersonInline({ door, onDone, onCancel, toast, toastQueued = t
   );
 }
 
-// A brand-new door at a tapped spot: name + address (+ unit, phone).
-export function AddDoorForm({ latlng, onDone, onCancel, toast }) {
+// A brand-new door: its address first. Picking one of the doors the box
+// offers (AddressField) fills it in and drops the pin there, and the map
+// goes to it (onPlace); a tap on the map drops or moves the pin by hand
+// (latlng). A typed address nobody picked is looked up when it's saved;
+// with no signal, the pin is a tap.
+export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast }) {
   const queryClient = useQueryClient();
   const refresh = useRefresh();
-  const [form, setForm] = useState({ name: '', house_number: '', address: '', unit: '', phone: '' });
+  const online = useOnline();
+  const [form, setForm] = useState({ name: '', address: '', unit: '', phone: '', city: '', postal: '' });
+  const [pinFrom, setPinFrom] = useState(null); // 'address' once a pick placed it
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const typeAddress = (v) => {
+    setForm((f) => ({ ...f, address: v, city: '', postal: '' }));
+    // The pin came from the address they're now changing: it goes with it.
+    if (pinFrom === 'address') { setPinFrom(null); onPlace?.(null); }
+  };
+  const picked = (s) => {
+    setForm((f) => ({ ...f, address: s.address, unit: s.unit || f.unit, city: s.city || '', postal: s.postal || '' }));
+    setPinFrom('address');
+    setError(null);
+    onPlace?.({ lat: s.lat, lng: s.lng });
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -301,23 +304,38 @@ export function AddDoorForm({ latlng, onDone, onCancel, toast }) {
     if (!form.name.trim() || !form.address.trim()) { setError('Add a name and address'); return; }
     setBusy(true);
     setError(null);
+    let at = latlng;
+    let { city, postal } = form;
+    if (!at) {
+      const found = online ? await lookupAddress(form.address) : null;
+      if (!found) {
+        setError(online ? 'Couldn’t find that address — pick one from the list, or tap the map where the door is' : 'No signal — tap the map where the door is');
+        setBusy(false);
+        return;
+      }
+      at = { lat: found.lat, lng: found.lng };
+      city = city || found.city || '';
+      postal = postal || found.postal || '';
+      onPlace?.(at);
+    }
     try {
       const name = form.name.trim();
       const r = await queueAction('person.create', {
         name,
-        house_number: form.house_number.trim() || undefined,
         address: form.address.trim(),
         unit: form.unit.trim() || undefined,
+        city: city || undefined,
+        postal: postal || undefined,
         phone: form.phone.trim() || undefined,
-        lat: latlng.lat,
-        lng: latlng.lng,
+        lat: at.lat,
+        lng: at.lng,
       }, { who: name });
       if (r.queued) { toast(queuedText(r, name)); onDone(r.client_id); return; }
       const res = r.result;
       toast(`Added ${res.person.name}`);
       patchDoors(queryClient, (d) => ({
         ...d,
-        persons: [...d.persons.filter((p) => p.id !== res.person.id), doorPerson(res.person, latlng)],
+        persons: [...d.persons.filter((p) => p.id !== res.person.id), doorPerson(res.person, at)],
       }));
       refresh();
       onDone(res.person.id);
@@ -336,7 +354,18 @@ export function AddDoorForm({ latlng, onDone, onCancel, toast }) {
         <button type="button" className="btn btn-quiet mapsheet-close" onClick={onCancel} aria-label="Close">✕</button>
       </header>
       <div className="door-form__body">
-        <PersonFields idPrefix="nd" form={form} set={set} withAddress />
+        <div className="form-row">
+          <div style={{ flex: '3 1 200px' }}>
+            <AddressField id="nd-address" value={form.address} onChange={typeAddress} onPick={picked} placed={Boolean(latlng)} required autoFocus
+              placedText="Pinned on the map — tap the map to move it"
+              hint={online ? 'Pick it from the list, or tap the map where it is' : 'tap the map where the door is'} />
+          </div>
+          <div className="field" style={{ flex: '1 1 80px' }}>
+            <label htmlFor="nd-unit">Unit</label>
+            <input id="nd-unit" className="input" maxLength={40} autoComplete="off" value={form.unit} onChange={set('unit')} />
+          </div>
+        </div>
+        <PersonFields idPrefix="nd" form={form} set={set} focusName={false} />
         {error && <p className="error">{error}</p>}
         <div className="door-form__actions">
           <button type="submit" className="btn btn-primary door-act" disabled={busy}>Add door</button>

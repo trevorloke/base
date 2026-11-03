@@ -229,6 +229,21 @@ rounds pauses the run with the reason. `GET /api/geocode/status` reports
 progress; the page shows it and works out the time left. With
 `STARBASE_JOBS=off` the page falls back to looking up batches itself.
 
+**Typing an address** (`server/ext/addresses`, `web/src/components/AddressField.jsx`):
+the map's *+ Door*, People → *Add person*, a profile's *Edit* and *Add a sign*
+share one Address box. From the third character it offers up to five doors
+(`GET /api/address/suggest`): the campaign's own doors that match first,
+then the address service's (BC's autocomplete, or Google/Nominatim — only
+real civic addresses, in the campaign's box). A pick fills the address, unit,
+city and postal code and drops the pin there (the map goes to it); a typed
+address nobody picked is looked up when it's saved. A person saved with an
+address and no pin anyway (a few at a time — an import is the background
+run's) is placed just after the save: a pin copied from a door on file at
+that address, or the geocoder's; one it can't place is set aside for a pin by
+hand. Fixing an address puts the person back in the queue. With no signal
+the box is a plain field and the pin is a tap. `GEOCODE_ON_SAVE=off` turns
+the lookup on save off.
+
 ## Sending email and text
 
 A newsletter or press release is written in Markdown: the message field
@@ -409,7 +424,7 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_TZ` | the campaign's time zone (shifts, receipts, quiet hours, the campaign's day) | `America/Vancouver` |
 | `STARBASE_CITY` | the city new addresses default to | `Surrey` |
 | `STARBASE_PROVINCE` | two letters, for geocoding | `BC` |
-| `STARBASE_GEO_BOUNDS` | `lat,lng\|lat,lng`, the box Google geocoding is biased to | Surrey's |
+| `STARBASE_GEO_BOUNDS` | `lat,lng\|lat,lng`, the box address lookups and suggestions are kept to (BC, Google, Nominatim) | Surrey's |
 | `STARBASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
 | `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |

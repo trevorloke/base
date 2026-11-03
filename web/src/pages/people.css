@@ -490,3 +490,10 @@ button.pf-back:focus-visible { outline: 2px solid var(--mark-deep); outline-offs
 .cl-bank__script { white-space: pre-wrap; font: inherit; font-size: 15px; line-height: 1.55; margin: var(--s-1) 0 0; padding: var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); }
 .cl-lists { margin: 0 0 var(--s-2); font-size: 14px; }
 .pp-savelist { margin-left: var(--s-3); font-size: 14px; }
+
+/* The profile's name with the desk's Edit beside it. */
+.pf-title { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-2); }
+.pf-title h1 { flex: 1 1 auto; min-width: 0; }
+.pf-edit { flex: 0 0 auto; min-height: 48px; }
+.pf-saved { align-self: center; color: var(--ok); font-weight: 600; font-size: 14px; }
+.pf-edit-form { scroll-margin-top: 80px; }

@@ -231,8 +231,12 @@ export const FIELD_ACTIONS = {
       let { address, lat, lng } = input;
       if (input.person_id) {
         const p = await requirePerson(tx, ctx.workspaceId, input.person_id);
+        // Their home's pin only for a sign at their home: one at a different
+        // address (their shop, a corner) would send the crew to the house.
+        const elsewhere = Boolean(String(address || '').trim())
+          && String(address).trim().toLowerCase().replace(/\s+/g, ' ') !== String(p.address || '').trim().toLowerCase().replace(/\s+/g, ' ');
         address = address || p.address;
-        if (lat == null && lng == null && p.lat != null && p.lng != null) { lat = p.lat; lng = p.lng; }
+        if (lat == null && lng == null && p.lat != null && p.lng != null && !elsewhere) { lat = p.lat; lng = p.lng; }
       }
       // A crew needs somewhere to go: an address or a pin.
       if (!String(address || '').trim() && (lat == null || lng == null)) {
