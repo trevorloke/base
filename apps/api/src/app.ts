@@ -172,7 +172,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
           networks: [...k.networks],
           configured: k.connectConfigured !== false,
           connect: k.connectMethod ?? "none",
-          inputs: k.oauthInputs ?? [],
+          inputs: k.connectMethod === "oauth" ? (k.oauthInputs ?? []) : (k.credentialInputs ?? []),
           capabilities: Object.fromEntries(k.networks.map((n) => [n, k.capabilities(n)])),
         })),
     ),
@@ -185,6 +185,12 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     return c.json(await m.accounts.connectWithCredentials(p, { connector: "bluesky", network: "bluesky", auth }), 201);
   });
 
+  app.post("/v1/accounts/connect/:connector/credentials", async (c) => {
+    const p = c.get("principal");
+    m.workspaces.requireRole(p, ["owner", "approver"]);
+    const body = z.object({ network: NetworkEnum, inputs: z.record(z.string(), z.string().max(2000)) }).parse(await c.req.json());
+    return c.json(await m.accounts.connectFromInputs(p, { connector: c.req.param("connector"), network: body.network, inputs: body.inputs }), 201);
+  });
   app.post("/v1/accounts/connect/:connector/start", async (c) => {
     const p = c.get("principal");
     m.workspaces.requireRole(p, ["owner", "approver"]);

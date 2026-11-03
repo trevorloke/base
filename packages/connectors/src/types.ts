@@ -100,7 +100,7 @@ export interface AuthRefresh {
 }
 
 /** How a person connects an account through this connector. */
-export type ConnectMethod = "app_password" | "oauth" | "api_key" | "none";
+export type ConnectMethod = "app_password" | "oauth" | "api_key" | "webhook_url" | "bot_token" | "none";
 
 /** Who the credentials belong to, as the network reports it. */
 export interface AccountIdentity {
@@ -132,6 +132,10 @@ export interface Connector {
    * Returns config to keep with the pending state and an authorize URL override.
    */
   oauthPrepare?(p: { inputs: Record<string, string>; redirectUri: string; state: string; codeChallenge: string }): Promise<{ authorizeUrl: string; config: Record<string, unknown> }>;
+  /** Non-OAuth connect: verify typed inputs (bot token + channel, webhook URL, app password) and return the accounts. */
+  connectWithInputs?(p: { network: Network; inputs: Record<string, string> }): Promise<ConnectedAccount[]>;
+  /** Inputs for connectWithInputs, shown as a form in the room. */
+  readonly credentialInputs?: readonly { key: string; label: string; placeholder?: string; secret?: boolean }[];
   /** Verify credentials and say whose they are. Used when a person connects an account. */
   describeAccount?(auth: Record<string, unknown>): Promise<AccountIdentity>;
   capabilities(network: Network): ConnectorCapabilities;

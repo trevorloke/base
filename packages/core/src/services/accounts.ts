@@ -70,6 +70,23 @@ export class AccountService {
     return this.connect(p, { network: input.network, externalId: identity.externalId, handle: identity.handle, displayName: identity.displayName ?? undefined, connector: connector.name, auth: input.auth });
   }
 
+  /** Connect from typed inputs (bot token, webhook URL, app password) for connectors that are not OAuth. */
+  async connectFromInputs(p: Principal, input: { connector: string; network: Network; inputs: Record<string, string> }) {
+    const connector = this.ctx.connectors.get(input.connector);
+    if (!connector?.connectWithInputs || !connector.networks.includes(input.network)) throw new CoreError("invalid", `${input.connector} does not connect ${input.network} with typed credentials`);
+    for (const f of connector.credentialInputs ?? []) if (!input.inputs[f.key]?.trim()) throw new CoreError("invalid", `${f.label} is required`, { field: f.key });
+    let found: ConnectedAccount[];
+    try {
+      found = await connector.connectWithInputs({ network: input.network, inputs: input.inputs });
+    } catch (e) {
+      const reason = e instanceof ConnectorError && e.kind === "auth" ? "The credentials were not accepted." : `The network did not accept the connection: ${(e as Error).message}`;
+      throw new CoreError("invalid", "could not connect", { reason });
+    }
+    const out = [];
+    for (const a of found) out.push(await this.connect(p, { network: a.network, externalId: a.identity.externalId, handle: a.identity.handle, displayName: a.identity.displayName ?? undefined, connector: connector.name, auth: a.auth, config: a.config }));
+    return out;
+  }
+
   /**
    * Begin an OAuth connection. Works for every OAuth connector: plain authorize URLs, PKCE, and connectors that
    * need per-start preparation from person-supplied inputs (e.g. registering an app on a Mastodon instance).
