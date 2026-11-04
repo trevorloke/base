@@ -1,20 +1,28 @@
 import type {
+  AcceptInviteInput,
   Account,
+  AccountMetrics,
   Activity,
   AdaptInput,
   AdaptResult,
   Alert,
   Brief,
-  ConnectBlueskyInput,
+  ConnectCredentialsInput,
+  ConnectStartInput,
   Connector,
   CreatePostInput,
   DecideInput,
   Discovery,
   FeedEvent,
   FeedQuery,
+  InviteCreated,
+  InviteInfo,
   LiftByStage,
   LiveStatus,
+  MediaAsset,
   Me,
+  Member,
+  ModerateAction,
   OAuthStart,
   Policy,
   PolicyCheckInput,
@@ -23,14 +31,19 @@ import type {
   PostFull,
   PostSummary,
   RadarEntry,
+  ReplyInput,
+  Role,
+  Session,
+  SignupInput,
   Stream,
   Summary,
   TopicDetail,
   TrendSource,
+  Workspace,
 } from "./types";
-import { ApiError } from "./lib/errors";
+import { ApiError, setKeyMode } from "./lib/errors";
 
-export { ApiError, isApiError, errorText } from "./lib/errors";
+export { ApiError, isApiError, errorText, reasonOf, sentence } from "./lib/errors";
 
 // "" by default: same origin, so the Vite dev/preview proxy forwards /v1 and /api to :4000.
 const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
@@ -40,23 +53,64 @@ export const USE_FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";
 
 export const API_KEY_STORAGE = "starsign.apiKey";
 
+// Kept in memory too, so a private window (no storage) still works for this page load.
+let memoryKey: string | null = null;
+
 export function getApiKey(): string | null {
   try {
     const k = localStorage.getItem(API_KEY_STORAGE);
-    return k && k.trim() ? k.trim() : null;
+    const v = k && k.trim() ? k.trim() : memoryKey;
+    setKeyMode(v !== null);
+    return v;
   } catch {
-    return null;
+    setKeyMode(memoryKey !== null);
+    return memoryKey;
   }
 }
 
 export function setApiKey(key: string | null): void {
+  memoryKey = key && key.trim() ? key.trim() : null;
+  setKeyMode(memoryKey !== null);
   try {
-    if (key && key.trim()) localStorage.setItem(API_KEY_STORAGE, key.trim());
+    if (memoryKey) localStorage.setItem(API_KEY_STORAGE, memoryKey);
     else localStorage.removeItem(API_KEY_STORAGE);
   } catch {
     // storage unavailable (private window); the key then lives only for this page load
   }
 }
+
+/**
+ * Every request carries the session cookie (`credentials: "include"`); writes add the CSRF header the
+ * server requires for cookie-authenticated changes. A pasted API key, when there is one, goes as a bearer.
+ */
+function authHeaders(method: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const key = getApiKey();
+  if (key) headers.Authorization = `Bearer ${key}`;
+  if (method !== "GET" && method !== "HEAD") headers["x-starsign-csrf"] = "1";
+  return headers;
+}
+
+function toApiError(status: number, statusText: string, text: string): ApiError {
+  let json: unknown = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+  const err = (json as { error?: { code?: string; message?: string; details?: unknown } } | null)?.error;
+  return new ApiError(status, err?.code ?? `http_${status}`, err?.message ?? (statusText || "Request failed"), err?.details);
+}
+
+// A cookie session that lapses answers 401 (and the server clears the cookie). Whoever listens (the App)
+// sends the person to Sign in. Auth endpoints and API-key mode handle their own 401s.
+let unauthorizedListener: (() => void) | null = null;
+export function onUnauthorized(fn: (() => void) | null): void {
+  unauthorizedListener = fn;
+}
+const AUTH_PATHS = /^\/v1\/(auth\/|invites\/[^/]+$)/;
 
 // Fixtures are a separate chunk; the production bundle never loads it unless VITE_USE_FIXTURES=1.
 type Fixtures = typeof import("./dev/fixtures");
@@ -83,9 +137,7 @@ function qs(params: Record<string, Param>): string {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  const key = getApiKey();
-  if (key) headers.Authorization = `Bearer ${key}`;
+  const headers: Record<string, string> = { Accept: "application/json", ...authHeaders(method) };
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
   let res: Response;
@@ -93,6 +145,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     res = await fetch(`${BASE}${path}`, {
       method,
       headers,
+      credentials: "include",
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
@@ -101,23 +154,63 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   if (res.status === 204) return undefined as T;
   const text = await res.text();
-  let json: unknown = null;
-  if (text) {
-    try {
-      json = JSON.parse(text);
-    } catch {
-      json = null;
-    }
-  }
   if (!res.ok) {
-    const err = (json as { error?: { code?: string; message?: string; details?: unknown } } | null)?.error;
-    throw new ApiError(res.status, err?.code ?? `http_${res.status}`, err?.message ?? (res.statusText || "Request failed"), err?.details);
+    if (res.status === 401 && !getApiKey() && !AUTH_PATHS.test(path)) unauthorizedListener?.();
+    throw toApiError(res.status, res.statusText, text);
   }
-  return json as T;
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return undefined as T;
+  }
+}
+
+export interface UploadHandle {
+  done: Promise<MediaAsset>;
+  abort: () => void;
+}
+
+/**
+ * POST /v1/media as multipart. XMLHttpRequest rather than fetch, because only XHR reports upload progress.
+ * `onProgress` gets 0..1.
+ */
+function uploadLive(file: File, alt: string | undefined, onProgress: (p: number) => void): UploadHandle {
+  const xhr = new XMLHttpRequest();
+  const done = new Promise<MediaAsset>((resolve, reject) => {
+    xhr.open("POST", `${BASE}/v1/media`);
+    xhr.withCredentials = true;
+    for (const [k, v] of Object.entries(authHeaders("POST"))) xhr.setRequestHeader(k, v);
+    xhr.setRequestHeader("Accept", "application/json");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) onProgress(Math.min(1, e.loaded / e.total));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          onProgress(1);
+          resolve(JSON.parse(xhr.responseText) as MediaAsset);
+        } catch {
+          reject(new ApiError(xhr.status, "invalid", "The upload finished but the answer was unreadable."));
+        }
+      } else {
+        if (xhr.status === 401 && !getApiKey()) unauthorizedListener?.();
+        reject(toApiError(xhr.status, xhr.statusText, xhr.responseText));
+      }
+    };
+    xhr.onerror = () => reject(new ApiError(0, "network", "Couldn't reach Starsign."));
+    xhr.onabort = () => reject(new ApiError(0, "aborted", "Upload cancelled."));
+    const form = new FormData();
+    form.append("file", file, file.name);
+    if (alt && alt.trim()) form.append("alt", alt.trim());
+    xhr.send(form);
+  });
+  return { done, abort: () => xhr.abort() };
 }
 
 const get = <T,>(path: string) => request<T>("GET", path);
 const post = <T,>(path: string, body?: unknown) => request<T>("POST", path, body);
+const patch = <T,>(path: string, body?: unknown) => request<T>("PATCH", path, body);
 const del = <T,>(path: string) => request<T>("DELETE", path);
 const enc = encodeURIComponent;
 
@@ -172,10 +265,6 @@ export const api = {
 
   // --- Compose, calendar, connect (v1.1) ---
   connectors: () => pick(() => get<Connector[]>("/v1/connectors"), (f) => f.fixtureApi.connectors()),
-  connectBluesky: (input: ConnectBlueskyInput) =>
-    pick(() => post<Account>("/v1/accounts/connect/bluesky", input), (f) => f.fixtureApi.connectBluesky(input)),
-  /** Starts X's OAuth flow; the caller sends the browser to `authorizeUrl`. 503 when the server isn't set up for X. */
-  connectXStart: () => pick(() => post<OAuthStart>("/v1/accounts/connect/x/start"), (f) => f.fixtureApi.connectXStart()),
   deleteAccount: (id: string) => pick(() => del<void>(`/v1/accounts/${enc(id)}`), (f) => f.fixtureApi.deleteAccount(id)),
 
   adapt: (input: AdaptInput) => pick(() => post<AdaptResult>("/v1/compose/adapt", input), (f) => f.fixtureApi.adapt(input)),
@@ -185,6 +274,51 @@ export const api = {
   calendar: (from: string, to: string) => pick(() => get<PostSummary[]>(`/v1/calendar${qs({ from, to })}`), (f) => f.fixtureApi.calendar(from, to)),
   sources: () => pick(() => get<TrendSource[]>("/v1/sources"), (f) => f.fixtureApi.sources()),
   discoveries: (limit = 50) => pick(() => get<Discovery[]>(`/v1/trends/discoveries${qs({ limit })}`), (f) => f.fixtureApi.discoveries(limit)),
+
+  // --- People, sign-in, teams (v1.2) ---
+  session: () => pick(() => get<Session>("/v1/auth/session"), (f) => f.fixtureApi.session()),
+  login: (email: string, password: string) => pick(() => post<Session>("/v1/auth/login", { email, password }), (f) => f.fixtureApi.login(email, password)),
+  signup: (input: SignupInput) => pick(() => post<Session>("/v1/auth/signup", input), (f) => f.fixtureApi.signup(input)),
+  logout: () => pick(() => post<void>("/v1/auth/logout"), (f) => f.fixtureApi.logout()),
+  switchWorkspace: (workspaceId: string) => pick(() => post<Session>("/v1/auth/switch", { workspaceId }), (f) => f.fixtureApi.switchWorkspace(workspaceId)),
+  forgot: (email: string) => pick(() => post<void>("/v1/auth/forgot", { email }), (f) => f.fixtureApi.forgot(email)),
+  reset: (token: string, password: string) => pick(() => post<void>("/v1/auth/reset", { token, password }), (f) => f.fixtureApi.reset(token, password)),
+  createWorkspace: (name: string) => pick(() => post<Workspace>("/v1/workspaces", { name }), (f) => f.fixtureApi.createWorkspace(name)),
+  members: () => pick(() => get<Member[]>("/v1/members"), (f) => f.fixtureApi.members()),
+  setMemberRole: (id: string, role: Role) => pick(() => patch<Member>(`/v1/members/${enc(id)}`, { role }), (f) => f.fixtureApi.setMemberRole(id, role)),
+  removeMember: (id: string) => pick(() => del<void>(`/v1/members/${enc(id)}`), (f) => f.fixtureApi.removeMember(id)),
+  invite: (email: string, role: Role) => pick(() => post<InviteCreated>("/v1/invites", { email, role }), (f) => f.fixtureApi.invite(email, role)),
+  inviteInfo: (token: string) => pick(() => get<InviteInfo>(`/v1/invites/${enc(token)}`), (f) => f.fixtureApi.inviteInfo(token)),
+  acceptInvite: (input: AcceptInviteInput) => pick(() => post<Session>("/v1/auth/accept-invite", input), (f) => f.fixtureApi.acceptInvite(input)),
+
+  // --- Integrations (v1.2) ---
+  /** OAuth connectors: the caller sends the browser to `authorizeUrl`. 503 when the server isn't set up for it. */
+  connectStart: (connector: string, input: ConnectStartInput) =>
+    pick(() => post<OAuthStart>(`/v1/accounts/connect/${enc(connector)}/start`, input), (f) => f.fixtureApi.connectStart(connector, input)),
+  /** Typed-credential connectors (app password, bot token, webhook URL): returns every account connected. */
+  connectCredentials: (connector: string, input: ConnectCredentialsInput) =>
+    pick(() => post<Account[]>(`/v1/accounts/connect/${enc(connector)}/credentials`, input), (f) => f.fixtureApi.connectCredentials(connector, input)),
+  accountMetrics: (id: string, metric = "followers_total") =>
+    pick(() => get<AccountMetrics>(`/v1/accounts/${enc(id)}/metrics${qs({ metric })}`), (f) => f.fixtureApi.accountMetrics(id, metric)),
+
+  media: () => pick(() => get<MediaAsset[]>("/v1/media"), (f) => f.fixtureApi.media()),
+  deleteMedia: (id: string) => pick(() => del<void>(`/v1/media/${enc(id)}`), (f) => f.fixtureApi.deleteMedia(id)),
+  /** Upload one file with progress. Fixture mode simulates the progress and keeps the file in this tab. */
+  uploadMedia: (file: File, onProgress: (p: number) => void, alt?: string): UploadHandle => {
+    if (!USE_FIXTURES) return uploadLive(file, alt, onProgress);
+    let abort = () => {};
+    const done = fixtures().then((f) => {
+      const h = f.fixtureUpload(file, onProgress, alt);
+      abort = h.abort;
+      return h.done;
+    });
+    return { done, abort: () => abort() };
+  },
+
+  reply: (activityId: string, input: ReplyInput) =>
+    pick(() => post<PostDetail>(`/v1/feed/${enc(activityId)}/reply`, input), (f) => f.fixtureApi.reply(activityId, input)),
+  moderate: (activityId: string, action: ModerateAction) =>
+    pick(() => post<{ ok: boolean; action: ModerateAction }>(`/v1/feed/${enc(activityId)}/moderate`, { action }), (f) => f.fixtureApi.moderate(activityId, action)),
 };
 
 export interface StreamHandlers {
@@ -195,8 +329,8 @@ export interface StreamHandlers {
 const SSE_EVENTS = ["activity", "post", "alert", "forecast"] as const;
 
 /**
- * Opens the live stream (GET /v1/feed/stream, SSE). EventSource cannot send headers, so the key
- * goes in `?key=` — the API accepts that for this route only. Returns a function that closes it.
+ * Opens the live stream (GET /v1/feed/stream, SSE). EventSource cannot send headers, so a single-use
+ * stream token goes in the URL instead (never the key). Returns a function that closes it.
  */
 export function openFeedStream(h: StreamHandlers): () => void {
   if (USE_FIXTURES) {
@@ -223,8 +357,7 @@ export function openFeedStream(h: StreamHandlers): () => void {
     // The API key never travels in a URL: mint a 60-second single-use stream token first.
     let token: string | null = null;
     try {
-      const key = getApiKey();
-      const res = await fetch(`${BASE}/v1/feed/stream-token`, { method: "POST", headers: key ? { authorization: `Bearer ${key}` } : {} });
+      const res = await fetch(`${BASE}/v1/feed/stream-token`, { method: "POST", headers: authHeaders("POST"), credentials: "include" });
       if (res.ok) token = ((await res.json()) as { token: string }).token;
     } catch {
       token = null;
@@ -236,7 +369,7 @@ export function openFeedStream(h: StreamHandlers): () => void {
       return;
     }
     const url = `${BASE}/v1/feed/stream?token=${enc(token)}`;
-    const source = new EventSource(url);
+    const source = new EventSource(url, { withCredentials: true });
     es = source;
     source.onopen = () => {
       backoff = 1_000;

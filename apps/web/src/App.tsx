@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import type { Account, ComposePrefill, LiftByStage, Me, Policy, PostSummary, RadarEntry, Stream, Summary, TrendSource } from "./types";
-import { api, errorText, getApiKey, isApiError, setApiKey, USE_FIXTURES } from "./api";
+import type { Account, ComposePrefill, Connector, LiftByStage, Me, Policy, PostSummary, RadarEntry, Role, Session, Stream, Summary, TrendSource } from "./types";
+import { api, errorText, getApiKey, isApiError, onUnauthorized, setApiKey, USE_FIXTURES } from "./api";
+import { AuthGate, stripAuthParams, type AuthScreen } from "./auth/AuthGate";
 import { BigNumber } from "./components/BigNumber";
+import { Menu } from "./components/Menu";
 import { Tabs, type TabDef } from "./components/Tabs";
 import { ToastProvider, useToast } from "./components/Toast";
-import { AccountsDrawer } from "./drawers/AccountsDrawer";
 import { ComposeDrawer } from "./drawers/ComposeDrawer";
+import { ConnectionsDrawer } from "./drawers/ConnectionsDrawer";
 import { PostDrawer } from "./drawers/PostDrawer";
+import { TeamDrawer } from "./drawers/TeamDrawer";
 import { TopicDrawer } from "./drawers/TopicDrawer";
-import { AUTONOMY_LABEL, lift as formatLift } from "./lib/format";
+import { AUTONOMY_LABEL, lift as formatLift, listOf, networkLabel, plural, roleLabel } from "./lib/format";
 import { RoomProvider, type RoomRefs } from "./lib/room";
 import { isoDaysAgo, isoNow } from "./lib/time";
 import { safeTz } from "./lib/tz";
@@ -74,123 +77,157 @@ function useTheme(): { theme: Theme; toggle: () => void } {
 
 // --- App -----------------------------------------------------------------
 
-export function App() {
-  const [key, setKey] = useState<string | null>(() => getApiKey());
-  const [gateMessage, setGateMessage] = useState<string | null>(null);
-  const { theme, toggle } = useTheme();
+type Auth =
+  | { kind: "checking" }
+  | { kind: "gate"; screen: AuthScreen; signupAllowed: boolean | null; message: string | null; session: Session | null }
+  | { kind: "session"; session: Session }
+  | { kind: "key"; key: string };
 
-  const disconnect = useCallback((message?: string) => {
+function readParam(name: string): string | null {
+  try {
+    const v = new URL(window.location.href).searchParams.get(name);
+    return v && v.trim() ? v.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The server may say on a 401 from /v1/auth/session whether it takes sign-ups (`details.signupAllowed`). */
+function signupHint(e: unknown): boolean | null {
+  if (!isApiError(e) || !e.details || typeof e.details !== "object") return null;
+  const v = (e.details as { signupAllowed?: unknown }).signupAllowed;
+  return typeof v === "boolean" ? v : null;
+}
+
+export function App() {
+  const { theme, toggle } = useTheme();
+  const [inviteToken] = useState(() => readParam("invite"));
+  const [resetToken] = useState(() => readParam("reset"));
+  const [auth, setAuth] = useState<Auth>(() => {
+    const key = getApiKey();
+    if (key && !inviteToken && !resetToken) return { kind: "key", key };
+    return { kind: "checking" };
+  });
+
+  // People sign in; the session cookie decides who they are. Ask once on load.
+  useEffect(() => {
+    if (auth.kind !== "checking") return;
+    let cancelled = false;
+    api
+      .session()
+      .then((session) => {
+        if (cancelled) return;
+        if (inviteToken) setAuth({ kind: "gate", screen: "invite", signupAllowed: null, message: null, session });
+        else {
+          if (resetToken) stripAuthParams();
+          setAuth({ kind: "session", session });
+        }
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        const screen: AuthScreen = inviteToken ? "invite" : resetToken ? "reset" : "signin";
+        const message = isApiError(e) && e.status !== 401 ? errorText(e) : null;
+        setAuth({ kind: "gate", screen, signupAllowed: signupHint(e), message, session: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.kind, inviteToken, resetToken]);
+
+  const signedOut = useCallback((message?: string) => {
     setApiKey(null);
-    setKey(null);
-    setGateMessage(message ?? null);
+    setAuth({ kind: "gate", screen: "signin", signupAllowed: null, message: message ?? null, session: null });
   }, []);
 
-  const connected = USE_FIXTURES || key !== null;
-  if (!connected) {
+  // Any request that finds the session gone sends the person back to Sign in.
+  const sessionActive = auth.kind === "session";
+  useEffect(() => {
+    if (!sessionActive) return;
+    onUnauthorized(() => signedOut("You're signed out. Sign in again."));
+    return () => onUnauthorized(null);
+  }, [sessionActive, signedOut]);
+
+  const signOut = useCallback(async () => {
+    try {
+      await api.logout();
+    } catch {
+      // the cookie may already be gone; the gate is the right place either way
+    }
+    signedOut();
+  }, [signedOut]);
+
+  const onSession = useCallback((session: Session) => {
+    setApiKey(null);
+    setAuth({ kind: "session", session });
+  }, []);
+
+  if (auth.kind === "checking") {
     return (
-      <ConnectPanel
-        initialError={gateMessage}
+      <main className="gate">
+        <span className="muted">Opening Starsign…</span>
+      </main>
+    );
+  }
+
+  if (auth.kind === "gate") {
+    return (
+      <AuthGate
+        initial={auth.screen}
+        inviteToken={inviteToken}
+        resetToken={resetToken}
+        session={auth.session}
+        signupAllowed={auth.signupAllowed}
+        message={auth.message}
         theme={theme}
         onToggleTheme={toggle}
-        onConnected={(k) => {
-          setGateMessage(null);
-          setKey(k);
-        }}
+        onSession={onSession}
+        onApiKey={(key) => setAuth({ kind: "key", key })}
       />
     );
   }
 
+  const roomKey = auth.kind === "key" ? `key:${auth.key}` : `ws:${auth.session.currentWorkspaceId}`;
   return (
     <ToastProvider>
-      <Room key={key ?? "fixtures"} theme={theme} onToggleTheme={toggle} onDisconnect={disconnect} />
+      <Room
+        key={roomKey}
+        theme={theme}
+        onToggleTheme={toggle}
+        session={auth.kind === "session" ? auth.session : null}
+        onSession={onSession}
+        onSignOut={() => void signOut()}
+        onSignedOut={signedOut}
+      />
     </ToastProvider>
-  );
-}
-
-// --- Key gate ------------------------------------------------------------
-
-function ConnectPanel({
-  onConnected,
-  initialError,
-  theme,
-  onToggleTheme,
-}: {
-  onConnected: (key: string) => void;
-  initialError: string | null;
-  theme: Theme;
-  onToggleTheme: () => void;
-}) {
-  const [value, setValue] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(initialError);
-
-  async function submit(e: FormEvent) {
-    e.preventDefault();
-    const k = value.trim();
-    if (!k) return;
-    setBusy(true);
-    setError(null);
-    setApiKey(k); // the client reads the key from storage
-    try {
-      await api.me();
-      onConnected(k);
-    } catch (err) {
-      setApiKey(null);
-      setError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <main className="gate">
-      <form className="gate-card" onSubmit={(e) => void submit(e)}>
-        <div className="brand">Starsign</div>
-        <h1>Connect to Starsign</h1>
-        <p className="muted">Paste a workspace API key. It stays in this browser.</p>
-        <label className="field">
-          <span>API key</span>
-          <input
-            className="input mono"
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="star_…"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-          />
-        </label>
-        {error ? (
-          <div className="card-error" role="alert">
-            {error}
-          </div>
-        ) : null}
-        <button className="btn btn-primary" type="submit" disabled={busy || !value.trim()}>
-          {busy ? "Checking…" : "Connect"}
-        </button>
-        <p className="hint muted small">
-          No key yet? Run <code className="mono">pnpm seed</code> to mint a dev key.
-        </p>
-      </form>
-      <button type="button" className="btn btn-ghost gate-theme" onClick={onToggleTheme}>
-        {theme === "dark" ? "Light" : "Dark"}
-      </button>
-    </main>
   );
 }
 
 // --- Coming back from a connect flow ---------------------------------------
 
-const CONNECT_ERROR_TEXT: Record<string, string> = {
-  expired: "the sign-in took too long. Try again.",
-  exchange_failed: "X didn't hand over access. Try again.",
-  access_denied: "access wasn't granted on X.",
-};
+function connectErrorText(reason: string, net: string): string {
+  switch (reason) {
+    case "expired":
+      return "the sign-in took too long. Try again.";
+    case "exchange_failed":
+      return `${net} didn't hand over access. Try again.`;
+    case "access_denied":
+    case "missing_code":
+      return `access wasn't granted on ${net}.`;
+    case "state_mismatch":
+    case "invalid_state":
+    case "unknown_state":
+      return "that sign-in link was already used. Start again from Connections.";
+    case "no_accounts":
+      return `this ${net} login doesn't manage any accounts Starsign can post as.`;
+    default:
+      return "something went wrong on the way back. Try again.";
+  }
+}
 
 /**
- * X's OAuth ends with the server redirecting to "/?connected=x&handle=…" or "/?connect_error=…".
- * Say how it went once, then take the params out of the address bar.
+ * Every OAuth connector ends with the server redirecting to "/?connected=<connector>&handle=a,b&count=n" or
+ * "/?connect_error=<reason>&connector=<connector>". Say how it went once, in the network's name, then take
+ * the params out of the address bar.
  */
 function useConnectReturn(onConnected: () => void) {
   const toast = useToast();
@@ -199,16 +236,31 @@ function useConnectReturn(onConnected: () => void) {
     const connected = url.searchParams.get("connected");
     const failed = url.searchParams.get("connect_error");
     if (!connected && !failed) return;
-    if (connected) {
-      const handle = (url.searchParams.get("handle") ?? "").replace(/^@/, "");
-      const net = connected === "x" ? "X" : connected;
-      toast(handle ? `Connected @${handle} on ${net}` : `Connected an account on ${net}`);
-      onConnected();
-    } else if (failed) {
-      toast(`X connection didn't finish: ${CONNECT_ERROR_TEXT[failed] ?? "something went wrong on the way back."}`, "bad");
-    }
-    for (const k of ["connected", "handle", "connect_error"]) url.searchParams.delete(k);
+    const connectorName = connected ?? url.searchParams.get("connector") ?? "";
+    const handles = (url.searchParams.get("handle") ?? "")
+      .split(",")
+      .map((h) => h.trim().replace(/^@/, ""))
+      .filter(Boolean);
+    const countParam = Number(url.searchParams.get("count"));
+    const count = Number.isFinite(countParam) && url.searchParams.has("count") ? countParam : handles.length;
+    for (const k of ["connected", "handle", "count", "connect_error", "connector"]) url.searchParams.delete(k);
     window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+
+    void api
+      .connectors()
+      .catch(() => [] as Connector[])
+      .then((list) => {
+        const c = list.find((k) => k.name === connectorName);
+        const net = c ? listOf(c.networks.map(networkLabel)) : connectorName ? networkLabel(connectorName).replace(/_/g, " ") : "the network";
+        if (connected) {
+          if (count === 1 && handles[0]) toast(`Connected @${handles[0]} on ${net}`);
+          else if (count > 0) toast(`Connected ${plural(count, "account")} on ${net}`);
+          else toast(`${net} didn't have any new accounts to connect`, "bad");
+          onConnected();
+        } else if (failed) {
+          toast(`${net} connection didn't finish: ${connectErrorText(failed, net)}`, "bad");
+        }
+      });
   }, [toast, onConnected]);
 }
 
@@ -219,6 +271,7 @@ type DrawerState =
   | { kind: "topic"; id: string }
   | { kind: "compose"; prefill?: ComposePrefill }
   | { kind: "accounts" }
+  | { kind: "team" }
   | null;
 
 function readCenter(): CenterView {
@@ -247,8 +300,24 @@ function CenterSwitch({ view, onChange, waiting, title }: { view: CenterView; on
   );
 }
 
-function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTheme: () => void; onDisconnect: (message?: string) => void }) {
+function Room({
+  theme,
+  onToggleTheme,
+  session,
+  onSession,
+  onSignOut,
+  onSignedOut,
+}: {
+  theme: Theme;
+  onToggleTheme: () => void;
+  /** null in API-key mode. */
+  session: Session | null;
+  onSession: (s: Session) => void;
+  onSignOut: () => void;
+  onSignedOut: (message?: string) => void;
+}) {
   const [me, setMe] = useState<Me | null>(null);
+  const [connectors, setConnectors] = useState<Connector[]>([]);
   const [offline, setOffline] = useState<string | null>(null);
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -279,7 +348,8 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
 
   const live = useLive(true);
 
-  // Identity doubles as the key check: a 401/403 sends the person back to the gate.
+  // Identity doubles as the auth check: a lapsed session or a dead key sends the person back to the gate.
+  const keyMode = session === null;
   useEffect(() => {
     let cancelled = false;
     api
@@ -291,20 +361,21 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        if (isApiError(e) && (e.status === 401 || e.status === 403)) onDisconnect(errorText(e));
+        if (isApiError(e) && (e.status === 401 || (keyMode && e.status === 403))) onSignedOut(errorText(e));
         else setOffline(errorText(e));
       });
     return () => {
       cancelled = true;
     };
-  }, [onDisconnect]);
+  }, [onSignedOut, keyMode]);
 
   const loadRefs = useCallback(async () => {
-    const [p, a, s, src] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources()]);
+    const [p, a, s, src, c] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources(), api.connectors()]);
     if (p.status === "fulfilled") setPolicy(p.value);
     if (a.status === "fulfilled") setAccounts(a.value);
     if (s.status === "fulfilled") setStreams(s.value);
     if (src.status === "fulfilled") setSources(src.value);
+    if (c.status === "fulfilled") setConnectors(c.value);
   }, []);
 
   const loadAccounts = useCallback(async () => {
@@ -315,7 +386,11 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
     }
   }, []);
 
-  useConnectReturn(loadAccounts);
+  const afterConnectReturn = useCallback(() => {
+    void loadAccounts();
+    setDrawer({ kind: "accounts" });
+  }, [loadAccounts]);
+  useConnectReturn(afterConnectReturn);
 
   const loadRadar = useCallback(async () => {
     setRadarLoading(true);
@@ -379,6 +454,7 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
   const refs = useMemo<RoomRefs>(
     () => ({
       accountsById: new Map(accounts.map((a) => [a.id, a])),
+      connectors,
       streamsById: new Map(streams.map((s) => [s.id, s])),
       topicsById: new Map((radar ?? []).map((r) => [r.topic.id, r.topic])),
       timezone,
@@ -386,7 +462,7 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
       openTopic: (id) => setDrawer({ kind: "topic", id }),
       openCompose: (prefill) => setDrawer({ kind: "compose", prefill }),
     }),
-    [accounts, streams, radar, timezone],
+    [accounts, connectors, streams, radar, timezone],
   );
 
   const closeDrawer = useCallback(() => setDrawer(null), []);
@@ -421,6 +497,9 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
     }
   };
 
+  const currentWorkspace = session?.workspaces.find((w) => w.id === session.currentWorkspaceId) ?? null;
+  const myRole = currentWorkspace?.role ?? me?.role ?? null;
+  const canDelete = myRole === "owner" || myRole === "approver";
   const waiting = queue?.length ?? null;
   const wentOut = summary ? summary.publishedByNetwork.reduce((n, g) => n + g.posts, 0) : null;
   const risingRow = liftRows?.find((r) => r.stage === "rising") ?? null;
@@ -454,7 +533,11 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
           <div className="topbar-left">
             <div className="topbar-id">
               <span className="brand">Starsign</span>
-              <span className="ws-name">{me?.workspace.name ?? (offline ? "Offline" : "")}</span>
+              {session ? (
+                <WorkspaceSwitcher session={session} onSession={onSession} />
+              ) : (
+                <span className="ws-name">{me?.workspace.name ?? (offline ? "Offline" : "")}</span>
+              )}
             </div>
             {newPostAutonomy || USE_FIXTURES ? (
               <div className="topbar-chips">
@@ -481,17 +564,96 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
             <button type="button" className="btn btn-primary topbar-new" onClick={() => setDrawer({ kind: "compose" })}>
               New post
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setDrawer({ kind: "accounts" })}>
-              Accounts
+            <button type="button" className={`btn btn-ghost${session ? " topbar-connections" : ""}`} onClick={() => setDrawer({ kind: "accounts" })}>
+              Connections
             </button>
-            <button type="button" className="btn btn-ghost" onClick={onToggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}>
+            <button
+              type="button"
+              className="btn btn-ghost topbar-theme"
+              onClick={onToggleTheme}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            >
               {theme === "dark" ? "Light" : "Dark"}
             </button>
-            {!USE_FIXTURES ? (
-              <button type="button" className="btn btn-ghost" onClick={() => onDisconnect()}>
+            {session ? (
+              <Menu
+                align="right"
+                className="user-menu"
+                buttonClassName="btn btn-ghost user-btn"
+                ariaLabel={`Account menu for ${session.user.name || session.user.email}`}
+                label={
+                  <>
+                    <span className="avatar" aria-hidden="true">
+                      {initials(session.user.name || session.user.email)}
+                    </span>
+                    <span className="user-name">{(session.user.name || session.user.email).split(" ")[0]}</span>
+                  </>
+                }
+              >
+                {(close) => (
+                  <>
+                    <div className="menu-head">
+                      <span className="strong">{session.user.name}</span>
+                      <span className="muted small">{session.user.email}</span>
+                    </div>
+                    <div className="menu-sep" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item menu-phone"
+                      onClick={() => {
+                        close();
+                        setDrawer({ kind: "accounts" });
+                      }}
+                    >
+                      Connections
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        setDrawer({ kind: "team" });
+                      }}
+                    >
+                      Team
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item menu-theme"
+                      onClick={() => {
+                        close();
+                        onToggleTheme();
+                      }}
+                    >
+                      {theme === "dark" ? "Light theme" : "Dark theme"}
+                    </button>
+                    <div className="menu-sep" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        onSignOut();
+                      }}
+                    >
+                      Sign out
+                    </button>
+                  </>
+                )}
+              </Menu>
+            ) : !USE_FIXTURES ? (
+              <button type="button" className="btn btn-ghost" onClick={() => onSignedOut()}>
                 Disconnect
               </button>
-            ) : null}
+            ) : (
+              <button type="button" className="btn btn-ghost" onClick={() => onSignedOut()}>
+                Sign out
+              </button>
+            )}
           </div>
         </header>
 
@@ -523,7 +685,7 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
               <Calendar refreshTick={calendarTick} head={<CenterSwitch view="calendar" onChange={changeCenter} waiting={waiting} title="Calendar" />} />
             </div>
             <div className="col-feed" data-panel="feed">
-              <Feed accounts={accounts} liveTick={live.counters.activity} liveStatus={live.status} />
+              <Feed accounts={accounts} liveTick={live.counters.activity} liveStatus={live.status} canDelete={canDelete} />
             </div>
           </div>
           <div className="col col-brief" data-panel="brief">
@@ -544,8 +706,142 @@ function Room({ theme, onToggleTheme, onDisconnect }: { theme: Theme; onToggleTh
             onOpenAccounts={() => setDrawer({ kind: "accounts" })}
           />
         ) : null}
-        {drawer?.kind === "accounts" ? <AccountsDrawer onClose={closeDrawer} onChanged={() => void loadAccounts()} /> : null}
+        {drawer?.kind === "accounts" ? <ConnectionsDrawer onClose={closeDrawer} onChanged={() => void loadAccounts()} /> : null}
+        {drawer?.kind === "team" ? (
+          <TeamDrawer
+            workspaceName={currentWorkspace?.name ?? me?.workspace.name ?? ""}
+            myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null}
+            myUserId={session?.user.id ?? null}
+            onClose={closeDrawer}
+          />
+        ) : null}
       </div>
     </RoomProvider>
+  );
+}
+
+// --- Workspaces and people ---------------------------------------------------
+
+function initials(name: string): string {
+  const parts = name.replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "?") + (parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "")).toUpperCase();
+}
+
+/**
+ * The workspace name doubles as a switcher: every workspace this person belongs to, with their role in it,
+ * and "New workspace" (how an agency adds a client).
+ */
+function WorkspaceSwitcher({ session, onSession }: { session: Session; onSession: (s: Session) => void }) {
+  const toast = useToast();
+  const current = session.workspaces.find((w) => w.id === session.currentWorkspaceId) ?? session.workspaces[0] ?? null;
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function switchTo(id: string, close: () => void) {
+    if (id === session.currentWorkspaceId) {
+      close();
+      return;
+    }
+    setBusy(id);
+    setError(null);
+    try {
+      const next = await api.switchWorkspace(id);
+      close();
+      onSession(next);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function create(e: FormEvent, close: () => void) {
+    e.preventDefault();
+    const clean = name.trim();
+    if (!clean) return;
+    setBusy("new");
+    setError(null);
+    try {
+      const ws = await api.createWorkspace(clean);
+      const next = await api.switchWorkspace(ws.id);
+      close();
+      setName("");
+      setCreating(false);
+      toast(`Created ${ws.name}. Connect its accounts in Connections.`);
+      onSession(next);
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Menu
+      className="ws-menu"
+      buttonClassName="ws-switch"
+      ariaLabel={`Workspace: ${current?.name ?? ""}. Switch workspace`}
+      label={
+        <>
+          <span className="ws-name">{current?.name ?? "Workspace"}</span>
+          <span className="ws-caret" aria-hidden="true">
+            ▾
+          </span>
+        </>
+      }
+    >
+      {(close) => (
+        <>
+          <div className="menu-h">Workspaces</div>
+          {session.workspaces.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              role="menuitemradio"
+              aria-checked={w.id === session.currentWorkspaceId}
+              className={`menu-item ws-item${w.id === session.currentWorkspaceId ? " ws-item-on" : ""}`}
+              disabled={busy !== null}
+              onClick={() => void switchTo(w.id, close)}
+            >
+              <span className="ws-item-name">{w.name}</span>
+              <span className="muted small">{busy === w.id ? "Opening…" : roleLabel(w.role)}</span>
+            </button>
+          ))}
+          <div className="menu-sep" />
+          {creating ? (
+            <form className="ws-new" onSubmit={(e) => void create(e, close)}>
+              <input
+                className="input"
+                placeholder="Client or brand name"
+                aria-label="New workspace name"
+                value={name}
+                autoFocus
+                onChange={(e) => setName(e.target.value)}
+              />
+              <div className="ws-new-actions">
+                <button type="submit" className="btn btn-small" disabled={busy !== null || !name.trim()}>
+                  {busy === "new" ? "Creating…" : "Create"}
+                </button>
+                <button type="button" className="btn btn-small btn-ghost" onClick={() => setCreating(false)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button type="button" role="menuitem" className="menu-item ws-new-item" onClick={() => setCreating(true)}>
+              <span>New workspace</span>
+              <span className="muted small">For a client or another brand</span>
+            </button>
+          )}
+          {error ? (
+            <div className="card-error menu-error" role="alert">
+              {error}
+            </div>
+          ) : null}
+        </>
+      )}
+    </Menu>
   );
 }

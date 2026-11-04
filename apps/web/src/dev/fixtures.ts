@@ -2,7 +2,9 @@
 // Everything here is plausible, deterministic, and relative to the moment the page loads.
 
 import type {
+  AcceptInviteInput,
   Account,
+  AccountMetrics,
   Activity,
   ActivityKind,
   AdaptInput,
@@ -11,8 +13,20 @@ import type {
   Alert,
   Approval,
   Brief,
-  ConnectBlueskyInput,
+  ConnectCredentialsInput,
+  ConnectStartInput,
   Connector,
+  InviteCreated,
+  InviteInfo,
+  MediaAsset,
+  Member,
+  ModerateAction,
+  NetworkCapabilities,
+  ReplyInput,
+  Role,
+  Session,
+  SessionWorkspace,
+  SignupInput,
   CreatePostInput,
   DecideInput,
   Discovery,
@@ -46,7 +60,7 @@ import type {
 } from "../types";
 import type { StreamHandlers } from "../api";
 import { ApiError } from "../lib/errors";
-import { NETWORK_THREADS, truncate } from "../lib/format";
+import { NETWORK_THREADS, networkLabel, truncate } from "../lib/format";
 import { weekStartMs } from "../lib/tz";
 
 const NOW = Date.now();
@@ -76,10 +90,29 @@ const workspace: Workspace = {
 
 const me: Me = { workspace, actor: { type: "human", id: "dev" }, role: "owner" };
 
+const acct = (id: string, network: Network, handle: string, displayName: string, connector: string, status: Account["status"], ingestedHoursAgo: number | null, externalId = id): Account => ({
+  id,
+  network,
+  externalId,
+  handle,
+  displayName,
+  connector,
+  status,
+  hasCredentials: status !== "disabled",
+  lastIngestAt: ingestedHoursAgo === null ? null : ago(ingestedHoursAgo),
+  config: {},
+});
+
+// Northwind's accounts. The feed, posts and calendar below reference these ids.
 const accounts: Account[] = [
-  { id: "acc_x", network: "x", externalId: "1842", handle: "northwindcoffee", displayName: "Northwind Coffee", connector: "x_api", status: "active", hasCredentials: true, lastIngestAt: ago(0.1), config: {} },
-  { id: "acc_bsky", network: "bluesky", externalId: "did:plc:nw", handle: "northwind.coffee", displayName: "Northwind Coffee", connector: "bluesky", status: "active", hasCredentials: true, lastIngestAt: ago(0.2), config: {} },
-  { id: "acc_ig", network: "instagram", externalId: "17841", handle: "northwindcoffee", displayName: "Northwind Coffee", connector: "zernio", status: "reauth_required", hasCredentials: true, lastIngestAt: ago(9), config: {} },
+  acct("acc_x", "x", "northwindcoffee", "Northwind Coffee", "x", "active", 0.1, "1842"),
+  acct("acc_bsky", "bluesky", "northwind.coffee", "Northwind Coffee", "bluesky", "active", 0.2, "did:plc:nw"),
+  acct("acc_ig", "instagram", "northwindcoffee", "Northwind Coffee", "meta", "reauth_required", 9, "17841"),
+  acct("acc_fb", "facebook", "northwindcoffeepdx", "Northwind Coffee", "meta", "active", 0.4),
+  acct("acc_yt", "youtube", "northwindroasters", "Northwind Roasters", "youtube", "active", 1.5),
+  acct("acc_tt", "tiktok", "northwind.coffee", "Northwind Coffee", "tiktok", "active", 0.8),
+  acct("acc_masto", "mastodon", "northwind@mastodon.social", "Northwind Coffee", "mastodon", "active", 0.6),
+  acct("acc_li", "linkedin", "northwind-coffee-roasters", "Northwind Coffee Roasters", "linkedin", "disabled", null),
 ];
 
 const streams: Stream[] = [
@@ -583,7 +616,19 @@ function act(
 ): Activity {
   const accountId = accounts.find((a) => a.network === network)?.id ?? null;
   const url =
-    network === "x" ? `https://x.com/${handle}/status/${id}` : network === "bluesky" ? `https://bsky.app/profile/${handle}/post/${id}` : `https://www.instagram.com/p/${id}/`;
+    network === "x"
+      ? `https://x.com/${handle}/status/${id}`
+      : network === "bluesky"
+        ? `https://bsky.app/profile/${handle}/post/${id}`
+        : network === "instagram"
+          ? `https://www.instagram.com/p/${id}/`
+          : network === "youtube"
+            ? `https://www.youtube.com/watch?v=${id}`
+            : network === "facebook"
+              ? `https://www.facebook.com/${id}`
+              : network === "tiktok"
+                ? `https://www.tiktok.com/@${handle}/video/${id}`
+                : null;
   return {
     id,
     workspaceId: workspace.id,
@@ -617,6 +662,10 @@ const feedSeed: Activity[] = [
   act("a10", "x", "reply", "m_torres", "M. Torres", "@northwindcoffee your app logged me out again. third time this week.", 3.0, ["st_brand"], -0.6),
   act("a11", "instagram", "mention", "pdxfoodie", "PDX Foodie", "best cold brew in town is northwindcoffee, no notes", 4.0, ["st_brand"], 0.9),
   act("a12", "x", "mention", "beanwatch", "Bean Watch", "Blue Bottle just dropped a pumpkin cold foam. @northwindcoffee your move", 5.0, ["st_comp", "st_psl"], 0.0),
+  act("a13", "facebook", "comment", "linda.park", "Linda Park", "Are you open on Thanksgiving morning? Want to grab beans for the family.", 0.55, ["st_brand"], 0.3),
+  act("a14", "youtube", "comment", "brewnerd42", "brewnerd42", "What grind setting on a Baratza for the 1:8 cold brew in this video?", 1.6, ["st_brand"], 0.4),
+  act("a15", "tiktok", "comment", "jules.sips", "jules", "the latte art at 0:12 😮", 2.2, ["st_brand"], 0.8),
+  act("a16", "mastodon", "mention", "kav@hachyderm.io", "Kavya", "@northwind@mastodon.social do you publish your green coffee prices? would love to see more roasters do that", 3.4, ["st_brand"], 0.5),
 ];
 
 const LIVE_LINES: { network: Network; kind: ActivityKind; handle: string; name: string; text: string; matched: string[] }[] = [
@@ -792,10 +841,76 @@ const calendarSeed: PostSummary[] = [
   calPost("p_cal_fri", "Friday pastries", "Friday: cardamom buns at the Alberta café. They go by 9.", slot(11, 7.5), "scheduled", [...XB, ["acc_ig", "instagram"]]),
 ];
 
+const cap = (kinds: string[], o: Partial<NetworkCapabilities> = {}): NetworkCapabilities => ({
+  publish: true,
+  reply: true,
+  moderate: true,
+  accountMetrics: true,
+  webhooks: false,
+  video: true,
+  kinds,
+  ...o,
+});
+
+// Every network, in mixed states: some set up and connected, some set up and waiting, some not set up here.
 const connectorsSeed: Connector[] = [
-  { name: "bluesky", networks: ["bluesky"], configured: true, connect: "app_password" },
-  { name: "x_api", networks: ["x"], configured: true, connect: "oauth" },
-  { name: "zernio", networks: ["instagram"], configured: false, connect: "oauth" },
+  { name: "x", networks: ["x"], configured: true, connect: "oauth", inputs: [], capabilities: { x: cap(["post", "poll"]) } },
+  {
+    name: "bluesky",
+    networks: ["bluesky"],
+    configured: true,
+    connect: "app_password",
+    inputs: [
+      { key: "identifier", label: "Handle", placeholder: "yourbrand.bsky.social" },
+      { key: "appPassword", label: "App password", placeholder: "xxxx-xxxx-xxxx-xxxx" },
+    ],
+    capabilities: { bluesky: cap(["post"]) },
+  },
+  {
+    name: "meta",
+    networks: ["facebook", "instagram"],
+    configured: true,
+    connect: "oauth",
+    inputs: [],
+    capabilities: {
+      facebook: cap(["post", "link", "reel", "story"], { webhooks: true }),
+      instagram: cap(["post", "carousel", "reel", "story"], { webhooks: true }),
+    },
+  },
+  { name: "threads", networks: ["threads"], configured: true, connect: "oauth", inputs: [], capabilities: { threads: cap(["post", "carousel"]) } },
+  { name: "linkedin", networks: ["linkedin"], configured: true, connect: "oauth", inputs: [], capabilities: { linkedin: cap(["post", "link", "carousel"]) } },
+  { name: "tiktok", networks: ["tiktok"], configured: true, connect: "oauth", inputs: [], capabilities: { tiktok: cap(["video", "carousel"], { reply: false, moderate: false }) } },
+  { name: "youtube", networks: ["youtube"], configured: true, connect: "oauth", inputs: [], capabilities: { youtube: cap(["video", "short"]) } },
+  { name: "pinterest", networks: ["pinterest"], configured: false, connect: "oauth", inputs: [], capabilities: { pinterest: cap(["pin"], { reply: false, moderate: false }) } },
+  {
+    name: "mastodon",
+    networks: ["mastodon"],
+    configured: true,
+    connect: "oauth",
+    inputs: [{ key: "instance", label: "Your server", placeholder: "mastodon.social" }],
+    capabilities: { mastodon: cap(["post", "poll"], { webhooks: true }) },
+  },
+  { name: "reddit", networks: ["reddit"], configured: false, connect: "oauth", inputs: [], capabilities: { reddit: cap(["post", "link"]) } },
+  { name: "google_business", networks: ["google_business"], configured: false, connect: "oauth", inputs: [], capabilities: { google_business: cap(["post"], { reply: true, moderate: false, video: false }) } },
+  {
+    name: "telegram",
+    networks: ["telegram"],
+    configured: true,
+    connect: "bot_token",
+    inputs: [
+      { key: "botToken", label: "Bot token", placeholder: "123456789:AA…" },
+      { key: "chatId", label: "Channel", placeholder: "@yourchannel" },
+    ],
+    capabilities: { telegram: cap(["post", "poll"], { reply: true, moderate: true, accountMetrics: true }) },
+  },
+  {
+    name: "discord",
+    networks: ["discord"],
+    configured: true,
+    connect: "webhook_url",
+    inputs: [{ key: "webhookUrl", label: "Webhook URL", placeholder: "https://discord.com/api/webhooks/…" }],
+    capabilities: { discord: cap(["post"], { reply: false, moderate: false, accountMetrics: false }) },
+  },
 ];
 
 const sourcesSeed: TrendSource[] = [
@@ -894,7 +1009,6 @@ const state = {
   liveIndex: 0,
   calendar: clone(calendarSeed),
   created: [] as PostSummary[],
-  accounts,
   createdSeq: 0,
 };
 
@@ -920,10 +1034,597 @@ const BLOCKING: { id: string; kind: string; re: RegExp; message: string }[] = [
   { id: "rl_health", kind: "forbidden_claim", re: /\b(cures?|heals?|burns? fat|weight loss|detox)\b/gi, message: "Makes a health claim about coffee" },
 ];
 
+// --- People, sign-in, teams (v1.2) ----------------------------------------
+// The fixture "server" keeps who is signed in, which workspace is current, and each workspace's accounts in
+// localStorage, standing in for the session cookie. That way a sign-in or an OAuth round trip (which reloads
+// the page) behaves like the real thing. Sign in with any email; the password "wrong" fails.
+
+interface FxUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+interface FxWorkspace {
+  id: string;
+  slug: string;
+  name: string;
+  role: Role;
+  createdAt: string;
+}
+
+interface FxStore {
+  signedIn: boolean;
+  user: FxUser;
+  currentWorkspaceId: string;
+  workspaces: FxWorkspace[];
+  accounts: Record<string, Account[]>;
+  members: Member[];
+}
+
+const FX_STORE_KEY = "starsign.fixtures.v2";
+
+function seedStore(): FxStore {
+  return {
+    signedIn: false,
+    user: { id: "usr_maya", email: "maya@northwind.coffee", name: "Maya Chen" },
+    currentWorkspaceId: workspace.id,
+    workspaces: [
+      { id: workspace.id, slug: workspace.slug, name: workspace.name, role: "owner", createdAt: workspace.createdAt },
+      { id: "ws_alder", slug: "alder-pine", name: "Alder & Pine Bakery", role: "owner", createdAt: ago(24 * 30) },
+      { id: "ws_harbor", slug: "harbor-books", name: "Harbor Books", role: "editor", createdAt: ago(24 * 12) },
+    ],
+    accounts: {
+      [workspace.id]: clone(accounts),
+      ws_alder: [acct("acc_alder_ig", "instagram", "alderandpine", "Alder & Pine", "meta", "active", 2), acct("acc_alder_fb", "facebook", "alderandpinebakery", "Alder & Pine Bakery", "meta", "active", 2)],
+      ws_harbor: [acct("acc_harbor_bsky", "bluesky", "harborbooks.bsky.social", "Harbor Books", "bluesky", "active", 3)],
+    },
+    members: [
+      { id: "mem_maya", userId: "usr_maya", email: "maya@northwind.coffee", name: "Maya Chen", role: "owner", createdAt: ago(24 * 90) },
+      { id: "mem_dev", userId: "usr_dev", email: "dev@northwind.coffee", name: "Dev Patel", role: "approver", createdAt: ago(24 * 60) },
+      { id: "mem_sam", userId: "usr_sam", email: "sam@northwind.coffee", name: "Sam Okafor", role: "editor", createdAt: ago(24 * 21) },
+      { id: "mem_rita", userId: "usr_rita", email: "rita@quillagency.com", name: "Rita Alvarez", role: "viewer", createdAt: ago(24 * 4) },
+    ],
+  };
+}
+
+function loadStore(): FxStore {
+  try {
+    const raw = localStorage.getItem(FX_STORE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as FxStore;
+      if (parsed && parsed.user && Array.isArray(parsed.workspaces) && parsed.accounts) return parsed;
+    }
+  } catch {
+    // fall through to a fresh seed
+  }
+  return seedStore();
+}
+
+const store: FxStore = loadStore();
+
+function save(): void {
+  try {
+    localStorage.setItem(FX_STORE_KEY, JSON.stringify(store));
+  } catch {
+    // private window: fixture state lasts for this page load
+  }
+}
+
+function currentWs(): FxWorkspace {
+  return store.workspaces.find((w) => w.id === store.currentWorkspaceId) ?? store.workspaces[0]!;
+}
+
+function currentAccounts(): Account[] {
+  const id = currentWs().id;
+  store.accounts[id] ??= [];
+  return store.accounts[id]!;
+}
+
+function currentMe(): Me {
+  const w = currentWs();
+  const ws: Workspace = w.id === workspace.id ? workspace : { ...workspace, id: w.id, slug: w.slug, name: w.name, profile: {}, createdAt: w.createdAt };
+  return { workspace: ws, actor: { type: "human", id: store.signedIn ? store.user.name.split(" ")[0]!.toLowerCase() : "dev" }, role: w.role };
+}
+
+function sessionOf(): Session {
+  const workspaces: SessionWorkspace[] = store.workspaces.map((w) => ({ id: w.id, slug: w.slug, name: w.name, role: w.role }));
+  return clone({ user: store.user, workspaces, currentWorkspaceId: currentWs().id });
+}
+
+function requireSession(): void {
+  if (!store.signedIn) throw new ApiError(401, "unauthorized", "Sign in first.");
+}
+
+function requireOwner(): void {
+  requireSession();
+  if (currentWs().role !== "owner") throw new ApiError(403, "forbidden", "Only an owner can change the team.");
+}
+
+const slugify = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "workspace";
+
+const INVITES: Record<string, InviteInfo> = {
+  demo: { workspaceName: "Northwind Coffee", email: "jordan@northwind.coffee", role: "editor", expiresAt: ahead(24 * 6), userExists: false },
+  member: { workspaceName: "Harbor Books", email: "maya@northwind.coffee", role: "approver", expiresAt: ahead(24 * 3), userExists: true },
+};
+
+function peopleApi() {
+  return {
+    session: async (): Promise<Session> => {
+      await delay(null, 120);
+      // The real server could say whether it takes sign-ups; fixtures say yes so every screen is reachable.
+      if (!store.signedIn) throw new ApiError(401, "unauthorized", "not signed in", { signupAllowed: true });
+      return sessionOf();
+    },
+
+    login: async (email: string, password: string): Promise<Session> => {
+      await delay(null, 450);
+      if (/^locked@/i.test(email.trim())) throw new ApiError(429, "rate_limited", "too many attempts");
+      if (!email.includes("@") || !password || password === "wrong") throw new ApiError(401, "unauthorized", "That email and password don't match.");
+      store.signedIn = true;
+      if (email.trim().toLowerCase() !== store.user.email) {
+        const local = email.split("@")[0] ?? "you";
+        store.user = { ...store.user, email: email.trim().toLowerCase(), name: local.replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) };
+      }
+      save();
+      return sessionOf();
+    },
+
+    signup: async (input: SignupInput): Promise<Session> => {
+      await delay(null, 600);
+      if (input.password.length < 10) throw new ApiError(400, "invalid", "Use at least 10 characters for the password.");
+      const id = `ws_${slugify(input.workspaceName).replace(/-/g, "_")}`;
+      store.signedIn = true;
+      store.user = { id: "usr_new", email: input.email.trim().toLowerCase(), name: input.name.trim() };
+      if (!store.workspaces.some((w) => w.id === id)) {
+        store.workspaces.unshift({ id, slug: slugify(input.workspaceName), name: input.workspaceName.trim(), role: "owner", createdAt: iso(Date.now()) });
+      }
+      store.currentWorkspaceId = id;
+      store.members = [{ id: "mem_new", userId: "usr_new", email: store.user.email, name: store.user.name, role: "owner", createdAt: iso(Date.now()) }];
+      save();
+      return sessionOf();
+    },
+
+    logout: async (): Promise<void> => {
+      await delay(null, 150);
+      store.signedIn = false;
+      save();
+    },
+
+    switchWorkspace: async (workspaceId: string): Promise<Session> => {
+      await delay(null, 220);
+      requireSession();
+      if (!store.workspaces.some((w) => w.id === workspaceId)) throw new ApiError(403, "forbidden", "You aren't a member of that workspace.");
+      store.currentWorkspaceId = workspaceId;
+      save();
+      return sessionOf();
+    },
+
+    forgot: async (_email: string): Promise<void> => {
+      await delay(null, 400);
+    },
+
+    reset: async (token: string, password: string): Promise<void> => {
+      await delay(null, 400);
+      if (token === "expired") throw new ApiError(400, "invalid", "This reset link has expired. Ask for a new one.");
+      if (password.length < 10) throw new ApiError(400, "invalid", "Use at least 10 characters for the password.");
+    },
+
+    createWorkspace: async (name: string): Promise<Workspace> => {
+      await delay(null, 350);
+      requireSession();
+      const clean = name.trim();
+      if (!clean) throw new ApiError(400, "invalid", "Give the workspace a name.");
+      let slug = slugify(clean);
+      while (store.workspaces.some((w) => w.slug === slug)) slug = `${slug}-2`;
+      const w: FxWorkspace = { id: `ws_${slug.replace(/-/g, "_")}`, slug, name: clean, role: "owner", createdAt: iso(Date.now()) };
+      store.workspaces.push(w);
+      store.accounts[w.id] = [];
+      save();
+      return clone({ ...workspace, id: w.id, slug, name: clean, profile: {}, createdAt: w.createdAt });
+    },
+
+    members: async (): Promise<Member[]> => {
+      await delay(null, 160);
+      requireSession();
+      const mine = store.members.find((m) => m.email === store.user.email);
+      if (!mine) store.members.unshift({ id: "mem_self", userId: store.user.id, email: store.user.email, name: store.user.name, role: currentWs().role, createdAt: ago(24 * 90) });
+      return clone(store.members);
+    },
+
+    setMemberRole: async (id: string, role: Role): Promise<Member> => {
+      await delay(null, 300);
+      requireOwner();
+      const m = store.members.find((x) => x.id === id);
+      if (!m) throw new ApiError(404, "not_found", "That person isn't on the team anymore.");
+      const owners = store.members.filter((x) => x.role === "owner");
+      if (m.role === "owner" && role !== "owner" && owners.length <= 1) {
+        throw new ApiError(409, "conflict", "A workspace needs at least one owner. Make someone else an owner first.");
+      }
+      m.role = role;
+      save();
+      return clone(m);
+    },
+
+    removeMember: async (id: string): Promise<void> => {
+      await delay(null, 300);
+      requireOwner();
+      const idx = store.members.findIndex((x) => x.id === id);
+      const m = store.members[idx];
+      if (!m) throw new ApiError(404, "not_found", "That person isn't on the team anymore.");
+      if (m.role === "owner" && store.members.filter((x) => x.role === "owner").length <= 1) {
+        throw new ApiError(409, "conflict", "You can't remove the last owner.");
+      }
+      store.members.splice(idx, 1);
+      save();
+    },
+
+    invite: async (email: string, role: Role): Promise<InviteCreated> => {
+      await delay(null, 450);
+      requireOwner();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) throw new ApiError(400, "invalid", "That doesn't look like an email address.");
+      if (store.members.some((m) => m.email === email.trim().toLowerCase())) throw new ApiError(409, "conflict", "They're already on the team.");
+      const token = `inv${Math.random().toString(36).slice(2, 10)}`;
+      INVITES[token] = { workspaceName: currentWs().name, email: email.trim().toLowerCase(), role, expiresAt: ahead(24 * 7), userExists: false };
+      // Pretend email is configured for company addresses only, so both outcomes show up.
+      return { inviteUrl: `${window.location.origin}/?invite=${token}`, expiresAt: ahead(24 * 7), emailed: !/gmail\.com$/i.test(email) };
+    },
+
+    inviteInfo: async (token: string): Promise<InviteInfo> => {
+      await delay(null, 250);
+      const info = INVITES[token];
+      if (!info) throw new ApiError(404, "not_found", "invite not found");
+      return clone(info);
+    },
+
+    acceptInvite: async (input: AcceptInviteInput): Promise<Session> => {
+      await delay(null, 500);
+      const info = INVITES[input.token];
+      if (!info) throw new ApiError(404, "not_found", "This invite has expired or was already used.");
+      if (!store.signedIn) {
+        if (info.userExists) {
+          if (!input.password || input.password === "wrong") throw new ApiError(401, "unauthorized", "That password doesn't match the account for this email.");
+          store.user = { ...store.user, email: info.email };
+        } else {
+          if (!input.name?.trim() || !input.password) throw new ApiError(400, "invalid", "Add your name and a password to join.");
+          if (input.password.length < 10) throw new ApiError(400, "invalid", "Use at least 10 characters for the password.");
+          store.user = { id: "usr_invited", email: info.email, name: input.name.trim() };
+        }
+      }
+      store.signedIn = true;
+      const existing = store.workspaces.find((w) => w.name === info.workspaceName);
+      if (existing) store.currentWorkspaceId = existing.id;
+      else {
+        const slug = slugify(info.workspaceName);
+        store.workspaces.push({ id: `ws_${slug}`, slug, name: info.workspaceName, role: info.role, createdAt: iso(Date.now()) });
+        store.currentWorkspaceId = `ws_${slug}`;
+      }
+      delete INVITES[input.token];
+      save();
+      return sessionOf();
+    },
+  };
+}
+
+// --- Integrations (v1.2) -----------------------------------------------------
+
+const FOLLOWERS: Record<string, number> = {
+  acc_x: 18_420,
+  acc_bsky: 3_912,
+  acc_ig: 41_300,
+  acc_fb: 12_870,
+  acc_yt: 6_240,
+  acc_tt: 22_150,
+  acc_masto: 1_184,
+  acc_alder_ig: 8_710,
+  acc_alder_fb: 2_302,
+  acc_harbor_bsky: 940,
+};
+
+/** Who an OAuth round trip "finds" behind one login, per connector. */
+const OAUTH_FINDS: Record<string, { network: Network; handle: string; name: string }[]> = {
+  meta: [
+    { network: "facebook", handle: "northwindpearl", name: "Northwind Coffee · Pearl" },
+    { network: "facebook", handle: "northwindalberta", name: "Northwind Coffee · Alberta" },
+    { network: "instagram", handle: "northwindwholesale", name: "Northwind Wholesale" },
+  ],
+  threads: [{ network: "threads", handle: "northwindcoffee", name: "Northwind Coffee" }],
+  linkedin: [
+    { network: "linkedin", handle: "maya-chen", name: "Maya Chen" },
+    { network: "linkedin", handle: "northwind-coffee-roasters", name: "Northwind Coffee Roasters" },
+  ],
+  x: [{ network: "x", handle: "northwindwholesale", name: "Northwind Wholesale" }],
+  tiktok: [{ network: "tiktok", handle: "northwind.coffee", name: "Northwind Coffee" }],
+  youtube: [{ network: "youtube", handle: "northwindroasters", name: "Northwind Roasters" }],
+};
+
+/** A small SVG "photo" so library thumbnails render offline. */
+function svgThumb(label: string, a: string, b: string, w = 1080, h = 1350): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><circle cx="${w * 0.68}" cy="${h * 0.36}" r="${Math.min(w, h) * 0.22}" fill="rgba(255,255,255,0.18)"/><text x="${w * 0.08}" y="${h * 0.9}" font-family="Inter, sans-serif" font-size="${Math.round(w / 14)}" fill="rgba(255,255,255,0.92)">${label}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function asset(id: string, kind: MediaAsset["kind"], mime: string, url: string, name: string, extra: Partial<MediaAsset> = {}, hoursAgo = 24): MediaAsset {
+  const a: MediaAsset = {
+    id,
+    url,
+    kind,
+    mime,
+    bytes: extra.bytes ?? 1_200_000,
+    width: extra.width ?? null,
+    height: extra.height ?? null,
+    durationSeconds: extra.durationSeconds ?? null,
+    originalName: name,
+    alt: extra.alt ?? null,
+    createdAt: ago(hoursAgo),
+    media: { kind, url, mime },
+  };
+  a.media = {
+    kind,
+    url,
+    mime,
+    bytes: a.bytes,
+    assetId: id,
+    ...(a.width ? { width: a.width } : {}),
+    ...(a.height ? { height: a.height } : {}),
+    ...(a.durationSeconds ? { durationSeconds: a.durationSeconds } : {}),
+    ...(a.alt ? { alt: a.alt } : {}),
+  };
+  return a;
+}
+
+const mediaLibrary: MediaAsset[] = [
+  asset("med_pour", "image", "image/jpeg", svgThumb("The pour", "#6b3f1d", "#d9a066"), "pour.jpg", { width: 1080, height: 1350, bytes: 2_400_000, alt: "A barista pouring a rosetta into a flat white" }, 20),
+  asset("med_pearl", "image", "image/jpeg", svgThumb("Pearl café", "#24414f", "#8fb3a8", 1600, 1067), "pearl-cafe.jpg", { width: 1600, height: 1067, bytes: 3_100_000, alt: "Morning light in the Pearl café" }, 52),
+  asset("med_roast", "video", "video/mp4", svgThumb("Roast day", "#3d1f12", "#c2562b", 1080, 1920), "roast-day.mp4", { width: 1080, height: 1920, durationSeconds: 42, bytes: 48_000_000 }, 75),
+  asset("med_menu", "document", "application/pdf", "", "wholesale-menu-fall.pdf", { bytes: 860_000 }, 120),
+];
+
+function kindOfFile(file: File): MediaAsset["kind"] | null {
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return "document";
+  if (file.type === "image/gif") return "gif";
+  if (/^image\/(jpeg|png|webp)$/.test(file.type)) return "image";
+  if (/^video\/(mp4|quicktime|webm)$/.test(file.type) || /\.(mp4|mov|webm)$/i.test(file.name)) return "video";
+  return null;
+}
+
+function probeImage(url: string): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
+
+function probeVideo(url: string): Promise<{ width: number; height: number; duration: number } | null> {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.muted = true;
+    v.onloadedmetadata = () => resolve({ width: v.videoWidth, height: v.videoHeight, duration: v.duration });
+    v.onerror = () => resolve(null);
+    v.src = url;
+  });
+}
+
+/** Simulated upload: progress ticks over a second or two, then the file joins this tab's library. */
+export function fixtureUpload(file: File, onProgress: (p: number) => void, alt?: string): { done: Promise<MediaAsset>; abort: () => void } {
+  let timer: number | null = null;
+  let rejectFn: ((e: unknown) => void) | null = null;
+  const done = new Promise<MediaAsset>((resolve, reject) => {
+    rejectFn = reject;
+    const kind = kindOfFile(file);
+    if (!kind) {
+      window.setTimeout(() => reject(new ApiError(400, "invalid", "unsupported file: upload JPEG, PNG, GIF, WebP, MP4, MOV, WebM or PDF")), 300);
+      return;
+    }
+    const cap = kind === "video" ? 1024e6 : kind === "document" ? 100e6 : 30e6;
+    if (file.size > cap) {
+      window.setTimeout(() => reject(new ApiError(400, "invalid", `file is ${Math.round(file.size / 1e6)}MB; the limit for ${kind} is ${Math.round(cap / 1e6)}MB`)), 300);
+      return;
+    }
+    const total = Math.min(2600, 700 + file.size / 4000);
+    const started = Date.now();
+    timer = window.setInterval(async () => {
+      const p = Math.min(1, (Date.now() - started) / total);
+      onProgress(p);
+      if (p < 1) return;
+      if (timer !== null) window.clearInterval(timer);
+      timer = null;
+      const url = URL.createObjectURL(file);
+      let width: number | null = null;
+      let height: number | null = null;
+      let durationSeconds: number | null = null;
+      if (kind === "image" || kind === "gif") {
+        const d = await probeImage(url);
+        width = d?.width ?? null;
+        height = d?.height ?? null;
+      } else if (kind === "video") {
+        const d = await probeVideo(url);
+        width = d?.width || null;
+        height = d?.height || null;
+        durationSeconds = d && Number.isFinite(d.duration) ? Math.round(d.duration * 10) / 10 : null;
+      }
+      state.createdSeq += 1;
+      const a = asset(`med_up_${state.createdSeq}`, kind, file.type || "application/octet-stream", url, file.name, { width, height, durationSeconds, bytes: file.size, alt: alt ?? null }, 0);
+      mediaLibrary.unshift(a);
+      resolve(clone(a));
+    }, 90);
+  });
+  return {
+    done,
+    abort: () => {
+      if (timer !== null) window.clearInterval(timer);
+      timer = null;
+      rejectFn?.(new ApiError(0, "aborted", "Upload cancelled."));
+    },
+  };
+}
+
+function integrationsApi() {
+  return {
+    connectStart: async (connector: string, input: ConnectStartInput): Promise<OAuthStart> => {
+      await delay(null, 350);
+      const c = connectorsSeed.find((k) => k.name === connector);
+      if (!c) throw new ApiError(404, "not_found", "No such connector.");
+      if (!c.configured) throw new ApiError(503, "unavailable", `${networkLabel(c.networks[0] ?? connector)} isn't set up on this server`);
+      if (c.inputs?.length) {
+        for (const field of c.inputs) {
+          if (!input.inputs?.[field.key]?.trim()) throw new ApiError(400, "invalid", `${field.label} is required`, { reason: `Enter ${field.label.toLowerCase()} first.` });
+        }
+      }
+      // Fixture mode round-trips locally: the "network" sends the browser straight back as if it had said yes.
+      const server = input.inputs?.instance?.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      if (server === "fail.example") return { authorizeUrl: `/?connect_error=access_denied&connector=${encodeURIComponent(connector)}`, expiresAt: ahead(0.2) };
+      const finds =
+        OAUTH_FINDS[connector] ??
+        (connector === "mastodon"
+          ? [{ network: "mastodon" as Network, handle: `northwind@${server || "mastodon.social"}`, name: "Northwind Coffee" }]
+          : [{ network: (input.network ?? c.networks[0]!) as Network, handle: "northwindcoffee", name: "Northwind Coffee" }]);
+      const list = currentAccounts();
+      const added: string[] = [];
+      for (const f of finds) {
+        if (input.network && f.network !== input.network && connector !== "meta") continue;
+        const existing = list.find((a) => a.network === f.network && a.handle === f.handle);
+        if (existing) {
+          existing.status = "active";
+          existing.hasCredentials = true;
+        } else {
+          state.createdSeq += 1;
+          list.push(acct(`acc_${f.network}_${Date.now().toString(36)}_${state.createdSeq}`, f.network, f.handle, f.name, connector, "active", null));
+        }
+        added.push(f.handle);
+      }
+      save();
+      return { authorizeUrl: `/?connected=${encodeURIComponent(connector)}&handle=${encodeURIComponent(added.join(","))}&count=${added.length}`, expiresAt: ahead(0.2) };
+    },
+
+    connectCredentials: async (connector: string, input: ConnectCredentialsInput): Promise<Account[]> => {
+      await delay(null, 600);
+      const c = connectorsSeed.find((k) => k.name === connector);
+      if (!c) throw new ApiError(404, "not_found", "No such connector.");
+      for (const field of c.inputs ?? []) {
+        if (!input.inputs[field.key]?.trim()) throw new ApiError(400, "invalid", "connect failed", { reason: `Enter ${field.label.toLowerCase()}.` });
+      }
+      const values = Object.values(input.inputs).map((v) => v.trim());
+      if (values.includes("fail")) {
+        const reason =
+          connector === "bluesky"
+            ? "Bluesky said the handle or app password is wrong."
+            : connector === "telegram"
+              ? "Telegram didn't accept that bot token, or the bot isn't an admin of that channel."
+              : "Discord didn't accept that webhook URL.";
+        throw new ApiError(400, "invalid", "connect failed", { reason });
+      }
+      let handle: string;
+      let name: string | null = null;
+      if (connector === "bluesky") {
+        const h = (input.inputs.identifier ?? "").replace(/^@/, "");
+        handle = h.includes(".") ? h : `${h}.bsky.social`;
+      } else if (connector === "telegram") {
+        handle = (input.inputs.chatId ?? "channel").replace(/^@/, "");
+        name = "Northwind Coffee updates";
+      } else {
+        handle = "northwind-community";
+        name = "#announcements";
+      }
+      const list = currentAccounts();
+      if (list.some((a) => a.network === input.network && a.handle === handle && a.status === "active")) {
+        throw new ApiError(409, "conflict", `That ${networkLabel(input.network)} account is already connected.`);
+      }
+      const existing = list.find((a) => a.network === input.network && a.handle === handle);
+      if (existing) {
+        existing.status = "active";
+        existing.hasCredentials = true;
+        save();
+        return clone([existing]);
+      }
+      state.createdSeq += 1;
+      const a = acct(`acc_${input.network}_${Date.now().toString(36)}_${state.createdSeq}`, input.network, handle, name ?? handle, connector, "active", null);
+      list.push(a);
+      save();
+      return clone([a]);
+    },
+
+    accountMetrics: async (id: string, _metric: string): Promise<AccountMetrics> => {
+      await delay(null, 200 + (id.length % 5) * 60);
+      const latest = FOLLOWERS[id];
+      if (latest === undefined) return { latest: {}, series: [] };
+      const series = Array.from({ length: 30 }, (_, i) => ({ value: Math.round(latest * (0.93 + (0.07 * i) / 29)), observedAt: ago(24 * (29 - i)) }));
+      return { latest: { followers_total: latest }, series };
+    },
+
+    media: async (): Promise<MediaAsset[]> => delay(mediaLibrary, 180),
+
+    deleteMedia: async (id: string): Promise<void> => {
+      await delay(null, 200);
+      const idx = mediaLibrary.findIndex((m) => m.id === id);
+      if (idx < 0) throw new ApiError(404, "not_found", "No such file.");
+      mediaLibrary.splice(idx, 1);
+    },
+
+    reply: async (activityId: string, input: ReplyInput): Promise<PostDetail> => {
+      await delay(null, 520);
+      const item = state.feed.find((a) => a.id === activityId);
+      if (!item) throw new ApiError(404, "not_found", "That item is gone.");
+      const account = currentAccounts().find((a) => a.id === item.socialAccountId);
+      if (!account) throw new ApiError(400, "invalid", "That item didn't come in through a connected account.");
+      if (account.status !== "active") throw new ApiError(409, "conflict", `@${account.handle} needs reconnecting before it can reply.`);
+      const decision = checkPolicy({ variants: [{ network: account.network, text: input.text }] });
+      // Replies from people go out unless a red line says otherwise; a long reply goes to an approver in fixtures.
+      const verdict = decision.verdict === "allow" && input.text.length > 240 ? "require_approval" : decision.verdict;
+      const status: PostStatus = verdict === "block" ? "blocked" : verdict === "require_approval" ? "pending_approval" : "scheduled";
+      state.createdSeq += 1;
+      const id = `p_reply_${state.createdSeq}`;
+      const now = iso(Date.now());
+      const post: Post = {
+        ...basePost,
+        id,
+        status,
+        title: null,
+        body: input.text,
+        media: [],
+        scheduledAt: status === "scheduled" ? now : null,
+        actionClass: "reply",
+        createdBy: currentMe().actor,
+        trendTopicId: null,
+        trendStageAtCreation: null,
+        trendForecastId: null,
+        disclosure: { aiAssisted: !!input.aiAssisted, humanReviewed: true },
+        evidence: [{ kind: "activity", ref: activityId }],
+        policyDecision: { ...decision, verdict },
+        createdAt: now,
+        updatedAt: now,
+      };
+      const item2: PostSummary = { post, variants: [variant(`${id}_v0`, id, account.id, account.network, input.text, { status: status === "blocked" ? "skipped" : "pending" })] };
+      if (status === "pending_approval") state.queue.push(item2);
+      else state.created.push(item2);
+      return clone({ post, variants: item2.variants, approvals: approvalsFor(item2) });
+    },
+
+    moderate: async (activityId: string, action: ModerateAction): Promise<{ ok: boolean; action: ModerateAction }> => {
+      await delay(null, 320);
+      const idx = state.feed.findIndex((a) => a.id === activityId);
+      if (idx < 0) throw new ApiError(404, "not_found", "That item is gone.");
+      if (action === "delete") {
+        if (currentWs().role !== "owner" && currentWs().role !== "approver") throw new ApiError(403, "forbidden", "Only owners and approvers can delete comments.");
+        state.feed.splice(idx, 1);
+      }
+      return { ok: true, action };
+    },
+  };
+}
+
 export const fixtureApi = {
-  me: () => delay(me),
+  me: () => delay(currentMe()),
   policy: () => delay(policy),
-  accounts: () => delay(accounts),
+  accounts: () => delay(currentAccounts()),
   streams: () => delay(streams),
 
   queue: () => delay(state.queue),
@@ -1021,46 +1722,13 @@ export const fixtureApi = {
 
   connectors: () => delay(connectorsSeed),
 
-  connectBluesky: async (input: ConnectBlueskyInput): Promise<Account> => {
-    await delay(null, 600);
-    const handle = input.identifier.trim().replace(/^@/, "");
-    if (!handle || !input.appPassword.trim()) {
-      throw new ApiError(400, "invalid", "Bluesky login failed", { reason: "Enter a handle and an app password." });
-    }
-    if (input.appPassword.trim() === "fail") {
-      throw new ApiError(400, "invalid", "Bluesky login failed", { reason: "Bluesky said the handle or app password is wrong (AuthenticationRequired)." });
-    }
-    if (state.accounts.some((a) => a.network === "bluesky" && a.handle === handle && a.status !== "disabled")) {
-      throw new ApiError(409, "conflict", "That Bluesky account is already connected.");
-    }
-    state.createdSeq += 1;
-    const account: Account = {
-      id: `acc_bsky_${state.createdSeq}`,
-      network: "bluesky",
-      externalId: `did:plc:fixture${state.createdSeq}`,
-      handle: handle.includes(".") ? handle : `${handle}.bsky.social`,
-      displayName: null,
-      connector: "bluesky",
-      status: "active",
-      hasCredentials: true,
-      lastIngestAt: null,
-      config: {},
-    };
-    state.accounts.push(account);
-    return clone(account);
-  },
-
-  /** Fixture mode round-trips locally: "X" sends the browser straight back as if it had said yes. */
-  connectXStart: async (): Promise<OAuthStart> => {
-    await delay(null, 300);
-    return { authorizeUrl: "/?connected=x&handle=northwind", expiresAt: iso(Date.now() + 10 * 60_000) };
-  },
-
   deleteAccount: async (id: string): Promise<void> => {
     await delay(null, 260);
-    const idx = state.accounts.findIndex((a) => a.id === id);
+    const list = currentAccounts();
+    const idx = list.findIndex((a) => a.id === id);
     if (idx < 0) throw new ApiError(404, "not_found", "No such account.");
-    state.accounts.splice(idx, 1);
+    list.splice(idx, 1);
+    save();
   },
 
   adapt: async (input: AdaptInput): Promise<AdaptResult> => {
@@ -1082,12 +1750,19 @@ export const fixtureApi = {
     await delay(null, 380);
     const issues: { code: string; message: string; socialAccountId: string; network: string }[] = [];
     const targets = input.variants.map((v) => {
-      const account = state.accounts.find((a) => a.id === v.socialAccountId);
+      const account = currentAccounts().find((a) => a.id === v.socialAccountId);
       if (!account) throw new ApiError(404, "not_found", "One of those accounts is gone.");
       if (account.status === "disabled") throw new ApiError(409, "conflict", `account ${account.handle} is disabled`);
       if (["instagram", "tiktok", "pinterest", "youtube"].includes(account.network) && !(v.media ?? []).length) {
         issues.push({ code: "media_required", message: `${account.network} requires at least one media item`, socialAccountId: account.id, network: account.network });
       }
+      const o = v.options ?? {};
+      if (["youtube", "reddit", "pinterest"].includes(account.network) && !o.title?.trim()) {
+        issues.push({ code: "title_required", message: `${account.network} requires a title`, socialAccountId: account.id, network: account.network });
+      }
+      if (account.network === "reddit" && !o.subreddit) issues.push({ code: "subreddit_required", message: "reddit requires a subreddit", socialAccountId: account.id, network: account.network });
+      if (account.network === "pinterest" && !o.boardId) issues.push({ code: "board_required", message: "pinterest requires a board", socialAccountId: account.id, network: account.network });
+      if (account.network === "tiktok" && !o.privacy) issues.push({ code: "privacy_required", message: "tiktok requires a privacy level", socialAccountId: account.id, network: account.network });
       return { v, account };
     });
     if (issues.length) throw new ApiError(400, "invalid", "variant validation failed", issues);
@@ -1146,6 +1821,9 @@ export const fixtureApi = {
 
   sources: () => delay(sourcesSeed),
   discoveries: (limit: number) => delay(discoveriesSeed.slice(0, limit)),
+
+  ...peopleApi(),
+  ...integrationsApi(),
 };
 
 /** A pretend live stream: one new mention arrives every 40 seconds. */
