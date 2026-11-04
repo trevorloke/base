@@ -1,20 +1,23 @@
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
+import { getCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { and, desc, eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { z, ZodError } from "zod";
 import { approvalDiffs, postOutcomes, posts, postVariants } from "@starsign/db";
-import { CoreError, type Starsign, type Principal } from "@starsign/core";
+import { CoreError, type Starsign, type Principal, type ResolvedSession } from "@starsign/core";
 import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
 import { gatePost } from "@starsign/policy";
 import { adaptForNetwork, runPrompt, type BrandContext, type ModelGateway } from "@starsign/ai";
 import type { SourceAdapter } from "@starsign/sources";
 import { Network as NetworkEnum, NETWORK_LIMITS } from "@starsign/schema";
+import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, registerAuthRoutes, SESSION_COOKIE, setSessionCookie } from "./auth-routes.ts";
 
 export const VERSION = "0.1.0";
 
-type Env = { Variables: { principal: Principal } };
+/** `session` is set only for cookie-authenticated requests (a signed-in person); `principal` for every authenticated one. */
+export type Env = { Variables: { principal: Principal; session?: ResolvedSession } };
 
 export interface AppOptions {
   /** Slug of a workspace that unauthenticated requests act on, as human owner "dev". Dev only. */
@@ -109,7 +112,10 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
 
   app.get("/api/health", (c) => c.json({ ok: true, version: VERSION, db: m.ctx.db.constructor.name.toLowerCase().includes("pglite") ? "pglite" : "postgres" }));
 
+  // Who is asking: a bearer API key (agents, automation), else the starsign_session cookie (people), else the dev workspace.
+  const cookieOpts = { publicUrl: opts.publicUrl };
   const auth = createMiddleware<Env>(async (c, next) => {
+    if (isPublicAuthRoute(c.req.method, c.req.path)) return next();
     const header = c.req.header("authorization");
     const key = header?.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : undefined;
     if (!key && c.req.path.endsWith("/feed/stream")) {
@@ -128,6 +134,23 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
       c.set("principal", p);
       return next();
     }
+    const cookie = getCookie(c, SESSION_COOKIE);
+    if (cookie) {
+      const s = await m.auth.resolveSession(cookie);
+      if (!s) {
+        clearSessionCookie(c, cookieOpts);
+        return c.json(err("unauthorized", "session expired or signed out"), 401);
+      }
+      // Cookies ride along on cross-site requests; a custom header cannot be sent cross-site without CORS approval.
+      if (isWrite(c.req.method) && !csrfOk(c)) return c.json(err("forbidden", `cookie-authenticated writes must send ${CSRF_HEADER}: 1`), 403);
+      if (s.refreshed) setSessionCookie(c, cookie, cookieOpts);
+      c.set("session", s);
+      if (s.principal) c.set("principal", s.principal);
+      else if (!allowedWithoutWorkspace(c.req.method, c.req.path)) {
+        return c.json(err("forbidden", "you are not a member of any workspace; create one or accept an invite"), 403);
+      }
+      return next();
+    }
     if (opts.devWorkspace) {
       const ws = await m.workspaces.bySlug(opts.devWorkspace);
       if (ws) {
@@ -135,9 +158,12 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
         return next();
       }
     }
-    return c.json(err("unauthorized", "missing api key"), 401);
+    return c.json(err("unauthorized", "sign in or send an API key"), 401);
   });
   app.use("/v1/*", auth);
+
+  // ---------------------------------------------------------------- people: sign-in, sessions, teams
+  registerAuthRoutes(app, m, { publicUrl: opts.publicUrl });
 
   // ---------------------------------------------------------------- identity & workspace
   app.get("/v1/me", async (c) => {

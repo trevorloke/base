@@ -36,6 +36,9 @@ export const users = pgTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name"),
+  /** scrypt, encoded with its parameters (see core AuthService). Null: the person has not set a password (cannot sign in). */
+  passwordHash: text("password_hash"),
+  emailVerifiedAt: ts("email_verified_at"),
   createdAt: now(),
 });
 
@@ -68,6 +71,59 @@ export const apiKeys = pgTable(
     createdAt: now(),
   },
   (t) => [index("api_keys_ws").on(t.workspaceId)],
+);
+
+// ---------------------------------------------------------------- people: sessions, invites, password resets
+
+/** Signed-in browser sessions. `id` is sha256 of the cookie token; the token itself is never stored. */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    currentWorkspaceId: text("current_workspace_id").references(() => workspaces.id),
+    createdAt: now(),
+    lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
+    /** Sliding: pushed out 30 days whenever the session is used. */
+    expiresAt: ts("expires_at").notNull(),
+    revokedAt: ts("revoked_at"),
+    userAgent: text("user_agent"),
+    ip: text("ip"),
+  },
+  (t) => [index("sessions_user").on(t.userId, t.lastSeenAt)],
+);
+
+/** Workspace invites. Single use, seven days. Only the token's sha256 is stored. */
+export const invites = pgTable(
+  "invites",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    email: text("email").notNull(),
+    role: text("role").$type<"owner" | "approver" | "editor" | "viewer">().notNull(),
+    /** user id of the owner who sent it */
+    invitedBy: text("invited_by").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    acceptedAt: ts("accepted_at"),
+    acceptedBy: text("accepted_by"),
+    createdAt: now(),
+  },
+  (t) => [index("invites_ws").on(t.workspaceId, t.createdAt)],
+);
+
+/** Password reset tokens. Single use, one hour. Only the token's sha256 is stored. */
+export const passwordResets = pgTable(
+  "password_resets",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    userId: text("user_id").notNull().references(() => users.id),
+    expiresAt: ts("expires_at").notNull(),
+    usedAt: ts("used_at"),
+    createdAt: now(),
+  },
+  (t) => [index("password_resets_user").on(t.userId)],
 );
 
 // ---------------------------------------------------------------- accounts

@@ -14,15 +14,20 @@ what moved the outcome. It gets smarter with every brand on it.
 
 ```bash
 pnpm install
-pnpm seed            # demo workspace with a week of history; prints two API keys
+pnpm seed            # demo workspace with a week of history; prints a sign-in (owner@acme.test + password) and two API keys
 pnpm dev:api         # http://localhost:4000  (embedded PGlite at ./.pglite, in-process scheduler)
-pnpm dev:web         # http://localhost:5173  paste the owner key
+pnpm dev:web         # http://localhost:5173  sign in with the printed email and password
 STARSIGN_API_KEY=<agent key> pnpm dev:mcp     # stdio MCP server for Claude / ChatGPT
 pnpm test            # 70+ tests, no network, embedded Postgres
 pnpm typecheck
 ```
 
-Set `STARSIGN_DEV_WORKSPACE=acme` to skip the key locally. Set `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL`
+People sign in with email and password (sessions, teams with owner/approver/editor/viewer roles, invites, password
+reset, and workspace switching for agencies running several brands). The first person on a fresh deployment can sign up;
+after that it is invite-only unless `STARSIGN_ALLOW_SIGNUP=1`. Set `RESEND_API_KEY` and `MAIL_FROM` to email invites and
+reset links. API keys remain, for agents and automation (the MCP server, operators, scripts); people no longer paste them.
+
+Set `STARSIGN_DEV_WORKSPACE=acme` to skip signing in locally. Set `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL`
 for durable queues; then run `pnpm dev:workers` and `pnpm dev:operators` as separate processes. `ANTHROPIC_API_KEY`
 turns the operators' model calls on (`STARSIGN_FAKE_AI=1` runs them with a fake gateway).
 

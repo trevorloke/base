@@ -11,7 +11,7 @@ the workspace's autonomy dial. Every write is attributed to that actor in the le
 Dev convenience: when the server runs with `STARSIGN_DEV_WORKSPACE=<slug>` and a request has no bearer, it acts as the
 human owner `dev` of that workspace. Never set in production.
 
-Errors: `{ "error": { "code": "not_found|forbidden|invalid|conflict|policy_blocked|unavailable|unauthorized", "message": "...", "details": ... } }`
+Errors: `{ "error": { "code": "not_found|forbidden|invalid|conflict|policy_blocked|unavailable|unauthorized|rate_limited", "message": "...", "details": ... } }`
 with statuses 404 / 403 / 400 / 409 / 422 / 503 / 401. A malformed JSON body is `400 invalid`. A `422 policy_blocked`
 carries `details: { violations: Violation[] }`.
 
@@ -152,7 +152,7 @@ current workspace with their member role.
 - `GET /v1/auth/session` → `{ user: { id, email, name }, workspaces: { id, slug, name, role }[], currentWorkspaceId }` or 401.
 - `POST /v1/auth/switch` `{ workspaceId }` → same shape; must be a member.
 - `POST /v1/auth/forgot` `{ email }` → 204 always (sends a reset link when email is configured: RESEND_API_KEY + MAIL_FROM).
-- `POST /v1/auth/reset` `{ token, password }` → 204.
+- `POST /v1/auth/reset` `{ token, password }` → 204. Reset links: `${STARSIGN_PUBLIC_URL}/?reset=<token>` (one hour, single use; signs the user out everywhere).
 - `POST /v1/workspaces` `{ name, slug?, timezone? }` → `201 Workspace` (any signed-in user; creator is owner). For agencies adding a client.
 - `GET /v1/members` → `{ id, userId, email, name, role, createdAt }[]`
 - `POST /v1/invites` `{ email, role }` (owner) → `201 { inviteUrl, expiresAt }` (also emailed when configured). Invite links: `${STARSIGN_PUBLIC_URL}/?invite=<token>`.

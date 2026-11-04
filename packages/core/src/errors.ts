@@ -1,4 +1,4 @@
-export type CoreErrorCode = "not_found" | "forbidden" | "invalid" | "conflict" | "policy_blocked" | "unavailable";
+export type CoreErrorCode = "not_found" | "unauthorized" | "forbidden" | "invalid" | "conflict" | "policy_blocked" | "rate_limited" | "unavailable";
 
 export class CoreError extends Error {
   constructor(
@@ -13,6 +13,8 @@ export class CoreError extends Error {
     switch (this.code) {
       case "not_found":
         return 404;
+      case "unauthorized":
+        return 401;
       case "forbidden":
         return 403;
       case "invalid":
@@ -21,6 +23,8 @@ export class CoreError extends Error {
         return 409;
       case "policy_blocked":
         return 422;
+      case "rate_limited":
+        return 429;
       case "unavailable":
         return 503;
     }

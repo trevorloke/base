@@ -12,3 +12,21 @@ export { compareArms, type Readout, type Comparison, type ArmReadout } from "./s
 export * from "./media/storage.ts";
 export * from "./media/probe.ts";
 export { MEDIA_LIMITS, type MediaRow } from "./services/media.ts";
+export {
+  AttemptLimiter,
+  hashPassword,
+  verifyPassword,
+  needsRehash,
+  resendMailerFromEnv,
+  SCRYPT_PARAMS,
+  SESSION_TTL_MS,
+  INVITE_TTL_MS,
+  RESET_TTL_MS,
+  type AuthOptions,
+  type Mailer,
+  type MailMessage,
+  type MemberView,
+  type RequestMeta,
+  type ResolvedSession,
+  type SessionView,
+} from "./services/auth.ts";

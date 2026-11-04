@@ -2,8 +2,9 @@
  * Seed a demo workspace with a week of history so every panel has something to show:
  * accounts, red lines, streams, topics with multi-source trend points and forecasts, posts that
  * went out (with captured outcomes), a queue of proposals waiting on a human, feed items, alerts, a brief.
- * Deterministic. Safe to re-run: it mints a fresh API key each time and skips the rest if the workspace exists.
+ * Deterministic. Safe to re-run: it mints a fresh API key and a fresh sign-in password each time and skips the rest if the workspace exists.
  */
+import { randomBytes } from "node:crypto";
 import { createDb, migrate } from "@starsign/db";
 import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
 import { InMemoryScheduler, Starsign, SecretBox, type Principal } from "@starsign/core";
@@ -32,10 +33,21 @@ const mock = new MockConnector();
 mock.now = now;
 const m = new Starsign({ handle, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: SecretBox.fromEnv(), now });
 
+/** The demo's sign-in person: an owner of the seeded workspace with a fresh random password (printed, never stored in clear). */
+const SIGN_IN_EMAIL = process.env.SEED_EMAIL ?? `owner@${SLUG}.test`;
+async function signInOwner(workspaceId: string): Promise<{ email: string; password: string }> {
+  const password = randomBytes(12).toString("base64url"); // 16 characters
+  const user = await m.workspaces.ensureUser(SIGN_IN_EMAIL, "Demo Owner");
+  await m.auth.setPassword(user.id, password);
+  if ((await m.workspaces.memberRole(workspaceId, user.id)) !== "owner") await m.workspaces.addMember(workspaceId, user.id, "owner");
+  return { email: SIGN_IN_EMAIL, password };
+}
+
 const existing = await m.workspaces.bySlug(SLUG);
 if (existing) {
   const { secret } = await m.workspaces.createApiKey({ workspaceId: existing.id, name: `seed key ${new Date().toISOString()}`, actorType: "human", actorId: "u_trevor", role: "owner" });
-  console.log(`workspace "${SLUG}" already seeded. New owner API key:\n  ${secret}`);
+  const login = await signInOwner(existing.id);
+  console.log(`workspace "${SLUG}" already seeded.\n  Sign in:            ${login.email} / ${login.password}  (new password)\n  New owner API key:  ${secret}`);
   await handle.close();
   process.exit(0);
 }
@@ -278,15 +290,17 @@ await m.ops.saveBrief(ws.id, { type: "operator", id: "analyst" }, { periodStart:
 
 const ownerKey = await m.workspaces.createApiKey({ workspaceId: ws.id, name: "trevor (owner)", actorType: "human", actorId: "u_trevor", role: "owner" });
 const agentKey = await m.workspaces.createApiKey({ workspaceId: ws.id, name: "claude (mcp)", actorType: "mcp", actorId: "claude" });
+const login = await signInOwner(ws.id);
 console.log(`
 Seeded workspace "${ws.slug}" (${ws.name}) with ${history.length} published posts, 3 proposals waiting, ${topicsSpec.length} topics, ${voices.length} feed items.
 
-Owner API key (web app, CLI):   ${ownerKey.secret}
+Sign in (web app):              ${login.email} / ${login.password}
+Owner API key (CLI, scripts):   ${ownerKey.secret}
 Agent API key (MCP server):     ${agentKey.secret}
 
 Next:
-  pnpm dev:api                      # http://localhost:4000  (or set STARSIGN_DEV_WORKSPACE=${ws.slug} to skip the key)
-  pnpm dev:web                      # paste the owner key when asked
+  pnpm dev:api                      # http://localhost:4000  (or set STARSIGN_DEV_WORKSPACE=${ws.slug} to skip signing in)
+  pnpm dev:web                      # sign in with the email and password above
   STARSIGN_API_KEY=<agent key> pnpm dev:mcp
 `);
 await handle.close();

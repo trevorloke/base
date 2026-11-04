@@ -56,7 +56,7 @@ forecast    pure: resample → EWMA kinematics → stage → damped Holt → ban
 db          drizzle schema + SQL migration + client (PGlite in dev/tests, Postgres in prod)
 ledger      EventStore (raw + ledger), OutcomeScheduler, ApprovalDiffs, prefixed ids
 connectors  Connector interface, per-network validation, registry, mock, bluesky, x, zernio
-core        Starsign: workspaces/accounts/policy/posts/approvals/publishing/listening/metrics/trends/ops/export
+core        Starsign: auth/workspaces/accounts/policy/posts/approvals/publishing/listening/metrics/trends/ops/export
 ai          ModelGateway (Anthropic SDK) with versioned prompts, pricing, FakeGateway
 ```
 
@@ -72,6 +72,33 @@ Dependency direction is strictly downward: `schema` ← `policy`/`forecast`/`db`
   Direct core access, same trust level as workers.
 - **mcp**: agents' front door, over the HTTP API with an agent key; proposals land in the approval queue.
 - **web**: the room.
+
+## People and sessions
+
+Two kinds of credentials reach `/v1`. **API keys** (`Authorization: Bearer star_...`) are for agents and automation:
+an MCP client, an operator, a script. **Sessions** are for people: email + password sign-in (`AuthService`,
+`packages/core/src/services/auth.ts`; routes in `apps/api/src/auth-routes.ts`) sets an HttpOnly, SameSite=Lax
+`starsign_session` cookie. Both resolve to the same `Principal`; a session's is
+`{ workspaceId: currentWorkspaceId, actor: { type: "human", id: userId }, role: <member role> }`, with the role read
+from `members` on every request, so a role change or removal applies immediately.
+
+- Passwords: scrypt (N=2^15, r=8, p=1, 64-byte key, per-user salt), stored as `scrypt$N$r$p$salt$key` so the cost can
+  rise later (hashes are upgraded on the next sign-in). Compared in constant time; unknown emails burn the same scrypt
+  time and get the same 401 as a wrong password.
+- Tokens: sessions, invites and password resets are 32 random bytes handed out once; only their sha256 is stored
+  (`sessions.id`, `invites.token_hash`, `password_resets.token_hash`). Sessions slide to 30 days on use, invites last
+  7 days, resets 1 hour; invites and resets are single use; a reset revokes every session of that user.
+- CSRF: cookie-authenticated writes must carry `x-starsign-csrf: 1` (a header a cross-site page cannot add without CORS
+  approval); session-creating public routes accept only `application/json`. Bearer requests need neither.
+- Teams: every workspace has at least one owner (the last owner cannot be demoted or removed). Owners invite by email;
+  accepting requires the invite's email (signed in as it, its password, or a new password for a new person). Any
+  signed-in person can create a workspace and owns it, which is how an agency adds a client; `POST /v1/auth/switch` moves
+  the session between workspaces the person belongs to. Membership changes, invites and sign-ups go to the ledger.
+- Sign-up: the first person on a deployment always; afterwards only with `STARSIGN_ALLOW_SIGNUP=1` (otherwise invites).
+- Mail: Resend over HTTPS when `RESEND_API_KEY` + `MAIL_FROM` are set; otherwise invite links are returned to the owner
+  and reset links go to the API log outside production.
+- Limits: 5 failed sign-ins per email per 15 minutes, then 429. The counter is **in memory, per process**: several API
+  replicas each keep their own and a restart clears it. Put a shared limiter in front if that matters.
 
 ## Adding a connector
 
@@ -96,3 +123,4 @@ everything it proposes. If it needs a new prompt, add one to `packages/ai/src/pr
 7. Role gates are for humans; agent keys never pass them. Agents act only through the autonomy dial, on their own posts.
 8. Connector resolution is strict and the mock connector never runs in production: a "published" post always touched a network.
 9. API keys never appear in URLs; the live stream uses single-use, sixty-second tokens.
+10. No password, session, invite or reset token is stored in a recoverable form; cookie writes need the CSRF header.
