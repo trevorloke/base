@@ -2,7 +2,7 @@ import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Netwo
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, downloadMedia, isAfter, isoSeconds, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
-import type { AccountRef, AuthRefresh, Connector, ConnectorCapabilities, PublishInput, PublishResult, ValidationIssue } from "./types.ts";
+import type { AccountRef, AuthRefresh, Connector, ConnectorCapabilities, MediaFetcher, ModerationInput, PublishInput, PublishResult, ValidationIssue } from "./types.ts";
 import { ConnectorError } from "./types.ts";
 
 /** OAuth 2.0 user-context credentials for one X account. `userId` is the numeric X user id. */
@@ -26,6 +26,12 @@ export interface XConnectorOptions {
   now?: () => Date;
   /** Upper bound on pages (100 tweets each) walked per timeline; each page costs money. */
   maxPages?: number;
+  /** Bytes per APPEND segment in chunked upload (default 4 MiB; X allows up to 5 MB per segment). */
+  chunkBytes?: number;
+  /** How many STATUS checks to make while X processes a video before giving up with a retryable error. */
+  maxProcessingChecks?: number;
+  /** Injectable sleep so tests do not wait on check_after_secs. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /** The parts of X's v2 tweet object we read. */
@@ -106,8 +112,20 @@ function xStatusOf(err: unknown): number | undefined {
  * rotates refresh tokens and the new pair has to be persisted; on 401 it throws an auth error and
  * core calls refreshAuth() explicitly.
  */
-/** Scopes a Starsign X account needs: read and write posts, read the user, upload images, refresh without the user. */
-export const X_OAUTH_SCOPES = ["tweet.read", "tweet.write", "users.read", "media.write", "offline.access"];
+/**
+ * Scopes a Starsign X account needs: read and write posts, read the user, upload media, like/unlike,
+ * hide replies, refresh without the user.
+ */
+export const X_OAUTH_SCOPES = ["tweet.read", "tweet.write", "users.read", "media.write", "like.write", "tweet.moderate.write", "offline.access"];
+
+/** X polls: 2 to 4 options of at most 25 characters, open 5 minutes to 7 days. */
+const X_POLL = { minOptions: 2, maxOptions: 4, maxOptionChars: 25, minMinutes: 5, maxMinutes: 10080 } as const;
+/** Media items that went up for an idempotency key, so a retry after "still processing" polls instead of re-uploading. */
+interface UploadedMedia {
+  id: string;
+  /** Video and GIF uploads are processed asynchronously and must reach "succeeded" before a tweet can use them. */
+  async: boolean;
+}
 
 export class XConnector implements Connector {
   readonly connectMethod = "oauth" as const;
@@ -184,8 +202,14 @@ export class XConnector implements Connector {
   private readonly fetchImpl: FetchLike | undefined;
   private readonly now: () => Date;
   private readonly maxPages: number;
+  private readonly chunkBytes: number;
+  private readonly maxProcessingChecks: number;
+  private readonly sleep: (ms: number) => Promise<void>;
   private readonly idempotency = new IdempotencyCache<PublishResult>();
   private readonly progress = new Map<string, string[]>();
+  private readonly uploaded = new Map<string, UploadedMedia[]>();
+  /** Set by core at boot; falls back to downloading `media.url`. */
+  media?: MediaFetcher;
 
   constructor(opts: XConnectorOptions = {}) {
     this.clientId = opts.clientId;
@@ -195,17 +219,28 @@ export class XConnector implements Connector {
     this.fetchImpl = opts.fetch;
     this.now = opts.now ?? (() => new Date());
     this.maxPages = opts.maxPages ?? 5;
+    this.chunkBytes = opts.chunkBytes ?? 4 * 1024 * 1024;
+    this.maxProcessingChecks = opts.maxProcessingChecks ?? 30;
+    this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   }
 
   capabilities(): ConnectorCapabilities {
-    return { publish: true, fetchActivity: true, fetchMetrics: true, meteredReads: true };
+    return { publish: true, fetchActivity: true, fetchMetrics: true, meteredReads: true, reply: true, moderate: true, accountMetrics: true, webhooks: false, video: true, kinds: ["post", "video", "poll"] };
   }
 
   validate(_account: AccountRef, input: PublishInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const motion = input.media.filter((m) => m.kind === "video" || m.kind === "gif");
     for (const m of input.media) {
-      if (m.kind === "video") issues.push({ code: "unsupported_media", message: "x connector v0 does not support video upload yet (chunked upload pending); publish with images only or drop the media" });
-      else if (m.kind === "document") issues.push({ code: "unsupported_media", message: "x has no document attachments" });
+      if (m.kind === "document") issues.push({ code: "unsupported_media", message: "x has no document attachments" });
+    }
+    // A tweet carries up to 4 images, or exactly one video or GIF.
+    if (motion.length > 0 && input.media.length > 1) issues.push({ code: "too_many_media", message: "x allows one video or GIF per tweet, and it cannot be mixed with images" });
+    const poll = input.options?.poll;
+    if (poll) {
+      if (input.media.length > 0) issues.push({ code: "unsupported_media", message: "x polls cannot carry media" });
+      if (poll.options.length < X_POLL.minOptions || poll.options.length > X_POLL.maxOptions) issues.push({ code: "too_many_media", message: `x polls take ${X_POLL.minOptions} to ${X_POLL.maxOptions} options (got ${poll.options.length})` });
+      for (const o of poll.options) if ([...o].length > X_POLL.maxOptionChars) issues.push({ code: "too_long", message: `x poll option "${o.slice(0, 30)}" is longer than ${X_POLL.maxOptionChars} characters` });
     }
     return issues;
   }
@@ -271,6 +306,51 @@ export class XConnector implements Connector {
     return { auth: next };
   }
 
+  /** Reply to a tweet (POST /2/tweets with reply.in_reply_to_tweet_id). */
+  async reply(account: AccountRef, input: { parentExternalId: string; text: string; idempotencyKey: string }): Promise<PublishResult> {
+    return this.idempotency.run(input.idempotencyKey, async () => {
+      const auth = parseAuth(account);
+      const res = await this.request<{ data?: { id?: string } }>(account, auth, "POST", "/2/tweets", { json: { text: input.text, reply: { in_reply_to_tweet_id: input.parentExternalId } }, creating: true });
+      const id = res.data?.id;
+      if (!id) throw new ConnectorError("x reply: response carried no tweet id", "unknown", false, res);
+      return { externalId: id, url: xTweetUrl(account.handle, id), raw: res };
+    });
+  }
+
+  /**
+   * like/unlike (POST/DELETE /2/users/:id/likes), hide/unhide a reply to one of our conversations
+   * (PUT /2/tweets/:id/hidden), delete our own tweet (DELETE /2/tweets/:id).
+   */
+  async moderate(account: AccountRef, input: ModerationInput): Promise<void> {
+    const auth = parseAuth(account);
+    const id = encodeURIComponent(input.externalId);
+    switch (input.action) {
+      case "like":
+        await this.request(account, auth, "POST", `/2/users/${auth.userId}/likes`, { json: { tweet_id: input.externalId }, creating: true });
+        return;
+      case "unlike":
+        await this.request(account, auth, "DELETE", `/2/users/${auth.userId}/likes/${id}`, { creating: true });
+        return;
+      case "hide":
+      case "unhide":
+        await this.request(account, auth, "PUT", `/2/tweets/${id}/hidden`, { json: { hidden: input.action === "hide" }, creating: true });
+        return;
+      case "delete":
+        await this.request(account, auth, "DELETE", `/2/tweets/${id}`, { creating: true });
+        return;
+    }
+  }
+
+  /** followers_total from GET /2/users/me?user.fields=public_metrics. Counts as one metered read. */
+  async fetchAccountMetrics(account: AccountRef): Promise<MetricInput[]> {
+    const auth = parseAuth(account);
+    const res = await this.request<{ data?: { public_metrics?: Record<string, number> } }>(account, auth, "GET", "/2/users/me", { query: { "user.fields": "public_metrics" } });
+    this.readsUsed += 1;
+    const followers = res.data?.public_metrics?.followers_count;
+    if (typeof followers !== "number") return [];
+    return [{ entityType: "social_account", entityId: account.id, metric: "followers_total", value: followers, observedAt: this.now().toISOString(), source: "x" }];
+  }
+
   // ---- publishing -------------------------------------------------------------------------
 
   private async publishSegments(account: AccountRef, auth: XAuth, input: PublishInput): Promise<PublishResult> {
@@ -278,7 +358,8 @@ export class XConnector implements Connector {
     const segments = [input.text, ...input.thread];
     // Segments already posted by an earlier, failed attempt are not posted again.
     const posted: string[] = this.progress.get(key) ?? [];
-    const mediaIds = posted.length === 0 ? await this.uploadImages(account, auth, input.media) : [];
+    const mediaIds = posted.length === 0 ? await this.prepareMedia(account, auth, key, input.media) : [];
+    const poll = input.options?.poll;
 
     try {
       for (let i = posted.length; i < segments.length; i++) {
@@ -286,6 +367,7 @@ export class XConnector implements Connector {
         const body: Record<string, unknown> = { text: segments[i] ?? "" };
         if (parent) body.reply = { in_reply_to_tweet_id: parent };
         if (i === 0 && mediaIds.length > 0) body.media = { media_ids: mediaIds };
+        if (i === 0 && poll && mediaIds.length === 0) body.poll = { options: poll.options, duration_minutes: Math.min(X_POLL.maxMinutes, Math.max(X_POLL.minMinutes, poll.durationMinutes)) };
         const res = await this.request<{ data?: { id?: string } }>(account, auth, "POST", "/2/tweets", { json: body, creating: true });
         const id = res.data?.id;
         if (!id) throw new ConnectorError("x publish: response carried no tweet id", "unknown", false, res);
@@ -306,6 +388,7 @@ export class XConnector implements Connector {
     const root = posted[0];
     if (!root) throw new ConnectorError("x publish: nothing to post", "rejected", false);
     this.progress.delete(key);
+    this.uploaded.delete(key);
     return {
       externalId: root,
       url: xTweetUrl(account.handle, root),
@@ -315,22 +398,79 @@ export class XConnector implements Connector {
     };
   }
 
-  /** v2 one-shot media upload; images and GIFs only, video needs the chunked INIT/APPEND/FINALIZE flow. */
-  private async uploadImages(account: AccountRef, auth: XAuth, media: Media[]): Promise<string[]> {
-    const ids: string[] = [];
-    for (const m of media) {
-      if (m.kind !== "image" && m.kind !== "gif") continue; // validate() already refused video/document
-      const { bytes, mime } = await downloadMedia(resolveFetch(this.fetchImpl), m);
-      const form = new FormData();
-      form.set("media", new Blob([bytes], { type: mime }), `upload.${mime.split("/")[1] ?? "bin"}`);
-      form.set("media_category", m.kind === "gif" ? "tweet_gif" : "tweet_image");
-      form.set("media_type", mime);
-      const res = await this.request<{ data?: { id?: string; media_key?: string } }>(account, auth, "POST", "/2/media/upload", { form, creating: true });
-      const id = res.data?.id ?? res.data?.media_key;
-      if (!id) throw new ConnectorError("x media upload: response carried no media id", "unknown", false, res);
-      ids.push(id);
+  /**
+   * Upload every attachment once per idempotency key and wait until X has processed the async ones.
+   * A retry after "still processing" re-checks the same media ids instead of uploading again.
+   */
+  private async prepareMedia(account: AccountRef, auth: XAuth, key: string, media: Media[]): Promise<string[]> {
+    let items = this.uploaded.get(key);
+    if (!items) {
+      items = [];
+      for (const m of media) {
+        if (m.kind === "document") continue; // validate() refuses documents
+        items.push(m.kind === "image" ? { id: await this.uploadSimple(account, auth, m), async: false } : { id: await this.uploadChunked(account, auth, m), async: true });
+        if (m.alt) await this.setAltText(account, auth, items[items.length - 1]!.id, m.alt);
+      }
+      this.uploaded.set(key, items);
     }
-    return ids;
+    for (const it of items) if (it.async) await this.waitForProcessing(account, auth, it.id);
+    return items.map((i) => i.id);
+  }
+
+  private async bytesOf(m: Media): Promise<{ bytes: Uint8Array; mime: string }> {
+    return this.media ? this.media.fetch(m) : downloadMedia(resolveFetch(this.fetchImpl), m);
+  }
+
+  /** v2 one-shot upload (POST /2/media/upload, multipart) for still images. */
+  private async uploadSimple(account: AccountRef, auth: XAuth, m: Media): Promise<string> {
+    const { bytes, mime } = await this.bytesOf(m);
+    const form = new FormData();
+    form.set("media", new Blob([bytes], { type: mime }), `upload.${mime.split("/")[1] ?? "bin"}`);
+    form.set("media_category", "tweet_image");
+    form.set("media_type", mime);
+    const res = await this.request<{ data?: { id?: string; media_key?: string } }>(account, auth, "POST", "/2/media/upload", { form, creating: true });
+    const id = res.data?.id ?? res.data?.media_key;
+    if (!id) throw new ConnectorError("x media upload: response carried no media id", "unknown", false, res);
+    return id;
+  }
+
+  /**
+   * v2 chunked upload for video and GIF: initialize → append segments → finalize.
+   * TODO(verify): path-style endpoints (/2/media/upload/initialize, /{id}/append, /{id}/finalize) replaced the
+   * command-style INIT/APPEND/FINALIZE on /2/media/upload in 2025; X's quickstart still shows the old form.
+   */
+  private async uploadChunked(account: AccountRef, auth: XAuth, m: Media): Promise<string> {
+    const { bytes, mime } = await this.bytesOf(m);
+    const category = m.kind === "gif" ? "tweet_gif" : "tweet_video";
+    const init = await this.request<{ data?: { id?: string } }>(account, auth, "POST", "/2/media/upload/initialize", { json: { media_type: mime, total_bytes: bytes.byteLength, media_category: category }, creating: true });
+    const id = init.data?.id;
+    if (!id) throw new ConnectorError("x media initialize: response carried no media id", "unknown", false, init);
+    for (let offset = 0, segment = 0; offset < bytes.byteLength; offset += this.chunkBytes, segment++) {
+      const form = new FormData();
+      form.set("segment_index", String(segment));
+      form.set("media", new Blob([bytes.subarray(offset, offset + this.chunkBytes)], { type: "application/octet-stream" }), "chunk");
+      await this.request(account, auth, "POST", `/2/media/upload/${id}/append`, { form, creating: true });
+    }
+    await this.request(account, auth, "POST", `/2/media/upload/${id}/finalize`, { creating: true });
+    return id;
+  }
+
+  /** TODO(verify): v2 alt text lives at POST /2/media/metadata with { id, metadata: { alt_text: { text } } }. */
+  private async setAltText(account: AccountRef, auth: XAuth, id: string, alt: string): Promise<void> {
+    await this.request(account, auth, "POST", "/2/media/metadata", { json: { id, metadata: { alt_text: { text: alt.slice(0, 1000) } } }, creating: true });
+  }
+
+  /** Poll GET /2/media/upload?command=STATUS until processing succeeds; bounded, then a retryable error. */
+  private async waitForProcessing(account: AccountRef, auth: XAuth, id: string): Promise<void> {
+    for (let i = 0; i < this.maxProcessingChecks; i++) {
+      const res = await this.request<{ data?: { processing_info?: { state?: string; check_after_secs?: number; error?: { message?: string } } } }>(account, auth, "GET", "/2/media/upload", { query: { command: "STATUS", media_id: id } });
+      const info = res.data?.processing_info;
+      // No processing_info means nothing is pending for this media.
+      if (!info || info.state === "succeeded") return;
+      if (info.state === "failed") throw new ConnectorError(`x media ${id}: processing failed${info.error?.message ? `: ${info.error.message}` : ""}`, "rejected", false, res);
+      await this.sleep(Math.min(30, Math.max(1, info.check_after_secs ?? 2)) * 1000);
+    }
+    throw new ConnectorError(`x media ${id}: still processing after ${this.maxProcessingChecks} checks; retry later (the upload is kept)`, "unknown", true);
   }
 
   // ---- reading ----------------------------------------------------------------------------
@@ -428,7 +568,7 @@ export class XConnector implements Connector {
   private async request<T>(
     account: AccountRef,
     auth: XAuth,
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PUT" | "DELETE",
     path: string,
     opts: { query?: Record<string, string | undefined>; json?: unknown; form?: FormData; creating?: boolean } = {},
   ): Promise<T> {

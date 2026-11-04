@@ -68,6 +68,7 @@ describe("x publish", () => {
       const u = String(url);
       if (u === "https://cdn.example/a.png") return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } });
       if (u === "https://api.x.com/2/media/upload") return json({ data: { id: "m1", media_key: "3_m1" } });
+      if (u === "https://api.x.com/2/media/metadata") return json({ data: { id: "m1" } });
       if (u === "https://api.x.com/2/tweets") return json({ data: { id: "901" } });
       throw new Error(`unexpected ${u}`);
     });
@@ -81,7 +82,8 @@ describe("x publish", () => {
     const form = upload.body as FormData;
     expect(form.get("media_category")).toBe("tweet_image");
     expect(form.get("media")).toBeInstanceOf(Blob);
-    expect(call(2).json()).toEqual({ text: "hello x", media: { media_ids: ["m1"] } });
+    expect(call(2).json()).toEqual({ id: "m1", metadata: { alt_text: { text: "A" } } });
+    expect(call(3).json()).toEqual({ text: "hello x", media: { media_ids: ["m1"] } });
   });
 
   it("posts thread segments as a reply chain and replies to a given tweet", async () => {
@@ -120,10 +122,12 @@ describe("x publish", () => {
     expect(res.threadExternalIds).toEqual(["900", "901"]);
   });
 
-  it("refuses video in validate()", () => {
-    const issues = connector().validate(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4" }] });
-    expect(issues).toMatchObject([{ code: "unsupported_media" }]);
-    expect(issues[0]?.message).toMatch(/video/);
+  it("accepts a single video in validate() but refuses documents and video mixed with images", () => {
+    expect(connector().validate(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4" }] })).toEqual([]);
+    expect(connector().validate(acct, { ...input, media: [{ kind: "document", url: "https://cdn.example/a.pdf" }] })).toMatchObject([{ code: "unsupported_media" }]);
+    const mixed = connector().validate(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4" }, { kind: "image", url: "https://cdn.example/a.png" }] });
+    expect(mixed).toMatchObject([{ code: "too_many_media" }]);
+    expect(mixed[0]?.message).toMatch(/video/);
   });
 });
 
@@ -316,7 +320,7 @@ describe("x oauth", () => {
     expect(new XConnector().connectConfigured).toBe(false);
     const url = new URL(c.oauthAuthorizeUrl({ state: "s1", codeChallenge: "ch", redirectUri: "https://app.example/oauth/x/callback" }));
     expect(url.origin + url.pathname).toBe("https://x.com/i/oauth2/authorize");
-    expect(url.searchParams.get("scope")).toBe("tweet.read tweet.write users.read media.write offline.access");
+    expect(url.searchParams.get("scope")).toBe("tweet.read tweet.write users.read media.write like.write tweet.moderate.write offline.access");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
     const auth = await c.oauthExchange({ code: "code1", codeVerifier: "ver", redirectUri: "https://app.example/oauth/x/callback" });
     expect(auth).toEqual({ accessToken: "at", refreshToken: "rt", userId: "42", expiresAt: "2026-11-02T02:00:00.000Z" });
@@ -324,5 +328,129 @@ describe("x oauth", () => {
     expect(form.get("code_verifier")).toBe("ver");
     expect(form.get("client_id")).toBe("cid");
     expect(await c.describeAccount({ accessToken: "at" })).toEqual({ externalId: "42", handle: "acmeoutdoor", displayName: "Acme" });
+  });
+});
+
+describe("x video, gif and polls", () => {
+  it("uploads video in chunks, polls STATUS until processing succeeds and attaches the id", async () => {
+    const bytes = new Uint8Array(10).fill(7);
+    let statusChecks = 0;
+    fetchMock.mockImplementation(async (url, init) => {
+      const u = new URL(String(url));
+      if (u.href === "https://cdn.example/v.mp4") return new Response(bytes, { headers: { "content-type": "video/mp4" } });
+      if (u.pathname === "/2/media/upload/initialize") return json({ data: { id: "vid1", media_key: "7_vid1", expires_after_secs: 86400 } });
+      if (u.pathname === "/2/media/upload/vid1/append") return new Response(null, { status: 204 });
+      if (u.pathname === "/2/media/upload/vid1/finalize") return json({ data: { id: "vid1", processing_info: { state: "pending", check_after_secs: 1 } } });
+      if (u.pathname === "/2/media/upload" && init?.method === "GET") {
+        statusChecks++;
+        return json({ data: { id: "vid1", processing_info: statusChecks < 2 ? { state: "in_progress", check_after_secs: 3, progress_percent: 40 } : { state: "succeeded", progress_percent: 100 } } });
+      }
+      if (u.pathname === "/2/tweets") return json({ data: { id: "950" } });
+      throw new Error(`unexpected ${u}`);
+    });
+    const sleeps: number[] = [];
+    const c = connector({ chunkBytes: 4, sleep: async (ms) => void sleeps.push(ms) });
+    const res = await c.publish(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4" }] });
+
+    expect(res.externalId).toBe("950");
+    expect(call(1).json()).toEqual({ media_type: "video/mp4", total_bytes: 10, media_category: "tweet_video" });
+    const appends = fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/append"));
+    expect(appends.map(([, i]) => (i?.body as FormData).get("segment_index"))).toEqual(["0", "1", "2"]);
+    expect(call(5).url).toBe("https://api.x.com/2/media/upload/vid1/finalize");
+    expect(new URL(call(6).url).searchParams.get("command")).toBe("STATUS");
+    expect(new URL(call(6).url).searchParams.get("media_id")).toBe("vid1");
+    expect(sleeps).toEqual([3000]);
+    expect(call(8).json()).toEqual({ text: "hello x", media: { media_ids: ["vid1"] } });
+  });
+
+  it("returns a retryable error while processing runs and resumes from STATUS without re-uploading", async () => {
+    let ready = false;
+    fetchMock.mockImplementation(async (url, init) => {
+      const u = new URL(String(url));
+      if (u.href === "https://cdn.example/a.gif") return new Response(new Uint8Array([1, 2]), { headers: { "content-type": "image/gif" } });
+      if (u.pathname === "/2/media/upload/initialize") return json({ data: { id: "g1" } });
+      if (u.pathname.endsWith("/append") || u.pathname.endsWith("/finalize")) return json({ data: { id: "g1" } });
+      if (u.pathname === "/2/media/upload" && init?.method === "GET") return json({ data: { processing_info: ready ? { state: "succeeded" } : { state: "in_progress", check_after_secs: 1 } } });
+      if (u.pathname === "/2/tweets") return json({ data: { id: "951" } });
+      throw new Error(`unexpected ${u}`);
+    });
+    const c = connector({ maxProcessingChecks: 2, sleep: async () => {} });
+    const gif = { ...input, idempotencyKey: "k-gif", media: [{ kind: "gif" as const, url: "https://cdn.example/a.gif" }] };
+    const err = await rejection(c.publish(acct, gif));
+    expect(err).toMatchObject({ retryable: true });
+    expect(err.message).toMatch(/still processing/);
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({ media_category: "tweet_gif" });
+    ready = true;
+    const before = fetchMock.mock.calls.length;
+    expect((await c.publish(acct, gif)).externalId).toBe("951");
+    const after = fetchMock.mock.calls.slice(before).map(([u]) => new URL(String(u)).pathname);
+    expect(after).toEqual(["/2/media/upload", "/2/tweets"]);
+  });
+
+  it("fails without retry when X reports processing failed", async () => {
+    fetchMock.mockImplementation(async (url, init) => {
+      const u = new URL(String(url));
+      if (u.href === "https://cdn.example/v.mp4") return new Response(new Uint8Array([1]), { headers: { "content-type": "video/mp4" } });
+      if (u.pathname === "/2/media/upload" && init?.method === "GET") return json({ data: { processing_info: { state: "failed", error: { message: "InvalidMedia" } } } });
+      return json({ data: { id: "v9" } });
+    });
+    await expect(connector({ sleep: async () => {} }).publish(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4" }] })).rejects.toMatchObject({ kind: "rejected", retryable: false });
+  });
+
+  it("posts a poll on the root tweet and validates X's poll limits", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: { id: "960" } }));
+    await connector().publish(acct, { ...input, options: { poll: { options: ["Yes", "No"], durationMinutes: 1440 } } });
+    expect(call(0).json()).toEqual({ text: "hello x", poll: { options: ["Yes", "No"], duration_minutes: 1440 } });
+    const issues = connector().validate(acct, { ...input, options: { poll: { options: ["a", "b", "c", "d", "e"], durationMinutes: 60 } } });
+    expect(issues).toMatchObject([{ code: "too_many_media" }]);
+    expect(connector().validate(acct, { ...input, options: { poll: { options: ["a".repeat(26), "b"], durationMinutes: 60 } } })).toMatchObject([{ code: "too_long" }]);
+  });
+});
+
+describe("x reply, moderate and account metrics", () => {
+  it("replies to a tweet once per idempotency key", async () => {
+    fetchMock.mockResolvedValue(json({ data: { id: "970" } }));
+    const c = connector();
+    const r = await c.reply(acct, { parentExternalId: "500", text: "thanks!", idempotencyKey: "r1" });
+    await c.reply(acct, { parentExternalId: "500", text: "thanks!", idempotencyKey: "r1" });
+    expect(r).toMatchObject({ externalId: "970", url: "https://x.com/acme/status/970" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(call(0).json()).toEqual({ text: "thanks!", reply: { in_reply_to_tweet_id: "500" } });
+  });
+
+  it("likes, unlikes, hides, unhides and deletes through the right endpoints", async () => {
+    fetchMock.mockImplementation(async () => json({ data: {} }));
+    const c = connector();
+    for (const action of ["like", "unlike", "hide", "unhide", "delete"] as const) await c.moderate(acct, { externalId: "777", action });
+    const calls = fetchMock.mock.calls.map(([u, i]) => `${i?.method} ${new URL(String(u)).pathname} ${i?.body ?? ""}`);
+    expect(calls).toEqual([
+      'POST /2/users/123/likes {"tweet_id":"777"}',
+      "DELETE /2/users/123/likes/777 ",
+      'PUT /2/tweets/777/hidden {"hidden":true}',
+      'PUT /2/tweets/777/hidden {"hidden":false}',
+      "DELETE /2/tweets/777 ",
+    ]);
+  });
+
+  it("maps a refused hide (not our conversation) to rejected", async () => {
+    fetchMock.mockResolvedValueOnce(json({ title: "Forbidden", detail: "You cannot hide this reply" }, 403));
+    await expect(connector().moderate(acct, { externalId: "1", action: "hide" })).rejects.toMatchObject({ kind: "rejected" });
+  });
+
+  it("reads followers_total from users/me public_metrics", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: { id: "123", username: "acme", public_metrics: { followers_count: 4321, following_count: 10 } } }));
+    const c = connector();
+    const rows = await c.fetchAccountMetrics(acct);
+    expect(new URL(call(0).url).searchParams.get("user.fields")).toBe("public_metrics");
+    expect(rows).toEqual([{ entityType: "social_account", entityId: "x1", metric: "followers_total", value: 4321, observedAt: NOW.toISOString(), source: "x" }]);
+    expect(c.capabilities()).toMatchObject({ reply: true, moderate: true, accountMetrics: true, video: true });
+  });
+
+  it("reads media bytes through the core media fetcher when one is set", async () => {
+    fetchMock.mockImplementation(async (url) => (String(url).endsWith("/2/media/upload") ? json({ data: { id: "m5" } }) : json({ data: { id: "980" } })));
+    const c = connector();
+    c.media = { fetch: async () => ({ bytes: new Uint8Array([9, 9]), mime: "image/png" }) };
+    await c.publish(acct, { ...input, media: [{ kind: "image", url: "https://cdn.example/x.png", assetId: "asset1" }] });
+    expect(fetchMock.mock.calls.map(([u]) => String(u))).toEqual(["https://api.x.com/2/media/upload", "https://api.x.com/2/tweets"]);
   });
 });

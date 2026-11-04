@@ -42,7 +42,7 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   linkedin: { maxText: 3000, maxMedia: 20, requiresMedia: false, supportsThread: false, maxVideoSeconds: 900 },
   tiktok: { maxText: 4000, maxMedia: 35, requiresMedia: true, supportsThread: false, maxVideoSeconds: 600 },
   youtube: { maxText: 5000, maxMedia: 1, requiresMedia: true, supportsThread: false },
-  pinterest: { maxText: 500, maxMedia: 1, requiresMedia: true, supportsThread: false },
+  pinterest: { maxText: 800, maxMedia: 5, requiresMedia: true, supportsThread: false, maxVideoSeconds: 900 },
   mastodon: { maxText: 500, maxMedia: 4, requiresMedia: false, supportsThread: true },
   reddit: { maxText: 40000, maxMedia: 20, requiresMedia: false, supportsThread: false, maxVideoSeconds: 900 },
   google_business: { maxText: 1500, maxMedia: 1, requiresMedia: false, supportsThread: false, maxVideoSeconds: 30 },
@@ -79,6 +79,8 @@ export const VariantOptions = z
     tags: z.array(z.string().max(100)).max(30).optional(),
     /** Cover/thumbnail image URL for video. */
     thumbnailUrl: z.string().url().optional(),
+    /** Mark as adult content (Reddit NSFW). */
+    nsfw: z.boolean().optional(),
     /** Content warning / spoiler (Mastodon, Reddit spoiler). */
     contentWarning: z.string().max(500).optional(),
     /** Disclose as branded/paid content where the network requires it (TikTok, Instagram, YouTube). */
@@ -91,6 +93,8 @@ export const VariantOptions = z
     allowStitch: z.boolean().optional(),
     /** Mastodon visibility. */
     visibility: z.enum(["public", "unlisted", "private", "direct"]).optional(),
+    /** Google Business Profile event/offer details (topicType, event dates, offer coupon/terms); validated by the connector. */
+    googleBusiness: z.record(z.string(), z.unknown()).optional(),
     /** Poll (Mastodon, Telegram, X): options and duration. */
     poll: z.object({ options: z.array(z.string().max(100)).min(2).max(10), durationMinutes: z.number().int().min(5).max(10080) }).optional(),
   })

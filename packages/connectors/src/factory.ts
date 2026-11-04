@@ -3,6 +3,17 @@ import { MockConnector } from "./mock.ts";
 import { ConnectorRegistry } from "./registry.ts";
 import { XConnector } from "./x.ts";
 import { ZernioConnector } from "./zernio.ts";
+import { createMetaConnectors } from "./meta.ts";
+import { createThreadsConnectors } from "./threads.ts";
+import { createLinkedInConnectors } from "./linkedin.ts";
+import { createPinterestConnectors } from "./pinterest.ts";
+import { createYouTubeConnectors } from "./youtube.ts";
+import { createGoogleBusinessConnectors } from "./google-business.ts";
+import { createTikTokConnectors } from "./tiktok.ts";
+import { createRedditConnectors } from "./reddit.ts";
+import { createMastodonConnectors } from "./mastodon.ts";
+import { createTelegramConnectors } from "./telegram.ts";
+import { createDiscordConnectors } from "./discord.ts";
 
 /**
  * The registry a Starsign process boots with. Native adapters are always present (their credentials
@@ -14,6 +25,23 @@ export function createDefaultRegistry(env: NodeJS.ProcessEnv = process.env): Con
   const registry = new ConnectorRegistry()
     .register(new BlueskyConnector())
     .register(new XConnector({ clientId: env.X_CLIENT_ID, clientSecret: env.X_CLIENT_SECRET, ...(env.X_API_BASE_URL ? { baseUrl: env.X_API_BASE_URL } : {}) }));
+  // Every native connector is registered; each reports connectConfigured=false until its app credentials exist,
+  // so the room can show "Not set up on this server" instead of hiding the network.
+  for (const make of [
+    createMetaConnectors,
+    createThreadsConnectors,
+    createLinkedInConnectors,
+    createPinterestConnectors,
+    createYouTubeConnectors,
+    createGoogleBusinessConnectors,
+    createTikTokConnectors,
+    createRedditConnectors,
+    createMastodonConnectors,
+    createTelegramConnectors,
+    createDiscordConnectors,
+  ]) {
+    for (const c of make(env)) registry.register(c);
+  }
   if (env.ZERNIO_API_KEY) registry.register(new ZernioConnector({ apiKey: env.ZERNIO_API_KEY, ...(env.ZERNIO_BASE_URL ? { baseUrl: env.ZERNIO_BASE_URL } : {}) }));
   // The mock never reaches production: a "published" post that touched no network would be a lie in the ledger.
   // Resolution is strict (by the account's connector name), so the mock only serves accounts that chose it.

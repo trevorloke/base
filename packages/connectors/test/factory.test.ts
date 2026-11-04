@@ -4,7 +4,7 @@ import { BlueskyConnector, IdempotencyCache, MockConnector, XConnector, ZernioCo
 describe("createDefaultRegistry", () => {
   it("registers the native adapters, the mock outside production, and resolves strictly by connector name", () => {
     const reg = createDefaultRegistry({});
-    expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "mock"]);
+    expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "meta", "threads", "linkedin", "pinterest", "youtube", "google_business", "tiktok", "reddit", "mastodon", "telegram", "discord", "mock"]);
     expect(reg.get("bluesky")).toBeInstanceOf(BlueskyConnector);
     expect(reg.get("x")).toBeInstanceOf(XConnector);
     expect(reg.get("mock")).toBeInstanceOf(MockConnector);
@@ -18,9 +18,22 @@ describe("createDefaultRegistry", () => {
     expect(createDefaultRegistry({ NODE_ENV: "production", STARSIGN_ENABLE_MOCK: "1" }).get("mock")).toBeInstanceOf(MockConnector);
   });
 
+  it("serves all fourteen networks natively and reports unconfigured apps instead of hiding them", () => {
+    const reg = createDefaultRegistry({ NODE_ENV: "production" });
+    const networks = new Set(reg.list().flatMap((c) => [...c.networks]));
+    for (const n of ["x", "bluesky", "threads", "instagram", "facebook", "linkedin", "tiktok", "youtube", "pinterest", "mastodon", "reddit", "google_business", "telegram", "discord"]) {
+      expect(networks.has(n as never), n).toBe(true);
+    }
+    // OAuth apps without credentials say so; open networks are always connectable.
+    expect(reg.get("meta")?.connectConfigured).toBe(false);
+    expect(reg.get("youtube")?.connectConfigured).toBe(false);
+    expect(reg.get("mastodon")?.connectConfigured).not.toBe(false);
+    expect(createDefaultRegistry({ META_CLIENT_ID: "a", META_CLIENT_SECRET: "b" }).get("meta")?.connectConfigured).toBe(true);
+  });
+
   it("adds Zernio only when ZERNIO_API_KEY is set", () => {
     const reg = createDefaultRegistry({ ZERNIO_API_KEY: "zk", X_CLIENT_ID: "cid", X_CLIENT_SECRET: "sec" });
-    expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "zernio", "mock"]);
+    expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "meta", "threads", "linkedin", "pinterest", "youtube", "google_business", "tiktok", "reddit", "mastodon", "telegram", "discord", "zernio", "mock"]);
     expect(reg.get("zernio")).toBeInstanceOf(ZernioConnector);
     expect(reg.resolve("zernio", "tiktok").name).toBe("zernio");
     expect(reg.get("x")?.capabilities("x")).toMatchObject({ meteredReads: true });

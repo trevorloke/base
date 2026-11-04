@@ -1,6 +1,6 @@
 import type { AppBskyFeedDefs, AppBskyNotificationListNotifications, BlobRef } from "@atproto/api";
 import { XRPCError } from "@atproto/api";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BlueskyConnector, ConnectorError, mapBlueskyError, type AccountRef, type BlueskyAgentLike, type BlueskyPostRecord, type PublishInput } from "../src/index.ts";
 
 type Notification = AppBskyNotificationListNotifications.Notification;
@@ -65,6 +65,8 @@ function notification(reason: string, extra: Partial<Notification> = {}): Notifi
   };
 }
 
+// Link cards read the linked page; by default every outside URL answers 404 so no test touches the network.
+beforeEach(() => vi.stubGlobal("fetch", vi.fn<typeof fetch>(async () => new Response("not found", { status: 404 }))));
 afterEach(() => vi.unstubAllGlobals());
 
 /** Await a promise expected to reject and hand back the ConnectorError for closer inspection. */
@@ -173,11 +175,16 @@ describe("bluesky publish", () => {
     expect(res.threadExternalIds).toEqual([`at://${DID}/app.bsky.feed.post/r1`, `at://${DID}/app.bsky.feed.post/r3`, `at://${DID}/app.bsky.feed.post/r4`]);
   });
 
-  it("flags video in validate() because upload is not supported yet", () => {
-    const issues = connector(fakeAgent()).validate(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4" }] });
+  it("accepts one MP4 video in validate() but flags non-MP4, mixed media, documents and polls", () => {
+    const c = connector(fakeAgent());
+    expect(c.validate(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4", mime: "video/mp4" }] })).toEqual([]);
+    const issues = c.validate(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mov", mime: "video/quicktime" }] });
     expect(issues).toMatchObject([{ code: "unsupported_media" }]);
     expect(issues[0]?.message).toMatch(/video/);
-    expect(connector(fakeAgent()).validate(acct, input)).toEqual([]);
+    expect(c.validate(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4" }, { kind: "image", url: "https://cdn.example/a.png" }] })).toMatchObject([{ code: "too_many_media" }]);
+    expect(c.validate(acct, { ...input, media: [{ kind: "document", url: "https://cdn.example/a.pdf" }] })).toMatchObject([{ code: "unsupported_media" }]);
+    expect(c.validate(acct, { ...input, options: { poll: { options: ["a", "b"], durationMinutes: 60 } } })).toMatchObject([{ code: "unsupported_media" }]);
+    expect(c.validate(acct, input)).toEqual([]);
   });
 });
 
@@ -307,5 +314,143 @@ describe("bluesky fetchMetrics", () => {
     const agent = fakeAgent();
     expect(await connector(agent).fetchMetrics(acct, [])).toEqual([]);
     expect(agent.login).not.toHaveBeenCalled();
+  });
+});
+
+const BLOB_JSON = { $type: "blob", ref: { $link: "bafkreie5737gdxlw5i64vzichcalba3z2v5n6icifvx5xytvske7mr3hpm" }, mimeType: "video/mp4", size: 10 };
+
+function fullAgent() {
+  const base = fakeAgent();
+  return Object.assign(base, {
+    pdsUrl: new URL("https://morel.us-east.host.bsky.network"),
+    getServiceAuth: vi.fn(async (_p: { aud: string; lxm?: string; exp?: number }) => ({ data: { token: "svc-token" } })),
+    like: vi.fn(async (uri: string, _cid: string) => ({ uri: `at://${DID}/app.bsky.feed.like/l1`, cid: `like-of-${uri}` })),
+    deleteLike: vi.fn(async (_uri: string) => {}),
+    deletePost: vi.fn(async (_uri: string) => {}),
+    getProfile: vi.fn(async (_p: { actor: string }) => ({ data: { did: DID, handle: HANDLE, followersCount: 812, followsCount: 5 } })),
+  });
+}
+
+describe("bluesky video", () => {
+  it("mints a service token for the PDS, uploads to the video service, polls the job and embeds the blob with aspect ratio", async () => {
+    let polls = 0;
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      const u = new URL(String(url));
+      if (u.href === "https://cdn.example/v.mp4") return new Response(new Uint8Array(10), { headers: { "content-type": "video/mp4" } });
+      if (u.pathname === "/xrpc/app.bsky.video.uploadVideo") return Response.json({ jobStatus: { jobId: "job1", did: DID, state: "JOB_STATE_CREATED" } });
+      if (u.pathname === "/xrpc/app.bsky.video.getJobStatus") {
+        polls++;
+        return Response.json({ jobStatus: polls < 2 ? { jobId: "job1", did: DID, state: "JOB_STATE_ENCODING", progress: 50 } : { jobId: "job1", did: DID, state: "JOB_STATE_COMPLETED", blob: BLOB_JSON } });
+      }
+      throw new Error(`unexpected ${u}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const agent = fullAgent();
+    const c = new BlueskyConnector({ agentFactory: () => agent, now: () => NOW, sleep: async () => {} });
+    await c.publish(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4", alt: "A demo", width: 1080, height: 1920 }] });
+
+    expect(agent.getServiceAuth).toHaveBeenCalledWith({ aud: "did:web:morel.us-east.host.bsky.network", lxm: "com.atproto.repo.uploadBlob", exp: Math.floor(NOW.getTime() / 1000) + 1800 });
+    const [uploadUrl, uploadInit] = fetchMock.mock.calls[1]!;
+    const u = new URL(String(uploadUrl));
+    expect(u.origin).toBe("https://video.bsky.app");
+    expect(u.searchParams.get("did")).toBe(DID);
+    expect(u.searchParams.get("name")).toMatch(/\.mp4$/);
+    expect((uploadInit?.headers as Record<string, string>).authorization).toBe("Bearer svc-token");
+    expect(new URL(String(fetchMock.mock.calls[2]![0])).searchParams.get("jobId")).toBe("job1");
+    const embed = agent.post.mock.calls[0]?.[0]?.embed as { $type: string; video: unknown; alt: string; aspectRatio: unknown };
+    expect(embed).toMatchObject({ $type: "app.bsky.embed.video", alt: "A demo", aspectRatio: { width: 1080, height: 1920 } });
+    expect(String((embed.video as { ref: { toString(): string } }).ref)).toBe(BLOB_JSON.ref.$link);
+  });
+
+  it("gives a retryable error while the job runs, then resumes polling the same job without re-uploading", async () => {
+    let done = false;
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      const u = new URL(String(url));
+      if (u.pathname.endsWith(".mp4")) return new Response(new Uint8Array(4), { headers: { "content-type": "video/mp4" } });
+      if (u.pathname === "/xrpc/app.bsky.video.uploadVideo") return Response.json({ jobStatus: { jobId: "job2", did: DID, state: "JOB_STATE_CREATED" } });
+      return Response.json({ jobStatus: done ? { jobId: "job2", did: DID, state: "JOB_STATE_COMPLETED", blob: BLOB_JSON } : { jobId: "job2", did: DID, state: "JOB_STATE_ENCODING" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const agent = fullAgent();
+    const c = new BlueskyConnector({ agentFactory: () => agent, now: () => NOW, sleep: async () => {}, maxProcessingChecks: 2 });
+    const vid = { ...input, idempotencyKey: "k-vid", media: [{ kind: "video" as const, url: "https://cdn.example/v.mp4" }] };
+    await expect(c.publish(acct, vid)).rejects.toMatchObject({ retryable: true, message: expect.stringMatching(/still processing/) });
+    done = true;
+    await c.publish(acct, vid);
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes("uploadVideo"))).toHaveLength(1);
+    expect(agent.post).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a failed job to rejected", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url) => {
+      const u = new URL(String(url));
+      if (u.pathname.endsWith(".mp4")) return new Response(new Uint8Array(4), { headers: { "content-type": "video/mp4" } });
+      if (u.pathname === "/xrpc/app.bsky.video.uploadVideo") return Response.json({ jobStatus: { jobId: "j", did: DID, state: "JOB_STATE_CREATED" } });
+      return Response.json({ jobStatus: { jobId: "j", did: DID, state: "JOB_STATE_FAILED", failureCode: "validation_failure", message: "too long" } });
+    }));
+    const c = new BlueskyConnector({ agentFactory: () => fullAgent(), now: () => NOW, sleep: async () => {} });
+    await expect(c.publish(acct, { ...input, media: [{ kind: "video", url: "https://cdn.example/v.mp4" }] })).rejects.toMatchObject({ kind: "rejected", retryable: false });
+  });
+});
+
+describe("bluesky link cards", () => {
+  it("builds an external embed from the page's Open Graph tags with a thumbnail blob", async () => {
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      if (u === "https://acme.example/launch") return new Response(`<html><head><meta property="og:title" content="Acme &amp; Co launch"><meta content="Big news" property="og:description"><meta property="og:image" content="/og.png"></head></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
+      if (u === "https://acme.example/og.png") return new Response(new Uint8Array([1, 2, 3]), { headers: { "content-type": "image/png" } });
+      return new Response("", { status: 404 });
+    }));
+    const agent = fakeAgent();
+    await connector(agent).publish(acct, { ...input, text: "We launched https://acme.example/launch" });
+    expect(agent.uploadBlob).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]), { encoding: "image/png" });
+    expect(agent.post.mock.calls[0]?.[0]?.embed).toEqual({ $type: "app.bsky.embed.external", external: { uri: "https://acme.example/launch", title: "Acme & Co launch", description: "Big news", thumb: FAKE_BLOB } });
+  });
+
+  it("prefers options.link and options.title, and posts without a card when the page cannot be read", async () => {
+    const agent = fakeAgent();
+    await connector(agent).publish(acct, { ...input, options: { link: "https://acme.example/x", title: "Read this" } });
+    expect(agent.post.mock.calls[0]?.[0]?.embed).toEqual({ $type: "app.bsky.embed.external", external: { uri: "https://acme.example/x", title: "Read this", description: "" } });
+    const agent2 = fakeAgent();
+    await connector(agent2).publish(acct, { ...input, text: "see https://down.example", idempotencyKey: "k-down" });
+    expect(agent2.post.mock.calls[0]?.[0]?.embed).toBeUndefined();
+  });
+});
+
+describe("bluesky reply, moderate and account metrics", () => {
+  it("replies with the parent's root and caches by idempotency key", async () => {
+    const agent = fakeAgent();
+    const parentUri = "at://did:plc:bob/app.bsky.feed.post/p1";
+    agent.getPosts.mockResolvedValue({ data: { posts: [postView(parentUri, { cid: "pc" })] } });
+    const c = connector(agent);
+    const r = await c.reply(acct, { parentExternalId: parentUri, text: "thank you", idempotencyKey: "rep1" });
+    await c.reply(acct, { parentExternalId: parentUri, text: "thank you", idempotencyKey: "rep1" });
+    expect(agent.post).toHaveBeenCalledTimes(1);
+    expect(agent.post.mock.calls[0]?.[0]).toMatchObject({ text: "thank you", reply: { root: { uri: parentUri, cid: "pc" }, parent: { uri: parentUri, cid: "pc" } } });
+    expect(r.url).toBe(`https://bsky.app/profile/${HANDLE}/post/r1`);
+  });
+
+  it("likes and unlikes via the viewer state, deletes only own posts and refuses hide", async () => {
+    const agent = fullAgent();
+    const theirs = "at://did:plc:bob/app.bsky.feed.post/t1";
+    agent.getPosts.mockResolvedValueOnce({ data: { posts: [postView(theirs, { cid: "tc" })] } });
+    const c = connector(agent);
+    await c.moderate(acct, { externalId: theirs, action: "like" });
+    expect(agent.like).toHaveBeenCalledWith(theirs, "tc");
+    agent.getPosts.mockResolvedValueOnce({ data: { posts: [postView(theirs, { cid: "tc", viewer: { like: `at://${DID}/app.bsky.feed.like/l1` } })] } });
+    await c.moderate(acct, { externalId: theirs, action: "unlike" });
+    expect(agent.deleteLike).toHaveBeenCalledWith(`at://${DID}/app.bsky.feed.like/l1`);
+    await c.moderate(acct, { externalId: `at://${DID}/app.bsky.feed.post/mine`, action: "delete" });
+    expect(agent.deletePost).toHaveBeenCalledWith(`at://${DID}/app.bsky.feed.post/mine`);
+    await expect(c.moderate(acct, { externalId: theirs, action: "delete" })).rejects.toMatchObject({ kind: "rejected" });
+    await expect(c.moderate(acct, { externalId: theirs, action: "hide" })).rejects.toMatchObject({ kind: "rejected" });
+  });
+
+  it("reads followers_total from getProfile", async () => {
+    const agent = fullAgent();
+    const rows = await connector(agent).fetchAccountMetrics(acct);
+    expect(agent.getProfile).toHaveBeenCalledWith({ actor: DID });
+    expect(rows).toEqual([{ entityType: "social_account", entityId: "a1", metric: "followers_total", value: 812, observedAt: NOW.toISOString(), source: "bluesky" }]);
+    expect(connector(agent).capabilities()).toMatchObject({ reply: true, moderate: true, accountMetrics: true, video: true });
   });
 });

@@ -1,10 +1,10 @@
-import { AppBskyRichtextFacet, AtpAgent, AtUri, RichText } from "@atproto/api";
-import type { AppBskyEmbedImages, AppBskyFeedDefs, AppBskyFeedPost, AppBskyNotificationListNotifications, BlobRef, Facet } from "@atproto/api";
+import { AppBskyRichtextFacet, AtpAgent, AtUri, BlobRef, jsonToLex, RichText } from "@atproto/api";
+import type { AppBskyActorDefs, AppBskyEmbedImages, AppBskyFeedDefs, AppBskyFeedPost, AppBskyNotificationListNotifications, AppBskyVideoDefs, Facet } from "@atproto/api";
 import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
 import { z } from "zod";
-import { downloadMedia, isAfter, resolveFetch, type FetchLike } from "./http.ts";
+import { asNetworkError, classifyHttpStatus, downloadMedia, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
-import type { AccountRef, Connector, ConnectorCapabilities, PublishInput, PublishResult, ValidationIssue } from "./types.ts";
+import type { AccountRef, ConnectedAccount, Connector, ConnectorCapabilities, MediaFetcher, ModerationInput, PublishInput, PublishResult, ValidationIssue } from "./types.ts";
 import { ConnectorError } from "./types.ts";
 
 /** Decrypted credential blob for a Bluesky account: an app password, never the main password. */
@@ -30,6 +30,38 @@ export interface BlueskyAgentLike {
   getPosts(params: { uris: string[] }): Promise<{ data: { posts: AppBskyFeedDefs.PostView[] } }>;
   getAuthorFeed(params: { actor: string; limit?: number; cursor?: string; filter?: string }): Promise<{ data: { feed: AppBskyFeedDefs.FeedViewPost[]; cursor?: string } }>;
   listNotifications(params: { limit?: number; cursor?: string }): Promise<{ data: { notifications: AppBskyNotificationListNotifications.Notification[]; cursor?: string } }>;
+  // Optional so narrow fakes stay small; the production wrapper around AtpAgent provides all of them.
+  /** The account's PDS (resolved from its DID document after login); the video service token is minted for it. */
+  readonly pdsUrl?: URL | string | undefined;
+  getServiceAuth?(params: { aud: string; lxm?: string; exp?: number }): Promise<{ data: { token: string } }>;
+  like?(uri: string, cid: string): Promise<{ uri: string; cid: string }>;
+  deleteLike?(likeUri: string): Promise<void>;
+  deletePost?(postUri: string): Promise<void>;
+  getProfile?(params: { actor: string }): Promise<{ data: AppBskyActorDefs.ProfileViewDetailed }>;
+}
+
+/** Adapt a real AtpAgent to the narrow surface (service auth lives under com.atproto.server). */
+export function atpAgentLike(agent: AtpAgent): BlueskyAgentLike {
+  return {
+    login: (o) => agent.login(o),
+    get session() {
+      return agent.session;
+    },
+    get pdsUrl() {
+      return agent.pdsUrl ?? agent.serviceUrl;
+    },
+    resolveHandle: (p) => agent.resolveHandle(p),
+    uploadBlob: (d, o) => agent.uploadBlob(d, o),
+    post: (r) => agent.post(r),
+    getPosts: (p) => agent.getPosts(p),
+    getAuthorFeed: (p) => agent.getAuthorFeed(p),
+    listNotifications: (p) => agent.listNotifications(p),
+    getServiceAuth: (p) => agent.com.atproto.server.getServiceAuth(p),
+    like: (uri, cid) => agent.like(uri, cid),
+    deleteLike: (uri) => agent.deleteLike(uri),
+    deletePost: (uri) => agent.deletePost(uri),
+    getProfile: (p) => agent.getProfile(p),
+  };
 }
 
 export interface BlueskyConnectorOptions {
@@ -40,6 +72,41 @@ export interface BlueskyConnectorOptions {
   now?: () => Date;
   /** Upper bound on pages (100 items each) walked per feed when `since` is far back or null. */
   maxPages?: number;
+  /** Bluesky's video service (default https://video.bsky.app). */
+  videoService?: string;
+  /** DID of the video service, used as the audience when polling job status (default did:web:video.bsky.app). */
+  videoServiceDid?: string;
+  /** Job status checks before giving up with a retryable error (default 60, about 2 minutes at 2s). */
+  maxProcessingChecks?: number;
+  sleep?: (ms: number) => Promise<void>;
+  /** Build app.bsky.embed.external link cards by reading the linked page's Open Graph tags (default true). */
+  linkCards?: boolean;
+}
+
+const URL_IN_TEXT = /https?:\/\/[^\s<>"')\]]+/i;
+
+/** First match of a meta tag's content, property= or name= in either attribute order. */
+function metaContent(html: string, key: string): string | undefined {
+  const k = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re1 = new RegExp(`<meta[^>]+(?:property|name)=["']${k}["'][^>]*content=["']([^"']*)["']`, "i");
+  const re2 = new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:property|name)=["']${k}["']`, "i");
+  const v = html.match(re1)?.[1] ?? html.match(re2)?.[1];
+  return v ? decodeEntities(v).trim() : undefined;
+}
+
+function decodeEntities(s: string): string {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;|&#x27;/g, "'");
+}
+
+/** The raw JSON blob from the video service, turned into a BlobRef the record serializer understands. */
+function toBlobRef(raw: unknown): BlobRef {
+  try {
+    const lex = jsonToLex(raw);
+    if (lex instanceof BlobRef) return lex;
+    return BlobRef.asBlobRef(lex) ?? (raw as BlobRef);
+  } catch {
+    return raw as BlobRef;
+  }
 }
 
 interface Session {
@@ -111,6 +178,17 @@ export function mapBlueskyError(err: unknown, phase: "login" | "call" = "call"):
  */
 export class BlueskyConnector implements Connector {
   readonly connectMethod = "app_password" as const;
+  readonly credentialInputs = [
+    { key: "identifier", label: "Handle", placeholder: "you.bsky.social" },
+    { key: "appPassword", label: "App password", placeholder: "xxxx-xxxx-xxxx-xxxx", secret: true },
+  ] as const;
+
+  /** Connect from the room's form: verify the app password and return the account. */
+  async connectWithInputs(p: { network: Network; inputs: Record<string, string> }): Promise<ConnectedAccount[]> {
+    const auth = { identifier: (p.inputs.identifier ?? "").trim().replace(/^@/, ""), appPassword: (p.inputs.appPassword ?? "").trim(), ...(p.inputs.service ? { service: p.inputs.service } : {}) };
+    const identity = await this.describeAccount(auth);
+    return [{ network: "bluesky", identity, auth }];
+  }
 
   /** Log in with the app password and read the account's DID and handle. Throws ConnectorError("auth") on bad credentials. */
   async describeAccount(rawAuth: Record<string, unknown>) {
@@ -137,25 +215,93 @@ export class BlueskyConnector implements Connector {
   private readonly sessions = new Map<string, Session>();
   private readonly idempotency = new IdempotencyCache<PublishResult>();
   private readonly progress = new Map<string, StrongRef[]>();
+  /** Embeds already built for an idempotency key, so a retry after "video still processing" does not re-upload. */
+  private readonly embeds = new Map<string, Promise<BlueskyPostRecord["embed"] | undefined>>();
+  private readonly videoService: string;
+  private readonly videoServiceDid: string;
+  private readonly maxProcessingChecks: number;
+  private readonly sleep: (ms: number) => Promise<void>;
+  private readonly linkCards: boolean;
+  /** Set by core at boot; falls back to downloading `media.url`. */
+  media?: MediaFetcher;
 
   constructor(opts: BlueskyConnectorOptions = {}) {
     this.fetchImpl = opts.fetch;
-    this.agentFactory = opts.agentFactory ?? ((service) => new AtpAgent({ service, ...(opts.fetch ? { fetch: opts.fetch } : {}) }));
+    this.agentFactory = opts.agentFactory ?? ((service) => atpAgentLike(new AtpAgent({ service, ...(opts.fetch ? { fetch: opts.fetch } : {}) })));
     this.now = opts.now ?? (() => new Date());
     this.maxPages = opts.maxPages ?? 10;
+    this.videoService = (opts.videoService ?? "https://video.bsky.app").replace(/\/+$/, "");
+    this.videoServiceDid = opts.videoServiceDid ?? "did:web:video.bsky.app";
+    this.maxProcessingChecks = opts.maxProcessingChecks ?? 60;
+    this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.linkCards = opts.linkCards ?? true;
   }
 
   capabilities(): ConnectorCapabilities {
-    return { publish: true, fetchActivity: true, fetchMetrics: true, meteredReads: false };
+    return { publish: true, fetchActivity: true, fetchMetrics: true, meteredReads: false, reply: true, moderate: true, accountMetrics: true, webhooks: false, video: true, kinds: ["post", "video", "link"] };
   }
 
   validate(_account: AccountRef, input: PublishInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const videos = input.media.filter((m) => m.kind === "video");
     for (const m of input.media) {
-      if (m.kind === "video") issues.push({ code: "unsupported_media", message: "bluesky connector v0 does not support video upload yet; publish with images only or drop the media" });
-      else if (m.kind === "document") issues.push({ code: "unsupported_media", message: "bluesky has no document attachments" });
+      if (m.kind === "document") issues.push({ code: "unsupported_media", message: "bluesky has no document attachments" });
+      if (m.kind === "video" && m.mime && m.mime !== "video/mp4") issues.push({ code: "unsupported_media", message: `bluesky video must be MP4 (got ${m.mime})` });
     }
+    if (videos.length > 0 && input.media.length > 1) issues.push({ code: "too_many_media", message: "bluesky allows one video per post, and it cannot be mixed with images" });
+    if (input.options?.poll) issues.push({ code: "unsupported_media", message: "bluesky has no native polls" });
     return issues;
+  }
+
+  /** Reply to a post: the parent's thread root is looked up so the reply lands in the right thread. */
+  async reply(account: AccountRef, input: { parentExternalId: string; text: string; idempotencyKey: string }): Promise<PublishResult> {
+    return this.publish(account, { variantId: input.idempotencyKey, text: input.text, media: [], thread: [], replyToExternalId: input.parentExternalId, idempotencyKey: input.idempotencyKey, options: {} });
+  }
+
+  /**
+   * like/unlike (app.bsky.feed.like records) and delete our own post. Bluesky has no per-reply hide in this
+   * adapter (threadgate hiddenReplies is not wired), so hide/unhide are refused.
+   */
+  async moderate(account: AccountRef, input: ModerationInput): Promise<void> {
+    await this.call(account, async (s) => {
+      const { agent } = s;
+      if (input.action === "hide" || input.action === "unhide") throw new ConnectorError(`bluesky moderate: ${input.action} is not supported`, "rejected", false);
+      if (input.action === "delete") {
+        let repo: string;
+        try {
+          repo = new AtUri(input.externalId).hostname;
+        } catch {
+          throw new ConnectorError(`bluesky moderate: ${input.externalId} is not an at:// uri`, "rejected", false);
+        }
+        if (repo !== s.did) throw new ConnectorError("bluesky moderate: only the account's own posts can be deleted", "rejected", false);
+        if (!agent.deletePost) throw new ConnectorError("bluesky moderate: agent cannot delete posts", "unknown", false);
+        await agent.deletePost(input.externalId);
+        return;
+      }
+      const res = await agent.getPosts({ uris: [input.externalId] });
+      const post = res.data.posts[0];
+      if (!post) throw new ConnectorError(`bluesky moderate: post ${input.externalId} not found`, "rejected", false);
+      if (input.action === "like") {
+        if (post.viewer?.like) return; // already liked
+        if (!agent.like) throw new ConnectorError("bluesky moderate: agent cannot like", "unknown", false);
+        await agent.like(post.uri, post.cid);
+        return;
+      }
+      if (!post.viewer?.like) return; // nothing to unlike
+      if (!agent.deleteLike) throw new ConnectorError("bluesky moderate: agent cannot unlike", "unknown", false);
+      await agent.deleteLike(post.viewer.like);
+    });
+  }
+
+  /** followers_total from app.bsky.actor.getProfile. */
+  async fetchAccountMetrics(account: AccountRef): Promise<MetricInput[]> {
+    return this.call(account, async (s) => {
+      if (!s.agent.getProfile) return [];
+      const res = await s.agent.getProfile({ actor: s.did });
+      const followers = res.data.followersCount;
+      if (typeof followers !== "number") return [];
+      return [{ entityType: "social_account", entityId: account.id, metric: "followers_total", value: followers, observedAt: this.now().toISOString(), source: "bluesky" }];
+    });
   }
 
   async publish(account: AccountRef, input: PublishInput): Promise<PublishResult> {
@@ -201,7 +347,7 @@ export class BlueskyConnector implements Connector {
     const posted: StrongRef[] = this.progress.get(key) ?? [];
     const replyTo = input.replyToExternalId ? await this.replyRefs(agent, input.replyToExternalId) : undefined;
     // Media only rides on the root post, so there is nothing to upload when resuming past it.
-    const embed = posted.length === 0 ? await this.uploadImages(agent, input.media) : undefined;
+    const embed = posted.length === 0 ? await this.rootEmbed(s, input) : undefined;
 
     try {
       for (let i = posted.length; i < segments.length; i++) {
@@ -234,6 +380,8 @@ export class BlueskyConnector implements Connector {
     const rootPost = posted[0];
     if (!rootPost) throw new ConnectorError("bluesky publish: nothing to post", "rejected", false);
     this.progress.delete(key);
+    this.embeds.delete(key);
+    this.videoJobs.delete(key);
     return {
       externalId: rootPost.uri,
       url: blueskyPostUrl(s.handle, rootPost.uri),
@@ -272,13 +420,137 @@ export class BlueskyConnector implements Connector {
     return { text: rt.text, facets: facets.length > 0 ? facets : undefined };
   }
 
+  /**
+   * The root post's embed: a video, else images, else a link card. Built once per idempotency key: a video
+   * that is still processing when the bounded wait ends is polled again on retry, not uploaded twice.
+   */
+  private async rootEmbed(s: Session, input: PublishInput): Promise<BlueskyPostRecord["embed"] | undefined> {
+    const key = input.idempotencyKey;
+    const video = input.media.find((m) => m.kind === "video");
+    if (video) {
+      let job = this.videoJobs.get(key);
+      if (!job) {
+        job = await this.uploadVideo(s, video);
+        this.videoJobs.set(key, job);
+      }
+      const blob = await this.waitForVideo(s, job);
+      const embed: BlueskyPostRecord["embed"] = {
+        $type: "app.bsky.embed.video",
+        video: blob,
+        ...(video.alt ? { alt: video.alt } : {}),
+        ...(video.width && video.height ? { aspectRatio: { width: video.width, height: video.height } } : {}),
+      };
+      return embed;
+    }
+    let pending = this.embeds.get(key);
+    if (!pending) {
+      pending = this.uploadImages(s.agent, input.media).then((e) => e ?? this.linkCard(s.agent, input));
+      this.embeds.set(key, pending);
+      pending.catch(() => this.embeds.delete(key));
+    }
+    return pending;
+  }
+
+  private readonly videoJobs = new Map<string, string>();
+
+  private async bytesOf(m: Media): Promise<{ bytes: Uint8Array; mime: string }> {
+    return this.media ? this.media.fetch(m) : downloadMedia(resolveFetch(this.fetchImpl), m);
+  }
+
+  /**
+   * Upload straight to the video service: a service token from the PDS (aud = did:web:<pds host>,
+   * lxm = com.atproto.repo.uploadBlob), then POST app.bsky.video.uploadVideo?did=&name=. Returns the job id.
+   * TODO(verify): 409 "already_exists" bodies carry the existing jobId at the top level.
+   */
+  private async uploadVideo(s: Session, m: Media): Promise<string> {
+    const { agent } = s;
+    if (!agent.getServiceAuth) throw new ConnectorError("bluesky video: agent cannot mint service auth", "unknown", false);
+    const pds = new URL(String(agent.pdsUrl ?? s.service));
+    const exp = Math.floor(this.now().getTime() / 1000) + 30 * 60;
+    const token = (await agent.getServiceAuth({ aud: `did:web:${pds.hostname}`, lxm: "com.atproto.repo.uploadBlob", exp })).data.token;
+    const { bytes } = await this.bytesOf(m);
+    const url = new URL(`${this.videoService}/xrpc/app.bsky.video.uploadVideo`);
+    url.searchParams.set("did", s.did);
+    url.searchParams.set("name", `${this.now().getTime().toString(36)}.mp4`);
+    const body = await this.videoRequest(url, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "video/mp4" }, body: bytes }, "uploadVideo", [409]);
+    const b = (body ?? {}) as { jobStatus?: AppBskyVideoDefs.JobStatus; jobId?: string };
+    const jobId = b.jobStatus?.jobId ?? b.jobId;
+    if (!jobId) throw new ConnectorError("bluesky video: uploadVideo returned no job id", "unknown", false, body);
+    return jobId;
+  }
+
+  /** Poll app.bsky.video.getJobStatus until the blob is ready; bounded, then a retryable error. */
+  private async waitForVideo(s: Session, jobId: string): Promise<BlobRef> {
+    for (let i = 0; i < this.maxProcessingChecks; i++) {
+      const url = new URL(`${this.videoService}/xrpc/app.bsky.video.getJobStatus`);
+      url.searchParams.set("jobId", jobId);
+      const body = (await this.videoRequest(url, { method: "GET" }, "getJobStatus")) as { jobStatus?: AppBskyVideoDefs.JobStatus } | undefined;
+      const st = body?.jobStatus;
+      if (st?.state === "JOB_STATE_FAILED") throw new ConnectorError(`bluesky video: processing failed (${st.failureCode ?? st.error ?? "unknown"}${st.message ? `: ${st.message}` : ""})`, "rejected", false, body);
+      if (st?.blob) return toBlobRef(st.blob);
+      await this.sleep(2000);
+    }
+    throw new ConnectorError(`bluesky video: job ${jobId} still processing after ${this.maxProcessingChecks} checks; retry later (the upload is kept)`, "unknown", true);
+  }
+
+  private async videoRequest(url: URL, init: RequestInit, what: string, okStatuses: number[] = []): Promise<unknown> {
+    let res: Response;
+    try {
+      res = await resolveFetch(this.fetchImpl)(url.toString(), init);
+    } catch (err) {
+      throw asNetworkError(err, `bluesky video ${what}`);
+    }
+    const body = await readJson(res);
+    if (!res.ok && !okStatuses.includes(res.status)) {
+      const b = (body ?? {}) as { error?: unknown; message?: unknown };
+      const detail = [b.error, b.message].filter((x) => typeof x === "string").join(": ");
+      if (res.status === 429) throw new ConnectorError(`bluesky video ${what}: rate limited ${detail} (ratelimit-reset=${res.headers.get("ratelimit-reset") ?? "?"})`, "rate_limit", true, body);
+      const { kind, retryable } = classifyHttpStatus(res.status);
+      throw new ConnectorError(`bluesky video ${what}: HTTP ${res.status} ${detail}`.trim(), kind, retryable, body);
+    }
+    return body;
+  }
+
+  /**
+   * An app.bsky.embed.external card for options.link, or the first link in the text. Title, description and
+   * thumbnail come from the page's Open Graph tags (options.title / options.thumbnailUrl win). Best effort:
+   * when the page cannot be read the post goes out without a card (the link facet still works).
+   */
+  private async linkCard(agent: BlueskyAgentLike, input: PublishInput): Promise<BlueskyPostRecord["embed"] | undefined> {
+    if (!this.linkCards) return undefined;
+    const uri = input.options?.link ?? input.text.match(URL_IN_TEXT)?.[0];
+    if (!uri) return undefined;
+    const fetchImpl = resolveFetch(this.fetchImpl);
+    let html = "";
+    try {
+      const res = await fetchImpl(uri, { headers: { accept: "text/html" }, signal: AbortSignal.timeout(5000) });
+      if (res.ok && (res.headers.get("content-type") ?? "text/html").includes("html")) html = (await res.text()).slice(0, 500_000);
+    } catch {
+      // unreadable page: fall through with whatever options give us
+    }
+    const title = input.options?.title ?? metaContent(html, "og:title") ?? metaContent(html, "twitter:title") ?? html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim();
+    if (!title && !html) return undefined;
+    const description = metaContent(html, "og:description") ?? metaContent(html, "description") ?? "";
+    const imageUrl = input.options?.thumbnailUrl ?? metaContent(html, "og:image") ?? metaContent(html, "twitter:image");
+    let thumb: BlobRef | undefined;
+    if (imageUrl) {
+      try {
+        const { bytes, mime } = await downloadMedia(fetchImpl, { kind: "image", url: new URL(imageUrl, uri).toString() });
+        // Bluesky caps link-card thumbnails at about 1 MB.
+        if (bytes.byteLength <= 1_000_000 && mime.startsWith("image/")) thumb = (await agent.uploadBlob(bytes, { encoding: mime })).data.blob;
+      } catch {
+        thumb = undefined;
+      }
+    }
+    return { $type: "app.bsky.embed.external", external: { uri, title: decodeEntities(title ?? uri), description, ...(thumb ? { thumb } : {}) } };
+  }
+
   private async uploadImages(agent: BlueskyAgentLike, media: Media[]): Promise<BlueskyPostRecord["embed"] | undefined> {
     const images = media.filter((m) => m.kind === "image" || m.kind === "gif");
     if (images.length === 0) return undefined;
-    const fetchImpl = resolveFetch(this.fetchImpl);
     const out: AppBskyEmbedImages.Image[] = [];
     for (const m of images) {
-      const { bytes, mime } = await downloadMedia(fetchImpl, m);
+      const { bytes, mime } = await this.bytesOf(m);
       const res = await agent.uploadBlob(bytes, { encoding: mime });
       out.push({
         image: res.data.blob,
