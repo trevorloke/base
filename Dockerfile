@@ -7,23 +7,26 @@ RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/*/package.json ./packages/
-COPY apps/*/package.json ./apps/
-# restore the directory layout pnpm expects for workspace packages
-RUN set -e; for f in packages/*.json; do n=$(basename "$f" .json); mkdir -p "packages/$n" && mv "$f" "packages/$n/package.json"; done; \
-    for f in apps/*.json; do n=$(basename "$f" .json); mkdir -p "apps/$n" && mv "$f" "apps/$n/package.json"; done
-RUN pnpm install --frozen-lockfile
+# pnpm fetch needs only the lockfile, so this layer caches until dependencies change.
+# (Copying packages/*/package.json with a wildcard flattens every file onto one name and breaks the workspace.)
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm fetch --frozen-lockfile
 
 FROM deps AS build
 COPY . .
+RUN pnpm install --offline --frozen-lockfile
 RUN pnpm --filter @starsign/web build
 
 FROM base AS runtime
 ENV NODE_ENV=production PORT=4000 PGLITE_PATH=/data/pglite
+# Keep the heap inside a 512 MB instance (embedded PGlite needs room outside the JS heap).
+ENV NODE_OPTIONS=--max-old-space-size=320
 COPY --from=build /app /app
 RUN mkdir -p /data && chown -R node:node /data /app
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost:4000/api/health || exit 1
-CMD ["pnpm", "--filter", "@starsign/api", "start"]
+# Run Node directly: going through pnpm adds a second Node process, and corepack re-downloads pnpm
+# for the non-root user on every boot. Same as `pnpm --filter @starsign/api start`.
+WORKDIR /app/apps/api
+CMD ["node", "--import", "tsx", "src/main.ts"]
