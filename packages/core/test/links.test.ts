@@ -117,6 +117,16 @@ describe("publishing through tracked links", () => {
     expect(new URL(link.target).searchParams.get("utm_campaign")).toBe("fall-launch");
   });
 
+  it("tags links in place, without a redirect, on networks that distrust them", async () => {
+    const acctPin = (await m.accounts.connect(owner, { network: "pinterest", externalId: "4", handle: "acmepins", connector: "mock" })).id;
+    const before = (await m.links.list(owner.workspaceId)).length;
+    const { sent, variant } = await publish(acctPin, "Spring gear list", { media: [{ kind: "image", url: "https://cdn.test/p.png" }], options: { link: "https://acme.example/spring" } });
+    const link = new URL(sent.options!.link!);
+    expect(link.origin + link.pathname).toBe("https://acme.example/spring");
+    expect(Object.fromEntries(link.searchParams)).toMatchObject({ utm_source: "pinterest", utm_medium: "social", utm_content: `v-${variant.id.slice(-8)}` });
+    expect((await m.links.list(owner.workspaceId)).length).toBe(before);
+  });
+
   it("does nothing when the workspace turns tracking off", async () => {
     await m.links.updateSettings(owner, { enabled: false });
     const { sent } = await publish(acctMasto, "Off https://acme.example/off");

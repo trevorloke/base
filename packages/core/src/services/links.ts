@@ -45,6 +45,9 @@ export function linkBaseFromEnv(env: NodeJS.ProcessEnv = process.env): string | 
 
 // Networks whose captions do not make links clickable: wrapping would only make the text longer.
 const NON_CLICKABLE_TEXT: ReadonlySet<Network> = new Set<Network>(["instagram", "tiktok"]);
+// Networks whose spam filters distrust redirecting links: their links keep the real destination, with UTM tags added
+// in place, so web analytics still attribute the visit (Starsign just does not count those clicks itself).
+const NO_REDIRECTS: ReadonlySet<Network> = new Set<Network>(["pinterest", "reddit", "google_business"]);
 
 const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"'`]+/gi;
 /** Trailing punctuation belongs to the sentence, not the URL; a closing bracket only if it is unbalanced. */
@@ -284,6 +287,7 @@ export class LinkService {
     const slugs: string[] = [];
 
     const linkFor = async (destination: string, placement: LinkRow["placement"]): Promise<string> => {
+      if (NO_REDIRECTS.has(network)) return settings.utm ? withUtm(destination, this.utmFor(settings, network, campaign, `v-${v.id.slice(-8)}`)) : destination;
       let row = await this.forVariant(v.id, placement, destination);
       if (!row) {
         row = await this.mint({ workspaceId, destination, target: destination, postId: v.postId, variantId: v.id, network, placement, createdBy: SYSTEM });

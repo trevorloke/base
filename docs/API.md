@@ -187,6 +187,8 @@ goes out as `<base>/<slug>`. The stored variant keeps the approved text; `varian
 The redirect adds `utm_source=<network>`, `utm_medium=social`, `utm_campaign=<options.campaign | workspace default |
 post-<id>>`, `utm_content=<slug>` (tags the author already set are kept) and `ssclid=<click id>`. Instagram and TikTok
 captions are left alone (links there are not clickable), as is any segment the short link would push over the limit.
+Pinterest, Reddit and Google Business distrust redirecting links, so there the real destination is kept and only the
+UTM tags are added (web analytics still attribute the visit; Starsign does not count those clicks itself).
 A variant opts out with `options.trackLinks: false`.
 
 Public:
