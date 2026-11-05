@@ -167,7 +167,49 @@ current workspace with their member role.
 - `POST /v1/accounts/connect/:connector/credentials` `{ network, inputs: { ... } }` → `201 Account[]` for non-OAuth connectors
   (Bluesky app password, Telegram bot token + channel, Discord webhook URL). `400` with `details.reason` on rejection.
 - `POST /v1/media` multipart `file` (+ `alt`) → `201 { id, url, kind, mime, bytes, width, height, durationSeconds, media: Media }`; `GET /v1/media`; `DELETE /v1/media/:id`.
+  `413 too_large` above `STARSIGN_MAX_UPLOAD_MB` (default 100): this path holds the file in memory.
+- Direct-to-bucket uploads (v1.3, S3-compatible storage only): `GET /v1/media/limits` → `{ maxUploadBytes, direct, directLimits, types }`.
+  `POST /v1/media/uploads` `{ mime, bytes, filename? }` → `201 { uploadId, method: "PUT", url, headers, expiresAt, maxBytes }`;
+  the browser PUTs the file to `url` with exactly `headers` (valid 1 hour); then `POST /v1/media/uploads/complete`
+  `{ uploadId, alt? }` → `201` asset as above. The server checks the object (HEAD for size, first 64 KB for type and
+  dimensions, ranged reads for MP4/MOV duration) and deletes anything that is not what it claimed. Caps: images 30 MB,
+  documents 100 MB, video 4 GB. `503 unavailable` on local-disk storage. The bucket needs CORS allowing `PUT` with a
+  `content-type` header from the app's origin.
 - `POST /v1/feed/:activityId/reply` `{ text, aiAssisted? }` → `201 PostDetail` (through the gate; may be pending approval).
 - `POST /v1/feed/:activityId/moderate` `{ action: hide|unhide|delete|like|unlike }` → `{ ok, action }` (people only; delete needs owner/approver).
 - `GET /v1/accounts/:id/metrics?metric=followers_total&from=` → `{ latest: {metric: value}, series: { value, observedAt }[] }`.
 - Variants accept `options` (see VariantOptions in packages/schema/src/networks.ts) and `replyToExternalId`.
+
+## Links & conversions (v1.3)
+Owned measurement. When a short-link base is configured (`STARSIGN_LINK_BASE_URL`, else `<STARSIGN_PUBLIC_URL>/l` when
+that is not localhost), every link in a published post (text, thread segments, `options.link`, `options.firstComment`)
+goes out as `<base>/<slug>`. The stored variant keeps the approved text; `variant.published` events list the slugs used.
+The redirect adds `utm_source=<network>`, `utm_medium=social`, `utm_campaign=<options.campaign | workspace default |
+post-<id>>`, `utm_content=<slug>` (tags the author already set are kept) and `ssclid=<click id>`. Instagram and TikTok
+captions are left alone (links there are not clickable), as is any segment the short link would push over the limit.
+A variant opts out with `options.trackLinks: false`.
+
+Public:
+- `GET /l/:slug` → `302` to the tagged destination, `Cache-Control: no-store`; `404` for unknown or disabled links. Link-preview
+  crawlers are redirected but recorded as previews and never counted. No raw IP is stored (a daily-salted hash counts unique visitors).
+- `POST /c` `{ clickId, name?, value?, currency? }` (JSON, `text/plain` accepted for `sendBeacon`, CORS `*`) → always `204`.
+  Counts only for a real, non-bot click from the last 30 days, once per click and name.
+- `GET /s.js` → the browser snippet: keeps `ssclid` from the landing URL for 30 days in first-party storage and exposes
+  `starsign.convert(name, value?, currency?)`.
+
+Authenticated:
+- `GET /v1/links?limit=` → `{ baseUrl, settings, links: (link & { shortUrl, stats: { links, clicks, uniqueVisitors, previews, conversions, conversionValue } })[] }`
+- `POST /v1/links` `{ url, network?, campaign? }` → `201` link + `shortUrl` (not viewers; `503` when no base is configured).
+- `DELETE /v1/links/:id` → `204`; the link stops redirecting at once (owner/approver).
+- `GET /v1/links/report?from&to` (default 30 days) → `{ configured, totals: { clicks, uniqueVisitors, previews, conversions,
+  attributedConversions, conversionValue, valueByCurrency[] }, byNetwork[], byDay[], topLinks[] }`.
+- `GET|PATCH /v1/links/settings` `{ enabled, utm, clickIds, defaultCampaign?, medium }` (PATCH: owner).
+- `POST /v1/conversions` `{ clickId? | slug?, name="conversion", value?, currency?, externalId?, occurredAt? }` → `201
+  { conversion, duplicate: false }`, or `200 { duplicate: true }` when `externalId` was already recorded. Any API key
+  (e.g. the shop's backend) or a non-viewer person. A `clickId` from another workspace is `404`.
+- `GET /v1/conversions?limit=`.
+
+Outcome snapshots (`post_outcomes.metrics`) gain `tracked_clicks` (unique visitors), `conversions` and
+`conversion_value` up to each offset's due time, merged over the network's numbers; networks that report no post
+metrics get these alone. A worker job writes the same three as cumulative series every 15 minutes.
+

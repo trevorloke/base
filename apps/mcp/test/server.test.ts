@@ -6,7 +6,7 @@ import { INSTRUCTIONS, SERVER_NAME, SERVER_VERSION, createServer } from "../src/
 import { TOOL_NAMES } from "../src/tools.ts";
 import { NOW, fakeApi, pendingDetail, radar, textOf } from "./helpers.ts";
 
-const WRITE_TOOLS = new Set(["create_post", "schedule_post", "cancel_post", "create_experiment"]);
+const WRITE_TOOLS = new Set(["create_post", "schedule_post", "cancel_post", "create_experiment", "create_link"]);
 
 let cleanup: (() => Promise<void>) | undefined;
 afterEach(async () => {
@@ -110,5 +110,27 @@ describe("new tools", () => {
     expect((cal.content as { text: string }[])[0]!.text).toMatch(/2026-11-03 16:00Z · scheduled · x\+bluesky · arm named · "Trail report" · pst_1/);
     const exp = await client.callTool({ name: "get_experiment", arguments: { experimentId: "exp_1" } });
     expect((exp.content as { text: string }[])[0]!.text).toMatch(/Verdict: not_enough_data[\s\S]*named: 1\/2 measured, mean 40\.0/);
+  });
+
+  it("reports what posts drove from owned link data", async () => {
+    const client = await connect(
+      fakeApi([
+        {
+          method: "GET",
+          path: "/v1/links/report",
+          body: {
+            configured: true,
+            totals: { clicks: 40, uniqueVisitors: 31, previews: 12, conversions: 3, attributedConversions: 2, conversionValue: 147, valueByCurrency: [{ currency: "USD", value: 147 }] },
+            byNetwork: [{ network: "linkedin", clicks: 30, uniqueVisitors: 24, conversions: 2, value: 98 }],
+            topLinks: [{ slug: "Ab3dE9x", shortUrl: "https://go.acme.test/Ab3dE9x", destination: "https://acme.test/sale", network: "linkedin", postId: "pst_9", uniqueVisitors: 24, conversions: 2, conversionValue: 98, clicksInRange: 30 }],
+          },
+        },
+      ]),
+    );
+    const r = await client.callTool({ name: "get_link_report", arguments: { days: 7 } });
+    const text = (r.content as { text: string }[])[0]!.text;
+    expect(text).toMatch(/Last 7 days: 31 people clicked \(40 clicks; 12 link-preview fetches not counted\)\. 3 conversions \(2 traced to a post\), worth 147\.00 USD/);
+    expect(text).toMatch(/linkedin: 24 people, 2 conversions/);
+    expect(text).toMatch(/go\.acme\.test\/Ab3dE9x → https:\/\/acme\.test\/sale: 30 clicks, 2 conversions \(post pst_9\)/);
   });
 });

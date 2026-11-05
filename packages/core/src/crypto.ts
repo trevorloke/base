@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, randomBytes, createHmac } from "node:crypto";
 
 /** AES-256-GCM for credentials at rest. Ciphertext = base64(iv(12) | tag(16) | data). */
 export class SecretBox {
@@ -19,6 +19,11 @@ export class SecretBox {
     const data = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
     const tag = cipher.getAuthTag();
     return Buffer.concat([iv, tag, data]).toString("base64");
+  }
+
+  /** A keyed hash for a purpose (e.g. a daily visitor salt). Deterministic per key; never reversible. */
+  derive(label: string): Buffer {
+    return createHmac("sha256", this.key).update(label).digest();
   }
 
   decrypt<T = Record<string, unknown>>(ciphertext: string): T {

@@ -530,6 +530,69 @@ export const mediaAssets = pgTable(
   (t) => [index("media_assets_ws").on(t.workspaceId, t.createdAt), index("media_assets_sha").on(t.workspaceId, t.sha256)],
 );
 
+// ---------------------------------------------------------------- owned measurement: links, clicks, conversions
+
+/** Short links Starsign minted for published posts (or by hand). `target` is the destination with UTM tags. */
+export const trackedLinks = pgTable(
+  "tracked_links",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    slug: text("slug").notNull().unique(),
+    destination: text("destination").notNull(),
+    target: text("target").notNull(),
+    postId: text("post_id").references(() => posts.id),
+    variantId: text("variant_id").references(() => postVariants.id),
+    network: text("network"),
+    placement: text("placement").$type<"text" | "thread" | "link" | "first_comment" | "manual">().notNull().default("text"),
+    utm: jsonb("utm").$type<Record<string, string>>().notNull().default({}),
+    createdBy: jsonb("created_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+    disabledAt: ts("disabled_at"),
+  },
+  (t) => [index("tracked_links_ws").on(t.workspaceId, t.createdAt), index("tracked_links_variant").on(t.variantId)],
+);
+
+/** Append-only. One row per redirect; no raw IP (visitor_hash is salted daily). */
+export const linkClicks = pgTable(
+  "link_clicks",
+  {
+    id: text("id").primaryKey(),
+    linkId: text("link_id").notNull().references(() => trackedLinks.id),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    variantId: text("variant_id"),
+    network: text("network"),
+    occurredAt: ts("occurred_at").notNull().defaultNow(),
+    visitorHash: text("visitor_hash").notNull(),
+    isBot: boolean("is_bot").notNull().default(false),
+    device: text("device"),
+    referrerHost: text("referrer_host"),
+    country: text("country"),
+  },
+  (t) => [index("link_clicks_link").on(t.linkId, t.occurredAt), index("link_clicks_ws").on(t.workspaceId, t.occurredAt)],
+);
+
+/** Append-only. Downstream outcomes, attributed to a post through the click id when the reporter passes it. */
+export const conversions = pgTable(
+  "conversions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    clickId: text("click_id").references(() => linkClicks.id),
+    linkId: text("link_id").references(() => trackedLinks.id),
+    variantId: text("variant_id"),
+    network: text("network"),
+    name: text("name").notNull(),
+    value: doublePrecision("value"),
+    currency: text("currency"),
+    externalId: text("external_id"),
+    source: text("source").$type<"api" | "browser">().notNull(),
+    occurredAt: ts("occurred_at").notNull(),
+    createdAt: now(),
+  },
+  (t) => [index("conversions_ws").on(t.workspaceId, t.occurredAt), index("conversions_variant").on(t.variantId)],
+);
+
 /** Pending OAuth authorizations (PKCE). The verifier is encrypted; rows expire after ten minutes. */
 export const oauthStates = pgTable("oauth_states", {
   state: text("state").primaryKey(),

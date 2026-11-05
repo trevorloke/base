@@ -44,6 +44,9 @@ export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEver
           return m.metrics.captureAccountMetrics();
         case "sources":
           return pullSources(m);
+        case "links":
+          // Cumulative values, so overlapping windows are harmless; 20 minutes covers a late or skipped run.
+          return { metrics: await m.links.rollup(new Date(m.ctx.now().getTime() - 20 * 60_000)) };
         case "forecasts":
           return { topics: await refreshForecasts(m) };
         default:
@@ -57,6 +60,7 @@ export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEver
   await mq.upsertJobScheduler("ingest", { every: opts.ingestEveryMs ?? 5 * 60_000 }, { name: "ingest" });
   await mq.upsertJobScheduler("outcomes", { every: opts.outcomesEveryMs ?? 10 * 60_000 }, { name: "outcomes" });
   await mq.upsertJobScheduler("account-metrics", { every: 6 * 60 * 60_000 }, { name: "account-metrics" });
+  await mq.upsertJobScheduler("links", { every: 15 * 60_000 }, { name: "links" });
   await mq.upsertJobScheduler("sources", { every: opts.sourcesEveryMs ?? 60 * 60_000 }, { name: "sources" });
   await mq.upsertJobScheduler("forecasts", { every: opts.forecastEveryMs ?? 60 * 60_000 }, { name: "forecasts" });
 

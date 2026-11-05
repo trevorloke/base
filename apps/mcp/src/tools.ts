@@ -35,6 +35,8 @@ export const TOOL_NAMES = [
   "list_experiments",
   "get_experiment",
   "create_experiment",
+  "get_link_report",
+  "create_link",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -148,6 +150,14 @@ export const inputs = {
       .describe("2-6 arms. Then create posts with experimentId and experimentArm set to one of these keys"),
     primaryMetric: z.enum(["engagements", "impressions", "likes", "replies", "reposts", "link_clicks", "conversions"]).default("engagements"),
     offset: z.enum(["24h", "72h", "7d"]).default("24h").describe("When outcomes are compared after publishing"),
+  },
+  get_link_report: {
+    days: z.number().int().min(1).max(365).default(30).describe("How many days back (default 30)"),
+  },
+  create_link: {
+    url: z.string().url().describe("Absolute http(s) destination"),
+    network: z.enum(["x", "bluesky", "threads", "instagram", "facebook", "linkedin", "tiktok", "youtube", "pinterest", "mastodon", "reddit", "google_business", "telegram", "discord"]).optional().describe("Where the link will be shared (sets utm_source)"),
+    campaign: z.string().max(100).optional().describe("utm_campaign"),
   },
 };
 
@@ -309,7 +319,7 @@ export const handlers = {
       const events = await ctx.client.getLedger({ types: args.types, subjectType: args.subjectType, subjectId: args.subjectId, limit: args.limit });
       return ok(fmt.formatLedger(events), events);
     }),
-} satisfies Record<Exclude<ToolName, keyof typeof moreHandlers>, (ctx: ToolContext, ...args: never[]) => Promise<CallToolResult>>;
+} satisfies Record<Exclude<ToolName, keyof typeof moreHandlers | keyof typeof linkHandlers>, (ctx: ToolContext, ...args: never[]) => Promise<CallToolResult>>;
 
 // ---- registration ----------------------------------------------------------------------------
 
@@ -358,6 +368,36 @@ const moreHandlers = {
     run(async () => {
       const e = await ctx.client.request<ExperimentRow>("POST", "/v1/experiments", { body: args });
       return ok(`Experiment "${e.name}" is running (${e.id}). Create posts with experimentId "${e.id}" and experimentArm one of: ${e.arms.map((a) => a.key).join(", ")}. They still go through the approval queue.`, e);
+    }),
+};
+
+interface LinkReportShape {
+  configured: boolean;
+  totals: { clicks: number; uniqueVisitors: number; previews: number; conversions: number; attributedConversions: number; conversionValue: number; valueByCurrency: { currency: string | null; value: number }[] };
+  byNetwork: { network: string | null; clicks: number; uniqueVisitors: number; conversions: number; value: number }[];
+  topLinks: { slug: string; shortUrl: string | null; destination: string; network: string | null; postId: string | null; uniqueVisitors: number; conversions: number; conversionValue: number; clicksInRange: number }[];
+}
+
+const linkHandlers = {
+  get_link_report: (ctx: ToolContext, args: Args<typeof inputs.get_link_report>) =>
+    run(async () => {
+      const to = ctx.now();
+      const from = new Date(to.getTime() - args.days * DAY_MS);
+      const r = await ctx.client.request<LinkReportShape>("GET", "/v1/links/report", { query: { from: from.toISOString(), to: to.toISOString() } });
+      if (!r.configured && r.totals.clicks === 0) return ok("Link tracking is not configured on this deployment, so there are no owned click or conversion numbers yet.", r);
+      const t = r.totals;
+      const money = t.valueByCurrency.map((c) => `${c.value.toFixed(2)} ${c.currency ?? "(no currency)"}`).join(", ");
+      const nets = r.byNetwork.map((n) => `  - ${n.network ?? "manual"}: ${n.uniqueVisitors} people, ${n.conversions} conversions`).join("\n");
+      const top = r.topLinks.map((l) => `  - ${l.shortUrl ?? l.slug} → ${l.destination}: ${l.clicksInRange} clicks, ${l.conversions} conversions${l.postId ? ` (post ${l.postId})` : ""}`).join("\n");
+      return ok(
+        `Last ${args.days} days: ${t.uniqueVisitors} people clicked (${t.clicks} clicks; ${t.previews} link-preview fetches not counted). ${t.conversions} conversions (${t.attributedConversions} traced to a post)${money ? `, worth ${money}` : ""}.${nets ? `\nBy network:\n${nets}` : ""}${top ? `\nTop links:\n${top}` : ""}`,
+        r,
+      );
+    }),
+  create_link: (ctx: ToolContext, args: Args<typeof inputs.create_link>) =>
+    run(async () => {
+      const l = await ctx.client.request<{ id: string; slug: string; shortUrl: string; target: string }>("POST", "/v1/links", { body: args });
+      return ok(`Short link ${l.shortUrl} → ${l.target}. Clicks and conversions on it show up in get_link_report. Links inside posts are wrapped automatically; use this for bios and anything posted by hand.`, l);
     }),
 };
 
@@ -572,5 +612,7 @@ export function registerTools(server: McpServer, client: StarsignClient, opts: {
   server.registerTool("get_discoveries", { title: "Trending now", description: "Raw terms the sources say are trending right now, before the Scout turns relevant ones into topics. Useful to spot something the radar does not track yet.", inputSchema: inputs.get_discoveries, annotations: READ_ONLY }, (args) => moreHandlers.get_discoveries(ctx, args));
   server.registerTool("list_experiments", { title: "Experiments", description: "Running and concluded experiments: name, arms, metric.", annotations: READ_ONLY }, () => moreHandlers.list_experiments(ctx));
   server.registerTool("get_experiment", { title: "Experiment readout", description: "One experiment with its readout: posts and measured outcomes per arm, lift with an 80% interval, and a verdict that names a winner only when the evidence clears.", inputSchema: inputs.get_experiment, annotations: READ_ONLY }, (args) => moreHandlers.get_experiment(ctx, args));
+  server.registerTool("get_link_report", { title: "What posts drove", description: "Owned outcome numbers from Starsign's short links: people who clicked, conversions and their value, by network and top link. Unlike network metrics these are first-party and comparable across networks; use them to judge which posts actually worked.", inputSchema: inputs.get_link_report, annotations: READ_ONLY }, (args) => linkHandlers.get_link_report(ctx, args));
+  server.registerTool("create_link", { title: "Make a tracked link", description: "Make a tracked short link with UTM tags for a destination (for a bio or a manual post). Links inside posts created with create_post are wrapped automatically at publish time.", inputSchema: inputs.create_link, annotations: { ...WRITES, idempotentHint: false } }, (args) => linkHandlers.create_link(ctx, args));
   server.registerTool("create_experiment", { title: "Start an experiment", description: "Start an experiment with 2-6 arms. Then create posts with experimentId and experimentArm. Concluding happens in the app.", inputSchema: inputs.create_experiment, annotations: { ...WRITES, idempotentHint: false } }, (args) => moreHandlers.create_experiment(ctx, args));
 }

@@ -17,6 +17,8 @@ export interface CoreDeps {
   classifyTopic?: (text: string, keywords: string[], description: string) => number;
   /** Where uploaded media lives. Defaults to local disk (STARSIGN_MEDIA_DIR / STARSIGN_PUBLIC_URL). */
   mediaStorage?: import("./media/storage.ts").MediaStorage;
+  /** Short-link base for link tracking. Undefined: read STARSIGN_LINK_BASE_URL / STARSIGN_PUBLIC_URL. Null: off. */
+  linkBaseUrl?: string | null;
   /** Sign-up gate, mailer and link base for people auth. Defaults read the environment. */
   auth?: import("./services/auth.ts").AuthOptions;
 }

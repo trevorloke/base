@@ -11,7 +11,7 @@ export type { PullResult, SourceStatus } from "./services/sources.ts";
 export { compareArms, type Readout, type Comparison, type ArmReadout } from "./services/experiments.ts";
 export * from "./media/storage.ts";
 export * from "./media/probe.ts";
-export { MAX_UPLOAD_BYTES, MEDIA_LIMITS, type MediaRow } from "./services/media.ts";
+export { MAX_UPLOAD_BYTES, MEDIA_LIMITS, DIRECT_LIMITS, type MediaRow } from "./services/media.ts";
 export {
   AttemptLimiter,
   hashPassword,
@@ -30,3 +30,4 @@ export {
   type ResolvedSession,
   type SessionView,
 } from "./services/auth.ts";
+export { LinkSettings, ConversionInput, linkBaseFromEnv, findUrls, trimUrl, withUtm, classifyAgent, newSlug, type LinkStats, type ClickMeta } from "./services/links.ts";
