@@ -248,6 +248,13 @@ one tap away under **More**.
   shows as a chip you can take off; **Save as a list** carries them, and the
   saved list (and a blast or Calls from it) keeps them.
 
+- **Scripts** — Today → More → **Scripts**: write what to say at the door
+  and on the phone; **+ First name**, **+ Your name**, **+ Campaign** fill in
+  for whoever's in front of the canvasser, and the preview reads it for a
+  made-up voter. **Save**; empty takes it away. A volunteer sees **Script**
+  above the rating buttons on the walk list, the door card and Calls (with
+  no signal too).
+
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
   **Today · Map · Calls · Shifts**.

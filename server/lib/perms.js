@@ -41,7 +41,7 @@ const ACTION_AREA = {
   gift: 'money', receipt: 'money',
   sign: 'signs',
   blast: 'outreach', survey: 'outreach',
-  ladder: 'outreach', text: 'outreach', texting: 'outreach', subscription: 'outreach',
+  ladder: 'outreach', text: 'outreach', texting: 'outreach', subscription: 'outreach', script: 'outreach',
   member: 'admin', team: 'admin', permission: 'admin', workspace: 'admin', scale: 'admin', field: 'admin',
   bank: 'people', list: 'people',
   pass: 'map',
@@ -77,6 +77,7 @@ const PATH_AREA = [
   [/^\/api\/shiftturfs(\/|$)/, 'shifts'],
   [/^\/api\/connections(\/|$)/, 'admin'],
   [/^\/api\/intake(\/|$)/, 'admin'],
+  [/^\/api\/scripts(\/|$)/, 'outreach'],
 ];
 export const areaOfPath = (path) => PATH_AREA.find(([re]) => re.test(path))?.[1] || null;
 

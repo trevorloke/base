@@ -32,6 +32,7 @@ import { MyPeopleLink } from '../components/RelationshipsBits.jsx';
 import { VotedRow } from '../components/Voted.jsx';
 import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs } from '../components/FieldCuts.jsx';
+import ScriptLine from '../components/ScriptLine.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared widgets + helpers (also used by Person.jsx)
@@ -1257,6 +1258,8 @@ function CallsScreen() {
             {/* Just texted (or someone else is): nothing to rate yet — the card offers Next. */}
             {!nothingToLog && (
               <>
+                {/* A phone bank's own script sits at the top; otherwise the campaign's. */}
+                {!bank?.script && <ScriptLine context="phone" person={current} />}
                 <div className="cl-rate">
                   <RatingButtons value={mine} onPick={(code) => log('contacted', code)} disabled={act.busy} />
                 </div>

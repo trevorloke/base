@@ -92,6 +92,8 @@ function planFor(key, me) {
     case 'voted': return k1 === 'status' && key.length === 2 ? { name: 'voted:status', tier: 'local', field: true } : null;
     case 'fieldReport': return key.length === 2 && typeof k1 === 'string' ? q(`fieldReport:${k1}`, 'local') : null;
     case 'shiftturfs': return key.length === 1 ? { name: 'shiftturfs', tier: 'local', field: true } : null;
+    // What to say at the door and on the phone (ext/scripts): it shows with no signal.
+    case 'scripts': return key.length === 1 ? { name: 'scripts', tier: 'local', field: true } : null;
     default: return null;
   }
 }

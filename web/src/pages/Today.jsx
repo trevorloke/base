@@ -811,6 +811,7 @@ function DeskToday({ b, me, toast }) {
           <LinkRow to="/lists" main="Lists" />
           <LinkRow to="/reports" main="Reports" />
           <LinkRow to="/surveys" main="Surveys" />
+          <LinkRow to="/scripts" main="Scripts" />
           {isManager && <LinkRow to="/settings" main={<>Settings <span className="muted">· members, teams, permissions</span></>} />}
           {b.providers && (!b.providers.email || !b.providers.text) && (
             <LinkRow to="/outreach/connect" main="Connect email & texting" />

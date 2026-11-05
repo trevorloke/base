@@ -56,6 +56,7 @@ import AddressField, { lookupAddress } from './AddressField.jsx';
 import { useOnline } from './NoSignal.jsx';
 import { callsCard, noTexts, textingOn, useTextingStatus } from './TextingCard.jsx';
 import '../pages/map.css';
+import ScriptLine from './ScriptLine.jsx';
 
 // "Wants a sign?" — one tap files a request (Undo is on the toast). A kind
 // this door already has (requested or up) isn't offered again.
@@ -629,6 +630,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
               <button type="button" className="fk-link" onClick={backToDoor}>At the door instead</button>
             </p>
           )}
+          {!dnc && <ScriptLine context={channel === 'door' ? 'door' : 'phone'} person={sel} />}
           <RatingButtons
             key={sel.id}
             value={ratingOf(sel)}

@@ -44,6 +44,7 @@ import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
+import ScriptLine from '../components/ScriptLine.jsx';
 
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
 const TURF_COLORS = ['#2b6cb0', '#7b3fa0', '#b5651d', '#1f7a6d', '#a0306a', '#4c5a8a'];
@@ -1069,6 +1070,7 @@ function Door({
         <div className="walk-panel" id={panelId}>
           <PersonTabs persons={door.persons} value={sel.id} onPick={onPick} />
           {dnc && <p className="walk-dnc"><span className="chip chip-danger">Do not contact</span> Skip {firstName(sel.name)}</p>}
+          {!dnc && <ScriptLine context="door" person={sel} />}
           <VotedRow person={sel} source="door" toast={toast} onMarked={onVoted} />
           <RatingButtons key={sel.id} value={sel.rating} disabled={Boolean(busy[sel.id] || busy[door.key])} onPick={(code) => talk(sel, code)} />
           <OutcomeButtons

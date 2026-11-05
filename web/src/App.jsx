@@ -45,6 +45,7 @@ const LaddersFollowups = lazy(() => import('./pages/LaddersFollowups.jsx'));
 const Surveys = lazy(() => import('./pages/Surveys.jsx'));
 const SurveysEdit = lazy(() => import('./pages/SurveysEdit.jsx'));
 const SurveysResults = lazy(() => import('./pages/SurveysResults.jsx'));
+const Scripts = lazy(() => import('./pages/Scripts.jsx'));
 const RatingScale = lazy(() => import('./pages/RatingScale.jsx'));
 const Fields = lazy(() => import('./pages/Fields.jsx'));
 const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
@@ -89,7 +90,7 @@ function NotForYou({ me }) {
 
 // A desk address typed into the field app (an old bookmark, a link in an
 // email): the admin has it. Volunteers go home, as before.
-const DESK_PATHS = /^\/(people(\/(import|fields|connected))?|money|lists|reports|outreach|ladders|follow-ups|surveys|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
+const DESK_PATHS = /^\/(people(\/(import|fields|connected))?|money|lists|reports|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
 function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
@@ -106,7 +107,7 @@ function FieldFallback() {
 // Permissions); a desk role denied the area is sent home too.
 const ROUTE_AREA = [
   [/^\/people\/(import|connected)|^\/lists/, 'people'], [/^\/people\/fields/, 'admin'], [/^\/reports/, 'data'],
-  [/^\/money/, 'money'], [/^\/outreach|^\/ladders|^\/follow-ups|^\/surveys|^\/inbox\/settings/, 'outreach'],
+  [/^\/money/, 'money'], [/^\/outreach|^\/ladders|^\/follow-ups|^\/surveys|^\/scripts|^\/inbox\/settings/, 'outreach'],
   [/^\/team|^\/settings|^\/rating-scale/, 'admin'],
   [/^\/passes/, 'map'],
   [/^\/voted/, 'people'],
@@ -204,6 +205,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/ladders/:id" element={<LaddersEdit />} />
           <Route path="/follow-ups" element={<LaddersFollowups />} />
           <Route path="/surveys" element={<Surveys />} />
+          <Route path="/scripts" element={<Scripts />} />
           <Route path="/surveys/:id" element={<SurveysEdit />} />
           <Route path="/surveys/:id/results" element={<SurveysResults />} />
           <Route path="/rating-scale" element={<RatingScale />} />

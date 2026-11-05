@@ -1,0 +1,12 @@
+/* ScriptLine: "Script", and the words when open. */
+.sl { margin: 0 0 var(--s-2); }
+.sl-btn { min-height: 44px; }
+.sl-words { white-space: pre-wrap; margin: var(--s-1) 0 0; padding: var(--s-3); font-size: 15px; line-height: 1.55;
+  background: var(--paper-0); border: var(--border); border-radius: var(--r-card); color: var(--text-1); }
+
+/* /scripts */
+.sc-box { margin: var(--s-4) 0; padding: var(--s-4); }
+.sc-h { font-size: 18px; margin: 0 0 var(--s-1); }
+.sc-text { min-height: 140px; font-size: 15px; line-height: 1.5; }
+.sc-inserts, .sc-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; margin-top: var(--s-2); }
+.sc-preview { margin-top: var(--s-3); }
