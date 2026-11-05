@@ -18,8 +18,9 @@ is written) and says exactly what is wrong if anything is.
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
+| [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
 
-The campaign's website is its own thing; how its forms will come in is
+The campaign's website sends people in with a key; the API is
 [below](#the-campaigns-website).
 
 ## Database
@@ -187,17 +188,76 @@ it in.
 
 ## The campaign's website
 
-The website is hosted apart, and its forms (petitions, newsletter and
-volunteer signups, RSVPs, donations) are to feed Starbase when it is
-integrated; until then nothing on the website writes to Starbase. What
-exists today:
+The website (hosted apart) sends people in through a small JSON API with a
+key — sign-ups, petition signatures, volunteer forms, newsletter opt-ins.
+It must call it **from its own server** (its form handler, a serverless
+function, a form service's webhook), never from JavaScript in the visitor's
+browser: the key would be visible to anyone.
 
-- **Files in:** People → Import takes a CSV or spreadsheet (a dry run first);
-  a `voted` column (1/0, yes/no or a date) marks who voted and never
-  un-marks anyone.
-- **Pages out:** the website can link to Starbase's public pages — `/learn/…`
-  (public lessons), and the unsubscribe pages every email carries (`/u`,
-  `/bu`, `/lu`) and receipts (`/r`).
-- **No API key yet:** every `/api` route needs a signed-in person. A website
-  feed will need its own key and an endpoint built for it; that is the next
-  piece of work for the integration, not a setting.
+**A key:** Settings → Services → *Website keys* → name it (*Website*) →
+**Make a key**. It is shown once — copy it into the website's own secret
+settings. Starbase keeps only a hash of it, lists it by its first characters
+with when it was last used, and **Revoke** stops it at once. Use one key per
+website or form service.
+
+```
+Authorization: Bearer sbk_…             every request
+GET  https://<public address>/in/v1/ping      → 200 { "ok": true, "campaign": "Imagine Surrey", "key": "Website" }
+POST https://<public address>/in/v1/people    → 201 new · 200 matched someone on file
+```
+
+**`POST /in/v1/people`** — JSON (`Content-Type: application/json`), one
+person. An email or a phone, and a name (or `first_name` / `last_name`):
+
+| Field | | |
+|---|---|---|
+| `name` or `first_name`, `last_name` | text | |
+| `email` | text | how a sign-up is matched first |
+| `phone` | text | any format |
+| `address`, `unit`, `city`, `postal` | text | the street line as typed (`13450 104 Ave`); it's placed on the map |
+| `tags` | up to 20 words | kept as sent (`Petition: Transit`) |
+| `source` | a word for where they came from (`petition-transit`) | added as a tag; default `website` |
+| `newsletter` | `true` | their email goes on the newsletter list — their own sign-up, so it rejoins someone who had unsubscribed |
+| `volunteer` | `true` | a *Wants to volunteer* request under Today → *Needs you*, with `note` |
+| `note` | what they wrote | with a volunteer request; otherwise their note on file if they have none |
+
+Anything else (a rating, a role, money) is refused: the website never sets
+what only a canvass or the desk decides.
+
+Someone already on file is matched the way an import matches (email, then
+name and phone, then name and address): their blanks are filled and the new
+tags added; nothing on file is overwritten. The answer:
+
+```json
+{ "person_id": "…", "created": true, "merged": [], "newsletter": "subscribed", "volunteer": "requested" }
+```
+
+`merged` names the fields filled on a match; `newsletter` is `subscribed`,
+`rejoined`, `already` or `null`; `volunteer` is `requested` or `null`.
+
+**Retries:** send an `Idempotency-Key` header (the form submission's own id,
+up to 200 characters). The same key with the same body answers what it
+answered the first time, with `"replayed": true`, and never makes a second
+person; the same key with a different body is refused (409).
+
+**Errors:** `401` no key, a wrong one or a revoked one · `400` a field
+missing or not allowed (the message names it) · `415` not JSON · `409` an
+Idempotency-Key reused with another body · `429` more than 120 requests a
+minute on one key. Everything accepted is on the event log, as the
+manager who made the key.
+
+```sh
+curl https://starbase.imaginesurrey.ca/in/v1/people \
+  -H "Authorization: Bearer $STARBASE_KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: form-2026-10-12-0193" \
+  -d '{"first_name":"Asha","last_name":"Example","email":"asha@example.org",
+       "postal":"V3T 1V8","newsletter":true,"source":"petition-transit"}'
+```
+
+Donations and RSVPs are not taken this way: a gift is logged at the desk
+(Donations → Log a gift), where the contribution limits are checked.
+
+Also, without a key: **files in** — People → Import takes a CSV or
+spreadsheet (a dry run first; a `voted` column marks who voted and never
+un-marks anyone); **pages out** — the website can link to Starbase's public
+lessons (`/learn/…`); every email carries its own unsubscribe page.

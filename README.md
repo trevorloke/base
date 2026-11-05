@@ -188,14 +188,18 @@ than a week after they came off is refused. Contacts are door, phone, text or
 |---|---|---|
 | **Ecanvasser** | map canvass, door cards, household grouping, ratings, no-answer outcomes, signs at the door, place-on-map, call/text lists, turf cutting & assignment, walk lists, survey builder (door and calls), custom person fields, offline field mode, offline desk (each sign-in's last copy of every screen, money and donor lists in the tab only; ratings, notes and tags queued; one outbox across tabs) | — |
 | **Action Builder** | assessments (= the rating scale, its words and Voting-for list edited per campaign), tags, roles, relational notes, relationship graph (My people, Knows with a nudge, Most connected, brought in by), event-logged every touch | — |
-| **Action Network** | newsletter list + unsubscribe, press list + releases, email blasts and texts to lists, ladders of engagement, A/B subject lines with open/click tracking | public forms (petitions, signups, RSVPs, donations) from the campaign's website |
+| **Action Network** | newsletter list + unsubscribe, press list + releases, email blasts and texts to lists, ladders of engagement, A/B subject lines with open/click tracking | the website's RSVPs and online donations (sign-ups, petitions and volunteers come in through `/in/v1/people`) |
 
 ## Public pages
 
-The campaign's website lives elsewhere, and its forms (petitions, newsletter
-and volunteer signup, RSVPs, donations) will feed Starbase when it is
-integrated. Until then Starbase's only public pages are the ones every
-email needs, no login:
+The campaign's website lives elsewhere. Its server sends sign-ups,
+petition signatures, volunteers and newsletter opt-ins in through
+`POST /in/v1/people` with a website key a manager makes under Settings →
+Services (`server/ext/intake`; the fields and answers are in
+INTEGRATIONS.md, *The campaign's website*): matched like an import, a
+volunteer filed as a request under *Needs you*. Donations and RSVPs aren't
+taken that way. Starbase's own public pages are the ones every email needs,
+no login:
 
 - `/u/:subscriptionId` — unsubscribe from the newsletter (the link asks; one
   tap on *Unsubscribe* does it, so mail scanners never unsubscribe anyone)

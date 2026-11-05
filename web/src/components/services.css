@@ -15,3 +15,10 @@
 .sv2-said.is-bad { color: var(--danger); font-weight: 600; }
 .sv2-check { flex: 0 0 auto; min-height: 48px; }
 .sv2-h { font-size: 16px; margin: var(--s-5) 0 var(--s-2); }
+.sv2-keys { margin-top: var(--s-5); }
+.sv2-fresh { margin: var(--s-3) 0; padding: var(--s-3); border: var(--border-2); border-radius: var(--r-card); background: var(--paper-1); }
+.sv2-key { display: block; margin: var(--s-2) 0; padding: 6px 8px; font-size: 14px; user-select: all; overflow-wrap: anywhere; }
+.sv2-fresh__acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.sv2-make { display: flex; gap: var(--s-2); align-items: flex-end; flex-wrap: wrap; margin-top: var(--s-3); }
+.sv2-make .field { flex: 1 1 220px; margin-bottom: 0; }
+.sv2-make .btn { min-height: 48px; }

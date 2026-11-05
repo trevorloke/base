@@ -76,6 +76,7 @@ const PATH_AREA = [
   [/^\/api\/field-report/, 'data'],
   [/^\/api\/shiftturfs(\/|$)/, 'shifts'],
   [/^\/api\/connections(\/|$)/, 'admin'],
+  [/^\/api\/intake(\/|$)/, 'admin'],
 ];
 export const areaOfPath = (path) => PATH_AREA.find(([re]) => re.test(path))?.[1] || null;
 

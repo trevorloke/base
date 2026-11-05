@@ -4,7 +4,9 @@
 // needed to launch, Check on the database answers, Check on email says the
 // key isn't set (no call goes out without one), and Twilio's address is
 // listed under "Coming in"; at 390 nothing scrolls sideways and the Check
-// buttons are 48px. Staff are kept out, on screen and on the server.
+// buttons are 48px. A website key: made, shown once, used to send a person
+// in (a volunteer lands under Requests), listed with when it was last used,
+// revoked. Staff are kept out, on screen and on the server.
 //
 //   node e2e-services.mjs                        (starts its own server on :4121)
 import { chromium } from 'playwright-core';
@@ -76,6 +78,34 @@ const m = await page.evaluate(() => {
 });
 check('at 390: no sideways scroll, no yellow button, Check ≥ 48px', m.overflow <= 0 && m.yellow === 0 && m.minTap >= 48, JSON.stringify(m));
 await page.screenshot({ path: `${SHOTS}/01-services.png`, fullPage: true });
+
+// Website keys: make one (shown once), the website sends a person in with it,
+// "last used", Revoke stops it.
+await page.fill('#sv2-key-name', 'Website');
+await page.tap('.sv2-make button[type="submit"]');
+await page.waitForSelector('.sv2-fresh .sv2-key', { timeout: 8000 }).catch(() => {});
+const shown = ((await page.innerText('.sv2-fresh .sv2-key').catch(() => '')) || '').trim();
+check('Make a key: the key, once, "copy this key now — it won’t be shown again"', /^sbk_[A-Za-z0-9]{40}$/.test(shown) && /won’t be shown again/.test(await text(page, '.sv2-fresh')), shown);
+const send = await page.request.post(`${BASE}/in/v1/people`, {
+  headers: { authorization: `Bearer ${shown}`, 'content-type': 'application/json', 'idempotency-key': 'e2e-1' },
+  data: { first_name: 'Asha', last_name: 'Example', email: `asha+${tag}@example.org`, newsletter: true, volunteer: true, note: 'Weekends', source: 'volunteer-form' },
+});
+const sent = await send.json();
+check('the website sends a person in with it: created, on the newsletter, a volunteer request', send.status() === 201 && sent.created && sent.newsletter === 'subscribed' && sent.volunteer === 'requested', JSON.stringify(sent));
+await page.tap('.sv2-fresh button:has-text("Done")');
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.sv2-keys .sv2-row', { timeout: 8000 }).catch(() => {});
+const row = await text(page, '.sv2-keys .sv2-row');
+check('the key is listed by its first characters and "last used"', row.includes(`${shown.slice(0, 10)}…`) && /last used/.test(row) && !row.includes(shown), row);
+await page.goto(`${ADMIN}/requests`, { waitUntil: 'domcontentloaded' });
+await sleep(1500);
+check('the volunteer is waiting under Requests, with what they wrote', /Asha Example/.test(await text(page)) && /Signed up on the website \(volunteer-form\): Weekends/.test(await text(page)), (await text(page)).slice(0, 300));
+await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.sv2-keys .sv2-row', { timeout: 8000 });
+await page.tap('.sv2-keys .sv2-row button:has-text("Revoke")');
+await sleep(800);
+const after = await page.request.get(`${BASE}/in/v1/ping`, { headers: { authorization: `Bearer ${shown}` } });
+check('Revoke: the key stops at once', after.status() === 401 && !(await page.$('.sv2-keys .sv2-row')), after.status());
 
 // Staff: not theirs.
 const inv = await ctx.request.post(`${BASE}/api/actions/member.invite`, { data: { email: `sam+${tag}@services.example`, role: 'staff' } });

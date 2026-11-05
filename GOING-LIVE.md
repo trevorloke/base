@@ -42,8 +42,9 @@ promote the code — the production database is the campaign's alone.
 
 Add the DNS records Render shows; it issues the certificates. The
 campaign's website (`imaginesurrey.ca`) is its own thing, hosted apart; it
-links to Starbase's public pages; its forms will feed Starbase once that
-integration is built (INTEGRATIONS.md, *The campaign's website*).
+links to Starbase's public pages, and its server sends sign-ups in with a
+website key from Settings → Services (INTEGRATIONS.md, *The campaign's
+website*: the fields, the answers, an example).
 
 ## 3 · Settings (Render → the service → Environment)
 

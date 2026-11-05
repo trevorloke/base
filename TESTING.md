@@ -234,6 +234,13 @@ one tap away under **More**.
   the number is on the Twilio account and its replies come here; Address
   lookup, the map background, the public address and the database answer
   too. *Coming in* lists the address to give Twilio. Staff can't open it.
+- **Website keys** (Settings → Services) — **Make a key**: it's shown once
+  to copy. Send a person in with it as the website would (INTEGRATIONS.md
+  has a `curl` line): a new person appears, tagged with the source; with
+  `"newsletter": true` they're on the list; with `"volunteer": true` a
+  *Wants to volunteer* request waits under Today → *Needs you*. Send the
+  same again with the same `Idempotency-Key`: still one person. The key's row
+  says when it was last used; **Revoke** and the next send is refused (401).
 
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
