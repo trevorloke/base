@@ -9,7 +9,17 @@ import { CoreError } from "../errors.ts";
 import { mp4DurationSeconds, probe } from "../media/probe.ts";
 import type { MediaStorage } from "../media/storage.ts";
 
-export const MEDIA_LIMITS = { imageBytes: 30 * 1024 * 1024, videoBytes: 1024 * 1024 * 1024, documentBytes: 100 * 1024 * 1024 };
+/**
+ * Uploads are held in memory while they are checked and stored, so the cap must fit the instance. The default
+ * (100 MB) is safe on a 512 MB instance; raise STARSIGN_MAX_UPLOAD_MB on bigger machines. Larger videos need
+ * direct-to-bucket uploads, which are not built yet.
+ */
+export const MAX_UPLOAD_BYTES = Math.max(1, Number(process.env.STARSIGN_MAX_UPLOAD_MB ?? 100)) * 1024 * 1024;
+export const MEDIA_LIMITS = {
+  imageBytes: Math.min(30 * 1024 * 1024, MAX_UPLOAD_BYTES),
+  videoBytes: Math.min(1024 * 1024 * 1024, MAX_UPLOAD_BYTES),
+  documentBytes: Math.min(100 * 1024 * 1024, MAX_UPLOAD_BYTES),
+};
 
 export type MediaRow = typeof mediaAssets.$inferSelect;
 

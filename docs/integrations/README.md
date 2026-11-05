@@ -80,4 +80,5 @@ so each connector is tested against the documented request and response shapes. 
 | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` | Reddit |
 | `TELEGRAM_WEBHOOK_SECRET` | Telegram push updates (else polling) |
 | `RESEND_API_KEY`, `MAIL_FROM` | Invites and password resets by email |
+| `STARSIGN_MAX_UPLOAD_MB` | Largest upload (default 100). Uploads are held in memory, so keep it well under the instance memory; videos larger than this need direct-to-bucket uploads (not built yet) |
 | `STARSIGN_ALLOW_SIGNUP` | Open sign-up after the first owner |

@@ -6,7 +6,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { z, ZodError } from "zod";
 import { approvalDiffs, postOutcomes, posts, postVariants } from "@starsign/db";
-import { CoreError, type Starsign, type Principal, type ResolvedSession } from "@starsign/core";
+import { CoreError, MAX_UPLOAD_BYTES, type Starsign, type Principal, type ResolvedSession } from "@starsign/core";
 import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
 import { gatePost } from "@starsign/policy";
 import { adaptForNetwork, runPrompt, type BrandContext, type ModelGateway } from "@starsign/ai";
@@ -232,6 +232,11 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   // ---------------------------------------------------------------- media library
   app.post("/v1/media", async (c) => {
     const p = c.get("principal");
+    // Refuse oversized uploads before buffering them: the body is read into memory.
+    const declared = Number(c.req.header("content-length") ?? "0");
+    if (declared > MAX_UPLOAD_BYTES + 64 * 1024) {
+      return c.json(err("too_large", `uploads are limited to ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB on this server`), 413);
+    }
     const form = await c.req.parseBody();
     const file = form.file;
     if (!(file instanceof File)) throw new CoreError("invalid", "send the file as multipart field 'file'");

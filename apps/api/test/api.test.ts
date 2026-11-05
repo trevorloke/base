@@ -247,3 +247,12 @@ describe("x oauth connect", () => {
     expect(denied.headers.get("location")).toBe("/?connect_error=access_denied&connector=x");
   });
 });
+
+describe("upload size", () => {
+  it("refuses an upload larger than the server's cap before reading it", async () => {
+    const { MAX_UPLOAD_BYTES } = await import("@starsign/core");
+    const res = await app.request("/v1/media", { method: "POST", headers: { authorization: `Bearer ${ownerKey}`, "content-length": String(MAX_UPLOAD_BYTES * 2), "content-type": "multipart/form-data; boundary=x" }, body: "--x--" });
+    expect(res.status).toBe(413);
+    expect((await json(res)).error.code).toBe("too_large");
+  });
+});

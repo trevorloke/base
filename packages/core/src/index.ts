@@ -11,7 +11,7 @@ export type { PullResult, SourceStatus } from "./services/sources.ts";
 export { compareArms, type Readout, type Comparison, type ArmReadout } from "./services/experiments.ts";
 export * from "./media/storage.ts";
 export * from "./media/probe.ts";
-export { MEDIA_LIMITS, type MediaRow } from "./services/media.ts";
+export { MAX_UPLOAD_BYTES, MEDIA_LIMITS, type MediaRow } from "./services/media.ts";
 export {
   AttemptLimiter,
   hashPassword,
