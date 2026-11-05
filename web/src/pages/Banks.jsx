@@ -112,11 +112,35 @@ function List() {
 }
 
 // ── A new bank from the people list ──
+// A No answer: back on the caller's list after some hours, up to so many
+// calls (server/ext/banks crossOff); "Never" crosses it off at once.
+const RETRY_HOURS = [[0, 'Never — cross it off'], [1, 'After an hour'], [2, 'After 2 hours'], [4, 'After 4 hours'], [8, 'After 8 hours'], [24, 'The next day']];
+const backAt = (iso) => new Date(iso).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+function RetryFields({ value, onChange, idPrefix, disabled = false }) {
+  return (
+    <div className="bk-who__row bk-retry">
+      <div><label htmlFor={`${idPrefix}-h`} className="ws-label">No answer: call again</label>
+        <select id={`${idPrefix}-h`} className="input" disabled={disabled} value={value.retry_hours}
+          onChange={(e) => onChange({ ...value, retry_hours: Number(e.target.value) })}>
+          {RETRY_HOURS.map(([h, l]) => <option key={h} value={h}>{l}</option>)}
+        </select></div>
+      {value.retry_hours > 0 && (
+        <div><label htmlFor={`${idPrefix}-t`} className="ws-label">Up to</label>
+          <select id={`${idPrefix}-t`} className="input" disabled={disabled} value={value.max_tries}
+            onChange={(e) => onChange({ ...value, max_tries: Number(e.target.value) })}>
+            {[2, 3, 4, 5].map((n) => <option key={n} value={n}>{n} calls</option>)}
+          </select></div>
+      )}
+    </div>
+  );
+}
+
 function NewBank() {
   const navigate = useNavigate();
   const scale = useScale();
   const [name, setName] = useState('');
   const [script, setScript] = useState('');
+  const [retry, setRetry] = useState({ retry_hours: 4, max_tries: 3 });
   const [f, setF] = useState({ q: '', band: '', tag: '' });
   const id = useId();
   const { run, busy, error } = useSaver();
@@ -132,7 +156,7 @@ function NewBank() {
   const callable = useMemo(() => (people.data?.persons || []).filter((p) => p.phone && !(p.tags || []).includes('do-not-contact')), [people.data]);
   const submit = async (e) => {
     e.preventDefault();
-    const r = await run('bank.create', { name, script: script || null, person_ids: callable.map((p) => p.id) });
+    const r = await run('bank.create', { name, script: script || null, person_ids: callable.map((p) => p.id), ...retry });
     if (r) navigate(`/banks/${r.bank.id}`, { replace: true });
   };
   return (
@@ -162,6 +186,7 @@ function NewBank() {
             </ul>
           )}
         </fieldset>
+        <RetryFields value={retry} onChange={setRetry} idPrefix={`${id}-r`} />
         <label htmlFor={`${id}-s`} className="ws-label">Script (what callers see while they call)</label>
         <textarea id={`${id}-s`} className="input bk-script" rows={6} value={script} maxLength={20_000}
           placeholder={'Hi, this is ___ with the campaign. We’re calling neighbours about the election on…'} onChange={(e) => setScript(e.target.value)} />
@@ -268,6 +293,12 @@ function Bank({ id }) {
         </section>
       )}
 
+      <section className="bk-sec" aria-label="No answer">
+        <h2 className="dash-sec__h">No answer</h2>
+        <RetryFields value={{ retry_hours: bank.retry_hours, max_tries: bank.max_tries }} idPrefix={`bk-${id}-r`} disabled={busy}
+          onChange={(v) => run('bank.update', { id, ...v })} />
+      </section>
+
       <section className="bk-sec" aria-label="Script">
         <div className="dash-sec__head">
           <h2 className="dash-sec__h">Script</h2>
@@ -296,7 +327,9 @@ function Bank({ id }) {
                   <td className="mono">{n.phone}</td>
                   <td>{n.rating ? <RatingChip code={n.rating} who brief /> : <span className="muted">·</span>}</td>
                   <td>{n.caller || <span className="muted">—</span>}</td>
-                  <td>{n.done_at ? <span className="chip chip-ok">{n.outcome || 'done'}</span> : n.assigned_to ? 'to call' : <span className="muted">not handed out</span>}</td>
+                  <td>{n.done_at ? <span className="chip chip-ok">{n.outcome || 'done'}</span>
+                    : n.next_at && new Date(n.next_at) > new Date() ? `call back ${backAt(n.next_at)}${n.tries ? ` · ${n.tries} ${n.tries === 1 ? 'try' : 'tries'}` : ''}`
+                      : n.assigned_to ? 'to call' : <span className="muted">not handed out</span>}</td>
                   <td className="bk-table__acts">
                     {!n.done_at && n.assigned_to && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.release', { id, person_id: n.person_id })}>Take back</button>}
                     {!n.done_at && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.done', { id, person_id: n.person_id, outcome: 'skipped' })}>Skip</button>}

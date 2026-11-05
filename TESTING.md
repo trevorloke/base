@@ -255,6 +255,13 @@ one tap away under **More**.
   above the rating buttons on the walk list, the door card and Calls (with
   no signal too).
 
+- **Phone banks: call backs** — Phone banks → **New phone bank**: *No
+  answer: call again* (after 1–24 hours, or Never) *up to* 2–5 calls. A
+  caller's **No answer** says *back on your list 6:30 p.m.*, the number leaves
+  their list until then, and the bank line counts it (*1 to call back*).
+  **Call back…** → *In an hour · This evening · Tomorrow morning* does the
+  same at that time. The bank's page shows *call back Thu 6:00 p.m. · 1 try*.
+
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
   **Today · Map · Calls · Shifts**.

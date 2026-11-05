@@ -902,6 +902,20 @@ const saveChannel = (me, c) => {
 };
 const OUTCOME_WORD = { no_answer: 'No answer', refused: 'Refused' };
 const outcomeWord = (outcome, channel) => (outcome === 'no_answer' && channel === 'text' ? 'No reply' : OUTCOME_WORD[outcome] || outcome);
+// When a phone bank's number comes back: "6:00 p.m.", "tomorrow 10:00 a.m.", "Fri 10:00 a.m.".
+const backWord = (iso) => {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((day(d) - day(new Date())) / 86_400_000);
+  return days <= 0 ? time : days === 1 ? `tomorrow ${time}` : `${d.toLocaleDateString('en-CA', { weekday: 'short' })} ${time}`;
+};
+// "Call back…": in an hour, this evening at 6, tomorrow at 10 — on the caller's phone's clock.
+const CALLBACKS = [
+  ['In an hour', () => new Date(Date.now() + 3600_000)],
+  ['This evening', () => { const d = new Date(); if (d.getHours() >= 17) d.setDate(d.getDate() + 1); d.setHours(18, 0, 0, 0); return d; }],
+  ['Tomorrow morning', () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); return d; }],
+];
 
 // Who comes up first: never rated, then rated longest ago, so anyone rated
 // today (by you or another caller) goes to the back. Ties are shuffled per
@@ -1100,12 +1114,28 @@ function CallsScreen() {
     if (rating) setPicked((m) => ({ ...m, [p.id]: rating }));
     setHeld(null);
     setCurrentId(next?.id ?? null);
+    const back = res.result?.bank?.back_at;
     const what = rating ? `Rated ${ratingText(scale, rating)}${answersTail(answers, res.result)}`
-      : answers.length ? answersSaid(answers, res.result) : outcomeWord(outcome, channel);
+      : answers.length ? answersSaid(answers, res.result)
+        : `${outcomeWord(outcome, channel)}${back ? ` — back on your list ${backWord(back)}` : ''}`;
+    if (back) queryClient.invalidateQueries({ queryKey: ['banks', bankId, 'mine'] });
     // Not reached yet: the same words as the door card ("Saved on this phone — sends soon").
     showToast(`${firstName(p.name)} · ${what}${res.queued ? ` · ${queuedText(res)}` : ''}`, p);
   };
   const skip = () => { const next = after(at); if (next) { refocus.current = focusInCard(); setCurrentId(next.id); } };
+  // A phone bank's "Call back…": off the list until then, back by itself.
+  const [callbackOpen, setCallbackOpen] = useState(false);
+  const callBack = async (when) => {
+    const p = current;
+    if (!p || !bankId) return;
+    const res = await act.run('bank.callback', { id: bankId, person_id: p.id, at: when().toISOString() });
+    if (!res) return;
+    setCallbackOpen(false);
+    const next = after(at);
+    setCurrentId(next?.id ?? null);
+    queryClient.invalidateQueries({ queryKey: ['banks', bankId, 'mine'] });
+    showToast(`${firstName(p.name)} · back on your list ${backWord(res.back_at ?? res.result?.back_at)}`, p);
+  };
   // Sent from the card: it says so and offers Next; they leave the list
   // until they reply.
   const onSent = (p) => {
@@ -1168,6 +1198,7 @@ function CallsScreen() {
           <p className="cl-bank__line">
             <Link to={desk ? '/banks' : '/banks'}>← {desk ? 'Phone banks' : 'Your call lists'}</Link>
             {bank && <span className="muted"> · {bank.done} of {bank.total} done</span>}
+            {bank?.later > 0 && <span className="muted"> · {bank.later} to call back{bank.next_at ? ` (next ${backWord(bank.next_at)})` : ''}</span>}
           </p>
           {bank?.script && (
             <>
@@ -1272,10 +1303,20 @@ function CallsScreen() {
                     </button>
                   )}
                   <button type="button" className="cl-out" disabled={act.busy} onClick={() => log('refused')}>Refused</button>
+                  {bankId && channel === 'phone' && (
+                    <button type="button" className="cl-out" aria-expanded={callbackOpen} disabled={act.busy} onClick={() => setCallbackOpen((v) => !v)}>Call back…</button>
+                  )}
                   <button type="button" className="cl-out cl-skip" disabled={act.busy || !after(at)} onClick={skip}>
                     Skip <Icon name="next" size={18} />
                   </button>
                 </div>
+                {callbackOpen && bankId && (
+                  <div className="cl-callback" role="group" aria-label="Call back">
+                    {CALLBACKS.map(([label, when]) => (
+                      <button key={label} type="button" className="btn ops-tap" disabled={act.busy} onClick={() => callBack(when)}>{label}</button>
+                    ))}
+                  </div>
+                )}
                 <SurveyQuestions survey={survey} disabled={act.busy} onSave={() => log('contacted')} />
               </>
             )}

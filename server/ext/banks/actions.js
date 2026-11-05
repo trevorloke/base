@@ -5,6 +5,9 @@
 // bank.assign   { id, user_id | team_id, count? }     desk: hand the next numbers to one caller, or split them across a team
 // bank.release  { id, user_id?, person_id? }          desk: take unfinished numbers back (one person's, or one number)
 // bank.done     { id, person_id, outcome? }           anyone: cross a number off without a call (wrong number, asked not to call)
+// bank.callback { id, person_id, at }                 anyone (their number): back on their list at that time
+// A No answer in a bank brings the number back after the bank's retry_hours,
+// up to max_tries calls; any other outcome crosses it off (crossOff).
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
@@ -15,6 +18,8 @@ const uuid = () => z.uuid();
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const NO_CONTACT = 'do-not-contact';
 const MAX_NUMBERS = 5000;
+// How a No answer comes back: after this many hours (0: never), up to this many calls.
+const RETRY = { retry_hours: z.number().int().min(0).max(72).optional(), max_tries: z.number().int().min(1).max(5).optional() };
 
 const bankOf = async (tx, ws, id) => {
   const b = (await tx.query('select * from call_banks where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
@@ -49,30 +54,34 @@ const counts = async (tx, bankId) => (await tx.query(
 export const actions = {
   'bank.create': {
     roles: DESK,
-    input: z.object({ name: z.string().max(120), script: z.string().max(20_000).nullish(), person_ids: z.array(uuid()).max(MAX_NUMBERS) }),
+    input: z.object({ name: z.string().max(120), script: z.string().max(20_000).nullish(), person_ids: z.array(uuid()).max(MAX_NUMBERS), ...RETRY }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
       const name = clean(input.name);
       if (!name) throw httpError(400, 'a phone bank needs a name');
       const id = newId();
-      await tx.query('insert into call_banks (id, workspace_id, name, script, created_by) values ($1, $2, $3, $4, $5)', [id, ws, name, input.script || null, ctx.user.id]);
+      await tx.query('insert into call_banks (id, workspace_id, name, script, created_by, retry_hours, max_tries) values ($1, $2, $3, $4, $5, $6, $7)',
+        [id, ws, name, input.script || null, ctx.user.id, input.retry_hours ?? 4, input.max_tries ?? 3]);
       const { added, skipped } = await addNumbers(tx, ws, id, input.person_ids);
       emit('call_bank', id, 'create', { name, numbers: added });
-      return { bank: { id, name, script: input.script || null, ...(await counts(tx, id)) }, added, skipped };
+      return { bank: { id, name, script: input.script || null, retry_hours: input.retry_hours ?? 4, max_tries: input.max_tries ?? 3, ...(await counts(tx, id)) }, added, skipped };
     },
   },
   'bank.update': {
     roles: DESK,
-    input: z.object({ id: uuid(), name: z.string().max(120).optional(), script: z.string().max(20_000).nullish(), closed: z.boolean().optional() }),
+    input: z.object({ id: uuid(), name: z.string().max(120).optional(), script: z.string().max(20_000).nullish(), closed: z.boolean().optional(), ...RETRY }),
     handler: async (tx, ctx, input, emit) => {
       const b = await bankOf(tx, ctx.workspaceId, input.id);
       const name = input.name === undefined ? b.name : clean(input.name);
       if (!name) throw httpError(400, 'a phone bank needs a name');
       const script = input.script === undefined ? b.script : (input.script || null);
       const closed = input.closed === undefined ? !!b.closed_at : input.closed;
-      await tx.query('update call_banks set name = $2, script = $3, closed_at = case when $4 then coalesce(closed_at, now()) else null end, updated_at = now() where id = $1', [b.id, name, script, closed]);
-      emit('call_bank', b.id, 'update', { name, closed });
-      return { bank: { id: b.id, name, script, closed } };
+      const retry = input.retry_hours ?? b.retry_hours;
+      const tries = input.max_tries ?? b.max_tries;
+      await tx.query('update call_banks set name = $2, script = $3, closed_at = case when $4 then coalesce(closed_at, now()) else null end, retry_hours = $5, max_tries = $6, updated_at = now() where id = $1',
+        [b.id, name, script, closed, retry, tries]);
+      emit('call_bank', b.id, 'update', { name, closed, retry_hours: retry, max_tries: tries });
+      return { bank: { id: b.id, name, script, closed, retry_hours: retry, max_tries: tries } };
     },
   },
   'bank.remove': {
@@ -157,16 +166,54 @@ export const actions = {
       return { done: true };
     },
   },
+  'bank.callback': {
+    roles: ALL,
+    input: z.object({ id: uuid(), person_id: uuid(), at: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/).max(40) }),
+    handler: async (tx, ctx, input, emit) => {
+      const b = await bankOf(tx, ctx.workspaceId, input.id);
+      const n = (await tx.query('select assigned_to, done_at from call_bank_numbers where bank_id = $1 and person_id = $2', [b.id, input.person_id])).rows[0];
+      if (!n) throw httpError(404, 'that number is not in this phone bank');
+      if (ctx.role === 'volunteer' && n.assigned_to !== ctx.user.id) throw httpError(403, 'that number is not yours');
+      if (n.done_at) throw httpError(409, 'that number is done');
+      const at = new Date(input.at);
+      const now = Date.now();
+      if (Number.isNaN(at.getTime()) || at.getTime() < now - 60_000 || at.getTime() > now + 14 * 86_400_000) {
+        throw httpError(400, 'a time in the next two weeks');
+      }
+      await tx.query('update call_bank_numbers set next_at = $3 where bank_id = $1 and person_id = $2', [b.id, input.person_id, at.toISOString()]);
+      emit('call_bank', b.id, 'update', { callback: input.person_id, at: at.toISOString(), by: ctx.user.id });
+      return { back_at: at.toISOString() };
+    },
+  },
 };
 
 // A phone call logged by the caller a number was handed to crosses it off
 // in every open phone bank it is in (contactLogged hook).
-export const crossOff = async (tx, ctx, { contact }) => {
+// A No answer comes back instead, after the bank's retry_hours, until its
+// max_tries calls are spent (reply.bank says when: the Calls card's toast).
+export const crossOff = async (tx, ctx, { contact, reply }) => {
   if (!contact?.person_id || contact.channel !== 'phone') return;
-  await tx.query(
-    `update call_bank_numbers n set done_at = now(), done_by = $2, outcome = $4
-       from call_banks b where b.id = n.bank_id and b.workspace_id = $1 and b.deleted_at is null
-        and n.person_id = $3 and n.done_at is null and (n.assigned_to = $2 or n.assigned_to is null)`,
-    [ctx.workspaceId, ctx.user.id, contact.person_id, String(contact.outcome || 'contacted')],
-  );
+  const outcome = String(contact.outcome || 'contacted');
+  const rows = (await tx.query(
+    `select n.bank_id, n.tries, b.retry_hours, b.max_tries from call_bank_numbers n
+       join call_banks b on b.id = n.bank_id and b.workspace_id = $1 and b.deleted_at is null
+      where n.person_id = $3 and n.done_at is null and (n.assigned_to = $2 or n.assigned_to is null)`,
+    [ctx.workspaceId, ctx.user.id, contact.person_id],
+  )).rows;
+  for (const r of rows) {
+    const tries = Number(r.tries) + 1;
+    if (outcome === 'no_answer' && Number(r.retry_hours) > 0 && tries < Number(r.max_tries)) {
+      const back = (await tx.query(
+        `update call_bank_numbers set tries = $3, next_at = now() + make_interval(hours => $4::int)
+          where bank_id = $1 and person_id = $2 returning next_at`,
+        [r.bank_id, contact.person_id, tries, Number(r.retry_hours)],
+      )).rows[0];
+      if (reply) reply.bank = { back_at: new Date(back.next_at).toISOString(), tries, max_tries: Number(r.max_tries) };
+    } else {
+      await tx.query(
+        'update call_bank_numbers set tries = $3, done_at = now(), done_by = $4, outcome = $5 where bank_id = $1 and person_id = $2',
+        [r.bank_id, contact.person_id, tries, ctx.user.id, outcome],
+      );
+    }
+  }
 };

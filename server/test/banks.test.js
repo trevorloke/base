@@ -5,6 +5,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
+import { getDb } from '../db/client.js';
 
 let mgr, vic, wen, staff;
 let ids = {};
@@ -107,4 +108,54 @@ test('skipping a number, taking numbers back, splitting the rest across a team, 
   ok(await mgr.action('bank.remove', { id: ids.bank }));
   assert.equal((await mgr.get(`/api/banks/${ids.bank}`)).status, 404);
   assert.equal(ok(await wen.get('/api/banks/mine')).banks.length, 0);
+});
+
+test('call backs: a No answer comes back after the bank’s hours, up to its tries; "Call back…" sets the time', async () => {
+  const db = await getDb();
+  const people = [];
+  for (let i = 0; i < 3; i++) people.push((await mgr.createPerson(`Callback Target ${i}`, { phone: `604-555-02${String(i).padStart(2, '0')}` })).id);
+  const b = ok(await mgr.action('bank.create', { name: 'Call backs', person_ids: people, retry_hours: 2, max_tries: 2 })).bank;
+  assert.deepEqual([b.retry_hours, b.max_tries], [2, 2]);
+  ok(await mgr.action('bank.assign', { id: b.id, user_id: ids.Wen }));
+  const mine = async () => ok(await wen.get(`/api/banks/${b.id}/mine`));
+
+  // A No answer: back in two hours, not crossed off.
+  const r = ok(await wen.action('contact.log', { person_id: people[0], channel: 'phone', outcome: 'no_answer' }));
+  const back = Date.parse(r.bank.back_at);
+  assert.ok(Math.abs(back - (Date.now() + 2 * 3600_000)) < 60_000, `back in two hours: ${r.bank.back_at}`);
+  assert.deepEqual([r.bank.tries, r.bank.max_tries], [1, 2]);
+  let m = await mine();
+  assert.ok(!m.persons.some((p) => p.id === people[0]), 'off the list until then');
+  assert.deepEqual([m.bank.later, m.bank.done], [1, 0]);
+  assert.equal(m.bank.next_at, r.bank.back_at);
+  // The time comes: back on the list; a second No answer spends the last try.
+  await db.query(`update call_bank_numbers set next_at = now() - interval '1 minute' where bank_id = $1 and person_id = $2`, [b.id, people[0]]);
+  assert.ok((await mine()).persons.some((p) => p.id === people[0]), 'due again');
+  const r2 = ok(await wen.action('contact.log', { person_id: people[0], channel: 'phone', outcome: 'no_answer' }));
+  assert.equal(r2.bank, undefined, 'no more tries: crossed off');
+  m = await mine();
+  assert.deepEqual([m.bank.done, m.bank.later], [1, 0]);
+
+  // "Call back at 7": their own number, a time in the next two weeks.
+  const at = new Date(Date.now() + 5 * 3600_000).toISOString();
+  ok(await wen.action('bank.callback', { id: b.id, person_id: people[1], at }));
+  m = await mine();
+  assert.ok(!m.persons.some((p) => p.id === people[1]));
+  assert.equal(m.bank.later, 1);
+  const desk = ok(await mgr.get(`/api/banks/${b.id}`)).numbers.find((n) => n.person_id === people[1]);
+  assert.equal(new Date(desk.next_at).toISOString(), at, 'the desk sees when');
+  assert.equal((await vic.action('bank.callback', { id: b.id, person_id: people[2], at })).status, 403, 'not Vic’s number');
+  assert.equal((await wen.action('bank.callback', { id: b.id, person_id: people[2], at: '2020-01-01T10:00' })).status, 400);
+  // A talk crosses it off whatever the time said.
+  ok(await wen.action('contact.log', { person_id: people[1], channel: 'phone', outcome: 'contacted', rating: '3' }));
+  assert.equal((await mine()).bank.later, 0);
+
+  // A bank set to never try again: a No answer crosses it off, as before.
+  const solo = (await mgr.createPerson('Once Target', { phone: '604-555-0299' })).id;
+  const once = ok(await mgr.action('bank.create', { name: 'Once', person_ids: [solo], retry_hours: 0 })).bank;
+  ok(await mgr.action('bank.assign', { id: once.id, user_id: ids.Wen }));
+  const r3 = ok(await wen.action('contact.log', { person_id: solo, channel: 'phone', outcome: 'no_answer' }));
+  assert.equal(r3.bank, undefined);
+  assert.equal(ok(await wen.get(`/api/banks/${once.id}/mine`)).bank.done, 1);
+  assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });

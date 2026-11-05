@@ -27,4 +27,12 @@ create table if not exists call_bank_numbers (
   primary key (bank_id, person_id)
 );
 create index if not exists call_bank_numbers_assignee_idx on call_bank_numbers (workspace_id, assigned_to) where done_at is null;
+-- Call backs: a No answer brings the number back after retry_hours, up to
+-- max_tries calls (retry_hours 0: a No answer crosses it off, as before); a
+-- caller's "Call back…" sets next_at. A number shows on a caller's list once
+-- next_at has passed.
+alter table call_banks add column if not exists retry_hours int not null default 4;
+alter table call_banks add column if not exists max_tries int not null default 3;
+alter table call_bank_numbers add column if not exists tries int not null default 0;
+alter table call_bank_numbers add column if not exists next_at timestamptz;
 `;

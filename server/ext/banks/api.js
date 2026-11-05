@@ -50,7 +50,7 @@ api.get('/banks/:id', async (c) => {
   )).rows[0];
   if (!b) return c.json({ error: 'not found' }, 404);
   const numbers = (await db.query(
-    `select n.person_id, n.position, n.assigned_to, n.assigned_at, n.done_at, n.outcome, u.name as caller,
+    `select n.person_id, n.position, n.assigned_to, n.assigned_at, n.done_at, n.outcome, n.tries, n.next_at, u.name as caller,
             p.name, p.phone, p.rating, p.address, p.city
        from call_bank_numbers n join persons p on p.id = n.person_id left join users u on u.id = n.assigned_to
       where n.bank_id = $1 order by n.position`, [id],
@@ -70,14 +70,28 @@ api.get('/banks/:id/mine', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db'); const ws = ctx.workspaceId;
   const id = c.req.param('id');
   if (!UUID.test(id)) return c.json({ error: 'not found' }, 404);
-  const b = (await db.query('select id, name, script, closed_at from call_banks where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
+  const b = (await db.query('select id, name, script, closed_at, retry_hours, max_tries from call_banks where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
   if (!b) return c.json({ error: 'not found' }, 404);
   const rows = (await db.query(
     `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at,
-            p.attrs->>'note' as note, n.done_at, n.position
+            p.attrs->>'note' as note, n.done_at, n.position, n.next_at, n.tries
        from call_bank_numbers n join persons p on p.id = n.person_id
       where n.bank_id = $1 and n.assigned_to = $2 and p.deleted_at is null order by n.position`, [id, ctx.user.id],
   )).rows;
-  const persons = rows.filter((r) => !r.done_at).map(({ done_at, position, ...p }) => ({ ...p, tags: parseJ(p.tags, []), socials: parseJ(p.socials, {}) })).map(forViewer(ctx));
-  return c.json({ bank: { id: b.id, name: b.name, script: b.script, closed: !!b.closed_at, total: rows.length, done: rows.filter((r) => r.done_at).length }, persons });
+  // A number to call back shows once its time has come; until then it is
+  // counted under "later", with the soonest time.
+  const now = Date.now();
+  const due = (r) => !r.next_at || new Date(r.next_at).getTime() <= now;
+  const open = rows.filter((r) => !r.done_at);
+  const later = open.filter((r) => !due(r));
+  const persons = open.filter(due)
+    .map(({ done_at, position, next_at, ...p }) => ({ ...p, tags: parseJ(p.tags, []), socials: parseJ(p.socials, {}) })).map(forViewer(ctx));
+  const nextAt = later.map((r) => new Date(r.next_at).getTime()).sort((x, y) => x - y)[0];
+  return c.json({
+    bank: {
+      id: b.id, name: b.name, script: b.script, closed: !!b.closed_at, total: rows.length, done: rows.filter((r) => r.done_at).length,
+      later: later.length, next_at: nextAt ? new Date(nextAt).toISOString() : null, retry_hours: b.retry_hours, max_tries: b.max_tries,
+    },
+    persons,
+  });
 });

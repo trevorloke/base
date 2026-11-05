@@ -500,3 +500,5 @@ button.pf-back:focus-visible { outline: 2px solid var(--mark-deep); outline-offs
 
 /* Filter: "Postal code starts with" under the field cuts. */
 .pp-postal { max-width: 220px; margin: 0 0 var(--s-3); }
+.cl-callback { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-2) 0; }
+.cl-callback .btn { min-height: 48px; }
