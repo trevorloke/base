@@ -4,16 +4,17 @@
 //
 //   Authorization: Bearer sbk_<40 characters>
 //   GET  /in/v1/ping      → { ok, campaign, key }            is the key good?
-//   POST /in/v1/people    → { person_id, created, merged, newsletter, volunteer }
+//   POST /in/v1/people    → { ok: true, person_id }
 //
-// A person comes in the way a list does (routes/data.js import): matched by
-// email, then name + phone, then name + address; a match only gets its
-// blanks filled and the new tags added — nothing on file is overwritten. A
-// new person is created. newsletter: true puts their email on the list
-// (it is their own sign-up, so it rejoins someone who had unsubscribed);
-// volunteer: true files a "Wants to volunteer" request under Today's Needs
-// you, with what they wrote. Everything is on the event log, as the key's
-// maker, and an address is placed on the map like any other.
+// What a visitor typed is not proof of who they are, so: the same email
+// fills a person's blanks and adds tags; with no email, a name and phone
+// match only gets the tags; anything else is a new person. Nothing on file
+// is overwritten. newsletter: true puts a new email on the list — never back
+// on it for someone who left or is do-not-email. volunteer: true, or a
+// note, files a request under Today's Needs you. The answer is only the
+// person's id: it never says whether they were on file. Everything is on
+// the event log, as the key's maker; an address is placed on the map. A key
+// stops when its maker leaves the campaign.
 //
 // Idempotency-Key (any string ≤ 200): the same key with the same body answers
 // what it answered the first time, once — a website retrying after a lost
@@ -138,6 +139,7 @@ const keyFor = async (db, c) => {
   if (!m) return null;
   const k = (await db.query(
     `select k.*, w.name as workspace_name from intake_keys k join workspaces w on w.id = k.workspace_id
+       join memberships m on m.user_id = k.created_by and m.workspace_id = k.workspace_id
       where k.key_hash = $1 and k.revoked_at is null`, [sha(m[1])],
   )).rows[0];
   return k || null;
@@ -163,6 +165,10 @@ publicRoutes.get('/in/v1/ping', (c) => {
 });
 
 // One person in: match or create, then the newsletter and the request.
+// The website forwards whatever a visitor typed, so nothing here trusts it
+// with someone else's record: only the same email fills blanks on a match;
+// without an email, a match by name and phone only gets the tags. An email
+// that matches nobody is a new person, never added to someone found by name.
 const takeIn = async (tx, ws, p, emit) => {
   const name = norm(p.name) || [norm(p.first_name), norm(p.last_name)].filter(Boolean).join(' ') || p.email.split('@')[0];
   const source = slug(p.source || 'website') || 'website';
@@ -171,42 +177,38 @@ const takeIn = async (tx, ws, p, emit) => {
   const cand = (await tx.query(
     `select id, name, email, phone, address, house_number, unit, city, postal, lat, tags from persons
       where workspace_id = $1 and deleted_at is null
-        and ((lower(email) = $2 and $2 <> '') or (regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = $3 and $3 <> '')
-             or (lower(address) = $4 and $4 <> ''))
+        and ((lower(email) = $2 and $2 <> '') or (regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = $3 and $3 <> ''))
       order by created_at limit 50`,
-    [ws, lower(p.email), digits(p.phone), lower(addr?.address)],
+    [ws, lower(p.email), digits(p.phone)],
   )).rows;
   const nk = nameKey(name);
-  const match = (p.email && cand.find((r) => lower(r.email) === lower(p.email)))
-    || (p.phone && cand.find((r) => nameKey(r.name) === nk && digits(r.phone) === digits(p.phone)))
-    || (addr && cand.find((r) => nameKey(r.name) === nk && lower(r.address) === lower(addr.address) && lower(r.unit) === lower(p.unit)))
-    || null;
+  const byEmail = p.email ? cand.find((r) => lower(r.email) === lower(p.email)) : null;
+  const byPhone = !p.email && p.phone ? cand.find((r) => nameKey(r.name) === nk && digits(r.phone) === digits(p.phone)) : null;
+  const match = byEmail || byPhone || null;
   let personId;
-  let created = false;
-  let merged = [];
   if (match) {
     personId = match.id;
     const patch = {};
-    if (!match.email && p.email) patch.email = p.email;
-    if (!match.phone && p.phone) patch.phone = norm(p.phone);
-    if (!match.address && addr) Object.assign(patch, { address: addr.address, house_number: addr.house_number || null, unit: norm(p.unit) || null });
-    if (!match.city && p.city) patch.city = norm(p.city);
-    if (!match.postal && p.postal) patch.postal = norm(p.postal).toUpperCase();
+    if (byEmail) {
+      if (!match.phone && p.phone) patch.phone = norm(p.phone);
+      if (!match.address && addr) Object.assign(patch, { address: addr.address, house_number: addr.house_number || null, unit: norm(p.unit) || null });
+      if (!match.city && p.city) patch.city = norm(p.city);
+      if (!match.postal && p.postal) patch.postal = norm(p.postal).toUpperCase();
+    }
     const had = parseTags(match.tags);
     const next = [...new Set([...had, ...tags])].slice(0, 50);
     if (next.length !== had.length) patch.tags = next;
-    merged = Object.keys(patch).filter((k) => k !== 'house_number');
-    if (merged.length) {
-      const sets = Object.keys(patch).map((k, i) => `${k} = $${i + 3}${k === 'tags' ? '::jsonb' : ''}`);
+    if (Object.keys(patch).length) {
+      const keys = Object.keys(patch);
+      const sets = keys.map((k, i) => (k === 'tags' ? `${k} = $${i + 3}::jsonb` : `${k} = $${i + 3}`));
       await tx.query(
         `update persons set ${sets.join(', ')}, updated_at = now() where id = $1 and workspace_id = $2`,
-        [personId, ws, ...Object.keys(patch).map((k) => (k === 'tags' ? JSON.stringify(patch[k]) : patch[k]))],
+        [personId, ws, ...keys.map((k) => (k === 'tags' ? JSON.stringify(patch[k]) : patch[k]))],
       );
       emit('person', personId, 'update', { ...patch, source: 'website' });
     }
   } else {
     personId = newId();
-    created = true;
     const row = {
       id: personId, kind: 'person', name, email: p.email || null, phone: norm(p.phone) || null,
       address: addr?.address || null, house_number: addr?.house_number || null, unit: norm(p.unit) || null,
@@ -220,43 +222,42 @@ const takeIn = async (tx, ws, p, emit) => {
     emit('person', personId, 'create', { ...row, source: 'website' });
   }
 
-  let newsletter = null;
+  // The newsletter: on the list — but never back on it for someone who left
+  // it or said not to email them. Typing an address into a website form
+  // doesn't prove it's yours.
   if (p.newsletter && p.email) {
-    const prev = (await tx.query('select id, status from subscriptions where workspace_id = $1 and email = $2', [ws, p.email])).rows[0];
-    if (prev?.status === 'subscribed') newsletter = 'already';
-    else {
-      // Their own sign-up: it rejoins someone who had left the list.
-      const id = prev?.id || newId();
+    const prev = (await tx.query('select id from subscriptions where workspace_id = $1 and email = $2', [ws, p.email])).rows[0];
+    const noEmail = (await tx.query(
+      `select 1 from persons where workspace_id = $1 and lower(email) = $2 and deleted_at is null and tags @> '"do-not-email"'::jsonb limit 1`,
+      [ws, p.email],
+    )).rows.length > 0;
+    if (!prev && !noEmail) {
+      const id = newId();
       await tx.query(
         `insert into subscriptions (id, workspace_id, email, name, status, source) values ($1, $2, $3, $4, 'subscribed', $5)
-         on conflict (workspace_id, email) do update set status = 'subscribed', unsubscribed_at = null,
-           name = coalesce(subscriptions.name, excluded.name), source = excluded.source`,
+         on conflict (workspace_id, email) do nothing`,
         [id, ws, p.email, name, source],
       );
       emit('subscription', id, 'create', { email: p.email, name, source });
-      newsletter = prev ? 'rejoined' : 'subscribed';
     }
   }
 
-  let volunteer = null;
-  if (p.volunteer) {
+  // Wants to volunteer, or wrote something: a request under Today's Needs
+  // you — never written onto their record.
+  if (p.volunteer || p.note) {
     const id = newId();
-    const note = [`Signed up on the website${p.source ? ` (${norm(p.source)})` : ''}`, norm(p.note)].filter(Boolean).join(': ');
+    const kind = p.volunteer ? 'volunteer' : 'other';
+    const from = p.source ? `From the website (${norm(p.source)})` : 'From the website';
+    const note = [from, norm(p.note)].filter(Boolean).join(': ').slice(0, 500);
     await tx.query(
-      `insert into door_requests (id, workspace_id, person_id, kind, note, asked_by) values ($1, $2, $3, 'volunteer', $4, null)`,
-      [id, ws, personId, note.slice(0, 500)],
+      `insert into door_requests (id, workspace_id, person_id, kind, note, asked_by) values ($1, $2, $3, $4, $5, null)`,
+      [id, ws, personId, kind, note],
     );
-    emit('door_request', id, 'create', { id, person_id: personId, kind: 'volunteer', note: note.slice(0, 500), from: 'website' });
-    volunteer = 'requested';
-  } else if (p.note) {
-    // A message with no other home: on the person's history as their note.
-    await tx.query(
-      `update persons set attrs = jsonb_set(coalesce(attrs, '{}'::jsonb), '{note}', to_jsonb($3::text)) where id = $1 and workspace_id = $2
-         and coalesce(attrs->>'note', '') = ''`,
-      [personId, ws, norm(p.note).slice(0, 2000)],
-    );
+    emit('door_request', id, 'create', { id, person_id: personId, kind, note, from: 'website' });
   }
-  return { person_id: personId, created, merged, newsletter, volunteer };
+  // Only the id: never whether they were on file, what was blank, or
+  // whether they had left the list.
+  return { person_id: personId };
 };
 
 publicRoutes.post('/in/v1/people', async (c) => {
@@ -278,13 +279,15 @@ publicRoutes.post('/in/v1/people', async (c) => {
     if (prev) {
       if (prev.body_hash !== bodyHash) return refuse(c, 409, 'that Idempotency-Key was used with a different body');
       const answer = typeof prev.answer === 'string' ? JSON.parse(prev.answer) : prev.answer;
-      return c.json({ ...answer, replayed: true });
+      return c.json({ ok: true, ...answer, replayed: true });
     }
   }
   try {
     const { result: answer } = await runAction(db, { workspaceId: key.workspace_id, actorId: key.created_by, action: 'intake.person' }, async (tx, emit) => {
       const a = await takeIn(tx, key.workspace_id, parsed.data, emit);
       if (idem) {
+        // A week of retries is plenty; older answers go.
+        await tx.query("delete from intake_requests where key_id = $1 and created_at < now() - interval '7 days'", [key.id]);
         await tx.query(
           `insert into intake_requests (workspace_id, key_id, idempotency_key, body_hash, answer) values ($1, $2, $3, $4, $5)`,
           [key.workspace_id, key.id, idem, bodyHash, JSON.stringify(a)],
@@ -292,12 +295,13 @@ publicRoutes.post('/in/v1/people', async (c) => {
       }
       return a;
     });
-    return c.json(answer, answer.created ? 201 : 200);
+    return c.json({ ok: true, ...answer });
   } catch (e) {
     // Two retries at once: the second waits for the first's answer.
     if (idem && /intake_requests_pkey|duplicate key/i.test(String(e.message))) {
-      const prev = (await db.query('select answer from intake_requests where key_id = $1 and idempotency_key = $2', [key.id, idem])).rows[0];
-      if (prev) return c.json({ ...(typeof prev.answer === 'string' ? JSON.parse(prev.answer) : prev.answer), replayed: true });
+      const prev = (await db.query('select body_hash, answer from intake_requests where key_id = $1 and idempotency_key = $2', [key.id, idem])).rows[0];
+      if (prev && prev.body_hash !== bodyHash) return refuse(c, 409, 'that Idempotency-Key was used with a different body');
+      if (prev) return c.json({ ok: true, ...(typeof prev.answer === 'string' ? JSON.parse(prev.answer) : prev.answer), replayed: true });
     }
     throw e;
   }

@@ -91,7 +91,7 @@ const send = await page.request.post(`${BASE}/in/v1/people`, {
   data: { first_name: 'Asha', last_name: 'Example', email: `asha+${tag}@example.org`, newsletter: true, volunteer: true, note: 'Weekends', source: 'volunteer-form' },
 });
 const sent = await send.json();
-check('the website sends a person in with it: created, on the newsletter, a volunteer request', send.status() === 201 && sent.created && sent.newsletter === 'subscribed' && sent.volunteer === 'requested', JSON.stringify(sent));
+check('the website sends a person in with it: the answer is only their id', send.status() === 200 && sent.ok === true && /^[0-9a-f-]{36}$/.test(sent.person_id) && Object.keys(sent).length === 2, JSON.stringify(sent));
 await page.tap('.sv2-fresh button:has-text("Done")');
 await page.reload({ waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.sv2-keys .sv2-row', { timeout: 8000 }).catch(() => {});
@@ -99,7 +99,7 @@ const row = await text(page, '.sv2-keys .sv2-row');
 check('the key is listed by its first characters and "last used"', row.includes(`${shown.slice(0, 10)}…`) && /last used/.test(row) && !row.includes(shown), row);
 await page.goto(`${ADMIN}/requests`, { waitUntil: 'domcontentloaded' });
 await sleep(1500);
-check('the volunteer is waiting under Requests, with what they wrote', /Asha Example/.test(await text(page)) && /Signed up on the website \(volunteer-form\): Weekends/.test(await text(page)), (await text(page)).slice(0, 300));
+check('the volunteer is waiting under Requests, with what they wrote', /Asha Example/.test(await text(page)) && /From the website \(volunteer-form\): Weekends/.test(await text(page)), (await text(page)).slice(0, 300));
 await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.sv2-keys .sv2-row', { timeout: 8000 });
 await page.tap('.sv2-keys .sv2-row button:has-text("Revoke")');

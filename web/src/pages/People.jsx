@@ -32,7 +32,7 @@ import { MyPeopleLink } from '../components/RelationshipsBits.jsx';
 import { VotedRow } from '../components/Voted.jsx';
 import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs } from '../components/FieldCuts.jsx';
-import ScriptLine from '../components/ScriptLine.jsx';
+import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared widgets + helpers (also used by Person.jsx)
@@ -951,6 +951,7 @@ function CallListsLink({ desk }) {
 }
 
 function CallsScreen() {
+  useScripts(); // read with the list, so the phone script is kept for later
   const { me } = useOutletContext() ?? {};
   const location = useLocation();
   const desk = canDesk(me);

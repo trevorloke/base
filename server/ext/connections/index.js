@@ -88,9 +88,9 @@ const within = (p) => Promise.race([p, new Promise((_, rej) => { setTimeout(() =
 
 // One real call per service; never a send, never a write.
 const CHECKS = {
-  database: async (db) => {
+  database: async (db, ws) => {
     await db.query('select 1');
-    const n = (await db.query('select count(*)::int as n from persons')).rows[0].n;
+    const n = (await db.query('select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
     return { ok: true, said: `Answering · ${n.toLocaleString('en-CA')} people on file` };
   },
   public: async () => {
@@ -178,9 +178,10 @@ api.post('/connections/check', async (c) => {
   const fn = CHECKS[key];
   if (!fn) return c.json({ error: 'no such service' }, 404);
   try {
-    return c.json({ key, ...(await within(fn(c.get('db')))) });
+    return c.json({ key, ...(await within(fn(c.get('db'), c.get('ctx').workspaceId))) });
   } catch (e) {
-    return c.json({ key, ok: false, said: `No answer: ${String(e.message).slice(0, 160)}` });
+    // Never a key in the words: a failed URL carries its query string.
+    return c.json({ key, ok: false, said: `No answer: ${String(e.message).replace(/([?&](key|token|apikey)=)[^&\s]+/gi, '$1…').slice(0, 160)}` });
   }
 });
 

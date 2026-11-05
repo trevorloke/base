@@ -44,7 +44,7 @@ import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
-import ScriptLine from '../components/ScriptLine.jsx';
+import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
 const TURF_COLORS = ['#2b6cb0', '#7b3fa0', '#b5651d', '#1f7a6d', '#a0306a', '#4c5a8a'];
@@ -300,6 +300,7 @@ function PhoneGlyph() {
 
 function WalkList({ id }) {
   const { me } = useOutletContext();
+  useScripts(); // read with the list, so the script is on the phone before the first door
   const desk = DESK_ROLES.includes(me?.role);
   const queryClient = useQueryClient();
   const scale = useScale();

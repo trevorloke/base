@@ -197,8 +197,10 @@ The campaign's website lives elsewhere. Its server sends sign-ups,
 petition signatures, volunteers and newsletter opt-ins in through
 `POST /in/v1/people` with a website key a manager makes under Settings →
 Services (`server/ext/intake`; the fields and answers are in
-INTEGRATIONS.md, *The campaign's website*): matched like an import, a
-volunteer filed as a request under *Needs you*. Donations and RSVPs aren't
+INTEGRATIONS.md, *The campaign's website*): matched only by the same
+email (a visitor's typing never lands on someone else's record), never back
+on the newsletter for someone who left it, a volunteer or a message filed
+as a request under *Needs you*; the answer is only the person's id. Donations and RSVPs aren't
 taken that way. Starbase's own public pages are the ones every email needs,
 no login:
 

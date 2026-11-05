@@ -25,10 +25,17 @@ import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { geocodeAddress, suggestAddresses } from '../../lib/geocode.js';
 import { civic } from '../../lib/address.js';
+import { makeLimiter } from '../../lib/guard.js';
 
 const LIMIT = 5;
 const LOOKUP_MS = 4000;
 const HAND_SIZED = 5;
+// What reaches the address service from here: lookups after a save, 60 a
+// minute for the whole server; suggestions, 60 a minute per person typing.
+const LOOKUPS_PER_MIN = 60;
+const lookups = makeLimiter({ windowMs: 60_000, max: LOOKUPS_PER_MIN });
+const lookupsBusy = (k) => lookups(k);
+const typing = makeLimiter({ windowMs: 60_000, max: 60 });
 const ADDRESS_KEYS = ['address', 'house_number', 'unit', 'city', 'postal'];
 
 const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -63,6 +70,7 @@ api.get('/address/suggest', async (c) => {
   let lookup = 'ok';
   let found = [];
   if (lookupOff()) lookup = 'off';
+  else if (typing(ctx.user.id)) lookup = 'unavailable'; // the doors on file still come
   else if (mine.length < LIMIT) {
     const r = await within(suggestAddresses(q, { limit: LIMIT }), LOOKUP_MS);
     if (Array.isArray(r)) found = r; else lookup = 'unavailable';
@@ -126,25 +134,30 @@ export const placeSoon = async (workspaceId, actorId, ids) => {
          and lower(trim(address)) = $2 and lower(trim(coalesce(city, ''))) = $3 limit 1`,
       [workspaceId, addr, city],
     )).rows[0];
+    // The geocoder is asked at most LOOKUPS_PER_MIN times a minute from
+    // here (a busy website feed, say); past that the person waits for the
+    // desk's background run, which paces itself.
+    if (!known && lookupsBusy('save')) continue;
     const r = known ? { lat: Number(known.lat), lng: Number(known.lng), copied: true }
       : await within(geocodeAddress({ address: p.address, city: p.city, postal: p.postal }), LOOKUP_MS * 2);
     if (r?.error || r === undefined) continue; // the service is down: the desk's run will try again
     const at = new Date().toISOString();
     await runAction(db, { workspaceId, actorId, action: 'person.geocode' }, async (tx, emit) => {
-      // Only if nothing moved meanwhile: still no pin, still this address.
+      // Only if nothing moved meanwhile: still no pin, still this address,
+      // city and postal code (an edit during the lookup looks again itself).
+      const same = `lat is null and address = $3 and coalesce(city, '') = coalesce($4, '') and coalesce(postal, '') = coalesce($5, '')`;
       if (r && !r.weak) {
         const geo = r.copied ? { status: 'ok', at, copied: true } : { status: 'ok', at, matched: r.matched, score: r.score ?? null };
         const { rows } = await tx.query(
-          `update persons set lat = $3, lng = $4, attrs = jsonb_set(attrs, '{geocode}', $5::jsonb), updated_at = now()
-            where id = $1 and workspace_id = $2 and lat is null and address = $6 returning id`,
-          [id, workspaceId, r.lat, r.lng, JSON.stringify(geo), p.address],
+          `update persons set lat = $6, lng = $7, attrs = jsonb_set(attrs, '{geocode}', $8::jsonb), updated_at = now()
+            where id = $1 and workspace_id = $2 and ${same} returning id`,
+          [id, workspaceId, p.address, p.city, p.postal, r.lat, r.lng, JSON.stringify(geo)],
         );
         if (rows.length) emit('person', id, 'update', { lat: r.lat, lng: r.lng, geocoded: r.matched || null });
       } else {
         await tx.query(
-          `update persons set attrs = jsonb_set(attrs, '{geocode}', $3::jsonb)
-            where id = $1 and workspace_id = $2 and lat is null and address = $4`,
-          [id, workspaceId, JSON.stringify({ status: r?.weak ? 'weak' : 'nomatch', at, matched: r?.matched || null }), p.address],
+          `update persons set attrs = jsonb_set(attrs, '{geocode}', $6::jsonb) where id = $1 and workspace_id = $2 and ${same}`,
+          [id, workspaceId, p.address, p.city, p.postal, JSON.stringify({ status: r?.weak ? 'weak' : 'nomatch', at, matched: r?.matched || null })],
         );
       }
     }).catch(() => {});

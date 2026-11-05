@@ -203,7 +203,7 @@ website or form service.
 ```
 Authorization: Bearer sbk_…             every request
 GET  https://<public address>/in/v1/ping      → 200 { "ok": true, "campaign": "Imagine Surrey", "key": "Website" }
-POST https://<public address>/in/v1/people    → 201 new · 200 matched someone on file
+POST https://<public address>/in/v1/people    → 200 { "ok": true, "person_id": "…" }
 ```
 
 **`POST /in/v1/people`** — JSON (`Content-Type: application/json`), one
@@ -217,23 +217,23 @@ person. An email or a phone, and a name (or `first_name` / `last_name`):
 | `address`, `unit`, `city`, `postal` | text | the street line as typed (`13450 104 Ave`); it's placed on the map |
 | `tags` | up to 20 words | kept as sent (`Petition: Transit`) |
 | `source` | a word for where they came from (`petition-transit`) | added as a tag; default `website` |
-| `newsletter` | `true` | their email goes on the newsletter list — their own sign-up, so it rejoins someone who had unsubscribed |
+| `newsletter` | `true` | a new email goes on the newsletter list; someone who unsubscribed or is do-not-email is never put back on from here (typing an address into a form doesn't prove it's yours) |
 | `volunteer` | `true` | a *Wants to volunteer* request under Today → *Needs you*, with `note` |
-| `note` | what they wrote | with a volunteer request; otherwise their note on file if they have none |
+| `note` | what they wrote | with the volunteer request; on its own, a request for the desk (*Something else*) — never written onto their record |
 
 Anything else (a rating, a role, money) is refused: the website never sets
 what only a canvass or the desk decides.
 
-Someone already on file is matched the way an import matches (email, then
-name and phone, then name and address): their blanks are filled and the new
-tags added; nothing on file is overwritten. The answer:
+What a visitor typed isn't proof of who they are, so a sign-up never lands
+on someone else's record: the same **email** finds a person on file, whose
+blanks are filled and tags added (nothing on file is overwritten); with no
+email, the same **name and phone** only adds the tags; anything else is a new
+person. The answer is the same either way, and says nothing about what was
+on file:
 
 ```json
-{ "person_id": "…", "created": true, "merged": [], "newsletter": "subscribed", "volunteer": "requested" }
+{ "ok": true, "person_id": "…" }
 ```
-
-`merged` names the fields filled on a match; `newsletter` is `subscribed`,
-`rejoined`, `already` or `null`; `volunteer` is `requested` or `null`.
 
 **Retries:** send an `Idempotency-Key` header (the form submission's own id,
 up to 200 characters). The same key with the same body answers what it
@@ -244,7 +244,7 @@ person; the same key with a different body is refused (409).
 missing or not allowed (the message names it) · `415` not JSON · `409` an
 Idempotency-Key reused with another body · `429` more than 120 requests a
 minute on one key. Everything accepted is on the event log, as the
-manager who made the key.
+manager who made the key. A key stops working when it is revoked, and when the manager who made it leaves the campaign.
 
 ```sh
 curl https://starbase.imaginesurrey.ca/in/v1/people \

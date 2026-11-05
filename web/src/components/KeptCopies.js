@@ -130,10 +130,12 @@ function derivePersons(me, plan, qs) {
     same.set('q', '');
     tries.push({ s: same.toString(), rest: false });
   }
-  // The whole list (no filters) — unless it's by volunteer role or a
-  // profile field (?field=), which a row doesn't carry: those say No signal
-  // rather than show everyone under the filter's chip.
-  if (!p.get('role') && !p.get('field')) tries.push({ s: new URLSearchParams({ q: '', limit: String(limit) }).toString(), rest: true });
+  // The whole list (no filters) — unless it's by volunteer role, a profile
+  // field (?field=) or a field cut (?knocked= ?outcome= ?turf= ?postal=
+  // ?notag=), which a row doesn't carry: those say No signal rather than
+  // show everyone under the filter's chip.
+  const notOnARow = ['role', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag'];
+  if (!notOnARow.some((k) => p.get(k))) tries.push({ s: new URLSearchParams({ q: '', limit: String(limit) }).toString(), rest: true });
   for (const t of tries) {
     if (t.s === qs) continue;
     const base = read(t.s);
