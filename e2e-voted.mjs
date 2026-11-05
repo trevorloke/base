@@ -224,6 +224,26 @@ const brief = (await D.api('/brief')).json.voted;
 check('Today → More: "Election day · 1 of 2 supporters voted" — the brief agrees', rowOn === 'Election day · 1 of 2 supporters voted' && brief.supporters_voted === 1 && brief.supporters === 2 && brief.on === true, `${rowOn} · ${JSON.stringify(brief)}`);
 await D.shot('05-today-row');
 
+// The map's filters: with Election day on, "Yes, not voted" (the pull list)
+// and "Voted", counted as the server's people say (one person per door here).
+const sheet = async () => {
+  await V.go('/map');
+  await vpage.waitForSelector('.map-filter-btn', { timeout: 8000 }).catch(() => {});
+  await tap('.map-filter-btn');
+  await vpage.waitForSelector('.map-fopt', { timeout: 5000 }).catch(() => {});
+  return vpage.$$eval('.map-fopt', (els) => els.map((e) => [e.querySelector('.map-fopt__label').innerText.trim(), e.querySelector('.map-fopt__n').innerText.trim()]));
+};
+const opts = await sheet();
+const ppl = (await V.api('/map/doors')).json.persons;
+const wantVoted = ppl.filter((x) => x.voted_at).length;
+const wantGotv = ppl.filter((x) => ['1', '2'].includes(x.rating) && !x.voted_at).length;
+const opt = (label) => opts.find(([l]) => l === label)?.[1];
+check(`map filters: "Yes, not voted" (${wantGotv}) and "Voted" (${wantVoted})`, opt('Yes, not voted') === String(wantGotv) && opt('Voted') === String(wantVoted) && wantVoted > 0 && wantGotv > 0, JSON.stringify(opts));
+await tap('.map-fopt:has-text("Yes, not voted")');
+await sleep(400);
+check('…picked: the pill says "Show: Yes, not voted"', /Show:\s*Yes, not voted/.test(await vpage.innerText('.map-filter-btn').catch(() => '')));
+await vpage.keyboard.press('Escape').catch(() => {});
+
 // ── 6. The map's door card has the same button ──
 await V.go(`/map?person=${P.maya.id}`);
 await vpage.waitForSelector('aside.door-card', { timeout: 8000 }).catch(() => {});
@@ -240,6 +260,7 @@ marks = await marksOf(P.maya.id);
 check('door card tap: "Voted · Maya" with Change, the server has it', /^Voted · Maya/.test(toast) && /Change/.test(toast) && !!marks.voted_at, `${toast} · ${JSON.stringify(marks)}`);
 check('door card reads "✓ Voted"', /^✓ Voted/.test((await vpage.innerText('aside.door-card .vt-done').catch(() => '')).trim()));
 await V.shot('06-door-card-voted');
+
 
 // ── 7. The Calls card too ──
 await V.go(`/calls?person=${P.tom.id}`);
@@ -354,6 +375,9 @@ check('off: an open door has the rating row and no "Voted ✓", no Change — th
 await V.go(`/calls?person=${P.dev.id}`);
 await vpage.waitForSelector('section.cl-card', { timeout: 8000 }).catch(() => {});
 check('off: the Calls card has no "Voted ✓"', !(await vpage.$('section.cl-card .vt-btn')) && !(await vpage.$('section.cl-card .vt-done')));
+const optsOff = await sheet();
+check('off: the map has no voted filters', !optsOff.some(([l]) => l === 'Voted' || l === 'Yes, not voted'), JSON.stringify(optsOff));
+await vpage.keyboard.press('Escape').catch(() => {});
 await V.shot('12-walk-off');
 
 // ── 12. The books still verify ──

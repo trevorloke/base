@@ -44,6 +44,7 @@ import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
+import { pendingVoted, useVotedMode } from '../components/Voted.jsx';
 
 const SURREY = [49.1913, -122.849];
 // "My turf" (volunteers with a turf) comes first and is where they start:
@@ -59,7 +60,12 @@ const FILTERS = [
   { key: 'unrated', label: 'Unrated' },
   { key: 'signs', label: 'Has a sign' },
 ];
-const FILTER_LABEL = Object.fromEntries([MINE, ...FILTERS].map((f) => [f.key, f.label]));
+// With Election day on (ext/voted): the pull list, and who has voted.
+const VOTED_FILTERS = [
+  { key: 'gotv', label: 'Yes, not voted' },
+  { key: 'voted', label: 'Voted' },
+];
+const FILTER_LABEL = Object.fromEntries([MINE, ...FILTERS, ...VOTED_FILTERS].map((f) => [f.key, f.label]));
 
 const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -979,7 +985,11 @@ export default function MapPage() {
     if (!rings.length) return null;
     return new Set(doors.filter((d) => rings.some((r) => pointInPolygon(d.lat, d.lng, r))).map((d) => d.key));
   }, [canCreate, turfs, doors]);
-  const filters = mineKeys?.size ? [MINE, ...FILTERS] : FILTERS;
+  const voting = useVotedMode().on;
+  const filters = [...(mineKeys?.size ? [MINE] : []), ...FILTERS, ...(voting ? VOTED_FILTERS : [])];
+  // Voted: the server's mark, or a tap still on this phone.
+  const votes = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
+  const hasVoted = useCallback((p) => (votes[p.id] ? votes[p.id].voted : Boolean(p.voted_at)), [votes]);
   // Volunteers start on their turf; everyone else on all doors.
   const filter = filterPick && filters.some((f) => f.key === filterPick) ? filterPick : mineKeys?.size ? 'mine' : 'all';
 
@@ -987,20 +997,24 @@ export default function MapPage() {
     filter === 'all' ? true
       : filter === 'mine' ? Boolean(mineKeys?.has(d.key))
         : filter === 'signs' ? d.signs.length > 0
-          : d.band === filter), [filter, mineKeys]);
+          : filter === 'voted' ? d.persons.some(hasVoted)
+            : filter === 'gotv' ? d.persons.some((p) => bandOf(p.rating) === 'support' && !hasVoted(p))
+              : d.band === filter), [filter, mineKeys, hasVoted]);
   // The open door always keeps its pin, whatever the filter. (Only a door
   // the filter hides changes the list, so a tap doesn't rebuild every pin.)
   const extraKey = selectedDoor && !shows(selectedDoor) ? selectedDoor.key : null;
   const visible = useMemo(() => doors.filter((d) => d.key === extraKey || shows(d)), [doors, shows, extraKey]);
   // Doors per filter, for the filter sheet (numbers, not sentences).
   const counts = useMemo(() => {
-    const c = { all: doors.length, mine: mineKeys?.size || 0, support: 0, undecided: 0, opposed: 0, unrated: 0, signs: 0 };
+    const c = { all: doors.length, mine: mineKeys?.size || 0, support: 0, undecided: 0, opposed: 0, unrated: 0, signs: 0, voted: 0, gotv: 0 };
     for (const d of doors) {
       c[d.band] += 1;
       if (d.signs.length) c.signs += 1;
+      if (d.persons.some(hasVoted)) c.voted += 1;
+      if (d.persons.some((p) => bandOf(p.rating) === 'support' && !hasVoted(p))) c.gotv += 1;
     }
     return c;
-  }, [doors, mineKeys]);
+  }, [doors, mineKeys, hasVoted]);
 
   // Deep link to someone who has no pin yet → offer to place them.
   const wantsMissing = Boolean(personParam && doorsQ.data && !selectedDoor && !doorsQ.isFetching);
