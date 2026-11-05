@@ -15,10 +15,11 @@ import { apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { useScale } from '../components/RatingButtons.jsx';
 import { useAction, ratingBands } from './People.jsx';
+import { CUT_KEYS, CutFields, useTurfs } from '../components/FieldCuts.jsx';
 import './shifts.css';
 import './lists.css';
 
-const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field'];
+const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field', ...CUT_KEYS];
 const HAS = [['', 'Anyone'], ['email', 'An email address'], ['phone', 'A phone number'], ['location', 'A pin on the map']];
 const plural = (n, one, many = `${one}s`) => (n === 1 ? one : many);
 const qs = (f) => new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([k, v]) => v && FILTER_KEYS.includes(k)))).toString();
@@ -35,6 +36,7 @@ const Counts = ({ counts, kind }) => counts && (
 // The filter fields: the same choices as People's own filter.
 function FilterFields({ value, onChange }) {
   const scale = useScale();
+  const turfs = useTurfs();
   const tags = useQuery({ queryKey: ['lists', 'tags'], queryFn: () => apiGet('/lists/tags') });
   const set = (k) => (v) => onChange({ ...value, [k]: v || '' });
   return (
@@ -70,6 +72,7 @@ function FilterFields({ value, onChange }) {
         <label htmlFor="ls-q">Words <span className="muted">(name, street, phone, email)</span></label>
         <input id="ls-q" className="input" value={value.q || ''} onChange={(e) => set('q')(e.target.value)} />
       </div>
+      <CutFields value={value} onChange={onChange} turfs={turfs} />
     </div>
   );
 }

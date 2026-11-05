@@ -31,6 +31,7 @@ import {
 import { MyPeopleLink } from '../components/RelationshipsBits.jsx';
 import { VotedRow } from '../components/Voted.jsx';
 import AddressField, { lookupAddress } from '../components/AddressField.jsx';
+import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs } from '../components/FieldCuts.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared widgets + helpers (also used by Person.jsx)
@@ -337,7 +338,8 @@ export function MoreMenu({ items, label = 'More' }) {
 // Filters: read from / write to the URL
 // ─────────────────────────────────────────────────────────────────────────────
 const HAS_LABEL = { phone: 'Has phone', email: 'Has email', location: 'On map', instagram: 'Has Instagram', x: 'Has X', tiktok: 'Has TikTok', reddit: 'Has Reddit' };
-const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'field']; // field: <field id>:<value> (profile fields)
+// field: <field id>:<value> (profile fields); the field cuts (FieldCuts.jsx).
+const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'field', ...CUT_KEYS];
 
 // Rating filter: three bands + Unrated on the first look; who an opposed
 // voter backs ("Voting for…") under More. The value goes to the server as is.
@@ -383,6 +385,7 @@ function useFilters() {
     role: params.get('role') || '',
     has: params.get('has') || '',
     field: params.get('field') || '',
+    ...Object.fromEntries(CUT_KEYS.map((k) => [k, params.get(k) || ''])),
   };
   // Patch the URL in place; empty values drop the key.
   const update = (patch, { replace = true } = {}) => {
@@ -408,6 +411,7 @@ const carry = (f, extra = {}) => {
 // Active filters as removable chips (search lives in its own box).
 function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra = null }) {
   const scale = useScale();
+  const turfs = useTurfs();
   const roleLabel = VOLUNTEER_ROLES.find((r) => r.code === f.role)?.label || f.role;
   const chips = [
     keys.includes('rating') && f.rating && {
@@ -419,6 +423,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
     keys.includes('role') && f.role && { key: 'role', label: roleLabel, name: roleLabel },
     keys.includes('has') && f.has && HAS_LABEL[f.has] && { key: 'has', label: HAS_LABEL[f.has], name: HAS_LABEL[f.has] },
     keys.includes('q') && f.q && { key: 'q', label: `“${f.q}”`, name: `search ${f.q}` },
+    ...cutChips(f, turfs).map((c) => ({ ...c, name: c.label })),
   ].filter(Boolean);
   if (!chips.length && !extra) return null;
   return (
@@ -436,6 +441,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
 
 function FilterSheet({ f, update, tagOptions, onClose, phone }) {
   const scale = useScale();
+  const turfs = useTurfs();
   // "Voting for…": the list's candidates, then anyone taken off it.
   const who = [...scale.candidates.filter((c) => !c.off), ...scale.candidates.filter((c) => c.off)];
   const titleId = useId();
@@ -457,12 +463,13 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose, phone]);
-  const anyPicked = Boolean(f.rating || f.tag || f.role || f.has || f.field);
+  const anyPicked = Boolean(f.rating || f.tag || f.role || f.has || f.field || CUT_KEYS.some((k) => f[k]));
   // Who they vote for and volunteer roles are the long lists: one tap away,
   // open if one is picked. Tags in use sit on the first level.
   const whoPicked = who.some((c) => c.code === f.rating);
-  const [moreOpen, setMoreOpen] = useState(Boolean(f.role || whoPicked || f.field));
-  const morePicked = [whoPicked, f.role, f.field].filter(Boolean).length;
+  const cutsPicked = CUT_KEYS.filter((k) => f[k]).length;
+  const [moreOpen, setMoreOpen] = useState(Boolean(f.role || whoPicked || f.field || cutsPicked));
+  const morePicked = [whoPicked, f.role, f.field].filter(Boolean).length + cutsPicked;
   const moreId = useId();
   // on: a band's chip is on for an older link of that band too.
   const chip = (key, value, label, band, on = f[key] === value) => (
@@ -481,7 +488,7 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
           <h2 id={titleId} ref={titleRef} tabIndex={-1}>Filter</h2>
           {anyPicked && (
             <button type="button" className="btn btn-quiet pp-btn"
-              onClick={() => update({ rating: null, tag: null, role: null, has: null, field: null })}>
+              onClick={() => update({ rating: null, tag: null, role: null, has: null, field: null, ...Object.fromEntries(CUT_KEYS.map((k) => [k, null])) })}>
               Clear
             </button>
           )}
@@ -528,6 +535,7 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
                 <div className="pp-group__opts">{VOLUNTEER_ROLES.map((r) => chip('role', r.code, r.label))}</div>
               </fieldset>
               <FieldFilterGroups chip={chip} />
+              <CutGroups chip={chip} f={f} update={update} turfs={turfs} />
             </div>
           )}
         </div>
@@ -688,6 +696,7 @@ function PeopleList() {
   if (f.role) qs.set('role', f.role);
   if (f.has) qs.set('has', f.has);
   if (f.field) qs.set('field', f.field);
+  addCuts(qs, f);
   const qsKey = qs.toString();
 
   const persons = useQuery({
@@ -710,7 +719,7 @@ function PeopleList() {
     ...[...seen].filter((t) => !SUGGESTED_TAGS.includes(t)).sort((a, b) => tagWord(a).localeCompare(tagWord(b))),
   ];
 
-  const picked = [f.rating, f.tag, f.role, f.has, f.field].filter(Boolean).length;
+  const picked = [f.rating, f.tag, f.role, f.has, f.field, ...CUT_KEYS.map((k) => f[k])].filter(Boolean).length;
   const anyFilter = Boolean(picked || f.q);
   const closeFilter = useCallback(() => { setFilterOpen(false); filterBtn.current?.focus(); }, []);
 
@@ -788,7 +797,7 @@ function PeopleList() {
           <strong className="mono">{count}</strong> {rows.length === 1 ? 'person' : 'people'}{partial ? ' in the kept list' : ''}
           {desk && anyFilter && !partial && ' '}
           {desk && anyFilter && !partial && (
-            <Link className="pp-savelist" to={`/lists/new?${new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([k, v]) => v && ['q', 'tag', 'rating', 'role', 'has', 'field'].includes(k))))}`}>
+            <Link className="pp-savelist" to={`/lists/new?${new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([k, v]) => v && ['q', 'tag', 'rating', 'role', 'has', 'field', ...CUT_KEYS].includes(k))))}`}>
               Save as a list
             </Link>
           )}
@@ -957,6 +966,7 @@ function CallsScreen() {
   if (f.rating) qs.set('rating', ratingQuery(scale, f.rating));
   if (f.role) qs.set('role', f.role);
   if (f.field) qs.set('field', f.field);
+  addCuts(qs, f);
   // The list is kept on this phone, so losing signal mid-list loses nothing.
   const copyName = bankId ? `bank:${bankId}` : `calls:${qs}`;
   const persons = useQuery({

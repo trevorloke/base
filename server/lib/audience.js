@@ -1,7 +1,8 @@
 // Who a People query names — the one WHERE clause behind GET /persons, a
 // saved list (ext/lists) and a send's audience (an email or text blast).
 //   personsWhere(db, ctx, query) → { where, params }  (alias p)
-//     query: { q, tag, rating, role, has, …a feature's own (?field=) }
+//     query: { q, tag, rating, role, has, …a feature's own (?field=;
+//              ?knocked= ?outcome= ?turf= ?postal= ?notag= — ext/cuts) }
 // A volunteer's search, tag and has=email never match on what they may not
 // see (viewer.js); the desk's does. Features add their own filters by the
 // personsWhere hook, on the same params.
@@ -70,7 +71,8 @@ export const personsWhere = async (db, ctx, query = {}) => {
 };
 
 // The filter a saved list or a send keeps: only the keys the query knows.
-export const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field'];
+// knocked, outcome, turf, postal, notag: the field cuts (ext/cuts).
+export const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag'];
 export const cleanFilter = (f) => {
   const out = {};
   for (const k of FILTER_KEYS) if (f && typeof f[k] === 'string' && f[k].trim()) out[k] = f[k].trim().slice(0, 400);

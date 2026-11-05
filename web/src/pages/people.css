@@ -497,3 +497,6 @@ button.pf-back:focus-visible { outline: 2px solid var(--mark-deep); outline-offs
 .pf-edit { flex: 0 0 auto; min-height: 48px; }
 .pf-saved { align-self: center; color: var(--ok); font-weight: 600; font-size: 14px; }
 .pf-edit-form { scroll-margin-top: 80px; }
+
+/* Filter: "Postal code starts with" under the field cuts. */
+.pp-postal { max-width: 220px; margin: 0 0 var(--s-3); }

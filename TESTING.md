@@ -242,6 +242,12 @@ one tap away under **More**.
   same again with the same `Idempotency-Key`: still one person. The key's row
   says when it was last used; **Revoke** and the next send is refused (401).
 
+- **The field's cuts** — People → Filter → **More filters**: *Last knocked*
+  (Never · not in 7, 14 or 30 days), *Last outcome* (No answer, Left lit,
+  Refused…), a *Turf*, *Postal code starts with*. Each narrows the list and
+  shows as a chip you can take off; **Save as a list** carries them, and the
+  saved list (and a blast or Calls from it) keeps them.
+
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
   **Today · Map · Calls · Shifts**.
