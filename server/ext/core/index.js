@@ -93,9 +93,12 @@ export const actions = {
       // Someone already at this door: the new person takes its address and pin.
       housemate_id: z.uuid(),
       name: z.string().trim().min(1).max(300),
+      // First and last apart, as the campaign's lists keep them (ext/names).
+      first_name: z.string().trim().max(150).nullish(),
+      last_name: z.string().trim().max(150).nullish(),
       phone: z.string().trim().max(40).nullish(),
     }),
-    handler: async (tx, ctx, { id: clientId, housemate_id: housemateId, name, phone }, emit) => {
+    handler: async (tx, ctx, { id: clientId, housemate_id: housemateId, name, first_name: firstName, last_name: lastName, phone }, emit) => {
       if (clientId) {
         const cur = (await tx.query('select * from persons where id = $1', [clientId])).rows[0];
         if (cur && cur.workspace_id !== ctx.workspaceId) throw httpError(409, 'that id is already taken');
@@ -118,10 +121,12 @@ export const actions = {
         postal: home.postal || null, lat: home.lat, lng: home.lng,
       };
       await tx.query(
-        `insert into persons (id, workspace_id, kind, name, phone, address, house_number, unit, city, postal, lat, lng, tags, socials)
-         values ($1, $2, 'person', $3, $4, $5, $11, $6, $7, $8, $9, $10, '[]', '{}')`,
-        [id, ctx.workspaceId, name, person.phone, person.address, person.unit, person.city, person.postal, person.lat, person.lng, person.house_number],
+        `insert into persons (id, workspace_id, kind, name, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, first_name, last_name)
+         values ($1, $2, 'person', $3, $4, $5, $11, $6, $7, $8, $9, $10, '[]', '{}', $12, $13)`,
+        [id, ctx.workspaceId, name, person.phone, person.address, person.unit, person.city, person.postal, person.lat, person.lng, person.house_number,
+         firstName || null, lastName || null],
       );
+      Object.assign(person, (await tx.query('select name, first_name, last_name from persons where id = $1', [id])).rows[0]);
       emit('person', id, 'create', { ...person, tags: [], at_door_of: housemateId });
       return { person: doorPerson(person) };
     },

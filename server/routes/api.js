@@ -146,7 +146,7 @@ app.get('/persons', async (c) => {
   // note: their own words from the volunteer form (attrs.note), so the call
   // card needs no per-person fetch. Nothing else from attrs is exposed.
   const { rows } = await c.get('db').query(
-    `select p.id, p.kind, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
+    `select p.id, p.kind, p.name, p.first_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
             p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note
      from persons p where ${where}
      order by lower(p.name) limit $4`,
@@ -203,7 +203,7 @@ app.get('/persons/:id', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const person = (await db.query(
-    `select id, kind, name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, voted_at, created_at,
+    `select id, kind, name, first_name, last_name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, voted_at, created_at,
             attrs->>'note' as note
      from persons where id = $1 and workspace_id = $2 and deleted_at is null`,
     [c.req.param('id'), ctx.workspaceId],

@@ -233,7 +233,7 @@ const spot = await page.evaluate(() => {
 });
 await page.mouse.click(spot.x, spot.y);
 await page.waitForSelector('form[aria-label="New door"]', { timeout: 5000 }).catch(() => {});
-await page.fill('#nd-name', 'Ana Souza');
+await page.fill('#nd-first', 'Ana'); await page.fill('#nd-last', 'Souza');
 await page.fill('#nd-address', '7155 124 St');
 await page.click('form[aria-label="New door"] button[type="submit"]');
 await sleep(600);
@@ -350,7 +350,7 @@ await page.click('aside.door-card button[aria-label="Close door card"]').catch((
 await page.click('button[aria-label="Add a door"]');
 await page.mouse.click(spot.x + 30, spot.y + 30);
 await page.waitForSelector('form[aria-label="New door"]', { timeout: 5000 }).catch(() => {});
-await page.fill('#nd-name', 'Lost Answer');
+await page.fill('#nd-first', 'Lost'); await page.fill('#nd-last', 'Answer');
 await page.fill('#nd-address', '7160 124 St');
 await page.click('form[aria-label="New door"] button[type="submit"]');
 await sleep(600);

@@ -139,6 +139,18 @@ const rf = (await api(`/persons/${riya.id}/fields`)).json.fields;
 const fv = (n) => rf.find((f) => f.name === n)?.value;
 check('Riya’s profile fields: Province BC, House notes, Email opt-in yes, SMS opt-in no, Support 5',
   fv('Province') === 'BC' && /old supporter list/.test(fv('House notes') || '') && fv('Email opt-in') === true && fv('SMS opt-in') === false && fv('Support') === 5, JSON.stringify(rf.filter((f) => f.value != null).map((f) => [f.name, f.value])));
+check('first and last kept apart, as the file has them (First Name · Surname)', riya.first_name === 'Riya' && riya.last_name === 'Sample', `${riya.first_name} · ${riya.last_name}`);
+await page.goto(`${ADMIN}/people/${riya.id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.pf-edit', { timeout: 8000 }).catch(() => {});
+await page.click('.pf-edit');
+await page.waitForSelector('#ed-first', { timeout: 8000 }).catch(() => {});
+check('her profile’s Edit: First name Riya, Last name Sample', (await page.inputValue('#ed-first').catch(() => '')) === 'Riya' && (await page.inputValue('#ed-last').catch(() => '')) === 'Sample');
+await page.fill('#ed-last', 'Example');
+await page.click('form[aria-label="Edit details"] button[type="submit"]');
+await sleep(1200);
+const re = (await api(`/persons/${riya.id}`)).json.person;
+check('a new last name: the whole name follows (Riya Example)', re.name === 'Riya Example' && re.last_name === 'Example', `${re.name} · ${re.first_name} · ${re.last_name}`);
+await page.screenshot({ path: `${SHOTS}/04-names.png` });
 const omar2 = await lp('Omar Listed');
 check('Omar (no mobile): his home phone is the number to call', omar2?.phone === '604-555-0177', JSON.stringify(omar2));
 const lee = await lp('Lee Listed');

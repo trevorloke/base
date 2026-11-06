@@ -348,10 +348,19 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
 // one line with the doors it matches under it (AddressField): a pick moves
 // the pin with the save; a new address nobody picked is looked up when it's
 // saved, and the server keeps looking if it can't be found yet.
-const EDIT_KEYS = ['name', 'kind', 'phone', 'email', 'address', 'unit', 'city', 'postal'];
+const EDIT_KEYS = ['kind', 'phone', 'email', 'address', 'unit', 'city', 'postal'];
+// A record from before first and last were kept: split at the last space,
+// as the server does (ext/names).
+const splitName = (name) => {
+  const w = String(name || '').trim().replace(/\s+/g, ' ');
+  const at = w.lastIndexOf(' ');
+  return at > 0 ? [w.slice(0, at), w.slice(at + 1)] : [w, ''];
+};
 function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
+  const [first0, last0] = person.first_name != null || person.last_name != null
+    ? [person.first_name || '', person.last_name || ''] : splitName(person.name);
   const start = {
-    name: person.name || '', kind: person.kind || 'person', phone: person.phone || '', email: person.email || '',
+    name: person.name || '', first: first0, last: last0, kind: person.kind || 'person', phone: person.phone || '', email: person.email || '',
     address: person.address || '', unit: person.unit || '', city: person.city || '', postal: person.postal || '',
   };
   const [form, setForm] = useState(start);
@@ -368,9 +377,18 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
     e.preventDefault();
     const patch = {};
     for (const k of EDIT_KEYS) {
-      const next = k === 'name' || k === 'kind' ? form[k].trim() : v(form[k]);
-      const was = k === 'name' || k === 'kind' ? start[k].trim() : v(start[k]);
+      const next = k === 'kind' ? form[k].trim() : v(form[k]);
+      const was = k === 'kind' ? start[k].trim() : v(start[k]);
       if (next !== was) patch[k] = next;
+    }
+    // Names: a person's first and last (the whole follows on the server); an
+    // organization's one name.
+    if (form.kind === 'org') {
+      if (form.name.trim() !== start.name.trim() || patch.kind) patch.name = form.name.trim() || [form.first, form.last].join(' ').trim();
+    } else if (form.first.trim() !== start.first.trim() || form.last.trim() !== start.last.trim() || patch.kind) {
+      if (!form.first.trim() && !form.last.trim()) return;
+      patch.first_name = form.first.trim() || null;
+      patch.last_name = form.last.trim() || null;
     }
     if (!Object.keys(patch).length) { onClose(); return; }
     if ('address' in patch) patch.house_number = null; // the number is read off the line
@@ -392,10 +410,23 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
   return (
     <form className="inline-form pf-edit-form" onSubmit={submit} ref={formRef} aria-label="Edit details">
       <div className="form-row">
-        <div className="field">
-          <label htmlFor="ed-name">Name</label>
-          <input id="ed-name" className="input" required maxLength={300} autoFocus={focus === 'name'} value={form.name} onChange={set('name')} />
-        </div>
+        {form.kind === 'org' ? (
+          <div className="field">
+            <label htmlFor="ed-name">Name</label>
+            <input id="ed-name" className="input" required maxLength={300} autoFocus={focus === 'name'} value={form.name} onChange={set('name')} />
+          </div>
+        ) : (
+          <>
+            <div className="field">
+              <label htmlFor="ed-first">First name</label>
+              <input id="ed-first" className="input" maxLength={150} autoFocus={focus === 'name'} value={form.first} onChange={set('first')} />
+            </div>
+            <div className="field">
+              <label htmlFor="ed-last">Last name</label>
+              <input id="ed-last" className="input" maxLength={150} value={form.last} onChange={set('last')} />
+            </div>
+          </>
+        )}
         <div className="field" style={{ flex: '0 1 150px' }}>
           <label htmlFor="ed-kind">Kind</label>
           <select id="ed-kind" className="input" value={form.kind} onChange={set('kind')}>

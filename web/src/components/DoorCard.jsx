@@ -159,13 +159,22 @@ function useRefresh() {
   };
 }
 
+// "Mary Anne" + "Example" → "Mary Anne Example": the whole name every screen reads.
+export const joinName = (f) => [f.first, f.last].map((x) => String(x || '').trim()).filter(Boolean).join(' ');
+
 function PersonFields({ idPrefix, form, set, focusName = true }) {
   const [more, setMore] = useState(false);
   return (
     <>
-      <div className="field">
-        <label htmlFor={`${idPrefix}-name`}>Name</label>
-        <input id={`${idPrefix}-name`} className="input" required autoFocus={focusName} maxLength={300} autoComplete="off" value={form.name} onChange={set('name')} />
+      <div className="form-row door-names">
+        <div className="field">
+          <label htmlFor={`${idPrefix}-first`}>First name</label>
+          <input id={`${idPrefix}-first`} className="input" autoFocus={focusName} maxLength={150} autoComplete="off" value={form.first} onChange={set('first')} />
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-last`}>Last name</label>
+          <input id={`${idPrefix}-last`} className="input" maxLength={150} autoComplete="off" value={form.last} onChange={set('last')} />
+        </div>
       </div>
       {more || form.phone ? (
         <div className="field">
@@ -223,24 +232,26 @@ export function SignAsk({ signs = [], disabled = false, onAsk, idPrefix = 'door'
 export function AddPersonInline({ door, onDone, onCancel, toast, toastQueued = toast }) {
   const queryClient = useQueryClient();
   const refresh = useRefresh();
-  const [form, setForm] = useState({ name: '', phone: '' });
+  const [form, setForm] = useState({ first: '', last: '', phone: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) { setError('Add a name'); return; }
+    if (!joinName(form)) { setError('Add a name'); return; }
     setBusy(true);
     setError(null);
     try {
       // Through the outbox: no signal, it's saved here and the door shows it
       // (meta.door: where the server will put them).
-      const name = form.name.trim();
+      const name = joinName(form);
       const housemate = door.persons.find((p) => !p.pending) || door.persons[0];
       const r = await queueAction('person.addAtDoor', {
         housemate_id: housemate.id,
         name,
+        first_name: form.first.trim() || undefined,
+        last_name: form.last.trim() || undefined,
         phone: form.phone.trim() || undefined,
       }, { who: name, door: { address: door.address ?? null, unit: door.unit ?? null, lat: door.lat, lng: door.lng } });
       if (r.queued) { toastQueued(queuedText(r, name)); onDone(r.client_id, null); return; }
@@ -281,7 +292,7 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast }) {
   const queryClient = useQueryClient();
   const refresh = useRefresh();
   const online = useOnline();
-  const [form, setForm] = useState({ name: '', address: '', unit: '', phone: '', city: '', postal: '' });
+  const [form, setForm] = useState({ first: '', last: '', address: '', unit: '', phone: '', city: '', postal: '' });
   const [pinFrom, setPinFrom] = useState(null); // 'address' once a pick placed it
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -302,7 +313,7 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast }) {
     e.preventDefault();
     // Whitespace passes `required`; the server trims names (→ 400) and a
     // blank address would make an unaddressed pin, not a door.
-    if (!form.name.trim() || !form.address.trim()) { setError('Add a name and address'); return; }
+    if (!joinName(form) || !form.address.trim()) { setError('Add a name and address'); return; }
     setBusy(true);
     setError(null);
     let at = latlng;
@@ -320,9 +331,11 @@ export function AddDoorForm({ latlng, onPlace, onDone, onCancel, toast }) {
       onPlace?.(at);
     }
     try {
-      const name = form.name.trim();
+      const name = joinName(form);
       const r = await queueAction('person.create', {
         name,
+        first_name: form.first.trim() || undefined,
+        last_name: form.last.trim() || undefined,
         address: form.address.trim(),
         unit: form.unit.trim() || undefined,
         city: city || undefined,

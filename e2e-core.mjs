@@ -162,8 +162,8 @@ check('Undo: "Lawn sign cancelled" — and it is gone from the server', /Lawn si
 
 await vp.click('.walk-door.is-open button:has-text("+ Person at this door")');
 await vp.waitForSelector('form[aria-label="Add a person at this door"]', { timeout: 3000 });
-check('the form asks name (phone one tap away), no address', !!(await vp.$('#dp-name')) && !(await vp.$('form[aria-label="Add a person at this door"] [id$="-address"]')));
-await vp.fill('#dp-name', 'Ravi Chen');
+check('the form asks name (phone one tap away), no address', !!(await vp.$('#dp-first')) && !(await vp.$('form[aria-label="Add a person at this door"] [id$="-address"]')));
+await vp.fill('#dp-first', 'Ravi'); await vp.fill('#dp-last', 'Chen');
 await vp.click('form[aria-label="Add a person at this door"] button:has-text("Phone")');
 await vp.fill('#dp-phone', '604-555-0108');
 m = await V.measure('form[aria-label="Add a person at this door"]');
@@ -198,7 +198,7 @@ check('lawn sign offline: "Lawn sign saved offline" with Undo', /Lawn sign saved
 check('the door shows "Lawn sign · Not sent yet"', /Lawn sign · Not sent yet/i.test(await panelText()));
 await vp.click('.walk-door.is-open button:has-text("+ Person at this door")');
 await vp.waitForSelector('form[aria-label="Add a person at this door"]', { timeout: 3000 });
-await vp.fill('#dp-name', 'Ana Souza');
+await vp.fill('#dp-first', 'Ana'); await vp.fill('#dp-last', 'Souza');
 await vp.click('form[aria-label="Add a person at this door"] button:has-text("Save person")');
 await sleep(800);
 t = await V.toast();

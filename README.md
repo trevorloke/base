@@ -115,6 +115,14 @@ than a week after they came off is refused. Contacts are door, phone, text or
 - **Tags**: free-form, seeded with media, VIP, endorser, host, …
 - **Socials**: per-person handles for Facebook, Instagram, X, TikTok, YouTube,
   LinkedIn, Bluesky.
+- **First and last names**, kept apart the way the campaign's lists keep
+  them (First Name · Surname): *Add person*, a profile's *Edit*, *+ Door*
+  and *Add someone at this door* ask for both; an import keeps them as the
+  file has them; the website sends `first_name` / `last_name`. The whole
+  name every screen reads follows them (a new last name changes it), and a
+  whole name given alone is split at its last space — as are the people on
+  file from before. An organization keeps one name. The People spreadsheet
+  has first and last, and the street apart from the house number.
 - **Profile fields**: the campaign's own — Text · Yes/No · Pick one · Number ·
   Date (*Language at home*, *Strata council member*, …) — set up by a manager,
   filled in by the desk under *More details* (read-only with no signal),

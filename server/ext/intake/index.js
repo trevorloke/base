@@ -214,10 +214,13 @@ const takeIn = async (tx, ws, p, emit) => {
       address: addr?.address || null, house_number: addr?.house_number || null, unit: norm(p.unit) || null,
       city: norm(p.city) || null, postal: norm(p.postal).toUpperCase() || null, tags,
     };
+    // First and last as the form sent them; a whole name alone is split (ext/names).
+    const firstLast = !norm(p.name) && (norm(p.first_name) || norm(p.last_name));
     await tx.query(
-      `insert into persons (id, workspace_id, kind, name, email, phone, address, house_number, unit, city, postal, tags, socials)
-       values ($1, $2, 'person', $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}')`,
-      [personId, ws, row.name, row.email, row.phone, row.address, row.house_number, row.unit, row.city, row.postal, JSON.stringify(tags)],
+      `insert into persons (id, workspace_id, kind, name, email, phone, address, house_number, unit, city, postal, tags, socials, first_name, last_name)
+       values ($1, $2, 'person', $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}', $12, $13)`,
+      [personId, ws, row.name, row.email, row.phone, row.address, row.house_number, row.unit, row.city, row.postal, JSON.stringify(tags),
+       firstLast ? norm(p.first_name) || null : null, firstLast ? norm(p.last_name) || null : null],
     );
     emit('person', personId, 'create', { ...row, source: 'website' });
   }

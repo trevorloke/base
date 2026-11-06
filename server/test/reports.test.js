@@ -40,8 +40,8 @@ test('the reports: totals and tables; CSV of any report and any dataset; volunte
   const people = await app.request('/api/export/people.csv', { headers: { cookie: mgr.cookie } });
   assert.equal(people.status, 200);
   const text = await people.text();
-  assert.match(text, /^﻿?name,email,phone/);
-  assert.match(text, /Bob Voter,,604-555-0102/);
+  assert.match(text, /^﻿?first_name,last_name,name,email,phone,unit,house_number,street,address/);
+  assert.match(text, /Bob,Voter,Bob Voter,,604-555-0102/);
   assert.match(text, /member; yard-sign/);
   for (const d of ['gifts', 'subscribers', 'contacts', 'lists']) {
     const res = await app.request(`/api/export/${d}.csv`, { headers: { cookie: mgr.cookie } });
@@ -66,17 +66,18 @@ test('more as spreadsheets: volunteers with their roles, signs, shifts; People c
   const people = await csv('people');
   const head = people.replace(/^﻿/, '').split('\r\n')[0].split(',');
   assert.ok(head.includes('voted'), head.join());
-  const bobRow = people.split('\r\n').find((l) => l.startsWith('Bob Voter')).split(',');
+  const bobRow = people.split('\r\n').find((l) => l.includes(',Bob Voter,')).split(',');
   assert.match(bobRow[head.indexOf('voted')], /^\d{4}-\d{2}-\d{2}$/, 'voted as a date');
   // The People spreadsheet imports straight back into another campaign.
   const other = new Client();
   await other.signup({ workspaceName: 'Round trip', email: `rt.${tag}@example.org`, jurisdiction: 'bc-municipal' });
   const rows = people.replace(/^﻿/, '').split('\r\n').slice(1).filter(Boolean).map((l) => {
     const cells = l.split(',');
-    return { name: cells[head.indexOf('name')], phone: cells[head.indexOf('phone')] || undefined, city: cells[head.indexOf('city')] || undefined, voted: cells[head.indexOf('voted')] || undefined };
+    return { first: cells[head.indexOf('first_name')], last: cells[head.indexOf('last_name')], phone: cells[head.indexOf('phone')] || undefined, city: cells[head.indexOf('city')] || undefined, voted: cells[head.indexOf('voted')] || undefined };
   });
   const r = await other.post('/api/data/import', { rows });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   const back = (await other.get('/api/persons?q=Bob%20Voter')).json.persons[0];
   assert.ok(back && back.voted_at, 'Bob comes back, voted');
+  assert.deepEqual([back.first_name, back.last_name], ['Bob', 'Voter'], 'first and last apart, as they went out');
 });

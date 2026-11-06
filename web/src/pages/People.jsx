@@ -548,7 +548,7 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Add person (inline, ?new=1)
 // ─────────────────────────────────────────────────────────────────────────────
-const emptyPerson = (me) => ({ name: '', kind: 'person', email: '', phone: '', address: '', unit: '', city: me?.org?.city || 'Surrey', postal: '' });
+const emptyPerson = (me) => ({ name: '', first: '', last: '', kind: 'person', email: '', phone: '', address: '', unit: '', city: me?.org?.city || 'Surrey', postal: '' });
 
 function AddPersonForm({ onClose, me }) {
   const queryClient = useQueryClient();
@@ -563,7 +563,9 @@ function AddPersonForm({ onClose, me }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim()) return;
+    const isOrg = form.kind === 'org';
+    const whole = isOrg ? form.name.trim() : [form.first, form.last].map((x) => x.trim()).filter(Boolean).join(' ');
+    if (!whole) return;
     // A typed address nobody picked: the first door that matches it, if the
     // service knows it (the server looks again when it can't).
     let at = pin;
@@ -573,7 +575,8 @@ function AddPersonForm({ onClose, me }) {
       if (found) { at = { lat: found.lat, lng: found.lng }; city = found.city || city; postal = postal || found.postal || ''; }
     }
     const res = await act.run('person.create', {
-      name: form.name.trim(),
+      name: whole,
+      ...(isOrg ? {} : { first_name: form.first.trim() || undefined, last_name: form.last.trim() || undefined }),
       kind: form.kind,
       email: opt(form.email),
       phone: opt(form.phone),
@@ -594,10 +597,23 @@ function AddPersonForm({ onClose, me }) {
   return (
     <form className="card inline-form pp-add" onSubmit={submit}>
       <h2>Add person</h2>
-      <div className="field">
-        <label htmlFor="np-name">Name</label>
-        <input id="np-name" className="input" required autoFocus maxLength={300} value={form.name} onChange={set('name')} />
-      </div>
+      {form.kind === 'org' ? (
+        <div className="field">
+          <label htmlFor="np-name">Name</label>
+          <input id="np-name" className="input" required autoFocus maxLength={300} value={form.name} onChange={set('name')} />
+        </div>
+      ) : (
+        <div className="form-row">
+          <div className="field">
+            <label htmlFor="np-first">First name</label>
+            <input id="np-first" className="input" autoFocus maxLength={150} value={form.first} onChange={set('first')} />
+          </div>
+          <div className="field">
+            <label htmlFor="np-last">Last name</label>
+            <input id="np-last" className="input" maxLength={150} value={form.last} onChange={set('last')} />
+          </div>
+        </div>
+      )}
       <div className="form-row">
         <div className="field">
           <label htmlFor="np-phone">Phone</label>

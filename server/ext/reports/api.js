@@ -120,7 +120,9 @@ api.get('/reports/:name', async (c) => {
 // Whole tables, every column a spreadsheet can hold; never a secret token.
 const DATASETS = {
   // Columns People → Import reads back (a round trip into another campaign).
-  people: { sql: `select p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
+  people: { sql: `select p.first_name, p.last_name, p.name, p.email, p.phone, p.unit, p.house_number,
+      case when p.house_number is not null and p.address like p.house_number || ' %' then substr(p.address, length(p.house_number) + 2) else p.address end as street,
+      p.address, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
       to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.kind, p.created_at
     from persons p where p.workspace_id = $1 and p.deleted_at is null order by lower(p.name)`, tags: true },
   volunteers: { sql: `select p.name, p.email, p.phone, string_agg(v.role || coalesce(' (' || nullif(v.detail, '') || ')', ''), '; ' order by v.role) as roles

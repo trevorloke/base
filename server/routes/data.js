@@ -83,7 +83,11 @@ const cleanRow = (raw, i, scale) => {
   const r = rowSchema.safeParse(raw);
   if (!r.success) return { error: `row ${i + 1}: ${r.error.issues[0].path.join('.')} ${r.error.issues[0].message}` };
   const v = r.data;
-  const name = norm(v.name) || [norm(v.first), norm(v.last)].filter(Boolean).join(' ');
+  // First and last as the file keeps them; a whole name alone is split by
+  // the database (ext/names).
+  const first = norm(v.first) || null;
+  const last = norm(v.last) || null;
+  const name = norm(v.name) || [first, last].filter(Boolean).join(' ');
   if (!name) return { error: `row ${i + 1}: no name` };
   const email = lower(v.email) || null;
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: `row ${i + 1}: invalid email “${v.email}”` };
@@ -105,7 +109,7 @@ const cleanRow = (raw, i, scale) => {
   const pin = lat != null && lng != null && !(lat === 0 && lng === 0) ? { lat, lng } : null;
   return {
     row: {
-      name, email, rating, socials, pin, house_number,
+      name, first: norm(v.name) ? null : first, last: norm(v.name) ? null : last, email, rating, socials, pin, house_number,
       phone: norm(v.phone) || null,
       address,
       unit: norm(v.unit) || null,
@@ -266,13 +270,15 @@ app.post('/import', async (c) => {
         decisions.push({ row: r.index + 1, name: r.name, action: 'created', id });
         const p = { id, name: r.name, email: r.email, phone: r.phone, address: r.address, unit: r.unit,
           city: r.city, postal: r.postal, tags: r.tags, socials: r.socials, rating: r.rating,
-          lat: r.pin?.lat ?? null, lng: r.pin?.lng ?? null, house_number: r.house_number };
+          lat: r.pin?.lat ?? null, lng: r.pin?.lng ?? null, house_number: r.house_number,
+          ...(r.first || r.last ? { first_name: r.first, last_name: r.last } : {}) };
         if (write) {
           await tx.query(
-            `insert into persons (id, workspace_id, name, email, phone, address, unit, city, postal, tags, socials, rating, lat, lng, house_number)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+            `insert into persons (id, workspace_id, name, email, phone, address, unit, city, postal, tags, socials, rating, lat, lng, house_number, first_name, last_name)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
             [id, ctx.workspaceId, p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal,
-             JSON.stringify(p.tags), JSON.stringify(p.socials), p.rating, p.lat, p.lng, p.house_number],
+             JSON.stringify(p.tags), JSON.stringify(p.socials), p.rating, p.lat, p.lng, p.house_number,
+             r.first || null, r.last || null],
           );
           emit('person', id, 'create', { ...p, source: 'import' });
         }
