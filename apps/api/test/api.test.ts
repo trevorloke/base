@@ -118,6 +118,10 @@ describe("api", () => {
 describe("review regressions", () => {
   it("agent keys never pass role gates: accounts, profile, global topics, keys", async () => {
     expect((await app.request("/v1/accounts", { method: "POST", headers: auth(agentKey), body: JSON.stringify({ network: "x", externalId: "9", handle: "h", connector: "mock" }) })).status).toBe(403);
+    // A connector this server does not run (the mock in production) cannot hold an account.
+    const unknown = await app.request("/v1/accounts", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ network: "x", externalId: "9", handle: "h", connector: "not_here" }) });
+    expect(unknown.status).toBe(400);
+    expect((await json(unknown)).error.message).toMatch(/not available on this server/);
     expect((await app.request(`/v1/accounts/${acctId}`, { method: "DELETE", headers: auth(agentKey) })).status).toBe(403);
     expect((await app.request("/v1/workspace/profile", { method: "PATCH", headers: auth(agentKey), body: JSON.stringify({ profile: { description: "pwned" } }) })).status).toBe(403);
     expect((await app.request("/v1/trends/topics", { method: "POST", headers: auth(agentKey), body: JSON.stringify({ name: "G", keywords: ["g"], global: true }) })).status).toBe(403);
@@ -209,7 +213,10 @@ describe("compose, calendar, connect, sources", () => {
     expect((await app.request("/v1/accounts/connect/bluesky", { method: "POST", headers: auth(agentKey), body: JSON.stringify({ identifier: "a", appPassword: "good-pass" }) })).status).toBe(403);
     const connectors = await json(await app.request("/v1/connectors", { headers: auth(ownerKey) }));
     expect(connectors.find((c: { name: string }) => c.name === "bluesky")).toMatchObject({ connect: "app_password" });
-    expect(connectors.find((c: { name: string }) => c.name === "mock")).toBeUndefined();
+    // Listed (so the room reads what demo accounts can do: no replies), never offered as a way to connect.
+    const mock = connectors.find((c: { name: string }) => c.name === "mock");
+    expect(mock).toMatchObject({ connect: "none", inputs: [] });
+    expect(mock.capabilities.x.reply).toBeFalsy();
   });
 
   it("reports sources and discoveries", async () => {

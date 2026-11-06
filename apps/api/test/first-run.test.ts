@@ -32,7 +32,7 @@ describe("first run on a deployment with only passwordless users", () => {
   it("tells the sign-in screen nobody can sign in yet", async () => {
     const r = await app.request("/v1/auth/session");
     expect(r.status).toBe(401);
-    expect((await json(r)).error.details).toEqual({ signupAllowed: true, firstRun: true });
+    expect((await json(r)).error.details).toEqual({ signupAllowed: true, firstRun: true, mail: false });
   });
 
   it("lets that user claim their account with a password and keeps their workspace", async () => {
@@ -46,7 +46,7 @@ describe("first run on a deployment with only passwordless users", () => {
   });
 
   it("then closes: the hint flips, and sign-up needs an invite", async () => {
-    expect((await json(await app.request("/v1/auth/session"))).error.details).toEqual({ signupAllowed: false, firstRun: false });
+    expect((await json(await app.request("/v1/auth/session"))).error.details).toEqual({ signupAllowed: false, firstRun: false, mail: false });
     expect((await post("/v1/auth/signup", { name: "X", email: "x@example.com", password: "a long enough password", workspaceName: "X" })).status).toBe(403);
     expect((await post("/v1/auth/login", { email: "trevor@example.com", password: "a long enough password" })).status).toBe(200);
   });

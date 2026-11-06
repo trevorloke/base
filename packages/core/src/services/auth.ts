@@ -135,7 +135,8 @@ const Timezone = z.string().refine((tz) => {
   }
 }, "unknown timezone");
 
-export const SignupInput = z.object({ email: Email, password: Password, name: z.string().trim().min(1).max(200), workspaceName: z.string().trim().min(1).max(200) });
+/** `timezone`: the new workspace's (the browser's own, from the web app); red lines and schedules read in it. Default UTC. */
+export const SignupInput = z.object({ email: Email, password: Password, name: z.string().trim().min(1).max(200), workspaceName: z.string().trim().min(1).max(200), timezone: Timezone.optional().catch(undefined) });
 export const LoginInput = z.object({ email: Email, password: z.string().min(1).max(1024) });
 export const CreateWorkspaceInput = z.object({ name: z.string().trim().min(1).max(200), slug: z.string().trim().min(1).max(60).optional(), timezone: Timezone.optional() });
 export const InviteInput = z.object({ email: Email, role: Role });
@@ -396,9 +397,10 @@ export class AuthService {
   }
 
   /** For the sign-in screen: whether a sign-up would be accepted, and whether nobody can sign in yet. */
-  async signupStatus(): Promise<{ signupAllowed: boolean; firstRun: boolean }> {
+  async signupStatus(): Promise<{ signupAllowed: boolean; firstRun: boolean; mail: boolean }> {
     const firstRun = (await this.accountsWithPassword()) === 0;
-    return { signupAllowed: firstRun || this.signupOpen(), firstRun };
+    // `mail`: whether reset links can be emailed at all, so "Forgot password?" can say so instead of promising one.
+    return { signupAllowed: firstRun || this.signupOpen(), firstRun, mail: this.mailConfigured };
   }
 
   /**
@@ -414,7 +416,7 @@ export class AuthService {
     if (existing && firstRun && !existing.passwordHash) {
       await this.ctx.db.update(users).set({ passwordHash: await hashPassword(input.password), name: existing.name ?? input.name }).where(eq(users.id, existing.id));
       const mine = await this.memberships(existing.id);
-      const ws = mine[0] ? null : await this.newWorkspace({ type: "human", id: existing.id }, { name: input.workspaceName });
+      const ws = mine[0] ? null : await this.newWorkspace({ type: "human", id: existing.id }, { name: input.workspaceName, timezone: input.timezone });
       const workspaceId = ws?.id ?? mine[0]!.id;
       await this.ctx.events.append({ workspaceId, type: "user.signed_up", subjectType: "user", subjectId: existing.id, actor: { type: "human", id: existing.id }, data: { via: "claim" } });
       return this.start(existing.id, workspaceId, meta);
@@ -425,7 +427,7 @@ export class AuthService {
       .values({ id: newId("usr"), email: input.email, name: input.name, passwordHash: await hashPassword(input.password) })
       .returning();
     const actor: Actor = { type: "human", id: u!.id };
-    const ws = await this.newWorkspace(actor, { name: input.workspaceName });
+    const ws = await this.newWorkspace(actor, { name: input.workspaceName, timezone: input.timezone });
     await this.ctx.events.append({ workspaceId: ws.id, type: "user.signed_up", subjectType: "user", subjectId: u!.id, actor, data: { via: "signup" } });
     return this.start(u!.id, ws.id, meta);
   }

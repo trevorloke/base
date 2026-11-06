@@ -19,8 +19,21 @@ export function gatewayFromEnv(env: NodeJS.ProcessEnv = process.env): ModelGatew
   return null;
 }
 
+/**
+ * The deployment's public address. Render gives every web service RENDER_EXTERNAL_URL; without falling back to it,
+ * a Render deploy that never set STARSIGN_PUBLIC_URL refuses every OAuth connect (503), mails relative invite and
+ * reset links and turns link tracking off. Fills STARSIGN_PUBLIC_URL in place so every reader (auth, links, media,
+ * connector webhooks) sees the same value.
+ */
+export function applyHostDefaults(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const own = env.STARSIGN_PUBLIC_URL?.trim();
+  if (!own && env.RENDER_EXTERNAL_URL?.trim()) env.STARSIGN_PUBLIC_URL = env.RENDER_EXTERNAL_URL.trim();
+  return env.STARSIGN_PUBLIC_URL?.trim() || undefined;
+}
+
 /** Shared boot for the API process: database, migrations, connectors, scheduler, Starsign. */
 export async function boot(env: NodeJS.ProcessEnv = process.env): Promise<Booted> {
+  applyHostDefaults(env);
   const handle = await createDb({ url: env.DATABASE_URL, pglitePath: env.DATABASE_URL ? undefined : env.PGLITE_PATH ?? ".pglite" });
   const applied = await migrate(handle);
   if (applied.length) console.log(`[db] applied migrations: ${applied.join(", ")}`);

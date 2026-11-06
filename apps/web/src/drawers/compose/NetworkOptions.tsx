@@ -99,9 +99,10 @@ export function variantProblems(network: Network, kinds: string[], o: VariantOpt
   const long = videos.find((m) => cap && m.durationSeconds && m.durationSeconds > cap);
   if (long && cap) out.push(`${kind === "short" ? "Shorts" : label} take videos up to ${duration(cap)}; this one is ${duration(long.durationSeconds)}`);
 
-  if ((kind === "reel" || kind === "video" || kind === "short") && media.length && !videos.length) out.push(`A ${postKindLabel(kind).toLowerCase()} needs a video`);
-  if (kind === "carousel" && media.length < 2) out.push("A carousel needs at least 2 images or videos");
-  if (kind === "story" && media.length !== 1) out.push("A story takes exactly 1 image or video");
+  // Say which network: with several selected, "A carousel needs…" leaves the person hunting for the variant.
+  if ((kind === "reel" || kind === "video" || kind === "short") && media.length && !videos.length) out.push(`${label} ${postKindLabel(kind).toLowerCase()}: attach a video file, not an image`);
+  if (kind === "carousel" && media.length < 2) out.push(`${label} carousel needs at least 2 images or videos`);
+  if (kind === "story" && media.length !== 1) out.push(`${label} story takes exactly 1 image or video`);
 
   if (TITLE_NETS.has(network)) {
     const t = (o.title ?? "").trim();

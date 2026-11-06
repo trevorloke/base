@@ -54,7 +54,7 @@ const lastLinkTo = (to: string, param: string) => {
 };
 const ledgerTypes = async (workspaceId: string) => (await m.ctx.db.select().from(ledgerEvents).where(eq(ledgerEvents.workspaceId, workspaceId))).map((e) => e.type);
 
-const ANN = { email: "ann@acme.test", password: "correct horse 1", name: "Ann", workspaceName: "Acme Outdoor" };
+const ANN = { email: "ann@acme.test", password: "correct horse 1", name: "Ann", workspaceName: "Acme Outdoor", timezone: "America/Vancouver" };
 const BOB = { email: "bob@client.test", password: "bob's long password", name: "Bob", workspaceName: "Bob Co" };
 const CARL = { email: "carl@acme.test", password: "carl's password!", name: "Carl", workspaceName: "Carl Co" };
 let annId = "";
@@ -90,6 +90,8 @@ describe("people: sign-up, sign-in, sessions", () => {
     expect(view.currentWorkspaceId).toBe(view.workspaces[0].id);
     annId = view.user.id;
     annWs = view.currentWorkspaceId;
+    // The workspace starts in the timezone the browser sent, so schedules and quiet hours read where the brand is.
+    expect((await m.policy.getActive(annWs)).timezone).toBe("America/Vancouver");
     const cookie = setCookie(r)!;
     expect(cookie.raw).toMatch(/HttpOnly/i);
     expect(cookie.raw).toMatch(/SameSite=Lax/i);
@@ -102,9 +104,11 @@ describe("people: sign-up, sign-in, sessions", () => {
     expect((await call("POST", "/v1/auth/signup", { body: BOB })).status).toBe(403);
     expect((await call("POST", "/v1/auth/signup", { body: { ...BOB, password: "short" } })).status).toBe(400);
     allowSignup = true;
-    const bob = await call("POST", "/v1/auth/signup", { body: BOB });
+    // A timezone the server does not know never blocks a sign-up; the workspace falls back to UTC.
+    const bob = await call("POST", "/v1/auth/signup", { body: { ...BOB, timezone: "Mars/Olympus_Mons" } });
     expect(bob.status).toBe(201);
     bobWs = (await json(bob)).currentWorkspaceId;
+    expect((await m.policy.getActive(bobWs)).timezone).toBe("UTC");
     expect((await call("POST", "/v1/auth/signup", { body: CARL })).status).toBe(201);
     expect((await call("POST", "/v1/auth/signup", { body: { ...BOB, email: "BOB@client.test" } })).status).toBe(409);
     allowSignup = false;

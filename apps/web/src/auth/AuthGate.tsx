@@ -3,6 +3,7 @@ import type { InviteInfo, Session } from "../types";
 import { api, errorText, isApiError, reasonOf, sentence, setApiKey, USE_FIXTURES } from "../api";
 import { roleLabel } from "../lib/format";
 import { formatDateTime } from "../lib/time";
+import { browserTz } from "../lib/tz";
 
 export type AuthScreen = "signin" | "signup" | "forgot" | "reset" | "invite" | "key";
 
@@ -267,7 +268,7 @@ function SignupCard({ initialEmail, onDone, onSignIn }: { initialEmail: string; 
     setBusy(true);
     setError(null);
     try {
-      onDone(await api.signup({ name: name.trim(), email: email.trim(), password, workspaceName: workspaceName.trim() }));
+      onDone(await api.signup({ name: name.trim(), email: email.trim(), password, workspaceName: workspaceName.trim(), timezone: browserTz() }));
     } catch (err) {
       if (isApiError(err) && err.status === 403) setError("This server isn't taking new sign-ups. Ask a workspace owner to invite you.");
       else if (isApiError(err) && err.status === 409) setError("There's already an account with that email. Sign in instead.");
@@ -319,6 +320,21 @@ function ForgotCard({ initialEmail, onBack }: { initialEmail: string; onBack: (n
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Whether this server emails reset links at all (the signed-out session check says); null until known.
+  const [mail, setMail] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.session().then(
+      () => undefined,
+      (e: unknown) => {
+        const v = isApiError(e) && e.details && typeof e.details === "object" ? (e.details as { mail?: unknown }).mail : undefined;
+        if (!cancelled && typeof v === "boolean") setMail(v);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -339,7 +355,17 @@ function ForgotCard({ initialEmail, onBack }: { initialEmail: string; onBack: (n
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
       <div className="brand">Starsign</div>
       <h1>Reset your password</h1>
-      {sent ? (
+      {mail === false ? (
+        <>
+          <p>This server doesn't send email yet, so a reset link can't be mailed to you.</p>
+          <p className="muted small">
+            Ask whoever runs Starsign for a one-time reset link. From a shell on the server: <code>node --import tsx src/admin.ts reset-link you@example.com</code>
+          </p>
+          <button type="button" className="btn btn-primary" onClick={() => onBack(null)}>
+            Back to sign in
+          </button>
+        </>
+      ) : sent ? (
         <>
           <p>If {email.trim()} has an account, a reset link is on its way. It works for one hour.</p>
           <p className="muted small">Nothing arrived? Check spam, or ask a workspace owner: this server may not send email.</p>

@@ -73,7 +73,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     const code = c.req.query("code");
     if (!state || !code) return c.redirect(`/?connect_error=${encodeURIComponent(c.req.query("error") ?? "missing_code")}&connector=${encodeURIComponent(name)}`);
     try {
-      const accts = await m.accounts.completeOAuth({ state, code });
+      const accts = await m.accounts.completeOAuth({ state, code, params: c.req.query() as Record<string, string> });
       const handles = accts.map((a) => a.handle).join(",");
       return c.redirect(`/?connected=${encodeURIComponent(name)}&handle=${encodeURIComponent(handles)}&count=${accts.length}`);
     } catch (e) {
@@ -235,12 +235,12 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     c.json(
       m.ctx.connectors
         .list()
-        .filter((k) => k.name !== "mock")
         .map((k) => ({
           name: k.name,
           networks: [...k.networks],
           configured: k.connectConfigured !== false,
-          connect: k.connectMethod ?? "none",
+          // The mock (dev and demos only) is listed so the room knows what its accounts can do, never as a way to connect.
+          connect: k.name === "mock" ? "none" : (k.connectMethod ?? "none"),
           inputs: k.connectMethod === "oauth" ? (k.oauthInputs ?? []) : (k.credentialInputs ?? []),
           capabilities: Object.fromEntries(k.networks.map((n) => [n, k.capabilities(n)])),
         })),
@@ -376,7 +376,11 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   app.post("/v1/accounts", async (c) => {
     const p = c.get("principal");
     m.workspaces.requireRole(p, ["owner", "approver"]);
-    return c.json(await m.accounts.connect(p, await c.req.json()), 201);
+    const body = await c.req.json();
+    // An account whose connector this server does not run could never post or pull (the mock in production).
+    const name = (body as { connector?: unknown } | null)?.connector;
+    if (typeof name === "string" && !m.ctx.connectors.get(name)) throw new CoreError("invalid", `connector "${name}" is not available on this server`);
+    return c.json(await m.accounts.connect(p, body), 201);
   });
   app.delete("/v1/accounts/:id", async (c) => {
     const p = c.get("principal");

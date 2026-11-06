@@ -14,6 +14,10 @@ export interface RoomRefs {
   openPost: (id: string) => void;
   openTopic: (id: string) => void;
   openCompose: (prefill?: ComposePrefill) => void;
+  /** Team members' names by user id, so posts say "Nora" rather than "usr_…". */
+  people: ReadonlyMap<string, string>;
+  /** The Connections drawer: where an empty room's next step usually is. */
+  openAccounts: () => void;
 }
 
 const RoomContext = createContext<RoomRefs>({
@@ -25,6 +29,8 @@ const RoomContext = createContext<RoomRefs>({
   openPost: () => {},
   openTopic: () => {},
   openCompose: () => {},
+  openAccounts: () => {},
+  people: new Map(),
 });
 
 export const RoomProvider = RoomContext.Provider;

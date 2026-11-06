@@ -707,6 +707,8 @@ export interface SignupInput {
   password: string;
   name: string;
   workspaceName: string;
+  /** The new workspace's timezone (this browser's); schedules and quiet hours read in it. */
+  timezone?: string;
 }
 
 export interface Member {

@@ -38,7 +38,7 @@ function networksOf(item: PostSummary): Network[] {
 
 /** Two weeks of what is going out, waiting, and went out, in the workspace's days. */
 export function Calendar({ head, refreshTick }: { head: ReactNode; refreshTick: number }) {
-  const { timezone: tz } = useRoom();
+  const { timezone: tz, openCompose } = useRoom();
   const [start, setStart] = useState(() => weekStartMs(Date.now(), tz));
   const [items, setItems] = useState<PostSummary[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,7 +134,16 @@ export function Calendar({ head, refreshTick }: { head: ReactNode; refreshTick: 
             </div>
 
             <div className="cal-list">
-              {count === 0 ? <div className="state state-empty">Nothing on the calendar these two weeks.</div> : null}
+              {count === 0 ? (
+                <div className="state state-empty">
+                  <span>
+                    Nothing on the calendar these two weeks.{" "}
+                    <button type="button" className="linkish strong" onClick={() => openCompose()}>
+                      Schedule a post
+                    </button>
+                  </span>
+                </div>
+              ) : null}
               {days.map((d) => {
                 const k = dayKey(d, tz);
                 const posts = byDay.get(k);

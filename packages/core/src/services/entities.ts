@@ -48,6 +48,29 @@ export const EntityInput = z.object({
   notes: z.string().max(4000).optional(),
 });
 export type EntityInput = z.input<typeof EntityInput>;
+
+/**
+ * A PATCH names only what changes. Built without the create defaults: `EntityInput.partial()` would still fill
+ * every defaulted field (zod 4 applies defaults inside optional), so renaming would reset the relation and wipe
+ * aliases, handles, context, exclude and Wikipedia titles.
+ */
+export const EntityPatch = z
+  .object({
+    kind: EntityKind,
+    name: EntityInput.shape.name,
+    role: EntityInput.shape.role.unwrap(),
+    parentId: EntityInput.shape.parentId.unwrap(),
+    relation: EntityRelation,
+    aliases: EntityInput.shape.aliases.unwrap(),
+    handles: EntityInput.shape.handles.unwrap(),
+    context: EntityInput.shape.context.unwrap(),
+    exclude: EntityInput.shape.exclude.unwrap(),
+    wikipedia: EntityInput.shape.wikipedia.unwrap(),
+    trackTrend: z.boolean(),
+    scanPublic: z.boolean(),
+    notes: EntityInput.shape.notes.unwrap(),
+  })
+  .partial();
 export type EntityRow = typeof trackedEntities.$inferSelect;
 
 export interface MentionMatch {
@@ -211,7 +234,7 @@ export class EntityService {
   async update(p: Principal, id: string, raw: unknown): Promise<EntityRow> {
     this.canEdit(p);
     await this.get(p.workspaceId, id);
-    const patch = EntityInput.partial().parse(raw);
+    const patch = EntityPatch.parse(raw);
     if (patch.parentId !== undefined) await this.checkParent(p.workspaceId, patch.parentId || undefined, id);
     const next = {
       ...(patch.name !== undefined ? { name: patch.name } : {}),

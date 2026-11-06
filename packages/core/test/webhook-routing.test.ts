@@ -43,6 +43,11 @@ class PerAccountChat implements Connector {
       return [{ network: "line", accountExternalId: b.destination, items: [{ network: "line", kind: "message", externalId: b.id, authorHandle: "u1", authorName: null, text: b.text, url: null, parentExternalId: null, occurredAt: new Date().toISOString(), raw: b, conversation: { id: "g1", name: "Fans", type: "group" } }] }];
     },
     ack: { body: "ok", contentType: "text/plain" },
+    // Like Slack's url_verification: a signed delivery that only wants its challenge echoed.
+    respond: (body) => {
+      const c = (body as { challenge?: unknown }).challenge;
+      return typeof c === "string" ? { body: c, contentType: "text/plain" } : null;
+    },
   };
 }
 
@@ -77,4 +82,16 @@ describe("webhooks signed with each account's own secret", () => {
     expect(await m.webhooks.challenge("chat", { channel: "chan-B", token: "secret-A", echo: "hi" })).toBeNull();
     expect(await m.webhooks.challenge("chat", { channel: "nobody", token: "secret-A", echo: "hi" })).toBeNull();
   });
+
+  it("answers a verification delivery with the challenge from its own signed body", async () => {
+    const raw = JSON.stringify({ destination: "chan-B", challenge: "abc123", text: "", id: "v1" });
+    const sig = createHmac("sha256", "secret-B").update(raw).digest("base64");
+    const r = await m.webhooks.receive("chat", { "x-signature": sig }, raw);
+    expect(r.ack).toEqual({ body: "abc123", contentType: "text/plain" });
+    // An ordinary delivery still gets the static ack.
+    const raw2 = JSON.stringify({ destination: "chan-B", text: "hello", id: "m2" });
+    const r2 = await m.webhooks.receive("chat", { "x-signature": createHmac("sha256", "secret-B").update(raw2).digest("base64") }, raw2);
+    expect(r2.ack).toEqual({ body: "ok", contentType: "text/plain" });
+  });
 });
+

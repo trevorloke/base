@@ -37,9 +37,20 @@ export function formatClock(iso: string): string {
   return d ? clock.format(d) : "";
 }
 
-export function formatDateTime(iso: string): string {
+/**
+ * "Nov 6, 9:30 AM". With `tz` (the workspace's policy timezone) the time reads where the brand lives, like the
+ * calendar and the compose picker, and names the zone when it is not this browser's own.
+ */
+export function formatDateTime(iso: string, tz?: string, showZone = true): string {
   const d = parse(iso);
-  return d ? dateTime.format(d) : "";
+  if (!d) return "";
+  if (!tz) return dateTime.format(d);
+  try {
+    const own = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: tz, ...(showZone && tz !== own ? { timeZoneName: "short" } : {}) }).format(d);
+  } catch {
+    return dateTime.format(d);
+  }
 }
 
 /** "Oct 27 – Nov 2" */

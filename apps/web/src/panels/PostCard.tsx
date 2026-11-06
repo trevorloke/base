@@ -14,7 +14,7 @@ type Decision = "approve" | "reject";
 /** One proposal waiting on a human. Everything needed to decide is on the card. */
 export function PostCard({ item, onDecided }: { item: PostSummary; onDecided: (id: string, decision: Decision) => void }) {
   const { post, variants } = item;
-  const { accountsById, topicsById, openPost, openTopic } = useRoom();
+  const { accountsById, topicsById, openPost, openTopic, timezone, people } = useRoom();
   const toast = useToast();
 
   const [editing, setEditing] = useState(false);
@@ -67,7 +67,7 @@ export function PostCard({ item, onDecided }: { item: PostSummary; onDecided: (i
     <article className="card" aria-label={title}>
       <header className="card-head">
         <div className="card-meta">
-          <span className="card-actor">{actorLabel(post.createdBy)}</span>
+          <span className="card-actor">{actorLabel(post.createdBy, people)}</span>
           <span className="sep" aria-hidden="true">
             ·
           </span>
@@ -96,7 +96,7 @@ export function PostCard({ item, onDecided }: { item: PostSummary; onDecided: (i
         ) : null}
         {post.scheduledAt ? (
           <div className="card-when muted">
-            Scheduled for <time className="mono">{formatDateTime(post.scheduledAt)}</time>
+            Scheduled for <time className="mono">{formatDateTime(post.scheduledAt, timezone)}</time>
           </div>
         ) : null}
       </header>

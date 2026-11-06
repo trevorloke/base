@@ -54,6 +54,16 @@ export function Feed({
   const [network, setNetwork] = useState<Network | null>(null);
   const [lang, setLang] = useState<string>("");
   const [conversation, setConversation] = useState<{ id: string; name: string } | null>(null);
+  const { openAccounts } = useRoom();
+  const noAccounts = (
+    <>
+      Nothing here yet.{" "}
+      <button type="button" className="linkish strong" onClick={openAccounts}>
+        Connect an account
+      </button>{" "}
+      and its mentions, replies, comments and messages land here. Names you follow in the Tracker are searched in public posts and news too.
+    </>
+  );
   const [items, setItems] = useState<Activity[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -214,7 +224,7 @@ export function Feed({
         ) : null}
       </div>
       <div className="panel-body">
-        <PanelState loading={loading && !items} error={error} onRetry={() => void load()} empty={items && items.length === 0 ? (entity ? `Nothing about ${entity.name} matches these filters yet.` : "Quiet. Nothing matches these filters yet.") : null} />
+        <PanelState loading={loading && !items} error={error} onRetry={() => void load()} empty={items && items.length === 0 ? (entity ? `Nothing about ${entity.name} matches these filters yet.` : accounts.length === 0 && kind === "all" && !network && !lang && !conversation ? noAccounts : "Quiet. Nothing matches these filters yet.") : null} />
         {items?.map((a) => (
           <FeedItem
             key={a.id}

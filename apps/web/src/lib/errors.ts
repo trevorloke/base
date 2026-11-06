@@ -50,6 +50,12 @@ export function errorText(e: unknown): string {
     }
     if (e.status === 429) return e.code === "rate_limited" || e.code.startsWith("http_") ? "Too many attempts. Try again in 15 minutes." : sentence(e.message);
     if (e.status >= 500 && e.code.startsWith("http_")) return "Starsign isn't answering right now.";
+    // A schema refusal says which field and why, not just "Validation failed."
+    if (e.code === "invalid" && /^validation failed$/i.test(e.message) && Array.isArray(e.details) && e.details.length) {
+      const first = e.details[0] as { path?: unknown; message?: unknown };
+      const field = Array.isArray(first.path) ? first.path.filter((p) => typeof p === "string").join(" ") : "";
+      if (typeof first.message === "string" && first.message) return sentence(`${field ? `${field}: ` : ""}${first.message}`);
+    }
     return e.message ? sentence(e.message) : "Something went wrong.";
   }
   if (e instanceof Error) return e.message;

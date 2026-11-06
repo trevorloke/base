@@ -309,6 +309,11 @@ export const api = {
 
   queue: () => pick(() => get<PostSummary[]>("/v1/posts/queue"), (f) => f.fixtureApi.queue()),
   post: (id: string) => pick(() => get<PostFull>(`/v1/posts/${enc(id)}`), (f) => f.fixtureApi.post(id)),
+  /** Saved drafts, newest first: they wait nowhere else in the room. */
+  drafts: (limit = 20) => pick(() => get<PostSummary[]>(`/v1/posts${qs({ status: "draft", limit })}`), () => Promise.resolve([] as PostSummary[])),
+  schedulePost: (id: string, at: string) => pick(() => post<PostDetail>(`/v1/posts/${enc(id)}/schedule`, { at }), (f) => f.fixtureApi.post(id)),
+  publishNow: (id: string) => pick(() => post<PostDetail>(`/v1/posts/${enc(id)}/publish-now`), (f) => f.fixtureApi.post(id)),
+  cancelPost: (id: string) => pick(() => post<PostDetail>(`/v1/posts/${enc(id)}/cancel`), (f) => f.fixtureApi.post(id)),
   decide: (id: string, input: DecideInput) =>
     pick(
       () => post<PostDetail>(`/v1/posts/${enc(id)}/decide`, input),
@@ -369,7 +374,7 @@ export const api = {
   switchWorkspace: (workspaceId: string) => pick(() => post<Session>("/v1/auth/switch", { workspaceId }), (f) => f.fixtureApi.switchWorkspace(workspaceId)),
   forgot: (email: string) => pick(() => post<void>("/v1/auth/forgot", { email }), (f) => f.fixtureApi.forgot(email)),
   reset: (token: string, password: string) => pick(() => post<void>("/v1/auth/reset", { token, password }), (f) => f.fixtureApi.reset(token, password)),
-  createWorkspace: (name: string) => pick(() => post<Workspace>("/v1/workspaces", { name }), (f) => f.fixtureApi.createWorkspace(name)),
+  createWorkspace: (name: string, timezone?: string) => pick(() => post<Workspace>("/v1/workspaces", { name, ...(timezone ? { timezone } : {}) }), (f) => f.fixtureApi.createWorkspace(name)),
   members: () => pick(() => get<Member[]>("/v1/members"), (f) => f.fixtureApi.members()),
   setMemberRole: (id: string, role: Role) => pick(() => patch<Member>(`/v1/members/${enc(id)}`, { role }), (f) => f.fixtureApi.setMemberRole(id, role)),
   removeMember: (id: string) => pick(() => del<void>(`/v1/members/${enc(id)}`), (f) => f.fixtureApi.removeMember(id)),

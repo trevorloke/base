@@ -29,7 +29,7 @@ export function Radar({
         <span className="panel-meta mono">{entries ? plural(entries.length, "topic") : ""}</span>
       </header>
       <div className="panel-body">
-        <PanelState loading={loading && !entries} error={error} onRetry={onRetry} empty={entries && entries.length === 0 ? "Nothing on the radar yet." : null} />
+        <PanelState loading={loading && !entries} error={error} onRetry={onRetry} empty={entries && entries.length === 0 ? "Nothing on the radar yet. Topics appear as Starsign spots trending terms that fit your brand profile, and for each name you follow in the Tracker." : null} />
         {entries?.map((e) => <RadarRow key={e.topic.id} entry={e} onOpen={() => openTopic(e.topic.id)} />)}
       </div>
       {sources && sources.length ? <Sources sources={sources} /> : null}

@@ -246,7 +246,10 @@ voices.forEach((v, i) => {
   feedItems.push({ network: v[0], kind: v[1], externalId: `seed-${i}`, authorHandle: v[2], authorName: v[3], text: v[4], url: null, parentExternalId: null, occurredAt: new Date(realNow - (i * 3 + 1) * H).toISOString(), raw: { seed: i } });
 });
 clock = realNow;
-await m.listening.ingestItems(ws.id, null, feedItems);
+// Each item arrives through the account it was said to (so the room offers Reply, Like and Hide on it).
+for (const network of new Set(voices.map((v) => v[0]))) {
+  await m.listening.ingestItems(ws.id, acct[network] ?? null, feedItems.filter((f) => (f as { network: string }).network === network));
+}
 
 // ---------------------------------------------------------------- alerts and a brief
 await m.ops.raiseAlert(ws.id, { type: "operator", id: "watch" }, {

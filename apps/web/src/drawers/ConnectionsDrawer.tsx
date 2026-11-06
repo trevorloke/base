@@ -51,6 +51,34 @@ const CAN_SEE: Record<string, string> = {
   line: "Starsign sees the groups and chats your official account's bot is in.",
 };
 
+/**
+ * The server settings a network's app needs before anyone can connect it (see docs/integrations), for whoever
+ * runs this deployment. Networks not listed point at the docs.
+ */
+const SETUP_ENV: Partial<Record<Network, string>> = {
+  x: "X_CLIENT_ID and X_CLIENT_SECRET",
+  threads: "THREADS_CLIENT_ID and THREADS_CLIENT_SECRET",
+  instagram: "META_CLIENT_ID and META_CLIENT_SECRET",
+  facebook: "META_CLIENT_ID and META_CLIENT_SECRET",
+  whatsapp: "WHATSAPP_APP_SECRET (or META_CLIENT_SECRET)",
+  linkedin: "LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET",
+  pinterest: "PINTEREST_CLIENT_ID and PINTEREST_CLIENT_SECRET",
+  youtube: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
+  google_business: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET",
+  tiktok: "TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET",
+  reddit: "REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET and REDDIT_USER_AGENT",
+};
+
+/** Why a network can't be connected here, and who can change that. */
+function unsetNote(network: Network, hasConnector: boolean): string {
+  const label = networkLabel(network);
+  if (!hasConnector) return `This server doesn't have a way to connect ${label} yet.`;
+  const env = SETUP_ENV[network];
+  return env
+    ? `${label} needs its app keys on this server first: whoever runs Starsign sets ${env} (see docs/integrations), then restarts it.`
+    : `${label} needs its app keys added to this server before anyone can connect it. Whoever runs Starsign can follow docs/integrations to set it up.`;
+}
+
 type Group = "connected" | "available" | "unset";
 
 interface Tile {
@@ -211,9 +239,7 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
           />
         ) : null}
         {openTile && group === "unset" ? (
-          <p className="net-unset-note muted small">
-            {networkLabel(openTile.network)} needs its app keys added to this server before anyone can connect it. Ask whoever runs Starsign.
-          </p>
+          <p className="net-unset-note muted small">{unsetNote(openTile.network, connectorsFor(connectors ?? [], openTile.network).length > 0)}</p>
         ) : null}
       </>
     );

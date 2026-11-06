@@ -388,11 +388,11 @@ export function kindLabel(kind: string): string {
 }
 
 /** "Operator · watch", "MCP agent · claude-desktop", "Human · marta", "System". */
-export function actorLabel(actor: Actor | null | undefined): string {
+export function actorLabel(actor: Actor | null | undefined, people?: ReadonlyMap<string, string>): string {
   if (!actor) return "Unknown";
   switch (actor.type) {
     case "human":
-      return `Human · ${actor.id}`;
+      return people?.get(actor.id) ?? `Human · ${actor.id}`;
     case "operator":
       return `Operator · ${actor.id}`;
     case "mcp":
@@ -405,11 +405,11 @@ export function actorLabel(actor: Actor | null | undefined): string {
 }
 
 /** For sentences: "Approved by marta", "Created by the watch operator", "…by an MCP agent (claude-desktop)". */
-export function actorPhrase(actor: Actor | null | undefined): string {
+export function actorPhrase(actor: Actor | null | undefined, people?: ReadonlyMap<string, string>): string {
   if (!actor) return "someone";
   switch (actor.type) {
     case "human":
-      return actor.id;
+      return people?.get(actor.id) ?? actor.id;
     case "operator":
       return `the ${actor.id} operator`;
     case "mcp":
