@@ -34,7 +34,7 @@ button, no paragraphs, everything else one tap away.
 | **Lists** | Saved filters (a tag, a rating band, a role, has an email…) and hand-picked lists of people: an audience for an email or text blast, a CSV, a report; People's *Save as a list* starts one |
 | **Reports** | The campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export; Field, by turf (coverage, talks, support found, not-homes; by canvasser; CSV) |
 | **Outreach** | Newsletter + press-release blasts written in Markdown (headings, bold, lists, links, pictures; files attached; *Send me a test*); **email blasts** and **texts** to any list, with the same rules as one-to-one texts (quiet hours, STOP, do-not-contact); ladders of engagement; the campaign's connections |
-| **ImagineU** | Training for every role: sections of lessons — notes, documents, videos, audio, pictures, contacts, procedures — each ticked *Done*; the desk edits in place and sees who has done what; a lesson marked public has a page anyone can open at `/learn/<slug>` |
+| **ImagineU** | Training for every role: courses of modules, each module a mix of materials — notes, documents, videos, audio, pictures, links — and the marker of progress: ticked *Done*, counted per course (*2 of 5 modules done*); the desk edits in place and sees who has done what; a module marked public has a page anyone can open at `/learn/<slug>` |
 
 Volunteers get five tabs — **Today · Map · Calls · Shifts · ImagineU** — plus
 *Signs to put up* for sign crews; desk-only addresses send them back to Today.
@@ -149,15 +149,18 @@ than a week after they came off is refused. Contacts are door, phone, text or
   unfinished ones back, closes the bank. A caller's *Your call lists* (on
   Calls) opens each bank on the Calls card, script and all; a phone call
   they log crosses the number off, *Skip* crosses one off without a call.
-- **ImagineU** (a tab for every role): the campaign's training. Sections of
-  lessons; each lesson is a note, a document (PDF, Word, PowerPoint, Excel),
-  a video (a YouTube or Vimeo link, or a short MP4), audio (MP3, M4A, WAV),
-  a picture, contacts, or a procedure, with words in Markdown and a file
-  (12 MB at most) or a link behind it. Everyone ticks *Done*; the desk edits
-  in place, chooses who sees each lesson (everyone signed in · the desk ·
-  public — a page of its own at `/learn/<slug>`) and reads *Progress*: who has
-  done which. Files are served to those who may see the lesson and are not
-  in the export.
+- **ImagineU** (a tab for every role): the campaign's training. **Courses**
+  of **modules**; a module opens with words (Markdown) and a file or link —
+  a note, a document (PDF, Word, PowerPoint, Excel), a video (a YouTube or
+  Vimeo link, or a short MP4), audio (MP3, M4A, WAV), a picture, contacts or
+  a procedure — then holds **more materials** in order (*+ Video*,
+  *+ Document*, *+ Audio*, *+ Picture*, *+ Link*, *+ Note*; files 12 MB at
+  most). The module is the marker of progress: everyone ticks *Mark this
+  module done*, each course shows *N of M modules done*, and the desk edits
+  in place, chooses who sees each module (everyone signed in · the desk ·
+  public — a page of its own at `/learn/<slug>`, its materials too) and
+  reads *Progress*: who has done which. Files are served to those who may
+  see the module and are not in the export (the materials' records are).
 - **The dashboard** (managers, at the top of Today): contacts today, in the
   last 7 or 30 days or in all — how many, doors, calls & texts, people
   reached, support, canvassers, who is out now; a bar per day (per week on

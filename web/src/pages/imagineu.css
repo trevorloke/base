@@ -85,3 +85,15 @@
 .lu-pdetail li { padding: 3px 0; color: var(--text-3); }
 .lu-pdetail li.is-done { color: var(--text-1); }
 .lu-pdetail a { color: inherit; }
+
+/* Courses and modules: a course's progress beside its name; a module's
+   further materials, each its own block; the editor's materials list. */
+.lu-course { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 160px; }
+.lu-course .lu-bar { flex: 1; min-width: 60px; }
+.lu-part { margin: var(--s-5) 0 0; padding-top: var(--s-4); border-top: var(--border); }
+.lu-part__h { display: flex; flex-direction: column; gap: 2px; margin: 0 0 var(--s-3); font-size: 20px; }
+.lu-parts-ed { border: 0; padding: 0; margin: var(--s-4) 0; }
+.lu-parts-ed__list { list-style: none; margin: 0 0 var(--s-3); padding: 0; display: grid; gap: var(--s-3); }
+.lu-part-ed { padding: var(--s-3); border: var(--border); border-radius: var(--r-ctrl); background: var(--paper-0); }
+.lu-part-ed__acts { display: flex; gap: var(--s-2); margin-top: var(--s-2); }
+.lu-parts-ed__add { display: flex; flex-wrap: wrap; gap: var(--s-2); }

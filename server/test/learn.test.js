@@ -151,3 +151,37 @@ test('removing: a section leaves its lessons unfiled; a removed lesson is gone f
   assert.ok(after.unfiled.some((l) => l.id === L.welcome.id), 'its lessons stay, unfiled');
   assert.equal((await get(`/learn/imagine-surrey/${L.picture.id}`)).status, 200, 'the public page stays');
 });
+
+test('a module mixes materials — words, a video link, a PDF, audio — in order; done is per module; files of a part follow its module', async () => {
+  const course = ok(await mgr.action('learn.section.save', { title: 'Canvassing 101' })).section;
+  const pdf = ok(await mgr.action('learn.asset.upload', { data: PDF, name: 'Walk sheet.pdf' })).asset;
+  const mp3 = ok(await mgr.action('learn.asset.upload', { data: MP3, name: 'Role play.mp3' })).asset;
+  const m = ok(await mgr.action('learn.lesson.save', {
+    section_id: course.id, title: 'At the door', kind: 'note', body: 'What a knock sounds like.',
+    parts: [
+      { kind: 'video', title: 'Watch first', link: 'https://www.youtube.com/watch?v=abcdefghijk' },
+      { kind: 'document', title: 'The walk sheet', asset_id: pdf.id },
+      { kind: 'audio', asset_id: mp3.id, body: 'Listen for the pause.' },
+    ],
+  })).lesson;
+  const got = ok(await vol.get(`/api/learn/lessons/${m.id}`)).lesson;
+  assert.deepEqual(got.parts.map((p) => [p.kind, p.title, p.asset?.name ?? p.link]), [
+    ['video', 'Watch first', 'https://www.youtube.com/watch?v=abcdefghijk'],
+    ['document', 'The walk sheet', 'Walk sheet.pdf'],
+    ['audio', null, 'Role play.mp3'],
+  ]);
+  const home = ok(await vol.get('/api/learn'));
+  const row = home.sections.find((s) => s.id === course.id).lessons.find((l) => l.id === m.id);
+  assert.deepEqual(row.parts, ['video', 'document', 'audio'], 'the list says what a module holds');
+  // A part's file opens for a volunteer, as the module does.
+  assert.equal((await get(`/api/learn/assets/${pdf.id}`, { cookie: vol.cookie })).status, 200);
+  // Saving with parts again replaces them; an empty material is refused.
+  ok(await mgr.action('learn.lesson.save', { id: m.id, title: 'At the door', kind: 'note', body: 'x', parts: [{ kind: 'link', link: 'https://example.org/guide' }] }));
+  assert.deepEqual(ok(await vol.get(`/api/learn/lessons/${m.id}`)).lesson.parts.map((p) => p.kind), ['link']);
+  assert.equal((await mgr.action('learn.lesson.save', { id: m.id, title: 'At the door', kind: 'note', parts: [{ kind: 'note' }] })).status, 400);
+  assert.equal((await mgr.action('learn.lesson.save', { id: m.id, title: 'At the door', kind: 'note', parts: [{ kind: 'link', link: 'http://insecure' }] })).status, 400);
+  // Done marks the module.
+  ok(await vol.action('learn.done', { lesson_id: m.id }));
+  assert.equal(ok(await vol.get(`/api/learn/lessons/${m.id}`)).lesson.done, true);
+  assert.ok((ok(await mgr.get('/api/export')).learn_parts || []).some((p) => p.lesson_id === m.id), 'the parts are in the export');
+});

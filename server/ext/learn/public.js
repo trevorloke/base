@@ -62,7 +62,12 @@ publicRoutes.get('/learn/:ws/:id', async (c) => {
     `select l.*, a.name as asset_name, a.content_type as asset_type from learn_lessons l left join learn_assets a on a.id = l.asset_id where l.id = $2 and ${PUBLIC}`, [ws.id, id],
   )).rows[0];
   if (!l) return c.text('not found', 404);
-  return page(c, db, ws, l.title, `<p><a href="/learn/${esc(ws.slug)}">← ImagineU</a></p><h1>${esc(l.title)}</h1>${media(l)}<div class="prose">${renderMarkdown(l.body || '')}</div>`);
+  const parts = (await db.query(
+    `select p.*, a.name as asset_name, a.content_type as asset_type from learn_parts p left join learn_assets a on a.id = p.asset_id
+      where p.workspace_id = $1 and p.lesson_id = $2 order by p.position`, [ws.id, l.id],
+  )).rows;
+  const more = parts.map((pt) => `<section class="learn-part">${pt.title ? `<h2>${esc(pt.title)}</h2>` : ''}${media({ ...pt, title: pt.title || l.title })}${pt.body ? `<div class="prose">${renderMarkdown(pt.body)}</div>` : ''}</section>`).join('');
+  return page(c, db, ws, l.title, `<p><a href="/learn/${esc(ws.slug)}">← ImagineU</a></p><h1>${esc(l.title)}</h1>${media(l)}<div class="prose">${renderMarkdown(l.body || '')}</div>${more}`);
 });
 
 publicRoutes.get('/learn-files/:id', async (c) => {
@@ -71,7 +76,8 @@ publicRoutes.get('/learn-files/:id', async (c) => {
   if (!UUID.test(id)) return c.text('not found', 404);
   const a = (await db.query(
     `select a.id, a.name, a.content_type, a.data from learn_assets a
-      where a.id = $1 and exists (select 1 from learn_lessons l where l.asset_id = a.id and l.workspace_id = a.workspace_id and l.deleted_at is null and l.published and l.audience = 'public')`, [id],
+      where a.id = $1 and exists (select 1 from learn_lessons l where l.workspace_id = a.workspace_id and l.deleted_at is null and l.published and l.audience = 'public'
+        and (l.asset_id = a.id or exists (select 1 from learn_parts p where p.lesson_id = l.id and p.asset_id = a.id)))`, [id],
   )).rows[0];
   if (!a) return c.text('not found', 404);
   return serveAsset(c, a, c.req.query('download') === '1');

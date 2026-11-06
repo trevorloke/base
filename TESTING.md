@@ -149,12 +149,15 @@ one tap away under **More**.
   add them back — only they can, by signing up again.
 - **Outreach → Connections** — whether email and texting are connected,
   and the Imagine Surrey website address the public pages link back to.
-- **ImagineU** (the tab) → *Edit* → add a section (*Start here*) and a few
-  lessons: a note (words), a video (paste a YouTube link), a document
-  (upload a PDF; set *Who sees it* to *Public* and open the link ImagineU
-  shows — a page anyone can open), *Who to call*. *Done editing*;
-  open a lesson, *Mark as done*; *Progress* shows each member's count and,
-  tapped, which lessons. A volunteer sees the lessons, not *Edit*.
+- **ImagineU** (the tab) → *Edit* → *+ Add a course* (*Canvassing 101*),
+  then *+ Add a module*: words to open with, then under *More materials*
+  *+ Video* (paste a YouTube link), *+ Document* (upload a PDF), *+ Audio*;
+  ↑ ↓ to reorder. The module's row says what it holds (*Note · Video ·
+  Document*). Set *Who sees it* to *Public* and open the link ImagineU
+  shows — a page anyone can open, its materials too. *Done editing*; open
+  the module, *Mark this module done*: the course reads *1 of N modules
+  done*; *Progress* shows each member's count and, tapped, which modules. A
+  volunteer sees the courses, not *Edit*.
 - **Phone banks** (People → More → Phone banks, or Today → More — in the admin) → *New
   phone bank*: a name, *Undecided* under *Who to call* (the count updates as
   you filter), a script, *Make the bank*. On the bank: *Hand out* three
@@ -284,8 +287,10 @@ one tap away under **More**.
   lists only those. A second *No answer* (or a talk, *Refused*, *Moved*, *No
   access*) finishes the door. With no signal the same chips show from the
   phone's copy, and an offline *No answer* reads *Try again*, never done.
-- **ImagineU** (the fifth tab) — the lessons the campaign put up; open one,
-  watch or read it, *Mark as done*. A manager can see what you've done.
+- **ImagineU** (the fifth tab) — the campaign's courses; open a module,
+  read, watch and listen to its materials, *Mark this module done*; each
+  course shows how many of its modules you've done. A manager can see what
+  you've done.
 - **Calls → Your call lists** — the phone banks with numbers handed to you;
   one opens on the Calls card with its script; each call you log crosses a
   number off, and *All done* says so.

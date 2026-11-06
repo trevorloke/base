@@ -1,6 +1,7 @@
 // learn.section.save    { id?, title, note?, position? }        desk
 // learn.section.remove  { id }                                   desk: void (its lessons stay, unfiled)
-// learn.lesson.save     { id?, section_id?, title, kind, body?, link?, asset_id?, audience?, published?, position? }  desk
+// learn.lesson.save     { id?, section_id?, title, kind, body?, link?, asset_id?, audience?, published?, position?, parts? }  desk
+//                       a module; parts: its materials in order [{ kind, title?, body?, link?, asset_id? }] — sent, they replace the module's
 // learn.lesson.remove   { id }                                   desk: void
 // learn.asset.upload    { data (base64), name }                  desk → { asset }
 // learn.done            { lesson_id, done }                      anyone: I have done this lesson (or not)
@@ -15,6 +16,37 @@ const uuid = () => z.uuid();
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 export const KINDS = ['note', 'document', 'video', 'audio', 'picture', 'contacts', 'procedure'];
 export const AUDIENCES = ['everyone', 'desk', 'public'];
+export const PART_KINDS = ['note', 'document', 'video', 'audio', 'picture', 'link'];
+const partInput = z.object({
+  kind: z.enum(PART_KINDS),
+  title: z.string().max(160).nullish(),
+  body: z.string().max(30_000).nullish(),
+  link: z.string().max(500).nullish(),
+  asset_id: uuid().nullish(),
+});
+// A module's materials, in order: what's sent replaces what was there.
+const saveParts = async (tx, ws, lessonId, parts) => {
+  const out = [];
+  for (const [i, raw] of parts.entries()) {
+    const link = clean(raw.link) || null;
+    if (link && !LINK_RE.test(link)) throw httpError(400, `material ${i + 1}: a link starts with https://`);
+    if (raw.asset_id) {
+      const a = (await tx.query('select id from learn_assets where id = $1 and workspace_id = $2', [raw.asset_id, ws])).rows[0];
+      if (!a) throw httpError(404, `material ${i + 1}: file not found`);
+    }
+    const body = String(raw.body ?? '');
+    if (!body.trim() && !link && !raw.asset_id) throw httpError(400, `material ${i + 1} is empty — add words, a file or a link, or take it out`);
+    out.push({ id: newId(), kind: raw.kind, title: clean(raw.title) || null, body, link, asset_id: raw.asset_id || null, position: i + 1 });
+  }
+  await tx.query('delete from learn_parts where workspace_id = $1 and lesson_id = $2', [ws, lessonId]);
+  for (const pt of out) {
+    await tx.query(
+      `insert into learn_parts (id, workspace_id, lesson_id, position, kind, title, body, link, asset_id) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [pt.id, ws, lessonId, pt.position, pt.kind, pt.title, pt.body, pt.link, pt.asset_id],
+    );
+  }
+  return out;
+};
 const LINK_RE = /^https:\/\/[^\s]{1,500}$/i;
 
 const sectionOf = async (tx, ws, id) => {
@@ -79,11 +111,12 @@ export const actions = {
       audience: z.enum(AUDIENCES).optional(),
       published: z.boolean().optional(),
       position: z.number().int().min(0).max(10_000).optional(),
+      parts: z.array(partInput).max(30).optional(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
       const title = clean(input.title);
-      if (!title) throw httpError(400, 'a lesson needs a title');
+      if (!title) throw httpError(400, 'a module needs a title');
       const link = clean(input.link) || null;
       if (link && !LINK_RE.test(link)) throw httpError(400, 'a link starts with https://');
       if (input.section_id) await sectionOf(tx, ws, input.section_id);
@@ -107,8 +140,9 @@ export const actions = {
            where id = $1 and workspace_id = $2`,
           [cur.id, ws, row.section_id, row.title, row.kind, row.body, row.link, row.asset_id, row.audience, row.published, position],
         );
-        emit('learn_lesson', cur.id, 'update', { ...row, body: undefined, position });
-        return { lesson: { ...cur, ...row, position } };
+        const parts = input.parts ? await saveParts(tx, ws, cur.id, input.parts) : undefined;
+        emit('learn_lesson', cur.id, 'update', { ...row, body: undefined, position, ...(parts ? { parts: parts.map((x) => ({ kind: x.kind, title: x.title, asset_id: x.asset_id, link: x.link })) } : {}) });
+        return { lesson: { ...cur, ...row, position, ...(parts ? { parts } : {}) } };
       }
       const id = newId();
       const position = input.position ?? await nextPosition(tx, 'learn_lessons', ws, 'and section_id is not distinct from $2', [row.section_id]);
@@ -117,8 +151,9 @@ export const actions = {
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [id, ws, row.section_id, row.title, row.kind, row.body, row.link, row.asset_id, row.audience, row.published, position, ctx.user.id],
       );
-      emit('learn_lesson', id, 'create', { ...row, body: undefined, position });
-      return { lesson: { id, ...row, position } };
+      const parts = input.parts ? await saveParts(tx, ws, id, input.parts) : [];
+      emit('learn_lesson', id, 'create', { ...row, body: undefined, position, parts: parts.map((x) => ({ kind: x.kind, title: x.title, asset_id: x.asset_id, link: x.link })) });
+      return { lesson: { id, ...row, position, parts } };
     },
   },
   'learn.lesson.remove': {

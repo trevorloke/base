@@ -3,7 +3,8 @@
 //                              (volunteers: published, everyone/public; the
 //                              desk: all, drafts too), with "done" for me and,
 //                              for the desk, how many have done each
-//   GET /learn/lessons/:id     one lesson, its body and file
+//   GET /learn/lessons/:id     one module: its words and file, then its
+//                              materials (parts) in order
 //   GET /learn/assets/:id      the file's bytes (signed in; a desk-only
 //                              lesson's file stays with the desk)
 //   GET /learn/progress        desk: every member, which lessons they've done
@@ -34,7 +35,13 @@ api.get('/learn', async (c) => {
   if (isDesk(ctx)) {
     doneBy = new Map((await db.query('select lesson_id, count(*)::int as n from learn_done where workspace_id = $1 group by lesson_id', [ws])).rows.map((r) => [r.lesson_id, r.n]));
   }
-  const out = lessons.map((l) => lessonOut(l, { done: mine.has(l.id), ...(isDesk(ctx) ? { done_by: doneBy.get(l.id) || 0 } : {}), excerpt: String(l.body || '').replace(/[#*_>`\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140) }));
+  // Each module's materials, as kinds ("Video · Document · Audio").
+  const partKinds = new Map();
+  for (const r of (await db.query('select lesson_id, kind from learn_parts where workspace_id = $1 order by position', [ws])).rows) {
+    if (!partKinds.has(r.lesson_id)) partKinds.set(r.lesson_id, []);
+    partKinds.get(r.lesson_id).push(r.kind);
+  }
+  const out = lessons.map((l) => lessonOut(l, { done: mine.has(l.id), parts: partKinds.get(l.id) || [], ...(isDesk(ctx) ? { done_by: doneBy.get(l.id) || 0 } : {}), excerpt: String(l.body || '').replace(/[#*_>`\[\]]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140) }));
   const members = isDesk(ctx) ? (await db.query('select count(*)::int as n from memberships where workspace_id = $1', [ws])).rows[0].n : undefined;
   return c.json({
     sections: sections.map((s) => ({ ...s, lessons: out.filter((l) => l.section_id === s.id) })),
@@ -51,7 +58,12 @@ api.get('/learn/lessons/:id', async (c) => {
   const l = (await db.query(`${LESSON_SELECT} where l.id = $1 and l.workspace_id = $2 and l.deleted_at is null ${visible(ctx)}`, [id, ctx.workspaceId])).rows[0];
   if (!l) return c.json({ error: 'not found' }, 404);
   const done = (await db.query('select 1 from learn_done where workspace_id = $1 and user_id = $2 and lesson_id = $3', [ctx.workspaceId, ctx.user.id, id])).rows.length > 0;
-  return c.json({ lesson: lessonOut(l, { body: l.body, done, public_url: l.audience === 'public' ? `/learn/${ctx.workspace.slug}/${l.id}` : null }) });
+  const parts = (await db.query(
+    `select p.id, p.kind, p.title, p.body, p.link, p.asset_id, a.name as asset_name, a.content_type as asset_type, a.bytes as asset_bytes
+       from learn_parts p left join learn_assets a on a.id = p.asset_id where p.workspace_id = $1 and p.lesson_id = $2 order by p.position`,
+    [ctx.workspaceId, id],
+  )).rows.map((p) => ({ id: p.id, kind: p.kind, title: p.title, body: p.body, link: p.link, asset: assetOut({ id: p.asset_id, name: p.asset_name, content_type: p.asset_type, bytes: p.asset_bytes }) }));
+  return c.json({ lesson: lessonOut(l, { body: l.body, done, parts, public_url: l.audience === 'public' ? `/learn/${ctx.workspace.slug}/${l.id}` : null }) });
 });
 
 api.get('/learn/assets/:id', async (c) => {
@@ -62,7 +74,8 @@ api.get('/learn/assets/:id', async (c) => {
   if (!a) return c.text('not found', 404);
   if (!isDesk(ctx)) {
     const ok = (await db.query(
-      `select 1 from learn_lessons l where l.workspace_id = $1 and l.asset_id = $2 and l.deleted_at is null and l.published and l.audience in ('everyone', 'public')`,
+      `select 1 from learn_lessons l where l.workspace_id = $1 and l.deleted_at is null and l.published and l.audience in ('everyone', 'public')
+         and (l.asset_id = $2 or exists (select 1 from learn_parts p where p.lesson_id = l.id and p.asset_id = $2))`,
       [ctx.workspaceId, id],
     )).rows.length > 0;
     if (!ok) return c.text('not found', 404);

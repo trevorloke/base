@@ -1,6 +1,8 @@
-// ImagineU — the campaign's training: sections of lessons (a note, a
-// document, a video, audio, a picture, contacts, a procedure), the files
-// behind them, and who has done which.
+// ImagineU — the campaign's training: courses (learn_sections) of modules
+// (learn_lessons), each module a mix of materials — its own words and file,
+// then any number of parts (learn_parts: a document, a video, audio, a
+// picture, a link, a note) — the files behind them, and who has done which
+// module (learn_done: a module is the marker of progress).
 export const sql = `
 create table if not exists learn_sections (
   id uuid primary key,
@@ -44,6 +46,20 @@ create table if not exists learn_lessons (
   deleted_at timestamptz
 );
 create index if not exists learn_lessons_ws_idx on learn_lessons (workspace_id, section_id, position) where deleted_at is null;
+
+create table if not exists learn_parts (
+  id uuid primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  lesson_id uuid not null references learn_lessons(id) on delete cascade,
+  position int not null default 0,
+  kind text not null check (kind in ('note', 'document', 'video', 'audio', 'picture', 'link')),
+  title text,
+  body text not null default '',
+  link text,
+  asset_id uuid references learn_assets(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists learn_parts_lesson_idx on learn_parts (workspace_id, lesson_id, position);
 
 create table if not exists learn_done (
   workspace_id uuid not null references workspaces(id) on delete cascade,
