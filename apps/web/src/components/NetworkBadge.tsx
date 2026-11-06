@@ -18,6 +18,7 @@ const SHORT: Record<string, string> = {
   whatsapp: "WA",
   wechat: "WeChat",
   line: "LINE",
+  news: "News",
 };
 
 /** Text-only network badge. Color comes from the per-network token; no logos. `short` is for tight spots like calendar chips. */

@@ -47,9 +47,13 @@ export const NETWORK_LABEL: Record<Network, string> = {
   whatsapp: "WhatsApp",
   wechat: "WeChat",
   line: "LINE",
+  news: "News",
 };
 
-/** Every network, in the order the room lists them. */
+/**
+ * Every network an account can be connected on, in the order the room lists them. "news" is not here: it is
+ * listening only (articles found by public search), with no connector and nothing to publish to.
+ */
 export const NETWORKS: Network[] = [
   "x",
   "bluesky",
@@ -89,6 +93,7 @@ export const NETWORK_MAX_TEXT: Record<Network, number> = {
   whatsapp: 4096,
   wechat: 600,
   line: 5000,
+  news: 0,
 };
 
 /** Networks where one post can continue as a thread of replies. */
@@ -116,6 +121,7 @@ export const NETWORK_MAX_MEDIA: Record<Network, number> = {
   whatsapp: 1,
   wechat: 1,
   line: 5,
+  news: 0,
 };
 
 /** Approximate longest organic video, in seconds, where a network caps it. */
@@ -241,7 +247,8 @@ export function atHandle(handle: string, network?: string): string {
  */
 export function authorHandleText(network: string, handle: string | null | undefined): string | null {
   if (!handle) return null;
-  if (network === "line" || network === "wechat") return null;
+  // News items carry the site's domain as the author, already shown as the name.
+  if (network === "line" || network === "wechat" || network === "news") return null;
   if (network === "whatsapp") return /^\d{6,15}$/.test(handle) ? `+${handle}` : handle;
   return atHandle(handle, network);
 }
@@ -436,4 +443,39 @@ export function isUrl(s: string): boolean {
 /** "Mentions · 41 in 3h" style evidence kinds → readable words. */
 export function evidenceKindLabel(kind: string): string {
   return kind.replace(/[_-]+/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+// --- The tracker -------------------------------------------------------------
+
+export const RELATION_LABEL: Record<"own" | "client" | "prospect" | "competitor" | "opponent" | "watch", string> = {
+  own: "Own",
+  client: "Client",
+  prospect: "Prospect",
+  competitor: "Competitor",
+  opponent: "Opponent",
+  watch: "Watching",
+};
+
+export const RELATION_HINT: Record<"own" | "client" | "prospect" | "competitor" | "opponent" | "watch", string> = {
+  own: "us, or one of our people",
+  client: "someone we work for",
+  prospect: "someone we're pitching",
+  competitor: "a rival brand",
+  opponent: "the other side in a race",
+  watch: "just keeping an eye on it",
+};
+
+export const RELATION_ORDER = ["own", "client", "prospect", "competitor", "opponent", "watch"] as const;
+
+/** Offered in the role field; anything else can be typed. */
+export const ENTITY_ROLE_SUGGESTIONS = ["party", "brand", "company", "candidate", "spokesperson", "founder", "creator", "ambassador"];
+
+export function entityKindLabel(kind: string): string {
+  return kind === "organization" ? "Organisation" : kind === "person" ? "Person" : kind;
+}
+
+/** 41.2 → "41%", 4.25 → "4.3%" (already a percent, not a fraction). */
+export function percent(x: number | null | undefined): string {
+  if (x === null || x === undefined || !Number.isFinite(x)) return "—";
+  return x >= 10 || Number.isInteger(x) ? `${Math.round(x)}%` : `${x.toFixed(1)}%`;
 }

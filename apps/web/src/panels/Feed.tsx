@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Account, Activity, ActivityKind, FeedQuery, LanguagesInfo, LiveStatus, ModerateAction, Network, PostDetail, Violation } from "../types";
 import { api, errorText, isApiError, USE_FIXTURES } from "../api";
 import { Menu } from "../components/Menu";
@@ -23,12 +23,22 @@ const KIND_CHIPS: { id: KindFilter; label: string }[] = [
 
 const LIVE_LABEL: Record<LiveStatus, string> = { live: "Live", connecting: "Reconnecting…", off: "Paused" };
 
+/** The feed narrowed to one tracked name (and, for an organisation, its people). */
+export interface FeedEntityFilter {
+  id: string;
+  name: string;
+  /** Include the people (and sub-brands) that belong to it. */
+  withPeople: boolean;
+}
+
 export function Feed({
   accounts,
   liveTick,
   liveStatus,
   canDelete,
   languages,
+  entity = null,
+  onClearEntity,
 }: {
   accounts: Account[];
   liveTick: number;
@@ -36,6 +46,9 @@ export function Feed({
   canDelete: boolean;
   /** GET /v1/languages: the team's language and what the feed has seen. Null until it loads (or on older servers). */
   languages: LanguagesInfo | null;
+  /** Set from the tracker's "Show in feed". */
+  entity?: FeedEntityFilter | null;
+  onClearEntity?: () => void;
 }) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [network, setNetwork] = useState<Network | null>(null);
@@ -55,9 +68,11 @@ export function Feed({
       networks: network ? [network] : undefined,
       languages: lang ? [lang] : undefined,
       conversation: conversation?.id,
+      entity: entity?.id,
+      children: entity ? true : undefined,
       limit: 60,
     }),
-    [kind, network, lang, conversation],
+    [kind, network, lang, conversation, entity],
   );
 
   const itemsRef = useRef<Activity[] | null>(null);
@@ -172,6 +187,20 @@ export function Feed({
             <LanguageFilter value={lang} onChange={setLang} seen={seenLangs} />
           </>
         ) : null}
+        {entity ? (
+          <button
+            type="button"
+            className="chip chip-on feed-conv-chip"
+            aria-label={`About: ${entity.name}${entity.withPeople ? " (+ people)" : ""}. Remove this filter`}
+            onClick={onClearEntity}
+          >
+            <span className="feed-conv-name">
+              About: {entity.name}
+              {entity.withPeople ? " (+ people)" : ""}
+            </span>
+            <span aria-hidden="true"> ×</span>
+          </button>
+        ) : null}
         {conversation ? (
           <button
             type="button"
@@ -185,7 +214,7 @@ export function Feed({
         ) : null}
       </div>
       <div className="panel-body">
-        <PanelState loading={loading && !items} error={error} onRetry={() => void load()} empty={items && items.length === 0 ? "Quiet. Nothing matches these filters yet." : null} />
+        <PanelState loading={loading && !items} error={error} onRetry={() => void load()} empty={items && items.length === 0 ? (entity ? `Nothing about ${entity.name} matches these filters yet.` : "Quiet. Nothing matches these filters yet.") : null} />
         {items?.map((a) => (
           <FeedItem
             key={a.id}
@@ -247,13 +276,14 @@ function outcomeOf(detail: PostDetail): Outcome {
  * One inbox item. When it came in through a connected account, it can be answered in place (through the
  * same red lines as any post) and, where the network allows, liked, hidden or deleted.
  */
-function FeedItem({
+export function FeedItem({
   item: a,
   fresh,
   canDelete,
   home,
   onChange,
   onConversation,
+  extra,
 }: {
   item: Activity;
   fresh: boolean;
@@ -264,6 +294,8 @@ function FeedItem({
   onChange: (next: Activity) => void;
   /** Show only this conversation. Absent while the feed is already narrowed to one. */
   onConversation?: (c: { id: string; name: string }) => void;
+  /** Extra tags in the head, before the time (the tracker says how a message matched). */
+  extra?: ReactNode;
 }) {
   const { streamsById, accountsById, connectors, openPost } = useRoom();
   const account = a.socialAccountId ? accountsById.get(a.socialAccountId) : undefined;
@@ -369,7 +401,7 @@ function FeedItem({
         <span className="feed-author">{a.authorName ?? a.authorHandle ?? "Someone"}</span>
         {handle ? <span className="feed-handle muted">{handle}</span> : null}
         <NetworkBadge network={a.network} />
-        <span className="feed-kind muted">{kindLabel(a.kind)}</span>
+        <span className="feed-kind muted">{a.network === "news" ? "Article" : kindLabel(a.kind)}</span>
         {where ? (
           onConversation && a.conversationId ? (
             <button
@@ -392,6 +424,7 @@ function FeedItem({
         ) : null}
         {liked ? <span className="tag">Liked</span> : null}
         {hidden ? <span className="tag">Hidden</span> : null}
+        {extra}
         <RelativeTime iso={a.occurredAt} className="feed-time" />
       </div>
       {a.text && translation ? (

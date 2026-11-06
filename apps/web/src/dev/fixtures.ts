@@ -18,6 +18,15 @@ import type {
   Connector,
   Conversion,
   CreateLinkInput,
+  AliasSuggestions,
+  Entity,
+  EntityInput,
+  EntityMention,
+  EntityPatch,
+  EntityRelation,
+  EntityReport,
+  EntityReportRow,
+  MentionHow,
   LinkList,
   LinkPlacement,
   LinkReport,
@@ -75,7 +84,7 @@ import type { StreamHandlers } from "../api";
 import { ApiError } from "../lib/errors";
 import { NETWORK_THREADS, networkLabel, truncate } from "../lib/format";
 import { LANG_CODE_RE, primaryLanguage } from "../lib/lang";
-import { weekStartMs } from "../lib/tz";
+import { dayKey, weekStartMs } from "../lib/tz";
 
 const NOW = Date.now();
 const HOUR = 3_600_000;
@@ -343,6 +352,61 @@ const TOPICS: TopicSpec[] = [
     score: 0.09,
     window: null,
     seed: 5,
+  },  // Trend topics the tracker made for the names it follows (see "The tracker" below).
+  {
+    id: "tp_ent_northwind",
+    name: "Northwind Coffee",
+    keywords: ["Northwind Coffee", "Northwind", "ノースウィンド", "北风咖啡"],
+    relevance: 1,
+    stage: "rising",
+    confidence: 0.62,
+    velocity: 0.08,
+    hoursToPeak: 20,
+    sources: [
+      { source: "news", scale: 40 },
+      { source: "own_feed", scale: 60 },
+      { source: "bluesky_search", scale: 120 },
+    ],
+    agreement: 0.68,
+    actedOn: 0,
+    score: 0.41,
+    window: null,
+    seed: 6,
+  },
+  {
+    id: "tp_ent_bluebottle",
+    name: "Blue Bottle",
+    keywords: ["Blue Bottle", "Blue Bottle Coffee", "ブルーボトル", "wiki:Blue_Bottle_Coffee"],
+    relevance: 1,
+    stage: "plateau",
+    confidence: 0.57,
+    velocity: 0.01,
+    hoursToPeak: null,
+    sources: [
+      { source: "news", scale: 30 },
+      { source: "wikipedia_pageviews", scale: 2400 },
+    ],
+    agreement: 0.6,
+    actedOn: 0,
+    score: 0.22,
+    window: null,
+    seed: 7,
+  },
+  {
+    id: "tp_ent_stumptown",
+    name: "Stumptown",
+    keywords: ["Stumptown", "Stumptown Coffee", "wiki:Stumptown_Coffee_Roasters"],
+    relevance: 1,
+    stage: "fading",
+    confidence: 0.44,
+    velocity: -0.04,
+    hoursToPeak: null,
+    sources: [{ source: "wikipedia_pageviews", scale: 800 }],
+    agreement: null,
+    actedOn: 0,
+    score: 0.12,
+    window: null,
+    seed: 8,
   },
 ];
 
@@ -749,6 +813,55 @@ const feedSeed: Activity[] = [
     conversationName: "Northwind wholesale partners",
     conversationType: "group",
   }),
+];
+
+/** A news article the tracker's public search found: the site is the author, the headline is the text. */
+function newsItem(id: string, domain: string, path: string, title: string, hoursAgo: number, sentiment: number | null, extra: Parameters<typeof act>[9] = {}): Activity {
+  return { ...act(id, "news", "mention", domain, domain, title, hoursAgo, [], sentiment, extra), url: `https://${domain}/${path}` };
+}
+
+/**
+ * Messages by and about the names the tracker follows, from public search (news, Bluesky, Reddit…) and the inboxes.
+ * Which entity each belongs to is worked out by matching, like the server does, not listed here.
+ */
+const trackerFeedSeed: Activity[] = [
+  newsItem("t01", "coffeewire.news", "2026/northwind-shibuya", "Northwind Coffee opens its fifth café, this time in Tokyo's Shibuya", 3, 0.4),
+  newsItem("t02", "tokyocafetimes.jp", "news/northwind-shibuya", "ノースウィンド、渋谷に新店舗　ポートランド発のロースターが日本初出店", 9, 0.5, {
+    lang: "ja",
+    ...translated("Northwind opens a new shop in Shibuya: the Portland roaster's first store in Japan", 9),
+  }),
+  act("t03", "x", "mention", "early_cup", "early cup", "@northwindcoffee the guji on batch brew today is unreal", 5, ["st_brand"], 0.8),
+  act("t04", "x", "own_post", "northwindcoffee", "Northwind Coffee", "Doors at 7 at all four cafés. The Guji is on batch brew until it runs out.", 20, [], null),
+  newsItem("t05", "portlandledger.com", "food/cold-brew-guide", "Where to drink cold brew in Portland right now: Northwind, Stumptown Coffee and six more", 30, 0.3),
+  act("t06", "bluesky", "mention", "elena.bsky.social", "Elena", "Probé el cold brew de Northwind en Portland. Muy bueno, nada dulce.", 14, [], 0.7, {
+    lang: "es",
+    ...translated("I tried the Northwind cold brew in Portland. Very good, not sweet at all.", 14),
+  }),
+  newsItem("t07", "beanbusiness.co", "interviews/ana-ruiz", "Northwind Coffee founder Ana Ruiz on paying farmers more and publishing what she pays", 26, 0.6),
+  act("t08", "x", "own_post", "anaroasts", "Ana Ruiz", "Cupping the new Guji lots this morning. Two of them taste like apricot jam.", 7, [], null),
+  act("t09", "instagram", "comment", "maya.brews", "Maya", "@ana.roasts your talk at the roasters guild was the best thing I saw this year", 11, [], 0.9),
+  act("t10", "x", "mention", "roastmag", "Roast Mag", "Ana Ruiz is right about green coffee prices. More roasters should publish them.", 40, [], 0.5),
+  act("t11", "tiktok", "own_post", "jules.sips", "jules", "trying every cold brew in portland. day 4: northwind. honestly the best so far", 18, [], null),
+  act("t12", "tiktok", "comment", "coldbrewkid", "cold brew kid", "@jules.sips which one was day 2??", 17, [], 0.2),
+  act("t13", "instagram", "mention", "hana.coffee", "はな", "@jules.sips さんの動画を見てノースウィンドに行ってきました。本当においしかった", 23, [], 0.8, {
+    lang: "ja",
+    ...translated("I went to Northwind after watching @jules.sips's video. It was really good.", 23),
+  }),
+  newsItem("t14", "tokyocafetimes.jp", "news/bluebottle-winter", "ブルーボトルコーヒー、冬季限定ブレンドを発表", 6, 0.3, {
+    lang: "ja",
+    ...translated("Blue Bottle Coffee announces a winter-only blend", 6),
+  }),
+  act("t15", "x", "mention", "pdxbudget", "PDX on a budget", "Blue Bottle's new cold foam is fine but $7 is a lot", 22, [], -0.3),
+  act("t16", "instagram", "comment", "jiwoo.cafe", "지우", "블루보틀 성수 매장 커피 맛있어요. 라떼 추천", 35, [], 0.7, {
+    lang: "ko",
+    ...translated("The coffee at Blue Bottle's Seongsu store is good. I recommend the latte.", 35),
+  }),
+  act("t17", "reddit", "mention", "pdxlocal", "pdxlocal", "Stumptown Coffee on Division still pulls the best espresso in town, fight me", 28, [], 0.4),
+  act("t18", "instagram", "own_post", "littlefern.tea", "Little Fern Tea", "Hojicha latte is back for winter. Same farm in Shizuoka.", 12, [], null),
+  act("t19", "tiktok", "comment", "momof3pdx", "Dana", "@littleferntea your matcha is the only one my kid will drink", 15, [], 0.8),
+  newsItem("t20", "beanbusiness.co", "funding/little-fern", "Little Fern Tea raises a small seed round to open its first café", 50, 0.4),
+  act("t21", "instagram", "own_post", "priya.brews", "Priya Nair", "Packing orders until midnight again. Little Fern turns two next week.", 8, [], null),
+  act("t22", "x", "mention", "teafest_pdx", "PDX Tea Fest", "Priya Nair's matcha talk was the best one this year. Slides are up.", 44, [], 0.6),
 ];
 
 /** What the fixture "model" answers when someone presses Translate. */
@@ -1161,7 +1274,7 @@ const state = {
   languageSettings: { home: "en", autoTranslate: true, dailyLimit: 2000 } as LanguageSettings,
   queue: clone(queueSeed),
   decided: [] as PostSummary[],
-  feed: clone(feedSeed),
+  feed: clone([...feedSeed, ...trackerFeedSeed]),
   alerts: clone(alertsSeed),
   liveIndex: 0,
   calendar: clone(calendarSeed),
@@ -2084,6 +2197,597 @@ function languagesApi() {
   };
 }
 
+// --- The tracker ----------------------------------------------------------------
+// Northwind as an agency would set it up: the own brand with its founder and an ambassador, two competitors, and a
+// prospect brand with its founder. Mentions are matched against the fixture feed the way the server matches them;
+// the report's numbers come from a deterministic daily series, so the 30-day view has shape.
+
+const ENT_CREATED = ago(24 * 40);
+
+function entity(e: Pick<Entity, "id" | "kind" | "name" | "relation"> & Partial<Entity>): Entity {
+  return {
+    workspaceId: workspace.id,
+    role: null,
+    parentId: null,
+    aliases: [],
+    handles: {},
+    context: [],
+    exclude: [],
+    wikipedia: [],
+    trendTopicId: null,
+    notes: null,
+    createdAt: ENT_CREATED,
+    updatedAt: ENT_CREATED,
+    archivedAt: null,
+    ...e,
+  };
+}
+
+const entitiesSeed: Entity[] = [
+  entity({
+    id: "ent_northwind",
+    kind: "organization",
+    name: "Northwind Coffee",
+    role: "brand",
+    relation: "own",
+    aliases: ["Northwind", "Northwind Roasters", "ノースウィンド", "北风咖啡"],
+    handles: { x: ["northwindcoffee"], bluesky: ["northwind.coffee"], instagram: ["northwindcoffee"], tiktok: ["northwind.coffee"], mastodon: ["northwind@mastodon.social"] },
+    exclude: ["Northwind Traders", "Northwind Airlines"],
+    trendTopicId: "tp_ent_northwind",
+    notes: "Us. Count the Tokyo shop under the same name.",
+  }),
+  entity({
+    id: "ent_ana",
+    kind: "person",
+    name: "Ana Ruiz",
+    role: "founder",
+    parentId: "ent_northwind",
+    relation: "own",
+    handles: { x: ["anaroasts"], instagram: ["ana.roasts"] },
+    context: ["coffee", "roaster", "roasters", "Northwind", "Guji"],
+  }),
+  entity({
+    id: "ent_jules",
+    kind: "person",
+    name: "Jules Park",
+    role: "ambassador",
+    parentId: "ent_northwind",
+    relation: "own",
+    aliases: ["jules sips"],
+    handles: { tiktok: ["jules.sips"], instagram: ["jules.sips"] },
+    notes: "Paid partnership through March. Posts need the #ad disclosure.",
+  }),
+  entity({
+    id: "ent_bluebottle",
+    kind: "organization",
+    name: "Blue Bottle",
+    role: "brand",
+    relation: "competitor",
+    aliases: ["Blue Bottle Coffee", "ブルーボトル", "블루보틀"],
+    handles: { x: ["bluebottleroast"], instagram: ["bluebottle"] },
+    context: ["coffee", "café", "latte", "espresso", "cold foam", "cold brew", "コーヒー", "커피", "라떼"],
+    wikipedia: ["Blue_Bottle_Coffee"],
+    trendTopicId: "tp_ent_bluebottle",
+  }),
+  entity({
+    id: "ent_stumptown",
+    kind: "organization",
+    name: "Stumptown",
+    role: "brand",
+    relation: "competitor",
+    aliases: ["Stumptown Coffee", "Stumptown Coffee Roasters"],
+    handles: { x: ["stumptowncoffee"] },
+    context: ["coffee", "espresso", "cold brew", "roaster", "latte"],
+    wikipedia: ["Stumptown_Coffee_Roasters"],
+    trendTopicId: "tp_ent_stumptown",
+  }),
+  entity({
+    id: "ent_fern",
+    kind: "organization",
+    name: "Little Fern Tea",
+    role: "brand",
+    relation: "prospect",
+    aliases: ["Little Fern"],
+    handles: { instagram: ["littlefern.tea"], tiktok: ["littleferntea"] },
+    notes: "Pitch meeting on the 18th. They want a café launch plan.",
+  }),
+  entity({
+    id: "ent_priya",
+    kind: "person",
+    name: "Priya Nair",
+    role: "founder",
+    parentId: "ent_fern",
+    relation: "prospect",
+    handles: { instagram: ["priya.brews"] },
+    context: ["tea", "matcha", "hojicha", "Little Fern"],
+  }),
+];
+
+/** How each seeded name is talked about: mentions per day, who writes, and where. */
+interface SeriesSpec {
+  base: number;
+  slope: number;
+  seed: number;
+  /** Days ago with a burst, and how big. */
+  spikes: [number, number][];
+  authored: number;
+  people: number;
+  sentiment: number;
+  networks: [string, number][];
+  languages: [string | null, number][];
+}
+
+const SERIES: Record<string, SeriesSpec> = {
+  ent_northwind: {
+    base: 30,
+    slope: 0.35,
+    seed: 1,
+    spikes: [[0, 1.6], [1, 2.1]],
+    authored: 0.09,
+    people: 0.64,
+    sentiment: 0.41,
+    networks: [["x", 34], ["instagram", 22], ["bluesky", 14], ["news", 11], ["tiktok", 9], ["line", 6], ["reddit", 4]],
+    languages: [["en", 70], ["ja", 15], ["es", 8], ["zh", 4], [null, 3]],
+  },
+  ent_ana: {
+    base: 5,
+    slope: 0.5,
+    seed: 2,
+    spikes: [[1, 2.4]],
+    authored: 0.22,
+    people: 0.8,
+    sentiment: 0.58,
+    networks: [["x", 45], ["news", 25], ["instagram", 20], ["linkedin", 10]],
+    languages: [["en", 88], ["es", 12]],
+  },
+  ent_jules: {
+    base: 8,
+    slope: 0.2,
+    seed: 3,
+    spikes: [[3, 1.8]],
+    authored: 0.18,
+    people: 0.72,
+    sentiment: 0.66,
+    networks: [["tiktok", 62], ["instagram", 30], ["x", 8]],
+    languages: [["en", 74], ["ja", 22], [null, 4]],
+  },
+  ent_bluebottle: {
+    base: 24,
+    slope: 0.05,
+    seed: 4,
+    spikes: [[0, 1.9]],
+    authored: 0.05,
+    people: 0.7,
+    sentiment: 0.22,
+    networks: [["instagram", 30], ["x", 28], ["news", 18], ["line", 12], ["bluesky", 7], ["reddit", 5]],
+    languages: [["en", 52], ["ja", 33], ["ko", 9], ["zh", 6]],
+  },
+  ent_stumptown: {
+    base: 13,
+    slope: -0.25,
+    seed: 5,
+    spikes: [],
+    authored: 0.04,
+    people: 0.68,
+    sentiment: 0.18,
+    networks: [["x", 40], ["reddit", 30], ["instagram", 18], ["news", 12]],
+    languages: [["en", 95], ["es", 5]],
+  },
+  ent_fern: {
+    base: 4,
+    slope: 0.6,
+    seed: 6,
+    spikes: [[2, 2.2]],
+    authored: 0.25,
+    people: 0.75,
+    sentiment: 0.62,
+    networks: [["instagram", 50], ["tiktok", 32], ["news", 18]],
+    languages: [["en", 90], ["ja", 10]],
+  },
+  ent_priya: {
+    base: 1.6,
+    slope: 0.3,
+    seed: 7,
+    spikes: [],
+    authored: 0.3,
+    people: 0.85,
+    sentiment: 0.7,
+    networks: [["instagram", 70], ["x", 30]],
+    languages: [["en", 100]],
+  },
+};
+
+const trackerState = {
+  /** Per workspace. Only the Northwind workspace starts with names; the others show the empty state. */
+  entities: { [workspace.id]: clone(entitiesSeed) } as Record<string, Entity[]>,
+  seq: 0,
+};
+
+function wsEntities(): Entity[] {
+  const id = currentWs().id;
+  trackerState.entities[id] ??= [];
+  return trackerState.entities[id]!;
+}
+
+function familyOf(all: Entity[], rootId: string): string[] {
+  const out = [rootId];
+  for (let i = 0; i < out.length; i++) for (const e of all) if (e.parentId === out[i] && !out.includes(e.id)) out.push(e.id);
+  return out;
+}
+
+const normHandle = (h: string) => h.replace(/^@/, "").toLowerCase();
+const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const CJK = /[぀-ヿ㐀-鿿가-힯]/;
+
+/** Whole words for Latin text; anywhere inside Chinese, Japanese and Korean, which don't space words. */
+function findTerm(text: string, terms: string[]): string | null {
+  const folded = text.normalize("NFKC").toLowerCase();
+  for (const term of terms) {
+    const t = term.normalize("NFKC").toLowerCase().trim();
+    if (!t) continue;
+    if (CJK.test(t) ? folded.includes(t) : new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRe(t)}(?![\\p{L}\\p{N}_])`, "u").test(folded)) return term;
+  }
+  return null;
+}
+
+/** The server's matching, in order: written by one of its handles; an @mention of one; its name or an alias. */
+function matchFixtureEntity(e: Entity, a: Activity): { how: MentionHow; term: string } | null {
+  const own = (e.handles[a.network] ?? []).map(normHandle);
+  if (a.authorHandle && own.includes(normHandle(a.authorHandle))) return { how: "author", term: `@${normHandle(a.authorHandle)}` };
+  const texts = [a.text, a.translation].filter((t): t is string => !!t);
+  const ats = Object.values(e.handles).flat().map((h) => `@${normHandle(h ?? "")}`);
+  for (const t of texts) {
+    const lower = t.toLowerCase();
+    const hit = ats.find((h) => new RegExp(`${escapeRe(h)}(?![\\w.@])`).test(lower) || new RegExp(`${escapeRe(h)}(?=[.]?(\\s|$))`).test(lower));
+    if (hit) return { how: "handle", term: hit };
+  }
+  for (const t of texts) {
+    const hit = findTerm(t, [e.name, ...e.aliases]);
+    if (!hit) continue;
+    if (e.exclude.length && texts.some((x) => findTerm(x, e.exclude))) return null;
+    if (e.context.length && !texts.some((x) => findTerm(x, e.context))) continue;
+    return { how: "name", term: hit };
+  }
+  return null;
+}
+
+function mentionsOf(entityIds: string[]): EntityMention[] {
+  const all = wsEntities();
+  const out: EntityMention[] = [];
+  const seen = new Set<string>();
+  for (const a of state.feed) {
+    for (const id of entityIds) {
+      const e = all.find((x) => x.id === id);
+      if (!e) continue;
+      const m = matchFixtureEntity(e, a);
+      if (!m) continue;
+      const key = `${id}:${a.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ mention: { id: `emn_${key}`, entityId: id, how: m.how, term: m.term, network: a.network, lang: a.lang ?? null, occurredAt: a.occurredAt }, activity: a });
+    }
+  }
+  return out.sort((x, y) => Date.parse(y.mention.occurredAt) - Date.parse(x.mention.occurredAt));
+}
+
+function entityActivityIds(entityId: string, children: boolean): Set<string> {
+  const ids = children ? familyOf(wsEntities(), entityId) : [entityId];
+  return new Set(mentionsOf(ids).map((m) => m.activity.id));
+}
+
+/** Split `total` by weights so the parts add up exactly (largest remainder). */
+function apportion<K>(total: number, weights: [K, number][]): { key: K; n: number }[] {
+  const sum = weights.reduce((n, [, w]) => n + w, 0) || 1;
+  const raw = weights.map(([key, w]) => ({ key, exact: (total * w) / sum }));
+  const parts = raw.map((r) => ({ key: r.key, n: Math.floor(r.exact), rest: r.exact - Math.floor(r.exact) }));
+  let left = total - parts.reduce((n, p) => n + p.n, 0);
+  for (const p of [...parts].sort((a, b) => b.rest - a.rest)) {
+    if (left <= 0) break;
+    p.n += 1;
+    left -= 1;
+  }
+  return parts.filter((p) => p.n > 0).map((p) => ({ key: p.key, n: p.n })).sort((a, b) => b.n - a.n);
+}
+
+/** Mentions per day for a seeded name, `daysAgo` days back (0 = today). */
+function dailyRate(spec: SeriesSpec, daysAgo: number): number {
+  const d = Math.floor((NOW - daysAgo * DAY) / DAY);
+  const dow = new Date(NOW - daysAgo * DAY).getUTCDay();
+  const weekday = dow === 0 || dow === 6 ? 0.78 : 1.06;
+  const wave = 1 + 0.22 * Math.sin(d * 0.9 + spec.seed) + 0.1 * Math.sin(d * 2.3 + spec.seed * 3);
+  const trend = 1 + spec.slope * ((30 - daysAgo) / 30 - 0.5);
+  const spike = spec.spikes.find(([ago]) => ago === daysAgo)?.[1] ?? 1;
+  return Math.max(0, spec.base * weekday * wave * trend * spike);
+}
+
+function reportRowFor(e: Entity, fromMs: number, toMs: number): Omit<EntityReportRow, "familyMentions" | "shareOfVoice" | "shareWithinParent"> {
+  const tz = policy.timezone;
+  const spec = SERIES[e.id];
+  const days = new Map<string, number>();
+  let mentions = 0;
+  let authored = 0;
+  let people = 0;
+  let sentiment: number | null = null;
+  let byNetwork: { network: string; n: number }[] = [];
+  let byLanguage: { lang: string | null; n: number }[] = [];
+  if (spec) {
+    // Spread each day's mentions over its hours, so a 24-hour window takes the right share of two days.
+    const exact = new Map<string, number>();
+    for (let t = fromMs; t < toMs; t += HOUR) {
+      const daysAgo = Math.max(0, Math.floor((NOW - t) / DAY));
+      const k = dayKey(t, tz);
+      exact.set(k, (exact.get(k) ?? 0) + dailyRate(spec, daysAgo) / 24);
+    }
+    for (const [k, v] of exact) {
+      const n = Math.round(v);
+      if (n > 0) days.set(k, n);
+      mentions += n;
+    }
+    authored = Math.round(mentions * spec.authored);
+    people = Math.round(mentions * spec.people);
+    sentiment = mentions ? spec.sentiment : null;
+    byNetwork = apportion(mentions, spec.networks).map((x) => ({ network: x.key, n: x.n }));
+    byLanguage = apportion(mentions, spec.languages).map((x) => ({ lang: x.key, n: x.n }));
+  } else {
+    // Names added here: what matching finds in the stored feed (the server rescans 90 days on create).
+    const rows = mentionsOf([e.id]).filter((m) => {
+      const t = Date.parse(m.mention.occurredAt);
+      return t >= fromMs && t <= toMs;
+    });
+    const others = rows.filter((m) => m.mention.how !== "author");
+    mentions = others.length;
+    authored = rows.length - others.length;
+    people = new Set(others.map((m) => m.activity.authorHandle)).size;
+    const scored = others.map((m) => m.activity.sentiment).filter((x): x is number => x !== null);
+    sentiment = scored.length ? scored.reduce((n, x) => n + x, 0) / scored.length : null;
+    const count = <K,>(key: (m: EntityMention) => K) => {
+      const c = new Map<K, number>();
+      for (const m of others) c.set(key(m), (c.get(key(m)) ?? 0) + 1);
+      return [...c.entries()].sort((a, b) => b[1] - a[1]);
+    };
+    byNetwork = count((m) => m.mention.network).map(([network, n]) => ({ network, n }));
+    byLanguage = count((m) => m.mention.lang).map(([lang, n]) => ({ lang, n }));
+    for (const [k, n] of count((m) => dayKey(Date.parse(m.mention.occurredAt), tz))) days.set(k, n);
+  }
+  return {
+    id: e.id,
+    name: e.name,
+    kind: e.kind,
+    role: e.role,
+    relation: e.relation,
+    parentId: e.parentId,
+    trendTopicId: e.trendTopicId,
+    mentions,
+    authored,
+    people,
+    sentiment,
+    byNetwork,
+    byLanguage,
+    byDay: [...days.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([day, n]) => ({ day, n })),
+  };
+}
+
+const RELATIONS: EntityRelation[] = ["own", "client", "prospect", "competitor", "opponent", "watch"];
+
+function requireTrackerEditor(): void {
+  if (currentWs().role === "viewer") throw new ApiError(403, "forbidden", "Viewers can't change the tracker.");
+}
+
+function cleanTerms(xs: unknown, max: number, what: string): string[] {
+  if (xs === undefined) return [];
+  if (!Array.isArray(xs)) throw new ApiError(400, "invalid", `${what} must be a list.`);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of xs) {
+    const t = String(x).trim();
+    if (!t) continue;
+    if (t.length > 120) throw new ApiError(400, "invalid", `"${truncate(t, 30)}" is too long for ${what.toLowerCase()} (120 characters at most).`);
+    const k = t.normalize("NFKC").toLowerCase();
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(t);
+    }
+  }
+  if (out.length > max) throw new ApiError(400, "invalid", `At most ${max} ${what.toLowerCase()}.`);
+  return out;
+}
+
+function cleanHandles(h: EntityInput["handles"]): Entity["handles"] {
+  const out: Entity["handles"] = {};
+  for (const [net, list] of Object.entries(h ?? {})) {
+    const clean = cleanTerms(list, 20, "Handles").map((x) => x.replace(/^@/, ""));
+    if (clean.length) out[net as Network] = clean;
+  }
+  return out;
+}
+
+function checkParent(all: Entity[], parentId: string | undefined, selfId?: string): void {
+  if (!parentId) return;
+  const parent = all.find((e) => e.id === parentId && !e.archivedAt);
+  if (!parent) throw new ApiError(404, "not_found", "That organisation isn't tracked anymore.");
+  if (parent.kind !== "organization") throw new ApiError(400, "invalid", "a person or organisation can only belong to an organisation");
+  let cursor: Entity | undefined = parent;
+  for (let depth = 0; cursor && depth < 10; depth++) {
+    if (cursor.id === selfId) throw new ApiError(400, "invalid", "that would make the organisation part of itself");
+    cursor = cursor.parentId ? all.find((e) => e.id === cursor!.parentId) : undefined;
+  }
+}
+
+/** A dormant radar topic for a newly tracked name; the forecast fills in as data arrives. */
+function topicForEntity(name: string, keywords: string[]): string {
+  trackerState.seq += 1;
+  const spec: TopicSpec = {
+    id: `tp_ent_new_${trackerState.seq}`,
+    name,
+    keywords,
+    relevance: 1,
+    stage: "dormant",
+    confidence: 0.2,
+    velocity: 0,
+    hoursToPeak: null,
+    sources: [{ source: "news", scale: 10 }],
+    agreement: null,
+    actedOn: 0,
+    score: 0.05,
+    window: null,
+    seed: 20 + trackerState.seq,
+  };
+  TOPICS.push(spec);
+  radar.push({ topic: { id: spec.id, workspaceId: currentWs().id, name, keywords, relevance: 1, createdAt: iso(Date.now()) }, forecast: forecastOf(spec), actedOn: 0, score: spec.score, window: null });
+  return spec.id;
+}
+
+/** What the fixture "model" suggests, per seeded name; anything else gets a generic pair. */
+const FIXTURE_ALIASES: Record<string, AliasSuggestions["aliases"]> = {
+  ent_northwind: [
+    { text: "노스윈드 커피", lang: "ko", why: "How Korean posts write the brand name" },
+    { text: "Café Northwind", lang: "es", why: "Spanish posts often put café first" },
+    { text: "北風", lang: "ja", why: "Kanji for “north wind”, used in some Japanese posts about the Shibuya shop" },
+  ],
+  ent_bluebottle: [
+    { text: "ブルーボトルコーヒー", lang: "ja", why: "The full Japanese name, as on the shop signs" },
+    { text: "蓝瓶", lang: "zh", why: "Short Chinese name; it also just means “blue bottle”" },
+  ],
+  ent_ana: [{ text: "アナ・ルイス", lang: "ja", why: "Her name in katakana, from the Shibuya opening coverage" }],
+};
+const FIXTURE_AMBIGUOUS: Record<string, string[]> = { ent_northwind: ["北風"], ent_bluebottle: ["蓝瓶"] };
+
+function trackerApi() {
+  return {
+    entities: async (archived: boolean): Promise<Entity[]> =>
+      delay(
+        wsEntities()
+          .filter((e) => archived || !e.archivedAt)
+          .sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name)),
+      ),
+
+    createEntity: async (input: EntityInput): Promise<Entity> => {
+      await delay(null, 420);
+      requireSession();
+      requireTrackerEditor();
+      const all = wsEntities();
+      if (input.kind !== "organization" && input.kind !== "person") throw new ApiError(400, "invalid", "kind must be organization or person");
+      const name = (input.name ?? "").trim();
+      if (!name) throw new ApiError(400, "invalid", "Give it a name.");
+      if (name.length > 200) throw new ApiError(400, "invalid", "Keep the name under 200 characters.");
+      if (input.relation && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one Starsign knows.");
+      if (all.some((e) => !e.archivedAt && e.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, "conflict", `${name} is already tracked.`);
+      checkParent(all, input.parentId || undefined);
+      const aliases = cleanTerms(input.aliases, 60, "Aliases");
+      const wikipedia = cleanTerms(input.wikipedia, 10, "Wikipedia articles");
+      trackerState.seq += 1;
+      const now = iso(Date.now());
+      const e: Entity = {
+        id: `ent_new_${trackerState.seq}`,
+        workspaceId: currentWs().id,
+        kind: input.kind,
+        name,
+        role: input.role?.trim() || null,
+        parentId: input.parentId || null,
+        relation: input.relation ?? "watch",
+        aliases,
+        handles: cleanHandles(input.handles),
+        context: cleanTerms(input.context, 40, "Context words"),
+        exclude: cleanTerms(input.exclude, 40, "Exclude words"),
+        wikipedia,
+        trendTopicId: input.trackTrend === false ? null : topicForEntity(name, [name, ...aliases.slice(0, 6), ...wikipedia.map((w) => `wiki:${w}`)]),
+        notes: input.notes?.trim() || null,
+        createdAt: now,
+        updatedAt: now,
+        archivedAt: null,
+      };
+      all.push(e);
+      return clone(e);
+    },
+
+    updateEntity: async (id: string, input: EntityPatch): Promise<Entity> => {
+      await delay(null, 380);
+      requireSession();
+      requireTrackerEditor();
+      const all = wsEntities();
+      const e = all.find((x) => x.id === id && !x.archivedAt);
+      if (!e) throw new ApiError(404, "not_found", "That name isn't tracked anymore.");
+      if (input.name !== undefined && !input.name.trim()) throw new ApiError(400, "invalid", "Give it a name.");
+      if (input.kind !== undefined && input.kind !== e.kind && input.kind === "person" && all.some((x) => x.parentId === e.id && !x.archivedAt)) {
+        throw new ApiError(400, "invalid", "People belong to this organisation. Move them first.");
+      }
+      if (input.parentId !== undefined) checkParent(all, input.parentId || undefined, id);
+      if (input.relation !== undefined && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one Starsign knows.");
+      if (input.name !== undefined) e.name = input.name.trim();
+      if (input.kind !== undefined) e.kind = input.kind;
+      if (input.role !== undefined) e.role = input.role.trim() || null;
+      if (input.parentId !== undefined) e.parentId = input.parentId || null;
+      if (input.relation !== undefined) e.relation = input.relation;
+      if (input.aliases !== undefined) e.aliases = cleanTerms(input.aliases, 60, "Aliases");
+      if (input.handles !== undefined) e.handles = cleanHandles(input.handles);
+      if (input.context !== undefined) e.context = cleanTerms(input.context, 40, "Context words");
+      if (input.exclude !== undefined) e.exclude = cleanTerms(input.exclude, 40, "Exclude words");
+      if (input.wikipedia !== undefined) e.wikipedia = cleanTerms(input.wikipedia, 10, "Wikipedia articles");
+      if (input.notes !== undefined) e.notes = input.notes.trim() || null;
+      e.updatedAt = iso(Date.now());
+      const topic = e.trendTopicId ? radar.find((r) => r.topic.id === e.trendTopicId) : undefined;
+      if (topic) topic.topic.name = e.name;
+      return clone(e);
+    },
+
+    archiveEntity: async (id: string): Promise<void> => {
+      await delay(null, 300);
+      requireSession();
+      requireTrackerEditor();
+      const e = wsEntities().find((x) => x.id === id && !x.archivedAt);
+      if (!e) throw new ApiError(404, "not_found", "That name isn't tracked anymore.");
+      e.archivedAt = iso(Date.now());
+    },
+
+    entityReport: async (from?: string, to?: string): Promise<EntityReport> => {
+      const toMs = to ? Date.parse(to) : Date.now();
+      const fromMs = from ? Date.parse(from) : toMs - 7 * DAY;
+      const live = wsEntities().filter((e) => !e.archivedAt);
+      const rows = live.map((e) => reportRowFor(e, fromMs, toMs));
+      const own = new Map(rows.map((r) => [r.id, r]));
+      const withFamily = rows.map((r) => ({ ...r, familyMentions: familyOf(live, r.id).reduce((n, id) => n + (own.get(id)?.mentions ?? 0), 0) }));
+      const byId = new Map(withFamily.map((r) => [r.id, r]));
+      const share = (ids: string[], value: (id: string) => number) => {
+        const total = ids.reduce((n, id) => n + value(id), 0);
+        return new Map(ids.map((id) => [id, total ? Math.round((value(id) / total) * 1000) / 10 : 0]));
+      };
+      const top = share(
+        withFamily.filter((r) => !r.parentId || !byId.has(r.parentId)).map((r) => r.id),
+        (id) => byId.get(id)!.familyMentions,
+      );
+      const within = new Map<string, number>();
+      for (const parent of withFamily) {
+        for (const [id, v] of share(withFamily.filter((r) => r.parentId === parent.id).map((r) => r.id), (id) => byId.get(id)!.mentions)) within.set(id, v);
+      }
+      return delay(
+        { from: iso(fromMs), to: iso(toMs), entities: withFamily.map((r) => ({ ...r, shareOfVoice: top.get(r.id) ?? null, shareWithinParent: within.get(r.id) ?? null })) },
+        200,
+      );
+    },
+
+    entityMentions: async (id: string, opts: { children?: boolean; limit?: number }): Promise<EntityMention[]> => {
+      const all = wsEntities();
+      if (!all.some((e) => e.id === id)) throw new ApiError(404, "not_found", "No such tracked name.");
+      const ids = opts.children ? familyOf(all, id) : [id];
+      return delay(mentionsOf(ids).slice(0, Math.min(opts.limit ?? 50, 500)), 180);
+    },
+
+    suggestAliases: async (id: string, languages?: string[]): Promise<AliasSuggestions> => {
+      await delay(null, 1100);
+      const e = wsEntities().find((x) => x.id === id);
+      if (!e) throw new ApiError(404, "not_found", "No such tracked name.");
+      const have = new Set([e.name, ...e.aliases].map((x) => x.normalize("NFKC").toLowerCase()));
+      const generic: AliasSuggestions["aliases"] = [
+        { text: `#${e.name.replace(/[^\p{L}\p{N}]+/gu, "")}`, lang: "en", why: "The hashtag people use for it" },
+        { text: e.name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""), lang: "en", why: "Written as one word in handles and replies" },
+      ];
+      const langs = languages?.length ? languages.map(primaryLanguage) : ["en", "ja", "es", "zh", "ko"];
+      const aliases = (FIXTURE_ALIASES[e.id] ?? generic).filter((a) => langs.includes(primaryLanguage(a.lang)) && !have.has(a.text.normalize("NFKC").toLowerCase()));
+      return clone({ languages: langs, aliases, ambiguous: FIXTURE_AMBIGUOUS[e.id] ?? [] });
+    },
+  };
+}
+
 export const fixtureApi = {
   me: () => delay(currentMe()),
   policy: () => delay(policy),
@@ -2167,6 +2871,10 @@ export const fixtureApi = {
     if (q.q) items = items.filter((a) => `${a.text ?? ""}\n${a.translation ?? ""}`.toLowerCase().includes(q.q!.toLowerCase()));
     if (q.languages?.length) items = items.filter((a) => !!a.lang && q.languages!.includes(primaryLanguage(a.lang)));
     if (q.conversation) items = items.filter((a) => a.conversationId === q.conversation);
+    if (q.entity) {
+      const ids = entityActivityIds(q.entity, !!q.children);
+      items = items.filter((a) => ids.has(a.id));
+    }
     return delay(items.slice(0, q.limit ?? 100));
   },
 
@@ -2291,6 +2999,7 @@ export const fixtureApi = {
   ...integrationsApi(),
   ...linksApi(),
   ...languagesApi(),
+  ...trackerApi(),
 };
 
 /** A pretend live stream: one new mention arrives every 40 seconds. */

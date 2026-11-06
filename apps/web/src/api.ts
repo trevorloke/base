@@ -15,6 +15,12 @@ import type {
   CreatePostInput,
   DecideInput,
   Discovery,
+  AliasSuggestions,
+  Entity,
+  EntityInput,
+  EntityMention,
+  EntityPatch,
+  EntityReport,
   FeedEvent,
   FeedQuery,
   InviteCreated,
@@ -327,6 +333,8 @@ export const api = {
             q: q.q,
             languages: q.languages,
             conversation: q.conversation,
+            entity: q.entity,
+            children: q.entity && q.children ? 1 : undefined,
           })}`,
         ),
       (f) => f.fixtureApi.feed(q),
@@ -424,6 +432,31 @@ export const api = {
   /** Fills the stream's `query.translations` for these languages (replacing what was there for them). 503 as above. */
   expandStream: (streamId: string, languages: string[]) =>
     pick(() => post<Stream>(`/v1/streams/${enc(streamId)}/expand`, { languages }), (f) => f.fixtureApi.expandStream(streamId, languages)),
+
+  // --- The tracker (v1.4) ---
+  /** Organisations and people the team follows; `archived` includes the ones no longer tracked. */
+  entities: (archived = false) =>
+    pick(() => get<Entity[]>(`/v1/entities${qs({ archived: archived ? 1 : undefined })}`), (f) => f.fixtureApi.entities(archived)),
+  /** 403 for viewers; 400 with a message for a person as parent or a cycle. The server rescans the last 90 days. */
+  createEntity: (input: EntityInput) => pick(() => post<Entity>("/v1/entities", input), (f) => f.fixtureApi.createEntity(input)),
+  /** Changing names, aliases, handles, context or exclude words rebuilds its mentions. */
+  updateEntity: (id: string, input: EntityPatch) => pick(() => patch<Entity>(`/v1/entities/${enc(id)}`, input), (f) => f.fixtureApi.updateEntity(id, input)),
+  /** Archives: it leaves lists and reports; its history stays. */
+  archiveEntity: (id: string) => pick(() => del<void>(`/v1/entities/${enc(id)}`), (f) => f.fixtureApi.archiveEntity(id)),
+  /** Defaults to the last 7 days on the server. */
+  entityReport: (from?: string, to?: string) =>
+    pick(() => get<EntityReport>(`/v1/entities/report${qs({ from, to })}`), (f) => f.fixtureApi.entityReport(from, to)),
+  entityMentions: (id: string, opts: { children?: boolean; limit?: number } = {}) =>
+    pick(
+      () => get<EntityMention[]>(`/v1/entities/${enc(id)}/mentions${qs({ children: opts.children ? 1 : undefined, limit: opts.limit })}`),
+      (f) => f.fixtureApi.entityMentions(id, opts),
+    ),
+  /** AI suggestions only; add the chosen ones with updateEntity. 503 `unavailable` without a model or past the spend cap. */
+  suggestAliases: (id: string, languages?: string[]) =>
+    pick(
+      () => post<AliasSuggestions>(`/v1/entities/${enc(id)}/suggest-aliases`, languages?.length ? { languages } : {}),
+      (f) => f.fixtureApi.suggestAliases(id, languages),
+    ),
 };
 
 export interface StreamHandlers {
