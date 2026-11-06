@@ -394,6 +394,11 @@ one tap away under **More**.
   booked is refused. **Call off** asks once (and says who booked won't be
   told); the shift leaves every list, and the walk lists it put on phones
   come back off — never a turf given by hand.
+- **People → More → Duplicates** — add two people with the same email (or
+  the same name and phone): they show side by side with why. *Keep this
+  one* asks once; *Merge* leaves one record with both histories (open the
+  other's old link: *Merged — open their record*). *Not the same* keeps a
+  pair away.
 - **Signs** — tap *To put up* / *Up* / *Taken down* to filter; **Add a sign**
   (it needs an address); a request that never went up can be *Cancelled*.
 - **Map → filter button → Draw turf** — tap the corners, name it, assign a

@@ -33,7 +33,7 @@ const isoDay = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String
 
 // Run the cap check for a live gift's donor and year; if the donor is over,
 // flag this gift with the reason. Shared by a new gift and a restored one.
-const flagIfOver = async (tx, workspace, { id, person_id, date, donorName, slate }) => {
+export const flagIfOver = async (tx, workspace, { id, person_id, date, donorName, slate }) => {
   const cap = await checkCap(tx, {
     workspaceId: workspace.id,
     personId: person_id,

@@ -73,7 +73,15 @@ Managers reach **Admin** from the account menu (their initials):
   reach it, kept copy included. A volunteer given Map & turfs sees every door.
   Call lists are scoped by phone banks, not by this.
 The same menu has **Rating scale** (below); People → More has **Profile
-fields** (managers) and **Most connected** (desk).
+fields** (managers), **Most connected** and **Duplicates** (desk).
+**Duplicates** lists two records that look like one person — the same
+email, the same phone and name, or the same name at one door — side by
+side. *Keep this one* merges the other into it: its contacts, gifts and
+receipts, shifts, signs, lists, answers, relationships, texts and requests
+move over (where both had the same — one shift, one list — the kept one's
+stays), its blanks are filled and tags joined, and an old link to it says
+*Merged — open their record*. A donor made one is checked against the limit
+again. *Not the same* keeps a pair away.
 
 ### The rating scale (door, phone, text)
 

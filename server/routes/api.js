@@ -208,7 +208,14 @@ app.get('/persons/:id', async (c) => {
      from persons where id = $1 and workspace_id = $2 and deleted_at is null`,
     [c.req.param('id'), ctx.workspaceId],
   )).rows[0];
-  if (!person) return c.json({ error: 'not found' }, 404);
+  if (!person) {
+    // Made one with another record (ext/duplicates): say which.
+    const into = (await db.query(
+      `select attrs->>'merged_into' as id from persons where id = $1 and workspace_id = $2 and deleted_at is not null`,
+      [c.req.param('id'), ctx.workspaceId],
+    )).rows[0]?.id;
+    return c.json(into ? { error: 'merged into another record', merged_into: into } : { error: 'not found' }, 404);
+  }
   const gifts = (await db.query(
     `select id, amount_cents, date, method, cadence, note, flagged, flag_reason from gifts
      where workspace_id = $1 and person_id = $2 and deleted_at is null order by date desc limit 200`,

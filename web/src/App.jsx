@@ -46,6 +46,7 @@ const Surveys = lazy(() => import('./pages/Surveys.jsx'));
 const SurveysEdit = lazy(() => import('./pages/SurveysEdit.jsx'));
 const SurveysResults = lazy(() => import('./pages/SurveysResults.jsx'));
 const Scripts = lazy(() => import('./pages/Scripts.jsx'));
+const Duplicates = lazy(() => import('./pages/Duplicates.jsx'));
 const RatingScale = lazy(() => import('./pages/RatingScale.jsx'));
 const Fields = lazy(() => import('./pages/Fields.jsx'));
 const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
@@ -90,7 +91,7 @@ function NotForYou({ me }) {
 
 // A desk address typed into the field app (an old bookmark, a link in an
 // email): the admin has it. Volunteers go home, as before.
-const DESK_PATHS = /^\/(people(\/(import|fields|connected))?|money|lists|reports|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
+const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates))?|money|lists|reports|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
 function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
@@ -138,6 +139,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/people/import" element={<FieldFallback />} />
           <Route path="/people/fields" element={<FieldFallback />} />
           <Route path="/people/connected" element={<FieldFallback />} />
+          <Route path="/people/duplicates" element={<FieldFallback />} />
           <Route path="/inbox/settings" element={<FieldFallback />} />
           <Route path="/banks/new" element={<FieldFallback />} />
           <Route path="/people/:id" element={<Person />} />
@@ -206,6 +208,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/follow-ups" element={<LaddersFollowups />} />
           <Route path="/surveys" element={<Surveys />} />
           <Route path="/scripts" element={<Scripts />} />
+          <Route path="/people/duplicates" element={<Duplicates />} />
           <Route path="/surveys/:id" element={<SurveysEdit />} />
           <Route path="/surveys/:id/results" element={<SurveysResults />} />
           <Route path="/rating-scale" element={<RatingScale />} />

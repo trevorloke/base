@@ -913,6 +913,9 @@ export default function Person() {
     return (
       <div className="pp-empty">
         <p>{gone ? 'No one here — they may have been removed.' : noAnswer(profile.error) ? 'No answer — check your signal' : profile.error.message}</p>
+        {profile.error?.body?.merged_into && (
+          <Link className="btn btn-primary pp-btn" to={`/people/${profile.error.body.merged_into}`} replace>Merged — open their record</Link>
+        )}
         <BackLink desk={desk} className="btn pp-btn" />
       </div>
     );

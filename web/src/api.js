@@ -2,15 +2,16 @@
 // integer cents on the wire and dollars on screen.
 
 export class ApiError extends Error {
-  constructor(status, message) {
+  constructor(status, message, body = {}) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
 async function handle(res) {
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, body.error || `request failed (${res.status})`);
+  if (!res.ok) throw new ApiError(res.status, body.error || `request failed (${res.status})`, body);
   return body;
 }
 

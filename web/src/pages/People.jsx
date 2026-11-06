@@ -759,6 +759,7 @@ function PeopleList() {
               desk && { to: '/people/import', label: 'Import', icon: 'upload' },
               desk && { to: '/surveys', label: 'Surveys' },
               desk && { to: '/people/connected', label: 'Most connected' },
+              desk && { to: '/people/duplicates', label: 'Duplicates' },
               me?.role === 'manager' && { to: '/people/fields', label: 'Profile fields' },
             ]}
           />
