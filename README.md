@@ -23,9 +23,21 @@ pnpm typecheck
 ```
 
 People sign in with email and password (sessions, teams with owner/approver/editor/viewer roles, invites, password
-reset, and workspace switching for agencies running several brands). The first person on a fresh deployment can sign up;
-after that it is invite-only unless `STARSIGN_ALLOW_SIGNUP=1`. Set `RESEND_API_KEY` and `MAIL_FROM` to email invites and
-reset links. API keys remain, for agents and automation (the MCP server, operators, scripts); people no longer paste them.
+reset, and workspace switching for agencies running several brands). Until someone on a deployment has a password, the
+app opens on "Create your account" and the first person to sign up becomes an owner (signing up with the email of an
+existing passwordless user, such as the seed's, claims that user and its workspaces); after that it is invite-only unless
+`STARSIGN_ALLOW_SIGNUP=1`. Set `RESEND_API_KEY` and `MAIL_FROM` to email invites and reset links. API keys remain, for
+agents and automation (the MCP server, operators, scripts); people no longer paste them.
+
+Locked out and no mail configured? From a shell on the server (Render: the web service's Shell tab, which starts in
+`apps/api`):
+
+```bash
+node --import tsx src/admin.ts users                  # who is on this deployment and who can sign in
+node --import tsx src/admin.ts reset-link you@example.com   # one-time link, valid for an hour
+```
+
+Locally the same is `pnpm --filter @starsign/api admin users`.
 
 Set `STARSIGN_DEV_WORKSPACE=acme` to skip signing in locally. Set `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL`
 for durable queues; then run `pnpm dev:workers` and `pnpm dev:operators` as separate processes. `ANTHROPIC_API_KEY`

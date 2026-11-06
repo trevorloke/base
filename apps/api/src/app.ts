@@ -196,6 +196,8 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
         return next();
       }
     }
+    // The sign-in screen asks this first: tell it whether to offer sign-up, and whether nobody can sign in yet.
+    if (c.req.path === "/v1/auth/session") return c.json(err("unauthorized", "sign in or send an API key", await m.auth.signupStatus()), 401);
     return c.json(err("unauthorized", "sign in or send an API key"), 401);
   });
   app.use("/v1/*", auth);
