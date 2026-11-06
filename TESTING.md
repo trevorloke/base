@@ -109,16 +109,20 @@ one tap away under **More**.
   filter is on) — a saved filter counts who matches as you pick (and how
   many can be emailed or texted); a hand-picked list takes people by name.
   A list has *Download CSV*, *Email this list* and *Text this list*.
-- **Outreach → Email blast** — choose a list, write as for a newsletter,
-  Send: everyone with an address who may be emailed; the footer's
-  *Unsubscribe* tags that address do-not-email. **Outreach → Texts** —
-  choose a list, write a text that names the campaign (the counter shows
+- **Outreach** is two modules, **Email** and **Texting** (old links —
+  /outreach/newsletter, /eblast, /press, /texts — land in them).
+- **Outreach → Email → Write an email** — *To*: the newsletter's
+  subscribers, or pick a list; write, Send: everyone with an address who
+  may be emailed; the footer's *Unsubscribe* tags that address
+  do-not-email. **Outreach → Texting** — the Inbox, phone banks, texting
+  one by one and texting settings, one tap each; *Write a text*: choose a
+  list, write a text that names the campaign (the counter shows
   the 1000-character limit with "Reply STOP to opt out" counted), Send: one
   text each through the campaign number; at night it waits and says when
   texting opens; replies land in the Inbox.
 - **Reports** (Today → More → Reports) — the campaign in numbers, *CSV* on
   every table, and the exports: any table as a spreadsheet.
-- **Outreach → Newsletter** — the message takes Markdown: tap **B**,
+- **Outreach → Email → Write an email** (to the subscribers) — the message takes Markdown: tap **B**,
   **H**, **• List**, **Link**, **Picture** (a photo goes in from your phone)
   then
   **Preview** to see the email as it will look. **Attach a file** takes a
@@ -145,10 +149,11 @@ one tap away under **More**.
   only to people who said yes to email (the newsletter); everyone else shows
   *Email skipped — didn't ask for email*.
   *+ First name* / *+ Campaign* fill in. The email's unsubscribe link asks
-  first; once someone unsubscribes, **Newsletter → More → Subscribers** can't
+  first; once someone unsubscribes, **Email → More → Subscribers** can't
   add them back — only they can, by signing up again.
-- **Outreach → Connections** — whether email and texting are connected,
-  and the Imagine Surrey website address the public pages link back to.
+- **Email & texting** (the *Connect* links on Shifts, Receipts and Ladders,
+  or Today → More) — whether email and texting are connected, and the
+  Imagine Surrey website address the public pages link back to.
 - **ImagineU** (the tab) → *Edit* → *+ Add a course* (*Canvassing 101*),
   then *+ Add a module*: words to open with, then under *More materials*
   *+ Video* (paste a YouTube link), *+ Document* (upload a PDF), *+ Audio*;

@@ -147,7 +147,7 @@ check('60 subscribers on the list', subs === 60, subs);
 
 // ── 2. Write an A/B newsletter while email isn't connected ──
 await go(page, '/outreach/newsletter');
-await page.click('button:has-text("Write newsletter")');
+await page.click('button:has-text("Write an email")');
 await page.waitForSelector('#newsletter-subject', { timeout: 5000 });
 await page.fill('#newsletter-subject', 'This week in Surrey');
 await page.fill('#newsletter-body', 'Hello neighbours.\n\nRead the transit plan: https://imaginesurrey.example/plan.');
@@ -321,27 +321,28 @@ check('under More: Past sends sit above the subscriber list', order.past != null
 check('under More: one line on Apple Mail opens', /Apple Mail can open emails by itself, so opens run high\./.test(t));
 await page.locator('section[aria-label="Past sends"]').screenshot({ path: `${SHOTS}/5-winner-past-sends.png` });
 
-// ── 6. Small lists: Press with one media contact sends normally ──
-await go(page, '/outreach/press');
-await page.click('button:has-text("Write press release")');
-await page.waitForSelector('#press-subject', { timeout: 5000 });
+// ── 6. Small lists: an email to a one-person list sends normally ──
+const small = (await act('list.create', { name: 'Media', kind: 'filter', filter: { tag: 'media' } })).json.list;
+await go(page, `/outreach/email?new=1&list=${small.id}`);
+await page.waitForSelector('#eblast-subject', { timeout: 5000 });
+check('Write an email → To: the list picked', (await page.inputValue('#em-to')) === small.id);
 await page.click('button.ab-toggle');
 await sleep(200);
 t = await textOf(page);
-check('small list: "Two subject lines need 50+ media contacts — this sends with one."', /Two subject lines need 50\+ media contacts — this sends with one\./.test(t) && !(await page.$('#press-ab-subject')) && !/A\/B/.test(t), (t.match(/Two subject.{0,80}/) || [''])[0]);
-await shot(page, '6-press-small-list-note');
-await page.fill('#press-subject', 'Imagine Surrey unveils transit plan');
-await page.fill('#press-body', 'FOR IMMEDIATE RELEASE https://imaginesurrey.example/news');
+check('small list: "Two subject lines need 50+ people — this sends with one."', /Two subject lines need 50\+ people — this sends with one\./.test(t) && !(await page.$('#eblast-ab-subject')) && !/A\/B/.test(t), (t.match(/Two subject.{0,80}/) || [''])[0]);
+await shot(page, '6-small-list-note');
+await page.fill('#eblast-subject', 'Imagine Surrey unveils transit plan');
+await page.fill('#eblast-body', 'FOR IMMEDIATE RELEASE https://imaginesurrey.example/news');
 await page.click('form.ot-compose button[type="submit"]');
 await sleep(300);
 t = await textOf(page);
-check('small list: the confirm is a normal send', /Send to 1 media contact\?/.test(t), (t.match(/Send to.{0,40}/) || [''])[0]);
+check('small list: the confirm is a normal send', /Send to 1 person\?/.test(t), (t.match(/Send to.{0,40}/) || [''])[0]);
 await page.click('button:has-text("Yes, send")');
 await sleep(1200);
 t = await textOf(page);
 const press = mailbox().slice(60);
-check('small list: sent normally, one subject, tracked', /Sent to 1 media contact/.test(t) && press.length === 1 && press[0].subject === 'Imagine Surrey unveils transit plan' && tokenOf(press[0]), press.length);
-await shot(page, '6-press-small-list-sent');
+check('small list: sent normally, one subject, tracked', /Sent to 1 person/.test(t) && press.length === 1 && press[0].subject === 'Imagine Surrey unveils transit plan' && tokenOf(press[0]), press.length);
+await shot(page, '6-small-list-sent');
 
 // ── 6b. A tie says so: winner by clicks, and nobody clicked ──
 const tieSend = await act('blast.send', {
@@ -368,7 +369,7 @@ await page.locator('section[aria-label="Last sent"]').screenshot({ path: `${SHOT
 // ── 6c. A send the request hands to the send job: "Sending · N of 60" ──
 await control('/slow');
 await go(page, '/outreach/newsletter');
-await page.click('button:has-text("Write newsletter")');
+await page.click('button:has-text("Write an email")');
 await page.waitForSelector('#newsletter-subject', { timeout: 5000 });
 await page.fill('#newsletter-subject', 'Rally on Saturday');
 await page.fill('#newsletter-body', 'See you at Holland Park.');

@@ -205,7 +205,7 @@ export function TestingList({ blasts, kind, skip }) {
   const stats = useBlastStats();
   const rows = (stats.data?.stats || []).filter((s) => s.ab?.status === 'testing' && s.id !== skip)
     .map((s) => ({ s, b: (blasts || []).find((b) => b.id === s.id) }))
-    .filter(({ b }) => b && b.kind === kind);
+    .filter(({ b }) => b && (Array.isArray(kind) ? kind.includes(b.kind) : b.kind === kind));
   if (rows.length === 0) return null;
   return (
     <section className="ot-sec" aria-label="Testing">

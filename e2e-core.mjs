@@ -267,7 +267,7 @@ check('the volunteer cannot export', (await V.api('/export')).status === 403);
 for (const who of ['lost.one', 'lost.two']) await D.api('/actions/subscription.add', { email: `${who}+${tag}@example.org` });
 const lostSends = async () => (await D.api('/blasts')).json.blasts.filter((b) => b.subject === 'Lost answer');
 await D.go('/outreach/newsletter');
-await page.click('button:has-text("Write newsletter")');
+await page.click('button:has-text("Write an email")');
 await page.waitForSelector('#newsletter-subject', { timeout: 5000 });
 await page.fill('#newsletter-subject', 'Lost answer');
 await page.fill('#newsletter-body', 'Hello neighbours.');

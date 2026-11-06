@@ -1,13 +1,16 @@
-// Outreach — five tabs, one job each. The header holds the tab's one yellow
-// action; under the tabs sits a short list. Everything else is one tap away
-// under "More", and only rendered when open.
-//   newsletter  Write newsletter · last sent · More: past sends, subscribers
-//   eblast      Write email blast to a list · past sends
-//   texts       Write a text to a list · past sends
-//   press       Write press release · media count · last sent · More: past sends
-//   connect     email & texting: connected or not; the campaign's website address
-// Tabs live in the URL (/outreach/:tab); an open compose/new form is ?new=1.
-// Everything is react-query driven; every write invalidates and confirms.
+// Outreach — two modules, one job each.
+//   email    (like Mailchimp) Write an email — to the newsletter's
+//            subscribers or to any list (a saved filter or hand-picked) —
+//            with two subject lines to test, a test send, files; then what
+//            went out: waiting, testing, the last send, opens and clicks.
+//            More: past sends, the subscribers (add, remove), automations.
+//   texting  (like CallHub) Write a text to a list; the Inbox of replies;
+//            phone banks and Calls; texting settings (quiet hours).
+// The header holds the module's one yellow action. Older addresses still
+// work: /outreach/newsletter, /eblast and /press open Email; /texts opens
+// Texting; /outreach/connect is where email and texting stand (and the
+// campaign's website address), linked from the screens that need them.
+// An open compose form is ?new=1. Every write invalidates and confirms.
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, Navigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,31 +20,34 @@ import {
   useBlastStat, useBlastStats,
 } from '../components/AbTests.jsx';
 import LaddersLink from '../components/LaddersLink.jsx';
+import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { MarkdownField, toDataUrl, uploadImage } from '../components/MarkdownField.jsx';
 import './outreach.css';
 
 const TABS = [
-  { key: 'newsletter', label: 'Newsletter' },
-  { key: 'eblast',     label: 'Blasts' },
-  { key: 'texts',      label: 'Texts' },
-  { key: 'press',      label: 'Press' },
-  { key: 'connect',    label: 'Connections' },
+  { key: 'email',   label: 'Email' },
+  { key: 'texting', label: 'Texting' },
 ];
-// The one yellow button in the header, per tab.
+// The one yellow button in the header, per module.
 const PRIMARY = {
-  newsletter: 'Write newsletter',
-  eblast: 'Write email blast',
-  texts: 'Write a text',
-  press: 'Write press release',
+  email: 'Write an email',
+  texting: 'Write a text',
 };
+// Older addresses → the module that has them now.
+const MOVED = { newsletter: 'email', eblast: 'email', press: 'email', texts: 'texting' };
+// The email kinds a send can be (press releases sent before stay in the record).
+const EMAIL_KINDS = ['newsletter', 'eblast', 'press'];
+const kindIs = (k, want) => (Array.isArray(want) ? want.includes(k) : k === want);
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
 // Volunteers get 403 on /api/subscriptions, /api/blasts and signature lists,
 // so they only see the tabs whose reads they're allowed.
-const VOLUNTEER_TABS = new Set(['connect']);
+const VOLUNTEER_TABS = new Set([]);
 
 // Tab icons (24×24, stroke = currentColor), same hand as the phone tab bar.
 const TAB_ICONS = {
+  email: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /></>,
+  texting: <><path d="M4 5.5h16v10H9l-4 3.5z" /><path d="M8 9h8M8 12h5" /></>,
   newsletter: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /></>,
   eblast: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /><path d="M7 15.5h4" /></>,
   texts: <><path d="M4 5.5h16v10H9l-4 3.5z" /><path d="M8 9h8M8 12h5" /></>,
@@ -699,13 +705,13 @@ function PastRow({ b, showKind, emailConfigured, canWrite }) {
 // Past newsletters and press releases, newest first. Saves that never went
 // out are not here: they sit on the first look under "Not sent".
 function PastList({ blasts, loading, kindFilter, emailConfigured, canWrite }) {
-  const rows = (blasts || []).filter((b) => (!kindFilter || b.kind === kindFilter) && !isWaiting(b));
+  const rows = (blasts || []).filter((b) => (!kindFilter || kindIs(b.kind, kindFilter)) && !isWaiting(b));
   if (loading) return <p className="ot-note">Loading…</p>;
   if (rows.length === 0) return <p className="ot-empty">Nothing sent yet.</p>;
   return (
     <ul className="ot-list">
       {rows.map((b) => (
-        <PastRow key={b.id} b={b} showKind={!kindFilter} emailConfigured={emailConfigured} canWrite={canWrite} />
+        <PastRow key={b.id} b={b} showKind={!kindFilter || Array.isArray(kindFilter)} emailConfigured={emailConfigured} canWrite={canWrite} />
       ))}
     </ul>
   );
@@ -718,7 +724,7 @@ function LastSent({ blasts, kind, skip, emailConfigured, canWrite }) {
   const stats = useBlastStats();
   if (!stats.data) return null;
   const testing = (id) => stats.data.stats?.find((s) => s.id === id)?.ab?.status === 'testing';
-  const b = (blasts || []).find((x) => x.kind === kind && !isWaiting(x) && !testing(x.id));
+  const b = (blasts || []).find((x) => kindIs(x.kind, kind) && !isWaiting(x) && !testing(x.id));
   if (!b || b.id === skip) return null;
   return (
     <section className="ot-sec" aria-label="Last sent">
@@ -787,7 +793,7 @@ function UnsentRow({ b, emailConfigured, canWrite, onResent }) {
 }
 
 function UnsentList({ blasts, kind, emailConfigured, canWrite, onResent }) {
-  const rows = (blasts || []).filter((b) => b.kind === kind && isWaiting(b));
+  const rows = (blasts || []).filter((b) => kindIs(b.kind, kind) && isWaiting(b));
   if (rows.length === 0) return null;
   return (
     <section className="ot-sec" aria-label="Not sent">
@@ -903,15 +909,86 @@ function ListBlastTab({ kind, me, canWrite, creating, onClose }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NEWSLETTER
+// EMAIL — the newsletter's subscribers or any list; what went out
 // ─────────────────────────────────────────────────────────────────────────────
-function NewsletterTab({ me, canWrite, creating, onClose, toast }) {
-  const queryClient = useQueryClient();
-  const slug = me.workspace.slug;
+function EmailTab({ me, canWrite, creating, onClose, toast }) {
+  const [params] = useSearchParams();
   const subs = useQuery({ queryKey: ['subscriptions'], queryFn: () => apiGet('/subscriptions') });
+  const lists = useQuery({ queryKey: ['lists', 'all'], queryFn: () => apiGet('/lists') });
   const blasts = useBlastList();
-
+  // Who it goes to: 'newsletter' (the subscribers) or a list's id.
+  const [to, setTo] = useState(params.get('list') || 'newsletter');
   const [result, setResult] = useState(null);
+  const composing = canWrite && creating;
+  const all = lists.data?.lists ?? [];
+  const isNews = to === 'newsletter';
+  const chosen = isNews ? null : all.find((l) => l.id === to) || null;
+  const subscribed = subs.data?.subscribed ?? null;
+  const emailConfigured = blasts.data?.emailConfigured;
+  const count = isNews ? subscribed : chosen ? chosen.counts.with_email : null;
+
+  return (
+    <>
+      {composing && (
+        <div className="card ot-audience">
+          <div className="field">
+            <label htmlFor="em-to">To</label>
+            <select id="em-to" className="input" value={to} onChange={(e) => setTo(e.target.value)}>
+              <option value="newsletter">Newsletter subscribers — {subscribed ?? '…'}</option>
+              {all.map((l) => <option key={l.id} value={l.id}>{l.name} — {l.counts.with_email} {plural(l.counts.with_email, 'person', 'people')}</option>)}
+            </select>
+            <span className="ops-meta">
+              The newsletter: everyone who signed up. A list: a saved filter or hand-picked people (<Link to="/lists">Lists</Link>).
+              Do-not-email, do-not-contact and unsubscribed addresses are left out.
+            </span>
+          </div>
+        </div>
+      )}
+      {composing && (
+        <ComposeCard
+          kind={isNews ? 'newsletter' : 'eblast'}
+          slug={me.workspace.slug}
+          campaign={me.workspace.name}
+          audience={isNews ? undefined : { list_id: to }}
+          audienceCount={count}
+          audienceNoun={isNews ? { one: 'subscriber', many: 'subscribers' } : { one: 'person', many: 'people' }}
+          emptyReason={isNews ? 'No subscribers yet — share the signup page first.' : 'No one on this list can be emailed.'}
+          emailConfigured={emailConfigured}
+          onCancel={onClose}
+          onSent={(b) => { setResult(b); onClose(); }}
+        />
+      )}
+      <BlastResult blast={result} emailConfigured={emailConfigured} canWrite={canWrite}
+        onDismiss={() => setResult(null)} onRetried={setResult} />
+      {!composing && (
+        <>
+          <Big n={subscribed} one="subscriber" many="subscribers" />
+          <ul className="ot-list">
+            <li className="ot-item"><Link className="ot-row" to="/lists"><span className="ot-row__main"><span className="ot-row__name">Lists</span><span className="ot-row__sub"><span>{all.length} {plural(all.length, 'list', 'lists')} — who else an email can go to</span></span></span></Link></li>
+          </ul>
+          <UnsentList blasts={blasts.data?.blasts} kind={EMAIL_KINDS} emailConfigured={emailConfigured} canWrite={canWrite} onResent={setResult} />
+          <TestingList blasts={blasts.data?.blasts} kind={EMAIL_KINDS} skip={result?.id} />
+          <LastSent blasts={blasts.data?.blasts} kind={EMAIL_KINDS} skip={result?.id} emailConfigured={emailConfigured} canWrite={canWrite} />
+        </>
+      )}
+      {!composing && <More>
+        <EmailStatus configured={emailConfigured} />
+        <section className="ot-sec" aria-label="Past sends">
+          <h2 className="ot-sec-h">Past sends</h2>
+          {blasts.isError && <p className="error">{blasts.error.message}</p>}
+          <PastList blasts={blasts.data?.blasts} loading={blasts.isPending} kindFilter={EMAIL_KINDS}
+            emailConfigured={emailConfigured} canWrite={canWrite} />
+          <OpensNote />
+        </section>
+        <Subscribers subs={subs} canWrite={canWrite} toast={toast} />
+      </More>}
+    </>
+  );
+}
+
+// The newsletter's subscribers: who, from where; add one; remove one.
+function Subscribers({ subs, canWrite, toast }) {
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [showAll, setShowAll] = useState(false);
@@ -924,9 +1001,7 @@ function NewsletterTab({ me, canWrite, creating, onClose, toast }) {
   const list = subs.data?.subscriptions ?? [];
   const subscribed = subs.data?.subscribed ?? null;
   const unsubscribed = subs.data?.unsubscribed ?? 0;
-  const composing = canWrite && creating;
   const visible = showAll ? list : list.slice(0, 50);
-  const emailConfigured = blasts.data?.emailConfigured;
 
   const add = async (e) => {
     e.preventDefault();
@@ -944,46 +1019,6 @@ function NewsletterTab({ me, canWrite, creating, onClose, toast }) {
   };
 
   return (
-    <>
-      {composing && (
-        <ComposeCard
-          kind="newsletter"
-          slug={slug}
-          audienceCount={subscribed}
-          audienceNoun={{ one: 'subscriber', many: 'subscribers' }}
-          emptyReason="No subscribers yet — share the signup page first."
-          emailConfigured={emailConfigured}
-          onCancel={onClose}
-          onSent={(b) => { setResult(b); onClose(); }}
-        />
-      )}
-      <BlastResult blast={result} emailConfigured={emailConfigured} canWrite={canWrite}
-        onDismiss={() => setResult(null)} onRetried={setResult} />
-
-      {/* While writing, the count sits next to Send — say it once. */}
-      {!composing && (
-        <>
-          <Big n={subscribed} one="subscriber" many="subscribers" />
-          <UnsentList blasts={blasts.data?.blasts} kind="newsletter" emailConfigured={emailConfigured}
-            canWrite={canWrite} onResent={setResult} />
-          <TestingList blasts={blasts.data?.blasts} kind="newsletter" skip={result?.id} />
-          <LastSent blasts={blasts.data?.blasts} kind="newsletter" skip={result?.id}
-            emailConfigured={emailConfigured} canWrite={canWrite} />
-        </>
-      )}
-
-      {!composing && <More>
-        <EmailStatus configured={emailConfigured} />
-
-        {/* Past sends first: the subscriber list is long. */}
-        <section className="ot-sec" aria-label="Past sends">
-          <h2 className="ot-sec-h">Past sends</h2>
-          {blasts.isError && <p className="error">{blasts.error.message}</p>}
-          <PastList blasts={blasts.data?.blasts} loading={blasts.isPending}
-            emailConfigured={emailConfigured} canWrite={canWrite} />
-          <OpensNote />
-        </section>
-
         <section className="ot-sec" aria-label="Subscribers">
           <h2 className="ot-sec-h">Subscribers <span className="ot-count">{subs.isPending ? '…' : subscribed}{unsubscribed > 0 && ` · ${unsubscribed} unsubscribed`}</span></h2>
           {subs.isError && <p className="error">{subs.error.message}</p>}
@@ -1035,14 +1070,31 @@ function NewsletterTab({ me, canWrite, creating, onClose, toast }) {
             </form>
           )}
         </section>
-      </More>}
-    </>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PRESS — releases go to everyone tagged 'media' who has an email
+// TEXTING — texts to a list, the replies, phone banks
 // ─────────────────────────────────────────────────────────────────────────────
+function TextingTab(props) {
+  const unread = Number(useTextingStatus(props.me).data?.unread) || 0;
+  return (
+    <>
+      {!props.creating && (
+        <ul className="ot-list ot-texting-links">
+          <li className="ot-item"><Link className="ot-row" to="/inbox"><span className="ot-row__main"><span className="ot-row__name">Inbox{unread > 0 && <> · <strong className="mono">{unread}</strong> new</>}</span><span className="ot-row__sub"><span>the replies, a conversation each</span></span></span></Link></li>
+          <li className="ot-item"><Link className="ot-row" to="/banks"><span className="ot-row__main"><span className="ot-row__name">Phone banks</span><span className="ot-row__sub"><span>numbers handed to callers, with a script and call-backs</span></span></span></Link></li>
+          <li className="ot-item"><Link className="ot-row" to="/calls?channel=text"><span className="ot-row__main"><span className="ot-row__name">Text one by one</span><span className="ot-row__sub"><span>Calls → Text: a person at a time, from your phone</span></span></span></Link></li>
+          <li className="ot-item"><Link className="ot-row" to="/inbox/settings"><span className="ot-row__main"><span className="ot-row__name">Texting settings</span><span className="ot-row__sub"><span>the first text’s words, and the hours texts may go out</span></span></span></Link></li>
+        </ul>
+      )}
+      <ListBlastTab kind="texts" {...props} />
+    </>
+  );
+}
+
+// Press releases sent before stay in the record (Email → past sends).
+// eslint-disable-next-line no-unused-vars
 function PressTab({ me, canWrite, creating, onClose }) {
   const blasts = useBlastList();
   const media = blasts.data?.mediaContacts ?? null;
@@ -1190,12 +1242,24 @@ export default function Outreach() {
   const toast = useToast();
   const canWrite = DESK_ROLES.includes(me.role);
   const tabs = canWrite ? TABS : TABS.filter((t) => VOLUNTEER_TABS.has(t.key));
-  const home = canWrite ? '/outreach/newsletter' : '/outreach/connect';
+  const home = canWrite ? '/outreach/email' : '/outreach/connect';
   const creating = canWrite && params.get('new') === '1';
   const openNew = () => setParams({ new: '1' });
   const closeNew = () => setParams({}, { replace: true });
 
   if (!tab) return <Navigate to={home} replace />;
+  if (MOVED[tab]) return <Navigate to={`/outreach/${MOVED[tab]}${params.toString() ? `?${params}` : ''}`} replace />;
+  // Where email and texting stand (and the website address): not a tab,
+  // but where "Connect" links land.
+  if (tab === 'connect') {
+    return (
+      <div className="ot-page">
+        <div className="ot-top"><h1>Email &amp; texting</h1></div>
+        {canWrite && <p className="ot-note"><Link to="/outreach/email">← Outreach</Link></p>}
+        <ConnectTab me={me} canWrite={canWrite} toast={toast.show} />
+      </div>
+    );
+  }
   if (!tabs.some((t) => t.key === tab)) return <Navigate to={home} replace />;
 
   const primary = canWrite && !creating ? PRIMARY[tab] : null;
@@ -1210,7 +1274,7 @@ export default function Outreach() {
         )}
       </div>
 
-      <nav className="ot-tabs" aria-label="Outreach sections" style={{ '--ot-tabs': tabs.length }}>
+      <nav className="ot-tabs" aria-label="Outreach: email and texting" style={{ '--ot-tabs': tabs.length }}>
         {tabs.map((t) => (
           <Link key={t.key} to={`/outreach/${t.key}`} className={`ot-tab${tab === t.key ? ' active' : ''}`}
             aria-current={tab === t.key ? 'page' : undefined}>
@@ -1220,12 +1284,9 @@ export default function Outreach() {
         ))}
       </nav>
 
-      {tab === 'newsletter' && <NewsletterTab {...tabProps} />}
-      {tab === 'press' && <PressTab {...tabProps} />}
-      {tab === 'eblast' && <ListBlastTab kind="eblast" {...tabProps} />}
-      {tab === 'texts' && <ListBlastTab kind="texts" {...tabProps} />}
-      {tab === 'connect' && <ConnectTab {...tabProps} />}
-      {canWrite && !creating && <LaddersLink />}
+      {tab === 'email' && <EmailTab {...tabProps} />}
+      {tab === 'texting' && <TextingTab {...tabProps} />}
+      {canWrite && !creating && tab === 'email' && <LaddersLink />}
 
       {toast.msg && (
         <div className="toast ot-toast" role="status">

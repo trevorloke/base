@@ -33,7 +33,7 @@ button, no paragraphs, everything else one tap away.
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
 | **Lists** | Saved filters (a tag, a rating band, a role, has an email…) and hand-picked lists of people: an audience for an email or text blast, a CSV, a report; People's *Save as a list* starts one |
 | **Reports** | The campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export; Field, by turf (coverage, talks, support found, not-homes; by canvasser; CSV) |
-| **Outreach** | Newsletter + press-release blasts written in Markdown (headings, bold, lists, links, pictures; files attached; *Send me a test*); **email blasts** and **texts** to any list, with the same rules as one-to-one texts (quiet hours, STOP, do-not-contact); ladders of engagement; the campaign's connections |
+| **Outreach** | Two modules. **Email** (like Mailchimp): *Write an email* to the newsletter's subscribers or to any list, in Markdown (headings, bold, lists, links, pictures; files attached; *Send me a test*; two subject lines to test), then what went out — opens, clicks, past sends — the subscribers, and ladders (automatic emails). **Texting** (like CallHub): *Write a text* to any list, with the one-to-one rules (quiet hours, STOP, do-not-contact); the Inbox of replies; phone banks; texting one by one; texting settings |
 | **ImagineU** | Training for every role: courses of modules, each module a mix of materials — notes, documents, videos, audio, pictures, links — and the marker of progress: ticked *Done*, counted per course (*2 of 5 modules done*); the desk edits in place and sees who has done what; a module marked public has a page anyone can open at `/learn/<slug>` |
 
 Volunteers get five tabs — **Today · Map · Calls · Shifts · ImagineU** — plus
@@ -296,12 +296,12 @@ served at `/media/:id`, cached a year. Up to five files (PDF, pictures, Word, Ex
 writer a copy first, untracked and off the record. Each email carries a
 plain-text part alongside the HTML.
 
-**Email blasts and texts to a list.** Outreach → Email blast sends to a
+**Emails and texts to a list.** Outreach → Email → *Write an email*, *To* a list, sends to a
 list (Lists: a saved filter or a hand-picked list): everyone on it with an
 address who may be emailed — never do-not-email, do-not-contact or an
 address that unsubscribed — each copy with its own unsubscribe link
 (`/bu/<recipient>`, which tags the address do-not-email). Outreach →
-Texts sends one text to everyone on a list with a number that can be
+Texting sends one text to everyone on a list with a number that can be
 texted, through the campaign's Twilio number, by the one-to-one rules:
 never a number that replied STOP, do-not-text or do-not-contact; the
 campaign named in the text; "Reply STOP to opt out" on each; inside quiet

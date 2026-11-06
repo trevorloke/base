@@ -281,7 +281,7 @@ await page.click('button.ot-more:has-text("More")');
 await sleep(300);
 t = await text();
 check('newsletter list includes the subscriber added at the desk', /priya@example\.org/.test(t));
-await page.click('button:has-text("Write newsletter")');
+await page.click('button:has-text("Write an email")');
 await page.waitForSelector('#newsletter-subject', { timeout: 5000 });
 await page.fill('#newsletter-subject', 'This week in Surrey');
 await page.fill('#newsletter-body', 'Hello neighbours — here is what we heard at the doors this week.');
@@ -295,9 +295,12 @@ t = await text();
 check('newsletter blast saved, not sent, without a provider', /Saved for \d+ subscribers? — not sent/.test(t) && /Connect email, then Send now/.test(t) && !/Sent to/.test(t) && !/send later/i.test(t));
 await shot('8-newsletter');
 
+// Outreach is two modules: Email (newsletter + lists) and Texting; old addresses land in them.
 await go('/outreach/press');
-t = await text();
-check('press tab counts media contacts', /Media contacts:?\s*1/i.test(t) || /1 media contact/i.test(t), (t.match(/[Mm]edia contact.{0,30}/) || [''])[0]);
+const tabsNow = await page.$$eval('.ot-tabs .ot-tab-label', (els) => els.map((e) => e.innerText.trim()));
+check('Outreach: two modules, Email and Texting; /outreach/press lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
+await go('/outreach/texts');
+check('/outreach/texts lands on Texting, with the Inbox and phone banks', /\/outreach\/texting/.test(page.url()) && /Inbox/.test(await text()) && /Phone banks/.test(await text()), page.url());
 
 // ── 8. Today composes it all ──
 await go('/');

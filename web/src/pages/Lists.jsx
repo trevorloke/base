@@ -178,8 +178,8 @@ function OneList({ id }) {
       <div className="ops-head">
         <h1>{l.name}</h1>
         <div className="ops-head__actions">
-          <Link className="btn btn-primary ops-tap" to={`/outreach/eblast?list=${id}`}>Email this list</Link>
-          <Link className="btn ops-tap" to={`/outreach/texts?list=${id}`}>Text this list</Link>
+          <Link className="btn btn-primary ops-tap" to={`/outreach/email?new=1&list=${id}`}>Email this list</Link>
+          <Link className="btn ops-tap" to={`/outreach/texting?new=1&list=${id}`}>Text this list</Link>
         </div>
       </div>
       <p className="ls-preview"><Counts counts={list.data.counts} kind={l.kind} /></p>

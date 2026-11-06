@@ -391,7 +391,7 @@ a.ot-row:hover, button.ot-row:hover { background: var(--paper-1); }
 
 /* ── Touch screens: fingers, not cursors ── */
 @media (pointer: coarse), (max-width: 720px) {
-  .ot-compose .input, .ot-inline-add .input { min-height: 48px; }
+  .ot-compose .input, .ot-inline-add .input, .ot-audience .input { min-height: 48px; }
   .ot-compose .ws-md__tool, .ot-compose .ot-file .btn { min-height: 48px; min-width: 48px; }
 }
 /* Email blasts and texts to a list */
