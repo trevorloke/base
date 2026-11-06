@@ -143,9 +143,9 @@ const pick = async (label) => {
   await sleep(500);
   return { pins: (await page.$$('.map-pin-wrap')).length, btn: (await page.innerText('.map-filter-btn')).replace(/\s+/g, ' ') };
 };
-let f = await pick('Voting Locke');
+let f = await pick("Locke");
 check('Voting Locke: just Dev’s door, and the button says so', f.pins === 1 && /Voting Locke 1/.test(f.btn), JSON.stringify(f));
-f = await pick('Voting McCallum');
+f = await pick("McCallum");
 check('Voting McCallum: just Tom’s door', f.pins === 1, JSON.stringify(f));
 f = await pick('Strong yes (1)');
 const ones = Number(f.btn.match(/(\d+)$/)?.[1]);

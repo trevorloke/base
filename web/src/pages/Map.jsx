@@ -73,7 +73,7 @@ const FILTER_LABEL = Object.fromEntries([MINE, ...FILTERS, ...VOTED_FILTERS].map
 const ratingFilters = (scale) => [
   ...scale.steps.filter((st) => st.band === 'support').map((st) => ({ key: `r:${st.code}`, label: `${st.word} (${st.code})`, band: 'support' })),
 ];
-const opponentFilters = (scale) => scale.candidates.map((c) => ({ key: `r:${c.code}`, label: `Voting ${c.name}`, band: 'opposed', group: 'Voting for', off: c.off }));
+const opponentFilters = (scale) => scale.candidates.map((c) => ({ key: `r:${c.code}`, label: `Voting ${c.name}`, short: c.name, band: 'opposed', group: 'Voting for', off: c.off }));
 
 // Signs on the map: which statuses (up, requested) and kinds show — the
 // flags on doors, the signs with no door, and "Has a sign". Kept per phone.
@@ -807,7 +807,7 @@ function FilterOpt({ f, filter, onFilter, counts, autoFocus }) {
       onClick={() => onFilter(f.key)}
     >
       <span className="map-fopt__dot" aria-hidden="true" />
-      <span className="map-fopt__label">{f.label}</span>
+      <span className="map-fopt__label">{f.short || f.label}</span>
       <span className="map-fopt__n mono">{counts[f.key] ?? 0}</span>
     </button>
   );

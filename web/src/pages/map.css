@@ -381,7 +381,8 @@
 .map-fopt[data-band='undecided'] { --dot-ring: #b87400; }
 .map-fopt[data-band='mine'] .map-fopt__dot { background: transparent; border: 2px solid currentColor; }
 .map-fopt[data-band='signs'] .map-fopt__dot { border-radius: 2px; background: #ffffff; border: 2px solid #161a2e; }
-.map-fopt__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-fopt__label { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.2; } /* field rule: words wrap, never cut */
+.map-fsheet__grid + .map-fsheet__sub { margin-top: var(--s-3); }
 .map-fopt__n { font-size: 13px; color: var(--text-3); }
 .map-fopt.is-on { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
 .map-fopt.is-on .map-fopt__n { color: var(--paper-0); }
