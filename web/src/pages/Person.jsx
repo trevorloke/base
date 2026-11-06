@@ -52,7 +52,7 @@ const OUTCOME_LABEL = {
   left_lit: 'Left lit',
   left_message: 'Left message',
 };
-const CHANNEL_LABEL = { door: 'Door', phone: 'Phone', text: 'Text', in_person: 'In person' };
+const CHANNEL_LABEL = { door: 'Door', phone: 'Phone', text: 'Text', in_person: 'In person', mainstreet: 'Mainstreeting' };
 // "Rated 2 · Lean yes", "Rated 4 · Locke" or "No answer" — the field's own words.
 const contactWord = (scale, c) => (c.rating ? `Rated ${ratingText(scale, c.rating)}` : OUTCOME_LABEL[c.outcome] || c.outcome);
 

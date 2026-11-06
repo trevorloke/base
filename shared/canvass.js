@@ -23,7 +23,8 @@ export const ratingByCode = (c) => RATINGS.find((r) => r.code === c) || null;
 // "Left lit": a call that reached no one to talk to but left word. Offered on
 // the phone only; in a phone bank it finishes the number (nobody gets a
 // second voicemail from the next caller).
-export const CHANNELS = ['door', 'phone', 'text', 'in_person'];
+// mainstreet: met at an event, a bus loop, a market (ext/mainstreet, with the place).
+export const CHANNELS = ['door', 'phone', 'text', 'in_person', 'mainstreet'];
 export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit', 'left_message'];
 
 export const SIGN_KINDS = [

@@ -735,6 +735,7 @@ function VolunteerToday({ b, me }) {
           <LinkRow to="/inbox" state={FROM_TODAY} main={<><strong className="mono">{replies}</strong> {plural(replies, 'reply', 'replies')}</>} />
         )}
         {/* The people they know (brief.myPeople), to reach in person, by call or text. */}
+        <LinkRow to="/mainstreet" main="Mainstreeting" />
         <LinkRow to="/my-people" state={FROM_TODAY}
           main={<>My people{b.myPeople ? <> · <strong className="mono">{b.myPeople}</strong></> : null}</>} />
       </ul>
@@ -838,6 +839,7 @@ function DeskToday({ b, me, toast }) {
           <LinkRow to="/reports" main="Reports" />
           <LinkRow to="/surveys" main="Surveys" />
           <LinkRow to="/scripts" main="Scripts" />
+          <LinkRow to="/mainstreet" main="Mainstreeting" />
           {isManager && <LinkRow to="/settings" main={<>Settings <span className="muted">· members, teams, permissions</span></>} />}
           {b.providers && (!b.providers.email || !b.providers.text) && (
             <LinkRow to="/outreach/connect" main="Connect email & texting" />

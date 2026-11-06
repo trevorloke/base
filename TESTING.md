@@ -292,6 +292,12 @@ one tap away under **More**.
   lists only those. A second *No answer* (or a talk, *Refused*, *Moved*, *No
   access*) finishes the door. With no signal the same chips show from the
   phone's copy, and an offline *No answer* reads *Try again*, never done.
+- **Mainstreeting** (Today → *Mainstreeting*) — say where you are (*Newton
+  bus loop*), *Start*; fill in someone you met (first and last name, phone,
+  a rating, *Wants to volunteer*), *Save · next person*: the form clears,
+  the place stays, *Met here today* counts them. Turn wifi off and save
+  another: *Not sent yet*, and it goes once the signal is back. On their
+  profile the history reads *Mainstreeting*.
 - **ImagineU** (the fifth tab) — the campaign's courses; open a module,
   read, watch and listen to its materials, *Mark this module done*; each
   course shows how many of its modules you've done. A manager can see what

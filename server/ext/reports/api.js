@@ -48,15 +48,16 @@ const REPORTS = {
     )).rows.map((r) => [day(r.week), r.n]),
   }),
   contacts: async (db, ws) => ({
-    head: ['Week of', 'Doors', 'Calls', 'Texts', 'Reached', 'No answer', 'Refused', 'Lit'],
+    head: ['Week of', 'Doors', 'Calls', 'Texts', 'Mainstreeting', 'Reached', 'No answer', 'Refused', 'Lit'],
     rows: (await db.query(
       `select date_trunc('week', created_at)::date as week,
          (count(*) filter (where channel = 'door'))::int as doors, (count(*) filter (where channel = 'phone'))::int as calls,
-         (count(*) filter (where channel = 'text'))::int as texts, (count(*) filter (where outcome = 'contacted'))::int as reached,
+         (count(*) filter (where channel = 'text'))::int as texts, (count(*) filter (where channel = 'mainstreet'))::int as mainstreet,
+         (count(*) filter (where outcome = 'contacted'))::int as reached,
          (count(*) filter (where outcome = 'no_answer'))::int as no_answer, (count(*) filter (where outcome = 'refused'))::int as refused,
          (count(*) filter (where outcome = 'left_lit'))::int as lit
        from contacts where workspace_id = $1 and created_at > now() - interval '8 weeks' group by 1 order by 1`, [ws],
-    )).rows.map((r) => [day(r.week), r.doors, r.calls, r.texts, r.reached, r.no_answer, r.refused, r.lit]),
+    )).rows.map((r) => [day(r.week), r.doors, r.calls, r.texts, r.mainstreet, r.reached, r.no_answer, r.refused, r.lit]),
   }),
   donations: async (db, ws) => ({
     head: ['Month', 'Gifts', 'Donors', 'Total ($)'],
@@ -135,7 +136,7 @@ const DATASETS = {
   gifts: { sql: `select p.name as donor, p.email, g.amount_cents / 100.0 as amount, g.date, g.method, g.cadence, coalesce(g.slate, 'council') as slate, g.note, g.flagged, g.flag_reason, g.created_at
     from gifts g join persons p on p.id = g.person_id where g.workspace_id = $1 and g.deleted_at is null order by g.date desc` },
   subscribers: { sql: `select email, name, status, source, created_at, unsubscribed_at from subscriptions where workspace_id = $1 order by created_at desc` },
-  contacts: { sql: `select p.name, c.channel, c.outcome, c.rating, c.note, u.name as by_name, c.created_at
+  contacts: { sql: `select p.name, c.channel, c.outcome, c.rating, c.note, c.place, u.name as by_name, c.created_at
     from contacts c join persons p on p.id = c.person_id left join users u on u.id = c.created_by where c.workspace_id = $1 order by c.created_at desc` },
   lists: { sql: `select l.name as list, l.kind, p.name, p.email, p.phone from list_members m join lists l on l.id = m.list_id join persons p on p.id = m.person_id
     where m.workspace_id = $1 and l.deleted_at is null order by lower(l.name), lower(p.name)` },

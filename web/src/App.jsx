@@ -51,6 +51,7 @@ const DataPage = lazy(() => import('./pages/Data.jsx'));
 const RatingScale = lazy(() => import('./pages/RatingScale.jsx'));
 const Fields = lazy(() => import('./pages/Fields.jsx'));
 const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
+const Mainstreet = lazy(() => import('./pages/Mainstreet.jsx'));
 const PeopleConnected = lazy(() => import('./pages/PeopleConnected.jsx'));
 const Passes = lazy(() => import('./pages/Passes.jsx'));
 const Voted = lazy(() => import('./pages/Voted.jsx'));
@@ -153,6 +154,8 @@ export default function App({ mode = 'field' }) {
           <Route path="/inbox" element={<TextingInbox />} />
           <Route path="/inbox/:id" element={<TextingThread />} />
           <Route path="/my-people" element={<MyPeople />} />
+        <Route path="/mainstreet" element={<Mainstreet />} />
+          <Route path="/mainstreet" element={<Mainstreet />} />
           <Route path="/imagineu" element={<ImagineU />} />
           <Route path="/imagineu/:id" element={<ImagineU />} />
           <Route path="/banks" element={<Banks />} />

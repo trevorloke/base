@@ -47,6 +47,7 @@ const ACTION_AREA = {
   pass: 'map',
   vote: 'people',
   request: 'people',
+  mainstreet: 'people',
   learn: 'learn',
 };
 // field.values.set is a person's record; field.ping ("I'm here", from the

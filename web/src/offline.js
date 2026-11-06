@@ -62,9 +62,9 @@ import { action, ApiError } from './api.js';
 // are made on the phone, so a replay is the same link).
 // person.tag: tags put on or taken off on a profile at the desk (desk roles;
 // the server dedupes it on client_id, server/ext/deskoffline).
-export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask'];
+export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet'];
 // Keyed by a client_id the server dedupes on.
-const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask'];
+const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet'];
 // The writes that add a person, on an id made here.
 export const NEW_PERSON = ['person.create', 'person.addAtDoor'];
 // What can be taken back while it waits: a sign request (its cancel is
@@ -262,7 +262,7 @@ const alreadyDone = (name, err) => err instanceof ApiError && (
 // A knock says when it was tapped: a candidate taken off the list since
 // is counted from the tap, however long it waited here (ext/scale). A Voted
 // mark too: it keeps its own time and day (ext/voted).
-const bodyOf = (item) => ((item.name === 'contact.log' || item.name === 'vote.mark') && item.at && !item.input.client_at
+const bodyOf = (item) => ((item.name === 'contact.log' || item.name === 'vote.mark' || item.name === 'mainstreet.meet') && item.at && !item.input.client_at
   ? { ...item.input, client_at: item.at } : item.input);
 
 async function send(item, { replay }) {
@@ -508,7 +508,7 @@ const tagChangeText = (i) => {
   if (off.length) parts.push(`${off.length > 1 ? 'Tags off' : 'Tag off'} · ${off.join(', ')}`);
   return parts.join(' · ') || 'Tags';
 };
-const CHANNEL_WORD = { door: 'Knock', phone: 'Call', text: 'Text', in_person: 'Talk' };
+const CHANNEL_WORD = { door: 'Knock', phone: 'Call', text: 'Text', in_person: 'Talk', mainstreet: 'Mainstreeting' };
 // "2:14 pm" today, "Oct 18" before that — the phone's own clock.
 export const clockText = (iso) => {
   const d = new Date(iso);
@@ -540,6 +540,7 @@ export function itemText(item, nameOf = () => '') {
     case 'person.tag': what = tagChangeText(i); break;
     case 'vote.mark': what = i.voted === false ? 'Not voted' : 'Voted'; break;
     case 'request.ask': what = `Ask the office · ${KIND_WORDS[i.kind] || 'Something else'}`; break;
+    case 'mainstreet.meet': what = `Met · ${i.place || 'mainstreeting'}`; break;
     default: what = 'Saved';
   }
   const name = NEW_PERSON.includes(item.name) ? i.name : item.name === 'relationship.add' ? i.person?.name || who : who;

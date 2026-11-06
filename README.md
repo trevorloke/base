@@ -115,6 +115,18 @@ than a week after they came off is refused. Contacts are door, phone, text or
 - **Tags**: free-form, seeded with media, VIP, endorser, host, …
 - **Socials**: per-person handles for Facebook, Instagram, X, TikTok, YouTube,
   LinkedIn, Bluesky.
+- **Mainstreeting** (Today → *Mainstreeting*, everyone on the field
+  team): meeting people where they are — an event, a bus loop, a market.
+  Say where you are once (kept on the phone); then for each person first
+  and last name, phone, email, postal code, how they lean, a note, *Wants
+  to volunteer* and *Newsletter*; *Save · next person*. It works with no
+  signal (sent once when it's back). Someone already on file is found (by
+  name and phone; the desk also by email — a volunteer never on an email
+  the campaign holds) and not doubled; anyone new is tagged
+  *mainstreeting*. Each is a contact of its own channel, *Mainstreeting*,
+  with the place — on the profile's history, in Reports (*contacts by
+  week* has a Mainstreeting column; the contacts spreadsheet has the
+  place) — and *Wants to volunteer* is a request for the desk.
 - **First and last names**, kept apart the way the campaign's lists keep
   them (First Name · Surname): *Add person*, a profile's *Edit*, *+ Door*
   and *Add someone at this door* ask for both; an import keeps them as the

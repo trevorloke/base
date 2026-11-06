@@ -168,7 +168,7 @@ test('the dashboard still answers with left_lit in its rows; contacts by week ha
   assert.equal(res.status, 200);
   const lines = (await res.text()).replace(/^﻿/, '').trim().split('\r\n').map((l) => l.split(','));
   const head = lines[0];
-  assert.deepEqual(head, ['Week of', 'Doors', 'Calls', 'Texts', 'Reached', 'No answer', 'Refused', 'Lit']);
+  assert.deepEqual(head, ['Week of', 'Doors', 'Calls', 'Texts', 'Mainstreeting', 'Reached', 'No answer', 'Refused', 'Lit']);
   const sum = (col) => lines.slice(1).reduce((a, r) => a + Number(r[head.indexOf(col)]), 0);
   const talked = (await db.query(`select count(*)::int as n from contacts where workspace_id = $1 and outcome = 'contacted'`, [ws])).rows[0].n;
   assert.equal(sum('Reached'), talked, 'Reached never counts a drop');

@@ -1,0 +1,12 @@
+/* Mainstreeting: where you are, then one quick form per person. */
+.ms-page { max-width: 640px; }
+.ms-where { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin: 0 0 var(--s-3); }
+.ms-place, .ms-form { padding: var(--s-4); display: grid; gap: var(--s-3); }
+.ms-form .field, .ms-place .field { margin: 0; }
+.ms-postal { max-width: 180px; }
+.ms-rate { display: grid; gap: var(--s-2); }
+.ms-asks { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); }
+.ms-asks .ot-check { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
+.ms-met { margin-top: var(--s-4); }
+.ms-foot { margin-top: var(--s-5); }
+@media (pointer: coarse), (max-width: 720px) { .ms-page .input { min-height: 48px; font-size: 16px; } }
