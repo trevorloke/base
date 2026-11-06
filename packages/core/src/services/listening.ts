@@ -144,3 +144,88 @@ export function matchesStream(q: StreamQuery, item: ActivityInput): boolean {
   if (q.authors.length && q.keywords.length) return authorOk || keywordOk;
   return authorOk && keywordOk;
 }
+
+/**
+ * Engagement from the inbox. Replies are posts: they pass the same gate (red lines + the reply autonomy dial),
+ * land in the approval queue when the dial says so, and publish through the connector's reply method.
+ */
+export class EngagementService {
+  constructor(
+    private readonly ctx: CoreContext,
+    private readonly posts: { create(p: Principal, input: unknown): Promise<{ post: { id: string; status: string } }> },
+    private readonly accounts: AccountService,
+  ) {}
+
+  private async activity(workspaceId: string, activityId: string) {
+    const [row] = await this.ctx.db.select().from(activities).where(and(eq(activities.id, activityId), eq(activities.workspaceId, workspaceId))).limit(1);
+    if (!row) throw new CoreError("not_found", `activity ${activityId}`);
+    return row;
+  }
+
+  async reply(p: Principal, activityId: string, text: string, opts: { aiAssisted?: boolean } = {}) {
+    const a = await this.activity(p.workspaceId, activityId);
+    if (!a.socialAccountId) throw new CoreError("invalid", "this item did not arrive through a connected account, so there is nothing to reply from");
+    const account = await this.accounts.get(p.workspaceId, a.socialAccountId);
+    const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
+    if (!connector.reply || !connector.capabilities(account.network as Network).reply) throw new CoreError("invalid", `${account.network} replies are not supported by this connection`);
+    return this.posts.create(p, {
+      body: text,
+      actionClass: "reply",
+      variants: [{ socialAccountId: account.id, text, replyToExternalId: a.externalId }],
+      scheduledAt: this.ctx.now().toISOString(),
+      evidence: [{ kind: "activity", ref: a.id, note: `${a.kind} from @${a.authorHandle ?? "unknown"}` }],
+      ...(opts.aiAssisted ? { disclosure: { aiAssisted: true, aiContributions: ["text_drafted"], humanReviewed: p.actor.type === "human" } } : {}),
+    });
+  }
+
+  /** Hide, delete or like an item on the network. People only: moderation is never delegated to an agent. */
+  async moderate(p: Principal, activityId: string, action: "hide" | "unhide" | "delete" | "like" | "unlike") {
+    if (p.actor.type !== "human" || !p.role || p.role === "viewer") throw new CoreError("forbidden", "a person moderates comments");
+    if (action === "delete" && !["owner", "approver"].includes(p.role)) throw new CoreError("forbidden", "deleting needs an owner or approver");
+    const a = await this.activity(p.workspaceId, activityId);
+    if (!a.socialAccountId) throw new CoreError("invalid", "not from a connected account");
+    const account = await this.accounts.get(p.workspaceId, a.socialAccountId);
+    const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
+    if (!connector.moderate || !connector.capabilities(account.network as Network).moderate) throw new CoreError("invalid", `${account.network} does not support ${action} through this connection`);
+    await this.accounts.withFreshAuth(account, connector, (ref) => connector.moderate!(ref, { externalId: a.externalId, action }));
+    await this.ctx.events.append({ workspaceId: p.workspaceId, type: "activity.moderated", subjectType: "activity", subjectId: a.id, actor: p.actor, data: { action, network: a.network, externalId: a.externalId } });
+    return { ok: true, action };
+  }
+}
+
+/** Inbound webhooks: verify, store raw, route items to every workspace that has the target account connected. */
+export class WebhookService {
+  constructor(
+    private readonly ctx: CoreContext,
+    private readonly listening: ListeningService,
+  ) {}
+
+  challenge(connectorName: string, query: Record<string, string>): string | null {
+    return this.ctx.connectors.get(connectorName)?.webhook?.challenge?.(query) ?? null;
+  }
+
+  async receive(connectorName: string, headers: Record<string, string>, rawBody: string): Promise<{ accepted: boolean; items: number }> {
+    const handler = this.ctx.connectors.get(connectorName)?.webhook;
+    if (!handler) throw new CoreError("not_found", `no webhooks for ${connectorName}`);
+    if (!handler.verify(headers, rawBody)) throw new CoreError("forbidden", "bad webhook signature");
+    let body: unknown;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      throw new CoreError("invalid", "webhook body is not JSON");
+    }
+    await this.ctx.events.appendRaw({ source: `webhook:${connectorName}`, kind: "delivery", workspaceId: null, externalId: null, payload: body });
+    let items = 0;
+    for (const batch of handler.parse(body)) {
+      const targets = await this.ctx.db
+        .select()
+        .from(socialAccounts)
+        .where(and(eq(socialAccounts.network, batch.network), eq(socialAccounts.externalId, batch.accountExternalId), eq(socialAccounts.status, "active")));
+      for (const acc of targets) {
+        const r = await this.listening.ingestItems(acc.workspaceId, acc.id, batch.items);
+        items += r.ingested;
+      }
+    }
+    return { accepted: true, items };
+  }
+}

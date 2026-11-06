@@ -1,41 +1,50 @@
-import { useEffect, useMemo, useState } from "react";
-import type { Account, ComposePrefill, CreatePostInput, Media, Network, PolicyCheckInput, PolicyDecision, PostDetail, VariantIssue } from "../types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Account, ComposePrefill, CreatePostInput, Media, Network, PolicyCheckInput, PolicyDecision, PostDetail, VariantIssue, VariantOptions } from "../types";
 import { api, errorText, isApiError } from "../api";
 import { Drawer } from "../components/Drawer";
 import { NetworkBadge } from "../components/NetworkBadge";
 import { StagePill } from "../components/Pill";
 import { useToast } from "../components/Toast";
-import { NETWORK_MAX_MEDIA, NETWORK_MAX_TEXT, NETWORK_NEEDS_MEDIA, NETWORK_THREADS, networkLabel, textLength, violationText } from "../lib/format";
+import { kindsFor } from "../lib/connectors";
+import { ACCOUNT_STATUS_LABEL, NETWORK_MAX_MEDIA, NETWORK_MAX_TEXT, NETWORK_THREADS, networkLabel, plural, textLength, violationText } from "../lib/format";
 import { useRoom } from "../lib/room";
+import { MediaTray, Thumb, type ItemsUpdate, type MediaItem } from "./compose/MediaTray";
+import { defaultPick, NetworkOptions, NO_TIKTOK, variantProblems, wireOptions, type TikTokExtras } from "./compose/NetworkOptions";
 import { dayClockIn, fromLocalInput, toLocalInput, tzName } from "../lib/tz";
 
 type Mode = "now" | "schedule" | "draft";
 
-interface Attachment {
-  url: string;
-  alt: string;
-}
-
-/** One account's version. `text: null` means it still follows the idea as written. */
+/**
+ * One account's version. `text: null` means it still follows the idea as written; `mediaPick: null` means it
+ * takes the attachments that suit its network (see defaultPick) until the person picks.
+ */
 interface Draft {
   text: string | null;
   thread: string[];
-  media: Attachment[];
+  mediaPick: string[] | null;
+  options: VariantOptions;
+  tiktok: TikTokExtras;
 }
 
-const EMPTY: Draft = { text: null, thread: [], media: [] };
+interface Effective {
+  text: string;
+  thread: string[];
+  media: MediaItem[];
+  picked: string[];
+  options: VariantOptions;
+  tiktok: TikTokExtras;
+  follows: boolean;
+  kinds: string[];
+  problems: string[];
+}
+
+const EMPTY: Draft = { text: null, thread: [], mediaPick: null, options: {}, tiktok: NO_TIKTOK };
 const CHECK_DEBOUNCE_MS = 600;
 const HALF_HOUR = 30 * 60_000;
 
 /** The next half hour at least an hour out: a sensible first guess for "Schedule". */
 function defaultWhen(): number {
   return Math.ceil((Date.now() + 60 * 60_000) / HALF_HOUR) * HALF_HOUR;
-}
-
-function mediaKind(url: string): Media["kind"] {
-  if (/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url)) return "video";
-  if (/\.gif(\?|$)/i.test(url)) return "gif";
-  return "image";
 }
 
 export function ComposeDrawer({
@@ -51,7 +60,7 @@ export function ComposeDrawer({
   onCreated: (detail: PostDetail) => void;
   onOpenAccounts: () => void;
 }) {
-  const { accountsById, timezone: tz } = useRoom();
+  const { accountsById, connectors, timezone: tz } = useRoom();
   const toast = useToast();
   const accounts = useMemo(() => [...accountsById.values()], [accountsById]);
   const usable = useMemo(() => accounts.filter((a) => a.status === "active"), [accounts]);
@@ -59,6 +68,8 @@ export function ComposeDrawer({
   const [body, setBody] = useState(prefill?.body ?? "");
   const [picked, setPicked] = useState<string[] | null>(null); // null: every connected account, until the person picks
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [items, setItemsState] = useState<MediaItem[]>([]);
+  const setItems = useCallback<ItemsUpdate>((fn) => setItemsState(fn), []);
   const [adapting, setAdapting] = useState(false);
   const [adaptNote, setAdaptNote] = useState<{ tone: "quiet" | "bad"; text: string } | null>(null);
   const [adaptedBy, setAdaptedBy] = useState<string | null>(null);
@@ -79,9 +90,23 @@ export function ComposeDrawer({
   const selectedIds = picked ?? usable.map((a) => a.id);
   const selected = usable.filter((a) => selectedIds.includes(a.id));
 
-  const effective = (id: string): { text: string; thread: string[]; media: Attachment[]; follows: boolean } => {
-    const d = drafts[id] ?? EMPTY;
-    return { text: d.text ?? body, thread: d.thread, media: d.media, follows: d.text === null };
+  const effective = (a: Account): Effective => {
+    const d = drafts[a.id] ?? EMPTY;
+    const live = new Set(items.map((m) => m.id));
+    const picked = (d.mediaPick ?? defaultPick(a.network, items)).filter((id) => live.has(id));
+    const media = items.filter((m) => picked.includes(m.id) && m.status !== "failed");
+    const kinds = kindsFor(connectors, a);
+    return {
+      text: d.text ?? body,
+      thread: d.thread,
+      media,
+      picked,
+      options: d.options,
+      tiktok: d.tiktok,
+      follows: d.text === null,
+      kinds,
+      problems: variantProblems(a.network, kinds, d.options, d.tiktok, media),
+    };
   };
 
   const updateDraft = (id: string, fn: (d: Draft) => Draft) => {
@@ -104,7 +129,7 @@ export function ComposeDrawer({
   // --- Live red-line check (debounced) ---
   const checkVariants = selected
     .map((a) => {
-      const v = effective(a.id);
+      const v = effective(a);
       return { network: a.network, text: [v.text, ...v.thread].filter((t) => t.trim()).join("\n") };
     })
     .filter((v) => v.text.trim());
@@ -192,13 +217,13 @@ export function ComposeDrawer({
   const reason = (() => {
     if (!usable.length) return null;
     if (!selected.length) return "Pick at least one account";
+    if (items.some((m) => m.status === "uploading")) return "Waiting for uploads to finish";
     for (const a of selected) {
-      const v = effective(a.id);
-      const media = v.media.filter((m) => m.url.trim());
-      if (!v.text.trim() && !media.length) return `${networkLabel(a.network)} has nothing to post`;
+      const v = effective(a);
+      if (!v.text.trim() && !v.media.length) return `${networkLabel(a.network)} has nothing to post`;
       const max = NETWORK_MAX_TEXT[a.network];
       if ([v.text, ...v.thread].some((s) => textLength(a.network, s) > max)) return `${networkLabel(a.network)} is over ${max} characters`;
-      if (NETWORK_NEEDS_MEDIA.has(a.network) && !media.length) return `${networkLabel(a.network)} needs an image or video`;
+      if (v.problems[0]) return v.problems[0];
     }
     if (mode === "schedule" && (scheduledMs === null || scheduledMs <= Date.now())) return "Pick a time in the future";
     return null;
@@ -223,15 +248,14 @@ export function ComposeDrawer({
     setSubmitError(null);
     setIssues([]);
     const input: CreatePostInput = {
-      body: body.trim() || effective(selected[0]!.id).text,
+      body: body.trim() || effective(selected[0]!).text,
       actionClass: "new_post",
       variants: selected.map((a) => {
-        const v = effective(a.id);
-        const media: Media[] = v.media
-          .filter((m) => m.url.trim())
-          .map((m) => ({ kind: mediaKind(m.url.trim()), url: m.url.trim(), ...(m.alt.trim() ? { alt: m.alt.trim() } : {}) }));
+        const v = effective(a);
+        const media = v.media.map(toMedia).filter((m): m is Media => m !== null);
         const thread = NETWORK_THREADS.has(a.network) ? v.thread.filter((s) => s.trim()) : [];
-        return { socialAccountId: a.id, text: v.text, ...(media.length ? { media } : {}), ...(thread.length ? { thread } : {}) };
+        const options = wireOptions(a.network, v.kinds, v.options, v.tiktok);
+        return { socialAccountId: a.id, text: v.text, ...(media.length ? { media } : {}), ...(thread.length ? { thread } : {}), ...(options ? { options } : {}) };
       }),
       disclosure: {
         aiAssisted: adaptedBy !== null,
@@ -241,6 +265,8 @@ export function ComposeDrawer({
         ...(adaptedBy ? { model: adaptedBy } : {}),
       },
     };
+    const allMedia = items.map(toMedia).filter((m): m is Media => m !== null);
+    if (allMedia.length) input.media = allMedia;
     // "Post now" is a schedule for this moment: the gate still decides whether it may go.
     if (mode === "now") input.scheduledAt = new Date().toISOString();
     if (mode === "schedule" && scheduledIso) input.scheduledAt = scheduledIso;
@@ -342,6 +368,11 @@ export function ComposeDrawer({
       </section>
 
       <section className="dsec">
+        <h3 className="section-h">Media</h3>
+        <MediaTray items={items} onItems={setItems} />
+      </section>
+
+      <section className="dsec">
         <h3 className="section-h">Post to</h3>
         {accounts.length === 0 ? (
           <p className="muted">
@@ -362,10 +393,10 @@ export function ComposeDrawer({
               );
             })}
             {unusable.map((a) => (
-              <span key={a.id} className="chip chip-acct chip-acct-off" aria-disabled="true" title="Reconnect it in Accounts to post here">
+              <span key={a.id} className="chip chip-acct chip-acct-off" aria-disabled="true" title="Reconnect it in Connections to post here">
                 <NetworkBadge network={a.network} />
                 <span>@{a.handle}</span>
-                <span className="chip-acct-why">Needs reconnecting</span>
+                <span className="chip-acct-why">{ACCOUNT_STATUS_LABEL[a.status]}</span>
               </span>
             ))}
           </div>
@@ -386,12 +417,15 @@ export function ComposeDrawer({
               <VariantEditor
                 key={a.id}
                 account={a}
-                value={effective(a.id)}
+                value={effective(a)}
+                items={items}
                 issues={issuesFor(a)}
                 onText={(text) => updateDraft(a.id, (d) => ({ ...d, text }))}
                 onFollow={() => updateDraft(a.id, (d) => ({ ...d, text: null }))}
                 onThread={(thread) => updateDraft(a.id, (d) => ({ ...d, text: d.text ?? body, thread }))}
-                onMedia={(media) => updateDraft(a.id, (d) => ({ ...d, media }))}
+                onPick={(mediaPick) => updateDraft(a.id, (d) => ({ ...d, mediaPick }))}
+                onOptions={(options) => updateDraft(a.id, (d) => ({ ...d, options }))}
+                onTikTok={(tiktok) => updateDraft(a.id, (d) => ({ ...d, tiktok }))}
               />
             ))}
           </div>
@@ -446,25 +480,38 @@ function Counter({ network, text }: { network: Network; text: string }) {
 function VariantEditor({
   account,
   value,
+  items,
   issues,
   onText,
   onFollow,
   onThread,
-  onMedia,
+  onPick,
+  onOptions,
+  onTikTok,
 }: {
   account: Account;
-  value: { text: string; thread: string[]; media: Attachment[]; follows: boolean };
+  value: Effective;
+  items: MediaItem[];
   issues: VariantIssue[];
   onText: (text: string) => void;
   onFollow: () => void;
   onThread: (thread: string[]) => void;
-  onMedia: (media: Attachment[]) => void;
+  onPick: (ids: string[]) => void;
+  onOptions: (o: VariantOptions) => void;
+  onTikTok: (t: TikTokExtras) => void;
 }) {
   const net = account.network;
   const label = networkLabel(net);
   const threads = NETWORK_THREADS.has(net);
-  const needsMedia = NETWORK_NEEDS_MEDIA.has(net) && !value.media.some((m) => m.url.trim());
   const parts = 1 + value.thread.length;
+  const offered = items.filter((m) => m.status !== "failed");
+
+  const togglePick = (id: string) => {
+    const cur = value.picked;
+    // Keep the tray's order whatever order things were ticked in.
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : offered.map((m) => m.id).filter((x) => x === id || cur.includes(x));
+    onPick(next);
+  };
 
   return (
     <div className={`variant cv${issues.length ? " variant-failed" : ""}`}>
@@ -498,30 +545,42 @@ function VariantEditor({
         </div>
       ))}
 
-      {value.media.map((m, i) => (
-        <div key={i} className="cv-media">
-          <input
-            className="input"
-            type="url"
-            placeholder="https://… image URL"
-            value={m.url}
-            aria-label={`${label} image ${i + 1} URL`}
-            onChange={(e) => onMedia(value.media.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
-          />
-          <input
-            className="input"
-            placeholder="Alt text"
-            value={m.alt}
-            aria-label={`${label} image ${i + 1} alt text`}
-            onChange={(e) => onMedia(value.media.map((x, j) => (j === i ? { ...x, alt: e.target.value } : x)))}
-          />
-          <button type="button" className="btn btn-ghost btn-small" onClick={() => onMedia(value.media.filter((_, j) => j !== i))}>
-            Remove
-          </button>
+      {offered.length ? (
+        <div className="cv-media-pick" role="group" aria-label={`${label} attachments`}>
+          {offered.map((m) => {
+            const on = value.picked.includes(m.id);
+            return (
+              <button
+                key={m.id}
+                type="button"
+                className={`pick${on ? " pick-on" : ""}`}
+                aria-pressed={on}
+                title={on ? `Leave ${m.name} off ${label}` : `Add ${m.name} to ${label}`}
+                onClick={() => togglePick(m.id)}
+              >
+                <Thumb kind={m.kind} url={m.previewUrl} name={m.name} durationSeconds={m.durationSeconds} small />
+                <span className="pick-mark" aria-hidden="true">
+                  {on ? "✓" : ""}
+                </span>
+              </button>
+            );
+          })}
+          <span className="muted small">
+            {value.media.length === offered.length ? (offered.length === 1 ? "Attached" : `All ${offered.length} attached`) : `${value.media.length} of ${plural(offered.length, "file")}`}
+            {NETWORK_MAX_MEDIA[net] < offered.length ? ` · takes up to ${NETWORK_MAX_MEDIA[net]}` : ""}
+          </span>
         </div>
-      ))}
+      ) : null}
 
-      {needsMedia ? <p className="cv-need">{label} needs an image or video.</p> : null}
+      <NetworkOptions network={net} kinds={value.kinds} value={value.options} tiktok={value.tiktok} onChange={onOptions} onTikTok={onTikTok} />
+
+      {value.problems.length ? (
+        <ul className="cv-need">
+          {value.problems.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      ) : null}
 
       {issues.map((iss, i) => (
         <div key={i} className="variant-error" role="alert">
@@ -535,11 +594,6 @@ function VariantEditor({
             Add to thread
           </button>
         ) : null}
-        {value.media.length < NETWORK_MAX_MEDIA[net] ? (
-          <button type="button" className="btn btn-ghost btn-small" onClick={() => onMedia([...value.media, { url: "", alt: "" }])}>
-            Add image
-          </button>
-        ) : null}
         {!value.follows ? (
           <button type="button" className="btn btn-ghost btn-small" onClick={onFollow}>
             Back to the idea
@@ -548,6 +602,15 @@ function VariantEditor({
       </div>
     </div>
   );
+}
+
+/** A ready attachment as the post's Media, with the alt text typed here. */
+function toMedia(m: MediaItem): Media | null {
+  if (m.status !== "ready" || !m.asset) return null;
+  const alt = m.alt.trim();
+  const base: Media = m.asset.media ?? { kind: m.asset.kind, url: m.asset.url, mime: m.asset.mime, assetId: m.asset.id };
+  const { alt: _old, ...rest } = base;
+  return alt ? { ...rest, alt } : rest;
 }
 
 /** A 400's per-variant issue, in the network's terms. */
@@ -565,6 +628,16 @@ function issueText(i: VariantIssue, network: Network): string {
       return `${label} takes at most ${NETWORK_MAX_MEDIA[network]} attachments.`;
     case "thread_unsupported":
       return `${label} doesn't do threads.`;
+    case "title_required":
+      return `${label} needs a title.`;
+    case "subreddit_required":
+      return "Reddit needs a subreddit.";
+    case "board_required":
+      return "Pinterest needs a board.";
+    case "privacy_required":
+      return "Choose who can see it on TikTok.";
+    case "video_required":
+      return `${label} needs a video.`;
     default:
       return i.message;
   }

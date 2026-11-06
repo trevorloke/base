@@ -11,7 +11,7 @@ the workspace's autonomy dial. Every write is attributed to that actor in the le
 Dev convenience: when the server runs with `STARSIGN_DEV_WORKSPACE=<slug>` and a request has no bearer, it acts as the
 human owner `dev` of that workspace. Never set in production.
 
-Errors: `{ "error": { "code": "not_found|forbidden|invalid|conflict|policy_blocked|unavailable|unauthorized", "message": "...", "details": ... } }`
+Errors: `{ "error": { "code": "not_found|forbidden|invalid|conflict|policy_blocked|unavailable|unauthorized|rate_limited", "message": "...", "details": ... } }`
 with statuses 404 / 403 / 400 / 409 / 422 / 503 / 401. A malformed JSON body is `400 invalid`. A `422 policy_blocked`
 carries `details: { violations: Violation[] }`.
 
@@ -138,3 +138,36 @@ Any post can be an arm: create the experiment, then create posts with `experimen
   A post's value is the sum over its variants. Concluded experiments return the frozen readout.
 - `POST /v1/experiments/:id/conclude` → `Experiment` (a person, editor or above; freezes the readout, records it in the ledger)
 - Creating a post with an `experimentId` from another workspace, a stopped experiment, or an unknown arm is refused.
+
+## People, sign-in, teams (v1.2)
+Two ways to authenticate every `/v1` route: `Authorization: Bearer star_...` (API keys, unchanged) or the `starsign_session`
+cookie (HttpOnly, SameSite=Lax, Secure when STARSIGN_PUBLIC_URL is https). Cookie-authenticated requests that change state
+(POST/PUT/PATCH/DELETE) must send `x-starsign-csrf: 1` or get `403 forbidden`. A session acts as the signed-in user in their
+current workspace with their member role.
+- `POST /v1/auth/signup` `{ email, password (>= 10 chars), name, workspaceName }` → `201 { user, workspaces, currentWorkspaceId }` + cookie.
+  Allowed when no user exists yet (first owner) or `STARSIGN_ALLOW_SIGNUP=1`; otherwise `403`.
+- `POST /v1/auth/login` `{ email, password }` → `{ user, workspaces, currentWorkspaceId }` + cookie. `401 unauthorized` on bad credentials
+  (same message for unknown email and wrong password). Repeated failures → `429` for 15 minutes per email.
+- `POST /v1/auth/logout` → 204, clears the cookie and revokes the session.
+- `GET /v1/auth/session` → `{ user: { id, email, name }, workspaces: { id, slug, name, role }[], currentWorkspaceId }` or 401.
+- `POST /v1/auth/switch` `{ workspaceId }` → same shape; must be a member.
+- `POST /v1/auth/forgot` `{ email }` → 204 always (sends a reset link when email is configured: RESEND_API_KEY + MAIL_FROM).
+- `POST /v1/auth/reset` `{ token, password }` → 204. Reset links: `${STARSIGN_PUBLIC_URL}/?reset=<token>` (one hour, single use; signs the user out everywhere).
+- `POST /v1/workspaces` `{ name, slug?, timezone? }` → `201 Workspace` (any signed-in user; creator is owner). For agencies adding a client.
+- `GET /v1/members` → `{ id, userId, email, name, role, createdAt }[]`
+- `POST /v1/invites` `{ email, role }` (owner) → `201 { inviteUrl, expiresAt }` (also emailed when configured). Invite links: `${STARSIGN_PUBLIC_URL}/?invite=<token>`.
+- `GET /v1/invites/:token` → `{ workspaceName, email, role, expiresAt }` (no auth) or 404.
+- `POST /v1/auth/accept-invite` `{ token, name?, password? }` → `{ user, workspaces, currentWorkspaceId }` + cookie (creates the user when new).
+- `PATCH /v1/members/:id` `{ role }` (owner; cannot demote the last owner) → member. `DELETE /v1/members/:id` (owner; not the last owner) → 204.
+
+## Integrations (v1.2)
+- `GET /v1/connectors` → `{ name, networks, configured, connect: "oauth"|"app_password"|"api_key"|"webhook_url"|"bot_token"|"none", inputs: { key, label, placeholder? }[], capabilities: { [network]: { publish, reply, moderate, accountMetrics, webhooks, video, kinds: string[] } } }[]`
+- `POST /v1/accounts/connect/:connector/start` `{ network?, inputs? }` → `{ authorizeUrl, expiresAt }`. Callback: `/oauth/:connector/callback`
+  → redirects to `/?connected=<connector>&handle=<h1,h2>&count=<n>` or `/?connect_error=<reason>&connector=<connector>`. One login may connect several accounts.
+- `POST /v1/accounts/connect/:connector/credentials` `{ network, inputs: { ... } }` → `201 Account[]` for non-OAuth connectors
+  (Bluesky app password, Telegram bot token + channel, Discord webhook URL). `400` with `details.reason` on rejection.
+- `POST /v1/media` multipart `file` (+ `alt`) → `201 { id, url, kind, mime, bytes, width, height, durationSeconds, media: Media }`; `GET /v1/media`; `DELETE /v1/media/:id`.
+- `POST /v1/feed/:activityId/reply` `{ text, aiAssisted? }` → `201 PostDetail` (through the gate; may be pending approval).
+- `POST /v1/feed/:activityId/moderate` `{ action: hide|unhide|delete|like|unlike }` → `{ ok, action }` (people only; delete needs owner/approver).
+- `GET /v1/accounts/:id/metrics?metric=followers_total&from=` → `{ latest: {metric: value}, series: { value, observedAt }[] }`.
+- Variants accept `options` (see VariantOptions in packages/schema/src/networks.ts) and `replyToExternalId`.

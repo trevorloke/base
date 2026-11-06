@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Account, Activity, ActivityKind, FeedQuery, LiveStatus, Network } from "../types";
-import { api, errorText, USE_FIXTURES } from "../api";
+import type { Account, Activity, ActivityKind, FeedQuery, LiveStatus, ModerateAction, Network, PostDetail, Violation } from "../types";
+import { api, errorText, isApiError, USE_FIXTURES } from "../api";
+import { Menu } from "../components/Menu";
 import { NetworkBadge } from "../components/NetworkBadge";
 import { PanelState } from "../components/PanelState";
 import { RelativeTime } from "../components/RelativeTime";
-import { kindLabel, networkLabel } from "../lib/format";
+import { canReply, capabilitiesFor, moderationFor } from "../lib/connectors";
+import { kindLabel, NETWORK_MAX_TEXT, networkLabel, textLength, violationText } from "../lib/format";
 import { useRoom } from "../lib/room";
 
 type KindFilter = "all" | ActivityKind;
@@ -19,8 +21,7 @@ const KIND_CHIPS: { id: KindFilter; label: string }[] = [
 
 const LIVE_LABEL: Record<LiveStatus, string> = { live: "Live", connecting: "Reconnecting…", off: "Paused" };
 
-export function Feed({ accounts, liveTick, liveStatus }: { accounts: Account[]; liveTick: number; liveStatus: LiveStatus }) {
-  const { streamsById } = useRoom();
+export function Feed({ accounts, liveTick, liveStatus, canDelete }: { accounts: Account[]; liveTick: number; liveStatus: LiveStatus; canDelete: boolean }) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [network, setNetwork] = useState<Network | null>(null);
   const [items, setItems] = useState<Activity[] | null>(null);
@@ -128,36 +129,256 @@ export function Feed({ accounts, liveTick, liveStatus }: { accounts: Account[]; 
       </div>
       <div className="panel-body">
         <PanelState loading={loading && !items} error={error} onRetry={() => void load()} empty={items && items.length === 0 ? "Quiet. Nothing matches these filters yet." : null} />
-        {items?.map((a) => {
-          const streams = a.matchedStreams.map((id) => streamsById.get(id)?.name).filter((n): n is string => !!n);
-          return (
-            <article key={a.id} className={`feed-row${fresh.has(a.id) ? " feed-fresh" : ""}`}>
-              <div className="feed-head">
-                <span className="feed-author">{a.authorName ?? a.authorHandle ?? "Someone"}</span>
-                {a.authorHandle ? <span className="feed-handle muted">@{a.authorHandle}</span> : null}
-                <NetworkBadge network={a.network} />
-                <span className="feed-kind muted">{kindLabel(a.kind)}</span>
-                <RelativeTime iso={a.occurredAt} className="feed-time" />
-              </div>
-              {a.text ? <p className="feed-text">{a.text}</p> : null}
-              {streams.length || a.url ? (
-                <div className="feed-foot">
-                  {streams.map((name) => (
-                    <span key={name} className="tag">
-                      {name}
-                    </span>
-                  ))}
-                  {a.url ? (
-                    <a className="feed-link" href={a.url} target="_blank" rel="noopener noreferrer">
-                      Open ↗
-                    </a>
-                  ) : null}
-                </div>
-              ) : null}
-            </article>
-          );
-        })}
+        {items?.map((a) => (
+          <FeedItem key={a.id} item={a} fresh={fresh.has(a.id)} canDelete={canDelete} />
+        ))}
       </div>
     </section>
+  );
+}
+
+type Outcome = { tone: "good" | "warn" | "bad"; text: string; postId?: string };
+
+function outcomeOf(detail: PostDetail): Outcome {
+  const { status, id, policyDecision } = detail.post;
+  if (status === "blocked") {
+    const v = (policyDecision?.violations ?? []).filter((x) => x.severity === "block");
+    return { tone: "bad", text: `Blocked by a red line: ${v.length ? v.map((x) => violationText(x.message)).join("; ") : "change the words and try again."}`, postId: id };
+  }
+  if (status === "pending_approval") return { tone: "warn", text: "Waiting on approval", postId: id };
+  if (status === "draft") return { tone: "warn", text: "Saved as a draft", postId: id };
+  if (status === "failed") return { tone: "bad", text: "Didn't go out", postId: id };
+  return { tone: "good", text: "Sent", postId: id };
+}
+
+/**
+ * One inbox item. When it came in through a connected account, it can be answered in place (through the
+ * same red lines as any post) and, where the network allows, liked, hidden or deleted.
+ */
+function FeedItem({ item: a, fresh, canDelete }: { item: Activity; fresh: boolean; canDelete: boolean }) {
+  const { streamsById, accountsById, connectors, openPost } = useRoom();
+  const account = a.socialAccountId ? accountsById.get(a.socialAccountId) : undefined;
+  const connected = !!account && account.status === "active";
+  const caps = account ? capabilitiesFor(connectors, account) : null;
+  const replyable = connected && canReply(caps, a.kind);
+  const mod = connected ? moderationFor(caps, a.network, a.kind) : { like: false, hide: false, delete: false };
+  const deletable = mod.delete && canDelete;
+
+  const [replying, setReplying] = useState(false);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [liked, setLiked] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [busy, setBusy] = useState<ModerateAction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const streams = a.matchedStreams.map((id) => streamsById.get(id)?.name).filter((n): n is string => !!n);
+  const max = NETWORK_MAX_TEXT[a.network as Network] ?? 10_000;
+  const n = textLength(a.network as Network, text);
+  const what = a.kind === "comment" ? "comment" : a.kind === "dm" ? "message" : a.kind === "reply" ? "reply" : "post";
+
+  async function send() {
+    const t = text.trim();
+    if (!t || sending || n > max) return;
+    setSending(true);
+    setError(null);
+    try {
+      const detail = await api.reply(a.id, { text: t });
+      const o = outcomeOf(detail);
+      setOutcome(o);
+      if (o.tone !== "bad") {
+        setText("");
+        setReplying(false);
+      }
+    } catch (e) {
+      if (isApiError(e) && e.status === 422 && e.details && typeof e.details === "object") {
+        const v = ((e.details as { violations?: Violation[] }).violations ?? []).filter((x) => x.severity === "block");
+        setOutcome({ tone: "bad", text: `Blocked by a red line: ${v.length ? v.map((x) => violationText(x.message)).join("; ") : "change the words and try again."}` });
+      } else {
+        setError(errorText(e));
+      }
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function moderate(action: ModerateAction) {
+    setBusy(action);
+    setError(null);
+    try {
+      await api.moderate(a.id, action);
+      if (action === "like" || action === "unlike") setLiked(action === "like");
+      if (action === "hide" || action === "unhide") setHidden(action === "hide");
+      if (action === "delete") setDeleted(true);
+      setConfirmDelete(false);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (deleted) {
+    return (
+      <article className="feed-row feed-gone">
+        <span className="muted small">
+          Deleted {a.authorName ?? a.authorHandle ?? "their"}'s {what} on {networkLabel(a.network)}.
+        </span>
+      </article>
+    );
+  }
+
+  const hasMenu = mod.like || mod.hide || deletable;
+  return (
+    <article className={`feed-row${fresh ? " feed-fresh" : ""}${hidden ? " feed-hidden" : ""}`}>
+      <div className="feed-head">
+        <span className="feed-author">{a.authorName ?? a.authorHandle ?? "Someone"}</span>
+        {a.authorHandle ? <span className="feed-handle muted">@{a.authorHandle}</span> : null}
+        <NetworkBadge network={a.network} />
+        <span className="feed-kind muted">{kindLabel(a.kind)}</span>
+        {liked ? <span className="tag">Liked</span> : null}
+        {hidden ? <span className="tag">Hidden</span> : null}
+        <RelativeTime iso={a.occurredAt} className="feed-time" />
+      </div>
+      {a.text ? <p className="feed-text">{a.text}</p> : null}
+      <div className="feed-foot">
+        {streams.map((name) => (
+          <span key={name} className="tag">
+            {name}
+          </span>
+        ))}
+        <span className="feed-actions">
+          {outcome ? (
+            <span className={`feed-outcome feed-outcome-${outcome.tone}`} role="status">
+              {outcome.text}
+              {outcome.postId && outcome.tone !== "good" ? (
+                <>
+                  {" "}
+                  <button type="button" className="linkish feed-outcome-open" onClick={() => openPost(outcome.postId!)}>
+                    Open
+                  </button>
+                </>
+              ) : null}
+            </span>
+          ) : null}
+          {replyable && !replying ? (
+            <button type="button" className="btn btn-ghost btn-small" onClick={() => setReplying(true)}>
+              Reply
+            </button>
+          ) : null}
+          {hasMenu ? (
+            <Menu label="…" ariaLabel={`More actions for ${a.authorName ?? a.authorHandle ?? "this item"}`} buttonClassName="btn btn-ghost btn-small feed-more" align="right">
+              {(close) => (
+                <>
+                  {mod.like ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        close();
+                        void moderate(liked ? "unlike" : "like");
+                      }}
+                    >
+                      {liked ? "Unlike" : "Like"}
+                    </button>
+                  ) : null}
+                  {mod.hide ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      disabled={busy !== null}
+                      onClick={() => {
+                        close();
+                        void moderate(hidden ? "unhide" : "hide");
+                      }}
+                    >
+                      {hidden ? `Unhide on ${networkLabel(a.network)}` : `Hide on ${networkLabel(a.network)}`}
+                    </button>
+                  ) : null}
+                  {deletable ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item menu-danger"
+                      onClick={() => {
+                        close();
+                        setConfirmDelete(true);
+                      }}
+                    >
+                      Delete…
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </Menu>
+          ) : null}
+          {a.url ? (
+            <a className="feed-link" href={a.url} target="_blank" rel="noopener noreferrer">
+              Open ↗
+            </a>
+          ) : null}
+        </span>
+      </div>
+
+      {confirmDelete ? (
+        <div className="acct-confirm feed-confirm" role="group" aria-label="Delete this item?">
+          <span>Delete this {what} on {networkLabel(a.network)}? It can't be undone.</span>
+          <button type="button" className="btn btn-small btn-danger" disabled={busy === "delete"} onClick={() => void moderate("delete")}>
+            {busy === "delete" ? "…" : "Yes"}
+          </button>
+          <span className="sep" aria-hidden="true">
+            ·
+          </span>
+          <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirmDelete(false)}>
+            No
+          </button>
+        </div>
+      ) : null}
+
+      {replying && account ? (
+        <div className="feed-reply">
+          <textarea
+            className="textarea"
+            rows={2}
+            value={text}
+            placeholder={`Reply as @${account.handle}`}
+            aria-label={`Reply to ${a.authorName ?? a.authorHandle ?? "them"} on ${networkLabel(a.network)}`}
+            autoFocus
+            onChange={(e) => {
+              setText(e.target.value);
+              if (outcome?.tone === "bad") setOutcome(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send();
+              if (e.key === "Escape") setReplying(false);
+            }}
+          />
+          <div className="feed-reply-bar">
+            <button type="button" className="btn btn-primary btn-small" disabled={sending || !text.trim() || n > max} onClick={() => void send()}>
+              {sending ? "Sending…" : "Send reply"}
+            </button>
+            <button type="button" className="btn btn-ghost btn-small" onClick={() => setReplying(false)}>
+              Cancel
+            </button>
+            <span className="muted small feed-reply-note">Goes through your red lines first</span>
+            <span className={`mono variant-count${n > max ? " over" : ""}`}>
+              {n}/{max}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="card-error feed-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </article>
   );
 }

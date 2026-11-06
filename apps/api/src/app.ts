@@ -1,20 +1,23 @@
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
+import { getCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { and, desc, eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { z, ZodError } from "zod";
 import { approvalDiffs, postOutcomes, posts, postVariants } from "@starsign/db";
-import { CoreError, type Starsign, type Principal } from "@starsign/core";
+import { CoreError, MAX_UPLOAD_BYTES, type Starsign, type Principal, type ResolvedSession } from "@starsign/core";
 import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
 import { gatePost } from "@starsign/policy";
 import { adaptForNetwork, runPrompt, type BrandContext, type ModelGateway } from "@starsign/ai";
 import type { SourceAdapter } from "@starsign/sources";
 import { Network as NetworkEnum, NETWORK_LIMITS } from "@starsign/schema";
+import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, registerAuthRoutes, SESSION_COOKIE, setSessionCookie } from "./auth-routes.ts";
 
 export const VERSION = "0.1.0";
 
-type Env = { Variables: { principal: Principal } };
+/** `session` is set only for cookie-authenticated requests (a signed-in person); `principal` for every authenticated one. */
+export type Env = { Variables: { principal: Principal; session?: ResolvedSession } };
 
 export interface AppOptions {
   /** Slug of a workspace that unauthenticated requests act on, as human owner "dev". Dev only. */
@@ -61,17 +64,45 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     return c.json(err("internal", "internal error"), 500);
   });
 
-  // OAuth callback: authenticated by the single-use state, not by an API key. Always lands back in the room.
-  app.get("/oauth/x/callback", async (c) => {
+  // OAuth callback for every connector: authenticated by the single-use state, not by an API key. Lands back in the room.
+  app.get("/oauth/:connector/callback", async (c) => {
+    const name = c.req.param("connector");
     const state = c.req.query("state");
     const code = c.req.query("code");
-    if (!state || !code) return c.redirect(`/?connect_error=${encodeURIComponent(c.req.query("error") ?? "missing_code")}`);
+    if (!state || !code) return c.redirect(`/?connect_error=${encodeURIComponent(c.req.query("error") ?? "missing_code")}&connector=${encodeURIComponent(name)}`);
     try {
-      const acct = await m.accounts.completeOAuth({ state, code });
-      return c.redirect(`/?connected=x&handle=${encodeURIComponent(acct.handle)}`);
+      const accts = await m.accounts.completeOAuth({ state, code });
+      const handles = accts.map((a) => a.handle).join(",");
+      return c.redirect(`/?connected=${encodeURIComponent(name)}&handle=${encodeURIComponent(handles)}&count=${accts.length}`);
     } catch (e) {
       const reason = e instanceof CoreError ? ((e.details as { reason?: string } | undefined)?.reason ?? "failed") : "failed";
-      return c.redirect(`/?connect_error=${encodeURIComponent(reason)}`);
+      return c.redirect(`/?connect_error=${encodeURIComponent(reason)}&connector=${encodeURIComponent(name)}`);
+    }
+  });
+
+  // Inbound webhooks: no API key; the connector verifies the signature over the raw body.
+  app.get("/webhooks/:connector", (c) => {
+    const answer = m.webhooks.challenge(c.req.param("connector"), c.req.query() as Record<string, string>);
+    return answer === null ? c.text("not a subscription request", 400) : c.text(answer);
+  });
+  app.post("/webhooks/:connector", async (c) => {
+    const raw = await c.req.text();
+    const headers = Object.fromEntries([...c.req.raw.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]));
+    const r = await m.webhooks.receive(c.req.param("connector"), headers, raw);
+    return c.json(r);
+  });
+
+  // Uploaded media on local storage. Keys are unguessable and public by design: networks fetch from here.
+  app.get("/media/*", async (c) => {
+    if (m.media.storage.name !== "local") return c.text("not found", 404);
+    const key = c.req.path.slice("/media/".length);
+    try {
+      const bytes = await m.media.storage.get(key);
+      const ext = key.split(".").pop() ?? "";
+      const type = ({ jpg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", pdf: "application/pdf" } as Record<string, string>)[ext] ?? "application/octet-stream";
+      return new Response(bytes, { headers: { "content-type": type, "cache-control": "public, max-age=31536000, immutable", "x-content-type-options": "nosniff" } });
+    } catch {
+      return c.text("not found", 404);
     }
   });
 
@@ -81,7 +112,10 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
 
   app.get("/api/health", (c) => c.json({ ok: true, version: VERSION, db: m.ctx.db.constructor.name.toLowerCase().includes("pglite") ? "pglite" : "postgres" }));
 
+  // Who is asking: a bearer API key (agents, automation), else the starsign_session cookie (people), else the dev workspace.
+  const cookieOpts = { publicUrl: opts.publicUrl };
   const auth = createMiddleware<Env>(async (c, next) => {
+    if (isPublicAuthRoute(c.req.method, c.req.path)) return next();
     const header = c.req.header("authorization");
     const key = header?.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : undefined;
     if (!key && c.req.path.endsWith("/feed/stream")) {
@@ -100,6 +134,23 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
       c.set("principal", p);
       return next();
     }
+    const cookie = getCookie(c, SESSION_COOKIE);
+    if (cookie) {
+      const s = await m.auth.resolveSession(cookie);
+      if (!s) {
+        clearSessionCookie(c, cookieOpts);
+        return c.json(err("unauthorized", "session expired or signed out"), 401);
+      }
+      // Cookies ride along on cross-site requests; a custom header cannot be sent cross-site without CORS approval.
+      if (isWrite(c.req.method) && !csrfOk(c)) return c.json(err("forbidden", `cookie-authenticated writes must send ${CSRF_HEADER}: 1`), 403);
+      if (s.refreshed) setSessionCookie(c, cookie, cookieOpts);
+      c.set("session", s);
+      if (s.principal) c.set("principal", s.principal);
+      else if (!allowedWithoutWorkspace(c.req.method, c.req.path)) {
+        return c.json(err("forbidden", "you are not a member of any workspace; create one or accept an invite"), 403);
+      }
+      return next();
+    }
     if (opts.devWorkspace) {
       const ws = await m.workspaces.bySlug(opts.devWorkspace);
       if (ws) {
@@ -107,9 +158,12 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
         return next();
       }
     }
-    return c.json(err("unauthorized", "missing api key"), 401);
+    return c.json(err("unauthorized", "sign in or send an API key"), 401);
   });
   app.use("/v1/*", auth);
+
+  // ---------------------------------------------------------------- people: sign-in, sessions, teams
+  registerAuthRoutes(app, m, { publicUrl: opts.publicUrl });
 
   // ---------------------------------------------------------------- identity & workspace
   app.get("/v1/me", async (c) => {
@@ -139,7 +193,14 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
       m.ctx.connectors
         .list()
         .filter((k) => k.name !== "mock")
-        .map((k) => ({ name: k.name, networks: [...k.networks], configured: k.connectConfigured !== false, connect: k.connectMethod ?? "none" })),
+        .map((k) => ({
+          name: k.name,
+          networks: [...k.networks],
+          configured: k.connectConfigured !== false,
+          connect: k.connectMethod ?? "none",
+          inputs: k.connectMethod === "oauth" ? (k.oauthInputs ?? []) : (k.credentialInputs ?? []),
+          capabilities: Object.fromEntries(k.networks.map((n) => [n, k.capabilities(n)])),
+        })),
     ),
   );
   app.post("/v1/accounts/connect/bluesky", async (c) => {
@@ -150,11 +211,63 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     return c.json(await m.accounts.connectWithCredentials(p, { connector: "bluesky", network: "bluesky", auth }), 201);
   });
 
-  app.post("/v1/accounts/connect/x/start", async (c) => {
+  app.post("/v1/accounts/connect/:connector/credentials", async (c) => {
     const p = c.get("principal");
     m.workspaces.requireRole(p, ["owner", "approver"]);
-    if (!opts.publicUrl) throw new CoreError("unavailable", "STARSIGN_PUBLIC_URL is not set, so X cannot send people back here");
-    return c.json(await m.accounts.startOAuth(p, { connector: "x", network: "x", redirectUri: `${opts.publicUrl.replace(/\/+$/, "")}/oauth/x/callback` }));
+    const body = z.object({ network: NetworkEnum, inputs: z.record(z.string(), z.string().max(2000)) }).parse(await c.req.json());
+    return c.json(await m.accounts.connectFromInputs(p, { connector: c.req.param("connector"), network: body.network, inputs: body.inputs }), 201);
+  });
+  app.post("/v1/accounts/connect/:connector/start", async (c) => {
+    const p = c.get("principal");
+    m.workspaces.requireRole(p, ["owner", "approver"]);
+    const name = c.req.param("connector");
+    if (!opts.publicUrl) throw new CoreError("unavailable", "STARSIGN_PUBLIC_URL is not set, so the network cannot send people back here");
+    const body = (await c.req.json().catch(() => ({}))) as { network?: string; inputs?: Record<string, string> };
+    const network = body.network ? NetworkEnum.parse(body.network) : undefined;
+    return c.json(
+      await m.accounts.startOAuth(p, { connector: name, network, inputs: body.inputs, redirectUri: `${opts.publicUrl.replace(/\/+$/, "")}/oauth/${encodeURIComponent(name)}/callback` }),
+    );
+  });
+
+  // ---------------------------------------------------------------- media library
+  app.post("/v1/media", async (c) => {
+    const p = c.get("principal");
+    // Refuse oversized uploads before buffering them: the body is read into memory.
+    const declared = Number(c.req.header("content-length") ?? "0");
+    if (declared > MAX_UPLOAD_BYTES + 64 * 1024) {
+      return c.json(err("too_large", `uploads are limited to ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB on this server`), 413);
+    }
+    const form = await c.req.parseBody();
+    const file = form.file;
+    if (!(file instanceof File)) throw new CoreError("invalid", "send the file as multipart field 'file'");
+    const row = await m.media.upload(p, { bytes: new Uint8Array(await file.arrayBuffer()), filename: file.name, alt: typeof form.alt === "string" ? form.alt : undefined });
+    return c.json({ ...row, media: m.media.toMedia(row) }, 201);
+  });
+  app.get("/v1/media", async (c) => {
+    const rows = await m.media.list(c.get("principal").workspaceId, Number(c.req.query("limit") ?? 100));
+    return c.json(rows.map((r) => ({ ...r, media: m.media.toMedia(r) })));
+  });
+  app.delete("/v1/media/:id", async (c) => {
+    await m.media.remove(c.get("principal"), c.req.param("id"));
+    return c.body(null, 204);
+  });
+
+  // ---------------------------------------------------------------- engagement (inbox actions)
+  app.post("/v1/feed/:id/reply", async (c) => {
+    const body = z.object({ text: z.string().min(1).max(10_000), aiAssisted: z.boolean().optional() }).parse(await c.req.json());
+    return c.json(await m.engagement.reply(c.get("principal"), c.req.param("id"), body.text, { aiAssisted: body.aiAssisted }), 201);
+  });
+  app.post("/v1/feed/:id/moderate", async (c) => {
+    const body = z.object({ action: z.enum(["hide", "unhide", "delete", "like", "unlike"]) }).parse(await c.req.json());
+    return c.json(await m.engagement.moderate(c.get("principal"), c.req.param("id"), body.action));
+  });
+  app.get("/v1/accounts/:id/metrics", async (c) => {
+    const p = c.get("principal");
+    const acc = await m.accounts.get(p.workspaceId, c.req.param("id"));
+    const now = m.ctx.now();
+    const from = date(c.req.query("from"), daysAgo(90, now));
+    const metric = c.req.query("metric") ?? "followers_total";
+    return c.json({ latest: await m.metrics.latest("social_account", acc.id), series: await m.metrics.series("social_account", acc.id, metric, from, now) });
   });
 
   // ---------------------------------------------------------------- compose & calendar

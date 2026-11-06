@@ -40,7 +40,29 @@ export const NETWORK_LABEL: Record<Network, string> = {
   youtube: "YouTube",
   pinterest: "Pinterest",
   mastodon: "Mastodon",
+  reddit: "Reddit",
+  google_business: "Google Business",
+  telegram: "Telegram",
+  discord: "Discord",
 };
+
+/** Every network, in the order the room lists them. */
+export const NETWORKS: Network[] = [
+  "x",
+  "bluesky",
+  "threads",
+  "instagram",
+  "facebook",
+  "linkedin",
+  "tiktok",
+  "youtube",
+  "pinterest",
+  "mastodon",
+  "reddit",
+  "google_business",
+  "telegram",
+  "discord",
+];
 
 /** Hard text limits per network, for the inline editor's counter. */
 export const NETWORK_MAX_TEXT: Record<Network, number> = {
@@ -54,6 +76,10 @@ export const NETWORK_MAX_TEXT: Record<Network, number> = {
   youtube: 5000,
   pinterest: 500,
   mastodon: 500,
+  reddit: 40000,
+  google_business: 1500,
+  telegram: 4096,
+  discord: 2000,
 };
 
 /** Networks where one post can continue as a thread of replies. */
@@ -74,7 +100,82 @@ export const NETWORK_MAX_MEDIA: Record<Network, number> = {
   youtube: 1,
   pinterest: 1,
   mastodon: 4,
+  reddit: 20,
+  google_business: 1,
+  telegram: 10,
+  discord: 10,
 };
+
+/** Approximate longest organic video, in seconds, where a network caps it. */
+export const NETWORK_MAX_VIDEO_SECONDS: Partial<Record<Network, number>> = {
+  x: 140,
+  bluesky: 180,
+  threads: 300,
+  instagram: 900,
+  linkedin: 900,
+  tiktok: 600,
+  reddit: 900,
+  google_business: 30,
+};
+
+export const ROLE_LABEL: Record<"owner" | "approver" | "editor" | "viewer", string> = {
+  owner: "Owner",
+  approver: "Approver",
+  editor: "Editor",
+  viewer: "Viewer",
+};
+
+export const ROLE_HINT: Record<"owner" | "approver" | "editor" | "viewer", string> = {
+  owner: "everything, including the team and red lines",
+  approver: "approves posts and connects accounts",
+  editor: "writes and schedules posts",
+  viewer: "reads the room",
+};
+
+export function roleLabel(role: string | null | undefined): string {
+  return role ? ((ROLE_LABEL as Record<string, string>)[role] ?? role) : "";
+}
+
+export const POST_KIND_LABEL: Record<string, string> = {
+  post: "Post",
+  reel: "Reel",
+  story: "Story",
+  carousel: "Carousel",
+  video: "Video",
+  short: "Short",
+  pin: "Pin",
+  link: "Link",
+  poll: "Poll",
+};
+
+export function postKindLabel(kind: string): string {
+  return POST_KIND_LABEL[kind] ?? kind.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
+/** 734 → "12:14", 3725 → "1:02:05" */
+export function duration(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return "";
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
+/** 2_400_000 → "2.4 MB" */
+export function bytes(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "";
+  if (n >= 1e9) return `${(n / 1e9).toFixed(1)} GB`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} MB`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)} KB`;
+  return `${n} B`;
+}
+
+/** "Facebook", "Facebook and Instagram", "X, Bluesky and Threads" */
+export function listOf(words: string[]): string {
+  if (words.length <= 1) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
 
 const URL_RE = /https?:\/\/[^\s]+/gi;
 const graphemes = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;

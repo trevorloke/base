@@ -22,6 +22,10 @@ export const Media = z.object({
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   durationSeconds: z.number().nonnegative().optional(),
+  /** Size in bytes, when known (uploads always know). */
+  bytes: z.number().int().nonnegative().optional(),
+  /** Starsign media library id when the file was uploaded here. */
+  assetId: z.string().optional(),
   /** C2PA manifest attached on export, when signed. */
   contentCredentials: z
     .object({ signed: z.boolean(), manifestUrl: z.string().url().optional() })

@@ -11,7 +11,11 @@ export type Network =
   | "tiktok"
   | "youtube"
   | "pinterest"
-  | "mastodon";
+  | "mastodon"
+  | "reddit"
+  | "google_business"
+  | "telegram"
+  | "discord";
 
 export type ActorType = "human" | "operator" | "mcp" | "system";
 export interface Actor {
@@ -106,6 +110,13 @@ export interface Media {
   kind: "image" | "video" | "gif" | "document";
   url: string;
   alt?: string;
+  mime?: string;
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+  bytes?: number;
+  /** Starsign media library id when the file was uploaded here. */
+  assetId?: string;
 }
 
 export interface Disclosure {
@@ -397,20 +408,56 @@ export type LiveStatus = "live" | "connecting" | "off";
 
 // --- Compose, calendar, connect (v1.1) -----------------------------------
 
-export type ConnectMethod = "app_password" | "oauth" | "api_key" | "none";
+export type ConnectMethod = "oauth" | "app_password" | "api_key" | "webhook_url" | "bot_token" | "none";
 
-/** GET /v1/connectors: which networks this deployment can connect, and how. */
+/** One field a person types before connecting (Mastodon server, Telegram bot token, Discord webhook URL…). */
+export interface ConnectorInput {
+  key: string;
+  label: string;
+  placeholder?: string;
+}
+
+/** What one connector can do on one network (v1.2). */
+export interface NetworkCapabilities {
+  publish: boolean;
+  reply: boolean;
+  moderate: boolean;
+  accountMetrics: boolean;
+  webhooks: boolean;
+  video: boolean;
+  kinds: string[];
+  /**
+   * Not in the v1.2 contract: when a server lists the moderation actions it supports, the room uses them
+   * instead of its own per-network table.
+   */
+  moderateActions?: ModerateAction[];
+}
+
+/** GET /v1/connectors: which networks this deployment can connect, how, and what each can do. */
 export interface Connector {
   name: string;
   networks: Network[];
   configured: boolean;
   connect: ConnectMethod;
+  /** Older servers (v1.1) omit these two. */
+  inputs?: ConnectorInput[];
+  capabilities?: Partial<Record<Network, NetworkCapabilities>>;
 }
 
-export interface ConnectBlueskyInput {
-  identifier: string;
-  appPassword: string;
-  service?: string;
+export interface ConnectStartInput {
+  network?: Network;
+  inputs?: Record<string, string>;
+}
+
+export interface ConnectCredentialsInput {
+  network: Network;
+  inputs: Record<string, string>;
+}
+
+/** GET /v1/accounts/:id/metrics */
+export interface AccountMetrics {
+  latest: Record<string, number>;
+  series: { value: number; observedAt: string }[];
 }
 
 /** POST /v1/accounts/connect/x/start: where to send the person's browser to authorize X. */
@@ -445,11 +492,42 @@ export interface PolicyCheckInput {
   disclosure?: Disclosure;
 }
 
+export type PostKind = "post" | "reel" | "story" | "carousel" | "video" | "short" | "pin" | "link" | "poll";
+export type Privacy = "public" | "unlisted" | "private" | "followers" | "friends" | "self";
+export type CallToAction = "BOOK" | "ORDER" | "SHOP" | "LEARN_MORE" | "SIGN_UP" | "CALL";
+export type MastodonVisibility = "public" | "unlisted" | "private" | "direct";
+
+/** Mirrors VariantOptions in packages/schema/src/networks.ts: each network reads what it understands. */
+export interface VariantOptions {
+  kind?: PostKind;
+  title?: string;
+  link?: string;
+  privacy?: Privacy;
+  boardId?: string;
+  subreddit?: string;
+  flairId?: string;
+  firstComment?: string;
+  tags?: string[];
+  thumbnailUrl?: string;
+  contentWarning?: string;
+  brandedContent?: boolean;
+  /** Not in VariantOptions yet: TikTok's "your brand" (brand_organic_toggle) disclosure. Servers that don't read it drop it. */
+  brandOrganic?: boolean;
+  callToAction?: CallToAction;
+  allowComments?: boolean;
+  allowDuet?: boolean;
+  allowStitch?: boolean;
+  visibility?: MastodonVisibility;
+  poll?: { options: string[]; durationMinutes: number };
+}
+
 export interface CreateVariantInput {
   socialAccountId: string;
   text: string;
   media?: Media[];
   thread?: string[];
+  options?: VariantOptions;
+  replyToExternalId?: string;
 }
 
 export interface CreatePostInput {
@@ -505,4 +583,92 @@ export interface ComposePrefill {
   topicName?: string;
   stage?: TrendStage;
   forecastId?: string;
+}
+
+// --- People, sign-in, teams (v1.2) --------------------------------------
+
+export type Role = "owner" | "approver" | "editor" | "viewer";
+
+export interface SessionUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface SessionWorkspace {
+  id: string;
+  slug: string;
+  name: string;
+  role: Role;
+}
+
+/** POST /v1/auth/login, /signup, /switch, /accept-invite and GET /v1/auth/session. */
+export interface Session {
+  user: SessionUser;
+  workspaces: SessionWorkspace[];
+  currentWorkspaceId: string;
+}
+
+export interface SignupInput {
+  email: string;
+  password: string;
+  name: string;
+  workspaceName: string;
+}
+
+export interface Member {
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: Role;
+  createdAt: string;
+}
+
+/** POST /v1/invites. `emailed` is true only when the server actually sent the invite by email. */
+export interface InviteCreated {
+  inviteUrl: string;
+  expiresAt: string;
+  emailed: boolean;
+}
+
+/** GET /v1/invites/:token (no auth). */
+export interface InviteInfo {
+  workspaceName: string;
+  email: string;
+  role: Role;
+  expiresAt: string;
+  /** True when that email already has a Starsign account: accepting asks for its password, not a new one. */
+  userExists: boolean;
+}
+
+export interface AcceptInviteInput {
+  token: string;
+  name?: string;
+  password?: string;
+}
+
+// --- Media library, inbox actions (v1.2) ---------------------------------
+
+/** One file in the workspace's media library (POST/GET /v1/media). */
+export interface MediaAsset {
+  id: string;
+  url: string;
+  kind: Media["kind"];
+  mime: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+  durationSeconds: number | null;
+  originalName?: string | null;
+  alt?: string | null;
+  createdAt?: string;
+  media: Media;
+}
+
+export type ModerateAction = "hide" | "unhide" | "delete" | "like" | "unlike";
+
+export interface ReplyInput {
+  text: string;
+  aiAssisted?: boolean;
 }

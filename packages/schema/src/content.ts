@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { Actor, Disclosure, Id, Media, Timestamp } from "./common.ts";
-import { Network } from "./networks.ts";
+import { Network, VariantOptions } from "./networks.ts";
 
 export const PostStatus = z.enum([
   "draft",
@@ -29,6 +29,10 @@ export const PostVariantInput = z.object({
   media: z.array(Media).default([]),
   /** For threads/carousels: additional segments after the first. */
   thread: z.array(z.string()).default([]),
+  /** Network-specific options (kind, title, privacy, board, subreddit, first comment...). */
+  options: VariantOptions.default({}),
+  /** When this variant is a reply: the network id of the post or comment it answers. */
+  replyToExternalId: z.string().min(1).optional(),
 });
 export type PostVariantInput = z.infer<typeof PostVariantInput>;
 
@@ -88,6 +92,8 @@ export const PostVariant = z.object({
   text: z.string(),
   media: z.array(Media),
   thread: z.array(z.string()),
+  options: VariantOptions,
+  replyToExternalId: z.string().nullable(),
   status: VariantStatus,
   externalId: z.string().nullable(),
   externalUrl: z.string().nullable(),

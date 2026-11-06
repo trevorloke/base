@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   bigserial,
   boolean,
   doublePrecision,
@@ -35,6 +36,9 @@ export const users = pgTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name"),
+  /** scrypt, encoded with its parameters (see core AuthService). Null: the person has not set a password (cannot sign in). */
+  passwordHash: text("password_hash"),
+  emailVerifiedAt: ts("email_verified_at"),
   createdAt: now(),
 });
 
@@ -67,6 +71,59 @@ export const apiKeys = pgTable(
     createdAt: now(),
   },
   (t) => [index("api_keys_ws").on(t.workspaceId)],
+);
+
+// ---------------------------------------------------------------- people: sessions, invites, password resets
+
+/** Signed-in browser sessions. `id` is sha256 of the cookie token; the token itself is never stored. */
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id),
+    currentWorkspaceId: text("current_workspace_id").references(() => workspaces.id),
+    createdAt: now(),
+    lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
+    /** Sliding: pushed out 30 days whenever the session is used. */
+    expiresAt: ts("expires_at").notNull(),
+    revokedAt: ts("revoked_at"),
+    userAgent: text("user_agent"),
+    ip: text("ip"),
+  },
+  (t) => [index("sessions_user").on(t.userId, t.lastSeenAt)],
+);
+
+/** Workspace invites. Single use, seven days. Only the token's sha256 is stored. */
+export const invites = pgTable(
+  "invites",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    email: text("email").notNull(),
+    role: text("role").$type<"owner" | "approver" | "editor" | "viewer">().notNull(),
+    /** user id of the owner who sent it */
+    invitedBy: text("invited_by").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    acceptedAt: ts("accepted_at"),
+    acceptedBy: text("accepted_by"),
+    createdAt: now(),
+  },
+  (t) => [index("invites_ws").on(t.workspaceId, t.createdAt)],
+);
+
+/** Password reset tokens. Single use, one hour. Only the token's sha256 is stored. */
+export const passwordResets = pgTable(
+  "password_resets",
+  {
+    id: text("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    userId: text("user_id").notNull().references(() => users.id),
+    expiresAt: ts("expires_at").notNull(),
+    usedAt: ts("used_at"),
+    createdAt: now(),
+  },
+  (t) => [index("password_resets_user").on(t.userId)],
 );
 
 // ---------------------------------------------------------------- accounts
@@ -164,6 +221,8 @@ export const postVariants = pgTable(
     text: text("text").notNull(),
     media: jsonb("media").$type<unknown[]>().notNull().default([]),
     thread: jsonb("thread").$type<string[]>().notNull().default([]),
+    options: jsonb("options").$type<Record<string, unknown>>().notNull().default({}),
+    replyToExternalId: text("reply_to_external_id"),
     status: text("status").notNull().default("pending"),
     externalId: text("external_id"),
     externalUrl: text("external_url"),
@@ -448,6 +507,29 @@ export const alerts = pgTable(
   (t) => [index("alerts_ws").on(t.workspaceId, t.createdAt)],
 );
 
+/** Uploaded media. Files live in the storage driver (local disk or S3-compatible); rows describe them. */
+export const mediaAssets = pgTable(
+  "media_assets",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    storageKey: text("storage_key").notNull().unique(),
+    url: text("url").notNull(),
+    kind: text("kind").$type<"image" | "video" | "gif" | "document">().notNull(),
+    mime: text("mime").notNull(),
+    bytes: bigint("bytes", { mode: "number" }).notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    durationSeconds: doublePrecision("duration_seconds"),
+    sha256: text("sha256").notNull(),
+    originalName: text("original_name"),
+    alt: text("alt"),
+    uploadedBy: jsonb("uploaded_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+  },
+  (t) => [index("media_assets_ws").on(t.workspaceId, t.createdAt), index("media_assets_sha").on(t.workspaceId, t.sha256)],
+);
+
 /** Pending OAuth authorizations (PKCE). The verifier is encrypted; rows expire after ten minutes. */
 export const oauthStates = pgTable("oauth_states", {
   state: text("state").primaryKey(),
@@ -457,6 +539,7 @@ export const oauthStates = pgTable("oauth_states", {
   verifierCiphertext: text("verifier_ciphertext").notNull(),
   redirectUri: text("redirect_uri").notNull(),
   actor: jsonb("actor").$type<ActorJson>().notNull(),
+  configCiphertext: text("config_ciphertext"),
   expiresAt: ts("expires_at").notNull(),
   createdAt: now(),
 });
