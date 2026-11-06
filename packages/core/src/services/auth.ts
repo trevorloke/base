@@ -1,5 +1,5 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
-import { and, asc, count, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { invites, members, passwordResets, sessions, users, workspaces } from "@starsign/db";
 import { newId } from "@starsign/ledger";
 import type { Actor } from "@starsign/schema";
@@ -389,12 +389,37 @@ export class AuthService {
 
   // ------------------------------------------------------------ sign up / sign in
 
-  /** First user always; after that only when sign-up is open. Creates the user, their workspace and owner membership. */
+  /** People who can sign in. Users without a password (seeded, or from before sign-in existed) do not count. */
+  private async accountsWithPassword(): Promise<number> {
+    const [{ n }] = (await this.ctx.db.select({ n: count() }).from(users).where(isNotNull(users.passwordHash))) as [{ n: number }];
+    return Number(n);
+  }
+
+  /** For the sign-in screen: whether a sign-up would be accepted, and whether nobody can sign in yet. */
+  async signupStatus(): Promise<{ signupAllowed: boolean; firstRun: boolean }> {
+    const firstRun = (await this.accountsWithPassword()) === 0;
+    return { signupAllowed: firstRun || this.signupOpen(), firstRun };
+  }
+
+  /**
+   * The first account always; after that only when sign-up is open. Creates the user, their workspace and owner
+   * membership. "First" means nobody can sign in yet: a deployment whose only users have no password (seeded, or
+   * created before sign-in existed) is still open, and signing up with such a user's email claims that user.
+   */
   async signup(raw: unknown, meta: RequestMeta = {}) {
     const input = SignupInput.parse(raw);
-    const [{ n }] = (await this.ctx.db.select({ n: count() }).from(users)) as [{ n: number }];
-    if (Number(n) > 0 && !this.signupOpen()) throw new CoreError("forbidden", "sign-up is closed on this deployment; ask an owner for an invite");
-    if (await this.userByEmail(input.email)) throw new CoreError("conflict", "an account with this email exists; sign in or reset your password");
+    const firstRun = (await this.accountsWithPassword()) === 0;
+    if (!firstRun && !this.signupOpen()) throw new CoreError("forbidden", "sign-up is closed on this deployment; ask an owner for an invite");
+    const existing = await this.userByEmail(input.email);
+    if (existing && firstRun && !existing.passwordHash) {
+      await this.ctx.db.update(users).set({ passwordHash: await hashPassword(input.password), name: existing.name ?? input.name }).where(eq(users.id, existing.id));
+      const mine = await this.memberships(existing.id);
+      const ws = mine[0] ? null : await this.newWorkspace({ type: "human", id: existing.id }, { name: input.workspaceName });
+      const workspaceId = ws?.id ?? mine[0]!.id;
+      await this.ctx.events.append({ workspaceId, type: "user.signed_up", subjectType: "user", subjectId: existing.id, actor: { type: "human", id: existing.id }, data: { via: "claim" } });
+      return this.start(existing.id, workspaceId, meta);
+    }
+    if (existing) throw new CoreError("conflict", "an account with this email exists; sign in or reset your password");
     const [u] = await this.ctx.db
       .insert(users)
       .values({ id: newId("usr"), email: input.email, name: input.name, passwordHash: await hashPassword(input.password) })
@@ -603,6 +628,25 @@ export class AuthService {
       console.info(`[auth] no mail configured (RESEND_API_KEY + MAIL_FROM); password reset link for ${email}: ${url}`);
     }
     return { token };
+  }
+
+  /**
+   * A reset link made by someone with shell access to the server (the `admin reset-link` command), for deployments
+   * without mail. No rate limit and no email; the caller prints it.
+   */
+  async adminResetLink(rawEmail: string, baseUrl?: string): Promise<string> {
+    const u = await this.userByEmail(Email.parse(rawEmail));
+    if (!u) throw new CoreError("not_found", `no user with email ${rawEmail}`);
+    const token = newToken();
+    const now = this.ctx.now();
+    await this.ctx.db.insert(passwordResets).values({ id: newId("pwr"), tokenHash: sha256(token), userId: u.id, expiresAt: new Date(now.getTime() + RESET_TTL_MS), createdAt: now });
+    return this.link(baseUrl, "reset", token);
+  }
+
+  /** Everyone on the deployment, for the admin command. */
+  async listUsers() {
+    const rows = await this.ctx.db.select({ id: users.id, email: users.email, name: users.name, passwordHash: users.passwordHash, createdAt: users.createdAt }).from(users).orderBy(asc(users.createdAt));
+    return rows.map(({ passwordHash, ...u }) => ({ ...u, canSignIn: Boolean(passwordHash) }));
   }
 
   /** Finish a reset: single use, one hour. Signs the user out everywhere. */

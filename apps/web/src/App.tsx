@@ -100,6 +100,11 @@ function signupHint(e: unknown): boolean | null {
   return typeof v === "boolean" ? v : null;
 }
 
+function firstRunHint(e: unknown): boolean {
+  if (!isApiError(e) || !e.details || typeof e.details !== "object") return false;
+  return (e.details as { firstRun?: unknown }).firstRun === true;
+}
+
 export function App() {
   const { theme, toggle } = useTheme();
   const [inviteToken] = useState(() => readParam("invite"));
@@ -126,7 +131,8 @@ export function App() {
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        const screen: AuthScreen = inviteToken ? "invite" : resetToken ? "reset" : "signin";
+        // Nobody can sign in yet on this deployment: start on creating the first account.
+        const screen: AuthScreen = inviteToken ? "invite" : resetToken ? "reset" : firstRunHint(e) ? "signup" : "signin";
         const message = isApiError(e) && e.status !== 401 ? errorText(e) : null;
         setAuth({ kind: "gate", screen, signupAllowed: signupHint(e), message, session: null });
       });
