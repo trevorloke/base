@@ -44,6 +44,9 @@ export const NETWORK_LABEL: Record<Network, string> = {
   google_business: "Google Business",
   telegram: "Telegram",
   discord: "Discord",
+  whatsapp: "WhatsApp",
+  wechat: "WeChat",
+  line: "LINE",
 };
 
 /** Every network, in the order the room lists them. */
@@ -62,6 +65,9 @@ export const NETWORKS: Network[] = [
   "google_business",
   "telegram",
   "discord",
+  "whatsapp",
+  "wechat",
+  "line",
 ];
 
 /** Hard text limits per network, for the inline editor's counter. */
@@ -80,6 +86,9 @@ export const NETWORK_MAX_TEXT: Record<Network, number> = {
   google_business: 1500,
   telegram: 4096,
   discord: 2000,
+  whatsapp: 4096,
+  wechat: 600,
+  line: 5000,
 };
 
 /** Networks where one post can continue as a thread of replies. */
@@ -104,6 +113,9 @@ export const NETWORK_MAX_MEDIA: Record<Network, number> = {
   google_business: 1,
   telegram: 10,
   discord: 10,
+  whatsapp: 1,
+  wechat: 1,
+  line: 5,
 };
 
 /** Approximate longest organic video, in seconds, where a network caps it. */
@@ -214,6 +226,26 @@ export const ACCOUNT_STATUS_LABEL: Record<"active" | "reauth_required" | "disabl
   disabled: "Disconnected",
 };
 
+/**
+ * An account's handle as people read it: "@northwindcoffee". Handles that already carry their own prefix ("@northwindjp"
+ * on LINE, "+1 503 555 0142" on WhatsApp), names with spaces (a Discord server) and WeChat ids ("gh_…") stay as they are.
+ */
+export function atHandle(handle: string, network?: string): string {
+  if (/^[@+]/.test(handle) || /\s/.test(handle) || network === "wechat") return handle;
+  return `@${handle}`;
+}
+
+/**
+ * The author's handle on a feed item, or null when there is nothing a person could read: LINE and WeChat give opaque
+ * ids, WhatsApp gives a phone number.
+ */
+export function authorHandleText(network: string, handle: string | null | undefined): string | null {
+  if (!handle) return null;
+  if (network === "line" || network === "wechat") return null;
+  if (network === "whatsapp") return /^\d{6,15}$/.test(handle) ? `+${handle}` : handle;
+  return atHandle(handle, network);
+}
+
 export function networkLabel(network: string): string {
   return (NETWORK_LABEL as Record<string, string>)[network] ?? network;
 }
@@ -278,6 +310,7 @@ export const KIND_LABEL: Record<ActivityKind, string> = {
   quote: "Quote",
   like: "Like",
   follow: "Follow",
+  message: "Message",
 };
 
 export function kindLabel(kind: string): string {

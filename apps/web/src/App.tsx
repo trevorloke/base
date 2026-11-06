@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import type { Account, ComposePrefill, Connector, LiftByStage, Me, Policy, PostSummary, RadarEntry, Role, Session, Stream, Summary, TrendSource } from "./types";
+import type { Account, ComposePrefill, Connector, LanguagesInfo, LiftByStage, Me, Policy, PostSummary, RadarEntry, Role, Session, Stream, Summary, TrendSource } from "./types";
 import { api, errorText, getApiKey, isApiError, onUnauthorized, setApiKey, USE_FIXTURES } from "./api";
 import { AuthGate, stripAuthParams, type AuthScreen } from "./auth/AuthGate";
 import { BigNumber } from "./components/BigNumber";
@@ -11,6 +11,7 @@ import { ConnectionsDrawer } from "./drawers/ConnectionsDrawer";
 import { PostDrawer } from "./drawers/PostDrawer";
 import { TeamDrawer } from "./drawers/TeamDrawer";
 import { LinksDrawer } from "./drawers/LinksDrawer";
+import { LanguagesDrawer } from "./drawers/LanguagesDrawer";
 import { TopicDrawer } from "./drawers/TopicDrawer";
 import { AUTONOMY_LABEL, lift as formatLift, listOf, networkLabel, plural, roleLabel } from "./lib/format";
 import { RoomProvider, type RoomRefs } from "./lib/room";
@@ -274,6 +275,7 @@ type DrawerState =
   | { kind: "accounts" }
   | { kind: "team" }
   | { kind: "links" }
+  | { kind: "languages" }
   | null;
 
 function readCenter(): CenterView {
@@ -324,6 +326,7 @@ function Room({
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [streams, setStreams] = useState<Stream[]>([]);
+  const [languages, setLanguages] = useState<LanguagesInfo | null>(null);
 
   const [radar, setRadar] = useState<RadarEntry[] | null>(null);
   const [radarLoading, setRadarLoading] = useState(true);
@@ -372,8 +375,9 @@ function Room({
   }, [onSignedOut, keyMode]);
 
   const loadRefs = useCallback(async () => {
-    const [p, a, s, src, c] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources(), api.connectors()]);
+    const [p, a, s, src, c, l] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources(), api.connectors(), api.languages()]);
     if (p.status === "fulfilled") setPolicy(p.value);
+    if (l.status === "fulfilled") setLanguages(l.value);
     if (a.status === "fulfilled") setAccounts(a.value);
     if (s.status === "fulfilled") setStreams(s.value);
     if (src.status === "fulfilled") setSources(src.value);
@@ -468,6 +472,7 @@ function Room({
   );
 
   const closeDrawer = useCallback(() => setDrawer(null), []);
+  const onStream = useCallback((next: Stream) => setStreams((list) => list.map((s) => (s.id === next.id ? next : s))), []);
   const onPostCreated = useCallback(() => {
     void loadQueue();
     setCalendarTick((t) => t + 1);
@@ -635,6 +640,17 @@ function Room({
                     <button
                       type="button"
                       role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        setDrawer({ kind: "languages" });
+                      }}
+                    >
+                      Languages
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
                       className="menu-item menu-theme"
                       onClick={() => {
                         close();
@@ -698,7 +714,7 @@ function Room({
               <Calendar refreshTick={calendarTick} head={<CenterSwitch view="calendar" onChange={changeCenter} waiting={waiting} title="Calendar" />} />
             </div>
             <div className="col-feed" data-panel="feed">
-              <Feed accounts={accounts} liveTick={live.counters.activity} liveStatus={live.status} canDelete={canDelete} />
+              <Feed accounts={accounts} liveTick={live.counters.activity} liveStatus={live.status} canDelete={canDelete} languages={languages} />
             </div>
           </div>
           <div className="col col-brief" data-panel="brief">
@@ -729,6 +745,15 @@ function Room({
           />
         ) : null}
         {drawer?.kind === "links" ? <LinksDrawer myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null} onClose={closeDrawer} /> : null}
+        {drawer?.kind === "languages" ? (
+          <LanguagesDrawer
+            myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null}
+            streams={streams}
+            onInfo={setLanguages}
+            onStream={onStream}
+            onClose={closeDrawer}
+          />
+        ) : null}
       </div>
     </RoomProvider>
   );

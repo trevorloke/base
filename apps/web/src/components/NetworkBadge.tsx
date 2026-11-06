@@ -15,6 +15,9 @@ const SHORT: Record<string, string> = {
   google_business: "GBP",
   telegram: "TG",
   discord: "Discord",
+  whatsapp: "WA",
+  wechat: "WeChat",
+  line: "LINE",
 };
 
 /** Text-only network badge. Color comes from the per-network token; no logos. `short` is for tight spots like calendar chips. */

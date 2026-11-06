@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Account, Activity, ActivityKind, FeedQuery, LiveStatus, ModerateAction, Network, PostDetail, Violation } from "../types";
+import type { Account, Activity, ActivityKind, FeedQuery, LanguagesInfo, LiveStatus, ModerateAction, Network, PostDetail, Violation } from "../types";
 import { api, errorText, isApiError, USE_FIXTURES } from "../api";
 import { Menu } from "../components/Menu";
 import { NetworkBadge } from "../components/NetworkBadge";
 import { PanelState } from "../components/PanelState";
 import { RelativeTime } from "../components/RelativeTime";
 import { canReply, capabilitiesFor, moderationFor } from "../lib/connectors";
-import { kindLabel, NETWORK_MAX_TEXT, networkLabel, textLength, violationText } from "../lib/format";
+import { atHandle, authorHandleText, kindLabel, NETWORK_MAX_TEXT, networkLabel, textLength, violationText } from "../lib/format";
+import { languageName, languageTag, sameLanguage } from "../lib/lang";
 import { useRoom } from "../lib/room";
 
 type KindFilter = "all" | ActivityKind;
@@ -17,22 +18,46 @@ const KIND_CHIPS: { id: KindFilter; label: string }[] = [
   { id: "reply", label: "Replies" },
   { id: "comment", label: "Comments" },
   { id: "dm", label: "DMs" },
+  { id: "message", label: "Messages" },
 ];
 
 const LIVE_LABEL: Record<LiveStatus, string> = { live: "Live", connecting: "Reconnecting…", off: "Paused" };
 
-export function Feed({ accounts, liveTick, liveStatus, canDelete }: { accounts: Account[]; liveTick: number; liveStatus: LiveStatus; canDelete: boolean }) {
+export function Feed({
+  accounts,
+  liveTick,
+  liveStatus,
+  canDelete,
+  languages,
+}: {
+  accounts: Account[];
+  liveTick: number;
+  liveStatus: LiveStatus;
+  canDelete: boolean;
+  /** GET /v1/languages: the team's language and what the feed has seen. Null until it loads (or on older servers). */
+  languages: LanguagesInfo | null;
+}) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [network, setNetwork] = useState<Network | null>(null);
+  const [lang, setLang] = useState<string>("");
+  const [conversation, setConversation] = useState<{ id: string; name: string } | null>(null);
   const [items, setItems] = useState<Activity[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(() => new Set());
 
   const networks = useMemo(() => Array.from(new Set(accounts.map((a) => a.network))), [accounts]);
+  const home = languages?.settings.home ?? "en";
+  const seenLangs = languages?.seen ?? [];
   const query = useMemo<FeedQuery>(
-    () => ({ kinds: kind === "all" ? undefined : [kind], networks: network ? [network] : undefined, limit: 60 }),
-    [kind, network],
+    () => ({
+      kinds: kind === "all" ? undefined : [kind],
+      networks: network ? [network] : undefined,
+      languages: lang ? [lang] : undefined,
+      conversation: conversation?.id,
+      limit: 60,
+    }),
+    [kind, network, lang, conversation],
   );
 
   const itemsRef = useRef<Activity[] | null>(null);
@@ -71,11 +96,22 @@ export function Feed({ accounts, liveTick, liveStatus, canDelete }: { accounts: 
       if (g !== gen.current || !incoming.length) return;
       let added: string[] = [];
       setItems((current) => {
+        const byId = new Map(incoming.map((a) => [a.id, a]));
         const seen = new Set((current ?? []).map((a) => a.id));
         const add = incoming.filter((a) => !seen.has(a.id));
         added = add.map((a) => a.id);
-        if (!add.length) return current;
-        return [...add, ...(current ?? [])].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt));
+        // An item already on screen may have just been translated (a live event with `translated: true`).
+        let changed = false;
+        const kept = (current ?? []).map((a) => {
+          const next = byId.get(a.id);
+          if (next && (next.translation ?? null) !== (a.translation ?? null)) {
+            changed = true;
+            return next;
+          }
+          return a;
+        });
+        if (!add.length && !changed) return current;
+        return [...add, ...kept].sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt));
       });
       if (added.length) setFresh((f) => new Set([...f, ...added]));
     } catch {
@@ -89,6 +125,10 @@ export function Feed({ accounts, liveTick, liveStatus, canDelete }: { accounts: 
     seenTick.current = liveTick;
     void refreshSince();
   }, [liveTick, refreshSince]);
+
+  const replaceItem = useCallback((next: Activity) => {
+    setItems((current) => current?.map((a) => (a.id === next.id ? next : a)) ?? current);
+  }, []);
 
   // Without a live connection, poll quietly.
   useEffect(() => {
@@ -126,14 +166,66 @@ export function Feed({ accounts, liveTick, liveStatus, canDelete }: { accounts: 
             {networkLabel(n)}
           </button>
         ))}
+        {seenLangs.length ? (
+          <>
+            <span className="chips-sep" aria-hidden="true" />
+            <LanguageFilter value={lang} onChange={setLang} seen={seenLangs} />
+          </>
+        ) : null}
+        {conversation ? (
+          <button
+            type="button"
+            className="chip chip-on feed-conv-chip"
+            aria-label={`Show every conversation, not only ${conversation.name}`}
+            onClick={() => setConversation(null)}
+          >
+            <span className="feed-conv-name">In {conversation.name}</span>
+            <span aria-hidden="true"> ×</span>
+          </button>
+        ) : null}
       </div>
       <div className="panel-body">
         <PanelState loading={loading && !items} error={error} onRetry={() => void load()} empty={items && items.length === 0 ? "Quiet. Nothing matches these filters yet." : null} />
         {items?.map((a) => (
-          <FeedItem key={a.id} item={a} fresh={fresh.has(a.id)} canDelete={canDelete} />
+          <FeedItem
+            key={a.id}
+            item={a}
+            fresh={fresh.has(a.id)}
+            canDelete={canDelete}
+            home={home}
+            onChange={replaceItem}
+            onConversation={conversation ? undefined : (c) => setConversation(c)}
+          />
         ))}
       </div>
     </section>
+  );
+}
+
+/**
+ * The feed's language filter: the languages seen in the last 30 days, most common first. "Unknown" is shown for the
+ * count only: the API filters by a language, not by its absence.
+ */
+function LanguageFilter({ value, onChange, seen }: { value: string; onChange: (lang: string) => void; seen: LanguagesInfo["seen"] }) {
+  const known = seen.filter((s): s is { lang: string; n: number } => !!s.lang);
+  const unknown = seen.find((s) => !s.lang);
+  return (
+    <label className="feed-lang-filter">
+      <span className="sr-only">Language</span>
+      <select className={`select select-small${value ? " feed-lang-on" : ""}`} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">All languages</option>
+        {known.map((s) => (
+          <option key={s.lang} value={s.lang}>
+            {languageName(s.lang)} · {s.n}
+          </option>
+        ))}
+        {unknown ? (
+          <option value="" disabled>
+            Unknown · {unknown.n}
+          </option>
+        ) : null}
+      </select>
+    </label>
   );
 }
 
@@ -155,7 +247,24 @@ function outcomeOf(detail: PostDetail): Outcome {
  * One inbox item. When it came in through a connected account, it can be answered in place (through the
  * same red lines as any post) and, where the network allows, liked, hidden or deleted.
  */
-function FeedItem({ item: a, fresh, canDelete }: { item: Activity; fresh: boolean; canDelete: boolean }) {
+function FeedItem({
+  item: a,
+  fresh,
+  canDelete,
+  home,
+  onChange,
+  onConversation,
+}: {
+  item: Activity;
+  fresh: boolean;
+  canDelete: boolean;
+  /** The team's language. */
+  home: string;
+  /** The item changed on the server (translated): replace it in the list. */
+  onChange: (next: Activity) => void;
+  /** Show only this conversation. Absent while the feed is already narrowed to one. */
+  onConversation?: (c: { id: string; name: string }) => void;
+}) {
   const { streamsById, accountsById, connectors, openPost } = useRoom();
   const account = a.socialAccountId ? accountsById.get(a.socialAccountId) : undefined;
   const connected = !!account && account.status === "active";
@@ -174,11 +283,19 @@ function FeedItem({ item: a, fresh, canDelete }: { item: Activity; fresh: boolea
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState<ModerateAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [translating, setTranslating] = useState(false);
+
+  const foreign = !sameLanguage(a.lang, home); // unknown counts as foreign: it may well need translating
+  const translation = a.translation ?? null;
+  const canTranslate = !!a.text && !translation && foreign;
+  const where = a.conversationName && a.conversationType !== "direct" ? a.conversationName : null;
+  const handle = authorHandleText(a.network, a.authorHandle);
 
   const streams = a.matchedStreams.map((id) => streamsById.get(id)?.name).filter((n): n is string => !!n);
   const max = NETWORK_MAX_TEXT[a.network as Network] ?? 10_000;
   const n = textLength(a.network as Network, text);
-  const what = a.kind === "comment" ? "comment" : a.kind === "dm" ? "message" : a.kind === "reply" ? "reply" : "post";
+  const what = a.kind === "comment" ? "comment" : a.kind === "dm" || a.kind === "message" ? "message" : a.kind === "reply" ? "reply" : "post";
 
   async function send() {
     const t = text.trim();
@@ -202,6 +319,20 @@ function FeedItem({ item: a, fresh, canDelete }: { item: Activity; fresh: boolea
       }
     } finally {
       setSending(false);
+    }
+  }
+
+  async function translate() {
+    setTranslating(true);
+    setError(null);
+    try {
+      const next = await api.translate(a.id);
+      setShowOriginal(false);
+      onChange(next);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setTranslating(false);
     }
   }
 
@@ -236,14 +367,57 @@ function FeedItem({ item: a, fresh, canDelete }: { item: Activity; fresh: boolea
     <article className={`feed-row${fresh ? " feed-fresh" : ""}${hidden ? " feed-hidden" : ""}`}>
       <div className="feed-head">
         <span className="feed-author">{a.authorName ?? a.authorHandle ?? "Someone"}</span>
-        {a.authorHandle ? <span className="feed-handle muted">@{a.authorHandle}</span> : null}
+        {handle ? <span className="feed-handle muted">{handle}</span> : null}
         <NetworkBadge network={a.network} />
         <span className="feed-kind muted">{kindLabel(a.kind)}</span>
+        {where ? (
+          onConversation && a.conversationId ? (
+            <button
+              type="button"
+              className="linkish feed-where muted"
+              title={`Show only ${where}`}
+              onClick={() => onConversation({ id: a.conversationId!, name: where })}
+            >
+              in {where}
+            </button>
+          ) : (
+            <span className="feed-where muted">in {where}</span>
+          )
+        ) : null}
+        {a.lang && foreign ? (
+          <span className="tag feed-lang" title={languageName(a.lang)}>
+            <span aria-hidden="true">{languageTag(a.lang)}</span>
+            <span className="sr-only">Written in {languageName(a.lang)}</span>
+          </span>
+        ) : null}
         {liked ? <span className="tag">Liked</span> : null}
         {hidden ? <span className="tag">Hidden</span> : null}
         <RelativeTime iso={a.occurredAt} className="feed-time" />
       </div>
-      {a.text ? <p className="feed-text">{a.text}</p> : null}
+      {a.text && translation ? (
+        <>
+          <p className="feed-translated muted">
+            {showOriginal ? (a.lang ? `${languageName(a.lang)} original` : "Original") : a.lang ? `Translated from ${languageName(a.lang)}` : "Translated"}
+            <span aria-hidden="true"> · </span>
+            <button type="button" className="linkish feed-toggle" aria-controls={`feed-text-${a.id}`} onClick={() => setShowOriginal((v) => !v)}>
+              {showOriginal ? "Show translation" : "Show original"}
+            </button>
+          </p>
+          {/* Both versions share one grid cell, so switching never moves what is below; only the one shown is read out. */}
+          <div className="feed-texts" id={`feed-text-${a.id}`}>
+            <p className="feed-text" lang={a.translationLang ?? home} aria-hidden={showOriginal} data-on={!showOriginal}>
+              {translation}
+            </p>
+            <p className="feed-text" lang={a.lang ?? undefined} aria-hidden={!showOriginal} data-on={showOriginal}>
+              {a.text}
+            </p>
+          </div>
+        </>
+      ) : a.text ? (
+        <p className="feed-text" lang={a.lang ?? undefined}>
+          {a.text}
+        </p>
+      ) : null}
       <div className="feed-foot">
         {streams.map((name) => (
           <span key={name} className="tag">
@@ -263,6 +437,11 @@ function FeedItem({ item: a, fresh, canDelete }: { item: Activity; fresh: boolea
                 </>
               ) : null}
             </span>
+          ) : null}
+          {canTranslate ? (
+            <button type="button" className="linkish feed-translate" disabled={translating} onClick={() => void translate()}>
+              {translating ? "Translating…" : "Translate"}
+            </button>
           ) : null}
           {replyable && !replying ? (
             <button type="button" className="btn btn-ghost btn-small" onClick={() => setReplying(true)}>
@@ -347,7 +526,7 @@ function FeedItem({ item: a, fresh, canDelete }: { item: Activity; fresh: boolea
             className="textarea"
             rows={2}
             value={text}
-            placeholder={`Reply as @${account.handle}`}
+            placeholder={`Reply as ${atHandle(account.handle, account.network)}`}
             aria-label={`Reply to ${a.authorName ?? a.authorHandle ?? "them"} on ${networkLabel(a.network)}`}
             autoFocus
             onChange={(e) => {

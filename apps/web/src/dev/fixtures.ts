@@ -28,6 +28,9 @@ import type {
   TrackedLink,
   InviteCreated,
   InviteInfo,
+  LanguageSettings,
+  LanguageSettingsPatch,
+  LanguagesInfo,
   MediaAsset,
   Member,
   ModerateAction,
@@ -71,6 +74,7 @@ import type {
 import type { StreamHandlers } from "../api";
 import { ApiError } from "../lib/errors";
 import { NETWORK_THREADS, networkLabel, truncate } from "../lib/format";
+import { LANG_CODE_RE, primaryLanguage } from "../lib/lang";
 import { weekStartMs } from "../lib/tz";
 
 const NOW = Date.now();
@@ -123,10 +127,34 @@ const accounts: Account[] = [
   acct("acc_tt", "tiktok", "northwind.coffee", "Northwind Coffee", "tiktok", "active", 0.8),
   acct("acc_masto", "mastodon", "northwind@mastodon.social", "Northwind Coffee", "mastodon", "active", 0.6),
   acct("acc_li", "linkedin", "northwind-coffee-roasters", "Northwind Coffee Roasters", "linkedin", "disabled", null),
+  // Chat apps: the LINE official account for the Tokyo cafés, the WhatsApp business number, the WeChat Official
+  // Account, and a bot in the community Discord server.
+  acct("acc_line", "line", "@northwindjp", "Northwind Coffee Japan", "line", "active", 0.05, "U4af4980629f1b2c3d4e5f60718293a4b"),
+  acct("acc_wa", "whatsapp", "+1 503 555 0142", "Northwind Coffee", "whatsapp", "active", 0.05, "106540352242922"),
+  acct("acc_wechat", "wechat", "gh_6a1f2c3d4e5f", "Northwind Coffee", "wechat", "active", 0.1),
+  acct("acc_dbot", "discord", "Northwind Community", "Northwind Community", "discord_bot", "active", 0.1, "934215867301928960"),
 ];
 
 const streams: Stream[] = [
-  { id: "st_brand", name: "Brand mentions", query: { keywords: ["northwind", "northwind coffee"], authors: [], networks: [], kinds: [] }, createdAt: ago(24 * 60) },
+  {
+    id: "st_brand",
+    name: "Brand mentions",
+    query: { keywords: ["northwind", "northwind coffee"], authors: [], networks: [], kinds: [], languages: [], translations: { ja: ["ノースウィンド", "ノースウィンドコーヒー"] } },
+    createdAt: ago(24 * 60),
+  },
+  {
+    id: "st_jp",
+    name: "Tokyo community",
+    query: {
+      keywords: ["cold brew", "yuzu blend", "shibuya"],
+      authors: [],
+      networks: ["line", "x"],
+      kinds: [],
+      languages: ["ja"],
+      translations: { ja: ["コールドブリュー", "水出しコーヒー", "ゆずブレンド", "渋谷"] },
+    },
+    createdAt: ago(24 * 14),
+  },
   { id: "st_comp", name: "Competitor watch", query: { keywords: ["blue bottle", "stumptown", "starbucks"], authors: [], networks: [], kinds: [] }, createdAt: ago(24 * 40) },
   { id: "st_psl", name: "Pumpkin spice", query: { keywords: ["pumpkin spice", "psl"], authors: [], networks: [], kinds: [] }, createdAt: ago(24 * 3) },
 ];
@@ -623,6 +651,7 @@ function act(
   hoursAgo: number,
   matched: string[],
   sentiment: number | null = null,
+  chat: Partial<Pick<Activity, "lang" | "conversationId" | "conversationName" | "conversationType" | "translation" | "translationLang" | "translatedAt">> = {},
 ): Activity {
   const accountId = accounts.find((a) => a.network === network)?.id ?? null;
   const url =
@@ -638,7 +667,9 @@ function act(
               ? `https://www.facebook.com/${id}`
               : network === "tiktok"
                 ? `https://www.tiktok.com/@${handle}/video/${id}`
-                : null;
+                : network === "discord" && chat.conversationId
+                  ? `https://discord.com/channels/934215867301928960/${chat.conversationId}/${id}`
+                  : null;
   return {
     id,
     workspaceId: workspace.id,
@@ -656,8 +687,19 @@ function act(
     sentiment,
     matchedStreams: matched,
     rawEventId: null,
+    lang: "en",
+    conversationId: null,
+    conversationName: null,
+    conversationType: null,
+    translation: null,
+    translationLang: null,
+    translatedAt: null,
+    ...chat,
   };
 }
+
+const TOKYO = { conversationId: "C8f3a1b2c4d5e6f708192a3b4c5d6e7f8", conversationName: "Acme Fans Tokyo", conversationType: "group" as const };
+const translated = (text: string, hoursAgo: number) => ({ translation: text, translationLang: "en", translatedAt: ago(Math.max(0, hoursAgo - 0.01)) });
 
 const feedSeed: Activity[] = [
   act("a01", "x", "mention", "latte_lauren", "Lauren", "is it just me or is @northwindcoffee the only one not doing pumpkin spice yet?? respect", 0.07, ["st_brand", "st_psl"], 0.6),
@@ -676,7 +718,59 @@ const feedSeed: Activity[] = [
   act("a14", "youtube", "comment", "brewnerd42", "brewnerd42", "What grind setting on a Baratza for the 1:8 cold brew in this video?", 1.6, ["st_brand"], 0.4),
   act("a15", "tiktok", "comment", "jules.sips", "jules", "the latte art at 0:12 😮", 2.2, ["st_brand"], 0.8),
   act("a16", "mastodon", "mention", "kav@hachyderm.io", "Kavya", "@northwind@mastodon.social do you publish your green coffee prices? would love to see more roasters do that", 3.4, ["st_brand"], 0.5),
+
+  // Chat apps, in several languages.
+  act("c01", "line", "message", "Ua1b2c3d4e5f60718293a4b5c6d7e8f90", "さくら", "渋谷の新しいお店、コールドブリューが本当においしかった。週末は混んでるので朝早めがおすすめです。", 0.12, ["st_jp"], 0.8, {
+    lang: "ja",
+    ...TOKYO,
+    ...translated("The cold brew at the new Shibuya shop was really good. It gets busy on weekends, so I'd go early in the morning.", 0.12),
+  }),
+  act("c02", "line", "message", "Ub2c3d4e5f60718293a4b5c6d7e8f9a01", "けんた", "限定のゆずブレンドっていつまで買えますか？オンラインでも売ってほしいです。", 0.25, ["st_jp"], 0.3, { lang: "ja", ...TOKYO }),
+  act("c03", "whatsapp", "dm", "5215512345678", "Lucía Fernández", "Hola, ¿hacen envíos a Ciudad de México? Quiero pedir 3 bolsas del tueste etíope para la oficina.", 0.38, [], 0.4, {
+    lang: "es",
+    conversationId: "5215512345678",
+    conversationName: "Lucía Fernández",
+    conversationType: "direct",
+    ...translated("Hi, do you ship to Mexico City? I'd like to order 3 bags of the Ethiopian roast for the office.", 0.38),
+  }),
+  act("c04", "wechat", "dm", "oX7a2Fq9kLm3nP0rS5tU8vW1yZ4b", "王伟", "你好，请问你们的咖啡豆可以寄到上海吗？运费大概多少？", 0.5, [], 0.2, {
+    lang: "zh",
+    conversationId: "oX7a2Fq9kLm3nP0rS5tU8vW1yZ4b",
+    conversationType: "direct",
+  }),
+  act("c05", "discord", "message", "brewbuddy", "Brew Buddy", "anyone tried the new decaf yet? curious if it holds up as espresso", 0.62, ["st_brand"], 0.3, {
+    conversationId: "1029384756102938475",
+    conversationName: "#general",
+    conversationType: "channel",
+  }),
+  act("c06", "whatsapp", "message", "15035550199", "Tomás (Alberta café)", "Pedido #4471 ok 👍", 0.8, [], 0.5, {
+    lang: null,
+    conversationId: "120363041122334455",
+    conversationName: "Northwind wholesale partners",
+    conversationType: "group",
+  }),
 ];
+
+/** What the fixture "model" answers when someone presses Translate. */
+const FIXTURE_TRANSLATIONS: Record<string, string> = {
+  c02: "How long will the limited yuzu blend be available? I'd love it if you sold it online too.",
+  c04: "Hello, can you ship your coffee beans to Shanghai? Roughly how much is shipping?",
+  c06: "Order #4471 ok 👍",
+};
+
+/** How a few stream keywords are written in other languages, for the fixture "expand to languages". */
+const FIXTURE_TERMS: Record<string, Record<string, string[]>> = {
+  northwind: { ja: ["ノースウィンド"], zh: ["北风", "Northwind"], ko: ["노스윈드"], es: ["Northwind"], fr: ["Northwind"], de: ["Northwind"], pt: ["Northwind"] },
+  "northwind coffee": { ja: ["ノースウィンドコーヒー"], zh: ["北风咖啡"], ko: ["노스윈드 커피"], es: ["café Northwind", "Northwind café"], fr: ["café Northwind"], de: ["Northwind Kaffee"], pt: ["café Northwind"] },
+  "cold brew": { ja: ["コールドブリュー", "水出しコーヒー"], zh: ["冷萃咖啡", "冷萃"], ko: ["콜드브루"], es: ["café cold brew", "café infusionado en frío"], fr: ["café infusé à froid"], de: ["Cold Brew Kaffee"], pt: ["café cold brew"] },
+  "yuzu blend": { ja: ["ゆずブレンド"], zh: ["柚子拼配"], ko: ["유자 블렌드"], es: ["mezcla de yuzu"], fr: ["mélange yuzu"], de: ["Yuzu-Mischung"], pt: ["blend de yuzu"] },
+  shibuya: { ja: ["渋谷"], zh: ["涩谷"], ko: ["시부야"] },
+  "pumpkin spice": { ja: ["パンプキンスパイス"], zh: ["南瓜香料"], ko: ["펌킨 스파이스"], es: ["especias de calabaza"], fr: ["épices à citrouille"], de: ["Kürbisgewürz"], pt: ["especiarias de abóbora"] },
+  psl: { ja: ["パンプキンスパイスラテ"], zh: ["南瓜拿铁"], ko: ["펌킨 스파이스 라떼"], es: ["latte de calabaza"], fr: ["latte à la citrouille"], de: ["Kürbis-Latte"], pt: ["latte de abóbora"] },
+  "blue bottle": { ja: ["ブルーボトル"], zh: ["蓝瓶咖啡"], ko: ["블루보틀"] },
+  starbucks: { ja: ["スターバックス", "スタバ"], zh: ["星巴克"], ko: ["스타벅스"] },
+  stumptown: { ja: ["スタンプタウン"] },
+};
 
 const LIVE_LINES: { network: Network; kind: ActivityKind; handle: string; name: string; text: string; matched: string[] }[] = [
   { network: "x", kind: "mention", handle: "fallhater", "name": "Sam", text: "@northwindcoffee are you doing anything for fall or is it just the cortado", matched: ["st_brand", "st_psl"] },
@@ -921,6 +1015,57 @@ const connectorsSeed: Connector[] = [
     inputs: [{ key: "webhookUrl", label: "Webhook URL", placeholder: "https://discord.com/api/webhooks/…" }],
     capabilities: { discord: cap(["post"], { reply: false, moderate: false, accountMetrics: false }) },
   },
+  // Chat apps. Credential inputs mirror packages/connectors (discord-bot.ts, whatsapp.ts, wechat.ts, line.ts).
+  {
+    name: "discord_bot",
+    networks: ["discord"],
+    configured: true,
+    connect: "bot_token",
+    inputs: [
+      { key: "botToken", label: "Bot token (Developer Portal → Bot → Reset Token)", placeholder: "MTIz...abc.Gh1234.xyz...", secret: true },
+      { key: "guildId", label: "Server ID (right-click the server → Copy Server ID)", placeholder: "123456789012345678" },
+      { key: "defaultChannelId", label: "Channel ID for posts (optional; default: first text channel)", placeholder: "234567890123456789", optional: true },
+    ],
+    capabilities: { discord: cap(["post", "video", "carousel", "link"], { moderateActions: ["like", "unlike", "delete"] }) },
+  },
+  {
+    name: "whatsapp",
+    networks: ["whatsapp"],
+    configured: true,
+    connect: "api_key",
+    inputs: [
+      { key: "phoneNumberId", label: "Phone number ID (WhatsApp Manager > API setup)", placeholder: "106540352242922" },
+      { key: "wabaId", label: "WhatsApp Business Account ID", placeholder: "102290129340398" },
+      { key: "accessToken", label: "System User access token (permanent)", placeholder: "EAAG...", secret: true },
+      { key: "defaultGroupId", label: "Group to post to (optional; a group your business created)", placeholder: "group id from the Groups API", optional: true },
+    ],
+    capabilities: { whatsapp: cap(["post"], { accountMetrics: false, webhooks: true, moderateActions: ["like", "unlike"] }) },
+  },
+  {
+    name: "wechat",
+    networks: ["wechat"],
+    configured: true,
+    connect: "api_key",
+    inputs: [
+      { key: "appId", label: "AppID", placeholder: "wx1234567890abcdef" },
+      { key: "appSecret", label: "AppSecret", placeholder: "32 letters and digits", secret: true },
+      { key: "originalId", label: "Original ID (原始ID)", placeholder: "gh_0123456789ab" },
+      { key: "token", label: "Server Token (服务器配置 Token)", placeholder: "the Token you entered in the server configuration", secret: true },
+      { key: "encodingAesKey", label: "EncodingAESKey (only for safe mode)", placeholder: "43 characters; leave empty for plaintext mode", secret: true, optional: true },
+    ],
+    capabilities: { wechat: cap([], { publish: false, moderate: false, webhooks: true, video: false }) },
+  },
+  {
+    name: "line",
+    networks: ["line"],
+    configured: true,
+    connect: "bot_token",
+    inputs: [
+      { key: "channelAccessToken", label: "Channel access token (long-lived, Messaging API tab)", placeholder: "eyJhbGciOi... or a long base64 string", secret: true },
+      { key: "channelSecret", label: "Channel secret (Basic settings tab)", placeholder: "32 hex characters", secret: true },
+    ],
+    capabilities: { line: cap(["post"], { moderate: false, webhooks: true, video: false }) },
+  },
 ];
 
 const sourcesSeed: TrendSource[] = [
@@ -1012,6 +1157,8 @@ function adaptFor(network: Network, body: string): AdaptedVariant {
 // --- Mutable state (the fixture "server") ----------------------------------
 
 const state = {
+  streams: clone(streams),
+  languageSettings: { home: "en", autoTranslate: true, dailyLimit: 2000 } as LanguageSettings,
   queue: clone(queueSeed),
   decided: [] as PostSummary[],
   feed: clone(feedSeed),
@@ -1520,7 +1667,7 @@ function integrationsApi() {
       const c = connectorsSeed.find((k) => k.name === connector);
       if (!c) throw new ApiError(404, "not_found", "No such connector.");
       for (const field of c.inputs ?? []) {
-        if (!input.inputs[field.key]?.trim()) throw new ApiError(400, "invalid", "connect failed", { reason: `Enter ${field.label.toLowerCase()}.` });
+        if (!field.optional && !input.inputs[field.key]?.trim()) throw new ApiError(400, "invalid", "connect failed", { reason: `Enter ${field.label.toLowerCase()}.` });
       }
       const values = Object.values(input.inputs).map((v) => v.trim());
       if (values.includes("fail")) {
@@ -1529,7 +1676,15 @@ function integrationsApi() {
             ? "Bluesky said the handle or app password is wrong."
             : connector === "telegram"
               ? "Telegram didn't accept that bot token, or the bot isn't an admin of that channel."
-              : "Discord didn't accept that webhook URL.";
+              : connector === "discord_bot"
+                ? "Discord didn't accept that bot token, or the bot isn't in that server."
+                : connector === "whatsapp"
+                  ? "WhatsApp didn't accept that access token for this phone number."
+                  : connector === "wechat"
+                    ? "WeChat didn't accept that AppID and AppSecret."
+                    : connector === "line"
+                      ? "LINE didn't accept that channel access token."
+                      : "Discord didn't accept that webhook URL.";
         throw new ApiError(400, "invalid", "connect failed", { reason });
       }
       let handle: string;
@@ -1540,6 +1695,16 @@ function integrationsApi() {
       } else if (connector === "telegram") {
         handle = (input.inputs.chatId ?? "channel").replace(/^@/, "");
         name = "Northwind Coffee updates";
+      } else if (connector === "discord_bot") {
+        handle = "Northwind Coffee Club";
+      } else if (connector === "whatsapp") {
+        handle = "+1 503 555 0177";
+        name = "Northwind Coffee Wholesale";
+      } else if (connector === "wechat") {
+        handle = (input.inputs.originalId ?? "gh_000000000000").trim();
+      } else if (connector === "line") {
+        handle = "@northwindus";
+        name = "Northwind Coffee US";
       } else {
         handle = "northwind-community";
         name = "#announcements";
@@ -1861,11 +2026,69 @@ function linksApi() {
   };
 }
 
+// --- Languages ----------------------------------------------------------------
+
+function languagesApi() {
+  return {
+    languages: async (): Promise<LanguagesInfo> => {
+      const since = Date.now() - 30 * DAY;
+      const counts = new Map<string | null, number>();
+      for (const a of state.feed) {
+        if (Date.parse(a.occurredAt) < since) continue;
+        const l = a.lang ? primaryLanguage(a.lang) : null;
+        counts.set(l, (counts.get(l) ?? 0) + 1);
+      }
+      const seen = [...counts.entries()].map(([lang, n]) => ({ lang, n })).sort((a, b) => b.n - a.n);
+      return delay({ settings: state.languageSettings, seen, translationAvailable: true });
+    },
+
+    updateLanguageSettings: async (input: LanguageSettingsPatch): Promise<LanguageSettings> => {
+      await delay(null, 260);
+      requireSession();
+      if (currentWs().role !== "owner") throw new ApiError(403, "forbidden", "Only an owner changes language settings.");
+      if (input.home !== undefined && !LANG_CODE_RE.test(input.home)) throw new ApiError(400, "invalid", "Use a language code such as en, ja or pt-BR.");
+      if (input.dailyLimit !== undefined && (!Number.isInteger(input.dailyLimit) || input.dailyLimit < 0 || input.dailyLimit > 100_000)) {
+        throw new ApiError(400, "invalid", "The daily limit is a whole number from 0 to 100,000.");
+      }
+      state.languageSettings = { ...state.languageSettings, ...input };
+      return clone(state.languageSettings);
+    },
+
+    translate: async (activityId: string): Promise<Activity> => {
+      await delay(null, 900);
+      const item = state.feed.find((a) => a.id === activityId);
+      if (!item) throw new ApiError(404, "not_found", "That item is gone.");
+      if (!item.text) throw new ApiError(400, "invalid", "This item has no text to translate.");
+      item.translation = FIXTURE_TRANSLATIONS[item.id] ?? item.text;
+      item.translationLang = state.languageSettings.home;
+      item.translatedAt = iso(Date.now());
+      return clone(item);
+    },
+
+    expandStream: async (streamId: string, languages: string[]): Promise<Stream> => {
+      await delay(null, 1100);
+      if (currentWs().role === "viewer") throw new ApiError(403, "forbidden", "Viewers can't change streams.");
+      const stream = state.streams.find((s) => s.id === streamId);
+      if (!stream) throw new ApiError(404, "not_found", "No such stream.");
+      if (!stream.query.keywords.length) throw new ApiError(400, "invalid", "This stream has no keywords to translate.");
+      const langs = [...new Set(languages.map(primaryLanguage))].slice(0, 12);
+      if (!langs.length) throw new ApiError(400, "invalid", "Name at least one language.");
+      const translations = { ...(stream.query.translations ?? {}) };
+      for (const lang of langs) {
+        const terms = [...new Set(stream.query.keywords.flatMap((k) => FIXTURE_TERMS[k.toLowerCase()]?.[lang] ?? []))];
+        if (terms.length) translations[lang] = terms;
+      }
+      stream.query = { ...stream.query, translations };
+      return clone(stream);
+    },
+  };
+}
+
 export const fixtureApi = {
   me: () => delay(currentMe()),
   policy: () => delay(policy),
   accounts: () => delay(currentAccounts()),
-  streams: () => delay(streams),
+  streams: () => delay(state.streams),
 
   queue: () => delay(state.queue),
 
@@ -1941,7 +2164,9 @@ export const fixtureApi = {
     if (q.stream) items = items.filter((a) => a.matchedStreams.includes(q.stream!));
     if (q.since) items = items.filter((a) => Date.parse(a.occurredAt) > Date.parse(q.since!));
     if (q.before) items = items.filter((a) => Date.parse(a.occurredAt) < Date.parse(q.before!));
-    if (q.q) items = items.filter((a) => (a.text ?? "").toLowerCase().includes(q.q!.toLowerCase()));
+    if (q.q) items = items.filter((a) => `${a.text ?? ""}\n${a.translation ?? ""}`.toLowerCase().includes(q.q!.toLowerCase()));
+    if (q.languages?.length) items = items.filter((a) => !!a.lang && q.languages!.includes(primaryLanguage(a.lang)));
+    if (q.conversation) items = items.filter((a) => a.conversationId === q.conversation);
     return delay(items.slice(0, q.limit ?? 100));
   },
 
@@ -2065,6 +2290,7 @@ export const fixtureApi = {
   ...peopleApi(),
   ...integrationsApi(),
   ...linksApi(),
+  ...languagesApi(),
 };
 
 /** A pretend live stream: one new mention arrives every 40 seconds. */

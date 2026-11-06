@@ -11,6 +11,25 @@ export function connectorFor(connectors: Connector[], network: Network): Connect
   return [...serving].sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
+/**
+ * Every connector that can connect a network, the preferred one first. Discord has two that do different jobs
+ * (a webhook that posts, a bot that reads and replies), so the room offers a choice where there is more than one.
+ * Aggregators are left out when a native connector exists: they would only repeat the same job.
+ */
+export function connectorsFor(connectors: Connector[], network: Network): Connector[] {
+  const serving = connectors.filter((c) => c.networks.includes(network) && c.connect !== "none");
+  const native = serving.filter((c) => c.name !== "zernio");
+  const list = native.length ? native : serving;
+  const first = connectorFor(list, network);
+  return first ? [first, ...list.filter((c) => c !== first)] : [];
+}
+
+/** How a person tells two connectors for the same network apart. */
+export const CONNECTOR_CHOICE: Record<string, { title: string; detail: string; short: string }> = {
+  discord: { title: "Post with a webhook", detail: "Posts to one channel. Doesn't read anything.", short: "Webhook" },
+  discord_bot: { title: "Read and reply with a bot", detail: "Reads the server's channels, replies and moderates. Can post too.", short: "Bot" },
+};
+
 /** What the connector behind an account can do on its network. Falls back to any connector for that network. */
 export function capabilitiesFor(connectors: Connector[], account: Pick<Account, "connector" | "network">): NetworkCapabilities | null {
   const own = connectors.find((c) => c.name === account.connector)?.capabilities?.[account.network];
@@ -44,12 +63,18 @@ const MODERATION_BY_NETWORK: Partial<Record<Network, ModerateAction[]>> = {
   mastodon: ["like"],
   reddit: ["like", "hide"],
   telegram: ["delete"],
+  discord: ["like", "delete"],
+  whatsapp: ["like"],
 };
 
-/** Hide and delete apply to comments and replies on your own posts; likes to anything someone said. */
+/**
+ * Hide applies to comments and replies on your own posts; delete also to messages in a chat the account runs;
+ * likes (a reaction, in chat apps) to anything someone said.
+ */
 const HIDEABLE: ReadonlySet<ActivityKind> = new Set<ActivityKind>(["comment", "reply"]);
-const LIKEABLE: ReadonlySet<ActivityKind> = new Set<ActivityKind>(["comment", "reply", "mention", "quote"]);
-const REPLYABLE: ReadonlySet<ActivityKind> = new Set<ActivityKind>(["comment", "reply", "mention", "quote", "dm"]);
+const DELETABLE: ReadonlySet<ActivityKind> = new Set<ActivityKind>(["comment", "reply", "message"]);
+const LIKEABLE: ReadonlySet<ActivityKind> = new Set<ActivityKind>(["comment", "reply", "mention", "quote", "message"]);
+const REPLYABLE: ReadonlySet<ActivityKind> = new Set<ActivityKind>(["comment", "reply", "mention", "quote", "dm", "message"]);
 
 export function moderationFor(caps: NetworkCapabilities | null, network: Network, kind: ActivityKind): { like: boolean; hide: boolean; delete: boolean } {
   if (!caps?.moderate) return { like: false, hide: false, delete: false };
@@ -57,7 +82,7 @@ export function moderationFor(caps: NetworkCapabilities | null, network: Network
   return {
     like: allowed.includes("like") && LIKEABLE.has(kind),
     hide: allowed.includes("hide") && HIDEABLE.has(kind),
-    delete: allowed.includes("delete") && HIDEABLE.has(kind),
+    delete: allowed.includes("delete") && DELETABLE.has(kind),
   };
 }
 

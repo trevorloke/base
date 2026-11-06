@@ -7,8 +7,8 @@ import { PanelState } from "../components/PanelState";
 import { Pill, type PillTone } from "../components/Pill";
 import { RelativeTime } from "../components/RelativeTime";
 import { useToast } from "../components/Toast";
-import { connectorFor, isSecretInput } from "../lib/connectors";
-import { ACCOUNT_STATUS_LABEL, compact, NETWORKS, networkLabel, plural } from "../lib/format";
+import { CONNECTOR_CHOICE, connectorFor, connectorsFor, isSecretInput } from "../lib/connectors";
+import { ACCOUNT_STATUS_LABEL, atHandle, compact, NETWORKS, networkLabel, plural } from "../lib/format";
 
 const STATUS_TONE: Record<Account["status"], PillTone> = {
   active: "good",
@@ -32,6 +32,23 @@ const CONNECT_HINT: Partial<Record<Network, string>> = {
   google_business: "You'll pick the Google account that manages your business profiles.",
   telegram: "Make your bot an admin of the channel, then paste its token from @BotFather.",
   discord: "In Discord: Server settings → Integrations → Webhooks → New webhook → Copy webhook URL.",
+  whatsapp: "Uses the WhatsApp Business Platform. The IDs and a permanent System User token are in Meta Business Manager and WhatsApp Manager.",
+  wechat: "Needs an Official Account (a verified service account to reply). Choose a Token here, then enter the same Token in the account's server configuration.",
+  line: "Uses a LINE Official Account with the Messaging API on. Both values are in the LINE Developers console. Invite the account to the groups you want to follow.",
+};
+
+/** Setup notes for a connector that does a different job from the network's usual one. */
+const CONNECTOR_HINT: Record<string, string> = {
+  discord_bot: "Create a bot in the Discord Developer Portal, turn on Message Content, and invite it to your server.",
+};
+
+/** One plain sentence on what Starsign can see once connected, where people reasonably wonder. */
+const CAN_SEE: Record<string, string> = {
+  discord: "A webhook only posts. Starsign doesn't read the server through it.",
+  discord_bot: "Starsign sees the channels the bot can read, nothing else.",
+  whatsapp: "Starsign sees messages to your business number and groups your business created, never personal groups.",
+  wechat: "Starsign sees messages people send to your Official Account.",
+  line: "Starsign sees the groups and chats your official account's bot is in.",
 };
 
 type Group = "connected" | "available" | "unset";
@@ -50,7 +67,7 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
   const [connectors, setConnectors] = useState<Connector[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [followers, setFollowers] = useState<Record<string, number>>({});
-  const [open, setOpen] = useState<{ network: Network; prefill?: Record<string, string>; reconnect?: boolean } | null>(null);
+  const [open, setOpen] = useState<{ network: Network; prefill?: Record<string, string>; reconnect?: boolean; connector?: string } | null>(null);
   const [unset, setUnset] = useState<Set<string>>(() => new Set()); // connectors the server said 503 for
   const [confirming, setConfirming] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -94,7 +111,7 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
     return NETWORKS.map((network) => {
       const connector = connectorFor(connectors, network);
       const mine = accounts.filter((a) => a.network === network);
-      const settable = !!connector && connector.configured && !unset.has(connector.name);
+      const settable = connectorsFor(connectors, network).some((c) => c.configured && !unset.has(c.name));
       const group: Group = mine.length ? "connected" : settable ? "available" : "unset";
       return { network, connector, group, accounts: mine };
     });
@@ -107,7 +124,7 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
 
   const afterConnect = (list: Account[], network: Network) => {
     const first = list[0];
-    toast(list.length === 1 && first ? `Connected @${first.handle} on ${networkLabel(network)}` : `Connected ${plural(list.length, "account")} on ${networkLabel(network)}`);
+    toast(list.length === 1 && first ? `Connected ${atHandle(first.handle, first.network)} on ${networkLabel(network)}` : `Connected ${plural(list.length, "account")} on ${networkLabel(network)}`);
     setOpen(null);
     load();
     onChanged();
@@ -119,7 +136,7 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
     try {
       await api.deleteAccount(a.id);
       setConfirming(null);
-      toast(`Disconnected @${a.handle}`);
+      toast(`Disconnected ${atHandle(a.handle, a.network)}`);
       load();
       onChanged();
     } catch (e) {
@@ -144,7 +161,7 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
         if (f.key === "identifier") prefill[f.key] = a.handle;
         else if (/instance|server/i.test(f.key) && server) prefill[f.key] = server;
       }
-      setOpen({ network: a.network, prefill, reconnect: true });
+      setOpen({ network: a.network, prefill, reconnect: true, connector: c.name });
       return;
     }
     setReconnecting(a.id);
@@ -157,6 +174,9 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
       setReconnecting(null);
     }
   }
+
+  /** The ways this network can be connected here right now (more than one for Discord). */
+  const settableFor = (network: Network): Connector[] => connectorsFor(connectors ?? [], network).filter((c) => c.configured && !unset.has(c.name));
 
   const byGroup = (g: Group) => tiles.filter((t) => t.group === g);
   const activeCount = (accounts ?? []).filter((a) => a.status === "active").length;
@@ -176,13 +196,16 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
           <ConnectPanel
             key={`${openTile.network}:${open?.reconnect ? "re" : "new"}`}
             network={openTile.network}
-            connector={openTile.connector}
+            options={settableFor(openTile.network)}
+            initial={open?.connector}
             prefill={open?.prefill}
             again={openTile.accounts.length > 0 && !open?.reconnect}
             onClose={() => setOpen(null)}
-            onUnset={() => {
-              setUnset((s) => new Set([...s, openTile.connector!.name]));
-              setOpen(null);
+            onUnset={(name) => {
+              setUnset((s) => new Set([...s, name]));
+              // Another way to connect the same network may still be open.
+              if (settableFor(openTile.network).filter((c) => c.name !== name).length === 0) setOpen(null);
+              else setOpen((o) => (o ? { ...o, connector: undefined, prefill: undefined } : o));
             }}
             onConnected={(list) => afterConnect(list, openTile.network)}
           />
@@ -215,11 +238,12 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
                     <div className="acct-main">
                       <div className="acct-id">
                         <NetworkBadge network={a.network} />
-                        <span className="strong">@{a.handle}</span>
+                        <span className="strong">{atHandle(a.handle, a.network)}</span>
                         <Pill tone={STATUS_TONE[a.status]}>{ACCOUNT_STATUS_LABEL[a.status]}</Pill>
                       </div>
                       <div className="acct-meta muted small">
                         {a.displayName && a.displayName !== a.handle ? <span>{a.displayName}</span> : null}
+                        {CONNECTOR_CHOICE[a.connector] && connectorsFor(connectors, a.network).length > 1 ? <span>{CONNECTOR_CHOICE[a.connector]!.short}</span> : null}
                         {followers[a.id] !== undefined ? (
                           <span>
                             <span className="mono acct-followers">{compact(followers[a.id])}</span> followers
@@ -240,8 +264,8 @@ export function ConnectionsDrawer({ onClose, onChanged }: { onClose: () => void;
                       ) : null}
                     </div>
                     {confirming === a.id ? (
-                      <div className="acct-confirm" role="group" aria-label={`Disconnect @${a.handle}?`}>
-                        <span>Disconnect @{a.handle}?</span>
+                      <div className="acct-confirm" role="group" aria-label={`Disconnect ${atHandle(a.handle, a.network)}?`}>
+                        <span>Disconnect {atHandle(a.handle, a.network)}?</span>
                         <button type="button" className="btn btn-small btn-danger" disabled={removing === a.id} onClick={() => void disconnect(a)}>
                           {removing === a.id ? "…" : "Yes"}
                         </button>
@@ -326,7 +350,49 @@ function NetTile({ tile, open, onToggle }: { tile: Tile; open: boolean; onToggle
  */
 function ConnectPanel({
   network,
+  options,
+  initial,
+  prefill,
+  again,
+  onClose,
+  onUnset,
+  onConnected,
+}: {
+  network: Network;
+  /** Ways to connect this network, preferred first. Usually one; Discord has a webhook and a bot. */
+  options: Connector[];
+  /** The connector to start on (when reconnecting an account). */
+  initial?: string;
+  prefill?: Record<string, string>;
+  again: boolean;
+  onClose: () => void;
+  onUnset: (connector: string) => void;
+  onConnected: (accounts: Account[]) => void;
+}) {
+  const [chosen, setChosen] = useState<string>(() => options.find((c) => c.name === initial)?.name ?? options[0]?.name ?? "");
+  const connector = options.find((c) => c.name === chosen) ?? options[0];
+  if (!connector) return null;
+  return (
+    <ConnectForm
+      key={connector.name}
+      network={network}
+      connector={connector}
+      options={options}
+      onChoose={setChosen}
+      prefill={connector.name === initial ? prefill : undefined}
+      again={again}
+      onClose={onClose}
+      onUnset={() => onUnset(connector.name)}
+      onConnected={onConnected}
+    />
+  );
+}
+
+function ConnectForm({
+  network,
   connector,
+  options,
+  onChoose,
   prefill,
   again,
   onClose,
@@ -335,6 +401,8 @@ function ConnectPanel({
 }: {
   network: Network;
   connector: Connector;
+  options: Connector[];
+  onChoose: (name: string) => void;
   prefill?: Record<string, string>;
   again: boolean;
   onClose: () => void;
@@ -344,10 +412,12 @@ function ConnectPanel({
   const label = networkLabel(network);
   const inputs = connector.inputs ?? [];
   const oauth = connector.connect === "oauth";
+  const hint = CONNECTOR_HINT[connector.name] ?? CONNECT_HINT[network];
+  const sees = CAN_SEE[connector.name] ?? CAN_SEE[network];
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(inputs.map((f) => [f.key, prefill?.[f.key] ?? ""])));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const missing = inputs.some((f) => !(values[f.key] ?? "").trim());
+  const missing = inputs.some((f) => !f.optional && !(values[f.key] ?? "").trim());
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -384,14 +454,32 @@ function ConnectPanel({
           Close
         </button>
       </div>
-      {CONNECT_HINT[network] ? <p className="muted small">{CONNECT_HINT[network]}</p> : null}
+      {options.length > 1 ? (
+        <div className="conn-choice" role="group" aria-label={`How to connect ${label}`}>
+          {options.map((c) => {
+            const choice = CONNECTOR_CHOICE[c.name];
+            const on = c.name === connector.name;
+            return (
+              <button key={c.name} type="button" className={`conn-choice-btn${on ? " conn-choice-on" : ""}`} aria-pressed={on} onClick={() => onChoose(c.name)}>
+                <span className="conn-choice-title">{choice?.title ?? c.name.replace(/_/g, " ")}</span>
+                {choice ? <span className="conn-choice-detail muted small">{choice.detail}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      {hint ? <p className="muted small">{hint}</p> : null}
+      {sees ? <p className="small conn-sees">{sees}</p> : null}
       {inputs.length ? (
         <div className={`connect-fields${inputs.length === 1 ? " connect-fields-one" : ""}`}>
           {inputs.map((f, i) => {
-            const secret = isSecretInput(f.key);
+            const secret = f.secret ?? isSecretInput(f.key);
             return (
               <label key={f.key} className="field">
-                <span>{f.label}</span>
+                <span>
+                  {f.label}
+                  {f.optional && !/optional/i.test(f.label) ? <span className="muted"> (optional)</span> : null}
+                </span>
                 <input
                   className={`input${secret ? " mono" : ""}`}
                   type={secret && !/webhook/i.test(f.key) ? "password" : /url|webhook/i.test(f.key) ? "url" : "text"}
@@ -399,7 +487,7 @@ function ConnectPanel({
                   spellCheck={false}
                   placeholder={f.placeholder}
                   value={values[f.key] ?? ""}
-                  autoFocus={i === 0}
+                  autoFocus={i === 0 && options.length < 2}
                   onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                 />
               </label>

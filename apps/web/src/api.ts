@@ -19,6 +19,9 @@ import type {
   FeedQuery,
   InviteCreated,
   InviteInfo,
+  LanguageSettings,
+  LanguageSettingsPatch,
+  LanguagesInfo,
   LiftByStage,
   LinkList,
   LinkReport,
@@ -322,6 +325,8 @@ export const api = {
             before: q.before,
             limit: q.limit,
             q: q.q,
+            languages: q.languages,
+            conversation: q.conversation,
           })}`,
         ),
       (f) => f.fixtureApi.feed(q),
@@ -407,6 +412,18 @@ export const api = {
   updateLinkSettings: (input: LinkSettingsPatch) =>
     pick(() => patch<LinkSettingsResponse>("/v1/links/settings", input), (f) => f.fixtureApi.updateLinkSettings(input)),
   conversions: (limit = 100) => pick(() => get<Conversion[]>(`/v1/conversions${qs({ limit })}`), (f) => f.fixtureApi.conversions(limit)),
+
+  // --- Languages ---
+  /** The team's language settings, the languages seen in the last 30 days, and whether translation is on here. */
+  languages: () => pick(() => get<LanguagesInfo>("/v1/languages"), (f) => f.fixtureApi.languages()),
+  /** Owner only; others get 403. */
+  updateLanguageSettings: (input: LanguageSettingsPatch) =>
+    pick(() => patch<LanguageSettings>("/v1/languages/settings", input), (f) => f.fixtureApi.updateLanguageSettings(input)),
+  /** Translates one feed item now and returns the updated row. 503 `unavailable` without a model or past the spend cap. */
+  translate: (activityId: string) => pick(() => post<Activity>(`/v1/feed/${enc(activityId)}/translate`), (f) => f.fixtureApi.translate(activityId)),
+  /** Fills the stream's `query.translations` for these languages (replacing what was there for them). 503 as above. */
+  expandStream: (streamId: string, languages: string[]) =>
+    pick(() => post<Stream>(`/v1/streams/${enc(streamId)}/expand`, { languages }), (f) => f.fixtureApi.expandStream(streamId, languages)),
 };
 
 export interface StreamHandlers {

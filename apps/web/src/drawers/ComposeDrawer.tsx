@@ -5,8 +5,8 @@ import { Drawer } from "../components/Drawer";
 import { NetworkBadge } from "../components/NetworkBadge";
 import { StagePill } from "../components/Pill";
 import { useToast } from "../components/Toast";
-import { kindsFor } from "../lib/connectors";
-import { ACCOUNT_STATUS_LABEL, NETWORK_MAX_MEDIA, NETWORK_MAX_TEXT, NETWORK_THREADS, networkLabel, plural, textLength, violationText } from "../lib/format";
+import { capabilitiesFor, kindsFor } from "../lib/connectors";
+import { ACCOUNT_STATUS_LABEL, atHandle, NETWORK_MAX_MEDIA, NETWORK_MAX_TEXT, NETWORK_THREADS, networkLabel, plural, textLength, violationText } from "../lib/format";
 import { useRoom } from "../lib/room";
 import { MediaTray, Thumb, type ItemsUpdate, type MediaItem } from "./compose/MediaTray";
 import { defaultPick, NetworkOptions, NO_TIKTOK, variantProblems, wireOptions, type TikTokExtras } from "./compose/NetworkOptions";
@@ -63,7 +63,9 @@ export function ComposeDrawer({
   const { accountsById, connectors, timezone: tz } = useRoom();
   const toast = useToast();
   const accounts = useMemo(() => [...accountsById.values()], [accountsById]);
-  const usable = useMemo(() => accounts.filter((a) => a.status === "active"), [accounts]);
+  // A connector that can't publish (WeChat Official Accounts here: replies only) has nothing to post to.
+  const canPost = useCallback((a: Account) => capabilitiesFor(connectors, a)?.publish !== false, [connectors]);
+  const usable = useMemo(() => accounts.filter((a) => a.status === "active" && canPost(a)), [accounts, canPost]);
 
   const [body, setBody] = useState(prefill?.body ?? "");
   const [picked, setPicked] = useState<string[] | null>(null); // null: every connected account, until the person picks
@@ -299,7 +301,7 @@ export function ComposeDrawer({
   }
 
   const issuesFor = (a: Account) => issues.filter((i) => (i.socialAccountId ? i.socialAccountId === a.id : i.network === a.network));
-  const unusable = accounts.filter((a) => a.status !== "active");
+  const unusable = accounts.filter((a) => a.status !== "active" || !canPost(a));
   const shown = check && check.verdict !== "allow" ? check.violations.filter((v) => v.severity !== "warn").sort((a, b) => (a.severity === "block" ? -1 : 0) - (b.severity === "block" ? -1 : 0)) : [];
 
   return (
@@ -388,15 +390,20 @@ export function ComposeDrawer({
               return (
                 <button key={a.id} type="button" className={`chip chip-acct${on ? " chip-acct-on" : ""}`} aria-pressed={on} onClick={() => toggle(a.id)}>
                   <NetworkBadge network={a.network} />
-                  <span>@{a.handle}</span>
+                  <span>{atHandle(a.handle, a.network)}</span>
                 </button>
               );
             })}
             {unusable.map((a) => (
-              <span key={a.id} className="chip chip-acct chip-acct-off" aria-disabled="true" title="Reconnect it in Connections to post here">
+              <span
+                key={a.id}
+                className="chip chip-acct chip-acct-off"
+                aria-disabled="true"
+                title={a.status === "active" ? `${networkLabel(a.network)} only answers messages here; it can't post` : "Reconnect it in Connections to post here"}
+              >
                 <NetworkBadge network={a.network} />
-                <span>@{a.handle}</span>
-                <span className="chip-acct-why">{ACCOUNT_STATUS_LABEL[a.status]}</span>
+                <span>{atHandle(a.handle, a.network)}</span>
+                <span className="chip-acct-why">{a.status === "active" ? "Replies only" : ACCOUNT_STATUS_LABEL[a.status]}</span>
               </span>
             ))}
           </div>
@@ -517,7 +524,7 @@ function VariantEditor({
     <div className={`variant cv${issues.length ? " variant-failed" : ""}`}>
       <div className="variant-head">
         <NetworkBadge network={net} />
-        <span className="muted">@{account.handle}</span>
+        <span className="muted">{atHandle(account.handle, account.network)}</span>
         {value.follows ? <span className="tag">Follows the idea</span> : null}
         {parts > 1 ? <span className="mono muted small">1/{parts}</span> : null}
         <Counter network={net} text={value.text} />
