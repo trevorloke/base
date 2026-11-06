@@ -109,6 +109,41 @@ check('Priya is on file: email, phone, address, the tag, voted (the date cell)',
   && priya.address === '13450 104 Ave' && priya.tags.includes('xlsx-import') && !!priya.voted_at, JSON.stringify(priya));
 check('Omar too, not voted', omar && omar.city === 'Whalley' && !omar.voted_at, JSON.stringify(omar));
 
+// ── The campaign's own list layout (made-up people): every column lands ──
+const LHEAD = ['First Name', 'Surname', 'Home Phone', 'Mobile Phone', 'Email Address', 'Volunteer', 'Lists', 'Donor', 'House Unit', 'House Number', 'Street Name', 'City', 'Province', 'Postal', 'Latitude', 'Longitude', 'House Notes', 'Building Notes', 'Access Type', 'Dwelling Type', 'Interaction Status', 'Interaction Date', 'Organizer', 'Email Opt-In', 'SMS Opt-In', 'Tags', 'Sign', 'Support', 'Voted'];
+const L1 = ['Riya', 'Sample', '', '16045550188', `riya.${tag}@example.org`, '1', '', '1', '204', '16068', '83 Ave', 'Surrey', 'BC', 'V4N 0N2', '49.1535325', '-122.7767407', 'On the old supporter list; volunteer status unconfirmed', '', '', '', '', '', '', 't', 'f', 'Team: North; Vol: Door Knocker; Vol: GOTV; Zone 1', '', '5', 'FALSE'];
+const L2 = [...L1]; L2[0] = 'Omar'; L2[1] = 'Listed'; L2[2] = '604-555-0177'; L2[3] = ''; L2[4] = ''; L2[8] = ''; L2[9] = '9001'; L2[16] = ''; L2[25] = '';
+const L3 = [...L1]; L3[0] = 'Lee'; L3[1] = 'Listed'; L3[3] = '1.6045E+10'; L3[4] = `lee.${tag}@example.org`; L3[9] = '9002'; L3[25] = '';
+await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
+await page.click('button:has-text("Paste text")');
+await page.fill('#imp-paste', [LHEAD, L1, L2, L3].map((r) => r.join('\t')).join('\n'));
+await page.click('button:has-text("Use this text")');
+await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+const lmap = Object.fromEntries(await page.$$eval('.imp-map__row', (rows) => rows.map((r) => [r.querySelector('.imp-map__head').innerText.trim(), (() => { const x = r.querySelector('select'); return x ? x.options[x.selectedIndex].text : ''; })()])));
+const want = { 'First Name': 'First name', Surname: 'Last name', 'Home Phone': 'Home phone', 'Mobile Phone': 'Phone', 'Email Address': 'Email', 'House Unit': 'Unit / apt', 'House Number': 'House number', 'Street Name': 'Street address', Postal: 'Postal code', 'House Notes': 'House notes', Tags: 'Tags', Support: 'Support', Voted: 'Voted (1/0 or a date)' };
+const wrong = Object.entries(want).filter(([h, f]) => lmap[h] !== f);
+check('the list’s columns map themselves (House Unit → Unit / apt; Home Phone → its field; Support → its 1–5 field)', wrong.length === 0, JSON.stringify(wrong));
+const notes = (await page.$$eval('.imp-map__note', (els) => els.map((e) => e.innerText))).join(' | ');
+check('a phone Excel cut short is named, and won’t be imported', /lost its last digits in Excel/.test(notes), notes);
+await page.screenshot({ path: `${SHOTS}/03-list-format.png`, fullPage: true });
+await page.click('button:has-text("Check 3 rows")');
+await sleep(1500);
+await page.getByRole('button', { name: /^Import \d+ (person|people)$/ }).click();
+await sleep(2000);
+const lp = async (q) => (await api(`/persons?q=${encodeURIComponent(q)}`)).json.persons[0];
+const riya = await lp('Riya Sample');
+check('Riya: unit 204 at 16068 83 Ave, her mobile, the pin, tags split, volunteer and donor',
+  riya?.unit === '204' && riya.address === '16068 83 Ave' && riya.phone === '16045550188' && riya.lat != null
+  && ['Team: North', 'Vol: Door Knocker', 'Zone 1', 'volunteer', 'donor'].every((x) => riya.tags.includes(x)) && !riya.voted_at, JSON.stringify(riya));
+const rf = (await api(`/persons/${riya.id}/fields`)).json.fields;
+const fv = (n) => rf.find((f) => f.name === n)?.value;
+check('Riya’s profile fields: Province BC, House notes, Email opt-in yes, SMS opt-in no, Support 5',
+  fv('Province') === 'BC' && /old supporter list/.test(fv('House notes') || '') && fv('Email opt-in') === true && fv('SMS opt-in') === false && fv('Support') === 5, JSON.stringify(rf.filter((f) => f.value != null).map((f) => [f.name, f.value])));
+const omar2 = await lp('Omar Listed');
+check('Omar (no mobile): his home phone is the number to call', omar2?.phone === '604-555-0177', JSON.stringify(omar2));
+const lee = await lp('Lee Listed');
+check('Lee (1.6045E+10): no wrong number on file', lee && !lee.phone, JSON.stringify(lee));
+
 // ── And out ──
 for (const k of ['people', 'contacts', 'gifts', 'volunteers', 'signs', 'shifts', 'subscribers', 'lists']) {
   const r = await api(`/export/${k}.csv`);

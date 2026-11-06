@@ -248,7 +248,7 @@ const EXACT = [
   ['volunteer', /^(volunteer|isvolunteer|volunteerflag|vol)$/],
   ['donor', /^(donor|isdonor|donorflag)$/],
   ['voted', /^(voted|hasvoted|didvote|votedyn|voted10)$/],
-  ['unit', /^(unit|unitnumber|unitno|apt|aptno|aptnumber|apartment|suite|suiteno|address2|addressline2|street2)$/],
+  ['unit', /^(unit|unitnumber|unitno|houseunit|apt|aptno|aptnumber|apartment|suite|suiteno|address2|addressline2|street2)$/],
   ['address', /^(address|streetaddress|streetaddress1|address1|addressline1|street|street1|streetname|civicaddress|homeaddress|residentialaddress|mailingaddress|addr)$/],
   ['city', /^(city|town|municipality|locality|cityname)$/],
   ['postal', /^(postal|postalcode|postcode|zip|zipcode|pc)$/],
@@ -268,7 +268,7 @@ const CONTAINS = [
   ['lat', /latitude/],
   ['lng', /longitude/],
   ['postal', /postal|postcode|zip/],
-  ['unit', /^(unit|apt|suite)/],
+  ['unit', /^(unit|apt|suite)|(house|home|suite|apt)unit$/],
   ['address', /address|street/],
   ['city', /(^|home|mailing|mail|res|residential|billing|primary|registered)city|^town|municipal/],
   ['tags', /^tags?|tags?$|groups?$|labels?$|segments?$/],
@@ -381,17 +381,27 @@ const ratingValuesOf = (records, col) => {
 // One CSV record → the server's row shape (only filled fields are sent).
 // A rating that isn't on the scale is left off: the server rejects the whole
 // row for it, and losing the person is worse than losing a bad rating.
-function toRow(scale, cells, mapping, ratingMap) {
+// A phone number Excel turned into "1.6047E+10": its last digits are gone,
+// so it is never imported as a number (the check step says which column).
+export const SCI_RE = /^\d(\.\d+)?e\+?\d+$/i;
+// homeCol: a Home Phone column — the number to call when the row has no
+// other (it still fills the Home phone profile field too).
+function toRow(scale, cells, mapping, ratingMap, homeCol = -1) {
   const row = {};
   mapping.forEach((key, i) => {
     if (!key) return;
     const v = String(cells[i] ?? '').trim();
     if (!v) return;
-    if (key.startsWith(FIELD_KEY)) { fieldCell(row, key, v); return; }
+    if (key.startsWith(FIELD_KEY)) { fieldCell(row, key, SCI_RE.test(v) && i === homeCol ? '' : v); return; }
     if (key === 'tags') row.tags = row.tags ? `${row.tags};${v}` : v;
     else if (key === 'rating') { const code = resolveRating(scale, ratingMap, v); if (code) row.rating = code; }
+    else if (key === 'phone' && SCI_RE.test(v)) { /* digits lost in Excel */ }
     else row[key] = v;
   });
+  if (!row.phone && homeCol >= 0) {
+    const h = String(cells[homeCol] ?? '').trim();
+    if (h && !SCI_RE.test(h)) row.phone = h;
+  }
   return row;
 }
 
@@ -691,12 +701,25 @@ function ImportFlow() {
   // file is never held twice. The preview shapes only its first few.
   const records = source?.records || [];
   const total = records.length;
+  // A Home Phone column (by its name): the number to call when there's no other.
+  const homeCol = source ? source.headers.findIndex((h) => normHeader(h) === 'homephone') : -1;
   const partAt = (start, size) => records.slice(start, start + size)
-    .map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap), row: r.row }));
+    .map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol), row: r.row }));
   const preview = useMemo(
-    () => (source ? source.records.slice(0, 5).map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap), row: r.row, cells: r.cells })) : []),
-    [source, mapping, scale, ratingMap],
+    () => (source ? source.records.slice(0, 5).map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol), row: r.row, cells: r.cells })) : []),
+    [source, mapping, scale, ratingMap, homeCol],
   );
+  // Phone columns Excel cut short ("1.6047E+10"), by column: how many.
+  const sciByCol = useMemo(() => {
+    const out = {};
+    if (!source) return out;
+    source.headers.forEach((_, i) => {
+      if (mapping[i] !== 'phone' && i !== homeCol) return;
+      const n = source.records.reduce((m, r) => m + (SCI_RE.test(String(r.cells[i] ?? '').trim()) ? 1 : 0), 0);
+      if (n) out[i] = n;
+    });
+    return out;
+  }, [source, mapping, homeCol]);
   const ratingCol = mapping.indexOf('rating');
   const hasName = mapping.some((k) => k === 'name' || k === 'first' || k === 'last');
   const usedCount = mapping.filter(Boolean).length;
@@ -934,6 +957,14 @@ function ImportFlow() {
                       <p className="imp-map__note" role="status">
                         Now “Don’t import” — {allFields.find((f) => f.key === bumped.key)?.label} comes from one column.
                       </p>
+                    )}
+                    {sciByCol[i] > 0 && (
+                      <p className="imp-map__note is-warn">
+                        {plural(sciByCol[i], 'number has', 'numbers have')} lost {sciByCol[i] === 1 ? 'its' : 'their'} last digits in Excel (like 1.6047E+10), so {sciByCol[i] === 1 ? 'it' : 'they'} won’t be imported. In the spreadsheet, format this column as Text (or Number with no decimals), save again, and choose the file again.
+                      </p>
+                    )}
+                    {i === homeCol && mapping[i] !== 'phone' && mapping[i] && !sciByCol[i] && (
+                      <p className="imp-map__note">Also the number to call for anyone with no mobile.</p>
                     )}
                     {mapping[i] === 'rating' && badRatings > 0 && (
                       <p className="imp-map__note is-warn">

@@ -136,7 +136,11 @@ than a week after they came off is refused. Contacts are door, phone, text or
   no, true and false, and a database export's t and f; a rating column
   rated some other way (a 1–5) is mapped value by value under *What each
   rating means on your scale* (a 5 there can be a 1 here); dates come in as
-  spreadsheets write them (10/21/2026, 21 Oct 2026).
+  spreadsheets write them (10/21/2026, 21 Oct 2026). A **House Unit**
+  column is the unit; a **Home Phone** column fills its field and is the
+  number to call for anyone with no mobile; and a phone number Excel has
+  cut short (1.6047E+10 — its last digits are gone) is never imported:
+  the column says so, and how to save it again.
 - **Fix details** wherever you meet someone — under the phone on the door
   card, on the Calls card and on the profile: a name, a phone, an email,
   saved through the offline outbox like a knock. Any role; a volunteer may
