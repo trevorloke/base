@@ -16,6 +16,16 @@ import type {
   ConnectCredentialsInput,
   ConnectStartInput,
   Connector,
+  Conversion,
+  CreateLinkInput,
+  LinkList,
+  LinkPlacement,
+  LinkReport,
+  LinkSettings,
+  LinkSettingsPatch,
+  LinkSettingsResponse,
+  LinkStats,
+  TrackedLink,
   InviteCreated,
   InviteInfo,
   MediaAsset,
@@ -1621,6 +1631,236 @@ function integrationsApi() {
   };
 }
 
+// --- Links and conversions ---------------------------------------------------
+// A handful of short links from published posts, about a month of clicks, and a few purchases in USD.
+
+const LINK_BASE = "https://nwc.to";
+
+interface LinkSpec {
+  id: string;
+  slug: string;
+  destination: string;
+  network: Network | null;
+  postId: string | null;
+  placement: LinkPlacement;
+  daysAgo: number;
+  people: number;
+  previews: number;
+  /** Purchase values, one per conversion. */
+  sales: number[];
+}
+
+const LINK_SPECS: LinkSpec[] = [
+  { id: "lnk_guji_x", slug: "guji", destination: "https://northwind.coffee/shop/ethiopia-guji", network: "x", postId: "p_cal_guji", placement: "text", daysAgo: 4, people: 412, previews: 38, sales: [24, 24, 48, 24] },
+  { id: "lnk_sub_li", slug: "sub2w", destination: "https://northwind.coffee/subscribe?plan=two-weeks", network: "linkedin", postId: "p_cal_beans", placement: "first_comment", daysAgo: 9, people: 268, previews: 61, sales: [49, 49, 98] },
+  { id: "lnk_ratio_bsky", slug: "ratio", destination: "https://northwind.coffee/journal/cold-brew-the-whole-recipe", network: "bluesky", postId: "p_ratio", placement: "thread", daysAgo: 16, people: 233, previews: 22, sales: [18] },
+  { id: "lnk_cup_threads", slug: "cupping", destination: "https://northwind.coffee/events/saturday-cupping-pearl", network: "threads", postId: "p_cal_sat", placement: "text", daysAgo: 6, people: 141, previews: 17, sales: [] },
+  { id: "lnk_whole_li", slug: "wholesale", destination: "https://northwind.coffee/wholesale", network: "linkedin", postId: "p_cal_wholesale", placement: "link", daysAgo: 12, people: 96, previews: 44, sales: [180] },
+  { id: "lnk_guji_bsky", slug: "guji-b", destination: "https://northwind.coffee/shop/ethiopia-guji", network: "bluesky", postId: "p_cal_guji", placement: "text", daysAgo: 4, people: 88, previews: 9, sales: [24] },
+  { id: "lnk_menu_x", slug: "fall-menu", destination: "https://northwind.coffee/menu/fall", network: "x", postId: "p_chai_iced", placement: "text", daysAgo: 22, people: 57, previews: 12, sales: [] },
+  { id: "lnk_manual", slug: "gift", destination: "https://northwind.coffee/gift-cards", network: null, postId: null, placement: "manual", daysAgo: 2, people: 21, previews: 0, sales: [] },
+];
+
+function linkStatsOf(spec: LinkSpec): LinkStats {
+  return {
+    links: 1,
+    clicks: Math.round(spec.people * 1.27),
+    uniqueVisitors: spec.people,
+    previews: spec.previews,
+    conversions: spec.sales.length,
+    conversionValue: spec.sales.reduce((a, b) => a + b, 0),
+  };
+}
+
+function utmFor(network: string | null, campaign: string, medium: string): Record<string, string> {
+  return { utm_source: network ?? "starsign", utm_medium: medium, utm_campaign: campaign };
+}
+
+function targetOf(destination: string, utm: Record<string, string>, on: boolean): string {
+  if (!on) return destination;
+  try {
+    const u = new URL(destination);
+    for (const [k, v] of Object.entries(utm)) u.searchParams.set(k, v);
+    return u.toString();
+  } catch {
+    return destination;
+  }
+}
+
+const linkState = {
+  settings: { enabled: true, utm: true, clickIds: true, defaultCampaign: "fall-2026", medium: "social" } as LinkSettings,
+  links: LINK_SPECS.map((spec): TrackedLink => {
+    const utm = utmFor(spec.network, spec.postId ? spec.postId.replace(/^p_(cal_)?/, "") : "fall-2026", "social");
+    return {
+      id: spec.id,
+      slug: spec.slug,
+      destination: spec.destination,
+      target: targetOf(spec.destination, utm, true),
+      postId: spec.postId,
+      variantId: spec.postId ? `${spec.postId}_v0` : null,
+      network: spec.network,
+      placement: spec.placement,
+      utm,
+      createdAt: ago(24 * spec.daysAgo),
+      disabledAt: null,
+      shortUrl: `${LINK_BASE}/${spec.slug}`,
+      stats: linkStatsOf(spec),
+    };
+  }),
+  conversions: LINK_SPECS.flatMap((spec, i) =>
+    spec.sales.map(
+      (value, j): Conversion => ({
+        id: `cv_${spec.slug}_${j}`,
+        clickId: `ssc_${spec.slug}${j}${i}`,
+        linkId: spec.id,
+        variantId: spec.postId ? `${spec.postId}_v0` : null,
+        network: spec.network,
+        name: spec.id === "lnk_sub_li" ? "subscribe" : spec.id === "lnk_whole_li" ? "lead" : "purchase",
+        value,
+        currency: "USD",
+        externalId: `order_${4100 + i * 10 + j}`,
+        source: j % 2 ? "api" : "browser",
+        occurredAt: ago(24 * Math.max(0.2, spec.daysAgo - 1 - j * 1.3)),
+        createdAt: ago(24 * Math.max(0.2, spec.daysAgo - 1 - j * 1.3)),
+      }),
+    ),
+  ),
+  seq: 0,
+};
+
+/** Thirty days of clicks: a weekday rhythm, bumps the day after each link went out, a little noise. */
+function clicksByDay(links: TrackedLink[], fromMs: number, toMs: number): { day: string; clicks: number }[] {
+  const days: { day: string; clicks: number }[] = [];
+  const start = new Date(fromMs);
+  start.setUTCHours(0, 0, 0, 0);
+  for (let t = start.getTime(); t <= toMs; t += DAY) {
+    const d = new Date(t);
+    const dow = d.getUTCDay();
+    let clicks = 18 + (dow === 0 || dow === 6 ? -6 : 4) + Math.round(5 * Math.sin(t / DAY));
+    for (const l of links) {
+      const age = (t - Date.parse(l.createdAt)) / DAY;
+      if (age >= -1 && age < 8) clicks += Math.round(((l.stats?.clicks ?? 0) / 4) * Math.exp(-Math.max(0, age) / 1.6));
+    }
+    days.push({ day: d.toISOString().slice(0, 10), clicks: Math.max(0, clicks) });
+  }
+  return days;
+}
+
+function canChangeLinks(): boolean {
+  const r = currentWs().role;
+  return r === "owner" || r === "approver";
+}
+
+function linksApi() {
+  return {
+    linkReport: async (from?: string, to?: string): Promise<LinkReport> => {
+      const toMs = to ? Date.parse(to) : Date.now();
+      const fromMs = from ? Date.parse(from) : toMs - 29 * DAY;
+      const live = linkState.links.filter((l) => !l.disabledAt);
+      const sum = (k: keyof LinkStats) => live.reduce((n, l) => n + (l.stats?.[k] ?? 0), 0);
+      const conversions = linkState.conversions.filter((c) => live.some((l) => l.id === c.linkId));
+      const byNet = new Map<string | null, { network: string | null; clicks: number; uniqueVisitors: number; conversions: number; value: number }>();
+      for (const l of live) {
+        const row = byNet.get(l.network) ?? { network: l.network, clicks: 0, uniqueVisitors: 0, conversions: 0, value: 0 };
+        row.clicks += l.stats?.clicks ?? 0;
+        row.uniqueVisitors += l.stats?.uniqueVisitors ?? 0;
+        row.conversions += l.stats?.conversions ?? 0;
+        row.value += l.stats?.conversionValue ?? 0;
+        byNet.set(l.network, row);
+      }
+      const value = sum("conversionValue");
+      return delay({
+        from: iso(fromMs),
+        to: iso(toMs),
+        configured: true,
+        totals: {
+          clicks: sum("clicks"),
+          uniqueVisitors: sum("uniqueVisitors"),
+          previews: sum("previews"),
+          conversions: conversions.length,
+          attributedConversions: conversions.filter((c) => c.linkId).length,
+          conversionValue: value,
+          valueByCurrency: value ? [{ currency: "USD", value }] : [],
+        },
+        byNetwork: [...byNet.values()].sort((a, b) => b.uniqueVisitors - a.uniqueVisitors),
+        byDay: clicksByDay(live, fromMs, toMs),
+        topLinks: live
+          .slice()
+          .sort((a, b) => (b.stats?.clicks ?? 0) - (a.stats?.clicks ?? 0))
+          .map((l) => ({
+            id: l.id,
+            slug: l.slug,
+            shortUrl: l.shortUrl,
+            destination: l.destination,
+            network: l.network,
+            postId: l.postId,
+            variantId: l.variantId,
+            placement: l.placement,
+            ...(l.stats ?? { links: 1, clicks: 0, uniqueVisitors: 0, previews: 0, conversions: 0, conversionValue: 0 }),
+            clicksInRange: l.stats?.clicks ?? 0,
+          })),
+      }, 220);
+    },
+
+    links: async (limit: number): Promise<LinkList> =>
+      delay({ baseUrl: LINK_BASE, settings: linkState.settings, links: linkState.links.filter((l) => !l.disabledAt).slice(0, limit) }),
+
+    createLink: async (input: CreateLinkInput): Promise<TrackedLink> => {
+      await delay(null, 300);
+      requireSession();
+      if (currentWs().role === "viewer") throw new ApiError(403, "forbidden", "Viewers can't make links.");
+      const url = input.url.trim();
+      if (!/^https?:\/\/[^\s.]+\.[^\s]+$/i.test(url)) throw new ApiError(400, "invalid", "That isn't a full web address (https://…).");
+      linkState.seq += 1;
+      const slug = `m${(4242 + linkState.seq * 37).toString(36)}`;
+      const campaign = input.campaign?.trim() || linkState.settings.defaultCampaign || "manual";
+      const utm = utmFor(input.network ?? null, campaign, linkState.settings.medium);
+      const link: TrackedLink = {
+        id: `lnk_new_${linkState.seq}`,
+        slug,
+        destination: url,
+        target: targetOf(url, utm, linkState.settings.utm),
+        postId: null,
+        variantId: null,
+        network: input.network ?? null,
+        placement: "manual",
+        utm: linkState.settings.utm ? utm : {},
+        createdAt: iso(Date.now()),
+        disabledAt: null,
+        shortUrl: `${LINK_BASE}/${slug}`,
+        stats: { links: 1, clicks: 0, uniqueVisitors: 0, previews: 0, conversions: 0, conversionValue: 0 },
+      };
+      linkState.links.unshift(link);
+      return clone(link);
+    },
+
+    disableLink: async (id: string): Promise<void> => {
+      await delay(null, 240);
+      requireSession();
+      if (!canChangeLinks()) throw new ApiError(403, "forbidden", "Only owners and approvers can turn links off.");
+      const link = linkState.links.find((l) => l.id === id && !l.disabledAt);
+      if (!link) throw new ApiError(404, "not_found", "That link is already off.");
+      link.disabledAt = iso(Date.now());
+    },
+
+    linkSettings: (): Promise<LinkSettingsResponse> => delay({ ...linkState.settings, baseUrl: LINK_BASE }),
+
+    updateLinkSettings: async (input: LinkSettingsPatch): Promise<LinkSettingsResponse> => {
+      await delay(null, 260);
+      requireSession();
+      if (currentWs().role !== "owner") throw new ApiError(403, "forbidden", "Only an owner can change link settings.");
+      if (input.defaultCampaign !== undefined && input.defaultCampaign.length > 100) throw new ApiError(400, "invalid", "Keep the campaign under 100 characters.");
+      const next: LinkSettings = { ...linkState.settings, ...input };
+      if (input.defaultCampaign !== undefined && !input.defaultCampaign.trim()) delete next.defaultCampaign;
+      linkState.settings = next;
+      return clone({ ...next, baseUrl: LINK_BASE });
+    },
+
+    conversions: async (limit: number): Promise<Conversion[]> =>
+      delay(linkState.conversions.slice().sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt)).slice(0, limit)),
+  };
+}
+
 export const fixtureApi = {
   me: () => delay(currentMe()),
   policy: () => delay(policy),
@@ -1824,6 +2064,7 @@ export const fixtureApi = {
 
   ...peopleApi(),
   ...integrationsApi(),
+  ...linksApi(),
 };
 
 /** A pretend live stream: one new mention arrives every 40 seconds. */
