@@ -6,6 +6,7 @@ import { PanelState } from "../components/PanelState";
 import { useToast } from "../components/Toast";
 import { plural } from "../lib/format";
 import { COMMON_LANGUAGES, LANG_CODE_RE, languageName, primaryLanguage, sameLanguage } from "../lib/lang";
+import { ErrorNote } from "../components/ErrorNote";
 
 const OTHER = "__other";
 const MAX_DAILY = 100_000;
@@ -415,11 +416,7 @@ function StreamLanguages({
           </div>
         )
       ) : null}
-      {error ? (
-        <div className="card-error" role="alert">
-          {error}
-        </div>
-      ) : null}
+      {error ? <ErrorNote text={error} /> : null}
     </div>
   );
 }

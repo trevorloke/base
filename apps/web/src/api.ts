@@ -39,9 +39,11 @@ import type {
   Member,
   ModerateAction,
   OAuthStart,
+  PendingInvite,
   Policy,
   PolicyCheckInput,
   PolicyDecision,
+  PolicyVersion,
   PostDetail,
   PostFull,
   PostSummary,
@@ -171,7 +173,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (res.status === 204) return undefined as T;
   const text = await res.text();
   if (!res.ok) {
-    if (res.status === 401 && !getApiKey() && !AUTH_PATHS.test(path)) unauthorizedListener?.();
+    if (res.status === 401 && !getApiKey() && !(AUTH_PATHS.test(path) && (method === "GET" || method === "POST"))) unauthorizedListener?.();
     throw toApiError(res.status, res.statusText, text);
   }
   if (!text) return undefined as T;
@@ -293,6 +295,7 @@ function multipart(file: File, alt: string | undefined, onProgress: (p: number) 
 const get = <T,>(path: string) => request<T>("GET", path);
 const post = <T,>(path: string, body?: unknown) => request<T>("POST", path, body);
 const patch = <T,>(path: string, body?: unknown) => request<T>("PATCH", path, body);
+const put = <T,>(path: string, body?: unknown) => request<T>("PUT", path, body);
 const del = <T,>(path: string) => request<T>("DELETE", path);
 const enc = encodeURIComponent;
 
@@ -304,6 +307,14 @@ function pick<T>(live: () => Promise<T>, mock: (f: Fixtures) => Promise<T>): Pro
 export const api = {
   me: () => pick(() => get<Me>("/v1/me"), (f) => f.fixtureApi.me()),
   policy: () => pick(() => get<Policy>("/v1/policy"), (f) => f.fixtureApi.policy()),
+  /** Replaces the whole policy with a new version (owners, people only). Send the full document. */
+  updatePolicy: (policy: Policy) => pick(() => put<Policy>("/v1/policy", policy), (f) => f.fixtureApi.updatePolicy(policy)),
+  /** Every version, newest first. */
+  policyHistory: () => pick(() => get<PolicyVersion[]>("/v1/policy/history"), (f) => f.fixtureApi.policyHistory()),
+  workspace: () => pick(() => get<Workspace>("/v1/workspace"), (f) => f.fixtureApi.workspace()),
+  /** Replaces the profile (owner/approver/editor): merge with the current one first so unknown keys survive. */
+  updateProfile: (profile: Record<string, unknown>) =>
+    pick(() => patch<Workspace>("/v1/workspace/profile", { profile }), (f) => f.fixtureApi.updateProfile(profile)),
   accounts: () => pick(() => get<Account[]>("/v1/accounts"), (f) => f.fixtureApi.accounts()),
   streams: () => pick(() => get<Stream[]>("/v1/streams"), (f) => f.fixtureApi.streams()),
 
@@ -313,6 +324,8 @@ export const api = {
   drafts: (limit = 20) => pick(() => get<PostSummary[]>(`/v1/posts${qs({ status: "draft", limit })}`), () => Promise.resolve([] as PostSummary[])),
   schedulePost: (id: string, at: string) => pick(() => post<PostDetail>(`/v1/posts/${enc(id)}/schedule`, { at }), (f) => f.fixtureApi.post(id)),
   publishNow: (id: string) => pick(() => post<PostDetail>(`/v1/posts/${enc(id)}/publish-now`), (f) => f.fixtureApi.post(id)),
+  /** Re-queues the failed variants of a failed or partly published post to go out now. 409 when nothing failed. */
+  retryPost: (id: string) => pick(() => post<PostDetail>(`/v1/posts/${enc(id)}/retry`), (f) => f.fixtureApi.retryPost(id)),
   cancelPost: (id: string) => pick(() => post<PostDetail>(`/v1/posts/${enc(id)}/cancel`), (f) => f.fixtureApi.post(id)),
   decide: (id: string, input: DecideInput) =>
     pick(
@@ -379,6 +392,10 @@ export const api = {
   setMemberRole: (id: string, role: Role) => pick(() => patch<Member>(`/v1/members/${enc(id)}`, { role }), (f) => f.fixtureApi.setMemberRole(id, role)),
   removeMember: (id: string) => pick(() => del<void>(`/v1/members/${enc(id)}`), (f) => f.fixtureApi.removeMember(id)),
   invite: (email: string, role: Role) => pick(() => post<InviteCreated>("/v1/invites", { email, role }), (f) => f.fixtureApi.invite(email, role)),
+  /** Owners only. */
+  invites: () => pick(() => get<PendingInvite[]>("/v1/invites"), (f) => f.fixtureApi.invites()),
+  /** Owners only; the link stops working at once. */
+  revokeInvite: (id: string) => pick(() => del<void>(`/v1/invites/${enc(id)}`), (f) => f.fixtureApi.revokeInvite(id)),
   inviteInfo: (token: string) => pick(() => get<InviteInfo>(`/v1/invites/${enc(token)}`), (f) => f.fixtureApi.inviteInfo(token)),
   acceptInvite: (input: AcceptInviteInput) => pick(() => post<Session>("/v1/auth/accept-invite", input), (f) => f.fixtureApi.acceptInvite(input)),
 

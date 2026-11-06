@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { AttemptLimiter, SCRYPT_PARAMS, hashPassword, needsRehash, verifyPassword } from "../src/index.ts";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomBytes } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { createTestDb } from "@starsign/db/test";
+import { ledgerEvents, type DbHandle } from "@starsign/db";
+import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
+import { AttemptLimiter, INVITE_TTL_MS, InMemoryScheduler, SCRYPT_PARAMS, SecretBox, Starsign, hashPassword, needsRehash, verifyPassword, type Principal } from "../src/index.ts";
 
 describe("password hashing", () => {
   it("encodes scrypt parameters, salt and a 64-byte key", async () => {
@@ -68,5 +73,88 @@ describe("attempt limiter", () => {
     l.hit("a@x.test");
     l.reset("a@x.test");
     expect(l.retryAfterMs("a@x.test")).toBe(0);
+  });
+});
+
+describe("pending invites", () => {
+  let h: DbHandle;
+  let m: Starsign;
+  let clock = Date.parse("2026-11-03T12:00:00Z");
+  const now = () => new Date(clock);
+  let owner: Principal;
+  let editor: Principal;
+  let wsId = "";
+  let otherOwner: Principal;
+  const token = (url: string) => new URL(url).searchParams.get("invite")!;
+
+  beforeAll(async () => {
+    h = await createTestDb();
+    m = new Starsign({
+      handle: h,
+      connectors: new ConnectorRegistry().register(new MockConnector()),
+      scheduler: new InMemoryScheduler(),
+      secrets: new SecretBox(randomBytes(32)),
+      now,
+      auth: { mailer: null, publicUrl: "https://starsign.test", logLinks: false },
+    });
+    const ownerUser = await m.workspaces.ensureUser("olga@acme.test", "Olga");
+    const ws = await m.workspaces.create({ slug: "acme", name: "Acme" }, { type: "human", id: ownerUser.id });
+    wsId = ws.id;
+    await m.workspaces.addMember(ws.id, ownerUser.id, "owner");
+    owner = { workspaceId: ws.id, actor: { type: "human", id: ownerUser.id }, role: "owner" };
+    editor = { workspaceId: ws.id, actor: { type: "human", id: "usr_ed" }, role: "editor" };
+    const other = await m.workspaces.create({ slug: "other", name: "Other" }, { type: "human", id: "usr_other" });
+    otherOwner = { workspaceId: other.id, actor: { type: "human", id: "usr_other" }, role: "owner" };
+  });
+  afterAll(() => h.close());
+
+  it("lists only pending invites, with who sent them, and never the token hash", async () => {
+    const a = await m.auth.createInvite(owner, { email: "ann@acme.test", role: "editor" });
+    await m.auth.createInvite(owner, { email: "ben@acme.test", role: "viewer" });
+    clock += 60_000;
+    // Accepted: not pending.
+    await m.auth.acceptInvite({ token: token(a.inviteUrl), name: "Ann", password: "ann's long password" }, null);
+    // Expired: not pending.
+    await m.auth.createInvite(owner, { email: "cat@acme.test", role: "viewer" });
+    clock += INVITE_TTL_MS + 60_000;
+    await m.auth.createInvite(owner, { email: "dan@acme.test", role: "approver" });
+    await m.auth.createInvite(otherOwner, { email: "eve@other.test", role: "viewer" });
+
+    const list = await m.auth.listInvites(owner);
+    expect(list.map((i) => i.email)).toEqual(["dan@acme.test"]);
+    expect(list[0]).toEqual({
+      id: expect.any(String),
+      email: "dan@acme.test",
+      role: "approver",
+      invitedBy: { id: owner.actor.id, name: "Olga", email: "olga@acme.test" },
+      expiresAt: new Date(clock + INVITE_TTL_MS).toISOString(),
+      createdAt: new Date(clock).toISOString(),
+    });
+    expect(JSON.stringify(list)).not.toContain("tokenHash");
+  });
+
+  it("is for owners only, people not agents", async () => {
+    await expect(m.auth.listInvites(editor)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(m.auth.listInvites({ ...owner, actor: { type: "mcp", id: "claude" } })).rejects.toMatchObject({ code: "forbidden" });
+    const [inv] = await m.auth.listInvites(owner);
+    await expect(m.auth.revokeInvite(editor, inv!.id)).rejects.toMatchObject({ code: "forbidden" });
+  });
+
+  it("revokes a pending invite so its link stops working, once, in its own workspace only", async () => {
+    const created = await m.auth.createInvite(owner, { email: "fay@acme.test", role: "editor" });
+    const t = token(created.inviteUrl);
+    const fay = (await m.auth.listInvites(owner)).find((i) => i.email === "fay@acme.test")!;
+    await expect(m.auth.revokeInvite(otherOwner, fay.id)).rejects.toMatchObject({ code: "not_found" });
+    const before = (await m.ctx.db.select().from(ledgerEvents).where(eq(ledgerEvents.workspaceId, wsId))).length;
+    await m.auth.revokeInvite(owner, fay.id);
+    expect((await m.auth.listInvites(owner)).map((i) => i.email)).toEqual(["dan@acme.test"]);
+    await expect(m.auth.viewInvite(t)).rejects.toMatchObject({ code: "not_found" });
+    await expect(m.auth.acceptInvite({ token: t, name: "Fay", password: "fay's long password" }, null)).rejects.toMatchObject({ code: "not_found" });
+    await expect(m.auth.revokeInvite(owner, fay.id)).rejects.toMatchObject({ code: "not_found" });
+    await expect(m.auth.revokeInvite(owner, "inv_nope")).rejects.toMatchObject({ code: "not_found" });
+    // The ledger records who revoked it.
+    const after = await m.ctx.db.select().from(ledgerEvents).where(eq(ledgerEvents.workspaceId, wsId));
+    expect(after.length).toBe(before + 1);
+    expect(after.find((e) => e.type === "invite.revoked")).toMatchObject({ subjectId: fay.id, data: { email: fay.email } });
   });
 });

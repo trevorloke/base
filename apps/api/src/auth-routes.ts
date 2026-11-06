@@ -140,4 +140,10 @@ export function registerAuthRoutes(app: Hono<Env>, m: Starsign, opts: AuthRouteO
   });
 
   app.post("/v1/invites", async (c) => c.json(await m.auth.createInvite(c.get("principal"), await c.req.json(), opts.publicUrl), 201));
+  /** Pending invites (owners only). GET /v1/invites/:token stays the public peek at one invite. */
+  app.get("/v1/invites", async (c) => c.json(await m.auth.listInvites(c.get("principal"))));
+  app.delete("/v1/invites/:id", async (c) => {
+    await m.auth.revokeInvite(c.get("principal"), c.req.param("id"));
+    return c.body(null, 204);
+  });
 }

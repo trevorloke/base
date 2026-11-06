@@ -175,6 +175,16 @@ export interface MemberView {
   createdAt: Date;
 }
 
+/** A pending invite as owners see it. The token (and its hash) is never shown again. */
+export interface InviteView {
+  id: string;
+  email: string;
+  role: MemberRole;
+  invitedBy: { id: string; name: string | null; email: string | null };
+  expiresAt: string;
+  createdAt: string;
+}
+
 export interface AuthOptions {
   /** Whether people may sign up once a first user exists. Default: STARSIGN_ALLOW_SIGNUP=1, read on each call. */
   allowSignup?: () => boolean;
@@ -538,14 +548,61 @@ export class AuthService {
     return { inviteUrl, expiresAt: expiresAt.toISOString(), emailed: this.mailer !== null };
   }
 
+  /**
+   * Pending invites for this workspace, newest first: not accepted and not yet expired (a revoked invite is expired
+   * on the spot, so it drops out too). Owners only. Never returns the token hash.
+   */
+  async listInvites(p: Principal): Promise<InviteView[]> {
+    this.workspaces.requireRole(p, ["owner"]);
+    const rows = await this.ctx.db
+      .select({
+        id: invites.id,
+        email: invites.email,
+        role: invites.role,
+        invitedBy: invites.invitedBy,
+        inviterName: users.name,
+        inviterEmail: users.email,
+        expiresAt: invites.expiresAt,
+        createdAt: invites.createdAt,
+      })
+      .from(invites)
+      .leftJoin(users, eq(users.id, invites.invitedBy))
+      .where(and(eq(invites.workspaceId, p.workspaceId), isNull(invites.acceptedAt), isNull(invites.revokedAt), gt(invites.expiresAt, this.ctx.now())))
+      .orderBy(desc(invites.createdAt));
+    return rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      role: r.role,
+      invitedBy: { id: r.invitedBy, name: r.inviterName ?? null, email: r.inviterEmail ?? null },
+      expiresAt: r.expiresAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Revoke a pending invite: its link stops working at once. Owners only. The invites table has no revoked flag, so a
+   * revoked invite is one whose expiry was moved to now (the row stays, so who invited whom is not lost).
+   */
+  async revokeInvite(p: Principal, inviteId: string): Promise<void> {
+    this.workspaces.requireRole(p, ["owner"]);
+    const at = this.ctx.now();
+    const [row] = await this.ctx.db
+      .update(invites)
+      .set({ revokedAt: at })
+      .where(and(eq(invites.id, inviteId), eq(invites.workspaceId, p.workspaceId), isNull(invites.acceptedAt), isNull(invites.revokedAt), gt(invites.expiresAt, at)))
+      .returning({ id: invites.id, email: invites.email, role: invites.role });
+    if (!row) throw new CoreError("not_found", "invite not found, already used, expired or revoked");
+    await this.ctx.events.append({ workspaceId: p.workspaceId, type: "invite.revoked", subjectType: "invite", subjectId: row.id, actor: p.actor, data: { email: row.email, role: row.role } });
+  }
+
   private async liveInvite(token: string) {
     const [row] = await this.ctx.db
       .select({ invite: invites, workspaceName: workspaces.name })
       .from(invites)
       .innerJoin(workspaces, eq(invites.workspaceId, workspaces.id))
-      .where(and(eq(invites.tokenHash, sha256(token)), isNull(invites.acceptedAt), gt(invites.expiresAt, this.ctx.now())))
+      .where(and(eq(invites.tokenHash, sha256(token)), isNull(invites.acceptedAt), isNull(invites.revokedAt), gt(invites.expiresAt, this.ctx.now())))
       .limit(1);
-    if (!row) throw new CoreError("not_found", "invite not found, already used, or expired");
+    if (!row) throw new CoreError("not_found", "invite not found, already used, revoked, or expired");
     return row;
   }
 

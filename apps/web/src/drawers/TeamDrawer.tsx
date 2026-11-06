@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { InviteCreated, Member, Role } from "../types";
+import type { InviteCreated, Member, PendingInvite, Role } from "../types";
 import { api, errorText } from "../api";
 import { Drawer } from "../components/Drawer";
 import { PanelState } from "../components/PanelState";
 import { Pill } from "../components/Pill";
+import { RelativeTime } from "../components/RelativeTime";
 import { useToast } from "../components/Toast";
 import { plural, ROLE_HINT, ROLE_LABEL } from "../lib/format";
 import { formatDateTime } from "../lib/time";
@@ -19,6 +20,7 @@ export function TeamDrawer({ workspaceName, myRole, myUserId, onClose }: { works
   const [saving, setSaving] = useState<string | null>(null);
   const [rowError, setRowError] = useState<{ id: string; text: string } | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [invitesTick, setInvitesTick] = useState(0);
 
   const load = useCallback(() => {
     setError(null);
@@ -131,8 +133,10 @@ export function TeamDrawer({ workspaceName, myRole, myUserId, onClose }: { works
         </section>
       ) : null}
 
+      {isOwner && members ? <PendingInvites tick={invitesTick} /> : null}
+
       {isOwner ? (
-        <InviteForm />
+        <InviteForm onSent={() => setInvitesTick((t) => t + 1)} />
       ) : members ? (
         <section className="dsec">
           <p className="muted small">Only an owner can invite people or change roles.</p>
@@ -154,7 +158,94 @@ export function TeamDrawer({ workspaceName, myRole, myUserId, onClose }: { works
   );
 }
 
-function InviteForm() {
+/** Invites not yet accepted, with who sent them and when they lapse. Owners can revoke one; its link then stops working. */
+function PendingInvites({ tick }: { tick: number }) {
+  const toast = useToast();
+  const [invites, setInvites] = useState<PendingInvite[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; text: string } | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    api
+      .invites()
+      .then(setInvites)
+      .catch((e: unknown) => setError(errorText(e)));
+  }, []);
+  useEffect(load, [load, tick]);
+
+  async function revoke(inv: PendingInvite) {
+    setBusy(inv.id);
+    setRowError(null);
+    try {
+      await api.revokeInvite(inv.id);
+      setConfirming(null);
+      setInvites((list) => list?.filter((x) => x.id !== inv.id) ?? null);
+      toast(`Revoked the invite for ${inv.email}`);
+    } catch (e) {
+      setRowError({ id: inv.id, text: errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (!error && invites && !invites.length) return null;
+  return (
+    <section className="dsec">
+      <h3 className="section-h">{invites ? plural(invites.length, "pending invite") : "Pending invites"}</h3>
+      <PanelState error={error} loading={!invites && !error} onRetry={load} />
+      {invites?.length ? (
+        <ul className="acct-list">
+          {invites.map((inv) => (
+            <li key={inv.id} className="acct-row team-row">
+              <div className="acct-main">
+                <div className="acct-id">
+                  <span className="strong invite-email-text">{inv.email}</span>
+                  <Pill tone="neutral">{ROLE_LABEL[inv.role] ?? inv.role}</Pill>
+                </div>
+                <div className="acct-meta muted small">
+                  <span>Invited by {inv.invitedBy.name || inv.invitedBy.email || "an owner"}</span>
+                  <span>
+                    expires <RelativeTime iso={inv.expiresAt} />
+                  </span>
+                </div>
+                {rowError?.id === inv.id ? (
+                  <div className="card-error" role="alert">
+                    {rowError.text}
+                  </div>
+                ) : null}
+              </div>
+              {confirming === inv.id ? (
+                <div className="acct-confirm" role="group" aria-label={`Revoke the invite for ${inv.email}?`}>
+                  <span>Revoke it?</span>
+                  <button type="button" className="btn btn-small btn-danger" disabled={busy === inv.id} onClick={() => void revoke(inv)}>
+                    {busy === inv.id ? "…" : "Yes"}
+                  </button>
+                  <span className="sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirming(null)}>
+                    No
+                  </button>
+                </div>
+              ) : (
+                <div className="acct-actions">
+                  <button type="button" className="btn btn-small btn-ghost" aria-label={`Revoke the invite for ${inv.email}`} onClick={() => setConfirming(inv.id)}>
+                    Revoke
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+function InviteForm({ onSent }: { onSent: () => void }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("editor");
   const [busy, setBusy] = useState(false);
@@ -172,6 +263,7 @@ function InviteForm() {
       const res = await api.invite(email.trim(), role);
       setSent({ ...res, email: email.trim() });
       setEmail("");
+      onSent();
     } catch (err) {
       setError(errorText(err));
     } finally {

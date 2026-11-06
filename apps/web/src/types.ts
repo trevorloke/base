@@ -87,6 +87,31 @@ export interface RedLine {
   [extra: string]: unknown;
 }
 
+export type RedLineKind =
+  | "forbidden_phrase"
+  | "forbidden_topic"
+  | "forbidden_claim"
+  | "no_competitor_mention"
+  | "quiet_hours"
+  | "required_disclosure"
+  | "max_posts_per_day"
+  | "network_restriction"
+  | "custom_regex";
+
+/** Monthly ceilings, in USD. */
+export interface SpendCaps {
+  /** Metered X API reads. 0 turns X reads off. */
+  xReadsUsdMonthly: number;
+  /** Model spend for this workspace (adapting, translating, operators, briefs). */
+  modelUsdMonthly: number;
+}
+
+export interface DisclosurePolicy {
+  recordAlways: true;
+  signMedia: boolean;
+  visibleTextForAi: string;
+}
+
 export interface Policy {
   version: number;
   autonomy: Partial<Record<ActionClass, AutonomyLevel>>;
@@ -94,6 +119,33 @@ export interface Policy {
   redLines: RedLine[];
   competitors: string[];
   timezone: string;
+  /** Always present from the server; optional so older fixtures still type. */
+  spendCaps?: SpendCaps;
+  disclosure?: DisclosurePolicy;
+}
+
+/** GET /v1/policy/history: one row per version, newest first. */
+export interface PolicyVersion {
+  id: string;
+  workspaceId: string;
+  version: number;
+  document: Policy;
+  active: boolean;
+  createdBy: Actor;
+  createdAt: string;
+}
+
+/**
+ * The conventional shape of `workspace.profile` (free-form JSON on the server). The Scout and the operators read
+ * these fields; anything else in the profile is kept as it is.
+ */
+export interface BrandProfile {
+  description?: string;
+  audience?: string;
+  topics?: string[];
+  voice?: { do?: string[]; dont?: string[]; examples?: string[] };
+  competitors?: string[];
+  [extra: string]: unknown;
 }
 
 export interface Violation {
@@ -735,6 +787,16 @@ export interface InviteInfo {
   expiresAt: string;
   /** True when that email already has a Starsign account: accepting asks for its password, not a new one. */
   userExists: boolean;
+}
+
+/** GET /v1/invites (owners): invites not yet accepted, revoked or expired. */
+export interface PendingInvite {
+  id: string;
+  email: string;
+  role: Role;
+  invitedBy: { id: string; name: string | null; email: string | null };
+  expiresAt: string;
+  createdAt: string;
 }
 
 export interface AcceptInviteInput {

@@ -26,6 +26,7 @@ export {
   type Mailer,
   type MailMessage,
   type MemberView,
+  type InviteView,
   type RequestMeta,
   type ResolvedSession,
   type SessionView,

@@ -13,7 +13,7 @@ import { useRoom } from "../lib/room";
 const ALERT_TONE: Record<AlertSeverity, PillTone> = { urgent: "bad", attention: "warn", info: "info" };
 
 export function Brief({ policy, alertTick }: { policy: Policy | null; alertTick: number }) {
-  const { openTopic, topicsById } = useRoom();
+  const { openTopic, topicsById, openSettings } = useRoom();
   const toast = useToast();
   const [brief, setBrief] = useState<BriefDoc | null | undefined>(undefined);
   const [briefError, setBriefError] = useState<string | null>(null);
@@ -110,7 +110,14 @@ export function Brief({ policy, alertTick }: { policy: Policy | null; alertTick:
         {policy ? (
           <>
             <section className="brief-section" aria-label="Red lines">
-              <h3 className="section-h">{plural(policy.redLines.length, "red line")}</h3>
+              <div className="brief-h">
+                <h3 className="section-h">{plural(policy.redLines.length, "red line")}</h3>
+                {policy.redLines.length ? (
+                  <button type="button" className="linkish small" onClick={() => openSettings("redlines")}>
+                    Change
+                  </button>
+                ) : null}
+              </div>
               {policy.redLines.length ? (
                 <ul className="redlines">
                   {policy.redLines.map((r) => (
@@ -123,12 +130,22 @@ export function Brief({ policy, alertTick }: { policy: Policy | null; alertTick:
                   ))}
                 </ul>
               ) : (
-                <p className="muted">None declared yet. Everything an agent writes will wait on you.</p>
+                <p className="muted">
+                  None declared yet. Everything an agent writes will wait on you.{" "}
+                  <button type="button" className="linkish strong" onClick={() => openSettings("redlines")}>
+                    Declare one in Settings
+                  </button>
+                </p>
               )}
             </section>
 
             <section className="brief-section" aria-label="Autonomy">
-              <h3 className="section-h">Autonomy</h3>
+              <div className="brief-h">
+                <h3 className="section-h">Autonomy</h3>
+                <button type="button" className="linkish small" onClick={() => openSettings("autonomy")}>
+                  Change
+                </button>
+              </div>
               <dl className="autonomy">
                 {ACTION_CLASS_ORDER.map((c) => {
                   const level = policy.autonomy[c];

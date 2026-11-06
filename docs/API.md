@@ -277,4 +277,8 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
 - `STARSIGN_PUBLIC_URL` falls back to `RENDER_EXTERNAL_URL` on Render's web service.
 - Webhook handlers may answer a delivery from its own signed body (`respond`), and OAuth callbacks pass every query
   parameter to the connector (`callbackParams`).
+- `GET /v1/invites` (owner) → pending invites `{ id, email, role, invitedBy: { id, name, email }, expiresAt, createdAt }[]`;
+  `DELETE /v1/invites/:id` (owner) → `204`, the link stops working at once and the ledger records `invite.revoked`.
+- The web app has a Settings drawer for the brand profile (PATCH /v1/workspace/profile), red lines, autonomy,
+  timezone and spend caps (PUT /v1/policy), and policy history.
 

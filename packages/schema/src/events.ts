@@ -29,6 +29,7 @@ export const LedgerEventType = z.enum([
   "member.role_changed",
   "invite.created",
   "invite.accepted",
+  "invite.revoked",
   "account.connected",
   "account.disconnected",
   "policy.updated",

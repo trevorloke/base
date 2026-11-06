@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { Account, ComposePrefill, Connector, Stream, Topic } from "../types";
+import type { SettingsSectionId } from "./policy";
 import { browserTz } from "./tz";
 
 /** What every panel needs to turn ids into names, and to open detail over the room. */
@@ -18,6 +19,8 @@ export interface RoomRefs {
   people: ReadonlyMap<string, string>;
   /** The Connections drawer: where an empty room's next step usually is. */
   openAccounts: () => void;
+  /** The Settings drawer, at one section: where red lines, autonomy, timezone and the brand profile change. */
+  openSettings: (section?: SettingsSectionId) => void;
 }
 
 const RoomContext = createContext<RoomRefs>({
@@ -30,6 +33,7 @@ const RoomContext = createContext<RoomRefs>({
   openTopic: () => {},
   openCompose: () => {},
   openAccounts: () => {},
+  openSettings: () => {},
   people: new Map(),
 });
 

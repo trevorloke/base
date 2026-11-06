@@ -14,7 +14,9 @@ import { LinksDrawer } from "./drawers/LinksDrawer";
 import { LanguagesDrawer } from "./drawers/LanguagesDrawer";
 import { TopicDrawer } from "./drawers/TopicDrawer";
 import { EntityDrawer } from "./drawers/EntityDrawer";
+import { SettingsDrawer } from "./drawers/SettingsDrawer";
 import { AUTONOMY_LABEL, lift as formatLift, listOf, networkLabel, plural, roleLabel } from "./lib/format";
+import type { SettingsSectionId } from "./lib/policy";
 import { RoomProvider, type RoomRefs } from "./lib/room";
 import { isoDaysAgo, isoNow } from "./lib/time";
 import { readTrackerPeriod, rememberTrackerPeriod, type TrackerPeriod } from "./lib/tracker";
@@ -287,6 +289,7 @@ type DrawerState =
   | { kind: "team" }
   | { kind: "links" }
   | { kind: "languages" }
+  | { kind: "settings"; section?: SettingsSectionId }
   /** id null: track a new name. */
   | { kind: "entity"; id: string | null; edit?: boolean; preset?: { parentId?: string; kind?: EntityKind } }
   | null;
@@ -493,6 +496,7 @@ function Room({
       openTopic: (id) => setDrawer({ kind: "topic", id }),
       openCompose: (prefill) => setDrawer({ kind: "compose", prefill }),
       openAccounts: () => setDrawer({ kind: "accounts" }),
+      openSettings: (section) => setDrawer({ kind: "settings", section }),
       people,
     }),
     [accounts, connectors, streams, radar, timezone, people],
@@ -593,9 +597,14 @@ function Room({
             {newPostAutonomy || USE_FIXTURES ? (
               <div className="topbar-chips">
                 {newPostAutonomy ? (
-                  <span className="chip chip-static" title="What agents may do with new posts">
+                  <button
+                    type="button"
+                    className="chip chip-static chip-link"
+                    title="What agents may do with new posts. Change it in Settings."
+                    onClick={() => setDrawer({ kind: "settings", section: "autonomy" })}
+                  >
                     New posts: {AUTONOMY_LABEL[newPostAutonomy].toLowerCase()}
-                  </span>
+                  </button>
                 ) : null}
                 {USE_FIXTURES ? <span className="chip chip-static chip-sample">Sample data</span> : null}
               </div>
@@ -658,6 +667,17 @@ function Room({
                       }}
                     >
                       Connections
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        setDrawer({ kind: "settings" });
+                      }}
+                    >
+                      Settings
                     </button>
                     <button
                       type="button"
@@ -790,7 +810,7 @@ function Room({
 
         <Tabs tabs={tabs} active={tab} onChange={changeTab} />
 
-        {drawer?.kind === "post" ? <PostDrawer id={drawer.id} onClose={closeDrawer} onChanged={onPostCreated} /> : null}
+        {drawer?.kind === "post" ? <PostDrawer id={drawer.id} myRole={myRole as Role | null} onClose={closeDrawer} onChanged={onPostCreated} /> : null}
         {drawer?.kind === "topic" ? <TopicDrawer id={drawer.id} onClose={closeDrawer} /> : null}
         {drawer?.kind === "compose" ? (
           <ComposeDrawer
@@ -799,6 +819,7 @@ function Room({
             onClose={closeDrawer}
             onCreated={onPostCreated}
             onOpenAccounts={() => setDrawer({ kind: "accounts" })}
+            onOpenLinks={() => setDrawer({ kind: "links" })}
           />
         ) : null}
         {drawer?.kind === "accounts" ? <ConnectionsDrawer onClose={closeDrawer} onChanged={() => void loadAccounts()} /> : null}
@@ -829,6 +850,16 @@ function Room({
               void loadRadar();
             }}
             onShowInFeed={showInFeed}
+          />
+        ) : null}
+        {drawer?.kind === "settings" ? (
+          <SettingsDrawer
+            myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null}
+            isHuman={!me || me.actor.type === "human"}
+            workspaceName={currentWorkspace?.name ?? me?.workspace.name ?? ""}
+            initial={drawer.section}
+            onPolicy={setPolicy}
+            onClose={closeDrawer}
           />
         ) : null}
         {drawer?.kind === "languages" ? (

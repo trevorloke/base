@@ -60,9 +60,11 @@ import type {
   Me,
   Network,
   OAuthStart,
+  PendingInvite,
   Policy,
   PolicyCheckInput,
   PolicyDecision,
+  PolicyVersion,
   Post,
   PostStatus,
   PostDetail,
@@ -181,6 +183,8 @@ const policy: Policy = {
   ],
   competitors: ["Blue Bottle", "Stumptown", "Starbucks"],
   timezone: "America/Los_Angeles",
+  spendCaps: { xReadsUsdMonthly: 50, modelUsdMonthly: 100 },
+  disclosure: { recordAlways: true, signMedia: true, visibleTextForAi: "" },
 };
 
 // --- Curves ------------------------------------------------------------
@@ -1202,6 +1206,8 @@ const NEEDS_APPROVAL: { id: string; kind: string; re: RegExp; message: (m: strin
   { id: "rl_comp", kind: "no_competitor_mention", re: /\b(MEC|Blue Bottle|Stumptown|Starbucks)\b/g, message: (m) => `Names a competitor: ${m}` },
 ];
 
+const SEEDED_LINES = new Set(["rl_comp", "rl_health", "rl_guarantee", "rl_quiet", "rl_disclose"]);
+
 function checkPolicy(input: PolicyCheckInput): PolicyDecision {
   const found = new Map<string, { redLineId: string; kind: string; severity: "block" | "require_approval"; message: string; matches: Set<string> }>();
   const add = (redLineId: string, kind: string, severity: "block" | "require_approval", message: string, match: string | null) => {
@@ -1218,7 +1224,39 @@ function checkPolicy(input: PolicyCheckInput): PolicyDecision {
   const hour = input.scheduledAt
     ? Number(new Intl.DateTimeFormat("en-US", { timeZone: policy.timezone, hour: "numeric", hourCycle: "h23" }).format(new Date(input.scheduledAt)))
     : 12;
-  if (hour >= 22 || hour < 7) add("rl_quiet", "quiet_hours", "require_approval", "Falls inside quiet hours (10pm–7am Pacific)", null);
+  if (policy.redLines.some((r) => r.id === "rl_quiet") && (hour >= 22 || hour < 7)) add("rl_quiet", "quiet_hours", "require_approval", "Falls inside quiet hours (10pm–7am Pacific)", null);
+  // Red lines added in Settings, judged roughly the way the server does.
+  for (const r of policy.redLines) {
+    if (SEEDED_LINES.has(r.id) || r.severity === "warn") continue;
+    const sev = r.severity as "block" | "require_approval";
+    const res: RegExp[] = [];
+    const words = (k: string) => ((r[k] as string[] | undefined) ?? []).map((w) => new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRe(w)}(?![\\p{L}\\p{N}_])`, "iu"));
+    if (r.kind === "forbidden_phrase") res.push(...words("phrases"));
+    if (r.kind === "forbidden_topic") res.push(...words("keywords"));
+    if (r.kind === "no_competitor_mention") res.push(...words("competitors"));
+    if (r.kind === "forbidden_claim" || r.kind === "custom_regex") {
+      const pats = r.kind === "custom_regex" ? [r.pattern as string] : ((r.patterns as string[] | undefined) ?? []);
+      const flags = r.kind === "custom_regex" ? String(r.flags ?? "i") : "i";
+      for (const p of pats) {
+        try {
+          res.push(new RegExp(p, flags.includes("u") ? flags.replace("g", "") : `${flags.replace("g", "")}u`));
+        } catch {
+          // an invalid pattern never matches, like the server
+        }
+      }
+    }
+    if (r.kind === "quiet_hours" && input.scheduledAt) {
+      const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: String(r.timezone), hour: "numeric", hourCycle: "h23" }).format(new Date(input.scheduledAt)));
+      const start = Number(r.startHour);
+      const end = Number(r.endHour);
+      const inside = start <= end ? h >= start && h < end : h >= start || h < end;
+      if (inside) add(r.id, r.kind, sev, `${r.description}: falls inside quiet hours`, null);
+    }
+    for (const v of input.variants) for (const re of res) {
+      const m = v.text.match(re);
+      if (m?.[0]) add(r.id, r.kind, sev, r.description, m[0].trim());
+    }
+  }
   const violations: Violation[] = [...found.values()].map((v) => ({ ...v, matches: [...v.matches] }));
   const verdict = violations.some((v) => v.severity === "block") ? "block" : violations.length ? "require_approval" : "allow";
   return { verdict, violations, policyVersion: policy.version };
@@ -1330,6 +1368,8 @@ interface FxStore {
   workspaces: FxWorkspace[];
   accounts: Record<string, Account[]>;
   members: Member[];
+  /** Pending invites, per workspace. Older stored states lack it; it is seeded on load. */
+  invites?: Record<string, (PendingInvite & { token: string })[]>;
 }
 
 const FX_STORE_KEY = "starsign.fixtures.v2";
@@ -1358,6 +1398,16 @@ function seedStore(): FxStore {
   };
 }
 
+function seedInvites(): Record<string, (PendingInvite & { token: string })[]> {
+  const maya = { id: "usr_maya", name: "Maya Chen", email: "maya@northwind.coffee" };
+  return {
+    [workspace.id]: [
+      { id: "inv_jordan", token: "demo", email: "jordan@northwind.coffee", role: "editor", invitedBy: maya, expiresAt: ahead(24 * 6), createdAt: ago(24) },
+      { id: "inv_lee", token: "inv_lee", email: "lee@quillagency.com", role: "viewer", invitedBy: maya, expiresAt: ahead(24 * 2), createdAt: ago(24 * 5) },
+    ],
+  };
+}
+
 function loadStore(): FxStore {
   try {
     const raw = localStorage.getItem(FX_STORE_KEY);
@@ -1372,6 +1422,14 @@ function loadStore(): FxStore {
 }
 
 const store: FxStore = loadStore();
+store.invites ??= seedInvites();
+
+function invitesHere(): (PendingInvite & { token: string })[] {
+  const all = (store.invites ??= {});
+  const id = currentWs().id;
+  all[id] = (all[id] ?? []).filter((i) => Date.parse(i.expiresAt) > Date.now());
+  return all[id]!;
+}
 
 function save(): void {
   try {
@@ -1541,8 +1599,37 @@ function peopleApi() {
       if (store.members.some((m) => m.email === email.trim().toLowerCase())) throw new ApiError(409, "conflict", "They're already on the team.");
       const token = `inv${Math.random().toString(36).slice(2, 10)}`;
       INVITES[token] = { workspaceName: currentWs().name, email: email.trim().toLowerCase(), role, expiresAt: ahead(24 * 7), userExists: false };
+      invitesHere().unshift({
+        id: `inv_${token}`,
+        token,
+        email: email.trim().toLowerCase(),
+        role,
+        invitedBy: { id: store.user.id, name: store.user.name, email: store.user.email },
+        expiresAt: ahead(24 * 7),
+        createdAt: iso(Date.now()),
+      });
+      save();
       // Pretend email is configured for company addresses only, so both outcomes show up.
       return { inviteUrl: `${window.location.origin}/?invite=${token}`, expiresAt: ahead(24 * 7), emailed: !/gmail\.com$/i.test(email) };
+    },
+
+    invites: async (): Promise<PendingInvite[]> => {
+      await delay(null, 160);
+      requireSession();
+      if (currentWs().role !== "owner") throw new ApiError(403, "forbidden", "Only an owner can see pending invites.");
+      return clone(invitesHere().map(({ token: _t, ...rest }) => rest));
+    },
+
+    revokeInvite: async (id: string): Promise<void> => {
+      await delay(null, 280);
+      requireSession();
+      if (currentWs().role !== "owner") throw new ApiError(403, "forbidden", "Only an owner can revoke invites.");
+      const list = invitesHere();
+      const i = list.findIndex((x) => x.id === id);
+      if (i < 0) throw new ApiError(404, "not_found", "That invite was already used, expired or revoked.");
+      delete INVITES[list[i]!.token];
+      list.splice(i, 1);
+      save();
     },
 
     inviteInfo: async (token: string): Promise<InviteInfo> => {
@@ -1575,6 +1662,10 @@ function peopleApi() {
         store.currentWorkspaceId = `ws_${slug}`;
       }
       delete INVITES[input.token];
+      for (const list of Object.values(store.invites ?? {})) {
+        const i = list.findIndex((x) => x.token === input.token);
+        if (i >= 0) list.splice(i, 1);
+      }
       save();
       return sessionOf();
     },
@@ -2788,6 +2879,152 @@ function trackerApi() {
   };
 }
 
+// --- Settings: brand profile, policy versions, retries ------------------------
+
+const ACTIONS = ["new_post", "reply", "dm", "repost", "campaign"] as const;
+const LEVELS = ["suggest", "draft", "schedule_with_approval", "autopost"];
+
+/** What the server's schema would refuse, in its words. */
+function policyProblem(doc: Policy): string | null {
+  for (const a of ACTIONS) if (doc.autonomy[a] && !LEVELS.includes(doc.autonomy[a]!)) return `autonomy ${a}: invalid value`;
+  const ids = new Set<string>();
+  for (const [i, r] of doc.redLines.entries()) {
+    const at = `redLines ${i}`;
+    if (!r.id || ids.has(r.id)) return `${at} id: must be unique`;
+    ids.add(r.id);
+    if (!["block", "require_approval", "warn"].includes(r.severity)) return `${at} severity: invalid value`;
+    const list = (k: string) => Array.isArray(r[k]) && (r[k] as unknown[]).length > 0 && (r[k] as unknown[]).every((x) => typeof x === "string" && x.length > 0);
+    const hour = (k: string) => Number.isInteger(r[k]) && (r[k] as number) >= 0 && (r[k] as number) <= 23;
+    switch (r.kind) {
+      case "forbidden_phrase":
+        if (!list("phrases")) return `${at} phrases: Array must contain at least 1 element(s)`;
+        break;
+      case "forbidden_topic":
+        if (!list("keywords")) return `${at} keywords: Array must contain at least 1 element(s)`;
+        break;
+      case "forbidden_claim":
+        if (!list("patterns")) return `${at} patterns: Array must contain at least 1 element(s)`;
+        break;
+      case "no_competitor_mention":
+        if (!list("competitors")) return `${at} competitors: Array must contain at least 1 element(s)`;
+        break;
+      case "network_restriction":
+        if (!list("networks")) return `${at} networks: Array must contain at least 1 element(s)`;
+        break;
+      case "quiet_hours":
+        if (!hour("startHour") || !hour("endHour")) return `${at} startHour: Number must be between 0 and 23`;
+        if (typeof r.timezone !== "string" || !r.timezone) return `${at} timezone: Required`;
+        break;
+      case "required_disclosure":
+        if (typeof r.requiredText !== "string" || !r.requiredText) return `${at} requiredText: String must contain at least 1 character(s)`;
+        if (!["ai_assisted", "always", "paid"].includes(r.when as string)) return `${at} when: invalid value`;
+        break;
+      case "max_posts_per_day":
+        if (!Number.isInteger(r.limit) || (r.limit as number) < 1) return `${at} limit: Number must be greater than 0`;
+        break;
+      case "custom_regex":
+        if (typeof r.pattern !== "string" || !r.pattern) return `${at} pattern: String must contain at least 1 character(s)`;
+        break;
+      default:
+        return `${at} kind: invalid discriminator value`;
+    }
+  }
+  const caps = doc.spendCaps;
+  if (caps && (!(caps.modelUsdMonthly >= 0) || !(caps.xReadsUsdMonthly >= 0))) return "spendCaps: Number must be greater than or equal to 0";
+  return null;
+}
+
+const MAYA = { type: "human" as const, id: "usr_maya" };
+const policyHistory: PolicyVersion[] = (() => {
+  const v1: Policy = { ...clone(policy), version: 1, redLines: [], autonomy: { new_post: "draft", reply: "draft", dm: "suggest", repost: "draft", campaign: "suggest" } };
+  const v2: Policy = { ...clone(policy), version: 2, redLines: clone(policy.redLines.slice(0, 3)), autonomy: v1.autonomy };
+  const v3: Policy = clone(policy);
+  const row = (doc: Policy, hoursAgo: number, by: PolicyVersion["createdBy"], active = false): PolicyVersion => ({
+    id: `pol_${doc.version}`,
+    workspaceId: workspace.id,
+    version: doc.version,
+    document: doc,
+    active,
+    createdBy: by,
+    createdAt: ago(hoursAgo),
+  });
+  return [row(v3, 24 * 20, MAYA, true), row(v2, 24 * 60, MAYA), row(v1, 24 * 90, { type: "system", id: "starsign" })];
+})();
+
+const profiles: Record<string, Record<string, unknown>> = {};
+
+function profileHere(): Record<string, unknown> {
+  const id = currentWs().id;
+  return id === workspace.id ? workspace.profile : (profiles[id] ??= {});
+}
+
+function settingsApi() {
+  return {
+    workspace: async (): Promise<Workspace> => {
+      const me = currentMe();
+      return delay({ ...me.workspace, profile: profileHere() });
+    },
+
+    updateProfile: async (profile: Record<string, unknown>): Promise<Workspace> => {
+      await delay(null, 300);
+      requireSession();
+      if (!["owner", "approver", "editor"].includes(currentWs().role)) throw new ApiError(403, "forbidden", "requires one of: owner, approver, editor");
+      const id = currentWs().id;
+      if (id === workspace.id) workspace.profile = clone(profile);
+      else profiles[id] = clone(profile);
+      return clone({ ...currentMe().workspace, profile: profileHere() });
+    },
+
+    updatePolicy: async (doc: Policy): Promise<Policy> => {
+      await delay(null, 340);
+      requireSession();
+      if (currentWs().role !== "owner") throw new ApiError(403, "forbidden", "requires one of: owner");
+      const problem = policyProblem(doc);
+      if (problem) {
+        const [path, message] = problem.split(": ");
+        throw new ApiError(400, "invalid", "Validation failed", [{ path: path!.split(" "), message }]);
+      }
+      const next: Policy = { ...clone(doc), version: policy.version + 1 };
+      Object.assign(policy, next);
+      for (const r of policyHistory) r.active = false;
+      policyHistory.unshift({ id: `pol_${next.version}`, workspaceId: workspace.id, version: next.version, document: clone(next), active: true, createdBy: { type: "human", id: store.user.id }, createdAt: iso(Date.now()) });
+      return clone(policy);
+    },
+
+    policyHistory: async (): Promise<PolicyVersion[]> => delay(policyHistory),
+
+    retryPost: async (id: string): Promise<PostDetail> => {
+      await delay(null, 420);
+      requireSession();
+      if (!["owner", "approver", "editor"].includes(currentWs().role)) throw new ApiError(403, "forbidden", "requires one of: owner, approver, editor");
+      const item = allPosts().find((p) => p.post.id === id);
+      if (!item) throw new ApiError(404, "not_found", "No such post.");
+      const failed = item.variants.filter((v) => v.status === "failed");
+      if (!["failed", "partially_published"].includes(item.post.status) || !failed.length) throw new ApiError(409, "conflict", "nothing failed on this post");
+      for (const v of failed) {
+        v.status = "publishing";
+        v.error = null;
+      }
+      item.post.status = "publishing";
+      item.post.updatedAt = iso(Date.now());
+      // A moment later the network takes it.
+      window.setTimeout(() => {
+        const at = iso(Date.now());
+        for (const v of failed) {
+          v.status = "published";
+          v.attemptCount += 1;
+          v.publishedAt = at;
+          v.externalUrl = v.network === "instagram" ? `https://www.instagram.com/p/${v.id}` : v.externalUrl;
+        }
+        item.post.status = "published";
+        item.post.publishedAt ??= at;
+        item.post.updatedAt = at;
+      }, 2500);
+      return clone({ post: item.post, variants: item.variants, approvals: approvalsFor(item) });
+    },
+  };
+}
+
 export const fixtureApi = {
   me: () => delay(currentMe()),
   policy: () => delay(policy),
@@ -3000,6 +3237,7 @@ export const fixtureApi = {
   ...linksApi(),
   ...languagesApi(),
   ...trackerApi(),
+  ...settingsApi(),
 };
 
 /** A pretend live stream: one new mention arrives every 40 seconds. */

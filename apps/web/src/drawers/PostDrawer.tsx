@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
-import type { LedgerEvent, PostFull, PostStatus, VariantStatus } from "../types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { LedgerEvent, PostFull, PostStatus, Role, Variant, VariantStatus } from "../types";
 import { api, errorText } from "../api";
 import { Drawer } from "../components/Drawer";
 import { NetworkBadge } from "../components/NetworkBadge";
 import { PanelState } from "../components/PanelState";
 import { Pill, StagePill, type PillTone } from "../components/Pill";
 import { RelativeTime } from "../components/RelativeTime";
+import { useToast } from "../components/Toast";
 import {
   actorLabel,
   actorPhrase,
@@ -14,6 +15,7 @@ import {
   evidenceKindLabel,
   isUrl,
   lift,
+  listOf,
   networkLabel,
   plural,
   POST_STATUS_LABEL,
@@ -45,7 +47,7 @@ const VARIANT_TONE: Record<VariantStatus, PillTone> = {
   skipped: "neutral",
 };
 
-export function PostDrawer({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged?: () => void }) {
+export function PostDrawer({ id, myRole, onClose, onChanged }: { id: string; myRole?: Role | null; onClose: () => void; onChanged?: () => void }) {
   const { accountsById, topicsById, openTopic, timezone, people } = useRoom();
   const [data, setData] = useState<PostFull | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +73,24 @@ export function PostDrawer({ id, onClose, onChanged }: { id: string; onClose: ()
     setReload((n) => n + 1);
     onChanged?.();
   }, [onChanged]);
+
+  // While it is going out, look again every few seconds (for a minute at most) so the outcome shows here.
+  const polls = useRef(0);
+  const going = data?.post.status === "publishing";
+  useEffect(() => {
+    if (!going || polls.current >= 20) return;
+    const t = window.setTimeout(() => {
+      polls.current += 1;
+      setReload((n) => n + 1);
+    }, 3000);
+    return () => window.clearTimeout(t);
+  }, [going, data]);
+  useEffect(() => {
+    if (data && !going && polls.current > 0) {
+      polls.current = 0;
+      onChanged?.();
+    }
+  }, [data, going, onChanged]);
 
   const post = data?.post;
   const title = post ? (post.title ?? truncate(post.body, 80)) : "Post";
@@ -128,6 +148,7 @@ export function PostDrawer({ id, onClose, onChanged }: { id: string; onClose: ()
           </section>
 
           <PostActions post={post} timezone={timezone} onDone={afterAction} />
+          <RetryFailed post={post} variants={data.variants} myRole={myRole ?? null} onDone={afterAction} />
 
           <section className="dsec">
             <h3 className="section-h">{plural(data.variants.length, "variant")}</h3>
@@ -418,6 +439,57 @@ function PostActions({ post, timezone, onDone }: { post: PostFull["post"]; timez
       ) : null}
       {!canGo ? <p className="muted small">Waiting on an approver: approve or reject it in the queue.</p> : null}
       {canGo ? <p className="muted small">Red lines are checked again first; it may still need an approval.</p> : null}
+      {error ? (
+        <div className="card-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * A failed or partly published post: send its failed variants again now (each one's error shows in the variants
+ * below). The server answers 409 when nothing is left to retry.
+ */
+function RetryFailed({ post, variants, myRole, onDone }: { post: PostFull["post"]; variants: Variant[]; myRole: Role | null; onDone: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const failed = variants.filter((v) => v.status === "failed");
+  if ((post.status !== "failed" && post.status !== "partially_published") || !failed.length) return null;
+  const nets = listOf([...new Set(failed.map((v) => networkLabel(v.network)))]);
+  const canRetry = myRole !== "viewer";
+
+  async function retry() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.retryPost(post.id);
+      toast(`Retrying on ${nets}`);
+      onDone();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="dsec post-actions post-retry" aria-label="Retry the failed variants">
+      <p className="small">
+        {post.status === "failed" ? "It didn't go out" : "It went out, except"} on <span className="strong">{nets}</span>. The reason is under each variant below.
+      </p>
+      {canRetry ? (
+        <div className="dsec-act">
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void retry()}>
+            {busy ? "Retrying…" : failed.length === 1 ? "Retry failed" : `Retry ${failed.length} failed`}
+          </button>
+          <span className="muted small">Sends {failed.length === 1 ? "it" : "them"} again now. Fix the cause first (reconnect an account, add media) or it will fail the same way.</span>
+        </div>
+      ) : (
+        <p className="muted small">Owners, approvers and editors can retry it.</p>
+      )}
       {error ? (
         <div className="card-error" role="alert">
           {error}

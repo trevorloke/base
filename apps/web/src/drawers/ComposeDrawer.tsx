@@ -53,12 +53,15 @@ export function ComposeDrawer({
   onClose,
   onCreated,
   onOpenAccounts,
+  onOpenLinks,
 }: {
   prefill?: ComposePrefill;
   reviewer?: string;
   onClose: () => void;
   onCreated: (detail: PostDetail) => void;
   onOpenAccounts: () => void;
+  /** The Links drawer, where an owner turns link tracking on. */
+  onOpenLinks?: () => void;
 }) {
   const { accountsById, connectors, timezone: tz } = useRoom();
   const toast = useToast();
@@ -85,6 +88,23 @@ export function ComposeDrawer({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [issues, setIssues] = useState<VariantIssue[]>([]);
+
+  // Link tracking needs a short-link base on the server and the workspace's switch on. Until we know, offer it
+  // (the server ignores it when off); once we know it's off, say so once instead of a checkbox per variant.
+  const [linkTracking, setLinkTracking] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .linkSettings()
+      .then((s) => {
+        if (!cancelled) setLinkTracking(s.enabled && !!s.baseUrl);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const tracking = linkTracking !== false;
 
   // The timezone can arrive with the policy after the drawer opens; keep the default time honest.
   useEffect(() => setWhen(toLocalInput(defaultWhen(), tz)), [tz]);
@@ -256,7 +276,7 @@ export function ComposeDrawer({
         const v = effective(a);
         const media = v.media.map(toMedia).filter((m): m is Media => m !== null);
         const thread = NETWORK_THREADS.has(a.network) ? v.thread.filter((s) => s.trim()) : [];
-        const options = wireOptions(a.network, v.kinds, v.options, v.tiktok);
+        const options = wireOptions(a.network, v.kinds, v.options, v.tiktok, tracking);
         return { socialAccountId: a.id, text: v.text, ...(media.length ? { media } : {}), ...(thread.length ? { thread } : {}), ...(options ? { options } : {}) };
       }),
       disclosure: {
@@ -419,6 +439,16 @@ export function ComposeDrawer({
       {selected.length ? (
         <section className="dsec">
           <h3 className="section-h">{selected.length === 1 ? "The post" : `${selected.length} variants`}</h3>
+          {!tracking ? (
+            <p className="muted small compose-links-off">
+              Link tracking is off, so links go out as written.{" "}
+              {onOpenLinks ? (
+                <button type="button" className="linkish strong" onClick={onOpenLinks}>
+                  Links settings
+                </button>
+              ) : null}
+            </p>
+          ) : null}
           <div className="cv-list">
             {selected.map((a) => (
               <VariantEditor
@@ -433,6 +463,7 @@ export function ComposeDrawer({
                 onPick={(mediaPick) => updateDraft(a.id, (d) => ({ ...d, mediaPick }))}
                 onOptions={(options) => updateDraft(a.id, (d) => ({ ...d, options }))}
                 onTikTok={(tiktok) => updateDraft(a.id, (d) => ({ ...d, tiktok }))}
+                linkTracking={tracking}
               />
             ))}
           </div>
@@ -495,7 +526,9 @@ function VariantEditor({
   onPick,
   onOptions,
   onTikTok,
+  linkTracking,
 }: {
+  linkTracking: boolean;
   account: Account;
   value: Effective;
   items: MediaItem[];
@@ -579,7 +612,7 @@ function VariantEditor({
         </div>
       ) : null}
 
-      <NetworkOptions network={net} kinds={value.kinds} value={value.options} tiktok={value.tiktok} onChange={onOptions} onTikTok={onTikTok} />
+      <NetworkOptions network={net} kinds={value.kinds} value={value.options} tiktok={value.tiktok} onChange={onOptions} onTikTok={onTikTok} linkTracking={linkTracking} />
 
       {value.problems.length ? (
         <ul className="cv-need">

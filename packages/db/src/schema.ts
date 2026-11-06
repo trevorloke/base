@@ -107,6 +107,8 @@ export const invites = pgTable(
     expiresAt: ts("expires_at").notNull(),
     acceptedAt: ts("accepted_at"),
     acceptedBy: text("accepted_by"),
+    /** An owner withdrew it; the link stops working at once. */
+    revokedAt: ts("revoked_at"),
     createdAt: now(),
   },
   (t) => [index("invites_ws").on(t.workspaceId, t.createdAt)],
