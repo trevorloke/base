@@ -52,6 +52,7 @@ test('/api/health says which environment this is', async () => {
   assert.equal(j.ok, true);
   assert.equal(j.env, 'staging');
   assert.equal(j.organization, null);
+  assert.ok('commit' in j, 'which build is live (RENDER_GIT_COMMIT), null locally');
 });
 
 test('a bad time zone or jurisdiction falls back rather than breaking setup', async () => {

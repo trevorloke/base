@@ -36,7 +36,10 @@ app.use('*', async (c, next) => {
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 });
-app.get('/api/health', (c) => c.json({ ok: true, service: 'starbase', env: envName(), organization: orgName(), tzdataCurrent: !staleTimeZoneData() }));
+// commit: which build is live (Render sets RENDER_GIT_COMMIT), so anyone can
+// check a deploy landed — open /api/health and compare with GitHub.
+const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null;
+app.get('/api/health', (c) => c.json({ ok: true, service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, tzdataCurrent: !staleTimeZoneData() }));
 app.route('/api/auth', authRoutes);
 app.route('/', publicRoutes); // /u, /bu — no auth
 for (const e of EXTENSIONS) if (e.publicRoutes) app.route('/', e.publicRoutes);
