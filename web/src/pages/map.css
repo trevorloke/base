@@ -908,3 +908,19 @@
   content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
   background: var(--gold); border-radius: 50%;
 }
+
+/* Signs in the Show sheet: on/off chips by status (with their flag) and by kind. */
+.map-schips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.map-schip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px;
+  border: 1px solid var(--rule-2); border-radius: 999px; background: var(--paper-0); color: var(--text-2);
+  font: inherit; font-size: 14px; cursor: pointer; touch-action: manipulation;
+}
+.map-schip.is-on { border-color: var(--ink); color: var(--text-1); background: var(--paper-1); font-weight: 600; }
+.map-schip:not(.is-on) { text-decoration: line-through; text-decoration-color: var(--text-4); }
+.map-schip .map-flag { position: static; display: inline-block; }
+.map-schip__n { color: var(--text-3); font-size: 12.5px; }
+.map-schip:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+/* A bigger sign flies a bigger flag: billboard > large > lawn. */
+.map-flag--k-billboard .map-flag__face { width: 22px; height: 14px; }
+.map-flag--k-large .map-flag__face { width: 19px; height: 12px; }

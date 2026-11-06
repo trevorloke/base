@@ -401,6 +401,11 @@ one tap away under **More**.
   pair away.
 - **Signs** — tap *To put up* / *Up* / *Taken down* to filter; **Add a sign**
   (it needs an address); a request that never went up can be *Cancelled*.
+- **Map → filter button** — *Strong yes (1)* and *Lean yes (2)* sit beside
+  *Yes (1–2)*; under *Voting for*, one choice per opponent (*Voting Locke*).
+  **Signs**: *Up* and *Requested* both on shows every flag (a request is a
+  pale flag); turn *Requested* off and only signs up stay; turn a kind off
+  (*Billboard*) and its flags go. The choice stays on that browser.
 - **Map → filter button → Draw turf** — tap the corners, name it, assign a
   canvasser.
 - **A profile → More details** — tap Yes/No or a choice, type the rest,

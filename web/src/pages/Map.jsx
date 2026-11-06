@@ -37,6 +37,7 @@ import { applyOutbox, queueAction, useOutbox } from '../offline.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { queuedText } from '../components/queued.js';
 import { bandOf, offTail, ratingByCode } from '@starbase/shared/scale';
+import { SIGN_KINDS } from '@starbase/shared/canvass';
 import DoorCard, { AddDoorForm, SIGN_LABEL, doorTitle, patchDoors } from '../components/DoorCard.jsx';
 import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
@@ -66,6 +67,26 @@ const VOTED_FILTERS = [
   { key: 'voted', label: 'Voted' },
 ];
 const FILTER_LABEL = Object.fromEntries([MINE, ...FILTERS, ...VOTED_FILTERS].map((f) => [f.key, f.label]));
+// The rating apart: 1s and 2s on their own ("Strong yes (1)"), and each
+// opponent on the "Voting for?" list ("Voting Locke") — in the campaign's
+// own words. A door shows when anyone there has that rating.
+const ratingFilters = (scale) => [
+  ...scale.steps.filter((st) => st.band === 'support').map((st) => ({ key: `r:${st.code}`, label: `${st.word} (${st.code})`, band: 'support' })),
+];
+const opponentFilters = (scale) => scale.candidates.map((c) => ({ key: `r:${c.code}`, label: `Voting ${c.name}`, band: 'opposed', group: 'Voting for', off: c.off }));
+
+// Signs on the map: which statuses (up, requested) and kinds show — the
+// flags on doors, the signs with no door, and "Has a sign". Kept per phone.
+const SIGNS_PREF = 'starbase:map:signs';
+const SIGN_SHOW_STATUS = [['installed', 'Up'], ['requested', 'Requested']];
+const readSignsPref = () => {
+  try {
+    const v = JSON.parse(localStorage.getItem(SIGNS_PREF) || 'null');
+    if (v && Array.isArray(v.status) && Array.isArray(v.kinds)) return v;
+  } catch { /* storage blocked or bad JSON */ }
+  return { status: SIGN_SHOW_STATUS.map(([k]) => k), kinds: SIGN_KINDS.map((k) => k.code) };
+};
+const writeSignsPref = (v) => { try { localStorage.setItem(SIGNS_PREF, JSON.stringify(v)); } catch { /* storage blocked */ } };
 
 const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -224,12 +245,12 @@ function personTitle(scale, p) {
 
 // A door pin; its signs fly as little flags at the top-right, inside the
 // same hit box, so tapping a flag opens the door.
-function pinIcon(door, selected) {
+function pinIcon(door, selected, signOk = () => true) {
   const n = door.persons.length;
   const cls = ['map-pin', `map-pin--${door.band}`, n > 1 ? 'map-pin--multi' : '', selected ? 'map-pin--selected' : ''].filter(Boolean).join(' ');
   const household = n > 1 ? `<span class="map-pin__hh">${PEOPLE_SVG}${n}</span>` : '';
-  const flags = door.signs.slice(0, 3).map((s, i) =>
-    `<i class="map-flag map-flag--${esc(s.status)}" style="left:${34 + i * 10}px;top:-6px"><i class="map-flag__face"></i><i class="map-flag__post"></i></i>`).join('');
+  const flags = door.signs.filter(signOk).slice(0, 3).map((s, i) =>
+    `<i class="map-flag map-flag--${esc(s.status)} map-flag--k-${esc(s.kind)}" style="left:${34 + i * 10}px;top:-6px"><i class="map-flag__face"></i><i class="map-flag__post"></i></i>`).join('');
   return L.divIcon({
     className: 'map-pin-wrap',
     // No digit on a pin (a "3" would read as 3 doors next to a count bubble):
@@ -257,10 +278,10 @@ function clusterIcon(doors, offset) {
 }
 
 // A sign with no door: its own 48px tap target.
-function signIcon(status) {
+function signIcon(status, kind) {
   return L.divIcon({
     className: 'map-sign-wrap',
-    html: `<i class="map-flag map-flag--${esc(status)}"><i class="map-flag__face"></i><i class="map-flag__post"></i></i>`,
+    html: `<i class="map-flag map-flag--${esc(status)} map-flag--k-${esc(kind)}"><i class="map-flag__face"></i><i class="map-flag__post"></i></i>`,
     iconSize: [48, 48],
     iconAnchor: [24, 34],
   });
@@ -774,10 +795,59 @@ const tilesLine = (setup) => {
 // map" (desk) — the turf outlines switch. Then the turf tools (walk lists,
 // "Draw turf"); a volunteer's walk list has its own chip on the map. Last,
 // for desks, one quiet line naming the map tiles (tilesNote).
+function FilterOpt({ f, filter, onFilter, counts, autoFocus }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={filter === f.key}
+      className={`map-fopt${filter === f.key ? ' is-on' : ''}`}
+      data-band={f.band || f.key}
+      autoFocus={autoFocus}
+      onClick={() => onFilter(f.key)}
+    >
+      <span className="map-fopt__dot" aria-hidden="true" />
+      <span className="map-fopt__label">{f.label}</span>
+      <span className="map-fopt__n mono">{counts[f.key] ?? 0}</span>
+    </button>
+  );
+}
+
+// Signs: two rows of on/off chips — Up · Requested, then each kind.
+function SignChips({ signShow, onSigns, signCounts }) {
+  const flip = (field, code) => {
+    const cur = new Set(signShow[field]);
+    if (cur.has(code)) cur.delete(code); else cur.add(code);
+    onSigns({ ...signShow, [field]: [...cur] });
+  };
+  const chip = (field, code, label, n) => (
+    <button key={code} type="button" aria-pressed={signShow[field].includes(code)}
+      className={`map-schip map-schip--${field === 'status' ? code : 'kind'}${signShow[field].includes(code) ? ' is-on' : ''}`}
+      onClick={() => flip(field, code)}>
+      {field === 'status' && <i className={`map-flag map-flag--${code}`} aria-hidden="true"><i className="map-flag__face" /></i>}
+      <span>{label}</span> <span className="mono map-schip__n">{n}</span>
+    </button>
+  );
+  return (
+    <div className="map-fsheet__layers">
+      <h3 className="map-fsheet__sub">Signs</h3>
+      <div className="map-schips" role="group" aria-label="Signs by status">
+        {SIGN_SHOW_STATUS.map(([code, label]) => chip('status', code, label, signCounts[code] || 0))}
+      </div>
+      <div className="map-schips" role="group" aria-label="Signs by kind">
+        {SIGN_KINDS.map((k) => chip('kinds', k.code, k.label, signCounts[`k:${k.code}`] || 0))}
+      </div>
+    </div>
+  );
+}
+
 function FilterSheet({
   filters, filter, onFilter, counts, showTurfs, onTurfs, turfCount, desk, onDraw, unlocated, onPlace, onClose, tilesNote = null,
-  sharing = false, onShare = null,
+  sharing = false, onShare = null, signShow = null, onSigns = null, signCounts = {},
 }) {
+  const main = filters.filter((f) => !f.group);
+  const opponents = filters.filter((f) => f.group === 'Voting for');
+  const focusKey = filters.some((x) => x.key === filter) ? filter : filters[0]?.key;
   return (
     <>
       <button type="button" className="map-scrim" aria-label="Close" tabIndex={-1} onClick={onClose} />
@@ -787,23 +857,17 @@ function FilterSheet({
           <button type="button" className="btn btn-quiet mapsheet-close" onClick={onClose} aria-label="Close">✕</button>
         </header>
         <div className="map-fsheet__grid" role="radiogroup" aria-labelledby="map-fsheet-show">
-          {filters.map((f, i) => (
-            <button
-              key={f.key}
-              type="button"
-              role="radio"
-              aria-checked={filter === f.key}
-              className={`map-fopt${filter === f.key ? ' is-on' : ''}`}
-              data-band={f.key}
-              autoFocus={filter === f.key || (i === 0 && !filters.some((x) => x.key === filter))}
-              onClick={() => onFilter(f.key)}
-            >
-              <span className="map-fopt__dot" aria-hidden="true" />
-              <span className="map-fopt__label">{f.label}</span>
-              <span className="map-fopt__n mono">{counts[f.key] ?? 0}</span>
-            </button>
-          ))}
+          {main.map((f) => <FilterOpt key={f.key} f={f} filter={filter} onFilter={onFilter} counts={counts} autoFocus={f.key === focusKey} />)}
         </div>
+        {opponents.length > 0 && (
+          <>
+            <h3 className="map-fsheet__sub" id="map-fsheet-opp">Voting for</h3>
+            <div className="map-fsheet__grid" role="radiogroup" aria-labelledby="map-fsheet-opp">
+              {opponents.map((f) => <FilterOpt key={f.key} f={f} filter={filter} onFilter={onFilter} counts={counts} autoFocus={f.key === focusKey} />)}
+            </div>
+          </>
+        )}
+        {signShow && <SignChips signShow={signShow} onSigns={onSigns} signCounts={signCounts} />}
         {desk && (
           <div className="map-fsheet__layers">
             <h3 className="map-fsheet__sub">On the map</h3>
@@ -986,7 +1050,19 @@ export default function MapPage() {
     return new Set(doors.filter((d) => rings.some((r) => pointInPolygon(d.lat, d.lng, r))).map((d) => d.key));
   }, [canCreate, turfs, doors]);
   const voting = useVotedMode().on;
-  const filters = [...(mineKeys?.size ? [MINE] : []), ...FILTERS, ...(voting ? VOTED_FILTERS : [])];
+  const [signShow, setSignShowState] = useState(readSignsPref);
+  const setSignShow = (v) => { setSignShowState(v); writeSignsPref(v); };
+  const signOk = useCallback((sg) => signShow.status.includes(sg.status) && signShow.kinds.includes(sg.kind), [signShow]);
+  // How many doors have anyone at each rating code (for 1s, 2s, each opponent).
+  const byCode = useMemo(() => {
+    const m = {};
+    for (const d of doors) for (const code of new Set(d.persons.map((p) => p.rating).filter(Boolean))) m[code] = (m[code] || 0) + 1;
+    return m;
+  }, [doors]);
+  // An opponent taken off the list still shows while doors carry it.
+  const opponents = useMemo(() => opponentFilters(scale).filter((f) => !f.off || byCode[f.key.slice(2)]), [scale, byCode]);
+  const filters = [...(mineKeys?.size ? [MINE] : []), FILTERS[0], FILTERS[1], ...ratingFilters(scale), ...FILTERS.slice(2), ...(voting ? VOTED_FILTERS : []), ...opponents];
+  const labelOf = (key) => FILTER_LABEL[key] || filters.find((f) => f.key === key)?.label || key;
   // Voted: the server's mark, or a tap still on this phone.
   const votes = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
   const hasVoted = useCallback((p) => (votes[p.id] ? votes[p.id].voted : Boolean(p.voted_at)), [votes]);
@@ -996,10 +1072,11 @@ export default function MapPage() {
   const shows = useCallback((d) => (
     filter === 'all' ? true
       : filter === 'mine' ? Boolean(mineKeys?.has(d.key))
-        : filter === 'signs' ? d.signs.length > 0
+        : filter === 'signs' ? d.signs.some(signOk)
+          : filter.startsWith('r:') ? d.persons.some((p) => p.rating === filter.slice(2))
           : filter === 'voted' ? d.persons.some(hasVoted)
             : filter === 'gotv' ? d.persons.some((p) => bandOf(p.rating) === 'support' && !hasVoted(p))
-              : d.band === filter), [filter, mineKeys, hasVoted]);
+              : d.band === filter), [filter, mineKeys, hasVoted, signOk]);
   // The open door always keeps its pin, whatever the filter. (Only a door
   // the filter hides changes the list, so a tap doesn't rebuild every pin.)
   const extraKey = selectedDoor && !shows(selectedDoor) ? selectedDoor.key : null;
@@ -1009,12 +1086,22 @@ export default function MapPage() {
     const c = { all: doors.length, mine: mineKeys?.size || 0, support: 0, undecided: 0, opposed: 0, unrated: 0, signs: 0, voted: 0, gotv: 0 };
     for (const d of doors) {
       c[d.band] += 1;
-      if (d.signs.length) c.signs += 1;
+      if (d.signs.some(signOk)) c.signs += 1;
       if (d.persons.some(hasVoted)) c.voted += 1;
       if (d.persons.some((p) => bandOf(p.rating) === 'support' && !hasVoted(p))) c.gotv += 1;
     }
+    for (const [code, n] of Object.entries(byCode)) c[`r:${code}`] = n;
     return c;
-  }, [doors, mineKeys, hasVoted]);
+  }, [doors, mineKeys, hasVoted, signOk, byCode]);
+  // Every sign on the map, by status and by kind (for the Signs chips).
+  const signCounts = useMemo(() => {
+    const c = {};
+    for (const sg of [...doors.flatMap((d) => d.signs), ...orphanSigns]) {
+      c[sg.status] = (c[sg.status] || 0) + 1;
+      c[`k:${sg.kind}`] = (c[`k:${sg.kind}`] || 0) + 1;
+    }
+    return c;
+  }, [doors, orphanSigns]);
 
   // Deep link to someone who has no pin yet → offer to place them.
   const wantsMissing = Boolean(personParam && doorsQ.data && !selectedDoor && !doorsQ.isFetching);
@@ -1457,7 +1544,7 @@ export default function MapPage() {
     const addPin = (door) => {
       const selected = door.key === selectedKeyRef.current;
       const marker = L.marker([door.lat, door.lng], {
-        icon: pinIcon(door, selected),
+        icon: pinIcon(door, selected, signOk),
         title: `${doorTitle(door)} — ${door.persons.map((p) => personTitle(scale, p)).join(', ')}`,
         riseOnHover: true,
         zIndexOffset: selected ? 1000 : 0,
@@ -1483,9 +1570,9 @@ export default function MapPage() {
       }
     }
     if (filter === 'all' || filter === 'signs') {
-      for (const s of orphanSigns) {
+      for (const s of orphanSigns.filter(signOk)) {
         L.marker([Number(s.lat), Number(s.lng)], {
-          icon: signIcon(s.status),
+          icon: signIcon(s.status, s.kind),
           title: `${SIGN_LABEL[s.kind] || s.kind} · ${SIGN_STATUS[s.status] || s.status}${s.address ? ` · ${s.address}` : ''}`,
           zIndexOffset: 500,
         })
@@ -1493,7 +1580,7 @@ export default function MapPage() {
           .addTo(layers.signs);
       }
     }
-  }, [groups, pulledKey, orphanSigns, filter, scale]);
+  }, [groups, pulledKey, orphanSigns, filter, scale, signOk]);
 
   // Highlight the selected pin without rebuilding every marker.
   useEffect(() => {
@@ -1666,14 +1753,14 @@ export default function MapPage() {
                 type="button"
                 ref={filterBtnRef}
                 className={`map-filter-btn${filter !== 'all' ? ' is-filtered' : ''}`}
-                data-band={filter}
+                data-band={filters.find((f) => f.key === filter)?.band || filter}
                 aria-haspopup="dialog"
                 aria-expanded={filterOpen}
-                aria-label={`Show: ${FILTER_LABEL[filter]}, ${plural(counts[filter] ?? 0, 'door', 'doors')}`}
+                aria-label={`Show: ${labelOf(filter)}, ${plural(counts[filter] ?? 0, 'door', 'doors')}`}
                 onClick={() => { setFilterOpen((o) => !o); setUnlocOpen(false); }}
               >
                 <FilterGlyph />
-                <span className="map-filter-btn__label"><span className="map-filter-btn__show">Show:</span> {FILTER_LABEL[filter]}</span>
+                <span className="map-filter-btn__label"><span className="map-filter-btn__show">Show:</span> {labelOf(filter)}</span>
                 <span className="map-filter-btn__n mono" aria-live="polite">
                   {doorsQ.isPending ? '…' : counts[filter] ?? 0}
                 </span>
@@ -1737,6 +1824,9 @@ export default function MapPage() {
           tilesNote={canCreate ? tilesLine(tilesQ.data?.setup) : null}
           sharing={sharing}
           onShare={setSharing}
+          signShow={signShow}
+          onSigns={setSignShow}
+          signCounts={signCounts}
         />
       )}
 

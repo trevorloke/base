@@ -136,6 +136,56 @@ await page.click('.map-fsheet .map-fopt:has-text("Opposed")');
 await sleep(500);
 const opposedPins = (await page.$$('.map-pin-wrap')).length;
 check('Opposed filter narrows pins', opposedPins === 2, `pins=${opposedPins}`); // Tom 4D, Dev 4B
+// Each opponent on its own; 1s apart from 2s.
+const pick = async (label) => {
+  await page.click('.map-filter-btn');
+  await page.click(`.map-fsheet .map-fopt:has-text("${label}")`);
+  await sleep(500);
+  return { pins: (await page.$$('.map-pin-wrap')).length, btn: (await page.innerText('.map-filter-btn')).replace(/\s+/g, ' ') };
+};
+let f = await pick('Voting Locke');
+check('Voting Locke: just Dev’s door, and the button says so', f.pins === 1 && /Voting Locke 1/.test(f.btn), JSON.stringify(f));
+f = await pick('Voting McCallum');
+check('Voting McCallum: just Tom’s door', f.pins === 1, JSON.stringify(f));
+f = await pick('Strong yes (1)');
+const ones = Number(f.btn.match(/(\d+)$/)?.[1]);
+check('Strong yes (1): its own filter, as many pins as it counts', ones >= 1 && f.pins === ones, JSON.stringify(f));
+await page.click('.map-filter-btn');
+check('the sheet: Lean yes (2) beside it, and a "Voting for" group', await page.locator('.map-fsheet .map-fopt:has-text("Lean yes (2)")').count() === 1
+  && /Voting for/i.test(await page.innerText('.map-fsheet')));
+await page.click('.map-fsheet .mapsheet-close');
+
+// Signs: requests on top of signs up, by kind.
+await act('sign.place', { kind: 'lawn', status: 'requested', person_id: P.harjit.id, address: '12345 72 Ave', lat: 49.133, lng: -122.851 });
+await act('sign.place', { kind: 'billboard', status: 'installed', person_id: P.dev.id, address: '12410 70A Ave', lat: 49.1295, lng: -122.848 });
+await go('/map');
+await page.waitForSelector('.map-pin-wrap', { timeout: 8000 }).catch(() => {});
+f = await pick('Has a sign');
+const signDoors = f.pins;
+const flags = async () => page.$$eval('.map-pin-wrap .map-flag', (els) => els.map((e) => e.className));
+let fl = await flags();
+check('Has a sign: a requested flag and an up flag, the billboard’s bigger', fl.some((c) => /requested/.test(c)) && fl.some((c) => /installed/.test(c) && /k-billboard/.test(c)), fl.join(' | '));
+await page.click('.map-filter-btn');
+await page.click('.map-fsheet .map-schip:has-text("Requested")');
+await sleep(400);
+check('Requested off: the chip says so', await page.getAttribute('.map-fsheet .map-schip:has-text("Requested")', 'aria-pressed') === 'false');
+await page.click('.map-fsheet .mapsheet-close');
+await sleep(300);
+fl = await flags();
+check('…and no requested flag on the map; fewer sign doors', !fl.some((c) => /requested/.test(c)) && (await page.$$('.map-pin-wrap')).length < signDoors, `${fl.join(' | ')} · ${signDoors}`);
+await page.click('.map-filter-btn');
+await page.click('.map-fsheet .map-schip:has-text("Billboard")');
+await sleep(400);
+await page.screenshot({ path: `${SHOTS}/map-filter-signs.png` });
+await page.click('.map-fsheet .mapsheet-close');
+await sleep(300);
+check('Billboard off too: no billboard flag', !(await flags()).some((c) => /k-billboard/.test(c)));
+// Back as it was (the choice is kept on this browser).
+await page.click('.map-filter-btn');
+await page.click('.map-fsheet .map-schip:has-text("Requested")');
+await page.click('.map-fsheet .map-schip:has-text("Billboard")');
+await page.click('.map-fsheet .map-fopt[data-band="all"]');
+await sleep(300);
 
 // ── 4. People: tag filter, phone bank logs a call ──
 await go('/people?tag=media');
