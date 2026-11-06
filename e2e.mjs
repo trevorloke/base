@@ -186,6 +186,25 @@ await page.click('.map-fsheet .map-schip:has-text("Requested")');
 await page.click('.map-fsheet .map-schip:has-text("Billboard")');
 await page.click('.map-fsheet .map-fopt[data-band="all"]');
 await sleep(300);
+// The map's look: Muted greys the tiles (pins keep their colours); kept on a reload.
+await page.click('.map-filter-btn');
+await page.click('.map-fsheet .map-vchip:has-text("Muted")');
+await sleep(300);
+const look = async () => page.$eval('.map-canvas', (el) => [el.className, getComputedStyle(el.querySelector('.leaflet-tile-pane')).filter]);
+let lk = await look();
+check('Show → Map → Muted: the tiles go grey', /map-view--muted/.test(lk[0]) && /grayscale/.test(lk[1]), lk.join(' · '));
+await page.screenshot({ path: `${SHOTS}/map-view-muted.png` });
+await page.click('.map-fsheet .mapsheet-close').catch(() => {});
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.map-canvas .leaflet-tile-pane', { timeout: 8000 }).catch(() => {});
+lk = await look();
+check('…and stays Muted after a reload (this browser)', /map-view--muted/.test(lk[0]), lk[0]);
+await page.click('.map-filter-btn');
+check('the looks offered here: Standard, Muted, Dark (no Google key: no Satellite)', (await page.$$eval('.map-vchip', (els) => els.map((e) => e.innerText.trim()))).join('|') === 'Standard|Muted|Dark');
+await page.click('.map-fsheet .map-vchip:has-text("Standard")');
+await page.click('.map-fsheet .mapsheet-close').catch(() => {});
+await sleep(300);
+check('Standard: the tiles as they come', (await look())[1] === 'none');
 
 // ── 4. People: tag filter, phone bank logs a call ──
 await go('/people?tag=media');

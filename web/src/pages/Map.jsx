@@ -88,6 +88,15 @@ const readSignsPref = () => {
 };
 const writeSignsPref = (v) => { try { localStorage.setItem(SIGNS_PREF, JSON.stringify(v)); } catch { /* storage blocked */ } };
 
+// The map's look, each person's own (kept per browser): the campaign's
+// standard tiles; Muted (grey, so the pins stand out) and Dark (for night),
+// drawn over any tiles; and, with Google Maps on, its other looks
+// (Satellite, Terrain) from /api/map/config views.
+const VIEW_PREF = 'starbase:map:view';
+const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: 'Muted' }, { key: 'dark', label: 'Dark' }];
+const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'standard'; } catch { return 'standard'; } };
+const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch { /* storage blocked */ } };
+
 const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const norm = (s) => String(s || '').trim().toLowerCase();
@@ -844,6 +853,7 @@ function SignChips({ signShow, onSigns, signCounts }) {
 function FilterSheet({
   filters, filter, onFilter, counts, showTurfs, onTurfs, turfCount, desk, onDraw, unlocated, onPlace, onClose, tilesNote = null,
   sharing = false, onShare = null, signShow = null, onSigns = null, signCounts = {},
+  views = [], view = 'standard', onView = null,
 }) {
   const main = filters.filter((f) => !f.group);
   const opponents = filters.filter((f) => f.group === 'Voting for');
@@ -868,6 +878,19 @@ function FilterSheet({
           </>
         )}
         {signShow && <SignChips signShow={signShow} onSigns={onSigns} signCounts={signCounts} />}
+        {onView && (
+          <div className="map-fsheet__layers">
+            <h3 className="map-fsheet__sub" id="map-fsheet-view">Map</h3>
+            <div className="map-schips" role="radiogroup" aria-labelledby="map-fsheet-view">
+              {[...SHADES, ...views].map((v) => (
+                <button key={v.key} type="button" role="radio" aria-checked={view === v.key}
+                  className={`map-schip map-vchip map-vchip--${v.key}${view === v.key ? ' is-on' : ''}`} onClick={() => onView(v.key)}>
+                  <i className="map-vchip__swatch" aria-hidden="true" />{v.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {desk && (
           <div className="map-fsheet__layers">
             <h3 className="map-fsheet__sub">On the map</h3>
@@ -1015,7 +1038,14 @@ export default function MapPage() {
     queryKey: ['mapConfig'], queryFn: () => apiGet('/map/config'), staleTime: 10 * 60_000, retry: 1, ...phoneCopy(me, 'mapConfig'),
   });
   useKeepCopy(me, 'mapConfig', tilesQ);
-  const tiles = tilesQ.data?.tiles || (tilesQ.isError || tilesQ.fetchStatus === 'paused' ? DEFAULT_TILES : null);
+  const baseTiles = tilesQ.data?.tiles || (tilesQ.isError || tilesQ.fetchStatus === 'paused' ? DEFAULT_TILES : null);
+  const views = tilesQ.data?.views ?? EMPTY_LIST;
+  const [viewPick, setViewPick] = useState(readViewPref);
+  const setView = (v) => { setViewPick(v); writeViewPref(v); };
+  // A provider look this server no longer offers falls back to Standard.
+  const providerView = views.find((v) => v.key === viewPick) || null;
+  const view = providerView || SHADES.some((s) => s.key === viewPick) ? viewPick : 'standard';
+  const tiles = providerView ? { url: providerView.url, attribution: providerView.attribution, maxZoom: providerView.maxZoom } : baseTiles;
   const offZoom = Math.min(CLUSTER_OFF_ZOOM, tiles?.maxZoom || CLUSTER_OFF_ZOOM);
   const offZoomRef = useRef(offZoom);
   offZoomRef.current = offZoom;
@@ -1699,7 +1729,7 @@ export default function MapPage() {
 
   return (
     <div className={pageCls} ref={pageRef}>
-      <div className="map-canvas" ref={canvasRef} role="application" aria-label="Canvass map" />
+      <div className={`map-canvas map-view--${view}`} ref={canvasRef} role="application" aria-label="Canvass map" />
 
       <div className="map-top">
         {mode === 'draw' ? (
@@ -1830,6 +1860,9 @@ export default function MapPage() {
           signShow={signShow}
           onSigns={setSignShow}
           signCounts={signCounts}
+          views={views}
+          view={view}
+          onView={setView}
         />
       )}
 

@@ -925,3 +925,15 @@
 /* A bigger sign flies a bigger flag: billboard > large > lawn. */
 .map-flag--k-billboard .map-flag__face { width: 22px; height: 14px; }
 .map-flag--k-large .map-flag__face { width: 19px; height: 12px; }
+
+/* The map's look (Show → Map), over any tiles: Muted greys the streets so the
+   pins stand out; Dark is for canvassing at night. Only the tiles change —
+   pins, turfs and flags keep their colours. */
+.map-view--muted .leaflet-tile-pane { filter: grayscale(1) contrast(0.9) brightness(1.08); }
+.map-view--dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9); }
+.map-vchip__swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--rule-2); background: #e8ecef; }
+.map-vchip--muted .map-vchip__swatch { background: #c9ccd1; }
+.map-vchip--dark .map-vchip__swatch { background: #262b33; }
+.map-vchip--satellite .map-vchip__swatch { background: linear-gradient(135deg, #3d5a3a, #8a7b55); }
+.map-vchip--terrain .map-vchip__swatch { background: linear-gradient(135deg, #cfe0c3, #e9dcc0); }
+.map-vchip:not(.is-on) { text-decoration: none; }

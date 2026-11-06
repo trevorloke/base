@@ -24,7 +24,7 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { getDb } from '../../db/client.js';
 import { loadContext, SESSION_COOKIE } from '../../lib/auth.js';
-import { googleTilesOn, fetchTile, attribution as googleCredit, TILE_PATH as GOOGLE_PATH, MAX_ZOOM as GOOGLE_MAX } from '../../lib/gtiles.js';
+import { googleTilesOn, fetchTile, attribution as googleCredit, TILE_PATH as GOOGLE_PATH, MAX_ZOOM as GOOGLE_MAX, MAP_TYPES, mapType } from '../../lib/gtiles.js';
 
 export const sql = `
 alter table signs add column if not exists client_id uuid;
@@ -102,6 +102,15 @@ export const api = new Hono();
 api.get('/map/config', (c) => {
   const t = tileConfig();
   const out = { tiles: { url: t.url, attribution: t.attribution, maxZoom: t.maxZoom } };
+  // Other looks a person can pick on the map (Show → Map). With Google on:
+  // its other map types, through the same key. (Muted and Dark are the
+  // phone's own, over any tiles.)
+  if (t.url === GOOGLE_PATH) {
+    const words = { roadmap: 'Streets', satellite: 'Satellite', terrain: 'Terrain' };
+    out.views = MAP_TYPES.filter((k) => k !== mapType()).map((k) => ({
+      key: k, label: words[k], url: `${GOOGLE_PATH}?t=${k}`, attribution: t.attribution, maxZoom: t.maxZoom,
+    }));
+  }
   // Desk roles: what took, so a mistyped setting shows on the map's sheet.
   if (DESK.includes(c.get('ctx')?.role)) {
     out.setup = { source: tileSource(t.url), custom: t.url !== TILE_DEFAULTS.url, ignored: t.ignored, maxZoom: t.maxZoom };
@@ -125,7 +134,7 @@ publicRoutes.get('/tiles/:z/:x/:y', async (c) => {
   }
   let t;
   try {
-    t = await fetchTile(z, x, y);
+    t = await fetchTile(z, x, y, c.req.query('t') || undefined);
   } catch (e) {
     console.warn(`map tiles: ${e.message}`);
     return c.text('Map tiles unavailable', 502);

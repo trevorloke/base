@@ -159,8 +159,9 @@ then, either:
 
 - **Google Maps:** `GOOGLE_MAPS_TILES=1` with `GOOGLE_MAPS_SERVER_KEY` (Map
   Tiles API enabled, above); `GOOGLE_MAPS_TILE_TYPE` roadmap | satellite |
-  terrain. Starbase fetches them for signed-in phones (`/tiles/…`), so the
-  key stays on the server.
+  terrain (the standard look; each person can switch to the others under
+  Show → Map). Starbase fetches them for signed-in phones (`/tiles/…`), so
+  the key stays on the server.
 - **Another provider:** `STARBASE_TILE_URL` (`https://…/{z}/{x}/{y}.png`, a
   key may ride in the query string — the phones see it),
   `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM`.

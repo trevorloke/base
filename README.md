@@ -353,6 +353,12 @@ A bad value falls back to the default (and logs once); desk roles see which
 tiles took on the map's filter sheet (*Map tiles: OpenStreetMap — custom
 address ignored*).
 
+**The map's look** is each person's own (Show → *Map*, kept on that
+browser): *Standard*; *Muted* (grey streets, so the pins stand out) and
+*Dark* (for night), drawn over any tiles; and with Google Maps on, its
+other looks too — *Satellite*, *Terrain* (or *Streets*), each through the
+same key.
+
 **Google Maps** instead: `GOOGLE_MAPS_TILES=1` with a `GOOGLE_MAPS_SERVER_KEY`
 that has the **Map Tiles API** enabled (`GOOGLE_MAPS_TILE_TYPE` roadmap |
 satellite | terrain). Google hands tiles out against a session, so the map

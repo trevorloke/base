@@ -95,3 +95,24 @@ test('bad coordinates are refused; a rejected session is renewed once; Google do
   tileStatus = 200;
   assert.equal((await get('/tiles/10/160/350.png', mgr.cookie)).status, 200, 'the new session works');
 });
+
+test('other looks: Satellite and Terrain offered with Google on; each its own session; an unknown look is the standard one', async () => {
+  process.env.GOOGLE_MAPS_TILES = '1';
+  process.env.GOOGLE_MAPS_SERVER_KEY = 'tiles-key';
+  tileStatus = 200;
+  _resetForTest();
+  log.length = 0;
+  const cfg = await (await get('/api/map/config', mgr.cookie)).json();
+  assert.deepEqual(cfg.views.map((v) => [v.key, v.label, v.url]), [
+    ['satellite', 'Satellite', '/tiles/{z}/{x}/{y}.png?t=satellite'],
+    ['terrain', 'Terrain', '/tiles/{z}/{x}/{y}.png?t=terrain'],
+  ]);
+  assert.equal((await get('/tiles/14/2611/5636.png?t=satellite', mgr.cookie)).status, 200);
+  assert.equal((await get('/tiles/14/2611/5636.png?t=satellite', mgr.cookie)).status, 200);
+  assert.equal((await get('/tiles/14/2611/5636.png?t=bogus', mgr.cookie)).status, 200);
+  const made = log.filter((l) => l.path === '/v1/createSession').map((l) => JSON.parse(l.body).mapType);
+  assert.deepEqual(made, ['satellite', 'roadmap'], 'one satellite session reused; bogus → the standard look');
+  delete process.env.GOOGLE_MAPS_TILES;
+  const off = await (await get('/api/map/config', mgr.cookie)).json();
+  assert.equal(off.views, undefined, 'OpenStreetMap: no provider looks (Muted and Dark are the phone’s own)');
+});
