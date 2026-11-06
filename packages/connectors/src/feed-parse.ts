@@ -209,7 +209,7 @@ export function textContent(el: XmlElement | undefined): string {
 // ---------------------------------------------------------------- HTML → text
 
 /** HTML (as found in feed descriptions) → plain text: drops scripts/styles/tags, keeps paragraph breaks, decodes entities. */
-export function htmlToText(html: string): string {
+export function feedHtmlToText(html: string): string {
   return decodeEntities(
     html
       .replace(/<(script|style|noscript|iframe|svg)\b[\s\S]*?<\/\1\s*>/gi, " ")
@@ -301,10 +301,10 @@ function authorName(raw: string): string | null {
 function textConstruct(el: XmlElement | undefined, assumeHtml: boolean): string {
   if (!el) return "";
   const type = (el.attrs.type ?? "").toLowerCase();
-  if (type === "xhtml") return htmlToText(serializeChildren(el));
+  if (type === "xhtml") return feedHtmlToText(serializeChildren(el));
   const raw = textContent(el);
   if (type === "text" || type === "text/plain") return clean(raw);
-  return assumeHtml || type === "html" || type === "text/html" || /<[a-z!/]/i.test(raw) ? htmlToText(raw) : raw.trim();
+  return assumeHtml || type === "html" || type === "text/html" || /<[a-z!/]/i.test(raw) ? feedHtmlToText(raw) : raw.trim();
 }
 
 /** Titles are one line; feeds often double-escape them ("Tom &amp;amp; Jerry"), so decode once more. */
@@ -312,7 +312,7 @@ function titleOf(el: XmlElement | undefined): string {
   return clean(decodeEntities(textConstruct(el, false)));
 }
 
-/** Re-serialize child markup (for Atom xhtml content) so htmlToText keeps its block breaks. */
+/** Re-serialize child markup (for Atom xhtml content) so feedHtmlToText keeps its block breaks. */
 function serializeChildren(el: XmlElement): string {
   let out = "";
   for (const c of el.children) {

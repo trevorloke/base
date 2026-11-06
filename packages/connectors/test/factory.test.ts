@@ -4,7 +4,7 @@ import { BlueskyConnector, IdempotencyCache, MockConnector, XConnector, ZernioCo
 describe("createDefaultRegistry", () => {
   it("registers the native adapters, the mock outside production, and resolves strictly by connector name", () => {
     const reg = createDefaultRegistry({});
-    expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "meta", "threads", "linkedin", "pinterest", "youtube", "google_business", "tiktok", "reddit", "mastodon", "telegram", "discord", "discord_bot", "whatsapp", "wechat", "line", "mock"]);
+    expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "meta", "threads", "linkedin", "pinterest", "youtube", "google_business", "tiktok", "reddit", "mastodon", "telegram", "discord", "discord_bot", "whatsapp", "wechat", "line", "nostr", "misskey", "lemmy", "slack", "matrix", "google_chat", "teams", "wordpress", "ghost", "mailchimp", "kit", "tumblr", "twitch", "vk", "webhook", "rss", "mock"]);
     expect(reg.get("bluesky")).toBeInstanceOf(BlueskyConnector);
     expect(reg.get("x")).toBeInstanceOf(XConnector);
     expect(reg.get("mock")).toBeInstanceOf(MockConnector);
@@ -18,10 +18,10 @@ describe("createDefaultRegistry", () => {
     expect(createDefaultRegistry({ NODE_ENV: "production", STARSIGN_ENABLE_MOCK: "1" }).get("mock")).toBeInstanceOf(MockConnector);
   });
 
-  it("serves all seventeen networks natively and reports unconfigured apps instead of hiding them", () => {
+  it("serves every network except news natively and reports unconfigured apps instead of hiding them", () => {
     const reg = createDefaultRegistry({ NODE_ENV: "production" });
     const networks = new Set(reg.list().flatMap((c) => [...c.networks]));
-    for (const n of ["x", "bluesky", "threads", "instagram", "facebook", "linkedin", "tiktok", "youtube", "pinterest", "mastodon", "reddit", "google_business", "telegram", "discord", "whatsapp", "wechat", "line"]) {
+    for (const n of ["x", "bluesky", "threads", "instagram", "facebook", "linkedin", "tiktok", "youtube", "pinterest", "mastodon", "reddit", "google_business", "telegram", "discord", "whatsapp", "wechat", "line", "nostr", "misskey", "lemmy", "tumblr", "vk", "twitch", "slack", "matrix", "google_chat", "teams", "wordpress", "ghost", "mailchimp", "kit", "webhook", "rss"]) {
       expect(networks.has(n as never), n).toBe(true);
     }
     // OAuth apps without credentials say so; open networks are always connectable.
@@ -38,7 +38,7 @@ describe("createDefaultRegistry", () => {
 
   it("adds Zernio only when ZERNIO_API_KEY is set", () => {
     const reg = createDefaultRegistry({ ZERNIO_API_KEY: "zk", X_CLIENT_ID: "cid", X_CLIENT_SECRET: "sec" });
-    expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "meta", "threads", "linkedin", "pinterest", "youtube", "google_business", "tiktok", "reddit", "mastodon", "telegram", "discord", "discord_bot", "whatsapp", "wechat", "line", "zernio", "mock"]);
+    expect(reg.list().map((c) => c.name)).toEqual(["bluesky", "x", "meta", "threads", "linkedin", "pinterest", "youtube", "google_business", "tiktok", "reddit", "mastodon", "telegram", "discord", "discord_bot", "whatsapp", "wechat", "line", "nostr", "misskey", "lemmy", "slack", "matrix", "google_chat", "teams", "wordpress", "ghost", "mailchimp", "kit", "tumblr", "twitch", "vk", "webhook", "rss", "zernio", "mock"]);
     expect(reg.get("zernio")).toBeInstanceOf(ZernioConnector);
     expect(reg.resolve("zernio", "tiktok").name).toBe("zernio");
     expect(reg.get("x")?.capabilities("x")).toMatchObject({ meteredReads: true });

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountRef } from "../src/index.ts";
 import { ConnectorError } from "../src/types.ts";
-import { decodeEntities, discoverFeedLink, htmlToText, parseFeed, parseFeedDate, parseXml } from "../src/feed-parse.ts";
+import { decodeEntities, discoverFeedLink, feedHtmlToText, parseFeed, parseFeedDate, parseXml } from "../src/feed-parse.ts";
 import { RssConnector, createRssConnectors, decodeBody, feedItemToActivity } from "../src/rss.ts";
 
 const NOW = new Date("2026-11-06T12:00:00Z");
@@ -139,7 +139,7 @@ describe("feed parsing", () => {
     expect(f?.title).toBe("T & U");
     expect(parseXml(`<a x='1>2' y="&lt;"/>`)?.attrs).toEqual({ x: "1>2", y: "<" });
     expect(decodeEntities("&#0; &#xD800; &#x110000; &bogus; &amp;amp;")).toBe("� � � &bogus; &amp;");
-    expect(htmlToText("<ul><li>a</li><li>b</li></ul><style>x{}</style>")).toBe("• a\n\n• b");
+    expect(feedHtmlToText("<ul><li>a</li><li>b</li></ul><style>x{}</style>")).toBe("• a\n\n• b");
   });
 
   it("parses feed dates and finds advertised feeds", () => {
