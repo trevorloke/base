@@ -514,7 +514,7 @@ one tap away under **More**.
   volunteer again and, after a reload, nothing a treasurer saw is kept.
 
 ### Import your own lists
-**People → More → Import.** Try `samples/surrey-import-test.csv` first —
+**People → More → Import & export → Import people** (or People → More → Import). A CSV or an **Excel workbook (.xlsx)** both work — save a sheet from Excel or Google Sheets as .xlsx and choose it: its first sheet comes in, columns matched. Try `samples/surrey-import-test.csv` first —
 fictional people at *public building* addresses (City Hall, rec centres). The
 check step should report **9 new, 1 merged** (Jordan Lee appears twice with
 the same email) and **1 refused** (the row with no name); Robin Kaur's rating

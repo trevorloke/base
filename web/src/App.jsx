@@ -47,6 +47,7 @@ const SurveysEdit = lazy(() => import('./pages/SurveysEdit.jsx'));
 const SurveysResults = lazy(() => import('./pages/SurveysResults.jsx'));
 const Scripts = lazy(() => import('./pages/Scripts.jsx'));
 const Duplicates = lazy(() => import('./pages/Duplicates.jsx'));
+const DataPage = lazy(() => import('./pages/Data.jsx'));
 const RatingScale = lazy(() => import('./pages/RatingScale.jsx'));
 const Fields = lazy(() => import('./pages/Fields.jsx'));
 const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
@@ -91,7 +92,7 @@ function NotForYou({ me }) {
 
 // A desk address typed into the field app (an old bookmark, a link in an
 // email): the admin has it. Volunteers go home, as before.
-const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates))?|money|lists|reports|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
+const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates))?|money|lists|reports|data|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
 function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
@@ -107,7 +108,7 @@ function FieldFallback() {
 // Desk screens: a desk role, or anyone given the screen's area (Admin →
 // Permissions); a desk role denied the area is sent home too.
 const ROUTE_AREA = [
-  [/^\/people\/(import|connected)|^\/lists/, 'people'], [/^\/people\/fields/, 'admin'], [/^\/reports/, 'data'],
+  [/^\/people\/(import|connected)|^\/lists/, 'people'], [/^\/people\/fields/, 'admin'], [/^\/reports|^\/data(\/|$)/, 'data'],
   [/^\/money/, 'money'], [/^\/outreach|^\/ladders|^\/follow-ups|^\/surveys|^\/scripts|^\/inbox\/settings/, 'outreach'],
   [/^\/team|^\/settings|^\/rating-scale/, 'admin'],
   [/^\/passes/, 'map'],
@@ -140,6 +141,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/people/fields" element={<FieldFallback />} />
           <Route path="/people/connected" element={<FieldFallback />} />
           <Route path="/people/duplicates" element={<FieldFallback />} />
+          <Route path="/data" element={<FieldFallback />} />
           <Route path="/inbox/settings" element={<FieldFallback />} />
           <Route path="/banks/new" element={<FieldFallback />} />
           <Route path="/people/:id" element={<Person />} />
@@ -209,6 +211,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/surveys" element={<Surveys />} />
           <Route path="/scripts" element={<Scripts />} />
           <Route path="/people/duplicates" element={<Duplicates />} />
+          <Route path="/data" element={<DataPage />} />
           <Route path="/surveys/:id" element={<SurveysEdit />} />
           <Route path="/surveys/:id/results" element={<SurveysResults />} />
           <Route path="/rating-scale" element={<RatingScale />} />

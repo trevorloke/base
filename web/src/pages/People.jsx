@@ -757,6 +757,7 @@ function PeopleList() {
               { to: '/inbox', label: 'Inbox', icon: 'text', state: { from: { to: '/people', label: 'People' } } },
               desk && { to: '/banks', label: 'Phone banks', icon: 'phone' },
               desk && { to: '/people/import', label: 'Import', icon: 'upload' },
+              desk && { to: '/data', label: 'Import & export' },
               desk && { to: '/surveys', label: 'Surveys' },
               desk && { to: '/people/connected', label: 'Most connected' },
               desk && { to: '/people/duplicates', label: 'Duplicates' },

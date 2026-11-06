@@ -51,3 +51,32 @@ test('the reports: totals and tables; CSV of any report and any dataset; volunte
   assert.equal((await vol.get('/api/reports')).status, 403);
   assert.equal((await app.request('/api/export/people.csv', { headers: { cookie: vol.cookie } })).status, 403);
 });
+
+test('more as spreadsheets: volunteers with their roles, signs, shifts; People carries voted, and reads back in', async () => {
+  const bob = (await mgr.get('/api/persons?q=Bob%20Voter')).json.persons[0];
+  await mgr.action('volunteer.assign', { person_id: bob.id, role: 'driver' });
+  await mgr.action('volunteer.assign', { person_id: bob.id, role: 'scrutineer', detail: 'Newton Rec' });
+  await mgr.action('sign.place', { kind: 'lawn', person_id: bob.id, address: '1 Main St' });
+  await mgr.action('shift.create', { title: 'Saturday canvass', starts_at: new Date(Date.now() + 864e5).toISOString(), capacity: 6 });
+  await mgr.action('vote.mark', { person_id: bob.id, source: 'desk' });
+  const csv = async (d) => (await app.request(`/api/export/${d}.csv`, { headers: { cookie: mgr.cookie } })).text();
+  assert.match(await csv('volunteers'), /Bob Voter,,604-555-0102,driver; scrutineer \(Newton Rec\)/);
+  assert.match(await csv('signs'), /1 Main St,lawn,requested,Bob Voter/);
+  assert.match(await csv('shifts'), /Saturday canvass,.*,6,0/);
+  const people = await csv('people');
+  const head = people.replace(/^﻿/, '').split('\r\n')[0].split(',');
+  assert.ok(head.includes('voted'), head.join());
+  const bobRow = people.split('\r\n').find((l) => l.startsWith('Bob Voter')).split(',');
+  assert.match(bobRow[head.indexOf('voted')], /^\d{4}-\d{2}-\d{2}$/, 'voted as a date');
+  // The People spreadsheet imports straight back into another campaign.
+  const other = new Client();
+  await other.signup({ workspaceName: 'Round trip', email: `rt.${tag}@example.org`, jurisdiction: 'bc-municipal' });
+  const rows = people.replace(/^﻿/, '').split('\r\n').slice(1).filter(Boolean).map((l) => {
+    const cells = l.split(',');
+    return { name: cells[head.indexOf('name')], phone: cells[head.indexOf('phone')] || undefined, city: cells[head.indexOf('city')] || undefined, voted: cells[head.indexOf('voted')] || undefined };
+  });
+  const r = await other.post('/api/data/import', { rows });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const back = (await other.get('/api/persons?q=Bob%20Voter')).json.persons[0];
+  assert.ok(back && back.voted_at, 'Bob comes back, voted');
+});

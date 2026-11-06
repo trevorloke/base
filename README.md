@@ -197,6 +197,16 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Reached*: Today's *More* counts the doors lit this week (yours and the
   team's), Reports → *Contacts by week* has a *Lit* column, the dashboard
   colours the drops apart, and a profile's History reads *Left lit*.
+- **Import & export** (People → More → *Import & export*, the Data area):
+  one page for both. **In:** People from a CSV or an **Excel workbook
+  (.xlsx — its first sheet; dates read as dates)**, from any spreadsheet, a
+  voter file, or another tool's export (Mailchimp, NationBuilder, VAN and
+  the like): the columns match themselves, nothing is saved until the
+  check, and the same file twice adds no one twice; a voted file the same
+  way; the website's sign-ups through its key. **Out:** each table as a
+  spreadsheet — people (with *voted*, and it reads straight back in),
+  contacts, gifts, volunteers and their roles, signs, shifts, subscribers,
+  lists — and everything in one JSON file for a backup or a move.
 - **GOTV mode** (Today → More → *GOTV & voting days*, managers): list the
   advance-voting days and election day, and GOTV mode turns itself on for
   each of them in the campaign's day (or on by hand, any day). While it's

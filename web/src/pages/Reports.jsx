@@ -10,8 +10,9 @@ const TITLES = {
   rating: 'People by rating', tags: 'Tags', cities: 'Cities', 'people-by-week': 'People added, by week',
   contacts: 'Contacts by week', donations: 'Donations by month', subscribers: 'Newsletter list, by month', sends: 'Sends',
 };
-const EXPORTS = [
+export const EXPORTS = [
   ['people', 'People'], ['contacts', 'Contacts (doors, calls, texts)'], ['gifts', 'Gifts'],
+  ['volunteers', 'Volunteers and their roles'], ['signs', 'Signs'], ['shifts', 'Shifts'],
   ['subscribers', 'Newsletter subscribers'], ['lists', 'Lists (hand-picked)'],
 ];
 const cell = (v) => (v instanceof Date || /^\d{4}-\d{2}-\d{2}T/.test(String(v)) ? String(v).slice(0, 10) : typeof v === 'number' && !Number.isInteger(v) ? v.toFixed(2) : String(v ?? ''));
@@ -55,7 +56,7 @@ export default function Reports() {
       {q.data && Object.entries(q.data.reports).map(([name, r]) => <Report key={name} name={name} r={r} />)}
       <section className="rp-sec" aria-labelledby="rp-exports">
         <div className="rp-sec__head"><h2 id="rp-exports">Exports</h2></div>
-        <p className="ops-meta">A whole table as a spreadsheet. The full export (everything, as JSON, for a backup or a move) is under Today → More.</p>
+        <p className="ops-meta">A whole table as a spreadsheet. Bringing data in, and the full backup, are on <Link to="/data">Import &amp; export</Link>.</p>
         <ul className="rp-exports">
           {EXPORTS.map(([k, label]) => <li key={k}><a className="btn ops-tap" href={`/api/export/${k}.csv`}>{label}</a></li>)}
           <li><a className="btn btn-quiet ops-tap" href="/api/export">Everything (JSON)</a></li>

@@ -7,6 +7,7 @@
 // by filling blanks only — so importing the same file again adds no one twice.
 // Desk roles only — volunteers are sent back to People.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { readXlsx, toCsv } from '../components/xlsx.js';
 import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { matchRating, offeredCandidates, offeredCodes } from '@starbase/shared/scale';
@@ -269,7 +270,7 @@ const CONTAINS = [
   ['postal', /postal|postcode|zip/],
   ['unit', /^(unit|apt|suite)/],
   ['address', /address|street/],
-  ['city', /(^|home|mailing|mail|res|residential|billing)city|^town|municipal/],
+  ['city', /(^|home|mailing|mail|res|residential|billing|primary|registered)city|^town|municipal/],
   ['tags', /^tags?|tags?$|groups?$|labels?$|segments?$/],
   ['rating', /support|rating/],
   ['instagram', /instagram/],
@@ -614,7 +615,21 @@ function ImportFlow() {
     try {
       let buf = await file.arrayBuffer();
       if (isSpreadsheetBinary(buf, file.name)) {
-        setLoadError('That’s a spreadsheet, not a CSV. Save it as CSV (File → Download → CSV), then choose that.');
+        // An Excel workbook (.xlsx): its first sheet, read here. An old .xls,
+        // Numbers or OpenDocument file still needs saving as CSV.
+        if (!/\.(xlsx|xlsm)$/i.test(file.name) && new Uint8Array(buf.slice(0, 2))[0] !== 0x50) {
+          setLoadError('That’s an older spreadsheet file. Save it as CSV or Excel (.xlsx), then choose that.');
+          return;
+        }
+        let book;
+        try {
+          book = await readXlsx(buf);
+        } catch (err) {
+          setLoadError(err.message || 'Couldn’t read that workbook. Save it as CSV and choose that.');
+          return;
+        }
+        buf = null;
+        await loadText(toCsv(book.rows), `${file.name} · ${book.sheet}`, file.size);
         return;
       }
       const text = decodeBytes(buf);
@@ -802,7 +817,7 @@ function ImportFlow() {
       </div>
 
       {/* ── 1. Choose ── */}
-      <Step n={1} title="Choose a file" line="A spreadsheet saved as CSV." state={stepState(1)}>
+      <Step n={1} title="Choose a file" line="A CSV or an Excel workbook (.xlsx) — its first sheet." state={stepState(1)}>
         {source ? (
           <div className="imp-source">
             <p>
@@ -827,13 +842,13 @@ function ImportFlow() {
                 id="imp-file"
                 className="imp-file-input"
                 type="file"
-                accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
+                accept=".csv,.tsv,.txt,.xlsx,text/csv,text/tab-separated-values,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 onChange={onPick}
                 disabled={Boolean(reading)}
               />
               {/* The paste box's "Use this text" is the yellow button while it's open. */}
               <span className={`btn ${pasteOpen ? 'btn-quiet' : 'btn-primary'} imp-tap imp-drop__btn`}>
-                {reading || 'Choose CSV file'}
+                {reading || 'Choose a file'}
               </span>
               <span className="imp-drop__or">or drop it here</span>
             </label>

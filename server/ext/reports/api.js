@@ -119,8 +119,17 @@ api.get('/reports/:name', async (c) => {
 
 // Whole tables, every column a spreadsheet can hold; never a secret token.
 const DATASETS = {
-  people: { sql: `select p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng, p.kind, p.created_at
+  // Columns People → Import reads back (a round trip into another campaign).
+  people: { sql: `select p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
+      to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.kind, p.created_at
     from persons p where p.workspace_id = $1 and p.deleted_at is null order by lower(p.name)`, tags: true },
+  volunteers: { sql: `select p.name, p.email, p.phone, string_agg(v.role || coalesce(' (' || nullif(v.detail, '') || ')', ''), '; ' order by v.role) as roles
+    from volunteer_roles v join persons p on p.id = v.person_id and p.deleted_at is null where v.workspace_id = $1 group by p.id, p.name, p.email, p.phone order by lower(p.name)` },
+  signs: { sql: `select s.address, s.kind, s.status, p.name as supporter, p.phone, s.note, s.lat, s.lng, s.created_at
+    from signs s left join persons p on p.id = s.person_id where s.workspace_id = $1 order by s.status, s.address` },
+  shifts: { sql: `select s.title, s.starts_at, s.ends_at, s.location, s.role, s.capacity,
+      (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed')) as booked
+    from shifts s where s.workspace_id = $1 and s.deleted_at is null order by s.starts_at` },
   gifts: { sql: `select p.name as donor, p.email, g.amount_cents / 100.0 as amount, g.date, g.method, g.cadence, coalesce(g.slate, 'council') as slate, g.note, g.flagged, g.flag_reason, g.created_at
     from gifts g join persons p on p.id = g.person_id where g.workspace_id = $1 and g.deleted_at is null order by g.date desc` },
   subscribers: { sql: `select email, name, status, source, created_at, unsubscribed_at from subscriptions where workspace_id = $1 order by created_at desc` },
