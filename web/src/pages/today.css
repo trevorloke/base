@@ -383,3 +383,13 @@ h2.today-h {
 .today-mine.is-small .today-mine__n { font-size: 22px; }
 .today-morebox__body > .today-mine.is-small:first-child { margin-top: var(--s-3); }
 .today-warning { display: block; margin: 0 0 var(--s-3); border-color: color-mix(in srgb, var(--danger) 40%, transparent); background: color-mix(in srgb, var(--danger) 8%, var(--paper-0)); color: var(--text-1); }
+
+/* GOTV mode: the day's one job, at the top for everyone. */
+.today-gotv {
+  margin: var(--s-4) 0; padding: var(--s-4); border-radius: var(--r-card);
+  background: var(--paper-1); border: 1px solid var(--rule);
+}
+.today-gotv__n { margin: var(--s-1) 0 var(--s-2); font-size: 17px; }
+.today-gotv__bar { margin-bottom: var(--s-3); }
+.today-gotv__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.today-gotv__btn { min-height: 48px; display: inline-flex; align-items: center; gap: 6px; background: var(--paper-0); }

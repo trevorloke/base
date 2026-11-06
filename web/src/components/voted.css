@@ -65,3 +65,11 @@
 .vt-table .vt-walk { display: inline-flex; align-items: center; min-height: 48px; margin: calc(-1 * var(--s-2)) 0; font-size: 13px; }
 .vt-empty { color: var(--text-3); }
 .vt-page .toast .btn { min-height: 48px; display: inline-flex; align-items: center; }
+/* GOTV page: what's on now, the voting days. */
+.vt-now { margin: 0 0 var(--s-2); font-size: 16px; }
+.vt-label { display: block; font-size: 14px; font-weight: 600; margin-bottom: var(--s-1); }
+.vt-days { list-style: none; margin: 0 0 var(--s-2); padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.vt-day { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 4px 0 10px; }
+.vt-day__x { min-width: 32px; min-height: 32px; border: 0; background: transparent; cursor: pointer; color: var(--text-3); font: inherit; }
+.vt-addday { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+.ot-check.vt-auto { margin: var(--s-2) 0 var(--s-3); min-height: 44px; }

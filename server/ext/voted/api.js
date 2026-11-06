@@ -1,4 +1,5 @@
-// GET /voted/status        anyone: { on, election_day } — whether the screens offer "Voted ✓"
+// GET /voted/status        anyone: { on, manual, auto, election_day, advance_days, voting_day } —
+//                          whether GOTV mode is on (the screens offer "Voted ✓")
 // GET /voted/summary       desk: the numbers by band and by turf (deskOnlyReads)
 // GET /voted/persons/:id   anyone: one person's voted_at and their marks (who
 //                          marked them only for desk roles)
@@ -18,13 +19,13 @@ const bandOfRating = (r) => {
   return c[0] === '3' ? 'undecided' : 'opposed';
 };
 
-api.get('/voted/status', async (c) => c.json(await settingsOf(c.get('db'), c.get('ctx').workspaceId)));
+api.get('/voted/status', async (c) => c.json(await settingsOf(c.get('db'), c.get('ctx'))));
 
 api.get('/voted/summary', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const ws = ctx.workspaceId;
-  const settings = await settingsOf(db, ws);
+  const settings = await settingsOf(db, ctx);
   const counts = await countsOf(db, ctx);
   const by_band = { support: 0, undecided: 0, opposed: 0, unrated: 0 };
   for (const b of (await db.query(

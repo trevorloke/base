@@ -36,7 +36,10 @@ export const SIGN_STATUSES = ['requested', 'installed', 'removed'];
 
 export const VOLUNTEER_ROLES = [
   { code: 'driver',              label: 'Driver' },
-  { code: 'scrutineer',          label: 'Scrutineer' },
+  { code: 'scrutineer',          label: 'Scrutineer', detail: 'Voting place' },
+  // GOTV: carries the strike-off lists from the voting places to the office.
+  { code: 'runner',              label: 'Runner' },
+  { code: 'poll_greeter',        label: 'Poll greeter', detail: 'Voting place' },
   { code: 'doorknocking',        label: 'Doorknocking' },
   { code: 'mainstreeting',       label: 'Mainstreeting' },
   { code: 'phoning',             label: 'Phoning' },

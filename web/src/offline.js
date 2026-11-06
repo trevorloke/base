@@ -491,7 +491,7 @@ export function refusedText(item) {
 
 const SIGN_WORD = Object.fromEntries(SIGN_KINDS.map((s) => [s.code, s.label]));
 // Ask the office (ext/requests): the kinds in words, as RequestAsk.jsx says them.
-const KIND_WORDS = { call_back: 'Call them back', volunteer: 'Wants to volunteer', question: 'Has a question', other: 'Something else' };
+const KIND_WORDS = { call_back: 'Call them back', volunteer: 'Wants to volunteer', question: 'Has a question', other: 'Something else', ride: 'Needs a ride to vote' };
 // "Tag · Media", "Tag off · VIP", "Tags · Media, Host" — tags in words, as
 // People shows them ("donor-prospect" → "Donor prospect"; "VIP" stays).
 const tagSay = (t) => {

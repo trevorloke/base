@@ -199,15 +199,21 @@ one tap away under **More**.
   or removed with ✕. **Take off** keeps everything filled in (still in *Export all
   data*); *Taken off → Bring back* restores it. The sample adds *Language at
   home*, *Strata council member* and *Union local*.
-- **Election day** (Today → More → *Election day*) — switch it **On** (the date
-  fills in as today), **Save**. Every volunteer's walk list, door card and
-  Calls card now has a 48px *Voted ✓*; mark one person yourself from a door
-  card. The row on Today reads *Election day · 1 of N supporters voted* and
+- **GOTV** (Today → More → *GOTV & voting days*) — set *Election day* to
+  today (or add today as an advance-voting day) and **Save**: it reads *On*
+  by itself; or switch *On by hand*. Every volunteer's walk list, door card
+  and Calls card now has a 48px *Voted ✓*; mark one person yourself from a
+  door card. Today opens with the GOTV card (*1 of N supporters have voted ·
+  … to go*, *Call who hasn't voted*, *Map: who hasn't voted*); write a GOTV
+  script under Scripts → *Get out the vote* and the Script line on a door
+  reads *GOTV script*; *Ask the office* offers *Needs a ride to vote*. The
+  row on Today reads *GOTV · 1 of N supporters voted* and
   the screen behind it counts by band and by turf (*Walk list* opens the
   turf). Then **People → Import** a file with a *Voted* column (1/0, yes/no
   or a date): it maps to *Voted (1/0 or a date)* and marks the people in it;
   a 0 never un-marks anyone, and the import's line says *adds voted*. Switch
-  it **Off** and the buttons go; the marks stay.
+  it off (and *Turn on by itself* off, on a voting day) and the buttons go;
+  the marks stay.
 - **Shifts → New shift → More details → Turfs** — tap one or more turfs
   (*Anyone who counts themselves in gets these walk lists*), then *Create
   shift*. The shift reads *Walk list: Newton block* (or *Walk lists: …*)

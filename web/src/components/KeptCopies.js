@@ -108,6 +108,7 @@ function filterPersons(rows, p, { q = true, rest = true } = {}) {
   const tag = (p.get('tag') || '').trim();
   const rating = (p.get('rating') || '').trim();
   const has = (p.get('has') || '').trim();
+  const voted = (p.get('voted') || '').trim(); // GOTV: rows carry voted_at
   const codes = rating ? rating.split(',').map((s) => s.trim()).filter(Boolean) : [];
   return rows.filter((r) => {
     if (q && words && ![r.name, r.address, r.phone, r.email].some((v) => lower(v).includes(words))) return false;
@@ -117,6 +118,8 @@ function filterPersons(rows, p, { q = true, rest = true } = {}) {
     if (has === 'phone' && !r.phone) return false;
     if (has === 'email' && !r.email) return false;
     if (has === 'location' && (r.lat == null || r.lng == null)) return false;
+    if (voted === 'no' && r.voted_at) return false;
+    if (voted === 'yes' && !r.voted_at) return false;
     return true;
   });
 }

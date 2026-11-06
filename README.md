@@ -24,8 +24,8 @@ button, no paragraphs, everything else one tap away.
 
 | Screen | What it is |
 |---|---|
-| **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you* (with the requests from the doors canvassers sent with *Ask the office*); under *More*, **Election day** — the switch that puts *Voted ✓* on every volunteer's screens, and how many supporters have voted, by band and by turf. Volunteers: one big *Start canvassing* and their next shift |
-| **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. *Show* filters by band, by 1s or 2s on their own, and by each opponent on the Voting-for list (*Voting Locke*); its **Signs** chips show signs up and sign requests together (requests a pale flag, a billboard a bigger one) and narrow them by status and kind. Turfs and walk lists; **passes** — a sweep over every turf with a purpose (persuasion, get out the vote, lit drop, find out who's who), a universe (who to knock) and a try rule, so a *No answer* door comes back (*Try again · 1 of 2*) until it's given up. With Election day on, every door card, walk-list door and Calls card has a one-tap *Voted ✓* (offline too, sent once), and a get-out-the-vote pass drops a door once everyone there has voted; a voted file from the campaign's website comes in through People → Import |
+| **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you* (with the requests from the doors canvassers sent with *Ask the office*); under *More*, **GOTV & voting days** — GOTV mode, and how many supporters have voted, by band and by turf. While GOTV mode is on, everyone's Today opens with the day's job: *N of M supporters have voted · K to go*, *Call who hasn't voted* and *Map: who hasn't voted*. Volunteers: one big *Start canvassing* and their next shift |
+| **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. *Show* filters by band, by 1s or 2s on their own, and by each opponent on the Voting-for list (*Voting Locke*); its **Signs** chips show signs up and sign requests together (requests a pale flag, a billboard a bigger one) and narrow them by status and kind. Turfs and walk lists; **passes** — a sweep over every turf with a purpose (persuasion, get out the vote, lit drop, find out who's who), a universe (who to knock) and a try rule, so a *No answer* door comes back (*Try again · 1 of 2*) until it's given up. With GOTV mode on, every door card, walk-list door and Calls card has a one-tap *Voted ✓* (offline too, sent once), and a get-out-the-vote pass drops a door once everyone there has voted; a voted file from the campaign's website comes in through People → Import |
 | **Scripts** | What to say at the door and on the phone (`/scripts`, desk): shown as *Script* above the rating buttons on the walk list, the door card and Calls, the voter's and the canvasser's first names filled in, kept on the phone |
 | **People** | Everyone, filterable by rating / tag / role / the campaign's own fields, and by the field's cuts (never knocked or not in 7–30 days, the last outcome, a turf, a postal code, without a tag — saved lists, blasts and Calls keep them); profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time; **My people** is each volunteer's own circle |
 | **Shifts** | Schedule volunteers, assign by role, notify by email + text with instructions and a link; volunteers tap *Count me in*; a shift can carry turfs; *Count me in* puts the walk list on your phone; the desk can *Edit* a shift (moved in time or place → *Let them know*) or *Call off* one, which takes back the walk lists it gave |
@@ -194,6 +194,17 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Reached*: Today's *More* counts the doors lit this week (yours and the
   team's), Reports → *Contacts by week* has a *Lit* column, the dashboard
   colours the drops apart, and a profile's History reads *Left lit*.
+- **GOTV mode** (Today → More → *GOTV & voting days*, managers): list the
+  advance-voting days and election day, and GOTV mode turns itself on for
+  each of them in the campaign's day (or on by hand, any day). While it's
+  on: everyone can mark people *Voted ✓*; the **GOTV scripts** (Scripts →
+  *Get out the vote*: door and phone) are said instead of the usual ones;
+  Today opens on the supporters who still have to vote, the desk's map on
+  *Yes, not voted*; People and Calls filter *Voted: Not voted yet*
+  (`voted=no`, also on lists, blasts and phone banks); and *Ask the office*
+  offers *Needs a ride to vote*, a request for the drivers. Shift roles
+  include Driver, Scrutineer (a voting place), Runner, Poll greeter and Zone
+  house captain.
 - **Left message**: the phone's *Left lit* (`left_message`) — a voicemail,
   or word left with whoever answered. The Calls card offers it on a call
   (never a text, never at the door). It is not a talk; in a phone bank it

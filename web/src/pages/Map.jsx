@@ -926,6 +926,7 @@ export default function MapPage() {
   const personParam = params.get('person');
   const turfParam = params.get('turf');
   const drawParam = params.get('draw');
+  const showParam = params.get('show'); // ?show=gotv from Today's GOTV card
 
   const pageRef = useRef(null);
   const canvasRef = useRef(null);
@@ -1067,7 +1068,9 @@ export default function MapPage() {
   const votes = useMemo(() => pendingVoted(outbox.items), [outbox.items]);
   const hasVoted = useCallback((p) => (votes[p.id] ? votes[p.id].voted : Boolean(p.voted_at)), [votes]);
   // Volunteers start on their turf; everyone else on all doors.
-  const filter = filterPick && filters.some((f) => f.key === filterPick) ? filterPick : mineKeys?.size ? 'mine' : 'all';
+  // GOTV mode on: the desk opens on who hasn't voted (a volunteer on their turf).
+  const want = filterPick || (showParam && filters.some((f) => f.key === showParam) ? showParam : null);
+  const filter = want && filters.some((f) => f.key === want) ? want : mineKeys?.size ? 'mine' : voting ? 'gotv' : 'all';
 
   const shows = useCallback((d) => (
     filter === 'all' ? true

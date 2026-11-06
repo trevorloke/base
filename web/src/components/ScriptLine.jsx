@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import { apiGet } from '../api.js';
 import { fillTemplate } from './TextingWords.js';
+import { useVotedMode } from './Voted.jsx';
 import './script-line.css';
 
 const KEY = 'sb:script-open';
@@ -21,7 +22,10 @@ export default function ScriptLine({ context, person }) {
   const { me } = useOutletContext() ?? {};
   const q = useScripts();
   const [open, setOpen] = useState(() => Boolean(readOpen()[context]));
-  const script = q.data?.[context];
+  // GOTV mode on: the GOTV script, when the desk wrote one.
+  const gotv = useVotedMode().on;
+  const gotvScript = gotv ? q.data?.[`gotv_${context}`] : null;
+  const script = gotvScript?.body ? gotvScript : q.data?.[context];
   if (!script?.body) return null;
   const toggle = () => {
     const next = !open;
@@ -30,7 +34,7 @@ export default function ScriptLine({ context, person }) {
   };
   return (
     <div className="sl">
-      <button type="button" className="btn btn-quiet disclose disclose--inline sl-btn" aria-expanded={open} onClick={toggle}>Script</button>
+      <button type="button" className="btn btn-quiet disclose disclose--inline sl-btn" aria-expanded={open} onClick={toggle}>{gotvScript?.body ? 'GOTV script' : 'Script'}</button>
       {open && <p className="sl-words">{fillTemplate(script.body, { person, me })}</p>}
     </div>
   );

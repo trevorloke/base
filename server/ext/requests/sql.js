@@ -11,7 +11,7 @@ create table if not exists door_requests (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id) on delete cascade,
   person_id uuid not null references persons(id) on delete cascade,
-  kind text not null check (kind in ('call_back','volunteer','question','other')),
+  kind text not null check (kind in ('call_back','volunteer','question','other','ride')),
   note text,
   asked_by uuid references users(id),
   created_at timestamptz not null default now(),
@@ -23,4 +23,16 @@ create table if not exists door_requests (
 create unique index if not exists door_requests_client_idx on door_requests (workspace_id, client_id) where client_id is not null;
 create index if not exists door_requests_open_idx on door_requests (workspace_id, created_at) where done_at is null;
 create index if not exists door_requests_person_idx on door_requests (workspace_id, person_id);
+-- 'ride': needs a ride to vote (GOTV) — for the drivers. A check made
+-- before it is swapped once.
+do $$
+begin
+  if exists (select 1 from pg_constraint where conrelid = 'door_requests'::regclass and conname = 'door_requests_kind_check'
+             and pg_get_constraintdef(oid) not like '%ride%') then
+    alter table door_requests drop constraint door_requests_kind_check;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'door_requests'::regclass and conname = 'door_requests_kind_check') then
+    alter table door_requests add constraint door_requests_kind_check check (kind in ('call_back','volunteer','question','other','ride'));
+  end if;
+end $$;
 `;

@@ -72,7 +72,7 @@ export const personsWhere = async (db, ctx, query = {}) => {
 
 // The filter a saved list or a send keeps: only the keys the query knows.
 // knocked, outcome, turf, postal, notag: the field cuts (ext/cuts).
-export const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag'];
+export const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted'];
 export const cleanFilter = (f) => {
   const out = {};
   for (const k of FILTER_KEYS) if (f && typeof f[k] === 'string' && f[k].trim()) out[k] = f[k].trim().slice(0, 400);

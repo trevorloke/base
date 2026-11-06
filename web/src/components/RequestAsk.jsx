@@ -17,6 +17,7 @@ import { apiGet, ApiError } from '../api.js';
 import { clockText, queueAction, useOutbox } from '../offline.js';
 import { queuedSaid } from './queued.js';
 import { useOnline } from './NoSignal.jsx';
+import { useVotedMode } from './Voted.jsx';
 import '../pages/requests.css';
 
 // The kinds in words (server/ext/requests KIND_WORDS; offline.js's sheet).
@@ -25,8 +26,10 @@ export const KIND_WORDS = {
   volunteer: 'Wants to volunteer',
   question: 'Has a question',
   other: 'Something else',
+  ride: 'Needs a ride to vote',
 };
-const KINDS = Object.keys(KIND_WORDS);
+// "Needs a ride to vote" is offered while GOTV mode is on (for the drivers).
+const KINDS = Object.keys(KIND_WORDS).filter((k) => k !== 'ride');
 
 export const requestsKey = (personId) => ['person', personId, 'requests'];
 
@@ -39,6 +42,7 @@ export default function RequestAsk(props) {
 function Ask({ person, toast }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState(null);
+  const gotv = useVotedMode().on;
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -95,7 +99,7 @@ function Ask({ person, toast }) {
     <div className="rq rq-sheet" role="group" aria-labelledby={`${id}-h`}>
       <p className="rq-h" id={`${id}-h`}>Ask the office about {person.name}</p>
       <div className="rq-kinds" role="radiogroup" aria-label="What it’s about">
-        {KINDS.map((k) => (
+        {(gotv ? ['ride', ...KINDS] : KINDS).map((k) => (
           <button key={k} type="button" role="radio" aria-checked={kind === k}
             className={`rq-kind${kind === k ? ' is-on' : ''}`} onClick={() => setKind(k)}>
             {KIND_WORDS[k]}

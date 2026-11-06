@@ -160,24 +160,31 @@ await page.click('.today-morebox__toggle');
 await sleep(300);
 const rowOff = await page.$('a.today-row[href="/admin/voted"]');
 const rowOffText = rowOff ? (await rowOff.$eval('.today-row__main', (el) => el.innerText)).replace(/\s+/g, ' ').trim() : '(no row)';
-check('Today → More lists "Election day" (off: no count)', !!rowOff && rowOffText === 'Election day', rowOffText);
+check('Today → More lists "GOTV & voting days" (off: no count)', !!rowOff && rowOffText === 'GOTV & voting days', rowOffText);
 await rowOff.click();
 await page.waitForURL(`${ADMIN}/voted`, { timeout: 8000 });
 await sleep(700);
-check('/admin/voted: "Election day", the switch off, the copy line', (await page.innerText('h1')) === 'Election day'
+check('/admin/voted: "Get out the vote", Off, the switch off, what GOTV mode does', (await page.innerText('h1')) === 'Get out the vote'
   && (await page.getAttribute('.vt-page .sv-switch', 'aria-checked')) === 'false'
-  && /When this is on, every volunteer can mark a person as voted from the walk list, the door card and Calls\./.test(await D.text()));
+  && /Off\./.test(await page.innerText('.vt-now'))
+  && /everyone can mark people as voted/.test(await D.text()) && /GOTV scripts/.test(await D.text()));
 let m = await measure(page, '.vt-page .sv-switch, .vt-page .vt-date, .vt-page .btn, .vt-page .ops-back');
 check('Election day at 1360: one yellow (Save), targets ≥ 48px', m.yellow === 1 && m.minTap >= 48 && /Save/.test(await page.innerText('.btn-primary')), JSON.stringify(m));
 check('Save is off until something changes', await page.$eval('.vt-page .btn-primary', (b) => b.disabled));
 await D.shot('01-election-day-off');
 await page.click('.vt-page .sv-switch');
 const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
-check('On: the switch reads On and the date fills in as today', (await page.getAttribute('.vt-page .sv-switch', 'aria-checked')) === 'true' && (await page.inputValue('#vt-date')) === today, await page.inputValue('#vt-date'));
+check('On by hand: the switch reads so', (await page.getAttribute('.vt-page .sv-switch', 'aria-checked')) === 'true');
+// Election day is today; an advance-voting day goes on the list.
+await page.fill('#vt-date', today);
+await page.fill('#vt-newday', '2030-10-09');
+await page.click('.vt-addday button:has-text("Add day")');
+check('the advance-voting day shows as a chip', /Oct 9/.test(await page.innerText('.vt-days').catch(() => '')));
 await page.click('.vt-page .btn-primary');
 await sleep(900);
 const status = (await D.api('/voted/status')).json;
-check('Save: "✓ Saved", and the server has it on with today’s date', /✓ Saved/.test(await D.text()) && status.on === true && status.election_day === today, JSON.stringify(status));
+check('Save: "✓ Saved"; the server has it on, election day today, the advance day kept', /✓ Saved/.test(await D.text()) && status.on === true && status.election_day === today
+  && status.voting_day === 'election' && status.advance_days.join() === '2030-10-09', JSON.stringify(status));
 check('vote.settings is a manager’s: the volunteer is refused', (await V.api('/actions/vote.settings', { on: false })).status === 403);
 await D.shot('02-election-day-on');
 
@@ -221,7 +228,12 @@ await page.click('.today-morebox__toggle');
 await sleep(300);
 const rowOn = ((await page.innerText('a.today-row[href="/admin/voted"] .today-row__main').catch(() => '')) || '').replace(/\s+/g, ' ').trim();
 const brief = (await D.api('/brief')).json.voted;
-check('Today → More: "Election day · 1 of 2 supporters voted" — the brief agrees', rowOn === 'Election day · 1 of 2 supporters voted' && brief.supporters_voted === 1 && brief.supporters === 2 && brief.on === true, `${rowOn} · ${JSON.stringify(brief)}`);
+check('Today → More: "GOTV · 1 of 2 supporters voted" — the brief agrees', rowOn === 'GOTV · 1 of 2 supporters voted' && brief.supporters_voted === 1 && brief.supporters === 2 && brief.on === true, `${rowOn} · ${JSON.stringify(brief)}`);
+const card = ((await page.innerText('.today-gotv').catch(() => '')) || '').replace(/\s+/g, ' ');
+check('Today’s GOTV card: "Election day · 1 of 2 supporters have voted · 1 to go", Call who hasn’t voted', /Election day/i.test(card) && /1 of 2 supporters have voted · 1 to go/.test(card)
+  && (await page.getAttribute('.today-gotv a:has-text("Call who hasn")', 'href')) === '/admin/calls?rating=1,2&voted=no', card);
+await V.go('/');
+check('the volunteer’s Today has the GOTV card too', /supporters have voted/.test(((await vpage.innerText('.today-gotv').catch(() => '')) || '')));
 await D.shot('05-today-row');
 
 // The map's filters: with Election day on, "Yes, not voted" (the pull list)
@@ -363,8 +375,10 @@ check('the import’s own events are on the books (voted_mark)', (await D.api('/
 await D.shot('11-import-voted');
 
 // ── 11. Off: the buttons go, the marks stay ──
+// Today is election day, so off by hand also needs "turn on by itself" off.
 await D.go('/voted');
 await page.click('.vt-page .sv-switch');
+await page.uncheck('.vt-auto input');
 await page.click('.vt-page .btn-primary');
 await sleep(900);
 check('switched off on the server', (await D.api('/voted/status')).json.on === false);

@@ -81,6 +81,10 @@ export default function Scripts() {
         <>
           <ScriptBox context="door" title="At the door" help="On the walk list and the map’s door card." current={q.data?.door?.body} me={me} />
           <ScriptBox context="phone" title="On the phone" help="On the Calls card (a phone bank’s own script takes its place there)." current={q.data?.phone?.body} me={me} />
+          <h2 className="sc-group">Get out the vote</h2>
+          <p className="ops-meta">Said instead while GOTV mode is on (advance-voting days and election day — Today → More → GOTV). Leave one empty and the usual script stays.</p>
+          <ScriptBox context="gotv_door" title="At the door — GOTV" help="Who has voted, where and when to vote, a ride if they need one." current={q.data?.gotv_door?.body} me={me} />
+          <ScriptBox context="gotv_phone" title="On the phone — GOTV" help="On the Calls card while GOTV mode is on." current={q.data?.gotv_phone?.body} me={me} />
         </>
       )}
     </div>

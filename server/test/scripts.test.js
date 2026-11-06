@@ -18,7 +18,7 @@ before(async () => {
 });
 
 test('the desk saves a door script and a phone script; everyone reads them', async () => {
-  assert.deepEqual(ok(await vol.get('/api/scripts')), { door: null, phone: null });
+  assert.deepEqual(ok(await vol.get('/api/scripts')), { door: null, phone: null, gotv_door: null, gotv_phone: null });
   ok(await mgr.action('script.save', { context: 'door', body: 'Hi {{first_name}}, I’m {{my_name}} with {{campaign}}.\r\nDo you have a minute?  ' }));
   ok(await mgr.action('script.save', { context: 'phone', body: 'Hi {{first_name}}, calling for {{campaign}}.' }));
   const s = ok(await vol.get('/api/scripts'));
@@ -41,4 +41,13 @@ test('a volunteer denied Outreach still reads the scripts (what to say is field 
   ok(await mgr.action('script.save', { context: 'door', body: 'Hello there' }));
   ok(await mgr.action('permission.member.set', { user_id: volId, grant: [], deny: ['outreach'] }));
   assert.equal(ok(await vol.get('/api/scripts')).door.body, 'Hello there');
+});
+
+test('GOTV scripts: their own pair, saved by the desk, read by everyone', async () => {
+  ok(await mgr.action('script.save', { context: 'gotv_door', body: 'Hi {{first_name}} — have you voted yet? Polls close at 8.' }));
+  const s = ok(await vol.get('/api/scripts'));
+  assert.match(s.gotv_door.body, /have you voted/);
+  assert.equal(s.gotv_phone, null);
+  assert.equal((await vol.action('script.save', { context: 'gotv_phone', body: 'x' })).status, 403);
+  assert.equal((await mgr.action('script.save', { context: 'gotv_text', body: 'x' })).status, 400);
 });

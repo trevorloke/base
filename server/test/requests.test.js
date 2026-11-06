@@ -171,3 +171,11 @@ test('the export carries door_requests; the chain verifies', async () => {
   assert.ok(ex.door_requests.some((r) => r.client_id === CID && r.person_id === dev.id));
   assert.equal((await mgr.get('/api/audit/verify')).json.ok, true);
 });
+
+test('GOTV: "Needs a ride to vote" is a request kind for the drivers', async () => {
+  const p = await mgr.createPerson('Ride Example', { phone: '604-555-0181' });
+  const r = await mgr.action('request.ask', { person_id: p.id, kind: 'ride', note: 'After 2pm' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const list = (await mgr.get('/api/requests')).json.requests.filter((x) => x.person.id === p.id);
+  assert.deepEqual(list.map((x) => x.kind), ['ride']);
+});

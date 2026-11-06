@@ -362,6 +362,30 @@ function LinkRow({ to, state, main, chip, chipCls = 'chip', end, title }) {
 // A screen opened from here says so on its back link ("← Today").
 const FROM_TODAY = { from: { to: '/', label: 'Today' } };
 
+// ── GOTV mode (ext/voted): on by hand, or by itself on an advance-voting day
+// and election day. The day's one job, for everyone: the supporters who
+// haven't voted yet — call them, or find their doors.
+const GOTV_CALLS = '/calls?rating=1,2&voted=no';
+function GotvCard({ v }) {
+  const left = Math.max(0, (Number(v.supporters) || 0) - (Number(v.supporters_voted) || 0));
+  const pct = v.supporters ? Math.min(100, Math.round((v.supporters_voted / v.supporters) * 100)) : 0;
+  const day = v.voting_day === 'election' ? 'Election day' : v.voting_day === 'advance' ? 'Advance voting' : 'GOTV';
+  return (
+    <section className="today-gotv" aria-label="Get out the vote">
+      <span className="eyebrow">Get out the vote · {day}</span>
+      <p className="today-gotv__n">
+        <strong className="mono">{num(v.supporters_voted)}</strong> of {num(v.supporters)} supporters have voted
+        {left > 0 && <> · <strong className="mono">{num(left)}</strong> to go</>}
+      </p>
+      <span className="today-progress today-gotv__bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>
+      <div className="today-gotv__acts">
+        <Link to={GOTV_CALLS} className="btn today-gotv__btn">Call who hasn’t voted <span aria-hidden="true">→</span></Link>
+        <Link to="/map?show=gotv" className="btn today-gotv__btn">Map: who hasn’t voted</Link>
+      </div>
+    </section>
+  );
+}
+
 // "5 spots left" — the same words as the Shifts screen.
 const spotsLeft = (n) => `${n} ${plural(n, 'spot')} left`;
 
@@ -670,6 +694,7 @@ function VolunteerToday({ b, me }) {
       <span className="eyebrow">{greeting()}</span>
       <h1>{me.workspace.name}</h1>
       {b.sampleLoaded && <SampleLine />}
+      {b.voted?.on && <GotvCard v={b.voted} />}
 
       {done ? (
         <section className="today-go" aria-label="Calls">
@@ -771,6 +796,7 @@ function DeskToday({ b, me, toast }) {
 
       {offerSample && <SampleCard onToast={toast.show} />}
       {b.sampleLoaded && <SampleLine desk />}
+      {b.voted?.on && <GotvCard v={b.voted} />}
       {showSteps && <GettingStarted steps={stepsLeft} role={me?.role} navigate={navigate} />}
 
       {isManager && (
@@ -816,7 +842,7 @@ function DeskToday({ b, me, toast }) {
           {b.providers && (!b.providers.email || !b.providers.text) && (
             <LinkRow to="/outreach/connect" main="Connect email & texting" />
           )}
-          <LinkRow to="/voted" main={b.voted?.on ? <>Election day · <strong className="mono">{b.voted.supporters_voted}</strong> of {b.voted.supporters} supporters voted</> : 'Election day'} />
+          <LinkRow to="/voted" main={b.voted?.on ? <>GOTV · <strong className="mono">{b.voted.supporters_voted}</strong> of {b.voted.supporters} supporters voted</> : 'GOTV & voting days'} />
         </ul>
         <div className="today-actions today-morebox__tools">
           <button type="button" className="btn today-tap" onClick={onVerify} disabled={verify?.busy}>Verify the records</button>

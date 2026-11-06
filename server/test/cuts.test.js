@@ -61,3 +61,14 @@ test('a saved list keeps the cuts, and its audience follows them', async () => {
   const people = ok(await mgr.get(`/api/lists/${list.id}`)).people.map((p) => p.name);
   assert.deepEqual(people, ['Ben Example']);
 });
+
+test('voted=no|yes: who still has to vote (GOTV), and who has', async () => {
+  const p1 = await mgr.createPerson('Gotv Pending', { phone: '604-555-0191' });
+  const p2 = await mgr.createPerson('Gotv Done', { phone: '604-555-0192' });
+  ok(await mgr.action('vote.mark', { person_id: p2.id, source: 'desk' }));
+  const no = ok(await mgr.get('/api/persons?q=Gotv&voted=no')).persons.map((x) => x.name);
+  const yes = ok(await mgr.get('/api/persons?q=Gotv&voted=yes')).persons.map((x) => x.name);
+  assert.deepEqual([no, yes], [['Gotv Pending'], ['Gotv Done']]);
+  assert.equal(ok(await mgr.get('/api/persons?q=Gotv&voted=maybe')).persons.length, 0, 'a value it doesn’t know matches nobody');
+  void p1;
+});

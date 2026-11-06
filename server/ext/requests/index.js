@@ -26,6 +26,7 @@ export const KIND_WORDS = {
   volunteer: 'Wants to volunteer',
   question: 'Has a question',
   other: 'Something else',
+  ride: 'Needs a ride to vote',
 };
 
 // In the full export.

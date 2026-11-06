@@ -79,19 +79,20 @@ test('a volunteer marks a voter; a replay is a duplicate; voted:false takes it b
   assert.equal((await other.get(`/api/voted/persons/${p.id}`)).status, 404);
 });
 
+const pick = (x) => ({ on: x.on, election_day: x.election_day });
 test('vote.settings is a manager’s; GET /voted/status tells every role', async () => {
   assert.equal((await staff.action('vote.settings', { on: true })).status, 403);
   assert.equal((await vol.action('vote.settings', { on: true })).status, 403);
-  assert.deepEqual(ok(await vol.get('/api/voted/status')), { on: false, election_day: null });
+  assert.deepEqual(pick(ok(await vol.get('/api/voted/status'))), { on: false, election_day: null });
   const on = ok(await mgr.action('vote.settings', { on: true, election_day: '2026-10-17' }));
   assert.deepEqual({ on: on.on, election_day: on.election_day }, { on: true, election_day: '2026-10-17' });
-  assert.deepEqual(ok(await vol.get('/api/voted/status')), { on: true, election_day: '2026-10-17' });
+  assert.deepEqual(pick(ok(await vol.get('/api/voted/status'))), { on: true, election_day: '2026-10-17' });
   assert.equal((await mgr.action('vote.settings', { on: true, election_day: 'tomorrow' })).status, 400);
   // The date stays when a save leaves it out; null clears it.
   ok(await mgr.action('vote.settings', { on: false }));
-  assert.deepEqual(ok(await staff.get('/api/voted/status')), { on: false, election_day: '2026-10-17' });
+  assert.deepEqual(pick(ok(await staff.get('/api/voted/status'))), { on: false, election_day: '2026-10-17' });
   ok(await mgr.action('vote.settings', { on: true, election_day: null }));
-  assert.deepEqual(ok(await vol.get('/api/voted/status')), { on: true, election_day: null });
+  assert.deepEqual(pick(ok(await vol.get('/api/voted/status'))), { on: true, election_day: null });
   ok(await mgr.action('vote.settings', { on: true, election_day: '2026-10-17' }));
   const evs = (await mgr.get('/api/events?since=0&limit=5000')).json.events.filter((e) => e.action === 'vote.settings');
   assert.equal(evs.length, 4);
@@ -196,7 +197,7 @@ test('the summary counts by band and by turf for the desk only; brief.voted is e
   assert.equal(sum.today, todays, 'today: the people who voted today (all of them, here), not the marks');
   assert.deepEqual({ on: sum.on, election_day: sum.election_day }, { on: true, election_day: '2026-10-17' });
 
-  const KEYS = ['election_day', 'on', 'supporters', 'supporters_voted', 'today', 'total'];
+  const KEYS = ['advance_days', 'auto', 'election_day', 'manual', 'on', 'supporters', 'supporters_voted', 'today', 'total', 'voting_day'];
   const bv = ok(await vol.get('/api/brief')).voted;
   assert.deepEqual(Object.keys(bv).sort(), KEYS, 'the volunteer’s Today has the numbers, nothing else');
   const bd = ok(await mgr.get('/api/brief')).voted;
@@ -255,4 +256,19 @@ test('marked twice: one voter, the first time kept; a mark that waited on a phon
   // A tap from the future (a phone clock running fast) counts as now.
   const fast = ok(await vol.action('vote.mark', { person_id: p.id, voted: false, source: 'door', client_id: randomUUID(), client_at: new Date(Date.now() + 3_600_000).toISOString() }));
   assert.equal(fast.voted_at, null, 'the newest tap wins');
+});
+
+test('GOTV mode turns itself on for an advance-voting day and election day, in the campaign’s day; off by hand stays off', async () => {
+  const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  ok(await mgr.action('vote.settings', { on: false, election_day: '2030-10-19', advance_days: ['2030-10-09', day, day], auto: true }));
+  let s = ok(await vol.get('/api/voted/status'));
+  assert.deepEqual([s.on, s.manual, s.voting_day, s.advance_days], [true, false, 'advance', [day, '2030-10-09'].sort()], 'today is an advance-voting day');
+  ok(await mgr.action('vote.settings', { on: false, election_day: day, advance_days: [] }));
+  s = ok(await vol.get('/api/voted/status'));
+  assert.deepEqual([s.on, s.voting_day], [true, 'election']);
+  ok(await mgr.action('vote.settings', { on: false, auto: false }));
+  s = ok(await vol.get('/api/voted/status'));
+  assert.deepEqual([s.on, s.auto, s.voting_day], [false, false, 'election'], 'auto off: only by hand');
+  ok(await mgr.action('vote.settings', { on: true, election_day: '2026-10-17', auto: true }));
+  assert.equal((await mgr.action('vote.settings', { on: true, advance_days: ['soon'] })).status, 400);
 });

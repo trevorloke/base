@@ -8,6 +8,8 @@
 //   turf=<id>                  their pin is inside that turf
 //   postal=V3T                 their postal code starts so (spaces ignored)
 //   notag=a,b                  they have none of these tags
+//   voted=no|yes               not marked as voted yet / marked (ext/voted) —
+//                              GOTV's list: supporters who still have to vote
 // A value it doesn't understand matches nobody, never everybody.
 import { OUTCOMES } from '@starbase/shared/canvass';
 import { pointInPolygon } from '../../lib/geo.js';
@@ -67,6 +69,11 @@ const personsWhere = async (db, ctx, query, w) => {
     if (ctx.role === 'volunteer' && tags.some(isMoneyTag)) { none(); return; }
     for (const t of tags) w.where += ` and not (p.tags @> ${next(JSON.stringify(t))}::jsonb)`;
   }
+
+  const voted = str(query?.voted, 5);
+  if (voted === 'no') w.where += ' and p.voted_at is null';
+  else if (voted === 'yes') w.where += ' and p.voted_at is not null';
+  else if (voted) none();
 };
 
 export const hooks = { personsWhere };

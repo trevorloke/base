@@ -12,7 +12,8 @@ import { OUTCOMES } from '@starbase/shared/canvass';
 import { apiGet } from '../api.js';
 import { OUTCOME_LABEL } from './RatingButtons.jsx';
 
-export const CUT_KEYS = ['knocked', 'outcome', 'turf', 'postal', 'notag'];
+export const CUT_KEYS = ['knocked', 'outcome', 'turf', 'postal', 'notag', 'voted'];
+export const VOTED_CUT = [['no', 'Not voted yet'], ['yes', 'Voted']];
 
 export const KNOCKED = [
   ['never', 'Never knocked'],
@@ -35,6 +36,7 @@ export const cutChips = (f, turfs = []) => [
   f.turf && { key: 'turf', label: `Turf: ${turfs.find((t) => t.id === f.turf)?.name || '…'}` },
   f.postal && { key: 'postal', label: `Postal ${String(f.postal).toUpperCase()}…` },
   f.notag && { key: 'notag', label: `Not tagged ${f.notag}` },
+  f.voted && { key: 'voted', label: VOTED_CUT.find(([k]) => k === f.voted)?.[1] || f.voted },
 ].filter(Boolean);
 
 export const addCuts = (qs, f) => {
@@ -52,6 +54,10 @@ export function CutGroups({ chip, f, update, turfs }) {
       <fieldset className="pp-group">
         <legend className="eyebrow">Last outcome</legend>
         <div className="pp-group__opts">{LAST_OUTCOMES.map(([k, l]) => chip('outcome', k, l))}</div>
+      </fieldset>
+      <fieldset className="pp-group">
+        <legend className="eyebrow">Voted</legend>
+        <div className="pp-group__opts">{VOTED_CUT.map(([k, l]) => chip('voted', k, l))}</div>
       </fieldset>
       {turfs.length > 0 && (
         <fieldset className="pp-group">
@@ -96,6 +102,13 @@ export function CutFields({ value, onChange, turfs }) {
       <div className="field">
         <label htmlFor="ls-postal">Postal code starts with</label>
         <input id="ls-postal" className="input mono" maxLength={7} placeholder="V3W" value={value.postal || ''} onChange={set('postal')} />
+      </div>
+      <div className="field">
+        <label htmlFor="ls-voted">Voted</label>
+        <select id="ls-voted" className="input" value={value.voted || ''} onChange={set('voted')}>
+          <option value="">Either</option>
+          {VOTED_CUT.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
       </div>
       <div className="field">
         <label htmlFor="ls-notag">Without the tag <span className="muted">(or several, with commas)</span></label>

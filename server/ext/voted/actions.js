@@ -1,5 +1,6 @@
 // vote.mark      { person_id, voted?, source?, client_id? }   anyone: this person has voted (or, voted:false, has not after all)
-// vote.settings  { on, election_day? }                        managers: Election day on or off, and the date
+// vote.settings  { on, election_day?, advance_days?, auto? }  managers: GOTV mode on by hand, election day,
+//                                                             the advance-voting days, and whether it turns itself on for them
 //
 // vote.mark is append-only like a knock: a mark is a new row in voted_marks
 // and persons.voted_at follows it (now() for voted, null for a take-back).
@@ -81,6 +82,10 @@ export const actions = {
       on: z.boolean(),
       // Left out: the date stays as it is; null clears it.
       election_day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'a date like 2026-10-17').nullish(),
+      // GOTV mode: the advance-voting days, and whether the mode turns
+      // itself on for them and election day. Left out: as they are.
+      advance_days: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'a date like 2026-10-08')).max(30).optional(),
+      auto: z.boolean().optional(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
@@ -97,8 +102,13 @@ export const actions = {
       const election_day = row.election_day
         ? (row.election_day instanceof Date ? row.election_day.toISOString().slice(0, 10) : String(row.election_day).slice(0, 10))
         : null;
-      emit('workspace', ws, 'update', { election_day_mode: input.on, election_day });
-      return { on: Boolean(row.on_day), election_day };
+      const extra = {};
+      if (input.advance_days !== undefined) extra.advance_days = [...new Set(input.advance_days)].sort();
+      if (input.auto !== undefined) extra.auto = input.auto;
+      if ('advance_days' in extra) await tx.query('update voted_settings set advance_days = $2 where workspace_id = $1', [ws, JSON.stringify(extra.advance_days)]);
+      if ('auto' in extra) await tx.query('update voted_settings set auto = $2 where workspace_id = $1', [ws, extra.auto]);
+      emit('workspace', ws, 'update', { election_day_mode: input.on, election_day, ...extra });
+      return { on: Boolean(row.on_day), election_day, ...extra };
     },
   },
 };

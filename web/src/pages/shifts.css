@@ -399,3 +399,5 @@
 .toast.ops-toast .btn { min-height: 48px; white-space: nowrap; display: inline-flex; align-items: center; }
 @media (max-width: 720px) { .toast.ops-toast { bottom: calc(76px + env(safe-area-inset-bottom)); } }
 .ops-seg button:disabled { opacity: 0.45; cursor: default; }
+/* Scripts: the GOTV pair under their own heading. */
+.sc-group { margin: var(--s-5) 0 var(--s-1); font-size: 20px; }

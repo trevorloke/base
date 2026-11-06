@@ -29,4 +29,8 @@ create table if not exists voted_settings (
   election_day date,
   updated_at timestamptz not null default now()
 );
+-- GOTV mode: the advance-voting days (dates, in the campaign's day) and
+-- whether the mode turns itself on for them and for election day.
+alter table voted_settings add column if not exists advance_days jsonb not null default '[]';
+alter table voted_settings add column if not exists auto boolean not null default true;
 `;

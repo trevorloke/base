@@ -14,7 +14,7 @@ import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 
 // The kinds' words live in index.js (KIND_WORDS) and the web's RequestAsk.jsx.
-const KINDS = ['call_back', 'volunteer', 'question', 'other'];
+const KINDS = ['call_back', 'volunteer', 'question', 'other', 'ride'];
 const ALL = ['manager', 'treasurer', 'staff', 'volunteer'];
 const DESK = ['manager', 'treasurer', 'staff'];
 const note = () => z.string().trim().max(500).nullish();

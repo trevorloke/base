@@ -1,13 +1,15 @@
-// Election day (ext/voted) — /voted, from Today → More. The desk's one
-// place for the mark: the switch that puts "Voted ✓" on every volunteer's
-// walk list, door card and Calls card (managers; staff see where it
-// stands) with the date; then "Voted so far" — supporters voted, by band,
-// and by turf with a Walk list link — and how a voted file from the
-// campaign's website comes in (People → Import). Needs signal.
+// GOTV (ext/voted) — /voted, from Today → More. The desk's one place for
+// get-out-the-vote: GOTV mode puts "Voted ✓" on every walk list, door card
+// and Calls card, swaps in the GOTV scripts, and puts the supporters who
+// haven't voted at the top of Today and the map. It turns itself on for the
+// voting days (the advance-voting days and election day, in the campaign's
+// day), or a manager turns it on by hand (staff see where it stands). Then
+// "Voted so far" — supporters voted, by band, and by turf with a Walk list
+// link — and how a voted file comes in (People → Import). Needs signal.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { action, apiGet, todayISO } from '../api.js';
+import { action, apiGet } from '../api.js';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import '../components/voted.css';
 import './shifts.css';
@@ -23,7 +25,8 @@ export default function Voted() {
   const queryClient = useQueryClient();
   const online = useOnline();
   const q = useQuery({ queryKey: ['voted', 'summary'], queryFn: () => apiGet('/voted/summary'), staleTime: 15_000 });
-  const [draft, setDraft] = useState(null); // { on, election_day } once edited
+  const [draft, setDraft] = useState(null); // { on, election_day, advance_days, auto } once edited
+  const [newDay, setNewDay] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [said, setSaid] = useState(null);
@@ -33,22 +36,32 @@ export default function Voted() {
   const head = (
     <>
       <Link to="/" className="ops-back">← Today</Link>
-      <h1>Election day</h1>
+      <h1>Get out the vote</h1>
     </>
   );
   if (noSignal(q)) return <div className="vt-page">{head}<NoSignal /></div>;
   if (q.isPending) return <div className="vt-page">{head}<p className="muted">Loading…</p></div>;
   if (q.isError) return <div className="vt-page">{head}<p className="error" role="alert">{q.error.message}</p></div>;
   const s = q.data;
-  const cur = draft || { on: Boolean(s.on), election_day: s.election_day || '' };
-  const changed = Boolean(draft) && (cur.on !== Boolean(s.on) || (cur.election_day || '') !== (s.election_day || ''));
-
-  const setOn = (on) => setDraft({ on, election_day: cur.election_day || (on ? todayISO() : '') });
+  const saved = { on: Boolean(s.manual), election_day: s.election_day || '', advance_days: s.advance_days || [], auto: s.auto !== false };
+  const cur = draft || saved;
+  const changed = Boolean(draft) && JSON.stringify(cur) !== JSON.stringify(saved);
+  const patch = (p) => setDraft({ ...cur, ...p });
+  const setOn = (on) => patch({ on });
+  const addDay = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDay)) return;
+    patch({ advance_days: [...new Set([...cur.advance_days, newDay])].sort() });
+    setNewDay('');
+  };
+  const dayWord = (d) => new Date(`${d}T12:00:00`).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
+  const why = s.on
+    ? (s.voting_day === 'election' && !s.manual ? 'On — it’s election day.' : s.voting_day === 'advance' && !s.manual ? 'On — it’s an advance-voting day.' : 'On.')
+    : 'Off.';
   const save = async () => {
     setBusy(true);
     setError(null);
     try {
-      await action('vote.settings', { on: cur.on, election_day: cur.election_day || null });
+      await action('vote.settings', { on: cur.on, election_day: cur.election_day || null, advance_days: cur.advance_days, auto: cur.auto });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['voted'] }),
         queryClient.invalidateQueries({ queryKey: ['brief'] }),
@@ -70,20 +83,46 @@ export default function Voted() {
       {head}
 
       <section className="vt-sec" aria-labelledby="vt-mode-h">
-        <h2 id="vt-mode-h">Election day</h2>
+        <h2 id="vt-mode-h">GOTV mode</h2>
+        <p className="vt-now" role="status"><strong>{why}</strong></p>
+        <p className="vt-line">While it’s on: everyone can mark people as voted (walk list, door card, Calls), the GOTV scripts are said instead of the usual ones (<Link to="/scripts">Scripts</Link>), and Today and the map open on the supporters who haven’t voted.</p>
+
+        <div className="field">
+          <label htmlFor="vt-date">Election day</label>
+          <input id="vt-date" type="date" className="input vt-date" value={cur.election_day || ''} disabled={!isManager || busy}
+            onChange={(e) => patch({ election_day: e.target.value })} />
+        </div>
+        <div className="field">
+          <span className="vt-label" id="vt-adv-l">Advance-voting days</span>
+          {cur.advance_days.length > 0 ? (
+            <ul className="vt-days" aria-labelledby="vt-adv-l">
+              {cur.advance_days.map((d) => (
+                <li key={d} className="chip vt-day">
+                  <span className="mono">{dayWord(d)}</span>
+                  {isManager && <button type="button" className="vt-day__x" aria-label={`Take ${dayWord(d)} off`} disabled={busy} onClick={() => patch({ advance_days: cur.advance_days.filter((x) => x !== d) })}>✕</button>}
+                </li>
+              ))}
+            </ul>
+          ) : <p className="ops-meta">None yet.</p>}
+          {isManager && (
+            <div className="vt-addday">
+              <input id="vt-newday" type="date" className="input vt-date" aria-label="An advance-voting day" value={newDay} disabled={busy} onChange={(e) => setNewDay(e.target.value)} />
+              <button type="button" className="btn vt-tap" disabled={busy || !newDay} onClick={addDay}>Add day</button>
+            </div>
+          )}
+        </div>
+        <label className="ot-check vt-auto">
+          <input type="checkbox" checked={cur.auto} disabled={!isManager || busy} onChange={(e) => patch({ auto: e.target.checked })} />
+          <span>Turn on by itself on these days (in the campaign’s time)</span>
+        </label>
         <div className="vt-switchrow">
           <button type="button" role="switch" aria-checked={cur.on} className="sv-switch" disabled={!isManager || busy}
             onClick={() => setOn(!cur.on)}>
             <span className="sv-switch__track" aria-hidden="true"><span className="sv-switch__dot" /></span>
-            <span className="sv-switch__label">{cur.on ? 'On' : 'Off'}</span>
+            <span className="sv-switch__label">{cur.on ? 'On by hand' : 'Not on by hand'}</span>
           </button>
-          <div className="field">
-            <label htmlFor="vt-date">Date</label>
-            <input id="vt-date" type="date" className="input vt-date" value={cur.election_day || ''} disabled={!isManager || busy}
-              onChange={(e) => setDraft({ on: cur.on, election_day: e.target.value })} />
-          </div>
+          <span className="ops-meta">On by hand: on whatever the day (a practice run, the weekend before).</span>
         </div>
-        <p className="vt-line">When this is on, every volunteer can mark a person as voted from the walk list, the door card and Calls.</p>
         {isManager ? (
           <div className="vt-save">
             <button type="button" className="btn btn-primary vt-tap" disabled={busy || !changed || !online} onClick={save}>Save</button>
