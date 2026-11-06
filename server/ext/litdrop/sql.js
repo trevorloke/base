@@ -4,17 +4,18 @@
 // Idempotent: run at every boot after the core schema (under test:pg every
 // test file boots against the same database) — the old check is dropped
 // only while it does not know 'left_lit', and the new one added only while
-// none is there.
+// none is there. It also takes 'left_message' (a voicemail left, the phone's
+// "Left lit"): a check that does not know that yet is swapped the same way.
 export const sql = `
 do $$
 begin
   if exists (select 1 from pg_constraint where conrelid = 'contacts'::regclass and conname = 'contacts_outcome_check'
-             and pg_get_constraintdef(oid) not like '%left_lit%') then
+             and (pg_get_constraintdef(oid) not like '%left_lit%' or pg_get_constraintdef(oid) not like '%left_message%')) then
     alter table contacts drop constraint contacts_outcome_check;
   end if;
   if not exists (select 1 from pg_constraint where conrelid = 'contacts'::regclass and conname = 'contacts_outcome_check') then
     alter table contacts add constraint contacts_outcome_check
-      check (outcome in ('contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit'));
+      check (outcome in ('contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit', 'left_message'));
   end if;
 end $$;
 `;

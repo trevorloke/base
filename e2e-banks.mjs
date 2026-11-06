@@ -96,6 +96,14 @@ const t2 = await toast();
 check(`Call back… → This evening: "${second.split(' ')[0]} · back on your list … 6:00 p.m."`, /back on your list .*6:00/.test(t2), t2);
 mine = (await vp.evaluate(async (b) => (await fetch(`/api/banks/${b}/mine`)).json(), bankId));
 check('two to call back, one left to call now', mine.bank.later === 2 && mine.persons.length === 1, JSON.stringify(mine.bank));
+// The third: Left message — the call left word; the number is done, never called back.
+const third = await cardName();
+await vp.tap('section.cl-card .cl-out:has-text("Left message")');
+await sleep(1200);
+const t3 = await toast();
+check(`Left message on ${third.split(' ')[0]}: "Left message", no call back`, /Left message/.test(t3) && !/back on your list/.test(t3), t3);
+mine = (await vp.evaluate(async (b) => (await fetch(`/api/banks/${b}/mine`)).json(), bankId));
+check('the server: done, nobody left to call now', mine.bank.done === 1 && mine.persons.length === 0, JSON.stringify(mine.bank));
 
 // ── The desk's bank page ──
 await page.reload({ waitUntil: 'domcontentloaded' });

@@ -900,7 +900,7 @@ const readChannel = (me) => {
 const saveChannel = (me, c) => {
   try { localStorage.setItem(channelKey(me), c); } catch { /* private mode: not remembered */ }
 };
-const OUTCOME_WORD = { no_answer: 'No answer', refused: 'Refused' };
+const OUTCOME_WORD = { no_answer: 'No answer', refused: 'Refused', left_message: 'Left message' };
 const outcomeWord = (outcome, channel) => (outcome === 'no_answer' && channel === 'text' ? 'No reply' : OUTCOME_WORD[outcome] || outcome);
 // When a phone bank's number comes back: "6:00 p.m.", "tomorrow 10:00 a.m.", "Fri 10:00 a.m.".
 const backWord = (iso) => {
@@ -1302,6 +1302,9 @@ function CallsScreen() {
                     <button type="button" className="cl-out" disabled={act.busy} onClick={() => log('no_answer')}>
                       {channel === 'text' ? 'No reply' : 'No answer'}
                     </button>
+                  )}
+                  {channel === 'phone' && (
+                    <button type="button" className="cl-out" disabled={act.busy} onClick={() => log('left_message')}>Left message</button>
                   )}
                   <button type="button" className="cl-out" disabled={act.busy} onClick={() => log('refused')}>Refused</button>
                   {bankId && channel === 'phone' && (

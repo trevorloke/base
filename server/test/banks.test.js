@@ -159,3 +159,15 @@ test('call backs: a No answer comes back after the bank’s hours, up to its tri
   assert.equal(ok(await wen.get(`/api/banks/${once.id}/mine`)).bank.done, 1);
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });
+
+test('Left message: a call that left word — kept as itself, and a bank number is done (no second voicemail)', async () => {
+  const p = (await mgr.createPerson('Voicemail Target', { phone: '604-555-0298' })).id;
+  const b = ok(await mgr.action('bank.create', { name: 'Voicemail', person_ids: [p] })).bank;
+  ok(await mgr.action('bank.assign', { id: b.id, user_id: ids.Wen }));
+  const r = ok(await wen.action('contact.log', { person_id: p, channel: 'phone', outcome: 'left_message' }));
+  assert.equal(r.contact.outcome, 'left_message');
+  assert.equal(r.bank, undefined, 'not called back');
+  assert.deepEqual([ok(await wen.get(`/api/banks/${b.id}/mine`)).bank.done, (await wen.get(`/api/banks/${b.id}/mine`)).json.persons.length], [1, 0]);
+  const prof = ok(await mgr.get(`/api/persons/${p}`));
+  assert.equal(prof.contacts[0].outcome, 'left_message');
+});

@@ -19,8 +19,12 @@ export const ratingByCode = (c) => RATINGS.find((r) => r.code === c) || null;
 // left_lit: literature left at a door — a visit, not a conversation; the
 // screens offer it at the door only (a phone left_lit is accepted by the enum
 // but never offered).
+// left_message: a voicemail or a message with whoever answered — the phone's
+// "Left lit": a call that reached no one to talk to but left word. Offered on
+// the phone only; in a phone bank it finishes the number (nobody gets a
+// second voicemail from the next caller).
 export const CHANNELS = ['door', 'phone', 'text', 'in_person'];
-export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit'];
+export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit', 'left_message'];
 
 export const SIGN_KINDS = [
   { code: 'billboard', label: 'Billboard (4×8)' },

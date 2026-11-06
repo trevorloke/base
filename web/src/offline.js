@@ -527,7 +527,7 @@ export function itemText(item, nameOf = () => '') {
   let what;
   switch (item.name) {
     case 'contact.log':
-      what = i.outcome === 'left_lit' ? 'Left lit' : i.rating || i.outcome !== 'contacted' || !i.note ? (CHANNEL_WORD[i.channel] || 'Knock') : 'Note';
+      what = i.outcome === 'left_lit' ? 'Left lit' : i.outcome === 'left_message' ? 'Left message' : i.rating || i.outcome !== 'contacted' || !i.note ? (CHANNEL_WORD[i.channel] || 'Knock') : 'Note';
       break;
     case 'person.create':
     case 'person.addAtDoor': what = 'New person'; break;

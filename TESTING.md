@@ -332,7 +332,8 @@ one tap away under **More**.
   office · Saved offline*, the strip's sheet lists *Ask the office · Wants to
   volunteer · Jasmine Wong · 2:10 pm*, and it sends once when the signal is back.
 - **Calls** — one person at a time: Call or Text, then rate; *No answer*,
-  *Refused*, *Skip*.
+  *Left message* (on a call: a voicemail left — in a phone bank the number
+  is done, not called back), *Refused*, *Skip*.
 - **Texts** (Twilio connected) — Calls → Text: the message is filled in; edit
   it, *Send*, then *Next →*. Whoever you texted leaves the list until they
   reply; then they come back first, with their reply on the card and a blank

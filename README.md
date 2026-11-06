@@ -186,6 +186,11 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Reached*: Today's *More* counts the doors lit this week (yours and the
   team's), Reports → *Contacts by week* has a *Lit* column, the dashboard
   colours the drops apart, and a profile's History reads *Left lit*.
+- **Left message**: the phone's *Left lit* (`left_message`) — a voicemail,
+  or word left with whoever answered. The Calls card offers it on a call
+  (never a text, never at the door). It is not a talk; in a phone bank it
+  finishes the number, so nobody gets a second voicemail from the next
+  caller. The dashboard colours it apart; History reads *Left message*.
 
 ## Coverage vs. the tools it replaces
 

@@ -22,7 +22,7 @@ import { bandOf } from '../../../shared/scale.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 
 export const api = new Hono();
-export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit'];
+export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit', 'left_message'];
 export const PERIODS = ['today', '7d', '30d', 'all'];
 const OUT_NOW_MS = 10 * 60_000;     // a position this fresh is "out now"
 const TRAIL_MAX = 400;              // points per person on the map

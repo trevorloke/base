@@ -64,11 +64,14 @@ export const OUTCOMES = [
   { code: 'moved', label: 'Moved' },
   { code: 'inaccessible', label: 'No access' },
 ];
-export const OUTCOME_LABEL = { contacted: 'Talked', ...Object.fromEntries(OUTCOMES.map((o) => [o.code, o.label])), left_lit: 'Left lit' };
+export const OUTCOME_LABEL = { contacted: 'Talked', ...Object.fromEntries(OUTCOMES.map((o) => [o.code, o.label])), left_lit: 'Left lit', left_message: 'Left message' };
 // Literature left at a door: a visit, not a conversation. Offered at the
 // door only (the walk list, the map's door card on the door channel) —
 // never in OUTCOMES, which the Calls card and the profile render.
 export const LIT = { code: 'left_lit', label: 'Left lit' };
+// Its phone twin: a voicemail (or word with whoever answered) left — offered
+// on the Calls card for a call, never at the door.
+export const MESSAGE = { code: 'left_message', label: 'Left message' };
 
 export function OutcomeButtons({ items = OUTCOMES, onPick, disabled = false }) {
   return (

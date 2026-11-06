@@ -4,7 +4,7 @@
 //                   today's and all-time figures underneath
 //   Over time       a bar per day (per week on "All time"), stacked by
 //                   outcome — Talked · No answer · Refused · Moved · No
-//                   access · Left lit — in that fixed order and colour; Grouped lays
+//                   access · Left lit · Left message — in that fixed order and colour; Grouped lays
 //                   the outcomes side by side; Table shows the numbers
 //   In the field    the map: every contact in the period as a dot (its
 //                   outcome's colour; tap one for who, what, by whom, when,
@@ -31,9 +31,10 @@ import { OUTCOME_LABEL } from '../components/RatingButtons.jsx';
 import './dashboard.css';
 
 // The outcomes, in a fixed order with a fixed colour each (a filter never
-// repaints a survivor). The six hues pass the colour-vision checks on both
-// the light and the dark surface (Left lit's sage was picked to stay apart
-// from the other five under each colour-vision simulation).
+// repaints a survivor). The hues pass the colour-vision checks on both the
+// light and the dark surface (Left lit's sage was picked to stay apart from
+// the other five under each colour-vision simulation; Left message's plum
+// keeps every pair as far apart as before it came).
 export const OUTCOME_SERIES = [
   { key: 'contacted', label: OUTCOME_LABEL.contacted, color: '#2a9d8f' },
   { key: 'no_answer', label: OUTCOME_LABEL.no_answer, color: '#7b61ff' },
@@ -41,6 +42,7 @@ export const OUTCOME_SERIES = [
   { key: 'moved', label: OUTCOME_LABEL.moved, color: '#b97a00' },
   { key: 'inaccessible', label: OUTCOME_LABEL.inaccessible, color: '#1f5fa8' },
   { key: 'left_lit', label: OUTCOME_LABEL.left_lit, color: '#809860' },
+  { key: 'left_message', label: OUTCOME_LABEL.left_message, color: '#a0457a' },
 ];
 const COLOR = Object.fromEntries(OUTCOME_SERIES.map((o) => [o.key, o.color]));
 const PERIODS = [
