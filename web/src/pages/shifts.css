@@ -70,6 +70,13 @@
 /* In-place confirm: "Remove Sam? Yes · No" */
 .ops-confirm { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; }
 .ops-confirm > span { font-size: 15px; }
+/* Desk: Edit · Call off under the title; a moved shift offers to tell those booked. */
+.ops-shift-tools { margin: calc(-1 * var(--s-2)) 0 var(--s-3); }
+.ops-moved {
+  display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap;
+  margin: 0 0 var(--s-3); padding: var(--s-3); border-radius: var(--r-card);
+  background: var(--paper-1); font-size: 15px;
+}
 
 /* ── Rows ── */
 .ops-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }

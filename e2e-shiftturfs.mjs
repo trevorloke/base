@@ -294,11 +294,52 @@ check('Today: the next shift is Sunday’s, "… · 72 Ave east"', /Sunday canva
 await simple(vp, 'Today after Can’t make it (390)', '.today-start');
 await V.shot('08-vol-today-after');
 
+// ── 5b. The desk moves Sunday's shift, then calls it off ──
+await D.go(`/shifts/${sunday.id}`);
+await page.waitForSelector('.ops-shift-tools', { timeout: 8000 }).catch(() => {});
+await page.click('.ops-shift-tools button:has-text("Edit")');
+await page.waitForSelector('form[aria-label="Edit shift"]', { timeout: 8000 });
+check('Edit opens filled in', (await page.inputValue('#edit-shift-title')) === 'Sunday canvass'
+  && (await page.inputValue('#edit-shift-location')) === 'Newton Rec Centre'
+  && /T10:00$/.test(await page.inputValue('#edit-shift-starts')), await page.inputValue('#edit-shift-starts'));
+await page.fill('#edit-shift-starts', (await page.inputValue('#edit-shift-starts')).replace('T10:00', 'T11:30'));
+await page.fill('#edit-shift-location', 'Newton Library');
+await page.click('form[aria-label="Edit shift"] button[type="submit"]');
+await page.waitForSelector('.ops-moved', { timeout: 8000 }).catch(() => {});
+const moved = await page.innerText('.ops-moved').catch(() => '');
+check('moved: "1 person booked has the old time or place" + Let them know', /It moved/.test(moved) && /Let them know/.test(moved), moved);
+const after = (await D.api(`/shifts/${sunday.id}`)).json.shift;
+check('server: the new place and 11:30', after.location === 'Newton Library'
+  && new Date(after.starts_at).toLocaleTimeString('en-CA', { timeZone: 'America/Vancouver', hour: 'numeric', minute: '2-digit', hour12: false }) === '11:30',
+  `${after.location} ${after.starts_at}`);
+check('page reads the new place', /Newton Library/.test(await D.text()));
+await page.click('.ops-moved button:has-text("Let them know")');
+await page.waitForSelector('.ops-notify .ops-confirm', { timeout: 8000 }).catch(() => {});
+check('Let them know opens "Email + text 1 person?"', /Email \+ text 1 person\?/.test(await page.innerText('.ops-notify').catch(() => '')));
+await page.click('.ops-notify .ops-confirm button:has-text("Cancel")');
+await D.shot('09-desk-shift-moved');
+// Room for fewer than are booked is refused.
+const tooSmall = await D.api('/actions/shift.update', { id: sunday.id, capacity: 1 });
+check('capacity at what is booked is fine', tooSmall.status === 200, tooSmall.raw);
+await page.click('.ops-shift-tools button:has-text("Call off")');
+const offText = await page.innerText('.ops-shift-tools .ops-confirm').catch(() => '');
+check('Call off asks, and says the 1 booked won’t be told', /Call off this shift\?/.test(offText) && /1 person booked won’t be told/.test(offText), offText);
+await page.click('.ops-shift-tools button:has-text("Call it off")');
+await page.waitForURL(/\/shifts$/, { timeout: 8000 }).catch(() => {});
+await page.waitForSelector('main.page h1, main h1', { timeout: 8000 }).catch(() => {});
+await sleep(400);
+check('called off → back on Shifts, and it isn’t listed', /\/shifts$/.test(page.url()) && !/Sunday canvass/.test(await D.text()), page.url());
+check('server: the shift is gone (404)', (await D.api(`/shifts/${sunday.id}`)).status === 404);
+mine = ((await V.api('/brief')).json?.myTurfs ?? []).map((t) => t.name);
+check('Walker: 72 Ave east (from Sunday) came off; September turf (by hand) stays', mine.join('|') === 'September turf', mine.join('|'));
+await V.go(`/shifts/${sunday.id}`);
+check('Walker opening it: "That shift is gone."', /That shift is gone/.test(await V.text()));
+
 // ── 6. The books still verify ──
 const v = (await D.api('/audit/verify')).json;
 check('hash chain verifies after the whole journey', v.ok === true && v.checked > 20, JSON.stringify(v));
 const exp = (await D.api('/export')).json;
-check('the export carries shift_turfs and shift_turf_walkers', exp.shift_turfs?.length === 2 && Array.isArray(exp.shift_turf_walkers) && exp.shift_turf_walkers.length === 1,
+check('the export carries shift_turfs and shift_turf_walkers', exp.shift_turfs?.length === 2 && Array.isArray(exp.shift_turf_walkers) && exp.shift_turf_walkers.length === 0,
   `${exp.shift_turfs?.length} · ${exp.shift_turf_walkers?.length}`);
 check('no page errors', errors.length === 0, errors.join(' | '));
 

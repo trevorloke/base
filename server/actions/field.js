@@ -372,6 +372,56 @@ export const FIELD_ACTIONS = {
     },
   },
 
+  // A shift changed after it was made: any of its fields; only what's sent
+  // changes. Room for fewer people than are booked is refused (take someone
+  // off first). The desk tells those booked with shift.notify, as before.
+  'shift.update': {
+    roles: DESK_ROLES,
+    input: z.object({
+      id: uuid(),
+      title: z.string().trim().min(1).max(300).optional(),
+      role: z.enum(VOLUNTEER_ROLE_CODES).nullish(),
+      location: z.string().max(400).nullish(),
+      starts_at: isoTs().optional(),
+      ends_at: isoTs().nullish(),
+      instructions: z.string().max(4000).nullish(),
+      link: z.string().max(1000).nullish(),
+      capacity: z.number().int().positive().nullish(),
+    }),
+    handler: async (tx, ctx, input, emit) => {
+      const { id, ...patch } = input;
+      const cur = (await tx.query('select * from shifts where id = $1 and workspace_id = $2 and deleted_at is null', [id, ctx.workspaceId])).rows[0];
+      if (!cur) throw httpError(404, 'shift not found');
+      const next = { ...cur, ...patch };
+      if (next.ends_at && new Date(next.ends_at) <= new Date(next.starts_at)) throw httpError(400, 'the end has to be after the start');
+      if ('capacity' in patch && patch.capacity != null) {
+        const booked = await activeOnShift(tx, ctx.workspaceId, id);
+        if (patch.capacity < booked) throw httpError(409, `${booked} are booked — take someone off first, or leave room for them`);
+      }
+      await tx.query(
+        `update shifts set title = $3, role = $4, location = $5, starts_at = $6, ends_at = $7, instructions = $8, link = $9, capacity = $10
+         where id = $1 and workspace_id = $2`,
+        [id, ctx.workspaceId, next.title, next.role || null, next.location || null, next.starts_at, next.ends_at || null,
+         next.instructions || null, next.link || null, next.capacity ?? null],
+      );
+      emit('shift', id, 'update', patch);
+      return { shift: { id, ...patch } };
+    },
+  },
+
+  // A shift called off: gone from every list, its bookings with it; the walk
+  // lists it gave go back (ext/shiftturfs). On the log, like everything.
+  'shift.delete': {
+    roles: DESK_ROLES,
+    input: z.object({ id: uuid() }),
+    handler: async (tx, ctx, input, emit) => {
+      const r = await tx.query('update shifts set deleted_at = now() where id = $1 and workspace_id = $2 and deleted_at is null', [input.id, ctx.workspaceId]);
+      if (!(r.affectedRows ?? r.rowCount)) throw httpError(404, 'shift not found');
+      emit('shift', input.id, 'void', {});
+      return { id: input.id };
+    },
+  },
+
   'shift.assign': {
     roles: DESK_ROLES,
     input: z.object({ shift_id: uuid(), person_id: uuid() }),

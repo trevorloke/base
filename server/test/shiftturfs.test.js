@@ -281,3 +281,32 @@ test('a turf the desk took off by hand stays off when the booking is confirmed',
   assert.equal((await mgr.action('shift.setStatus', { id, status: 'confirmed' })).status, 200);
   assert.ok((await membersOn(t.id)).includes(walkerId), 'declined → confirmed puts them back');
 });
+
+test('a shift changed and called off: only what’s sent changes; room for fewer than are booked is refused; its walk lists go back', async () => {
+  const t = await mkTurf('Called-off turf');
+  const shift = await mkShift('To change', 13, [t]);
+  assert.equal((await vol.action('shift.join', { shift_id: shift.id })).status, 200);
+  assert.ok((await turfsOf(vol)).includes('Called-off turf'));
+  const later = inDays(14);
+  let r = await mgr.action('shift.update', { id: shift.id, location: 'Guildford Library', starts_at: later, ends_at: inDays(14.1) });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const d = (await mgr.get(`/api/shifts/${shift.id}`)).json.shift;
+  assert.deepEqual([d.title, d.location, new Date(d.starts_at).toISOString()], ['To change', 'Guildford Library', new Date(later).toISOString()]);
+  assert.equal((await mgr.action('shift.update', { id: shift.id, ends_at: inDays(13) })).status, 400, 'the end before the start');
+  assert.equal((await mgr.action('shift.update', { id: shift.id, capacity: 1 })).status, 200, 'room for the one booked');
+  const two = await joinAs('second.walker@example.org', 'Two Example');
+  assert.equal((await two.c.action('shift.join', { shift_id: shift.id })).status, 409, 'full');
+  assert.equal((await mgr.action('shift.update', { id: shift.id, capacity: null })).status, 200, 'no limit');
+  assert.equal((await two.c.action('shift.join', { shift_id: shift.id })).status, 200);
+  r = await mgr.action('shift.update', { id: shift.id, capacity: 1 });
+  assert.equal(r.status, 409);
+  assert.match(r.json.error, /^2 are booked/);
+  assert.equal((await vol.action('shift.update', { id: shift.id, title: 'mine' })).status, 403);
+
+  assert.equal((await mgr.action('shift.delete', { id: shift.id })).status, 200);
+  assert.equal((await mgr.get(`/api/shifts/${shift.id}`)).status, 404);
+  assert.ok(!(await mgr.get('/api/shifts')).json.shifts.some((s) => s.id === shift.id), 'gone from the list');
+  assert.ok(!(await turfsOf(vol)).includes('Called-off turf'), 'its walk list went back');
+  assert.equal((await mgr.action('shift.delete', { id: shift.id })).status, 404);
+  assert.equal((await mgr.get('/api/audit/verify')).json.ok, true);
+});

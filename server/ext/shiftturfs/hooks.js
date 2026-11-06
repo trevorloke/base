@@ -98,9 +98,21 @@ const onMembership = async (tx, meta, e) => {
   }
 };
 
+// A shift called off: what it put on phones comes back off (never a turf
+// given by hand, never one another shift still holds — takeOff decides).
+const onShift = async (tx, meta, e) => {
+  if (e.op !== 'void') return;
+  const ws = meta.workspaceId;
+  const held = (await tx.query(
+    'select distinct assignment_id from shift_turf_walkers where workspace_id = $1 and shift_id = $2', [ws, e.entityId],
+  )).rows;
+  for (const h of held) await takeOff(tx, ws, { assignmentId: h.assignment_id }, meta.emit);
+};
+
 export const onShiftEvents = async (tx, meta, events) => {
   for (const e of events) {
-    if (e.entityType === 'shift_assignment') await onAssignment(tx, meta, e);
+    if (e.entityType === 'shift') await onShift(tx, meta, e);
+    else if (e.entityType === 'shift_assignment') await onAssignment(tx, meta, e);
     else if (e.entityType === 'turf') await onTurf(tx, meta, e);
     else if (e.entityType === 'membership') await onMembership(tx, meta, e);
   }

@@ -387,6 +387,12 @@ one tap away under **More**.
   **Notify everyone** (email + text). Without email/text connected the
   button says *Save — nothing sends*; once connected, *Notify again* reaches
   them. Nothing on any screen claims to be sent unless it was.
+  **Edit** under the title opens the shift filled in; move its time or
+  place and it says *It moved — 1 person booked has the old time or place*
+  with **Let them know** (the same Notify). Room for fewer people than are
+  booked is refused. **Call off** asks once (and says who booked won't be
+  told); the shift leaves every list, and the walk lists it put on phones
+  come back off — never a turf given by hand.
 - **Signs** — tap *To put up* / *Up* / *Taken down* to filter; **Add a sign**
   (it needs an address); a request that never went up can be *Cancelled*.
 - **Map → filter button → Draw turf** — tap the corners, name it, assign a

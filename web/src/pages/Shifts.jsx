@@ -559,6 +559,112 @@ function ShiftForm({ onClose }) {
   );
 }
 
+// ISO from the server → a datetime-local value in this device's time.
+const isoToLocal = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const sameMoment = (a, b) => (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null);
+
+// ── Edit a shift (desk): the same fields, filled in; only what changed is
+// sent. Moving it in time or place says so, and offers to tell those booked
+// (shift.notify, which emails and texts the shift as it now stands). ──
+function EditShiftForm({ shift, booked, onClose, onSaved }) {
+  const [f, setF] = useState({
+    title: shift.title || '', role: shift.role || '', location: shift.location || '',
+    starts: isoToLocal(shift.starts_at), ends: isoToLocal(shift.ends_at),
+    capacity: shift.capacity ? String(shift.capacity) : '', link: shift.link || '', instructions: shift.instructions || '',
+  });
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setF((cur) => ({ ...cur, [k]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    const starts_at = localToISO(f.starts);
+    const ends_at = localToISO(f.ends);
+    if (!f.title.trim()) { setError('Give the shift a name'); return; }
+    if (!starts_at) { setError('Pick when it starts'); return; }
+    if (ends_at && new Date(ends_at) <= new Date(starts_at)) { setError('The end has to be after the start'); return; }
+    let capacity = null;
+    if (f.capacity.trim()) {
+      capacity = Number(f.capacity);
+      if (!Number.isInteger(capacity) || capacity < 1) { setError('How many: a whole number, 1 or more'); return; }
+    }
+    const patch = {};
+    if (f.title.trim() !== shift.title) patch.title = f.title.trim();
+    if ((f.role || null) !== (shift.role || null)) patch.role = f.role || null;
+    if ((f.location.trim() || null) !== (shift.location || null)) patch.location = f.location.trim() || null;
+    if (!sameMoment(starts_at, shift.starts_at)) patch.starts_at = starts_at;
+    if (!sameMoment(ends_at, shift.ends_at)) patch.ends_at = ends_at;
+    if (capacity !== (shift.capacity ?? null)) patch.capacity = capacity;
+    if ((normalizeLink(f.link) ?? null) !== (shift.link || null)) patch.link = normalizeLink(f.link) ?? null;
+    if ((f.instructions.trim() || null) !== (shift.instructions || null)) patch.instructions = f.instructions.trim() || null;
+    if (!Object.keys(patch).length) { onClose(); return; }
+    setBusy(true);
+    try {
+      await action('shift.update', { id: shift.id, ...patch });
+      const moved = ['starts_at', 'ends_at', 'location'].some((k) => k in patch);
+      onSaved({ moved: moved && booked > 0 });
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="card ops-form" onSubmit={submit} aria-label="Edit shift">
+      <div className="field">
+        <label htmlFor="edit-shift-title">What</label>
+        <input id="edit-shift-title" className="input" required autoFocus value={f.title} onChange={set('title')} />
+      </div>
+      <div className="field">
+        <label htmlFor="edit-shift-starts">When</label>
+        <input id="edit-shift-starts" className="input mono" type="datetime-local" required value={f.starts} onChange={set('starts')} />
+      </div>
+      <div className="field">
+        <label htmlFor="edit-shift-ends">Ends</label>
+        <input id="edit-shift-ends" className="input mono" type="datetime-local" min={f.starts || undefined}
+          value={f.ends} onChange={set('ends')} />
+      </div>
+      <div className="field">
+        <label htmlFor="edit-shift-location">Where</label>
+        <input id="edit-shift-location" className="input" value={f.location} onChange={set('location')} />
+      </div>
+      <div className="field">
+        <label htmlFor="edit-shift-capacity">How many people</label>
+        <input id="edit-shift-capacity" className="input mono" type="number" min={Math.max(1, booked)} step="1" inputMode="numeric"
+          placeholder="No limit" value={f.capacity} onChange={set('capacity')} />
+        {booked > 0 && <span className="ops-meta">{people(booked)} booked</span>}
+      </div>
+      <div className="field">
+        <label htmlFor="edit-shift-role">Role</label>
+        <select id="edit-shift-role" className="input" value={f.role} onChange={set('role')}>
+          <option value="">Any role</option>
+          {VOLUNTEER_ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
+        </select>
+      </div>
+      <div className="field">
+        <label htmlFor="edit-shift-instructions">Instructions</label>
+        <textarea id="edit-shift-instructions" className="input" rows={3} value={f.instructions} onChange={set('instructions')} />
+      </div>
+      <div className="field">
+        <label htmlFor="edit-shift-link">Link</label>
+        <input id="edit-shift-link" className="input" type="text" inputMode="url" autoCapitalize="none"
+          autoCorrect="off" spellCheck={false} value={f.link} onChange={set('link')} />
+      </div>
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="ops-actions">
+        <button type="submit" className="btn btn-primary ops-tap" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
+        <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={onClose}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
 // ── Which shifts am I on? (volunteers) ──
 // The server marks each shift the caller is on (s.mine: their own supporter
 // record, matched by login email, holds an active spot). Only an older
@@ -819,6 +925,12 @@ function ShiftDetail({ id, canDesk, me }) {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState(null);
   const [leaving, setLeaving] = useState(false); // "Can't make it? Yes · No"
+  // Desk: "Edit" opens the form in place; "Call off" asks once.
+  const [editing, setEditing] = useState(false);
+  const [edited, setEdited] = useState(null); // { moved } after a save
+  const [callingOff, setCallingOff] = useState(false);
+  const [offBusy, setOffBusy] = useState(false);
+  const [offError, setOffError] = useState(null);
   // The shift's turfs: every role reads the kept list; the desk also learns
   // who on it has no app sign-in (their phone can't get the walk lists).
   const { byShift } = useShiftTurfs(me, { side: true });
@@ -1114,10 +1226,79 @@ function ShiftDetail({ id, canDesk, me }) {
     </section>
   );
 
+  const callOff = async () => {
+    setOffError(null);
+    setOffBusy(true);
+    try {
+      await action('shift.delete', { id: shift.id });
+      queryClient.removeQueries({ queryKey: ['shift', id] });
+      refresh();
+      // The board opens without it, not with it for a moment.
+      await queryClient.refetchQueries({ queryKey: ['shifts'] }).catch(() => {});
+      navigate('/shifts');
+    } catch (e) {
+      setOffError(e.message);
+      setOffBusy(false);
+    }
+  };
+
+  if (canDesk && editing) {
+    return (
+      <div className="ops-page">
+        <Link to="/shifts" className="ops-back">← Shifts</Link>
+        <h1>Edit shift</h1>
+        <EditShiftForm shift={shift} booked={active.length} onClose={() => setEditing(false)}
+          onSaved={(r) => { setEditing(false); setEdited(r); refresh(); }} />
+      </div>
+    );
+  }
+
   return (
     <div className="ops-page">
       <Link to="/shifts" className="ops-back">← Shifts</Link>
       <h1>{shift.title}</h1>
+      {canDesk && (
+        <div className="ops-actions ops-shift-tools">
+          <button type="button" className="btn btn-quiet ops-tap" disabled={!online || offBusy}
+            onClick={() => { setEditing(true); setEdited(null); setCallingOff(false); }}>
+            Edit
+          </button>
+          {!callingOff ? (
+            <button type="button" className="btn btn-quiet ops-tap" disabled={!online}
+              onClick={() => { setCallingOff(true); setOffError(null); }}>
+              Call off
+            </button>
+          ) : (
+            <div className="ops-confirm" role="group" aria-label="Call off this shift">
+              <span>
+                Call off this shift?
+                {active.length > 0 && ` ${people(active.length)} booked won’t be told — Notify them first if they should know.`}
+              </span>
+              <button type="button" className="btn ops-danger ops-tap" disabled={offBusy || !online} onClick={callOff}>
+                {offBusy ? 'Calling off…' : 'Call it off'}
+              </button>
+              <button type="button" className="btn btn-quiet ops-tap" disabled={offBusy} onClick={() => setCallingOff(false)}>
+                Keep it
+              </button>
+            </div>
+          )}
+          {!online && <NeedsSignal>Needs signal</NeedsSignal>}
+          {edited && !edited.moved && <span className="ops-done" role="status">✓ Saved</span>}
+        </div>
+      )}
+      {offError && <p className="error" role="alert">{offError}</p>}
+      {canDesk && edited?.moved && !confirming && (
+        <div className="ops-moved" role="status">
+          <span>✓ Saved. It moved — {people(active.length)} booked {active.length === 1 ? 'has' : 'have'} the old time or place.</span>
+          <button type="button" className="btn btn-primary ops-tap"
+            onClick={() => {
+              setConfirming(true); setResults(null); setNotifyError(null); setEdited(null);
+              requestAnimationFrame(() => document.querySelector('.ops-notify[aria-label="Notify volunteers"]')?.scrollIntoView({ block: 'center' }));
+            }}>
+            Let them know
+          </button>
+        </div>
+      )}
       <div className="ops-lines">
         {shift.role && (
           <span className="ops-chips"><span className="chip">{roleLabel(shift.role)}</span></span>
