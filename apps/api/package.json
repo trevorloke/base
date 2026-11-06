@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "admin": "tsx src/admin.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
