@@ -5,7 +5,9 @@ import { findPhrases } from "@starsign/policy";
 import { ActivityInput, StreamQuery, type ActivityKind, type Network } from "@starsign/schema";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
+import { detectLanguage, primaryLanguage } from "../lang.ts";
 import type { AccountService } from "./accounts.ts";
+import type { WebhookHandler } from "@starsign/connectors";
 
 export type StreamRow = typeof streams.$inferSelect;
 
@@ -62,7 +64,8 @@ export class ListeningService {
         externalId: item.externalId,
         payload: item.raw ?? item,
       });
-      const matched = wsStreams.filter((s) => matchesStream(StreamQuery.parse(s.query), item)).map((s) => s.id);
+      const lang = item.lang ? primaryLanguage(item.lang) : (detectLanguage(item.text)?.lang ?? null);
+      const matched = wsStreams.filter((s) => matchesStream(StreamQuery.parse(s.query), item, { lang })).map((s) => s.id);
       const id = newId("act");
       const inserted = await this.ctx.db
         .insert(activities)
@@ -82,6 +85,10 @@ export class ListeningService {
           ingestedAt: this.ctx.now(),
           matchedStreams: matched,
           rawEventId: rawEvent.id,
+          lang,
+          conversationId: item.conversation?.id ?? null,
+          conversationName: item.conversation?.name ?? null,
+          conversationType: item.conversation?.type ?? null,
         })
         .onConflictDoNothing()
         .returning({ id: activities.id });
@@ -91,7 +98,7 @@ export class ListeningService {
       }
       ingested++;
       ids.push(id);
-      this.ctx.emitter.emit("activity", { workspaceId, id, network: item.network, kind: item.kind, matchedStreams: matched });
+      this.ctx.emitter.emit("activity", { workspaceId, id, network: item.network, kind: item.kind, matchedStreams: matched, lang });
     }
     if (ingested > 0) {
       await this.ctx.events.append({
@@ -108,16 +115,19 @@ export class ListeningService {
 
   async feed(
     workspaceId: string,
-    opts: { streamId?: string; networks?: Network[]; kinds?: ActivityKind[]; accountId?: string; since?: Date; before?: Date; limit?: number; q?: string } = {},
+    opts: { streamId?: string; networks?: Network[]; kinds?: ActivityKind[]; accountId?: string; since?: Date; before?: Date; limit?: number; q?: string; languages?: string[]; conversationId?: string } = {},
   ) {
     const conds = [eq(activities.workspaceId, workspaceId)];
+    if (opts.languages?.length) conds.push(inArray(activities.lang, opts.languages.map(primaryLanguage)));
+    if (opts.conversationId) conds.push(eq(activities.conversationId, opts.conversationId));
     if (opts.streamId) conds.push(sql`${activities.matchedStreams} @> ${JSON.stringify([opts.streamId])}::jsonb`);
     if (opts.networks?.length) conds.push(inArray(activities.network, opts.networks));
     if (opts.kinds?.length) conds.push(inArray(activities.kind, opts.kinds));
     if (opts.accountId) conds.push(eq(activities.socialAccountId, opts.accountId));
     if (opts.since) conds.push(gt(activities.occurredAt, opts.since));
     if (opts.before) conds.push(lt(activities.occurredAt, opts.before));
-    if (opts.q) conds.push(sql`${activities.text} ILIKE ${"%" + opts.q + "%"}`);
+    // Search finds a message by its words or by its translation.
+    if (opts.q) conds.push(sql`(${activities.text} ILIKE ${"%" + opts.q + "%"} OR ${activities.translation} ILIKE ${"%" + opts.q + "%"})`);
     return this.ctx.db
       .select()
       .from(activities)
@@ -136,11 +146,22 @@ export class ListeningService {
   }
 }
 
-export function matchesStream(q: StreamQuery, item: ActivityInput): boolean {
+/**
+ * Whether an item belongs in a stream. Keywords match the original text in the stream's own words or in any of its
+ * translated keyword lists, and, once a translation exists, the translation too (so an English keyword finds a
+ * Japanese message about the same thing).
+ */
+export function matchesStream(q: StreamQuery, item: ActivityInput, extra: { lang?: string | null; translation?: string | null } = {}): boolean {
   if (q.networks.length && !q.networks.includes(item.network)) return false;
   if (q.kinds.length && !q.kinds.includes(item.kind)) return false;
+  const lang = extra.lang ?? (item.lang ? primaryLanguage(item.lang) : null);
+  if (q.languages.length && (!lang || !q.languages.includes(lang))) return false;
   const authorOk = q.authors.length === 0 || (item.authorHandle ? q.authors.some((a) => a.replace(/^@/, "").toLowerCase() === item.authorHandle!.replace(/^@/, "").toLowerCase()) : false);
-  const keywordOk = q.keywords.length === 0 || (item.text ? findPhrases(item.text, q.keywords).length > 0 : false);
+  const allKeywords = [...q.keywords, ...Object.values(q.translations).flat()];
+  const keywordOk =
+    q.keywords.length === 0 ||
+    (item.text ? findPhrases(item.text, allKeywords).length > 0 : false) ||
+    (extra.translation ? findPhrases(extra.translation, q.keywords).length > 0 : false);
   if (q.authors.length && q.keywords.length) return authorOk || keywordOk;
   return authorOk && keywordOk;
 }
@@ -198,21 +219,68 @@ export class WebhookService {
   constructor(
     private readonly ctx: CoreContext,
     private readonly listening: ListeningService,
+    private readonly accounts: AccountService,
   ) {}
 
-  challenge(connectorName: string, query: Record<string, string>): string | null {
-    return this.ctx.connectors.get(connectorName)?.webhook?.challenge?.(query) ?? null;
+  async challenge(connectorName: string, query: Record<string, string>): Promise<string | null> {
+    const handler = this.ctx.connectors.get(connectorName)?.webhook;
+    if (!handler) return null;
+    if (handler.route && handler.challengeAccount) {
+      const target = handler.route("", query, {});
+      if (!target) return null;
+      for (const acc of await this.targets(target.network, target.accountExternalId)) {
+        const answer = handler.challengeAccount(this.accounts.toRef(acc), query);
+        if (answer !== null) return answer;
+      }
+      return null;
+    }
+    return handler.challenge?.(query) ?? null;
   }
 
-  async receive(connectorName: string, headers: Record<string, string>, rawBody: string): Promise<{ accepted: boolean; items: number }> {
+  private targets(network: string, externalId: string) {
+    return this.ctx.db
+      .select()
+      .from(socialAccounts)
+      .where(and(eq(socialAccounts.network, network), eq(socialAccounts.externalId, externalId), eq(socialAccounts.status, "active")));
+  }
+
+  /** Deliveries signed with each account's own secret: find the claimed account, verify with its credentials. */
+  private async receiveRouted(connectorName: string, handler: WebhookHandler, headers: Record<string, string>, rawBody: string, query: Record<string, string>) {
+    const target = handler.route!(rawBody, query, headers);
+    if (!target) throw new CoreError("invalid", "webhook delivery names no account");
+    const verified = (await this.targets(target.network, target.accountExternalId)).filter((acc) => handler.verifyAccount!(this.accounts.toRef(acc), headers, rawBody, query));
+    if (verified.length === 0) throw new CoreError("forbidden", "bad webhook signature");
+    let items = 0;
+    let logged = false;
+    for (const acc of verified) {
+      let body: unknown;
+      try {
+        body = handler.decodeAccount ? handler.decodeAccount(this.accounts.toRef(acc), rawBody, query) : handler.decode ? handler.decode(rawBody, query) : JSON.parse(rawBody);
+      } catch {
+        throw new CoreError("invalid", "webhook body could not be read");
+      }
+      if (!logged) {
+        await this.ctx.events.appendRaw({ source: `webhook:${connectorName}`, kind: "delivery", workspaceId: null, externalId: null, payload: body });
+        logged = true;
+      }
+      for (const batch of handler.parse(body)) {
+        if (batch.network !== acc.network || batch.accountExternalId !== acc.externalId) continue;
+        items += (await this.listening.ingestItems(acc.workspaceId, acc.id, batch.items)).ingested;
+      }
+    }
+    return { accepted: true, items, ...(handler.ack ? { ack: handler.ack } : {}) };
+  }
+
+  async receive(connectorName: string, headers: Record<string, string>, rawBody: string, query: Record<string, string> = {}): Promise<{ accepted: boolean; items: number; ack?: { body: string; contentType: string } }> {
     const handler = this.ctx.connectors.get(connectorName)?.webhook;
     if (!handler) throw new CoreError("not_found", `no webhooks for ${connectorName}`);
-    if (!handler.verify(headers, rawBody)) throw new CoreError("forbidden", "bad webhook signature");
+    if (handler.route && handler.verifyAccount) return this.receiveRouted(connectorName, handler, headers, rawBody, query);
+    if (!handler.verify(headers, rawBody, query)) throw new CoreError("forbidden", "bad webhook signature");
     let body: unknown;
     try {
-      body = JSON.parse(rawBody);
+      body = handler.decode ? handler.decode(rawBody, query) : JSON.parse(rawBody);
     } catch {
-      throw new CoreError("invalid", "webhook body is not JSON");
+      throw new CoreError("invalid", "webhook body could not be read");
     }
     await this.ctx.events.appendRaw({ source: `webhook:${connectorName}`, kind: "delivery", workspaceId: null, externalId: null, payload: body });
     let items = 0;
@@ -226,6 +294,6 @@ export class WebhookService {
         items += r.ingested;
       }
     }
-    return { accepted: true, items };
+    return { accepted: true, items, ...(handler.ack ? { ack: handler.ack } : {}) };
   }
 }

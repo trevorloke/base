@@ -16,6 +16,9 @@ export const Network = z.enum([
   "google_business",
   "telegram",
   "discord",
+  "whatsapp",
+  "wechat",
+  "line",
 ]);
 export type Network = z.infer<typeof Network>;
 
@@ -48,6 +51,10 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   google_business: { maxText: 1500, maxMedia: 1, requiresMedia: false, supportsThread: false, maxVideoSeconds: 30 },
   telegram: { maxText: 4096, maxMedia: 10, requiresMedia: false, supportsThread: false },
   discord: { maxText: 2000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  // TODO(verify): chat apps' limits — WhatsApp text 4096, WeChat customer-service text ~2048 bytes, LINE text 5000.
+  whatsapp: { maxText: 4096, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  wechat: { maxText: 600, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  line: { maxText: 5000, maxMedia: 5, requiresMedia: false, supportsThread: false },
 };
 
 /**

@@ -21,3 +21,8 @@ export * from "./reddit.ts";
 export * from "./mastodon.ts";
 export * from "./telegram.ts";
 export * from "./discord.ts";
+export * from "./discord-bot.ts";
+export * from "./whatsapp.ts";
+export * from "./wechat.ts";
+export * from "./wechat-crypto.ts";
+export * from "./line.ts";

@@ -74,7 +74,7 @@ export class AccountService {
   async connectFromInputs(p: Principal, input: { connector: string; network: Network; inputs: Record<string, string> }) {
     const connector = this.ctx.connectors.get(input.connector);
     if (!connector?.connectWithInputs || !connector.networks.includes(input.network)) throw new CoreError("invalid", `${input.connector} does not connect ${input.network} with typed credentials`);
-    for (const f of connector.credentialInputs ?? []) if (!input.inputs[f.key]?.trim()) throw new CoreError("invalid", `${f.label} is required`, { field: f.key });
+    for (const f of connector.credentialInputs ?? []) if (!f.optional && !input.inputs[f.key]?.trim()) throw new CoreError("invalid", `${f.label} is required`, { field: f.key });
     let found: ConnectedAccount[];
     try {
       found = await connector.connectWithInputs({ network: input.network, inputs: input.inputs });

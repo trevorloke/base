@@ -184,8 +184,8 @@ describe("engagement", () => {
 
 describe("webhooks and account metrics", () => {
   it("verifies signatures, answers challenges, routes items to the connected account", async () => {
-    expect(m.webhooks.challenge("full", { "hub.verify_token": "vt", "hub.challenge": "42" })).toBe("42");
-    expect(m.webhooks.challenge("full", { "hub.verify_token": "nope", "hub.challenge": "42" })).toBeNull();
+    expect(await m.webhooks.challenge("full", { "hub.verify_token": "vt", "hub.challenge": "42" })).toBe("42");
+    expect(await m.webhooks.challenge("full", { "hub.verify_token": "nope", "hub.challenge": "42" })).toBeNull();
     const raw = JSON.stringify({ entry: [{ id: "page-1", text: "webhook comment", cid: "c-900" }, { id: "unknown-page", text: "x", cid: "c-901" }] });
     await expect(m.webhooks.receive("full", { "x-hub-signature-256": "sha256=deadbeef" }, raw)).rejects.toMatchObject({ code: "forbidden" });
     const sig = `sha256=${createHmac("sha256", "app-secret").update(raw).digest("hex")}`;

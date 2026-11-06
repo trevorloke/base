@@ -14,6 +14,10 @@ import { createRedditConnectors } from "./reddit.ts";
 import { createMastodonConnectors } from "./mastodon.ts";
 import { createTelegramConnectors } from "./telegram.ts";
 import { createDiscordConnectors } from "./discord.ts";
+import { createDiscordBotConnectors } from "./discord-bot.ts";
+import { createWhatsAppConnectors } from "./whatsapp.ts";
+import { createWeChatConnectors } from "./wechat.ts";
+import { createLineConnectors } from "./line.ts";
 
 /**
  * The registry a Starsign process boots with. Native adapters are always present (their credentials
@@ -39,6 +43,11 @@ export function createDefaultRegistry(env: NodeJS.ProcessEnv = process.env): Con
     createMastodonConnectors,
     createTelegramConnectors,
     createDiscordConnectors,
+    // Chat apps: monitoring group chats and messages to the business, through each platform's official API.
+    createDiscordBotConnectors,
+    createWhatsAppConnectors,
+    createWeChatConnectors,
+    createLineConnectors,
   ]) {
     for (const c of make(env)) registry.register(c);
   }

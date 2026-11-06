@@ -308,10 +308,21 @@ export const activities = pgTable(
     sentiment: doublePrecision("sentiment"),
     matchedStreams: jsonb("matched_streams").$type<string[]>().notNull().default([]),
     rawEventId: text("raw_event_id"),
+    conversationId: text("conversation_id"),
+    conversationName: text("conversation_name"),
+    conversationType: text("conversation_type").$type<"group" | "channel" | "direct">(),
+    /** ISO 639-1 (or the platform's BCP-47 tag). Null: unknown (too short, emoji only). */
+    lang: text("lang"),
+    /** Into the workspace's home language; derived, re-creatable. */
+    translation: text("translation"),
+    translationLang: text("translation_lang"),
+    translatedAt: ts("translated_at"),
   },
   (t) => [
     uniqueIndex("activities_ws_net_ext").on(t.workspaceId, t.network, t.externalId),
     index("activities_ws_time").on(t.workspaceId, t.occurredAt),
+    index("activities_ws_lang").on(t.workspaceId, t.lang, t.occurredAt),
+    index("activities_ws_conv").on(t.workspaceId, t.conversationId, t.occurredAt),
   ],
 );
 
