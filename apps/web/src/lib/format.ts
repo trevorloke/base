@@ -48,6 +48,22 @@ export const NETWORK_LABEL: Record<Network, string> = {
   wechat: "WeChat",
   line: "LINE",
   news: "News",
+  nostr: "Nostr",
+  misskey: "Misskey",
+  lemmy: "Lemmy",
+  tumblr: "Tumblr",
+  vk: "VK",
+  twitch: "Twitch",
+  slack: "Slack",
+  matrix: "Matrix",
+  google_chat: "Google Chat",
+  teams: "Microsoft Teams",
+  wordpress: "WordPress",
+  ghost: "Ghost",
+  mailchimp: "Mailchimp",
+  kit: "Kit",
+  webhook: "Custom webhook",
+  rss: "RSS / Atom",
 };
 
 /**
@@ -72,6 +88,21 @@ export const NETWORKS: Network[] = [
   "whatsapp",
   "wechat",
   "line",
+  "nostr",
+  "misskey",
+  "lemmy",
+  "tumblr",
+  "vk",
+  "twitch",
+  "slack",
+  "matrix",
+  "google_chat",
+  "teams",
+  "wordpress",
+  "ghost",
+  "mailchimp",
+  "kit",
+  "webhook",
 ];
 
 /** Hard text limits per network, for the inline editor's counter. */
@@ -94,10 +125,26 @@ export const NETWORK_MAX_TEXT: Record<Network, number> = {
   wechat: 600,
   line: 5000,
   news: 0,
+  nostr: 10000,
+  misskey: 3000,
+  lemmy: 10000,
+  tumblr: 10000,
+  vk: 15000,
+  twitch: 500,
+  slack: 40000,
+  matrix: 30000,
+  google_chat: 32000,
+  teams: 28000,
+  wordpress: 100000,
+  ghost: 100000,
+  mailchimp: 100000,
+  kit: 100000,
+  webhook: 100000,
+  rss: 0,
 };
 
 /** Networks where one post can continue as a thread of replies. */
-export const NETWORK_THREADS: ReadonlySet<Network> = new Set<Network>(["x", "bluesky", "threads", "mastodon"]);
+export const NETWORK_THREADS: ReadonlySet<Network> = new Set<Network>(["x", "bluesky", "threads", "mastodon", "nostr", "misskey"]);
 
 /** Networks that refuse a post without an image or video. */
 export const NETWORK_NEEDS_MEDIA: ReadonlySet<Network> = new Set<Network>(["instagram", "tiktok", "pinterest", "youtube"]);
@@ -122,6 +169,22 @@ export const NETWORK_MAX_MEDIA: Record<Network, number> = {
   wechat: 1,
   line: 5,
   news: 0,
+  nostr: 4,
+  misskey: 16,
+  lemmy: 1,
+  tumblr: 10,
+  vk: 10,
+  twitch: 0,
+  slack: 10,
+  matrix: 1,
+  google_chat: 0,
+  teams: 1,
+  wordpress: 20,
+  ghost: 20,
+  mailchimp: 10,
+  kit: 10,
+  webhook: 10,
+  rss: 0,
 };
 
 /** Approximate longest organic video, in seconds, where a network caps it. */

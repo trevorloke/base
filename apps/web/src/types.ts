@@ -20,7 +20,24 @@ export type Network =
   | "wechat"
   | "line"
   /** Listening only: news articles found by the tracker's public search. Never a publish target, never in Connections. */
-  | "news";
+  | "news"
+  | "nostr"
+  | "misskey"
+  | "lemmy"
+  | "tumblr"
+  | "vk"
+  | "twitch"
+  | "slack"
+  | "matrix"
+  | "google_chat"
+  | "teams"
+  | "wordpress"
+  | "ghost"
+  | "mailchimp"
+  | "kit"
+  | "webhook"
+  /** Listening only: feeds Starsign reads (blogs, news sites, podcasts). */
+  | "rss";
 
 export type ActorType = "human" | "operator" | "mcp" | "system";
 export interface Actor {

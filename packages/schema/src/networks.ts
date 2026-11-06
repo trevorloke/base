@@ -21,11 +21,28 @@ export const Network = z.enum([
   "line",
   /** Listening only: news articles found by the tracker's public search. Nothing publishes to it. */
   "news",
+  // Open networks, team chat, blogs and newsletters, streaming, and the universal connectors.
+  "nostr",
+  "misskey",
+  "lemmy",
+  "tumblr",
+  "vk",
+  "twitch",
+  "slack",
+  "matrix",
+  "google_chat",
+  "teams",
+  "wordpress",
+  "ghost",
+  "mailchimp",
+  "kit",
+  "webhook",
+  "rss",
 ]);
 export type Network = z.infer<typeof Network>;
 
 /** Networks Starsign only listens to (nothing can be published there). */
-export const LISTEN_ONLY_NETWORKS: ReadonlySet<Network> = new Set<Network>(["news"]);
+export const LISTEN_ONLY_NETWORKS: ReadonlySet<Network> = new Set<Network>(["news", "rss"]);
 
 /** Hard publishing limits per network. Soft limits (engagement cliffs) live in the ledger, learned. */
 export interface NetworkLimits {
@@ -61,6 +78,23 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   wechat: { maxText: 600, maxMedia: 1, requiresMedia: false, supportsThread: false },
   line: { maxText: 5000, maxMedia: 5, requiresMedia: false, supportsThread: false },
   news: { maxText: 0, maxMedia: 0, requiresMedia: false, supportsThread: false },
+  // TODO(verify): limits below are conservative readings of each platform's documented maxima; connectors validate precisely.
+  nostr: { maxText: 10000, maxMedia: 4, requiresMedia: false, supportsThread: true },
+  misskey: { maxText: 3000, maxMedia: 16, requiresMedia: false, supportsThread: true },
+  lemmy: { maxText: 10000, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  tumblr: { maxText: 10000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  vk: { maxText: 15000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  twitch: { maxText: 500, maxMedia: 0, requiresMedia: false, supportsThread: false },
+  slack: { maxText: 40000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  matrix: { maxText: 30000, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  google_chat: { maxText: 32000, maxMedia: 0, requiresMedia: false, supportsThread: false },
+  teams: { maxText: 28000, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  wordpress: { maxText: 100000, maxMedia: 20, requiresMedia: false, supportsThread: false },
+  ghost: { maxText: 100000, maxMedia: 20, requiresMedia: false, supportsThread: false },
+  mailchimp: { maxText: 100000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  kit: { maxText: 100000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  webhook: { maxText: 100000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  rss: { maxText: 0, maxMedia: 0, requiresMedia: false, supportsThread: false },
 };
 
 /**
