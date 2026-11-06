@@ -67,7 +67,11 @@ Managers reach **Admin** from the account menu (their initials):
   give one to a single person on top of their role (a volunteer who runs
   Outreach, a staffer kept out of Donations). The server decides on every action
   and read, and the app shows a person the tabs of the areas they have.
-  Managers always have every area.
+  Managers always have every area. **Volunteers' map** (same page): *Every
+  door*, or *Only their turfs* — then a volunteer's phone gets only the doors
+  and signs inside the turfs they walk (and their own record); the rest never
+  reach it, kept copy included. A volunteer given Map & turfs sees every door.
+  Call lists are scoped by phone banks, not by this.
 The same menu has **Rating scale** (below); People → More has **Profile
 fields** (managers) and **Most connected** (desk).
 

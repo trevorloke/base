@@ -108,6 +108,20 @@ export const actions = {
       return { role: input.role, grant, deny: input.deny };
     },
   },
+  // Volunteers' map: every door (the default), or only the doors inside
+  // the turfs each one walks (routes/api.js /map/doors).
+  'permission.doors.set': {
+    roles: MANAGER,
+    input: z.object({ scope: z.enum(['all', 'turfs']) }),
+    handler: async (tx, ctx, input, emit) => {
+      const ws = ctx.workspaceId;
+      const settings = parseJ((await tx.query('select settings from workspaces where id = $1 for update', [ws])).rows[0].settings, {});
+      const next = { ...settings, permissions: { ...(settings.permissions || {}), volunteerDoors: input.scope } };
+      await tx.query('update workspaces set settings = $2 where id = $1', [ws, JSON.stringify(next)]);
+      emit('workspace', ws, 'update', { permissions: { volunteerDoors: input.scope } });
+      return { scope: input.scope };
+    },
+  },
   'permission.member.set': {
     roles: MANAGER,
     input: z.object({ user_id: uuid(), grant: areas(), deny: areas() }),

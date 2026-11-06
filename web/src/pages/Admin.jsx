@@ -223,6 +223,21 @@ function Permissions({ me }) {
         </table>
       </div>
 
+      <h2 className="ot-sec-h">Volunteers’ map</h2>
+      <p className="muted">What a volunteer’s phone carries. Someone given Map &amp; turfs above sees every door either way.</p>
+      <fieldset className="adm-doors" aria-label="Volunteers’ map">
+        {[
+          ['all', 'Every door', 'The whole campaign on the map, as now'],
+          ['turfs', 'Only their turfs', 'Just the doors inside the turfs they’re given — the rest never reach their phone'],
+        ].map(([v, label, what]) => (
+          <label key={v} className="ot-check">
+            <input type="radio" name="adm-doors" value={v} checked={d.doors === v} disabled={busy || !online}
+              onChange={() => run('permission.doors.set', { scope: v })} />
+            <span>{label}<span className="muted adm-what">{what}</span></span>
+          </label>
+        ))}
+      </fieldset>
+
       <h2 className="ot-sec-h">One person</h2>
       <p className="muted">On top of their role: give someone an extra area, or take one away from them alone.</p>
       <div className="field">

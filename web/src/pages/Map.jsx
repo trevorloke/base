@@ -1772,7 +1772,11 @@ export default function MapPage() {
       ) : null}
       {showEmpty && (
         <div className="card map-empty">
-          {unlocated > 0 ? (
+          {doorsData?.scope === 'turfs' && !doorsData.turfs ? (
+            <p>No turf yet — your organizer gives you one, and its doors show here</p>
+          ) : doorsData?.scope === 'turfs' ? (
+            <p>No doors in your turfs yet — ask your organizer</p>
+          ) : unlocated > 0 ? (
             <>
               <p>{plural(unlocated, 'person needs', 'people need')} a pin</p>
               <button type="button" className="btn btn-primary map-empty__btn" onClick={() => { setPickerOpen(true); setAddAt(null); cancelMode(); }}>Place</button>

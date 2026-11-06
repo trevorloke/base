@@ -173,7 +173,7 @@ one tap away under **More**.
   universe leave them. The pass's card counts *doors knocked · talked · yes*
   as the team works; **End this pass** (asks in place) puts every knocked
   door back to done, and starting another pass ends the open one.
-- **Settings → Permissions** — untick Donations for Staff and watch a staffer's Donations tab go; tick Outreach for one volunteer and watch them get it.
+- **Settings → Permissions** — untick Donations for Staff and watch a staffer's Donations tab go; tick Outreach for one volunteer and watch them get it. Under **Volunteers' map** pick *Only their turfs*: a volunteer's map now shows just the doors inside the turfs they walk (no turf: *No turf yet*), and *Every door* brings the rest back.
 - **Rating scale** (your initials → *Rating scale*) — change the words on 1
   (e.g. *Definitely*; up to 30 letters, a long one wraps on the buttons),
   rename a candidate, **Add** one, move it with ↑ ↓,

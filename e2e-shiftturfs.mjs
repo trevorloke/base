@@ -335,6 +335,34 @@ check('Walker: 72 Ave east (from Sunday) came off; September turf (by hand) stay
 await V.go(`/shifts/${sunday.id}`);
 check('Walker opening it: "That shift is gone."', /That shift is gone/.test(await V.text()));
 
+// ── 5c. Volunteers' map: only their turfs ──
+await D.go('/settings/permissions');
+await page.waitForSelector('fieldset.adm-doors', { timeout: 8000 });
+check('Settings → Permissions: Volunteers’ map is "Every door"', await page.isChecked('input[name="adm-doors"][value="all"]'));
+await page.click('fieldset.adm-doors label:has-text("Only their turfs")');
+await page.waitForFunction(() => document.querySelector('input[name="adm-doors"][value="turfs"]')?.checked && !document.querySelector('input[name="adm-doors"]')?.disabled, null, { timeout: 8000 }).catch(() => {});
+await D.shot('10-desk-volunteers-map');
+const everyDoor = (await D.api('/map/doors')).json.persons.length;
+const scoped = (await V.api('/map/doors')).json;
+const rings = ((await V.api('/turfs')).json.turfs || []).map((t) => t.polygon);
+const inRing = (lat, lng, ring) => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [yi, xi] = ring[i]; const [yj, xj] = ring[j];
+    if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+};
+const strays = scoped.persons.filter((p) => !rings.some((r) => inRing(p.lat, p.lng, r)) && p.name !== 'Walker Example');
+check('Walker’s phone: only doors inside their turfs', scoped.scope === 'turfs' && strays.length === 0 && scoped.persons.length < everyDoor,
+  `${scoped.persons.length} of ${everyDoor}, strays: ${strays.map((p) => p.name).join(', ')}`);
+await V.go('/map');
+await vp.waitForSelector('.leaflet-container', { timeout: 8000 }).catch(() => {});
+await V.shot('10-vol-map-turfs-only');
+await page.click('fieldset.adm-doors label:has-text("Every door")');
+await page.waitForFunction(() => document.querySelector('input[name="adm-doors"][value="all"]')?.checked, null, { timeout: 8000 }).catch(() => {});
+check('back to Every door: Walker’s phone has every door again', (await V.api('/map/doors')).json.persons.length === everyDoor);
+
 // ── 6. The books still verify ──
 const v = (await D.api('/audit/verify')).json;
 check('hash chain verifies after the whole journey', v.ok === true && v.checked > 20, JSON.stringify(v));

@@ -12,3 +12,8 @@
 .adm-areas { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; }
 .adm-areas .ot-check { min-height: 44px; }
 .adm-chip { margin-left: 8px; font-size: 11.5px; }
+/* Volunteers' map: two choices, each with its one-line meaning. */
+.adm-doors { border: 0; margin: 0 0 var(--s-4); padding: 0; display: grid; gap: 6px; }
+.adm-doors .ot-check { min-height: 44px; align-items: flex-start; }
+.adm-doors .adm-what { display: block; }
+.adm-doors input[type='radio'] { width: 22px; height: 22px; accent-color: var(--mark); margin-top: 1px; }

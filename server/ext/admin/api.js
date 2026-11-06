@@ -44,5 +44,5 @@ api.get('/admin/permissions', async (c) => {
     const areas = AREA_KEYS.filter((k) => { const d = decide(perms, k); return d === null ? BASE[m.role].includes(k) : d; });
     return { id: m.id, name: m.name, email: m.email, role: m.role, grant: own.grant || [], deny: own.deny || [], areas };
   });
-  return c.json({ areas: AREAS, base: BASE, roles, members });
+  return c.json({ areas: AREAS, base: BASE, roles, members, doors: settings.permissions?.volunteerDoors === 'turfs' ? 'turfs' : 'all' });
 });

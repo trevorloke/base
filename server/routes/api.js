@@ -157,25 +157,45 @@ app.get('/persons', async (c) => {
 
 // Everything a door card needs, keyed by address: persons at that address,
 // their ratings, and any signs. Only located persons (lat/lng set).
+// A manager may keep a volunteer's map to the turfs they walk (Admin →
+// Permissions → Volunteers' map): then only the doors inside those turfs
+// (and their own) reach the phone — and its kept copy. A volunteer given
+// Map & turfs sees every door, as the desk does.
+const turfsOnly = (ctx) => ctx.role === 'volunteer'
+  && ctx.workspace?.settings?.permissions?.volunteerDoors === 'turfs'
+  && decide(ctx.perms, 'map') !== true;
+
 app.get('/map/doors', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
-  const persons = (await db.query(
+  let persons = (await db.query(
     `select id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags
      from persons where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
      order by lower(address), lower(name) limit 5000`,
     [ctx.workspaceId],
-  )).rows.map(personRow).map(forViewer(ctx));
-  const signs = (await db.query(
+  )).rows.map(personRow);
+  let signs = (await db.query(
     `select id, person_id, address, lat, lng, kind, status from signs
      where workspace_id = $1 and status <> 'removed'`,
     [ctx.workspaceId],
   )).rows;
+  if (turfsOnly(ctx)) {
+    const rings = (await db.query(
+      `select t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
+       where t.workspace_id = $1 and t.deleted_at is null`,
+      [ctx.workspaceId, ctx.user.id],
+    )).rows.map((t) => parseJson(t.polygon, []).map(([lat, lng]) => [Number(lat), Number(lng)])).filter((r) => r.length >= 3);
+    const inTurf = (lat, lng) => lat != null && rings.some((r) => pointInPolygon(Number(lat), Number(lng), r));
+    const mine = loginEmail(ctx);
+    persons = persons.filter((p) => inTurf(p.lat, p.lng) || (mine && String(p.email || '').trim().toLowerCase() === mine));
+    signs = signs.filter((s) => inTurf(s.lat, s.lng));
+    return c.json({ persons: persons.map(forViewer(ctx)), signs, unlocated: 0, scope: 'turfs', turfs: rings.length });
+  }
   const unlocated = (await db.query(
     `select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and address is not null and lat is null`,
     [ctx.workspaceId],
   )).rows[0].n;
-  return c.json({ persons, signs, unlocated });
+  return c.json({ persons: persons.map(forViewer(ctx)), signs, unlocated });
 });
 
 app.get('/persons/:id', async (c) => {
