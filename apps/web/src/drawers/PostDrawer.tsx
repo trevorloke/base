@@ -9,6 +9,7 @@ import { RelativeTime } from "../components/RelativeTime";
 import {
   actorLabel,
   actorPhrase,
+  atHandle,
   compact,
   evidenceKindLabel,
   isUrl,
@@ -128,7 +129,7 @@ export function PostDrawer({ id, onClose }: { id: string; onClose: () => void })
                 <div key={v.id} className={`variant variant-${v.status}`}>
                   <div className="variant-head">
                     <NetworkBadge network={v.network} />
-                    {account ? <span className="muted">@{account.handle}</span> : null}
+                    {account ? <span className="muted">{atHandle(account.handle, account.network)}</span> : null}
                     <Pill tone={VARIANT_TONE[v.status]}>{VARIANT_STATUS_LABEL[v.status]}</Pill>
                     {v.publishedAt ? <RelativeTime iso={v.publishedAt} /> : null}
                     {v.externalUrl ? (

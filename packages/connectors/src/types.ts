@@ -87,11 +87,26 @@ export interface WebhookBatch {
 }
 
 export interface WebhookHandler {
-  /** Subscription handshake (e.g. Meta's hub.challenge). Return the body to echo, or null when not a handshake. */
+  /** Subscription handshake (e.g. Meta's hub.challenge, WeChat's echostr). Return the body to echo, or null when not a handshake. */
   challenge?(query: Record<string, string>): string | null;
-  /** Verify the signature over the raw body. Must be constant-time. */
-  verify(headers: Record<string, string>, rawBody: string): boolean;
+  /** Verify the signature over the raw body (and, for platforms that sign the URL, its query). Must be constant-time. */
+  verify(headers: Record<string, string>, rawBody: string, query?: Record<string, string>): boolean;
+  /** Turn the raw body into what `parse` reads. Default: JSON.parse. WeChat: XML, possibly encrypted. */
+  decode?(rawBody: string, query: Record<string, string>): unknown;
   parse(body: unknown): WebhookBatch[];
+  /** What the platform expects back on success. Default: JSON `{ accepted, items }`. WeChat: the text "success". */
+  ack?: { body: string; contentType: string };
+
+  /**
+   * Per-account secrets (LINE channel secret, a WeChat Official Account's token and AES key). When `route` is set,
+   * core reads which account a delivery claims to be for (unverified), loads that account's credentials and checks
+   * the delivery with `verifyAccount` instead of `verify`; only the accounts that verify receive the items. The
+   * handshake works the same way through `challengeAccount`. Platforms with one app-wide secret ignore these.
+   */
+  route?(rawBody: string, query: Record<string, string>, headers: Record<string, string>): { network: Network; accountExternalId: string } | null;
+  verifyAccount?(account: AccountRef, headers: Record<string, string>, rawBody: string, query: Record<string, string>): boolean;
+  decodeAccount?(account: AccountRef, rawBody: string, query: Record<string, string>): unknown;
+  challengeAccount?(account: AccountRef, query: Record<string, string>): string | null;
 }
 
 /** Updated credentials to persist after a refresh. */
@@ -135,7 +150,7 @@ export interface Connector {
   /** Non-OAuth connect: verify typed inputs (bot token + channel, webhook URL, app password) and return the accounts. */
   connectWithInputs?(p: { network: Network; inputs: Record<string, string> }): Promise<ConnectedAccount[]>;
   /** Inputs for connectWithInputs, shown as a form in the room. */
-  readonly credentialInputs?: readonly { key: string; label: string; placeholder?: string; secret?: boolean }[];
+  readonly credentialInputs?: readonly { key: string; label: string; placeholder?: string; secret?: boolean; optional?: boolean }[];
   /** Verify credentials and say whose they are. Used when a person connects an account. */
   describeAccount?(auth: Record<string, unknown>): Promise<AccountIdentity>;
   capabilities(network: Network): ConnectorCapabilities;

@@ -308,10 +308,21 @@ export const activities = pgTable(
     sentiment: doublePrecision("sentiment"),
     matchedStreams: jsonb("matched_streams").$type<string[]>().notNull().default([]),
     rawEventId: text("raw_event_id"),
+    conversationId: text("conversation_id"),
+    conversationName: text("conversation_name"),
+    conversationType: text("conversation_type").$type<"group" | "channel" | "direct">(),
+    /** ISO 639-1 (or the platform's BCP-47 tag). Null: unknown (too short, emoji only). */
+    lang: text("lang"),
+    /** Into the workspace's home language; derived, re-creatable. */
+    translation: text("translation"),
+    translationLang: text("translation_lang"),
+    translatedAt: ts("translated_at"),
   },
   (t) => [
     uniqueIndex("activities_ws_net_ext").on(t.workspaceId, t.network, t.externalId),
     index("activities_ws_time").on(t.workspaceId, t.occurredAt),
+    index("activities_ws_lang").on(t.workspaceId, t.lang, t.occurredAt),
+    index("activities_ws_conv").on(t.workspaceId, t.conversationId, t.occurredAt),
   ],
 );
 
@@ -528,6 +539,57 @@ export const mediaAssets = pgTable(
     createdAt: now(),
   },
   (t) => [index("media_assets_ws").on(t.workspaceId, t.createdAt), index("media_assets_sha").on(t.workspaceId, t.sha256)],
+);
+
+// ---------------------------------------------------------------- the tracker: organisations and people
+
+/** A named organisation (party, brand, company) or person (candidate, spokesperson, creator, individual brand). */
+export const trackedEntities = pgTable(
+  "tracked_entities",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    kind: text("kind").$type<"organization" | "person">().notNull(),
+    name: text("name").notNull(),
+    role: text("role"),
+    parentId: text("parent_id"),
+    relation: text("relation").$type<"own" | "client" | "prospect" | "competitor" | "opponent" | "watch">().notNull().default("watch"),
+    aliases: jsonb("aliases").$type<string[]>().notNull().default([]),
+    handles: jsonb("handles").$type<Record<string, string[]>>().notNull().default({}),
+    context: jsonb("context").$type<string[]>().notNull().default([]),
+    exclude: jsonb("exclude").$type<string[]>().notNull().default([]),
+    wikipedia: jsonb("wikipedia").$type<string[]>().notNull().default([]),
+    trendTopicId: text("trend_topic_id"),
+    notes: text("notes"),
+    /** Search public posts and news for this name (the tracker's public scan). */
+    scanPublic: boolean("scan_public").notNull().default(true),
+    /** Per search source: when it last ran for this entity. */
+    scanState: jsonb("scan_state").$type<Record<string, string>>().notNull().default({}),
+    createdBy: jsonb("created_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    archivedAt: ts("archived_at"),
+  },
+  (t) => [index("tracked_entities_ws").on(t.workspaceId, t.archivedAt), index("tracked_entities_parent").on(t.parentId)],
+);
+
+/** Which messages mention (or were written by) which tracked entity. Derived from activities; re-creatable. */
+export const entityMentions = pgTable(
+  "entity_mentions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    entityId: text("entity_id").notNull().references(() => trackedEntities.id),
+    activityId: text("activity_id").notNull().references(() => activities.id),
+    how: text("how").$type<"name" | "handle" | "author">().notNull(),
+    term: text("term"),
+    network: text("network").notNull(),
+    lang: text("lang"),
+    authorHandle: text("author_handle"),
+    occurredAt: ts("occurred_at").notNull(),
+    createdAt: now(),
+  },
+  (t) => [uniqueIndex("entity_mentions_once").on(t.entityId, t.activityId), index("entity_mentions_entity_time").on(t.entityId, t.occurredAt), index("entity_mentions_ws_time").on(t.workspaceId, t.occurredAt)],
 );
 
 // ---------------------------------------------------------------- owned measurement: links, clicks, conversions

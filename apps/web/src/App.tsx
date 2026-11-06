@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import type { Account, ComposePrefill, Connector, LiftByStage, Me, Policy, PostSummary, RadarEntry, Role, Session, Stream, Summary, TrendSource } from "./types";
+import type { Account, ComposePrefill, Connector, EntityKind, LanguagesInfo, LiftByStage, Me, Policy, PostSummary, RadarEntry, Role, Session, Stream, Summary, TrendSource } from "./types";
 import { api, errorText, getApiKey, isApiError, onUnauthorized, setApiKey, USE_FIXTURES } from "./api";
 import { AuthGate, stripAuthParams, type AuthScreen } from "./auth/AuthGate";
 import { BigNumber } from "./components/BigNumber";
@@ -11,24 +11,30 @@ import { ConnectionsDrawer } from "./drawers/ConnectionsDrawer";
 import { PostDrawer } from "./drawers/PostDrawer";
 import { TeamDrawer } from "./drawers/TeamDrawer";
 import { LinksDrawer } from "./drawers/LinksDrawer";
+import { LanguagesDrawer } from "./drawers/LanguagesDrawer";
 import { TopicDrawer } from "./drawers/TopicDrawer";
+import { EntityDrawer } from "./drawers/EntityDrawer";
 import { AUTONOMY_LABEL, lift as formatLift, listOf, networkLabel, plural, roleLabel } from "./lib/format";
 import { RoomProvider, type RoomRefs } from "./lib/room";
 import { isoDaysAgo, isoNow } from "./lib/time";
+import { readTrackerPeriod, rememberTrackerPeriod, type TrackerPeriod } from "./lib/tracker";
 import { safeTz } from "./lib/tz";
 import { useLive } from "./lib/useLive";
 import { Brief } from "./panels/Brief";
 import { Calendar } from "./panels/Calendar";
-import { Feed } from "./panels/Feed";
+import { Feed, type FeedEntityFilter } from "./panels/Feed";
 import { Queue } from "./panels/Queue";
 import { Radar } from "./panels/Radar";
+import { Tracker } from "./panels/Tracker";
 
 type Theme = "light" | "dark";
 const THEME_STORAGE = "starsign.theme";
 const TAB_STORAGE = "starsign.tab";
 const CENTER_STORAGE = "starsign.center";
 
-type CenterView = "queue" | "calendar";
+type CenterView = "queue" | "calendar" | "tracker";
+const CENTER_VIEWS: CenterView[] = ["queue", "calendar", "tracker"];
+const isCenterView = (v: string | null): v is CenterView => !!v && (CENTER_VIEWS as string[]).includes(v);
 
 // --- Theme ---------------------------------------------------------------
 
@@ -280,17 +286,21 @@ type DrawerState =
   | { kind: "accounts" }
   | { kind: "team" }
   | { kind: "links" }
+  | { kind: "languages" }
+  /** id null: track a new name. */
+  | { kind: "entity"; id: string | null; edit?: boolean; preset?: { parentId?: string; kind?: EntityKind } }
   | null;
 
 function readCenter(): CenterView {
   try {
-    return localStorage.getItem(CENTER_STORAGE) === "calendar" ? "calendar" : "queue";
+    const v = localStorage.getItem(CENTER_STORAGE);
+    return isCenterView(v) ? v : "queue";
   } catch {
     return "queue";
   }
 }
 
-/** The center column's switch: "Queue · Calendar" on desktop; the phone uses the bottom tabs instead. */
+/** The center column's switch: "Queue · Calendar · Tracker" on desktop; the phone uses the bottom tabs instead. */
 function CenterSwitch({ view, onChange, waiting, title }: { view: CenterView; onChange: (v: CenterView) => void; waiting: number | null; title: string }) {
   return (
     <>
@@ -302,6 +312,9 @@ function CenterSwitch({ view, onChange, waiting, title }: { view: CenterView; on
         </button>
         <button type="button" role="tab" aria-selected={view === "calendar"} className="seg-btn" onClick={() => onChange("calendar")}>
           Calendar
+        </button>
+        <button type="button" role="tab" aria-selected={view === "tracker"} className="seg-btn" onClick={() => onChange("tracker")}>
+          Tracker
         </button>
       </div>
     </>
@@ -330,6 +343,7 @@ function Room({
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [streams, setStreams] = useState<Stream[]>([]);
+  const [languages, setLanguages] = useState<LanguagesInfo | null>(null);
 
   const [radar, setRadar] = useState<RadarEntry[] | null>(null);
   const [radarLoading, setRadarLoading] = useState(true);
@@ -344,6 +358,9 @@ function Room({
   const [sources, setSources] = useState<TrendSource[] | null>(null);
   const [calendarTick, setCalendarTick] = useState(0);
   const [center, setCenter] = useState<CenterView>(readCenter);
+  const [trackerPeriod, setTrackerPeriod] = useState<TrackerPeriod>(readTrackerPeriod);
+  const [trackerTick, setTrackerTick] = useState(0);
+  const [feedEntity, setFeedEntity] = useState<FeedEntityFilter | null>(null);
 
   const [drawer, setDrawer] = useState<DrawerState>(null);
   const [tab, setTab] = useState<string>(() => {
@@ -378,8 +395,9 @@ function Room({
   }, [onSignedOut, keyMode]);
 
   const loadRefs = useCallback(async () => {
-    const [p, a, s, src, c] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources(), api.connectors()]);
+    const [p, a, s, src, c, l] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources(), api.connectors(), api.languages()]);
     if (p.status === "fulfilled") setPolicy(p.value);
+    if (l.status === "fulfilled") setLanguages(l.value);
     if (a.status === "fulfilled") setAccounts(a.value);
     if (s.status === "fulfilled") setStreams(s.value);
     if (src.status === "fulfilled") setSources(src.value);
@@ -474,6 +492,7 @@ function Room({
   );
 
   const closeDrawer = useCallback(() => setDrawer(null), []);
+  const onStream = useCallback((next: Stream) => setStreams((list) => list.map((s) => (s.id === next.id ? next : s))), []);
   const onPostCreated = useCallback(() => {
     void loadQueue();
     setCalendarTick((t) => t + 1);
@@ -490,7 +509,7 @@ function Room({
   const changeCenter = (v: CenterView) => {
     setCenter(v);
     remember(CENTER_STORAGE, v);
-    if (tab === "queue" || tab === "calendar") {
+    if (isCenterView(tab)) {
       setTab(v);
       remember(TAB_STORAGE, v);
     }
@@ -499,7 +518,7 @@ function Room({
   const changeTab = (id: string) => {
     setTab(id);
     remember(TAB_STORAGE, id);
-    if (id === "queue" || id === "calendar") {
+    if (isCenterView(id)) {
       setCenter(id);
       remember(CENTER_STORAGE, id);
     }
@@ -508,6 +527,22 @@ function Room({
   const currentWorkspace = session?.workspaces.find((w) => w.id === session.currentWorkspaceId) ?? null;
   const myRole = currentWorkspace?.role ?? me?.role ?? null;
   const canDelete = myRole === "owner" || myRole === "approver";
+  // Before the role is known (API-key mode, still loading) offer the controls; the server has the last word.
+  const canEditTracker = myRole !== "viewer";
+
+  const changeTrackerPeriod = (p: TrackerPeriod) => {
+    setTrackerPeriod(p);
+    rememberTrackerPeriod(p);
+  };
+  const showInFeed = (f: FeedEntityFilter) => {
+    setFeedEntity(f);
+    setDrawer(null);
+    // On a phone the feed is its own tab; on a desktop it sits under the center view.
+    if (window.matchMedia?.("(max-width: 1199px)").matches) {
+      setTab("feed");
+      remember(TAB_STORAGE, "feed");
+    }
+  };
   const waiting = queue?.length ?? null;
   const wentOut = summary ? summary.publishedByNetwork.reduce((n, g) => n + g.posts, 0) : null;
   const risingRow = liftRows?.find((r) => r.stage === "rising") ?? null;
@@ -530,6 +565,7 @@ function Room({
     { id: "radar", label: "Radar" },
     { id: "queue", label: "Queue", badge: waiting ?? undefined },
     { id: "calendar", label: "Calendar" },
+    { id: "tracker", label: "Tracker" },
     { id: "feed", label: "Feed" },
     { id: "brief", label: "Brief" },
   ];
@@ -641,6 +677,17 @@ function Room({
                     <button
                       type="button"
                       role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        setDrawer({ kind: "languages" });
+                      }}
+                    >
+                      Languages
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
                       className="menu-item menu-theme"
                       onClick={() => {
                         close();
@@ -703,8 +750,29 @@ function Room({
             <div className="col-queue col-calendar" data-panel="calendar">
               <Calendar refreshTick={calendarTick} head={<CenterSwitch view="calendar" onChange={changeCenter} waiting={waiting} title="Calendar" />} />
             </div>
+            {center === "tracker" || tab === "tracker" ? (
+              <div className="col-queue col-tracker" data-panel="tracker">
+                <Tracker
+                  head={<CenterSwitch view="tracker" onChange={changeCenter} waiting={waiting} title="Tracker" />}
+                  period={trackerPeriod}
+                  onPeriod={changeTrackerPeriod}
+                  refreshTick={trackerTick}
+                  canEdit={canEditTracker}
+                  onOpen={(id) => setDrawer({ kind: "entity", id })}
+                  onTrack={() => setDrawer({ kind: "entity", id: null })}
+                />
+              </div>
+            ) : null}
             <div className="col-feed" data-panel="feed">
-              <Feed accounts={accounts} liveTick={live.counters.activity} liveStatus={live.status} canDelete={canDelete} />
+              <Feed
+                accounts={accounts}
+                liveTick={live.counters.activity}
+                liveStatus={live.status}
+                canDelete={canDelete}
+                languages={languages}
+                entity={feedEntity}
+                onClearEntity={() => setFeedEntity(null)}
+              />
             </div>
           </div>
           <div className="col col-brief" data-panel="brief">
@@ -735,6 +803,31 @@ function Room({
           />
         ) : null}
         {drawer?.kind === "links" ? <LinksDrawer myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null} onClose={closeDrawer} /> : null}
+        {drawer?.kind === "entity" ? (
+          <EntityDrawer
+            key={drawer.id ?? "new"}
+            id={drawer.id}
+            startEditing={drawer.edit}
+            preset={drawer.preset}
+            period={trackerPeriod}
+            canEdit={canEditTracker}
+            canDelete={canDelete}
+            home={languages?.settings.home ?? "en"}
+            onClose={closeDrawer}
+            onOpen={(id) => setDrawer({ kind: "entity", id })}
+            onChanged={() => setTrackerTick((t) => t + 1)}
+            onShowInFeed={showInFeed}
+          />
+        ) : null}
+        {drawer?.kind === "languages" ? (
+          <LanguagesDrawer
+            myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null}
+            streams={streams}
+            onInfo={setLanguages}
+            onStream={onStream}
+            onClose={closeDrawer}
+          />
+        ) : null}
       </div>
     </RoomProvider>
   );

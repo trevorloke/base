@@ -1,4 +1,4 @@
-import type { ModelGateway } from "@starsign/ai";
+import { gatewayTranslator, type ModelGateway } from "@starsign/ai";
 import type { Starsign } from "@starsign/core";
 import { runAnalyst, type AnalystOptions } from "./operators/analyst.ts";
 import { runScout, type ScoutOptions } from "./operators/scout.ts";
@@ -18,12 +18,15 @@ export interface ServeOptions {
   scout?: ScoutOptions;
   /** How often the Scout clusters trending terms into new topics (default 2h). 0 disables it. */
   scoutEveryMs?: number;
+  /** How often waiting messages are translated into each workspace's language (default 5 minutes). 0 disables it. */
+  translateEveryMs?: number;
   log?: (line: string) => void;
 }
 
 export interface ServeState {
   lastWatchAt: Map<string, number>;
   lastScoutAt?: Map<string, number>;
+  lastTranslateAt?: Map<string, number>;
   /** When the weekly brief last failed per workspace; it is not retried for six hours (a failed brief is a 64k-token call). */
   lastAnalystFailAt?: Map<string, number>;
 }
@@ -66,6 +69,7 @@ export interface TickResult {
   watched: string[];
   scouted?: string[];
   briefed: string[];
+  translated?: { workspace: string; count: number }[];
   /** Workspaces skipped because their monthly model spend cap is reached. */
   capped: string[];
   errors: string[];
@@ -99,6 +103,18 @@ export async function tick(m: Starsign, gw: ModelGateway, state: ServeState, opt
         if (s.created.length) (result.scouted ??= []).push(ws.slug);
       } catch (e) {
         result.errors.push(`${ws.slug}: scout: ${(e as Error).message}`);
+      }
+    }
+    // Translation: small, frequent batches so a message in another language is readable within minutes.
+    const translateEveryMs = opts.translateEveryMs ?? 5 * 60_000;
+    const lastTranslate = (state.lastTranslateAt ??= new Map()).get(ws.id);
+    if (translateEveryMs > 0 && (lastTranslate === undefined || now.getTime() - lastTranslate >= translateEveryMs)) {
+      state.lastTranslateAt.set(ws.id, now.getTime());
+      try {
+        const t = await m.translations.translateWorkspace(ws.id, gatewayTranslator(gw));
+        if (t.translated) (result.translated ??= []).push({ workspace: ws.slug, count: t.translated });
+      } catch (e) {
+        result.errors.push(`${ws.slug}: translate: ${(e as Error).message}`);
       }
     }
     const last = state.lastWatchAt.get(ws.id);

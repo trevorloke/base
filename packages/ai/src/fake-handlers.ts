@@ -7,6 +7,9 @@ import { readProfile } from "./prompts/context.ts";
 import type { DraftForTrendOutput, DraftForTrendVars } from "./prompts/draftForTrend.ts";
 import type { ScoreRelevanceOutput, ScoreRelevanceVars } from "./prompts/scoreRelevance.ts";
 import type { WriteBriefOutput, WriteBriefVars } from "./prompts/writeBrief.ts";
+import type { TranslateMessagesOutput, TranslateMessagesVars } from "./prompts/translateMessages.ts";
+import type { TranslateKeywordsOutput, TranslateKeywordsVars } from "./prompts/translateKeywords.ts";
+import type { SuggestAliasesOutput, SuggestAliasesVars } from "./prompts/suggestAliases.ts";
 
 /** Trim to the network's text limit by code points (graphemes never exceed code points, so Bluesky stays legal). */
 export function fitToNetwork(text: string, network: Network): string {
@@ -24,6 +27,24 @@ const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w
  */
 export function defaultFakeHandlers(): Record<string, FakeHandler> {
   return {
+    // Marks text as translated without inventing a translation.
+    translateMessages: (vars) => {
+      const v = vars as TranslateMessagesVars;
+      const out: TranslateMessagesOutput = { translations: v.items.map((i) => ({ id: i.id, text: i.lang === v.to ? i.text : `[${v.to}] ${i.text}` })) };
+      return out;
+    },
+    // A hashtag form only: derived from the name, nothing invented.
+    suggestAliases: (vars) => {
+      const v = vars as SuggestAliasesVars;
+      const tag = `#${v.name.replace(/[^\p{L}\p{N}]+/gu, "")}`;
+      const out: SuggestAliasesOutput = { aliases: v.existing.includes(tag) ? [] : [{ text: tag, lang: "und", why: "hashtag" }], ambiguous: [] };
+      return out;
+    },
+    translateKeywords: (vars) => {
+      const v = vars as TranslateKeywordsVars;
+      const out: TranslateKeywordsOutput = { byLanguage: v.languages.map((lang) => ({ lang, keywords: v.keywords.map((k) => `${k} (${lang})`) })) };
+      return out;
+    },
     adaptForNetwork: (vars) => {
       const v = vars as AdaptForNetworkVars;
       const out: AdaptForNetworkOutput = {

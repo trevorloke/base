@@ -31,3 +31,6 @@ export {
   type SessionView,
 } from "./services/auth.ts";
 export { LinkSettings, ConversionInput, linkBaseFromEnv, findUrls, trimUrl, withUtm, classifyAgent, newSlug, type LinkStats, type ClickMeta } from "./services/links.ts";
+export { LanguageSettings, type Translator, type TranslatorResult, type KeywordExpander } from "./services/translation.ts";
+export { detectLanguage, primaryLanguage, sameLanguage, languageName } from "./lang.ts";
+export { EntityInput, EntityKind, EntityRelation, matchEntity, type EntityRow, type MentionMatch, type PublicScanResult } from "./services/entities.ts";

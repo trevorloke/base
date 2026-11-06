@@ -5,7 +5,7 @@ import { NetworkBadge } from "../components/NetworkBadge";
 import { Pill, StagePill } from "../components/Pill";
 import { RelativeTime } from "../components/RelativeTime";
 import { useToast } from "../components/Toast";
-import { actionClassLabel, actorLabel, evidenceKindLabel, isUrl, NETWORK_MAX_TEXT, networkLabel, plural, truncate, violationText } from "../lib/format";
+import { actionClassLabel, actorLabel, atHandle, evidenceKindLabel, isUrl, NETWORK_MAX_TEXT, networkLabel, plural, truncate, violationText } from "../lib/format";
 import { formatDateTime, relativeTime } from "../lib/time";
 import { useRoom } from "../lib/room";
 
@@ -111,7 +111,7 @@ export function PostCard({ item, onDecided }: { item: PostSummary; onDecided: (i
             <div key={v.id} className="variant">
               <div className="variant-head">
                 <NetworkBadge network={v.network} />
-                {account ? <span className="muted">@{account.handle}</span> : null}
+                {account ? <span className="muted">{atHandle(account.handle, account.network)}</span> : null}
                 {editing ? (
                   <span className={`mono variant-count${over ? " over" : ""}`}>
                     {text.length}

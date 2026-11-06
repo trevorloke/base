@@ -2,6 +2,7 @@ import { Queue, Worker } from "bullmq";
 import type { Redis } from "ioredis";
 import { RetryablePublishError, type Starsign } from "@starsign/core";
 import { captureOutcomes, ingestAll, pullSources, refreshForecasts } from "./jobs.ts";
+import { createMentionSearches } from "@starsign/sources";
 import { connectionFor, MAINTENANCE_QUEUE, PUBLISH_QUEUE } from "./queues.ts";
 
 export interface WorkerHandles {
@@ -44,6 +45,12 @@ export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEver
           return m.metrics.captureAccountMetrics();
         case "sources":
           return pullSources(m);
+        case "tracker-scan": {
+          // Public posts and news naming tracked parties, brands and people.
+          const r = await m.entities.scanPublic(createMentionSearches());
+          for (const e of r.errors.slice(0, 10)) console.warn(`[tracker] ${e}`);
+          return { entities: r.entities, found: r.found, stored: r.stored, errors: r.errors.length };
+        }
         case "links":
           // Cumulative values, so overlapping windows are harmless; 20 minutes covers a late or skipped run.
           return { metrics: await m.links.rollup(new Date(m.ctx.now().getTime() - 20 * 60_000)) };
@@ -61,6 +68,7 @@ export async function startWorkers(m: Starsign, redis: Redis, opts: { ingestEver
   await mq.upsertJobScheduler("outcomes", { every: opts.outcomesEveryMs ?? 10 * 60_000 }, { name: "outcomes" });
   await mq.upsertJobScheduler("account-metrics", { every: 6 * 60 * 60_000 }, { name: "account-metrics" });
   await mq.upsertJobScheduler("links", { every: 15 * 60_000 }, { name: "links" });
+  await mq.upsertJobScheduler("tracker-scan", { every: 30 * 60_000 }, { name: "tracker-scan" });
   await mq.upsertJobScheduler("sources", { every: opts.sourcesEveryMs ?? 60 * 60_000 }, { name: "sources" });
   await mq.upsertJobScheduler("forecasts", { every: opts.forecastEveryMs ?? 60 * 60_000 }, { name: "forecasts" });
 

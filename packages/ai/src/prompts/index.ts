@@ -5,6 +5,9 @@ import { draftForTrend } from "./draftForTrend.ts";
 import { scoreRelevance } from "./scoreRelevance.ts";
 import type { PromptSpec } from "./types.ts";
 import { writeBrief } from "./writeBrief.ts";
+import { translateMessages } from "./translateMessages.ts";
+import { translateKeywords } from "./translateKeywords.ts";
+import { suggestAliases } from "./suggestAliases.ts";
 
 export * from "./types.ts";
 export * from "./context.ts";
@@ -15,6 +18,9 @@ export * from "./clusterSignals.ts";
 export * from "./writeBrief.ts";
 export * from "./classifyTopic.ts";
 export * from "./scoreRelevance.ts";
+export * from "./translateMessages.ts";
+export * from "./translateKeywords.ts";
+export * from "./suggestAliases.ts";
 
 /** Every prompt the gateway knows, for evals and the fake gateway. */
-export const ALL_PROMPTS: readonly PromptSpec[] = [adaptForNetwork, draftForTrend, clusterSignals, writeBrief, classifyTopic, scoreRelevance];
+export const ALL_PROMPTS: readonly PromptSpec[] = [adaptForNetwork, draftForTrend, clusterSignals, writeBrief, classifyTopic, scoreRelevance, translateMessages, translateKeywords, suggestAliases];

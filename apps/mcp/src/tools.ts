@@ -37,6 +37,9 @@ export const TOOL_NAMES = [
   "create_experiment",
   "get_link_report",
   "create_link",
+  "list_tracked",
+  "get_tracker_report",
+  "track_entity",
 ] as const;
 export type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -153,6 +156,20 @@ export const inputs = {
   },
   get_link_report: {
     days: z.number().int().min(1).max(365).default(30).describe("How many days back (default 30)"),
+  },
+  get_tracker_report: {
+    days: z.number().int().min(1).max(90).default(7).describe("How many days back (default 7)"),
+  },
+  track_entity: {
+    kind: z.enum(["organization", "person"]).describe("organization: a party, brand or company. person: a candidate, spokesperson, creator or individual brand"),
+    name: z.string().min(1).max(200),
+    role: z.string().max(60).optional().describe("party, brand, candidate, spokesperson, creator..."),
+    parentId: z.string().optional().describe("The organisation this person or sub-brand belongs to (an id from list_tracked)"),
+    relation: z.enum(["own", "client", "prospect", "competitor", "opponent", "watch"]).default("watch"),
+    aliases: z.array(z.string().max(120)).max(60).default([]).describe("Other spellings, names in other languages and scripts, nicknames, abbreviations"),
+    handles: z.record(z.string(), z.array(z.string())).default({}).describe("Their own accounts per network, e.g. {\"x\": [\"handle\"]}"),
+    context: z.array(z.string().max(120)).max(40).default([]).describe("For ambiguous names: a match counts only near one of these words"),
+    exclude: z.array(z.string().max(120)).max(40).default([]).describe("Never count a match when one of these appears (namesakes)"),
   },
   create_link: {
     url: z.string().url().describe("Absolute http(s) destination"),
@@ -319,7 +336,7 @@ export const handlers = {
       const events = await ctx.client.getLedger({ types: args.types, subjectType: args.subjectType, subjectId: args.subjectId, limit: args.limit });
       return ok(fmt.formatLedger(events), events);
     }),
-} satisfies Record<Exclude<ToolName, keyof typeof moreHandlers | keyof typeof linkHandlers>, (ctx: ToolContext, ...args: never[]) => Promise<CallToolResult>>;
+} satisfies Record<Exclude<ToolName, keyof typeof moreHandlers | keyof typeof linkHandlers | keyof typeof trackerHandlers>, (ctx: ToolContext, ...args: never[]) => Promise<CallToolResult>>;
 
 // ---- registration ----------------------------------------------------------------------------
 
@@ -377,6 +394,60 @@ interface LinkReportShape {
   byNetwork: { network: string | null; clicks: number; uniqueVisitors: number; conversions: number; value: number }[];
   topLinks: { slug: string; shortUrl: string | null; destination: string; network: string | null; postId: string | null; uniqueVisitors: number; conversions: number; conversionValue: number; clicksInRange: number }[];
 }
+
+interface TrackedRow {
+  id: string;
+  kind: string;
+  name: string;
+  role: string | null;
+  relation: string;
+  parentId: string | null;
+  aliases: string[];
+}
+interface TrackerReportShape {
+  entities: (TrackedRow & { mentions: number; authored: number; people: number; familyMentions: number; shareOfVoice: number | null; shareWithinParent: number | null; byLanguage: { lang: string | null; n: number }[]; byNetwork: { network: string; n: number }[] })[];
+}
+
+const trackerHandlers = {
+  list_tracked: (ctx: ToolContext) =>
+    run(async () => {
+      const rows = await ctx.client.request<TrackedRow[]>("GET", "/v1/entities");
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      return ok(
+        rows.length
+          ? rows.map((r) => line([r.name, r.role ?? r.kind, r.relation, r.parentId ? `of ${byId.get(r.parentId)?.name ?? r.parentId}` : null, r.aliases.length ? `aka ${r.aliases.slice(0, 4).join(", ")}` : null, r.id])).join("\n")
+          : "Nothing is tracked yet. Use track_entity to add a party, brand or person.",
+        rows,
+      );
+    }),
+  get_tracker_report: (ctx: ToolContext, args: Args<typeof inputs.get_tracker_report>) =>
+    run(async () => {
+      const to = ctx.now();
+      const from = new Date(to.getTime() - args.days * DAY_MS);
+      const r = await ctx.client.request<TrackerReportShape>("GET", "/v1/entities/report", { query: { from: from.toISOString(), to: to.toISOString() } });
+      const fmtLangs = (xs: { lang: string | null; n: number }[]) => xs.slice(0, 4).map((x) => `${x.lang ?? "?"} ${x.n}`).join(", ");
+      const lines = r.entities
+        .slice()
+        .sort((a, b) => b.familyMentions - a.familyMentions)
+        .map((e) =>
+          line([
+            `${e.parentId ? "  " : ""}${e.name}`,
+            `${e.mentions} mention(s)`,
+            e.familyMentions !== e.mentions ? `${e.familyMentions} incl. its people` : null,
+            `${e.people} people`,
+            e.authored ? `${e.authored} by them` : null,
+            e.shareOfVoice !== null ? `${e.shareOfVoice}% share of voice` : e.shareWithinParent !== null ? `${e.shareWithinParent}% within party/brand` : null,
+            e.byLanguage.length ? `langs ${fmtLangs(e.byLanguage)}` : null,
+          ]),
+        );
+      return ok(lines.length ? `Last ${args.days} days:\n${lines.join("\n")}` : "Nothing is tracked yet.", r);
+    }),
+  track_entity: (ctx: ToolContext, args: Args<typeof inputs.track_entity>) =>
+    run(async () => {
+      const e = await ctx.client.request<TrackedRow>("POST", "/v1/entities", { body: args });
+      return ok(`Now tracking ${e.name} (${e.id}). Past 90 days of messages were scanned; new ones are scanned as they arrive. get_tracker_report shows the counts.`, e);
+    }),
+};
 
 const linkHandlers = {
   get_link_report: (ctx: ToolContext, args: Args<typeof inputs.get_link_report>) =>
@@ -614,5 +685,8 @@ export function registerTools(server: McpServer, client: StarsignClient, opts: {
   server.registerTool("get_experiment", { title: "Experiment readout", description: "One experiment with its readout: posts and measured outcomes per arm, lift with an 80% interval, and a verdict that names a winner only when the evidence clears.", inputSchema: inputs.get_experiment, annotations: READ_ONLY }, (args) => moreHandlers.get_experiment(ctx, args));
   server.registerTool("get_link_report", { title: "What posts drove", description: "Owned outcome numbers from Starsign's short links: people who clicked, conversions and their value, by network and top link. Unlike network metrics these are first-party and comparable across networks; use them to judge which posts actually worked.", inputSchema: inputs.get_link_report, annotations: READ_ONLY }, (args) => linkHandlers.get_link_report(ctx, args));
   server.registerTool("create_link", { title: "Make a tracked link", description: "Make a tracked short link with UTM tags for a destination (for a bio or a manual post). Links inside posts created with create_post are wrapped automatically at publish time.", inputSchema: inputs.create_link, annotations: { ...WRITES, idempotentHint: false } }, (args) => linkHandlers.create_link(ctx, args));
+  server.registerTool("list_tracked", { title: "Tracked names", description: "Parties, brands, companies and people (candidates, spokespeople, creators, individual brands) the workspace tracks, with their aliases and who belongs to which organisation.", annotations: READ_ONLY }, () => trackerHandlers.list_tracked(ctx));
+  server.registerTool("get_tracker_report", { title: "Who is being talked about", description: "Mentions per tracked party, brand or person across every network, chat app and language: mentions by others, messages by them, distinct people, share of voice, and languages. Organisations include their people.", inputSchema: inputs.get_tracker_report, annotations: READ_ONLY }, (args) => trackerHandlers.get_tracker_report(ctx, args));
+  server.registerTool("track_entity", { title: "Track a name", description: "Start tracking a party, brand, company or person. Give every way it is written (aliases in other languages and scripts), its own handles, and context words when the name is a common word.", inputSchema: inputs.track_entity, annotations: { ...WRITES, idempotentHint: false } }, (args) => trackerHandlers.track_entity(ctx, args));
   server.registerTool("create_experiment", { title: "Start an experiment", description: "Start an experiment with 2-6 arms. Then create posts with experimentId and experimentArm. Concluding happens in the app.", inputSchema: inputs.create_experiment, annotations: { ...WRITES, idempotentHint: false } }, (args) => moreHandlers.create_experiment(ctx, args));
 }

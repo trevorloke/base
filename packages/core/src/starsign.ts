@@ -15,6 +15,8 @@ import { SourcesService } from "./services/sources.ts";
 import { ExperimentService } from "./services/experiments.ts";
 import { MediaService } from "./services/media.ts";
 import { LinkService } from "./services/links.ts";
+import { TranslationService } from "./services/translation.ts";
+import { EntityService } from "./services/entities.ts";
 import { EngagementService, WebhookService } from "./services/listening.ts";
 import { storageFromEnv } from "./media/storage.ts";
 import { AuthService } from "./services/auth.ts";
@@ -38,6 +40,8 @@ export class Starsign {
   readonly experiments: ExperimentService;
   readonly media: MediaService;
   readonly links: LinkService;
+  readonly translations: TranslationService;
+  readonly entities: EntityService;
   readonly engagement: EngagementService;
   readonly webhooks: WebhookService;
   readonly auth: AuthService;
@@ -55,13 +59,18 @@ export class Starsign {
     this.metrics = new MetricsService(this.ctx, this.accounts, this.policy, this.links);
     this.trends = new TrendService(this.ctx);
     this.ops = new OpsService(this.ctx);
+    this.translations = new TranslationService(this.ctx, this.ops);
+    this.entities = new EntityService(this.ctx, this.trends, this.listening);
+    // Every stored message and every new translation is scanned for tracked parties, brands and people.
+    this.listening.afterIngest.push((ws, ids) => this.entities.scanActivities(ws, ids));
+    this.translations.afterTranslate.push((ws, ids) => this.entities.scanActivities(ws, ids));
     this.exports = new ExportService(this.ctx);
     this.sources = new SourcesService(this.ctx, this.trends);
     this.brand = new BrandService(this.ctx, this.workspaces, this.policy, this.accounts);
     this.experiments = new ExperimentService(this.ctx);
     this.media = new MediaService(this.ctx, deps.mediaStorage ?? storageFromEnv());
     this.engagement = new EngagementService(this.ctx, this.posts, this.accounts);
-    this.webhooks = new WebhookService(this.ctx, this.listening);
+    this.webhooks = new WebhookService(this.ctx, this.listening, this.accounts);
     this.auth = new AuthService(this.ctx, this.workspaces, deps.auth);
     // Upload-style connectors read media bytes through the library.
     const fetcher = this.media.fetcher();

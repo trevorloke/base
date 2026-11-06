@@ -4,3 +4,4 @@ export * from "./errors.ts";
 export * from "./pricing.ts";
 export * from "./prompts/index.ts";
 export * from "./fake-handlers.ts";
+export * from "./translate.ts";

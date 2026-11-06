@@ -15,7 +15,12 @@ export type Network =
   | "reddit"
   | "google_business"
   | "telegram"
-  | "discord";
+  | "discord"
+  | "whatsapp"
+  | "wechat"
+  | "line"
+  /** Listening only: news articles found by the tracker's public search. Never a publish target, never in Connections. */
+  | "news";
 
 export type ActorType = "human" | "operator" | "mcp" | "system";
 export interface Actor {
@@ -226,7 +231,12 @@ export type ActivityKind =
   | "repost"
   | "quote"
   | "like"
-  | "follow";
+  | "follow"
+  /** A message in a group chat, channel or server channel the account is part of. */
+  | "message";
+
+/** Where a chat message was said. "direct" is a one-to-one conversation with the business. */
+export type ConversationType = "group" | "channel" | "direct";
 
 export interface Activity {
   id: string;
@@ -245,12 +255,34 @@ export interface Activity {
   sentiment: number | null;
   matchedStreams: string[];
   rawEventId: string | null;
+  // Chat and languages. Older servers omit these; treat a missing value like null.
+  /** ISO 639-1 ("ja", "es"); null when the language is unknown. */
+  lang?: string | null;
+  conversationId?: string | null;
+  /** "#general", "Acme Fans Tokyo". */
+  conversationName?: string | null;
+  conversationType?: ConversationType | null;
+  /** The text in the team's language, once translated. */
+  translation?: string | null;
+  translationLang?: string | null;
+  translatedAt?: string | null;
+}
+
+export interface StreamQuery {
+  keywords: string[];
+  authors: string[];
+  networks: Network[];
+  kinds: ActivityKind[];
+  /** Only these languages (ISO 639-1). Empty or missing: every language. */
+  languages?: string[];
+  /** The keywords as people write them in other languages (lang → terms). Filled by "expand to languages". */
+  translations?: Record<string, string[]>;
 }
 
 export interface Stream {
   id: string;
   name: string;
-  query: { keywords: string[]; authors: string[]; networks: Network[]; kinds: ActivityKind[] };
+  query: StreamQuery;
   createdAt: string;
 }
 
@@ -262,7 +294,39 @@ export interface FeedQuery {
   since?: string;
   before?: string;
   limit?: number;
+  /** Searches the text and its translation. */
   q?: string;
+  /** Only these languages (ISO 639-1). */
+  languages?: string[];
+  /** One conversation (conversationId). */
+  conversation?: string;
+  /** Only messages by or about this tracked entity. */
+  entity?: string;
+  /** With `entity`: include the people (and sub-brands) that belong to it. */
+  children?: boolean;
+}
+
+// --- Languages ----------------------------------------------------------
+
+/** GET/PATCH /v1/languages/settings */
+export interface LanguageSettings {
+  /** The team's language: what everything is translated into. */
+  home: string;
+  /** Translate new messages automatically. Off: only on demand from the feed. */
+  autoTranslate: boolean;
+  /** Most messages translated automatically per UTC day. */
+  dailyLimit: number;
+}
+
+export type LanguageSettingsPatch = Partial<LanguageSettings>;
+
+/** GET /v1/languages */
+export interface LanguagesInfo {
+  settings: LanguageSettings;
+  /** The last 30 days, most common first. `lang` null = unknown. */
+  seen: { lang: string | null; n: number }[];
+  /** False when no model is configured on the server: detection and filtering still work, translation does not. */
+  translationAvailable: boolean;
 }
 
 // --- Measurement --------------------------------------------------------
@@ -399,7 +463,11 @@ export interface Brief {
 // --- Live stream (SSE) --------------------------------------------------
 
 export type FeedEvent =
-  | { type: "activity"; data: { workspaceId: string; id: string; network: Network; kind: ActivityKind; matchedStreams: string[] } }
+  | {
+      type: "activity";
+      /** `translated: true` when an item already in the feed just got its translation. */
+      data: { workspaceId: string; id: string; network: Network; kind: ActivityKind; matchedStreams: string[]; lang?: string | null; translated?: boolean };
+    }
   | { type: "post"; data: { workspaceId: string; postId: string; status: PostStatus } }
   | { type: "alert"; data: { workspaceId: string; id: string; title: string; severity: AlertSeverity } }
   | { type: "forecast"; data: { topicId: string; stage: TrendStage; confidence: number } };
@@ -415,6 +483,10 @@ export interface ConnectorInput {
   key: string;
   label: string;
   placeholder?: string;
+  /** Shown masked. */
+  secret?: boolean;
+  /** May be left empty. */
+  optional?: boolean;
 }
 
 /** What one connector can do on one network (v1.2). */
@@ -792,4 +864,105 @@ export interface Conversion {
   source: "api" | "browser";
   occurredAt: string;
   createdAt: string;
+}
+
+// --- The tracker: parties, brands and people (v1.4) ------------------------
+
+export type EntityKind = "organization" | "person";
+export type EntityRelation = "own" | "client" | "prospect" | "competitor" | "opponent" | "watch";
+
+/** GET /v1/entities: an organisation (party, brand, company) or a person (candidate, founder, creator) the team follows. */
+export interface Entity {
+  id: string;
+  workspaceId: string;
+  kind: EntityKind;
+  name: string;
+  /** In the team's words: party, brand, candidate, founder… */
+  role: string | null;
+  /** The organisation it belongs to. */
+  parentId: string | null;
+  relation: EntityRelation;
+  /** Other ways it is written: other languages and scripts, nicknames, abbreviations. */
+  aliases: string[];
+  /** Its own accounts per network (without the @). */
+  handles: Partial<Record<Network, string[]>>;
+  /** A name match counts only when one of these words is nearby. */
+  context: string[];
+  /** Never count a match when one of these appears. */
+  exclude: string[];
+  /** Wikipedia article titles, for the momentum forecast. */
+  wikipedia: string[];
+  trendTopicId: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
+
+/** POST /v1/entities. PATCH takes any subset; "" clears `role`, `parentId` and `notes`. */
+export interface EntityInput {
+  kind: EntityKind;
+  name: string;
+  role?: string;
+  parentId?: string;
+  relation?: EntityRelation;
+  aliases?: string[];
+  handles?: Partial<Record<Network, string[]>>;
+  context?: string[];
+  exclude?: string[];
+  wikipedia?: string[];
+  /** Create only: forecast its momentum on the radar (default true). */
+  trackTrend?: boolean;
+  notes?: string;
+}
+
+export type EntityPatch = Partial<Omit<EntityInput, "trackTrend">>;
+
+/** One entity in GET /v1/entities/report. Mentions exclude messages written by the entity itself (`authored`). */
+export interface EntityReportRow {
+  id: string;
+  name: string;
+  kind: EntityKind;
+  role: string | null;
+  relation: EntityRelation;
+  parentId: string | null;
+  trendTopicId: string | null;
+  mentions: number;
+  authored: number;
+  /** Distinct people talking about it. */
+  people: number;
+  /** -1..1, null without scored messages. */
+  sentiment: number | null;
+  /** Its mentions plus those of everyone who belongs to it. */
+  familyMentions: number;
+  byNetwork: { network: string; n: number }[];
+  byLanguage: { lang: string | null; n: number }[];
+  /** Only days with mentions, in the workspace's time zone. */
+  byDay: { day: string; n: number }[];
+  /** Percent among top-level entities (by familyMentions); null for entities that belong to another. */
+  shareOfVoice: number | null;
+  /** Percent among an organisation's people; null at the top level. */
+  shareWithinParent: number | null;
+}
+
+export interface EntityReport {
+  from: string;
+  to: string;
+  entities: EntityReportRow[];
+}
+
+export type MentionHow = "name" | "handle" | "author";
+
+/** GET /v1/entities/:id/mentions */
+export interface EntityMention {
+  mention: { id: string; entityId?: string; how: MentionHow; term: string; network: string; lang: string | null; occurredAt: string };
+  activity: Activity;
+}
+
+/** POST /v1/entities/:id/suggest-aliases: suggestions only, nothing is saved. */
+export interface AliasSuggestions {
+  languages: string[];
+  aliases: { text: string; lang: string; why: string }[];
+  /** Names that also mean something else: worth context words. */
+  ambiguous: string[];
 }

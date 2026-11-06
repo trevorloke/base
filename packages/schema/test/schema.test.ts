@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CreatePostInput, DEFAULT_POLICY, NETWORK_LIMITS, Network, Policy, RedLine } from "../src/index.ts";
+import { CreatePostInput, DEFAULT_POLICY, LISTEN_ONLY_NETWORKS, NETWORK_LIMITS, Network, Policy, RedLine } from "../src/index.ts";
 
 describe("schema", () => {
   it("default policy is conservative and valid", () => {
@@ -7,8 +7,12 @@ describe("schema", () => {
     expect(DEFAULT_POLICY.autonomy.dm).toBe("suggest");
   });
 
-  it("every network has limits", () => {
-    for (const n of Network.options) expect(NETWORK_LIMITS[n].maxText).toBeGreaterThan(0);
+  it("every publishable network has limits; listening-only networks take no posts", () => {
+    for (const n of Network.options) {
+      if (LISTEN_ONLY_NETWORKS.has(n)) expect(NETWORK_LIMITS[n].maxText).toBe(0);
+      else expect(NETWORK_LIMITS[n].maxText).toBeGreaterThan(0);
+    }
+    expect([...LISTEN_ONLY_NETWORKS]).toEqual(["news"]);
   });
 
   it("parses a red line and rejects unknown kinds", () => {
