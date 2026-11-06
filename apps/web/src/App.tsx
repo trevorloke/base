@@ -10,6 +10,7 @@ import { ComposeDrawer } from "./drawers/ComposeDrawer";
 import { ConnectionsDrawer } from "./drawers/ConnectionsDrawer";
 import { PostDrawer } from "./drawers/PostDrawer";
 import { TeamDrawer } from "./drawers/TeamDrawer";
+import { LinksDrawer } from "./drawers/LinksDrawer";
 import { TopicDrawer } from "./drawers/TopicDrawer";
 import { AUTONOMY_LABEL, lift as formatLift, listOf, networkLabel, plural, roleLabel } from "./lib/format";
 import { RoomProvider, type RoomRefs } from "./lib/room";
@@ -272,6 +273,7 @@ type DrawerState =
   | { kind: "compose"; prefill?: ComposePrefill }
   | { kind: "accounts" }
   | { kind: "team" }
+  | { kind: "links" }
   | null;
 
 function readCenter(): CenterView {
@@ -622,6 +624,17 @@ function Room({
                     <button
                       type="button"
                       role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        setDrawer({ kind: "links" });
+                      }}
+                    >
+                      Links
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
                       className="menu-item menu-theme"
                       onClick={() => {
                         close();
@@ -715,6 +728,7 @@ function Room({
             onClose={closeDrawer}
           />
         ) : null}
+        {drawer?.kind === "links" ? <LinksDrawer myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null} onClose={closeDrawer} /> : null}
       </div>
     </RoomProvider>
   );

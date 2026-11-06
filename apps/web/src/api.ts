@@ -10,6 +10,8 @@ import type {
   ConnectCredentialsInput,
   ConnectStartInput,
   Connector,
+  Conversion,
+  CreateLinkInput,
   CreatePostInput,
   DecideInput,
   Discovery,
@@ -18,6 +20,10 @@ import type {
   InviteCreated,
   InviteInfo,
   LiftByStage,
+  LinkList,
+  LinkReport,
+  LinkSettingsPatch,
+  LinkSettingsResponse,
   LiveStatus,
   MediaAsset,
   Me,
@@ -38,6 +44,7 @@ import type {
   Stream,
   Summary,
   TopicDetail,
+  TrackedLink,
   TrendSource,
   Workspace,
 } from "./types";
@@ -171,13 +178,80 @@ export interface UploadHandle {
   abort: () => void;
 }
 
+interface MediaLimits {
+  maxUploadBytes: number;
+  direct: boolean;
+  types: string[];
+}
+let limitsPromise: Promise<MediaLimits | null> | null = null;
+function mediaLimits(): Promise<MediaLimits | null> {
+  limitsPromise ??= request<MediaLimits>("GET", "/v1/media/limits").catch(() => {
+    limitsPromise = null; // try again next time
+    return null;
+  });
+  return limitsPromise;
+}
+
+interface DirectUpload {
+  uploadId: string;
+  url: string;
+  headers: Record<string, string>;
+}
+
 /**
- * POST /v1/media as multipart. XMLHttpRequest rather than fetch, because only XHR reports upload progress.
- * `onProgress` gets 0..1.
+ * Uploads one file. With S3 storage the file goes straight to the bucket (presign, PUT, complete), so big videos
+ * never pass through the API; otherwise it is POSTed to /v1/media. XMLHttpRequest rather than fetch, because only
+ * XHR reports upload progress. `onProgress` gets 0..1.
  */
 function uploadLive(file: File, alt: string | undefined, onProgress: (p: number) => void): UploadHandle {
+  let current: XMLHttpRequest | null = null;
+  let aborted = false;
+  const done = (async () => {
+    const limits = await mediaLimits();
+    if (aborted) throw new ApiError(0, "aborted", "Upload cancelled.");
+    if (limits?.direct && limits.types.includes(file.type)) {
+      const ticket = await request<DirectUpload>("POST", "/v1/media/uploads", { mime: file.type, bytes: file.size, filename: file.name });
+      if (aborted) throw new ApiError(0, "aborted", "Upload cancelled.");
+      await putToBucket(file, ticket, (p) => onProgress(p * 0.97), (x) => (current = x));
+      const asset = await request<MediaAsset>("POST", "/v1/media/uploads/complete", { uploadId: ticket.uploadId, ...(alt && alt.trim() ? { alt: alt.trim() } : {}) });
+      onProgress(1);
+      return asset;
+    }
+    return multipart(file, alt, onProgress, (x) => (current = x));
+  })();
+  return {
+    done,
+    abort: () => {
+      aborted = true;
+      current?.abort();
+    },
+  };
+}
+
+/** The presigned PUT: no cookies, no API headers, only the headers the URL was signed with. */
+function putToBucket(file: File, t: DirectUpload, onProgress: (p: number) => void, track: (x: XMLHttpRequest) => void): Promise<void> {
   const xhr = new XMLHttpRequest();
-  const done = new Promise<MediaAsset>((resolve, reject) => {
+  track(xhr);
+  return new Promise<void>((resolve, reject) => {
+    xhr.open("PUT", t.url);
+    for (const [k, v] of Object.entries(t.headers)) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) onProgress(Math.min(1, e.loaded / e.total));
+    };
+    xhr.onload = () =>
+      xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new ApiError(xhr.status, "storage", `The media storage refused the file (HTTP ${xhr.status}).`));
+    // A CORS refusal looks like a network error from here; the bucket's CORS policy is the usual cause.
+    xhr.onerror = () => reject(new ApiError(0, "network", "Couldn't reach the media storage. Check the bucket's CORS settings allow uploads from this site."));
+    xhr.onabort = () => reject(new ApiError(0, "aborted", "Upload cancelled."));
+    xhr.send(file);
+  });
+}
+
+/** POST /v1/media as multipart. */
+function multipart(file: File, alt: string | undefined, onProgress: (p: number) => void, track: (x: XMLHttpRequest) => void): Promise<MediaAsset> {
+  const xhr = new XMLHttpRequest();
+  track(xhr);
+  return new Promise<MediaAsset>((resolve, reject) => {
     xhr.open("POST", `${BASE}/v1/media`);
     xhr.withCredentials = true;
     for (const [k, v] of Object.entries(authHeaders("POST"))) xhr.setRequestHeader(k, v);
@@ -205,7 +279,6 @@ function uploadLive(file: File, alt: string | undefined, onProgress: (p: number)
     if (alt && alt.trim()) form.append("alt", alt.trim());
     xhr.send(form);
   });
-  return { done, abort: () => xhr.abort() };
 }
 
 const get = <T,>(path: string) => request<T>("GET", path);
@@ -319,6 +392,21 @@ export const api = {
     pick(() => post<PostDetail>(`/v1/feed/${enc(activityId)}/reply`, input), (f) => f.fixtureApi.reply(activityId, input)),
   moderate: (activityId: string, action: ModerateAction) =>
     pick(() => post<{ ok: boolean; action: ModerateAction }>(`/v1/feed/${enc(activityId)}/moderate`, { action }), (f) => f.fixtureApi.moderate(activityId, action)),
+
+  // --- Links and conversions (v1.3) ---
+  /** Clicks, people and conversions; `from`/`to` default to the last 30 days on the server. */
+  linkReport: (from?: string, to?: string) =>
+    pick(() => get<LinkReport>(`/v1/links/report${qs({ from, to })}`), (f) => f.fixtureApi.linkReport(from, to)),
+  links: (limit = 100) => pick(() => get<LinkList>(`/v1/links${qs({ limit })}`), (f) => f.fixtureApi.links(limit)),
+  /** 403 for viewers; 503 `unavailable` when the server has no short-link base. */
+  createLink: (input: CreateLinkInput) => pick(() => post<TrackedLink>("/v1/links", input), (f) => f.fixtureApi.createLink(input)),
+  /** Turns a link off (owner/approver). It 404s from then on. */
+  disableLink: (id: string) => pick(() => del<void>(`/v1/links/${enc(id)}`), (f) => f.fixtureApi.disableLink(id)),
+  linkSettings: () => pick(() => get<LinkSettingsResponse>("/v1/links/settings"), (f) => f.fixtureApi.linkSettings()),
+  /** Owner only. */
+  updateLinkSettings: (input: LinkSettingsPatch) =>
+    pick(() => patch<LinkSettingsResponse>("/v1/links/settings", input), (f) => f.fixtureApi.updateLinkSettings(input)),
+  conversions: (limit = 100) => pick(() => get<Conversion[]>(`/v1/conversions${qs({ limit })}`), (f) => f.fixtureApi.conversions(limit)),
 };
 
 export interface StreamHandlers {

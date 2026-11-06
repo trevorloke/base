@@ -5,6 +5,7 @@ import type { Media, Network, VariantOptions } from "@starsign/schema";
 import { SYSTEM, type CoreContext } from "../context.ts";
 import { RetryablePublishError } from "../errors.ts";
 import type { AccountService } from "./accounts.ts";
+import type { LinkService } from "./links.ts";
 
 const MAX_ATTEMPTS = 5;
 
@@ -16,6 +17,7 @@ export class PublishingService {
   constructor(
     private readonly ctx: CoreContext,
     private readonly accounts: AccountService,
+    private readonly links?: LinkService,
   ) {}
 
   async publishPost(postId: string): Promise<{ status: string; published: number; failed: number }> {
@@ -53,12 +55,22 @@ export class PublishingService {
         await this.fail(workspaceId, v, (e as Error).message, false);
         continue;
       }
-      const options = (v.options ?? {}) as VariantOptions;
-      const input: PublishInput = { variantId: v.id, text: v.text, media: v.media as Media[], thread: v.thread, options, replyToExternalId: v.replyToExternalId, idempotencyKey: v.id };
+      // Links go out as tracked short links; the stored variant keeps the text as it was written and approved.
+      let wrapped;
+      try {
+        wrapped = this.links ? await this.links.wrapVariant(workspaceId, v, account.network as Network) : null;
+      } catch (e) {
+        console.warn(`[publish] link tracking skipped for ${v.id}:`, (e as Error).message);
+        wrapped = null;
+      }
+      const text = wrapped?.text ?? v.text;
+      const thread = wrapped?.thread ?? v.thread;
+      const options = wrapped?.options ?? ((v.options ?? {}) as VariantOptions);
+      const input: PublishInput = { variantId: v.id, text, media: v.media as Media[], thread, options, replyToExternalId: v.replyToExternalId, idempotencyKey: v.id };
       // Replies need no media rule checks; everything else gets generic plus connector-specific validation.
       const issues = v.replyToExternalId
         ? []
-        : [...validateVariant(account.network as Network, v.text, v.media as Media[], v.thread), ...(connector.validate?.(ref, input) ?? [])];
+        : [...validateVariant(account.network as Network, text, v.media as Media[], thread), ...(connector.validate?.(ref, input) ?? [])];
       if (issues.length) {
         await this.fail(workspaceId, v, issues.map((i) => i.message).join("; "), false);
         continue;
@@ -67,7 +79,7 @@ export class PublishingService {
       try {
         const result = await this.accounts.withFreshAuth(account, connector, (fresh) =>
           v.replyToExternalId && connector.reply
-            ? connector.reply(fresh, { parentExternalId: v.replyToExternalId, text: v.text, idempotencyKey: v.id })
+            ? connector.reply(fresh, { parentExternalId: v.replyToExternalId, text, idempotencyKey: v.id })
             : connector.publish(fresh, input),
         );
         const publishedAt = this.ctx.now();
@@ -81,7 +93,7 @@ export class PublishingService {
           subjectType: "post_variant",
           subjectId: v.id,
           actor: SYSTEM,
-          data: { postId, network: v.network, externalId: result.externalId, url: result.url, attempt: v.attemptCount + 1 },
+          data: { postId, network: v.network, externalId: result.externalId, url: result.url, attempt: v.attemptCount + 1, ...(wrapped?.slugs.length ? { trackedLinks: wrapped.slugs } : {}) },
         });
         await this.ctx.outcomes.schedule({ workspaceId, postId, variantId: v.id, publishedAt, actor: SYSTEM });
         // First comment: a separate, best-effort step. The post is out either way; a failure is recorded, not retried.

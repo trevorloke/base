@@ -9,6 +9,12 @@ export interface MediaStorage {
   get(key: string): Promise<Uint8Array>;
   delete(key: string): Promise<void>;
   publicUrl(key: string): string;
+  /** Direct uploads: a URL the browser PUTs the file to, so large files never pass through the API. */
+  presignPut?(key: string, mime: string, expiresSeconds: number): { url: string; headers: Record<string, string> };
+  /** Size and type of a stored object, or null when it does not exist. */
+  head?(key: string): Promise<{ bytes: number; mime: string | null; etag: string | null } | null>;
+  /** Bytes [start, start + length) of a stored object. */
+  getRange?(key: string, start: number, length: number): Promise<Uint8Array>;
 }
 
 /** Local disk, served by the API at /media/:key. Fine for one machine and for development. */
@@ -87,6 +93,63 @@ export class S3Storage implements MediaStorage {
     return { ...rest, authorization: `AWS4-HMAC-SHA256 Credential=${this.cfg.accessKeyId}/${scope}, SignedHeaders=${names.join(";")}, Signature=${signature}` };
   }
 
+  /**
+   * A query-string-signed URL (SigV4 presigning). The payload is unsigned, as S3 requires for presigned uploads; every
+   * header in `headers` is signed, so the uploader must send exactly those.
+   */
+  presign(method: string, url: URL, expiresSeconds: number, headers: Record<string, string> = {}): URL {
+    const t = this.now();
+    const amzDate = t.toISOString().replace(/[:-]|\.\d{3}/g, "");
+    const day = amzDate.slice(0, 8);
+    const scope = `${day}/${this.cfg.region}/s3/aws4_request`;
+    const signed: Record<string, string> = { host: url.host, ...lower(headers) };
+    const names = Object.keys(signed).sort();
+    const query: Record<string, string> = {
+      ...Object.fromEntries(url.searchParams),
+      "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+      "X-Amz-Credential": `${this.cfg.accessKeyId}/${scope}`,
+      "X-Amz-Date": amzDate,
+      "X-Amz-Expires": String(Math.max(1, Math.min(604800, Math.floor(expiresSeconds)))),
+      "X-Amz-SignedHeaders": names.join(";"),
+    };
+    const canonicalQuery = Object.keys(query)
+      .sort()
+      .map((k) => `${rfc3986(k)}=${rfc3986(query[k]!)}`)
+      .join("&");
+    const canonical = [method, url.pathname, canonicalQuery, names.map((n) => `${n}:${String(signed[n]).trim()}\n`).join(""), names.join(";"), "UNSIGNED-PAYLOAD"].join("\n");
+    const toSign = ["AWS4-HMAC-SHA256", amzDate, scope, createHash("sha256").update(canonical).digest("hex")].join("\n");
+    const hmac = (k: Buffer | string, d: string) => createHmac("sha256", k).update(d).digest();
+    const kSigning = hmac(hmac(hmac(hmac(`AWS4${this.cfg.secretAccessKey}`, day), this.cfg.region), "s3"), "aws4_request");
+    const signature = createHmac("sha256", kSigning).update(toSign).digest("hex");
+    const out = new URL(url.toString());
+    out.search = `${canonicalQuery}&X-Amz-Signature=${signature}`;
+    return out;
+  }
+
+  presignPut(key: string, mime: string, expiresSeconds: number): { url: string; headers: Record<string, string> } {
+    const headers = { "content-type": mime };
+    return { url: this.presign("PUT", this.url(key), expiresSeconds, headers).toString(), headers };
+  }
+
+  async head(key: string): Promise<{ bytes: number; mime: string | null; etag: string | null } | null> {
+    const url = this.url(key);
+    const res = await this.fetchImpl(url, { method: "HEAD", headers: this.sign("HEAD", url, new Uint8Array()) });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`s3 head ${key}: HTTP ${res.status}`);
+    return { bytes: Number(res.headers.get("content-length") ?? 0), mime: res.headers.get("content-type"), etag: res.headers.get("etag")?.replace(/"/g, "") ?? null };
+  }
+
+  async getRange(key: string, start: number, length: number): Promise<Uint8Array> {
+    const url = this.url(key);
+    const range = `bytes=${start}-${start + Math.max(1, length) - 1}`;
+    const res = await this.fetchImpl(url, { method: "GET", headers: this.sign("GET", url, new Uint8Array(), { Range: range }) });
+    if (res.status === 416) return new Uint8Array();
+    if (!res.ok) throw new Error(`s3 range ${key}: HTTP ${res.status}`);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    // A server that ignores Range sends the whole object; keep only what was asked for.
+    return res.status === 200 ? bytes.subarray(start, start + length) : bytes;
+  }
+
   async put(key: string, bytes: Uint8Array, mime: string): Promise<void> {
     const url = this.url(key);
     const res = await this.fetchImpl(url, { method: "PUT", headers: this.sign("PUT", url, bytes, { "content-type": mime }), body: bytes });
@@ -105,6 +168,11 @@ export class S3Storage implements MediaStorage {
   publicUrl(key: string): string {
     return `${this.cfg.publicBaseUrl.replace(/\/+$/, "")}/${key}`;
   }
+}
+
+/** S3's URI encoding: everything but unreserved characters. */
+function rfc3986(s: string): string {
+  return encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 function lower(h: Record<string, string>): Record<string, string> {

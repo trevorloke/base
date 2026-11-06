@@ -6,6 +6,7 @@ import { SYSTEM } from "../context.ts";
 import { localHour } from "../time.ts";
 import type { AccountService } from "./accounts.ts";
 import type { PolicyService } from "./policy.ts";
+import { LinkService } from "./links.ts";
 
 /** Price of one post object returned by a metered read (X pay-per-use). */
 export const METERED_READ_PRICE_USD = 0.005;
@@ -21,6 +22,7 @@ export class MetricsService {
     private readonly ctx: CoreContext,
     private readonly accounts: AccountService,
     private readonly policy: PolicyService,
+    private readonly links?: LinkService,
   ) {}
 
   /** Month-to-date metered read spend for a workspace, from the ledger. */
@@ -75,6 +77,8 @@ export class MetricsService {
     const accounts = accountIds.length ? await this.ctx.db.select().from(socialAccounts).where(inArray(socialAccounts.id, accountIds)) : [];
     const byAccount = new Map(accounts.map((a) => [a.id, a]));
 
+    // Accounts whose network reports no post metrics: their outcomes are Starsign's own numbers alone.
+    const ownedOnly = new Set<string>();
     // One fetch per account.
     const fetched = new Map<string, Record<string, number>>(); // externalId -> metric -> value
     for (const account of accounts) {
@@ -83,7 +87,10 @@ export class MetricsService {
       try {
         const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
         const caps = connector.capabilities(account.network as Network);
-        if (!caps.fetchMetrics) continue;
+        if (!caps.fetchMetrics) {
+          ownedOnly.add(account.id);
+          continue;
+        }
         if (caps.meteredReads && !(await this.underMeteredCap(account.workspaceId))) {
           console.warn(`[metrics] ${account.handle}: metered reads paused, monthly cap reached`);
           continue;
@@ -107,10 +114,17 @@ export class MetricsService {
     for (const o of due) {
       const v = byVariant.get(o.variantId);
       const bag = v?.externalId ? fetched.get(v.externalId) : undefined;
+      // Owned numbers (tracked clicks, conversions) up to the offset's due time, merged over the network's.
+      const owned = this.links && v ? LinkService.outcomeMetrics((await this.links.statsByVariant([v.id], o.dueAt)).get(v.id)) : {};
+      const hasOwned = Object.keys(owned).length > 0;
+      const late = now.getTime() - o.dueAt.getTime() > 48 * 3_600_000;
       if (bag) {
-        await this.ctx.outcomes.capture({ outcomeId: o.id, metrics: bag, capturedAt: now, actor: SYSTEM });
+        await this.ctx.outcomes.capture({ outcomeId: o.id, metrics: { ...bag, ...owned }, capturedAt: now, actor: SYSTEM });
         captured++;
-      } else if (now.getTime() - o.dueAt.getTime() > 48 * 3_600_000 || !v?.externalId || !byAccount.get(v.socialAccountId)) {
+      } else if (hasOwned && v?.externalId && (late || ownedOnly.has(v.socialAccountId))) {
+        await this.ctx.outcomes.capture({ outcomeId: o.id, metrics: owned, capturedAt: now, actor: SYSTEM });
+        captured++;
+      } else if (late || !v?.externalId || !byAccount.get(v.socialAccountId)) {
         await this.ctx.outcomes.skip(o.id);
         skipped++;
       }

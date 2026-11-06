@@ -14,6 +14,7 @@ import { BrandService } from "./services/brand.ts";
 import { SourcesService } from "./services/sources.ts";
 import { ExperimentService } from "./services/experiments.ts";
 import { MediaService } from "./services/media.ts";
+import { LinkService } from "./services/links.ts";
 import { EngagementService, WebhookService } from "./services/listening.ts";
 import { storageFromEnv } from "./media/storage.ts";
 import { AuthService } from "./services/auth.ts";
@@ -36,6 +37,7 @@ export class Starsign {
   readonly brand: BrandService;
   readonly experiments: ExperimentService;
   readonly media: MediaService;
+  readonly links: LinkService;
   readonly engagement: EngagementService;
   readonly webhooks: WebhookService;
   readonly auth: AuthService;
@@ -47,9 +49,10 @@ export class Starsign {
     this.policy = new PolicyService(this.ctx);
     this.posts = new PostService(this.ctx, this.policy);
     this.approvals = new ApprovalService(this.ctx, this.posts, this.policy);
-    this.publishing = new PublishingService(this.ctx, this.accounts);
+    this.links = new LinkService(this.ctx, deps.linkBaseUrl === undefined ? {} : { baseUrl: deps.linkBaseUrl });
+    this.publishing = new PublishingService(this.ctx, this.accounts, this.links);
     this.listening = new ListeningService(this.ctx, this.accounts);
-    this.metrics = new MetricsService(this.ctx, this.accounts, this.policy);
+    this.metrics = new MetricsService(this.ctx, this.accounts, this.policy, this.links);
     this.trends = new TrendService(this.ctx);
     this.ops = new OpsService(this.ctx);
     this.exports = new ExportService(this.ctx);

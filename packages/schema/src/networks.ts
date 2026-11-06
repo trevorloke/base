@@ -96,6 +96,10 @@ export const VariantOptions = z
     /** Google Business Profile event/offer details (topicType, event dates, offer coupon/terms); validated by the connector. */
     googleBusiness: z.record(z.string(), z.unknown()).optional(),
     /** Poll (Mastodon, Telegram, X): options and duration. */
+    /** Wrap links in Starsign short links with UTM tags (default: on when link tracking is configured). */
+    trackLinks: z.boolean().optional(),
+    /** utm_campaign for this variant's links. Default: the workspace's default campaign, else the post. */
+    campaign: z.string().max(100).optional(),
     poll: z.object({ options: z.array(z.string().max(100)).min(2).max(10), durationMinutes: z.number().int().min(5).max(10080) }).optional(),
   })
   .partial();

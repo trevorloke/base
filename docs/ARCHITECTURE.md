@@ -100,6 +100,23 @@ from `members` on every request, so a role change or removal applies immediately
 - Limits: 5 failed sign-ins per email per 15 minutes, then 429. The counter is **in memory, per process**: several API
   replicas each keep their own and a restart clears it. Put a shared limiter in front if that matters.
 
+## Owned measurement
+
+Network metrics are rented: each platform decides what it reports, renames it, rate-limits it or prices it. So every
+link Starsign publishes can go through a short link it controls (`LinkService`, `packages/core/src/services/links.ts`).
+`PublishingService` asks it to wrap a variant's links just before sending; the stored variant keeps the approved text.
+The redirect (`GET /l/:slug`) appends UTM tags and a click id (`ssclid`); the customer's site reports conversions with
+that id, server to server (`POST /v1/conversions`, idempotent by `externalId`) or from the browser (`/s.js` → `POST /c`,
+once per click and name, 30-day window). `link_clicks` and `conversions` are append-only like the event logs.
+
+Privacy by construction: no raw IP is stored. A click carries `visitor_hash = sha256(HMAC(master key, day), ip, ua)`,
+which counts unique visitors within a day and cannot be joined across days or reversed. Link-preview crawlers are
+redirected (so cards still render) but flagged and never counted.
+
+Outcome snapshots merge these first-party numbers (`tracked_clicks`, `conversions`, `conversion_value`, counted up to
+each offset's due time) over the network's, which makes outcomes comparable across networks that report nothing alike,
+and lets experiments use `conversions` as their primary metric.
+
 ## Adding a connector
 
 Implement `Connector` from `@starsign/connectors` (publish / fetchActivity / fetchMetrics / capabilities), map errors to
@@ -124,3 +141,4 @@ everything it proposes. If it needs a new prompt, add one to `packages/ai/src/pr
 8. Connector resolution is strict and the mock connector never runs in production: a "published" post always touched a network.
 9. API keys never appear in URLs; the live stream uses single-use, sixty-second tokens.
 10. No password, session, invite or reset token is stored in a recoverable form; cookie writes need the CSRF header.
+11. No raw visitor IP is stored; clicks and conversions are append-only, and tracking never changes the text people approved.

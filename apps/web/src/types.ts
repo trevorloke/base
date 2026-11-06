@@ -519,6 +519,10 @@ export interface VariantOptions {
   allowStitch?: boolean;
   visibility?: MastodonVisibility;
   poll?: { options: string[]; durationMinutes: number };
+  /** Wrap this variant's links in Starsign short links with UTM tags. Omitted means on (when the server has a link base). */
+  trackLinks?: boolean;
+  /** utm_campaign for this variant's links. Default: the workspace's default campaign, else the post. */
+  campaign?: string;
 }
 
 export interface CreateVariantInput {
@@ -671,4 +675,121 @@ export type ModerateAction = "hide" | "unhide" | "delete" | "like" | "unlike";
 export interface ReplyInput {
   text: string;
   aiAssisted?: boolean;
+}
+
+// --- Links and conversions (v1.3) ------------------------------------------
+
+/** Where in a post a wrapped link sat. "manual" is a link someone made by hand in the Links drawer. */
+export type LinkPlacement = "text" | "thread" | "link" | "first_comment" | "manual";
+
+export interface LinkSettings {
+  /** Wrap links in published posts. */
+  enabled: boolean;
+  /** Add utm_source / utm_medium / utm_campaign to the destination. */
+  utm: boolean;
+  /** Append ssclid (the click id) to the landing URL so the site can report conversions. */
+  clickIds: boolean;
+  defaultCampaign?: string;
+  medium: string;
+}
+
+export type LinkSettingsPatch = Partial<Pick<LinkSettings, "enabled" | "utm" | "clickIds" | "defaultCampaign" | "medium">>;
+
+/** GET/PATCH /v1/links/settings */
+export interface LinkSettingsResponse extends LinkSettings {
+  baseUrl: string | null;
+}
+
+export interface LinkStats {
+  links: number;
+  clicks: number;
+  uniqueVisitors: number;
+  previews: number;
+  conversions: number;
+  conversionValue: number;
+}
+
+/** One short link (GET /v1/links, POST /v1/links). */
+export interface TrackedLink {
+  id: string;
+  slug: string;
+  destination: string;
+  /** The destination with UTM tags, where the redirect sends people. */
+  target: string;
+  postId: string | null;
+  variantId: string | null;
+  network: string | null;
+  placement: LinkPlacement;
+  utm: Record<string, string>;
+  createdAt: string;
+  disabledAt: string | null;
+  shortUrl: string | null;
+  stats?: LinkStats;
+}
+
+/** GET /v1/links */
+export interface LinkList {
+  baseUrl: string | null;
+  settings: LinkSettings;
+  links: TrackedLink[];
+}
+
+export interface CreateLinkInput {
+  url: string;
+  network?: string;
+  campaign?: string;
+}
+
+export interface LinkReportTop {
+  id: string;
+  slug: string;
+  shortUrl: string | null;
+  destination: string;
+  network: string | null;
+  postId: string | null;
+  variantId: string | null;
+  placement: LinkPlacement;
+  links: number;
+  clicks: number;
+  uniqueVisitors: number;
+  previews: number;
+  conversions: number;
+  conversionValue: number;
+  clicksInRange: number;
+}
+
+/** GET /v1/links/report: clicks, people and conversions over a range (default the last 30 days). */
+export interface LinkReport {
+  from: string;
+  to: string;
+  /** False when the server has no short-link base: nothing is wrapped. */
+  configured: boolean;
+  totals: {
+    clicks: number;
+    uniqueVisitors: number;
+    previews: number;
+    conversions: number;
+    attributedConversions: number;
+    conversionValue: number;
+    valueByCurrency: { currency: string | null; value: number }[];
+  };
+  byNetwork: { network: string | null; clicks: number; uniqueVisitors: number; conversions: number; value: number }[];
+  byDay: { day: string; clicks: number }[];
+  topLinks: LinkReportTop[];
+}
+
+/** GET /v1/conversions */
+export interface Conversion {
+  id: string;
+  clickId: string | null;
+  linkId: string | null;
+  variantId: string | null;
+  network: string | null;
+  name: string;
+  value: number | null;
+  currency: string | null;
+  externalId: string | null;
+  source: "api" | "browser";
+  occurredAt: string;
+  createdAt: string;
 }

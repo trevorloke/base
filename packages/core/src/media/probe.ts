@@ -90,3 +90,28 @@ export function mp4DurationSeconds(b: Uint8Array): number | null {
   const duration = be32(b, mvhd + 16);
   return timescale ? duration / timescale : null;
 }
+
+/**
+ * MP4/MOV duration without holding the file: walks top-level boxes with small ranged reads until `moov` (which
+ * may sit at the end of files that were not "fast-started"), then reads only that box.
+ */
+export async function mp4DurationFromRanges(read: (start: number, length: number) => Promise<Uint8Array>, size: number, maxMoovBytes = 8 * 1024 * 1024): Promise<number | null> {
+  let o = 0;
+  for (let boxes = 0; o + 8 <= size && boxes < 64; boxes++) {
+    const h = await read(o, 16);
+    if (h.length < 8) return null;
+    let boxSize = be32(h, 0);
+    const type = ascii(h, 4, 4);
+    if (boxSize === 1) {
+      if (h.length < 16) return null;
+      boxSize = be32(h, 12) + be32(h, 8) * 2 ** 32;
+    } else if (boxSize === 0) boxSize = size - o;
+    if (boxSize < 8) return null;
+    if (type === "moov") {
+      if (boxSize > maxMoovBytes) return null;
+      return mp4DurationSeconds(await read(o, boxSize));
+    }
+    o += boxSize;
+  }
+  return null;
+}

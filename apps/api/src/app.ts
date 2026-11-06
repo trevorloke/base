@@ -106,6 +106,44 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     }
   });
 
+  // ---------------------------------------------------------------- owned measurement: short links, conversions
+  const clientIp = (c: { req: { header: (n: string) => string | undefined } }) =>
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || c.req.header("cf-connecting-ip") || null;
+
+  app.get("/l/:slug", async (c) => {
+    const location = await m.links.click(c.req.param("slug"), {
+      ip: clientIp(c),
+      userAgent: c.req.header("user-agent") ?? null,
+      referrer: c.req.header("referer") ?? null,
+      country: c.req.header("cf-ipcountry") ?? c.req.header("x-vercel-ip-country") ?? c.req.header("x-country-code") ?? null,
+    });
+    if (!location) return c.text("This link does not exist or has been turned off.", 404, { "cache-control": "no-store" });
+    // 302, never cached: every visit must reach us to be counted, and a disabled link must stop working at once.
+    return new Response(null, { status: 302, headers: { location, "cache-control": "no-store, max-age=0", "referrer-policy": "no-referrer-when-downgrade", "x-robots-tag": "noindex" } });
+  });
+
+  const beaconCors = { "access-control-allow-origin": "*", "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" };
+  app.options("/c", () => new Response(null, { status: 204, headers: beaconCors }));
+  app.post("/c", async (c) => {
+    // navigator.sendBeacon posts text/plain to skip the CORS preflight; accept JSON in either content type.
+    let body: unknown = null;
+    try {
+      body = JSON.parse((await c.req.text()).slice(0, 4096));
+    } catch {
+      body = null;
+    }
+    try {
+      await m.links.recordBrowserConversion(body);
+    } catch {
+      // A beacon never gets an error it could learn from.
+    }
+    return new Response(null, { status: 204, headers: beaconCors });
+  });
+  app.get("/s.js", (c) => {
+    const base = (opts.publicUrl ?? new URL(c.req.url).origin).replace(/\/+$/, "");
+    return c.body(conversionSnippet(base), 200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "access-control-allow-origin": "*" });
+  });
+
   // Short-lived, single-use tokens for the SSE stream (EventSource cannot send headers; API keys never go in URLs).
   const streamTokens = new Map<string, { principal: Principal; expires: number }>();
   const STREAM_TOKEN_TTL_MS = 60_000;
@@ -230,6 +268,17 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   });
 
   // ---------------------------------------------------------------- media library
+  // Direct-to-bucket uploads (S3 storage): presign, the browser PUTs the file, then complete.
+  app.get("/v1/media/limits", (c) => c.json(m.media.limits()));
+  app.post("/v1/media/uploads", async (c) => {
+    const body = z.object({ mime: z.string().max(100), bytes: z.number().int().positive(), filename: z.string().max(255).optional() }).parse(await c.req.json());
+    return c.json(await m.media.createDirectUpload(c.get("principal"), body), 201);
+  });
+  app.post("/v1/media/uploads/complete", async (c) => {
+    const body = z.object({ uploadId: z.string().min(1).max(4096), alt: z.string().max(1000).optional() }).parse(await c.req.json());
+    const row = await m.media.completeDirectUpload(c.get("principal"), body);
+    return c.json({ ...row, media: m.media.toMedia(row) }, 201);
+  });
   app.post("/v1/media", async (c) => {
     const p = c.get("principal");
     // Refuse oversized uploads before buffering them: the body is read into memory.
@@ -507,6 +556,37 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     return c.json({ latest: v.externalId ? await m.metrics.latest("post_variant", v.externalId) : {}, outcomes });
   });
 
+  // ---------------------------------------------------------------- links & conversions
+  app.get("/v1/links", async (c) => {
+    const p = c.get("principal");
+    return c.json({ baseUrl: m.links.baseUrl, settings: await m.links.settings(p.workspaceId), links: await m.links.list(p.workspaceId, Number(c.req.query("limit") ?? 100)) });
+  });
+  app.post("/v1/links", async (c) => {
+    const body = z.object({ url: z.string().min(1).max(2048), network: NetworkEnum.optional(), campaign: z.string().max(100).optional() }).parse(await c.req.json());
+    return c.json(await m.links.create(c.get("principal"), body), 201);
+  });
+  app.delete("/v1/links/:id", async (c) => {
+    await m.links.disable(c.get("principal"), c.req.param("id"));
+    return c.body(null, 204);
+  });
+  app.get("/v1/links/report", async (c) => {
+    const p = c.get("principal");
+    const now = m.ctx.now();
+    const policy = await m.policy.getActive(p.workspaceId);
+    return c.json(await m.links.report(p.workspaceId, date(c.req.query("from"), daysAgo(30, now)), date(c.req.query("to"), now), policy.timezone));
+  });
+  app.get("/v1/links/settings", async (c) => c.json({ ...(await m.links.settings(c.get("principal").workspaceId)), baseUrl: m.links.baseUrl }));
+  app.patch("/v1/links/settings", async (c) => {
+    const p = c.get("principal");
+    m.workspaces.requireRole(p, ["owner"]);
+    return c.json(await m.links.updateSettings(p, await c.req.json()));
+  });
+  app.get("/v1/conversions", async (c) => c.json(await m.links.listConversions(c.get("principal").workspaceId, Number(c.req.query("limit") ?? 100))));
+  app.post("/v1/conversions", async (c) => {
+    const result = await m.links.recordConversion(c.get("principal"), await c.req.json());
+    return c.json(result, result.duplicate ? 200 : 201);
+  });
+
   // ---------------------------------------------------------------- trends
   app.get("/v1/trends/radar", async (c) => c.json(await m.trends.radar(c.get("principal").workspaceId)));
   app.get("/v1/trends/topics", async (c) => c.json(await m.trends.listTopics(c.get("principal").workspaceId)));
@@ -596,4 +676,20 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   });
 
   return app;
+}
+
+/**
+ * The browser half of conversion tracking. Drop it on the destination site:
+ *   <script src="https://YOUR-STARSIGN/s.js" async></script>
+ * It keeps the ssclid from the landing URL in first-party storage for 30 days, and
+ *   starsign.convert("purchase", 49.0, "USD")
+ * reports a conversion against that click. No cookies are set on any other domain; nothing runs without a click id.
+ */
+export function conversionSnippet(base: string): string {
+  return `(function(){var K="starsign_clid",T=2592e6,B=${JSON.stringify(base)};
+function get(){try{var v=JSON.parse(localStorage.getItem(K)||"null");if(v&&Date.now()-v.t<T)return v.id}catch(e){}return null}
+try{var p=new URLSearchParams(location.search).get("ssclid");if(p&&/^clk_[0-9a-f]{32}$/.test(p))localStorage.setItem(K,JSON.stringify({id:p,t:Date.now()}))}catch(e){}
+function convert(name,value,currency){var id=get();if(!id)return false;var b=JSON.stringify({clickId:id,name:name||"conversion",value:typeof value==="number"?value:undefined,currency:currency});
+if(navigator.sendBeacon)return navigator.sendBeacon(B+"/c",b);fetch(B+"/c",{method:"POST",body:b,keepalive:true,mode:"cors"});return true}
+var q=(window.starsign&&window.starsign.q)||[];window.starsign={convert:convert,clickId:get};for(var i=0;i<q.length;i++)convert.apply(null,q[i]);})();`;
 }

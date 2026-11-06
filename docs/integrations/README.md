@@ -80,5 +80,14 @@ so each connector is tested against the documented request and response shapes. 
 | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` | Reddit |
 | `TELEGRAM_WEBHOOK_SECRET` | Telegram push updates (else polling) |
 | `RESEND_API_KEY`, `MAIL_FROM` | Invites and password resets by email |
-| `STARSIGN_MAX_UPLOAD_MB` | Largest upload (default 100). Uploads are held in memory, so keep it well under the instance memory; videos larger than this need direct-to-bucket uploads (not built yet) |
+| `STARSIGN_LINK_BASE_URL` | Short-link base for tracked links (default `<STARSIGN_PUBLIC_URL>/l` when public). A short domain pointed at the API reads better in posts |
+| `STARSIGN_MAX_UPLOAD_MB` | Largest upload (default 100). Uploads are held in memory, so keep it well under the instance memory; with S3 storage the web app uploads straight to the bucket instead (up to 4 GB video; set bucket CORS to allow `PUT` + `content-type` from the app origin) |
 | `STARSIGN_ALLOW_SIGNUP` | Open sign-up after the first owner |
+
+## Known limits
+
+- **Big videos on upload-style networks.** Direct uploads keep a 4 GB video out of the API's memory, and networks
+  that pull media by URL (Instagram, Facebook, Threads, Pinterest, TikTok's pull mode) never need the bytes. But
+  connectors that upload bytes themselves (X, YouTube, LinkedIn, Bluesky, Mastodon, Reddit, Telegram, Discord, and
+  TikTok's file mode) still read the whole file into memory when publishing. On a 512 MB instance keep those videos
+  under about 150 MB, or run the workers on a bigger machine, until streamed (chunked) uploads land in those connectors.

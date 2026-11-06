@@ -58,7 +58,7 @@ const MASTODON_VISIBILITY: [MastodonVisibility, string][] = [
   ["direct", "Mentioned people only"],
 ];
 
-/** Whether a network has anything to set beyond the text, so the panel only appears where it matters. */
+/** Whether a network has fields of its own beyond the text (link tracking is shown for every network regardless). */
 export function hasOptions(network: Network, kinds: string[]): boolean {
   return selectableKinds(kinds).length > 1 || TITLE_NETS.has(network) || FIRST_COMMENT_NETS.has(network) || LINK_NETS.has(network) || POLL_NETS.has(network) || ["tiktok", "mastodon", "google_business"].includes(network);
 }
@@ -163,6 +163,11 @@ export function wireOptions(network: Network, kinds: string[], o: VariantOptions
   if (cw) out.contentWarning = cw;
   if (o.visibility) out.visibility = o.visibility;
   if (o.callToAction) out.callToAction = o.callToAction;
+  if (o.trackLinks === false) out.trackLinks = false;
+  else {
+    const campaign = str(o.campaign);
+    if (campaign) out.campaign = campaign;
+  }
   if (network === "tiktok") {
     out.allowComments = !!o.allowComments;
     out.allowDuet = !!o.allowDuet;
@@ -195,8 +200,13 @@ export function NetworkOptions({
   const set = (p: Partial<VariantOptions>) => onChange({ ...value, ...p });
   const id = (f: string) => `opt-${network}-${f}`;
   const pollLim = POLL_LIMITS[network] ?? { options: 4, chars: 100 };
-
-  if (!hasOptions(network, kinds)) return null;
+  const tracking = value.trackLinks !== false;
+  const setTracking = (on: boolean) => {
+    const next: VariantOptions = { ...value };
+    if (on) delete next.trackLinks;
+    else next.trackLinks = false;
+    onChange(next);
+  };
 
   return (
     <div className="cv-opts" aria-label={`${label} options`}>
@@ -493,6 +503,18 @@ export function NetworkOptions({
           />
         </label>
       ) : null}
+
+      <div className="opt-row opt-links">
+        <label className="check" title="Wrap links in Starsign short links with UTM tags, so clicks are counted">
+          <input type="checkbox" checked={tracking} onChange={(e) => setTracking(e.target.checked)} /> Track links
+        </label>
+        {tracking ? (
+          <label className="opt-inline opt-campaign" htmlFor={id("campaign")}>
+            <span className="opt-label">Campaign</span>
+            <input id={id("campaign")} className="input" placeholder="Workspace default" maxLength={100} value={value.campaign ?? ""} onChange={(e) => set({ campaign: e.target.value })} />
+          </label>
+        ) : null}
+      </div>
     </div>
   );
 }
