@@ -7,6 +7,8 @@ import { newId } from "@starsign/ledger";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import type { TrendService } from "./trends.ts";
+import type { ListeningService } from "./listening.ts";
+import type { MentionSearch } from "@starsign/sources";
 
 /**
  * The tracker. Named organisations (a party, a brand, a company) and people (a candidate, a spokesperson, a creator,
@@ -41,6 +43,8 @@ export const EntityInput = z.object({
   wikipedia: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
   /** Forecast its momentum on the radar (creates a trend topic). */
   trackTrend: z.boolean().default(true),
+  /** Search public posts and news for it, not only the workspace's own inboxes and chats. */
+  scanPublic: z.boolean().default(true),
   notes: z.string().max(4000).optional(),
 });
 export type EntityInput = z.input<typeof EntityInput>;
@@ -84,11 +88,57 @@ export function matchEntity(
 
 type ActivityRow = typeof activities.$inferSelect;
 
+export interface PublicScanResult {
+  entities: number;
+  found: number;
+  stored: number;
+  errors: string[];
+}
+
+/** First scan of a new entity looks back this far; later scans continue from the last run per source. */
+const FIRST_SCAN_LOOKBACK_MS = 24 * 3_600_000;
+
 export class EntityService {
   constructor(
     private readonly ctx: CoreContext,
     private readonly trends: TrendService,
+    private readonly listening: ListeningService,
   ) {}
+
+  /**
+   * Search public posts and news for every tracked name, in every workspace (or one). Only results that pass the
+   * entity's own rules (name or alias present, context words when set, no exclusion words) are stored, as feed items
+   * with no connected account; storing them runs the tracker's normal scan, so mentions and roll-ups follow.
+   */
+  async scanPublic(searches: MentionSearch[], opts: { workspaceId?: string; entityId?: string; perEntityLimit?: number; maxEntities?: number } = {}): Promise<PublicScanResult> {
+    const result: PublicScanResult = { entities: 0, found: 0, stored: 0, errors: [] };
+    if (searches.length === 0) return result;
+    const conds = [isNull(trackedEntities.archivedAt), eq(trackedEntities.scanPublic, true)];
+    if (opts.workspaceId) conds.push(eq(trackedEntities.workspaceId, opts.workspaceId));
+    if (opts.entityId) conds.push(eq(trackedEntities.id, opts.entityId));
+    const rows = await this.ctx.db.select().from(trackedEntities).where(and(...conds)).orderBy(trackedEntities.updatedAt).limit(opts.maxEntities ?? 200);
+    const now = this.ctx.now();
+    for (const e of rows) {
+      result.entities++;
+      // The name and the most distinctive aliases; hashtags and other scripts are often the best search terms.
+      const terms = [e.name, ...e.aliases].slice(0, 5);
+      const state = { ...e.scanState };
+      for (const s of searches) {
+        const last = state[s.name] ? new Date(state[s.name]!) : new Date(now.getTime() - FIRST_SCAN_LOOKBACK_MS);
+        try {
+          const items = await s.search({ terms, since: last, now, limit: opts.perEntityLimit ?? 50 });
+          result.found += items.length;
+          const relevant = items.filter((it) => matchEntity(e, { network: it.network, text: it.text, authorHandle: it.authorHandle }));
+          if (relevant.length) result.stored += (await this.listening.ingestItems(e.workspaceId, null, relevant)).ingested;
+          state[s.name] = now.toISOString();
+        } catch (err) {
+          result.errors.push(`${e.name} / ${s.name}: ${(err as Error).message}`);
+        }
+      }
+      await this.ctx.db.update(trackedEntities).set({ scanState: state }).where(eq(trackedEntities.id, e.id));
+    }
+    return result;
+  }
 
   private canEdit(p: Principal) {
     if (p.actor.type === "human" && (!p.role || p.role === "viewer")) throw new CoreError("forbidden", "viewers cannot change the tracker");
@@ -149,6 +199,7 @@ export class EntityService {
         wikipedia: dedupe(input.wikipedia),
         trendTopicId,
         notes: input.notes ?? null,
+        scanPublic: input.scanPublic,
         createdBy: p.actor,
       })
       .returning();
@@ -174,6 +225,7 @@ export class EntityService {
       ...(patch.exclude !== undefined ? { exclude: dedupe(patch.exclude) } : {}),
       ...(patch.wikipedia !== undefined ? { wikipedia: dedupe(patch.wikipedia) } : {}),
       ...(patch.notes !== undefined ? { notes: patch.notes || null } : {}),
+      ...(patch.scanPublic !== undefined ? { scanPublic: patch.scanPublic } : {}),
       updatedAt: this.ctx.now(),
     };
     const [row] = await this.ctx.db.update(trackedEntities).set(next).where(eq(trackedEntities.id, id)).returning();

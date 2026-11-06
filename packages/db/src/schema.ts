@@ -561,6 +561,10 @@ export const trackedEntities = pgTable(
     wikipedia: jsonb("wikipedia").$type<string[]>().notNull().default([]),
     trendTopicId: text("trend_topic_id"),
     notes: text("notes"),
+    /** Search public posts and news for this name (the tracker's public scan). */
+    scanPublic: boolean("scan_public").notNull().default(true),
+    /** Per search source: when it last ran for this entity. */
+    scanState: jsonb("scan_state").$type<Record<string, string>>().notNull().default({}),
     createdBy: jsonb("created_by").$type<ActorJson>().notNull(),
     createdAt: now(),
     updatedAt: ts("updated_at").notNull().defaultNow(),

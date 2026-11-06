@@ -255,5 +255,10 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
 - `GET /v1/entities/:id/mentions?children=1&limit=` → `{ mention: { how, term, network, lang }, activity }[]`.
 - `POST /v1/entities/:id/suggest-aliases` `{ languages? }` → `{ languages, aliases: { text, lang, why }[], ambiguous[] }`.
   Suggestions only; add them with PATCH. Defaults to the languages seen in the feed.
+- Public scan (`scanPublic`, default on): every 30 minutes the workers search public Bluesky posts
+  (`app.bsky.feed.searchPosts`), Mastodon hashtag timelines, YouTube (with `YOUTUBE_API_KEY`) and news in 65+
+  languages (GDELT, network `news`, listening only) for each tracked name, from where the last run left off. Only
+  results that pass the entity's rules are stored, as feed items without a connected account.
+  `POST /v1/entities/:id/scan` runs it now for one entity → `{ entities, found, stored, errors[] }`.
 - MCP tools: `list_tracked`, `get_tracker_report`, `track_entity`.
 

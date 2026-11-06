@@ -91,6 +91,9 @@ unofficial tools that try get numbers and accounts banned, so Starsign does not 
 | `TELEGRAM_WEBHOOK_SECRET` | Telegram push updates (else polling) |
 | `RESEND_API_KEY`, `MAIL_FROM` | Invites and password resets by email |
 | `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | WhatsApp webhooks (the Meta app's secret, and a verify token you choose); webhook URL `/webhooks/whatsapp` |
+| `STARSIGN_BLUESKY_SEARCH_TOKEN` | Bluesky post search, if the public AppView requires sign-in (tracker public scan and the radar) |
+| `STARSIGN_MASTODON_SEARCH_INSTANCES` | Servers whose public hashtag timelines the tracker reads (default `mastodon.social`) |
+| `STARSIGN_MENTION_SOURCES` | Limit the tracker's public scan to some of `bluesky,mastodon,youtube,news` |
 | `WECHAT_API_BASE`, `LINE_API_BASE` | Optional API host overrides (e.g. a regional WeChat host) |
 | `STARSIGN_LINK_BASE_URL` | Short-link base for tracked links (default `<STARSIGN_PUBLIC_URL>/l` when public). A short domain pointed at the API reads better in posts |
 | `STARSIGN_MAX_UPLOAD_MB` | Largest upload (default 100). Uploads are held in memory, so keep it well under the instance memory; with S3 storage the web app uploads straight to the bucket instead (up to 4 GB video; set bucket CORS to allow `PUT` + `content-type` from the app origin) |

@@ -60,7 +60,7 @@ export class Starsign {
     this.trends = new TrendService(this.ctx);
     this.ops = new OpsService(this.ctx);
     this.translations = new TranslationService(this.ctx, this.ops);
-    this.entities = new EntityService(this.ctx, this.trends);
+    this.entities = new EntityService(this.ctx, this.trends, this.listening);
     // Every stored message and every new translation is scanned for tracked parties, brands and people.
     this.listening.afterIngest.push((ws, ids) => this.entities.scanActivities(ws, ids));
     this.translations.afterTranslate.push((ws, ids) => this.entities.scanActivities(ws, ids));

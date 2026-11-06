@@ -10,7 +10,7 @@ import { CoreError, MAX_UPLOAD_BYTES, type Starsign, type Principal, type Resolv
 import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
 import { gatePost } from "@starsign/policy";
 import { adaptForNetwork, gatewayKeywordExpander, gatewayTranslator, runPrompt, suggestAliases, type BrandContext, type ModelGateway } from "@starsign/ai";
-import type { SourceAdapter } from "@starsign/sources";
+import { createMentionSearches, type MentionSearch, type SourceAdapter } from "@starsign/sources";
 import { Network as NetworkEnum, NETWORK_LIMITS } from "@starsign/schema";
 import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, registerAuthRoutes, SESSION_COOKIE, setSessionCookie } from "./auth-routes.ts";
 
@@ -28,6 +28,8 @@ export interface AppOptions {
   sources?: SourceAdapter[];
   /** Public base URL of this deployment (OAuth redirects come back here). */
   publicUrl?: string;
+  /** Public mention search for the tracker's "scan now". Default: every configured search. */
+  mentionSearches?: MentionSearch[];
 }
 
 const err = (code: string, message: string, details?: unknown) => ({ error: { code, message, details } });
@@ -473,6 +475,14 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     const p = c.get("principal");
     const children = c.req.query("children") === "1" || c.req.query("children") === "true";
     return c.json(await m.entities.mentions(p.workspaceId, c.req.param("id"), { includeChildren: children, limit: Number(c.req.query("limit") ?? 50) }));
+  });
+  /** Search public posts and news for one tracked name now (the background job does this every 30 minutes). */
+  app.post("/v1/entities/:id/scan", async (c) => {
+    const p = c.get("principal");
+    if (p.actor.type === "human" && (!p.role || p.role === "viewer")) throw new CoreError("forbidden", "viewers cannot start a scan");
+    const e = await m.entities.get(p.workspaceId, c.req.param("id"));
+    const r = await m.entities.scanPublic(opts.mentionSearches ?? createMentionSearches(), { workspaceId: p.workspaceId, entityId: e.id });
+    return c.json(r);
   });
   /** Suggestions only: nothing changes until the person adds them with PATCH. */
   app.post("/v1/entities/:id/suggest-aliases", async (c) => {

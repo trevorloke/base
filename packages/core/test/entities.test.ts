@@ -6,6 +6,7 @@ import { entityMentions, trendTopics, type DbHandle } from "@starsign/db";
 import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
 import type { ActivityInput } from "@starsign/schema";
 import { InMemoryScheduler, SecretBox, Starsign, matchEntity, type Principal } from "../src/index.ts";
+import type { MentionSearch } from "@starsign/sources";
 
 let h: DbHandle;
 let m: Starsign;
@@ -108,3 +109,46 @@ describe("tracking a party and its candidates", () => {
     expect(await m.ctx.db.select().from(entityMentions).where(eq(entityMentions.entityId, rival!.id))).toHaveLength(before.length);
   });
 });
+
+describe("public scan", () => {
+  it("searches public posts and news for each tracked name, keeps only real matches, and continues from the last run", async () => {
+    const ws = await m.workspaces.create({ slug: "scan", name: "Scan desk" }, { type: "human", id: "u2" });
+    const p: Principal = { workspaceId: ws.id, actor: { type: "human", id: "u2" }, role: "owner" };
+    const party = await m.entities.create(p, { kind: "organization", name: "Green Party", aliases: ["Greens", "Green"], context: ["party", "vote", "election", "candidate"], trackTrend: false });
+    await m.entities.create(p, { kind: "person", name: "Quiet Person", scanPublic: false, trackTrend: false });
+    const calls: { source: string; terms: string[]; since: Date }[] = [];
+    const fake = (name: string, results: () => ActivityInput[]): MentionSearch => ({
+      name,
+      configured: true,
+      search: async (req) => {
+        calls.push({ source: name, terms: req.terms, since: req.since });
+        return results();
+      },
+    });
+    const bluesky = fake("bluesky", () => [
+      item("Voting Green this election", { network: "bluesky", externalId: "at://1", authorHandle: "v.bsky.social" }),
+      item("My kitchen is painted green", { network: "bluesky", externalId: "at://2", authorHandle: "w.bsky.social" }), // no context word
+    ]);
+    const news = fake("news", () => [item("Green Party leads new poll", { network: "news", externalId: "https://news.example/a", authorHandle: "news.example", lang: "en" })]);
+    const broken: MentionSearch = { name: "youtube", configured: true, search: async () => { throw new Error("quota exceeded"); } };
+
+    const r1 = await m.entities.scanPublic([bluesky, news, broken], { workspaceId: ws.id });
+    expect(r1).toMatchObject({ entities: 1, found: 3, stored: 2 });
+    expect(r1.errors).toEqual(["Green Party / youtube: quota exceeded"]);
+    expect(calls.filter((c) => c.source === "bluesky")[0]!.terms).toEqual(["Green Party", "Greens", "Green"]);
+    const mentions = await m.entities.mentions(ws.id, party.id);
+    expect(mentions.map((x) => x.activity.text).sort()).toEqual(["Green Party leads new poll", "Voting Green this election"]);
+    expect(mentions.every((x) => x.activity.socialAccountId === null)).toBe(true);
+    expect((await m.listening.feed(ws.id, {})).map((a) => a.text)).not.toContain("My kitchen is painted green");
+
+    // The next run asks only for what is new; a failed source keeps its old starting point.
+    const firstRun = calls.find((c) => c.source === "bluesky")!.since;
+    calls.length = 0;
+    const r2 = await m.entities.scanPublic([bluesky, news], { workspaceId: ws.id });
+    expect(r2.stored).toBe(0); // already stored
+    expect(calls.find((c) => c.source === "bluesky")!.since.getTime()).toBeGreaterThan(firstRun.getTime());
+    const [row] = await m.entities.list(ws.id).then((l) => l.filter((e) => e.id === party.id));
+    expect(Object.keys(row!.scanState).sort()).toEqual(["bluesky", "news"]);
+  });
+});
+

@@ -19,8 +19,13 @@ export const Network = z.enum([
   "whatsapp",
   "wechat",
   "line",
+  /** Listening only: news articles found by the tracker's public search. Nothing publishes to it. */
+  "news",
 ]);
 export type Network = z.infer<typeof Network>;
+
+/** Networks Starsign only listens to (nothing can be published there). */
+export const LISTEN_ONLY_NETWORKS: ReadonlySet<Network> = new Set<Network>(["news"]);
 
 /** Hard publishing limits per network. Soft limits (engagement cliffs) live in the ledger, learned. */
 export interface NetworkLimits {
@@ -55,6 +60,7 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   whatsapp: { maxText: 4096, maxMedia: 1, requiresMedia: false, supportsThread: false },
   wechat: { maxText: 600, maxMedia: 1, requiresMedia: false, supportsThread: false },
   line: { maxText: 5000, maxMedia: 5, requiresMedia: false, supportsThread: false },
+  news: { maxText: 0, maxMedia: 0, requiresMedia: false, supportsThread: false },
 };
 
 /**

@@ -7,3 +7,4 @@ export * from "./hacker-news.ts";
 export * from "./bluesky-search.ts";
 export * from "./youtube.ts";
 export * from "./factory.ts";
+export * from "./mentions.ts";
