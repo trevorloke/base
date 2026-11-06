@@ -3833,6 +3833,16 @@ ul.cv-need li + li {
 .ent-fields .section-h {
   margin-bottom: -4px;
 }
+.ent-fields .seg {
+  align-self: flex-start;
+}
+.ent-fields .seg-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.feed-conv-chip > span[aria-hidden="true"] {
+  margin-left: 4px;
+}
 .ent-pair {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
@@ -3909,8 +3919,7 @@ ul.cv-need li + li {
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
 }
 .ent-tone {
-  margin-top: -4px;
-  margin-bottom: 6px;
+  margin-top: 10px;
 }
 .ent-split {
   display: grid;
