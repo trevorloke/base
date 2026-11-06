@@ -59,6 +59,11 @@ describe("red lines", () => {
     expect(evaluateSubject(policy, { network: "x", text: "morning", scheduledAt: morning }).verdict).toBe("allow");
   });
 
+  it("does not hold a draft with no publish time for quiet hours (scheduling it checks again)", () => {
+    const lateNow = { now: new Date("2026-11-03T07:30:00Z") }; // 23:30 Vancouver, but the draft has no time
+    expect(evaluateSubject(policy, { network: "x", text: "an idea for later", scheduledAt: null }, lateNow).verdict).toBe("allow");
+  });
+
   it("requires disclosure when AI-assisted", () => {
     const disc = { aiAssisted: true, aiContributions: ["text_drafted"], humanReviewed: false };
     expect(evaluateSubject(policy, { ...base, text: "Drafted by a robot", disclosure: disc }).verdict).toBe("block");

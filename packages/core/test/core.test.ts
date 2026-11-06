@@ -172,6 +172,16 @@ describe("publishing and outcomes", () => {
     mock.failNext = { kind: "rejected", retryable: false };
     const res = await m.publishing.publishPost(r.post.id);
     expect(res).toMatchObject({ status: "partially_published", published: 1, failed: 1 });
+
+    // Retry: only the failed variant goes out again; the published one is not re-sent.
+    const sentBefore = mock.posts.length;
+    await expect(m.posts.retry({ ...owner, role: "viewer" }, r.post.id)).rejects.toMatchObject({ code: "forbidden" });
+    const retried = await m.posts.retry(owner, r.post.id);
+    expect(retried.post.status).toBe("scheduled");
+    expect(retried.variants.filter((v) => v.status === "pending")).toHaveLength(1);
+    expect(await m.publishing.publishPost(r.post.id)).toMatchObject({ status: "published", published: 2, failed: 0 });
+    expect(mock.posts.length).toBe(sentBefore + 1);
+    await expect(m.posts.retry(owner, r.post.id)).rejects.toMatchObject({ code: "conflict" });
   });
 });
 

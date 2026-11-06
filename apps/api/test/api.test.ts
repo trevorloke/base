@@ -213,10 +213,10 @@ describe("compose, calendar, connect, sources", () => {
     expect((await app.request("/v1/accounts/connect/bluesky", { method: "POST", headers: auth(agentKey), body: JSON.stringify({ identifier: "a", appPassword: "good-pass" }) })).status).toBe(403);
     const connectors = await json(await app.request("/v1/connectors", { headers: auth(ownerKey) }));
     expect(connectors.find((c: { name: string }) => c.name === "bluesky")).toMatchObject({ connect: "app_password" });
-    // Listed (so the room reads what demo accounts can do: no replies), never offered as a way to connect.
+    // Listed (so the room reads what demo accounts can do), never offered as a way to connect.
     const mock = connectors.find((c: { name: string }) => c.name === "mock");
     expect(mock).toMatchObject({ connect: "none", inputs: [] });
-    expect(mock.capabilities.x.reply).toBeFalsy();
+    expect(mock.capabilities.x).toMatchObject({ reply: true, moderate: true }); // the demo can show replies and moderation
   });
 
   it("reports sources and discoveries", async () => {

@@ -277,6 +277,24 @@ export class PostService {
   }
 
   /**
+   * Try a failed or partly published post again, now. Only the variants that failed go out again (published ones
+   * are never re-sent); their attempt count restarts. The gate already passed when the post was scheduled.
+   */
+  async retry(p: Principal, postId: string) {
+    const detail = await this.get(p.workspaceId, postId);
+    if (!["failed", "partially_published"].includes(detail.post.status)) throw new CoreError("conflict", `only failed or partly published posts can be retried (post is ${detail.post.status})`);
+    await this.assertMayModify(p, detail, "edit");
+    const failed = detail.variants.filter((v) => v.status === "failed");
+    if (failed.length === 0) throw new CoreError("conflict", "nothing failed on this post");
+    await this.ctx.db
+      .update(postVariants)
+      .set({ status: "pending", attemptCount: 0, error: null })
+      .where(and(eq(postVariants.postId, postId), eq(postVariants.status, "failed")));
+    await this.arm(p.workspaceId, postId, this.ctx.now(), p.actor);
+    return this.get(p.workspaceId, postId);
+  }
+
+  /**
    * Who may change an existing post. Viewers never. Editors may edit drafts and cancel their own or unapproved
    * posts; approved/scheduled posts are cancelled by owners/approvers (or the creator). Agents may only touch
    * their own posts, and only when autonomy lets them create at all.

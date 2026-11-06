@@ -262,3 +262,19 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
   `POST /v1/entities/:id/scan` runs it now for one entity → `{ entities, found, stored, errors[] }`.
 - MCP tools: `list_tracked`, `get_tracker_report`, `track_entity`.
 
+## Changes in v1.5
+- `POST /v1/posts/:id/retry` → post detail: a failed or partly published post's failed variants go out again now
+  (published ones are never re-sent). `409` when nothing failed. Owner/approver/editor, or the agent that created it.
+- Quiet hours no longer hold a draft that has no publish time; scheduling it (or "Post now") checks the rules then.
+- `401` from `/v1/auth/session` also carries `mail: boolean` (whether reset and invite emails can be sent).
+- Sign-up and `POST /v1/workspaces` accept `timezone` (IANA); unknown zones are ignored.
+- `POST /v1/accounts` refuses connectors this server does not run (`400`).
+- `GET /v1/connectors` lists the demo connector as `connect: "none"` when it is enabled, so its real capabilities show.
+- Connect errors (`400`, `details.reason`) say whether the network was unreachable, the credentials were refused, or
+  the network refused, with the connector's own hint.
+- Without `REDIS_URL` the API process runs the background jobs itself (ingest, outcomes, account metrics, link
+  rollups, tracker scan, trend sources, forecasts) on timers; `STARSIGN_INPROCESS_JOBS=0` turns that off.
+- `STARSIGN_PUBLIC_URL` falls back to `RENDER_EXTERNAL_URL` on Render's web service.
+- Webhook handlers may answer a delivery from its own signed body (`respond`), and OAuth callbacks pass every query
+  parameter to the connector (`callbackParams`).
+

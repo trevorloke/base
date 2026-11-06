@@ -1,6 +1,8 @@
 # Render Blueprint — staging deploys every push to `main`; production deploys the `production` branch.
 # Mirrors the Starbase layout: one Docker image, three services from it (api, workers, operators),
 # one Postgres (pgvector is available on Render Postgres 16), one Redis (Key Value).
+# Connector app keys (X_CLIENT_ID, META_CLIENT_ID, ... see docs/integrations/README.md) go on the web service AND the
+# workers service: the web service connects accounts, the workers refresh their tokens and publish.
 services:
   - type: web
     name: starsign-staging
@@ -20,6 +22,9 @@ services:
         fromService: { type: keyvalue, name: starsign-staging-redis, property: connectionString }
       - key: STARSIGN_MASTER_KEY
         generateValue: true
+      # Optional on the web service (it falls back to Render's own URL); set it to your custom domain if you have one.
+      - key: STARSIGN_PUBLIC_URL
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: STARSIGN_MODEL
@@ -34,6 +39,13 @@ services:
     dockerCommand: pnpm --filter @starsign/workers start
     autoDeploy: true
     envVars:
+      # Production: no demo connector, and the same behaviour as the web service.
+      - key: NODE_ENV
+        value: production
+      # The web service's public URL (e.g. https://starsign-staging.onrender.com): workers wrap links in posts and
+      # register webhooks with it. Background workers have no URL of their own.
+      - key: STARSIGN_PUBLIC_URL
+        sync: false
       - key: DATABASE_URL
         fromDatabase: { name: starsign-staging-db, property: connectionString }
       - key: REDIS_URL
@@ -50,6 +62,13 @@ services:
     dockerCommand: pnpm --filter @starsign/operators start
     autoDeploy: true
     envVars:
+      # Production: no demo connector, and the same behaviour as the web service.
+      - key: NODE_ENV
+        value: production
+      # The web service's public URL (e.g. https://starsign-staging.onrender.com): workers wrap links in posts and
+      # register webhooks with it. Background workers have no URL of their own.
+      - key: STARSIGN_PUBLIC_URL
+        sync: false
       - key: DATABASE_URL
         fromDatabase: { name: starsign-staging-db, property: connectionString }
       - key: REDIS_URL

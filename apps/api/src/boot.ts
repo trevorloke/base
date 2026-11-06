@@ -1,6 +1,6 @@
 import { createDb, migrate, type DbHandle } from "@starsign/db";
 import { Starsign, SecretBox, TimerScheduler, type Scheduler } from "@starsign/core";
-import { BullMQScheduler, buildRegistry, createRedis } from "@starsign/workers";
+import { BullMQScheduler, buildRegistry, createRedis, startInProcessJobs } from "@starsign/workers";
 import { AnthropicGateway, FakeGateway, defaultFakeHandlers, type ModelGateway } from "@starsign/ai";
 import { createDefaultSources, type SourceAdapter } from "@starsign/sources";
 
@@ -57,6 +57,15 @@ export async function boot(env: NodeJS.ProcessEnv = process.env): Promise<Booted
     m = new Starsign({ handle, connectors: buildRegistry(env), scheduler, secrets: SecretBox.fromEnv(env) });
     const n = await m.publishing.rearm((postId, at) => timers.schedulePublish(postId, at));
     if (n) console.log(`[scheduler] re-armed ${n} scheduled post(s) (in-process timers; set REDIS_URL for durable queues)`);
+    // No separate workers process: run the background jobs here, or the feed, radar and metrics never fill.
+    if (env.STARSIGN_INPROCESS_JOBS !== "0") {
+      const jobs = startInProcessJobs(m);
+      const prev = closeScheduler;
+      closeScheduler = async () => {
+        jobs.stop();
+        await prev();
+      };
+    }
   }
   return {
     handle,

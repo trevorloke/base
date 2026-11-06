@@ -435,6 +435,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   });
   app.post("/v1/posts/:id/publish-now", async (c) => c.json(await m.posts.publishNow(c.get("principal"), c.req.param("id"))));
   app.post("/v1/posts/:id/cancel", async (c) => c.json(await m.posts.cancel(c.get("principal"), c.req.param("id"))));
+  app.post("/v1/posts/:id/retry", async (c) => c.json(await m.posts.retry(c.get("principal"), c.req.param("id"))));
   app.patch("/v1/posts/:id/variants", async (c) => {
     const body = (await c.req.json()) as { edits: Record<string, string> };
     return c.json(await m.posts.updateVariants(c.get("principal"), c.req.param("id"), body.edits ?? {}));
