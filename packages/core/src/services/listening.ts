@@ -13,6 +13,9 @@ export type StreamRow = typeof streams.$inferSelect;
 
 /** The live feed: every inbound item from every connected account, raw first, normalized second, matched to streams third. */
 export class ListeningService {
+  /** Called with the ids of newly stored items (the tracker scans them). Failures are logged, never lost items. */
+  readonly afterIngest: ((workspaceId: string, activityIds: string[]) => Promise<unknown>)[] = [];
+
   constructor(
     private readonly ctx: CoreContext,
     private readonly accounts: AccountService,
@@ -100,6 +103,9 @@ export class ListeningService {
       ids.push(id);
       this.ctx.emitter.emit("activity", { workspaceId, id, network: item.network, kind: item.kind, matchedStreams: matched, lang });
     }
+    for (const hook of this.afterIngest) {
+      if (ids.length) await hook(workspaceId, ids).catch((e) => console.error("[listening] after-ingest hook failed:", (e as Error).message));
+    }
     if (ingested > 0) {
       await this.ctx.events.append({
         workspaceId,
@@ -115,9 +121,13 @@ export class ListeningService {
 
   async feed(
     workspaceId: string,
-    opts: { streamId?: string; networks?: Network[]; kinds?: ActivityKind[]; accountId?: string; since?: Date; before?: Date; limit?: number; q?: string; languages?: string[]; conversationId?: string } = {},
+    opts: { streamId?: string; networks?: Network[]; kinds?: ActivityKind[]; accountId?: string; since?: Date; before?: Date; limit?: number; q?: string; languages?: string[]; conversationId?: string; ids?: string[] } = {},
   ) {
     const conds = [eq(activities.workspaceId, workspaceId)];
+    if (opts.ids) {
+      if (opts.ids.length === 0) return [];
+      conds.push(inArray(activities.id, opts.ids));
+    }
     if (opts.languages?.length) conds.push(inArray(activities.lang, opts.languages.map(primaryLanguage)));
     if (opts.conversationId) conds.push(eq(activities.conversationId, opts.conversationId));
     if (opts.streamId) conds.push(sql`${activities.matchedStreams} @> ${JSON.stringify([opts.streamId])}::jsonb`);

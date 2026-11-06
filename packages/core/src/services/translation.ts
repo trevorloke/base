@@ -45,6 +45,9 @@ const MAX_CHARS = 2000;
 type Row = typeof activities.$inferSelect;
 
 export class TranslationService {
+  /** Called with ids whose translation just landed (the tracker scans translations too). */
+  readonly afterTranslate: ((workspaceId: string, activityIds: string[]) => Promise<unknown>)[] = [];
+
   constructor(
     private readonly ctx: CoreContext,
     private readonly ops: OpsService,
@@ -164,6 +167,8 @@ export class TranslationService {
           }
         }
       }
+      const done = rows.map((r) => r.id);
+      for (const hook of this.afterTranslate) await hook(workspaceId, done).catch((e) => console.error("[translation] after-translate hook failed:", (e as Error).message));
       await this.ops.finishRun(runId, { status: "succeeded", summary: `translated ${translated} message(s) into ${to}`, inputTokens, outputTokens, costUsd });
     } catch (e) {
       await this.ops.finishRun(runId, { status: "failed", error: (e as Error).message, summary: `translated ${translated} before failing`, inputTokens, outputTokens, costUsd });

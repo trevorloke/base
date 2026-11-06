@@ -541,6 +541,53 @@ export const mediaAssets = pgTable(
   (t) => [index("media_assets_ws").on(t.workspaceId, t.createdAt), index("media_assets_sha").on(t.workspaceId, t.sha256)],
 );
 
+// ---------------------------------------------------------------- the tracker: organisations and people
+
+/** A named organisation (party, brand, company) or person (candidate, spokesperson, creator, individual brand). */
+export const trackedEntities = pgTable(
+  "tracked_entities",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    kind: text("kind").$type<"organization" | "person">().notNull(),
+    name: text("name").notNull(),
+    role: text("role"),
+    parentId: text("parent_id"),
+    relation: text("relation").$type<"own" | "client" | "prospect" | "competitor" | "opponent" | "watch">().notNull().default("watch"),
+    aliases: jsonb("aliases").$type<string[]>().notNull().default([]),
+    handles: jsonb("handles").$type<Record<string, string[]>>().notNull().default({}),
+    context: jsonb("context").$type<string[]>().notNull().default([]),
+    exclude: jsonb("exclude").$type<string[]>().notNull().default([]),
+    wikipedia: jsonb("wikipedia").$type<string[]>().notNull().default([]),
+    trendTopicId: text("trend_topic_id"),
+    notes: text("notes"),
+    createdBy: jsonb("created_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    archivedAt: ts("archived_at"),
+  },
+  (t) => [index("tracked_entities_ws").on(t.workspaceId, t.archivedAt), index("tracked_entities_parent").on(t.parentId)],
+);
+
+/** Which messages mention (or were written by) which tracked entity. Derived from activities; re-creatable. */
+export const entityMentions = pgTable(
+  "entity_mentions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    entityId: text("entity_id").notNull().references(() => trackedEntities.id),
+    activityId: text("activity_id").notNull().references(() => activities.id),
+    how: text("how").$type<"name" | "handle" | "author">().notNull(),
+    term: text("term"),
+    network: text("network").notNull(),
+    lang: text("lang"),
+    authorHandle: text("author_handle"),
+    occurredAt: ts("occurred_at").notNull(),
+    createdAt: now(),
+  },
+  (t) => [uniqueIndex("entity_mentions_once").on(t.entityId, t.activityId), index("entity_mentions_entity_time").on(t.entityId, t.occurredAt), index("entity_mentions_ws_time").on(t.workspaceId, t.occurredAt)],
+);
+
 // ---------------------------------------------------------------- owned measurement: links, clicks, conversions
 
 /** Short links Starsign minted for published posts (or by hand). `target` is the destination with UTM tags. */

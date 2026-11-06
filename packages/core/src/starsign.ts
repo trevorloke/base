@@ -16,6 +16,7 @@ import { ExperimentService } from "./services/experiments.ts";
 import { MediaService } from "./services/media.ts";
 import { LinkService } from "./services/links.ts";
 import { TranslationService } from "./services/translation.ts";
+import { EntityService } from "./services/entities.ts";
 import { EngagementService, WebhookService } from "./services/listening.ts";
 import { storageFromEnv } from "./media/storage.ts";
 import { AuthService } from "./services/auth.ts";
@@ -40,6 +41,7 @@ export class Starsign {
   readonly media: MediaService;
   readonly links: LinkService;
   readonly translations: TranslationService;
+  readonly entities: EntityService;
   readonly engagement: EngagementService;
   readonly webhooks: WebhookService;
   readonly auth: AuthService;
@@ -58,6 +60,10 @@ export class Starsign {
     this.trends = new TrendService(this.ctx);
     this.ops = new OpsService(this.ctx);
     this.translations = new TranslationService(this.ctx, this.ops);
+    this.entities = new EntityService(this.ctx, this.trends);
+    // Every stored message and every new translation is scanned for tracked parties, brands and people.
+    this.listening.afterIngest.push((ws, ids) => this.entities.scanActivities(ws, ids));
+    this.translations.afterTranslate.push((ws, ids) => this.entities.scanActivities(ws, ids));
     this.exports = new ExportService(this.ctx);
     this.sources = new SourcesService(this.ctx, this.trends);
     this.brand = new BrandService(this.ctx, this.workspaces, this.policy, this.accounts);

@@ -9,7 +9,7 @@ import { approvalDiffs, postOutcomes, posts, postVariants } from "@starsign/db";
 import { CoreError, MAX_UPLOAD_BYTES, type Starsign, type Principal, type ResolvedSession } from "@starsign/core";
 import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
 import { gatePost } from "@starsign/policy";
-import { adaptForNetwork, gatewayKeywordExpander, gatewayTranslator, runPrompt, type BrandContext, type ModelGateway } from "@starsign/ai";
+import { adaptForNetwork, gatewayKeywordExpander, gatewayTranslator, runPrompt, suggestAliases, type BrandContext, type ModelGateway } from "@starsign/ai";
 import type { SourceAdapter } from "@starsign/sources";
 import { Network as NetworkEnum, NETWORK_LIMITS } from "@starsign/schema";
 import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, registerAuthRoutes, SESSION_COOKIE, setSessionCookie } from "./auth-routes.ts";
@@ -449,8 +449,50 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
         q: q.q,
         languages: list(q.languages),
         conversationId: q.conversation,
+        ...(q.entity ? { ids: await m.entities.activityIdsFor(p.workspaceId, q.entity, { includeChildren: q.children === "1" || q.children === "true", limit: 2000 }) } : {}),
       }),
     );
+  });
+
+  // ---------------------------------------------------------------- the tracker: parties, brands, people
+  app.get("/v1/entities", async (c) => c.json(await m.entities.list(c.get("principal").workspaceId, { includeArchived: c.req.query("archived") === "1" })));
+  app.post("/v1/entities", async (c) => c.json(await m.entities.create(c.get("principal"), await c.req.json()), 201));
+  app.get("/v1/entities/report", async (c) => {
+    const p = c.get("principal");
+    const now = m.ctx.now();
+    const policy = await m.policy.getActive(p.workspaceId);
+    return c.json(await m.entities.report(p.workspaceId, date(c.req.query("from"), daysAgo(7, now)), date(c.req.query("to"), now), policy.timezone));
+  });
+  app.get("/v1/entities/:id", async (c) => c.json(await m.entities.get(c.get("principal").workspaceId, c.req.param("id"))));
+  app.patch("/v1/entities/:id", async (c) => c.json(await m.entities.update(c.get("principal"), c.req.param("id"), await c.req.json())));
+  app.delete("/v1/entities/:id", async (c) => {
+    await m.entities.archive(c.get("principal"), c.req.param("id"));
+    return c.body(null, 204);
+  });
+  app.get("/v1/entities/:id/mentions", async (c) => {
+    const p = c.get("principal");
+    const children = c.req.query("children") === "1" || c.req.query("children") === "true";
+    return c.json(await m.entities.mentions(p.workspaceId, c.req.param("id"), { includeChildren: children, limit: Number(c.req.query("limit") ?? 50) }));
+  });
+  /** Suggestions only: nothing changes until the person adds them with PATCH. */
+  app.post("/v1/entities/:id/suggest-aliases", async (c) => {
+    const p = c.get("principal");
+    const e = await m.entities.get(p.workspaceId, c.req.param("id"));
+    const body = z.object({ languages: z.array(z.string().min(2).max(12)).max(12).default([]) }).parse(await c.req.json().catch(() => ({})));
+    const gw = await modelFor(p.workspaceId);
+    const parent = e.parentId ? await m.entities.get(p.workspaceId, e.parentId) : null;
+    const seen = body.languages.length ? body.languages : (await m.translations.languagesSeen(p.workspaceId, daysAgo(30, m.ctx.now()))).flatMap((l) => (l.lang ? [l.lang] : [])).slice(0, 8);
+    const languages = seen.length ? seen : [(await m.translations.settings(p.workspaceId)).home];
+    const runId = await m.ops.startRun(p.workspaceId, "tracker");
+    try {
+      const res = await runPrompt(gw, suggestAliases, { name: e.name, kind: e.kind, ...(e.role ? { role: e.role } : {}), ...(parent ? { parent: parent.name } : {}), languages, existing: [e.name, ...e.aliases] });
+      await m.ops.finishRun(runId, { status: "succeeded", summary: `suggested ${res.output.aliases.length} alias(es) for ${e.name}`, inputTokens: res.usage.inputTokens, outputTokens: res.usage.outputTokens, costUsd: res.usage.costUsd });
+      const have = new Set([e.name, ...e.aliases].map((x) => x.normalize("NFKC").toLowerCase()));
+      return c.json({ languages, aliases: res.output.aliases.filter((a) => !have.has(a.text.normalize("NFKC").toLowerCase())), ambiguous: res.output.ambiguous });
+    } catch (err) {
+      await m.ops.finishRun(runId, { status: "failed", error: (err as Error).message });
+      throw err;
+    }
   });
 
   // ---------------------------------------------------------------- languages

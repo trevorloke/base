@@ -25,6 +25,16 @@ so each connector is tested against the documented request and response shapes. 
 | TikTok | `tiktok` | OAuth | Private posts only, 5 creators/day | Content Posting Direct Post audit |
 | Pinterest | `pinterest` | OAuth | Sandbox or failures | Standard access |
 | Reddit | `reddit` | OAuth | Only with an existing registered app | New public access closed 2026-10-31; commercial terms |
+| Discord servers (read + reply) | `discord_bot` | Bot token + server ID | Yes, under 100 servers | Message Content intent: toggle in the Developer Portal; Discord verification at 100+ servers |
+| WhatsApp (business number + business-created groups) | `whatsapp` | Phone number ID + WABA ID + System User token | Yes, on your own Meta app | Meta Business verification for higher limits; Groups API needs an Official Business Account; per-message pricing |
+| WeChat Official Account (messages to the account) | `wechat` | AppID + AppSecret + original ID + server Token (+ AES key) | Verified service account needed for replies | Server IP whitelist; mainland-China hosting realities (see wechat.md) |
+| LINE (groups and chats the bot is in) | `line` | Channel access token + channel secret | Yes | Message quotas by plan |
+
+**What chat monitoring can and cannot see.** Starsign reads only what each platform's official API allows: Discord
+channels its bot can read; Telegram groups its bot is in; LINE groups and chats its bot is in; messages people send
+to a WhatsApp business number and groups the business created; messages people send to a WeChat Official Account.
+Personal WhatsApp groups and WeChat group chats (群聊) cannot be monitored through any official API, and the
+unofficial tools that try get numbers and accounts banned, so Starsign does not use them.
 
 ## Do these first (they take weeks)
 
@@ -80,6 +90,8 @@ so each connector is tested against the documented request and response shapes. 
 | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT` | Reddit |
 | `TELEGRAM_WEBHOOK_SECRET` | Telegram push updates (else polling) |
 | `RESEND_API_KEY`, `MAIL_FROM` | Invites and password resets by email |
+| `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | WhatsApp webhooks (the Meta app's secret, and a verify token you choose); webhook URL `/webhooks/whatsapp` |
+| `WECHAT_API_BASE`, `LINE_API_BASE` | Optional API host overrides (e.g. a regional WeChat host) |
 | `STARSIGN_LINK_BASE_URL` | Short-link base for tracked links (default `<STARSIGN_PUBLIC_URL>/l` when public). A short domain pointed at the API reads better in posts |
 | `STARSIGN_MAX_UPLOAD_MB` | Largest upload (default 100). Uploads are held in memory, so keep it well under the instance memory; with S3 storage the web app uploads straight to the bucket instead (up to 4 GB video; set bucket CORS to allow `PUT` + `content-type` from the app origin) |
 | `STARSIGN_ALLOW_SIGNUP` | Open sign-up after the first owner |

@@ -215,3 +215,45 @@ Outcome snapshots (`post_outcomes.metrics`) gain `tracked_clicks` (unique visito
 `conversion_value` up to each offset's due time, merged over the network's numbers; networks that report no post
 metrics get these alone. A worker job writes the same three as cumulative series every 15 minutes.
 
+## Languages and chat apps (v1.4)
+Every inbound item is labelled with its language at ingest (`lang`, ISO 639-1; null when the text is too short to
+tell) and, for chat apps, the room it was said in (`conversationId`, `conversationName`, `conversationType`:
+group | channel | direct). New activity kind `message` (a message in a group, channel or server channel).
+Networks `whatsapp`, `wechat`, `line`; connectors `discord_bot`, `whatsapp`, `wechat`, `line` (see docs/integrations).
+Credential inputs may be `optional`.
+
+- `GET /v1/feed` also takes `languages=ja,es`, `conversation=<id>`, `entity=<id>` (+ `children=1`); `q` searches translations too.
+  Rows carry `translation`, `translationLang`, `translatedAt`.
+- `GET /v1/languages` → `{ settings: { home, autoTranslate, dailyLimit }, seen: { lang, n }[], translationAvailable }`;
+  `PATCH /v1/languages/settings` (owner).
+- `POST /v1/feed/:id/translate` → the activity with its translation. `503` without a model or past the monthly model spend cap.
+- Streams: `query.languages` (only these) and `query.translations` (lang → keywords); `POST /v1/streams/:id/expand`
+  `{ languages }` fills translations with the words people use in those languages. Keywords match inside Chinese,
+  Japanese and Thai text, full-width characters fold, and translations are matched too.
+- The operators process translates waiting items every five minutes (batches of 25, `dailyLimit` per workspace), as
+  "translator" operator runs that count toward the model spend cap.
+- Webhooks: `GET|POST /webhooks/:connector` pass the query string to the connector (WeChat signs the URL), accept
+  non-JSON bodies (WeChat XML) and reply with what the platform expects (WeChat: `success`). Platforms that sign each
+  account's deliveries with that account's own secret (LINE, WeChat) are verified against the named account.
+
+## The tracker: parties, brands and people (v1.4)
+Track named organisations (`kind: "organization"`: a party, brand, company) and people (`kind: "person"`: a
+candidate, spokesperson, creator, an individual's own brand). A person or sub-brand can belong to an organisation
+(`parentId`), and organisations roll up their people.
+
+- `GET /v1/entities` (`?archived=1`), `POST /v1/entities`, `GET|PATCH|DELETE /v1/entities/:id` (DELETE archives; history stays).
+  Body: `{ kind, name, role?, parentId?, relation: own|client|prospect|competitor|opponent|watch, aliases[], handles: { network: [handle] },
+  context[], exclude[], wikipedia[], trackTrend = true, notes? }`. Viewers cannot change it; agent keys can.
+- Matching, on every stored message and every new translation: written by one of its handles (`how: "author"`); an
+  @mention of a handle (`handle`); its name or an alias in the text or translation (`name`) — only when a `context`
+  word is also present if any are set, and never when an `exclude` word appears. Creating or renaming an entity
+  rescans the last 90 days.
+- `trackTrend` creates a trend topic (name, aliases, `wiki:` articles) so the radar forecasts its momentum.
+- `GET /v1/entities/report?from&to` (default 7 days) → per entity: `mentions`, `authored`, `people`, `sentiment`,
+  `familyMentions` (with its people), `byNetwork`, `byLanguage`, `byDay`, `shareOfVoice` (among top-level entities),
+  `shareWithinParent` (among an organisation's people).
+- `GET /v1/entities/:id/mentions?children=1&limit=` → `{ mention: { how, term, network, lang }, activity }[]`.
+- `POST /v1/entities/:id/suggest-aliases` `{ languages? }` → `{ languages, aliases: { text, lang, why }[], ambiguous[] }`.
+  Suggestions only; add them with PATCH. Defaults to the languages seen in the feed.
+- MCP tools: `list_tracked`, `get_tracker_report`, `track_entity`.
+

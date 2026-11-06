@@ -135,6 +135,7 @@ describe("schemas", () => {
       scoreRelevance: { brand, topic: { name: "four-day week", keywords: ["async work"] } },
       translateMessages: { to: "en", items: [{ id: "a1", text: "新商品はいつ？", lang: "ja" }, { id: "a2", text: "hello", lang: "en" }] },
       translateKeywords: { keywords: ["rain jacket"], languages: ["ja", "es"], keepAsIs: ["Acme"] },
+      suggestAliases: { name: "Maria Lopez", kind: "person", role: "candidate", parent: "Green Party", languages: ["en", "es"], existing: [] },
     };
     for (const p of ALL_PROMPTS) {
       const format = betaZodOutputFormat(p.schema);
