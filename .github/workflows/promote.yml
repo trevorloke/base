@@ -1,5 +1,5 @@
 # Promote staging to production: fast-forward the `production` branch to
-# what `main` is now (staging deploys from main; production from
+# what `main` is now (every app's staging deploys from main; production from
 # production). Run it from the Actions tab — "Promote to production" → Run
 # workflow. It refuses when CI has not passed on main's latest commit, and
 # when production has commits main does not (nothing is ever rewritten).
@@ -33,16 +33,20 @@ jobs:
           git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha is not on main"; exit 1; }
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "Promoting $sha"
-      - name: Require green CI on that commit
+      - name: Require green CI on that commit (every app)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           sha="${{ steps.pick.outputs.sha }}"
-          conclusion=$(gh api "repos/${{ github.repository }}/commits/$sha/check-runs?check_name=starbase" \
-            --jq '[.check_runs[] | select(.name == "starbase")] | sort_by(.completed_at) | last | .conclusion // "none"')
-          echo "CI on $sha: $conclusion"
-          [ "$conclusion" = "success" ] || { echo "::error::CI has not passed on $sha (it is: $conclusion). Wait for green, or fix main."; exit 1; }
+          bad=0
+          for app in ground web air gateway; do
+            conclusion=$(gh api "repos/${{ github.repository }}/commits/$sha/check-runs?check_name=$app" \
+              --jq '[.check_runs[] | select(.name == "'"$app"'")] | sort_by(.completed_at) | last | .conclusion // "none"')
+            echo "CI ($app) on $sha: $conclusion"
+            [ "$conclusion" = "success" ] || { echo "::error::$app has not passed on $sha (it is: $conclusion)."; bad=1; }
+          done
+          [ "$bad" = 0 ] || { echo "::error::Wait for green, or fix main."; exit 1; }
       - name: Fast-forward production
         run: |
           set -euo pipefail

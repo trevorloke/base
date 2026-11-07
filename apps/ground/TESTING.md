@@ -67,7 +67,7 @@ For Twilio, set the number's incoming messages webhook to
 campaign also need `BASE_PUBLIC_URL`; `TWILIO_VOICE=off` keeps texting
 and turns calling off.
 
-Any Docker host works too: `docker build -t base-ground .` then run with
+Any Docker host works too: from the repository root, `docker build -t base-ground .` then run with
 either `DATABASE_URL=postgres://…` or a volume at `/data`.
 
 ---

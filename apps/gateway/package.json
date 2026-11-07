@@ -1,0 +1,12 @@
+{
+  "name": "base-gateway",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "base.win's front door: sends /<client>/… to that client's apps. See ../../SUITE.md.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test --test-force-exit test/*.test.js"
+  }
+}

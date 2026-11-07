@@ -1,109 +1,97 @@
-# Render Blueprint — one client's two environments, from one repo:
-#   starbase-staging    deploys every push to `main`     → test here first
-#   starbase            deploys the `production` branch  → promoted from main
-#                       by the "Promote to production" workflow (GitHub → Actions)
-# Each has its own Postgres database; nothing is shared between them.
+# Render Blueprint for base (SUITE.md). One client today: Imagine Surrey
+# (slug `imaginesurrey`). Every client has its own copy of each app — its own
+# services and its own databases; only the front door (base.win) is shared.
 #
-# Another client is another copy of this file's pair with its own names
-# (starbase-<client>, starbase-<client>-staging) and its own STARBASE_* values —
-# see GOING-LIVE.md "A new client". Service names are unique per Render
-# account, so the copy must rename every service and database.
+#   *-staging    deploys every push to `main`        → staging.base.win
+#   the rest     deploys the `production` branch     → base.win, moved forward
+#                only by "Promote to production" (GitHub → Actions), when Trevor
+#                says so
+#
+# Production today is base ground alone (still named `starbase`, on its old
+# settings). Its rename and production's web, air and front door are written
+# out at the bottom, commented, and go in at the first promotion of the suite:
+# the `production` branch doesn't hold apps/web, apps/air or apps/gateway until
+# then, so a service built from it now would fail.
+#
+# A new client is a copy of the four `imaginesurrey` blocks under its own slug
+# (names are unique per Render workspace) plus BASE_CLIENT_<SLUG>_* lines on
+# the front door. See SUITE.md.
+#
+# Settings with `sync: false` are asked for when the Blueprint syncs and are
+# set per service after. Each app's own docs list its optional settings:
+# apps/ground/INTEGRATIONS.md, apps/web/SETUP.md, apps/air/README.md.
 #
 # Docs: https://render.com/docs/blueprint-spec
-#
-# Every outside service, its settings and where each key comes from:
-# INTEGRATIONS.md. Settings with sync: false are asked for when the Blueprint
-# is created and set per service after. Optional ones, added under the
-# service's Environment only when wanted:
-#   GEOCODER (bc), GEOCODER_FALLBACK, BC_GEOCODER_KEY   address lookup
-#   GOOGLE_MAPS_TILES=1, GOOGLE_MAPS_TILE_TYPE          Google map tiles
-#   STARBASE_TILE_URL, _ATTRIBUTION, _MAX_ZOOM          another tile provider
-#   TWILIO_VOICE=off                                    texting without calls
-#   STARBASE_CANDIDATES, STARBASE_PROVINCE, STARBASE_GEO_BOUNDS   the campaign
-# Once set: Settings → Services in the admin checks each one.
 
 services:
+  # ── The front door ──────────────────────────────────────────────────────
   - type: web
-    name: starbase-staging
+    name: base-gateway-staging
     runtime: docker
     plan: starter
     region: oregon
     branch: main
-    dockerfilePath: ./Dockerfile
+    dockerContext: ./apps/gateway
+    dockerfilePath: ./apps/gateway/Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: BASE_CLIENT_IMAGINESURREY_GROUND
+        fromService: { type: web, name: base-ground-imaginesurrey-staging, property: hostport }
+      - key: BASE_CLIENT_IMAGINESURREY_AIR
+        fromService: { type: web, name: base-air-imaginesurrey-staging, property: hostport }
+      - key: BASE_CLIENT_IMAGINESURREY_WEB   # base web staging's public https:// address
+        sync: false
+
+  # ── Imagine Surrey · base ground (staging) ──────────────────────────────
+  - type: web
+    name: base-ground-imaginesurrey-staging
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
     dockerContext: .
+    dockerfilePath: ./Dockerfile          # base ground's image, at the root (see the Dockerfile)
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
-      - key: STARBASE_ENV
+      - key: BASE_ENV
         value: staging
       - key: DATABASE_URL
-        fromDatabase:
-          name: starbase-staging-db
-          property: connectionString
-      # The client. The same values on both environments (below).
-      - key: STARBASE_ORG_NAME
+        fromDatabase: { name: base-ground-imaginesurrey-staging-db, property: connectionString }
+      - key: BASE_PATH
+        value: /imaginesurrey
+      - key: BASE_PUBLIC_URL
+        value: https://staging.base.win/imaginesurrey
+      - key: BASE_TRUSTED_PROXIES          # Render's load balancer, then the front door
+        value: "2"
+      - key: BASE_ORG_NAME
         value: Imagine Surrey
-      - key: STARBASE_JURISDICTION
+      - key: BASE_JURISDICTION
         value: bc-municipal
-      - key: STARBASE_TZ
+      - key: BASE_TZ
         value: America/Vancouver
-      - key: STARBASE_CITY
+      - key: BASE_CITY
         value: Surrey
-      - key: STARBASE_SLATES
+      - key: BASE_SLATES
         value: "council:City council,school_board:School board"
-      - key: STARBASE_PUBLIC_URL     # this environment's address, e.g. https://starbase-staging.onrender.com
+      # Signing in once (SUITE.md): ground is the hub; each app's secret is
+      # made here and handed to that app below.
+      - key: BASE_AIR_URL
+        value: https://staging.base.win/imaginesurrey/air
+      - key: BASE_AIR_SSO_SECRET
+        generateValue: true
+      - key: BASE_WEB_URL                  # base web staging's public https:// address
         sync: false
-      - key: RESEND_API_KEY          # email: newsletters, invites, shift alerts (staging: a test key, or unset)
+      - key: BASE_WEB_SSO_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY                # staging: a test key, or unset
         sync: false
       - key: MAIL_FROM
         sync: false
-      - key: TWILIO_ACCOUNT_SID      # texting and calls (staging: a test number, or unset)
-        sync: false
-      - key: TWILIO_AUTH_TOKEN
-        sync: false
-      - key: TWILIO_FROM
-        sync: false
-      - key: GOOGLE_MAPS_SERVER_KEY  # optional: Google geocoding and map tiles (INTEGRATIONS.md)
-        sync: false
-
-  - type: web
-    name: starbase
-    runtime: docker
-    plan: starter              # always-on; volunteers canvass at all hours
-    region: oregon
-    branch: production
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    healthCheckPath: /api/health
-    autoDeploy: true
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: STARBASE_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: starbase-db
-          property: connectionString
-      - key: STARBASE_ORG_NAME
-        value: Imagine Surrey
-      - key: STARBASE_JURISDICTION
-        value: bc-municipal
-      - key: STARBASE_TZ
-        value: America/Vancouver
-      - key: STARBASE_CITY
-        value: Surrey
-      - key: STARBASE_SLATES
-        value: "council:City council,school_board:School board"
-      - key: STARBASE_PUBLIC_URL     # the public address, e.g. https://starbase.imaginesurrey.ca
-        sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: MAIL_FROM               # e.g. Imagine Surrey <team@imaginesurrey.ca>
-        sync: false
-      - key: TWILIO_ACCOUNT_SID
+      - key: TWILIO_ACCOUNT_SID            # staging: a test number, or unset
         sync: false
       - key: TWILIO_AUTH_TOKEN
         sync: false
@@ -112,12 +100,246 @@ services:
       - key: GOOGLE_MAPS_SERVER_KEY
         sync: false
 
+  # ── Imagine Surrey · base web (staging) ─────────────────────────────────
+  - type: web
+    name: base-web-imaginesurrey-staging
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    dockerContext: ./apps/web
+    dockerfilePath: ./apps/web/Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: base-web-imaginesurrey-staging-db, property: connectionString }
+      - key: NEXT_PUBLIC_SITE_URL          # this service's public https:// address
+        sync: false
+      - key: BASE_WEB_BRAND_PRESET
+        value: imagine-surrey
+      - key: CRON_SECRET
+        generateValue: true
+      - key: BASE_GROUND_URL
+        value: https://staging.base.win/imaginesurrey
+      - key: BASE_GROUND_INTERNAL_URL
+        fromService: { type: web, name: base-ground-imaginesurrey-staging, property: hostport }
+      - key: BASE_SSO_SECRET
+        fromService: { type: web, name: base-ground-imaginesurrey-staging, envVarKey: BASE_WEB_SSO_SECRET }
+      - key: BASE_AIR_URL
+        value: https://staging.base.win/imaginesurrey/air
+      - key: BASE_GROUND_KEY               # a website key made in base ground (Settings → Services)
+        sync: false
+      - key: BASE_GROUND_INBOUND_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY             # staging: test-mode keys only
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+
+  - type: cron
+    name: base-web-imaginesurrey-staging-reminders
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main
+    rootDir: ./apps/gateway                # nothing to build: the job is one curl
+    schedule: "7 17 * * *"                 # about 10 a.m. Pacific
+    buildCommand: "true"
+    startCommand: curl -fsS -H "Authorization: Bearer $CRON_SECRET" "http://$WEB_HOSTPORT/api/cron/reminders"
+    envVars:
+      - key: WEB_HOSTPORT
+        fromService: { type: web, name: base-web-imaginesurrey-staging, property: hostport }
+      - key: CRON_SECRET
+        fromService: { type: web, name: base-web-imaginesurrey-staging, envVarKey: CRON_SECRET }
+
+  - type: cron
+    name: base-web-imaginesurrey-staging-email
+    runtime: node
+    plan: starter
+    region: oregon
+    branch: main
+    rootDir: ./apps/gateway
+    schedule: "37 17 * * *"
+    buildCommand: "true"
+    startCommand: curl -fsS -H "Authorization: Bearer $CRON_SECRET" "http://$WEB_HOSTPORT/api/cron/email"
+    envVars:
+      - key: WEB_HOSTPORT
+        fromService: { type: web, name: base-web-imaginesurrey-staging, property: hostport }
+      - key: CRON_SECRET
+        fromService: { type: web, name: base-web-imaginesurrey-staging, envVarKey: CRON_SECRET }
+
+  # ── Imagine Surrey · base air (staging) ─────────────────────────────────
+  # One image, three services: the API (which serves the web app), the
+  # workers (publishing queue, ingest, schedules) and the operators (agents).
+  - type: web
+    name: base-air-imaginesurrey-staging
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    dockerContext: ./apps/air
+    dockerfilePath: ./apps/air/Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: base-air-imaginesurrey-staging-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: base-air-imaginesurrey-staging-redis, property: connectionString }
+      - key: BASE_PATH
+        value: /imaginesurrey/air
+      - key: BASE_AIR_PUBLIC_URL
+        value: https://staging.base.win/imaginesurrey/air
+      - key: BASE_AIR_MASTER_KEY
+        generateValue: true
+      - key: BASE_AIR_BRAND_PRESET
+        value: air
+      - key: BASE_GROUND_URL
+        value: https://staging.base.win/imaginesurrey
+      - key: BASE_GROUND_INTERNAL_URL
+        fromService: { type: web, name: base-ground-imaginesurrey-staging, property: hostport }
+      - key: BASE_SSO_SECRET
+        fromService: { type: web, name: base-ground-imaginesurrey-staging, envVarKey: BASE_AIR_SSO_SECRET }
+      - key: BASE_WEB_URL                  # base web staging's public https:// address
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+  - type: worker
+    name: base-air-imaginesurrey-staging-workers
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    dockerContext: ./apps/air
+    dockerfilePath: ./apps/air/Dockerfile
+    dockerCommand: pnpm --filter @base-air/workers start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: base-air-imaginesurrey-staging-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: base-air-imaginesurrey-staging-redis, property: connectionString }
+      - key: BASE_AIR_PUBLIC_URL
+        value: https://staging.base.win/imaginesurrey/air
+      - key: BASE_AIR_MASTER_KEY
+        fromService: { type: web, name: base-air-imaginesurrey-staging, envVarKey: BASE_AIR_MASTER_KEY }
+  - type: worker
+    name: base-air-imaginesurrey-staging-operators
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    dockerContext: ./apps/air
+    dockerfilePath: ./apps/air/Dockerfile
+    dockerCommand: pnpm --filter @base-air/operators start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: base-air-imaginesurrey-staging-db, property: connectionString }
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: base-air-imaginesurrey-staging-redis, property: connectionString }
+      - key: BASE_AIR_PUBLIC_URL
+        value: https://staging.base.win/imaginesurrey/air
+      - key: BASE_AIR_MASTER_KEY
+        fromService: { type: web, name: base-air-imaginesurrey-staging, envVarKey: BASE_AIR_MASTER_KEY }
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: BASE_AIR_MODEL
+        value: claude-opus-5-5
+  - type: keyvalue
+    name: base-air-imaginesurrey-staging-redis
+    plan: starter
+    region: oregon
+    ipAllowList: []                        # private network only
+
+  # ── Imagine Surrey · base ground (production) ───────────────────────────
+  # Still named `starbase` and on its old settings until the first promotion
+  # of the suite. The BASE_* settings below are added beside the old
+  # STARBASE_* ones (a Blueprint never deletes a setting), so the code
+  # promoted later finds them; the STARBASE_* ones are removed after.
+  - type: web
+    name: starbase
+    runtime: docker
+    plan: starter              # always-on; volunteers canvass at all hours
+    region: oregon
+    branch: production
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: STARBASE_ENV
+        value: production
+      - key: BASE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase: { name: starbase-db, property: connectionString }
+      - key: STARBASE_ORG_NAME
+        value: Imagine Surrey
+      - key: BASE_ORG_NAME
+        value: Imagine Surrey
+      - key: STARBASE_JURISDICTION
+        value: bc-municipal
+      - key: BASE_JURISDICTION
+        value: bc-municipal
+      - key: STARBASE_TZ
+        value: America/Vancouver
+      - key: BASE_TZ
+        value: America/Vancouver
+      - key: STARBASE_CITY
+        value: Surrey
+      - key: BASE_CITY
+        value: Surrey
+      - key: STARBASE_SLATES
+        value: "council:City council,school_board:School board"
+      - key: BASE_SLATES
+        value: "council:City council,school_board:School board"
+
 databases:
-  - name: starbase-staging-db
+  - name: base-ground-imaginesurrey-staging-db
     plan: basic-256mb
     region: oregon
     postgresMajorVersion: "16"
-  - name: starbase-db
+  - name: base-web-imaginesurrey-staging-db
     plan: basic-256mb
     region: oregon
     postgresMajorVersion: "16"
+  - name: base-air-imaginesurrey-staging-db   # pgvector: CREATE EXTENSION vector (air's first migration)
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "16"
+  - name: starbase-db                          # production ground; renamed at the first promotion
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "16"
+
+# ── At the first promotion of the suite ─────────────────────────────────────
+# Production follows staging's blocks above with `branch: production`, the
+# names without `-staging`, base.win in place of staging.base.win, and:
+#   base-gateway                      the front door at base.win
+#   base-ground-imaginesurrey         rename of `starbase` (+ BASE_PATH, BASE_PUBLIC_URL=https://base.win/imaginesurrey,
+#                                     BASE_TRUSTED_PROXIES=2, the SSO settings); drop the STARBASE_* lines
+#   base-ground-imaginesurrey-db      rename of `starbase-db` — the same database, renamed in place
+#   base-web-imaginesurrey (+ its two crons) on imaginesurrey.ca, using the website's existing database
+#                                     (`imagine-surrey-db`, renamed in place), replacing the old
+#                                     ImagineSurreyWebsite service
+#   base-air-imaginesurrey (+ workers, operators, redis, db)

@@ -1,3 +1,5 @@
+# One check per app. "Promote to production" waits for all four to pass on
+# the commit it moves production to.
 name: CI
 
 on:
@@ -6,14 +8,18 @@ on:
   pull_request:
 
 jobs:
-  starbase:
+  ground:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/ground
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
+          cache-dependency-path: apps/ground/package-lock.json
       - run: npm ci
       - name: Test (event log, cap engine, API)
         run: npm test
@@ -21,3 +27,53 @@ jobs:
         run: npm run test:pg
       - name: Build (web)
         run: npm run build
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  air:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/air
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: apps/air/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm --filter @base-air/web typecheck
+      - run: pnpm test
+      - run: pnpm --filter @base-air/web build
+
+  gateway:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test

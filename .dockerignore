@@ -1,0 +1,10 @@
+# The root context builds base ground only (Dockerfile); the other apps build
+# from their own folders with their own .dockerignore.
+apps/web
+apps/air
+apps/gateway
+**/node_modules
+apps/ground/web/dist
+apps/ground/data
+**/*.log
+.git
