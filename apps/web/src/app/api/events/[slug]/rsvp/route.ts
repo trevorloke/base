@@ -13,7 +13,7 @@ import { subscribe } from "@/lib/server/newsletter";
 import { notifyRsvp } from "@/lib/server/notifications";
 import { findOrCreatePerson } from "@/lib/server/people";
 import { normalizePhone } from "@/lib/server/sms";
-import { forwardRsvp } from "@/lib/server/starbase-forward";
+import { forwardRsvp } from "@/lib/server/base-ground-forward";
 import { rsvpRequestSchema } from "@/lib/shift-validation";
 
 const FULL = "This event is full. Get the newsletter and we'll tell you about the next one.";

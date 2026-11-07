@@ -8,7 +8,7 @@ import { consentMeta } from "@/lib/server/consent";
 import { handle } from "@/lib/server/handle";
 import { subscribe } from "@/lib/server/newsletter";
 import { findOrCreatePerson } from "@/lib/server/people";
-import { forwardNewsletter } from "@/lib/server/starbase-forward";
+import { forwardNewsletter } from "@/lib/server/base-ground-forward";
 import { newsletterSchema } from "@/lib/validation";
 
 // Request: { email, source?, ref?, website (honeypot) }.

@@ -1,11 +1,11 @@
-// Withdrawals made in Starbase, applied here (POST /api/in/consent): the key
-// check, the body Starbase may send, and phone matching. The database part
+// Withdrawals made in base ground, applied here (POST /api/in/consent): the key
+// check, the body base ground may send, and phone matching. The database part
 // is covered end to end in e2e/desk.e2e.mjs.
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const { bearerMatches, inboundConsentSchema, phoneDigits, schemaError } = await import("@/lib/server/starbase-inbound");
+const { bearerMatches, inboundConsentSchema, phoneDigits, schemaError } = await import("@/lib/server/base-ground-inbound");
 
 const KEY = "sbin_0123456789abcdefghijklmnopqrstuv";
 
@@ -27,7 +27,7 @@ describe("the inbound key", () => {
   });
 });
 
-describe("the body Starbase sends", () => {
+describe("the body base ground sends", () => {
   const at = "2026-11-07T10:30:00-08:00";
 
   it("takes { email?, phone?, channel, action, reason, at }", () => {

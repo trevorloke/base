@@ -10,12 +10,12 @@ import { addDays, todayInSurrey } from "@/lib/shifts";
 import { recordConsent } from "./consent";
 import { emailContext, queueEmails, sendQueued, type OutgoingEmail } from "./email";
 import { normalizePhone, sendSms } from "./sms";
-import { forwardConsentWithdrawal } from "./starbase-forward";
+import { forwardConsentWithdrawal } from "./base-ground-forward";
 
 // What the website still sends itself: transactional email and texts
 // (confirmations, receipts, reminders, tracker alerts, sign-in links), the
 // replies to inbound texts (STOP and START are consent), and the log of all
-// of it. Newsletters, campaign emails and text blasts go out from Starbase,
+// of it. Newsletters, campaign emails and text blasts go out from base ground,
 // which holds the full list.
 
 // ── Texts ─────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ export async function handleInboundSms(db: Db, ctx: MessageContext & { orgPhone?
     case "stop":
       // Each withdrawal goes to the consent ledger, which also clears smsConsentAt.
       for (const m of matches) await recordConsent(db, { personId: m.id, email: m.email, channel: "sms", purpose: "sms", action: "withdraw", wording: `Texted "${input.body.trim().slice(0, 40)}"`, source: "sms-stop" });
-      // Starbase texts too: the number is opted out there as well, whether or not anyone here has it.
+      // base ground texts too: the number is opted out there as well, whether or not anyone here has it.
       if (phone) await forwardConsentWithdrawal(db, { personId: matches.length === 1 ? matches[0].id : null, phone, channel: "sms", reason: "stop" });
       reply = `You're opted out of ${ctx.orgName} texts and won't get any more. Reply START to opt back in.`;
       break;
@@ -207,7 +207,7 @@ export async function logKinds(db: Db): Promise<string[]> {
   return rows.map((r) => r.kind);
 }
 
-/** Campaign emails sent from here before Starbase took over bulk sending, newest first (read-only history). */
+/** Campaign emails sent from here before base ground took over bulk sending, newest first (read-only history). */
 export async function pastCampaigns(db: Db, limit = 50) {
   return db
     .select({ id: emailCampaigns.id, subject: emailCampaigns.subject, status: emailCampaigns.status, recipientCount: emailCampaigns.recipientCount, sentCount: emailCampaigns.sentCount, failedCount: emailCampaigns.failedCount, sentAt: emailCampaigns.sentAt, updatedAt: emailCampaigns.updatedAt })

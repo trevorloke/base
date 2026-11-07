@@ -8,7 +8,7 @@ import { LOCALES } from "@/components/admin/people/query";
 import { getDb } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { can, requireAdmin } from "@/lib/server/admin-auth";
-import { outboxForPerson } from "@/lib/server/starbase-outbox";
+import { outboxForPerson } from "@/lib/server/base-ground-outbox";
 import { displayName, filterFacets, loadPerson, type TimelineEntry } from "@/lib/server/supporters";
 import { addNoteAction, addTagAction, anonymizeAction, removeTagAction, savePerson } from "./actions";
 import "../people.css";
@@ -104,8 +104,8 @@ export default async function PersonPage({ params }: PageProps<"/admin/people/[i
               <dd>{person.issue ?? "—"}</dd>
               <dt>Source</dt>
               <dd>{person.source ?? "—"}</dd>
-              <dt>Starbase id</dt>
-              <dd>{person.starbasePersonId ? <span className="secret">{person.starbasePersonId}</span> : "—"}</dd>
+              <dt>base ground id</dt>
+              <dd>{person.baseGroundPersonId ? <span className="secret">{person.baseGroundPersonId}</span> : "—"}</dd>
               <dt>Added</dt>
               <dd>{WHEN.format(person.createdAt)}</dd>
             </dl>
@@ -204,11 +204,11 @@ export default async function PersonPage({ params }: PageProps<"/admin/people/[i
           </section>
 
           <section className="profile-card" aria-labelledby="desk-title">
-            <h2 id="desk-title">Sent to Starbase</h2>
+            <h2 id="desk-title">Sent to base ground</h2>
             {desk.length === 0 ? (
               <p className="small">Nothing from this supporter has been forwarded to the desk.</p>
             ) : (
-              <ul className="notes" data-starbase-rows>
+              <ul className="notes" data-base-ground-rows>
                 {desk.map((r) => (
                   <li key={r.id} className="note">
                     <span className="note__meta">

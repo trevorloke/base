@@ -8,8 +8,8 @@ import { ActionError, adminAction } from "@/lib/server/actions";
 import { sendEmail } from "@/lib/server/email";
 import { getSettings } from "@/lib/server/settings";
 import { normalizePhone, sendSms } from "@/lib/server/sms";
-import { ping } from "@/lib/server/starbase";
-import { deliverOutbox, retryOutboxRow, skipOutboxRow, type DeliveryReport } from "@/lib/server/starbase-outbox";
+import { ping } from "@/lib/server/base-ground";
+import { deliverOutbox, retryOutboxRow, skipOutboxRow, type DeliveryReport } from "@/lib/server/base-ground-outbox";
 import { revalidatePath } from "next/cache";
 
 /** A test message to the signed-in admin's own address, through the same path every site email takes. */
@@ -52,75 +52,75 @@ export const sendTestSms = adminAction(
   "integrations.test-sms",
 );
 
-// ── Starbase ("the desk") ─────────────────────────────────────────────────
+// ── base ground ("the desk") ─────────────────────────────────────────────────
 
-function refreshStarbase() {
+function refreshBaseGround() {
   revalidatePath("/admin/integrations");
-  revalidatePath("/admin/integrations/starbase");
+  revalidatePath("/admin/integrations/base-ground");
 }
 
 function describe(report: DeliveryReport): string {
   const parts = [`${report.sent} sent`];
   if (report.failed) parts.push(`${report.failed} refused`);
   if (report.retrying) parts.push(`${report.retrying} will be retried`);
-  if (report.unsupported) parts.push("unsubscribes and STOPs still wait: this Starbase doesn't take them yet (/in/v1/consent)");
+  if (report.unsupported) parts.push("unsubscribes and STOPs still wait: this base ground doesn't take them yet (/in/v1/consent)");
   return parts.join(", ");
 }
 
 /** GET /in/v1/ping with the configured key: which campaign and which key, or what is wrong. */
-export const testStarbase = adminAction(
+export const testBaseGround = adminAction(
   "integrations",
   z.object({}),
   async () => {
-    if (!env.starbaseEnabled) throw new ActionError("Starbase isn't configured: set STARBASE_URL and STARBASE_KEY.");
+    if (!env.baseGroundEnabled) throw new ActionError("base ground isn't configured: set BASE_GROUND_URL and BASE_GROUND_KEY.");
     const r = await ping();
-    if (r.ok) return `Connected to ${r.campaign || "Starbase"} with the key “${r.key || "unnamed"}”.`;
-    const hint = r.status === 401 ? " The key is wrong or was revoked: make a new one in Starbase → Settings → Services → Website keys." : "";
-    throw new ActionError(`Starbase answered: ${r.status ? `${r.status} ` : ""}${r.error}.${hint}`);
+    if (r.ok) return `Connected to ${r.campaign || "base ground"} with the key “${r.key || "unnamed"}”.`;
+    const hint = r.status === 401 ? " The key is wrong or was revoked: make a new one in base ground → Settings → Services → Website keys." : "";
+    throw new ActionError(`base ground answered: ${r.status ? `${r.status} ` : ""}${r.error}.${hint}`);
   },
-  "integrations.starbase-test",
+  "integrations.base-ground-test",
 );
 
 /** Send every waiting sign-up now, whatever its backoff. */
-export const sendStarbaseNow = adminAction(
+export const sendBaseGroundNow = adminAction(
   "integrations",
   z.object({}),
   async () => {
-    if (!env.starbaseEnabled) throw new ActionError("Starbase isn't configured: set STARBASE_URL and STARBASE_KEY.");
+    if (!env.baseGroundEnabled) throw new ActionError("base ground isn't configured: set BASE_GROUND_URL and BASE_GROUND_KEY.");
     const report = await deliverOutbox(getDb(), 45_000, { ignoreBackoff: true });
-    refreshStarbase();
+    refreshBaseGround();
     if (report.problem && report.sent === 0) throw new ActionError(`Nothing could be sent. ${report.problem}`);
     return `${describe(report)}.${report.problem ? ` Stopped: ${report.problem}` : ""}`;
   },
-  "integrations.starbase-send",
+  "integrations.base-ground-send",
 );
 
 const rowId = z.object({ id: z.uuid({ error: "Not an outbox id" }) });
 
 /** A failed (or skipped) row back to pending with its attempts reset, then one try now. */
-export const retryStarbaseRow = adminAction(
+export const retryBaseGroundRow = adminAction(
   "integrations",
   rowId,
   async ({ id }) => {
     const { row, report } = await retryOutboxRow(getDb(), id);
-    refreshStarbase();
+    refreshBaseGround();
     if (!row) throw new ActionError("That row no longer exists.");
-    if (row.status === "sent") return "Sent to Starbase.";
-    if (!report) return row.status === "pending" ? "Queued again. It goes once Starbase is connected." : `Only failed or skipped rows can be retried (this one is ${row.status}).`;
-    return `Queued again. ${row.lastError ? `Starbase answered: ${row.lastError}` : "It will be sent shortly."}`;
+    if (row.status === "sent") return "Sent to base ground.";
+    if (!report) return row.status === "pending" ? "Queued again. It goes once base ground is connected." : `Only failed or skipped rows can be retried (this one is ${row.status}).`;
+    return `Queued again. ${row.lastError ? `base ground answered: ${row.lastError}` : "It will be sent shortly."}`;
   },
-  "integrations.starbase-retry",
+  "integrations.base-ground-retry",
 );
 
 /** Pending or failed → skipped: it will not be sent. */
-export const skipStarbaseRow = adminAction(
+export const skipBaseGroundRow = adminAction(
   "integrations",
   rowId,
   async ({ id }) => {
     const skipped = await skipOutboxRow(getDb(), id);
-    refreshStarbase();
+    refreshBaseGround();
     if (!skipped) throw new ActionError("Only pending or failed rows can be skipped.");
     return "Skipped: it won't be sent.";
   },
-  "integrations.starbase-skip",
+  "integrations.base-ground-skip",
 );

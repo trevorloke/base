@@ -3,8 +3,8 @@ import { z } from "zod";
 import { env } from "@/lib/env";
 import { formatLongDate, SLOT_BY_ID, type Slot } from "@/lib/shifts";
 
-// The website's side of Starbase ("the desk"), the campaign's database app.
-// Starbase takes people in through a small JSON API with a website key:
+// The website's side of base ground ("the desk"), the campaign's database app.
+// base ground takes people in through a small JSON API with a website key:
 //
 //   Authorization: Bearer sbk_…
 //   GET  /in/v1/ping     → { ok, campaign, key }
@@ -13,24 +13,24 @@ import { formatLongDate, SLOT_BY_ID, type Slot } from "@/lib/shifts";
 //
 // It is called from this server only, never from a visitor's browser, which
 // would show the key to anyone. Its body schema is strict: any field outside
-// STARBASE_FIELDS, or any value over its length, is refused with a 400, so
-// every payload is built by cleanStarbasePerson, which mirrors that schema.
+// BASE_GROUND_FIELDS, or any value over its length, is refused with a 400, so
+// every payload is built by cleanBaseGroundPerson, which mirrors that schema.
 // Money, ratings and roles are never sent: gifts are logged at the desk
 // (Donations → Log a gift), where the contribution limits are checked. RSVPs,
 // paid shop orders and promise follows go as tags on the person, nothing more.
 //
 // /in/v1/consent carries withdrawals (unsubscribe, text STOP, a preference
-// change, a deletion) so both apps stop contacting the person. Starbase may
+// change, a deletion) so both apps stop contacting the person. base ground may
 // not have it yet: a 404 there means "not supported yet", and those rows wait.
 
 // ── The payload ────────────────────────────────────────────────────────────
 
 /** Every field POST /in/v1/people accepts, in the order they are sent. */
-export const STARBASE_FIELDS = ["name", "first_name", "last_name", "email", "phone", "address", "unit", "city", "postal", "tags", "newsletter", "volunteer", "note", "source"] as const;
-export type StarbaseField = (typeof STARBASE_FIELDS)[number];
+export const BASE_GROUND_FIELDS = ["name", "first_name", "last_name", "email", "phone", "address", "unit", "city", "postal", "tags", "newsletter", "volunteer", "note", "source"] as const;
+export type BaseGroundField = (typeof BASE_GROUND_FIELDS)[number];
 
-/** Starbase's own limits (server/ext/intake/index.js), counted after trimming. */
-export const STARBASE_LIMITS = {
+/** base ground's own limits (server/ext/intake/index.js), counted after trimming. */
+export const BASE_GROUND_LIMITS = {
   name: 300,
   first_name: 150,
   last_name: 150,
@@ -48,7 +48,7 @@ export const STARBASE_LIMITS = {
   tags: 20,
 } as const;
 
-export type StarbasePerson = {
+export type BaseGroundPerson = {
   name?: string;
   first_name?: string;
   last_name?: string;
@@ -68,7 +68,7 @@ export type StarbasePerson = {
 type Text = string | null | undefined;
 
 /** What a website form gave, in the website's own names. Only these are read. */
-export type StarbasePersonInput = {
+export type BaseGroundPersonInput = {
   name?: Text;
   firstName?: Text;
   lastName?: Text;
@@ -99,17 +99,17 @@ function cap(value: unknown, max: number): string | undefined {
 
 const emailSchema = z.email();
 
-/** Lower-cased and checked the way Starbase checks it; undefined when it would be refused. */
+/** Lower-cased and checked the way base ground checks it; undefined when it would be refused. */
 function cleanEmail(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const s = value.trim().toLowerCase();
-  if (!s || s.length > STARBASE_LIMITS.email || !emailSchema.safeParse(s).success) return undefined;
+  if (!s || s.length > BASE_GROUND_LIMITS.email || !emailSchema.safeParse(s).success) return undefined;
   return s;
 }
 
 /** "Petition:  Transit " → "Petition: Transit", at most 40 characters. */
 function cleanTag(value: unknown): string | undefined {
-  return typeof value === "string" ? cap(value.replace(/\s+/g, " "), STARBASE_LIMITS.tag) : undefined;
+  return typeof value === "string" ? cap(value.replace(/\s+/g, " "), BASE_GROUND_LIMITS.tag) : undefined;
 }
 
 /** A lowercase word for where the person came from: "petition:skytrain" → "petition-skytrain". */
@@ -119,22 +119,22 @@ export function sourceWord(value: unknown): string | undefined {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return cap(word, STARBASE_LIMITS.source)?.replace(/-+$/, "") || undefined;
+  return cap(word, BASE_GROUND_LIMITS.source)?.replace(/-+$/, "") || undefined;
 }
 
 /**
  * A body POST /in/v1/people will accept, from one in its own field names:
- * trimmed, empty values dropped, every text cut to Starbase's limit, the
- * email lower-cased (and dropped if Starbase would refuse it), at most 20
+ * trimmed, empty values dropped, every text cut to base ground's limit, the
+ * email lower-cased (and dropped if base ground would refuse it), at most 20
  * tags of 40 characters, the two flags sent only when true, and nothing
- * outside STARBASE_FIELDS. Null when it can't be sent: Starbase needs an
+ * outside BASE_GROUND_FIELDS. Null when it can't be sent: base ground needs an
  * email or a phone, and a name or an email.
  */
-export function cleanStarbasePerson(raw: Record<string, unknown> | null | undefined): StarbasePerson | null {
+export function cleanBaseGroundPerson(raw: Record<string, unknown> | null | undefined): BaseGroundPerson | null {
   if (!raw || typeof raw !== "object") return null;
-  const out: StarbasePerson = {};
-  const text = (field: Exclude<StarbaseField, "email" | "tags" | "newsletter" | "volunteer" | "source">) => {
-    const v = cap(raw[field], STARBASE_LIMITS[field]);
+  const out: BaseGroundPerson = {};
+  const text = (field: Exclude<BaseGroundField, "email" | "tags" | "newsletter" | "volunteer" | "source">) => {
+    const v = cap(raw[field], BASE_GROUND_LIMITS[field]);
     if (v) out[field] = v;
   };
   text("name");
@@ -148,7 +148,7 @@ export function cleanStarbasePerson(raw: Record<string, unknown> | null | undefi
   text("city");
   text("postal");
   if (Array.isArray(raw.tags)) {
-    const tags = [...new Set(raw.tags.map(cleanTag).filter((t): t is string => Boolean(t)))].slice(0, STARBASE_LIMITS.tags);
+    const tags = [...new Set(raw.tags.map(cleanTag).filter((t): t is string => Boolean(t)))].slice(0, BASE_GROUND_LIMITS.tags);
     if (tags.length) out.tags = tags;
   }
   if (raw.newsletter === true && out.email) out.newsletter = true;
@@ -160,12 +160,12 @@ export function cleanStarbasePerson(raw: Record<string, unknown> | null | undefi
   if (!out.email && !out.phone) return null;
   if (!out.name && !out.first_name && !out.last_name && !out.email) return null;
   // Rebuilt in the fixed field order, so the same person always serializes the same way.
-  return Object.fromEntries(STARBASE_FIELDS.filter((f) => out[f] !== undefined).map((f) => [f, out[f]])) as StarbasePerson;
+  return Object.fromEntries(BASE_GROUND_FIELDS.filter((f) => out[f] !== undefined).map((f) => [f, out[f]])) as BaseGroundPerson;
 }
 
-/** The payload for one website submission, from the website's field names. See cleanStarbasePerson. */
-export function toStarbasePerson(input: StarbasePersonInput): StarbasePerson | null {
-  return cleanStarbasePerson({
+/** The payload for one website submission, from the website's field names. See cleanBaseGroundPerson. */
+export function toBaseGroundPerson(input: BaseGroundPersonInput): BaseGroundPerson | null {
+  return cleanBaseGroundPerson({
     name: input.name,
     first_name: input.firstName,
     last_name: input.lastName,
@@ -199,8 +199,8 @@ export function signaturePerson(s: {
   address?: Text;
   postalCode?: Text;
   newsletter: boolean;
-}): StarbasePerson | null {
-  return toStarbasePerson({
+}): BaseGroundPerson | null {
+  return toBaseGroundPerson({
     firstName: s.firstName,
     lastName: s.lastName,
     email: s.email,
@@ -214,8 +214,8 @@ export function signaturePerson(s: {
 }
 
 /** A newsletter address that has just become subscribed on the website. */
-export function newsletterPerson(s: { email: string; source?: Text }): StarbasePerson | null {
-  return toStarbasePerson({ email: s.email, newsletter: true, source: `newsletter-${s.source || "website"}` });
+export function newsletterPerson(s: { email: string; source?: Text }): BaseGroundPerson | null {
+  return toBaseGroundPerson({ email: s.email, newsletter: true, source: `newsletter-${s.source || "website"}` });
 }
 
 /** "Signed up for Door-knocking in Newton, Saturday, November 7, 9 a.m.–12 p.m. at Newton Library" */
@@ -232,8 +232,8 @@ export function shiftPerson(s: {
   postalCode?: Text;
   opening: { title: string; date: string; slot: Slot; location?: string | null };
   newsletter: boolean;
-}): StarbasePerson | null {
-  return toStarbasePerson({
+}): BaseGroundPerson | null {
+  return toBaseGroundPerson({
     name: s.name,
     email: s.email,
     phone: s.phone,
@@ -250,7 +250,7 @@ export const MEMBER_TAG = "Member (joined online)";
 /**
  * A membership that has become active, from the details given on its form
  * (the membership snapshot). Deliberately takes no fee: nothing about money
- * ever goes to Starbase.
+ * ever goes to base ground.
  */
 export function membershipPerson(m: {
   memberName: Text;
@@ -262,9 +262,9 @@ export function membershipPerson(m: {
   interestVolunteer: boolean;
   interestLawnSign: boolean;
   updatesConsent: boolean;
-}): StarbasePerson | null {
+}): BaseGroundPerson | null {
   const note = m.interestLawnSign ? (m.interestVolunteer ? "Wants to volunteer. Asked for a lawn sign" : "Asked for a lawn sign") : undefined;
-  return toStarbasePerson({
+  return toBaseGroundPerson({
     name: m.memberName,
     email: m.email,
     phone: m.memberPhone,
@@ -280,12 +280,12 @@ export function membershipPerson(m: {
 }
 
 /** "Delete my account" from the supporter portal: a request for the desk, with the email and name only. */
-export function deletionRequestPerson(p: { firstName?: Text; lastName?: Text; email: string; date: string }): StarbasePerson | null {
-  return toStarbasePerson({
+export function deletionRequestPerson(p: { firstName?: Text; lastName?: Text; email: string; date: string }): BaseGroundPerson | null {
+  return toBaseGroundPerson({
     firstName: p.firstName,
     lastName: p.lastName,
     email: p.email,
-    note: `Asked us to delete their data (supporter portal, ${p.date}). Please action it in Starbase too.`,
+    note: `Asked us to delete their data (supporter portal, ${p.date}). Please action it in base ground too.`,
     source: "supporter-portal",
   });
 }
@@ -297,27 +297,27 @@ export function deletionRequestPerson(p: { firstName?: Text; lastName?: Text; em
 export const MERCH_TAG = "Bought merch";
 
 /** "RSVP: Town hall in Newton" for an event RSVP. */
-export function rsvpPerson(r: { name?: Text; email: string; eventTitle: string }): StarbasePerson | null {
-  return toStarbasePerson({ name: r.name, email: r.email, tags: [`RSVP: ${r.eventTitle}`], source: "rsvp" });
+export function rsvpPerson(r: { name?: Text; email: string; eventTitle: string }): BaseGroundPerson | null {
+  return toBaseGroundPerson({ name: r.name, email: r.email, tags: [`RSVP: ${r.eventTitle}`], source: "rsvp" });
 }
 
 /** A paid shop order: the "Bought merch" tag. Deliberately takes no amount or items. */
-export function orderPerson(o: { firstName?: Text; lastName?: Text; email: string }): StarbasePerson | null {
-  return toStarbasePerson({ firstName: o.firstName, lastName: o.lastName, email: o.email, tags: [MERCH_TAG], source: "shop" });
+export function orderPerson(o: { firstName?: Text; lastName?: Text; email: string }): BaseGroundPerson | null {
+  return toBaseGroundPerson({ firstName: o.firstName, lastName: o.lastName, email: o.email, tags: [MERCH_TAG], source: "shop" });
 }
 
 /** A confirmed promise-tracker follow: "Follows: promise 12". */
-export function followPerson(f: { email: string; number: number }): StarbasePerson | null {
-  return toStarbasePerson({ email: f.email, tags: [`Follows: promise ${f.number}`], source: "tracker" });
+export function followPerson(f: { email: string; number: number }): BaseGroundPerson | null {
+  return toBaseGroundPerson({ email: f.email, tags: [`Follows: promise ${f.number}`], source: "tracker" });
 }
 
 /**
  * Details a signed-in supporter changed in the portal (/me/preferences).
- * Starbase fills blanks only, the same rule as every sign-up, so what is on
+ * base ground fills blanks only, the same rule as every sign-up, so what is on
  * file there is never overwritten.
  */
-export function portalPerson(p: { firstName?: Text; lastName?: Text; email: string; phone?: Text; address?: Text; postalCode?: Text }): StarbasePerson | null {
-  return toStarbasePerson({ firstName: p.firstName, lastName: p.lastName, email: p.email, phone: p.phone, address: p.address, postalCode: p.postalCode, source: "portal" });
+export function portalPerson(p: { firstName?: Text; lastName?: Text; email: string; phone?: Text; address?: Text; postalCode?: Text }): BaseGroundPerson | null {
+  return toBaseGroundPerson({ firstName: p.firstName, lastName: p.lastName, email: p.email, phone: p.phone, address: p.address, postalCode: p.postalCode, source: "portal" });
 }
 
 // ── Consent withdrawals (POST /in/v1/consent) ──────────────────────────────
@@ -339,7 +339,7 @@ export type ConsentPayload = {
 };
 
 /**
- * A withdrawal Starbase can match: the email (checked and lower-cased) or the
+ * A withdrawal base ground can match: the email (checked and lower-cased) or the
  * phone, the channel, the reason and the time. Null when there is nothing to
  * match on, or the channel or reason is unknown.
  */
@@ -349,19 +349,19 @@ export function cleanConsentPayload(raw: Record<string, unknown> | null | undefi
   const reason = CONSENT_REASONS.find((r) => r === raw.reason);
   if (!channel || !reason || raw.action !== "withdraw") return null;
   const email = cleanEmail(raw.email);
-  const phone = cap(raw.phone, STARBASE_LIMITS.phone);
+  const phone = cap(raw.phone, BASE_GROUND_LIMITS.phone);
   if (!email && !phone) return null;
   const at = typeof raw.at === "string" && !Number.isNaN(Date.parse(raw.at)) ? new Date(raw.at).toISOString() : new Date().toISOString();
   return { ...(email ? { email } : {}), ...(phone ? { phone } : {}), channel, action: "withdraw", reason, at };
 }
 
-/** A withdrawal recorded on the website, for Starbase. */
+/** A withdrawal recorded on the website, for base ground. */
 export function consentPayload(w: { email?: Text; phone?: Text; channel: ConsentSyncChannel; reason: ConsentReason; at?: Date }): ConsentPayload | null {
   return cleanConsentPayload({ email: w.email, phone: w.phone, channel: w.channel, action: "withdraw", reason: w.reason, at: (w.at ?? new Date()).toISOString() });
 }
 
 /**
- * JSON with keys in sorted order at every level. Starbase compares the raw
+ * JSON with keys in sorted order at every level. base ground compares the raw
  * body of a retry with the first one (same Idempotency-Key, different body is
  * a 409), and a payload read back from a jsonb column can come back with its
  * keys reordered, so every send serializes this way.
@@ -374,64 +374,64 @@ export function stableJson(value: unknown): string {
 
 // ── The client ─────────────────────────────────────────────────────────────
 
-export const STARBASE_TIMEOUT_MS = 10_000;
+export const BASE_GROUND_TIMEOUT_MS = 10_000;
 
 type Fetch = typeof fetch;
-export type StarbaseConfig = { url?: string; key?: string; fetch?: Fetch; timeoutMs?: number };
+export type BaseGroundConfig = { url?: string; key?: string; fetch?: Fetch; timeoutMs?: number };
 
 /** Why the configured address can't be used, or null. The key must never travel unencrypted. */
-export function starbaseUrlProblem(url: string | undefined): string | null {
-  if (!url) return "STARBASE_URL is not set.";
+export function baseGroundUrlProblem(url: string | undefined): string | null {
+  if (!url) return "BASE_GROUND_URL is not set.";
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return "STARBASE_URL is not a web address (e.g. https://starbase.imaginesurrey.ca).";
+    return "BASE_GROUND_URL is not a web address (e.g. https://base.win/imaginesurrey).";
   }
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
-  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && local)) return "STARBASE_URL must start with https://, so the key is never sent unencrypted.";
+  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && local)) return "BASE_GROUND_URL must start with https://, so the key is never sent unencrypted.";
   return null;
 }
 
-function config(c: StarbaseConfig = {}) {
-  return { url: c.url ?? env.starbaseUrl, key: c.key ?? env.starbaseKey, fetch: c.fetch ?? fetch, timeoutMs: c.timeoutMs ?? STARBASE_TIMEOUT_MS };
+function config(c: BaseGroundConfig = {}) {
+  return { url: c.url ?? env.baseGroundUrl, key: c.key ?? env.baseGroundKey, fetch: c.fetch ?? fetch, timeoutMs: c.timeoutMs ?? BASE_GROUND_TIMEOUT_MS };
 }
 
-/** Starbase's two intake endpoints. Every outbox row names the one it goes to. */
+/** base ground's two intake endpoints. Every outbox row names the one it goes to. */
 export const PEOPLE_ENDPOINT = "/in/v1/people";
 export const CONSENT_ENDPOINT = "/in/v1/consent";
-export type StarbaseEndpoint = typeof PEOPLE_ENDPOINT | typeof CONSENT_ENDPOINT;
-export const STARBASE_ENDPOINTS: StarbaseEndpoint[] = [PEOPLE_ENDPOINT, CONSENT_ENDPOINT];
+export type BaseGroundEndpoint = typeof PEOPLE_ENDPOINT | typeof CONSENT_ENDPOINT;
+export const BASE_GROUND_ENDPOINTS: BaseGroundEndpoint[] = [PEOPLE_ENDPOINT, CONSENT_ENDPOINT];
 
-/** How a waiting row says Starbase has no consent endpoint yet (never starts with a status, so it isn't read as a key problem). */
+/** How a waiting row says base ground has no consent endpoint yet (never starts with a status, so it isn't read as a key problem). */
 export const NOT_SUPPORTED_YET = "Not supported yet";
 
 /**
  * What one call came to:
- *   ok           Starbase took it (a replay of an earlier answer counts)
+ *   ok           base ground took it (a replay of an earlier answer counts)
  *   refused      400, 409, 415 or another 4xx: this body will never be taken as it is
  *   config       401, 403, 404: the key or address is wrong; nothing about the row is
- *   unsupported  a 404 from /in/v1/consent: this Starbase doesn't take consent yet
+ *   unsupported  a 404 from /in/v1/consent: this base ground doesn't take consent yet
  *   retry        429, 5xx, a timeout, a network error or an answer we can't read
  */
-export type StarbaseAnswer =
+export type BaseGroundAnswer =
   | { kind: "ok"; personId: string | null; replayed: boolean }
   | { kind: "refused"; status: number; error: string }
   | { kind: "config"; status: number; error: string }
   | { kind: "unsupported"; status: number; error: string }
   | { kind: "retry"; status: number | null; error: string };
 
-/** Sort an HTTP answer from one of the intake endpoints into a StarbaseAnswer. */
-export function classifyAnswer(status: number, body: unknown, endpoint: string = PEOPLE_ENDPOINT): StarbaseAnswer {
+/** Sort an HTTP answer from one of the intake endpoints into a BaseGroundAnswer. */
+export function classifyAnswer(status: number, body: unknown, endpoint: string = PEOPLE_ENDPOINT): BaseGroundAnswer {
   const b = (body && typeof body === "object" ? body : {}) as { ok?: unknown; person_id?: unknown; replayed?: unknown; error?: unknown };
   const message = typeof b.error === "string" && b.error ? b.error.slice(0, 500) : `HTTP ${status}`;
   if (status >= 200 && status < 300) {
     const personId = typeof b.person_id === "string" && b.person_id ? b.person_id : null;
-    // A person always comes back with Starbase's id; a consent change needs only ok.
+    // A person always comes back with base ground's id; a consent change needs only ok.
     if (b.ok === true && (personId || endpoint === CONSENT_ENDPOINT)) return { kind: "ok", personId, replayed: b.replayed === true };
-    return { kind: "retry", status, error: endpoint === CONSENT_ENDPOINT ? "Starbase answered without ok" : "Starbase answered without a person id" };
+    return { kind: "retry", status, error: endpoint === CONSENT_ENDPOINT ? "base ground answered without ok" : "base ground answered without a person id" };
   }
-  if (status === 404 && endpoint === CONSENT_ENDPOINT) return { kind: "unsupported", status, error: `${NOT_SUPPORTED_YET}: this Starbase has no ${CONSENT_ENDPOINT} (404), so the withdrawal waits here until it does` };
+  if (status === 404 && endpoint === CONSENT_ENDPOINT) return { kind: "unsupported", status, error: `${NOT_SUPPORTED_YET}: this base ground has no ${CONSENT_ENDPOINT} (404), so the withdrawal waits here until it does` };
   if (status === 401 || status === 403 || status === 404) return { kind: "config", status, error: message };
   if (status === 429 || status === 408 || status >= 500) return { kind: "retry", status, error: message };
   return { kind: "refused", status, error: message };
@@ -439,14 +439,14 @@ export function classifyAnswer(status: number, body: unknown, endpoint: string =
 
 /**
  * POST one body to an intake endpoint. The Idempotency-Key makes a retry
- * safe: Starbase answers a repeat of the same key and body with its first
+ * safe: base ground answers a repeat of the same key and body with its first
  * answer. Never throws.
  */
-export async function sendToStarbase(endpoint: string, payload: Record<string, unknown>, idempotencyKey: string, c?: StarbaseConfig): Promise<StarbaseAnswer> {
+export async function sendToBaseGround(endpoint: string, payload: Record<string, unknown>, idempotencyKey: string, c?: BaseGroundConfig): Promise<BaseGroundAnswer> {
   const { url, key, fetch: doFetch, timeoutMs } = config(c);
-  const problem = starbaseUrlProblem(url) ?? (key ? null : "STARBASE_KEY is not set.");
+  const problem = baseGroundUrlProblem(url) ?? (key ? null : "BASE_GROUND_KEY is not set.");
   if (problem) return { kind: "config", status: 0, error: problem };
-  if (!(STARBASE_ENDPOINTS as string[]).includes(endpoint)) return { kind: "refused", status: 0, error: `Unknown Starbase endpoint ${endpoint}` };
+  if (!(BASE_GROUND_ENDPOINTS as string[]).includes(endpoint)) return { kind: "refused", status: 0, error: `Unknown base ground endpoint ${endpoint}` };
   let res: Response;
   try {
     res = await doFetch(`${url}${endpoint}`, {
@@ -463,7 +463,7 @@ export async function sendToStarbase(endpoint: string, payload: Record<string, u
     });
   } catch (err) {
     const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-    return { kind: "retry", status: null, error: timedOut ? `No answer within ${Math.round(timeoutMs / 1000)} seconds` : `Could not reach Starbase: ${err instanceof Error ? err.message : String(err)}` };
+    return { kind: "retry", status: null, error: timedOut ? `No answer within ${Math.round(timeoutMs / 1000)} seconds` : `Could not reach base ground: ${err instanceof Error ? err.message : String(err)}` };
   }
   let body: unknown = null;
   try {
@@ -475,16 +475,16 @@ export async function sendToStarbase(endpoint: string, payload: Record<string, u
 }
 
 /** POST one person to /in/v1/people. Never throws. */
-export async function sendPerson(payload: StarbasePerson | Record<string, unknown>, idempotencyKey: string, c?: StarbaseConfig): Promise<StarbaseAnswer> {
-  return sendToStarbase(PEOPLE_ENDPOINT, payload as Record<string, unknown>, idempotencyKey, c);
+export async function sendPerson(payload: BaseGroundPerson | Record<string, unknown>, idempotencyKey: string, c?: BaseGroundConfig): Promise<BaseGroundAnswer> {
+  return sendToBaseGround(PEOPLE_ENDPOINT, payload as Record<string, unknown>, idempotencyKey, c);
 }
 
 export type PingResult = { ok: true; campaign: string; key: string } | { ok: false; status: number | null; error: string };
 
 /** GET /in/v1/ping: is the key good, and for which campaign? Never throws. */
-export async function ping(c?: StarbaseConfig): Promise<PingResult> {
+export async function ping(c?: BaseGroundConfig): Promise<PingResult> {
   const { url, key, fetch: doFetch, timeoutMs } = config(c);
-  const problem = starbaseUrlProblem(url) ?? (key ? null : "STARBASE_KEY is not set.");
+  const problem = baseGroundUrlProblem(url) ?? (key ? null : "BASE_GROUND_KEY is not set.");
   if (problem) return { ok: false, status: null, error: problem };
   try {
     const res = await doFetch(`${url}/in/v1/ping`, {
@@ -497,7 +497,7 @@ export async function ping(c?: StarbaseConfig): Promise<PingResult> {
     return { ok: false, status: res.status, error: typeof body?.error === "string" ? body.error : `HTTP ${res.status}` };
   } catch (err) {
     const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-    return { ok: false, status: null, error: timedOut ? `No answer within ${Math.round(timeoutMs / 1000)} seconds` : `Could not reach Starbase: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, status: null, error: timedOut ? `No answer within ${Math.round(timeoutMs / 1000)} seconds` : `Could not reach base ground: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
@@ -520,7 +520,7 @@ export type OutboxPatch = {
   lastError: string | null;
   lastAttemptAt: Date;
   nextAttemptAt: Date | null;
-  starbasePersonId?: string;
+  baseGroundPersonId?: string;
   sentAt?: Date;
 };
 
@@ -529,8 +529,8 @@ export const UNSUPPORTED_WAIT_MS = 6 * 3_600_000;
 
 /**
  * The row after one attempt:
- *   ok           → sent, with the id Starbase answered (people only)
- *   refused      → failed for good, with Starbase's message (staff can Retry it)
+ *   ok           → sent, with the id base ground answered (people only)
+ *   refused      → failed for good, with base ground's message (staff can Retry it)
  *   config       → still pending and due, attempts unchanged: a wrong key or
  *                  address is not the row's fault, and is shown in the admin
  *   unsupported  → still pending, attempts unchanged, tried again in 6 hours
@@ -538,11 +538,11 @@ export const UNSUPPORTED_WAIT_MS = 6 * 3_600_000;
  *   retry        → pending again after 1 min, 5 min, 30 min, 2 h, then every
  *                  12 h; failed once MAX_ATTEMPTS attempts have been made
  */
-export function afterAttempt(row: { attempts: number }, answer: StarbaseAnswer, now: Date): OutboxPatch {
+export function afterAttempt(row: { attempts: number }, answer: BaseGroundAnswer, now: Date): OutboxPatch {
   const attempts = row.attempts + 1;
   switch (answer.kind) {
     case "ok":
-      return { status: "sent", attempts, lastError: null, lastAttemptAt: now, nextAttemptAt: null, ...(answer.personId ? { starbasePersonId: answer.personId } : {}), sentAt: now };
+      return { status: "sent", attempts, lastError: null, lastAttemptAt: now, nextAttemptAt: null, ...(answer.personId ? { baseGroundPersonId: answer.personId } : {}), sentAt: now };
     case "refused":
       return { status: "failed", attempts, lastError: `${answer.status}: ${answer.error}`, lastAttemptAt: now, nextAttemptAt: null };
     case "config":
@@ -562,6 +562,6 @@ export function afterAttempt(row: { attempts: number }, answer: StarbaseAnswer, 
  * there. "Not supported yet" affects only that endpoint: the run goes on
  * without it.
  */
-export function stopsRun(answer: StarbaseAnswer): boolean {
+export function stopsRun(answer: BaseGroundAnswer): boolean {
   return answer.kind === "config" || answer.kind === "retry";
 }

@@ -1,22 +1,22 @@
-// The Starbase ("the desk") client: the payload rules that keep every
-// website submission acceptable to Starbase's strict schema, and the outbox
+// The base ground ("the desk") client: the payload rules that keep every
+// website submission acceptable to base ground's strict schema, and the outbox
 // delivery state machine, with fetch and the database replaced by fakes.
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", () => ({ after: () => {} }));
 
-const sb = await import("@/lib/server/starbase");
-const { deliverWith, scrubbedOnceSent } = await import("@/lib/server/starbase-outbox");
-type OutboxStore = import("@/lib/server/starbase-outbox").OutboxStore;
-type OutboxRow = import("@/lib/server/starbase-outbox").OutboxRow;
+const sb = await import("@/lib/server/base-ground");
+const { deliverWith, scrubbedOnceSent } = await import("@/lib/server/base-ground-outbox");
+type OutboxStore = import("@/lib/server/base-ground-outbox").OutboxStore;
+type OutboxRow = import("@/lib/server/base-ground-outbox").OutboxRow;
 
-const ALLOWED = new Set<string>(sb.STARBASE_FIELDS);
+const ALLOWED = new Set<string>(sb.BASE_GROUND_FIELDS);
 const keysOf = (o: object | null) => Object.keys(o ?? {});
 
-describe("toStarbasePerson", () => {
-  it("maps the website's fields to Starbase's names, trimmed, in a fixed order", () => {
-    const p = sb.toStarbasePerson({
+describe("toBaseGroundPerson", () => {
+  it("maps the website's fields to base ground's names, trimmed, in a fixed order", () => {
+    const p = sb.toBaseGroundPerson({
       firstName: "  Asha ",
       lastName: "Example",
       email: "  Asha@Example.ORG ",
@@ -44,15 +44,15 @@ describe("toStarbasePerson", () => {
       newsletter: true,
       source: "petition-skytrain-south-surrey",
     });
-    expect(keysOf(p)).toEqual(sb.STARBASE_FIELDS.filter((f) => f in (p ?? {})));
+    expect(keysOf(p)).toEqual(sb.BASE_GROUND_FIELDS.filter((f) => f in (p ?? {})));
   });
 
   it("drops empty values and false flags", () => {
-    const p = sb.toStarbasePerson({ name: "   ", firstName: "", email: "a@b.ca", phone: null, address: undefined, tags: ["", "  "], newsletter: false, volunteer: false, note: "  " });
+    const p = sb.toBaseGroundPerson({ name: "   ", firstName: "", email: "a@b.ca", phone: null, address: undefined, tags: ["", "  "], newsletter: false, volunteer: false, note: "  " });
     expect(p).toEqual({ email: "a@b.ca" });
   });
 
-  it("never emits a field outside Starbase's list, whatever it is given", () => {
+  it("never emits a field outside base ground's list, whatever it is given", () => {
     const input = {
       email: "donor@example.com",
       firstName: "D",
@@ -63,17 +63,17 @@ describe("toStarbasePerson", () => {
       role: "manager",
       slate: "council",
       stripePaymentIntentId: "pi_123",
-    } as unknown as Parameters<typeof sb.toStarbasePerson>[0];
-    const p = sb.toStarbasePerson(input);
+    } as unknown as Parameters<typeof sb.toBaseGroundPerson>[0];
+    const p = sb.toBaseGroundPerson(input);
     expect(keysOf(p).every((k) => ALLOWED.has(k))).toBe(true);
     expect(p).toEqual({ first_name: "D", email: "donor@example.com" });
-    const raw = sb.cleanStarbasePerson({ email: "x@y.ca", money: 5, guests: 3, rsvp: true, person_id: "p" });
+    const raw = sb.cleanBaseGroundPerson({ email: "x@y.ca", money: 5, guests: 3, rsvp: true, person_id: "p" });
     expect(raw).toEqual({ email: "x@y.ca" });
   });
 
-  it("caps every text at Starbase's own limit, after trimming", () => {
+  it("caps every text at base ground's own limit, after trimming", () => {
     const long = (n: number) => "x".repeat(n);
-    const p = sb.toStarbasePerson({
+    const p = sb.toBaseGroundPerson({
       name: long(400),
       firstName: long(200),
       lastName: long(200),
@@ -99,39 +99,39 @@ describe("toStarbasePerson", () => {
   });
 
   it("never cuts through a surrogate pair, and trims what the cut leaves", () => {
-    const p = sb.toStarbasePerson({ email: "a@b.ca", city: "x".repeat(119) + "😀" })!;
+    const p = sb.toBaseGroundPerson({ email: "a@b.ca", city: "x".repeat(119) + "😀" })!;
     expect(p.city).toBe("x".repeat(119));
-    const q = sb.toStarbasePerson({ email: "a@b.ca", unit: "x".repeat(39) + " yz" })!;
+    const q = sb.toBaseGroundPerson({ email: "a@b.ca", unit: "x".repeat(39) + " yz" })!;
     expect(q.unit).toBe("x".repeat(39));
   });
 
   it("keeps at most 20 tags of at most 40 characters, without blanks or repeats", () => {
     const tags = Array.from({ length: 30 }, (_, i) => `Tag ${i}`);
-    const p = sb.toStarbasePerson({ email: "a@b.ca", tags: ["Petition:   Transit", "Petition: Transit", "", ...tags, "P".repeat(60)] })!;
+    const p = sb.toBaseGroundPerson({ email: "a@b.ca", tags: ["Petition:   Transit", "Petition: Transit", "", ...tags, "P".repeat(60)] })!;
     expect(p.tags).toHaveLength(20);
     expect(p.tags![0]).toBe("Petition: Transit");
     expect(new Set(p.tags).size).toBe(20);
     expect(p.tags!.every((t) => t.length >= 1 && t.length <= 40)).toBe(true);
-    const long = sb.toStarbasePerson({ email: "a@b.ca", tags: ["Petition: " + "A very long campaign title that goes on and on"] })!;
+    const long = sb.toBaseGroundPerson({ email: "a@b.ca", tags: ["Petition: " + "A very long campaign title that goes on and on"] })!;
     expect(long.tags![0]).toHaveLength(40);
   });
 
   it("needs an email or a phone, and a name or an email", () => {
-    expect(sb.toStarbasePerson({ firstName: "No", lastName: "Contact" })).toBeNull();
-    expect(sb.toStarbasePerson({ phone: "604 555 0100" })).toBeNull();
-    expect(sb.toStarbasePerson({ name: "Pat", phone: "604 555 0100" })).toEqual({ name: "Pat", phone: "604 555 0100" });
-    expect(sb.toStarbasePerson({ email: "only@example.com" })).toEqual({ email: "only@example.com" });
+    expect(sb.toBaseGroundPerson({ firstName: "No", lastName: "Contact" })).toBeNull();
+    expect(sb.toBaseGroundPerson({ phone: "604 555 0100" })).toBeNull();
+    expect(sb.toBaseGroundPerson({ name: "Pat", phone: "604 555 0100" })).toEqual({ name: "Pat", phone: "604 555 0100" });
+    expect(sb.toBaseGroundPerson({ email: "only@example.com" })).toEqual({ email: "only@example.com" });
   });
 
-  it("drops an email Starbase would refuse, and then may have nothing to send", () => {
-    expect(sb.toStarbasePerson({ name: "Pat", email: "not-an-email" })).toBeNull();
-    expect(sb.toStarbasePerson({ name: "Pat", email: "not-an-email", phone: "604 555 0100" })).toEqual({ name: "Pat", phone: "604 555 0100" });
-    expect(sb.toStarbasePerson({ email: `${"a".repeat(320)}@example.com` })).toBeNull();
+  it("drops an email base ground would refuse, and then may have nothing to send", () => {
+    expect(sb.toBaseGroundPerson({ name: "Pat", email: "not-an-email" })).toBeNull();
+    expect(sb.toBaseGroundPerson({ name: "Pat", email: "not-an-email", phone: "604 555 0100" })).toEqual({ name: "Pat", phone: "604 555 0100" });
+    expect(sb.toBaseGroundPerson({ email: `${"a".repeat(320)}@example.com` })).toBeNull();
   });
 
   it("sends newsletter only with an email, and volunteer only when true", () => {
-    expect(sb.toStarbasePerson({ name: "Pat", phone: "604 555 0100", newsletter: true })).toEqual({ name: "Pat", phone: "604 555 0100" });
-    expect(sb.toStarbasePerson({ email: "a@b.ca", volunteer: true })).toEqual({ email: "a@b.ca", volunteer: true });
+    expect(sb.toBaseGroundPerson({ name: "Pat", phone: "604 555 0100", newsletter: true })).toEqual({ name: "Pat", phone: "604 555 0100" });
+    expect(sb.toBaseGroundPerson({ email: "a@b.ca", volunteer: true })).toEqual({ email: "a@b.ca", volunteer: true });
   });
 
   it("turns any source into a lowercase word", () => {
@@ -229,7 +229,7 @@ describe("what each form forwards", () => {
       first_name: "Pat",
       last_name: "Lee",
       email: "pat@example.com",
-      note: "Asked us to delete their data (supporter portal, November 6, 2026). Please action it in Starbase too.",
+      note: "Asked us to delete their data (supporter portal, November 6, 2026). Please action it in base ground too.",
       source: "supporter-portal",
     });
   });
@@ -244,20 +244,20 @@ describe("stableJson", () => {
   });
 });
 
-describe("the Starbase URL", () => {
+describe("the base ground URL", () => {
   it("must be https, except on this machine", () => {
-    expect(sb.starbaseUrlProblem("https://starbase.imaginesurrey.ca")).toBeNull();
-    expect(sb.starbaseUrlProblem("http://localhost:12111")).toBeNull();
-    expect(sb.starbaseUrlProblem("http://starbase.imaginesurrey.ca")).toMatch(/https/);
-    expect(sb.starbaseUrlProblem("starbase")).toMatch(/web address/);
-    expect(sb.starbaseUrlProblem(undefined)).toMatch(/not set/);
+    expect(sb.baseGroundUrlProblem("https://base.win/imaginesurrey")).toBeNull();
+    expect(sb.baseGroundUrlProblem("http://localhost:12111")).toBeNull();
+    expect(sb.baseGroundUrlProblem("http://base.win/imaginesurrey")).toMatch(/https/);
+    expect(sb.baseGroundUrlProblem("base-ground")).toMatch(/web address/);
+    expect(sb.baseGroundUrlProblem(undefined)).toMatch(/not set/);
   });
 });
 
 // ── Delivery ───────────────────────────────────────────────────────────────
 
 const KEY = "sbk_TestKey0123456789abcdefghij";
-const URL_ = "https://starbase.test";
+const URL_ = "https://ground.test";
 
 type Call = { url: string; init: RequestInit };
 
@@ -290,7 +290,7 @@ function row(over: Partial<OutboxRow> = {}): OutboxRow {
     attempts: 0,
     lastError: null,
     lastAttemptAt: null,
-    starbasePersonId: null,
+    baseGroundPersonId: null,
     nextAttemptAt: new Date(0),
     createdAt: new Date(),
     sentAt: null,
@@ -317,13 +317,13 @@ function memoryStore(rows: OutboxRow[]) {
     },
     async save(r, patch) {
       Object.assign(r, patch);
-      if (patch.starbasePersonId && r.personId) linked[r.personId] = patch.starbasePersonId;
+      if (patch.baseGroundPersonId && r.personId) linked[r.personId] = patch.baseGroundPersonId;
     },
   };
   return { store, linked };
 }
 
-const sender = (f: typeof fetch, timeoutMs = 50) => (payload: Record<string, unknown>, key: string, endpoint: string) => sb.sendToStarbase(endpoint, payload, key, { url: URL_, key: KEY, fetch: f, timeoutMs });
+const sender = (f: typeof fetch, timeoutMs = 50) => (payload: Record<string, unknown>, key: string, endpoint: string) => sb.sendToBaseGround(endpoint, payload, key, { url: URL_, key: KEY, fetch: f, timeoutMs });
 
 describe("sendPerson", () => {
   it("posts JSON with the Bearer key and the Idempotency-Key", async () => {
@@ -341,7 +341,7 @@ describe("sendPerson", () => {
 
   it("never throws, and refuses to send the key over plain http", async () => {
     const { fn, calls } = fakeFetch([]);
-    const answer = await sb.sendPerson({ email: "a@b.ca" }, "k", { url: "http://starbase.example", key: KEY, fetch: fn });
+    const answer = await sb.sendPerson({ email: "a@b.ca" }, "k", { url: "http://ground.example", key: KEY, fetch: fn });
     expect(answer.kind).toBe("config");
     expect(calls).toHaveLength(0);
     const boom = vi.fn(() => {
@@ -382,18 +382,18 @@ describe("the delivery state machine", () => {
     expect(state.attempts).toBe(sb.MAX_ATTEMPTS);
   });
 
-  it("200 → sent, with Starbase's id on the row and on the person; the key is the row id", async () => {
+  it("200 → sent, with base ground's id on the row and on the person; the key is the row id", async () => {
     const r = row();
     const { store, linked } = memoryStore([r]);
     const { fn, calls } = fakeFetch([reply(200, { ok: true, person_id: "sb-42" })]);
     const report = await deliverWith(store, 5_000, { send: sender(fn), now: () => NOW });
     expect(report).toEqual({ sent: 1, failed: 0, retrying: 0, problem: null, unsupported: 0 });
-    expect(r).toMatchObject({ status: "sent", attempts: 1, starbasePersonId: "sb-42", lastError: null, sentAt: NOW, nextAttemptAt: null });
+    expect(r).toMatchObject({ status: "sent", attempts: 1, baseGroundPersonId: "sb-42", lastError: null, sentAt: NOW, nextAttemptAt: null });
     expect(linked[r.personId!]).toBe("sb-42");
     expect((calls[0].init.headers as Record<string, string>)["idempotency-key"]).toBe(r.id);
   });
 
-  it("400 → failed for good, with Starbase's message, and the next row still goes", async () => {
+  it("400 → failed for good, with base ground's message, and the next row still goes", async () => {
     const bad = row({ createdAt: new Date(1) });
     const good = row({ createdAt: new Date(2) });
     const { store } = memoryStore([good, bad]);
@@ -511,7 +511,7 @@ describe("engagement tags: a tag on the person, never money", () => {
       tags: ["RSVP: Newton town hall"],
       source: "rsvp",
     });
-    // A long title is cut to Starbase's 40 characters.
+    // A long title is cut to base ground's 40 characters.
     expect(sb.rsvpPerson({ email: "a@b.ca", eventTitle: "A very long event title that goes on and on" })!.tags![0].length).toBeLessThanOrEqual(40);
   });
 
@@ -574,7 +574,7 @@ describe("consent withdrawals for /in/v1/consent", () => {
   it("posts to /in/v1/consent with the Bearer key and the row id as Idempotency-Key", async () => {
     const { fn, calls } = fakeFetch([reply(200, { ok: true })]);
     const payload = sb.consentPayload({ email: "a@b.ca", channel: "email", reason: "unsubscribe", at: AT })!;
-    const answer = await sb.sendToStarbase(sb.CONSENT_ENDPOINT, payload, "row-7", { url: URL_, key: KEY, fetch: fn });
+    const answer = await sb.sendToBaseGround(sb.CONSENT_ENDPOINT, payload, "row-7", { url: URL_, key: KEY, fetch: fn });
     expect(answer).toEqual({ kind: "ok", personId: null, replayed: false });
     expect(calls[0].url).toBe(`${URL_}/in/v1/consent`);
     const headers = calls[0].init.headers as Record<string, string>;
@@ -582,7 +582,7 @@ describe("consent withdrawals for /in/v1/consent", () => {
     expect(headers["idempotency-key"]).toBe("row-7");
     expect(calls[0].init.body).toBe('{"action":"withdraw","at":"2026-11-07T18:30:00.000Z","channel":"email","email":"a@b.ca","reason":"unsubscribe"}');
     // Nowhere else.
-    expect((await sb.sendToStarbase("/in/v1/gifts", payload, "k", { url: URL_, key: KEY, fetch: fn })).kind).toBe("refused");
+    expect((await sb.sendToBaseGround("/in/v1/gifts", payload, "k", { url: URL_, key: KEY, fetch: fn })).kind).toBe("refused");
   });
 
   it("a 404 from /in/v1/consent is 'not supported yet'; from /in/v1/people it is still a wrong address", () => {
@@ -608,7 +608,7 @@ describe("consent withdrawals for /in/v1/consent", () => {
     expect(state).toMatchObject({ status: "pending", attempts: 0 });
   });
 
-  it("delivery: consent rows wait when Starbase has no endpoint, and the sign-ups behind them still go", async () => {
+  it("delivery: consent rows wait when base ground has no endpoint, and the sign-ups behind them still go", async () => {
     const consentPayload = sb.consentPayload({ email: "u@b.ca", channel: "email", reason: "unsubscribe" })! as Record<string, unknown>;
     const c1 = row({ kind: "consent", endpoint: sb.CONSENT_ENDPOINT, payload: consentPayload, createdAt: new Date(1) });
     const c2 = row({ kind: "consent", endpoint: sb.CONSENT_ENDPOINT, payload: consentPayload, createdAt: new Date(2) });
@@ -623,15 +623,15 @@ describe("consent withdrawals for /in/v1/consent", () => {
     expect(c2).toMatchObject({ status: "pending", attempts: 0, lastError: null });
     expect(person.status).toBe("sent");
 
-    // Once Starbase has it, "Send now" sends them all.
+    // Once base ground has it, "Send now" sends them all.
     const later = fakeFetch([reply(200, { ok: true }), reply(200, { ok: true, replayed: false })]);
     const again = await deliverWith(store, 5_000, { send: sender(later.fn), ignoreBackoff: true });
     expect(again).toMatchObject({ sent: 2, unsupported: 0 });
-    expect(c1).toMatchObject({ status: "sent", starbasePersonId: null });
+    expect(c1).toMatchObject({ status: "sent", baseGroundPersonId: null });
     expect(c2.status).toBe("sent");
   });
 
-  it("a deletion's address and number are removed from the row once Starbase has it", () => {
+  it("a deletion's address and number are removed from the row once base ground has it", () => {
     const deletion = { endpoint: sb.CONSENT_ENDPOINT, payload: { email: "gone@example.com", phone: "+16045550100", channel: "sms", action: "withdraw", reason: "deletion", at: "x" } };
     expect(scrubbedOnceSent(deletion)).toEqual({ payload: { email: "(removed after sending)", phone: "(removed after sending)", channel: "sms", action: "withdraw", reason: "deletion", at: "x" } });
     expect(scrubbedOnceSent({ ...deletion, payload: { ...deletion.payload, reason: "stop" } })).toBeNull();

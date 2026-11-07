@@ -3,7 +3,7 @@ import { redirectTo } from "@/lib/redirect";
 import { getDb } from "@/lib/db";
 import { consentMeta } from "@/lib/server/consent";
 import { confirmSubscriptionDetails, type ConfirmResult } from "@/lib/server/newsletter";
-import { forwardNewsletter } from "@/lib/server/starbase-forward";
+import { forwardNewsletter } from "@/lib/server/base-ground-forward";
 
 // The link in the double opt-in email. One click subscribes the address and
 // records contact consent; a used or expired link explains itself, and an

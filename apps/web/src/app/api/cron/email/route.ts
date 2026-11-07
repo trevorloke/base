@@ -3,11 +3,11 @@ import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { error, json } from "@/lib/server/api";
 import { drainQueue, pruneEmailBodies } from "@/lib/server/email";
-import { deliverOutbox } from "@/lib/server/starbase-outbox";
+import { deliverOutbox } from "@/lib/server/base-ground-outbox";
 import { pruneVisits } from "@/lib/server/visits";
 
 // Sends anything still queued (campaigns normally drain right after "Send"),
-// then anything still waiting for Starbase (sign-ups normally go right after
+// then anything still waiting for base ground (sign-ups normally go right after
 // the form; this catches retries and outages). It shares this job instead of
 // having its own because vercel.json crons must stay at most once a day on
 // the Hobby plan.
@@ -26,11 +26,11 @@ export async function GET(req: NextRequest) {
   const result = await drainQueue(db, 35_000);
   if (Math.random() < 0.02) await pruneEmailBodies(db);
   // The time the email left, within the 60 seconds; deliverOutbox never throws.
-  const starbase = await deliverOutbox(db, Math.max(5_000, 45_000 - (Date.now() - started)));
+  const baseGround = await deliverOutbox(db, Math.max(5_000, 45_000 - (Date.now() - started)));
   // Page views are kept for 13 months; old visitor salts go after a day.
   const visits = await pruneVisits(db).catch((err) => {
     console.error("Old page views could not be deleted", err);
     return { deleted: 0, error: true };
   });
-  return json({ ok: true, ...result, starbase, visits });
+  return json({ ok: true, ...result, baseGround, visits });
 }

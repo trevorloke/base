@@ -2,7 +2,7 @@ import Link from "next/link";
 import { OutboxRowActions } from "@/components/admin/content/IntegrationTests";
 import { getDb } from "@/lib/db";
 import { can, requireAdmin } from "@/lib/server/admin-auth";
-import { listOutbox, OUTBOX_KINDS, OUTBOX_PAGE_SIZE, OUTBOX_STATUSES, outboxStats, parseOutboxFilters, type OutboxFilters } from "@/lib/server/starbase-outbox";
+import { listOutbox, OUTBOX_KINDS, OUTBOX_PAGE_SIZE, OUTBOX_STATUSES, outboxStats, parseOutboxFilters, type OutboxFilters } from "@/lib/server/base-ground-outbox";
 import "../../people/people.css";
 
 const WHEN = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -15,7 +15,7 @@ function href(f: OutboxFilters, page: number): string {
   if (f.kind) p.set("kind", f.kind);
   if (page > 1) p.set("page", String(page));
   const s = p.toString();
-  return s ? `/admin/integrations/starbase?${s}` : "/admin/integrations/starbase";
+  return s ? `/admin/integrations/base-ground?${s}` : "/admin/integrations/base-ground";
 }
 
 /** Who a row is about when it isn't linked to a supporter here (a text STOP from an unknown number). */
@@ -24,8 +24,8 @@ function payloadContact(payload: Record<string, unknown>): string {
   return typeof v === "string" && v ? v : "—";
 }
 
-/** Everything the website has queued for Starbase, newest first, with Retry and Skip. */
-export default async function StarbaseOutboxPage({ searchParams }: PageProps<"/admin/integrations/starbase">) {
+/** Everything the website has queued for base ground, newest first, with Retry and Skip. */
+export default async function BaseGroundOutboxPage({ searchParams }: PageProps<"/admin/integrations/base-ground">) {
   const user = await requireAdmin("integrations");
   const filters = parseOutboxFilters(await searchParams);
   const db = getDb();
@@ -40,25 +40,25 @@ export default async function StarbaseOutboxPage({ searchParams }: PageProps<"/a
       <div className="crm-head">
         <div>
           <p className="small">
-            <Link href="/admin/integrations">Integrations</Link> / Starbase
+            <Link href="/admin/integrations">Integrations</Link> / base ground
           </p>
-          <h1 className="h3">Sent to Starbase (the desk)</h1>
+          <h1 className="h3">Sent to base ground (the desk)</h1>
         </div>
       </div>
       <p style={{ maxWidth: 760 }}>
         Each row is one sign-up, portal edit, tag or consent withdrawal the website forwarded, and exactly what was sent. Its id is the Idempotency-Key, so sending it again
-        never makes a second person in Starbase. Waiting rows are retried after 1 minute, 5 minutes, 30 minutes, 2 hours, then every 12 hours, and marked refused after 8
+        never makes a second person in base ground. Waiting rows are retried after 1 minute, 5 minutes, 30 minutes, 2 hours, then every 12 hours, and marked refused after 8
         attempts.
       </p>
       {notSupported > 0 && (
         <p className="alert alert--note" role="note" style={{ maxWidth: 760 }}>
           {notSupported} unsubscribe{notSupported === 1 ? "" : "s"} and STOP{notSupported === 1 ? "" : "s"} (kind “consent”) {notSupported === 1 ? "is" : "are"} waiting because
-          this Starbase doesn&apos;t take consent changes yet (it answers 404 at /in/v1/consent). {notSupported === 1 ? "It isn't" : "They aren't"} failed: each is tried again every
-          6 hours and with Send now, and goes once Starbase has the endpoint.
+          this base ground doesn&apos;t take consent changes yet (it answers 404 at /in/v1/consent). {notSupported === 1 ? "It isn't" : "They aren't"} failed: each is tried again every
+          6 hours and with Send now, and goes once base ground has the endpoint.
         </p>
       )}
 
-      <form method="get" action="/admin/integrations/starbase" className="crm-filters" aria-label="Filter the outbox">
+      <form method="get" action="/admin/integrations/base-ground" className="crm-filters" aria-label="Filter the outbox">
         <div className="field">
           <label htmlFor="status">Status</label>
           <select id="status" name="status" className="input input--compact" defaultValue={filters.status}>
@@ -86,7 +86,7 @@ export default async function StarbaseOutboxPage({ searchParams }: PageProps<"/a
             Apply
           </button>
           {(filters.status || filters.kind) && (
-            <Link href="/admin/integrations/starbase" className="btn btn--outline btn--compact">
+            <Link href="/admin/integrations/base-ground" className="btn btn--outline btn--compact">
               Clear
             </Link>
           )}
@@ -103,7 +103,7 @@ export default async function StarbaseOutboxPage({ searchParams }: PageProps<"/a
       ) : (
         <div className="table-wrap">
           <table className="table">
-            <caption className="visually-hidden">Sign-ups forwarded to Starbase</caption>
+            <caption className="visually-hidden">Sign-ups forwarded to base ground</caption>
             <thead>
               <tr>
                 <th scope="col">Queued</th>
@@ -143,9 +143,9 @@ export default async function StarbaseOutboxPage({ searchParams }: PageProps<"/a
                   <td className="cell-wrap">{r.lastError ?? ""}</td>
                   <td className="cell-wrap">
                     {r.sentAt ? WHEN.format(r.sentAt) : ""}
-                    {r.starbasePersonId && (
+                    {r.baseGroundPersonId && (
                       <span className="small" style={{ display: "block" }}>
-                        Starbase id {r.starbasePersonId}
+                        base ground id {r.baseGroundPersonId}
                       </span>
                     )}
                   </td>

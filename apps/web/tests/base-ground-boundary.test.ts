@@ -1,11 +1,11 @@
-// What reaches Starbase ("the desk"), and from where. Sign-up forms forward
+// What reaches base ground ("the desk"), and from where. Sign-up forms forward
 // the person; an RSVP, a paid shop order and a confirmed promise follow
 // forward a tag only; a withdrawal (unsubscribe, STOP, preference change,
 // deletion) goes to the consent endpoint; a supporter's own portal edit
 // forwards their details. Money never does: donations, monthly gifts, fees,
 // order totals and items, and gift amounts are logged at the desk by the
 // treasurer, where the contribution limits are checked. Admin edits to a
-// supporter never do either, and a withdrawal that came from Starbase is never
+// supporter never do either, and a withdrawal that came from base ground is never
 // sent back. This test reads the import graph of each code path and fails if
 // one of them can reach the outbox through anything but its own forward.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -16,9 +16,9 @@ const root = path.resolve(import.meta.dirname, "..");
 const src = (p: string) => path.join(root, "src", p);
 const rel = (p: string) => path.relative(root, p);
 
-const STARBASE = src("lib/server/starbase.ts");
-const OUTBOX = src("lib/server/starbase-outbox.ts");
-const FORWARD = src("lib/server/starbase-forward.ts");
+const BASE_GROUND = src("lib/server/base-ground.ts");
+const OUTBOX = src("lib/server/base-ground-outbox.ts");
+const FORWARD = src("lib/server/base-ground-forward.ts");
 
 type Edge = { target: string; names: string[] | "*" };
 
@@ -63,8 +63,8 @@ function edges(file: string): Edge[] {
 
 type Allowance = (from: string, edge: Edge) => boolean;
 
-/** The path from `entry` to a Starbase module that `allowed` doesn't excuse, or null. */
-function reachesStarbase(entry: string, allowed: Allowance): string[] | null {
+/** The path from `entry` to a base ground module that `allowed` doesn't excuse, or null. */
+function reachesBaseGround(entry: string, allowed: Allowance): string[] | null {
   const seen = new Set<string>();
   const stack: string[][] = [[entry]];
   while (stack.length) {
@@ -73,7 +73,7 @@ function reachesStarbase(entry: string, allowed: Allowance): string[] | null {
     if (seen.has(file)) continue;
     seen.add(file);
     for (const edge of edges(file)) {
-      if (edge.target === STARBASE || edge.target === OUTBOX || edge.target === FORWARD) {
+      if (edge.target === BASE_GROUND || edge.target === OUTBOX || edge.target === FORWARD) {
         if (allowed(file, edge)) continue;
         return [...trail, edge.target].map(rel);
       }
@@ -128,30 +128,30 @@ function walk(dir: string): string[] {
   });
 }
 
-describe("what is forwarded to Starbase, and from where", () => {
+describe("what is forwarded to base ground, and from where", () => {
   it.each(DESIGNATED_ONLY)("%s reaches the outbox only through its own forwards", (file) => {
     const entry = src(file);
     expect(existsSync(entry), `${file} exists`).toBe(true);
-    expect(reachesStarbase(entry, designated)).toBeNull();
+    expect(reachesBaseGround(entry, designated)).toBeNull();
   });
 
   it("nothing in the admin forwards a person; it may only read, deliver, retry or skip", () => {
-    // The outbox's own admin functions; never enqueueStarbase, never a forward*
+    // The outbox's own admin functions; never enqueueBaseGround, never a forward*
     // except through the modules above (an anonymized supporter's withdrawal).
     const ADMIN_OUTBOX = ["deliverOutbox", "retryOutboxRow", "skipOutboxRow", "outboxStats", "listOutbox", "outboxForPerson", "parseOutboxFilters", "OUTBOX_KINDS", "OUTBOX_STATUSES", "OUTBOX_PAGE_SIZE"];
-    const ADMIN_CLIENT = ["ping", "starbaseUrlProblem", "NOT_SUPPORTED_YET"];
+    const ADMIN_CLIENT = ["ping", "baseGroundUrlProblem", "NOT_SUPPORTED_YET"];
     const adminAllowed: Allowance = (from, edge) =>
-      designated(from, edge) || (edge.target === OUTBOX && only(edge.names, ADMIN_OUTBOX)) || (edge.target === STARBASE && only(edge.names, ADMIN_CLIENT));
+      designated(from, edge) || (edge.target === OUTBOX && only(edge.names, ADMIN_OUTBOX)) || (edge.target === BASE_GROUND && only(edge.names, ADMIN_CLIENT));
     const files = [...walk(src("app/admin")), ...walk(src("app/api/admin")), ...walk(src("components/admin"))];
     expect(files.length).toBeGreaterThan(20);
-    const leaks = files.map((f) => reachesStarbase(f, adminAllowed)).filter(Boolean);
+    const leaks = files.map((f) => reachesBaseGround(f, adminAllowed)).filter(Boolean);
     expect(leaks).toEqual([]);
   });
 
-  it("a withdrawal that came from Starbase is never sent back", () => {
-    // The inbound endpoint may read Starbase's channel and reason names, nothing else.
-    const constantsOnly: Allowance = (_from, edge) => edge.target === STARBASE && only(edge.names, ["CONSENT_CHANNELS", "CONSENT_REASONS"]);
-    expect(reachesStarbase(src("app/api/in/consent/route.ts"), constantsOnly)).toBeNull();
+  it("a withdrawal that came from base ground is never sent back", () => {
+    // The inbound endpoint may read base ground's channel and reason names, nothing else.
+    const constantsOnly: Allowance = (_from, edge) => edge.target === BASE_GROUND && only(edge.names, ["CONSENT_CHANNELS", "CONSENT_REASONS"]);
+    expect(reachesBaseGround(src("app/api/in/consent/route.ts"), constantsOnly)).toBeNull();
   });
 
   it("the forwards never read money", () => {
@@ -162,21 +162,21 @@ describe("what is forwarded to Starbase, and from where", () => {
     const orderForward = forward.slice(forward.indexOf("export async function forwardOrder"), forward.indexOf("export async function forwardFollow"));
     expect(orderForward).toMatch(/columns: \{ email: true, personId: true, status: true \}/);
     expect(orderForward).not.toMatch(/cents|amount|total|items|stripe/i);
-    const starbase = readFileSync(STARBASE, "utf8");
+    const baseGround = readFileSync(BASE_GROUND, "utf8");
     for (const builder of ["rsvpPerson", "orderPerson", "followPerson", "portalPerson", "consentPayload"]) {
-      const start = starbase.indexOf(`export function ${builder}(`);
+      const start = baseGround.indexOf(`export function ${builder}(`);
       expect(start, builder).toBeGreaterThan(0);
-      const signature = starbase.slice(start, starbase.indexOf("{\n", start));
+      const signature = baseGround.slice(start, baseGround.indexOf("{\n", start));
       expect(signature, builder).not.toMatch(/cents|amount|total|fee|stripe|guests|items/i);
     }
   });
 
   it("the import check sees a real forward (so the tests above can fail)", () => {
-    expect(reachesStarbase(src("app/api/signatures/route.ts"), designated)).toEqual(["src/app/api/signatures/route.ts", "src/lib/server/starbase-forward.ts"]);
-    expect(reachesStarbase(src("app/api/volunteer/signup/route.ts"), designated)).not.toBeNull();
+    expect(reachesBaseGround(src("app/api/signatures/route.ts"), designated)).toEqual(["src/app/api/signatures/route.ts", "src/lib/server/base-ground-forward.ts"]);
+    expect(reachesBaseGround(src("app/api/volunteer/signup/route.ts"), designated)).not.toBeNull();
     // The webhook may forward memberships and orders, but not with nothing allowed.
     const strict: Allowance = (from, edge) => edge.target === FORWARD && from === src("lib/server/webhooks.ts") && only(edge.names, []);
-    expect(reachesStarbase(src("app/api/stripe/webhook/route.ts"), strict)).not.toBeNull();
+    expect(reachesBaseGround(src("app/api/stripe/webhook/route.ts"), strict)).not.toBeNull();
     // A module can't borrow another's forward: payments may not tag an order, a route may not forward a membership.
     expect(designated(src("lib/server/payments.ts"), { target: FORWARD, names: ["forwardOrder"] })).toBe(false);
     expect(designated(src("app/api/stripe/webhook/route.ts"), { target: FORWARD, names: ["forwardMembership"] })).toBe(false);

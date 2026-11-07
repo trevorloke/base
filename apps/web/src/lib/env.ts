@@ -128,27 +128,27 @@ export const env = {
     return optional("CRON_SECRET");
   },
 
-  // ── Starbase ("the desk"): the campaign's database app ──
+  // ── base ground ("the desk"): the campaign's database app ──
   // Called only from this server: the key would be visible to anyone if a
   // browser sent it, so it never has a NEXT_PUBLIC_ name.
-  /** e.g. https://starbase.imaginesurrey.ca, without a trailing slash. */
-  get starbaseUrl() {
-    return optional("STARBASE_URL")?.trim().replace(/\/+$/, "");
+  /** e.g. https://base.win/imaginesurrey, without a trailing slash. */
+  get baseGroundUrl() {
+    return optional("BASE_GROUND_URL")?.trim().replace(/\/+$/, "");
   },
-  /** A website key from Starbase → Settings → Services → Website keys (sbk_…). */
-  get starbaseKey() {
-    return optional("STARBASE_KEY")?.trim();
+  /** A website key from base ground → Settings → Services → Website keys (sbk_…). */
+  get baseGroundKey() {
+    return optional("BASE_GROUND_KEY")?.trim();
   },
-  get starbaseEnabled() {
-    return Boolean(this.starbaseUrl && this.starbaseKey);
+  get baseGroundEnabled() {
+    return Boolean(this.baseGroundUrl && this.baseGroundKey);
   },
   /**
-   * The key Starbase sends to POST /api/in/consent (Authorization: Bearer …),
+   * The key base ground sends to POST /api/in/consent (Authorization: Bearer …),
    * so a withdrawal made there is applied here. A different secret from
-   * STARBASE_KEY; without it the endpoint refuses every call.
+   * BASE_GROUND_KEY; without it the endpoint refuses every call.
    */
-  get starbaseInboundKey() {
-    return optional("STARBASE_INBOUND_KEY")?.trim();
+  get baseGroundInboundKey() {
+    return optional("BASE_GROUND_INBOUND_KEY")?.trim();
   },
 
   // ── Human check on public forms (Cloudflare Turnstile) ──

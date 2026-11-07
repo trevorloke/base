@@ -8,7 +8,7 @@ import { newsletterConfirmEmail } from "@/lib/email/messages";
 import { emailContext, sendEmail } from "./email";
 import { recordConsent } from "./consent";
 import { findOrCreatePerson, findPersonByEmail } from "./people";
-import { forwardConsentWithdrawal } from "./starbase-forward";
+import { forwardConsentWithdrawal } from "./base-ground-forward";
 import { consumeToken, createToken, tokenUrl } from "./tokens";
 
 export type SubscribeStatus = "pending" | "subscribed" | "unsubscribed";
@@ -142,7 +142,7 @@ export async function confirmSubscriptionDetails(
 /**
  * Stop bulk email for a token from an email link, record the withdrawal in
  * the consent ledger (which also clears the person's contact consent) and
- * pass it to Starbase. Returns whether a row changed.
+ * pass it to base ground. Returns whether a row changed.
  */
 export async function unsubscribeByToken(db: Db, token: string, proof: RequestProof = {}): Promise<boolean> {
   if (!token || token.length > 200) return false;
@@ -155,7 +155,7 @@ export async function unsubscribeByToken(db: Db, token: string, proof: RequestPr
   const { email, personId } = rows[0];
   const id = personId ?? (await findPersonByEmail(db, email))?.id ?? null;
   await recordConsent(db, { personId: id, email, channel: "email", purpose: "updates", action: "withdraw", source: "unsubscribe", ...proof });
-  // Starbase stops emailing them too.
+  // base ground stops emailing them too.
   await forwardConsentWithdrawal(db, { personId: id, email, channel: "email", reason: "unsubscribe" });
   return true;
 }

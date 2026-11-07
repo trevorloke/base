@@ -28,7 +28,7 @@ import { subscribe } from "./newsletter";
 import { trackingFromRequest, type Tracking } from "./attribution";
 import { CONSENT_WORDING, consentMeta, recordConsent } from "./consent";
 import { normalizePhone } from "./sms";
-import { forwardMembership } from "./starbase-forward";
+import { forwardMembership } from "./base-ground-forward";
 
 export { contributionRoom, contributionTotals, currentLimit, limitForYear, UserFacingError } from "./limits";
 export { addYear } from "@/lib/contributions";

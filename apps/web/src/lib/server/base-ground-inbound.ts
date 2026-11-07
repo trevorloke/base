@@ -5,26 +5,26 @@ import { z } from "zod";
 import type { Db } from "@/lib/db";
 import { auditLog, people } from "@/lib/db/schema";
 import { recordConsent } from "./consent";
-import { CONSENT_CHANNELS, CONSENT_REASONS } from "./starbase";
+import { CONSENT_CHANNELS, CONSENT_REASONS } from "./base-ground";
 
-// Withdrawals made in Starbase, applied here: POST /api/in/consent with
-// Authorization: Bearer $STARBASE_INBOUND_KEY. The body is the same shape the
-// website sends to Starbase's /in/v1/consent:
+// Withdrawals made in base ground, applied here: POST /api/in/consent with
+// Authorization: Bearer $BASE_GROUND_INBOUND_KEY. The body is the same shape the
+// website sends to base ground's /in/v1/consent:
 //
 //   { email?, phone?, channel: "email" | "sms", action: "withdraw" | "grant",
 //     reason: "unsubscribe" | "stop" | "preference" | "deletion", at }
 //
-// A withdrawal is recorded in the consent ledger with source "starbase" (which
+// A withdrawal is recorded in the consent ledger with source "base-ground" (which
 // clears the person's consent and unsubscribes the address from the
 // newsletter). A grant is answered but never applied: only withdrawals flow
-// between the apps on their own. Nothing here forwards to Starbase, so a
+// between the apps on their own. Nothing here forwards to base ground, so a
 // withdrawal that came from there is never echoed back.
 //
 // Each call carries an Idempotency-Key. The answer is kept in the audit log
-// (entity "starbase-consent", the key as its id): the same key with the same
+// (entity "base-ground-consent", the key as its id): the same key with the same
 // body gets the first answer again, with replayed: true; with another body, 409.
 
-export const INBOUND_ENTITY = "starbase-consent";
+export const INBOUND_ENTITY = "base-ground-consent";
 
 /** Whether an Authorization header carries the inbound key. Constant time; false when no key is configured. */
 export function bearerMatches(header: string | null | undefined, key: string | null | undefined): boolean {
@@ -53,7 +53,7 @@ export type InboundConsent = z.output<typeof inboundConsentSchema>;
 
 export type InboundAnswer = { status: number; body: Record<string, unknown> };
 
-/** Starbase-style error text for a refused body: "channel: Invalid option…". */
+/** Error text in base ground's style for a refused body: "channel: Invalid option…". */
 export function schemaError(error: z.ZodError): string {
   const issue = error.issues[0];
   return `${issue.path.length ? `${issue.path.join(".")}: ` : ""}${issue.message}`;
@@ -84,7 +84,7 @@ async function matchingPeople(q: Tx, c: InboundConsent): Promise<{ id: string; e
 }
 
 /**
- * Apply one call from Starbase, once per Idempotency-Key. `raw` is the body
+ * Apply one call from base ground, once per Idempotency-Key. `raw` is the body
  * exactly as received, to tell a replay from a reused key.
  */
 export async function applyInboundConsent(db: Db, c: InboundConsent, idempotencyKey: string, raw: string): Promise<InboundAnswer> {
@@ -106,21 +106,21 @@ export async function applyInboundConsent(db: Db, c: InboundConsent, idempotency
     let answer: Record<string, unknown>;
     if (c.action === "grant") {
       // Someone saying yes again is for them to do on this site, where the ledger records the wording they saw.
-      answer = { ok: true, applied: 0, note: "Grants are not applied from Starbase; only withdrawals are." };
+      answer = { ok: true, applied: 0, note: "Grants are not applied from base ground; only withdrawals are." };
     } else {
       const matches = await matchingPeople(tx, c);
-      const wording = `Withdrawn in Starbase (${c.reason}) at ${c.at}`;
+      const wording = `Withdrawn in base ground (${c.reason}) at ${c.at}`;
       const ledger = tx as unknown as Db;
       const purpose = c.channel === "sms" ? "sms" : "updates";
-      for (const m of matches) await recordConsent(ledger, { personId: m.id, email: m.email, channel: c.channel, purpose, action: "withdraw", wording, source: "starbase" });
+      for (const m of matches) await recordConsent(ledger, { personId: m.id, email: m.email, channel: c.channel, purpose, action: "withdraw", wording, source: "base-ground" });
       // An address nobody here has yet still goes in the ledger, so a later public form can't sign it up again
       // (and an email withdrawal unsubscribes it from the newsletter).
-      if (c.email && !matches.some((m) => m.email === c.email)) await recordConsent(ledger, { personId: null, email: c.email, channel: c.channel, purpose, action: "withdraw", wording, source: "starbase" });
+      if (c.email && !matches.some((m) => m.email === c.email)) await recordConsent(ledger, { personId: null, email: c.email, channel: c.channel, purpose, action: "withdraw", wording, source: "base-ground" });
       answer = { ok: true, applied: matches.length };
     }
 
     await tx.insert(auditLog).values({
-      action: c.action === "grant" ? "consent.starbase-grant-ignored" : "consent.starbase-withdraw",
+      action: c.action === "grant" ? "consent.base-ground-grant-ignored" : "consent.base-ground-withdraw",
       entity: INBOUND_ENTITY,
       entityId: idempotencyKey,
       // What was decided, never the address or number (those are in the consent ledger).

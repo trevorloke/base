@@ -12,7 +12,7 @@ import { subscribe } from "@/lib/server/newsletter";
 import { normalizePhone } from "@/lib/server/sms";
 import { notifySignature } from "@/lib/server/notifications";
 import { findOrCreatePerson } from "@/lib/server/people";
-import { forwardSignature } from "@/lib/server/starbase-forward";
+import { forwardSignature } from "@/lib/server/base-ground-forward";
 import { signatureSchema } from "@/lib/validation";
 
 /**
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
 
     invalidate(TAGS.counters);
     if (inserted) {
-      // A new signature goes to the desk too; Starbase's newsletter only on a recorded grant.
+      // A new signature goes to the desk too; base ground's newsletter only on a recorded grant.
       await forwardSignature(db, {
         personId: person.id,
         campaign: { kind: campaign.kind, slug, title: campaign.title },

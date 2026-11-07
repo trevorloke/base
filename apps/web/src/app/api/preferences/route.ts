@@ -4,7 +4,7 @@ import { neighbourhoodForPostalCode, normalizePostalCode, OUTSIDE_SURREY } from 
 import { error, json, parseBody } from "@/lib/server/api";
 import { CONSENT_WORDING, consentMeta, recordConsent } from "@/lib/server/consent";
 import { handle } from "@/lib/server/handle";
-import { forwardConsentWithdrawal } from "@/lib/server/starbase-forward";
+import { forwardConsentWithdrawal } from "@/lib/server/base-ground-forward";
 import { findPersonByEmail, updatePerson, type PersonFields } from "@/lib/server/people";
 import { consumeToken, createToken } from "@/lib/server/tokens";
 import { preferencesSchema } from "@/lib/validation";
@@ -15,7 +15,7 @@ const TTL_MINUTES = 60;
  * Save email and text preferences. The token proves control of the address
  * and is single use; the response carries a fresh one so the page can save
  * again. Every tick that changed is written to the consent ledger, and a
- * withdrawal is passed to Starbase.
+ * withdrawal is passed to base ground.
  */
 export async function POST(req: NextRequest) {
   return handle(async () => {
