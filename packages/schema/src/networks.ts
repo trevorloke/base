@@ -38,6 +38,14 @@ export const Network = z.enum([
   "kit",
   "webhook",
   "rss",
+  // Community platforms: Chinese, Korean, Vietnamese, Russian-speaking and other diaspora audiences.
+  "weibo",
+  "douyin",
+  "wecom",
+  "band",
+  "zalo",
+  "viber",
+  "ok",
 ]);
 export type Network = z.infer<typeof Network>;
 
@@ -95,6 +103,14 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   kit: { maxText: 100000, maxMedia: 10, requiresMedia: false, supportsThread: false },
   webhook: { maxText: 100000, maxMedia: 10, requiresMedia: false, supportsThread: false },
   rss: { maxText: 0, maxMedia: 0, requiresMedia: false, supportsThread: false },
+  // TODO(verify): community platforms' limits, as documented by each; connectors validate precisely.
+  weibo: { maxText: 2000, maxMedia: 9, requiresMedia: false, supportsThread: false },
+  douyin: { maxText: 1000, maxMedia: 1, requiresMedia: true, supportsThread: false },
+  wecom: { maxText: 2048, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  band: { maxText: 10000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  zalo: { maxText: 2000, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  viber: { maxText: 7000, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  ok: { maxText: 10000, maxMedia: 10, requiresMedia: false, supportsThread: false },
 };
 
 /**
