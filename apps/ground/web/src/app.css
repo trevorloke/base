@@ -1,0 +1,662 @@
+/* base ground — one stylesheet.
+   Imagine Surrey's field app, in the party's own colours (brand guidelines
+   2.1): Surrey Navy leads (the sidebar, the one primary button), Marigold is
+   the spark (the active tab's bar, badges, focus on navy), red is for action
+   and danger only, Sky and Paper give everything room. Barlow Condensed for
+   headlines and labels, Inter for everything people read (self-hosted,
+   /fonts/fonts.css). Dark mode is Deep Navy with marigold accents, as the
+   guidelines say. The brand lives in these tokens only. */
+
+:root {
+  /* Type — Inter for reading, Barlow Condensed for headlines and labels. */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', 'Inter', system-ui, Arial, sans-serif;
+  /* Older names, kept so every screen picks up the same face. */
+  --font-serif: var(--font-sans);
+  --font-mono: var(--font-sans);
+
+  /* Brand */
+  --navy: #003979;        /* Surrey Navy: grounds, headlines */
+  --navy-2: #00224d;      /* Deep Navy: depth, overlays */
+  --navy-text: #c9d6ea;   /* quiet text on navy */
+  --gold: #ffc72c;        /* Marigold: the spark — never as text on white or cream */
+  --red: #ef2023;         /* Signal Red: buttons and large type only (19px bold up) */
+  --red-text: #c8151b;    /* red that reads as text on white */
+  --cream: #f3ebda;
+
+  /* Surfaces: --paper is the page, --paper-0 a card, --paper-1 Sky panels */
+  --ink: #141a26;
+  --paper-0: #ffffff;
+  --paper: #f6f7f9;
+  --paper-1: #e9f0f9;
+  --paper-2: #dbe5f2;
+  --rule: #d6dce5;
+  --rule-2: #bfc8d6;
+
+  --text-1: var(--ink);
+  --text-2: #2a3444;
+  --text-3: #5b6472;
+  --text-4: #8a94a6;
+
+  /* The mark — the one accent (primary button, active item, focus): navy. */
+  --mark: var(--navy);
+  --mark-ink: #ffffff;
+  --mark-soft: var(--paper-1);
+  --mark-deep: var(--navy-2);
+
+  /* Status */
+  --ok: #1f7a4d;
+  --warn: #9a5b00;
+  --danger: var(--red-text);
+  /* Undecided — the map pins' amber. */
+  --amber: #f5a524;
+  --amber-deep: #b87400;
+
+  /* Geometry */
+  --r-ctrl: 10px;
+  --r-card: 14px;
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px;
+  --shadow-1: 0 1px 2px rgba(0, 34, 77, 0.06), 0 1px 1px rgba(0, 34, 77, 0.03);
+  --shadow-2: 0 8px 28px rgba(0, 34, 77, 0.14);
+  --side-w: 232px;
+
+  --border: 1px solid var(--rule);
+  --border-2: 1px solid var(--rule-2);
+  --border-ink: 1px solid var(--rule-2);
+  /* One column for every screen (Map is the only full-width one). --max-w is
+     the column plus its side gutters, for the nav and page boxes. */
+  --page-w: 960px;
+  --max-w: calc(var(--page-w) + 2 * var(--s-4));
+}
+
+/* Dark mode: Deep Navy ground, white text, marigold links and accents. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #f6f7f9;
+    --paper-0: #0b3068;
+    --paper: #00224d;
+    --paper-1: #164082;
+    --paper-2: #1e4a8f;
+    --rule: #2a4f8a;
+    --rule-2: #3b63a3;
+    --text-2: #d6deeb;
+    --text-3: #a9b6cc;
+    --text-4: #7f8ea8;
+    --navy: #001a3d;
+    --navy-2: #0b3068;
+    --mark: #ffc72c;
+    --mark-ink: #00224d;
+    --mark-soft: #2b3f66;
+    --mark-deep: #f2bb1f;
+    --danger: #ff8a8a;
+    --ok: #5fd39a;
+    --warn: #f0b955;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.5);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  font-family: var(--font-sans);
+  color: var(--text-1);
+  background: var(--paper);
+  font-size: 15px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a { color: inherit; }
+::selection { background: var(--mark-soft); color: var(--text-1); }
+
+/* Headlines in Barlow Condensed (700), sentence case, tight. */
+h1, h2, h3 { font-family: var(--font-display); font-weight: 700; margin: 0 0 var(--s-3); line-height: 1.1; letter-spacing: 0; }
+h1 { font-size: 30px; }
+h2 { font-size: 21px; }
+
+/* ── 1. Micro-label (eyebrow) — small, uppercase, quiet ── */
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.mono { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+
+/* ── 2. Hairline rule ── */
+.hairline { height: 1px; background: var(--rule); border: 0; margin: var(--s-4) 0; }
+
+/* ── 3. Button ── */
+.btn {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-1);
+  background: var(--paper-0);
+  border: var(--border-2);
+  border-radius: var(--r-ctrl);
+  padding: 8px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  line-height: 1.3;
+  transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+.btn-primary {
+  background: var(--mark); color: var(--mark-ink); border: 1px solid var(--mark);
+  box-shadow: 0 1px 2px rgba(0, 34, 77, 0.25);
+}
+.btn-quiet { border-color: transparent; background: transparent; color: var(--text-3); }
+/* Hover only where a pointer hovers. On a phone a tapped button keeps
+   :hover until the next tap, so it would still look pressed on the next
+   screen. Every :hover that changes a fill or edge sits in (hover: hover). */
+@media (hover: hover) {
+  .btn:hover { border-color: var(--mark); background: var(--paper-0); }
+  .btn-primary:hover { background: var(--mark-deep); border-color: var(--mark-deep); }
+  .btn-quiet:hover { color: var(--text-1); border-color: var(--rule-2); background: transparent; }
+}
+.btn:focus-visible, .input:focus-visible, a:focus-visible, [role='option']:focus-visible {
+  outline: 2px solid var(--mark);
+  outline-offset: 2px;
+}
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ── 4. Input + field ── */
+.input {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--text-1);
+  background: var(--paper-0);
+  border: var(--border-2);
+  border-radius: var(--r-ctrl);
+  padding: 9px 12px;
+  width: 100%;
+}
+.input:focus { outline: 3px solid var(--mark-soft); outline-offset: 0; border-color: var(--mark); }
+.field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); }
+.field > label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-3);
+}
+.form-row { display: flex; gap: var(--s-3); flex-wrap: wrap; }
+.form-row > .field { flex: 1 1 140px; }
+
+/* ── 5. Card ── */
+.card {
+  background: var(--paper-0);
+  border: var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-1);
+  padding: var(--s-4) var(--s-4);
+  margin-bottom: var(--s-4);
+}
+.card > .eyebrow { display: block; margin-bottom: var(--s-2); }
+
+/* ── 6. Table ── */
+.table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--paper-0); border: var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-1); overflow: hidden; }
+.table th {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-3);
+  text-align: left;
+  background: var(--paper-1);
+  padding: 10px var(--s-3);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.table td {
+  padding: 11px var(--s-3);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: baseline;
+}
+.table tr:last-child td { border-bottom: 0; }
+.table tr.rowlink { cursor: pointer; }
+@media (hover: hover) { .table tr.rowlink:hover td { background: color-mix(in srgb, var(--mark-soft) 45%, var(--paper-0)); } }
+.table .num { text-align: right; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
+.table th.num { text-align: right; }
+
+/* ── 7. Chip ── */
+.chip {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+  color: var(--text-2);
+  background: var(--paper-1);
+}
+.chip-warn { background: #fff3d6; border-color: transparent; color: #8a5a00; }
+.chip-danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--paper-0)); border-color: transparent; }
+.chip-ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, var(--paper-0)); border-color: transparent; }
+
+/* ── 8. Banner ── */
+.banner {
+  border: 1px solid color-mix(in srgb, var(--mark) 30%, transparent);
+  background: var(--mark-soft);
+  border-radius: var(--r-card);
+  padding: var(--s-3) var(--s-4);
+  margin-bottom: var(--s-4);
+  display: flex;
+  gap: var(--s-3);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+/* ── 9. Toast ── */
+.toast {
+  position: fixed;
+  bottom: var(--s-5);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--navy);
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: var(--shadow-2);
+  padding: var(--s-3) var(--s-4);
+  display: flex;
+  gap: var(--s-4);
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 50;
+}
+/* The toast's button (Change, Undo, OK): a light outline in the toast's own
+   ink — never the accent, which is the screen's one primary button. */
+.toast .btn {
+  color: inherit;
+  background: transparent;
+  border-color: currentColor;
+  border-color: color-mix(in srgb, currentColor 55%, transparent);
+}
+@media (hover: hover) {
+  .toast .btn:hover { color: inherit; background: color-mix(in srgb, currentColor 14%, transparent); border-color: currentColor; }
+}
+
+/* ── 10. Nav / shell ──
+   Desktop: a navy sidebar down the left. Phones (≤ 720px): a navy top bar
+   with the brand and avatar, and the tab bar along the bottom (§11). */
+.nav {
+  background: var(--navy);
+  color: var(--navy-text);
+}
+.nav-inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 var(--s-4);
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 56px;
+  flex-wrap: wrap;
+}
+.nav .brand {
+  display: inline-flex; align-items: center; gap: 10px;
+  text-decoration: none; color: #fff;
+}
+/* The star device at its natural width: 32px tall, the guidelines' minimum. */
+.brand-mark { width: auto; height: 32px; flex: none; display: block; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+.brand-admin { color: var(--gold); font-weight: 600; }
+.brand-name { font-family: var(--font-display); font-size: 19px; font-weight: 700; letter-spacing: 0.01em; }
+.brand-org { font-size: 12px; font-weight: 600; color: var(--gold); }
+/* Staging, said on every screen so nobody mistakes it for production. */
+.env-badge { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--gold); color: var(--navy); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; vertical-align: middle; }
+.nav .links { display: flex; gap: var(--s-1); }
+.nav .links a {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--navy-text);
+  padding: 9px 12px;
+  border-radius: 10px;
+}
+.nav .links .tab-icon { width: 20px; height: 20px; flex: none; opacity: 0.9; }
+@media (hover: hover) { .nav .links a:hover { color: #fff; background: var(--navy-2); } }
+.nav .links a.active { color: #fff; background: var(--navy-2); box-shadow: inset 3px 0 0 var(--gold); }
+.nav .links a:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+/* A small count on a tab (new replies on Calls). */
+.tab-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+  margin-left: 6px; border-radius: 9px; background: var(--gold); color: var(--navy);
+  font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: 0;
+}
+.tab-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.spacer { flex: 1; }
+.nav .ws { font-size: 13px; color: var(--navy-text); }
+
+@media (min-width: 721px) {
+  #root:has(> .nav) { padding-left: var(--side-w); }
+  .nav {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 950;
+    width: var(--side-w);
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .nav-inner {
+    flex: 1; width: 100%; max-width: none; margin: 0;
+    flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--s-1);
+    padding: 20px 12px 14px;
+  }
+  .nav .brand { padding: 0 8px 18px; }
+  .nav .links { flex-direction: column; gap: 2px; }
+  .nav .acct { margin-top: var(--s-3); }
+}
+
+/* Account menu: the avatar opens name · campaign · Team · Sign out */
+.acct { position: relative; }
+.acct-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-width: 44px; height: 44px; padding: 0; margin: 0 calc(-1 * var(--s-2));
+  background: none; border: 0; border-radius: 999px; cursor: pointer; color: inherit;
+  font: inherit;
+}
+.acct-btn__who { display: none; }
+.acct-btn[aria-expanded='true'] .avatar { background: var(--mark); color: var(--mark-ink); }
+@media (hover: hover) { .acct-btn:hover .avatar { background: var(--mark); color: var(--mark-ink); } }
+.acct-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 0; }
+@media (min-width: 721px) {
+  .acct-btn {
+    width: 100%; height: auto; margin: 0; padding: 8px; justify-content: flex-start;
+    border-radius: 10px; text-align: left;
+  }
+  @media (hover: hover) { .acct-btn:hover { background: var(--navy-2); } }
+  .acct-btn__who { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+  .acct-btn__name { color: #fff; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct-btn__role { color: var(--navy-text); font-size: 12px; text-transform: capitalize; opacity: 0.8; }
+}
+.acct-panel {
+  position: absolute; right: calc(-1 * var(--s-2)); top: calc(100% + 6px); z-index: 960;
+  min-width: 220px; max-width: calc(100vw - 2 * var(--s-4));
+  background: var(--paper-0); color: var(--text-1);
+  border: var(--border); border-radius: 12px;
+  box-shadow: var(--shadow-2);
+  padding: var(--s-1) 0;
+  overflow: hidden;
+}
+@media (min-width: 721px) {
+  .acct-panel { top: auto; bottom: calc(100% + 6px); left: 0; right: auto; }
+}
+.acct-panel[hidden] { display: none; }
+.acct-who { display: flex; flex-direction: column; padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--rule); }
+.acct-name { font-weight: 700; overflow-wrap: anywhere; }
+.acct-ws { font-size: 13px; color: var(--text-3); overflow-wrap: anywhere; }
+.acct-item {
+  display: flex; align-items: center; width: 100%; min-height: 46px; padding: 0 var(--s-4);
+  font-family: var(--font-sans); font-size: 14.5px; font-weight: 500; letter-spacing: 0; text-transform: none;
+  color: var(--text-1); text-decoration: none; text-align: left;
+  background: none; border: 0; cursor: pointer;
+}
+.acct-item + .acct-item { border-top: 1px solid var(--rule); }
+@media (hover: hover) { .acct-item:hover { background: var(--paper-1); } }
+.acct-item.active { box-shadow: inset 3px 0 0 var(--mark); }
+.acct-item:disabled { opacity: 0.5; cursor: default; }
+.acct-item:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.acct-confirm { padding: var(--s-3) var(--s-4); border-top: 1px solid var(--rule); }
+.acct-confirm p { margin: 0 0 var(--s-3); font-size: 14px; }
+.acct-confirm__row { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+.btn.acct-danger { color: var(--danger); border-color: var(--danger); }
+@media (hover: hover) { .btn.acct-danger:hover { background: var(--danger); color: #fff; } }
+
+.avatar {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  width: 34px; height: 34px; flex: none;
+  border-radius: 50%;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--navy);
+  background: var(--gold);
+}
+
+.page { max-width: var(--max-w); margin: 0 auto; padding: var(--s-6) var(--s-5) var(--s-7); }
+/* A screen narrower than the column (e.g. the call card) sits centred in it. */
+.page > * { margin-inline: auto; }
+/* The map is the one full-width screen. */
+.page:has(> .map-page) { max-width: none; }
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); margin-bottom: var(--s-5); flex-wrap: wrap; }
+.page-head h1 { margin: 0; }
+
+/* ── 11. Hero stat ── */
+.stat-hero { margin: var(--s-4) 0 var(--s-5); }
+.stat-hero .amount {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat-hero .sub { color: var(--text-3); margin-top: var(--s-1); }
+
+/* ── 12. Picker (type-ahead dropdown) ── */
+.picker { position: relative; }
+.picker-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0; right: 0;
+  background: var(--paper-0);
+  border: var(--border);
+  border-radius: var(--r-ctrl);
+  z-index: 20;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0; padding: 0;
+  list-style: none;
+  box-shadow: var(--shadow-2);
+}
+.picker-list li { padding: var(--s-2) var(--s-3); cursor: pointer; border-bottom: 1px solid var(--rule); }
+.picker-list li:last-child { border-bottom: 0; }
+.picker-list li.active { background: var(--mark-soft); }
+.picker-list li .meta { color: var(--text-3); font-size: 12px; margin-left: var(--s-2); }
+.picker-list li.create { font-style: italic; color: var(--text-2); }
+
+/* Small helpers (shared, not per-screen) */
+.ok-text { color: var(--ok); }
+.danger-text { color: var(--danger); }
+.muted { color: var(--text-3); }
+/* No signal, nothing loaded yet: one quiet line (components/NoSignal.jsx). */
+.no-signal {
+  margin: var(--s-3) 0;
+  padding: var(--s-3) var(--s-4);
+  border-left: 3px solid var(--rule-2);
+  border-radius: 0 var(--r-ctrl) var(--r-ctrl) 0;
+  background: var(--paper-0);
+  color: var(--text-2);
+  font-size: 16px;
+}
+.error {
+  color: var(--danger);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  margin: var(--s-2) 0;
+}
+.list-plain { list-style: none; margin: 0; padding: 0; }
+.list-plain li { padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); display: flex; gap: var(--s-3); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.list-plain li:last-child { border-bottom: 0; }
+.footer-row { display: flex; align-items: center; gap: var(--s-4); margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--rule); flex-wrap: wrap; }
+
+/* Sign in / set up: a white card on Surrey Navy, with the rise — a Deep
+   Navy block whose edge climbs at 24 degrees, the brand's one device. */
+html:has(.auth-page) { min-height: 100%; background: linear-gradient(156deg, var(--navy) 0 64%, var(--navy-2) 64%) fixed; }
+html:has(.auth-page) body { background: transparent; }
+.auth-page {
+  max-width: 420px; margin: 9vh auto var(--s-6); padding: 28px;
+  background: var(--paper-0); color: var(--text-1);
+  border-radius: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+@media (max-width: 460px) { .auth-page { margin: 6vh var(--s-3) var(--s-5); padding: 22px; } }
+.auth-page .brand {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: 0.01em; text-transform: none;
+  color: var(--text-1); background: none; padding: 0;
+  margin-bottom: var(--s-5);
+}
+.auth-page .brand::before {
+  content: ''; width: 72px; height: 36px; flex: none;
+  background: url('/star.png') center / contain no-repeat;
+}
+.auth-page .brand-org { color: var(--mark); }
+.auth-page h1 { font-size: 28px; }
+/* The marigold bar: a short bar under a headline, one per page. */
+.auth-page h1::after { content: ''; display: block; width: 44px; height: 5px; margin-top: 10px; background: var(--gold); }
+.check { font-family: var(--font-sans); }
+.done { text-decoration: line-through; color: var(--text-4); }
+
+/* ── 11. Mobile tab bar (field mode) ── */
+.tabbar { display: none; }
+@media (max-width: 720px) {
+  .nav .links { display: none; }
+  .nav .ws { display: none; }
+  .nav-inner { min-height: 56px; }
+  .brand-mark { height: 30px; }
+  /* Clear the tab bar; the full-bleed map cancels exactly 64px itself. */
+  .page { padding: var(--s-5) var(--s-4) calc(92px + env(safe-area-inset-bottom)); }
+  .page:has(> .map-page) { padding-bottom: 64px; }
+  /* A tab is at least as wide as its label (minmax(min-content, 1fr) —
+     "Outreach" takes a little from the shorter ones), so all seven desk
+     tabs fit a 360px phone whole, with an 8px gutter at each end. */
+  .tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    gap: 2px;
+    background: var(--navy);
+    padding: 6px var(--s-2) calc(6px + env(safe-area-inset-bottom));
+  }
+  .tabbar a {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-width: 0; min-height: 54px; padding: 5px 3px 4px;
+    font-family: var(--font-sans); font-size: 11.5px; font-weight: 500; line-height: 1.2; letter-spacing: 0; text-transform: none;
+    text-decoration: none; color: var(--navy-text); text-align: center;
+    border-radius: 10px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tabbar .tab-icon { width: 22px; height: 22px; flex: none; }
+  .tabbar .tab-iconwrap { position: relative; display: inline-flex; }
+  .tabbar .tab-badge { position: absolute; top: -6px; right: -12px; margin: 0; }
+  .tabbar .tab-label { display: block; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+  .tabbar a.active { color: #fff; background: var(--navy-2); font-weight: 700; }
+  .tabbar a.active .tab-icon { stroke-width: 2.2; color: var(--gold); }
+  .tabbar a:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+  /* Volunteers: four tabs, so everything is bigger. */
+  .tabbar[data-count='4'] a { min-height: 60px; font-size: 13.5px; gap: 4px; }
+  .tabbar[data-count='4'] .tab-icon { width: 26px; height: 26px; }
+}
+/* Seven desk tabs: a little tighter on small phones, labels whole. */
+@media (max-width: 400px) {
+  .tabbar[data-count='8'] { gap: 0; padding-left: var(--s-1); padding-right: var(--s-1); }
+  .tabbar[data-count='8'] a { font-size: 10.5px; padding-left: 2px; padding-right: 2px; }
+}
+/* Very narrow phones (≤ 359px): seven 10.5px labels still fit whole. */
+@media (max-width: 359px) {
+  .tabbar { padding-left: var(--s-1); padding-right: var(--s-1); }
+  .tabbar a { font-size: 10.5px; }
+  .tabbar[data-count='4'] a { font-size: 12.5px; }
+}
+
+/* ── 13. Touch: fingers, not cursors ──
+   Touch screens and phone-width windows get ≥44px tap targets on the shared
+   controls; desktop (fine pointer, wide window) keeps its density. Padding is
+   computed from the font size so the label stays centred whatever a page sets. */
+@media (pointer: coarse), (max-width: 720px) {
+  .btn {
+    min-height: 44px;
+    padding-top: max(7px, calc((44px - 1.3em) / 2 - 1px));
+    padding-bottom: max(7px, calc((44px - 1.3em) / 2 - 1px));
+  }
+  button.chip, a.chip, label.chip { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s-3); }
+  .input { min-height: 44px; font-size: 16px; } /* 16px: iOS won't zoom on focus */
+}
+
+/* ── 14. Disclosure — the one "show more" shape ──
+   Every More, More details, Up next, Roles and profile section: a
+   full-width row, the label on the left in the body font, a + on the right
+   that turns into − when open, a hairline above. Quiet ink, never yellow.
+   Put it on a <button aria-expanded>; the glyph follows aria-expanded, so
+   there is no caret markup. --disclose-x lines the label up with a card's
+   padding when the row runs edge to edge.
+   .disclose--inline is the in-form "More details": same label, same glyph
+   on the same side, only as wide as its words and without the rule. */
+.disclose {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: var(--s-2) var(--disclose-x, 0);
+  font-family: var(--font-sans);
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  color: var(--text-2);
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.disclose::after {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  background:
+    linear-gradient(currentColor, currentColor) center / 14px 2px no-repeat,
+    linear-gradient(currentColor, currentColor) center / 2px 14px no-repeat;
+}
+.disclose[aria-expanded='true'] { color: var(--text-1); }
+.disclose[aria-expanded='true']::after { background: linear-gradient(currentColor, currentColor) center / 14px 2px no-repeat; }
+@media (hover: hover) { .disclose:hover { color: var(--text-1); } }
+.disclose:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.disclose:disabled { opacity: 0.5; cursor: default; }
+.disclose--inline {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  gap: var(--s-2);
+  border-top: 0;
+}
+.disclose--inline::after { margin-left: var(--s-1); }
+/* Forced colours drop background images: fall back to a text glyph. */
+@media (forced-colors: active) {
+  .disclose::after { width: auto; height: auto; background: none; content: '+'; content: '+' / ''; }
+  .disclose[aria-expanded='true']::after { content: '−'; content: '−' / ''; }
+}
+
+/* A quiet text button inside a line of words (NameFields' Undo, Move it). */
+.btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--link, var(--text-1)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.btn-link:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
+.name-note { margin: calc(-1 * var(--s-2, 8px)) 0 var(--s-3, 12px); font-size: 14px; }

@@ -1,0 +1,10 @@
+{
+  "name": "@base-ground/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@base-ground/shared": "*",
+    "pg": "^8.16.3"
+  }
+}

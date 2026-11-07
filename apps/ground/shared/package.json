@@ -1,0 +1,15 @@
+{
+  "name": "@base-ground/shared",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./registry": "./registry.js",
+    "./canvass": "./canvass.js",
+    "./scale": "./scale.js",
+    "./dayparts": "./dayparts.js",
+    "./markdown": "./markdown.js",
+    "./passes": "./passes.js",
+    "./names": "./names.js"
+  }
+}
