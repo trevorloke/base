@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // A self-contained server (.next/standalone) for the Docker image.
+  output: "standalone",
   // Stripe and postgres are server-only Node packages.
   serverExternalPackages: ["postgres"],
   poweredByHeader: false,

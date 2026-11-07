@@ -9,6 +9,7 @@ import { StickyActions } from "@/components/shell/StickyActions";
 import { VisitBeacon } from "@/components/VisitBeacon";
 import { env } from "@/lib/env";
 import { shellSettings } from "@/lib/server/home";
+import { renderAtRequestTimeWithoutDatabase } from "@/lib/server/render-time";
 import "./globals.css";
 import "@/components/shell/shell.css";
 
@@ -21,6 +22,7 @@ const montserrat = localFont({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
+  await renderAtRequestTimeWithoutDatabase();
   const { seo, org } = await shellSettings();
   return {
     metadataBase: new URL(env.siteUrl),
@@ -36,6 +38,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = { themeColor: "#003979" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  await renderAtRequestTimeWithoutDatabase();
   const { org, socials, announcement, seo, header } = await shellSettings();
   const siteUrl = env.siteUrl;
   const organization = {

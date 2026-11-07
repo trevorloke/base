@@ -1,7 +1,9 @@
 import type { MetadataRoute } from "next";
 import { shellSettings } from "@/lib/server/home";
+import { renderAtRequestTimeWithoutDatabase } from "@/lib/server/render-time";
 
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  await renderAtRequestTimeWithoutDatabase();
   const { org, seo } = await shellSettings();
   return {
     name: org.name,

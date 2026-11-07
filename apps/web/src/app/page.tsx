@@ -17,6 +17,7 @@ import { NEIGHBOURHOODS } from "@/lib/neighbourhoods";
 import { activeProducts, latestNews, upcomingEvents } from "@/lib/server/content";
 import { homeLive, shellSettings, type HomeLive } from "@/lib/server/home";
 import { formatDay, SLOTS } from "@/lib/shifts";
+import { buildingWithoutDatabase } from "@/lib/server/render-time";
 
 export const revalidate = 3600;
 
@@ -36,7 +37,7 @@ export default async function Home() {
   const [settings, live, news, events, products] = await Promise.all([
     shellSettings(),
     homeLive().catch((err) => {
-      console.error("The home page rail could not be loaded", err);
+      if (!buildingWithoutDatabase()) console.error("The home page rail could not be loaded", err);
       return null;
     }),
     latestNews(3),

@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "ICU_TIMEZONE_FILES_DIR=./tzdata next dev",
     "build": "ICU_TIMEZONE_FILES_DIR=./tzdata next build",
-    "vercel-build": "tsx scripts/predeploy.ts && ICU_TIMEZONE_FILES_DIR=./tzdata next build",
     "build:deploy": "tsx scripts/predeploy.ts && ICU_TIMEZONE_FILES_DIR=./tzdata next build",
     "start": "ICU_TIMEZONE_FILES_DIR=./tzdata next start",
     "typecheck": "tsc --noEmit",
@@ -14,7 +13,8 @@
     "e2e": "node e2e/run.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:seed": "tsx scripts/seed.ts"
+    "db:seed": "tsx scripts/seed.ts",
+    "build:predeploy": "esbuild scripts/predeploy.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/predeploy.mjs --log-level=warning"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",
@@ -34,6 +34,7 @@
     "@types/react-dom": "^19.3.0",
     "@types/sanitize-html": "^2.16.2",
     "drizzle-kit": "^0.31.11",
+    "esbuild": "^0.28.2",
     "playwright": "^1.56.1",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",

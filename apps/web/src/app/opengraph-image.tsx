@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import { env } from "@/lib/env";
 import { shellSettings } from "@/lib/server/home";
+import { renderAtRequestTimeWithoutDatabase } from "@/lib/server/render-time";
 
 // The default share card for every page that doesn't set its own.
 export const alt = "Imagine Surrey";
@@ -14,6 +15,7 @@ export const contentType = "image/png";
 const fontDir = join(process.cwd(), "src/components/shell/fonts");
 
 export default async function OpengraphImage() {
+  await renderAtRequestTimeWithoutDatabase();
   const [{ org, seo }, black, medium] = await Promise.all([
     shellSettings(),
     readFile(join(fontDir, "montserrat-black.ttf")),

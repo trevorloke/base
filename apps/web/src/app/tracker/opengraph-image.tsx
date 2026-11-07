@@ -2,6 +2,7 @@ import { ImageResponse } from "next/og";
 import { env } from "@/lib/env";
 import { countByStatus, formatIsoDate, PROMISE_STATUSES } from "@/lib/tracker";
 import { loadTracker } from "@/lib/server/tracker";
+import { renderAtRequestTimeWithoutDatabase } from "@/lib/server/render-time";
 
 // The share image for /tracker: the scoreboard. Brand colours and the
 // runtime's bundled font, so no font files ship with the site.
@@ -16,6 +17,7 @@ const YELLOW = "#FFF100";
 const PALE = "#D3DEEF";
 
 export default async function Image() {
+  await renderAtRequestTimeWithoutDatabase();
   const { promises, lastUpdated } = await loadTracker();
   const counts = countByStatus(promises.map((p) => p.status));
   const host = new URL(env.siteUrl).host;
