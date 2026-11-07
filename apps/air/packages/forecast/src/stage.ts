@@ -1,4 +1,4 @@
-import type { TrendStage } from "@starsign/schema";
+import type { TrendStage } from "@base-air/schema";
 import { ewma, mean } from "./series.ts";
 
 export interface Kinematics {

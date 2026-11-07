@@ -1,5 +1,5 @@
-import type { Starsign } from "@starsign/core";
-import { createMentionSearches } from "@starsign/sources";
+import type { BaseAir } from "@base-air/core";
+import { createMentionSearches } from "@base-air/sources";
 import { captureOutcomes, ingestAll, pullSources, refreshForecasts } from "./jobs.ts";
 // ---- AI answer visibility
 import { runVisibility } from "./visibility.ts";
@@ -8,7 +8,7 @@ import { runVisibility } from "./visibility.ts";
 export interface MaintenanceJob {
   name: string;
   everyMs: number;
-  run(m: Starsign): Promise<unknown>;
+  run(m: BaseAir): Promise<unknown>;
 }
 
 export interface MaintenanceOptions {
@@ -57,7 +57,7 @@ export interface InProcessJobs {
  * mode). Without this the feed, radar, metrics and brief would never fill. Each job runs at most once at a time;
  * first runs are staggered so the server is up before any of them start.
  */
-export function startInProcessJobs(m: Starsign, opts: MaintenanceOptions & { firstRunAfterMs?: number; log?: (line: string) => void } = {}): InProcessJobs {
+export function startInProcessJobs(m: BaseAir, opts: MaintenanceOptions & { firstRunAfterMs?: number; log?: (line: string) => void } = {}): InProcessJobs {
   const log = opts.log ?? ((line: string) => console.log(line));
   const jobs = maintenanceJobs(opts);
   const running = new Set<string>();

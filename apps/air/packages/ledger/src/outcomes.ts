@@ -1,6 +1,6 @@
 import { and, eq, lte } from "drizzle-orm";
-import { postOutcomes, type Db } from "@starsign/db";
-import { OUTCOME_OFFSETS, type Actor } from "@starsign/schema";
+import { postOutcomes, type Db } from "@base-air/db";
+import { OUTCOME_OFFSETS, type Actor } from "@base-air/schema";
 import { newId } from "./ids.ts";
 import type { EventStore } from "./store.ts";
 

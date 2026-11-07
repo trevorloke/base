@@ -1,20 +1,20 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FakeGateway } from "@starsign/ai";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, SecretBox, Starsign } from "@starsign/core";
-import type { DbHandle } from "@starsign/db";
-import { createTestDb } from "@starsign/db/test";
+import { FakeGateway } from "@base-air/ai";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, SecretBox, BaseAir } from "@base-air/core";
+import type { DbHandle } from "@base-air/db";
+import { createTestDb } from "@base-air/db/test";
 import { runScout } from "../src/index.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let wsId: string;
 const now = () => new Date("2026-11-02T18:00:00Z");
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now });
   wsId = (await m.workspaces.create({ slug: "acme", name: "Acme Outdoor", timezone: "UTC", profile: { description: "outdoor gear" } }, { type: "human", id: "u1" })).id;
   await m.trends.createTopic({ workspaceId: wsId, name: "Microspikes vs. crampons", keywords: ["microspikes"] });
 });

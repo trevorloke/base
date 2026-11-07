@@ -1,9 +1,9 @@
-import type { Starsign } from "@starsign/core";
-import type { Network } from "@starsign/schema";
-import { createDefaultSources, type SourceAdapter } from "@starsign/sources";
+import type { BaseAir } from "@base-air/core";
+import type { Network } from "@base-air/schema";
+import { createDefaultSources, type SourceAdapter } from "@base-air/sources";
 
 /** Pull activity for every active account across workspaces, honoring per-workspace metered-read caps. */
-export async function ingestAll(m: Starsign): Promise<{ accounts: number; ingested: number }> {
+export async function ingestAll(m: BaseAir): Promise<{ accounts: number; ingested: number }> {
   let ingested = 0;
   let accounts = 0;
   for (const ws of await m.workspaces.list()) {
@@ -41,11 +41,11 @@ function readsUsed(connector: unknown): number {
   return typeof v === "number" ? v : 0;
 }
 
-export async function captureOutcomes(m: Starsign) {
+export async function captureOutcomes(m: BaseAir) {
   return m.metrics.captureDueOutcomes();
 }
 
-export async function refreshForecasts(m: Starsign): Promise<number> {
+export async function refreshForecasts(m: BaseAir): Promise<number> {
   const seen = new Set<string>();
   for (const ws of await m.workspaces.list()) {
     for (const t of await m.trends.listTopics(ws.id)) {
@@ -62,7 +62,7 @@ export async function refreshForecasts(m: Starsign): Promise<number> {
 }
 
 /** Sample every topic from every configured trend source, and store what is trending now for the Scout. */
-export async function pullSources(m: Starsign, sources: SourceAdapter[] = createDefaultSources(), region = process.env.STARSIGN_TRENDS_REGION ?? "US") {
+export async function pullSources(m: BaseAir, sources: SourceAdapter[] = createDefaultSources(), region = process.env.BASE_AIR_TRENDS_REGION ?? "US") {
   const results = await m.sources.pull(sources, { region });
   for (const r of results) if (r.error) console.warn(`[sources] ${r.source}: ${r.error}`);
   return results;

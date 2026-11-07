@@ -2,11 +2,11 @@
 
 Connector `viber` · networks `["viber"]` · `packages/connectors/src/viber.ts` · factory `createViberConnectors(env)`
 
-Viber is widely used in Ukraine, the Balkans, Greece, Eastern Europe, the Philippines and Myanmar. Starsign connects two kinds of
+Viber is widely used in Ukraine, the Balkans, Greece, Eastern Europe, the Philippines and Myanmar. base air connects two kinds of
 Viber account, chosen in the connect form:
 
-- **Viber Channel**: a broadcast channel. Starsign posts to it. Channels have no inbox.
-- **Viber Bot**: a business chatbot. Starsign receives what people send it and answers. Since February 2024 Viber gives new bots
+- **Viber Channel**: a broadcast channel. base air posts to it. Channels have no inbox.
+- **Viber Bot**: a business chatbot. base air receives what people send it and answers. Since February 2024 Viber gives new bots
   only to businesses with a commercial agreement with Viber, and messages a bot sends are charged. Use a bot only if you already
   have one or have signed that agreement.
 
@@ -17,10 +17,10 @@ Viber account, chosen in the connect form:
   - Channel: the first member with role `superadmin` is the sender (`from`) of every post; a token without a superadmin is refused.
   - externalId = account id (`pa:…`), handle = uri, config `{ kind, accountId, name, uri, from, subscribersCount, webhookUrl,
     webhookSet }`.
-- **Webhook**: with `STARSIGN_PUBLIC_URL` set, Starsign calls `set_webhook` with
-  `${STARSIGN_PUBLIC_URL}/webhooks/viber?account=<account id>` (bots also subscribe to `subscribed`, `unsubscribed`,
+- **Webhook**: with `BASE_AIR_PUBLIC_URL` set, base air calls `set_webhook` with
+  `${BASE_AIR_PUBLIC_URL}/webhooks/viber?account=<account id>` (bots also subscribe to `subscribed`, `unsubscribed`,
   `conversation_started`, `delivered`, `seen`, `failed`). Viber checks the URL at once; on first connect that check usually fails
-  because the account is not saved yet, so Starsign sets it again on the first poll (`fetchActivity`, once per process) and when a
+  because the account is not saved yet, so base air sets it again on the first poll (`fetchActivity`, once per process) and when a
   post is refused with status 10 (webhook not set; the post is then retried once). Channels need a webhook before Viber accepts
   posts.
 - **Signatures**: `X-Viber-Content-Signature` = hex HMAC-SHA256 of the raw body with that account's auth token, checked in constant
@@ -49,18 +49,18 @@ Viber account, chosen in the connect form:
   rejected; 10 (webhook not set) → rejected after one automatic retry; 23/24 (free messages exceeded, no balance) → rejected; the
   rest → rejected. HTTP failures use the shared mapping.
 
-## What Starsign can and cannot see
-For a **channel**: nothing comes back. Viber sends no callbacks for channel posts, reactions or comments, so Starsign only publishes
+## What base air can and cannot see
+For a **channel**: nothing comes back. Viber sends no callbacks for channel posts, reactions or comments, so base air only publishes
 and reads the subscriber count. For a **bot**: the messages people send to the bot and who subscribes, from the moment the webhook is
-set. Starsign never sees Viber group chats, Communities, personal chats, or message history from before the webhook.
+set. base air never sees Viber group chats, Communities, personal chats, or message history from before the webhook.
 
 ## Setup
 - **Channel**: in the Viber app (17.7 or later), as a channel superadmin: Channel settings → Developer tools → copy the token.
 - **Bot**: the bot's token from the Viber Admin Panel (partners.viber.com), available to bots under a commercial agreement.
-- In Starsign: connect Viber, paste the token, type `channel` or `bot`.
-- Webhook URL (set automatically): `${STARSIGN_PUBLIC_URL}/webhooks/viber?account=<account id>`. HTTPS with a certificate from a
+- In base air: connect Viber, paste the token, type `channel` or `bot`.
+- Webhook URL (set automatically): `${BASE_AIR_PUBLIC_URL}/webhooks/viber?account=<account id>`. HTTPS with a certificate from a
   public CA is required (Viber rejects self-signed certificates).
-- Env vars: none required. `STARSIGN_PUBLIC_URL` lets Starsign set webhooks; `VIBER_API_BASE` is an optional override.
+- Env vars: none required. `BASE_AIR_PUBLIC_URL` lets base air set webhooks; `VIBER_API_BASE` is an optional override.
 
 ## Review and access requirements
 - Channels: only superadmins get API access; no review.

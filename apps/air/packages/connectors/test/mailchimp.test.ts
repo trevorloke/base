@@ -5,7 +5,7 @@ import { MailchimpConnector, createMailchimpConnectors, mailchimpDataCenter, mai
 const NOW = new Date("2026-11-06T12:00:00.000Z");
 // A made-up key in the right shape, assembled at runtime so secret scanners do not mistake it for a real one.
 const KEY = ["0123456789abcdef".repeat(2), "us6"].join("-");
-const BASIC = `Basic ${Buffer.from(`starsign:${KEY}`).toString("base64")}`;
+const BASIC = `Basic ${Buffer.from(`base-air:${KEY}`).toString("base64")}`;
 const BASE = "https://us6.api.mailchimp.com/3.0";
 const acct = (config: Record<string, unknown> = {}): AccountRef => ({
   id: "m1",
@@ -82,7 +82,7 @@ describe("mailchimp connect", () => {
 });
 
 describe("mailchimp publish", () => {
-  const input: PublishInput = { variantId: "v", text: "Big <news> inside\n\nMore & more", media: [{ kind: "image", url: "https://cdn.starsign.test/hero.jpg", alt: "Hero" }], thread: [], idempotencyKey: "k1", options: { title: "November update", link: "https://acme.test/nov" } };
+  const input: PublishInput = { variantId: "v", text: "Big <news> inside\n\nMore & more", media: [{ kind: "image", url: "https://cdn.air.test/hero.jpg", alt: "Hero" }], thread: [], idempotencyKey: "k1", options: { title: "November update", link: "https://acme.test/nov" } };
 
   it("creates the campaign, sets content, checks and sends, in that order", async () => {
     route((c) => {
@@ -101,7 +101,7 @@ describe("mailchimp publish", () => {
     expect(html).toContain("<p>Big &lt;news&gt; inside</p>");
     expect(html).toContain("<p>More &amp; more</p>");
     expect(html).toContain('<a href="https://acme.test/nov">');
-    expect(html).toContain('<img src="https://cdn.starsign.test/hero.jpg" alt="Hero"');
+    expect(html).toContain('<img src="https://cdn.air.test/hero.jpg" alt="Hero"');
     expect(html).toContain('href="*|UNSUB|*"');
     expect(html).toContain("*|LIST:ADDRESSLINE|*");
     expect(res).toEqual({ externalId: "c42", url: "https://us6.campaign-archive.com/?u=1&id=c42", raw: { campaignId: "c42" } });

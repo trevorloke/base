@@ -56,7 +56,7 @@ function useCopy() {
   );
 }
 
-/** Short links Starsign put in published posts: who clicked, what they bought, and the settings behind it. */
+/** Short links base air put in published posts: who clicked, what they bought, and the settings behind it. */
 export function LinksDrawer({ myRole, onClose }: { myRole: Role | null; onClose: () => void }) {
   const toast = useToast();
   const copy = useCopy();
@@ -113,8 +113,8 @@ export function LinksDrawer({ myRole, onClose }: { myRole: Role | null; onClose:
         <section className="dsec">
           <h3 className="section-h">Not on yet</h3>
           <p>
-            Link tracking turns on when the server has <code className="links-inline-code">STARSIGN_LINK_BASE_URL</code> set, or a public{" "}
-            <code className="links-inline-code">STARSIGN_PUBLIC_URL</code>. Until then, links in posts go out as written and nothing is counted.
+            Link tracking turns on when the server has <code className="links-inline-code">BASE_AIR_LINK_BASE_URL</code> set, or a public{" "}
+            <code className="links-inline-code">BASE_AIR_PUBLIC_URL</code>. Until then, links in posts go out as written and nothing is counted.
           </p>
         </section>
       ) : null}
@@ -314,7 +314,7 @@ function MakeLink({ onMade }: { onMade: () => void }) {
   return (
     <section className="dsec">
       <h3 className="section-h">Make a link</h3>
-      <p className="muted small links-lede">For a bio, a newsletter or anywhere Starsign doesn't post for you.</p>
+      <p className="muted small links-lede">For a bio, a newsletter or anywhere base air doesn't post for you.</p>
       <form className="links-make" onSubmit={(e) => void submit(e)}>
         <label className="field links-make-url">
           <span>Web address</span>
@@ -466,11 +466,11 @@ function LinkSettingsSection({ settings, isOwner, onSaved }: { settings: LinkSet
 function ConversionSnippet() {
   const copy = useCopy();
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const snippet = `<script src="${origin}/s.js" async></script>\n<script>\n  // after a purchase, on the thank-you page\n  starsign.convert("purchase", 49, "USD");\n</script>`;
+  const snippet = `<script src="${origin}/s.js" async></script>\n<script>\n  // after a purchase, on the thank-you page\n  baseAir.convert("purchase", 49, "USD");\n</script>`;
   return (
     <section className="dsec">
       <h3 className="section-h">Count conversions</h3>
-      <p className="small links-lede">Put this on your site. Call starsign.convert when someone buys or signs up, with the value and currency if there is one.</p>
+      <p className="small links-lede">Put this on your site. Call baseAir.convert when someone buys or signs up, with the value and currency if there is one.</p>
       <div className="links-code-head">
         <span className="muted small">HTML</span>
         <button type="button" className="btn btn-small" onClick={() => void copy(snippet, "snippet")}>

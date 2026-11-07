@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DEFAULT_API_URL, StarsignApiError, StarsignClient, buildUrl } from "../src/client.ts";
+import { DEFAULT_API_URL, BaseAirApiError, BaseAirClient, buildUrl } from "../src/client.ts";
 import { blockedDecision, brief, failingFetch, fakeApi } from "./helpers.ts";
 
 const BASE = "http://api.test:4000";
-const make = (api: ReturnType<typeof fakeApi>) => new StarsignClient({ baseUrl: BASE, apiKey: "star_abc", fetch: api.fetch });
+const make = (api: ReturnType<typeof fakeApi>) => new BaseAirClient({ baseUrl: BASE, apiKey: "air_abc", fetch: api.fetch });
 
 describe("buildUrl", () => {
   it("joins base and path, comma-joins arrays and drops empty values", () => {
@@ -19,7 +19,7 @@ describe("buildUrl", () => {
   });
 });
 
-describe("StarsignClient", () => {
+describe("BaseAirClient", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("sends the bearer key, accept and user-agent headers, and JSON bodies on POST", async () => {
@@ -28,18 +28,18 @@ describe("StarsignClient", () => {
     expect(decision).toEqual(blockedDecision);
     const call = api.last();
     expect(call.method).toBe("POST");
-    expect(call.headers.authorization).toBe("Bearer star_abc");
+    expect(call.headers.authorization).toBe("Bearer air_abc");
     expect(call.headers.accept).toBe("application/json");
     expect(call.headers["content-type"]).toBe("application/json");
-    expect(call.headers["user-agent"]).toMatch(/^starsign-mcp\//);
+    expect(call.headers["user-agent"]).toMatch(/^base-air-mcp\//);
     expect(call.body).toEqual({ variants: [{ network: "x", text: "Results guaranteed" }] });
   });
 
   it("omits the Authorization header when there is no key (the API's dev mode decides)", async () => {
     const api = fakeApi([{ path: "/v1/me", body: { workspace: {}, actor: { type: "human", id: "dev" }, role: "owner" } }]);
-    await new StarsignClient({ baseUrl: BASE, fetch: api.fetch }).me();
+    await new BaseAirClient({ baseUrl: BASE, fetch: api.fetch }).me();
     expect(api.last().headers.authorization).toBeUndefined();
-    await new StarsignClient({ baseUrl: BASE, apiKey: "   ", fetch: api.fetch }).me();
+    await new BaseAirClient({ baseUrl: BASE, apiKey: "   ", fetch: api.fetch }).me();
     expect(api.last().headers.authorization).toBeUndefined();
   });
 
@@ -120,8 +120,8 @@ describe("StarsignClient", () => {
     const err = await make(api)
       .createPost({ body: "x", variants: [{ socialAccountId: "a", text: "x" }], actionClass: "dm" })
       .catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(StarsignApiError);
-    const e = err as StarsignApiError;
+    expect(err).toBeInstanceOf(BaseAirApiError);
+    const e = err as BaseAirApiError;
     expect(e).toMatchObject({ status: 403, code: "forbidden", message: "autonomy for dm is suggest: the actor may not create", details: { autonomy: "suggest" }, method: "POST", path: "/v1/posts" });
     expect(e.toText()).toContain("403 (forbidden)");
     expect(e.toText()).toContain('"autonomy": "suggest"');
@@ -140,9 +140,9 @@ describe("StarsignClient", () => {
   });
 
   it("wraps transport failures as an unreachable-API error", async () => {
-    const c = new StarsignClient({ baseUrl: BASE, apiKey: "star_abc", fetch: failingFetch() });
-    const err = (await c.getRadar().catch((e: unknown) => e)) as StarsignApiError;
-    expect(err).toBeInstanceOf(StarsignApiError);
+    const c = new BaseAirClient({ baseUrl: BASE, apiKey: "air_abc", fetch: failingFetch() });
+    const err = (await c.getRadar().catch((e: unknown) => e)) as BaseAirApiError;
+    expect(err).toBeInstanceOf(BaseAirApiError);
     expect(err).toMatchObject({ status: 0, code: "unavailable" });
     expect(err.message).toContain(BASE);
     expect(err.message).toContain("ECONNREFUSED");
@@ -162,21 +162,21 @@ describe("StarsignClient", () => {
   });
 
   it("reads the environment and strips trailing slashes", () => {
-    const fromEnv = StarsignClient.fromEnv({ STARSIGN_API_URL: "https://starsign.example/api/", STARSIGN_API_KEY: "star_env" });
-    expect(fromEnv.baseUrl).toBe("https://starsign.example/api");
-    expect(fromEnv.apiKey).toBe("star_env");
-    const defaults = StarsignClient.fromEnv({});
+    const fromEnv = BaseAirClient.fromEnv({ BASE_AIR_API_URL: "https://air.example/api/", BASE_AIR_API_KEY: "air_env" });
+    expect(fromEnv.baseUrl).toBe("https://air.example/api");
+    expect(fromEnv.apiKey).toBe("air_env");
+    const defaults = BaseAirClient.fromEnv({});
     expect(defaults.baseUrl).toBe(DEFAULT_API_URL);
     expect(defaults.apiKey).toBeUndefined();
-    const other = fromEnv.withApiKey("star_other");
+    const other = fromEnv.withApiKey("air_other");
     expect(other.baseUrl).toBe(fromEnv.baseUrl);
-    expect(other.apiKey).toBe("star_other");
+    expect(other.apiKey).toBe("air_other");
   });
 
   it("uses the global fetch when none is injected", async () => {
     const api = fakeApi([{ path: "/api/health", body: { ok: true, version: "0.1.0", db: "pglite" } }]);
     vi.stubGlobal("fetch", api.fetch);
-    const c = new StarsignClient({ baseUrl: BASE });
+    const c = new BaseAirClient({ baseUrl: BASE });
     expect(await c.health()).toEqual({ ok: true, version: "0.1.0", db: "pglite" });
     expect(api.calls).toHaveLength(1);
   });

@@ -3,7 +3,7 @@
  * (and refuses `fetch` for it), and a fake network that drains every request body the way a real server would.
  */
 import { expect, vi } from "vitest";
-import type { Media } from "@starsign/schema";
+import type { Media } from "@base-air/schema";
 import type { MediaFetcher } from "../src/index.ts";
 
 export const MiB = 1024 * 1024;

@@ -88,7 +88,7 @@ describe("ok signature", () => {
 
 describe("ok connect", () => {
   it("builds the authorize URL with ;-separated scopes and is configured only with all three env vars", () => {
-    const url = new URL(connector().oauthAuthorizeUrl({ state: "st", codeChallenge: "chal", redirectUri: "https://starsign.example/oauth/ok/callback" }));
+    const url = new URL(connector().oauthAuthorizeUrl({ state: "st", codeChallenge: "chal", redirectUri: "https://air.example/oauth/ok/callback" }));
     expect(url.origin + url.pathname).toBe("https://connect.ok.ru/oauth/authorize");
     expect(url.searchParams.get("scope")).toContain("GROUP_CONTENT;");
     expect(url.searchParams.get("client_id")).toBe("512000000001");
@@ -102,7 +102,7 @@ describe("ok connect", () => {
     method("users.getCurrentUser", { uid: "111", name: "Ivan Petrov", first_name: "Ivan", last_name: "Petrov" });
     method("group.getUserGroupsV2", { groups: [{ groupId: "555", userId: "111", status: "ADMIN" }, { groupId: "666", userId: "111", status: "MODERATOR" }, { groupId: "777", userId: "111", status: "ACTIVE" }] });
     method("group.getInfo", [{ uid: "555", name: "Acme", shortname: "acme", members_count: 1200 }, { uid: "666", name: "Acme Shop" }]);
-    const accounts = await connector().oauthConnect({ code: "code1", codeVerifier: "unused", redirectUri: "https://starsign.example/oauth/ok/callback" });
+    const accounts = await connector().oauthConnect({ code: "code1", codeVerifier: "unused", redirectUri: "https://air.example/oauth/ok/callback" });
     expect(accounts.map((a) => [a.identity.externalId, a.identity.handle, a.identity.displayName, a.config])).toEqual([
       ["111", "profile/111", "Ivan Petrov", { kind: "user", uid: "111", name: "Ivan Petrov" }],
       ["group:555", "acme", "Acme", { kind: "group", uid: "111", gid: "555", role: "ADMIN", name: "Acme" }],

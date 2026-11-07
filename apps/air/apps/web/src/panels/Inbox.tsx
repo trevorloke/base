@@ -29,7 +29,7 @@ import { languageName, languageTag, sameLanguage } from "../lib/lang";
 import { useNow } from "../lib/useNow";
 import "./inbox.css";
 
-const TAB_STORAGE = "starsign.inboxTab";
+const TAB_STORAGE = "base-air.inboxTab";
 const LIVE_LABEL: Record<LiveStatus, string> = { live: "Live", connecting: "Reconnecting…", off: "Paused" };
 
 function readTab(): InboxTabId {

@@ -25,13 +25,13 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 function connector(extra: Partial<ConstructorParameters<typeof WebhookConnector>[0]> = {}) {
-  return new WebhookConnector({ now: () => NOW, lookup: publicLookup, publicUrl: "https://starsign.example.com/", newAccountId: () => "wh_TESTACCOUNT01", ...extra });
+  return new WebhookConnector({ now: () => NOW, lookup: publicLookup, publicUrl: "https://air.example.com/", newAccountId: () => "wh_TESTACCOUNT01", ...extra });
 }
 const account = (auth: Record<string, unknown>, externalId = "wh_TESTACCOUNT01"): AccountRef => ({ id: `acc-${externalId}`, workspaceId: "w", network: "webhook", externalId, handle: "Zapier", auth, config: {} });
 const input: PublishInput = {
   variantId: "v1",
   text: "Launch day",
-  media: [{ kind: "image", url: "https://cdn.starsign.example.com/a.jpg", mime: "image/jpeg", alt: "A rocket" }],
+  media: [{ kind: "image", url: "https://cdn.air.example.com/a.jpg", mime: "image/jpeg", alt: "A rocket" }],
   thread: ["second"],
   options: { link: "https://acme.example.com" },
   idempotencyKey: "idem-1",
@@ -46,14 +46,14 @@ describe("webhook connect", () => {
       network: "webhook",
       identity: { externalId: "wh_TESTACCOUNT01", handle: "Zapier → Slack", displayName: "Zapier → Slack" },
       auth: { accountId: "wh_TESTACCOUNT01", name: "Zapier → Slack", outboundUrl: OUT, secret: SECRET },
-      config: { inboundEnabled: true, inboundUrl: "https://starsign.example.com/webhooks/webhook?account=wh_TESTACCOUNT01", outboundHost: "hooks.zapier.com" },
+      config: { inboundEnabled: true, inboundUrl: "https://air.example.com/webhooks/webhook?account=wh_TESTACCOUNT01", outboundHost: "hooks.zapier.com" },
     });
     expect(JSON.stringify(acc!.config)).not.toContain(SECRET);
     expect(JSON.stringify(acc!.config)).not.toContain("abcdef");
     const ping = call(0);
     expect(ping.url).toBe(OUT);
     expect(ping.json()).toMatchObject({ event: "ping", network: "webhook", account: { id: "wh_TESTACCOUNT01" } });
-    expect(ping.headers["x-starsign-signature"]).toBe(signWebhookPayload(SECRET, TS, ping.body));
+    expect(ping.headers["x-base-air-signature"]).toBe(signWebhookPayload(SECRET, TS, ping.body));
     expect(ping.init.redirect).toBe("manual");
     expect(c.connectMethod).toBe("webhook_url");
     expect(c.capabilities()).toMatchObject({ publish: true, fetchActivity: false, webhooks: true });
@@ -80,8 +80,8 @@ describe("webhook connect", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("allows http and private hosts when STARSIGN_ALLOW_PRIVATE_URLS=1", async () => {
-    const [c] = createWebhookConnectors({ STARSIGN_ALLOW_PRIVATE_URLS: "1" }) as [WebhookConnector];
+  it("allows http and private hosts when BASE_AIR_ALLOW_PRIVATE_URLS=1", async () => {
+    const [c] = createWebhookConnectors({ BASE_AIR_ALLOW_PRIVATE_URLS: "1" }) as [WebhookConnector];
     fetchMock.mockResolvedValueOnce(new Response("", { status: 200 }));
     const [acc] = await c.connectWithInputs({ network: "webhook", inputs: { outboundUrl: "http://n8n:5678/webhook/abc" } });
     expect(acc!.auth.outboundUrl).toBe("http://n8n:5678/webhook/abc");
@@ -101,7 +101,7 @@ describe("webhook publish", () => {
       id: "idem-1",
       text: "Launch day",
       thread: ["second"],
-      media: [{ url: "https://cdn.starsign.example.com/a.jpg", kind: "image", mime: "image/jpeg", alt: "A rocket" }],
+      media: [{ url: "https://cdn.air.example.com/a.jpg", kind: "image", mime: "image/jpeg", alt: "A rocket" }],
       options: { link: "https://acme.example.com" },
       replyTo: null,
       account: { id: "wh_TESTACCOUNT01", name: "Zapier" },
@@ -109,9 +109,12 @@ describe("webhook publish", () => {
       sentAt: NOW.toISOString(),
     });
     expect(req.headers["content-type"]).toBe("application/json");
-    expect(req.headers["x-starsign-timestamp"]).toBe(String(TS));
+    expect(req.headers["x-base-air-timestamp"]).toBe(String(TS));
     const expected = "sha256=" + createHmac("sha256", SECRET).update(`${TS}.${req.body}`).digest("hex");
+    expect(req.headers["x-base-air-signature"]).toBe(expected);
+    // Receivers set up before the rename still find the headers they check.
     expect(req.headers["x-starsign-signature"]).toBe(expected);
+    expect(req.headers["x-starsign-timestamp"]).toBe(String(TS));
     // Same signature as a receiver computes with the exported verifier.
     expect(verifyWebhookRequest(SECRET, req.headers, req.body, NOW)).toBe(true);
   });
@@ -125,7 +128,7 @@ describe("webhook publish", () => {
     expect(r1).toEqual(r2);
     expect(r1).toMatchObject({ externalId: "idem-1", url: null });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(call(0).headers["x-starsign-signature"]).toBeUndefined();
+    expect(call(0).headers["x-base-air-signature"]).toBeUndefined();
   });
 
   it("sends URL credentials as Basic auth and never puts them in the URL", async () => {
@@ -170,7 +173,7 @@ describe("webhook inbound", () => {
   const accA = account({ accountId: "wh_TESTACCOUNT01", secret: SECRET });
   const accB = account({ accountId: "wh_OTHERACCOUNT1", secret: "another-secret-for-B-1234" }, "wh_OTHERACCOUNT1");
   const raw = JSON.stringify({ items: [{ id: "t-1", kind: "message", text: "Where is my order?", author: { handle: "jane", name: "Jane" }, conversation: { id: "support", name: "Support", type: "channel" } }] });
-  const signed = (secret: string, ts: number | string = TS, body = raw) => ({ "x-starsign-timestamp": String(ts), "x-starsign-signature": signWebhookPayload(secret, ts, body) });
+  const signed = (secret: string, ts: number | string = TS, body = raw) => ({ "x-base-air-timestamp": String(ts), "x-base-air-signature": signWebhookPayload(secret, ts, body) });
 
   it("routes by ?account=", () => {
     expect(c.webhook.route!(raw, { account: "wh_TESTACCOUNT01" }, {})).toEqual({ network: "webhook", accountExternalId: "wh_TESTACCOUNT01" });
@@ -181,19 +184,26 @@ describe("webhook inbound", () => {
   it("verifies good signatures, refuses bad, stale, future, missing and other accounts' secrets", () => {
     const v = (acc: AccountRef, h: Record<string, string>, body = raw) => c.webhook.verifyAccount!(acc, h, body, { account: acc.externalId });
     expect(v(accA, signed(SECRET))).toBe(true);
-    expect(v(accA, { "X-Starsign-Timestamp": String(TS), "X-Starsign-Signature": signWebhookPayload(SECRET, TS, raw) })).toBe(true); // header case
+    expect(v(accA, { "X-Base-Air-Timestamp": String(TS), "X-Base-Air-Signature": signWebhookPayload(SECRET, TS, raw) })).toBe(true); // header case
     expect(v(accA, signed(SECRET, TS - 299))).toBe(true);
     expect(v(accA, signed(SECRET, TS - 301))).toBe(false); // stale
     expect(v(accA, signed(SECRET, TS + 301))).toBe(false); // future
     expect(v(accA, signed(SECRET, `${TS}000`))).toBe(true); // milliseconds
-    expect(v(accA, { "x-starsign-signature": signWebhookPayload(SECRET, TS, raw) })).toBe(false); // no timestamp
-    expect(v(accA, { ...signed(SECRET), "x-starsign-timestamp": String(TS + 1) })).toBe(false); // timestamp is signed
+    expect(v(accA, { "x-base-air-signature": signWebhookPayload(SECRET, TS, raw) })).toBe(false); // no timestamp
+    expect(v(accA, { ...signed(SECRET), "x-base-air-timestamp": String(TS + 1) })).toBe(false); // timestamp is signed
     expect(v(accA, signed(SECRET), raw.replace("order", "parcel"))).toBe(false); // body tampered
     expect(v(accA, signed("another-secret-for-B-1234"))).toBe(false); // B's secret cannot speak for A
     expect(v(accB, signed(SECRET))).toBe(false);
-    expect(v(accA, { "x-starsign-timestamp": String(TS), "x-starsign-signature": "sha256=deadbeef" })).toBe(false);
+    expect(v(accA, { "x-base-air-timestamp": String(TS), "x-base-air-signature": "sha256=deadbeef" })).toBe(false);
     expect(v(accA, {})).toBe(false);
     expect(v(account({ accountId: "wh_TESTACCOUNT01" }), signed(""))).toBe(false); // no secret = inbound disabled
+  });
+
+  it("still accepts senders that sign with the pre-rename X-Starsign-* headers", () => {
+    const v = (h: Record<string, string>) => c.webhook.verifyAccount!(accA, h, raw, { account: accA.externalId });
+    expect(v({ "x-starsign-timestamp": String(TS), "x-starsign-signature": signWebhookPayload(SECRET, TS, raw) })).toBe(true);
+    expect(v({ "x-starsign-timestamp": String(TS), "x-starsign-signature": "sha256=deadbeef" })).toBe(false);
+    expect(v({ "x-starsign-timestamp": String(TS - 301), "x-starsign-signature": signWebhookPayload(SECRET, TS - 301, raw) })).toBe(false);
   });
 
   it("accepts a bearer secret for systems that cannot sign", () => {

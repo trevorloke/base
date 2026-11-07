@@ -1,13 +1,13 @@
 import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
-import { activities, socialAccounts, streams } from "@starsign/db";
-import { newId } from "@starsign/ledger";
-import { findPhrases } from "@starsign/policy";
-import { ActivityInput, StreamQuery, networkLabel, type ActivityKind, type Network } from "@starsign/schema";
+import { activities, socialAccounts, streams } from "@base-air/db";
+import { newId } from "@base-air/ledger";
+import { findPhrases } from "@base-air/policy";
+import { ActivityInput, StreamQuery, networkLabel, type ActivityKind, type Network } from "@base-air/schema";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import { detectLanguage, primaryLanguage } from "../lang.ts";
 import type { AccountService } from "./accounts.ts";
-import type { WebhookHandler } from "@starsign/connectors";
+import type { WebhookHandler } from "@base-air/connectors";
 
 export type StreamRow = typeof streams.$inferSelect;
 

@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { activities, streams, workspaces } from "@starsign/db";
-import { StreamQuery, type ActivityInput } from "@starsign/schema";
+import { activities, streams, workspaces } from "@base-air/db";
+import { StreamQuery, type ActivityInput } from "@base-air/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import { primaryLanguage, sameLanguage } from "../lang.ts";

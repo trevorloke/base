@@ -16,10 +16,10 @@ export * from "./fake.ts";
 const has = (v: string | undefined) => typeof v === "string" && v.trim().length > 0;
 const model = (v: string | undefined, fallback: string) => (has(v) ? v!.trim() : fallback);
 
-/** Every engine Starsign knows, whether this deployment has its key, and which variable turns it on. */
+/** Every engine base air knows, whether this deployment has its key, and which variable turns it on. */
 export function answerEngineStatus(env: NodeJS.ProcessEnv = process.env): AnswerEngineStatus[] {
   return [
-    { id: "anthropic", label: "Claude", configured: has(env.ANTHROPIC_API_KEY), envVar: "ANTHROPIC_API_KEY", modelEnvVar: "STARSIGN_MODEL", model: resolveModel(env), priced: true },
+    { id: "anthropic", label: "Claude", configured: has(env.ANTHROPIC_API_KEY), envVar: "ANTHROPIC_API_KEY", modelEnvVar: "BASE_AIR_MODEL", model: resolveModel(env), priced: true },
     { id: "openai", label: "ChatGPT", configured: has(env.OPENAI_API_KEY), envVar: "OPENAI_API_KEY", modelEnvVar: "OPENAI_ANSWER_MODEL", model: model(env.OPENAI_ANSWER_MODEL, OPENAI_DEFAULT_MODEL), priced: false },
     { id: "perplexity", label: "Perplexity", configured: has(env.PERPLEXITY_API_KEY), envVar: "PERPLEXITY_API_KEY", modelEnvVar: "PERPLEXITY_ANSWER_MODEL", model: model(env.PERPLEXITY_ANSWER_MODEL, PERPLEXITY_DEFAULT_MODEL), priced: false },
     { id: "gemini", label: "Gemini", configured: has(env.GEMINI_API_KEY), envVar: "GEMINI_API_KEY", modelEnvVar: "GEMINI_ANSWER_MODEL", model: model(env.GEMINI_ANSWER_MODEL, GEMINI_DEFAULT_MODEL), priced: false },
@@ -27,7 +27,7 @@ export function answerEngineStatus(env: NodeJS.ProcessEnv = process.env): Answer
 }
 
 /**
- * The engines this deployment can ask, one per key present. With `STARSIGN_FAKE_AI=1` and no keys, one demo
+ * The engines this deployment can ask, one per key present. With `BASE_AIR_FAKE_AI=1` and no keys, one demo
  * engine, so the whole flow runs offline. Keys are read here and handed to each adapter; they are never logged.
  */
 export function answerEnginesFromEnv(env: NodeJS.ProcessEnv = process.env, opts: { fetch?: FetchLike } = {}): AnswerEngine[] {
@@ -36,7 +36,7 @@ export function answerEnginesFromEnv(env: NodeJS.ProcessEnv = process.env, opts:
   if (has(env.OPENAI_API_KEY)) out.push(new OpenAIAnswerEngine({ apiKey: env.OPENAI_API_KEY!.trim(), model: model(env.OPENAI_ANSWER_MODEL, OPENAI_DEFAULT_MODEL), fetch: opts.fetch }));
   if (has(env.PERPLEXITY_API_KEY)) out.push(new PerplexityAnswerEngine({ apiKey: env.PERPLEXITY_API_KEY!.trim(), model: model(env.PERPLEXITY_ANSWER_MODEL, PERPLEXITY_DEFAULT_MODEL), fetch: opts.fetch }));
   if (has(env.GEMINI_API_KEY)) out.push(new GeminiAnswerEngine({ apiKey: env.GEMINI_API_KEY!.trim(), model: model(env.GEMINI_ANSWER_MODEL, GEMINI_DEFAULT_MODEL), fetch: opts.fetch }));
-  if (out.length === 0 && env.STARSIGN_FAKE_AI === "1") out.push(new FakeAnswerEngine());
+  if (out.length === 0 && env.BASE_AIR_FAKE_AI === "1") out.push(new FakeAnswerEngine());
   return out.map((e) => (e.id === "anthropic" || e.id === "fake" ? e : withCostFloor(e, perCallEstimate(env))));
 }
 
@@ -44,12 +44,12 @@ export function answerEnginesFromEnv(env: NodeJS.ProcessEnv = process.env, opts:
 export const DEFAULT_ANSWER_CALL_COST_USD = 0.05;
 
 function perCallEstimate(env: NodeJS.ProcessEnv): number {
-  const v = Number(env.STARSIGN_ANSWER_CALL_COST_USD);
+  const v = Number(env.BASE_AIR_ANSWER_CALL_COST_USD);
   return Number.isFinite(v) && v >= 0 ? v : DEFAULT_ANSWER_CALL_COST_USD;
 }
 
 /**
- * Engines whose price Starsign cannot read from the response would otherwise cost "$0" and never reach the
+ * Engines whose price base air cannot read from the response would otherwise cost "$0" and never reach the
  * workspace's model spend cap. Charge them a conservative estimate per call instead, marked as an estimate.
  */
 export function withCostFloor(engine: AnswerEngine, estimateUsd: number): AnswerEngine {

@@ -1,9 +1,9 @@
 import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
-import { approvals, experiments, posts, postVariants, socialAccounts, trendActions, trendForecasts } from "@starsign/db";
-import { validateVariant } from "@starsign/connectors";
-import { newId } from "@starsign/ledger";
-import { gatePost, resolveAutonomy, type Subject } from "@starsign/policy";
-import { CreatePostInput, type Actor, type Network, type Policy, type PostStatus, type TrendStage } from "@starsign/schema";
+import { approvals, experiments, posts, postVariants, socialAccounts, trendActions, trendForecasts } from "@base-air/db";
+import { validateVariant } from "@base-air/connectors";
+import { newId } from "@base-air/ledger";
+import { gatePost, resolveAutonomy, type Subject } from "@base-air/policy";
+import { CreatePostInput, type Actor, type Network, type Policy, type PostStatus, type TrendStage } from "@base-air/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import type { PolicyService } from "./policy.ts";

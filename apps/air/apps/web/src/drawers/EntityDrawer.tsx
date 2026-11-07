@@ -437,7 +437,7 @@ function People({ report, rootId, onOpen }: { report: EntityReport; rootId: stri
   );
 }
 
-/** How Starsign recognises it: read-only here, changed with Edit. */
+/** How base air recognises it: read-only here, changed with Edit. */
 function Matching({ entity }: { entity: Entity }) {
   const handles = Object.entries(entity.handles).flatMap(([net, list]) => (list ?? []).map((h) => ({ net, h })));
   const words = (xs: string[]) => (xs.length ? <span className="ent-words">{xs.map((x) => <span key={x} className="tag">{x}</span>)}</span> : <span className="muted">None</span>);

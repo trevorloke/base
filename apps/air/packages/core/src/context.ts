@@ -1,9 +1,9 @@
 import { EventEmitter } from "node:events";
-import type { Db, DbHandle } from "@starsign/db";
-import type { ConnectorRegistry } from "@starsign/connectors";
-import { ApprovalDiffs, EventStore, OutcomeScheduler } from "@starsign/ledger";
-import type { Actor } from "@starsign/schema";
-import type { MemberRole } from "@starsign/policy";
+import type { Db, DbHandle } from "@base-air/db";
+import type { ConnectorRegistry } from "@base-air/connectors";
+import { ApprovalDiffs, EventStore, OutcomeScheduler } from "@base-air/ledger";
+import type { Actor } from "@base-air/schema";
+import type { MemberRole } from "@base-air/policy";
 import type { SecretBox } from "./crypto.ts";
 import type { Scheduler } from "./scheduler.ts";
 
@@ -15,9 +15,9 @@ export interface CoreDeps {
   now?: () => Date;
   /** Optional semantic classifier for red lines marked semantic (wired to the model gateway by the operators app). */
   classifyTopic?: (text: string, keywords: string[], description: string) => number;
-  /** Where uploaded media lives. Defaults to local disk (STARSIGN_MEDIA_DIR / STARSIGN_PUBLIC_URL). */
+  /** Where uploaded media lives. Defaults to local disk (BASE_AIR_MEDIA_DIR / BASE_AIR_PUBLIC_URL). */
   mediaStorage?: import("./media/storage.ts").MediaStorage;
-  /** Short-link base for link tracking. Undefined: read STARSIGN_LINK_BASE_URL / STARSIGN_PUBLIC_URL. Null: off. */
+  /** Short-link base for link tracking. Undefined: read BASE_AIR_LINK_BASE_URL / BASE_AIR_PUBLIC_URL. Null: off. */
   linkBaseUrl?: string | null;
   /** Sign-up gate, mailer and link base for people auth. Defaults read the environment. */
   auth?: import("./services/auth.ts").AuthOptions;
@@ -30,7 +30,7 @@ export interface Principal {
   role?: MemberRole;
 }
 
-export const SYSTEM: Actor = { type: "system", id: "starsign" };
+export const SYSTEM: Actor = { type: "system", id: "base-air" };
 
 export class CoreContext {
   readonly db: Db;

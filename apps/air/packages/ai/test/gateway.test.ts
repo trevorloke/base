@@ -108,11 +108,11 @@ describe("FakeGateway", () => {
 });
 
 describe("AnthropicGateway", () => {
-  it("defaults to claude-opus-5-5, reads STARSIGN_MODEL, never appends a date suffix", () => {
+  it("defaults to claude-opus-5-5, reads BASE_AIR_MODEL, never appends a date suffix", () => {
     expect(DEFAULT_MODEL).toBe("claude-opus-5-5");
     expect(resolveModel({})).toBe("claude-opus-5-5");
-    expect(resolveModel({ STARSIGN_MODEL: "  " })).toBe("claude-opus-5-5");
-    expect(resolveModel({ STARSIGN_MODEL: "claude-sonnet-5-5" })).toBe("claude-sonnet-5-5");
+    expect(resolveModel({ BASE_AIR_MODEL: "  " })).toBe("claude-opus-5-5");
+    expect(resolveModel({ BASE_AIR_MODEL: "claude-sonnet-5-5" })).toBe("claude-sonnet-5-5");
     expect(DEFAULT_MODEL).not.toMatch(/\d{8}$/);
   });
 

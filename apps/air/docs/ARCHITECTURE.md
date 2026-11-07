@@ -1,6 +1,6 @@
 # Architecture
 
-Starsign is one TypeScript monorepo with two spines running through every package.
+base air is one TypeScript monorepo with two spines running through every package.
 
 ## The data spine
 
@@ -9,7 +9,7 @@ Two append-only logs. Postgres triggers refuse `UPDATE` and `DELETE` on both.
 | Log | What goes in | Why it exists |
 |---|---|---|
 | `raw_events` | Every payload received from any source, verbatim, hash-deduplicated | Nothing observed is ever lost; derivations can be rebuilt with better models later |
-| `ledger_events` | Every fact Starsign asserts (`post.created`, `policy.blocked`, `variant.published`, `outcome.captured`, `operator.alert`, …) with the actor who caused it | The ledger is the product's memory and its audit trail; the brief, the lift analysis and the voice model all read from it |
+| `ledger_events` | Every fact base air asserts (`post.created`, `policy.blocked`, `variant.published`, `outcome.captured`, `operator.alert`, …) with the actor who caused it | The ledger is the product's memory and its audit trail; the brief, the lift analysis and the voice model all read from it |
 
 Everything else is a derivation. `posts`, `activities`, `metrics`, `trend_forecasts` and friends are indexed, queryable
 projections that could be recomputed from the logs. Derived tables carry `model_version` / `prompt_version` where a model
@@ -26,7 +26,7 @@ One `Policy` document per workspace (versioned in `policies`, every change in th
 
 - **Red lines** — declared constraints the brand never crosses: forbidden phrases/topics/claims, competitor mentions,
   quiet hours, required disclosure, cadence caps, network restrictions, custom regex. Each has a severity
-  (`block`, `require_approval`, `warn`). Evaluated by `@starsign/policy` on every output from every actor.
+  (`block`, `require_approval`, `warn`). Evaluated by `@base-air/policy` on every output from every actor.
 - **Autonomy dial** — per action class (`new_post`, `reply`, `dm`, `repost`, `campaign`): `suggest`, `draft`,
   `schedule_with_approval`, `autopost`. Operators and MCP agents follow it; humans follow role rules.
 - **Spend caps** and **disclosure** defaults.
@@ -56,7 +56,7 @@ forecast    pure: resample → EWMA kinematics → stage → damped Holt → ban
 db          drizzle schema + SQL migration + client (PGlite in dev/tests, Postgres in prod)
 ledger      EventStore (raw + ledger), OutcomeScheduler, ApprovalDiffs, prefixed ids
 connectors  Connector interface, per-network validation, registry, mock, bluesky, x, zernio
-core        Starsign: auth/workspaces/accounts/policy/posts/approvals/publishing/listening/metrics/trends/ops/export
+core        base air: auth/workspaces/accounts/policy/posts/approvals/publishing/listening/metrics/trends/ops/export
 ai          ModelGateway (Anthropic SDK) with versioned prompts, pricing, FakeGateway
 ```
 
@@ -64,7 +64,7 @@ Dependency direction is strictly downward: `schema` ← `policy`/`forecast`/`db`
 
 ## Apps
 
-- **api** (Hono): the HTTP contract in `docs/API.md`, SSE fan-out from `Starsign.emitter`, serves `apps/web/dist`.
+- **api** (Hono): the HTTP contract in `docs/API.md`, SSE fan-out from `base air.emitter`, serves `apps/web/dist`.
   Boot: migrate → connectors → scheduler (BullMQ when `REDIS_URL`, else in-process timers re-armed from the database).
 - **workers** (BullMQ): durable publish queue (one delayed job per post, idempotent per variant), repeatable jobs for
   ingest (with metered-read caps), outcome capture, forecast refresh.
@@ -75,10 +75,10 @@ Dependency direction is strictly downward: `schema` ← `policy`/`forecast`/`db`
 
 ## People and sessions
 
-Two kinds of credentials reach `/v1`. **API keys** (`Authorization: Bearer star_...`) are for agents and automation:
+Two kinds of credentials reach `/v1`. **API keys** (`Authorization: Bearer air_...`) are for agents and automation:
 an MCP client, an operator, a script. **Sessions** are for people: email + password sign-in (`AuthService`,
 `packages/core/src/services/auth.ts`; routes in `apps/api/src/auth-routes.ts`) sets an HttpOnly, SameSite=Lax
-`starsign_session` cookie. Both resolve to the same `Principal`; a session's is
+`base_air_session` cookie. Both resolve to the same `Principal`; a session's is
 `{ workspaceId: currentWorkspaceId, actor: { type: "human", id: userId }, role: <member role> }`, with the role read
 from `members` on every request, so a role change or removal applies immediately.
 
@@ -88,13 +88,13 @@ from `members` on every request, so a role change or removal applies immediately
 - Tokens: sessions, invites and password resets are 32 random bytes handed out once; only their sha256 is stored
   (`sessions.id`, `invites.token_hash`, `password_resets.token_hash`). Sessions slide to 30 days on use, invites last
   7 days, resets 1 hour; invites and resets are single use; a reset revokes every session of that user.
-- CSRF: cookie-authenticated writes must carry `x-starsign-csrf: 1` (a header a cross-site page cannot add without CORS
+- CSRF: cookie-authenticated writes must carry `x-base-air-csrf: 1` (a header a cross-site page cannot add without CORS
   approval); session-creating public routes accept only `application/json`. Bearer requests need neither.
 - Teams: every workspace has at least one owner (the last owner cannot be demoted or removed). Owners invite by email;
   accepting requires the invite's email (signed in as it, its password, or a new password for a new person). Any
   signed-in person can create a workspace and owns it, which is how an agency adds a client; `POST /v1/auth/switch` moves
   the session between workspaces the person belongs to. Membership changes, invites and sign-ups go to the ledger.
-- Sign-up: the first person on a deployment always; afterwards only with `STARSIGN_ALLOW_SIGNUP=1` (otherwise invites).
+- Sign-up: the first person on a deployment always; afterwards only with `BASE_AIR_ALLOW_SIGNUP=1` (otherwise invites).
 - Mail: Resend over HTTPS when `RESEND_API_KEY` + `MAIL_FROM` are set; otherwise invite links are returned to the owner
   and reset links go to the API log outside production.
 - Limits: 5 failed sign-ins per email per 15 minutes, then 429. The counter is **in memory, per process**: several API
@@ -103,7 +103,7 @@ from `members` on every request, so a role change or removal applies immediately
 ## Owned measurement
 
 Network metrics are rented: each platform decides what it reports, renames it, rate-limits it or prices it. So every
-link Starsign publishes can go through a short link it controls (`LinkService`, `packages/core/src/services/links.ts`).
+link base air publishes can go through a short link it controls (`LinkService`, `packages/core/src/services/links.ts`).
 `PublishingService` asks it to wrap a variant's links just before sending; the stored variant keeps the approved text.
 The redirect (`GET /l/:slug`) appends UTM tags and a click id (`ssclid`); the customer's site reports conversions with
 that id, server to server (`POST /v1/conversions`, idempotent by `externalId`) or from the browser (`/s.js` → `POST /c`,
@@ -131,13 +131,13 @@ tokens are stored only as sha256.
 
 ## Adding a connector
 
-Implement `Connector` from `@starsign/connectors` (publish / fetchActivity / fetchMetrics / capabilities), map errors to
+Implement `Connector` from `@base-air/connectors` (publish / fetchActivity / fetchMetrics / capabilities), map errors to
 `ConnectorError` kinds so publishing knows what to retry, declare `meteredReads` if reads cost money, register it in
 `createDefaultRegistry`. Credentials arrive decrypted in `AccountRef.auth`; never log them.
 
 ## Adding an operator
 
-An operator is a function `(m: Starsign, gateway: ModelGateway, workspaceId) => summary` wrapped in
+An operator is a function `(m: base air, gateway: ModelGateway, workspaceId) => summary` wrapped in
 `m.ops.startRun/finishRun`. It reads through core, writes through core (so the gate applies), and attaches evidence to
 everything it proposes. If it needs a new prompt, add one to `packages/ai/src/prompts` with a version string.
 

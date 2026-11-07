@@ -1,30 +1,30 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox } from "@starsign/core";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox } from "@base-air/core";
 import { createApp } from "../src/app.ts";
 
 /** A deployment whose only users have no password: seeded data, or users from before sign-in existed. */
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let app: ReturnType<typeof createApp>;
 let seededWs: string;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const json = async (r: Response): Promise<any> => r.json();
 const post = (path: string, body: unknown, cookie?: string) =>
-  app.request(path, { method: "POST", headers: { "content-type": "application/json", "x-starsign-csrf": "1", ...(cookie ? { cookie } : {}) }, body: JSON.stringify(body) });
-const cookieOf = (r: Response) => r.headers.getSetCookie().find((c) => c.startsWith("starsign_session="))!.split(";")[0]!;
+  app.request(path, { method: "POST", headers: { "content-type": "application/json", "x-base-air-csrf": "1", ...(cookie ? { cookie } : {}) }, body: JSON.stringify(body) });
+const cookieOf = (r: Response) => r.headers.getSetCookie().find((c) => c.startsWith("base_air_session="))!.split(";")[0]!;
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry(), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), auth: { allowSignup: () => false } });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry(), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), auth: { allowSignup: () => false } });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme Outdoor" }, { type: "human", id: "u_trevor" });
   seededWs = ws.id;
   const u = await m.workspaces.ensureUser("trevor@example.com", "Trevor");
   await m.workspaces.addMember(ws.id, u.id, "owner");
-  app = createApp(m, { publicUrl: "https://starsign.test" });
+  app = createApp(m, { publicUrl: "https://air.test" });
 });
 afterAll(() => h.close());
 
@@ -52,9 +52,9 @@ describe("first run on a deployment with only passwordless users", () => {
   });
 
   it("recovers a forgotten password from the server shell without mail", async () => {
-    const link = await m.auth.adminResetLink("trevor@example.com", "https://starsign.test");
+    const link = await m.auth.adminResetLink("trevor@example.com", "https://air.test");
     const token = new URL(link).searchParams.get("reset")!;
-    expect(link.startsWith("https://starsign.test/?reset=")).toBe(true);
+    expect(link.startsWith("https://air.test/?reset=")).toBe(true);
     expect((await post("/v1/auth/reset", { token, password: "a brand new password" })).status).toBe(204);
     expect((await post("/v1/auth/login", { email: "trevor@example.com", password: "a brand new password" })).status).toBe(200);
     await expect(m.auth.adminResetLink("nobody@example.com")).rejects.toMatchObject({ code: "not_found" });

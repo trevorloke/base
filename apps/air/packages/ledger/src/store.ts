@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, asc, desc, eq, gt, lt, sql } from "drizzle-orm";
-import { ledgerEvents, rawEvents, type Db } from "@starsign/db";
-import type { LedgerEvent, LedgerEventInput, RawEventInput } from "@starsign/schema";
+import { ledgerEvents, rawEvents, type Db } from "@base-air/db";
+import type { LedgerEvent, LedgerEventInput, RawEventInput } from "@base-air/schema";
 import { newId } from "./ids.ts";
 
 /** Stable JSON for hashing: sorted keys, no whitespace. */
@@ -35,7 +35,7 @@ export interface LedgerQuery {
 
 /**
  * The event store. Two append-only logs; the database refuses UPDATE/DELETE on both.
- * Everything else in Starsign is a derivation that could be rebuilt from here.
+ * Everything else in base air is a derivation that could be rebuilt from here.
  */
 export class EventStore {
   constructor(

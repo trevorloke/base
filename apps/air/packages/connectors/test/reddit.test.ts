@@ -4,7 +4,7 @@ import { REDDIT_DEFAULT_USER_AGENT, RedditConnector, createRedditConnectors, map
 
 const NOW = new Date("2026-11-03T00:00:00.000Z");
 const NOW_S = NOW.getTime() / 1000;
-const UA = "web:starsign:0.1 (by /u/acme_owner)";
+const UA = "web:base-air:0.1 (by /u/acme_owner)";
 
 const acct: AccountRef = {
   id: "acc-rd",
@@ -51,7 +51,7 @@ async function rejection(p: Promise<unknown>): Promise<ConnectorError> {
   throw new Error("expected rejection");
 }
 
-const input = (over: Partial<PublishInput> = {}): PublishInput => ({ variantId: "v1", text: "Body text", media: [], thread: [], idempotencyKey: "k1", options: { subreddit: "starsign", title: "Hello Reddit" }, ...over });
+const input = (over: Partial<PublishInput> = {}): PublishInput => ({ variantId: "v1", text: "Body text", media: [], thread: [], idempotencyKey: "k1", options: { subreddit: "baseair", title: "Hello Reddit" }, ...over });
 
 const lease = (n: string) =>
   json({
@@ -106,28 +106,28 @@ describe("reddit connect", () => {
 describe("reddit publish", () => {
   it("submits a self post with flair, spoiler and NSFW, and posts the first comment", async () => {
     const { c, form, calls } = setup((url) => {
-      if (url.pathname === "/api/submit") return json({ json: { errors: [], data: { url: "https://www.reddit.com/r/starsign/comments/p1/hello_reddit/", id: "p1", name: "t3_p1" } } });
-      if (url.pathname === "/api/comment") return json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "c1", name: "t1_c1", permalink: "/r/starsign/comments/p1/hello_reddit/c1/" } }] } } });
+      if (url.pathname === "/api/submit") return json({ json: { errors: [], data: { url: "https://www.reddit.com/r/baseair/comments/p1/hello_reddit/", id: "p1", name: "t3_p1" } } });
+      if (url.pathname === "/api/comment") return json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "c1", name: "t1_c1", permalink: "/r/baseair/comments/p1/hello_reddit/c1/" } }] } } });
       return undefined;
     });
-    const res = await c.publish(acct, input({ options: { subreddit: "starsign", title: "Hello Reddit", flairId: "flair-1", contentWarning: "plot", tags: ["NSFW"], firstComment: "Sources in thread" } }));
-    expect(res).toEqual({ externalId: "t3_p1", url: "https://www.reddit.com/r/starsign/comments/p1/hello_reddit/", raw: { kind: "self", subreddit: "starsign" } });
-    expect(form("/api/submit")).toEqual({ sr: "starsign", title: "Hello Reddit", api_type: "json", sendreplies: "true", resubmit: "true", nsfw: "true", spoiler: "true", flair_id: "flair-1", kind: "self", text: "Body text" });
+    const res = await c.publish(acct, input({ options: { subreddit: "baseair", title: "Hello Reddit", flairId: "flair-1", contentWarning: "plot", tags: ["NSFW"], firstComment: "Sources in thread" } }));
+    expect(res).toEqual({ externalId: "t3_p1", url: "https://www.reddit.com/r/baseair/comments/p1/hello_reddit/", raw: { kind: "self", subreddit: "baseair" } });
+    expect(form("/api/submit")).toEqual({ sr: "baseair", title: "Hello Reddit", api_type: "json", sendreplies: "true", resubmit: "true", nsfw: "true", spoiler: "true", flair_id: "flair-1", kind: "self", text: "Body text" });
     expect(form("/api/comment")).toEqual({ thing_id: "t3_p1", text: "Sources in thread" });
     expect(calls[0]!.url.origin).toBe("https://oauth.reddit.com");
     expect((calls[0]!.init.headers as Record<string, string>)["user-agent"]).toBe(UA);
     // Idempotent on retry.
-    await c.publish(acct, input({ options: { subreddit: "starsign", title: "Hello Reddit" } }));
+    await c.publish(acct, input({ options: { subreddit: "baseair", title: "Hello Reddit" } }));
     expect(calls.filter((x) => x.url.pathname === "/api/submit")).toHaveLength(1);
   });
 
   it("submits link posts and posts the body text as the first comment", async () => {
     const { c, form } = setup((url) => {
-      if (url.pathname === "/api/submit") return json({ json: { errors: [], data: { url: "https://www.reddit.com/r/starsign/comments/p2/x/", id: "p2", name: "t3_p2" } } });
+      if (url.pathname === "/api/submit") return json({ json: { errors: [], data: { url: "https://www.reddit.com/r/baseair/comments/p2/x/", id: "p2", name: "t3_p2" } } });
       if (url.pathname === "/api/comment") return json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "c2", name: "t1_c2" } }] } } });
       return undefined;
     });
-    const res = await c.publish(acct, input({ options: { subreddit: "starsign", title: "Read this", link: "https://acme.example/post" } }));
+    const res = await c.publish(acct, input({ options: { subreddit: "baseair", title: "Read this", link: "https://acme.example/post" } }));
     expect(res.externalId).toBe("t3_p2");
     expect(form("/api/submit")).toMatchObject({ kind: "link", url: "https://acme.example/post", nsfw: "false", spoiler: "false" });
     expect(form("/api/submit").text).toBeUndefined();
@@ -141,12 +141,12 @@ describe("reddit publish", () => {
       if (url.host === "reddit-uploaded-media.s3-accelerate.amazonaws.com") return s3ok("i1");
       if (url.pathname === "/api/submit") return json({ json: { errors: [], data: { user_submitted_page: "https://www.reddit.com/user/acme/submitted/", websocket_url: "wss://ws.example/x" } } });
       if (url.pathname === "/user/acme/submitted")
-        return json(listing(++listed < 2 ? [] : [{ kind: "t3", data: { id: "p3", name: "t3_p3", title: "Hello Reddit", subreddit: "starsign", created_utc: NOW_S, permalink: "/r/starsign/comments/p3/hello_reddit/" } }]));
+        return json(listing(++listed < 2 ? [] : [{ kind: "t3", data: { id: "p3", name: "t3_p3", title: "Hello Reddit", subreddit: "baseair", created_utc: NOW_S, permalink: "/r/baseair/comments/p3/hello_reddit/" } }]));
       if (url.pathname === "/api/comment") return json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "c3", name: "t1_c3" } }] } } });
       return undefined;
     });
     const res = await c.publish(acct, input({ media: [{ kind: "image", url: "https://media.acme.example/photo.jpg", alt: "a photo" }] }));
-    expect(res).toMatchObject({ externalId: "t3_p3", url: "https://www.reddit.com/r/starsign/comments/p3/hello_reddit/" });
+    expect(res).toMatchObject({ externalId: "t3_p3", url: "https://www.reddit.com/r/baseair/comments/p3/hello_reddit/" });
     expect(form("/api/media/asset.json")).toEqual({ filepath: "photo.jpg", mimetype: "image/jpeg" });
     const s3 = calls.find((x) => x.url.host.startsWith("reddit-uploaded-media"))!;
     expect(s3.init.body).toBeInstanceOf(FormData);
@@ -162,18 +162,18 @@ describe("reddit publish", () => {
       if (url.pathname === "/api/media/asset.json") return lease("v1");
       if (url.host.startsWith("reddit-uploaded-media")) return s3ok("v1");
       if (url.pathname === "/api/submit") return json({ json: { errors: [], data: { websocket_url: "wss://ws.example/x" } } });
-      if (url.pathname === "/user/acme/submitted") return json(listing(ready ? [{ kind: "t3", data: { id: "p4", name: "t3_p4", title: "Hello Reddit", subreddit: "StarSign", created_utc: NOW_S } }] : []));
+      if (url.pathname === "/user/acme/submitted") return json(listing(ready ? [{ kind: "t3", data: { id: "p4", name: "t3_p4", title: "Hello Reddit", subreddit: "BaseAir", created_utc: NOW_S } }] : []));
       if (url.pathname === "/api/comment") return json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "c4", name: "t1_c4" } }] } } });
       return undefined;
     }, { maxPolls: 2 });
-    const vid = input({ media: [{ kind: "video", url: "https://media.acme.example/clip.mp4" }], options: { subreddit: "starsign", title: "Hello Reddit", thumbnailUrl: "https://media.acme.example/poster.jpg" } });
+    const vid = input({ media: [{ kind: "video", url: "https://media.acme.example/clip.mp4" }], options: { subreddit: "baseair", title: "Hello Reddit", thumbnailUrl: "https://media.acme.example/poster.jpg" } });
     const e = await rejection(c.publish(acct, vid));
     expect(e).toMatchObject({ kind: "network", retryable: true });
     const submit = calls.find((x) => x.url.pathname === "/api/submit")!;
     expect(Object.fromEntries(new URLSearchParams(String(submit.init.body)))).toMatchObject({ kind: "video", url: "https://reddit-uploaded-media.s3-accelerate.amazonaws.com/rte_images/v1.jpg", video_poster_url: expect.stringContaining("reddit-uploaded-media") });
     ready = true;
     const res = await c.publish(acct, vid);
-    expect(res).toMatchObject({ externalId: "t3_p4", url: "https://www.reddit.com/r/starsign/comments/p4/" });
+    expect(res).toMatchObject({ externalId: "t3_p4", url: "https://www.reddit.com/r/baseair/comments/p4/" });
     expect(calls.filter((x) => x.url.pathname === "/api/submit")).toHaveLength(1);
     expect(calls.filter((x) => x.url.pathname === "/api/media/asset.json")).toHaveLength(2); // video + poster, once
   });
@@ -186,10 +186,10 @@ describe("reddit publish", () => {
       if (url.pathname === "/api/comment") return json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "c5", name: "t1_c5" } }] } } });
       return undefined;
     });
-    const res = await c.publish(acct, input({ media: [{ kind: "image", url: "https://m.example/a.jpg", alt: "A" }, { kind: "image", url: "https://m.example/b.jpg" }], options: { subreddit: "starsign", title: "Gallery", kind: "carousel" } }));
+    const res = await c.publish(acct, input({ media: [{ kind: "image", url: "https://m.example/a.jpg", alt: "A" }, { kind: "image", url: "https://m.example/b.jpg" }], options: { subreddit: "baseair", title: "Gallery", kind: "carousel" } }));
     expect(res).toMatchObject({ externalId: "t3_p5", url: "https://www.reddit.com/gallery/p5" });
     const g = calls.find((x) => x.url.pathname === "/api/submit_gallery_post.json")!;
-    expect(JSON.parse(String(g.init.body))).toMatchObject({ sr: "starsign", title: "Gallery", items: [{ media_id: "asset-1", caption: "A", outbound_url: "" }, { media_id: "asset-2", caption: "", outbound_url: "" }], api_type: "json" });
+    expect(JSON.parse(String(g.init.body))).toMatchObject({ sr: "baseair", title: "Gallery", items: [{ media_id: "asset-1", caption: "A", outbound_url: "" }, { media_id: "asset-2", caption: "", outbound_url: "" }], api_type: "json" });
   });
 
   it("maps json.errors: RATELIMIT to rate_limit, others to rejected; HTTP 429 with X-Ratelimit headers", async () => {
@@ -216,7 +216,7 @@ describe("reddit publish", () => {
   it("refuses to publish without subreddit or title", async () => {
     const { c, calls } = setup(() => undefined);
     expect((await rejection(c.publish(acct, input({ options: { title: "x" } })))).kind).toBe("rejected");
-    expect((await rejection(c.publish(acct, input({ idempotencyKey: "k2", options: { subreddit: "starsign" } })))).kind).toBe("rejected");
+    expect((await rejection(c.publish(acct, input({ idempotencyKey: "k2", options: { subreddit: "baseair" } })))).kind).toBe("rejected");
     expect(calls).toHaveLength(0);
   });
 });
@@ -227,14 +227,14 @@ describe("reddit inbox", () => {
       if (url.pathname === "/message/inbox")
         return json(
           listing([
-            { kind: "t1", data: { id: "c1", name: "t1_c1", author: "fan", body: "great post", type: "post_reply", was_comment: true, parent_id: "t3_p1", context: "/r/starsign/comments/p1/x/c1/?context=3", created_utc: NOW_S - 60 } },
+            { kind: "t1", data: { id: "c1", name: "t1_c1", author: "fan", body: "great post", type: "post_reply", was_comment: true, parent_id: "t3_p1", context: "/r/baseair/comments/p1/x/c1/?context=3", created_utc: NOW_S - 60 } },
             { kind: "t1", data: { id: "c2", name: "t1_c2", author: "pal", body: "hey u/acme", type: "username_mention", was_comment: true, parent_id: "t3_zz", context: "/r/other/comments/zz/y/c2/?context=3", created_utc: NOW_S - 120 } },
-            { kind: "t1", data: { id: "c3", name: "t1_c3", author: "op", body: "agreed", type: "comment_reply", was_comment: true, parent_id: "t1_c0", context: "/r/starsign/comments/p1/x/c3/?context=3", created_utc: NOW_S - 180 } },
+            { kind: "t1", data: { id: "c3", name: "t1_c3", author: "op", body: "agreed", type: "comment_reply", was_comment: true, parent_id: "t1_c0", context: "/r/baseair/comments/p1/x/c3/?context=3", created_utc: NOW_S - 180 } },
             { kind: "t4", data: { id: "m1", name: "t4_m1", author: "buyer", subject: "question", body: "price?", parent_id: null, created_utc: NOW_S - 240 } },
             { kind: "t1", data: { id: "old", name: "t1_old", body: "old", type: "post_reply", created_utc: NOW_S - 86400 * 30 } },
           ]),
         );
-      if (url.pathname === "/user/acme/submitted") return json(listing([{ kind: "t3", data: { id: "p1", name: "t3_p1", title: "Hello", selftext: "Body", permalink: "/r/starsign/comments/p1/x/", created_utc: NOW_S - 3600 } }]));
+      if (url.pathname === "/user/acme/submitted") return json(listing([{ kind: "t3", data: { id: "p1", name: "t3_p1", title: "Hello", selftext: "Body", permalink: "/r/baseair/comments/p1/x/", created_utc: NOW_S - 3600 } }]));
       return undefined;
     });
     const items = await c.fetchActivity(acct, new Date(NOW.getTime() - 86400_000));
@@ -245,15 +245,15 @@ describe("reddit inbox", () => {
       ["mention", "t1_c2", "t3_zz", "pal"],
       ["comment", "t1_c1", "t3_p1", "fan"],
     ]);
-    expect(items.find((i) => i.kind === "comment")!.url).toBe("https://www.reddit.com/r/starsign/comments/p1/x/c1/?context=3");
+    expect(items.find((i) => i.kind === "comment")!.url).toBe("https://www.reddit.com/r/baseair/comments/p1/x/c1/?context=3");
     expect(items.find((i) => i.kind === "dm")!.text).toBe("question\n\nprice?");
     expect(items.find((i) => i.kind === "own_post")!.text).toBe("Hello\n\nBody");
   });
 
   it("replies with api/comment, idempotently", async () => {
-    const { c, form, calls } = setup((url) => (url.pathname === "/api/comment" ? json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "r1", name: "t1_r1", permalink: "/r/starsign/comments/p1/x/r1/" } }] } } }) : undefined));
+    const { c, form, calls } = setup((url) => (url.pathname === "/api/comment" ? json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "r1", name: "t1_r1", permalink: "/r/baseair/comments/p1/x/r1/" } }] } } }) : undefined));
     const res = await c.reply(acct, { parentExternalId: "t1_c1", text: "thanks!", idempotencyKey: "r" });
-    expect(res).toMatchObject({ externalId: "t1_r1", url: "https://www.reddit.com/r/starsign/comments/p1/x/r1/" });
+    expect(res).toMatchObject({ externalId: "t1_r1", url: "https://www.reddit.com/r/baseair/comments/p1/x/r1/" });
     expect(form("/api/comment")).toEqual({ thing_id: "t1_c1", text: "thanks!" });
     await c.reply(acct, { parentExternalId: "t1_c1", text: "thanks!", idempotencyKey: "r" });
     expect(calls).toHaveLength(1);

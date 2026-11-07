@@ -1,9 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
-import { mediaAssets } from "@starsign/db";
-import type { MediaFetcher } from "@starsign/connectors";
-import { newId } from "@starsign/ledger";
-import type { Media } from "@starsign/schema";
+import { mediaAssets } from "@base-air/db";
+import type { MediaFetcher } from "@base-air/connectors";
+import { newId } from "@base-air/ledger";
+import type { Media } from "@base-air/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import { mp4DurationFromRanges, mp4DurationSeconds, probe } from "../media/probe.ts";
@@ -12,12 +12,12 @@ import { sliceStream } from "../media/streams.ts";
 
 /**
  * Uploads through the API (POST /v1/media) are held in memory while they are checked and stored, so the cap must fit
- * the instance. The default (100 MB) is safe on a 512 MB instance; raise STARSIGN_MAX_UPLOAD_MB on bigger machines.
+ * the instance. The default (100 MB) is safe on a 512 MB instance; raise BASE_AIR_MAX_UPLOAD_MB on bigger machines.
  * With S3 storage, larger files go straight to the bucket (createDirectUpload / completeDirectUpload) and never pass
  * through the API. Publishing does not load them either: the fetcher below serves sizes, ranges and streams, and
  * upload-style connectors send videos chunk by chunk or as a streamed request body (see docs/integrations/README.md).
  */
-export const MAX_UPLOAD_BYTES = Math.max(1, Number(process.env.STARSIGN_MAX_UPLOAD_MB ?? 100)) * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = Math.max(1, Number(process.env.BASE_AIR_MAX_UPLOAD_MB ?? 100)) * 1024 * 1024;
 export const MEDIA_LIMITS = {
   imageBytes: Math.min(30 * 1024 * 1024, MAX_UPLOAD_BYTES),
   videoBytes: Math.min(1024 * 1024 * 1024, MAX_UPLOAD_BYTES),
@@ -105,7 +105,7 @@ export class MediaService {
    */
   async createDirectUpload(p: Principal, input: { mime: string; bytes: number; filename?: string }) {
     if (p.actor.type === "human" && p.role === "viewer") throw new CoreError("forbidden", "viewers cannot upload media");
-    if (!this.storage.presignPut) throw new CoreError("unavailable", "direct uploads need S3-compatible storage (STARSIGN_S3_*); use POST /v1/media");
+    if (!this.storage.presignPut) throw new CoreError("unavailable", "direct uploads need S3-compatible storage (BASE_AIR_S3_*); use POST /v1/media");
     const type = DIRECT_TYPES[input.mime];
     if (!type) throw new CoreError("invalid", "unsupported type: upload JPEG, PNG, GIF, WebP, MP4, MOV, WebM or PDF");
     const max = type.kind === "video" ? DIRECT_LIMITS.videoBytes : type.kind === "document" ? DIRECT_LIMITS.documentBytes : DIRECT_LIMITS.imageBytes;

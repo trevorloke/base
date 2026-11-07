@@ -1,15 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { inboxItems, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import type { ActivityInput } from "@starsign/schema";
+import { createTestDb } from "@base-air/db/test";
+import { inboxItems, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import type { ActivityInput } from "@base-air/schema";
 import {
   DEFAULT_INBOX_SETTINGS,
   InMemoryScheduler,
   SecretBox,
-  Starsign,
+  BaseAir,
   fillSavedReply,
   parseMentions,
   replyVariables,
@@ -19,7 +19,7 @@ import {
 } from "../src/index.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let ws: string;
 let acct: string;
 let owner: Principal;
@@ -54,7 +54,7 @@ const ledger = async (types: string[]) => m.events.list({ workspaceId: ws, types
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now: () => new Date(T0 + 60 * 60_000) });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now: () => new Date(T0 + 60 * 60_000) });
   const w = await m.workspaces.create({ slug: "nw", name: "Northwind" }, { type: "human", id: "u-owner" });
   ws = w.id;
   const person = async (email: string, name: string, role: "owner" | "approver" | "editor" | "viewer"): Promise<Principal> => {

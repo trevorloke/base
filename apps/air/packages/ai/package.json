@@ -1,12 +1,12 @@
 {
-  "name": "@starsign/ai",
+  "name": "@base-air/ai",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
-    "@starsign/schema": "workspace:*",
+    "@base-air/schema": "workspace:*",
     "zod": "^4.0.0"
   }
 }

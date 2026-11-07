@@ -49,7 +49,7 @@ function rng(seed: string) {
 }
 
 const ENGINES: VisEngine[] = [
-  { id: "anthropic", label: "Claude", configured: true, enabled: true, envVar: "ANTHROPIC_API_KEY", modelEnvVar: "STARSIGN_MODEL", model: "claude-opus-5-5", priced: true },
+  { id: "anthropic", label: "Claude", configured: true, enabled: true, envVar: "ANTHROPIC_API_KEY", modelEnvVar: "BASE_AIR_MODEL", model: "claude-opus-5-5", priced: true },
   { id: "openai", label: "ChatGPT", configured: true, enabled: true, envVar: "OPENAI_API_KEY", modelEnvVar: "OPENAI_ANSWER_MODEL", model: "gpt-5", priced: false },
   { id: "perplexity", label: "Perplexity", configured: true, enabled: true, envVar: "PERPLEXITY_API_KEY", modelEnvVar: "PERPLEXITY_ANSWER_MODEL", model: "sonar", priced: false },
   { id: "gemini", label: "Gemini", configured: false, enabled: false, envVar: "GEMINI_API_KEY", modelEnvVar: "GEMINI_ANSWER_MODEL", model: "gemini-2.5-flash", priced: false },

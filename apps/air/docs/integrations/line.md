@@ -2,7 +2,7 @@
 
 Connector `line` · networks `["line"]` · `packages/connectors/src/line.ts` · factory `createLineConnectors(env)`
 
-Uses only the official **LINE Messaging API** (`https://api.line.me`). One Starsign account = one LINE Official
+Uses only the official **LINE Messaging API** (`https://api.line.me`). One base air account = one LINE Official
 Account's Messaging API channel (its bot). Shapes follow LINE's official OpenAPI definitions
 ([line/line-openapi](https://github.com/line/line-openapi): `messaging-api.yml`, `webhook.yml`, `insight.yml`),
 read November 2026.
@@ -12,7 +12,7 @@ read November 2026.
   `channelSecret` (secret). `connectWithInputs` calls `GET /v2/bot/info` and returns one account: externalId = the
   bot's `userId` (the same value LINE puts in a webhook's `destination`), handle = `basicId` (e.g. `@123abcde`),
   displayName. It also reads `GET /v2/bot/channel/webhook/endpoint` (informational) and keeps in config whether
-  the channel's webhook URL points at Starsign and whether "Use webhook" is on. A bad token → `auth` error. Auth
+  the channel's webhook URL points at base air and whether "Use webhook" is on. A bad token → `auth` error. Auth
   blob: `{ channelAccessToken, channelSecret }`. `describeAccount` reads the bot info again.
 - **Webhooks** (per-channel secret): `route` reads `destination` from the unverified body; `verifyAccount` checks
   `x-line-signature` = base64(HMAC-SHA256(channel secret, raw body)) in constant time with that account's secret.
@@ -61,7 +61,7 @@ read November 2026.
   plan-gated); other 4xx → `rejected` with LINE's `details`; 5xx and transport failures → retryable. Messages never
   contain the token.
 
-## What Starsign can and cannot see
+## What base air can and cannot see
 - **Can see**: messages in LINE **group chats and multi-person chats the official account's bot was invited to**,
   and **1:1 messages people send to the official account**; friend adds, unblocks, and people joining those groups.
   Stickers, photos, videos, voice messages, files and locations show as short descriptions, not the content.
@@ -78,18 +78,18 @@ read November 2026.
 2. In the LINE Developers console, open the channel:
    - **Basic settings** tab → copy the **Channel secret**.
    - **Messaging API** tab → **Channel access token (long-lived)** → **Issue**, and copy it. (Reissuing invalidates
-     the previous long-lived token, so reconnect in Starsign afterwards.)
-   - **Webhook URL** = `${STARSIGN_PUBLIC_URL}/webhooks/line`, then turn on **Use webhook** and press **Verify**.
+     the previous long-lived token, so reconnect in base air afterwards.)
+   - **Webhook URL** = `${BASE_AIR_PUBLIC_URL}/webhooks/line`, then turn on **Use webhook** and press **Verify**.
    - Optionally turn on **Webhook redelivery** (redeliveries are deduped by message id).
 3. In **LINE Official Account Manager → Settings → Response settings / Account settings**:
    - Allow the account to **join group chats and multi-person chats** ("Allow bot to join group chats").
-   - Turn off **Auto-reply messages** and **Greeting messages** if Starsign (or a person) should answer instead.
-4. In Starsign, connect LINE with the channel access token and channel secret. Invite the official account to the
+   - Turn off **Auto-reply messages** and **Greeting messages** if base air (or a person) should answer instead.
+4. In base air, connect LINE with the channel access token and channel secret. Invite the official account to the
    groups to monitor. To publish into one group instead of broadcasting, set `defaultGroupId` (a `C…` group id,
    visible in that group's webhook items) in the account config.
 - Redirect URI: none (not OAuth).
-- Webhook URL: `${STARSIGN_PUBLIC_URL}/webhooks/line`.
-- Env vars: `STARSIGN_PUBLIC_URL` (used to check the webhook URL at connect), optional `LINE_API_BASE` (tests or a
+- Webhook URL: `${BASE_AIR_PUBLIC_URL}/webhooks/line`.
+- Env vars: `BASE_AIR_PUBLIC_URL` (used to check the webhook URL at connect), optional `LINE_API_BASE` (tests or a
   proxy). No app-wide secret: each account's channel secret is stored in its encrypted auth blob.
 
 ## Review and access requirements
@@ -136,4 +136,4 @@ mission stickers, the "verified"/premium account features) need extra applicatio
   push? It saves quota but a lost response can then double-send.
 - Can the media library produce a ≤ 1 MB preview rendition automatically, so images over 1 MB do not need a
   manual thumbnail?
-- Which LINE plan and region is the account on (so Starsign can warn before the monthly allowance runs out)?
+- Which LINE plan and region is the account on (so base air can warn before the monthly allowance runs out)?

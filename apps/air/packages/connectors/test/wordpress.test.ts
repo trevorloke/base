@@ -98,8 +98,8 @@ describe("wordpress publish", () => {
     variantId: "v1",
     text: "Hello <world> & friends\n\nSecond para with https://example.com/x",
     media: [
-      { kind: "image", url: "https://cdn.starsign.test/a/cover.jpg", alt: 'Cover "art"' },
-      { kind: "image", url: "https://cdn.starsign.test/a/second" },
+      { kind: "image", url: "https://cdn.air.test/a/cover.jpg", alt: 'Cover "art"' },
+      { kind: "image", url: "https://cdn.air.test/a/second" },
     ],
     thread: [],
     idempotencyKey: "k1",
@@ -161,7 +161,7 @@ describe("wordpress publish", () => {
       return json({}, 404);
     });
     const c = connector();
-    await c.publish(acct, { variantId: "v", text: "Body", media: [], thread: [], idempotencyKey: "k2", options: { title: "T", link: "https://acme.test/p", firstComment: "First!", thumbnailUrl: "https://cdn.starsign.test/thumb.png" } });
+    await c.publish(acct, { variantId: "v", text: "Body", media: [], thread: [], idempotencyKey: "k2", options: { title: "T", link: "https://acme.test/p", firstComment: "First!", thumbnailUrl: "https://cdn.air.test/thumb.png" } });
     const post = bodyJson(calls.find((x) => x.url.pathname === "/wp-json/wp/v2/posts"));
     expect(post).toMatchObject({ status: "publish", featured_media: 3 });
     expect(post.content).toBe('<p>Body</p>\n<p><a href="https://acme.test/p">https://acme.test/p</a></p>');

@@ -1,4 +1,4 @@
-import { Network, type ActivityInput, type MetricInput } from "@starsign/schema";
+import { Network, type ActivityInput, type MetricInput } from "@base-air/schema";
 import type { AccountRef, Connector, ConnectorCapabilities, ModerationInput, PublishInput, PublishResult } from "./types.ts";
 import { ConnectorError } from "./types.ts";
 

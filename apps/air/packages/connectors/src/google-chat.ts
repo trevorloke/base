@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ActivityInput, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, MetricInput, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -12,7 +12,7 @@ import { ConnectorError } from "./types.ts";
  * only post into that one space. Reading a space needs a Chat app (Chat API + Google Workspace admin approval for
  * the app's scopes): a later step.
  *
- * Threads: every post names a `threadKey` derived from Starsign's idempotency key with
+ * Threads: every post names a `threadKey` derived from base air's idempotency key with
  * messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD, so thread segments and later replies to a post land in its
  * thread (or start one).
  */
@@ -56,6 +56,7 @@ export function toChatText(text: string): string {
 
 /** A stable thread key for a post (also what later replies use). */
 export function chatThreadKey(idempotencyKey: string): string {
+  // The "starsign" namespace predates the rename to base air and must stay: replies to existing posts re-derive this key.
   return `starsign-${createHash("sha256").update(`starsign:gchat:${idempotencyKey}`).digest("hex").slice(0, 24)}`;
 }
 
@@ -71,7 +72,7 @@ export function linkCard(link: string, title?: string, imageUrl?: string): Recor
   if (imageUrl) widgets.push({ image: { imageUrl, altText: title ?? host } });
   widgets.push({ buttonList: { buttons: [{ text: "Open", onClick: { openLink: { url: link } } }] } });
   return {
-    cardId: "starsign-link",
+    cardId: "base-air-link",
     card: { header: { title: (title ?? host).slice(0, LIMITS.cardTitle), subtitle: host }, sections: [{ widgets }] },
   };
 }

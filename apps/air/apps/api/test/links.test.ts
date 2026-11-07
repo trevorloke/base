@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox } from "@starsign/core";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox } from "@base-air/core";
 import { createApp } from "../src/app.ts";
 
 let h: DbHandle;
@@ -18,7 +18,7 @@ const PHONE = "Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Mobile Safari/
 
 beforeAll(async () => {
   h = await createTestDb();
-  const m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), linkBaseUrl: "https://app.acme.test/l" });
+  const m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), linkBaseUrl: "https://app.acme.test/l" });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   ownerKey = (await m.workspaces.createApiKey({ workspaceId: ws.id, name: "o", actorType: "human", actorId: "u1", role: "owner" })).secret;
   viewerKey = (await m.workspaces.createApiKey({ workspaceId: ws.id, name: "v", actorType: "human", actorId: "u2", role: "viewer" })).secret;
@@ -83,5 +83,19 @@ describe("links api", () => {
     expect(js).toContain('"https://app.acme.test"');
     expect(js).toContain("ssclid");
     expect(() => new Function(js)).not.toThrow(); // it parses
+  });
+
+  it("carries a click id stored by the pre-rename snippet over and keeps window.starsign working", async () => {
+    const js = await (await app.request("/s.js")).text();
+    const store = new Map<string, string>([["starsign_clid", JSON.stringify({ id: "clk_" + "a".repeat(32), t: Date.now() })]]);
+    const localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v), removeItem: (k: string) => void store.delete(k) };
+    const beacons: string[] = [];
+    const win: Record<string, any> = { starsign: { q: [["signup"]] } };
+    new Function("window", "localStorage", "location", "navigator", js)(win, localStorage, { search: "" }, { sendBeacon: (_u: string, b: string) => (beacons.push(b), true) });
+    expect(store.has("starsign_clid")).toBe(false);
+    expect(JSON.parse(store.get("base_air_clid")!).id).toBe("clk_" + "a".repeat(32));
+    expect(beacons.map((b) => JSON.parse(b).name)).toEqual(["signup"]); // the old queue is sent
+    expect(win.starsign).toBe(win.baseAir);
+    expect(win.baseAir.clickId()).toBe("clk_" + "a".repeat(32));
   });
 });

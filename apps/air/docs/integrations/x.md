@@ -14,7 +14,7 @@ Connector `x` · networks `["x"]` · `packages/connectors/src/x.ts` · registere
 
 ## Setup
 1. developer.x.com → Projects & Apps → your app → User authentication settings: OAuth 2.0, type "Web App" (confidential) or "Native" (public PKCE), permissions Read and write.
-2. Callback URI: `${STARSIGN_PUBLIC_URL}/oauth/x/callback`. Website URL: your Starsign URL.
+2. Callback URI: `${BASE_AIR_PUBLIC_URL}/oauth/x/callback`. Website URL: your base air URL.
 3. Scopes requested: `tweet.read tweet.write users.read media.write like.write tweet.moderate.write offline.access`. Accounts connected before this change lack `like.write` and `tweet.moderate.write`: like and hide will fail with an auth error until they reconnect.
 - Webhook URL: none.
 - Env vars: `X_CLIENT_ID`, `X_CLIENT_SECRET` (optional for public clients), `X_API_BASE_URL` (optional).
@@ -34,4 +34,4 @@ X API access is paid (pay-per-use credits or a tier); no app review, but writes 
 
 ## Questions for the owner
 - Which X API plan does the deployment use (determines likes/hide availability and read spend caps)?
-- Should Starsign prompt existing X accounts to reconnect for the new scopes?
+- Should base air prompt existing X accounts to reconnect for the new scopes?

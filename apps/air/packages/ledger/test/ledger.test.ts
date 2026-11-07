@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createTestDb } from "@starsign/db/test";
-import { posts, postVariants, socialAccounts, workspaces, type DbHandle } from "@starsign/db";
+import { createTestDb } from "@base-air/db/test";
+import { posts, postVariants, socialAccounts, workspaces, type DbHandle } from "@base-air/db";
 import { ApprovalDiffs, EventStore, OutcomeScheduler, hashPayload } from "../src/index.ts";
 
 let h: DbHandle;

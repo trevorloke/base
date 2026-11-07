@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox, type MailMessage } from "@starsign/core";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox, type MailMessage } from "@base-air/core";
 import { createApp } from "../src/app.ts";
 
 let h: DbHandle;
@@ -19,7 +19,7 @@ const json = async (r: Response): Promise<any> => r.json();
 
 beforeAll(async () => {
   h = await createTestDb();
-  const m = new Starsign({
+  const m = new BaseAir({
     handle: h,
     connectors: new ConnectorRegistry().register(new MockConnector()),
     scheduler: new InMemoryScheduler(),

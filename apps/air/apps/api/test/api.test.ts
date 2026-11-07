@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox } from "@starsign/core";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox } from "@base-air/core";
 import { createApp } from "../src/app.ts";
 
 let h: DbHandle;
 let app: ReturnType<typeof createApp>;
-let m: Starsign;
+let m: BaseAir;
 let ownerKey: string;
 let agentKey: string;
 let acctId: string;
@@ -19,7 +19,7 @@ const json = async (r: Response): Promise<any> => r.json();
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   ownerKey = (await m.workspaces.createApiKey({ workspaceId: ws.id, name: "o", actorType: "human", actorId: "u1", role: "owner" })).secret;
   agentKey = (await m.workspaces.createApiKey({ workspaceId: ws.id, name: "a", actorType: "mcp", actorId: "claude" })).secret;
@@ -31,7 +31,7 @@ afterAll(() => h.close());
 describe("api", () => {
   it("health is open; v1 needs a key unless dev workspace is set", async () => {
     expect((await app.request("/api/health")).status).toBe(200);
-    const bad = await app.request("/v1/me", { headers: { authorization: "Bearer star_nope" } });
+    const bad = await app.request("/v1/me", { headers: { authorization: "Bearer air_nope" } });
     expect(bad.status).toBe(401);
     const dev = await app.request("/v1/me");
     expect(dev.status).toBe(200);
@@ -174,7 +174,7 @@ describe("review regressions", () => {
 describe("compose, calendar, connect, sources", () => {
   it("compose/adapt answers 503 without a model and adapts per network with one", async () => {
     expect((await app.request("/v1/compose/adapt", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ body: "idea", networks: ["bluesky"] }) })).status).toBe(503);
-    const { FakeGateway, defaultFakeHandlers } = await import("@starsign/ai");
+    const { FakeGateway, defaultFakeHandlers } = await import("@base-air/ai");
     const withAi = createApp(m, { gateway: new FakeGateway(defaultFakeHandlers()) });
     const res = await withAi.request("/v1/compose/adapt", { method: "POST", headers: auth(ownerKey), body: JSON.stringify({ body: "First snow on the North Shore: spikes on.", networks: ["bluesky", "x", "x"] }) });
     expect(res.status).toBe(200);
@@ -192,7 +192,7 @@ describe("compose, calendar, connect, sources", () => {
   });
 
   it("connects Bluesky by verifying the app password, and refuses agents and bad passwords", async () => {
-    const { BlueskyConnector } = await import("@starsign/connectors");
+    const { BlueskyConnector } = await import("@base-air/connectors");
     const fakeAgent = () => {
       const agent: { session?: { did: string; handle: string }; login: (o: { identifier: string; password: string }) => Promise<void> } = {
         async login(o) {
@@ -229,7 +229,7 @@ describe("compose, calendar, connect, sources", () => {
 
 describe("x oauth connect", () => {
   it("starts with a single-use state, completes via the callback, and rejects replays", async () => {
-    const { XConnector } = await import("@starsign/connectors");
+    const { XConnector } = await import("@base-air/connectors");
     const fetchImpl = (async (url: string) => {
       if (url.endsWith("/2/oauth2/token")) return new Response(JSON.stringify({ access_token: "at", refresh_token: "rt", expires_in: 7200 }), { status: 200 });
       if (url.endsWith("/2/users/me")) return new Response(JSON.stringify({ data: { id: "4242", username: "acme_x", name: "Acme" } }), { status: 200 });
@@ -257,7 +257,7 @@ describe("x oauth connect", () => {
 
 describe("upload size", () => {
   it("refuses an upload larger than the server's cap before reading it", async () => {
-    const { MAX_UPLOAD_BYTES } = await import("@starsign/core");
+    const { MAX_UPLOAD_BYTES } = await import("@base-air/core");
     const res = await app.request("/v1/media", { method: "POST", headers: { authorization: `Bearer ${ownerKey}`, "content-length": String(MAX_UPLOAD_BYTES * 2), "content-type": "multipart/form-data; boundary=x" }, body: "--x--" });
     expect(res.status).toBe(413);
     expect((await json(res)).error.code).toBe("too_large");

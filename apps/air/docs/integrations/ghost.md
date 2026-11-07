@@ -19,14 +19,14 @@ Connector `ghost` · networks `["ghost"]` · `packages/connectors/src/ghost.ts` 
 - **Metrics**: `fetchMetrics` reads `GET /posts/<id>/?include=email,count.clicks`; for emailed posts: `reach` = `email.delivered_count` (else `email_count`), `impressions` = `email.opened_count`, `link_clicks` = `count.clicks`. Posts that were never emailed have no rows; unknown posts are skipped. `fetchAccountMetrics`: `followers_total` = `meta.pagination.total` of `GET /members/?limit=1`.
 - **Errors**: Ghost's `{ errors: [{ type, message, context }] }` is put in the message. 401/403 → auth; 404/422 → rejected; 429 → rate_limit with `Retry-After`; 5xx/transport → retryable. Messages never contain the key.
 
-## What Starsign can and cannot see
-With the best-effort comments endpoint available, Starsign sees member comments on the site's posts: the member's name, the comment and the post. It does not store member emails, does not see member lists beyond the total count, payment data, or email replies sent to the newsletter's reply-to address.
+## What base air can and cannot see
+With the best-effort comments endpoint available, base air sees member comments on the site's posts: the member's name, the comment and the post. It does not store member emails, does not see member lists beyond the total count, payment data, or email replies sent to the newsletter's reply-to address.
 
 ## Setup
-1. Ghost Admin → **Settings → Integrations → Add custom integration** → name it "Starsign".
+1. Ghost Admin → **Settings → Integrations → Add custom integration** → name it "base air".
 2. Copy the **Admin API key** (not the Content API key) and the **API URL**.
 3. Optional: Settings → Newsletters → open the newsletter → note its slug (shown in the URL / newsletter settings). Enter it when connecting to enable `#newsletter` sends.
-4. In Starsign, connect Ghost with the API URL, Admin API key and optional newsletter slug.
+4. In base air, connect Ghost with the API URL, Admin API key and optional newsletter slug.
 - Redirect URI: none (not OAuth). Webhook URL: none today (Ghost webhooks exist for post/member events but carry no comments; polling is used).
 - Env vars: optional `GHOST_ACCEPT_VERSION` (default `v6.0`).
 - Account config the owner may set (no UI yet): `emailEveryPost: true` (email every publish), `emailSegment` (recipient filter).
@@ -37,7 +37,7 @@ None. A custom integration's Admin API key has full Admin API access immediately
 ## Limits and quotas
 - Ghost does not publish fixed Admin API rate limits; Ghost(Pro) applies request limits and returns 429 (`TooManyRequestsError`), handled as retryable.
 - Image uploads: the site's upload limit (Ghost(Pro) images up to about 10 MB; self-hosted depends on the proxy).
-- Tokens must expire within 5 minutes of `iat`; Starsign signs a new one per request (clock skew on the server can still cause 401s).
+- Tokens must expire within 5 minutes of `iat`; base air signs a new one per request (clock skew on the server can still cause 401s).
 
 ## Unverified
 - `GET /ghost/api/admin/site/` answers without authentication (hence the extra authenticated `/posts/` call to prove the key).

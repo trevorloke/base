@@ -15,7 +15,7 @@ describe("createDefaultRegistry", () => {
     expect(reg.resolve("x", "x").name).toBe("x");
     expect(reg.resolve("mock", "x").name).toBe("mock");
     expect(createDefaultRegistry({ NODE_ENV: "production" }).get("mock")).toBeUndefined();
-    expect(createDefaultRegistry({ NODE_ENV: "production", STARSIGN_ENABLE_MOCK: "1" }).get("mock")).toBeInstanceOf(MockConnector);
+    expect(createDefaultRegistry({ NODE_ENV: "production", BASE_AIR_ENABLE_MOCK: "1" }).get("mock")).toBeInstanceOf(MockConnector);
   });
 
   it("serves every network except news natively and reports unconfigured apps instead of hiding them", () => {

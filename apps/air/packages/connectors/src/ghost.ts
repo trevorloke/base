@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import type { ActivityInput, Media, MetricInput, Network, VariantOptions } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, Network, VariantOptions } from "@base-air/schema";
 import { z } from "zod";
 import { htmlToText, httpFailure, normalizeSiteUrl, siteKey, textToHtml, uploadFileName } from "./html.ts";
 import { asNetworkError, downloadMedia, isoSeconds, readJson, resolveFetch, type FetchLike } from "./http.ts";
@@ -51,7 +51,7 @@ export function ghostToken(adminApiKey: string, now: Date, audience = "/admin/")
   return `${header}.${payload}.${signature}`;
 }
 
-/** Starsign visibility → Ghost post visibility: public (default), unlisted → members only, private/direct → paid members only. */
+/** base air visibility → Ghost post visibility: public (default), unlisted → members only, private/direct → paid members only. */
 export function ghostVisibility(o: VariantOptions): "public" | "members" | "paid" {
   if (o.visibility === "unlisted") return "members";
   if (o.visibility === "private" || o.visibility === "direct") return "paid";
@@ -248,7 +248,7 @@ export class GhostConnector implements Connector {
   /** POST /images/upload/ as multipart: file (with a filename), purpose=image, ref. Returns the hosted URL. */
   private async uploadImage(auth: GhostAuth, m: Media, i: number): Promise<string> {
     const { bytes, mime } = this.media ? await this.media.fetch(m) : await downloadMedia(resolveFetch(this.fetchImpl), m);
-    const filename = uploadFileName(m.url, mime, `starsign-${i + 1}`);
+    const filename = uploadFileName(m.url, mime, `base-air-${i + 1}`);
     const form = new FormData();
     form.set("file", new Blob([bytes], { type: mime }), filename);
     form.set("purpose", "image");
@@ -363,7 +363,7 @@ function commentToActivity(c: GhostComment, siteUrl: string | null): ActivityInp
     network: "ghost",
     kind: "comment",
     externalId: c.id,
-    // Members are identified by email in Ghost; the email is never copied into Starsign.
+    // Members are identified by email in Ghost; the email is never copied into base air.
     authorHandle: null,
     authorName: c.member?.name ?? null,
     text: c.html ? htmlToText(c.html) : null,

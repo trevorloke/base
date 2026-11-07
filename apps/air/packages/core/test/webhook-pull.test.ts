@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { activities, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, type Connector, type ConnectorCapabilities, type WebhookHandler } from "@starsign/connectors";
-import type { ActivityInput, Network } from "@starsign/schema";
-import { InMemoryScheduler, SecretBox, Starsign, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import { activities, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, type Connector, type ConnectorCapabilities, type WebhookHandler } from "@base-air/connectors";
+import type { ActivityInput, Network } from "@base-air/schema";
+import { InMemoryScheduler, SecretBox, BaseAir, type Principal } from "../src/index.ts";
 
 /** Like WeCom customer service: the callback only says "new messages waiting"; the messages come from a pull. */
 class Announcer implements Connector {
@@ -42,14 +42,14 @@ class Announcer implements Connector {
 }
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let ws: Principal;
 const conn = new Announcer();
 const deliver = (event: string) => m.webhooks.receive("announcer", { "x-token": "t1" }, JSON.stringify({ event }), { account: "corp-1" });
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(conn), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(conn), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
   const w = await m.workspaces.create({ slug: "acme", name: "Acme" }, { type: "human", id: "u" });
   ws = { workspaceId: w.id, actor: { type: "human", id: "u" }, role: "owner" };
   await m.accounts.connect(ws, { network: "wecom", externalId: "corp-1", handle: "acme_kf", connector: "announcer", auth: { token: "t1" } });

@@ -3,11 +3,11 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, type AccountRef, type Connector, type ConnectorCapabilities, type MediaFetcher, type PublishInput } from "@starsign/connectors";
-import type { Network } from "@starsign/schema";
-import { InMemoryScheduler, LocalStorage, S3Storage, SecretBox, Starsign, mp4DurationSeconds, probe, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, type AccountRef, type Connector, type ConnectorCapabilities, type MediaFetcher, type PublishInput } from "@base-air/connectors";
+import type { Network } from "@base-air/schema";
+import { InMemoryScheduler, LocalStorage, S3Storage, SecretBox, BaseAir, mp4DurationSeconds, probe, type Principal } from "../src/index.ts";
 
 /** A connector exercising every optional capability of the contract. */
 class FullConnector implements Connector {
@@ -73,7 +73,7 @@ class FullConnector implements Connector {
 }
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let full: FullConnector;
 let owner: Principal;
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 4, 0, 0, 0, 3, 0, 8, 2, 0, 0, 0]);
@@ -81,8 +81,8 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 beforeAll(async () => {
   h = await createTestDb();
   full = new FullConnector();
-  const dir = mkdtempSync(join(tmpdir(), "starsign-media-"));
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(full), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), mediaStorage: new LocalStorage(dir, "https://app.example") });
+  const dir = mkdtempSync(join(tmpdir(), "base-air-media-"));
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(full), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), mediaStorage: new LocalStorage(dir, "https://app.example") });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   owner = { workspaceId: ws.id, actor: { type: "human", id: "u1" }, role: "owner" };
   await m.policy.update(owner, { autonomy: { new_post: "schedule_with_approval", reply: "draft", dm: "suggest", repost: "draft", campaign: "suggest" }, redLines: [{ id: "g", kind: "forbidden_phrase", description: "No guarantees", severity: "block", phrases: ["guaranteed"] }] });

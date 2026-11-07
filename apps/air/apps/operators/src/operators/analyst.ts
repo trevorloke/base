@@ -1,5 +1,5 @@
-import { runPrompt, writeBrief, type Effort, type GatewayUsage, type ModelGateway, type WriteBriefVars } from "@starsign/ai";
-import type { Starsign } from "@starsign/core";
+import { runPrompt, writeBrief, type Effort, type GatewayUsage, type ModelGateway, type WriteBriefVars } from "@base-air/ai";
+import type { BaseAir } from "@base-air/core";
 import { ANALYST_ACTOR, DAY_MS, buildBrandContext } from "../context.ts";
 
 export interface AnalystOptions {
@@ -24,7 +24,7 @@ export interface AnalystResult {
  * The Analyst operator: gather the period's ledger (24h outcomes, lift by trend stage, inbound counts, the radar,
  * recent alerts), have the model write the weekly brief from those numbers only, and save it with its evidence.
  */
-export async function runAnalyst(m: Starsign, gw: ModelGateway, workspaceId: string, opts: AnalystOptions = {}): Promise<AnalystResult> {
+export async function runAnalyst(m: BaseAir, gw: ModelGateway, workspaceId: string, opts: AnalystOptions = {}): Promise<AnalystResult> {
   const periodDays = opts.periodDays ?? 7;
   const log = opts.log ?? (() => {});
   const runId = await m.ops.startRun(workspaceId, "analyst");

@@ -42,7 +42,7 @@ Other behavior:
   `subscribed_fields=feed,mention` for each Page. This is best effort, and the result is saved as
   `config.webhooksSubscribed`. Page webhooks fire only for Pages that installed the app this way. Instagram comment and
   mention webhooks also depend on the linked Page's installation.
-- **Mentions without a tag.** A caption @mention with no photo tag reaches Starsign only through the `mentions` webhook. The
+- **Mentions without a tag.** A caption @mention with no photo tag reaches base air only through the `mentions` webhook. The
   payload carries `media_id` (and `comment_id` for comment mentions) but no text. Text could be fetched later with
   `GET /{ig-user-id}?fields=mentioned_media.media_id(...)` / `mentioned_comment.comment_id(...)` (not implemented).
 - **Idempotency.** Results are cached per idempotency key, and Instagram progress (child containers, container, published
@@ -70,7 +70,7 @@ Other behavior:
 2. **Add products and use cases.** Add *Facebook Login for Business*, *Instagram* (the "API setup with Facebook login" option)
    and *Webhooks*. Under Pages, enable the "Manage everything on your Page" use case.
 3. **Facebook Login for Business → Settings.**
-   - Valid OAuth Redirect URI: `${STARSIGN_PUBLIC_URL}/oauth/meta/callback`
+   - Valid OAuth Redirect URI: `${BASE_AIR_PUBLIC_URL}/oauth/meta/callback`
    - Turn on Client OAuth login, Web OAuth login and Enforce HTTPS.
    - Optional: create a *Configuration* (login variation "General", token type **User access token**, the assets Pages and
      Instagram accounts, and the permissions below). Put its id in `META_LOGIN_CONFIG_ID`; the connector then sends it as
@@ -82,7 +82,7 @@ Other behavior:
    `pages_manage_metadata` is needed for the webhook subscription (`subscribed_apps`). `business_management` makes Pages
    owned through a Business portfolio appear.
 5. **Webhooks** (App Dashboard → Webhooks):
-   - Object **Page**: callback URL `${STARSIGN_PUBLIC_URL}/webhooks/meta`, verify token = `META_WEBHOOK_VERIFY_TOKEN`.
+   - Object **Page**: callback URL `${BASE_AIR_PUBLIC_URL}/webhooks/meta`, verify token = `META_WEBHOOK_VERIFY_TOKEN`.
      Subscribe the fields `feed` and `mention`.
    - Object **Instagram**: the same callback and verify token. Subscribe the fields `comments` and `mentions`.
    - Meta signs deliveries with the **app secret** (`X-Hub-Signature-256`). The connector verifies them with
@@ -110,7 +110,7 @@ user token do not expire, so core should not refresh them on a timer. On an auth
   only for data from those people. This is enough to build and to record the App Review screencasts.
 - **Advanced Access, through App Review**, is needed for any customer outside the app's roles. Submit every permission
   above. For each one, the reviewer expects:
-  - a written explanation of how Starsign uses it;
+  - a written explanation of how base air uses it;
   - a screencast showing the full flow: logging in with Facebook, choosing Pages and IG accounts in the dialog, then the
     feature using that permission. For example: publishing a post and a reel (`pages_manage_posts`,
     `instagram_content_publish`); reading and replying to, hiding and deleting a comment (`pages_read_user_content`,
@@ -193,7 +193,7 @@ search snippets were available):
 4. Which **test Page and Instagram professional account** can reviewers use, and who records the screencasts?
 5. Is **instagram_manage_messages / pages_messaging** (DM inbox) in scope later? It is not requested now and would need its
    own review.
-6. Should Starsign keep requesting **`business_management`**? It is only needed when Pages are owned by a Business portfolio
+6. Should base air keep requesting **`business_management`**? It is only needed when Pages are owned by a Business portfolio
    rather than a person, and it adds review scrutiny.
 7. Should the Graph version be **pinned per deployment** (`META_GRAPH_VERSION`), and who watches Meta's deprecation
    notices?

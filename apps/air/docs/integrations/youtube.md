@@ -32,10 +32,10 @@ Capabilities: `publish`, `fetchActivity`, `fetchMetrics`, `reply`, `moderate`, `
 
 1. In Google Cloud Console, create or choose a project. Enable **YouTube Data API v3** and **YouTube Analytics API**.
 2. Set up the **OAuth consent screen**: External user type, app name, support email, privacy policy URL, terms URL,
-   authorized domain = the domain of `STARSIGN_PUBLIC_URL`.
+   authorized domain = the domain of `BASE_AIR_PUBLIC_URL`.
 3. Create **Credentials → OAuth client ID → Web application** and add the authorized redirect URI:
-   `${STARSIGN_PUBLIC_URL}/oauth/youtube/callback`
-   (if Google Business Profile shares the same client, also add `${STARSIGN_PUBLIC_URL}/oauth/google_business/callback`).
+   `${BASE_AIR_PUBLIC_URL}/oauth/youtube/callback`
+   (if Google Business Profile shares the same client, also add `${BASE_AIR_PUBLIC_URL}/oauth/google_business/callback`).
 4. Scopes the connector requests:
    - `https://www.googleapis.com/auth/youtube.upload` (sensitive)
    - `https://www.googleapis.com/auth/youtube.force-ssl` (sensitive: comments, moderation)
@@ -44,7 +44,7 @@ Capabilities: `publish`, `fetchActivity`, `fetchMetrics`, `reply`, `moderate`, `
 5. Env vars (one OAuth client serves both Google connectors):
    - `GOOGLE_CLIENT_ID`
    - `GOOGLE_CLIENT_SECRET`
-6. Webhook URL: not used (`${STARSIGN_PUBLIC_URL}/webhooks/youtube` is not registered anywhere).
+6. Webhook URL: not used (`${BASE_AIR_PUBLIC_URL}/webhooks/youtube` is not registered anywhere).
 
 ## Review and access requirements
 
@@ -68,7 +68,7 @@ Capabilities: `publish`, `fetchActivity`, `fetchMetrics`, `reply`, `moderate`, `
 
 ## Limits and quotas
 
-- Quota is per Google Cloud project, shared by every Starsign workspace and channel on the deployment, and resets at
+- Quota is per Google Cloud project, shared by every base air workspace and channel on the deployment, and resets at
   midnight Pacific.
   - Default pool: 10,000 units/day. Lists cost 1 unit; `commentThreads.insert`, `comments.insert`, `setModerationStatus`, `comments.delete` and `thumbnails.set` cost about 50 each.
   - Uploads (current docs, since 1 June 2026): a separate "Video Uploads" bucket of **100 `videos.insert` calls/day**,
@@ -102,7 +102,7 @@ Everything marked `TODO(verify)` in the code, plus figures taken from secondary 
 ## Questions for the owner
 
 1. **Google Cloud project**: which project, who owns it, and has it passed (or applied for) the YouTube API Services audit? Until it does, every upload is locked private.
-2. **Consent screen verification**: who will record the scope demo video and own the verified domain for `STARSIGN_PUBLIC_URL`?
+2. **Consent screen verification**: who will record the scope demo video and own the verified domain for `BASE_AIR_PUBLIC_URL`?
 3. **Upload volume**: expected uploads per day across all workspaces. Above 100/day needs a quota extension.
 4. **Defaults**: keep `notifySubscribers: true`, `madeForKids: false` and category 22 (People & Blogs) as deployment defaults, or expose them in the composer?
 5. **Shorts thumbnails**: should a `thumbnailUrl` on a Short be dropped silently or flagged in the composer?

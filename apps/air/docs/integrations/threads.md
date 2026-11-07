@@ -50,10 +50,10 @@ Validation:
 2. Use case → Permissions. Add `threads_basic`, `threads_content_publish`, `threads_manage_replies`, `threads_read_replies`,
    `threads_manage_insights` and `threads_delete`. Mention webhooks also need `threads_manage_mentions` (see Questions).
 3. Use case → Settings:
-   - Redirect callback URL: `${STARSIGN_PUBLIC_URL}/oauth/threads/callback`
-   - Uninstall and delete callback URLs: required by Meta. Starsign has no endpoint for these yet (see Questions).
+   - Redirect callback URL: `${BASE_AIR_PUBLIC_URL}/oauth/threads/callback`
+   - Uninstall and delete callback URLs: required by Meta. base air has no endpoint for these yet (see Questions).
 4. Webhooks: add the **Threads webhooks** sub-use case.
-   - Callback URL: `${STARSIGN_PUBLIC_URL}/webhooks/threads`
+   - Callback URL: `${BASE_AIR_PUBLIC_URL}/webhooks/threads`
    - Verify token: `THREADS_WEBHOOK_VERIFY_TOKEN`
    - Subscribe the fields `replies` and `mentions`.
 5. Roles → add Threads testers. Each tester accepts the invite in the Threads app (Settings → Account → Website permissions)
@@ -113,7 +113,7 @@ The sandbox could not reach developers.facebook.com; these come from search snip
    Dropping it shortens App Review.
 2. Should mention webhooks be enabled? They need **`threads_manage_mentions`** (not requested yet) and its own review.
 3. Is keyword search or listening on Threads wanted? That is `threads_keyword_search`, a separate review and not built.
-4. Starsign needs **uninstall and delete-data callback endpoints** for the Threads app settings. Who owns building those?
+4. base air needs **uninstall and delete-data callback endpoints** for the Threads app settings. Who owns building those?
    Meta requires them before going live.
 5. Which Threads profiles will be testers during development, and who records the review screencasts?
 6. Should the API host be `graph.threads.com` (Meta's newer name) instead of the default `graph.threads.net`?

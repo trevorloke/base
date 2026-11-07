@@ -1,4 +1,4 @@
-import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -38,7 +38,7 @@ import { ConnectorError } from "./types.ts";
 export const REDDIT_SCOPES = ["identity", "submit", "read", "edit", "history", "privatemessages", "mysubreddits", "flair", "vote", "modposts"];
 
 /** Placeholder the owner must replace: Reddit asks for `<platform>:<app id>:<version> (by /u/<username>)`. */
-export const REDDIT_DEFAULT_USER_AGENT = "starsign/0.1 by <owner>";
+export const REDDIT_DEFAULT_USER_AGENT = "base-air/0.1 by <owner>";
 
 export const RedditAuth = z.object({
   accessToken: z.string().min(1),

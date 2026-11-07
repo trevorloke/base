@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
 import { randomBytes } from "node:crypto";
-import { CoreError, InMemoryScheduler, Starsign, RetryablePublishError, SecretBox, type Principal } from "../src/index.ts";
+import { CoreError, InMemoryScheduler, BaseAir, RetryablePublishError, SecretBox, type Principal } from "../src/index.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let mock: MockConnector;
 let sched: InMemoryScheduler;
 let clock = Date.parse("2026-11-02T17:00:00Z"); // 09:00 Vancouver
@@ -23,7 +23,7 @@ beforeAll(async () => {
   mock = new MockConnector();
   mock.now = now;
   sched = new InMemoryScheduler();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(mock), scheduler: sched, secrets: new SecretBox(randomBytes(32)), now });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(mock), scheduler: sched, secrets: new SecretBox(randomBytes(32)), now });
   const ws = await m.workspaces.create({ slug: "Acme Co", name: "Acme", timezone: "America/Vancouver" }, { type: "human", id: "u_owner" });
   owner = { workspaceId: ws.id, actor: { type: "human", id: "u_owner" }, role: "owner" };
   editor = { workspaceId: ws.id, actor: { type: "human", id: "u_editor" }, role: "editor" };
@@ -51,7 +51,7 @@ describe("workspace and keys", () => {
     const { secret } = await m.workspaces.createApiKey({ workspaceId: owner.workspaceId, name: "cli", actorType: "human", actorId: "u_owner", role: "owner" });
     const p = await m.workspaces.authenticate(secret);
     expect(p).toMatchObject({ workspaceId: owner.workspaceId, actor: { type: "human", id: "u_owner" }, role: "owner" });
-    expect(await m.workspaces.authenticate("star_nope")).toBeNull();
+    expect(await m.workspaces.authenticate("air_nope")).toBeNull();
     expect((await m.policy.getActive(owner.workspaceId)).version).toBe(2);
   });
 });

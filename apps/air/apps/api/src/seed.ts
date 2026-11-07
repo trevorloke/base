@@ -5,10 +5,10 @@
  * Deterministic. Safe to re-run: it mints a fresh API key and a fresh sign-in password each time and skips the rest if the workspace exists.
  */
 import { randomBytes } from "node:crypto";
-import { createDb, migrate } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox, type Principal } from "@starsign/core";
-import { networkLabel, type TrendStage } from "@starsign/schema";
+import { createDb, migrate } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox, type Principal } from "@base-air/core";
+import { networkLabel, type TrendStage } from "@base-air/schema";
 
 const SLUG = process.env.SEED_SLUG ?? "acme";
 const realNow = Date.now();
@@ -31,7 +31,7 @@ const handle = await createDb({ url: process.env.DATABASE_URL, pglitePath: proce
 await migrate(handle);
 const mock = new MockConnector();
 mock.now = now;
-const m = new Starsign({ handle, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: SecretBox.fromEnv(), now });
+const m = new BaseAir({ handle, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: SecretBox.fromEnv(), now });
 
 /** The demo's sign-in person: an owner of the seeded workspace with a fresh random password (printed, never stored in clear). */
 const SIGN_IN_EMAIL = process.env.SEED_EMAIL ?? `owner@${SLUG}.test`;
@@ -302,8 +302,8 @@ Owner API key (CLI, scripts):   ${ownerKey.secret}
 Agent API key (MCP server):     ${agentKey.secret}
 
 Next:
-  pnpm dev:api                      # http://localhost:4000  (or set STARSIGN_DEV_WORKSPACE=${ws.slug} to skip signing in)
+  pnpm dev:api                      # http://localhost:4000  (or set BASE_AIR_DEV_WORKSPACE=${ws.slug} to skip signing in)
   pnpm dev:web                      # sign in with the email and password above
-  STARSIGN_API_KEY=<agent key> pnpm dev:mcp
+  BASE_AIR_API_KEY=<agent key> pnpm dev:mcp
 `);
 await handle.close();

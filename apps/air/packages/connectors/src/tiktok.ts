@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { ActivityInput, Media, MetricInput, MetricName, Network, VariantOptions } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, MetricName, Network, VariantOptions } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -114,7 +114,7 @@ export interface TikTokHttpFailure {
   body: unknown;
 }
 
-/** Starsign privacy → TikTok privacy_level. "unlisted" has no TikTok equivalent. */
+/** base air privacy → TikTok privacy_level. "unlisted" has no TikTok equivalent. */
 export const TIKTOK_PRIVACY: Record<NonNullable<VariantOptions["privacy"]>, string | null> = {
   public: "PUBLIC_TO_EVERYONE",
   friends: "MUTUAL_FOLLOW_FRIENDS",
@@ -464,7 +464,7 @@ export class TikTokConnector implements Connector {
           description: input.text,
           privacy_level: plan.privacy,
           disable_comment: plan.disableComment,
-          // Starsign does not pick music for the creator; the room asks for music-usage consent (see docs).
+          // base air does not pick music for the creator; the room asks for music-usage consent (see docs).
           auto_add_music: false,
           brand_content_toggle: plan.brandContent,
           brand_organic_toggle: plan.brandOrganic,
@@ -667,7 +667,7 @@ export function planPost(creator: TikTokCreatorInfo, input: PublishInput, isPhot
     disableDuet: isPhoto ? true : interaction(o.allowDuet, creator.duet_disabled, "duets"),
     disableStitch: isPhoto ? true : interaction(o.allowStitch, creator.stitch_disabled, "stitches"),
     // brandedContent = "Branded content" (paid partnership for a third party). "Your brand" (brand_organic_toggle) has no
-    // Starsign option yet; see docs/integrations/tiktok.md.
+    // base air option yet; see docs/integrations/tiktok.md.
     brandContent: o.brandedContent === true,
     brandOrganic: false,
   };

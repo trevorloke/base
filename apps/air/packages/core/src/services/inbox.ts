@@ -1,8 +1,8 @@
 import { and, asc, desc, eq, gt, inArray, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { activities, entityMentions, inboxItems, inboxNotes, inboxRules, members, posts, postVariants, savedReplies, socialAccounts, users, workspaces } from "@starsign/db";
-import { newId } from "@starsign/ledger";
-import { findPhrases } from "@starsign/policy";
+import { activities, entityMentions, inboxItems, inboxNotes, inboxRules, members, posts, postVariants, savedReplies, socialAccounts, users, workspaces } from "@base-air/db";
+import { newId } from "@base-air/ledger";
+import { findPhrases } from "@base-air/policy";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import { primaryLanguage } from "../lang.ts";

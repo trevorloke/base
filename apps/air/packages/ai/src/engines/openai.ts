@@ -21,7 +21,7 @@ interface ResponsesOutput {
 
 /**
  * ChatGPT's behaviour through the Responses API with the hosted web search tool. Plain fetch, no SDK.
- * Cost is recorded as $0: OpenAI's prices are not in Starsign's price table (tokens are still recorded).
+ * Cost is recorded as $0: OpenAI's prices are not in base air's price table (tokens are still recorded).
  */
 export class OpenAIAnswerEngine implements AnswerEngine {
   readonly id = "openai" as const;

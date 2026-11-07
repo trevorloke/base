@@ -1,18 +1,17 @@
 import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
-import { getCookie } from "hono/cookie";
 import { streamSSE } from "hono/streaming";
 import { and, desc, eq } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
 import { z, ZodError } from "zod";
-import { approvalDiffs, postOutcomes, posts, postVariants } from "@starsign/db";
-import { CoreError, MAX_UPLOAD_BYTES, type Starsign, type Principal, type ResolvedSession } from "@starsign/core";
-import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@starsign/schema";
-import { gatePost } from "@starsign/policy";
-import { adaptForNetwork, gatewayKeywordExpander, gatewayTranslator, runPrompt, suggestAliases, type BrandContext, type ModelGateway } from "@starsign/ai";
-import { createMentionSearches, type MentionSearch, type SourceAdapter } from "@starsign/sources";
-import { Network as NetworkEnum, NETWORK_LIMITS } from "@starsign/schema";
-import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, registerAuthRoutes, SESSION_COOKIE, setSessionCookie } from "./auth-routes.ts";
+import { approvalDiffs, postOutcomes, posts, postVariants } from "@base-air/db";
+import { CoreError, MAX_UPLOAD_BYTES, type BaseAir, type Principal, type ResolvedSession } from "@base-air/core";
+import { Policy, Timestamp, type ActivityKind, type Network, type PostStatus } from "@base-air/schema";
+import { gatePost } from "@base-air/policy";
+import { adaptForNetwork, gatewayKeywordExpander, gatewayTranslator, runPrompt, suggestAliases, type BrandContext, type ModelGateway } from "@base-air/ai";
+import { createMentionSearches, type MentionSearch, type SourceAdapter } from "@base-air/sources";
+import { Network as NetworkEnum, NETWORK_LIMITS } from "@base-air/schema";
+import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, readSessionCookie, registerAuthRoutes, setSessionCookie } from "./auth-routes.ts";
 import { registerInboxRoutes } from "./routes-inbox.ts"; // ---- inbox workflow
 import { registerVisibilityRoutes } from "./routes-visibility.ts"; // ---- AI answer visibility
 import { registerAnalyticsRoutes } from "./routes-analytics.ts"; // ---- analytics & client reports
@@ -35,7 +34,7 @@ export interface AppOptions {
   mentionSearches?: MentionSearch[];
   // ---- AI answer visibility
   /** Answer engines to ask (tests). Default: one per key in the environment. */
-  answerEngines?: import("@starsign/core").VisibilityEngine[];
+  answerEngines?: import("@base-air/core").VisibilityEngine[];
 }
 
 const err = (code: string, message: string, details?: unknown) => ({ error: { code, message, details } });
@@ -61,7 +60,7 @@ function startOfLocalWeek(at: Date, timezone: string): Date {
   return new Date(at.getTime() - msIntoDay - Math.max(0, dow) * 86_400_000);
 }
 
-export function createApp(m: Starsign, opts: AppOptions = {}) {
+export function createApp(m: BaseAir, opts: AppOptions = {}) {
   const app = new Hono<Env>();
 
   app.onError((e, c) => {
@@ -159,7 +158,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
 
   app.get("/api/health", (c) => c.json({ ok: true, version: VERSION, db: m.ctx.db.constructor.name.toLowerCase().includes("pglite") ? "pglite" : "postgres" }));
 
-  // Who is asking: a bearer API key (agents, automation), else the starsign_session cookie (people), else the dev workspace.
+  // Who is asking: a bearer API key (agents, automation), else the base_air_session cookie (people), else the dev workspace.
   const cookieOpts = { publicUrl: opts.publicUrl };
   const auth = createMiddleware<Env>(async (c, next) => {
     if (isPublicAuthRoute(c.req.method, c.req.path)) return next();
@@ -181,7 +180,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
       c.set("principal", p);
       return next();
     }
-    const cookie = getCookie(c, SESSION_COOKIE);
+    const cookie = readSessionCookie(c, cookieOpts);
     if (cookie) {
       const s = await m.auth.resolveSession(cookie);
       if (!s) {
@@ -273,7 +272,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
     const p = c.get("principal");
     m.workspaces.requireRole(p, ["owner", "approver"]);
     const name = c.req.param("connector");
-    if (!opts.publicUrl) throw new CoreError("unavailable", "STARSIGN_PUBLIC_URL is not set, so the network cannot send people back here");
+    if (!opts.publicUrl) throw new CoreError("unavailable", "BASE_AIR_PUBLIC_URL is not set, so the network cannot send people back here");
     const body = (await c.req.json().catch(() => ({}))) as { network?: string; inputs?: Record<string, string> };
     const network = body.network ? NetworkEnum.parse(body.network) : undefined;
     return c.json(
@@ -743,7 +742,7 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
   app.get("/v1/export", async (c) => {
     const p = c.get("principal");
     const data = await m.exports.workspace(p);
-    c.header("Content-Disposition", `attachment; filename="starsign-${data.workspace?.slug ?? p.workspaceId}.json"`);
+    c.header("Content-Disposition", `attachment; filename="base-air-${data.workspace?.slug ?? p.workspaceId}.json"`);
     return c.json(data);
   });
 
@@ -780,16 +779,19 @@ export function createApp(m: Starsign, opts: AppOptions = {}) {
 
 /**
  * The browser half of conversion tracking. Drop it on the destination site:
- *   <script src="https://YOUR-STARSIGN/s.js" async></script>
+ *   <script src="https://YOUR-BASE-AIR/s.js" async></script>
  * It keeps the ssclid from the landing URL in first-party storage for 30 days, and
- *   starsign.convert("purchase", 49.0, "USD")
+ *   baseAir.convert("purchase", 49.0, "USD")
  * reports a conversion against that click. No cookies are set on any other domain; nothing runs without a click id.
+ * Sites set up before the rename keep working: a click id stored under the old key is moved to the new one, calls
+ * queued on window.starsign are sent, and window.starsign stays an alias of window.baseAir.
  */
 export function conversionSnippet(base: string): string {
-  return `(function(){var K="starsign_clid",T=2592e6,B=${JSON.stringify(base)};
+  return `(function(){var K="base_air_clid",OK="starsign_clid",T=2592e6,B=${JSON.stringify(base)};
+try{var o=localStorage.getItem(OK);if(o!==null){if(localStorage.getItem(K)===null)localStorage.setItem(K,o);localStorage.removeItem(OK)}}catch(e){}
 function get(){try{var v=JSON.parse(localStorage.getItem(K)||"null");if(v&&Date.now()-v.t<T)return v.id}catch(e){}return null}
 try{var p=new URLSearchParams(location.search).get("ssclid");if(p&&/^clk_[0-9a-f]{32}$/.test(p))localStorage.setItem(K,JSON.stringify({id:p,t:Date.now()}))}catch(e){}
 function convert(name,value,currency){var id=get();if(!id)return false;var b=JSON.stringify({clickId:id,name:name||"conversion",value:typeof value==="number"?value:undefined,currency:currency});
 if(navigator.sendBeacon)return navigator.sendBeacon(B+"/c",b);fetch(B+"/c",{method:"POST",body:b,keepalive:true,mode:"cors"});return true}
-var q=(window.starsign&&window.starsign.q)||[];window.starsign={convert:convert,clickId:get};for(var i=0;i<q.length;i++)convert.apply(null,q[i]);})();`;
+var q=[].concat((window.baseAir&&window.baseAir.q)||[],(window.starsign&&window.starsign.q)||[]);window.baseAir=window.starsign={convert:convert,clickId:get};for(var i=0;i<q.length;i++)convert.apply(null,q[i]);})();`;
 }

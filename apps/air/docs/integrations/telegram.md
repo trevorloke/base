@@ -9,16 +9,16 @@ Connector `telegram` · networks `["telegram"]` · `packages/connectors/src/tele
 - **reply**: replies with `reply_parameters`. A reply to a channel post goes to its copy in the discussion group when that copy has been seen; otherwise the reply is posted in the parent's chat.
 - **moderate**: `delete` → `deleteMessage`; `like`/`unlike` → 👍 reaction via `setMessageReaction`; hide/unhide refused.
 - **Metrics**: per-message views are **not available through the Bot API**, so `fetchMetrics` is empty and `capabilities.fetchMetrics` is false. `fetchAccountMetrics` returns `followers_total` from `getChatMemberCount`.
-- **Webhooks**: when `TELEGRAM_WEBHOOK_SECRET` (and `STARSIGN_PUBLIC_URL`) are set, connecting calls `setWebhook` with `secret_token` and `allowed_updates: ["message","channel_post"]`; `webhook.verify` compares `X-Telegram-Bot-Api-Secret-Token` in constant time; `webhook.parse` turns one Update into a batch for the right chat.
+- **Webhooks**: when `TELEGRAM_WEBHOOK_SECRET` (and `BASE_AIR_PUBLIC_URL`) are set, connecting calls `setWebhook` with `secret_token` and `allowed_updates: ["message","channel_post"]`; `webhook.verify` compares `X-Telegram-Bot-Api-Secret-Token` in constant time; `webhook.parse` turns one Update into a batch for the right chat.
 - Errors: 429 → rate_limit with `retry_after`; 401/404 → auth (bad token); 403 → auth (bot kicked / lacks rights); 409 → rejected (getUpdates while a webhook is set); 400 → rejected; 5xx/network → retryable. Error messages never include the bot token.
 
 ## Setup
 1. In Telegram, talk to **@BotFather** → `/newbot` → copy the token.
 2. Add the bot to the channel as an **administrator** with "Post messages" (and "Delete messages" for moderation). For comments, also add it to the channel's linked discussion group (admin, so it receives all messages despite privacy mode).
-3. In Starsign, connect Telegram with the token and the channel's @username or id.
+3. In base air, connect Telegram with the token and the channel's @username or id.
 - Redirect URI: none (not OAuth).
-- Webhook URL: `${STARSIGN_PUBLIC_URL}/webhooks/telegram` (registered automatically on connect when the secret is configured).
-- Env vars: `TELEGRAM_WEBHOOK_SECRET` (1–256 chars of `A-Z a-z 0-9 _ -`; enables webhooks), `STARSIGN_PUBLIC_URL`, optional `TELEGRAM_API_BASE` (self-hosted Bot API server).
+- Webhook URL: `${BASE_AIR_PUBLIC_URL}/webhooks/telegram` (registered automatically on connect when the secret is configured).
+- Env vars: `TELEGRAM_WEBHOOK_SECRET` (1–256 chars of `A-Z a-z 0-9 _ -`; enables webhooks), `BASE_AIR_PUBLIC_URL`, optional `TELEGRAM_API_BASE` (self-hosted Bot API server).
 
 ## Review and access requirements
 None. Any bot token works immediately; the only requirement is admin rights in the target chat.
@@ -34,6 +34,6 @@ None. Any bot token works immediately; the only requirement is admin rights in t
 - Telegram's documentation site was not reachable from the sandbox; method names and fields come from long-standing Bot API behaviour (reply_parameters since 7.0, InputPollOption since 7.3, setMessageReaction since 7.0).
 
 ## Questions for the owner
-- Should Starsign own the bot's webhook? `setWebhook` replaces any webhook the bot already has (and disables `getUpdates` for other tools using the same bot). Use a dedicated bot per brand if unsure.
+- Should base air own the bot's webhook? `setWebhook` replaces any webhook the bot already has (and disables `getUpdates` for other tools using the same bot). Use a dedicated bot per brand if unsure.
 - Disconnecting does not call `deleteWebhook`; should it?
 - Are long polls (> 10 minutes) acceptable as "open until closed manually"? Telegram's `open_period` caps at 600 seconds.

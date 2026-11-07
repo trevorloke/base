@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { classifyTopic, runPrompt, type BrandContext, type Effort, type ModelGateway } from "@starsign/ai";
-import type { RedLine } from "@starsign/schema";
+import { classifyTopic, runPrompt, type BrandContext, type Effort, type ModelGateway } from "@base-air/ai";
+import type { RedLine } from "@base-air/schema";
 
 type SemanticLine = Extract<RedLine, { kind: "forbidden_topic" }>;
 const isSemantic = (rl: RedLine): rl is SemanticLine => rl.kind === "forbidden_topic" && rl.semantic;
@@ -95,7 +95,7 @@ export function stewardClassifier(gw: ModelGateway, opts: StewardOptions = {}): 
   };
 }
 
-/** Just the function core wants: `new Starsign({ ..., classifyTopic: makeClassifier(gw) })`. Same cold-cache caveat. */
+/** Just the function core wants: `new BaseAir({ ..., classifyTopic: makeClassifier(gw) })`. Same cold-cache caveat. */
 export function makeClassifier(gw: ModelGateway, opts: StewardOptions = {}): (text: string, keywords: string[], description: string) => number {
   return stewardClassifier(gw, opts).classify;
 }

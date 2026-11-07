@@ -103,7 +103,7 @@ describe("line connect", () => {
   });
 
   it("factory builds one connector named line", () => {
-    const [c] = createLineConnectors({ STARSIGN_PUBLIC_URL: "https://app.example" });
+    const [c] = createLineConnectors({ BASE_AIR_PUBLIC_URL: "https://app.example" });
     expect(c).toMatchObject({ name: "line", networks: ["line"] });
   });
 });

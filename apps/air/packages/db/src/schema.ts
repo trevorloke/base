@@ -16,7 +16,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
-/** Mirrors @starsign/schema Actor without a cross-package import (db stays a leaf). */
+/** Mirrors @base-air/schema Actor without a cross-package import (db stays a leaf). */
 export type ActorJson = { type: "human" | "operator" | "mcp" | "system"; id: string };
 const now = () => ts("created_at").notNull().defaultNow();
 
@@ -596,7 +596,7 @@ export const entityMentions = pgTable(
 
 // ---------------------------------------------------------------- owned measurement: links, clicks, conversions
 
-/** Short links Starsign minted for published posts (or by hand). `target` is the destination with UTM tags. */
+/** Short links base air minted for published posts (or by hand). `target` is the destination with UTM tags. */
 export const trackedLinks = pgTable(
   "tracked_links",
   {

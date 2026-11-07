@@ -148,7 +148,7 @@ describe("Bluesky search", () => {
   });
   it("explains a 403 as needing a token", async () => {
     const f = fakeFetch([[/searchPosts/, () => ({ status: 403, body: { error: "Forbidden" } })]]);
-    await expect(new BlueskySearchSource({ fetch: f }).sample({ keywords: ["x"], since: new Date("2026-11-02T10:00:00Z"), now: NOW })).rejects.toThrow(/STARSIGN_BLUESKY_SEARCH_TOKEN/);
+    await expect(new BlueskySearchSource({ fetch: f }).sample({ keywords: ["x"], since: new Date("2026-11-02T10:00:00Z"), now: NOW })).rejects.toThrow(/BASE_AIR_BLUESKY_SEARCH_TOKEN/);
   });
 });
 
@@ -174,7 +174,7 @@ describe("errors and factory", () => {
     const all = createDefaultSources({});
     expect(all.map((s) => s.name)).toEqual(["google_trends", "google_trends_rss", "wikipedia_pageviews", "hacker_news", "bluesky_search", "youtube_trending"]);
     expect(all.filter((s) => s.configured).map((s) => s.name)).toEqual(["google_trends_rss", "wikipedia_pageviews", "hacker_news", "bluesky_search"]);
-    expect(createDefaultSources({ YOUTUBE_API_KEY: "k", STARSIGN_SOURCES: "youtube_trending,hacker_news" }).map((s) => [s.name, s.configured])).toEqual([
+    expect(createDefaultSources({ YOUTUBE_API_KEY: "k", BASE_AIR_SOURCES: "youtube_trending,hacker_news" }).map((s) => [s.name, s.configured])).toEqual([
       ["hacker_news", true],
       ["youtube_trending", true],
     ]);

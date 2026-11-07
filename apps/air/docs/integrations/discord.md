@@ -11,7 +11,7 @@ Connector `discord` · networks `["discord"]` · `packages/connectors/src/discor
 
 ## Setup
 1. In Discord: Server Settings or Channel Settings → Integrations → Webhooks → New Webhook → choose the channel → Copy Webhook URL (requires Manage Webhooks).
-2. In Starsign, connect Discord and paste the URL. To post into a specific thread, append `?thread_id=<thread id>`.
+2. In base air, connect Discord and paste the URL. To post into a specific thread, append `?thread_id=<thread id>`.
 - Redirect URI: none. Webhook URL (inbound): none.
 - Env vars: none.
 
@@ -38,7 +38,7 @@ None. A webhook works as soon as it is created. Anyone holding the URL can post 
 
 Connector `discord_bot` · networks `["discord"]` · `packages/connectors/src/discord-bot.ts` · factory `createDiscordBotConnectors(env)`
 
-The webhook connector above can only post. The bot connector lets Starsign **read** a server: it brings messages from the server's channels into the live feed, and it can reply, react, delete and post. It uses Discord's official bot API (REST v10, `Authorization: Bot <token>`). It never uses self-bots or user tokens.
+The webhook connector above can only post. The bot connector lets base air **read** a server: it brings messages from the server's channels into the live feed, and it can reply, react, delete and post. It uses Discord's official bot API (REST v10, `Authorization: Bot <token>`). It never uses self-bots or user tokens.
 
 ## What works
 - **Connect** (`connectMethod: "bot_token"`). Inputs: bot token (secret), server (guild) ID, and an optional channel ID for posts. `connectWithInputs`:
@@ -59,26 +59,26 @@ The webhook connector above can only post. The bot connector lets Starsign **rea
 - **Account metrics**: `followers_total` = `approximate_member_count` from `GET /guilds/{id}?with_counts=true`.
 - **No post metrics**: bots cannot see views. `fetchMetrics` returns [].
 - **Errors**: 429 → `rate_limit`, retryable, with `retryAfter` from the body `retry_after` or the `X-RateLimit-Reset-After` header. A `retry_after` of 5 s or less is waited out once inside the call. 401 → `auth` ("reset the token"). 403 → `auth` (50001 Missing Access / 50013 Missing Permissions are told apart). Other 4xx → `rejected` with Discord's code. 5xx/network → `network`, retryable. Error messages are built from the status and Discord's JSON body only, and transport errors have the token scrubbed, so the bot token never appears in an error.
-- **No Gateway (WebSocket)**: Starsign workers poll, so new messages arrive at the polling interval, not instantly. Real-time delivery (and reactions, edits and deletes as events) needs a Gateway connection, which is a later step.
+- **No Gateway (WebSocket)**: base air workers poll, so new messages arrive at the polling interval, not instantly. Real-time delivery (and reactions, edits and deletes as events) needs a Gateway connection, which is a later step.
 
 ## Setup
-1. Open the Discord Developer Portal → **Applications** → **New Application** → name it (e.g. "Starsign").
+1. Open the Discord Developer Portal → **Applications** → **New Application** → name it (e.g. "base air").
 2. **Bot** page → **Reset Token** → copy the token (shown once). Under **Privileged Gateway Intents**, turn on **Message Content Intent**. **Server Members Intent** and **Presence Intent** are not needed.
 3. **OAuth2 → URL Generator**: scope `bot`. Bot permissions: **View Channels**, **Read Message History**, **Send Messages**, **Add Reactions**, and optionally **Manage Messages** (only to delete other people's messages). Open the generated URL and add the bot to your server (needs Manage Server on that server).
 4. To keep the bot out of a channel, deny it View Channel there. Channels it cannot read are not listed.
 5. In Discord: User Settings → Advanced → **Developer Mode** on. Then right-click the server → **Copy Server ID** (and optionally right-click a channel → Copy Channel ID for posts).
-6. In Starsign, connect **Discord (bot)** and paste the token and server ID.
+6. In base air, connect **Discord (bot)** and paste the token and server ID.
 - Redirect URI: none. Inbound webhook URL: none.
 - Env vars: none.
 - New channels created after connecting are picked up when you reconnect the server.
 
-## What Starsign can and cannot see
+## What base air can and cannot see
 - **Can see**: messages in the text, announcement and forum channels of the connected server where the bot has View Channel and Read Message History, plus active public threads in those channels. It sees the text, attachment file names, author username and display name, and which message a reply answers. Only messages since the previous poll (or since connect) are read.
-- **Cannot see**: servers the bot was not invited to, channels it is denied, private threads, voice/stage chat, DMs (not polled), deleted or edited message history, reactions as events, member lists, presence or email addresses. No user tokens are ever used, and Starsign never reads anything as a person.
+- **Cannot see**: servers the bot was not invited to, channels it is denied, private threads, voice/stage chat, DMs (not polled), deleted or edited message history, reactions as events, member lists, presence or email addresses. No user tokens are ever used, and base air never reads anything as a person.
 
 ## Review and access requirements
 - None while the bot is in **fewer than 100 servers**: you turn on the Message Content intent yourself.
-- Once an application is in 100 or more servers, it must pass Discord's **app verification**, and Message Content becomes a privileged intent that Discord must approve (they ask why you need it). Each customer using their own bot application stays far below this. A shared Starsign-owned bot would hit it.
+- Once an application is in 100 or more servers, it must pass Discord's **app verification**, and Message Content becomes a privileged intent that Discord must approve (they ask why you need it). Each customer using their own bot application stays far below this. A shared base air-owned bot would hit it.
 
 ## Limits and quotas
 - Global rate limit is about 50 requests/second per bot. Per-route limits come in the `X-RateLimit-*` headers. Repeated invalid requests (401/403/429) can get the bot's IP temporarily banned, which is why the poll is bounded and skips forbidden channels.
@@ -94,7 +94,7 @@ The webhook connector above can only post. The bot connector lets Starsign **rea
 - Whether the "messages that mention the bot keep their content" exemption from the Message Content intent applies to REST reads as well as Gateway events.
 
 ## Questions for the owner
-- Should each customer create their own bot (recommended: no verification, their own token), or should Starsign run one shared verified bot?
+- Should each customer create their own bot (recommended: no verification, their own token), or should base air run one shared verified bot?
 - Which channels should be monitored: all readable ones (today), or a chosen list?
 - Should replies ping the person being answered (today: yes, nobody else)?
 - How often should servers be polled? A Gateway worker for real-time messages would be a separate long-running process; is that in scope?

@@ -1,4 +1,4 @@
-import type { ActionClass, ActorType, Policy, PolicyDecision, PostStatus } from "@starsign/schema";
+import type { ActionClass, ActorType, Policy, PolicyDecision, PostStatus } from "@base-air/schema";
 import { resolveAutonomy, type MemberRole } from "./autonomy.ts";
 import { evaluatePost, type EvaluationContext, type Subject } from "./redlines.ts";
 

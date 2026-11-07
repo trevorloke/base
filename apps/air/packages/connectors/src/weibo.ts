@@ -1,4 +1,4 @@
-import type { ActivityInput, Media, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, isAfter, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -24,7 +24,7 @@ import { ConnectorError } from "./types.ts";
  *
  * Publishing goes through `statuses/share`, the only status-creating endpoint Weibo still opens to third-party apps.
  * Its rule: the text must contain at least one URL under the app's registered **security domain** (安全域名, set in the
- * app's settings on open.weibo.com). Without it Weibo answers 10017 "text not find domain". Starsign checks for a link
+ * app's settings on open.weibo.com). Without it Weibo answers 10017 "text not find domain". base air checks for a link
  * before calling Weibo, and checks the domain too when `WEIBO_SECURITY_DOMAIN` (or the account's `securityDomain`
  * config) is set.
  *

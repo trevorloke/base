@@ -28,7 +28,7 @@ Publishing
   overwritten. A thread that fails after its root went out keeps the root's ids on the variant.
 - X tokens refresh proactively near expiry and reactively on 401, and the refreshed blob is persisted.
 - Connector resolution is strict (no silent fallback to another adapter); the mock connector is not registered
-  in production unless `STARSIGN_ENABLE_MOCK=1`.
+  in production unless `BASE_AIR_ENABLE_MOCK=1`.
 - The in-process timer scheduler re-arms instead of firing early for delays beyond ~24.8 days.
 
 Measurement and ledger

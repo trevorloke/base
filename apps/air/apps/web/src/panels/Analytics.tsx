@@ -249,7 +249,7 @@ function Daily({ data, series, prevLabel, windowLabel }: { data: AnalyticsPayloa
         baselineZero={series !== "followers"}
       />
       <p className="muted small">
-        {series === "clicks" ? "Clicks on Starsign's short links, by the day they happened." : series === "followers" ? "Followers across these accounts at the end of each day." : "By the day each post went out, at its 72-hour, 24-hour or latest numbers."}{" "}
+        {series === "clicks" ? "Clicks on base air's short links, by the day they happened." : series === "followers" ? "Followers across these accounts at the end of each day." : "By the day each post went out, at its 72-hour, 24-hour or latest numbers."}{" "}
         {windowLabel}.
       </p>
     </>

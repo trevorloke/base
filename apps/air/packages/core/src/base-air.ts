@@ -29,7 +29,7 @@ import { AnalyticsService } from "./services/analytics.ts";
 import { ReportService } from "./services/reports.ts";
 
 /** The one object every front door (API, MCP, operators, workers) talks to. */
-export class Starsign {
+export class BaseAir {
   readonly ctx: CoreContext;
   readonly workspaces: WorkspaceService;
   readonly accounts: AccountService;

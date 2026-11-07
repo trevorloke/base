@@ -6,9 +6,9 @@ Connector `kit` · networks `["kit"]` · `packages/connectors/src/kit.ts` · fac
 - **Connect** (`connectMethod: "api_key"`): input `apiKey` (secret, a **v4** API key). Every request sends `X-Kit-Api-Key` to `https://api.kit.com/v4`. `connectWithInputs` calls `GET /v4/account`; externalId = account id, handle = account name (else primary email), displayName = account name. Auth blob `{ apiKey }`; config `{ accountId, plan }`.
 - **Publish** = a broadcast sent now: `POST /v4/broadcasts { subject, content, public, published_at, send_at, thumbnail_url, thumbnail_alt }`.
   - `subject` = `options.title`, else the post's first line (plain text). Required.
-  - `content` = the post text rendered to safe HTML, `options.link` appended when missing, images by their public Starsign media URLs. Kit wraps it in the account's default email template.
+  - `content` = the post text rendered to safe HTML, `options.link` appended when missing, images by their public base air media URLs. Kit wraps it in the account's default email template.
   - `public` = true when `options.visibility` is unset or `public` (the broadcast also appears on the creator's web newsletter feed, with `published_at` = now); `unlisted`/`private`/`direct` keep it email-only.
-  - `send_at` = now (Starsign already scheduled it). No `subscriber_filter`, so it goes to all subscribers.
+  - `send_at` = now (base air already scheduled it). No `subscriber_filter`, so it goes to all subscribers.
   - `thumbnail_url` = `options.thumbnailUrl` or the first image.
   - Returns `externalId` = broadcast id, `url` = `public_url` (null for email-only broadcasts). Idempotent in-process.
 - **validate**: subject present; no video/document attachments; no polls.
@@ -19,8 +19,8 @@ Connector `kit` · networks `["kit"]` · `packages/connectors/src/kit.ts` · fac
 ## Setup
 1. Kit → **Settings → Developer → API keys → Add a new key** (v4). v3 API keys/secrets do not work.
 2. Check the default email template and sender (Settings → Email) — broadcasts use them.
-3. In Starsign, connect Kit with the key.
-- Redirect URI: none today. Kit OAuth (apps in the Kit App Store, `https://app.kit.com/oauth/authorize`) is a **later step**; redirect URI would be `${STARSIGN_PUBLIC_URL}/oauth/kit/callback`.
+3. In base air, connect Kit with the key.
+- Redirect URI: none today. Kit OAuth (apps in the Kit App Store, `https://app.kit.com/oauth/authorize`) is a **later step**; redirect URI would be `${BASE_AIR_PUBLIC_URL}/oauth/kit/callback`.
 - Webhook URL: none (Kit webhooks cover subscriber events, not needed yet).
 - Env vars: optional `KIT_API_BASE` (default `https://api.kit.com/v4`).
 
@@ -42,5 +42,5 @@ None for API keys; they work immediately on any plan with API access. Sending br
 
 ## Questions for the owner
 - Should broadcasts be public (on the creator profile) by default, or email-only unless asked?
-- Should Starsign target a segment or tag (`subscriber_filter`) instead of all subscribers?
+- Should base air target a segment or tag (`subscriber_filter`) instead of all subscribers?
 - Which email template should broadcasts use (`email_template_id`), if not the account default?

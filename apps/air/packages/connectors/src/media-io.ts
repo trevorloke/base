@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { Media } from "@starsign/schema";
+import type { Media } from "@base-air/schema";
 import { downloadMedia, resolveFetch, type FetchLike } from "./http.ts";
 import { ConnectorError, type MediaFetcher } from "./types.ts";
 
@@ -260,7 +260,7 @@ type Part = { name: string; head: Uint8Array; body: StreamBody | Uint8Array };
  * by piece, then the closing boundary. Same wire format and `set` semantics as FormData.
  */
 export class StreamingForm implements StreamBody {
-  readonly boundary = `----starsign${randomBytes(12).toString("hex")}`;
+  readonly boundary = `----base-air${randomBytes(12).toString("hex")}`;
   private readonly parts: Part[] = [];
 
   get type(): string {

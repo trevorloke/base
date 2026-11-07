@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import type { ActivityInput, ActivityKind, Media, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -24,7 +24,7 @@ export interface TelegramConnectorOptions {
   now?: () => Date;
   /** Deployment-wide secret sent by Telegram in X-Telegram-Bot-Api-Secret-Token (1-256 of A-Z a-z 0-9 _ -). */
   webhookSecret?: string;
-  /** STARSIGN_PUBLIC_URL: with a secret, connecting registers ${publicUrl}/webhooks/telegram via setWebhook. */
+  /** BASE_AIR_PUBLIC_URL: with a secret, connecting registers ${publicUrl}/webhooks/telegram via setWebhook. */
   publicUrl?: string;
   /** getUpdates pages (100 updates each) per poll when no webhook is set. */
   maxPages?: number;
@@ -499,5 +499,5 @@ function configOf(account: AccountRef): ChatConfig {
 }
 
 export function createTelegramConnectors(env: NodeJS.ProcessEnv): Connector[] {
-  return [new TelegramConnector({ ...(env.TELEGRAM_WEBHOOK_SECRET ? { webhookSecret: env.TELEGRAM_WEBHOOK_SECRET } : {}), ...(env.STARSIGN_PUBLIC_URL ? { publicUrl: env.STARSIGN_PUBLIC_URL } : {}), ...(env.TELEGRAM_API_BASE ? { apiBase: env.TELEGRAM_API_BASE } : {}) })];
+  return [new TelegramConnector({ ...(env.TELEGRAM_WEBHOOK_SECRET ? { webhookSecret: env.TELEGRAM_WEBHOOK_SECRET } : {}), ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}), ...(env.TELEGRAM_API_BASE ? { apiBase: env.TELEGRAM_API_BASE } : {}) })];
 }

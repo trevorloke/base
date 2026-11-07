@@ -1,4 +1,4 @@
-import { NETWORK_LIMITS, type Media, type Network } from "@starsign/schema";
+import { NETWORK_LIMITS, type Media, type Network } from "@base-air/schema";
 import type { ValidationIssue } from "./types.ts";
 
 const segmenter = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { StarsignClient } from "../src/client.ts";
+import { BaseAirClient } from "../src/client.ts";
 import { visibilityHandlers, type ToolContext } from "../src/tools.ts";
 import { NOW, fakeApi, textOf } from "./helpers.ts";
 
-const ctx = (api: ReturnType<typeof fakeApi>): ToolContext => ({ client: new StarsignClient({ baseUrl: "http://api.test", apiKey: "star_t", fetch: api.fetch }), now: () => NOW });
+const ctx = (api: ReturnType<typeof fakeApi>): ToolContext => ({ client: new BaseAirClient({ baseUrl: "http://api.test", apiKey: "air_t", fetch: api.fetch }), now: () => NOW });
 const agg = (answers: number, mentioned: number, avgPosition: number | null, sentiment: number | null) => ({ answers, mentioned, share: answers ? mentioned / answers : null, avgPosition, sentiment });
 
 const report = {

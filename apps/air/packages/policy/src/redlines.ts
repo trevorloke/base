@@ -1,4 +1,4 @@
-import type { Disclosure, Policy, PolicyDecision, PolicyVerdict, RedLine, Violation } from "@starsign/schema";
+import type { Disclosure, Policy, PolicyDecision, PolicyVerdict, RedLine, Violation } from "@base-air/schema";
 import { findPatterns, findPhrases } from "./text.ts";
 import { hourInWindow, localHourAndDay } from "./time.ts";
 

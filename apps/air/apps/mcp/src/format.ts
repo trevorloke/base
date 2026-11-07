@@ -2,7 +2,7 @@
  * Readable summaries for tool results. Pure functions: API shape in, text out.
  * Every tool puts one of these first and the raw JSON second.
  */
-import type { AutonomyLevel, PolicyDecision, PostStatus, RedLine, RedLineSeverity, Violation } from "@starsign/schema";
+import type { AutonomyLevel, PolicyDecision, PostStatus, RedLine, RedLineSeverity, Violation } from "@base-air/schema";
 import type {
   Activity,
   Alert,
@@ -91,8 +91,8 @@ export const SEVERITY_TEXT: Record<RedLineSeverity, string> = {
 };
 
 export const STATUS_TEXT: Record<PostStatus, string> = {
-  draft: "It is saved as a draft. Nothing is scheduled; a human must schedule it in the Starsign app.",
-  pending_approval: "It landed in the approval queue. A human must approve it in the Starsign app before anything publishes.",
+  draft: "It is saved as a draft. Nothing is scheduled; a human must schedule it in the base air app.",
+  pending_approval: "It landed in the approval queue. A human must approve it in the base air app before anything publishes.",
   approved: "It is approved and waiting to be scheduled.",
   scheduled: "It is scheduled and will publish at the scheduled time unless a human cancels it.",
   publishing: "It is publishing right now.",
@@ -258,7 +258,7 @@ function postLine(item: PostSummary): string {
 
 export function formatQueue(items: PostSummary[]): string {
   if (items.length === 0) return "The approval queue is empty: nothing is waiting on a human.";
-  return [`${plural(items.length, "post")} waiting on a human, oldest first. Humans approve or reject in the Starsign app; this server cannot decide for them.`, ...items.map(postLine)].join("\n");
+  return [`${plural(items.length, "post")} waiting on a human, oldest first. Humans approve or reject in the base air app; this server cannot decide for them.`, ...items.map(postLine)].join("\n");
 }
 
 export function formatPostList(items: PostSummary[]): string {
@@ -269,7 +269,7 @@ export function formatPostList(items: PostSummary[]): string {
 // ---- trends ----------------------------------------------------------------------------------
 
 export function formatRadar(entries: RadarEntry[]): string {
-  if (entries.length === 0) return "The radar is empty: no trend topics are tracked for this workspace yet (topics are added in the Starsign app).";
+  if (entries.length === 0) return "The radar is empty: no trend topics are tracked for this workspace yet (topics are added in the base air app).";
   const rows = entries.map((e) => [
     e.topic.name,
     e.topic.id,
@@ -378,7 +378,7 @@ export function formatBrief(b: Brief | null): string {
 export function formatAlerts(alerts: Alert[], unacknowledgedOnly: boolean): string {
   if (alerts.length === 0) return unacknowledgedOnly ? "No unacknowledged alerts." : "No alerts.";
   return [
-    `${plural(alerts.length, "alert")}${unacknowledgedOnly ? " awaiting acknowledgement" : ""} (acknowledging happens in the Starsign app):`,
+    `${plural(alerts.length, "alert")}${unacknowledgedOnly ? " awaiting acknowledgement" : ""} (acknowledging happens in the base air app):`,
     ...alerts.map((a) => {
       const meta = [a.kind, when(a.createdAt), a.acknowledgedAt ? "acknowledged" : "unacknowledged", a.topicId ? `topic ${a.topicId}` : ""].filter(Boolean).join(", ");
       return `  - [${a.severity.toUpperCase()}] ${a.title} (${meta}) [id ${a.id}]${a.body ? `\n      ${excerpt(a.body, 240)}` : ""}`;

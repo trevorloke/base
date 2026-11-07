@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { ledgerEvents, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { AttemptLimiter, INVITE_TTL_MS, InMemoryScheduler, SCRYPT_PARAMS, SecretBox, Starsign, hashPassword, needsRehash, verifyPassword, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import { ledgerEvents, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { AttemptLimiter, INVITE_TTL_MS, InMemoryScheduler, SCRYPT_PARAMS, SecretBox, BaseAir, hashPassword, needsRehash, verifyPassword, type Principal } from "../src/index.ts";
 
 describe("password hashing", () => {
   it("encodes scrypt parameters, salt and a 64-byte key", async () => {
@@ -78,7 +78,7 @@ describe("attempt limiter", () => {
 
 describe("pending invites", () => {
   let h: DbHandle;
-  let m: Starsign;
+  let m: BaseAir;
   let clock = Date.parse("2026-11-03T12:00:00Z");
   const now = () => new Date(clock);
   let owner: Principal;
@@ -89,13 +89,13 @@ describe("pending invites", () => {
 
   beforeAll(async () => {
     h = await createTestDb();
-    m = new Starsign({
+    m = new BaseAir({
       handle: h,
       connectors: new ConnectorRegistry().register(new MockConnector()),
       scheduler: new InMemoryScheduler(),
       secrets: new SecretBox(randomBytes(32)),
       now,
-      auth: { mailer: null, publicUrl: "https://starsign.test", logLinks: false },
+      auth: { mailer: null, publicUrl: "https://air.test", logLinks: false },
     });
     const ownerUser = await m.workspaces.ensureUser("olga@acme.test", "Olga");
     const ws = await m.workspaces.create({ slug: "acme", name: "Acme" }, { type: "human", id: ownerUser.id });

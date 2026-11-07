@@ -3,7 +3,7 @@
 Connector `mastodon` · networks `["mastodon"]` · `packages/connectors/src/mastodon.ts` · factory `createMastodonConnectors(env)`
 
 ## What works
-- **Connect (any server)**: the person types their server (`mastodon.social`, `https://hachyderm.io`, `@me@fosstodon.org` all work). `oauthPrepare` registers a Starsign app on that server (`POST /api/v1/apps`, scopes `read write push`), caches it in memory per server + redirect URI, and returns the server's `/oauth/authorize` URL with PKCE (S256). The client id/secret travel in the pending-state config (encrypted by core) and end up in the account's auth blob.
+- **Connect (any server)**: the person types their server (`mastodon.social`, `https://hachyderm.io`, `@me@fosstodon.org` all work). `oauthPrepare` registers a base air app on that server (`POST /api/v1/apps`, scopes `read write push`), caches it in memory per server + redirect URI, and returns the server's `/oauth/authorize` URL with PKCE (S256). The client id/secret travel in the pending-state config (encrypted by core) and end up in the account's auth blob.
 - `oauthConnect` exchanges the code at `https://<server>/oauth/token` through `OAuth2Client` and reads the account with `GET /api/v1/accounts/verify_credentials`. Identity: externalId `<account id>@<server>` (account ids are only unique per server), handle `@user@server`; config `{ instance, accountUrl }`.
 - Tokens do not expire and Mastodon issues no refresh token: `refreshAuth` returns `null`; a 401 means "reconnect".
 - Server input is normalized and loopback/private/IP-literal hosts are refused (the host is fetched server-side).
@@ -17,9 +17,9 @@ Connector `mastodon` · networks `["mastodon"]` · `packages/connectors/src/mast
 
 ## Setup
 - No developer portal and no deployment-wide client id: apps are registered per server automatically. `connectConfigured` is always true.
-- Redirect URI: `${STARSIGN_PUBLIC_URL}/oauth/mastodon/callback` (registered on each server as part of `POST /api/v1/apps`).
+- Redirect URI: `${BASE_AIR_PUBLIC_URL}/oauth/mastodon/callback` (registered on each server as part of `POST /api/v1/apps`).
 - Webhook URL: none (no inbound webhooks).
-- Env vars: `STARSIGN_PUBLIC_URL` (sent as the app website), optional `MASTODON_APP_NAME` (default `Starsign`, shown on the authorize page and as "via" on posts).
+- Env vars: `BASE_AIR_PUBLIC_URL` (sent as the app website), optional `MASTODON_APP_NAME` (default `base air`, shown on the authorize page and as "via" on posts).
 
 ## Review and access requirements
 None. Any person with an account on a server can authorize. Some servers restrict sign-ups or API apps, and server admins can suspend the app; there is no central review.
@@ -35,6 +35,6 @@ None. Any person with an account on a server can authorize. Some servers restric
 - Older servers (< 4.3) ignore PKCE parameters; this is fine because the app is confidential and the secret is sent.
 
 ## Questions for the owner
-- App name shown on servers and posts: keep "Starsign"?
+- App name shown on servers and posts: keep "base air"?
 - Should thread follow-ups be `unlisted` (common etiquette) instead of inheriting the root's visibility?
 - Do you want quote posts (Mastodon 4.5 quote_id) once the composer has a quote field?

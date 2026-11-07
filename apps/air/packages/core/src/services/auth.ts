@@ -1,9 +1,9 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
 import { and, asc, count, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
-import { invites, members, passwordResets, sessions, users, workspaces } from "@starsign/db";
-import { newId } from "@starsign/ledger";
-import type { Actor } from "@starsign/schema";
-import type { MemberRole } from "@starsign/policy";
+import { invites, members, passwordResets, sessions, users, workspaces } from "@base-air/db";
+import { newId } from "@base-air/ledger";
+import type { Actor } from "@base-air/schema";
+import type { MemberRole } from "@base-air/policy";
 import { z } from "zod";
 import type { CoreContext, Principal } from "../context.ts";
 import { sha256 } from "../crypto.ts";
@@ -188,11 +188,11 @@ export interface InviteView {
 }
 
 export interface AuthOptions {
-  /** Whether people may sign up once a first user exists. Default: STARSIGN_ALLOW_SIGNUP=1, read on each call. */
+  /** Whether people may sign up once a first user exists. Default: BASE_AIR_ALLOW_SIGNUP=1, read on each call. */
   allowSignup?: () => boolean;
   /** Undefined: Resend from env when configured. Null: never send mail. */
   mailer?: Mailer | null;
-  /** Base for invite and reset links. Default: STARSIGN_PUBLIC_URL. */
+  /** Base for invite and reset links. Default: BASE_AIR_PUBLIC_URL. */
   publicUrl?: string;
   /** Print reset links to the console when no mailer is configured. Default: outside production. */
   logLinks?: boolean;
@@ -241,10 +241,10 @@ export class AuthService {
   }
 
   private signupOpen(): boolean {
-    return this.opts.allowSignup ? this.opts.allowSignup() : process.env.STARSIGN_ALLOW_SIGNUP === "1";
+    return this.opts.allowSignup ? this.opts.allowSignup() : process.env.BASE_AIR_ALLOW_SIGNUP === "1";
   }
   private link(baseUrl: string | undefined, param: string, token: string): string {
-    const base = (baseUrl ?? this.opts.publicUrl ?? process.env.STARSIGN_PUBLIC_URL ?? "").replace(/\/+$/, "");
+    const base = (baseUrl ?? this.opts.publicUrl ?? process.env.BASE_AIR_PUBLIC_URL ?? "").replace(/\/+$/, "");
     return `${base}/?${param}=${encodeURIComponent(token)}`;
   }
   private sendLater(msg: MailMessage): void {
@@ -544,8 +544,8 @@ export class AuthService {
     const inviteUrl = this.link(baseUrl, "invite", token);
     this.sendLater({
       to: input.email,
-      subject: `You're invited to ${ws.name} on Starsign`,
-      text: `You've been invited to join ${ws.name} on Starsign as ${input.role}.\n\nAccept the invite: ${inviteUrl}\n\nThe link works once and expires ${expiresAt.toUTCString()}.`,
+      subject: `You're invited to ${ws.name} on base air`,
+      text: `You've been invited to join ${ws.name} on base air as ${input.role}.\n\nAccept the invite: ${inviteUrl}\n\nThe link works once and expires ${expiresAt.toUTCString()}.`,
     });
     return { inviteUrl, expiresAt: expiresAt.toISOString(), emailed: this.mailer !== null };
   }
@@ -684,7 +684,7 @@ export class AuthService {
     await this.ctx.db.insert(passwordResets).values({ id: newId("pwr"), tokenHash: sha256(token), userId: u.id, expiresAt: new Date(now.getTime() + RESET_TTL_MS), createdAt: now });
     const url = this.link(baseUrl, "reset", token);
     if (this.mailer) {
-      this.sendLater({ to: email, subject: "Reset your Starsign password", text: `Someone asked to reset the password for ${email} on Starsign.\n\nChoose a new password: ${url}\n\nThe link works once and expires in an hour. If this wasn't you, ignore this email.` });
+      this.sendLater({ to: email, subject: "Reset your base air password", text: `Someone asked to reset the password for ${email} on base air.\n\nChoose a new password: ${url}\n\nThe link works once and expires in an hour. If this wasn't you, ignore this email.` });
     } else if (this.opts.logLinks ?? process.env.NODE_ENV !== "production") {
       console.info(`[auth] no mail configured (RESEND_API_KEY + MAIL_FROM); password reset link for ${email}: ${url}`);
     }

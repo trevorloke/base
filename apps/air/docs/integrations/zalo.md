@@ -2,7 +2,7 @@
 
 Connector `zalo` · networks `["zalo"]` · `packages/connectors/src/zalo.ts` · factory `createZaloConnectors(env)`
 
-Zalo is Vietnam's main messenger. Businesses reach people through a Zalo Official Account (OA). Starsign connects an OA:
+Zalo is Vietnam's main messenger. Businesses reach people through a Zalo Official Account (OA). base air connects an OA:
 it receives the messages people send to it, answers them, and publishes OA articles.
 
 ## What works
@@ -12,12 +12,12 @@ it receives the messages people send to it, answers them, and publishes OA artic
   app secret). The OA administrator picks the OA on Zalo's screen; the callback names it in `oa_id`, which must match the token's
   OA. `GET /v2.0/oa/getoa` gives the OA's id, name, avatar and verification. externalId = `oa_id`, handle = OA name, config
   `{ oaId, name, avatar, verified, broadcast }`. One login = one OA. `connectConfigured` needs `ZALO_APP_ID` and `ZALO_APP_SECRET`.
-- **Connect form**: one question, "Also broadcast each new article to all followers? yes or no" (Starsign's OAuth form has no
+- **Connect form**: one question, "Also broadcast each new article to all followers? yes or no" (base air's OAuth form has no
   optional fields, so answer `no` to skip). It is kept in the account config as `broadcast`.
 - **Refresh**: access tokens last about 25 hours; refresh tokens last about 3 months and are **single-use** (rotated on every
   refresh). Concurrent refreshes in one process share one request so the old token is never spent twice.
 - **API calls**: `https://openapi.zalo.me`, header `access_token`. Responses are `{ error, message, data }`; `error` 0 is success.
-- **Inbox (webhook)** `POST ${STARSIGN_PUBLIC_URL}/webhooks/zalo`: one app-level webhook for every OA authorised to the app.
+- **Inbox (webhook)** `POST ${BASE_AIR_PUBLIC_URL}/webhooks/zalo`: one app-level webhook for every OA authorised to the app.
   `X-ZEvent-Signature: mac=<hex sha256(app_id + raw body + timestamp + OA secret key)>`, checked in constant time; deliveries
   for another app id never verify. Events:
   - `user_send_text`, `user_send_image`, `user_send_gif`, `user_send_link`, `user_send_sticker`, `user_send_file`,
@@ -27,7 +27,7 @@ it receives the messages people send to it, answers them, and publishes OA artic
   - `follow` → `follow`. `unfollow`, `oa_send_*`, `user_seen_message` and the rest are ignored.
   The batch goes to the OA named by `recipient.id` (or `oa_id`).
 - **Reply** `POST /v3.0/oa/message/cs` (`recipient.user_id`, `message.text`): a customer-service message. Zalo allows these only
-  for a limited time after the person last wrote to the OA; outside it Starsign returns a clear "the window has closed" error.
+  for a limited time after the person last wrote to the OA; outside it base air returns a clear "the window has closed" error.
 - **Publish** OA articles: `POST /v2.0/article/create` (`type: "normal"`, `title` from `options.title` (required), `author` = OA
   name, `cover` = `options.thumbnailUrl` or the first image (required), `description` = the first 300 characters, `body` = the text
   as HTML paragraphs plus `options.link` plus the other images, `status: "show"`, `comment: "show"`) → a token;
@@ -39,16 +39,16 @@ it receives the messages people send to it, answers them, and publishes OA artic
 - **Errors**: −216/−124 (invalid or expired token) → auth; −213/−230 (not a follower / outside the reply window) → rejected with
   an explanation; −32 and quota messages → rate_limit retryable; other codes → rejected; HTTP failures use the shared mapping.
 
-## What Starsign can and cannot see
-Starsign sees the messages people send to the connected Official Account, and who follows it, from the moment the webhook is
+## What base air can and cannot see
+base air sees the messages people send to the connected Official Account, and who follows it, from the moment the webhook is
 set up. It does not see message history from before, people's personal chats, Zalo groups, or anything on personal Zalo
 accounts (Zalo offers no official API for those). It cannot start a conversation: it can only answer someone who wrote to the OA
 recently.
 
 ## Setup
 1. At https://developers.zalo.me create an app and link it to the Official Account (the OA's admin must approve the link).
-2. Official Account → settings: callback (redirect) URL `${STARSIGN_PUBLIC_URL}/oauth/zalo/callback`.
-3. Webhook: URL `${STARSIGN_PUBLIC_URL}/webhooks/zalo`; turn on the user message events and `follow`. Copy the **OA Secret Key**
+2. Official Account → settings: callback (redirect) URL `${BASE_AIR_PUBLIC_URL}/oauth/zalo/callback`.
+3. Webhook: URL `${BASE_AIR_PUBLIC_URL}/webhooks/zalo`; turn on the user message events and `follow`. Copy the **OA Secret Key**
    shown there.
 4. Request the OA API permissions the app needs (messages, articles, OA information).
 - Env vars: `ZALO_APP_ID`, `ZALO_APP_SECRET`, `ZALO_OA_SECRET_KEY` (webhook signatures; without it every delivery is refused).

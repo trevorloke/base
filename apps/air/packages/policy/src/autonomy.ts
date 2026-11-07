@@ -1,4 +1,4 @@
-import { AUTONOMY_ORDER, type ActionClass, type ActorType, type AutonomyLevel, type Policy } from "@starsign/schema";
+import { AUTONOMY_ORDER, type ActionClass, type ActorType, type AutonomyLevel, type Policy } from "@base-air/schema";
 
 export type MemberRole = "owner" | "approver" | "editor" | "viewer";
 

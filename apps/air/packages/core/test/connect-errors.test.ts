@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConnectorError } from "@starsign/connectors";
+import { ConnectorError } from "@base-air/connectors";
 import { connectFailureReason } from "../src/services/accounts.ts";
 
 describe("connect failure reasons", () => {

@@ -51,7 +51,7 @@ export function estimateCostUsd(model: string, usage: TokenUsage): number {
   if (!p) {
     if (!warnedUnknown.has(model)) {
       warnedUnknown.add(model);
-      console.warn(`[starsign/ai] no price known for model "${model}"; its cost is recorded as $0. Add it to MODEL_PRICES.`);
+      console.warn(`[base-air/ai] no price known for model "${model}"; its cost is recorded as $0. Add it to MODEL_PRICES.`);
     }
     return 0;
   }

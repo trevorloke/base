@@ -1,13 +1,13 @@
 /**
- * The MCP tools: Starsign's front door for agents.
+ * The MCP tools: base air's front door for agents.
  * Agents can see the radar, the feed, the queue, the ledger and the red lines, and propose posts.
  * They cannot approve, publish, change policy or connect accounts: humans do that in the app.
  */
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { ActionClass, ActivityKind, LedgerEventType, Network, PostStatus, Timestamp, TrendStage, type Disclosure } from "@starsign/schema";
-import { StarsignApiError, type StarsignClient } from "./client.ts";
+import { ActionClass, ActivityKind, LedgerEventType, Network, PostStatus, Timestamp, TrendStage, type Disclosure } from "@base-air/schema";
+import { BaseAirApiError, type BaseAirClient } from "./client.ts";
 import * as fmt from "./format.ts";
 import type { CreatePostBody } from "./types.ts";
 
@@ -52,7 +52,7 @@ export type ToolName = (typeof TOOL_NAMES)[number];
 export const MCP_MODEL_LABEL = "mcp-client";
 
 export interface ToolContext {
-  client: StarsignClient;
+  client: BaseAirClient;
   now: () => Date;
 }
 
@@ -199,7 +199,7 @@ export function ok(summary: string, data: unknown): CallToolResult {
 
 /** Never throw raw: every failure becomes an `isError` result the agent can read. */
 export function toolError(err: unknown): CallToolResult {
-  const text = err instanceof StarsignApiError ? err.toText() : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
+  const text = err instanceof BaseAirApiError ? err.toText() : `Unexpected error: ${err instanceof Error ? err.message : String(err)}`;
   return { isError: true, content: [{ type: "text", text }] };
 }
 
@@ -480,7 +480,7 @@ const linkHandlers = {
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, openWorldHint: false } as const;
 const WRITES = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 
-export function registerTools(server: McpServer, client: StarsignClient, opts: { now?: () => Date } = {}): void {
+export function registerTools(server: McpServer, client: BaseAirClient, opts: { now?: () => Date } = {}): void {
   const ctx: ToolContext = { client, now: opts.now ?? (() => new Date()) };
 
   server.registerTool(
@@ -538,7 +538,7 @@ export function registerTools(server: McpServer, client: StarsignClient, opts: {
     "get_queue",
     {
       title: "Approval queue",
-      description: "Posts waiting on a human in the approval queue, oldest first. Read-only: approving and rejecting happen in the Starsign app, never through this server.",
+      description: "Posts waiting on a human in the approval queue, oldest first. Read-only: approving and rejecting happen in the base air app, never through this server.",
       annotations: READ_ONLY,
     },
     () => handlers.get_queue(ctx),
@@ -611,7 +611,7 @@ export function registerTools(server: McpServer, client: StarsignClient, opts: {
       description:
         "Propose a post: one idea with one text variant per connected account. The server runs the red lines and the autonomy dial and decides where it lands: " +
         "usually the approval queue (pending_approval), otherwise draft or scheduled, or blocked when a red line is crossed (the block is recorded in the ledger). " +
-        "You cannot approve or publish; humans do that in the Starsign app. Get account ids and voice from get_brand_context and dry-run with check_policy first. " +
+        "You cannot approve or publish; humans do that in the base air app. Get account ids and voice from get_brand_context and dry-run with check_policy first. " +
         "The post is recorded as AI-assisted and not yet human-reviewed. The result states plainly where the post landed.",
       inputSchema: inputs.create_post,
       annotations: { ...WRITES, idempotentHint: false },
@@ -676,7 +676,7 @@ export function registerTools(server: McpServer, client: StarsignClient, opts: {
     "get_ledger",
     {
       title: "Ledger",
-      description: "Query the append-only ledger: every fact Starsign asserts (post.created, policy.blocked, post.approval_decided, post.published, outcome.captured, operator.alert...). Filter by event types and subject. Newest first.",
+      description: "Query the append-only ledger: every fact base air asserts (post.created, policy.blocked, post.approval_decided, post.published, outcome.captured, operator.alert...). Filter by event types and subject. Newest first.",
       inputSchema: inputs.get_ledger,
       annotations: READ_ONLY,
     },
@@ -688,7 +688,7 @@ export function registerTools(server: McpServer, client: StarsignClient, opts: {
   server.registerTool("get_discoveries", { title: "Trending now", description: "Raw terms the sources say are trending right now, before the Scout turns relevant ones into topics. Useful to spot something the radar does not track yet.", inputSchema: inputs.get_discoveries, annotations: READ_ONLY }, (args) => moreHandlers.get_discoveries(ctx, args));
   server.registerTool("list_experiments", { title: "Experiments", description: "Running and concluded experiments: name, arms, metric.", annotations: READ_ONLY }, () => moreHandlers.list_experiments(ctx));
   server.registerTool("get_experiment", { title: "Experiment readout", description: "One experiment with its readout: posts and measured outcomes per arm, lift with an 80% interval, and a verdict that names a winner only when the evidence clears.", inputSchema: inputs.get_experiment, annotations: READ_ONLY }, (args) => moreHandlers.get_experiment(ctx, args));
-  server.registerTool("get_link_report", { title: "What posts drove", description: "Owned outcome numbers from Starsign's short links: people who clicked, conversions and their value, by network and top link. Unlike network metrics these are first-party and comparable across networks; use them to judge which posts actually worked.", inputSchema: inputs.get_link_report, annotations: READ_ONLY }, (args) => linkHandlers.get_link_report(ctx, args));
+  server.registerTool("get_link_report", { title: "What posts drove", description: "Owned outcome numbers from base air's short links: people who clicked, conversions and their value, by network and top link. Unlike network metrics these are first-party and comparable across networks; use them to judge which posts actually worked.", inputSchema: inputs.get_link_report, annotations: READ_ONLY }, (args) => linkHandlers.get_link_report(ctx, args));
   server.registerTool("create_link", { title: "Make a tracked link", description: "Make a tracked short link with UTM tags for a destination (for a bio or a manual post). Links inside posts created with create_post are wrapped automatically at publish time.", inputSchema: inputs.create_link, annotations: { ...WRITES, idempotentHint: false } }, (args) => linkHandlers.create_link(ctx, args));
   server.registerTool("list_tracked", { title: "Tracked names", description: "Parties, brands, companies and people (candidates, spokespeople, creators, individual brands) the workspace tracks, with their aliases and who belongs to which organisation.", annotations: READ_ONLY }, () => trackerHandlers.list_tracked(ctx));
   server.registerTool("get_tracker_report", { title: "Who is being talked about", description: "Mentions per tracked party, brand or person across every network, chat app and language: mentions by others, messages by them, distinct people, share of voice, and languages. Organisations include their people.", inputSchema: inputs.get_tracker_report, annotations: READ_ONLY }, (args) => trackerHandlers.get_tracker_report(ctx, args));

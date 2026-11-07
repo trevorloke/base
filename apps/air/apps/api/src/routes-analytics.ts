@@ -1,5 +1,5 @@
 import type { Context, Hono } from "hono";
-import { CoreError, type Starsign } from "@starsign/core";
+import { CoreError, type BaseAir } from "@base-air/core";
 import type { AppOptions, Env } from "./app.ts";
 
 /**
@@ -23,7 +23,7 @@ function date(v: string | undefined, fallback: Date): Date {
 }
 
 /**
- * A rendered report is a document from Starsign, never an app page: no scripts run, nothing loads but inline styles
+ * A rendered report is a document from base air, never an app page: no scripts run, nothing loads but inline styles
  * and images (the logo), and it is never framed by another site or indexed.
  */
 const REPORT_HEADERS = {
@@ -35,7 +35,7 @@ const REPORT_HEADERS = {
   "x-robots-tag": "noindex, nofollow",
 };
 
-export function registerAnalyticsRoutes(app: Hono<Env>, m: Starsign, opts: AppOptions = {}) {
+export function registerAnalyticsRoutes(app: Hono<Env>, m: BaseAir, opts: AppOptions = {}) {
   const base = (c: Context<Env>) => (opts.publicUrl ?? new URL(c.req.url).origin).replace(/\/+$/, "");
 
   app.get("/v1/analytics", async (c) => {

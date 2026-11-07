@@ -1,6 +1,6 @@
-# Starsign
+# base air
 
-**The system of record for attention.** Starsign observes every surface where attention forms, forecasts where it is
+**The system of record for attention.** base air observes every surface where attention forms, forecasts where it is
 going (with honest confidence bands), acts through operator agents inside the brand's declared red lines, and proves
 what moved the outcome. It gets smarter with every brand on it.
 
@@ -17,7 +17,7 @@ pnpm install
 pnpm seed            # demo workspace with a week of history; prints a sign-in (owner@acme.test + password) and two API keys
 pnpm dev:api         # http://localhost:4000  (embedded PGlite at ./.pglite, in-process scheduler)
 pnpm dev:web         # http://localhost:5173  sign in with the printed email and password
-STARSIGN_API_KEY=<agent key> pnpm dev:mcp     # stdio MCP server for Claude / ChatGPT
+BASE_AIR_API_KEY=<agent key> pnpm dev:mcp     # stdio MCP server for Claude / ChatGPT
 pnpm test            # 70+ tests, no network, embedded Postgres
 pnpm typecheck
 ```
@@ -26,7 +26,7 @@ People sign in with email and password (sessions, teams with owner/approver/edit
 reset, and workspace switching for agencies running several brands). Until someone on a deployment has a password, the
 app opens on "Create your account" and the first person to sign up becomes an owner (signing up with the email of an
 existing passwordless user, such as the seed's, claims that user and its workspaces); after that it is invite-only unless
-`STARSIGN_ALLOW_SIGNUP=1`. Set `RESEND_API_KEY` and `MAIL_FROM` to email invites and reset links. API keys remain, for
+`BASE_AIR_ALLOW_SIGNUP=1`. Set `RESEND_API_KEY` and `MAIL_FROM` to email invites and reset links. API keys remain, for
 agents and automation (the MCP server, operators, scripts); people no longer paste them.
 
 Locked out and no mail configured? From a shell on the server (Render: the web service's Shell tab, which starts in
@@ -37,11 +37,11 @@ node --import tsx src/admin.ts users                  # who is on this deploymen
 node --import tsx src/admin.ts reset-link you@example.com   # one-time link, valid for an hour
 ```
 
-Locally the same is `pnpm --filter @starsign/api admin users`.
+Locally the same is `pnpm --filter @base-air/api admin users`.
 
-Set `STARSIGN_DEV_WORKSPACE=acme` to skip signing in locally. Set `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL`
+Set `BASE_AIR_DEV_WORKSPACE=acme` to skip signing in locally. Set `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL`
 for durable queues; then run `pnpm dev:workers` and `pnpm dev:operators` as separate processes. `ANTHROPIC_API_KEY`
-turns the operators' model calls on (`STARSIGN_FAKE_AI=1` runs them with a fake gateway).
+turns the operators' model calls on (`BASE_AIR_FAKE_AI=1` runs them with a fake gateway).
 
 ## Shape
 

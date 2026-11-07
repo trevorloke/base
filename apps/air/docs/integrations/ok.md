@@ -43,14 +43,14 @@ Uzbekistan and the Russian-speaking diaspora. Most brand activity happens in gro
   signature) → auth; 8/11/26/5000 (flood, limits) → rate_limit retryable; 10 (permission denied) → rejected with an explanation;
   1/2/50/51 → network retryable; the rest → rejected. HTTP failures use the shared mapping.
 
-## What Starsign can and cannot see
-Starsign sees comments on the 10 most recent topics of each connected group (and of the user's own feed), with commenters' ids
+## What base air can and cannot see
+base air sees comments on the 10 most recent topics of each connected group (and of the user's own feed), with commenters' ids
 and, where OK returns them, names. It does not see private messages, group chats, comments on older topics, or groups the person
 does not administer or moderate.
 
 ## Setup
 1. Register as an OK developer (https://ok.ru/devaccess) and create an application ("Внешнее приложение" / external app).
-2. Redirect URI: `${STARSIGN_PUBLIC_URL}/oauth/ok/callback`.
+2. Redirect URI: `${BASE_AIR_PUBLIC_URL}/oauth/ok/callback`.
 3. Note the Application ID (client id), the public key (application key) and the secret key (client secret) from the email OK
    sends.
 4. Ask OK API support (api-support@ok.ru) for the permissions below; some are granted only on request.

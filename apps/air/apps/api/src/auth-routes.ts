@@ -1,11 +1,13 @@
 import type { Context, Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
-import { CoreError, SESSION_TTL_MS, type RequestMeta, type ResolvedSession, type Starsign } from "@starsign/core";
+import { CoreError, SESSION_TTL_MS, type RequestMeta, type ResolvedSession, type BaseAir } from "@base-air/core";
 import type { Env } from "./app.ts";
 
-export const SESSION_COOKIE = "starsign_session";
-export const CSRF_HEADER = "x-starsign-csrf";
+export const SESSION_COOKIE = "base_air_session";
+/** The session cookie's name before Starsign became base air. Read once, moved to SESSION_COOKIE, then cleared. */
+export const LEGACY_SESSION_COOKIE = "starsign_session";
+export const CSRF_HEADER = "x-base-air-csrf";
 
 export interface AuthRouteOptions {
   /** Public base URL. https → the session cookie is Secure; also the base of invite and reset links. */
@@ -38,6 +40,20 @@ export function clearSessionCookie(c: C, opts: AuthRouteOptions): void {
   deleteCookie(c, SESSION_COOKIE, cookieBase(opts));
 }
 
+/**
+ * The session token this browser sent. A browser still holding the pre-rename cookie keeps its session: the token is
+ * moved to the new cookie and the old one is cleared (it was always set on Path=/).
+ */
+export function readSessionCookie(c: C, opts: AuthRouteOptions): string | undefined {
+  const token = getCookie(c, SESSION_COOKIE);
+  if (token) return token;
+  const legacy = getCookie(c, LEGACY_SESSION_COOKIE);
+  if (!legacy) return undefined;
+  setSessionCookie(c, legacy, opts);
+  deleteCookie(c, LEGACY_SESSION_COOKIE, { path: "/", httpOnly: true, sameSite: "Lax", secure: !!opts.publicUrl?.startsWith("https") });
+  return legacy;
+}
+
 function meta(c: C): RequestMeta {
   const fwd = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
   return { userAgent: c.req.header("user-agent") ?? null, ip: fwd || c.req.header("x-real-ip") || null };
@@ -59,12 +75,12 @@ function needSession(c: C): ResolvedSession {
 }
 
 /** People: sign-up, sign-in, sessions, workspaces, members, invites, password reset. See docs/API.md (v1.2). */
-export function registerAuthRoutes(app: Hono<Env>, m: Starsign, opts: AuthRouteOptions = {}): void {
+export function registerAuthRoutes(app: Hono<Env>, m: BaseAir, opts: AuthRouteOptions = {}): void {
   /** A cookie on a public write counts only with the CSRF header; without it the request is anonymous. */
-  const optionalSession = async (c: C) => (csrfOk(c) ? m.auth.resolveSession(getCookie(c, SESSION_COOKIE)) : null);
+  const optionalSession = async (c: C) => (csrfOk(c) ? m.auth.resolveSession(readSessionCookie(c, opts)) : null);
   /** Signing in again replaces whatever session this browser had. */
   const replaceSession = async (c: C, token: string) => {
-    await m.auth.logout(getCookie(c, SESSION_COOKIE));
+    await m.auth.logout(readSessionCookie(c, opts));
     setSessionCookie(c, token, opts);
   };
 
@@ -81,7 +97,7 @@ export function registerAuthRoutes(app: Hono<Env>, m: Starsign, opts: AuthRouteO
   });
 
   app.post("/v1/auth/logout", async (c) => {
-    const token = getCookie(c, SESSION_COOKIE);
+    const token = readSessionCookie(c, opts);
     if (token) {
       if (!csrfOk(c)) throw new CoreError("forbidden", `cookie-authenticated writes must send ${CSRF_HEADER}: 1`);
       await m.auth.logout(token);

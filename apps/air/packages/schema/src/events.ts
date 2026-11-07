@@ -2,11 +2,11 @@ import { z } from "zod";
 import { Actor, Id, Timestamp } from "./common.ts";
 
 /**
- * Starsign Open Event Schema v0.
+ * base air Open Event Schema v0.
  *
  * Two append-only logs:
  *  - raw_events:    every payload received from any source, verbatim. Never updated, never deleted.
- *  - ledger_events: every domain fact Starsign asserts (a post was created, a policy blocked something,
+ *  - ledger_events: every domain fact base air asserts (a post was created, a policy blocked something,
  *                   an operator acted, an outcome was captured). Derived tables are rebuildable from these.
  */
 export const RawEventInput = z.object({

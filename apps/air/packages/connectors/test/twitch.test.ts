@@ -54,7 +54,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const connector = (opts: ConstructorParameters<typeof TwitchConnector>[0] = {}) => new TwitchConnector({ clientId: "cid", clientSecret: "csecret", now: () => NOW, ...opts });
-const withEventSub = () => connector({ eventsubSecret: SECRET, publicUrl: "https://starsign.example/" });
+const withEventSub = () => connector({ eventsubSecret: SECRET, publicUrl: "https://air.example/" });
 
 function signed(body: unknown, opts: { ts?: string; secret?: string; id?: string } = {}) {
   const raw = JSON.stringify(body);
@@ -90,7 +90,7 @@ const chat = (over: Record<string, unknown> = {}) => ({
 
 describe("twitch connect", () => {
   it("builds the authorize URL with the minimal scopes", () => {
-    const url = new URL(connector().oauthAuthorizeUrl({ state: "s", codeChallenge: "c", redirectUri: "https://starsign.example/oauth/twitch/callback" }));
+    const url = new URL(connector().oauthAuthorizeUrl({ state: "s", codeChallenge: "c", redirectUri: "https://air.example/oauth/twitch/callback" }));
     expect(url.origin + url.pathname).toBe("https://id.twitch.tv/oauth2/authorize");
     expect(url.searchParams.get("scope")!.split(" ")).toEqual(TWITCH_OAUTH_SCOPES);
     expect(TWITCH_OAUTH_SCOPES).toEqual(expect.arrayContaining(["user:read:chat", "user:write:chat", "moderator:manage:chat_messages", "moderator:read:followers"]));
@@ -100,7 +100,7 @@ describe("twitch connect", () => {
   it("connects the broadcaster and explains when EventSub is not configured", async () => {
     on("POST", TOKEN, { access_token: "utok", refresh_token: "uref", expires_in: 14400, scope: ["user:read:chat", "user:write:chat"], token_type: "bearer" });
     on("GET", `${HELIX}/users`, { data: [{ id: "1001", login: "acmelive", display_name: "AcmeLive", broadcaster_type: "affiliate" }] });
-    const [a, ...rest] = await connector().oauthConnect({ code: "c", codeVerifier: "v", redirectUri: "https://starsign.example/oauth/twitch/callback" });
+    const [a, ...rest] = await connector().oauthConnect({ code: "c", codeVerifier: "v", redirectUri: "https://air.example/oauth/twitch/callback" });
     expect(rest).toHaveLength(0);
     expect(a!.identity).toEqual({ externalId: "1001", handle: "acmelive", displayName: "AcmeLive" });
     expect(a!.auth).toEqual({ accessToken: "utok", refreshToken: "uref", expiresAt: "2026-11-06T16:00:00.000Z", scope: "user:read:chat user:write:chat", userId: "1001", login: "acmelive" });
@@ -117,12 +117,12 @@ describe("twitch connect", () => {
     let n = 0;
     on("POST", `${HELIX}/eventsub/subscriptions`, () => (n++ === 0 ? json({ data: [{ id: "s1", status: "webhook_callback_verification_pending" }] }, 202) : json({ error: "Conflict", status: 409, message: "subscription already exists" }, 409)));
     const [a] = await withEventSub().oauthConnect({ code: "c", codeVerifier: "v", redirectUri: "r" });
-    expect(a!.config).toMatchObject({ eventsub: { status: "subscribed", callback: "https://starsign.example/webhooks/twitch" } });
+    expect(a!.config).toMatchObject({ eventsub: { status: "subscribed", callback: "https://air.example/webhooks/twitch" } });
     const subs = calls("POST", `${HELIX}/eventsub/subscriptions`);
     expect(subs.map((c) => c.headers.authorization)).toEqual(["Bearer apptok", "Bearer apptok"]);
     expect(subs.map((c) => JSON.parse(String(c.body)))).toEqual([
-      { type: "channel.chat.message", version: "1", condition: { broadcaster_user_id: "1001", user_id: "1001" }, transport: { method: "webhook", callback: "https://starsign.example/webhooks/twitch", secret: SECRET } },
-      { type: "channel.follow", version: "2", condition: { broadcaster_user_id: "1001", moderator_user_id: "1001" }, transport: { method: "webhook", callback: "https://starsign.example/webhooks/twitch", secret: SECRET } },
+      { type: "channel.chat.message", version: "1", condition: { broadcaster_user_id: "1001", user_id: "1001" }, transport: { method: "webhook", callback: "https://air.example/webhooks/twitch", secret: SECRET } },
+      { type: "channel.follow", version: "2", condition: { broadcaster_user_id: "1001", moderator_user_id: "1001" }, transport: { method: "webhook", callback: "https://air.example/webhooks/twitch", secret: SECRET } },
     ]);
   });
 

@@ -1,11 +1,11 @@
 {
-  "name": "@starsign/mcp",
+  "name": "@base-air/mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": { "dev": "tsx src/main.ts", "start": "tsx src/main.ts" },
   "dependencies": {
-    "@starsign/schema": "workspace:*",
+    "@base-air/schema": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
     "zod": "^4.0.0"
   },

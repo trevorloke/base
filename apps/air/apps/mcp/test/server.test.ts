@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { StarsignClient } from "../src/client.ts";
+import { BaseAirClient } from "../src/client.ts";
 import { INSTRUCTIONS, SERVER_NAME, SERVER_VERSION, createServer } from "../src/server.ts";
 import { TOOL_NAMES } from "../src/tools.ts";
 import { NOW, fakeApi, pendingDetail, radar, textOf } from "./helpers.ts";
@@ -16,7 +16,7 @@ afterEach(async () => {
 
 async function connect(api: ReturnType<typeof fakeApi>) {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const server = createServer(new StarsignClient({ baseUrl: "http://api.test", apiKey: "star_t", fetch: api.fetch }), { now: () => NOW });
+  const server = createServer(new BaseAirClient({ baseUrl: "http://api.test", apiKey: "air_t", fetch: api.fetch }), { now: () => NOW });
   await server.connect(serverTransport);
   const client = new Client({ name: "test-client", version: "0.0.0" });
   await client.connect(clientTransport);
@@ -27,7 +27,7 @@ async function connect(api: ReturnType<typeof fakeApi>) {
   return client;
 }
 
-describe("starsign MCP server", () => {
+describe("base air MCP server", () => {
   it("identifies itself and carries instructions that say to call get_brand_context first", async () => {
     const client = await connect(fakeApi([]));
     expect(client.getServerVersion()).toMatchObject({ name: SERVER_NAME, version: SERVER_VERSION });
@@ -65,7 +65,7 @@ describe("starsign MCP server", () => {
     expect(content).toHaveLength(2);
     expect(textOf({ content })).toMatch(/Vancouver snow day\s+top_1\s+rising\s+72%/);
     expect(JSON.parse(textOf({ content }, 1))).toEqual(radar);
-    expect(api.last().headers.authorization).toBe("Bearer star_t");
+    expect(api.last().headers.authorization).toBe("Bearer air_t");
   });
 
   it("calls create_post end to end, applying schema defaults and the disclosure", async () => {

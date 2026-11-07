@@ -1,19 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, SecretBox, Starsign, compareArms, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, SecretBox, BaseAir, compareArms, type Principal } from "../src/index.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let owner: Principal;
 let acct: string;
 const now = () => new Date("2026-11-02T18:00:00Z");
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   owner = { workspaceId: ws.id, actor: { type: "human", id: "u1" }, role: "owner" };
   acct = (await m.accounts.connect(owner, { network: "bluesky", externalId: "did:1", handle: "acme", connector: "mock" })).id;
@@ -23,7 +23,7 @@ afterAll(() => h.close());
 /** Create a post in an arm with a captured 24h outcome of `engagements`. */
 async function armPost(expId: string, arm: string, engagements: number) {
   const r = await m.posts.create(owner, { body: arm, variants: [{ socialAccountId: acct, text: `${arm} ${engagements}` }], experimentId: expId, experimentArm: arm });
-  const { postOutcomes } = await import("@starsign/db");
+  const { postOutcomes } = await import("@base-air/db");
   await m.ctx.db.insert(postOutcomes).values({ id: `out_${r.post.id}`, workspaceId: owner.workspaceId, postId: r.post.id, variantId: r.variants[0]!.id, offsetLabel: "24h", dueAt: now(), capturedAt: now(), metrics: { engagements }, status: "captured" });
 }
 

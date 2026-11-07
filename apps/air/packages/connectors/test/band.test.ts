@@ -52,9 +52,9 @@ const connector = () => new BandConnector({ clientId: "band-client", clientSecre
 
 describe("band connect", () => {
   it("builds the authorize URL and is configured only with id and secret", () => {
-    const url = new URL(connector().oauthAuthorizeUrl({ state: "st", codeChallenge: "c", redirectUri: "https://starsign.example/oauth/band/callback" }));
+    const url = new URL(connector().oauthAuthorizeUrl({ state: "st", codeChallenge: "c", redirectUri: "https://air.example/oauth/band/callback" }));
     expect(url.origin + url.pathname).toBe("https://auth.band.us/oauth2/authorize");
-    expect(Object.fromEntries(url.searchParams)).toEqual({ response_type: "code", client_id: "band-client", redirect_uri: "https://starsign.example/oauth/band/callback", state: "st" });
+    expect(Object.fromEntries(url.searchParams)).toEqual({ response_type: "code", client_id: "band-client", redirect_uri: "https://air.example/oauth/band/callback", state: "st" });
     expect(createBandConnectors({ BAND_CLIENT_ID: "x" })[0]!.connectConfigured).toBe(false);
     expect(createBandConnectors({ BAND_CLIENT_ID: "x", BAND_CLIENT_SECRET: "y" })[0]!.connectConfigured).toBe(true);
   });
@@ -69,7 +69,7 @@ describe("band connect", () => {
       if (k === "BANDKEY2") return ok({ permissions: ["commenting"] });
       return fail(60100, "invalid band");
     });
-    const accounts = await connector().oauthConnect({ code: "code1", codeVerifier: "unused", redirectUri: "https://starsign.example/oauth/band/callback" });
+    const accounts = await connector().oauthConnect({ code: "code1", codeVerifier: "unused", redirectUri: "https://air.example/oauth/band/callback" });
     expect(accounts.map((a) => [a.identity.externalId, a.identity.handle, a.config?.memberCount, a.config?.permissions])).toEqual([
       ["BANDKEY1", "우리 동네 모임", 87, ["posting", "commenting", "contents_deletion"]],
       ["BANDKEY3", "Unknown perms", null, null],

@@ -1,5 +1,5 @@
 {
-  "name": "@starsign/core",
+  "name": "@base-air/core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,13 +10,13 @@
     }
   },
   "dependencies": {
-    "@starsign/connectors": "workspace:*",
-    "@starsign/db": "workspace:*",
-    "@starsign/forecast": "workspace:*",
-    "@starsign/ledger": "workspace:*",
-    "@starsign/policy": "workspace:*",
-    "@starsign/schema": "workspace:*",
-    "@starsign/sources": "workspace:*",
+    "@base-air/connectors": "workspace:*",
+    "@base-air/db": "workspace:*",
+    "@base-air/forecast": "workspace:*",
+    "@base-air/ledger": "workspace:*",
+    "@base-air/policy": "workspace:*",
+    "@base-air/schema": "workspace:*",
+    "@base-air/sources": "workspace:*",
     "drizzle-orm": "^0.45.0",
     "tinyld": "1.3.4",
     "zod": "^4.0.0"

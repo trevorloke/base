@@ -7,7 +7,7 @@ import { createApp, VERSION } from "./app.ts";
 import { boot } from "./boot.ts";
 
 const { m, handle, close, gateway, sources } = await boot();
-const app = createApp(m, { devWorkspace: process.env.STARSIGN_DEV_WORKSPACE, gateway, sources, publicUrl: process.env.STARSIGN_PUBLIC_URL });
+const app = createApp(m, { devWorkspace: process.env.BASE_AIR_DEV_WORKSPACE, gateway, sources, publicUrl: process.env.BASE_AIR_PUBLIC_URL });
 
 // Serve the built web app from the same process when it exists (single-container deploys).
 const here = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,7 @@ if (existsSync(dist)) {
 
 const port = Number(process.env.PORT ?? 4000);
 serve({ fetch: app.fetch, port }, () => {
-  console.log(`[api] starsign ${VERSION} on http://localhost:${port} (db=${handle.kind}${process.env.STARSIGN_DEV_WORKSPACE ? `, dev workspace=${process.env.STARSIGN_DEV_WORKSPACE}` : ""})`);
+  console.log(`[api] base air ${VERSION} on http://localhost:${port} (db=${handle.kind}${process.env.BASE_AIR_DEV_WORKSPACE ? `, dev workspace=${process.env.BASE_AIR_DEV_WORKSPACE}` : ""})`);
 });
 
 const shutdown = async () => {

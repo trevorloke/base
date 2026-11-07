@@ -14,6 +14,6 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm --filter @starsign/web typecheck
+      - run: pnpm --filter @base-air/web typecheck
       - run: pnpm test
-      - run: pnpm --filter @starsign/web build
+      - run: pnpm --filter @base-air/web build

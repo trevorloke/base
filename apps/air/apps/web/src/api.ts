@@ -75,7 +75,7 @@ const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 /** When true, every call is answered from src/dev/fixtures.ts and no network request is made. */
 export const USE_FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";
 
-export const API_KEY_STORAGE = "starsign.apiKey";
+export const API_KEY_STORAGE = "base-air.apiKey";
 
 // Kept in memory too, so a private window (no storage) still works for this page load.
 let memoryKey: string | null = null;
@@ -111,7 +111,7 @@ function authHeaders(method: string): Record<string, string> {
   const headers: Record<string, string> = {};
   const key = getApiKey();
   if (key) headers.Authorization = `Bearer ${key}`;
-  if (method !== "GET" && method !== "HEAD") headers["x-starsign-csrf"] = "1";
+  if (method !== "GET" && method !== "HEAD") headers["x-base-air-csrf"] = "1";
   return headers;
 }
 
@@ -173,7 +173,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError(0, "network", "Couldn't reach Starsign.");
+    throw new ApiError(0, "network", "Couldn't reach base air.");
   }
 
   if (res.status === 204) return undefined as T;
@@ -289,7 +289,7 @@ function multipart(file: File, alt: string | undefined, onProgress: (p: number) 
         reject(toApiError(xhr.status, xhr.statusText, xhr.responseText));
       }
     };
-    xhr.onerror = () => reject(new ApiError(0, "network", "Couldn't reach Starsign."));
+    xhr.onerror = () => reject(new ApiError(0, "network", "Couldn't reach base air."));
     xhr.onabort = () => reject(new ApiError(0, "aborted", "Upload cancelled."));
     const form = new FormData();
     form.append("file", file, file.name);
@@ -318,7 +318,7 @@ async function requestHtml(method: "GET" | "POST", path: string, body?: unknown)
   try {
     res = await fetch(`${BASE}${path}`, { method, headers, credentials: "include", body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    throw new ApiError(0, "network", "Couldn't reach Starsign.");
+    throw new ApiError(0, "network", "Couldn't reach base air.");
   }
   const text = await res.text();
   if (!res.ok) {

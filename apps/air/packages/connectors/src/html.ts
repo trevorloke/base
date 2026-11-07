@@ -2,7 +2,7 @@ import { classifyHttpStatus } from "./http.ts";
 import { ConnectorError } from "./types.ts";
 
 /**
- * Starsign post text → safe HTML for blog and newsletter platforms (WordPress, Ghost, Mailchimp, Kit).
+ * base air post text → safe HTML for blog and newsletter platforms (WordPress, Ghost, Mailchimp, Kit).
  *
  * A post's `text` is markdown-ish plain text written in the composer. We render a deliberately small subset:
  * paragraphs (blank line), line breaks, `#`/`##`/`###` headings, `-`/`*` bullet and `1.` numbered lists, `>` quotes,

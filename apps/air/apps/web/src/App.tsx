@@ -34,9 +34,9 @@ import { Analytics } from "./panels/Analytics";
 import { ReportsDrawer } from "./drawers/ReportsDrawer";
 
 type Theme = "light" | "dark";
-const THEME_STORAGE = "starsign.theme";
-const TAB_STORAGE = "starsign.tab";
-const CENTER_STORAGE = "starsign.center";
+const THEME_STORAGE = "base-air.theme";
+const TAB_STORAGE = "base-air.tab";
+const CENTER_STORAGE = "base-air.center";
 
 type CenterView = "queue" | "calendar" | "tracker" | "analytics";
 const CENTER_VIEWS: CenterView[] = ["queue", "calendar", "tracker", "analytics"];
@@ -183,7 +183,7 @@ export function App() {
   if (auth.kind === "checking") {
     return (
       <main className="gate">
-        <span className="muted">Opening Starsign…</span>
+        <span className="muted">Opening base air…</span>
       </main>
     );
   }
@@ -237,7 +237,7 @@ function connectErrorText(reason: string, net: string): string {
     case "unknown_state":
       return "that sign-in link was already used. Start again from Connections.";
     case "no_accounts":
-      return `this ${net} login doesn't manage any accounts Starsign can post as.`;
+      return `this ${net} login doesn't manage any accounts base air can post as.`;
     default:
       return "something went wrong on the way back. Try again.";
   }
@@ -599,7 +599,7 @@ function Room({
         <header className="topbar">
           <div className="topbar-left">
             <div className="topbar-id">
-              <span className="brand">Starsign</span>
+              <span className="brand">base air</span>
               {session ? (
                 <WorkspaceSwitcher session={session} onSession={onSession} />
               ) : (

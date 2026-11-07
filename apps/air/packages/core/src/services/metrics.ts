@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import { metrics, postOutcomes, posts, postVariants, rowsOf, socialAccounts, trendActions } from "@starsign/db";
-import { MetricInput, type Network } from "@starsign/schema";
+import { metrics, postOutcomes, posts, postVariants, rowsOf, socialAccounts, trendActions } from "@base-air/db";
+import { MetricInput, type Network } from "@base-air/schema";
 import type { CoreContext } from "../context.ts";
 import { SYSTEM } from "../context.ts";
 import { localHour } from "../time.ts";
@@ -77,7 +77,7 @@ export class MetricsService {
     const accounts = accountIds.length ? await this.ctx.db.select().from(socialAccounts).where(inArray(socialAccounts.id, accountIds)) : [];
     const byAccount = new Map(accounts.map((a) => [a.id, a]));
 
-    // Accounts whose network reports no post metrics: their outcomes are Starsign's own numbers alone.
+    // Accounts whose network reports no post metrics: their outcomes are base air's own numbers alone.
     const ownedOnly = new Set<string>();
     // One fetch per account.
     const fetched = new Map<string, Record<string, number>>(); // externalId -> metric -> value

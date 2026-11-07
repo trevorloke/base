@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ActivityInput, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, MetricInput, Network } from "@base-air/schema";
 import { asNetworkError, resolveFetch, type FetchLike } from "./http.ts";
 import { discoverFeedLink, parseFeed, primaryLanguage, type ParsedFeed, type ParsedFeedItem } from "./feed-parse.ts";
 import type { AccountIdentity, AccountRef, ConnectedAccount, Connector, ConnectorCapabilities, PublishResult } from "./types.ts";
@@ -13,7 +13,7 @@ import { assertPublicHttpUrl, type LookupFn, type UrlPolicy } from "./webhook.ts
  * content about the world.
  *
  * Fetching is defensive: http(s) only at every redirect hop, no private/loopback destinations (unless
- * STARSIGN_ALLOW_PRIVATE_URLS=1), a 5 MB response cap and a timeout. The parser never expands DTD entities.
+ * BASE_AIR_ALLOW_PRIVATE_URLS=1), a 5 MB response cap and a timeout. The parser never expands DTD entities.
  */
 
 const ACCEPT = "application/rss+xml, application/atom+xml, application/rdf+xml;q=0.9, application/xml;q=0.8, text/xml;q=0.8, text/html;q=0.3, */*;q=0.1";
@@ -22,7 +22,7 @@ const TEXT_CAP = 4000;
 export interface RssConnectorOptions {
   fetch?: FetchLike;
   now?: () => Date;
-  /** STARSIGN_ALLOW_PRIVATE_URLS=1: allow feeds on private/loopback hosts (an intranet feed next to a self-hosted Starsign). */
+  /** BASE_AIR_ALLOW_PRIVATE_URLS=1: allow feeds on private/loopback hosts (an intranet feed next to a self-hosted base air). */
   allowPrivate?: boolean;
   lookup?: LookupFn;
   /** Per request, including the body. */
@@ -34,7 +34,7 @@ export interface RssConnectorOptions {
   /** Hard cap on items returned by one poll. */
   maxItemsPerPoll?: number;
   maxRedirects?: number;
-  /** STARSIGN_PUBLIC_URL, named in the User-Agent so feed owners can see who polls. */
+  /** BASE_AIR_PUBLIC_URL, named in the User-Agent so feed owners can see who polls. */
   publicUrl?: string;
 }
 
@@ -185,7 +185,7 @@ export class RssConnector implements Connector {
     this.firstRunItems = opts.firstRunItems ?? 50;
     this.maxItemsPerPoll = opts.maxItemsPerPoll ?? 200;
     this.maxRedirects = opts.maxRedirects ?? 5;
-    this.userAgent = `Starsign-RSS/1${opts.publicUrl ? ` (+${opts.publicUrl.replace(/\/+$/, "")})` : ""}`;
+    this.userAgent = `Base-Air-RSS/1${opts.publicUrl ? ` (+${opts.publicUrl.replace(/\/+$/, "")})` : ""}`;
   }
 
   capabilities(): ConnectorCapabilities {
@@ -340,5 +340,5 @@ export class RssConnector implements Connector {
 }
 
 export function createRssConnectors(env: NodeJS.ProcessEnv): Connector[] {
-  return [new RssConnector({ allowPrivate: env.STARSIGN_ALLOW_PRIVATE_URLS === "1", ...(env.STARSIGN_PUBLIC_URL ? { publicUrl: env.STARSIGN_PUBLIC_URL } : {}) })];
+  return [new RssConnector({ allowPrivate: env.BASE_AIR_ALLOW_PRIVATE_URLS === "1", ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}) })];
 }

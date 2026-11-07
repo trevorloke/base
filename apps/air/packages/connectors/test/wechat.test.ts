@@ -7,7 +7,7 @@ import { parseWeChatXml, toWeChatXml, wechatDecrypt, wechatEncrypt, wechatSignat
 const APPID = "wx1234567890abcdef";
 const SECRET = "0123456789abcdef0123456789abcdef";
 const GH = "gh_0123456789ab";
-const TOKEN = "starsignToken42";
+const TOKEN = "baseAirToken42";
 // 43 chars: base64 of 32 bytes without the trailing "=".
 const AES = randomBytes(32).toString("base64").replace(/=$/, "").replace(/[+/]/g, "A");
 const NOW = new Date("2026-11-06T10:00:00.000Z");
@@ -341,7 +341,7 @@ describe("wechat reply, publish, metrics", () => {
   });
 
   it("factory builds one connector honoring env", () => {
-    const [c] = createWeChatConnectors({ STARSIGN_PUBLIC_URL: "https://s.example", WECHAT_API_BASE: "https://api2.weixin.qq.com/" });
+    const [c] = createWeChatConnectors({ BASE_AIR_PUBLIC_URL: "https://s.example", WECHAT_API_BASE: "https://api2.weixin.qq.com/" });
     expect(c?.name).toBe("wechat");
     expect(c?.networks).toEqual(["wechat"]);
   });
@@ -352,8 +352,8 @@ describe("wechat reply, publish, metrics", () => {
 describe("wechat connect: publishing settings", () => {
   it("keeps the author and broadcast choice in config", async () => {
     fetchMock.mockResolvedValueOnce(json({ access_token: "AT-1", expires_in: 7200 }));
-    const [a] = await connector().connectWithInputs({ network: "wechat", inputs: { ...inputs, author: "Starsign 编辑部", broadcast: "yes" } });
-    expect(a?.config).toMatchObject({ author: "Starsign 编辑部", broadcast: true });
+    const [a] = await connector().connectWithInputs({ network: "wechat", inputs: { ...inputs, author: "base air 编辑部", broadcast: "yes" } });
+    expect(a?.config).toMatchObject({ author: "base air 编辑部", broadcast: true });
     fetchMock.mockResolvedValueOnce(json({ access_token: "AT-1", expires_in: 7200 }));
     const [b] = await connector().connectWithInputs({ network: "wechat", inputs: { ...inputs, broadcast: "" } });
     expect(b?.config).not.toHaveProperty("broadcast");
@@ -416,7 +416,7 @@ describe("wechat article publishing", () => {
       "freepublish/submit": [json({ errcode: 0, errmsg: "ok", publish_id: "2247483647" })],
       "freepublish/get": [json({ publish_id: "2247483647", publish_status: 1 }), json({ publish_id: "2247483647", publish_status: 0, article_id: "ART-1", article_detail: { count: 1, item: [{ idx: 1, article_url: "https://mp.weixin.qq.com/s/abc" }] }, fail_idx: [] })],
     });
-    const account = { ...acct(), config: { appId: APPID, author: "Starsign" } };
+    const account = { ...acct(), config: { appId: APPID, author: "base air" } };
     const r = await pub().publish(account, input());
     expect(r).toMatchObject({ externalId: "ART-1", url: "https://mp.weixin.qq.com/s/abc" });
     expect(sleeps).toEqual([5]);
@@ -428,7 +428,7 @@ describe("wechat article publishing", () => {
     expect(bodyOf("media/uploadimg")).toBeInstanceOf(FormData);
     const draft = JSON.parse(String(bodyOf("draft/add"))) as { articles: Record<string, unknown>[] };
     const a = draft.articles[0]!;
-    expect(a).toMatchObject({ title: "New autumn menu", author: "Starsign", thumb_media_id: "THUMB-1", content_source_url: "https://example.cn/menu", digest: "Try the chestnut latte this week." });
+    expect(a).toMatchObject({ title: "New autumn menu", author: "base air", thumb_media_id: "THUMB-1", content_source_url: "https://example.cn/menu", digest: "Try the chestnut latte this week." });
     expect(a.content).toContain("<strong>chestnut latte</strong>");
     expect(a.content).toContain('<img src="http://mmbiz.qpic.cn/inline1"');
     expect(a.content).not.toContain("<script>");

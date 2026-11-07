@@ -9,9 +9,9 @@ For creators and brands with a channel: watch and answer chat, delete messages, 
   Authorize `https://id.twitch.tv/oauth2/authorize`, token `https://id.twitch.tv/oauth2/token`.
   One account = the broadcaster who logs in (`GET /helix/users`): externalId = user id, handle = login, displayName = display name.
   Auth `{ accessToken, refreshToken, expiresAt, scope, userId, login }`; config `{ broadcasterId, login, broadcasterType, eventsub }`.
-- **EventSub subscriptions at connect**: when `STARSIGN_PUBLIC_URL`, `TWITCH_EVENTSUB_SECRET` and the client secret are set,
+- **EventSub subscriptions at connect**: when `BASE_AIR_PUBLIC_URL`, `TWITCH_EVENTSUB_SECRET` and the client secret are set,
   the connector gets an **app access token** (client credentials, cached) and creates two webhook subscriptions
-  (`POST /helix/eventsub/subscriptions`), callback `${STARSIGN_PUBLIC_URL}/webhooks/twitch`:
+  (`POST /helix/eventsub/subscriptions`), callback `${BASE_AIR_PUBLIC_URL}/webhooks/twitch`:
   `channel.chat.message` v1 (`broadcaster_user_id` = `user_id` = the broadcaster) and `channel.follow` v2
   (`moderator_user_id` = the broadcaster). 409 (already exists) counts as success. The result is stored in
   `config.eventsub` as `subscribed`, `not_configured` (with what to set) or `failed` (with Twitch's message); the connection
@@ -36,22 +36,22 @@ For creators and brands with a channel: watch and answer chat, delete messages, 
 - **Refresh**: `refreshAuth` with the stored refresh token (user tokens last about 4 hours).
 - **Errors**: 401 → auth; 403 → auth; 429 → rate_limit retryable with the `Ratelimit-Reset` time; 409/400 → rejected; 5xx/network → retryable.
 
-## What Starsign can and cannot see
-Starsign sees messages typed in the connected broadcaster's own chat while subscriptions are active, and new followers.
+## What base air can and cannot see
+base air sees messages typed in the connected broadcaster's own chat while subscriptions are active, and new followers.
 It does not see whispers (private messages), other channels' chats, chat from before the connection, or VOD/stream content.
-Nothing is collected when `STARSIGN_PUBLIC_URL`/`TWITCH_EVENTSUB_SECRET` are not configured.
+Nothing is collected when `BASE_AIR_PUBLIC_URL`/`TWITCH_EVENTSUB_SECRET` are not configured.
 
 ## Setup
 1. Register an application at https://dev.twitch.tv/console/apps (Category: e.g. "Website Integration", client type **Confidential**).
-2. OAuth Redirect URL: `${STARSIGN_PUBLIC_URL}/oauth/twitch/callback`.
+2. OAuth Redirect URL: `${BASE_AIR_PUBLIC_URL}/oauth/twitch/callback`.
 3. Copy the Client ID and generate a Client Secret.
 4. Choose a random EventSub secret (10–100 ASCII characters) for `TWITCH_EVENTSUB_SECRET`.
-5. `STARSIGN_PUBLIC_URL` must be publicly reachable over **HTTPS on port 443**; Twitch posts to `${STARSIGN_PUBLIC_URL}/webhooks/twitch`.
+5. `BASE_AIR_PUBLIC_URL` must be publicly reachable over **HTTPS on port 443**; Twitch posts to `${BASE_AIR_PUBLIC_URL}/webhooks/twitch`.
 6. Connect (or reconnect) the channel after setting these, so the subscriptions are created.
 - Scopes (minimal): `user:read:chat`, `user:bot`, `channel:bot` (read chat over webhooks with an app token: the chatting user
   grants `user:bot`, the broadcaster `channel:bot` — here both are the broadcaster), `user:write:chat` (send and reply),
   `moderator:manage:chat_messages` (delete), `moderator:read:followers` (channel.follow; the follower total needs no scope).
-- Env vars: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_EVENTSUB_SECRET`, `STARSIGN_PUBLIC_URL`.
+- Env vars: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_EVENTSUB_SECRET`, `BASE_AIR_PUBLIC_URL`.
 
 ## Core change
 Done: core's `WebhookHandler.respond(body, headers)` answers the signed callback verification with its `challenge` as text/plain. The handler keeps no state between deliveries.
@@ -73,10 +73,10 @@ broadcaster limits.
 - `TODO(verify)`: reading chat as the broadcaster (`user_id` = `broadcaster_user_id`) satisfies the `user:bot` + `channel:bot`
   requirement for app-token webhook subscriptions without a separate bot account.
 - Chat send limits above; whether `channel:bot` is still required when the reader is the broadcaster.
-- Timestamps of chat items are the time Starsign received the delivery (the event has no timestamp; the message timestamp
+- Timestamps of chat items are the time base air received the delivery (the event has no timestamp; the message timestamp
   header is not passed to `parse` by core).
 
 ## Questions for the owner
-- Should Starsign speak in chat as the broadcaster (today) or as a separate bot account (a second login with `user:bot`)?
+- Should base air speak in chat as the broadcaster (today) or as a separate bot account (a second login with `user:bot`)?
 - Should "announce" use `/helix/chat/announcements` (highlighted message, needs `moderator:manage:announcements`)?
 - Do you want subscriptions, cheers, raids or channel-point redemptions in the feed (more EventSub types and scopes)?

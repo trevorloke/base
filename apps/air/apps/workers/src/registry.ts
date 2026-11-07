@@ -1,5 +1,5 @@
-import * as connectors from "@starsign/connectors";
-import type { ConnectorRegistry } from "@starsign/connectors";
+import * as connectors from "@base-air/connectors";
+import type { ConnectorRegistry } from "@base-air/connectors";
 
 /**
  * Build the connector registry from the environment. Uses the native adapters' factory when the

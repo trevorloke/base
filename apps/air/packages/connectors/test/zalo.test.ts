@@ -48,7 +48,7 @@ const connector = (opts: ConstructorParameters<typeof ZaloConnector>[0] = {}) =>
 
 describe("zalo connect", () => {
   it("builds the OA permission URL with app_id and PKCE; configured only with id and secret", () => {
-    const url = new URL(connector().oauthAuthorizeUrl({ state: "st", codeChallenge: "chal", redirectUri: "https://starsign.example/oauth/zalo/callback" }));
+    const url = new URL(connector().oauthAuthorizeUrl({ state: "st", codeChallenge: "chal", redirectUri: "https://air.example/oauth/zalo/callback" }));
     expect(url.origin + url.pathname).toBe("https://oauth.zaloapp.com/v4/oa/permission");
     expect(url.searchParams.get("app_id")).toBe(APP_ID);
     expect(url.searchParams.get("code_challenge")).toBe("chal");
@@ -68,7 +68,7 @@ describe("zalo connect", () => {
   it("exchanges the code with the secret_key header and code_verifier, and returns the OA", async () => {
     on(TOKEN_URL, () => new Response(JSON.stringify({ access_token: ACCESS, refresh_token: "zalo_refresh_example", expires_in: "90000" }), { status: 200 }));
     on(`${API}/v2.0/oa/getoa`, { oa_id: OA, name: "Cà phê Acme", avatar: "https://s.example/a.jpg", is_verified: true, num_follower: 4321 });
-    const accounts = await connector().oauthConnect({ code: "code1", codeVerifier: "ver1", redirectUri: "https://starsign.example/oauth/zalo/callback", config: { broadcast: true }, callbackParams: { code: "code1", oa_id: OA, state: "st" } });
+    const accounts = await connector().oauthConnect({ code: "code1", codeVerifier: "ver1", redirectUri: "https://air.example/oauth/zalo/callback", config: { broadcast: true }, callbackParams: { code: "code1", oa_id: OA, state: "st" } });
     expect(accounts).toEqual([
       { network: "zalo", identity: { externalId: OA, handle: "Cà phê Acme", displayName: "Cà phê Acme" }, auth: { accessToken: ACCESS, refreshToken: "zalo_refresh_example", expiresAt: "2026-11-07T13:00:00.000Z" }, config: { oaId: OA, name: "Cà phê Acme", avatar: "https://s.example/a.jpg", verified: true, broadcast: true } },
     ]);

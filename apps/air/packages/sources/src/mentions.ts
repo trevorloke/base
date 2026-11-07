@@ -1,4 +1,4 @@
-import type { ActivityInput } from "@starsign/schema";
+import type { ActivityInput } from "@base-air/schema";
 import { fetchOf, getJson } from "./http.ts";
 import { SourceError, type FetchLike } from "./types.ts";
 
@@ -60,7 +60,7 @@ export class BlueskyMentionSearch implements MentionSearch {
         body = await getJson<{ posts?: BskyPost[] }>(this.fetchFn, this.name, `${this.baseUrl}/app.bsky.feed.searchPosts?${params}`, headers);
       } catch (e) {
         if (e instanceof SourceError && (e.status === 401 || e.status === 403)) {
-          throw new SourceError("bluesky: post search needs authentication here; set STARSIGN_BLUESKY_SEARCH_TOKEN", this.name, false, e.status);
+          throw new SourceError("bluesky: post search needs authentication here; set BASE_AIR_BLUESKY_SEARCH_TOKEN", this.name, false, e.status);
         }
         throw e;
       }
@@ -293,11 +293,11 @@ export class GdeltNewsSearch implements MentionSearch {
 /** Every public mention search this deployment can use. */
 export function createMentionSearches(env: NodeJS.ProcessEnv = process.env): MentionSearch[] {
   const all: MentionSearch[] = [
-    new BlueskyMentionSearch({ ...(env.STARSIGN_BLUESKY_SEARCH_TOKEN ? { token: env.STARSIGN_BLUESKY_SEARCH_TOKEN } : {}) }),
-    new MastodonTagSearch({ ...(env.STARSIGN_MASTODON_SEARCH_INSTANCES ? { instances: env.STARSIGN_MASTODON_SEARCH_INSTANCES.split(",") } : {}) }),
+    new BlueskyMentionSearch({ ...(env.BASE_AIR_BLUESKY_SEARCH_TOKEN ? { token: env.BASE_AIR_BLUESKY_SEARCH_TOKEN } : {}) }),
+    new MastodonTagSearch({ ...(env.BASE_AIR_MASTODON_SEARCH_INSTANCES ? { instances: env.BASE_AIR_MASTODON_SEARCH_INSTANCES.split(",") } : {}) }),
     new YouTubeMentionSearch({ apiKey: env.YOUTUBE_API_KEY }),
     new GdeltNewsSearch(),
   ];
-  const only = env.STARSIGN_MENTION_SOURCES?.split(",").map((s) => s.trim()).filter(Boolean);
+  const only = env.BASE_AIR_MENTION_SOURCES?.split(",").map((s) => s.trim()).filter(Boolean);
   return (only?.length ? all.filter((s) => only.includes(s.name)) : all).filter((s) => s.configured);
 }

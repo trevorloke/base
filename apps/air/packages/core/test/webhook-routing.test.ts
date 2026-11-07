@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createHmac, randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import { activities, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, type AccountRef, type Connector, type ConnectorCapabilities, type WebhookHandler } from "@starsign/connectors";
-import type { Network } from "@starsign/schema";
-import { InMemoryScheduler, SecretBox, Starsign, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import { activities, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, type AccountRef, type Connector, type ConnectorCapabilities, type WebhookHandler } from "@base-air/connectors";
+import type { Network } from "@base-air/schema";
+import { InMemoryScheduler, SecretBox, BaseAir, type Principal } from "../src/index.ts";
 
 /** Like LINE: each channel signs with its own secret, and the body names the channel. */
 class PerAccountChat implements Connector {
@@ -52,12 +52,12 @@ class PerAccountChat implements Connector {
 }
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let ws: Principal;
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new PerAccountChat()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new PerAccountChat()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
   const w = await m.workspaces.create({ slug: "acme", name: "Acme" }, { type: "human", id: "u" });
   ws = { workspaceId: w.id, actor: { type: "human", id: "u" }, role: "owner" };
   await m.accounts.connect(ws, { network: "line", externalId: "chan-A", handle: "acme_jp", connector: "chat", auth: { secret: "secret-A" } });

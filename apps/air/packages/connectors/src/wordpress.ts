@@ -1,4 +1,4 @@
-import type { ActivityInput, Media, MetricInput, Network, VariantOptions } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, Network, VariantOptions } from "@base-air/schema";
 import { z } from "zod";
 import { firstParagraph, htmlToText, httpFailure, normalizeSiteUrl, siteKey, textToHtml, uploadFileName, escapeHtml, safeUrl } from "./html.ts";
 import { asNetworkError, isoSeconds, readJson, resolveFetch, type FetchLike } from "./http.ts";
@@ -56,7 +56,7 @@ interface WordPressUser {
   capabilities?: Record<string, boolean>;
 }
 
-/** Starsign visibility → WordPress post status. public (default) publishes; private is WordPress's native private post; unlisted/direct save a draft. */
+/** base air visibility → WordPress post status. public (default) publishes; private is WordPress's native private post; unlisted/direct save a draft. */
 export function wordpressStatus(o: VariantOptions): "publish" | "private" | "draft" {
   const v = o.visibility ?? (o.privacy === "private" || o.privacy === "self" ? "private" : o.privacy === "unlisted" ? "unlisted" : undefined);
   if (v === "private") return "private";
@@ -237,7 +237,7 @@ export class WordPressConnector implements Connector {
     // Videos are sent as a streamed body with an exact Content-Length; images are read whole as before.
     return withUpload(mediaSource(this.media, this.fetchImpl), m, async (file) => {
       const mime = file.mime;
-      const filename = uploadFileName(m.url, mime, `starsign-${i + 1}`);
+      const filename = uploadFileName(m.url, mime, `base-air-${i + 1}`);
       // TODO(verify): alt_text as a query parameter on the binary upload is applied by WP_REST_Attachments_Controller::create_item.
       const res = await this.request<{ id: number; source_url?: string }>(
         auth,

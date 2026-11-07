@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { StarsignClient } from "../src/client.ts";
+import { BaseAirClient } from "../src/client.ts";
 import { formatRadar, pct } from "../src/format.ts";
 import { MCP_MODEL_LABEL, handlers, type ToolContext } from "../src/tools.ts";
 import { NOW, alerts, blockedDecision, blockedDetail, brief, context, failingFetch, fakeApi, pendingDetail, post, radar, textOf, variant } from "./helpers.ts";
 
 const ctx = (api: ReturnType<typeof fakeApi>): ToolContext => ({
-  client: new StarsignClient({ baseUrl: "http://api.test", apiKey: "star_t", fetch: api.fetch }),
+  client: new BaseAirClient({ baseUrl: "http://api.test", apiKey: "air_t", fetch: api.fetch }),
   now: () => NOW,
 });
 
@@ -74,13 +74,13 @@ describe("create_post", () => {
     expect(text).toContain('Post pst_pending "Snow day WFH"');
     expect(text).toContain("status: pending_approval");
     expect(text).toContain("landed in the approval queue");
-    expect(text).toContain("human must approve it in the Starsign app");
+    expect(text).toContain("human must approve it in the base air app");
     expect(text).toContain("publishes at 2026-11-03T16:00:00Z");
     expect(text).toContain("Approvals: requested.");
     expect(text).not.toContain("violations");
 
     expect(api.last().method).toBe("POST");
-    expect(api.last().headers.authorization).toBe("Bearer star_t");
+    expect(api.last().headers.authorization).toBe("Bearer air_t");
     expect(api.last().body).toEqual({
       body: "Snow day in Vancouver",
       variants: [{ socialAccountId: "acc_x", text: "Snow day in Vancouver: the team is working from home.", thread: [] }],
@@ -141,7 +141,7 @@ describe("create_post", () => {
   });
 
   it("turns an unreachable API into an isError result", async () => {
-    const c: ToolContext = { client: new StarsignClient({ baseUrl: "http://api.test", apiKey: "star_t", fetch: failingFetch() }), now: () => NOW };
+    const c: ToolContext = { client: new BaseAirClient({ baseUrl: "http://api.test", apiKey: "air_t", fetch: failingFetch() }), now: () => NOW };
     const res = await handlers.create_post(c, { body: "x", variants: [{ socialAccountId: "acc_x", text: "x" }], aiAssisted: true });
     expect(res.isError).toBe(true);
     expect(textOf(res)).toContain("unreachable");

@@ -198,7 +198,7 @@ describe("Gemini answer engine", () => {
 describe("engines from the environment", () => {
   it("configures one engine per key and says which variable turns each on", () => {
     expect(answerEnginesFromEnv({})).toEqual([]);
-    expect(answerEnginesFromEnv({ STARSIGN_FAKE_AI: "1" }).map((e) => e.id)).toEqual(["fake"]);
+    expect(answerEnginesFromEnv({ BASE_AIR_FAKE_AI: "1" }).map((e) => e.id)).toEqual(["fake"]);
     const engines = answerEnginesFromEnv({ ANTHROPIC_API_KEY: "a", OPENAI_API_KEY: "o", OPENAI_ANSWER_MODEL: "gpt-x", GEMINI_API_KEY: " " });
     expect(engines.map((e) => [e.id, e.model])).toEqual([["anthropic", "claude-opus-5-5"], ["openai", "gpt-x"]]);
     const status = answerEngineStatus({ PERPLEXITY_API_KEY: "p" });
@@ -241,7 +241,7 @@ describe("spend cap for engines without a known price", () => {
     expect((await withCostFloor(base(0.012), 0.05).ask("q", { lang: "en", region: null })).usage?.costEstimated).toBeUndefined();
     expect(DEFAULT_ANSWER_CALL_COST_USD).toBeGreaterThan(0);
     // Every non-Claude engine from env gets the floor; the estimate is configurable.
-    const engines = answerEnginesFromEnv({ OPENAI_API_KEY: "k", GEMINI_API_KEY: "g", STARSIGN_ANSWER_CALL_COST_USD: "0.2" }, { fetch: async () => new Response(JSON.stringify({ output: [], usage: {} })) });
+    const engines = answerEnginesFromEnv({ OPENAI_API_KEY: "k", GEMINI_API_KEY: "g", BASE_AIR_ANSWER_CALL_COST_USD: "0.2" }, { fetch: async () => new Response(JSON.stringify({ output: [], usage: {} })) });
     expect(engines.map((e) => e.id).sort()).toEqual(["gemini", "openai"]);
   });
 });

@@ -1,6 +1,6 @@
 import { AppBskyRichtextFacet, AtpAgent, AtUri, BlobRef, jsonToLex, RichText } from "@atproto/api";
 import type { AppBskyActorDefs, AppBskyEmbedImages, AppBskyFeedDefs, AppBskyFeedPost, AppBskyNotificationListNotifications, AppBskyVideoDefs, Facet } from "@atproto/api";
-import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, downloadMedia, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";

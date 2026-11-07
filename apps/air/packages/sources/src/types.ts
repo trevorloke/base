@@ -1,4 +1,4 @@
-import type { TrendSource } from "@starsign/schema";
+import type { TrendSource } from "@base-air/schema";
 
 /** One observation of how much attention a set of keywords is getting. */
 export interface SamplePoint {

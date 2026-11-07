@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, downloadMedia, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -118,7 +118,7 @@ export function mapOkError(error: OkErrorBody, what: string, status = 200, body:
   const msg = `ok ${what}: error ${code ?? "?"}${error.error_msg ? ` ${error.error_msg}` : ""}`;
   const cause: OkFailure = { status, ...(code !== undefined ? { code } : {}), body };
   if (code !== undefined) {
-    if (code === 102) return new ConnectorError(`${msg} (session expired; Starsign refreshes it, or reconnect OK)`, "auth", false, cause);
+    if (code === 102) return new ConnectorError(`${msg} (session expired; base air refreshes it, or reconnect OK)`, "auth", false, cause);
     if (AUTH_CODES.has(code)) return new ConnectorError(`${msg} (the session or app key was rejected; reconnect OK)`, "auth", false, cause);
     // TODO(verify): 5000 is listed as a rate condition in the brief; OK's own table was not reachable.
     if (RATE_CODES.has(code)) return new ConnectorError(`${msg} (rate or daily limit reached; try later)`, "rate_limit", true, cause);
