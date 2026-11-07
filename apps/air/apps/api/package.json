@@ -10,15 +10,16 @@
     "admin": "tsx src/admin.ts"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.0",
     "@base-air/ai": "workspace:*",
     "@base-air/connectors": "workspace:*",
     "@base-air/core": "workspace:*",
     "@base-air/db": "workspace:*",
+    "@base-air/look": "workspace:*",
     "@base-air/policy": "workspace:*",
     "@base-air/schema": "workspace:*",
     "@base-air/sources": "workspace:*",
     "@base-air/workers": "workspace:*",
+    "@hono/node-server": "^1.13.0",
     "drizzle-orm": "^0.45.0",
     "hono": "^4.6.0",
     "zod": "^4.0.0"

@@ -14,6 +14,7 @@
     "@base-air/db": "workspace:*",
     "@base-air/forecast": "workspace:*",
     "@base-air/ledger": "workspace:*",
+    "@base-air/look": "workspace:*",
     "@base-air/policy": "workspace:*",
     "@base-air/schema": "workspace:*",
     "@base-air/sources": "workspace:*",

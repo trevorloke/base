@@ -13,6 +13,7 @@ import { createMentionSearches, type MentionSearch, type SourceAdapter } from "@
 import { Network as NetworkEnum, NETWORK_LIMITS } from "@base-air/schema";
 import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, readSessionCookie, registerAuthRoutes, setSessionCookie } from "./auth-routes.ts";
 import { clientIpFrom, normalizeBasePath } from "./base-path.ts";
+import { registerBrandRoutes } from "./routes-brand.ts";
 import { registerSsoRoutes, type SsoConfig, type SuiteLinks } from "./sso.ts";
 import { registerInboxRoutes } from "./routes-inbox.ts"; // ---- inbox workflow
 import { registerVisibilityRoutes } from "./routes-visibility.ts"; // ---- AI answer visibility
@@ -230,6 +231,7 @@ export function createApp(m: BaseAir, opts: AppOptions = {}) {
   registerInboxRoutes(app, m); // ---- inbox workflow
   registerVisibilityRoutes(app, m, { gateway: opts.gateway, ...(opts.answerEngines ? { answerEngines: opts.answerEngines } : {}) }); // ---- AI answer visibility
   registerAnalyticsRoutes(app, m, opts); // ---- analytics & client reports
+  registerBrandRoutes(app, m); // ---- the base suite: brand
 
   // ---------------------------------------------------------------- identity & workspace
   app.get("/v1/me", async (c) => {

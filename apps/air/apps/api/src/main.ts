@@ -4,8 +4,9 @@ import { serve } from "@hono/node-server";
 import { createApp, VERSION } from "./app.ts";
 import { normalizeBasePath, trustedProxiesFromEnv, withBasePath } from "./base-path.ts";
 import { boot } from "./boot.ts";
-import { ssoConfigFromEnv, suiteInfo, suiteLinksFromEnv } from "./sso.ts";
-import { inlineJson, registerWebApp } from "./web-app.ts";
+import { brandHead } from "./routes-brand.ts";
+import { ssoConfigFromEnv, suiteLinksFromEnv } from "./sso.ts";
+import { registerWebApp } from "./web-app.ts";
 
 const { m, handle, close, gateway, sources } = await boot();
 const basePath = normalizeBasePath(process.env.BASE_PATH);
@@ -25,8 +26,8 @@ const app = createApp(m, {
 // Serve the built web app from the same process when it exists (single-container deploys).
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "..", "web", "dist");
-const suiteScript = `<script>window.__BASE_SUITE__=${inlineJson(suiteInfo(sso, suite))};</script>`;
-if (registerWebApp(app, { dist, basePath, head: () => ({ head: suiteScript }) })) console.log(`[web] serving ${dist}`);
+const head = brandHead(m, { publicUrl: process.env.BASE_AIR_PUBLIC_URL, basePath, devWorkspace: process.env.BASE_AIR_DEV_WORKSPACE, sso, suite });
+if (registerWebApp(app, { dist, basePath, head })) console.log(`[web] serving ${dist}`);
 
 const port = Number(process.env.PORT ?? 4000);
 serve({ fetch: withBasePath(app.fetch, basePath), port }, () => {

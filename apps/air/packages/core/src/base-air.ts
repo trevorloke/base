@@ -27,6 +27,8 @@ import { VisibilityService } from "./services/visibility.ts";
 // ---- analytics & client reports
 import { AnalyticsService } from "./services/analytics.ts";
 import { ReportService } from "./services/reports.ts";
+// ---- the base suite: brand
+import { LookService } from "./services/look.ts";
 
 /** The one object every front door (API, MCP, operators, workers) talks to. */
 export class BaseAir {
@@ -59,10 +61,13 @@ export class BaseAir {
   // ---- analytics & client reports
   readonly analytics: AnalyticsService;
   readonly reports: ReportService;
+  /** The workspace's look (Brand page). Not `brand`, which is the brand voice the operators write in. */
+  readonly look: LookService;
 
   constructor(deps: CoreDeps) {
     this.ctx = new CoreContext(deps);
     this.workspaces = new WorkspaceService(this.ctx);
+    this.look = new LookService(this.ctx, this.workspaces, deps.defaultBrand);
     this.accounts = new AccountService(this.ctx);
     this.policy = new PolicyService(this.ctx);
     this.posts = new PostService(this.ctx, this.policy);

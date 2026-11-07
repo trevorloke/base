@@ -21,6 +21,8 @@ export interface CoreDeps {
   linkBaseUrl?: string | null;
   /** Sign-up gate, mailer and link base for people auth. Defaults read the environment. */
   auth?: import("./services/auth.ts").AuthOptions;
+  /** The look before a workspace saves one. Default: BASE_AIR_BRAND_* settings, else the Air preset. */
+  defaultBrand?: import("@base-air/look").Brand;
 }
 
 /** Who is asking. Every service call carries one; it decides autonomy and shows up in the ledger. */

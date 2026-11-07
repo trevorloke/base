@@ -9,6 +9,8 @@ import { normalizeBasePath } from "./base-path.ts";
 export interface IndexHead {
   /** Extra markup for <head>: a <style> with the brand's custom properties, a <title>. */
   head?: string;
+  /** Already-escaped text for <title>. */
+  title?: string;
   /** Attributes for <html>, e.g. data-theme. */
   htmlAttrs?: Record<string, string>;
 }
@@ -23,8 +25,11 @@ export const inlineJson = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u00
  */
 export function renderIndexHtml(template: string, basePath: string, extra: IndexHead = {}): string {
   const base = normalizeBasePath(basePath);
-  const inject = `<base href="${escAttr(base)}/" />\n    <script>window.__BASE_PATH__=${inlineJson(base)};</script>${extra.head ? `\n    ${extra.head}` : ""}`;
+  // <base> first, before anything with a URL; the brand last in <head>, after the stylesheet it overrides.
+  const inject = `<base href="${escAttr(base)}/" />\n    <script>window.__BASE_PATH__=${inlineJson(base)};</script>`;
   let html = template.replace(/<head(\s[^>]*)?>/i, (m) => `${m}\n    ${inject}`);
+  if (extra.head) html = html.replace(/<\/head>/i, () => `  ${extra.head}\n  </head>`);
+  if (extra.title !== undefined) html = html.replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${extra.title}</title>`);
   const attrs = Object.entries(extra.htmlAttrs ?? {});
   if (attrs.length) {
     html = html.replace(/<html(\s[^>]*)?>/i, (_m, existing: string | undefined) => {
