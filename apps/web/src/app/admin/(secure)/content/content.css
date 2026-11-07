@@ -51,7 +51,7 @@
 .cms-form h2 {
   margin: 8px 0 0;
   font-size: 20px;
-  color: var(--navy);
+  color: var(--primary);
 }
 .cms-form .form-row {
   align-items: start;
@@ -97,13 +97,13 @@
   font-size: 14px;
 }
 .btn--danger {
-  border-color: var(--red-hover);
+  border-color: var(--accent-hover);
   background: #fff;
-  color: var(--red-hover);
+  color: var(--accent-hover);
 }
 .btn--danger:hover {
-  background: var(--red-pale);
-  color: var(--red-hover);
+  background: var(--accent-pale);
+  color: var(--accent-hover);
 }
 .cms-danger {
   display: flex;
@@ -140,19 +140,19 @@
   color: var(--ink);
 }
 .cms-badge--scheduled {
-  background: var(--yellow-pale);
-  color: var(--navy);
+  background: var(--highlight-pale);
+  color: var(--primary);
 }
 .cms-badge--live {
   background: #d9f2e3;
   color: #0f5132;
 }
 .cms-badge--off {
-  background: var(--red-pale);
+  background: var(--accent-pale);
   color: #8a1014;
 }
 .cms-badge--warn {
-  background: var(--yellow-pale);
+  background: var(--highlight-pale);
   color: #6b4e00;
 }
 
@@ -186,7 +186,7 @@
 .cms-card h2 {
   margin: 0;
   font-size: 20px;
-  color: var(--navy);
+  color: var(--primary);
 }
 .cms-card p {
   margin: 0;
@@ -212,7 +212,7 @@
 .cms-stat strong {
   display: block;
   font-size: 22px;
-  color: var(--navy);
+  color: var(--primary);
 }
 
 /* Slug */
@@ -286,7 +286,7 @@
 .page-prose h4 {
   margin: 1.4em 0 0.5em;
   line-height: 1.2;
-  color: var(--navy);
+  color: var(--primary);
 }
 .page-prose h2 {
   font-size: 1.5em;
@@ -305,7 +305,7 @@
 .page-prose blockquote {
   margin: 0 0 1em;
   padding: 2px 0 2px 16px;
-  border-left: 4px solid var(--yellow);
+  border-left: 4px solid var(--highlight);
   color: var(--muted);
 }
 .page-prose img {
@@ -474,7 +474,7 @@
   text-align: left;
 }
 .media-pick:hover {
-  border-color: var(--navy);
+  border-color: var(--primary);
 }
 .media-pick img {
   width: 100%;
@@ -503,7 +503,7 @@
 .sf-group > legend {
   padding: 0 6px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .sf-list {
   margin: 0;
@@ -518,7 +518,7 @@
 .sf-list > legend {
   padding: 0 6px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .sf-items {
   list-style: none;
@@ -584,7 +584,7 @@
   align-items: center;
   gap: 10px;
   font-size: 20px;
-  color: var(--navy);
+  color: var(--primary);
 }
 .int-card dl {
   margin: 0;
@@ -624,13 +624,13 @@
   background: #1b8a4b;
 }
 .status-dot--warn {
-  background: var(--yellow);
+  background: var(--highlight);
 }
 .status-dot--off {
   background: #9aa5b8;
 }
 .status-dot--bad {
-  background: var(--red-fill);
+  background: var(--accent-fill);
 }
 
 /* RSVPs */

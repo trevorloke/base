@@ -68,7 +68,7 @@ export function LimitForm({
         error={fieldError(state, "note")}
       />
       <div>
-        <SubmitButton className="btn btn--navy btn--compact" pendingText="Saving…">
+        <SubmitButton className="btn btn--primary btn--compact" pendingText="Saving…">
           {submitLabel}
         </SubmitButton>
       </div>

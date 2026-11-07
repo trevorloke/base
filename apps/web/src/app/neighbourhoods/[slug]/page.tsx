@@ -54,7 +54,7 @@ export default async function NeighbourhoodPage({ params }: PageProps<"/neighbou
       <section className="section">
         <div className="container stack" style={{ gap: 28 }}>
           <div className="hood-ctas">
-            <Link href={joinHref} className="btn btn--red btn--lg">
+            <Link href={joinHref} className="btn btn--accent btn--lg">
               Join the {name} committee
             </Link>
             <Link href="/volunteer" className="btn btn--outline btn--lg">
@@ -135,7 +135,7 @@ export default async function NeighbourhoodPage({ params }: PageProps<"/neighbou
                         {o.location && <span>{o.location}</span>}
                       </p>
                       <p className={`spots ${o.spotsLeft === 0 ? "spots--full" : o.spotsLeft <= 2 ? "spots--low" : ""}`}>{o.spotsLeft === 0 ? "Full" : `${o.spotsLeft} of ${o.capacity} spots left`}</p>
-                      <Link href={`/volunteer#opening-${o.id}`} className="btn btn--red" style={{ alignSelf: "flex-start" }}>
+                      <Link href={`/volunteer#opening-${o.id}`} className="btn btn--accent" style={{ alignSelf: "flex-start" }}>
                         {o.spotsLeft === 0 ? "See details" : "Sign up"}
                         <span className="visually-hidden"> for {o.title}</span>
                       </Link>

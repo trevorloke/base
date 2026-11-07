@@ -60,7 +60,7 @@ export function ProductForm({ product }: { product?: ProductFormValues }) {
       </Checkbox>
       <Notice state={state} />
       <div className="cms-publish">
-        <SubmitButton className="btn btn--red">{product ? "Save changes" : "Add product"}</SubmitButton>
+        <SubmitButton className="btn btn--accent">{product ? "Save changes" : "Add product"}</SubmitButton>
       </div>
     </form>
   );

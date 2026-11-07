@@ -652,6 +652,20 @@ export const siteSettings = pgTable("site_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
+// The site's look (Admin → Brand): one row, the brand as src/lib/brand.ts
+// defines it. With no row, the preset from BASE_WEB_BRAND_PRESET or the
+// client's seed applies.
+export const siteBrand = pgTable(
+  "site_brand",
+  {
+    id: integer("id").primaryKey().default(1),
+    value: jsonb("value").notNull(),
+    updatedById: uuid("updated_by_id").references(() => adminUsers.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("site_brand_one_row", sql`${t.id} = 1`)],
+).enableRLS();
+
 // Free-form pages such as the privacy policy, served at /<slug>.
 export const sitePages = pgTable(
   "site_pages",

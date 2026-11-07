@@ -151,6 +151,16 @@ export const env = {
     return optional("BASE_GROUND_INBOUND_KEY")?.trim();
   },
 
+  // ── The client this deployment is for (src/seeds) ──
+  /** Which client's starting content, copy and look: "imagine-surrey" or "default" (a clean, neutral site). */
+  get client() {
+    return optional("BASE_WEB_CLIENT")?.trim();
+  },
+  /** A brand preset to start from when none is saved in Admin → Brand (e.g. "civic"). */
+  get brandPreset() {
+    return optional("BASE_WEB_BRAND_PRESET")?.trim();
+  },
+
   // ── Signing in with base (SUITE.md, "Signing in once") ──
   /** base ground's internal address for the token call: a URL or Render's bare host:port. */
   get baseGroundInternalUrl() {

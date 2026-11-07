@@ -33,14 +33,14 @@
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--navy);
+  color: var(--primary);
 }
 .sheet h1 {
   margin: 0 0 8pt;
   font-size: 22pt;
   line-height: 1.1;
   font-weight: 900;
-  color: var(--navy);
+  color: var(--primary);
 }
 .sheet-statement {
   margin: 0 0 8pt;

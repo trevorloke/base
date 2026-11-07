@@ -73,7 +73,7 @@ export function UpdateForm({ promise, today }: { promise: TrackerPromise; today:
         </p>
       )}
       <p className="small">Changing the status emails everyone following this promise.</p>
-      <SubmitButton className="btn btn--red" pendingText="Adding…" style={{ alignSelf: "flex-start" }}>
+      <SubmitButton className="btn btn--accent" pendingText="Adding…" style={{ alignSelf: "flex-start" }}>
         Add update
       </SubmitButton>
     </form>
@@ -183,7 +183,7 @@ export function EditPromiseForm({ promise }: { promise: TrackerPromise }) {
       ))}
       <PromiseDateFields idPrefix={`edit-${id}`} state={state} promisedOn={promise.promisedOn} targetDate={promise.targetDate} neighbourhoods={promise.neighbourhoods} />
       <div className="btn-row" style={{ gap: 10 }}>
-        <SubmitButton className="btn btn--navy" pendingText="Saving…">
+        <SubmitButton className="btn btn--primary" pendingText="Saving…">
           Save changes
         </SubmitButton>
       </div>
@@ -249,7 +249,7 @@ export function AddPromiseForm({ nextNumber, areas }: { nextNumber: number; area
         <FieldError state={state} name="sourceUrl" id="np-url" />
       </div>
       <PromiseDateFields idPrefix="np" state={state} />
-      <SubmitButton className="btn btn--red" pendingText="Adding…" style={{ alignSelf: "flex-start" }}>
+      <SubmitButton className="btn btn--accent" pendingText="Adding…" style={{ alignSelf: "flex-start" }}>
         Add promise #{nextNumber}
       </SubmitButton>
     </form>
@@ -289,7 +289,7 @@ export function AddAnnouncementForm({ today }: { today: string }) {
           <FieldError state={state} name="sourceUrl" id="na-url" />
         </div>
       </div>
-      <SubmitButton className="btn btn--red" pendingText="Adding…" style={{ alignSelf: "flex-start" }}>
+      <SubmitButton className="btn btn--accent" pendingText="Adding…" style={{ alignSelf: "flex-start" }}>
         Add announcement
       </SubmitButton>
     </form>

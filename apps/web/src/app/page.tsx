@@ -53,13 +53,13 @@ export default async function Home() {
     // ── Hero ──
     hero: (
       <>
-      <section id="top" className="section section--navy hero">
+      <section id="top" className="section section--primary hero">
         <div className="container hero-inner">
           <div className="hero-copy">
             <RotatingWord prefix={hero.titlePrefix} words={hero.words} />
             <Markdown text={hero.text} className="hero-text" />
             <div className="btn-row" style={{ marginTop: 8 }}>
-              <SmartLink href={hero.primaryCta.href} className="btn btn--yellow btn--lg">
+              <SmartLink href={hero.primaryCta.href} className="btn btn--highlight btn--lg">
                 {hero.primaryCta.label}
               </SmartLink>
               {hero.secondaryCtas.map((cta) => (
@@ -169,7 +169,7 @@ export default async function Home() {
                 {membership.benefits.map((b) => (
                   <div key={b.title} className="stack" style={{ gap: 6 }}>
                     <div className="bar" />
-                    <h3 style={{ margin: "6px 0 0", fontWeight: 700, fontSize: 20, lineHeight: 1.25, color: "var(--navy)" }}>{b.title}</h3>
+                    <h3 style={{ margin: "6px 0 0", fontWeight: 700, fontSize: 20, lineHeight: 1.25, color: "var(--primary)" }}>{b.title}</h3>
                     <Markdown text={b.body} className="benefit-body" />
                   </div>
                 ))}
@@ -193,7 +193,7 @@ export default async function Home() {
     // ── Stop McCallum's chaos ──
     pledge: (
       <>
-      <section id="stop" className="section section--navy on-dark">
+      <section id="stop" className="section section--primary on-dark">
         <div className="container stack" style={{ gap: 40 }}>
           <div className="stop-head">
             <StopDougSign />
@@ -205,7 +205,7 @@ export default async function Home() {
           <div className="features">
             {stop.items.map((item) => (
               <article key={item.title} className="feature">
-                <div className="bar bar--red" />
+                <div className="bar bar--accent" />
                 <h3>{item.title}</h3>
                 <Markdown text={item.body} />
               </article>
@@ -213,14 +213,14 @@ export default async function Home() {
           </div>
           <div id="pledge" className="pledge">
             <div className="pledge-copy">
-              <p className="eyebrow eyebrow--yellow">{stop.pledgeEyebrow}</p>
+              <p className="eyebrow eyebrow--highlight">{stop.pledgeEyebrow}</p>
               <h3>{stop.pledgeTitle}</h3>
               <blockquote>{stop.pledgeText}</blockquote>
             </div>
             <SignatureForm campaign="stop-mccallum-pledge" variant="pledge" />
           </div>
           <div className="btn-row">
-            <a href="#join" className="btn btn--yellow btn--lg">
+            <a href="#join" className="btn btn--highlight btn--lg">
               Help stop it: become a member
             </a>
             <Link href="/donate" className="btn btn--ghost btn--lg">
@@ -258,7 +258,7 @@ export default async function Home() {
     // ── SkyTrain ──
     skytrain: (
       <>
-      <section id="skytrain" className="section--navy-dark skytrain on-dark">
+      <section id="skytrain" className="section--primary-dark skytrain on-dark">
         <div className="skytrain-hero" style={skytrain.image.url ? { backgroundImage: `url(${JSON.stringify(skytrain.image.url)})` } : undefined}>
           <div className="container">
             <h2 className="display pop">
@@ -280,7 +280,7 @@ export default async function Home() {
             <SkyTrainMap />
             <div className="map-legend">
               <span>
-                <span aria-hidden="true" className="swatch" style={{ background: "var(--navy)" }} />
+                <span aria-hidden="true" className="swatch" style={{ background: "var(--primary)" }} />
                 SkyTrain today
               </span>
               <span>
@@ -318,12 +318,12 @@ export default async function Home() {
     // ── Organize ──
     organize: (
       <>
-      <section id="organize" className="section section--yellow organize">
+      <section id="organize" className="section section--highlight organize">
         <div className="container" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "32px 48px" }}>
           <h2 className="display pop">
             {organize.title} {organize.highlight && <span className="underline">{organize.highlight}</span>}
           </h2>
-          <SmartLink href={organize.ctaHref} className="btn btn--navy btn--xl">
+          <SmartLink href={organize.ctaHref} className="btn btn--primary btn--xl">
             {organize.ctaLabel}
           </SmartLink>
         </div>
@@ -430,14 +430,14 @@ export default async function Home() {
     // ── Events ──
     events: (
       <>
-      <section id="events" className="section section--red on-dark">
+      <section id="events" className="section section--accent on-dark">
         <div className="container stack" style={{ gap: 28 }}>
           <div className="section-head">
             <div className="stack" style={{ gap: 10 }}>
               <p className="eyebrow" style={{ color: "#fff", fontSize: 14, letterSpacing: "0.14em" }}>
                 Next event
               </p>
-              <h2 className="display pop--navy">Come and meet us</h2>
+              <h2 className="display pop--primary">Come and meet us</h2>
             </div>
             <Link href="/events" className="text-link">
               All events
@@ -457,7 +457,7 @@ export default async function Home() {
                   </p>
                   <p className="summary">{nextEvent.summary}</p>
                 </div>
-                <Link href={`/events/${nextEvent.slug}`} className="btn btn--yellow btn--lg" style={{ fontSize: 19, minHeight: 56, padding: "0 32px" }}>
+                <Link href={`/events/${nextEvent.slug}`} className="btn btn--highlight btn--lg" style={{ fontSize: 19, minHeight: 56, padding: "0 32px" }}>
                   RSVP<span className="visually-hidden"> for {nextEvent.title}</span>
                 </Link>
               </div>
@@ -489,7 +489,7 @@ export default async function Home() {
                 <h3>New events are on the way</h3>
                 <p className="summary">Get the newsletter and we&apos;ll tell you as soon as the next one is booked.</p>
               </div>
-              <a href="#newsletter" className="btn btn--yellow btn--lg">
+              <a href="#newsletter" className="btn btn--highlight btn--lg">
                 Get the newsletter
               </a>
             </div>
@@ -508,7 +508,7 @@ export default async function Home() {
               <h2 className="display pop">Get the merch</h2>
               <p className="lede">Lawn signs, shirts, and buttons. Pick something to see it and check out.</p>
             </div>
-            <Link href="/shop" className="btn btn--red btn--lg">
+            <Link href="/shop" className="btn btn--accent btn--lg">
               Shop and check out
             </Link>
           </div>
@@ -689,8 +689,8 @@ function ActNow({ live }: { live: HomeLive }) {
 const TONE_CLASS: Record<HomeModule["tone"], string> = {
   white: "section",
   grey: "section section--surface",
-  navy: "section section--navy on-dark",
-  yellow: "section section--yellow",
+  navy: "section section--primary on-dark",
+  yellow: "section section--highlight",
 };
 
 /** A text block an organizer added in Admin → Home page. */
@@ -708,7 +708,7 @@ function CustomModule({ module: m, index }: { module: HomeModule; index: number 
         {m.body && <Markdown text={m.body} className="lede" />}
         {m.buttonLabel && m.buttonHref && (
           <div className="btn-row">
-            <SmartLink href={m.buttonHref} className={`btn btn--lg ${m.tone === "navy" ? "btn--yellow" : "btn--red"}`}>
+            <SmartLink href={m.buttonHref} className={`btn btn--lg ${m.tone === "navy" ? "btn--highlight" : "btn--accent"}`}>
               {m.buttonLabel}
             </SmartLink>
           </div>

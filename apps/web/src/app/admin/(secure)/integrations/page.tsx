@@ -134,7 +134,7 @@ export default async function IntegrationsPage() {
           env={["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_MEDIA_BUCKET"]}
         >
           {uploadProblem && (
-            <p className="small" style={{ color: "var(--red-hover)", fontWeight: 700 }}>
+            <p className="small" style={{ color: "var(--accent-hover)", fontWeight: 700 }}>
               {uploadProblem} Create a public bucket in Supabase first.
             </p>
           )}
@@ -165,7 +165,7 @@ export default async function IntegrationsPage() {
             [
               "Last problem",
               deskError ? (
-                <span style={keyRefused ? { color: "var(--red-hover)", fontWeight: 700 } : undefined}>
+                <span style={keyRefused ? { color: "var(--accent-hover)", fontWeight: 700 } : undefined}>
                   {deskError.message} ({when(deskError.at)}){keyRefused ? ". Check the key: sign-ups are waiting until it works." : ""}
                 </span>
               ) : (
@@ -201,7 +201,7 @@ export default async function IntegrationsPage() {
           env={["NEXT_PUBLIC_TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "TURNSTILE_VERIFY_URL"]}
         >
           {!env.humanCheckEnabled && (
-            <p className="small" style={{ color: "var(--red-hover)", fontWeight: 700 }}>
+            <p className="small" style={{ color: "var(--accent-hover)", fontWeight: 700 }}>
               The live site should have this on: every accepted sign-up becomes a supporter record here and in base ground, and can file a request for the desk. Make a free
               Turnstile widget in Cloudflare and set both keys.
             </p>

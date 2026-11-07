@@ -74,7 +74,7 @@ export default async function AdminLogin({ searchParams }: PageProps<"/admin/log
         )}
         {baseOn && (
           <div className="form-card" style={{ gap: 10 }}>
-            <a href={`/auth/base?next=${encodeURIComponent(next)}`} className="btn btn--navy btn--lg base-signin">
+            <a href={`/auth/base?next=${encodeURIComponent(next)}`} className="btn btn--primary btn--lg base-signin">
               <span className="base-wordmark" aria-hidden="true">
                 base
               </span>
@@ -95,13 +95,13 @@ export default async function AdminLogin({ searchParams }: PageProps<"/admin/log
             <label htmlFor="password">Password</label>
             <input id="password" name="password" type="password" className="input" required autoComplete="current-password" />
           </div>
-          <button type="submit" className="btn btn--navy btn--lg">
+          <button type="submit" className="btn btn--primary btn--lg">
             Sign in
           </button>
         </form>
         <form method="post" action="/api/admin/magic-link" className="form-card" style={{ gap: 12 }}>
           <input type="hidden" name="next" value={next} />
-          <p style={{ margin: 0, fontWeight: 700, color: "var(--navy)" }}>Or get a sign-in link by email</p>
+          <p style={{ margin: 0, fontWeight: 700, color: "var(--primary)" }}>Or get a sign-in link by email</p>
           <div className="field">
             <label htmlFor="link-email">Email</label>
             <input id="link-email" name="email" type="email" className="input" required autoComplete="username" defaultValue={email} />

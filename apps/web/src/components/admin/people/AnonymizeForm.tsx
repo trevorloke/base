@@ -23,7 +23,7 @@ export function AnonymizeForm({ id, name, action }: { id: string; name: string; 
         I have the request on file and want to remove {name}&apos;s personal details
       </Checkbox>
       <div>
-        <SubmitButton className="btn btn--red btn--compact" pendingText="Removing…" confirm={`Remove ${name}'s personal details for good?`}>
+        <SubmitButton className="btn btn--accent btn--compact" pendingText="Removing…" confirm={`Remove ${name}'s personal details for good?`}>
           Anonymize this supporter
         </SubmitButton>
       </div>

@@ -56,14 +56,14 @@ export function NewsForm({ post }: { post?: NewsFormValues }) {
         {status === "published" ? (
           <>
             <Badge tone="live">Published</Badge>
-            <SubmitButton name="publish" value="keep" className="btn btn--red">
+            <SubmitButton name="publish" value="keep" className="btn btn--accent">
               Save changes
             </SubmitButton>
           </>
         ) : (
           <>
             <Badge tone={status}>{status === "scheduled" ? "Scheduled" : "Draft"}</Badge>
-            <SubmitButton name="publish" value="now" className="btn btn--red" pendingText="Publishing…">
+            <SubmitButton name="publish" value="now" className="btn btn--accent" pendingText="Publishing…">
               Publish now
             </SubmitButton>
             <SubmitButton name="publish" value="draft" className="btn btn--outline">
@@ -91,7 +91,7 @@ export function NewsForm({ post }: { post?: NewsFormValues }) {
               </p>
             )}
           </div>
-          <SubmitButton name="publish" value="schedule" className="btn btn--navy" pendingText="Scheduling…">
+          <SubmitButton name="publish" value="schedule" className="btn btn--primary" pendingText="Scheduling…">
             Schedule
           </SubmitButton>
         </div>

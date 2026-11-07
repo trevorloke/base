@@ -20,7 +20,7 @@ export default async function CampaignsAdmin({ searchParams }: PageProps<"/admin
           <a href="/api/admin/export/signatures" className="btn btn--outline">
             Download signatures (CSV)
           </a>
-          <Link href={`${ADMIN_PATHS.campaigns}/new`} className="btn btn--red">
+          <Link href={`${ADMIN_PATHS.campaigns}/new`} className="btn btn--accent">
             Start a campaign
           </Link>
         </>

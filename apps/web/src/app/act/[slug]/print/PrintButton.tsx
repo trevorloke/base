@@ -2,7 +2,7 @@
 
 export function PrintButton() {
   return (
-    <button type="button" className="btn btn--navy" onClick={() => window.print()}>
+    <button type="button" className="btn btn--primary" onClick={() => window.print()}>
       Print this sheet
     </button>
   );

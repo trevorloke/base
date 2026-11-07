@@ -91,7 +91,7 @@ export function StaffControls(p: StaffControlsProps) {
           <form action={setActive}>
             <input type="hidden" name="id" value={p.id} />
             <SubmitButton
-              className={`btn btn--compact ${p.active ? "btn--outline" : "btn--navy"}`}
+              className={`btn btn--compact ${p.active ? "btn--outline" : "btn--primary"}`}
               pendingText="Saving…"
               confirm={p.active ? `Deactivate ${p.name}? They are signed out everywhere and can't sign in until reactivated.` : undefined}
             >

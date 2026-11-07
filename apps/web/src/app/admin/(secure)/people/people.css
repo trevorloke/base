@@ -78,13 +78,13 @@
   min-height: 30px;
   padding: 0 12px;
   border-radius: 15px;
-  background: var(--pale-blue);
-  color: var(--navy);
+  background: var(--primary-pale);
+  color: var(--primary);
   font-size: 14px;
   font-weight: 600;
 }
 .chip--tag {
-  background: var(--yellow-pale);
+  background: var(--highlight-pale);
 }
 .chip--muted {
   background: var(--surface);
@@ -101,7 +101,7 @@
   min-height: 28px;
   font: inherit;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--primary);
   cursor: pointer;
   border-radius: 14px;
 }
@@ -162,9 +162,9 @@
   border: 2px solid var(--line);
 }
 .crm-pager span[aria-current] {
-  background: var(--navy);
+  background: var(--primary);
   color: #fff;
-  border-color: var(--navy);
+  border-color: var(--primary);
 }
 
 .table .cell-wrap {
@@ -183,8 +183,8 @@
   margin: 1px 4px 1px 0;
   padding: 1px 8px;
   border-radius: 10px;
-  background: var(--yellow-pale);
-  color: var(--navy);
+  background: var(--highlight-pale);
+  color: var(--primary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -207,16 +207,16 @@
   color: #0f5a2f;
 }
 .badge--warn {
-  background: var(--yellow-pale);
+  background: var(--highlight-pale);
   color: #5c4a00;
 }
 .badge--bad {
-  background: var(--red-pale);
+  background: var(--accent-pale);
   color: #8f1216;
 }
-.badge--navy {
-  background: var(--pale-blue);
-  color: var(--navy);
+.badge--primary {
+  background: var(--primary-pale);
+  color: var(--primary);
 }
 
 /* ── Profile ───────────────────────────────────────────────────────── */
@@ -244,13 +244,13 @@
 .profile-card h2 {
   margin: 0;
   font-size: 19px;
-  color: var(--navy);
+  color: var(--primary);
 }
 .profile-card--surface {
   background: var(--surface);
 }
 .profile-card--danger {
-  border-color: var(--red);
+  border-color: var(--accent);
 }
 .facts {
   display: grid;
@@ -295,16 +295,16 @@
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: var(--pale-blue);
+  background: var(--primary-pale);
   border: 3px solid #fff;
 }
 .timeline li[data-kind="contribution"]::before,
 .timeline li[data-kind="recurring"]::before,
 .timeline li[data-kind="order"]::before {
-  background: var(--yellow);
+  background: var(--highlight);
 }
 .timeline li[data-kind="membership"]::before {
-  background: var(--navy);
+  background: var(--primary);
 }
 .timeline li[data-kind="email"]::before,
 .timeline li[data-kind="sms"]::before {
@@ -384,7 +384,7 @@
 .trend__value {
   font-size: 26px;
   font-weight: 900;
-  color: var(--navy);
+  color: var(--primary);
 }
 .trend__delta {
   font-size: 14px;
@@ -412,10 +412,10 @@
 }
 .sparkline__point:hover,
 .sparkline__point:focus {
-  fill: var(--navy);
+  fill: var(--primary);
 }
 .sparkline__last {
-  fill: var(--navy);
+  fill: var(--primary);
 }
 
 .attention {
@@ -436,18 +436,18 @@
   background: #fff;
 }
 .attention li[data-level="warn"] {
-  border-color: var(--yellow);
-  background: var(--yellow-pale);
+  border-color: var(--highlight);
+  background: var(--highlight-pale);
 }
 .attention li[data-level="bad"] {
-  border-color: var(--red);
-  background: var(--red-pale);
+  border-color: var(--accent);
+  background: var(--accent-pale);
 }
 .attention__n {
   min-width: 44px;
   font-size: 26px;
   font-weight: 900;
-  color: var(--navy);
+  color: var(--primary);
   text-align: center;
 }
 .attention__text {
@@ -493,7 +493,7 @@
 }
 .staff__who strong {
   font-size: 17px;
-  color: var(--navy);
+  color: var(--primary);
 }
 .staff__who p {
   margin: 2px 0 0;

@@ -13,7 +13,7 @@
   font-size: 34px;
   font-weight: 900;
   line-height: 1.1;
-  color: var(--navy);
+  color: var(--primary);
 }
 .portal-nav {
   display: flex;
@@ -26,7 +26,7 @@
 .portal-nav__brand {
   font-size: 15px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--primary);
 }
 .portal-nav a {
   display: inline-flex;
@@ -35,7 +35,7 @@
   font-weight: 700;
 }
 .portal-nav a[aria-current="page"] {
-  color: var(--red-hover);
+  color: var(--accent-hover);
   text-decoration-thickness: 3px;
   text-underline-offset: 4px;
 }
@@ -67,14 +67,14 @@
   grid-column: 1 / -1;
 }
 .portal-card--white {
-  background: #fff;
+  background: var(--bg);
 }
 .portal-card h2 {
   margin: 0;
   font-size: 20px;
   font-weight: 800;
   line-height: 1.2;
-  color: var(--navy);
+  color: var(--primary);
 }
 .portal-card p,
 .portal-card li {
@@ -106,7 +106,7 @@
 }
 .portal-item__title {
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .portal-item__meta {
   font-size: 14px;
@@ -138,12 +138,12 @@
   color: #0b5a2a;
 }
 .status-pill--expired {
-  background: var(--red-pale);
+  background: var(--accent-pale);
   color: #8a1216;
 }
 .status-pill--none {
-  background: var(--pale-blue);
-  color: var(--navy);
+  background: var(--primary-pale);
+  color: var(--primary);
 }
 .meter {
   display: flex;
@@ -153,14 +153,14 @@
 .meter__track {
   height: 14px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--bg);
   border: 1px solid var(--field-border);
   overflow: hidden;
 }
 .meter__fill {
   height: 100%;
   border-radius: 999px;
-  background: var(--navy);
+  background: var(--primary);
 }
 .meter__text {
   margin: 0;
@@ -170,13 +170,13 @@
 }
 .meter__text strong {
   font-weight: 800;
-  color: var(--navy);
+  color: var(--primary);
 }
 .portal .form-card {
   max-width: 640px;
 }
 .portal .next-step {
-  background: #fff;
+  background: var(--bg);
 }
 @media (max-width: 520px) {
   .portal {

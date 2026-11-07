@@ -70,7 +70,7 @@ export function LoginForm({ next }: { next: string }) {
         </p>
       </div>
       <HumanCheck control={human} />
-      <button type="submit" className="btn btn--navy btn--lg" aria-busy={status === "sending"} aria-disabled={status === "sending"}>
+      <button type="submit" className="btn btn--primary btn--lg" aria-busy={status === "sending"} aria-disabled={status === "sending"}>
         {status === "sending" ? "Sending…" : "Email me a sign-in link"}
       </button>
       <div id="member-login-status" role="status" aria-live="polite" className={status === "sent" ? "alert alert--note" : undefined}>

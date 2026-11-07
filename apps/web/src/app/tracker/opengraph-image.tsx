@@ -1,4 +1,6 @@
 import { ImageResponse } from "next/og";
+import { shareImageColors } from "@/lib/brand";
+import { shellBrand } from "@/lib/server/brand";
 import { env } from "@/lib/env";
 import { countByStatus, formatIsoDate, PROMISE_STATUSES } from "@/lib/tracker";
 import { loadTracker } from "@/lib/server/tracker";
@@ -12,11 +14,9 @@ export const alt = "The Safe Surrey promise tracker scoreboard: how many promise
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-const NAVY = "#003979";
-const YELLOW = "#FFF100";
-const PALE = "#D3DEEF";
 
 export default async function Image() {
+  const { primary: NAVY, accentFill: RED, highlight: YELLOW, pale: PALE, onPrimary: ON_PRIMARY, onAccent: ON_ACCENT } = shareImageColors(await shellBrand());
   await renderAtRequestTimeWithoutDatabase();
   const { promises, lastUpdated } = await loadTracker();
   const counts = countByStatus(promises.map((p) => p.status));
@@ -24,7 +24,7 @@ export default async function Image() {
 
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: NAVY, color: "#FFFFFF" }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: NAVY, color: ON_PRIMARY }}>
         <div style={{ display: "flex", height: 18, background: YELLOW }} />
         <div style={{ display: "flex", flexDirection: "column", flex: 1, padding: "48px 64px 40px", justifyContent: "space-between" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

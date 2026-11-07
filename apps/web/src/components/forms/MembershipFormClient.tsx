@@ -409,7 +409,7 @@ export function MembershipFormClient({
 
         <HumanCheck control={human} error={fields.human} />
         <ErrorSummary ref={summaryRef} error={error} fields={fields} />
-        <SubmitButton pending={pending} disabled={blocked} className="btn btn--red btn--lg btn--block">
+        <SubmitButton pending={pending} disabled={blocked} className="btn btn--accent btn--lg btn--block">
           {feeCents > 0 && amountCents !== null && !(pick === "other" && other.error) ? `Join Imagine Surrey · ${formatCents(amountCents)} a year` : "Join Imagine Surrey"}
         </SubmitButton>
         <p className="small">

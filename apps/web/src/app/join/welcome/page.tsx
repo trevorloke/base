@@ -40,7 +40,7 @@ export default async function Welcome({ searchParams }: PageProps<"/join/welcome
           )}
           {returned ? (
             <div className="btn-row">
-              <Link href="/events" className="btn btn--red btn--lg">
+              <Link href="/events" className="btn btn--accent btn--lg">
                 See upcoming events
               </Link>
             </div>

@@ -28,7 +28,7 @@ const STATUS_TONE: Record<string, string> = {
   pending: "badge--warn",
   pending_payment: "badge--warn",
   queued: "badge--warn",
-  scheduled: "badge--navy",
+  scheduled: "badge--primary",
   expired: "badge--bad",
   failed: "badge--bad",
   cancelled: "badge--bad",
@@ -75,7 +75,7 @@ export default async function PersonPage({ params }: PageProps<"/admin/people/[i
           {membership.status === "active" && <span className="badge badge--ok">Member until {membership.expiresAt ? DAY.format(membership.expiresAt) : ""}</span>}
           {membership.status === "expired" && <span className="badge badge--bad">Membership expired</span>}
           {membership.status === "pending" && <span className="badge badge--warn">Membership pending payment</span>}
-          {money && profile.donatedThisYearCents > 0 && <span className="badge badge--navy">Gave {formatCents(profile.donatedThisYearCents)} this year</span>}
+          {money && profile.donatedThisYearCents > 0 && <span className="badge badge--primary">Gave {formatCents(profile.donatedThisYearCents)} this year</span>}
           {anonymized && <span className="badge badge--bad">Anonymized</span>}
         </div>
       </div>

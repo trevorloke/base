@@ -111,7 +111,7 @@ export default async function CommsLog({ searchParams }: PageProps<"/admin/comms
           <label htmlFor="f-q">Address or subject</label>
           <input id="f-q" name="q" type="search" className="input input--search" defaultValue={filter.q ?? ""} maxLength={100} />
         </div>
-        <button type="submit" className="btn btn--navy" style={{ minHeight: 44 }}>
+        <button type="submit" className="btn btn--primary" style={{ minHeight: 44 }}>
           Filter
         </button>
       </form>

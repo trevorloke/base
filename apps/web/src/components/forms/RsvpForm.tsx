@@ -77,7 +77,7 @@ export function RsvpForm({ slug, eventTitle }: { slug: string; eventTitle?: stri
         <ConsentCheckbox id="r-sms" kind="sms" error={fields.smsConsent} />
         <HumanCheck control={human} error={fields.human} />
         <ErrorSummary ref={summaryRef} error={error} fields={fields} />
-        <SubmitButton pending={pending} className="btn btn--red btn--lg">
+        <SubmitButton pending={pending} className="btn btn--accent btn--lg">
           RSVP
         </SubmitButton>
       </form>

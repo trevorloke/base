@@ -82,7 +82,7 @@ export default async function BaseGroundOutboxPage({ searchParams }: PageProps<"
           </select>
         </div>
         <div className="crm-filters__actions">
-          <button type="submit" className="btn btn--navy btn--compact">
+          <button type="submit" className="btn btn--primary btn--compact">
             Apply
           </button>
           {(filters.status || filters.kind) && (

@@ -12,19 +12,19 @@
   font-weight: 700;
 }
 .tracker-toolbar a {
-  color: var(--navy);
+  color: var(--primary);
   text-underline-offset: 3px;
 }
 .tracker-toolbar a:hover {
-  color: var(--red-hover);
+  color: var(--accent-hover);
 }
 /* On navy sections the links are white with a yellow underline. */
 .on-dark .tracker-toolbar a {
-  color: #fff;
-  text-decoration-color: var(--yellow);
+  color: var(--on-primary);
+  text-decoration-color: var(--highlight);
 }
 .on-dark .tracker-toolbar a:hover {
-  color: var(--yellow);
+  color: var(--highlight);
 }
 
 /* Countdown and overdue chips. Each kind is told apart by text, not colour alone. */
@@ -48,19 +48,19 @@
   font-size: 15px;
 }
 .due-chip--due {
-  background: #fff;
-  color: var(--navy);
-  border-color: var(--navy);
+  background: var(--bg);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 .due-chip--due_today {
-  background: var(--yellow);
-  color: var(--navy);
-  border-color: var(--navy);
+  background: var(--highlight);
+  color: var(--primary);
+  border-color: var(--primary);
 }
 .due-chip--overdue {
-  background: var(--red-fill);
-  color: #fff;
-  border-color: var(--red-fill);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
 }
 .due-chip--waiting {
   background: var(--surface);
@@ -84,8 +84,8 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
-  color: var(--red-fill);
+  background: var(--bg);
+  color: var(--accent-fill);
   font-size: 12px;
   line-height: 1;
 }
@@ -107,14 +107,14 @@
   border-radius: 14px;
   border: 1px solid var(--line);
   background: var(--surface);
-  color: var(--navy);
+  color: var(--primary);
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
 }
 .hood-chip:hover {
-  border-color: var(--navy);
-  color: var(--navy);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .promise-title-link {
@@ -122,7 +122,7 @@
   text-decoration: none;
 }
 .promise-title-link:hover {
-  color: var(--red-hover);
+  color: var(--accent-hover);
   text-decoration: underline;
 }
 .promise-links {
@@ -204,7 +204,7 @@
 .aside-card h2 {
   margin: 0;
   font-size: 20px;
-  color: var(--navy);
+  color: var(--primary);
 }
 .aside-card p {
   margin: 0;
@@ -233,10 +233,10 @@
   flex-direction: column;
   gap: 6px;
   padding: 14px 16px;
-  border-radius: 8px;
-  background: #fff;
-  border: 2px solid var(--navy);
-  color: var(--navy);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  border: 2px solid var(--primary);
+  color: var(--primary);
 }
 .share-row {
   display: flex;
@@ -252,9 +252,9 @@
   min-height: 44px;
   padding: 0 16px;
   border-radius: 22px;
-  border: 2px solid var(--navy);
-  background: #fff;
-  color: var(--navy);
+  border: 2px solid var(--primary);
+  background: var(--bg);
+  color: var(--primary);
   font-family: var(--font);
   font-size: 15px;
   font-weight: 700;
@@ -262,13 +262,13 @@
   cursor: pointer;
 }
 .share-link:hover {
-  background: var(--navy);
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .copy-status {
   font-size: 14px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
   overflow-wrap: anywhere;
 }
 .council-letter textarea {
@@ -276,8 +276,8 @@
   min-height: 240px;
   padding: 12px;
   border: 1px solid var(--field-border);
-  border-radius: 8px;
-  background: #fff;
+  border-radius: var(--radius-md);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font);
   font-size: 14px;
@@ -317,7 +317,7 @@
 .method-section h2 {
   margin: 0 0 10px;
   font-size: 26px;
-  color: var(--navy);
+  color: var(--primary);
 }
 .method-section p {
   margin: 0 0 12px;

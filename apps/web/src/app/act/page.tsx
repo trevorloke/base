@@ -30,7 +30,7 @@ export default async function ActIndex() {
                     <Link href={`/act/${c.slug}`}>{c.title}</Link>
                   </h2>
                   <p>{excerpt(c.body || c.statement, 180)}</p>
-                  <Link href={`/act/${c.slug}`} className="btn btn--red">
+                  <Link href={`/act/${c.slug}`} className="btn btn--accent">
                     {c.kind === "pledge" ? "Sign the pledge" : "Add my name"}
                     <span className="visually-hidden">: {c.title}</span>
                   </Link>

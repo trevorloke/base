@@ -23,7 +23,7 @@ export default async function MyData({ searchParams }: PageProps<"/me/data">) {
           <h2 id="export-h">Download my data</h2>
           <p>A file with your record, memberships, contributions, signatures, RSVPs, shifts, consent history and the subjects of emails we&apos;ve sent you. Nothing about anyone else.</p>
           <div className="portal-actions">
-            <a href="/api/me/export" className="btn btn--navy btn--sm" download="my-imagine-surrey-data.json">
+            <a href="/api/me/export" className="btn btn--primary btn--sm" download="my-imagine-surrey-data.json">
               Download my data (JSON)
             </a>
           </div>

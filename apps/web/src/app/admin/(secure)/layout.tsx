@@ -24,6 +24,7 @@ const NAV: { href: string; label: string; permission?: Permission }[] = [
   { href: "/admin/desk-gifts", label: "Gifts to log at the desk", permission: "money" },
   { href: "/admin/limits", label: "Contribution limits", permission: "money" },
   { href: "/admin/settings", label: "Site settings", permission: "settings" },
+  { href: "/admin/brand", label: "Brand", permission: "settings" },
   { href: "/admin/integrations", label: "Integrations", permission: "integrations" },
   { href: "/admin/exports", label: "Exports" },
   { href: "/admin/users", label: "Staff", permission: "users" },
@@ -42,13 +43,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="admin">
       {adminPreviewAllowed() && (
-        <p role="status" className="no-print" style={{ margin: 0, padding: "8px 16px", background: "var(--yellow)", color: "var(--navy)", fontWeight: 700 }}>
+        <p role="status" className="no-print" style={{ margin: 0, padding: "8px 16px", background: "var(--highlight)", color: "var(--primary)", fontWeight: 700 }}>
           Preview mode: signed in automatically on this local copy. It cannot be turned on for the live site.
         </p>
       )}
       <nav className="admin-nav no-print" aria-label="Admin">
         {suite.length > 0 && <BaseSwitcher apps={suite} />}
-        <strong style={{ color: "var(--navy)", fontSize: 18 }}>Imagine Surrey admin</strong>
+        <strong style={{ color: "var(--primary)", fontSize: 18 }}>Imagine Surrey admin</strong>
         {nav.map((item) => (
           <Link key={item.href} href={item.href}>
             {item.label}

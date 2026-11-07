@@ -51,7 +51,7 @@ export function SignOutEverywhereForm({ action }: { action: Action }) {
     <form action={formAction} className="stack" style={{ gap: 12 }}>
       <Notice state={state} />
       <div>
-        <SubmitButton className="btn btn--red btn--compact" pendingText="Signing out…" confirm="Sign out of every device, including this one?">
+        <SubmitButton className="btn btn--accent btn--compact" pendingText="Signing out…" confirm="Sign out of every device, including this one?">
           Sign out everywhere
         </SubmitButton>
       </div>

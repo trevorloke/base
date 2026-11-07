@@ -33,7 +33,7 @@ export function NextStepCard({
       </Heading>
       <p className="next-step__body">{step.body}</p>
       <div className="next-step__actions">
-        <Link href={step.cta.href} className="btn btn--red btn--lg">
+        <Link href={step.cta.href} className="btn btn--accent btn--lg">
           {step.cta.label}
         </Link>
         {step.secondary && (

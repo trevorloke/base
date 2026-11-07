@@ -45,9 +45,9 @@ export default async function TrackerPage() {
 
   return (
     <>
-      <section className="section--navy on-dark page-head">
+      <section className="section--primary on-dark page-head">
         <div className="container stack" style={{ gap: 18 }}>
-          <p className="eyebrow eyebrow--yellow">Accountability</p>
+          <p className="eyebrow eyebrow--highlight">Accountability</p>
           <h1 className="display pop">{trackerIntro.title}</h1>
           <p className="lede" style={{ maxWidth: 760 }}>
             {trackerIntro.lede}
@@ -72,7 +72,7 @@ export default async function TrackerPage() {
                 <span className="score-label">Promises tracked</span>
               </li>
             </ul>
-            <p className="small" style={{ color: "var(--pale-blue)" }}>
+            <p className="small" style={{ color: "var(--primary-pale)" }}>
               {lastUpdated ? `Last updated ${formatDate(lastUpdated)}.` : "Tracking began October 18, 2026."} Scored against the public record, with sources for every line.
             </p>
           </div>
@@ -166,7 +166,7 @@ export default async function TrackerPage() {
         </div>
       </section>
 
-      <section id="subscribe" className="section section--navy on-dark">
+      <section id="subscribe" className="section section--primary on-dark">
         <div className="container split">
           <div className="stack" style={{ flex: "1 1 420px", gap: 14 }}>
             <h2 className="display pop" style={{ fontSize: "clamp(32px, 4.4vw, 52px)" }}>
@@ -177,7 +177,7 @@ export default async function TrackerPage() {
               there.
             </p>
             <div className="btn-row">
-              <Link href="/#join" className="btn btn--yellow btn--lg">
+              <Link href="/#join" className="btn btn--highlight btn--lg">
                 Become a member
               </Link>
               <Link href="/donate" className="btn btn--ghost btn--lg">

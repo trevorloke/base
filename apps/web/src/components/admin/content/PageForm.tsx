@@ -28,7 +28,7 @@ export function PageForm({ page }: { page?: PageFormValues }) {
       </Checkbox>
       <Notice state={state} />
       <div className="cms-publish">
-        <SubmitButton className="btn btn--red">{page ? "Save changes" : "Create page"}</SubmitButton>
+        <SubmitButton className="btn btn--accent">{page ? "Save changes" : "Create page"}</SubmitButton>
       </div>
     </form>
   );

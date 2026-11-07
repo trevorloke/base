@@ -20,7 +20,7 @@ export default async function Confirmed({ searchParams }: PageProps<"/newsletter
         </PageHead>
         <section className="section">
           <div className="container">
-            <a href={`mailto:${org.email}?subject=${encodeURIComponent("Please add me back to the newsletter")}`} className="btn btn--navy btn--lg">
+            <a href={`mailto:${org.email}?subject=${encodeURIComponent("Please add me back to the newsletter")}`} className="btn btn--primary btn--lg">
               Email {org.email}
             </a>
           </div>
@@ -38,7 +38,7 @@ export default async function Confirmed({ searchParams }: PageProps<"/newsletter
       </PageHead>
       <section className="section">
         <div className="container">
-          <Link href={invalid ? "/#newsletter" : "/"} className="btn btn--navy btn--lg">
+          <Link href={invalid ? "/#newsletter" : "/"} className="btn btn--primary btn--lg">
             {invalid ? "Sign up again" : "Back to the home page"}
           </Link>
         </div>

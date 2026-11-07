@@ -7,41 +7,41 @@
   min-height: 26px;
   padding: 0 10px;
   border-radius: 13px;
-  background: var(--pale-blue);
-  color: var(--navy);
+  background: var(--primary-pale);
+  color: var(--primary);
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
 .badge--citywide {
-  background: var(--yellow-pale);
+  background: var(--highlight-pale);
 }
 .badge--task {
   border: 0;
 }
 .on-dark .badge {
   background: rgba(255, 255, 255, 0.92);
-  color: var(--navy);
+  color: var(--primary);
 }
 
 .spots {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .spots--low {
-  color: var(--red-hover);
+  color: var(--accent-hover);
 }
 .spots--full {
   color: var(--muted);
 }
 .on-dark .spots {
-  color: var(--yellow);
+  color: var(--highlight);
 }
 .on-dark .spots--full {
-  color: var(--pale-blue);
+  color: var(--primary-pale);
 }
 
 /* ── Share and calendar ───────────────────────────────────────────────── */
@@ -55,10 +55,10 @@
   margin: 0;
   font-size: 15px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--primary);
 }
 .on-dark .share-heading {
-  color: #fff;
+  color: var(--on-primary);
 }
 .share-buttons {
   margin: 0;
@@ -74,9 +74,9 @@
   min-height: 42px;
   padding: 0 16px;
   border-radius: 999px;
-  border: 2px solid var(--navy);
-  background: #fff;
-  color: var(--navy);
+  border: 2px solid var(--primary);
+  background: var(--bg);
+  color: var(--primary);
   font-family: var(--font);
   font-size: 15px;
   font-weight: 700;
@@ -84,15 +84,15 @@
   cursor: pointer;
 }
 .share-button:hover {
-  background: var(--outline-hover);
-  color: var(--navy);
+  background: var(--primary-wash);
+  color: var(--primary);
 }
 .share-button--whatsapp {
-  background: var(--navy);
+  background: var(--primary);
   color: #fff;
 }
 .share-button--whatsapp:hover {
-  background: var(--navy-dark);
+  background: var(--primary-dark);
   color: #fff;
 }
 .share-status {
@@ -139,7 +139,7 @@
   margin: 0;
   font-size: 22px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--primary);
 }
 .opening-list {
   margin: 0;
@@ -159,7 +159,7 @@
   gap: 16px;
   padding: 20px;
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--bg);
   border: 1px solid var(--line);
   scroll-margin-top: 90px;
 }
@@ -174,9 +174,9 @@
   justify-content: center;
   width: 64px;
   height: 64px;
-  border-radius: 8px;
-  background: var(--yellow);
-  color: var(--navy);
+  border-radius: var(--radius-md);
+  background: var(--highlight);
+  color: var(--primary);
 }
 .opening-date .day {
   font-size: 26px;
@@ -209,7 +209,7 @@
   font-size: 20px;
   font-weight: 800;
   line-height: 1.2;
-  color: var(--navy);
+  color: var(--primary);
 }
 .opening-meta {
   margin: 0;
@@ -244,7 +244,7 @@
   margin: 0;
   font-size: 17px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--primary);
 }
 .opening-confirm {
   display: flex;
@@ -276,11 +276,11 @@
   gap: 16px;
   padding: 18px 20px;
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--bg);
   border: 1px solid var(--line);
 }
 .event-card .date-badge--sm {
-  background: var(--yellow);
+  background: var(--highlight);
 }
 .event-card-body {
   flex: 1 1 auto;
@@ -296,11 +296,11 @@
   line-height: 1.2;
 }
 .event-card h3 a {
-  color: var(--navy);
+  color: var(--primary);
   text-decoration: none;
 }
 .event-card h3 a:hover {
-  color: var(--red-hover);
+  color: var(--accent-hover);
   text-decoration: underline;
 }
 .event-card p {

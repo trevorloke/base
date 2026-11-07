@@ -50,7 +50,7 @@ export function RequestLinkForm({ expired = false }: { expired?: boolean }) {
         <TextField id="pref-request-email" name="email" type="email" label="Email" required autoComplete="email" error={fields.email} />
         <HumanCheck control={human} error={fields.human} />
         <ErrorSummary ref={summaryRef} error={error} fields={fields} />
-        <SubmitButton pending={pending} className="btn btn--navy btn--lg">
+        <SubmitButton pending={pending} className="btn btn--primary btn--lg">
           Send me a link
         </SubmitButton>
       </form>

@@ -7,7 +7,7 @@
 .site-page h4 {
   margin: 1.5em 0 0.5em;
   line-height: 1.2;
-  color: var(--navy);
+  color: var(--primary);
 }
 .site-page h2 {
   font-size: 1.5em;
@@ -26,7 +26,7 @@
 .site-page blockquote {
   margin: 0 0 1em;
   padding: 2px 0 2px 16px;
-  border-left: 4px solid var(--yellow);
+  border-left: 4px solid var(--highlight);
   color: var(--muted);
 }
 .site-page img {

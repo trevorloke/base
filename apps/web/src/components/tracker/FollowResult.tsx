@@ -20,7 +20,7 @@ export function FollowResult() {
       <div className="stack" style={{ gap: 14 }} role="status">
         <p className="lede">You&apos;re following promise {outcome.number}. We&apos;ll email you when its status changes, with a link to the record.</p>
         <div className="btn-row">
-          <Link href={`/tracker/${outcome.number}`} className="btn btn--navy">
+          <Link href={`/tracker/${outcome.number}`} className="btn btn--primary">
             Back to promise {outcome.number}
           </Link>
           <Link href="/tracker" className="btn btn--outline">
@@ -35,7 +35,7 @@ export function FollowResult() {
       <p className="lede">{outcome.kind === "expired" ? "That confirmation link has expired or was already used." : "Nothing to confirm here."}</p>
       <p>Open the promise you want to follow and enter your email again; a fresh link will be sent.</p>
       <div className="btn-row">
-        <Link href="/tracker" className="btn btn--navy">
+        <Link href="/tracker" className="btn btn--primary">
           Go to the tracker
         </Link>
       </div>

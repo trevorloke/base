@@ -16,7 +16,7 @@ export function CouncilLetter({ text }: { text: string }) {
       <div className="btn-row" style={{ gap: 10 }}>
         <button
           type="button"
-          className="btn btn--navy"
+          className="btn btn--primary"
           onClick={async () => {
             const current = (document.getElementById(id) as HTMLTextAreaElement | null)?.value ?? text;
             try {

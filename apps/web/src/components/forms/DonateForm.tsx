@@ -63,7 +63,7 @@ export function DonateForm({
       <AmountPicker choice={choice} onChange={setChoice} onCustomError={setCustomError} limitCents={limitCents} allowCustom monthlyNote={monthlyNote} clubNote={clubNote} />
 
       <fieldset className="group" style={{ gap: 14 }}>
-        <legend style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)" }}>Your details</legend>
+        <legend style={{ fontSize: 18, fontWeight: 700, color: "var(--primary)" }}>Your details</legend>
         <p className="hint" style={{ margin: "-4px 0 0" }}>
           BC law requires us to record the name and address of everyone who contributes.
         </p>
@@ -99,7 +99,7 @@ export function DonateForm({
       </Checkbox>
 
       <ErrorSummary ref={summaryRef} error={error} fields={summaryFields} />
-      <SubmitButton pending={pending} className="btn btn--red btn--xl btn--block" pendingLabel="Taking you to secure checkout…">
+      <SubmitButton pending={pending} className="btn btn--accent btn--xl btn--block" pendingLabel="Taking you to secure checkout…">
         Donate {choiceLabel(choice, limitCents)}
       </SubmitButton>
       <p className="small">

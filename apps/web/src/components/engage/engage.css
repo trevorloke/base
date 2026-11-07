@@ -10,7 +10,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .share-sheet__list {
   list-style: none;
@@ -27,9 +27,9 @@
   min-height: 44px;
   padding: 0 16px;
   border-radius: 999px;
-  border: 2px solid var(--navy);
-  background: #fff;
-  color: var(--navy);
+  border: 2px solid var(--primary);
+  background: var(--bg);
+  color: var(--primary);
   font-family: var(--font);
   font-size: 15px;
   font-weight: 700;
@@ -40,15 +40,15 @@
     color 0.15s ease;
 }
 .share-sheet__link:hover {
-  background: var(--outline-hover);
-  color: var(--navy);
+  background: var(--primary-wash);
+  color: var(--primary);
 }
 .share-sheet__link--whatsapp {
-  background: var(--navy);
+  background: var(--primary);
   color: #fff;
 }
 .share-sheet__link--whatsapp:hover {
-  background: var(--navy-dark);
+  background: var(--primary-dark);
   color: #fff;
 }
 .share-sheet__link svg {
@@ -64,11 +64,11 @@
   min-height: 1.4em;
   font-size: 14px;
   font-weight: 600;
-  color: var(--navy);
+  color: var(--primary);
 }
 .on-dark .share-sheet__label,
 .on-dark .share-sheet__status {
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* ── Next step card ────────────────────────────────────────────────── */
@@ -80,15 +80,15 @@
   width: 100%;
   padding: 28px;
   border-radius: var(--radius);
-  background: #fff;
-  border: 3px solid var(--yellow);
+  background: var(--bg);
+  border: 3px solid var(--highlight);
   color: var(--ink);
 }
 .next-step__thanks {
   margin: 0;
   font-size: 17px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .next-step__eyebrow {
   margin: 0;
@@ -103,7 +103,7 @@
   font-size: 26px;
   font-weight: 800;
   line-height: 1.15;
-  color: var(--navy);
+  color: var(--primary);
 }
 .next-step__body {
   margin: 0;
@@ -121,7 +121,7 @@
   align-items: center;
   min-height: 44px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .next-step__share {
   padding-top: 16px;

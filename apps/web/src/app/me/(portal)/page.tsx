@@ -71,7 +71,7 @@ export default async function MeHome({ searchParams }: PageProps<"/me">) {
               <span className="status-pill status-pill--expired">Expired</span>
               <p>{membership.expiresAt ? `Your membership ended ${formatDate(membership.expiresAt)}.` : "Your membership has ended."} Renew to keep your vote and your say.</p>
               <div className="portal-actions">
-                <Link href="/join" className="btn btn--red btn--sm">
+                <Link href="/join" className="btn btn--accent btn--sm">
                   Renew
                 </Link>
               </div>
@@ -82,7 +82,7 @@ export default async function MeHome({ searchParams }: PageProps<"/me">) {
               <span className="status-pill status-pill--none">Not a member yet</span>
               <p>{membership.pending ? "A membership payment was started but hasn't completed. Try again when you're ready." : "Members set the priorities and vote on who runs for council. It's $10 a year."}</p>
               <div className="portal-actions">
-                <Link href="/join" className="btn btn--red btn--sm">
+                <Link href="/join" className="btn btn--accent btn--sm">
                   Become a member
                 </Link>
               </div>
@@ -142,7 +142,7 @@ export default async function MeHome({ searchParams }: PageProps<"/me">) {
             <p>{monthly.monthlyCents > 0 ? `You give ${formatCents(monthly.monthlyCents)} a month. Thank you: that pays for organizers all year.` : "Manage your payment details and past receipts."}</p>
             {monthly.canManageBilling ? (
               <form method="post" action="/api/me/billing-portal" className="portal-actions">
-                <button type="submit" className="btn btn--navy btn--sm">
+                <button type="submit" className="btn btn--primary btn--sm">
                   Manage monthly gift
                 </button>
               </form>

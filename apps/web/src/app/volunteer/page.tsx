@@ -47,7 +47,7 @@ export default async function VolunteerPage() {
             <p style={{ margin: 0, fontSize: 17, lineHeight: 1.55 }}>
               Join as a member and tick “Volunteering”. Organizers see who&apos;s willing and will find you a shift that fits.
             </p>
-            <Link href="/#join" className="btn btn--navy" style={{ alignSelf: "flex-start" }}>
+            <Link href="/#join" className="btn btn--primary" style={{ alignSelf: "flex-start" }}>
               Become a member
             </Link>
           </div>

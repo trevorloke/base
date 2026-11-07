@@ -48,7 +48,7 @@ export default async function VerifySignIn({ searchParams }: PageProps<"/admin/l
               autoFocus
             />
           </div>
-          <button type="submit" className="btn btn--navy btn--lg">
+          <button type="submit" className="btn btn--primary btn--lg">
             Sign in
           </button>
         </form>

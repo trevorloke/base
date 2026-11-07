@@ -55,7 +55,7 @@ export function SignatureForm({ campaign, kind, variant, question, heading, onSi
             Thanks.{" "}
             {petition ? "We’ll deliver the names to City Hall." : "We’ll hold City Hall to it."}
           </p>
-          <p style={{ fontWeight: 700, color: "var(--navy)" }}>Share it with a neighbour:</p>
+          <p style={{ fontWeight: 700, color: "var(--primary)" }}>Share it with a neighbour:</p>
           <div className="success-actions">
             {SHARE_CHANNELS.map((c) => (
               <a key={c.key} className="btn btn--outline" href={links[c.key]} target={c.key === "sms" || c.key === "email" ? undefined : "_blank"} rel="noopener noreferrer">
@@ -78,11 +78,11 @@ export function SignatureForm({ campaign, kind, variant, question, heading, onSi
               {copied ? "Link copied" : "Copy link"}
             </button>
           </div>
-          <p style={{ fontWeight: 700, color: "var(--navy)" }}>Three ways to help next:</p>
+          <p style={{ fontWeight: 700, color: "var(--primary)" }}>Three ways to help next:</p>
           {nextSteps ?? (
             <div className="success-actions">
               {nextAsks(done.campaign.slug).map((a) => (
-                <Link key={a.href} href={a.href} className="btn btn--red">
+                <Link key={a.href} href={a.href} className="btn btn--accent">
                   {a.label}
                 </Link>
               ))}
@@ -119,7 +119,7 @@ export function SignatureForm({ campaign, kind, variant, question, heading, onSi
         <Honeypot />
         <TrackingFields />
         {(heading ?? (petition ? "Add your name" : "")) && (
-          <h3 style={{ margin: 0, fontWeight: 800, fontSize: 26, lineHeight: 1.15, color: "var(--navy)" }}>{heading ?? "Add your name"}</h3>
+          <h3 style={{ margin: 0, fontWeight: 800, fontSize: 26, lineHeight: 1.15, color: "var(--primary)" }}>{heading ?? "Add your name"}</h3>
         )}
         <div className="form-row" style={petition ? undefined : { gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))" }}>
           <TextField id={`${p}-first`} name="firstName" label="First name" required autoComplete="given-name" error={fields.firstName} />
@@ -138,7 +138,7 @@ export function SignatureForm({ campaign, kind, variant, question, heading, onSi
         <ConsentCheckbox id={`${p}-sms`} kind="sms" error={fields.smsConsent} />
         <HumanCheck control={human} error={fields.human} />
         <ErrorSummary ref={summaryRef} error={error} fields={fields} />
-        <SubmitButton pending={pending} className="btn btn--red btn--lg" style={{ minHeight: petition ? 56 : 54, fontSize: 19 }}>
+        <SubmitButton pending={pending} className="btn btn--accent btn--lg" style={{ minHeight: petition ? 56 : 54, fontSize: 19 }}>
           {petition ? "Add my name" : "Sign the pledge"}
         </SubmitButton>
         <p className="small">

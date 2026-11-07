@@ -60,7 +60,7 @@ export default async function AdminExports({ searchParams }: PageProps<"/admin/e
         <>
           <nav aria-label="Datasets" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
             {allowed.map((d) => (
-              <Link key={d} href={`/admin/exports?view=${d}`} className={`btn btn--compact ${d === view ? "btn--navy" : "btn--outline"}`} aria-current={d === view ? "page" : undefined}>
+              <Link key={d} href={`/admin/exports?view=${d}`} className={`btn btn--compact ${d === view ? "btn--primary" : "btn--outline"}`} aria-current={d === view ? "page" : undefined}>
                 {LABELS[d]}
               </Link>
             ))}
@@ -92,7 +92,7 @@ export default async function AdminExports({ searchParams }: PageProps<"/admin/e
                 Showing the latest {rows.length} {LABELS[view].toLowerCase()}.
               </p>
             )}
-            <a href={csvHref} className="btn btn--red btn--compact">
+            <a href={csvHref} className="btn btn--accent btn--compact">
               Download {LABELS[view]} CSV
             </a>
           </div>

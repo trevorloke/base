@@ -34,7 +34,7 @@
   justify-content: center;
   font-weight: 700;
   font-size: 14px;
-  background: var(--navy);
+  background: var(--primary);
   color: #fff;
 }
 .home-module-title {

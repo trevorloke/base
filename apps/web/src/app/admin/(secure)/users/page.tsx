@@ -47,7 +47,7 @@ export default async function StaffPage() {
               <li key={s.id} className={`staff ${s.active ? "" : "staff--inactive"}`}>
                 <div className="staff__who">
                   <strong>{s.name}</strong>{" "}
-                  <span className={`badge ${s.active ? "badge--navy" : "badge--bad"}`}>{s.active ? ROLE_LABELS[s.role] : "Deactivated"}</span>
+                  <span className={`badge ${s.active ? "badge--primary" : "badge--bad"}`}>{s.active ? ROLE_LABELS[s.role] : "Deactivated"}</span>
                   {s.id === user.id && <span className="badge"> you</span>}
                   <p>
                     {s.email}

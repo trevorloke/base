@@ -368,7 +368,7 @@ export function SubmitButton({
   pending,
   disabled,
   pendingLabel = "Sending…",
-  className = "btn btn--red btn--lg",
+  className = "btn btn--accent btn--lg",
   children,
   onClick,
   ...rest

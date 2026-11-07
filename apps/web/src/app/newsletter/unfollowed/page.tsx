@@ -17,7 +17,7 @@ export default async function Unfollowed({ searchParams }: PageProps<"/newslette
       </PageHead>
       <section className="section">
         <div className="container">
-          <Link href="/tracker" className="btn btn--navy btn--lg">
+          <Link href="/tracker" className="btn btn--primary btn--lg">
             Back to the promise tracker
           </Link>
         </div>

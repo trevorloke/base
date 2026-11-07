@@ -38,7 +38,7 @@ export function NewsletterForm({ source = "website", id = "nl-email" }: { source
     return (
       <>
         <LiveRegion message={done} />
-        <p ref={status} role="status" tabIndex={-1} style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--navy)" }}>
+        <p ref={status} role="status" tabIndex={-1} style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--primary)" }}>
           {done}
         </p>
       </>
@@ -77,7 +77,7 @@ export function NewsletterForm({ source = "website", id = "nl-email" }: { source
         aria-describedby={message ? `${id}-error` : undefined}
       />
       <HumanCheck control={human} />
-      <SubmitButton pending={pending} className="btn btn--navy" pendingLabel="Sending…">
+      <SubmitButton pending={pending} className="btn btn--primary" pendingLabel="Sending…">
         Subscribe
       </SubmitButton>
       {message && (

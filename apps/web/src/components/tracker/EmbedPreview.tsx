@@ -43,7 +43,7 @@ export function EmbedPreview({ snippet }: { snippet: string }) {
         <div className="btn-row" style={{ gap: 10 }}>
           <button
             type="button"
-            className="btn btn--navy"
+            className="btn btn--primary"
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(snippet);

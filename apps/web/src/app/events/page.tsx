@@ -16,7 +16,7 @@ export default async function EventsIndex() {
   return (
     <>
       <PageHead title="Come and meet us">Town halls, door-knocking, socials, and neighbourhood meetings across Surrey.</PageHead>
-      <section className="section section--red on-dark">
+      <section className="section section--accent on-dark">
         <div className="container stack" style={{ gap: 16 }}>
           {events.length === 0 ? (
             <p className="lede" style={{ color: "#fff" }}>
@@ -53,7 +53,7 @@ export default async function EventsIndex() {
                     <p className="summary">{ev.summary}</p>
                     {ev.going >= 3 && <p className="event-going">{ev.going} going</p>}
                   </div>
-                  <Link href={`/events/${ev.slug}`} className="btn btn--yellow btn--lg">
+                  <Link href={`/events/${ev.slug}`} className="btn btn--highlight btn--lg">
                     {full ? "Details" : "RSVP"}
                     <span className="visually-hidden"> for {ev.title}</span>
                   </Link>

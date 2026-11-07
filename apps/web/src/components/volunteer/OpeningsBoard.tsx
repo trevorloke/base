@@ -192,7 +192,7 @@ function OpeningCard({
         ) : (
           <>
             {!formOpen && (
-              <button ref={signUpRef} type="button" className="btn btn--red" style={{ alignSelf: "flex-start" }} onClick={onToggle}>
+              <button ref={signUpRef} type="button" className="btn btn--accent" style={{ alignSelf: "flex-start" }} onClick={onToggle}>
                 Sign up<span className="visually-hidden"> for {o.title}</span>
               </button>
             )}
