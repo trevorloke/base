@@ -8,7 +8,8 @@ import { freshDb, Client } from './helpers.js';
 const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
 const saved = { ...process.env };
-const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'BASE_PUBLIC_URL',
+const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'BASE_PUBLIC_URL', 'BASE_PATH',
+  'BASE_AIR_URL', 'BASE_AIR_SSO_SECRET', 'BASE_WEB_URL', 'BASE_WEB_SSO_SECRET',
   'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'BASE_TILE_URL'];
 let mgr, staff;
 let resendDomains = [];
@@ -56,7 +57,10 @@ const check = async (key) => ok(await mgr.post('/api/connections/check', { key }
 
 test('nothing set: what each service is for and which settings are missing — managers only', async () => {
   const s = byKey(await list());
-  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs']);
+  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'air', 'web']);
+  // base air and base web, signing in through base ground (ext/sso): optional.
+  assert.deepEqual(s.air.missing, ['BASE_AIR_URL', 'BASE_AIR_SSO_SECRET']);
+  assert.deepEqual([s.web.state, s.web.launch], ['missing', false]);
   assert.deepEqual(s.email.missing, ['RESEND_API_KEY', 'MAIL_FROM']);
   assert.equal(s.email.state, 'missing');
   assert.deepEqual(s.texting.missing, ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']);
@@ -121,4 +125,15 @@ test('the public address, the address service, the database and Google tiles ans
   assert.equal(byKey(await list()).geocoder.state, 'missing');
   assert.equal((await check('geocoder')).ok, false);
   delete process.env.GEOCODER;
+});
+
+test('the public address must end in BASE_PATH, or it says so', async () => {
+  process.env.BASE_PUBLIC_URL = 'https://base.example.org';
+  assert.equal(byKey(await list()).public.state, 'ready');
+  // A prefix in the address, but this app wasn't told it lives there.
+  process.env.BASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
+  const p = byKey(await list()).public;
+  assert.equal(p.state, 'missing');
+  assert.match(p.detail, /ends in "\/imaginesurrey" but BASE_PATH is "\(empty\)"/);
+  process.env.BASE_PUBLIC_URL = 'https://base.example.org';
 });
