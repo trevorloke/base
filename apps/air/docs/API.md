@@ -1,6 +1,8 @@
 # base air HTTP API v1 (contract)
 
-Base URL in dev: `http://localhost:4000`. All bodies and responses are JSON. Times are ISO-8601 strings.
+Base URL in dev: `http://localhost:4000`. In the base suite every path below lives under the deployment's `BASE_PATH`
+(e.g. `https://base.win/imaginesurrey/air/v1/me`); see "base air in the base suite" at the end. All bodies and responses
+are JSON. Times are ISO-8601 strings.
 
 ## Authentication
 
@@ -23,7 +25,8 @@ Agents may create posts within the autonomy dial and may only schedule, edit or 
 - `DELETE /v1/keys/:id` → 204, revokes the key immediately (owner; recorded in the ledger)
 
 ## Health
-- `GET /api/health` → `{ ok: true, version: "0.1.0", db: "pglite" | "postgres" }` (no auth)
+- `GET /api/health` → `{ ok: true, version: "0.1.0", db: "pglite" | "postgres" }` (no auth). Answers with or without the
+  `BASE_PATH` prefix, so the host's health check needs no prefix.
 
 ## Identity & workspace
 - `GET /v1/me` → `{ workspace: Workspace, actor: { type, id }, role: string | null }`
@@ -414,3 +417,44 @@ Every change is a ledger event.
 - Live: the SSE stream gains `event: inbox`, `data: { workspaceId, kind: new|updated|assigned|mention|note|settings, ids?, userIds?, noteId? }`.
 - MCP: `list_inbox` (read) and `update_inbox_item` (status, labels, note; write).
 <!-- ---- end inbox workflow -->
+
+## base air in the base suite
+
+base air is one of the base suite's apps (see the repository's SUITE.md). Each client's deployment is served under a
+prefix, `BASE_PATH` (e.g. `/imaginesurrey/air`):
+
+- Requests under `${BASE_PATH}` are handled as if at the root. `/api/health` also answers without the prefix; anything
+  else without it gets `308` to the same path and query under it. `BASE_PATH` empty: everything at the root, as before.
+- `index.html` carries `<base href="${BASE_PATH}/">`, `window.__BASE_PATH__`, the workspace's brand as CSS custom
+  properties (`<style id="base-air-brand">`, `data-theme`), `window.__BASE_AIR_BRAND__` and `window.__BASE_SUITE__`.
+- Cookies (`base_air_session`, `base_air_sso_state`) are set with `Path=${BASE_PATH}` (or `/`).
+- Links in emails, posts and webhook registrations come from `BASE_AIR_PUBLIC_URL`, which includes the prefix.
+- Client IPs (sessions, link clicks) come from `X-Forwarded-For`, `BASE_AIR_TRUSTED_PROXIES` (default 1) entries from
+  the right: base's front door sits behind Render's load balancer, so the client is the second-to-last entry.
+
+### Sign in with base
+base ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set:
+- `GET /auth/base?next=<path>` → `302` to `${BASE_GROUND_URL}/api/sso/authorize?app=air&redirect_uri=…&state=…`, with
+  `state` kept in the `base_air_sso_state` cookie (HttpOnly, SameSite=Lax, ten minutes). `next` is honoured only when it
+  is a same-origin path under the prefix; anything else lands on the room.
+- `GET /auth/base/callback?code&state` → checks `state` against the cookie, posts `{ code, redirect_uri }` to
+  `${BASE_GROUND_INTERNAL_URL or BASE_GROUND_URL}/api/sso/token` with `Authorization: Bearer <BASE_SSO_SECRET>`
+  (`BASE_GROUND_INTERNAL_URL` is used as an origin only, `http://` assumed for a bare `host:port`, followed by the path
+  of `BASE_GROUND_URL`), finds the user by email (case-insensitive) and starts a normal session (`302` to `next`).
+  No account is ever created: someone without one gets a page saying "No base air account for <email> — ask an owner
+  to invite you." Bad state, `invalid_grant` and an unreachable ground each get a plain page. Every hand-off, refused
+  or not, is in the ledger as `auth.base_handoff` (`data.outcome`: `signed_in | no_account | bad_state |
+  invalid_grant | ground_error | not_configured`).
+- `GET /api/suite` (no auth) → `{ signInWithBase, groundUrl, webUrl }`: what the sign-in screen and the base switcher
+  show.
+
+### Brand
+- `GET /v1/brand` → `{ brand, saved, defaults, updatedAt, contrast: ContrastPair[], choices: { presets, fonts, corners,
+  modes } }`. `brand` = `{ preset, name, logoUrl, palettes: { light, dark }, font, corners, mode }`, each palette
+  `{ primary, onPrimary, accent, onAccent, surface, ink }` as `#rrggbb`; `mode` is `light | dark | device`. Unsaved,
+  the deployment's default applies (`BASE_AIR_BRAND_PRESET`, `_NAME`, `_LOGO_URL`, `_MODE`, `_FONT`, `_CORNERS`,
+  `_PRIMARY`, `_ACCENT`; else the Air preset), named after the workspace.
+- `PUT /v1/brand` `{ brand, confirmLowContrast? }` (owner, people only) → same shape plus `lowContrast`. Any
+  text-and-background pair under 4.5:1 answers `409 conflict` with `details.lowContrast: { id, label, scheme, fg, bg,
+  ratio }[]` until `confirmLowContrast: true`. Invalid values → `400` with `details.problems: { field, message }[]`.
+  Recorded in the ledger as `brand.updated` with the fields that changed.
