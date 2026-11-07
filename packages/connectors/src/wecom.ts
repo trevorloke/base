@@ -167,6 +167,9 @@ export function mapWeComError(errcode: number, errmsg: string, context: string):
   }
 }
 
+/** A customer-service callback saying "new messages are waiting" (it carries a sync token, not the messages). */
+const isKfAnnouncement = (body: unknown): boolean => !!body && typeof body === "object" && field(body as WeChatXml, "MsgType") === "event" && field(body as WeChatXml, "Event") === "kf_msg_or_event";
+
 const isTokenError = (e: unknown) => e instanceof ConnectorError && [40014, 41001, 42001].includes((e.cause as WeComFailure | undefined)?.errcode ?? 0);
 
 // ---- message mapping ----------------------------------------------------------------------
@@ -309,6 +312,8 @@ export class WeComConnector implements Connector {
       verifyAccount: (account, _headers, raw, query) => this.verifyAccount(account, raw, query),
       decodeAccount: (account, raw) => this.decodeAccount(account, raw),
       parse: (body) => this.parse(body),
+      // The announcement carries no messages: core pulls the account straight after answering, using the sync token parse stored.
+      pullNow: (body) => isKfAnnouncement(body),
       // TODO(verify): WeCom only needs HTTP 200 within 5 seconds for kf callbacks; an empty body is the documented safe answer.
       ack: { body: "", contentType: "text/plain" },
     };
@@ -635,9 +640,9 @@ export class WeComConnector implements Connector {
    * (valid 10 minutes). Parse is synchronous, so the token is kept for the next fetchActivity; no items are returned.
    */
   private parse(body: unknown): WebhookBatch[] {
-    if (!body || typeof body !== "object") return [];
+    if (!isKfAnnouncement(body)) return [];
     const x = body as WeChatXml;
-    if (field(x, "MsgType") === "event" && field(x, "Event") === "kf_msg_or_event") {
+    {
       const corpId = field(x, "ToUserName");
       const openKfId = field(x, "OpenKfId");
       const token = field(x, "Token");

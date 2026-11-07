@@ -20,6 +20,10 @@ import { createWeChatConnectors } from "./wechat.ts";
 import { createWeComConnectors } from "./wecom.ts";
 import { createWeiboConnectors } from "./weibo.ts";
 import { createDouyinConnectors } from "./douyin.ts";
+import { createBandConnectors } from "./band.ts";
+import { createZaloConnectors } from "./zalo.ts";
+import { createViberConnectors } from "./viber.ts";
+import { createOkConnectors } from "./ok.ts";
 import { createLineConnectors } from "./line.ts";
 import { createNostrConnectors } from "./nostr.ts";
 import { createMisskeyConnectors } from "./misskey.ts";
@@ -86,6 +90,11 @@ export function createDefaultRegistry(env: NodeJS.ProcessEnv = process.env): Con
     // Chinese platforms with open APIs (Weibo, Douyin); WeChat and WeCom sit with the chat apps above.
     createWeiboConnectors,
     createDouyinConnectors,
+    // Community networks in Korea (Naver Band), Vietnam (Zalo), Eastern Europe and the Middle East (Viber), Russia (OK.ru).
+    createBandConnectors,
+    createZaloConnectors,
+    createViberConnectors,
+    createOkConnectors,
     createWebhookConnectors,
     createRssConnectors,
   ]) {

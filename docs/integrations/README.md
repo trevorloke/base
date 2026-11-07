@@ -27,7 +27,8 @@ so each connector is tested against the documented request and response shapes. 
 | Reddit | `reddit` | OAuth | Only with an existing registered app | New public access closed 2026-10-31; commercial terms |
 | Discord servers (read + reply) | `discord_bot` | Bot token + server ID | Yes, under 100 servers | Message Content intent: toggle in the Developer Portal; Discord verification at 100+ servers |
 | WhatsApp (business number + business-created groups) | `whatsapp` | Phone number ID + WABA ID + System User token | Yes, on your own Meta app | Meta Business verification for higher limits; Groups API needs an Official Business Account; per-message pricing |
-| WeChat Official Account (messages to the account) | `wechat` | AppID + AppSecret + original ID + server Token (+ AES key) | Verified service account needed for replies | Server IP whitelist; mainland-China hosting realities (see wechat.md) |
+| WeChat Official Account (articles, messages to the account) | `wechat` | AppID + AppSecret + original ID + server Token (+ AES key) | Verified service account needed for replies and for sending to followers | Server IP whitelist; mainland-China hosting realities (see wechat.md) |
+| WeCom (企业微信: customer service 微信客服 + group bot) | `wecom` | CorpID + Customer Service Secret + callback Token/AES key; and/or a group bot URL | Yes | Customer service must be enabled in the WeCom admin console; trusted IPs (see wecom.md) |
 | LINE (groups and chats the bot is in) | `line` | Channel access token + channel secret | Yes | Message quotas by plan |
 | Nostr | `nostr` | Secret key (nsec) + relays | Yes, fully | None |
 | Misskey (and Sharkey, Firefish…) | `misskey` | Server + access token | Yes, fully | None |
@@ -127,6 +128,11 @@ unofficial tools that try get numbers and accounts banned, so Starsign does not 
 | `WECHAT_API_BASE`, `LINE_API_BASE` | Optional API host overrides (e.g. a regional WeChat host) |
 | `WEIBO_APP_KEY`, `WEIBO_APP_SECRET`, `WEIBO_SECURITY_DOMAIN` (+ optional `WEIBO_SCOPES`, `WEIBO_API_BASE`) | Weibo app; redirect `/oauth/weibo/callback`; posts must link to the security domain |
 | `DOUYIN_CLIENT_KEY`, `DOUYIN_CLIENT_SECRET` (+ optional `DOUYIN_SCOPES`, `DOUYIN_API_BASE`) | Douyin app; redirect `/oauth/douyin/callback`; `DOUYIN_SCOPES` must match the capabilities Douyin granted |
+| `WECOM_API_BASE` | Optional WeCom API host override; customer-service callback is `/webhooks/wecom?account=<CorpID>` |
+| `BAND_CLIENT_ID`, `BAND_CLIENT_SECRET` | Naver Band service; redirect `/oauth/band/callback` |
+| `ZALO_APP_ID`, `ZALO_APP_SECRET`, `ZALO_OA_SECRET_KEY` | Zalo app; redirect `/oauth/zalo/callback`; the OA secret key checks webhook signatures (without it every Zalo delivery is refused) |
+| `VIBER_API_BASE` | Optional; Viber needs no app credentials (each channel or bot brings its token). Bot webhooks need `STARSIGN_PUBLIC_URL` |
+| `OK_CLIENT_ID`, `OK_CLIENT_SECRET`, `OK_APPLICATION_KEY` | OK.ru app; redirect `/oauth/ok/callback`; all three are required |
 | `STARSIGN_LINK_BASE_URL` | Short-link base for tracked links (default `<STARSIGN_PUBLIC_URL>/l` when public). A short domain pointed at the API reads better in posts |
 | `STARSIGN_MAX_UPLOAD_MB` | Largest upload (default 100). Uploads are held in memory, so keep it well under the instance memory; with S3 storage the web app uploads straight to the bucket instead (up to 4 GB video; set bucket CORS to allow `PUT` + `content-type` from the app origin) |
 | `STARSIGN_ALLOW_SIGNUP` | Open sign-up after the first owner |

@@ -254,6 +254,9 @@ describe("wecom sync_msg", () => {
     });
     const c = connector();
     c.webhook.parse({ ToUserName: CORP, MsgType: "event", Event: "kf_msg_or_event", Token: "OLD", OpenKfId: KF });
+    // The announcement asks core to pull at once; other events do not.
+    expect(c.webhook.pullNow?.({ ToUserName: CORP, MsgType: "event", Event: "kf_msg_or_event", Token: "OLD", OpenKfId: KF })).toBe(true);
+    expect(c.webhook.pullNow?.({ ToUserName: CORP, MsgType: "event", Event: "enter_agent" })).toBe(false);
     const items = await c.fetchActivity(acct(), new Date(NOW.getTime() - 3600_000));
     expect(items.map((i) => i.externalId)).toEqual([`${KF}:${USER}:msg2`]);
     expect(items[0]?.authorName).toBeNull();
