@@ -13,6 +13,7 @@ import { createMentionSearches, type MentionSearch, type SourceAdapter } from "@
 import { Network as NetworkEnum, NETWORK_LIMITS } from "@base-air/schema";
 import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, readSessionCookie, registerAuthRoutes, setSessionCookie } from "./auth-routes.ts";
 import { clientIpFrom, normalizeBasePath } from "./base-path.ts";
+import { registerSsoRoutes, type SsoConfig, type SuiteLinks } from "./sso.ts";
 import { registerInboxRoutes } from "./routes-inbox.ts"; // ---- inbox workflow
 import { registerVisibilityRoutes } from "./routes-visibility.ts"; // ---- AI answer visibility
 import { registerAnalyticsRoutes } from "./routes-analytics.ts"; // ---- analytics & client reports
@@ -33,6 +34,12 @@ export interface AppOptions {
   publicUrl?: string;
   /** Where this deployment lives on its host, e.g. "/imaginesurrey/air" (SUITE.md). "" = the root. */
   basePath?: string;
+  /** Sign in with base (BASE_GROUND_URL + BASE_SSO_SECRET). Null or absent: email and password only. */
+  sso?: SsoConfig | null;
+  /** The other base apps' addresses, for the switcher (BASE_GROUND_URL, BASE_WEB_URL). */
+  suite?: SuiteLinks;
+  /** Test seam for the call to base ground's token endpoint. */
+  ssoFetch?: typeof fetch;
   /** Proxies in front of this server that append to X-Forwarded-For, after the client (BASE_AIR_TRUSTED_PROXIES). */
   trustedProxies?: number;
   /** Public mention search for the tracker's "scan now". Default: every configured search. */
@@ -219,6 +226,7 @@ export function createApp(m: BaseAir, opts: AppOptions = {}) {
 
   // ---------------------------------------------------------------- people: sign-in, sessions, teams
   registerAuthRoutes(app, m, cookieOpts);
+  registerSsoRoutes(app, m, { ...cookieOpts, sso: opts.sso ?? null, suite: opts.suite ?? {}, ...(opts.ssoFetch ? { fetch: opts.ssoFetch } : {}) });
   registerInboxRoutes(app, m); // ---- inbox workflow
   registerVisibilityRoutes(app, m, { gateway: opts.gateway, ...(opts.answerEngines ? { answerEngines: opts.answerEngines } : {}) }); // ---- AI answer visibility
   registerAnalyticsRoutes(app, m, opts); // ---- analytics & client reports

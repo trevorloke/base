@@ -4,6 +4,7 @@ import { api, errorText, isApiError, reasonOf, sentence, setApiKey, USE_FIXTURES
 import { roleLabel } from "../lib/format";
 import { formatDateTime } from "../lib/time";
 import { browserTz } from "../lib/tz";
+import { signInWithBaseHref, useSuite } from "../lib/suite";
 
 export type AuthScreen = "signin" | "signup" | "forgot" | "reset" | "invite" | "key";
 
@@ -196,6 +197,7 @@ function SignInCard({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const suite = useSuite();
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -215,9 +217,22 @@ function SignInCard({
       <div className="brand">base air</div>
       <h1>Sign in</h1>
       <Notice text={notice} />
+      {suite.signInWithBase ? (
+        <>
+          <a className="btn btn-base" href={signInWithBaseHref("/")}>
+            <span className="base-mark" aria-hidden="true">
+              base
+            </span>
+            Sign in with base
+          </a>
+          <div className="gate-or" role="separator">
+            <span>or with email and password</span>
+          </div>
+        </>
+      ) : null}
       <label className="field">
         <span>Email</span>
-        <input className="input" type="email" autoComplete="username" value={email} onChange={(e) => onEmail(e.target.value)} autoFocus={!email} />
+        <input className="input" type="email" autoComplete="username" value={email} onChange={(e) => onEmail(e.target.value)} autoFocus={!email && !suite.signInWithBase} />
       </label>
       <div className="field">
         <span className="field-row">

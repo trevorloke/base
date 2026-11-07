@@ -104,6 +104,10 @@ export const LedgerEventType = z.enum([
   "visibility.settings_updated",
   "visibility.run_completed",
   // ---- end AI answer visibility
+  // ---- the base suite
+  "auth.base_handoff",
+  "brand.updated",
+  // ---- end the base suite
 ]);
 export type LedgerEventType = z.infer<typeof LedgerEventType>;
 

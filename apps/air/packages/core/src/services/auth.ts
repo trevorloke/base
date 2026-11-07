@@ -1,5 +1,5 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
-import { and, asc, count, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { invites, members, passwordResets, sessions, users, workspaces } from "@base-air/db";
 import { newId } from "@base-air/ledger";
 import type { Actor } from "@base-air/schema";
@@ -448,6 +448,47 @@ export class AuthService {
     const input = LoginInput.parse(raw);
     const u = await this.checkPassword(input.email, input.password);
     return this.start(u.id, null, meta);
+  }
+
+  // ------------------------------------------------------------ signing in with base (SUITE.md, "The hand-off")
+
+  /** The deployment's first workspace: where hand-offs that match nobody are recorded. */
+  private async homeWorkspace(): Promise<string | null> {
+    const [w] = await this.ctx.db.select({ id: workspaces.id }).from(workspaces).orderBy(asc(workspaces.createdAt)).limit(1);
+    return w?.id ?? null;
+  }
+
+  /**
+   * Record a hand-off from base ground, refused or not. A refusal that names nobody here is recorded in the
+   * deployment's first workspace (one client per deployment, so that is the client's log).
+   */
+  async recordBaseHandoff(input: { outcome: "signed_in" | "no_account" | "bad_state" | "invalid_grant" | "ground_error" | "not_configured"; email?: string | null; userId?: string | null; workspaceId?: string | null; ip?: string | null; detail?: string }): Promise<void> {
+    const workspaceId = input.workspaceId ?? (await this.homeWorkspace());
+    if (!workspaceId) return;
+    await this.ctx.events.append({
+      workspaceId,
+      type: "auth.base_handoff",
+      subjectType: "user",
+      subjectId: input.userId ?? input.email ?? "unknown",
+      actor: input.userId ? { type: "human", id: input.userId } : { type: "system", id: "base-ground" },
+      data: { outcome: input.outcome, email: input.email ?? null, ip: input.ip ?? null, ...(input.detail ? { detail: input.detail } : {}) },
+    });
+  }
+
+  /**
+   * Start a session for the person base ground vouched for, by email (case-insensitive). Never creates a user:
+   * null when nobody here has that email. The hand-off is recorded either way.
+   */
+  async signInFromBase(rawEmail: string, meta: RequestMeta = {}) {
+    const email = rawEmail.trim().toLowerCase();
+    const [u] = email ? await this.ctx.db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1) : [];
+    if (!u) {
+      await this.recordBaseHandoff({ outcome: "no_account", email: email || null, ip: meta.ip ?? null });
+      return null;
+    }
+    const started = await this.start(u.id, null, meta);
+    await this.recordBaseHandoff({ outcome: "signed_in", email: u.email, userId: u.id, workspaceId: started.view.currentWorkspaceId, ip: meta.ip ?? null });
+    return started;
   }
 
   // ------------------------------------------------------------ workspaces
