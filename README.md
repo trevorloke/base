@@ -166,7 +166,11 @@ than a week after they came off is refused. Contacts are door, phone, text or
   column is the unit; a **Home Phone** column fills its field and is the
   number to call for anyone with no mobile; and a phone number Excel has
   cut short (1.6047E+10 — its last digits are gone) is never imported:
-  the column says so, and how to save it again.
+  the column says so, and how to save it again. Tags that name a volunteer
+  role (*Vol: Door Knocker*, or anything in a Tags column headed
+  *Volunteer…*) are listed under *Volunteer roles*: choose the role each
+  is (Door Knocker → Doorknocking is guessed; GOTV is left a tag until you
+  say), and those people get it, as if added on their profile — never twice.
 - **Fix details** wherever you meet someone — under the phone on the door
   card, on the Calls card and on the profile: a name, a phone, an email,
   saved through the offline outbox like a knock. Any role; a volunteer may

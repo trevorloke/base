@@ -125,6 +125,9 @@ const wrong = Object.entries(want).filter(([h, f]) => lmap[h] !== f);
 check('the list’s columns map themselves (House Unit → Unit / apt; Home Phone → its field; Support → its 1–5 field)', wrong.length === 0, JSON.stringify(wrong));
 const notes = (await page.$$eval('.imp-map__note', (els) => els.map((e) => e.innerText))).join(' | ');
 check('a phone Excel cut short is named, and won’t be imported', /lost its last digits in Excel/.test(notes), notes);
+const roleRows = Object.fromEntries(await page.$$eval('section[aria-labelledby="imp-roles-h"] .imp-rmap__row', (rows) => rows.map((r) => [r.querySelector('.imp-rmap__word').innerText.trim(), (() => { const x = r.querySelector('select'); return x.options[x.selectedIndex].text; })()])));
+check('Volunteer roles: Vol: Door Knocker → Doorknocking; Vol: GOTV a tag only', roleRows['Vol: Door Knocker'] === 'Doorknocking' && roleRows['Vol: GOTV'] === 'A tag only', JSON.stringify(roleRows));
+await page.selectOption('select[aria-label="The role “Vol: GOTV” is"]', 'driver');
 await page.screenshot({ path: `${SHOTS}/03-list-format.png`, fullPage: true });
 await page.click('button:has-text("Check 3 rows")');
 await sleep(1500);
@@ -139,6 +142,8 @@ const rf = (await api(`/persons/${riya.id}/fields`)).json.fields;
 const fv = (n) => rf.find((f) => f.name === n)?.value;
 check('Riya’s profile fields: Province BC, House notes, Email opt-in yes, SMS opt-in no, Support 5',
   fv('Province') === 'BC' && /old supporter list/.test(fv('House notes') || '') && fv('Email opt-in') === true && fv('SMS opt-in') === false && fv('Support') === 5, JSON.stringify(rf.filter((f) => f.value != null).map((f) => [f.name, f.value])));
+const riyaRoles = (await api(`/persons/${riya.id}`)).json.roles.map((r) => r.role).sort().join(',');
+check('Riya’s volunteer roles: Doorknocking and Driver (the GOTV tag, as chosen)', riyaRoles === 'doorknocking,driver', riyaRoles);
 check('first and last kept apart, as the file has them (First Name · Surname)', riya.first_name === 'Riya' && riya.last_name === 'Sample', `${riya.first_name} · ${riya.last_name}`);
 await page.goto(`${ADMIN}/people/${riya.id}`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.pf-edit', { timeout: 8000 }).catch(() => {});

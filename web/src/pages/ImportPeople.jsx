@@ -11,6 +11,7 @@ import { readXlsx, toCsv } from '../components/xlsx.js';
 import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { matchRating, offeredCandidates, offeredCodes } from '@starbase/shared/scale';
+import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { apiPost } from '../api.js';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
@@ -384,15 +385,51 @@ const ratingValuesOf = (records, col) => {
 // A phone number Excel turned into "1.6047E+10": its last digits are gone,
 // so it is never imported as a number (the check step says which column).
 export const SCI_RE = /^\d(\.\d+)?e\+?\d+$/i;
+// Volunteer roles carried as tags: "Vol: Door Knocker", "Volunteer - GOTV",
+// or any value of a Tags column whose heading says volunteer ("Volunteer
+// Lists"). Each one found is offered under "Volunteer roles", where the
+// person importing says which role it is (or keeps it a tag only); the
+// tags themselves come in as they are.
+const ROLE_TAG_RE = /^\s*vol(?:unteer)?\s*[:\-–]\s*(.+)$/i;
+const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
+// A first reading of the words: "Door Knocker" → Doorknocking; nothing
+// sure → a tag only.
+const ROLE_WORDS = [
+  [/door|knock|canvass/, 'doorknocking'], [/phon|call/, 'phoning'], [/driv|ride/, 'driver'],
+  [/scrut/, 'scrutineer'], [/runner/, 'runner'], [/greet/, 'poll_greeter'], [/dataentry|data/, 'data_entry'],
+  [/event|host/, 'event_hosting'], [/zone|housecaptain/, 'zone_house_captain'], [/hirise|highrise|building/, 'highrise_captain'],
+  [/food|cook/, 'food'], [/transl|interpret/, 'translation'], [/burma/, 'burmashave'], [/committee/, 'community_committee'],
+  [/policy/, 'policy'], [/admin|office/, 'administration'], [/mainstreet|street/, 'mainstreeting'],
+];
+export const guessRole = (word) => {
+  const w = squash(word);
+  if (!w) return '';
+  const exact = VOLUNTEER_ROLES.find((r) => squash(r.label) === w || squash(r.code) === w);
+  if (exact) return exact.code;
+  return ROLE_WORDS.find(([re]) => re.test(w))?.[1] || '';
+};
+// The role words a tag carries, or null: from a "Vol:" tag, or any tag in a
+// volunteer column (volCol).
+const roleWord = (tag, volCol) => { const m = ROLE_TAG_RE.exec(tag); return m ? m[1].trim() : (volCol ? tag : null); };
+const resolveRole = (roleMap, word) => (Object.hasOwn(roleMap || {}, word.toLowerCase()) ? roleMap[word.toLowerCase()] : guessRole(word));
+
 // homeCol: a Home Phone column — the number to call when the row has no
 // other (it still fills the Home phone profile field too); not when the
 // column is set to Don't import.
-function toRow(scale, cells, mapping, ratingMap, homeCol = -1) {
+function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, volCols = null) {
   const row = {};
+  const roles = new Set();
   mapping.forEach((key, i) => {
     if (!key) return;
     const v = String(cells[i] ?? '').trim();
     if (!v) return;
+    if (key === 'tags') {
+      for (const t of splitTags(v)) {
+        const word = roleWord(t, volCols?.has(i));
+        const code = word ? resolveRole(roleMap, word) : '';
+        if (code) roles.add(code);
+      }
+    }
     if (key.startsWith(FIELD_KEY)) { fieldCell(row, key, SCI_RE.test(v) && i === homeCol ? '' : v); return; }
     if (key === 'tags') row.tags = row.tags ? `${row.tags};${v}` : v;
     else if (key === 'rating') { const code = resolveRating(scale, ratingMap, v); if (code) row.rating = code; }
@@ -403,6 +440,7 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1) {
     const h = String(cells[homeCol] ?? '').trim();
     if (h && !SCI_RE.test(h)) row.phone = h;
   }
+  if (roles.size) row.roles = [...roles];
   return row;
 }
 
@@ -567,6 +605,7 @@ function ImportFlow() {
   // Step 2 — mapping, then the check (a dry run). Any mapping/tag change throws the check away.
   const [mapping, setMapping] = useState([]);
   const [ratingMap, setRatingMap] = useState({}); // the rating column's values → codes ('' unrated), by choice
+  const [roleMap, setRoleMap] = useState({}); // volunteer-role tags (lower-cased words) → role codes ('' a tag only), by choice
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [tag, setTag] = useState('');
   const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, parts, error }
@@ -600,6 +639,7 @@ function ImportFlow() {
     setSource({ name, ...t, ...shaped });
     setMapping(guessMapping(scale, shaped.headers, shaped.records, !t.header, custom));
     setRatingMap({});
+    setRoleMap({});
     setTag('');
     resetAfterSource();
   };
@@ -678,6 +718,7 @@ function ImportFlow() {
     setSource(null);
     setMapping([]);
     setRatingMap({});
+    setRoleMap({});
     setTag('');
     setLoadError(null);
     setPasteText('');
@@ -704,11 +745,17 @@ function ImportFlow() {
   const total = records.length;
   // A Home Phone column (by its name): the number to call when there's no other.
   const homeCol = source ? source.headers.findIndex((h) => normHeader(h) === 'homephone') : -1;
+  // Columns whose heading says volunteer ("Volunteer Lists"): mapped to
+  // Tags, every value in them is a role to place.
+  const volCols = useMemo(
+    () => new Set(source ? source.headers.map((h, i) => (/volunteer/i.test(h) ? i : -1)).filter((i) => i >= 0) : []),
+    [source],
+  );
   const partAt = (start, size) => records.slice(start, start + size)
-    .map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol), row: r.row }));
+    .map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol, roleMap, volCols), row: r.row }));
   const preview = useMemo(
-    () => (source ? source.records.slice(0, 5).map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol), row: r.row, cells: r.cells })) : []),
-    [source, mapping, scale, ratingMap, homeCol],
+    () => (source ? source.records.slice(0, 5).map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol, roleMap, volCols), row: r.row, cells: r.cells })) : []),
+    [source, mapping, scale, ratingMap, homeCol, roleMap, volCols],
   );
   // Phone columns Excel cut short ("1.6047E+10"), by column: how many.
   const sciByCol = useMemo(() => {
@@ -750,6 +797,30 @@ function ImportFlow() {
     const vals = [...seen.values()];
     return { badRatings: n, badValues: vals.length > 3 ? `${vals.slice(0, 3).join(', ')}…` : vals.join(', ') };
   }, [source, ratingCol, scale, ratingMap]);
+  // Volunteer-role tags in the Tags columns, most common first.
+  const roleWords = useMemo(() => {
+    const seen = new Map();
+    if (source) {
+      mapping.forEach((key, i) => {
+        if (key !== 'tags') return;
+        for (const r of source.records) {
+          for (const t of splitTags(r.cells[i])) {
+            const word = roleWord(t, volCols.has(i));
+            if (!word) continue;
+            const k = word.toLowerCase();
+            const cur = seen.get(k) || { word, tag: t, n: 0 };
+            cur.n += 1;
+            seen.set(k, cur);
+          }
+        }
+      });
+    }
+    return [...seen.values()].sort((a, b) => b.n - a.n || a.word.localeCompare(b.word)).slice(0, 40);
+  }, [source, mapping, volCols]);
+  const setRoleMeaning = (word, code) => {
+    setRoleMap((m) => ({ ...m, [word.toLowerCase()]: code }));
+    setCheck(null);
+  };
   const setRatingMeaning = (value, code) => {
     setRatingMap((m) => ({ ...m, [value.toLowerCase()]: code }));
     setCheck(null);
@@ -988,7 +1059,7 @@ function ImportFlow() {
                     const own = Object.hasOwn(ratingMap, value.toLowerCase());
                     return (
                       <li key={value.toLowerCase()} className={`imp-rmap__row${cur ? ' is-used' : ''}`}>
-                        <span className="imp-rmap__val"><span className="imp-rmap__word">{value}</span> <span className="mono muted">{n.toLocaleString('en-CA')} {plural(n, 'row')}</span></span>
+                        <span className="imp-rmap__val"><span className="imp-rmap__word">{value}</span> <span className="mono muted">{plural(n, 'row', 'rows')}</span></span>
                         <span className="imp-map__arrow" aria-hidden="true">→</span>
                         <select className="input imp-rmap__select" value={cur} disabled={locked}
                           aria-label={`What “${value}” means`} onChange={(e) => setRatingMeaning(value, e.target.value)}>
@@ -1008,11 +1079,37 @@ function ImportFlow() {
                   })}
                 </ul>
                 {ratingValues.more > 0 && (
-                  <p className="imp-hint imp-hint--sm">…and {ratingValues.more.toLocaleString('en-CA')} rarer {plural(ratingValues.more, 'value')}, read as the scale reads them (unrated otherwise).</p>
+                  <p className="imp-hint imp-hint--sm">…and {plural(ratingValues.more, 'rarer value', 'rarer values')}, read as the scale reads them (unrated otherwise).</p>
                 )}
                 {Object.keys(ratingMap).length > 0 && !locked && (
                   <button type="button" className="btn btn-quiet imp-rmap__reset" onClick={() => { setRatingMap({}); setCheck(null); }}>Back to the scale’s own reading</button>
                 )}
+              </section>
+            )}
+            {roleWords.length > 0 && (
+              <section className="imp-rmap" aria-labelledby="imp-roles-h">
+                <h3 id="imp-roles-h" className="imp-rmap__h">Volunteer roles</h3>
+                <p className="imp-hint imp-hint--sm">
+                  Tags in the list that name a volunteer role. Choose the role each one is, and those people get it (as if added on their profile) — so you can pick them by role when staffing shifts. The tags still come in as they are.
+                </p>
+                <ul className="imp-rmap__list">
+                  {roleWords.map(({ word, tag: t, n }) => {
+                    const cur = resolveRole(roleMap, word);
+                    const own = Object.hasOwn(roleMap, word.toLowerCase());
+                    return (
+                      <li key={word.toLowerCase()} className={`imp-rmap__row${cur ? ' is-used' : ''}`}>
+                        <span className="imp-rmap__val"><span className="imp-rmap__word">{t}</span> <span className="mono muted">{plural(n, 'row', 'rows')}</span></span>
+                        <span className="imp-map__arrow" aria-hidden="true">→</span>
+                        <select className="input imp-rmap__select" value={cur} disabled={locked}
+                          aria-label={`The role “${t}” is`} onChange={(e) => setRoleMeaning(word, e.target.value)}>
+                          <option value="">A tag only</option>
+                          {VOLUNTEER_ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
+                        </select>
+                        {own && <span className="imp-rmap__own mono" aria-hidden="true">yours</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
               </section>
             )}
             {!hasName && (

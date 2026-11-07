@@ -4,6 +4,7 @@ import { civic } from '../lib/address.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { matchRating, offeredCodes } from '@starbase/shared/scale';
+import { VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
 import { loadScale } from '../ext/scale/rules.js';
 import { runAction, newId } from '../lib/events.js';
 import { geocodeAddress } from '../lib/geocode.js';
@@ -51,6 +52,9 @@ const rowSchema = z.object({
   // A pin already known (a list that was geocoded before).
   lat: z.union([z.string().max(40), z.number()]).nullish(),
   lng: z.union([z.string().max(40), z.number()]).nullish(),
+  // Volunteer roles, as the person importing chose them from the file's
+  // tags ("Vol: Door Knocker" → doorknocking); the tags stay as they are.
+  roles: z.array(z.enum(VOLUNTEER_ROLE_CODES)).max(20).nullish(),
   // 1/0 (yes/no) columns that become the volunteer and donor tags.
   volunteer: z.union([z.string().max(20), z.number(), z.boolean()]).nullish(),
   donor: z.union([z.string().max(20), z.number(), z.boolean()]).nullish(),
@@ -116,6 +120,7 @@ const cleanRow = (raw, i, scale) => {
       city: norm(v.city) || null,
       postal: norm(v.postal).toUpperCase() || null,
       tags: [...new Set(tags.map((t) => norm(t)).filter((t) => t && t.length <= 40))].slice(0, 50),
+      roles: [...new Set(v.roles || [])],
     },
   };
 };
@@ -209,6 +214,22 @@ app.post('/import', async (c) => {
   });
 
   await statsReady(c.get('db'));
+  // Volunteer roles: the ones a row names that the person doesn't have yet.
+  const addRoles = async (tx, personId, roles, write, emit, fresh = false) => {
+    if (!roles.length) return [];
+    const have = fresh ? new Set() : new Set((await tx.query(
+      'select role from volunteer_roles where workspace_id = $1 and person_id = $2', [ctx.workspaceId, personId],
+    )).rows.map((x) => x.role));
+    const add = roles.filter((r) => !have.has(r));
+    if (write) {
+      for (const role of add) {
+        const id = newId();
+        await tx.query('insert into volunteer_roles (id, workspace_id, person_id, role) values ($1, $2, $3, $4)', [id, ctx.workspaceId, personId, role]);
+        emit('volunteer_role', id, 'create', { id, person_id: personId, role, source: 'import' });
+      }
+    }
+    return add;
+  };
   // write=false is the dry run: identical decisions, no writes.
   const run = async (tx, emit, write = true) => {
     const existing = await candidates(tx, ctx.workspaceId, clean);
@@ -245,6 +266,7 @@ app.post('/import', async (c) => {
         const newHandles = Object.entries(r.socials).filter(([k]) => !String(match.socials?.[k] || '').trim());
         if (newHandles.length) patch.socials = { ...(match.socials || {}), ...Object.fromEntries(newHandles) };
         const filled = await fillExtras(tx, match.id, r, write, emit);
+        if ((await addRoles(tx, match.id, r.roles, write, emit)).length) filled.push('roles');
         if (Object.keys(patch).length === 0 && !filled.length) { unchanged += 1; decisions.push({ row: r.index + 1, name: r.name, action: 'unchanged', id: match.id }); continue; }
         merged += 1;
         decisions.push({ row: r.index + 1, name: r.name, action: 'merged', id: match.id, fields: [...Object.keys(patch), ...filled] });
@@ -283,6 +305,7 @@ app.post('/import', async (c) => {
           emit('person', id, 'create', { ...p, source: 'import' });
         }
         await fillExtras(tx, id, r, write, emit);
+        await addRoles(tx, id, r.roles, write, emit, true);
         index(p); // later rows in the same file dedupe against this one
       }
     }

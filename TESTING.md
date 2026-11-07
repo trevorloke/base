@@ -542,7 +542,9 @@ by itself: House Number + Street Name become one address, Latitude and
 Longitude a pin, Volunteer and Donor (1/0) the tags, Home Phone, Province,
 House/Building Notes, Access Type, Dwelling Type, Interaction Status/Date,
 Organizer, Email/SMS Opt-In, Sign, Support (1–5) and Voted the standard
-profile fields of the same names.
+profile fields of the same names. Tags like *Vol: Door Knocker* show under
+**Volunteer roles** (Doorknocking guessed); set *Vol: GOTV* to Driver, import,
+and the person's profile lists both roles. Import again: no role twice.
 Then **Place on map** looks the addresses up with the BC Address
 Geocoder (needs internet). It runs on the server: you can close the page and
 it keeps going (come back to Import or the map to see how far it's got, or
