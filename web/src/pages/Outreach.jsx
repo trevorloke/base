@@ -21,8 +21,6 @@ import {
 } from '../components/AbTests.jsx';
 import LaddersLink from '../components/LaddersLink.jsx';
 import { useTextingStatus } from '../components/TextingStatus.js';
-import { KIND_WORDS, MailoutForm, STATUS_WORDS } from './Mailout.jsx';
-import './mailouts.css';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { MarkdownField, toDataUrl, uploadImage } from '../components/MarkdownField.jsx';
 import './outreach.css';
@@ -30,13 +28,11 @@ import './outreach.css';
 const TABS = [
   { key: 'email',   label: 'Email' },
   { key: 'texting', label: 'Texting' },
-  { key: 'mail',    label: 'Mail' },
 ];
 // The one yellow button in the header, per module.
 const PRIMARY = {
   email: 'Write an email',
   texting: 'Write a text',
-  mail: 'New mailout',
 };
 // Older addresses → the module that has them now.
 const MOVED = { newsletter: 'email', eblast: 'email', press: 'email', texts: 'texting' };
@@ -52,7 +48,6 @@ const VOLUNTEER_TABS = new Set([]);
 const TAB_ICONS = {
   email: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /></>,
   texting: <><path d="M4 5.5h16v10H9l-4 3.5z" /><path d="M8 9h8M8 12h5" /></>,
-  mail: <><path d="M3.5 7.5h13v10h-13z" /><path d="M16.5 10.5h4v7h-4" /><path d="M6 11h5M6 14h7" /></>,
   newsletter: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /></>,
   eblast: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /><path d="M7 15.5h4" /></>,
   texts: <><path d="M4 5.5h16v10H9l-4 3.5z" /><path d="M8 9h8M8 12h5" /></>,
@@ -1098,47 +1093,6 @@ function TextingTab(props) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIL — letters, postcards and labels, printed here and put in the mail
-// ─────────────────────────────────────────────────────────────────────────────
-function MailTab({ canWrite, creating, onClose }) {
-  const navigate = useNavigate();
-  const q = useQuery({ queryKey: ['mailouts'], queryFn: () => apiGet('/mailouts') });
-  const lists = useQuery({ queryKey: ['lists', 'all'], queryFn: () => apiGet('/lists') });
-  const rows = q.data?.mailouts ?? [];
-  return (
-    <>
-      {canWrite && creating && (
-        <MailoutForm lists={lists.data?.lists} mailFrom={q.data?.mail_from}
-          onSaved={(m) => { onClose(); navigate(`/mailouts/${m.id}`); }} onCancel={onClose} />
-      )}
-      {!creating && (
-        <>
-          <p className="ot-note">Letters, postcards and envelope labels to a list — printed here, then into the mail. Thank-you letters to donors start from Donations → Stewardship.</p>
-          {q.isError && <p className="error">{q.error.message}</p>}
-          {q.isSuccess && rows.length === 0 && <p className="ot-empty">No mailouts yet.</p>}
-          <ul className="ml-list">
-            {rows.map((m) => (
-              <li key={m.id} className="ot-item">
-                <Link className="ot-row" to={`/mailouts/${m.id}`}>
-                  <span className="ot-row__main">
-                    <span className="ot-row__name">{m.name}</span>
-                    <span className="ot-row__sub">
-                      <span>{KIND_WORDS[m.kind]}</span>
-                      <span>{STATUS_WORDS[m.status]}{m.status === 'mailed' && m.mailed_at ? ` ${fmtDay(m.mailed_at)}` : ''}</span>
-                      {m.recipients > 0 && <span>{m.recipients} {m.recipients === 1 ? 'person' : 'people'}</span>}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </>
-  );
-}
-
 // Press releases sent before stay in the record (Email → past sends).
 // eslint-disable-next-line no-unused-vars
 function PressTab({ me, canWrite, creating, onClose }) {
@@ -1332,7 +1286,6 @@ export default function Outreach() {
 
       {tab === 'email' && <EmailTab {...tabProps} />}
       {tab === 'texting' && <TextingTab {...tabProps} />}
-      {tab === 'mail' && <MailTab {...tabProps} />}
       {canWrite && !creating && tab === 'email' && <LaddersLink />}
 
       {toast.msg && (

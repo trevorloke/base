@@ -4,8 +4,7 @@
 // Donations area).
 //
 //   gift_thanks      one per gift: how it was thanked (a call, an email, a
-//                    handwritten note, a letter — a printed mailout marks
-//                    its gifts so, ext/mailouts — or in person), by whom, when
+//                    handwritten note, a letter, or in person), by whom, when
 //   donor_steps      a donor's next step and its date ("Coffee after the
 //                    debate", Nov 20) — one per donor, replaced when done
 //
@@ -35,7 +34,6 @@ create table if not exists gift_thanks (
   person_id uuid references persons(id) on delete set null,
   how text not null check (how in ('call', 'email', 'note', 'letter', 'in_person')),
   note text,
-  mailout_id uuid,
   thanked_by uuid references users(id),
   thanked_at timestamptz not null default now(),
   unique (workspace_id, gift_id)
@@ -56,23 +54,22 @@ const MONEY = ['manager', 'treasurer', 'staff'];
 export const HOWS = ['call', 'email', 'note', 'letter', 'in_person'];
 const uuid = () => z.uuid();
 
-// Thank a gift (once; a second thanks replaces the first). Used by the
-// mailouts too, when a thank-you letter is marked mailed.
-export const thankGift = async (tx, ctx, { giftId, how, note = null, mailoutId = null }, emit) => {
+// Thank a gift (once; a second thanks replaces the first).
+export const thankGift = async (tx, ctx, { giftId, how, note = null }, emit) => {
   const g = (await tx.query(
     'select id, person_id from gifts where id = $1 and workspace_id = $2 and deleted_at is null', [giftId, ctx.workspaceId],
   )).rows[0];
   if (!g) throw httpError(404, 'gift not found');
   const id = newId();
   const row = (await tx.query(
-    `insert into gift_thanks (id, workspace_id, gift_id, person_id, how, note, mailout_id, thanked_by)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
-     on conflict (workspace_id, gift_id) do update set how = excluded.how, note = excluded.note, mailout_id = excluded.mailout_id,
+    `insert into gift_thanks (id, workspace_id, gift_id, person_id, how, note, thanked_by)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     on conflict (workspace_id, gift_id) do update set how = excluded.how, note = excluded.note,
        thanked_by = excluded.thanked_by, thanked_at = now()
      returning id, thanked_at`,
-    [id, ctx.workspaceId, g.id, g.person_id, how, note, mailoutId, ctx.user.id],
+    [id, ctx.workspaceId, g.id, g.person_id, how, note, ctx.user.id],
   )).rows[0];
-  emit('gift_thanks', row.id, 'update', { gift_id: g.id, how, ...(mailoutId ? { mailout_id: mailoutId } : {}) });
+  emit('gift_thanks', row.id, 'update', { gift_id: g.id, how });
   return { gift_id: g.id, how, thanked_at: row.thanked_at };
 };
 

@@ -35,10 +35,6 @@ const REACH = {
     and not exists (select 1 from subscriptions s where s.workspace_id = p.workspace_id and s.email = lower(p.email) and s.status = 'unsubscribed')`,
   phone: `and p.phone is not null and trim(p.phone) <> ''
     and not (p.tags @> '"do-not-text"'::jsonb) and not (p.tags @> '"do-not-contact"'::jsonb)`,
-  // A letter or postcard (ext/mailouts): a street address, and not
-  // do-not-mail or do-not-contact.
-  mail: `and p.address is not null and trim(p.address) <> ''
-    and not (p.tags @> '"do-not-mail"'::jsonb) and not (p.tags @> '"do-not-contact"'::jsonb)`,
 };
 
 // Everyone a list names (the people rows), or only those with the reach.

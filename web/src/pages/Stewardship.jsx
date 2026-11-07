@@ -3,14 +3,12 @@
 // step for the ones who matter (ext/stewardship).
 //   To thank      each gift no one has thanked, oldest first, with how many
 //                 days it has waited — Called · Emailed · Note · Letter
-//                 marks it; "Write thank-you letters" starts a mailout to
-//                 all of them (Outreach → Mail): printed and marked mailed,
-//                 their gifts are thanked by letter.
+//                 marks it.
 //   Next steps    one per donor, with a date; the due ones first; Done.
 //   Lapsed        gave in an earlier year and not this one.
 //   Top donors    this year's biggest, and when they were last thanked.
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
@@ -48,7 +46,6 @@ function Donor({ id, name }) {
 
 export default function Stewardship() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const online = useOnline();
   const q = useQuery({ queryKey: ['stewardship'], queryFn: () => apiGet('/stewardship') });
   const [busy, setBusy] = useState(null);
@@ -64,17 +61,6 @@ export default function Stewardship() {
       setSaid(`✓ ${g.name} — ${label.toLowerCase()}`);
       refresh();
     } catch (e) { setError(e.message); } finally { setBusy(null); }
-  };
-  const letters = async () => {
-    setBusy('letters'); setError(null);
-    try {
-      const r = await action('mailout.save', {
-        name: `Thank-you letters · ${new Date().toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}`,
-        kind: 'letter', audience: { thanks: true },
-        body: 'Dear {{first_name}},\n\nThank you for your gift of {{amount}} on {{gift_date}}. It goes straight to the work of the campaign — the doors we knock, the calls we make, and the city we are building together.\n\nWith gratitude,\n\n{{campaign}}',
-      });
-      navigate(`/mailouts/${r.mailout.id}`);
-    } catch (e) { setError(e.message); setBusy(null); }
   };
   const doneStep = async (s) => {
     setBusy(s.person_id);
@@ -107,7 +93,6 @@ export default function Stewardship() {
       <section className="sw-sec" aria-labelledby="sw-thank">
         <div className="sw-sec__head">
           <h2 id="sw-thank">To thank</h2>
-          {d.to_thank.length > 0 && <button type="button" className="btn btn-primary ops-tap" disabled={!online || busy === 'letters'} onClick={letters}>Write thank-you letters</button>}
         </div>
         {d.to_thank.length === 0 ? <p className="ops-empty">Everyone has been thanked.</p> : (
           <ul className="sw-list">

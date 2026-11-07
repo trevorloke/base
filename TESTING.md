@@ -422,15 +422,8 @@ one tap away under **More**.
   other's old link: *Merged — open their record*). *Not the same* keeps a
   pair away.
 - **Donations → Stewardship** — log two gifts; both are under *To thank*.
-  *Called* on one: it leaves. *Write thank-you letters*: a letter mailout to
-  the other opens; *Get the list ready*; *Letters* opens a page with their
-  name, gift and date filled in (print at 100%); *Address labels* an Avery
-  5160 sheet; *Mark as mailed* → *2 gifts thanked*… and To thank is empty.
+  *Called* on one: it leaves; *Letter* on the other — To thank is empty.
   *Next step…* on a donor sets a step and date; *Done* clears it.
-- **Outreach → Mail → New mailout** — a postcard to a list; *Postcards —
-  sample* before it's ready; *Get the list ready* says how many and how many
-  were left out (no street address, or tagged do-not-mail); *Postcards*
-  prints a message side and an address side for each (print both sides).
 - **Signs** — tap *To put up* / *Up* / *Taken down* to filter; **Add a sign**
   (it needs an address); a request that never went up can be *Cancelled*.
 - **Map → filter button** — *Strong yes (1)* and *Lean yes (2)* sit beside
