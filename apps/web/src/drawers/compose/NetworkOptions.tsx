@@ -15,8 +15,24 @@ export interface TikTokExtras {
 
 export const NO_TIKTOK: TikTokExtras = { disclose: false, yourBrand: false, branded: false, musicOk: false };
 
-const TITLE_NETS = new Set<Network>(["youtube", "reddit", "pinterest"]);
-const TITLE_MAX: Partial<Record<Network, number>> = { youtube: 100, reddit: 300, pinterest: 100 };
+/** Networks that refuse a post without a title. */
+const TITLE_NETS = new Set<Network>(["youtube", "reddit", "pinterest", "wordpress", "ghost", "lemmy", "zalo"]);
+/** Networks that take a title (or subject line) but fall back to the post's first line without one. */
+const OPTIONAL_TITLE_NETS = new Set<Network>(["wechat", "mailchimp", "kit", "tumblr"]);
+const TITLE_MAX: Partial<Record<Network, number>> = { youtube: 100, reddit: 300, pinterest: 100, ghost: 255, lemmy: 200, zalo: 150, wechat: 64, mailchimp: 150, kit: 150 };
+const TITLE_PLACEHOLDER: Partial<Record<Network, string>> = {
+  youtube: "What the video is about",
+  reddit: "A title the subreddit will read",
+  pinterest: "What the pin shows",
+  wordpress: "The post's headline",
+  ghost: "The post's headline",
+  lemmy: "A title the community will read",
+  zalo: "The article's headline",
+  wechat: "Article title (标题); empty uses the first line",
+  mailchimp: "Subject line; empty uses the first line",
+  kit: "Subject line; empty uses the first line",
+  tumblr: "A heading above the post (optional)",
+};
 const FIRST_COMMENT_NETS = new Set<Network>(["instagram", "facebook", "linkedin", "youtube", "reddit"]);
 const LINK_NETS = new Set<Network>(["facebook", "linkedin", "pinterest", "reddit"]);
 const POLL_NETS = new Set<Network>(["x", "mastodon", "telegram"]);
@@ -60,7 +76,7 @@ const MASTODON_VISIBILITY: [MastodonVisibility, string][] = [
 
 /** Whether a network has fields of its own beyond the text (link tracking, when on, is shown for every network regardless). */
 export function hasOptions(network: Network, kinds: string[]): boolean {
-  return selectableKinds(kinds).length > 1 || TITLE_NETS.has(network) || FIRST_COMMENT_NETS.has(network) || LINK_NETS.has(network) || POLL_NETS.has(network) || ["tiktok", "mastodon", "google_business"].includes(network);
+  return selectableKinds(kinds).length > 1 || TITLE_NETS.has(network) || OPTIONAL_TITLE_NETS.has(network) || FIRST_COMMENT_NETS.has(network) || LINK_NETS.has(network) || POLL_NETS.has(network) || ["tiktok", "mastodon", "google_business"].includes(network);
 }
 
 /** Poll is a toggle of its own, so it never shows as a kind. */
@@ -90,7 +106,7 @@ export function variantProblems(network: Network, kinds: string[], o: VariantOpt
   const kind = (o.kind ?? selectableKinds(kinds)[0] ?? "post") as PostKind;
 
   if (NETWORK_NEEDS_MEDIA.has(network) && !media.length) {
-    out.push(network === "youtube" ? "YouTube needs a video" : network === "tiktok" ? "TikTok needs a video or photos" : `${label} needs an image or video`);
+    out.push(network === "youtube" ? "YouTube needs a video" : network === "tiktok" ? "TikTok needs a video or photos" : network === "wechat" || network === "zalo" ? `${label} articles need a cover image` : `${label} needs an image or video`);
   }
   if (network === "youtube" && media.length && !videos.length) out.push("YouTube needs a video, not an image");
   if (media.length > NETWORK_MAX_MEDIA[network]) out.push(`${label} takes at most ${NETWORK_MAX_MEDIA[network]} ${NETWORK_MAX_MEDIA[network] === 1 ? "attachment" : "attachments"}`);
@@ -104,10 +120,11 @@ export function variantProblems(network: Network, kinds: string[], o: VariantOpt
   if (kind === "carousel" && media.length < 2) out.push(`${label} carousel needs at least 2 images or videos`);
   if (kind === "story" && media.length !== 1) out.push(`${label} story takes exactly 1 image or video`);
 
-  if (TITLE_NETS.has(network)) {
+  if (TITLE_NETS.has(network) || OPTIONAL_TITLE_NETS.has(network)) {
     const t = (o.title ?? "").trim();
-    if (!t) out.push(`${label} needs a title`);
-    else if (t.length > (TITLE_MAX[network] ?? 300)) out.push(`${label} titles are at most ${TITLE_MAX[network]} characters`);
+    const max = TITLE_MAX[network];
+    if (!t && TITLE_NETS.has(network)) out.push(`${label} needs a title`);
+    else if (max && [...t].length > max) out.push(`${label} ${network === "mailchimp" || network === "kit" ? "subject lines" : "titles"} are at most ${max} characters`);
   }
   if (network === "reddit") {
     const sub = (o.subreddit ?? "").trim();
@@ -230,17 +247,18 @@ export function NetworkOptions({
         </div>
       ) : null}
 
-      {TITLE_NETS.has(network) ? (
+      {TITLE_NETS.has(network) || OPTIONAL_TITLE_NETS.has(network) ? (
         <label className="opt-field" htmlFor={id("title")}>
           <span className="opt-label">
-            Title <span className="opt-req">required</span>
+            {network === "mailchimp" || network === "kit" ? "Subject line" : "Title"}
+            {TITLE_NETS.has(network) ? <span className="opt-req"> required</span> : null}
           </span>
           <input
             id={id("title")}
             className="input"
             value={value.title ?? ""}
             maxLength={(TITLE_MAX[network] ?? 300) + 20}
-            placeholder={network === "youtube" ? "What the video is about" : network === "reddit" ? "A title the subreddit will read" : "What the pin shows"}
+            placeholder={TITLE_PLACEHOLDER[network] ?? "Title"}
             onChange={(e) => set({ title: e.target.value })}
           />
         </label>

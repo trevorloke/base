@@ -168,7 +168,7 @@ export const NETWORK_MAX_TEXT: Record<Network, number> = {
 export const NETWORK_THREADS: ReadonlySet<Network> = new Set<Network>(["x", "bluesky", "threads", "mastodon", "nostr", "misskey"]);
 
 /** Networks that refuse a post without an image or video. */
-export const NETWORK_NEEDS_MEDIA: ReadonlySet<Network> = new Set<Network>(["instagram", "tiktok", "pinterest", "youtube", "douyin", "wechat"]);
+export const NETWORK_NEEDS_MEDIA: ReadonlySet<Network> = new Set<Network>(["instagram", "tiktok", "pinterest", "youtube", "douyin", "wechat", "zalo"]);
 
 /** Most attachments a single post can carry. */
 export const NETWORK_MAX_MEDIA: Record<Network, number> = {

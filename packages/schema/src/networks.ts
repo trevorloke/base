@@ -158,7 +158,7 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   douyin: { maxText: 1000, maxMedia: 1, requiresMedia: true, supportsThread: false },
   wecom: { maxText: 2048, maxMedia: 1, requiresMedia: false, supportsThread: false },
   band: { maxText: 10000, maxMedia: 10, requiresMedia: false, supportsThread: false },
-  zalo: { maxText: 2000, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  zalo: { maxText: 2000, maxMedia: 1, requiresMedia: true, supportsThread: false }, // an OA article: cover image required
   viber: { maxText: 7000, maxMedia: 1, requiresMedia: false, supportsThread: false },
   ok: { maxText: 10000, maxMedia: 10, requiresMedia: false, supportsThread: false },
 };
