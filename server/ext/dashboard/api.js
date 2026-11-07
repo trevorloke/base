@@ -20,6 +20,7 @@
 import { Hono } from 'hono';
 import { bandOf } from '../../../shared/scale.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
+import { startOfDay, toLocal } from '../../lib/tzsql.js';
 
 export const api = new Hono();
 export const OUTCOMES = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit', 'left_message'];
@@ -28,9 +29,9 @@ const OUT_NOW_MS = 10 * 60_000;     // a position this fresh is "out now"
 const TRAIL_MAX = 400;              // points per person on the map
 
 const SINCE = {
-  today: "date_trunc('day', now() at time zone $1::text) at time zone $1::text",
-  '7d': "(date_trunc('day', now() at time zone $1::text) - interval '6 days') at time zone $1::text",
-  '30d': "(date_trunc('day', now() at time zone $1::text) - interval '29 days') at time zone $1::text",
+  today: startOfDay('$1::text'),
+  '7d': startOfDay('$1::text', 6),
+  '30d': startOfDay('$1::text', 29),
   all: 'null::timestamptz',
 };
 const DAYS = { today: 1, '7d': 7, '30d': 30 };
@@ -95,7 +96,7 @@ api.get('/dashboard', async (c) => {
 
   // The stacked bar: a row per day (or week) and outcome.
   const weekly = period === 'all';
-  const bucket = weekly ? "to_char(date_trunc('week', c.created_at at time zone $3::text), 'YYYY-MM-DD')" : "to_char(c.created_at at time zone $3::text, 'YYYY-MM-DD')";
+  const bucket = weekly ? `to_char(date_trunc('week', ${toLocal('c.created_at', '$3::text')}), 'YYYY-MM-DD')` : `to_char(${toLocal('c.created_at', '$3::text')}, 'YYYY-MM-DD')`;
   const cells = (await db.query(
     `select ${bucket} as day, c.outcome, count(*)::int as n from contacts c
       where c.workspace_id = $1 and ${inPeriod} group by 1, 2 order by 1`, [...P, tz],

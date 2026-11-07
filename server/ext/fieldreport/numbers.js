@@ -27,6 +27,7 @@ import { bandOf } from '@starbase/shared/scale';
 import { pointInPolygon, groupDoors } from '../../lib/geo.js';
 import { httpError } from '../../actions/util.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
+import { fromLocal, toLocal } from '../../lib/tzsql.js';
 
 // left_lit: a lit drop (ext/litdrop) — its own column, never a talk.
 export const KNOWN = ['contacted', 'no_answer', 'refused', 'moved', 'inaccessible', 'left_lit'];
@@ -69,8 +70,8 @@ export const rangeOf = (query = {}, tz) => {
 // The campaign's days as moments: [start, end).
 export const boundsOf = async (db, range, tz) => {
   const r = (await db.query(
-    `select ($1::date)::timestamp at time zone $3::text as start,
-            ($2::date + 1)::timestamp at time zone $3::text as stop`,
+    `select ${fromLocal('($1::date)::timestamp', '$3::text')} as start,
+            ${fromLocal('($2::date + 1)::timestamp', '$3::text')} as stop`,
     [range.from === 'all' ? null : range.from, range.to, zoneOf(tz)],
   )).rows[0];
   return { start: r.start ? new Date(r.start).toISOString() : null, end: new Date(r.stop).toISOString() };
@@ -89,7 +90,7 @@ const parseJ = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : 
 // with its door, its day in the campaign's zone and its pin (null: none).
 export const doorContacts = async (db, ws, bounds, tz) => (await db.query(
   `select c.person_id, c.outcome, c.rating, c.created_by, c.created_at,
-          to_char(c.created_at at time zone $4::text, 'YYYY-MM-DD') as day,
+          to_char(${toLocal('c.created_at', '$4::text')}, 'YYYY-MM-DD') as day,
           p.lat, p.lng, p.address, p.unit
      from contacts c join persons p on p.id = c.person_id
     where c.workspace_id = $1 and c.channel = 'door'
@@ -227,7 +228,7 @@ export const mineAll = async (db, ws, userId, tz) => {
     `select count(distinct case when nullif(trim(p.address), '') is null then p.id::text
                                 else lower(trim(p.address)) || '|' || lower(trim(coalesce(p.unit, ''))) end)::int as doors,
             count(*) filter (where c.outcome = 'contacted')::int as talked,
-            count(distinct to_char(c.created_at at time zone $3::text, 'YYYY-MM-DD'))::int as days_out
+            count(distinct to_char(${toLocal('c.created_at', '$3::text')}, 'YYYY-MM-DD'))::int as days_out
        from contacts c join persons p on p.id = c.person_id
       where c.workspace_id = $1 and c.created_by = $2 and c.channel = 'door'`,
     [ws, userId, zoneOf(tz)],

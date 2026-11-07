@@ -7,6 +7,7 @@ import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
 import { app } from '../index.js';
 import { turfNumbers, rangeOf, addDays, localDay } from '../ext/fieldreport/numbers.js';
+import { fromLocal } from '../lib/tzsql.js';
 
 const TZ = 'America/Vancouver'; // a new campaign's zone (lib/org.js DEFAULT_TZ)
 const lat = 49.1327; const lng = -122.855;
@@ -189,8 +190,8 @@ test('days are the campaign’s: a knock just before local midnight and one just
   const p = await mgr.createPerson('Mid Example', { address: '13219 72 Ave', lat, lng: lng + 0.0001 });
   const late = await knock(mgr, p, 'contacted');
   const early = await knock(mgr, p, 'no_answer');
-  await db.query(`update contacts set created_at = (($2::date)::timestamp + time '23:59') at time zone $3::text where id = $1`, [late, day, TZ]);
-  await db.query(`update contacts set created_at = (($2::date + 1)::timestamp + time '00:01') at time zone $3::text where id = $1`, [early, day, TZ]);
+  await db.query(`update contacts set created_at = ${fromLocal("(($2::date)::timestamp + time '23:59')", '$3::text')} where id = $1`, [late, day, TZ]);
+  await db.query(`update contacts set created_at = ${fromLocal("(($2::date + 1)::timestamp + time '00:01')", '$3::text')} where id = $1`, [early, day, TZ]);
   const on = (await mgr.get(`/api/field-report?from=${day}&to=${day}`)).json;
   assert.equal(on.turfs[0].knocked, 1);
   assert.equal(on.turfs[0].talked, 1, '11:59 p.m. is that day');

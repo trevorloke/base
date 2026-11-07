@@ -6,9 +6,10 @@
 // campaign renames the words, never the steps). Volunteers get the same
 // numbers: there is no money or email in them.
 import { DEFAULT_TZ } from '../../lib/org.js';
+import { startOfDay } from '../../lib/tzsql.js';
 
 export const SUPPORT_CODES = ['1', '2'];
-const START_OF_TODAY = "date_trunc('day', now() at time zone $2::text) at time zone $2::text";
+const START_OF_TODAY = startOfDay('$2::text');
 const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
 
 // GOTV mode: on by hand (manual), or by itself on a voting day — an
