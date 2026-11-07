@@ -1,0 +1,28 @@
+{
+  "name": "starsign",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Starsign — the system of record for attention. Observe every surface, forecast where attention is going, act through operators inside your red lines, prove what moved.",
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev:api": "pnpm --filter @starsign/api dev",
+    "dev:workers": "pnpm --filter @starsign/workers dev",
+    "dev:mcp": "pnpm --filter @starsign/mcp dev",
+    "dev:web": "pnpm --filter @starsign/web dev",
+    "dev:operators": "pnpm --filter @starsign/operators dev",
+    "build:web": "pnpm --filter @starsign/web build",
+    "seed": "pnpm --filter @starsign/api seed",
+    "migrate": "pnpm --filter @starsign/db migrate"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  }
+}
