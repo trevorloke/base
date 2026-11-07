@@ -39,6 +39,17 @@ export function sameLanguage(a: string | null | undefined, b: string | null | un
   return !!a && !!b && primaryLanguage(a) === primaryLanguage(b);
 }
 
+/**
+ * Whether to offer "Translate" on a message. A known language other than the team's: yes. Unknown (the detector
+ * declines to guess on short text): yes, unless the team works in English and the text is plain unaccented English
+ * letters ("lol same", "mud is real"), which an English-speaking team reads as it is.
+ */
+export function mayNeedTranslating(lang: string | null | undefined, text: string | null | undefined, home: string): boolean {
+  if (!text?.trim()) return false;
+  if (lang) return !sameLanguage(lang, home);
+  return !(primaryLanguage(home) === "en" && /^[\x00-\x7F\p{Extended_Pictographic}\u200d\ufe0f\u2019\u201c\u201d\u2014\u2026]*$/u.test(text));
+}
+
 /** "ja" → "JA": the short tag on a feed item. */
 export function languageTag(code: string): string {
   return primaryLanguage(code).toUpperCase();

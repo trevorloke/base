@@ -38,8 +38,66 @@ export const Network = z.enum([
   "kit",
   "webhook",
   "rss",
+  // Community platforms: Chinese, Korean, Vietnamese, Russian-speaking and other diaspora audiences.
+  "weibo",
+  "douyin",
+  "wecom",
+  "band",
+  "zalo",
+  "viber",
+  "ok",
 ]);
 export type Network = z.infer<typeof Network>;
+
+/** What people call each network, for reports, briefs and messages (the web app keeps the same names). */
+export const NETWORK_LABEL: Record<Network, string> = {
+  x: "X",
+  bluesky: "Bluesky",
+  threads: "Threads",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  linkedin: "LinkedIn",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  pinterest: "Pinterest",
+  mastodon: "Mastodon",
+  reddit: "Reddit",
+  google_business: "Google Business",
+  telegram: "Telegram",
+  discord: "Discord",
+  whatsapp: "WhatsApp",
+  wechat: "WeChat",
+  line: "LINE",
+  news: "News",
+  nostr: "Nostr",
+  misskey: "Misskey",
+  lemmy: "Lemmy",
+  tumblr: "Tumblr",
+  vk: "VK",
+  twitch: "Twitch",
+  slack: "Slack",
+  matrix: "Matrix",
+  google_chat: "Google Chat",
+  teams: "Microsoft Teams",
+  wordpress: "WordPress",
+  ghost: "Ghost",
+  mailchimp: "Mailchimp",
+  kit: "Kit",
+  webhook: "Custom webhook",
+  rss: "RSS / Atom",
+  weibo: "Weibo",
+  douyin: "Douyin",
+  wecom: "WeCom",
+  band: "Naver Band",
+  zalo: "Zalo",
+  viber: "Viber",
+  ok: "OK.ru",
+};
+
+/** The display name for a network id; unknown ids are humanised rather than shown raw. */
+export function networkLabel(n: string): string {
+  return (NETWORK_LABEL as Record<string, string>)[n] ?? n.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
 
 /** Networks Starsign only listens to (nothing can be published there). */
 export const LISTEN_ONLY_NETWORKS: ReadonlySet<Network> = new Set<Network>(["news", "rss"]);
@@ -75,7 +133,7 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   discord: { maxText: 2000, maxMedia: 10, requiresMedia: false, supportsThread: false },
   // TODO(verify): chat apps' limits — WhatsApp text 4096, WeChat customer-service text ~2048 bytes, LINE text 5000.
   whatsapp: { maxText: 4096, maxMedia: 1, requiresMedia: false, supportsThread: false },
-  wechat: { maxText: 600, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  wechat: { maxText: 20000, maxMedia: 20, requiresMedia: true, supportsThread: false }, // one article (图文): cover image required
   line: { maxText: 5000, maxMedia: 5, requiresMedia: false, supportsThread: false },
   news: { maxText: 0, maxMedia: 0, requiresMedia: false, supportsThread: false },
   // TODO(verify): limits below are conservative readings of each platform's documented maxima; connectors validate precisely.
@@ -95,6 +153,14 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   kit: { maxText: 100000, maxMedia: 10, requiresMedia: false, supportsThread: false },
   webhook: { maxText: 100000, maxMedia: 10, requiresMedia: false, supportsThread: false },
   rss: { maxText: 0, maxMedia: 0, requiresMedia: false, supportsThread: false },
+  // TODO(verify): community platforms' limits, as documented by each; connectors validate precisely.
+  weibo: { maxText: 2000, maxMedia: 9, requiresMedia: false, supportsThread: false },
+  douyin: { maxText: 1000, maxMedia: 1, requiresMedia: true, supportsThread: false },
+  wecom: { maxText: 2048, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  band: { maxText: 10000, maxMedia: 10, requiresMedia: false, supportsThread: false },
+  zalo: { maxText: 2000, maxMedia: 1, requiresMedia: true, supportsThread: false }, // an OA article: cover image required
+  viber: { maxText: 7000, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  ok: { maxText: 10000, maxMedia: 10, requiresMedia: false, supportsThread: false },
 };
 
 /**

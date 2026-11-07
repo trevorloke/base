@@ -2,7 +2,7 @@ import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { activities, socialAccounts, streams } from "@starsign/db";
 import { newId } from "@starsign/ledger";
 import { findPhrases } from "@starsign/policy";
-import { ActivityInput, StreamQuery, type ActivityKind, type Network } from "@starsign/schema";
+import { ActivityInput, StreamQuery, networkLabel, type ActivityKind, type Network } from "@starsign/schema";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import { detectLanguage, primaryLanguage } from "../lang.ts";
@@ -198,7 +198,7 @@ export class EngagementService {
     if (!a.socialAccountId) throw new CoreError("invalid", "this item did not arrive through a connected account, so there is nothing to reply from");
     const account = await this.accounts.get(p.workspaceId, a.socialAccountId);
     const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
-    if (!connector.reply || !connector.capabilities(account.network as Network).reply) throw new CoreError("invalid", `${account.network} replies are not supported by this connection`);
+    if (!connector.reply || !connector.capabilities(account.network as Network).reply) throw new CoreError("invalid", `replying on ${networkLabel(account.network)} is not supported by this connection`);
     return this.posts.create(p, {
       body: text,
       actionClass: "reply",
@@ -217,7 +217,7 @@ export class EngagementService {
     if (!a.socialAccountId) throw new CoreError("invalid", "not from a connected account");
     const account = await this.accounts.get(p.workspaceId, a.socialAccountId);
     const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
-    if (!connector.moderate || !connector.capabilities(account.network as Network).moderate) throw new CoreError("invalid", `${account.network} does not support ${action} through this connection`);
+    if (!connector.moderate || !connector.capabilities(account.network as Network).moderate) throw new CoreError("invalid", `${networkLabel(account.network)} does not support ${action} through this connection`);
     await this.accounts.withFreshAuth(account, connector, (ref) => connector.moderate!(ref, { externalId: a.externalId, action }));
     await this.ctx.events.append({ workspaceId: p.workspaceId, type: "activity.moderated", subjectType: "activity", subjectId: a.id, actor: p.actor, data: { action, network: a.network, externalId: a.externalId } });
     return { ok: true, action };
@@ -279,10 +279,43 @@ export class WebhookService {
         if (batch.network !== acc.network || batch.accountExternalId !== acc.externalId) continue;
         items += (await this.listening.ingestItems(acc.workspaceId, acc.id, batch.items)).ingested;
       }
+      if (handler.pullNow?.(body)) this.pullSoon(acc.id);
     }
     const ack = reply ?? handler.ack;
     return { accepted: true, items, ...(ack ? { ack } : {}) };
   }
+
+  /** Accounts being pulled because a delivery said "new items waiting", and those asked again meanwhile. */
+  private readonly pulling = new Set<string>();
+  private readonly pullAgain = new Set<string>();
+
+  /**
+   * Pull one account in the background, so the webhook answers within the platform's deadline. Bursts of
+   * announcements collapse: while a pull runs, further requests for the account queue a single follow-up pull.
+   * Returns the running pull (tests await it; the webhook route does not).
+   */
+  pullSoon(accountId: string): Promise<void> {
+    if (this.pulling.has(accountId)) {
+      this.pullAgain.add(accountId);
+      return Promise.resolve();
+    }
+    this.pulling.add(accountId);
+    const run = async (): Promise<void> => {
+      try {
+        do {
+          this.pullAgain.delete(accountId);
+          await this.listening.ingestAccount(accountId).catch((e) => console.error(`[webhook] pull after announcement failed for ${accountId}:`, e instanceof Error ? e.message : e));
+        } while (this.pullAgain.has(accountId));
+      } finally {
+        this.pulling.delete(accountId);
+      }
+    };
+    this.lastPull = run();
+    return this.lastPull;
+  }
+
+  /** The most recent background pull (for tests). */
+  lastPull: Promise<void> = Promise.resolve();
 
   async receive(connectorName: string, headers: Record<string, string>, rawBody: string, query: Record<string, string> = {}): Promise<{ accepted: boolean; items: number; ack?: { body: string; contentType: string } }> {
     const handler = this.ctx.connectors.get(connectorName)?.webhook;

@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 import { createDb, migrate } from "@starsign/db";
 import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
 import { InMemoryScheduler, Starsign, SecretBox, type Principal } from "@starsign/core";
-import type { TrendStage } from "@starsign/schema";
+import { networkLabel, type TrendStage } from "@starsign/schema";
 
 const SLUG = process.env.SEED_SLUG ?? "acme";
 const realNow = Date.now();
@@ -282,7 +282,7 @@ ${lift
 - Posts with no trend behind them: ${lift.find((l) => l.stage === "no_trend")?.posts ?? 0} post(s), ${fmt(lift.find((l) => l.stage === "no_trend")?.avgEngagements ?? 0)} avg engagements
 
 ## By network
-${s.byNetwork.map((n) => `- ${n.key}: ${n.posts} post(s), ${fmt(n.avgEngagements)} avg engagements`).join("\n")}
+${s.byNetwork.map((n) => `- ${networkLabel(n.key)}: ${n.posts} post(s), ${fmt(n.avgEngagements)} avg engagements`).join("\n")}
 
 ## Best hours (local)
 ${s.byHour.slice(0, 3).map((h) => `- ${h.key}:00 — ${fmt(h.avgEngagements)} avg engagements over ${h.posts} post(s)`).join("\n")}
