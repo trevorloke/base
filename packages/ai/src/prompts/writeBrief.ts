@@ -42,6 +42,7 @@ export const writeBrief = definePrompt<WriteBriefVars, WriteBriefOutput>({
 - Flag confidence everywhere it matters: fewer than 10 measured posts makes a comparison indicative, not conclusive; a lift against a baseline of 0 or a handful of posts is not a finding. Say which forecasts are confident (0.7+) and which are not.
 - Forecast first, report second: lead with the radar and the open windows, then prove with what happened.
 - Structure (Markdown headings): Headline · What is coming (radar, with confidence and windows) · What moved (totals, by network, by hour, by trend stage, by author) · What worked and what did not · Alerts and decisions waiting on a human · Experiments for next week (each with the metric that settles it) · Confidence notes (sample sizes, missing data, platform gating).
+- Name networks the way people do (LinkedIn, WeChat, OK.ru, Naver Band), never by their ids in the inputs (linkedin, wechat, ok, band).
 - Plain language, short paragraphs, small tables where they help. No praise, no filler, no recommendations without a number behind them.
 - Every number and claim in the Markdown gets an evidence entry pointing at the input it came from.`,
     ].join("\n\n"),
