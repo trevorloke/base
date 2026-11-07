@@ -133,14 +133,29 @@ than a week after they came off is refused. Contacts are door, phone, text or
   with the place — on the profile's history, in Reports (*contacts by
   week* has a Mainstreeting column; the contacts spreadsheet has the
   place) — and *Wants to volunteer* is a request for the desk.
-- **First and last names**, kept apart the way the campaign's lists keep
-  them (First Name · Surname): *Add person*, a profile's *Edit*, *+ Door*
-  and *Add someone at this door* ask for both; an import keeps them as the
-  file has them; the website sends `first_name` / `last_name`. The whole
-  name every screen reads follows them (a new last name changes it), and a
-  whole name given alone is split at its last space — as are the people on
-  file from before. An organization keeps one name. The People spreadsheet
-  has first and last, and the street apart from the house number.
+- **First, middle and last names**, kept apart the way the campaign's lists
+  keep them (First Name · Surname): *Add person* and a profile's *Edit* ask
+  for all three, *+ Door* and *Add someone at this door* for first and last;
+  an import keeps them as the file has them (a *Middle name* column too);
+  the website sends `first_name` / `middle_name` / `last_name`. The whole
+  name every screen reads follows them, and a whole name given alone is
+  split first · middle · last (*Ana Maria de la Example* → Ana · Maria ·
+  de la Example — a van, de, von… stays with the last name). A first name
+  with a second word or an initial (*Mary Anne*, *John A.* — not
+  *Mary-Anne*) goes to Middle name: by itself when you leave the First name
+  field (with *Undo — it's part of the first name*), as a suggestion on a
+  record already on file, as a ticked option in an import, and
+  automatically from the door, mainstreeting and the website. An
+  organization keeps one name. The People spreadsheet has first, middle and
+  last, and the street apart from the house number.
+- **A list from a past election** (Import → *From a past election*, with its
+  year): nothing in it becomes today's. Ratings come in as tags with the
+  year (*Strong support 2022*, *Voting Locke 2022*, *Opposed 2022*), and so
+  do signs (*Lawn sign 2022*), voted (*Voted 2022*), volunteer and donor,
+  roles (*Doorknocking 2022*) and talks (*Talked 2022*). Someone already on
+  file keeps today's rating. Names, phones, emails and addresses come in as
+  usual; profile fields as they are (set any from that election to Don't
+  import).
 - **Profile fields**: the campaign's own — Text · Yes/No · Pick one · Number ·
   Date (*Language at home*, *Strata council member*, …) — set up by a manager,
   filled in by the desk under *More details* (read-only with no signal),

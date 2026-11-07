@@ -549,6 +549,12 @@ Give a row *Interaction Status* Not Home and *Interaction Date* 10/04/2026:
 **Past conversations** reads it as Not home; imported, their history shows a
 not-home knock on Oct 4 *From an imported list*. Set **Signs** → *Yes* to
 *A lawn sign to put up*: it's on the Signs list at their address.
+A First Name of *Lee Ann*: the import offers *Lee · Ann* (ticked); imported,
+Lee Ann's profile has First Lee, Middle Ann. **People → Add person**: type
+*Mary Anne* and Tab — First Mary, Middle Anne, with Undo; *Mary-Anne* stays
+whole. **From a past election**, year 2022, a row rated 1 with Voted yes:
+imported, they're tagged *Strong support 2022* and *Voted 2022*, unrated and
+not marked voted.
 Then **Place on map** looks the addresses up with the BC Address
 Geocoder (needs internet). It runs on the server: you can close the page and
 it keeps going (come back to Import or the map to see how far it's got, or
