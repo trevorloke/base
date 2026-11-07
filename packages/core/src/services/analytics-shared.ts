@@ -433,11 +433,12 @@ export function fmtRatio(x: number | null | undefined): string {
   return `${x < 10 ? x.toFixed(1) : Math.round(x)}×`;
 }
 
+/** Every network by its proper name. Kept here because this file is import-free; a test pins it to the schema's NETWORK_LABEL. */
 const NETWORK_NAMES: Record<string, string> = {
   x: "X",
   bluesky: "Bluesky",
-  instagram: "Instagram",
   threads: "Threads",
+  instagram: "Instagram",
   facebook: "Facebook",
   linkedin: "LinkedIn",
   tiktok: "TikTok",
@@ -452,6 +453,29 @@ const NETWORK_NAMES: Record<string, string> = {
   wechat: "WeChat",
   line: "LINE",
   news: "News",
+  nostr: "Nostr",
+  misskey: "Misskey",
+  lemmy: "Lemmy",
+  tumblr: "Tumblr",
+  vk: "VK",
+  twitch: "Twitch",
+  slack: "Slack",
+  matrix: "Matrix",
+  google_chat: "Google Chat",
+  teams: "Microsoft Teams",
+  wordpress: "WordPress",
+  ghost: "Ghost",
+  mailchimp: "Mailchimp",
+  kit: "Kit",
+  webhook: "Custom webhook",
+  rss: "RSS / Atom",
+  weibo: "Weibo",
+  douyin: "Douyin",
+  wecom: "WeCom",
+  band: "Naver Band",
+  zalo: "Zalo",
+  viber: "Viber",
+  ok: "OK.ru",
 };
 export function networkName(n: string): string {
   return NETWORK_NAMES[n] ?? n.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());

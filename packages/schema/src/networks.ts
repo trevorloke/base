@@ -49,6 +49,56 @@ export const Network = z.enum([
 ]);
 export type Network = z.infer<typeof Network>;
 
+/** What people call each network, for reports, briefs and messages (the web app keeps the same names). */
+export const NETWORK_LABEL: Record<Network, string> = {
+  x: "X",
+  bluesky: "Bluesky",
+  threads: "Threads",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  linkedin: "LinkedIn",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  pinterest: "Pinterest",
+  mastodon: "Mastodon",
+  reddit: "Reddit",
+  google_business: "Google Business",
+  telegram: "Telegram",
+  discord: "Discord",
+  whatsapp: "WhatsApp",
+  wechat: "WeChat",
+  line: "LINE",
+  news: "News",
+  nostr: "Nostr",
+  misskey: "Misskey",
+  lemmy: "Lemmy",
+  tumblr: "Tumblr",
+  vk: "VK",
+  twitch: "Twitch",
+  slack: "Slack",
+  matrix: "Matrix",
+  google_chat: "Google Chat",
+  teams: "Microsoft Teams",
+  wordpress: "WordPress",
+  ghost: "Ghost",
+  mailchimp: "Mailchimp",
+  kit: "Kit",
+  webhook: "Custom webhook",
+  rss: "RSS / Atom",
+  weibo: "Weibo",
+  douyin: "Douyin",
+  wecom: "WeCom",
+  band: "Naver Band",
+  zalo: "Zalo",
+  viber: "Viber",
+  ok: "OK.ru",
+};
+
+/** The display name for a network id; unknown ids are humanised rather than shown raw. */
+export function networkLabel(n: string): string {
+  return (NETWORK_LABEL as Record<string, string>)[n] ?? n.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}
+
 /** Networks Starsign only listens to (nothing can be published there). */
 export const LISTEN_ONLY_NETWORKS: ReadonlySet<Network> = new Set<Network>(["news", "rss"]);
 

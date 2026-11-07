@@ -2,7 +2,7 @@ import { and, desc, eq, gt, inArray, lt, sql } from "drizzle-orm";
 import { activities, socialAccounts, streams } from "@starsign/db";
 import { newId } from "@starsign/ledger";
 import { findPhrases } from "@starsign/policy";
-import { ActivityInput, StreamQuery, type ActivityKind, type Network } from "@starsign/schema";
+import { ActivityInput, StreamQuery, networkLabel, type ActivityKind, type Network } from "@starsign/schema";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import { detectLanguage, primaryLanguage } from "../lang.ts";
@@ -198,7 +198,7 @@ export class EngagementService {
     if (!a.socialAccountId) throw new CoreError("invalid", "this item did not arrive through a connected account, so there is nothing to reply from");
     const account = await this.accounts.get(p.workspaceId, a.socialAccountId);
     const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
-    if (!connector.reply || !connector.capabilities(account.network as Network).reply) throw new CoreError("invalid", `${account.network} replies are not supported by this connection`);
+    if (!connector.reply || !connector.capabilities(account.network as Network).reply) throw new CoreError("invalid", `replying on ${networkLabel(account.network)} is not supported by this connection`);
     return this.posts.create(p, {
       body: text,
       actionClass: "reply",
@@ -217,7 +217,7 @@ export class EngagementService {
     if (!a.socialAccountId) throw new CoreError("invalid", "not from a connected account");
     const account = await this.accounts.get(p.workspaceId, a.socialAccountId);
     const connector = this.ctx.connectors.resolve(account.connector, account.network as Network);
-    if (!connector.moderate || !connector.capabilities(account.network as Network).moderate) throw new CoreError("invalid", `${account.network} does not support ${action} through this connection`);
+    if (!connector.moderate || !connector.capabilities(account.network as Network).moderate) throw new CoreError("invalid", `${networkLabel(account.network)} does not support ${action} through this connection`);
     await this.accounts.withFreshAuth(account, connector, (ref) => connector.moderate!(ref, { externalId: a.externalId, action }));
     await this.ctx.events.append({ workspaceId: p.workspaceId, type: "activity.moderated", subjectType: "activity", subjectId: a.id, actor: p.actor, data: { action, network: a.network, externalId: a.externalId } });
     return { ok: true, action };
