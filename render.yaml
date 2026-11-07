@@ -152,7 +152,7 @@ services:
     rootDir: ./apps/gateway                # nothing to build: the job is one curl
     schedule: "7 17 * * *"                 # about 10 a.m. Pacific
     buildCommand: "true"
-    startCommand: curl -fsS -H "Authorization: Bearer $CRON_SECRET" "http://$WEB_HOSTPORT/api/cron/reminders"
+    startCommand: 'curl -fsS -H "Authorization: Bearer $CRON_SECRET" "http://$WEB_HOSTPORT/api/cron/reminders"'
     envVars:
       - key: WEB_HOSTPORT
         fromService: { type: web, name: base-web-imaginesurrey-staging, property: hostport }
@@ -168,7 +168,7 @@ services:
     rootDir: ./apps/gateway
     schedule: "37 17 * * *"
     buildCommand: "true"
-    startCommand: curl -fsS -H "Authorization: Bearer $CRON_SECRET" "http://$WEB_HOSTPORT/api/cron/email"
+    startCommand: 'curl -fsS -H "Authorization: Bearer $CRON_SECRET" "http://$WEB_HOSTPORT/api/cron/email"'
     envVars:
       - key: WEB_HOSTPORT
         fromService: { type: web, name: base-web-imaginesurrey-staging, property: hostport }
