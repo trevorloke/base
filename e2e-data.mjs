@@ -112,8 +112,10 @@ check('Omar too, not voted', omar && omar.city === 'Whalley' && !omar.voted_at, 
 // ── The campaign's own list layout (made-up people): every column lands ──
 const LHEAD = ['First Name', 'Surname', 'Home Phone', 'Mobile Phone', 'Email Address', 'Volunteer', 'Lists', 'Donor', 'House Unit', 'House Number', 'Street Name', 'City', 'Province', 'Postal', 'Latitude', 'Longitude', 'House Notes', 'Building Notes', 'Access Type', 'Dwelling Type', 'Interaction Status', 'Interaction Date', 'Organizer', 'Email Opt-In', 'SMS Opt-In', 'Tags', 'Sign', 'Support', 'Voted'];
 const L1 = ['Riya', 'Sample', '', '16045550188', `riya.${tag}@example.org`, '1', '', '1', '204', '16068', '83 Ave', 'Surrey', 'BC', 'V4N 0N2', '49.1535325', '-122.7767407', 'On the old supporter list; volunteer status unconfirmed', '', '', '', '', '', '', 't', 'f', 'Team: North; Vol: Door Knocker; Vol: GOTV; Zone 1', '', '5', 'FALSE'];
+L1[20] = 'Not Home'; L1[21] = '10/04/2026'; L1[26] = 'Yes';
 const L2 = [...L1]; L2[0] = 'Omar'; L2[1] = 'Listed'; L2[2] = '604-555-0177'; L2[3] = ''; L2[4] = ''; L2[8] = ''; L2[9] = '9001'; L2[16] = ''; L2[25] = '';
-const L3 = [...L1]; L3[0] = 'Lee'; L3[1] = 'Listed'; L3[3] = '1.6045E+10'; L3[4] = `lee.${tag}@example.org`; L3[9] = '9002'; L3[25] = '';
+L2[20] = 'Spoke - supporter';
+const L3 = [...L1]; L3[0] = 'Lee'; L3[1] = 'Listed'; L3[3] = '1.6045E+10'; L3[4] = `lee.${tag}@example.org`; L3[9] = '9002'; L3[25] = ''; L3[20] = ''; L3[21] = ''; L3[26] = '';
 await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
 await page.click('button:has-text("Paste text")');
 await page.fill('#imp-paste', [LHEAD, L1, L2, L3].map((r) => r.join('\t')).join('\n'));
@@ -128,6 +130,12 @@ check('a phone Excel cut short is named, and won’t be imported', /lost its las
 const roleRows = Object.fromEntries(await page.$$eval('section[aria-labelledby="imp-roles-h"] .imp-rmap__row', (rows) => rows.map((r) => [r.querySelector('.imp-rmap__word').innerText.trim(), (() => { const x = r.querySelector('select'); return x.options[x.selectedIndex].text; })()])));
 check('Volunteer roles: Vol: Door Knocker → Doorknocking; Vol: GOTV a tag only', roleRows['Vol: Door Knocker'] === 'Doorknocking' && roleRows['Vol: GOTV'] === 'A tag only', JSON.stringify(roleRows));
 await page.selectOption('select[aria-label="The role “Vol: GOTV” is"]', 'driver');
+const readRows = (sec) => page.$$eval(`section[aria-labelledby="${sec}"] .imp-rmap__row`, (rows) => Object.fromEntries(rows.map((r) => [r.querySelector('.imp-rmap__word').innerText.trim(), (() => { const x = r.querySelector('select'); return x.options[x.selectedIndex].text; })()])));
+const hist = await readRows('imp-hist-h');
+check('Past conversations: Not Home → Not home; Spoke - supporter → Talked', hist['Not Home'] === 'Not home' && hist['Spoke - supporter'] === 'Talked', JSON.stringify(hist));
+const signs0 = await readRows('imp-sign-h');
+check('Signs: Yes is a profile field only until you say', signs0.Yes === 'A profile field only', JSON.stringify(signs0));
+await page.selectOption('select[aria-label="What a sign “Yes” means"]', 'requested');
 await page.screenshot({ path: `${SHOTS}/03-list-format.png`, fullPage: true });
 await page.click('button:has-text("Check 3 rows")');
 await sleep(1500);
@@ -144,6 +152,10 @@ check('Riya’s profile fields: Province BC, House notes, Email opt-in yes, SMS 
   fv('Province') === 'BC' && /old supporter list/.test(fv('House notes') || '') && fv('Email opt-in') === true && fv('SMS opt-in') === false && fv('Support') === 5, JSON.stringify(rf.filter((f) => f.value != null).map((f) => [f.name, f.value])));
 const riyaRoles = (await api(`/persons/${riya.id}`)).json.roles.map((r) => r.role).sort().join(',');
 check('Riya’s volunteer roles: Doorknocking and Driver (the GOTV tag, as chosen)', riyaRoles === 'doorknocking,driver', riyaRoles);
+const riyaFull = (await api(`/persons/${riya.id}`)).json;
+check('Riya’s history: not home at the door on Oct 4, from an imported list; a lawn sign to put up',
+  riyaFull.contacts.some((x) => x.channel === 'door' && x.outcome === 'no_answer' && /imported list/.test(x.note || '') && /^2026-10-0[45]/.test(new Date(x.created_at).toISOString()))
+  && riyaFull.signs.some((x) => x.kind === 'lawn' && x.status === 'requested'), JSON.stringify({ c: riyaFull.contacts, s: riyaFull.signs }));
 check('first and last kept apart, as the file has them (First Name · Surname)', riya.first_name === 'Riya' && riya.last_name === 'Sample', `${riya.first_name} · ${riya.last_name}`);
 await page.goto(`${ADMIN}/people/${riya.id}`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.pf-edit', { timeout: 8000 }).catch(() => {});

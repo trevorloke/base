@@ -171,6 +171,13 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Volunteer…*) are listed under *Volunteer roles*: choose the role each
   is (Door Knocker → Doorknocking is guessed; GOTV is left a tag until you
   say), and those people get it, as if added on their profile — never twice.
+  A list's own history comes in too: under *Past conversations* say what
+  each *Interaction Status* was (Not Home → not home at the door, Spoke →
+  talked; a call's outcomes too), and it becomes that day's knock or call —
+  on the map, the field report (*From an imported list*) and their history.
+  Under *Signs* say what the Sign column means (a lawn sign to put up, or
+  one that's up; a plain Yes stays a profile field until you say). Neither
+  is ever doubled by importing the file again.
 - **Fix details** wherever you meet someone — under the phone on the door
   card, on the Calls card and on the profile: a name, a phone, an email,
   saved through the offline outbox like a knock. Any role; a volunteer may

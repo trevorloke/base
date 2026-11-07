@@ -4,7 +4,10 @@ import { civic } from '../lib/address.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { matchRating, offeredCodes } from '@starbase/shared/scale';
-import { VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
+import { OUTCOMES, VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
+import { dateFrom } from '../ext/fields/kinds.js';
+import { timeZone } from '../lib/org.js';
+import { fromLocal } from '../lib/tzsql.js';
 import { loadScale } from '../ext/scale/rules.js';
 import { runAction, newId } from '../lib/events.js';
 import { geocodeAddress } from '../lib/geocode.js';
@@ -55,6 +58,15 @@ const rowSchema = z.object({
   // Volunteer roles, as the person importing chose them from the file's
   // tags ("Vol: Door Knocker" → doorknocking); the tags stay as they are.
   roles: z.array(z.enum(VOLUNTEER_ROLE_CODES)).max(20).nullish(),
+  // The list's last interaction, as the person importing read its status:
+  // a knock or a call with this outcome on that day (ext/importhistory).
+  history: z.object({
+    channel: z.enum(['door', 'phone']),
+    outcome: z.enum(OUTCOMES),
+    date: z.string().max(40),
+  }).nullish(),
+  // The Sign column, as they read it: a lawn sign to put up, or one that's up.
+  sign: z.enum(['requested', 'installed']).nullish(),
   // 1/0 (yes/no) columns that become the volunteer and donor tags.
   volunteer: z.union([z.string().max(20), z.number(), z.boolean()]).nullish(),
   donor: z.union([z.string().max(20), z.number(), z.boolean()]).nullish(),
@@ -121,8 +133,15 @@ const cleanRow = (raw, i, scale) => {
       postal: norm(v.postal).toUpperCase() || null,
       tags: [...new Set(tags.map((t) => norm(t)).filter((t) => t && t.length <= 40))].slice(0, 50),
       roles: [...new Set(v.roles || [])],
+      // No day (or one in the future): the status stays a profile field only.
+      history: v.history && historyDay(v.history.date) ? { ...v.history, day: historyDay(v.history.date) } : null,
+      sign: v.sign || null,
     },
   };
+};
+const historyDay = (raw) => {
+  const d = dateFrom(String(raw || ''));
+  return d && d <= new Date(Date.now() + 86_400_000).toISOString().slice(0, 10) ? d : null;
 };
 
 // Only the people a chunk could match are loaded, not the whole list: those
@@ -230,6 +249,47 @@ app.post('/import', async (c) => {
     }
     return add;
   };
+  // The list's last interaction: once — importing the file again finds it.
+  const addHistory = async (tx, personId, h, write, emit, fresh = false) => {
+    if (!h) return false;
+    const at = `${fromLocal(`($1::date + time '12:00')`, '$2::text')}`;
+    if (!fresh) {
+      const had = (await tx.query(
+        `select 1 from contacts where workspace_id = $3 and person_id = $4 and source = 'import'
+            and channel = $5 and outcome = $6 and created_at = ${at} limit 1`,
+        [h.day, timeZone(), ctx.workspaceId, personId, h.channel, h.outcome],
+      )).rows[0];
+      if (had) return false;
+    }
+    if (write) {
+      const id = newId();
+      const row = (await tx.query(
+        `insert into contacts (id, workspace_id, person_id, channel, outcome, note, source, created_at)
+         values ($3, $4, $5, $6, $7, 'From an imported list', 'import', ${at}) returning created_at`,
+        [h.day, timeZone(), id, ctx.workspaceId, personId, h.channel, h.outcome],
+      )).rows[0];
+      emit('contact', id, 'create', { id, person_id: personId, channel: h.channel, outcome: h.outcome, source: 'import', created_at: new Date(row.created_at).toISOString() });
+    }
+    return true;
+  };
+  // The Sign column: a lawn sign at their home, unless they have a sign.
+  const addSign = async (tx, p, status, write, emit, fresh = false) => {
+    if (!status) return false;
+    if (!String(p.address || '').trim() && (p.lat == null || p.lng == null)) return false; // nowhere to send a crew
+    if (!fresh && (await tx.query(
+      "select 1 from signs where workspace_id = $1 and person_id = $2 and status <> 'removed' limit 1", [ctx.workspaceId, p.id],
+    )).rows[0]) return false;
+    if (write) {
+      const id = newId();
+      await tx.query(
+        `insert into signs (id, workspace_id, person_id, address, lat, lng, kind, status, note)
+         values ($1, $2, $3, $4, $5, $6, 'lawn', $7, 'From an imported list')`,
+        [id, ctx.workspaceId, p.id, p.address || null, p.lat ?? null, p.lng ?? null, status],
+      );
+      emit('sign', id, 'create', { id, kind: 'lawn', status, person_id: p.id, address: p.address || null, source: 'import' });
+    }
+    return true;
+  };
   // write=false is the dry run: identical decisions, no writes.
   const run = async (tx, emit, write = true) => {
     const existing = await candidates(tx, ctx.workspaceId, clean);
@@ -267,6 +327,8 @@ app.post('/import', async (c) => {
         if (newHandles.length) patch.socials = { ...(match.socials || {}), ...Object.fromEntries(newHandles) };
         const filled = await fillExtras(tx, match.id, r, write, emit);
         if ((await addRoles(tx, match.id, r.roles, write, emit)).length) filled.push('roles');
+        if (await addHistory(tx, match.id, r.history, write, emit)) filled.push('history');
+        if (await addSign(tx, { ...match, ...patch, id: match.id }, r.sign, write, emit)) filled.push('sign');
         if (Object.keys(patch).length === 0 && !filled.length) { unchanged += 1; decisions.push({ row: r.index + 1, name: r.name, action: 'unchanged', id: match.id }); continue; }
         merged += 1;
         decisions.push({ row: r.index + 1, name: r.name, action: 'merged', id: match.id, fields: [...Object.keys(patch), ...filled] });
@@ -306,6 +368,8 @@ app.post('/import', async (c) => {
         }
         await fillExtras(tx, id, r, write, emit);
         await addRoles(tx, id, r.roles, write, emit, true);
+        await addHistory(tx, id, r.history, write, emit, true);
+        await addSign(tx, p, r.sign, write, emit, true);
         index(p); // later rows in the same file dedupe against this one
       }
     }

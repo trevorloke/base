@@ -89,7 +89,7 @@ const parseJ = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : 
 // The range's door knocks (phone calls and texts are never knocks), each
 // with its door, its day in the campaign's zone and its pin (null: none).
 export const doorContacts = async (db, ws, bounds, tz) => (await db.query(
-  `select c.person_id, c.outcome, c.rating, c.created_by, c.created_at,
+  `select c.person_id, c.outcome, c.rating, c.created_by, c.created_at, c.source,
           to_char(${toLocal('c.created_at', '$4::text')}, 'YYYY-MM-DD') as day,
           p.lat, p.lng, p.address, p.unit
      from contacts c join persons p on p.id = c.person_id
@@ -155,11 +155,12 @@ export const turfNumbers = async (db, ws, knocks) => {
 export const canvasserNumbers = async (db, ws, knocks) => {
   const by = new Map();
   for (const k of knocks) {
-    const id = k.created_by || null;
+    // Knocks from an imported list (ext/importhistory) are their own row.
+    const id = k.created_by || (k.source === 'import' ? 'import' : null);
     if (!by.has(id)) by.set(id, []);
     by.get(id).push(k);
   }
-  const ids = [...by.keys()].filter(Boolean);
+  const ids = [...by.keys()].filter((k) => k && k !== 'import');
   const users = ids.length ? (await db.query('select id, name from users where id = any($1::uuid[])', [ids])).rows : [];
   const nameOf = new Map(users.map((u) => [u.id, u.name]));
   // Their first team, by name (teams are ext/admin's; plain SQL, no import).
@@ -173,7 +174,7 @@ export const canvasserNumbers = async (db, ws, knocks) => {
   return [...by.entries()].map(([id, list]) => {
     const n = tally(list);
     return {
-      id, name: (id && nameOf.get(id)) || 'Someone no longer here', team: (id && teamOf.get(id)) || null,
+      id, name: id === 'import' ? 'From an imported list' : (id && nameOf.get(id)) || 'Someone no longer here', team: (id && id !== 'import' && teamOf.get(id)) || null,
       doors: n.knocked, talked: n.talked, support_found: n.support_found,
       days_out: n.days_out, last_out: n.last_at,
     };

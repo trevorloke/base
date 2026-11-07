@@ -545,6 +545,10 @@ Organizer, Email/SMS Opt-In, Sign, Support (1–5) and Voted the standard
 profile fields of the same names. Tags like *Vol: Door Knocker* show under
 **Volunteer roles** (Doorknocking guessed); set *Vol: GOTV* to Driver, import,
 and the person's profile lists both roles. Import again: no role twice.
+Give a row *Interaction Status* Not Home and *Interaction Date* 10/04/2026:
+**Past conversations** reads it as Not home; imported, their history shows a
+not-home knock on Oct 4 *From an imported list*. Set **Signs** → *Yes* to
+*A lawn sign to put up*: it's on the Signs list at their address.
 Then **Place on map** looks the addresses up with the BC Address
 Geocoder (needs internet). It runs on the server: you can close the page and
 it keeps going (come back to Import or the map to see how far it's got, or

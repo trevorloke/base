@@ -413,10 +413,46 @@ export const guessRole = (word) => {
 const roleWord = (tag, volCol) => { const m = ROLE_TAG_RE.exec(tag); return m ? m[1].trim() : (volCol ? tag : null); };
 const resolveRole = (roleMap, word) => (Object.hasOwn(roleMap || {}, word.toLowerCase()) ? roleMap[word.toLowerCase()] : guessRole(word));
 
+// A list's own record of each person's last interaction (Interaction Status
+// + Interaction Date) and its Sign column. Under "Past conversations" each
+// status is read as a knock or a call ("Not Home" → at the door, not home)
+// or left a profile field only; under "Signs" each Sign value as a lawn sign
+// to put up, one that's up, or the field only. Read, they come in as that
+// day's knock (or call) and a sign on the sign list (ext/importhistory).
+const STATUS_HEADS = ['interactionstatus', 'contactstatus', 'canvassstatus', 'doorstatus', 'laststatus'];
+const DATE_HEADS = ['interactiondate', 'contactdate', 'canvassdate', 'lastcontact', 'lastcontacted', 'lastinteraction'];
+const SIGN_HEADS = ['sign', 'signs', 'lawnsign', 'signrequest', 'wantssign'];
+export const HISTORY_CHOICES = [
+  ['door', [['door:contacted', 'Talked'], ['door:no_answer', 'Not home'], ['door:refused', 'Refused'], ['door:moved', 'Moved'], ['door:inaccessible', 'Couldn’t get to the door'], ['door:left_lit', 'Left lit']]],
+  ['phone', [['phone:contacted', 'Talked'], ['phone:no_answer', 'No answer'], ['phone:refused', 'Refused'], ['phone:left_message', 'Left a message'], ['phone:moved', 'Wrong number / moved']]],
+];
+export const guessHistory = (value) => {
+  const w = squash(value);
+  if (!w) return '';
+  if (/nothome|notin|noanswer|^nh$|^na$|away/.test(w)) return 'door:no_answer';
+  if (/refus|hostile|declin|slam|donotcall|dnc/.test(w)) return 'door:refused';
+  if (/moved|deceased|wrongaddress|vacant/.test(w)) return 'door:moved';
+  if (/inaccess|noaccess|locked|gated|nosolicit/.test(w)) return 'door:inaccessible';
+  if (/lit|flyer|leaflet|literature|dropped/.test(w)) return 'door:left_lit';
+  if (/voicemail|message|^vm$/.test(w)) return 'phone:left_message';
+  if (/wrongnumber|badnumber/.test(w)) return 'phone:moved';
+  if (/talk|spoke|contacted|reached|conversation|answered|home/.test(w)) return 'door:contacted';
+  return '';
+};
+const NO_RE = /^(no|n|false|f|0|none|-)$/i;
+export const guessSign = (value) => {
+  const w = squash(value);
+  if (/up|installed|placed|planted|has/.test(w)) return 'installed';
+  if (/request|wants|deliver|pending|toputup/.test(w)) return 'requested';
+  return '';
+};
+const resolveIn = (map, value, guess) => (Object.hasOwn(map || {}, value.toLowerCase()) ? map[value.toLowerCase()] : guess(value));
+const headCol = (headers, names) => (headers ? headers.findIndex((h) => names.includes(normHeader(h))) : -1);
+
 // homeCol: a Home Phone column — the number to call when the row has no
 // other (it still fills the Home phone profile field too); not when the
 // column is set to Don't import.
-function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, volCols = null) {
+function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, volCols = null, more = {}) {
   const row = {};
   const roles = new Set();
   mapping.forEach((key, i) => {
@@ -441,6 +477,15 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, v
     if (h && !SCI_RE.test(h)) row.phone = h;
   }
   if (roles.size) row.roles = [...roles];
+  const { statusCol = -1, dateCol = -1, signCol = -1, historyMap, signMap } = more;
+  // Only columns that are coming in (not set to Don't import).
+  const st = statusCol >= 0 && mapping[statusCol] ? String(cells[statusCol] ?? '').trim() : '';
+  const day = dateCol >= 0 && mapping[dateCol] ? String(cells[dateCol] ?? '').trim() : '';
+  const how = st ? resolveIn(historyMap, st, guessHistory) : '';
+  if (how && day) { const [channel, outcome] = how.split(':'); row.history = { channel, outcome, date: day }; }
+  const sg = signCol >= 0 && mapping[signCol] ? String(cells[signCol] ?? '').trim() : '';
+  const sign = sg && !NO_RE.test(sg) ? resolveIn(signMap, sg, guessSign) : '';
+  if (sign) row.sign = sign;
   return row;
 }
 
@@ -606,6 +651,8 @@ function ImportFlow() {
   const [mapping, setMapping] = useState([]);
   const [ratingMap, setRatingMap] = useState({}); // the rating column's values → codes ('' unrated), by choice
   const [roleMap, setRoleMap] = useState({}); // volunteer-role tags (lower-cased words) → role codes ('' a tag only), by choice
+  const [historyMap, setHistoryMap] = useState({}); // Interaction Status values → 'door:no_answer'… ('' a field only), by choice
+  const [signMap, setSignMap] = useState({}); // Sign values → 'requested' | 'installed' ('' a field only), by choice
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [tag, setTag] = useState('');
   const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, parts, error }
@@ -640,6 +687,8 @@ function ImportFlow() {
     setMapping(guessMapping(scale, shaped.headers, shaped.records, !t.header, custom));
     setRatingMap({});
     setRoleMap({});
+    setHistoryMap({});
+    setSignMap({});
     setTag('');
     resetAfterSource();
   };
@@ -719,6 +768,8 @@ function ImportFlow() {
     setMapping([]);
     setRatingMap({});
     setRoleMap({});
+    setHistoryMap({});
+    setSignMap({});
     setTag('');
     setLoadError(null);
     setPasteText('');
@@ -747,15 +798,19 @@ function ImportFlow() {
   const homeCol = source ? source.headers.findIndex((h) => normHeader(h) === 'homephone') : -1;
   // Columns whose heading says volunteer ("Volunteer Lists"): mapped to
   // Tags, every value in them is a role to place.
+  const statusCol = headCol(source?.headers, STATUS_HEADS);
+  const dateCol = headCol(source?.headers, DATE_HEADS);
+  const signCol = headCol(source?.headers, SIGN_HEADS);
+  const more = useMemo(() => ({ statusCol, dateCol, signCol, historyMap, signMap }), [statusCol, dateCol, signCol, historyMap, signMap]);
   const volCols = useMemo(
     () => new Set(source ? source.headers.map((h, i) => (/volunteer/i.test(h) ? i : -1)).filter((i) => i >= 0) : []),
     [source],
   );
   const partAt = (start, size) => records.slice(start, start + size)
-    .map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol, roleMap, volCols), row: r.row }));
+    .map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol, roleMap, volCols, more), row: r.row }));
   const preview = useMemo(
-    () => (source ? source.records.slice(0, 5).map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol, roleMap, volCols), row: r.row, cells: r.cells })) : []),
-    [source, mapping, scale, ratingMap, homeCol, roleMap, volCols],
+    () => (source ? source.records.slice(0, 5).map((r) => ({ data: toRow(scale, r.cells, mapping, ratingMap, homeCol, roleMap, volCols, more), row: r.row, cells: r.cells })) : []),
+    [source, mapping, scale, ratingMap, homeCol, roleMap, volCols, more],
   );
   // Phone columns Excel cut short ("1.6047E+10"), by column: how many.
   const sciByCol = useMemo(() => {
@@ -817,6 +872,31 @@ function ImportFlow() {
     }
     return [...seen.values()].sort((a, b) => b.n - a.n || a.word.localeCompare(b.word)).slice(0, 40);
   }, [source, mapping, volCols]);
+  // A column's values, most common first: [{ value, n }] (and how many
+  // rows have no day, for the statuses).
+  const valuesIn = (col, keep = () => true) => {
+    const seen = new Map();
+    if (source && col >= 0 && mapping[col]) {
+      for (const r of source.records) {
+        const v = String(r.cells[col] ?? '').trim();
+        if (!v || !keep(v)) continue;
+        const k = v.toLowerCase();
+        const cur = seen.get(k) || { value: v, n: 0 };
+        cur.n += 1;
+        seen.set(k, cur);
+      }
+    }
+    return [...seen.values()].sort((a, b) => b.n - a.n || a.value.localeCompare(b.value)).slice(0, 40);
+  };
+  const statusValues = useMemo(() => valuesIn(statusCol), [source, mapping, statusCol]); // eslint-disable-line react-hooks/exhaustive-deps
+  const signValues = useMemo(() => valuesIn(signCol, (v) => !NO_RE.test(v)), [source, mapping, signCol]); // eslint-disable-line react-hooks/exhaustive-deps
+  const undated = useMemo(() => {
+    if (!source || statusCol < 0 || !mapping[statusCol]) return 0;
+    return source.records.filter((r) => String(r.cells[statusCol] ?? '').trim()
+      && !(dateCol >= 0 && mapping[dateCol] && String(r.cells[dateCol] ?? '').trim())).length;
+  }, [source, mapping, statusCol, dateCol]);
+  const setHistoryMeaning = (value, code) => { setHistoryMap((m) => ({ ...m, [value.toLowerCase()]: code })); setCheck(null); };
+  const setSignMeaning = (value, code) => { setSignMap((m) => ({ ...m, [value.toLowerCase()]: code })); setCheck(null); };
   const setRoleMeaning = (word, code) => {
     setRoleMap((m) => ({ ...m, [word.toLowerCase()]: code }));
     setCheck(null);
@@ -1104,6 +1184,66 @@ function ImportFlow() {
                           aria-label={`The role “${t}” is`} onChange={(e) => setRoleMeaning(word, e.target.value)}>
                           <option value="">A tag only</option>
                           {VOLUNTEER_ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
+                        </select>
+                        {own && <span className="imp-rmap__own mono" aria-hidden="true">yours</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
+            {statusValues.length > 0 && (
+              <section className="imp-rmap" aria-labelledby="imp-hist-h">
+                <h3 id="imp-hist-h" className="imp-rmap__h">Past conversations</h3>
+                <p className="imp-hint imp-hint--sm">
+                  Each person’s last interaction in the list ({source.headers[statusCol]}{dateCol >= 0 ? ` on ${source.headers[dateCol]}` : ''}). Say what each status was, and it comes in as a knock or a call on that day — on the map, the field report and their history, marked as from this list. Left as a profile field, it stays just that.
+                </p>
+                <ul className="imp-rmap__list">
+                  {statusValues.map(({ value, n }) => {
+                    const cur = resolveIn(historyMap, value, guessHistory);
+                    const own = Object.hasOwn(historyMap, value.toLowerCase());
+                    return (
+                      <li key={value.toLowerCase()} className={`imp-rmap__row${cur ? ' is-used' : ''}`}>
+                        <span className="imp-rmap__val"><span className="imp-rmap__word">{value}</span> <span className="mono muted">{plural(n, 'row', 'rows')}</span></span>
+                        <span className="imp-map__arrow" aria-hidden="true">→</span>
+                        <select className="input imp-rmap__select" value={cur} disabled={locked}
+                          aria-label={`What “${value}” was`} onChange={(e) => setHistoryMeaning(value, e.target.value)}>
+                          <option value="">A profile field only</option>
+                          {HISTORY_CHOICES.map(([ch, opts]) => (
+                            <optgroup key={ch} label={ch === 'door' ? 'At the door' : 'On the phone'}>
+                              {opts.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                        {own && <span className="imp-rmap__own mono" aria-hidden="true">yours</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+                {undated > 0 && (
+                  <p className="imp-hint imp-hint--sm">{plural(undated, 'row has', 'rows have')} a status but no date — {undated === 1 ? 'it stays' : 'they stay'} a profile field only.</p>
+                )}
+              </section>
+            )}
+            {signValues.length > 0 && (
+              <section className="imp-rmap" aria-labelledby="imp-sign-h">
+                <h3 id="imp-sign-h" className="imp-rmap__h">Signs</h3>
+                <p className="imp-hint imp-hint--sm">
+                  What the list’s {source.headers[signCol]} column means. A lawn sign to put up (or one that’s up) goes on the sign list at their address — never a second one for someone who has a sign.
+                </p>
+                <ul className="imp-rmap__list">
+                  {signValues.map(({ value, n }) => {
+                    const cur = resolveIn(signMap, value, guessSign);
+                    const own = Object.hasOwn(signMap, value.toLowerCase());
+                    return (
+                      <li key={value.toLowerCase()} className={`imp-rmap__row${cur ? ' is-used' : ''}`}>
+                        <span className="imp-rmap__val"><span className="imp-rmap__word">{value}</span> <span className="mono muted">{plural(n, 'row', 'rows')}</span></span>
+                        <span className="imp-map__arrow" aria-hidden="true">→</span>
+                        <select className="input imp-rmap__select" value={cur} disabled={locked}
+                          aria-label={`What a sign “${value}” means`} onChange={(e) => setSignMeaning(value, e.target.value)}>
+                          <option value="">A profile field only</option>
+                          <option value="requested">A lawn sign to put up</option>
+                          <option value="installed">A lawn sign that’s up</option>
                         </select>
                         {own && <span className="imp-rmap__own mono" aria-hidden="true">yours</span>}
                       </li>
