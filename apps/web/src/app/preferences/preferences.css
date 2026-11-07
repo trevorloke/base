@@ -1,0 +1,13 @@
+/* The preference centre. */
+.prefs-container {
+  max-width: 760px;
+}
+.prefs-saved {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 2px solid var(--yellow);
+  background: var(--yellow-pale);
+  font-weight: 700;
+  color: var(--navy);
+}
