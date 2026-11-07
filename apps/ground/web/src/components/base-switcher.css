@@ -1,0 +1,64 @@
+/* The base switcher (BaseSwitcher.jsx): a "base" wordmark button in the top
+   bar and the list of the client's apps under it. Self-contained: every
+   colour, size and font comes from a CSS variable with a fallback, so the
+   app's tokens — and a client's brand — apply without touching this file. */
+.bsw { position: relative; flex: none; }
+.bsw-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; min-width: 44px; padding: 0 10px; margin: 0;
+  background: var(--bsw-btn-bg, transparent);
+  color: var(--bsw-btn-ink, inherit);
+  border: 1px solid var(--bsw-btn-rule, rgba(255, 255, 255, 0.28));
+  border-radius: var(--r-ctrl, 10px);
+  font: inherit; cursor: pointer;
+}
+.bsw-word {
+  font-family: var(--font-display, system-ui, sans-serif);
+  font-size: 17px; font-weight: 700; letter-spacing: 0.04em; line-height: 1;
+  text-transform: lowercase;
+}
+.bsw-chev { flex: none; transition: transform 120ms ease; }
+.bsw-btn[aria-expanded='true'] .bsw-chev { transform: rotate(180deg); }
+.bsw-btn[aria-expanded='true'],
+.bsw-btn:hover { background: var(--bsw-btn-bg-on, var(--navy-2, rgba(0, 0, 0, 0.2))); }
+.bsw-btn:focus-visible { outline: 2px solid var(--bsw-focus, var(--gold, #ffc72c)); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .bsw-chev { transition: none; } }
+
+/* Only for screen readers: what the wordmark button is. */
+.bsw-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.bsw-panel {
+  position: absolute; left: 0; top: calc(100% + 6px); z-index: 970;
+  min-width: 240px; max-width: calc(100vw - 2 * var(--s-4, 16px));
+  margin: 0; padding: var(--s-1, 4px) 0; list-style: none;
+  background: var(--paper-0, #fff); color: var(--text-1, #141a26);
+  border: 1px solid var(--rule, #d6dce5);
+  border-radius: var(--r-card, 12px);
+  box-shadow: var(--shadow-2, 0 8px 28px rgba(0, 0, 0, 0.16));
+}
+.bsw-panel[hidden] { display: none; }
+/* In the desktop sidebar the list takes the sidebar's width, so it is never
+   cut off at the sidebar's edge. */
+@media (min-width: 721px) {
+  .bsw { align-self: stretch; }
+  .bsw-panel { right: 0; min-width: 0; max-width: none; }
+}
+.bsw-panel li + li { border-top: 1px solid var(--rule, #d6dce5); }
+.bsw-link {
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+  min-height: 52px; padding: var(--s-2, 8px) var(--s-4, 16px);
+  color: inherit; text-decoration: none;
+}
+.bsw-link:hover { background: var(--paper-1, #eef2f8); }
+.bsw-link:focus-visible { outline: 2px solid var(--mark, #003979); outline-offset: -2px; }
+.bsw-link[aria-current='true'] { box-shadow: inset 3px 0 0 var(--mark, #003979); }
+.bsw-name { font-size: 15.5px; font-weight: 700; }
+.bsw-name__base { font-family: var(--font-display, inherit); font-weight: 700; color: var(--text-3, #5b6472); }
+.bsw-what { font-size: 13px; color: var(--text-3, #5b6472); }
+@media (forced-colors: active) {
+  .bsw-btn, .bsw-panel { border-color: ButtonText; }
+  .bsw-link[aria-current='true'] { outline: 2px solid Highlight; }
+}

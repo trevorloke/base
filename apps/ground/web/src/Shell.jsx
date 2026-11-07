@@ -22,6 +22,7 @@ import {
   clockText,
 } from './offline.js';
 import OfflineSheet from './components/OfflineSheet.jsx';
+import BaseSwitcher from './components/BaseSwitcher.jsx';
 import { useThisDevice } from './components/queued.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { useKeptTime } from './components/KeptCopies.js';
@@ -452,6 +453,7 @@ function SignedInShell({ who, mode }) {
               <span className="brand-org">{me.workspace.name}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
             </span>
           </NavLink>
+          <BaseSwitcher me={me} current={mode === 'admin' ? 'ground' : 'field'} />
           <nav className="links" aria-label="Main">
             {nav.map((n) => <NavLink key={n.to} to={n.to} end={n.end}><Icon name={n.icon} />{n.label}{badge(n)}</NavLink>)}
           </nav>
