@@ -65,3 +65,13 @@ CREATE TABLE IF NOT EXISTS inbox_rules (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS inbox_rules_ws ON inbox_rules(workspace_id, position);
+
+-- What was already in the feed: each message is its own conversation. The last week starts open, older ones done.
+INSERT INTO inbox_items (activity_id, workspace_id, thread_id, status, done_at, last_activity_at, created_at, updated_at)
+SELECT a.id, a.workspace_id, a.id,
+       CASE WHEN a.occurred_at > now() - interval '7 days' THEN 'open' ELSE 'done' END,
+       CASE WHEN a.occurred_at > now() - interval '7 days' THEN NULL ELSE now() END,
+       a.occurred_at, now(), now()
+FROM activities a
+WHERE a.kind NOT IN ('own_post', 'like', 'follow', 'repost') AND a.social_account_id IS NOT NULL
+ON CONFLICT (activity_id) DO NOTHING;

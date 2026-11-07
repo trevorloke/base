@@ -97,6 +97,13 @@ export const LedgerEventType = z.enum([
   "report.shared",
   "report.share_revoked",
   // ---- end analytics & client reports
+  // ---- AI answer visibility
+  "visibility.prompt_created",
+  "visibility.prompt_updated",
+  "visibility.prompt_archived",
+  "visibility.settings_updated",
+  "visibility.run_completed",
+  // ---- end AI answer visibility
 ]);
 export type LedgerEventType = z.infer<typeof LedgerEventType>;
 
