@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BaseSwitcher } from "@/components/admin/BaseSwitcher";
+import { env } from "@/lib/env";
 import { adminPreviewAllowed } from "@/lib/preview-mode";
+import { suiteLinks } from "@/lib/suite";
 import { can, getAdminAccount, ROLE_LABELS, type Permission } from "@/lib/server/admin-auth";
 
 export const metadata: Metadata = { title: "Admin", robots: { index: false } };
@@ -35,6 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Enrol first: an owner or administrator without two-factor sign-in gets
   // only My account (requireAdmin on every other page sends them there).
   const nav = mustEnrol ? NAV.filter((item) => item.href === "/admin/account") : NAV.filter((item) => !item.permission || can(user, item.permission));
+  const suite = env.baseGroundUrl ? suiteLinks({ groundUrl: env.baseGroundUrl, airUrl: env.baseAirUrl }) : [];
   return (
     <div className="admin">
       {adminPreviewAllowed() && (
@@ -43,6 +47,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </p>
       )}
       <nav className="admin-nav no-print" aria-label="Admin">
+        {suite.length > 0 && <BaseSwitcher apps={suite} />}
         <strong style={{ color: "var(--navy)", fontSize: 18 }}>Imagine Surrey admin</strong>
         {nav.map((item) => (
           <Link key={item.href} href={item.href}>
