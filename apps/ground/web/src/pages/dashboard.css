@@ -11,7 +11,7 @@
   background: transparent; color: var(--text-2); cursor: pointer; touch-action: manipulation;
 }
 .dash-period.is-on { background: var(--paper-0); color: var(--text-1); box-shadow: var(--shadow-1); }
-.dash-period:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.dash-period:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* Figures: a small tile each, the period's number big. */
 .dash-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: var(--s-2); margin: 0 0 var(--s-4); }
@@ -19,8 +19,8 @@
   display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: var(--s-3);
   background: var(--paper-0); border: var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-1);
 }
-.dash-fig__n { font-family: var(--font-serif); font-size: clamp(24px, 5vw, 36px); font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums lining-nums; }
-.dash-fig__label { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); margin-top: 4px; }
+.dash-fig__n { font-family: var(--font-sans); font-size: clamp(24px, 5vw, 36px); font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums lining-nums; }
+.dash-fig__label { font-family: var(--font-sans); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); margin-top: 4px; }
 .dash-fig__sub { font-size: 11.5px; color: var(--text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dash-fig--live { border-color: color-mix(in srgb, var(--ok) 50%, var(--rule)); }
 
@@ -38,7 +38,7 @@
 .dash-seg__b { font: inherit; font-size: 13px; min-height: 32px; padding: 0 12px; border: 0; background: var(--paper-0); color: var(--text-2); cursor: pointer; }
 .dash-seg__b + .dash-seg__b { border-left: var(--border-2); }
 .dash-seg__b.is-on { background: var(--ink); color: var(--paper-0); }
-.dash-seg__b:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.dash-seg__b:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 
 /* Legend — always present; text in text tokens, the swatch carries identity. */
 .dash-legend { list-style: none; display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-4); padding: 0; margin: 0 0 var(--s-2); font-size: 13px; color: var(--text-2); }
@@ -50,7 +50,7 @@
 .dash-chart svg { display: block; max-width: 100%; }
 .dash-grid { stroke: var(--rule); stroke-width: 1; }
 .dash-base { stroke: var(--rule-2); stroke-width: 1; }
-.dash-axis { font-family: var(--font-mono); font-size: 10.5px; fill: var(--text-3); }
+.dash-axis { font-family: var(--font-sans); font-size: 10.5px; fill: var(--text-3); }
 .dash-bar { stroke: var(--paper-0); stroke-width: 1; }
 .dash-hit { fill: transparent; cursor: default; outline: none; }
 .dash-hit.is-on { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
@@ -67,7 +67,7 @@
 .dash-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .dash-table th, .dash-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 .dash-table th[scope='row'], .dash-table th:first-child { text-align: left; }
-.dash-table thead th { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.dash-table thead th { font-family: var(--font-sans); font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
 .dash-table tbody tr:last-child th, .dash-table tbody tr:last-child td { border-bottom: 0; }
 
 /* In the field: the map beside the people (stacked on a phone). */
@@ -86,7 +86,7 @@
   font: inherit; text-align: left; color: var(--text-1); background: transparent; border: 0; cursor: pointer; touch-action: manipulation;
 }
 .dash-prow.is-on { background: var(--paper-1); }
-.dash-prow:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.dash-prow:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .dash-prow__main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .dash-prow__name { font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .dash-prow__sub { font-size: 12.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -101,15 +101,15 @@
 .dash-who-wrap { background: transparent; border: 0; }
 .dash-who {
   display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%;
-  font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.02em; color: #fff; background: #003979;
-  border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); box-sizing: border-box;
+  font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.02em; color: var(--mark-ink); background: var(--mark);
+  border: 2px solid var(--map-paper); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); box-sizing: border-box;
 }
-.dash-who.is-stale { background: #6b7384; }
-.dash-who.is-out { box-shadow: 0 0 0 3px #2a9d8f, 0 1px 4px rgba(0, 0, 0, 0.35); }
-.dash-who.is-sel { background: #ffc72c; color: #00224d; }
+.dash-who.is-stale { background: var(--pin-unrated); color: #ffffff; }
+.dash-who.is-out { box-shadow: 0 0 0 3px var(--ok), 0 1px 4px rgba(0, 0, 0, 0.35); }
+.dash-who.is-sel { background: var(--accent); color: var(--accent-ink); }
 .dash-prow__av { width: 36px; height: 36px; flex: none; box-shadow: none; border-color: var(--paper-0); }
-.dash-prow__av.is-out { box-shadow: 0 0 0 2px #2a9d8f; }
-.dash-acc { stroke: #2a9d8f; fill: #2a9d8f; fill-opacity: 0.1; stroke-width: 1; }
+.dash-prow__av.is-out { box-shadow: 0 0 0 2px var(--ok); }
+.dash-acc { stroke: var(--map-me); fill: var(--map-me); fill-opacity: 0.1; stroke-width: 1; }
 
 /* Latest */
 .dash-recent { list-style: none; margin: 0; padding: 0; border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
@@ -122,10 +122,11 @@
 .dash-sec__links { display: inline-flex; align-items: center; gap: var(--s-2); }
 .dash-sec__btn { min-height: 32px; padding: 0 10px; font-size: 13px; }
 .dash-tt { font-family: var(--font-sans); font-size: 12.5px; }
-.dash-pop { font-family: var(--font-sans); font-size: 13.5px; line-height: 1.5; color: #141a26; min-width: 160px; }
-.dash-pop a { color: #003979; }
-.dash-pop__sub { color: #5b6472; font-size: 12.5px; }
+.dash-pop { font-family: var(--font-sans); font-size: 13.5px; line-height: 1.5; color: var(--ink); min-width: 160px; }
+.dash-pop a { color: var(--link); }
+.dash-pop__sub { color: var(--text-3); font-size: 12.5px; }
 .dash-pop__dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; vertical-align: -1px; }
-.dash-pop__live { color: #1f7a4d; font-weight: 600; }
-.dash-pop__btn { margin-top: 6px; font: inherit; font-size: 13px; min-height: 32px; padding: 0 10px; border: 1px solid #bfc8d6; border-radius: 8px; background: #fff; color: #141a26; cursor: pointer; }
-.dash-map .leaflet-popup-content-wrapper { border-radius: 12px; }
+.dash-pop__live { color: var(--ok); font-weight: 700; }
+.dash-pop__btn { margin-top: 6px; font: inherit; font-size: 13px; min-height: 32px; padding: 0 10px; border: var(--border-2); border-radius: var(--r-btn); background: var(--paper-0); color: var(--ink); cursor: pointer; }
+.dash-map .leaflet-popup-content-wrapper { border-radius: var(--r-card); }
+.dash-map .leaflet-popup-content-wrapper, .dash-map .leaflet-popup-tip { background: var(--paper-0); color: var(--ink); }

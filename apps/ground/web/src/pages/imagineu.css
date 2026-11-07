@@ -27,15 +27,18 @@
 .lu-row__n { font-size: 12px; color: var(--text-3); }
 .lu-chip { font-size: 11px; min-height: 0; padding: 1px 7px; }
 .lu-mark {
-  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 10px;
-  font-family: var(--font-display); font-weight: 700; font-size: 15px; color: #fff; background: var(--navy);
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--r-ctrl);
+  font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--mark-ink); background: var(--mark);
 }
+/* A lesson's kind: a fixed set of colours (the same on every campaign),
+   each dark enough for white letters at 4.5:1. */
+.lu-mark--document, .lu-mark--video, .lu-mark--audio, .lu-mark--picture, .lu-mark--contacts { color: #ffffff; }
 .lu-mark--document { background: #1f5fa8; }
 .lu-mark--video { background: #b91c1c; }
-.lu-mark--audio { background: #7b61ff; }
-.lu-mark--picture { background: #2a9d8f; }
-.lu-mark--contacts { background: #b97a00; }
-.lu-mark--procedure { background: var(--navy-2); }
+.lu-mark--audio { background: #5b43d6; }
+.lu-mark--picture { background: #1d7a6f; }
+.lu-mark--contacts { background: #8a5a00; }
+.lu-mark--procedure { background: var(--mark-deep); }
 .lu-mark.is-done { background: var(--ok); }
 .lu-addrow, .lu-addsec { padding: 8px 12px; }
 .lu-addsec { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; padding: var(--s-3) 0; }

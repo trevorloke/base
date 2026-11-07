@@ -8,7 +8,7 @@
   margin-top: var(--s-4);
   padding: var(--s-2) 0;
   border-top: 1px solid var(--rule);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
   color: var(--text-2);
@@ -16,6 +16,6 @@
   -webkit-tap-highlight-color: transparent;
 }
 @media (hover: hover) { .lad-link:hover { color: var(--text-1); } }
-.lad-link:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
-.lad-link__sub { font-family: var(--font-mono); font-size: 12px; font-weight: 400; color: var(--text-3); }
+.lad-link:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.lad-link__sub { font-family: var(--font-sans); font-size: 12px; font-weight: 400; color: var(--text-3); }
 .lad-link__chev { margin-left: auto; font-size: 22px; line-height: 1; color: var(--text-3); }

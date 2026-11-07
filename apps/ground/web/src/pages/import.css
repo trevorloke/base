@@ -49,7 +49,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
   color: var(--text-4);
@@ -79,7 +79,7 @@
 .imp-drop:hover { border-color: var(--ink); }
 .imp-drop.is-over { border-style: solid; border-color: var(--ink); background: var(--paper-1); }
 .imp-drop.is-busy { cursor: progress; opacity: 0.8; }
-.imp-drop:focus-within { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.imp-drop:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
 .imp-file-input {
   position: absolute;
   width: 1px; height: 1px;
@@ -88,12 +88,12 @@
   clip: rect(0 0 0 0);
 }
 .imp-drop__btn { pointer-events: none; }
-.imp-drop__or { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.imp-drop__or { font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
 /* Phones and tablets can't drag a file in: just the button. (Phone width
    too, for browsers that don't report a coarse pointer.) */
 @media (pointer: coarse), (max-width: 560px) { .imp-drop__or { display: none; } }
 .imp-paste { margin-top: var(--s-2); }
-.imp-paste__text { font-family: var(--font-mono); font-size: 13px; line-height: 1.45; resize: vertical; min-height: 140px; }
+.imp-paste__text { font-family: var(--font-sans); font-size: 13px; line-height: 1.45; resize: vertical; min-height: 140px; }
 
 .imp-source { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
 .imp-source p { margin: 0; overflow-wrap: anywhere; }
@@ -135,7 +135,7 @@
 }
 .imp-map__src { min-width: 0; display: flex; flex-direction: column; }
 .imp-map__head {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
   letter-spacing: 0.02em;
   font-weight: 600;
@@ -150,7 +150,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.imp-map__arrow { color: var(--text-4); font-family: var(--font-mono); }
+.imp-map__arrow { color: var(--text-4); font-family: var(--font-sans); }
 .imp-map__row.is-used .imp-map__arrow { color: var(--text-1); }
 .imp-map__select { min-height: 48px; }
 .imp-map__row:not(.is-used) .imp-map__select { color: var(--text-3); }
@@ -227,13 +227,13 @@
   min-height: 44px;
   display: flex;
   align-items: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--text-2);
 }
-.imp-matches summary:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 1px; }
+.imp-matches summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 .imp-matches ul { list-style: none; margin: 0; padding: 0; }
 .imp-matches li { padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 14px; overflow-wrap: anywhere; }
 .imp-matches li .mono { font-size: 11px; margin-right: var(--s-2); }
@@ -259,12 +259,12 @@
 
 /* ── GeocodeButton ── */
 .geo--compact { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.geo--compact .geo-live { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
+.geo--compact .geo-live { font-family: var(--font-sans); font-size: 11px; color: var(--text-2); }
 .btn.geo-btn--compact { min-height: 28px; padding: 4px 12px; border-radius: 999px; }
 
 .geo--full { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-2) 0; }
 .geo-run { max-width: 520px; }
-.geo-live--full { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; color: var(--text-2); }
+.geo-live--full { margin: 0; font-family: var(--font-sans); font-size: 12px; letter-spacing: 0.02em; color: var(--text-2); }
 .geo-live--full:empty { display: none; }
 .geo-summary {
   border-left: 3px solid var(--ok);
@@ -329,7 +329,7 @@
 }
 .imp-headrow input { width: 20px; height: 20px; margin: 0; accent-color: var(--ink); cursor: pointer; }
 .imp-headrow input:disabled { cursor: default; }
-.imp-headrow input:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.imp-headrow input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* Touch screens keep :hover after a tap: the drop box only darkens for a mouse. */
 @media (hover: none) { .imp-drop:hover { border-color: var(--rule-2); } }
 .imp-split { display: flex; gap: var(--s-2); align-items: flex-start; margin: 0 0 var(--s-4); padding: var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); font-size: 14px; color: var(--text-2); }

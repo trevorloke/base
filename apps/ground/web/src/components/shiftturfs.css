@@ -30,7 +30,7 @@
 }
 .st-opt:hover { background: var(--paper-1); }
 .st-opt[aria-pressed='true'] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-.st-opt:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.st-opt:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .st-opt:disabled { opacity: 0.6; cursor: default; }
 .st-opt__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-opt__check { font-size: 14px; }

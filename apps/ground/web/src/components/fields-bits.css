@@ -17,7 +17,7 @@
 }
 @media (hover: hover) { .btn.fd-save:not(:disabled):hover { background: var(--ink); opacity: 0.88; } }
 .btn.fd-save:disabled { background: var(--paper-0); color: var(--text-3); border-color: var(--rule-2); }
-.fd-said { font-family: var(--font-mono); font-size: 13px; color: var(--ok); }
+.fd-said { font-family: var(--font-sans); font-size: 13px; color: var(--ok); }
 .fd-read .k { min-width: 120px; max-width: 45%; overflow-wrap: anywhere; }
 
 /* Long text: room to write, and its lines kept when read. */

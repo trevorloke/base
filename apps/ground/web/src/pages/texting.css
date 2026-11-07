@@ -18,12 +18,12 @@
 .tx-sub { margin: 0 0 var(--s-4); color: var(--text-3); font-size: 14px; }
 
 .tx-thread { list-style: none; margin: 0 0 var(--s-4); padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
-.tx-bubble { max-width: 85%; padding: var(--s-2) var(--s-3); border-radius: 10px; border: 1px solid var(--rule-2); }
+.tx-bubble { max-width: 85%; padding: var(--s-2) var(--s-3); border-radius: var(--r-card); border: 1px solid var(--rule-2); }
 .tx-bubble--in { align-self: flex-start; background: var(--paper-2); border-bottom-left-radius: 2px; }
 .tx-bubble--out { align-self: flex-end; background: var(--paper-0); border-color: var(--ink); border-bottom-right-radius: 2px; }
 .tx-bubble.is-bad { border-color: var(--danger); border-style: dashed; }
 .tx-bubble__body { margin: 0; font-size: 16px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
-.tx-bubble__meta { display: block; margin-top: 2px; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.tx-bubble__meta { display: block; margin-top: 2px; font-family: var(--font-sans); font-size: 11px; color: var(--text-3); }
 .tx-bubble.is-bad .tx-bubble__meta { color: var(--danger); }
 .tx-kw { display: inline-block; margin-top: var(--s-1); }
 
@@ -36,7 +36,7 @@
 
 .tx-status { list-style: none; margin: 0 0 var(--s-4); padding: 0; border-top: 1px solid var(--rule); }
 .tx-status li { display: flex; justify-content: space-between; gap: var(--s-3); align-items: baseline; padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); }
-.tx-status span { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.tx-status span { font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
 .tx-status strong { font-weight: 600; text-align: right; }
 .input.tx-tpl { min-height: 96px; font-size: 16px; line-height: 1.45; resize: vertical; }
 /* "+ First name / + Your name / + Campaign" — the ladder email's buttons. */
@@ -46,4 +46,4 @@
 .tx-save { display: flex; align-items: center; gap: var(--s-3); margin: 0 0 var(--s-4); }
 .tx-more { --disclose-x: var(--s-1); }
 .tx-more__body { padding: 0 var(--s-1) var(--s-4); }
-.tx-code { display: block; padding: var(--s-2) var(--s-3); background: var(--paper-1); border: var(--border); border-radius: var(--r-ctrl); font: 13px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+.tx-code { display: block; padding: var(--s-2) var(--s-3); background: var(--paper-1); border: var(--border); border-radius: var(--r-ctrl); font: 13px/1.5 var(--font-sans); overflow-wrap: anywhere; }

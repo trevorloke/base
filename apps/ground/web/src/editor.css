@@ -7,7 +7,7 @@
 .ws-tabs {
   display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none;
   margin: 0 calc(-1 * var(--s-1)) var(--s-5); padding: 4px;
-  background: var(--paper-1); border-radius: 12px;
+  background: var(--paper-1); border-radius: var(--r-card);
 }
 .ws-tabs::-webkit-scrollbar { display: none; }
 .ws-tab {
@@ -17,9 +17,9 @@
 }
 @media (hover: hover) { .ws-tab:hover { background: var(--paper-0); color: var(--text-1); } }
 .ws-tab.active { background: var(--paper-0); color: var(--text-1); box-shadow: var(--shadow-1); }
-.ws-tab:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.ws-tab:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 
-.ws-note { margin: 0 0 var(--s-4); padding: 10px 14px; border-radius: 10px; background: var(--mark-soft); color: var(--text-1); font-size: 14px; }
+.ws-note { margin: 0 0 var(--s-4); padding: 10px 14px; border-radius: var(--r-ctrl); background: var(--mark-soft); color: var(--text-1); font-size: 14px; }
 .ws-note code { font-size: 13px; background: var(--paper-0); padding: 1px 6px; border-radius: 6px; overflow-wrap: anywhere; }
 .ws-hint { margin: calc(-1 * var(--s-2)) 0 var(--s-4); color: var(--text-3); font-size: 14px; }
 
@@ -34,12 +34,12 @@
 .ws-md__bar { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
 .ws-md__tools { display: flex; flex-wrap: wrap; gap: 4px; }
 .ws-md__tool {
-  min-height: 38px; min-width: 38px; padding: 0 10px; border-radius: 8px;
+  min-height: 38px; min-width: 38px; padding: 0 10px; border-radius: var(--r-ctrl);
   border: var(--border-2); background: var(--paper-0); color: var(--text-1);
   font: 600 13.5px/1 var(--font-sans); cursor: pointer;
 }
 .ws-md__tool:hover { background: var(--paper-1); }
-.ws-md__tool:focus-visible { outline: 2px solid var(--mark); outline-offset: 1px; }
+.ws-md__tool:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
 .ws-md__tool--b { font-weight: 800; }
 .ws-md__tool--i { font-style: italic; font-family: Georgia, serif; }
 .ws-md__preview[aria-pressed='true'] { background: var(--mark-soft); border-color: var(--mark); }
