@@ -17,6 +17,9 @@ import { createDiscordConnectors } from "./discord.ts";
 import { createDiscordBotConnectors } from "./discord-bot.ts";
 import { createWhatsAppConnectors } from "./whatsapp.ts";
 import { createWeChatConnectors } from "./wechat.ts";
+import { createWeComConnectors } from "./wecom.ts";
+import { createWeiboConnectors } from "./weibo.ts";
+import { createDouyinConnectors } from "./douyin.ts";
 import { createLineConnectors } from "./line.ts";
 import { createNostrConnectors } from "./nostr.ts";
 import { createMisskeyConnectors } from "./misskey.ts";
@@ -63,6 +66,7 @@ export function createDefaultRegistry(env: NodeJS.ProcessEnv = process.env): Con
     createDiscordBotConnectors,
     createWhatsAppConnectors,
     createWeChatConnectors,
+    createWeComConnectors,
     createLineConnectors,
     // Open networks, team chat, blogs and newsletters, more social and streaming, and the universal connectors.
     createNostrConnectors,
@@ -79,6 +83,9 @@ export function createDefaultRegistry(env: NodeJS.ProcessEnv = process.env): Con
     createTumblrConnectors,
     createTwitchConnectors,
     createVkConnectors,
+    // Chinese platforms with open APIs (Weibo, Douyin); WeChat and WeCom sit with the chat apps above.
+    createWeiboConnectors,
+    createDouyinConnectors,
     createWebhookConnectors,
     createRssConnectors,
   ]) {
