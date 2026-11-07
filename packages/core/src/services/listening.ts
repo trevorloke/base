@@ -262,6 +262,7 @@ export class WebhookService {
     if (verified.length === 0) throw new CoreError("forbidden", "bad webhook signature");
     let items = 0;
     let logged = false;
+    let reply: { body: string; contentType: string } | null = null;
     for (const acc of verified) {
       let body: unknown;
       try {
@@ -273,12 +274,14 @@ export class WebhookService {
         await this.ctx.events.appendRaw({ source: `webhook:${connectorName}`, kind: "delivery", workspaceId: null, externalId: null, payload: body });
         logged = true;
       }
+      reply ??= handler.respond?.(body, headers) ?? null;
       for (const batch of handler.parse(body)) {
         if (batch.network !== acc.network || batch.accountExternalId !== acc.externalId) continue;
         items += (await this.listening.ingestItems(acc.workspaceId, acc.id, batch.items)).ingested;
       }
     }
-    return { accepted: true, items, ...(handler.ack ? { ack: handler.ack } : {}) };
+    const ack = reply ?? handler.ack;
+    return { accepted: true, items, ...(ack ? { ack } : {}) };
   }
 
   async receive(connectorName: string, headers: Record<string, string>, rawBody: string, query: Record<string, string> = {}): Promise<{ accepted: boolean; items: number; ack?: { body: string; contentType: string } }> {
@@ -304,6 +307,7 @@ export class WebhookService {
         items += r.ingested;
       }
     }
-    return { accepted: true, items, ...(handler.ack ? { ack: handler.ack } : {}) };
+    const ack = handler.respond?.(body, headers) ?? handler.ack;
+    return { accepted: true, items, ...(ack ? { ack } : {}) };
   }
 }

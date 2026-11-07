@@ -1,5 +1,5 @@
 import { Network, type ActivityInput, type MetricInput } from "@starsign/schema";
-import type { AccountRef, Connector, ConnectorCapabilities, PublishInput, PublishResult } from "./types.ts";
+import type { AccountRef, Connector, ConnectorCapabilities, ModerationInput, PublishInput, PublishResult } from "./types.ts";
 import { ConnectorError } from "./types.ts";
 
 interface MockPost {
@@ -24,7 +24,8 @@ export class MockConnector implements Connector {
   now: () => Date = () => new Date();
 
   capabilities(): ConnectorCapabilities {
-    return { publish: true, fetchActivity: true, fetchMetrics: true, meteredReads: false };
+    // Everything a demo needs to show: replies and moderation are recorded, never sent anywhere.
+    return { publish: true, fetchActivity: true, fetchMetrics: true, meteredReads: false, reply: true, moderate: true };
   }
 
   async publish(account: AccountRef, input: PublishInput): Promise<PublishResult> {
@@ -38,6 +39,21 @@ export class MockConnector implements Connector {
     const externalId = `mock-${account.network}-${++this.counter}`;
     this.posts.push({ externalId, accountId: account.id, text: input.text, publishedAt: this.now(), idempotencyKey: input.idempotencyKey });
     return { externalId, url: `https://mock.social/${account.handle}/${externalId}` };
+  }
+
+  readonly replies: { parentExternalId: string; text: string; idempotencyKey: string; externalId: string }[] = [];
+  readonly moderated: { externalId: string; action: string }[] = [];
+
+  async reply(account: AccountRef, input: { parentExternalId: string; text: string; idempotencyKey: string }): Promise<PublishResult> {
+    const existing = this.replies.find((r) => r.idempotencyKey === input.idempotencyKey);
+    if (existing) return { externalId: existing.externalId, url: `https://mock.social/${account.handle}/${existing.externalId}` };
+    const externalId = `mock-${account.network}-reply-${++this.counter}`;
+    this.replies.push({ ...input, externalId });
+    return { externalId, url: `https://mock.social/${account.handle}/${externalId}` };
+  }
+
+  async moderate(_account: AccountRef, input: ModerationInput): Promise<void> {
+    this.moderated.push({ externalId: input.externalId, action: input.action });
   }
 
   /** Queue synthetic inbound items for an account (tests/dev). */

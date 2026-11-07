@@ -1,6 +1,6 @@
 import { createDb, migrate, type DbHandle } from "@starsign/db";
 import { Starsign, SecretBox, TimerScheduler, type Scheduler } from "@starsign/core";
-import { BullMQScheduler, buildRegistry, createRedis } from "@starsign/workers";
+import { BullMQScheduler, buildRegistry, createRedis, startInProcessJobs } from "@starsign/workers";
 import { AnthropicGateway, FakeGateway, defaultFakeHandlers, type ModelGateway } from "@starsign/ai";
 import { createDefaultSources, type SourceAdapter } from "@starsign/sources";
 
@@ -19,8 +19,21 @@ export function gatewayFromEnv(env: NodeJS.ProcessEnv = process.env): ModelGatew
   return null;
 }
 
+/**
+ * The deployment's public address. Render gives every web service RENDER_EXTERNAL_URL; without falling back to it,
+ * a Render deploy that never set STARSIGN_PUBLIC_URL refuses every OAuth connect (503), mails relative invite and
+ * reset links and turns link tracking off. Fills STARSIGN_PUBLIC_URL in place so every reader (auth, links, media,
+ * connector webhooks) sees the same value.
+ */
+export function applyHostDefaults(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const own = env.STARSIGN_PUBLIC_URL?.trim();
+  if (!own && env.RENDER_EXTERNAL_URL?.trim()) env.STARSIGN_PUBLIC_URL = env.RENDER_EXTERNAL_URL.trim();
+  return env.STARSIGN_PUBLIC_URL?.trim() || undefined;
+}
+
 /** Shared boot for the API process: database, migrations, connectors, scheduler, Starsign. */
 export async function boot(env: NodeJS.ProcessEnv = process.env): Promise<Booted> {
+  applyHostDefaults(env);
   const handle = await createDb({ url: env.DATABASE_URL, pglitePath: env.DATABASE_URL ? undefined : env.PGLITE_PATH ?? ".pglite" });
   const applied = await migrate(handle);
   if (applied.length) console.log(`[db] applied migrations: ${applied.join(", ")}`);
@@ -44,6 +57,15 @@ export async function boot(env: NodeJS.ProcessEnv = process.env): Promise<Booted
     m = new Starsign({ handle, connectors: buildRegistry(env), scheduler, secrets: SecretBox.fromEnv(env) });
     const n = await m.publishing.rearm((postId, at) => timers.schedulePublish(postId, at));
     if (n) console.log(`[scheduler] re-armed ${n} scheduled post(s) (in-process timers; set REDIS_URL for durable queues)`);
+    // No separate workers process: run the background jobs here, or the feed, radar and metrics never fill.
+    if (env.STARSIGN_INPROCESS_JOBS !== "0") {
+      const jobs = startInProcessJobs(m);
+      const prev = closeScheduler;
+      closeScheduler = async () => {
+        jobs.stop();
+        await prev();
+      };
+    }
   }
   return {
     handle,

@@ -6,6 +6,7 @@ import { NetworkBadge } from "../components/NetworkBadge";
 import { ENTITY_ROLE_SUGGESTIONS, NETWORKS, networkLabel, RELATION_HINT, RELATION_LABEL, RELATION_ORDER } from "../lib/format";
 import { languageName } from "../lib/lang";
 import { descendantsOf } from "../lib/tracker";
+import { ErrorNote } from "../components/ErrorNote";
 
 type Handles = Partial<Record<Network, string[]>>;
 
@@ -420,11 +421,7 @@ function AliasSuggester({ entity, have, onAdd }: { entity: Entity; have: string[
       <button type="button" className="btn btn-small" disabled={busy} onClick={() => void ask()}>
         {busy ? "Asking…" : result ? "Suggest again" : "Suggest names in other languages"}
       </button>
-      {error ? (
-        <div className="card-error" role="alert">
-          {error}
-        </div>
-      ) : null}
+      {error ? <ErrorNote text={error} /> : null}
       {result ? (
         <div className="ent-suggest-out" role="status">
           {result.aliases.length ? (

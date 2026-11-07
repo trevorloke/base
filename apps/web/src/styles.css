@@ -3986,3 +3986,425 @@ ul.cv-need li + li {
     gap: 2px 10px;
   }
 }
+
+/* ---------- Queue drafts, post actions ---------- */
+.queue-drafts {
+  padding: 12px 14px 16px;
+  border-top: 1px solid var(--border);
+}
+.queue-drafts-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.post-actions .muted.small {
+  margin-top: 8px;
+}
+/* An empty state's next step reads as a link, not as more grey text. */
+.state-empty .linkish {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ---------- Settings ---------- */
+.chip-link,
+.chip-link:hover {
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.chip-link:hover {
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+.brief-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.brief-h .linkish {
+  color: var(--accent);
+}
+.panel-brief .muted .linkish,
+.compose-links-off .linkish {
+  color: var(--accent);
+}
+.settings-nav {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 18px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.settings-nav .chip {
+  height: 26px;
+  font: inherit;
+  font-size: 12.5px;
+}
+.settings-sec {
+  scroll-margin-top: 52px;
+}
+.settings-sec .section-h:focus {
+  outline: none;
+}
+.settings-lede {
+  color: var(--fg-muted);
+  margin: -4px 0 12px;
+}
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-form .textarea,
+.settings-form .input {
+  min-width: 0;
+}
+.settings-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.settings-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.settings-example {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px;
+}
+.settings-kv dd {
+  color: var(--fg);
+}
+.settings-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* Red lines */
+.rl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rl-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.rl-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.rl-row-edit {
+  display: block;
+}
+.rl-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rl-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.rl-top .rl-sev {
+  min-width: 0;
+}
+.rl-title {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.rl-detail {
+  overflow-wrap: anywhere;
+}
+.rl-act {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.rl-add {
+  margin-top: 12px;
+}
+.rl-new {
+  margin-top: 12px;
+}
+.rl-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.rl-form-h {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.rl-hint {
+  margin-top: -4px;
+}
+.rl-patterns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rl-pattern {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rl-pattern > .input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.rl-pattern > .input.rl-flags {
+  flex: 0 0 56px;
+  width: 56px;
+}
+.rl-slash {
+  color: var(--fg-faint);
+}
+.rl-pattern-err {
+  flex-basis: 100%;
+}
+.rl-hours {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.rl-hours .input,
+.rl-hours .select {
+  min-width: 0;
+  width: 100%;
+}
+.rl-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rl-days .chip {
+  font: inherit;
+  font-size: 12.5px;
+}
+.rl-limit {
+  max-width: 160px;
+}
+.rl-tester {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--sunken);
+}
+.rl-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+.rl-results mark {
+  background: var(--danger-soft);
+  color: var(--danger);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+.rl-result-p {
+  overflow-wrap: anywhere;
+}
+
+/* Autonomy dial */
+.dial {
+  display: flex;
+  flex-direction: column;
+}
+.dial-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 220px) minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+}
+.dial-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.dial-label {
+  font-weight: 500;
+}
+.dial-select {
+  width: 100%;
+}
+.dial-legend summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+}
+
+/* Timezone picker */
+.tzp {
+  position: relative;
+  max-width: 360px;
+}
+.tzp-input {
+  width: 100%;
+}
+.tzp-list {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  max-height: 240px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.tzp-opt {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+}
+.tzp-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tzp-active {
+  background: var(--hover);
+}
+.tzp-on {
+  color: var(--accent);
+  font-weight: 500;
+}
+.tzp-empty {
+  padding: 6px 8px;
+}
+.tz-now {
+  font-size: 13px;
+}
+
+/* Spend caps */
+.cap-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 4px 14px;
+  align-items: start;
+}
+.cap-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cap-input .input {
+  width: 100%;
+  min-width: 0;
+}
+.cap-covers {
+  margin-top: 22px;
+}
+
+/* Policy history */
+.ph-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.ph-row {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.ph-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.ph-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.ph-changes {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--fg-muted);
+}
+.ph-changes li {
+  overflow-wrap: anywhere;
+}
+
+.post-retry .dsec-act {
+  margin-top: 8px;
+}
+.compose-links-off {
+  margin: -2px 0 8px;
+}
+.invite-email-text {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .settings-pair,
+  .rl-hours {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dial-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  }
+  .dial-hint {
+    grid-column: 1 / -1;
+  }
+  .cap-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cap-covers {
+    margin-top: 0;
+  }
+  .rl-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .rl-act,
+  .rl-confirm {
+    align-self: flex-end;
+  }
+}
+/* The last section can scroll up under the nav, so "History" in the nav lands on it. */
+.settings-sec:last-child {
+  min-height: calc(100dvh - 190px);
+}

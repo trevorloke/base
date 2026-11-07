@@ -12,7 +12,7 @@ describe("schema", () => {
       if (LISTEN_ONLY_NETWORKS.has(n)) expect(NETWORK_LIMITS[n].maxText).toBe(0);
       else expect(NETWORK_LIMITS[n].maxText).toBeGreaterThan(0);
     }
-    expect([...LISTEN_ONLY_NETWORKS]).toEqual(["news"]);
+    expect([...LISTEN_ONLY_NETWORKS]).toEqual(["news", "rss"]);
   });
 
   it("parses a red line and rejects unknown kinds", () => {

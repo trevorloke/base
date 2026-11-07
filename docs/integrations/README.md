@@ -29,6 +29,22 @@ so each connector is tested against the documented request and response shapes. 
 | WhatsApp (business number + business-created groups) | `whatsapp` | Phone number ID + WABA ID + System User token | Yes, on your own Meta app | Meta Business verification for higher limits; Groups API needs an Official Business Account; per-message pricing |
 | WeChat Official Account (messages to the account) | `wechat` | AppID + AppSecret + original ID + server Token (+ AES key) | Verified service account needed for replies | Server IP whitelist; mainland-China hosting realities (see wechat.md) |
 | LINE (groups and chats the bot is in) | `line` | Channel access token + channel secret | Yes | Message quotas by plan |
+| Nostr | `nostr` | Secret key (nsec) + relays | Yes, fully | None |
+| Misskey (and Sharkey, Firefish…) | `misskey` | Server + access token | Yes, fully | None |
+| Lemmy | `lemmy` | Server + username + password | Yes, fully | None |
+| Tumblr (every blog of a login) | `tumblr` | OAuth 2.0 | Yes | None; register an app |
+| Twitch (chat, follows) | `twitch` | OAuth 2.0 + EventSub webhooks | Yes | None; register an app |
+| VK (wall and communities) | `vk` | VK ID OAuth with PKCE | Yes | App registration in VK ID |
+| Slack (your workspace) | `slack` | Bot token + signing secret | Yes (internal app) | None for your own workspace |
+| Matrix | `matrix` | Homeserver + access token | Yes, fully | None (encrypted rooms are not readable) |
+| Google Chat | `google_chat` | Space webhook URL | Yes (post only) | Reading spaces needs a Chat app + admin approval |
+| Microsoft Teams | `teams` | Workflows webhook URL | Yes (post only) | Reading channels needs Graph + admin consent |
+| WordPress | `wordpress` | Site + username + Application Password | Yes, fully | None |
+| Ghost | `ghost` | Site + Admin API key | Yes, fully | None |
+| Mailchimp | `mailchimp` | API key (+ audience) | Yes | None |
+| Kit (ConvertKit) | `kit` | API key (v4) | Yes | None |
+| Custom webhook (Zapier, Make, n8n…) | `webhook` | Outbound URL and/or signing secret | Yes, fully | None |
+| RSS / Atom (listening) | `rss` | Feed or site URL | Yes, fully | None |
 
 **What chat monitoring can and cannot see.** Starsign reads only what each platform's official API allows: Discord
 channels its bot can read; Telegram groups its bot is in; LINE groups and chats its bot is in; messages people send
@@ -91,6 +107,12 @@ unofficial tools that try get numbers and accounts banned, so Starsign does not 
 | `TELEGRAM_WEBHOOK_SECRET` | Telegram push updates (else polling) |
 | `RESEND_API_KEY`, `MAIL_FROM` | Invites and password resets by email |
 | `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` | WhatsApp webhooks (the Meta app's secret, and a verify token you choose); webhook URL `/webhooks/whatsapp` |
+| `TUMBLR_CLIENT_ID`, `TUMBLR_CLIENT_SECRET` | Tumblr OAuth app; redirect `/oauth/tumblr/callback` |
+| `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_EVENTSUB_SECRET` | Twitch app and EventSub signing secret (HTTPS public URL on port 443 required) |
+| `VK_CLIENT_ID` (+ optional `VK_CLIENT_SECRET`, `VK_API_VERSION`) | VK ID app; redirect `/oauth/vk/callback` |
+| `NOSTR_DEFAULT_RELAYS`, `MISSKEY_LIKE_REACTION`, `LEMMY_API_BASE`, `SLACK_API_BASE`, `GHOST_ACCEPT_VERSION` | Optional overrides |
+| `STARSIGN_ALLOW_PRIVATE_URLS` | Let the custom webhook and RSS reach private network addresses (self-hosted n8n); off by default |
+| `STARSIGN_INPROCESS_JOBS` | `0` stops the API from running background jobs when there is no `REDIS_URL` |
 | `STARSIGN_BLUESKY_SEARCH_TOKEN` | Bluesky post search, if the public AppView requires sign-in (tracker public scan and the radar) |
 | `STARSIGN_MASTODON_SEARCH_INSTANCES` | Servers whose public hashtag timelines the tracker reads (default `mastodon.social`) |
 | `STARSIGN_MENTION_SOURCES` | Limit the tracker's public scan to some of `bluesky,mastodon,youtube,news` |

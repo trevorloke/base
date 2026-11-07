@@ -58,7 +58,7 @@ const MASTODON_VISIBILITY: [MastodonVisibility, string][] = [
   ["direct", "Mentioned people only"],
 ];
 
-/** Whether a network has fields of its own beyond the text (link tracking is shown for every network regardless). */
+/** Whether a network has fields of its own beyond the text (link tracking, when on, is shown for every network regardless). */
 export function hasOptions(network: Network, kinds: string[]): boolean {
   return selectableKinds(kinds).length > 1 || TITLE_NETS.has(network) || FIRST_COMMENT_NETS.has(network) || LINK_NETS.has(network) || POLL_NETS.has(network) || ["tiktok", "mastodon", "google_business"].includes(network);
 }
@@ -99,9 +99,10 @@ export function variantProblems(network: Network, kinds: string[], o: VariantOpt
   const long = videos.find((m) => cap && m.durationSeconds && m.durationSeconds > cap);
   if (long && cap) out.push(`${kind === "short" ? "Shorts" : label} take videos up to ${duration(cap)}; this one is ${duration(long.durationSeconds)}`);
 
-  if ((kind === "reel" || kind === "video" || kind === "short") && media.length && !videos.length) out.push(`A ${postKindLabel(kind).toLowerCase()} needs a video`);
-  if (kind === "carousel" && media.length < 2) out.push("A carousel needs at least 2 images or videos");
-  if (kind === "story" && media.length !== 1) out.push("A story takes exactly 1 image or video");
+  // Say which network: with several selected, "A carousel needs…" leaves the person hunting for the variant.
+  if ((kind === "reel" || kind === "video" || kind === "short") && media.length && !videos.length) out.push(`${label} ${postKindLabel(kind).toLowerCase()}: attach a video file, not an image`);
+  if (kind === "carousel" && media.length < 2) out.push(`${label} carousel needs at least 2 images or videos`);
+  if (kind === "story" && media.length !== 1) out.push(`${label} story takes exactly 1 image or video`);
 
   if (TITLE_NETS.has(network)) {
     const t = (o.title ?? "").trim();
@@ -136,7 +137,7 @@ export function variantProblems(network: Network, kinds: string[], o: VariantOpt
 }
 
 /** What goes on the wire: empty strings dropped, the kind only where there is a choice, TikTok's toggles mapped. */
-export function wireOptions(network: Network, kinds: string[], o: VariantOptions, tt: TikTokExtras): VariantOptions | undefined {
+export function wireOptions(network: Network, kinds: string[], o: VariantOptions, tt: TikTokExtras, linkTracking = true): VariantOptions | undefined {
   const out: VariantOptions = {};
   const sel = selectableKinds(kinds);
   if (o.poll && o.poll.options.filter((x) => x.trim()).length) {
@@ -163,8 +164,9 @@ export function wireOptions(network: Network, kinds: string[], o: VariantOptions
   if (cw) out.contentWarning = cw;
   if (o.visibility) out.visibility = o.visibility;
   if (o.callToAction) out.callToAction = o.callToAction;
-  if (o.trackLinks === false) out.trackLinks = false;
-  else {
+  // With tracking off for the workspace there is nothing to opt out of, and no campaign to tag.
+  if (linkTracking && o.trackLinks === false) out.trackLinks = false;
+  else if (linkTracking) {
     const campaign = str(o.campaign);
     if (campaign) out.campaign = campaign;
   }
@@ -186,6 +188,7 @@ export function NetworkOptions({
   tiktok,
   onChange,
   onTikTok,
+  linkTracking = true,
 }: {
   network: Network;
   kinds: string[];
@@ -193,9 +196,13 @@ export function NetworkOptions({
   tiktok: TikTokExtras;
   onChange: (o: VariantOptions) => void;
   onTikTok: (t: TikTokExtras) => void;
+  /** False when the server has no short-link base or the workspace turned tracking off: no "Track links" then. */
+  linkTracking?: boolean;
 }) {
   const label = networkLabel(network);
   const sel = selectableKinds(kinds);
+  // Nothing of its own and no link tracking: no empty options box.
+  if (!linkTracking && !hasOptions(network, kinds)) return null;
   const kind = value.kind ?? sel[0] ?? "post";
   const set = (p: Partial<VariantOptions>) => onChange({ ...value, ...p });
   const id = (f: string) => `opt-${network}-${f}`;
@@ -504,17 +511,19 @@ export function NetworkOptions({
         </label>
       ) : null}
 
-      <div className="opt-row opt-links">
-        <label className="check" title="Wrap links in Starsign short links with UTM tags, so clicks are counted">
-          <input type="checkbox" checked={tracking} onChange={(e) => setTracking(e.target.checked)} /> Track links
-        </label>
-        {tracking ? (
-          <label className="opt-inline opt-campaign" htmlFor={id("campaign")}>
-            <span className="opt-label">Campaign</span>
-            <input id={id("campaign")} className="input" placeholder="Workspace default" maxLength={100} value={value.campaign ?? ""} onChange={(e) => set({ campaign: e.target.value })} />
+      {linkTracking ? (
+        <div className="opt-row opt-links">
+          <label className="check" title="Wrap links in Starsign short links with UTM tags, so clicks are counted">
+            <input type="checkbox" checked={tracking} onChange={(e) => setTracking(e.target.checked)} /> Track links
           </label>
-        ) : null}
-      </div>
+          {tracking ? (
+            <label className="opt-inline opt-campaign" htmlFor={id("campaign")}>
+              <span className="opt-label">Campaign</span>
+              <input id={id("campaign")} className="input" placeholder="Workspace default" maxLength={100} value={value.campaign ?? ""} onChange={(e) => set({ campaign: e.target.value })} />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -97,6 +97,11 @@ describe("tracking a party and its candidates", () => {
     expect((await m.entities.mentions(owner.workspaceId, rival!.id)).length).toBe(1);
     await m.entities.update(owner, rival!.id, { aliases: ["Alianza Azul", "the Blues"] });
     expect((await m.entities.mentions(owner.workspaceId, rival!.id)).length).toBe(2);
+    // A patch changes only what it names: a note keeps the relation, aliases, context and scan setting.
+    const kept = await m.entities.get(owner.workspaceId, rival!.id);
+    const noted = await m.entities.update(owner, rival!.id, { notes: "watch the rally" });
+    expect(noted).toMatchObject({ notes: "watch the rally", relation: kept.relation, aliases: kept.aliases, context: kept.context, exclude: kept.exclude, handles: kept.handles, scanPublic: kept.scanPublic });
+    expect((await m.entities.mentions(owner.workspaceId, rival!.id)).length).toBe(2);
 
     // A message only matched through its translation.
     await m.listening.ingestItems(owner.workspaceId, acct, [item("蓝色联盟今天举行集会", { lang: "zh" })]);
@@ -106,6 +111,9 @@ describe("tracking a party and its candidates", () => {
     const before = await m.ctx.db.select().from(entityMentions).where(eq(entityMentions.entityId, rival!.id));
     await m.entities.archive(owner, rival!.id);
     expect((await m.entities.list(owner.workspaceId)).map((e) => e.name)).not.toContain("Blue Alliance");
+    // Its momentum topic leaves the radar too.
+    expect(rival!.trendTopicId).toBeTruthy();
+    expect((await m.trends.radar(owner.workspaceId)).map((r) => r.topic.id)).not.toContain(rival!.trendTopicId);
     expect(await m.ctx.db.select().from(entityMentions).where(eq(entityMentions.entityId, rival!.id))).toHaveLength(before.length);
   });
 });

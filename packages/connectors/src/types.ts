@@ -96,6 +96,11 @@ export interface WebhookHandler {
   parse(body: unknown): WebhookBatch[];
   /** What the platform expects back on success. Default: JSON `{ accepted, items }`. WeChat: the text "success". */
   ack?: { body: string; contentType: string };
+  /**
+   * A reply computed from this delivery, after it verified: e.g. Slack's url_verification and Twitch's callback
+   * verification echo a `challenge` from the signed body. Null: use `ack` or the default.
+   */
+  respond?(body: unknown, headers: Record<string, string>): { body: string; contentType: string } | null;
 
   /**
    * Per-account secrets (LINE channel secret, a WeChat Official Account's token and AES key). When `route` is set,
@@ -139,7 +144,7 @@ export interface Connector {
    * OAuth: exchange the code and return every account the login can act for. Preferred over oauthExchange
    * when one login yields several accounts (Meta pages + Instagram, LinkedIn member + organizations).
    */
-  oauthConnect?(p: { code: string; codeVerifier: string; redirectUri: string; config?: Record<string, unknown> }): Promise<ConnectedAccount[]>;
+  oauthConnect?(p: { code: string; codeVerifier: string; redirectUri: string; config?: Record<string, unknown>; /** Every query parameter the callback received (VK ID adds device_id). */ callbackParams?: Record<string, string> }): Promise<ConnectedAccount[]>;
   /** Extra inputs a person supplies before OAuth starts (e.g. Mastodon instance URL). */
   readonly oauthInputs?: readonly { key: string; label: string; placeholder?: string }[];
   /**

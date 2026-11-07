@@ -26,7 +26,9 @@ class FullConnector implements Connector {
   async oauthPrepare(p: { inputs: Record<string, string>; redirectUri: string; state: string }) {
     return { authorizeUrl: `https://${p.inputs.instance}/oauth/authorize?state=${p.state}`, config: { instance: p.inputs.instance, clientSecret: "per-instance-secret" } };
   }
-  async oauthConnect(p: { code: string; config?: Record<string, unknown> }) {
+  lastCallbackParams: Record<string, string> | undefined;
+  async oauthConnect(p: { code: string; config?: Record<string, unknown>; callbackParams?: Record<string, string> }) {
+    this.lastCallbackParams = p.callbackParams;
     if (p.code === "bad") throw new Error("denied");
     return [
       { network: "facebook" as const, identity: { externalId: "page-1", handle: "acmepage", displayName: "Acme Page" }, auth: { pageToken: "pt" }, config: { instance: p.config?.instance } },
@@ -135,7 +137,8 @@ describe("multi-account OAuth", () => {
     const start = await m.accounts.startOAuth(owner, { connector: "full", redirectUri: "https://app/cb", inputs: { instance: "mastodon.social" } });
     expect(start.authorizeUrl).toMatch(/^https:\/\/mastodon\.social\/oauth\/authorize\?state=/);
     const state = new URL(start.authorizeUrl).searchParams.get("state")!;
-    const accts = await m.accounts.completeOAuth({ state, code: "ok" });
+    const accts = await m.accounts.completeOAuth({ state, code: "ok", params: { code: "ok", state, device_id: "dev-42" } });
+    expect(full.lastCallbackParams).toMatchObject({ device_id: "dev-42" }); // VK ID needs device_id in the token exchange
     expect(accts.map((a) => `${a.network}:${a.handle}`)).toEqual(["facebook:acmepage", "instagram:acme.ig"]);
     expect(accts[0]!.config).toEqual({ instance: "mastodon.social" });
     const s2 = new URL((await m.accounts.startOAuth(owner, { connector: "full", redirectUri: "https://app/cb", inputs: { instance: "x.y" } })).authorizeUrl).searchParams.get("state")!;

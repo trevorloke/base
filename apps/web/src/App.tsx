@@ -14,11 +14,13 @@ import { LinksDrawer } from "./drawers/LinksDrawer";
 import { LanguagesDrawer } from "./drawers/LanguagesDrawer";
 import { TopicDrawer } from "./drawers/TopicDrawer";
 import { EntityDrawer } from "./drawers/EntityDrawer";
+import { SettingsDrawer } from "./drawers/SettingsDrawer";
 import { AUTONOMY_LABEL, lift as formatLift, listOf, networkLabel, plural, roleLabel } from "./lib/format";
+import type { SettingsSectionId } from "./lib/policy";
 import { RoomProvider, type RoomRefs } from "./lib/room";
 import { isoDaysAgo, isoNow } from "./lib/time";
 import { readTrackerPeriod, rememberTrackerPeriod, type TrackerPeriod } from "./lib/tracker";
-import { safeTz } from "./lib/tz";
+import { browserTz, safeTz } from "./lib/tz";
 import { useLive } from "./lib/useLive";
 import { Brief } from "./panels/Brief";
 import { Calendar } from "./panels/Calendar";
@@ -287,6 +289,7 @@ type DrawerState =
   | { kind: "team" }
   | { kind: "links" }
   | { kind: "languages" }
+  | { kind: "settings"; section?: SettingsSectionId }
   /** id null: track a new name. */
   | { kind: "entity"; id: string | null; edit?: boolean; preset?: { parentId?: string; kind?: EntityKind } }
   | null;
@@ -344,6 +347,7 @@ function Room({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [streams, setStreams] = useState<Stream[]>([]);
   const [languages, setLanguages] = useState<LanguagesInfo | null>(null);
+  const [people, setPeople] = useState<ReadonlyMap<string, string>>(() => new Map());
 
   const [radar, setRadar] = useState<RadarEntry[] | null>(null);
   const [radarLoading, setRadarLoading] = useState(true);
@@ -352,6 +356,7 @@ function Room({
   const [queue, setQueue] = useState<PostSummary[] | null>(null);
   const [queueLoading, setQueueLoading] = useState(true);
   const [queueError, setQueueError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<PostSummary[]>([]);
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [liftRows, setLiftRows] = useState<LiftByStage[] | null>(null);
@@ -395,7 +400,8 @@ function Room({
   }, [onSignedOut, keyMode]);
 
   const loadRefs = useCallback(async () => {
-    const [p, a, s, src, c, l] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources(), api.connectors(), api.languages()]);
+    const [p, a, s, src, c, l, mem] = await Promise.allSettled([api.policy(), api.accounts(), api.streams(), api.sources(), api.connectors(), api.languages(), api.members()]);
+    if (mem.status === "fulfilled") setPeople(new Map(mem.value.map((x) => [x.userId, x.name || x.email])));
     if (p.status === "fulfilled") setPolicy(p.value);
     if (l.status === "fulfilled") setLanguages(l.value);
     if (a.status === "fulfilled") setAccounts(a.value);
@@ -440,6 +446,8 @@ function Room({
     } finally {
       setQueueLoading(false);
     }
+    // Saved drafts sit under the queue: nowhere else in the room lists them.
+    api.drafts().then(setDrafts, () => undefined);
   }, []);
 
   const loadMetrics = useCallback(async () => {
@@ -487,8 +495,11 @@ function Room({
       openPost: (id) => setDrawer({ kind: "post", id }),
       openTopic: (id) => setDrawer({ kind: "topic", id }),
       openCompose: (prefill) => setDrawer({ kind: "compose", prefill }),
+      openAccounts: () => setDrawer({ kind: "accounts" }),
+      openSettings: (section) => setDrawer({ kind: "settings", section }),
+      people,
     }),
-    [accounts, connectors, streams, radar, timezone],
+    [accounts, connectors, streams, radar, timezone, people],
   );
 
   const closeDrawer = useCallback(() => setDrawer(null), []);
@@ -586,9 +597,14 @@ function Room({
             {newPostAutonomy || USE_FIXTURES ? (
               <div className="topbar-chips">
                 {newPostAutonomy ? (
-                  <span className="chip chip-static" title="What agents may do with new posts">
+                  <button
+                    type="button"
+                    className="chip chip-static chip-link"
+                    title="What agents may do with new posts. Change it in Settings."
+                    onClick={() => setDrawer({ kind: "settings", section: "autonomy" })}
+                  >
                     New posts: {AUTONOMY_LABEL[newPostAutonomy].toLowerCase()}
-                  </span>
+                  </button>
                 ) : null}
                 {USE_FIXTURES ? <span className="chip chip-static chip-sample">Sample data</span> : null}
               </div>
@@ -651,6 +667,17 @@ function Room({
                       }}
                     >
                       Connections
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        setDrawer({ kind: "settings" });
+                      }}
+                    >
+                      Settings
                     </button>
                     <button
                       type="button"
@@ -744,6 +771,7 @@ function Room({
                 error={queueError}
                 onRetry={() => void loadQueue()}
                 onDecided={onDecided}
+                drafts={drafts}
                 head={<CenterSwitch view="queue" onChange={changeCenter} waiting={waiting} title="Queue" />}
               />
             </div>
@@ -782,7 +810,7 @@ function Room({
 
         <Tabs tabs={tabs} active={tab} onChange={changeTab} />
 
-        {drawer?.kind === "post" ? <PostDrawer id={drawer.id} onClose={closeDrawer} /> : null}
+        {drawer?.kind === "post" ? <PostDrawer id={drawer.id} myRole={myRole as Role | null} onClose={closeDrawer} onChanged={onPostCreated} /> : null}
         {drawer?.kind === "topic" ? <TopicDrawer id={drawer.id} onClose={closeDrawer} /> : null}
         {drawer?.kind === "compose" ? (
           <ComposeDrawer
@@ -791,6 +819,7 @@ function Room({
             onClose={closeDrawer}
             onCreated={onPostCreated}
             onOpenAccounts={() => setDrawer({ kind: "accounts" })}
+            onOpenLinks={() => setDrawer({ kind: "links" })}
           />
         ) : null}
         {drawer?.kind === "accounts" ? <ConnectionsDrawer onClose={closeDrawer} onChanged={() => void loadAccounts()} /> : null}
@@ -815,8 +844,22 @@ function Room({
             home={languages?.settings.home ?? "en"}
             onClose={closeDrawer}
             onOpen={(id) => setDrawer({ kind: "entity", id })}
-            onChanged={() => setTrackerTick((t) => t + 1)}
+            onChanged={() => {
+              setTrackerTick((t) => t + 1);
+              // Tracking a name adds its momentum topic to the radar; archiving takes it off.
+              void loadRadar();
+            }}
             onShowInFeed={showInFeed}
+          />
+        ) : null}
+        {drawer?.kind === "settings" ? (
+          <SettingsDrawer
+            myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null}
+            isHuman={!me || me.actor.type === "human"}
+            workspaceName={currentWorkspace?.name ?? me?.workspace.name ?? ""}
+            initial={drawer.section}
+            onPolicy={setPolicy}
+            onClose={closeDrawer}
           />
         ) : null}
         {drawer?.kind === "languages" ? (
@@ -877,7 +920,7 @@ function WorkspaceSwitcher({ session, onSession }: { session: Session; onSession
     setBusy("new");
     setError(null);
     try {
-      const ws = await api.createWorkspace(clean);
+      const ws = await api.createWorkspace(clean, browserTz());
       const next = await api.switchWorkspace(ws.id);
       close();
       setName("");

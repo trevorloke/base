@@ -65,7 +65,10 @@ export function evaluateRedLine(rl: RedLine, subject: Subject, ctx: EvaluationCo
       return hits.length ? violation(rl, `${rl.description}: names a competitor`, hits) : null;
     }
     case "quiet_hours": {
-      const at = subject.scheduledAt ?? ctx.now ?? new Date();
+      // A draft has no publish time yet: there is nothing to judge, and scheduling it runs the gate again.
+      // "Post now" and replies always carry a time, so they are still checked.
+      if (!subject.scheduledAt) return null;
+      const at = subject.scheduledAt;
       const { hour, day } = localHourAndDay(at, rl.timezone);
       const dayApplies = rl.days.length === 0 || rl.days.includes(day);
       if (dayApplies && hourInWindow(hour, rl.startHour, rl.endHour)) {

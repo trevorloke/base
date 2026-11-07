@@ -54,7 +54,7 @@ const lastLinkTo = (to: string, param: string) => {
 };
 const ledgerTypes = async (workspaceId: string) => (await m.ctx.db.select().from(ledgerEvents).where(eq(ledgerEvents.workspaceId, workspaceId))).map((e) => e.type);
 
-const ANN = { email: "ann@acme.test", password: "correct horse 1", name: "Ann", workspaceName: "Acme Outdoor" };
+const ANN = { email: "ann@acme.test", password: "correct horse 1", name: "Ann", workspaceName: "Acme Outdoor", timezone: "America/Vancouver" };
 const BOB = { email: "bob@client.test", password: "bob's long password", name: "Bob", workspaceName: "Bob Co" };
 const CARL = { email: "carl@acme.test", password: "carl's password!", name: "Carl", workspaceName: "Carl Co" };
 let annId = "";
@@ -90,6 +90,8 @@ describe("people: sign-up, sign-in, sessions", () => {
     expect(view.currentWorkspaceId).toBe(view.workspaces[0].id);
     annId = view.user.id;
     annWs = view.currentWorkspaceId;
+    // The workspace starts in the timezone the browser sent, so schedules and quiet hours read where the brand is.
+    expect((await m.policy.getActive(annWs)).timezone).toBe("America/Vancouver");
     const cookie = setCookie(r)!;
     expect(cookie.raw).toMatch(/HttpOnly/i);
     expect(cookie.raw).toMatch(/SameSite=Lax/i);
@@ -102,9 +104,11 @@ describe("people: sign-up, sign-in, sessions", () => {
     expect((await call("POST", "/v1/auth/signup", { body: BOB })).status).toBe(403);
     expect((await call("POST", "/v1/auth/signup", { body: { ...BOB, password: "short" } })).status).toBe(400);
     allowSignup = true;
-    const bob = await call("POST", "/v1/auth/signup", { body: BOB });
+    // A timezone the server does not know never blocks a sign-up; the workspace falls back to UTC.
+    const bob = await call("POST", "/v1/auth/signup", { body: { ...BOB, timezone: "Mars/Olympus_Mons" } });
     expect(bob.status).toBe(201);
     bobWs = (await json(bob)).currentWorkspaceId;
+    expect((await m.policy.getActive(bobWs)).timezone).toBe("UTC");
     expect((await call("POST", "/v1/auth/signup", { body: CARL })).status).toBe(201);
     expect((await call("POST", "/v1/auth/signup", { body: { ...BOB, email: "BOB@client.test" } })).status).toBe(409);
     allowSignup = false;
@@ -299,6 +303,48 @@ describe("people: invites and members", () => {
     clock += 7 * DAY + MIN;
     expect((await call("GET", `/v1/invites/${frank}`, { csrf: false })).status).toBe(404);
     expect((await call("POST", "/v1/auth/accept-invite", { body: { token: frank, password: "frank's password" } })).status).toBe(404);
+  });
+
+  it("owners list pending invites and revoke them; the revoked link stops working", async () => {
+    annCookie = (await login(ANN.email, ANN.password)).cookie;
+    const gina = tokenFrom((await json(await call("POST", "/v1/invites", { cookie: annCookie, body: { email: "gina@acme.test", role: "editor" } }))).inviteUrl, "invite");
+    const hal = tokenFrom((await json(await call("POST", "/v1/invites", { cookie: annCookie, body: { email: "hal@acme.test", role: "viewer" } }))).inviteUrl, "invite");
+
+    const r = await call("GET", "/v1/invites", { cookie: annCookie, csrf: false });
+    expect(r.status).toBe(200);
+    const list = await json(r);
+    // Accepted (dana, bob, carl) and expired (frank) invites are not pending.
+    expect(list.map((x: { email: string }) => x.email).sort()).toEqual(["gina@acme.test", "hal@acme.test"]);
+    const g = list.find((x: { email: string }) => x.email === "gina@acme.test");
+    expect(g).toEqual({
+      id: expect.any(String),
+      email: "gina@acme.test",
+      role: "editor",
+      invitedBy: { id: annId, name: "Ann", email: ANN.email },
+      expiresAt: new Date(clock + 7 * DAY).toISOString(),
+      createdAt: expect.any(String),
+    });
+    expect(JSON.stringify(list)).not.toMatch(/tokenHash|token_hash/);
+
+    // Only owners: editors and agents get 403, for listing and revoking.
+    expect((await call("GET", "/v1/invites", { cookie: danaCookie, csrf: false })).status).toBe(403);
+    expect((await call("DELETE", `/v1/invites/${g.id}`, { cookie: danaCookie })).status).toBe(403);
+    const agent = (await m.workspaces.createApiKey({ workspaceId: annWs, name: "agent2", actorType: "mcp", actorId: "claude" })).secret;
+    expect((await call("GET", "/v1/invites", { csrf: false, headers: { authorization: `Bearer ${agent}` } })).status).toBe(403);
+    // Another workspace's owner cannot touch it.
+    const bobOwnCookie = (await login(BOB.email, BOB.password)).cookie;
+    await call("POST", "/v1/auth/switch", { cookie: bobOwnCookie, body: { workspaceId: bobWs } });
+    expect((await call("DELETE", `/v1/invites/${g.id}`, { cookie: bobOwnCookie })).status).toBe(404);
+
+    expect((await call("DELETE", `/v1/invites/${g.id}`, { cookie: annCookie })).status).toBe(204);
+    expect((await call("DELETE", `/v1/invites/${g.id}`, { cookie: annCookie })).status).toBe(404);
+    expect((await call("GET", `/v1/invites/${gina}`, { csrf: false })).status).toBe(404);
+    expect((await call("POST", "/v1/auth/accept-invite", { body: { token: gina, name: "Gina", password: "gina's password" } })).status).toBe(404);
+    expect((await json(await call("GET", "/v1/invites", { cookie: annCookie, csrf: false }))).map((x: { email: string }) => x.email)).toEqual(["hal@acme.test"]);
+    // The other one still works.
+    expect((await call("GET", `/v1/invites/${hal}`, { csrf: false })).status).toBe(200);
+    const halId = (await json(await call("GET", "/v1/invites", { cookie: annCookie, csrf: false })))[0].id;
+    expect((await call("DELETE", `/v1/invites/${halId}`, { cookie: annCookie })).status).toBe(204);
   });
 
   it("lists members; owners change roles and remove people; the last owner is protected", async () => {

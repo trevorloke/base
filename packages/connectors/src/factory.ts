@@ -18,6 +18,22 @@ import { createDiscordBotConnectors } from "./discord-bot.ts";
 import { createWhatsAppConnectors } from "./whatsapp.ts";
 import { createWeChatConnectors } from "./wechat.ts";
 import { createLineConnectors } from "./line.ts";
+import { createNostrConnectors } from "./nostr.ts";
+import { createMisskeyConnectors } from "./misskey.ts";
+import { createLemmyConnectors } from "./lemmy.ts";
+import { createSlackConnectors } from "./slack.ts";
+import { createMatrixConnectors } from "./matrix.ts";
+import { createGoogleChatConnectors } from "./google-chat.ts";
+import { createTeamsConnectors } from "./teams.ts";
+import { createWordPressConnectors } from "./wordpress.ts";
+import { createGhostConnectors } from "./ghost.ts";
+import { createMailchimpConnectors } from "./mailchimp.ts";
+import { createKitConnectors } from "./kit.ts";
+import { createTumblrConnectors } from "./tumblr.ts";
+import { createTwitchConnectors } from "./twitch.ts";
+import { createVkConnectors } from "./vk.ts";
+import { createWebhookConnectors } from "./webhook.ts";
+import { createRssConnectors } from "./rss.ts";
 
 /**
  * The registry a Starsign process boots with. Native adapters are always present (their credentials
@@ -48,6 +64,23 @@ export function createDefaultRegistry(env: NodeJS.ProcessEnv = process.env): Con
     createWhatsAppConnectors,
     createWeChatConnectors,
     createLineConnectors,
+    // Open networks, team chat, blogs and newsletters, more social and streaming, and the universal connectors.
+    createNostrConnectors,
+    createMisskeyConnectors,
+    createLemmyConnectors,
+    createSlackConnectors,
+    createMatrixConnectors,
+    createGoogleChatConnectors,
+    createTeamsConnectors,
+    createWordPressConnectors,
+    createGhostConnectors,
+    createMailchimpConnectors,
+    createKitConnectors,
+    createTumblrConnectors,
+    createTwitchConnectors,
+    createVkConnectors,
+    createWebhookConnectors,
+    createRssConnectors,
   ]) {
     for (const c of make(env)) registry.register(c);
   }

@@ -1,5 +1,7 @@
-/** Loading, error and empty states, in one quiet line. */
-export function PanelState({ loading, error, onRetry, empty }: { loading?: boolean; error?: string | null; onRetry?: () => void; empty?: string | null }) {
+import type { ReactNode } from "react";
+
+/** Loading, error and empty states, in one quiet line. An empty state may carry its next step (a link or button). */
+export function PanelState({ loading, error, onRetry, empty }: { loading?: boolean; error?: string | null; onRetry?: () => void; empty?: ReactNode }) {
   if (error) {
     return (
       <div className="state state-error" role="alert">
@@ -13,6 +15,7 @@ export function PanelState({ loading, error, onRetry, empty }: { loading?: boole
     );
   }
   if (loading) return <div className="state state-loading">Loading…</div>;
-  if (empty) return <div className="state state-empty">{empty}</div>;
+  // One span: the state row is a flex box, and a sentence with a link in it must wrap as one paragraph.
+  if (empty) return <div className="state state-empty"><span>{empty}</span></div>;
   return null;
 }

@@ -167,7 +167,8 @@ export class TrendService {
    * score = confidence x stage weight x relevance (unknown relevance counts as 0.5).
    */
   async radar(workspaceId: string) {
-    const topics = await this.listTopics(workspaceId);
+    // Relevance 0 means someone stopped following it (an archived tracker name): off the radar, history kept.
+    const topics = (await this.listTopics(workspaceId)).filter((t) => t.relevance !== 0);
     if (topics.length === 0) return [];
     const ids = topics.map((t) => t.id);
     const forecasts = await this.ctx.db

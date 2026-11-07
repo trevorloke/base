@@ -135,7 +135,8 @@ const Timezone = z.string().refine((tz) => {
   }
 }, "unknown timezone");
 
-export const SignupInput = z.object({ email: Email, password: Password, name: z.string().trim().min(1).max(200), workspaceName: z.string().trim().min(1).max(200) });
+/** `timezone`: the new workspace's (the browser's own, from the web app); red lines and schedules read in it. Default UTC. */
+export const SignupInput = z.object({ email: Email, password: Password, name: z.string().trim().min(1).max(200), workspaceName: z.string().trim().min(1).max(200), timezone: Timezone.optional().catch(undefined) });
 export const LoginInput = z.object({ email: Email, password: z.string().min(1).max(1024) });
 export const CreateWorkspaceInput = z.object({ name: z.string().trim().min(1).max(200), slug: z.string().trim().min(1).max(60).optional(), timezone: Timezone.optional() });
 export const InviteInput = z.object({ email: Email, role: Role });
@@ -172,6 +173,16 @@ export interface MemberView {
   name: string | null;
   role: MemberRole;
   createdAt: Date;
+}
+
+/** A pending invite as owners see it. The token (and its hash) is never shown again. */
+export interface InviteView {
+  id: string;
+  email: string;
+  role: MemberRole;
+  invitedBy: { id: string; name: string | null; email: string | null };
+  expiresAt: string;
+  createdAt: string;
 }
 
 export interface AuthOptions {
@@ -396,9 +407,10 @@ export class AuthService {
   }
 
   /** For the sign-in screen: whether a sign-up would be accepted, and whether nobody can sign in yet. */
-  async signupStatus(): Promise<{ signupAllowed: boolean; firstRun: boolean }> {
+  async signupStatus(): Promise<{ signupAllowed: boolean; firstRun: boolean; mail: boolean }> {
     const firstRun = (await this.accountsWithPassword()) === 0;
-    return { signupAllowed: firstRun || this.signupOpen(), firstRun };
+    // `mail`: whether reset links can be emailed at all, so "Forgot password?" can say so instead of promising one.
+    return { signupAllowed: firstRun || this.signupOpen(), firstRun, mail: this.mailConfigured };
   }
 
   /**
@@ -414,7 +426,7 @@ export class AuthService {
     if (existing && firstRun && !existing.passwordHash) {
       await this.ctx.db.update(users).set({ passwordHash: await hashPassword(input.password), name: existing.name ?? input.name }).where(eq(users.id, existing.id));
       const mine = await this.memberships(existing.id);
-      const ws = mine[0] ? null : await this.newWorkspace({ type: "human", id: existing.id }, { name: input.workspaceName });
+      const ws = mine[0] ? null : await this.newWorkspace({ type: "human", id: existing.id }, { name: input.workspaceName, timezone: input.timezone });
       const workspaceId = ws?.id ?? mine[0]!.id;
       await this.ctx.events.append({ workspaceId, type: "user.signed_up", subjectType: "user", subjectId: existing.id, actor: { type: "human", id: existing.id }, data: { via: "claim" } });
       return this.start(existing.id, workspaceId, meta);
@@ -425,7 +437,7 @@ export class AuthService {
       .values({ id: newId("usr"), email: input.email, name: input.name, passwordHash: await hashPassword(input.password) })
       .returning();
     const actor: Actor = { type: "human", id: u!.id };
-    const ws = await this.newWorkspace(actor, { name: input.workspaceName });
+    const ws = await this.newWorkspace(actor, { name: input.workspaceName, timezone: input.timezone });
     await this.ctx.events.append({ workspaceId: ws.id, type: "user.signed_up", subjectType: "user", subjectId: u!.id, actor, data: { via: "signup" } });
     return this.start(u!.id, ws.id, meta);
   }
@@ -536,14 +548,61 @@ export class AuthService {
     return { inviteUrl, expiresAt: expiresAt.toISOString(), emailed: this.mailer !== null };
   }
 
+  /**
+   * Pending invites for this workspace, newest first: not accepted and not yet expired (a revoked invite is expired
+   * on the spot, so it drops out too). Owners only. Never returns the token hash.
+   */
+  async listInvites(p: Principal): Promise<InviteView[]> {
+    this.workspaces.requireRole(p, ["owner"]);
+    const rows = await this.ctx.db
+      .select({
+        id: invites.id,
+        email: invites.email,
+        role: invites.role,
+        invitedBy: invites.invitedBy,
+        inviterName: users.name,
+        inviterEmail: users.email,
+        expiresAt: invites.expiresAt,
+        createdAt: invites.createdAt,
+      })
+      .from(invites)
+      .leftJoin(users, eq(users.id, invites.invitedBy))
+      .where(and(eq(invites.workspaceId, p.workspaceId), isNull(invites.acceptedAt), isNull(invites.revokedAt), gt(invites.expiresAt, this.ctx.now())))
+      .orderBy(desc(invites.createdAt));
+    return rows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      role: r.role,
+      invitedBy: { id: r.invitedBy, name: r.inviterName ?? null, email: r.inviterEmail ?? null },
+      expiresAt: r.expiresAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  /**
+   * Revoke a pending invite: its link stops working at once. Owners only. The invites table has no revoked flag, so a
+   * revoked invite is one whose expiry was moved to now (the row stays, so who invited whom is not lost).
+   */
+  async revokeInvite(p: Principal, inviteId: string): Promise<void> {
+    this.workspaces.requireRole(p, ["owner"]);
+    const at = this.ctx.now();
+    const [row] = await this.ctx.db
+      .update(invites)
+      .set({ revokedAt: at })
+      .where(and(eq(invites.id, inviteId), eq(invites.workspaceId, p.workspaceId), isNull(invites.acceptedAt), isNull(invites.revokedAt), gt(invites.expiresAt, at)))
+      .returning({ id: invites.id, email: invites.email, role: invites.role });
+    if (!row) throw new CoreError("not_found", "invite not found, already used, expired or revoked");
+    await this.ctx.events.append({ workspaceId: p.workspaceId, type: "invite.revoked", subjectType: "invite", subjectId: row.id, actor: p.actor, data: { email: row.email, role: row.role } });
+  }
+
   private async liveInvite(token: string) {
     const [row] = await this.ctx.db
       .select({ invite: invites, workspaceName: workspaces.name })
       .from(invites)
       .innerJoin(workspaces, eq(invites.workspaceId, workspaces.id))
-      .where(and(eq(invites.tokenHash, sha256(token)), isNull(invites.acceptedAt), gt(invites.expiresAt, this.ctx.now())))
+      .where(and(eq(invites.tokenHash, sha256(token)), isNull(invites.acceptedAt), isNull(invites.revokedAt), gt(invites.expiresAt, this.ctx.now())))
       .limit(1);
-    if (!row) throw new CoreError("not_found", "invite not found, already used, or expired");
+    if (!row) throw new CoreError("not_found", "invite not found, already used, revoked, or expired");
     return row;
   }
 

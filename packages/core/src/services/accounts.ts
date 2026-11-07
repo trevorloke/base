@@ -7,6 +7,32 @@ import { Network } from "@starsign/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 
+const TRANSPORT = /fetch failed|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|getaddrinfo|socket hang up|network error|timed? ?out|aborted/i;
+
+/**
+ * What a person reads when connecting fails. Connector messages start with their own name and the call
+ * ("telegram getMe: ...", "mastodon POST /api/v1/apps (host): fetch failed"); the person already knows which
+ * network, so that prefix goes. A transport failure never reads as "credentials not accepted", and the connector's
+ * own hint ("that does not look like a bot token (123456789:AA...)") is kept rather than replaced by a generic line.
+ */
+export function connectFailureReason(e: unknown, connectorName: string): string {
+  const raw = (e instanceof Error ? e.message : String(e ?? "")).trim();
+  let detail = raw;
+  const name = connectorName.split("_")[0]!.toLowerCase();
+  for (let i = 0; i < 3; i++) {
+    const m = /^([^:]{1,100}):\s+([\s\S]+)$/.exec(detail);
+    if (!m || !m[1]!.toLowerCase().startsWith(name)) break;
+    detail = m[2]!.trim();
+  }
+  const kind = e instanceof ConnectorError ? e.kind : null;
+  const clean = detail ? detail.charAt(0).toUpperCase() + detail.slice(1) : "";
+  const sentence = clean && !/[.!?)]$/.test(clean) ? `${clean}.` : clean;
+  if (kind === "network" || TRANSPORT.test(detail)) return "Starsign couldn't reach the network from this server. Check the address you typed, then try again in a minute.";
+  if (kind === "rate_limit") return "The network is limiting requests right now. Try again in a few minutes.";
+  if (kind === "auth") return sentence && !/^(unauthori[sz]ed|forbidden|401|403)\b/i.test(detail) ? `The credentials were not accepted: ${sentence}` : "The credentials were not accepted. Check them and try again.";
+  return sentence || "The network refused the connection. Check what you typed and try again.";
+}
+
 export class AccountService {
   constructor(private readonly ctx: CoreContext) {}
 
@@ -64,7 +90,7 @@ export class AccountService {
     try {
       identity = await connector.describeAccount(input.auth);
     } catch (e) {
-      const reason = e instanceof ConnectorError && e.kind === "auth" ? "The handle or app password was not accepted." : "The network did not answer; try again in a minute.";
+      const reason = e instanceof ConnectorError && e.kind === "auth" ? "The handle or app password was not accepted." : connectFailureReason(e, connector.name);
       throw new CoreError("invalid", "could not connect the account", { reason });
     }
     return this.connect(p, { network: input.network, externalId: identity.externalId, handle: identity.handle, displayName: identity.displayName ?? undefined, connector: connector.name, auth: input.auth });
@@ -79,7 +105,7 @@ export class AccountService {
     try {
       found = await connector.connectWithInputs({ network: input.network, inputs: input.inputs });
     } catch (e) {
-      const reason = e instanceof ConnectorError && e.kind === "auth" ? "The credentials were not accepted." : `The network did not accept the connection: ${(e as Error).message}`;
+      const reason = connectFailureReason(e, connector.name);
       throw new CoreError("invalid", "could not connect", { reason });
     }
     const out = [];
@@ -119,7 +145,7 @@ export class AccountService {
         authorizeUrl = prepared.authorizeUrl;
         config = prepared.config;
       } catch (e) {
-        throw new CoreError("invalid", "could not start the connection", { reason: (e as Error).message });
+        throw new CoreError("invalid", "could not start the connection", { reason: connectFailureReason(e, connector.name) });
       }
     } else {
       authorizeUrl = connector.oauthAuthorizeUrl!({ state, codeChallenge: challenge, redirectUri: input.redirectUri });
@@ -142,7 +168,7 @@ export class AccountService {
    * Finish an OAuth connection. The state is single use and expires; it carries the workspace and the person who
    * started it. One login may connect several accounts (a Facebook login yields its Pages and Instagram accounts).
    */
-  async completeOAuth(input: { state: string; code: string }) {
+  async completeOAuth(input: { state: string; code: string; params?: Record<string, string> }) {
     const [row] = await this.ctx.db.delete(oauthStates).where(eq(oauthStates.state, input.state)).returning();
     if (!row || row.expiresAt.getTime() < this.ctx.now().getTime()) throw new CoreError("invalid", "this connection link has expired; start again", { reason: "expired" });
     const connector = this.ctx.connectors.get(row.connector);
@@ -152,7 +178,7 @@ export class AccountService {
     let found: ConnectedAccount[];
     try {
       if (connector.oauthConnect) {
-        found = await connector.oauthConnect({ code: input.code, codeVerifier: verifier, redirectUri: row.redirectUri, ...(config ? { config } : {}) });
+        found = await connector.oauthConnect({ code: input.code, codeVerifier: verifier, redirectUri: row.redirectUri, ...(config ? { config } : {}), ...(input.params ? { callbackParams: input.params } : {}) });
       } else {
         const auth = await connector.oauthExchange!({ code: input.code, codeVerifier: verifier, redirectUri: row.redirectUri });
         found = [{ network: row.network as Network, identity: await connector.describeAccount!(auth), auth }];
