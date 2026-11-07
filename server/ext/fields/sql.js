@@ -23,7 +23,7 @@ create table if not exists person_fields (
   id uuid primary key,
   workspace_id uuid not null references workspaces(id) on delete cascade,
   name text not null,
-  kind text not null check (kind in ('text', 'yesno', 'choice', 'number', 'date')),
+  kind text not null check (kind in ('text', 'note', 'yesno', 'choice', 'choices', 'number', 'date')),
   choices jsonb not null default '[]',
   volunteers boolean not null default false,
   position int not null default 0,
@@ -49,4 +49,44 @@ create table if not exists person_field_values (
 );
 create index if not exists person_field_values_find_idx on person_field_values (workspace_id, field_id, value);
 create index if not exists person_field_values_person_idx on person_field_values (workspace_id, person_id);
+
+-- Long text and Pick several (kinds.js): the kind check widened on a
+-- database made before them.
+do $$
+declare c record;
+begin
+  for c in select conname, pg_get_constraintdef(oid) as def from pg_constraint
+            where conrelid = 'person_fields'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%kind%' loop
+    if c.def not like '%choices%' then
+      execute format('alter table person_fields drop constraint %I', c.conname);
+      alter table person_fields add constraint person_fields_kind_check
+        check (kind in ('text', 'note', 'yesno', 'choice', 'choices', 'number', 'date'));
+    end if;
+  end loop;
+end $$;
+
+-- Voter eligibility, Language and Notes (people.js STANDARD_FIELDS) for
+-- campaigns set up before they were standard: added once each, at the end
+-- of the list. fields_seeded remembers, so a campaign that renames or takes
+-- one off never has it put back.
+create table if not exists fields_seeded (
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  name text not null,
+  primary key (workspace_id, name)
+);
+insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position)
+select gen_random_uuid(), w.id, s.name, s.kind, s.choices::jsonb, s.vol,
+       coalesce((select max(f.position) from person_fields f where f.workspace_id = w.id and f.retired_at is null), -1) + s.ord
+  from workspaces w
+ cross join (values
+   ('Voter eligibility', 'choice', '["Eligible","Ineligible"]', true, 1),
+   ('Language', 'choices', '["English","Punjabi","Hindi","Mandarin","Tagalog","Cantonese","Urdu","Arabic","Korean","Spanish","Gujarati","Vietnamese"]', true, 2),
+   ('Notes', 'note', '[]', false, 3)
+ ) as s(name, kind, choices, vol, ord)
+ where not exists (select 1 from person_fields f where f.workspace_id = w.id and lower(f.name) = lower(s.name))
+   and not exists (select 1 from fields_seeded x where x.workspace_id = w.id and x.name = s.name)
+   and (select count(*) from person_fields f where f.workspace_id = w.id and f.retired_at is null) < 38;
+insert into fields_seeded (workspace_id, name)
+select w.id, s.name from workspaces w cross join (values ('Voter eligibility'), ('Language'), ('Notes')) as s(name)
+on conflict do nothing;
 `;

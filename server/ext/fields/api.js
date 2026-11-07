@@ -44,7 +44,12 @@ api.get('/fields', async (c) => {
   const counts = (await db.query(
     `select v.field_id, v.value, count(*)::int as n from person_field_values v
      join person_fields f on f.id = v.field_id and f.kind in ('choice', 'yesno')
-     where v.workspace_id = $1 group by v.field_id, v.value`,
+     where v.workspace_id = $1 group by v.field_id, v.value
+     union all
+     select v.field_id, e.value, count(*)::int from person_field_values v
+     join person_fields f on f.id = v.field_id and f.kind = 'choices'
+     cross join lateral jsonb_array_elements(case when jsonb_typeof(v.value) = 'array' then v.value else '[]'::jsonb end) e
+     where v.workspace_id = $1 group by v.field_id, e.value`,
     [ws],
   )).rows;
   // What a filter can find (Text, Number): the most common values on people
@@ -64,7 +69,7 @@ api.get('/fields', async (c) => {
   return c.json({
     fields: fields.map((f) => {
       const out = { ...fieldOut(f), filled: f.filled };
-      if (f.kind === 'choice' || f.kind === 'yesno') {
+      if (f.kind === 'choice' || f.kind === 'choices' || f.kind === 'yesno') {
         out.uses = counts.filter((r) => r.field_id === f.id).map((r) => ({ value: r.value, n: r.n }));
       }
       if (f.kind === 'text' || f.kind === 'number') {

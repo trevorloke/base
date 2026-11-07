@@ -19,3 +19,8 @@
 .btn.fd-save:disabled { background: var(--paper-0); color: var(--text-3); border-color: var(--rule-2); }
 .fd-said { font-family: var(--font-mono); font-size: 13px; color: var(--ok); }
 .fd-read .k { min-width: 120px; max-width: 45%; overflow-wrap: anywhere; }
+
+/* Long text: room to write, and its lines kept when read. */
+.fd-note { min-height: 6em; resize: vertical; font: inherit; line-height: 1.45; }
+.fd-note-read { white-space: pre-line; }
+.fd-q__hint { margin: -4px 0 6px; font-size: 13px; }

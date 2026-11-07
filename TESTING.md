@@ -554,7 +554,13 @@ Lee Ann's profile has First Lee, Middle Ann. **People → Add person**: type
 *Mary Anne* and Tab — First Mary, Middle Anne, with Undo; *Mary-Anne* stays
 whole. **From a past election**, year 2022, a row rated 1 with Voted yes:
 imported, they're tagged *Strong support 2022* and *Voted 2022*, unrated and
-not marked voted. A Sign (Yes/No) column shows ticked as *Sign 2022*: they
+not marked voted.
+- **A profile → More details** — *Language* taps on and off (any that
+  apply: Punjabi and Hindi both on); *Notes* is a box for a long note, its
+  lines kept; *Voter eligibility* is Eligible or Ineligible. Save; People →
+  Filter → Language → Punjabi finds them; Data → Export → People has the
+  three columns (*Punjabi; Hindi*). Their volunteer roles offer *Candidate
+  aide*, *Social media team* and *Photography / videography*. A Sign (Yes/No) column shows ticked as *Sign 2022*: they
 get that tag, and their Sign profile field stays empty.
 Then **Place on map** looks the addresses up with the BC Address
 Geocoder (needs internet). It runs on the server: you can close the page and

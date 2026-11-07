@@ -15,8 +15,12 @@
 // is YYYY-MM-DD and must be a real day. Empty (null, "", spaces) means
 // "not filled in" — saving it clears the value.
 
-export const KINDS = ['text', 'yesno', 'choice', 'number', 'date'];
-export const KIND_WORD = { text: 'Text', yesno: 'Yes/No', choice: 'Pick one', number: 'Number', date: 'Date' };
+export const KINDS = ['text', 'note', 'yesno', 'choice', 'choices', 'number', 'date'];
+export const KIND_WORD = { text: 'Text', note: 'Long text', yesno: 'Yes/No', choice: 'Pick one', choices: 'Pick several', number: 'Number', date: 'Date' };
+// The kinds with a list of choices: Pick one (one of them) and Pick several
+// (any of them — stored as a list, in the choices' order).
+export const HAS_CHOICES = new Set(['choice', 'choices']);
+export const NOTE_MAX = 4000;
 export const NAME_MAX = 60;
 export const TEXT_MAX = 500;
 export const CHOICE_MAX = 80;
@@ -74,6 +78,21 @@ export const realDate = (s) => {
 // value's problem in plain words, without the field's name.
 export const parseValue = (field, raw) => {
   if (raw === null || raw === undefined) return { empty: true };
+  // Pick several: a list, or one cell with them apart ("Punjabi; Hindi").
+  if (field.kind === 'choices') {
+    const choices = choicesOf(field);
+    const given = Array.isArray(raw) ? raw : typeof raw === 'object' ? null : String(raw).split(/[;,|/\n]/);
+    if (!given) return { error: 'isn’t a value' };
+    const words = given.map((x) => String(x ?? '').trim()).filter(Boolean);
+    if (!words.length) return { empty: true };
+    const picked = new Set();
+    for (const w of words) {
+      const hit = choices.find((c) => nameKey(c) === nameKey(w));
+      if (!hit) return { error: `${quote(w)} isn’t one of the choices (${listChoices(choices)})` };
+      picked.add(hit);
+    }
+    return { value: choices.filter((c) => picked.has(c)) };
+  }
   if (typeof raw === 'object') return { error: 'isn’t a value' };
   const s = typeof raw === 'string' ? raw.trim() : raw;
   if (s === '') return { empty: true };
@@ -81,6 +100,11 @@ export const parseValue = (field, raw) => {
     case 'text': {
       const t = String(s).replace(/\s+/g, ' ');
       return t.length > TEXT_MAX ? { error: `is too long (${TEXT_MAX} characters max)` } : { value: t };
+    }
+    case 'note': {
+      // Long text keeps its lines.
+      const t = String(s).replace(/\r\n?/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+      return t.length > NOTE_MAX ? { error: `is too long (${NOTE_MAX} characters max)` } : { value: t };
     }
     case 'yesno': {
       if (typeof s === 'boolean') return { value: s };
@@ -125,6 +149,7 @@ export const valueError = (field, error) => (/^isn?’?t? /.test(error)
 export const showValue = (kind, v) => {
   if (v === null || v === undefined) return '';
   if (kind === 'yesno') return v === true ? 'Yes' : v === false ? 'No' : String(v);
+  if (Array.isArray(v)) return v.join(', ');
   return String(v);
 };
 

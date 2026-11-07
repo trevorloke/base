@@ -26,13 +26,18 @@ import './fields-bits.css';
 
 export const KINDS = [
   { code: 'text', label: 'Text' },
+  { code: 'note', label: 'Long text' },
   { code: 'yesno', label: 'Yes/No' },
   { code: 'choice', label: 'Pick one' },
+  { code: 'choices', label: 'Pick several' },
   { code: 'number', label: 'Number' },
   { code: 'date', label: 'Date' },
 ];
 export const KIND_LABEL = Object.fromEntries(KINDS.map((k) => [k.code, k.label]));
+// The kinds with a list of choices (Pick one, Pick several).
+export const hasChoices = (kind) => kind === 'choice' || kind === 'choices';
 const TEXT_MAX = 500;
+const NOTE_MAX = 4000;
 
 // "2024-02-29" → "Feb 29, 2024" (the day as stored, never shifted by a time zone).
 export const fmtDay = (s) => {
@@ -47,6 +52,7 @@ export const fieldWords = (kind, v) => {
   if (kind === 'yesno') return v === true ? 'Yes' : v === false ? 'No' : String(v);
   if (kind === 'date') return fmtDay(v);
   if (kind === 'number') return Number(v).toLocaleString('en-CA', { maximumFractionDigits: 6 });
+  if (Array.isArray(v)) return v.join(', ');
   return String(v);
 };
 
@@ -67,12 +73,14 @@ export const filledCount = (query) => (query.data?.fields || []).filter((f) => f
 
 // What goes in a draft for each stored value (inputs hold strings).
 const draftOf = (f) => {
+  if (f.kind === 'choices') return Array.isArray(f.value) ? [...f.value] : [];
   if (f.value === null || f.value === undefined) return f.kind === 'yesno' || f.kind === 'choice' ? null : '';
   if (f.kind === 'yesno' || f.kind === 'choice') return f.value;
   return String(f.value);
 };
 const sameDraft = (f, d) => {
   const a = draftOf(f);
+  if (Array.isArray(a)) return [...a].sort().join('\u0000') === [...(d || [])].sort().join('\u0000');
   return typeof a === 'string' ? a.trim() === String(d ?? '').trim() : a === d;
 };
 
@@ -92,8 +100,41 @@ function Taps({ id, label, options, value, onPick, disabled }) {
   );
 }
 
+// Pick several: each choice taps on and off; the list keeps the choices' order.
+function ManyTaps({ id, label, choices, value, onChange, disabled }) {
+  const on = new Set(value || []);
+  const all = [...choices, ...[...on].filter((v) => !choices.includes(v))]; // one since taken off still shows
+  const flip = (c) => onChange(all.filter((x) => (x === c ? !on.has(c) : on.has(x))));
+  return (
+    <div className="sv-q fd-q" role="group" aria-labelledby={id}>
+      <p className="sv-q__text fd-q__label" id={id}>{label}</p>
+      <p className="muted fd-q__hint">Any that apply</p>
+      <div className="sv-q__opts">
+        {all.map((c) => (
+          <button key={c} type="button" className={`sv-opt${on.has(c) ? ' is-on' : ''}`}
+            aria-pressed={on.has(c)} disabled={disabled} onClick={() => flip(c)}>
+            {c}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FieldControl({ f, value, onChange, disabled }) {
   const id = useId();
+  if (f.kind === 'choices') {
+    return <ManyTaps id={id} label={f.name} choices={f.choices} value={value} onChange={onChange} disabled={disabled} />;
+  }
+  if (f.kind === 'note') {
+    return (
+      <div className="sv-q fd-q">
+        <label className="sv-q__text fd-q__label" htmlFor={id}>{f.name}</label>
+        <textarea id={id} className="input sv-q__input fd-note" rows={4} maxLength={NOTE_MAX} disabled={disabled}
+          value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
+      </div>
+    );
+  }
   if (f.kind === 'yesno') {
     return <Taps id={id} label={f.name} value={value} onPick={onChange} disabled={disabled}
       options={[{ v: true, label: 'Yes' }, { v: false, label: 'No' }]} />;
@@ -141,7 +182,7 @@ function PersonFieldsForm({ fields, personId, saved, setSaved, online }) {
         person_id: personId,
         values: changed.map((f) => {
           const v = draft[f.id];
-          return { field_id: f.id, value: typeof v === 'string' ? (v.trim() || null) : v };
+          return { field_id: f.id, value: typeof v === 'string' ? (v.trim() || null) : Array.isArray(v) ? (v.length ? v : null) : v };
         }),
       });
       await Promise.all([
@@ -196,7 +237,7 @@ export function PersonFields({ query, personId }) {
         {fields.map((f) => (
           <li key={f.id}>
             <span className="k">{f.name}</span>
-            <span className="v">{fieldWords(f.kind, f.value)}</span>
+            <span className={`v${f.kind === 'note' ? ' fd-note-read' : ''}`}>{fieldWords(f.kind, f.value)}</span>
           </li>
         ))}
       </ul>
@@ -210,7 +251,8 @@ export function PersonFields({ query, personId }) {
 // ── People: filter by one field's value ──
 const filterOptions = (f) => {
   if (f.kind === 'yesno') return [['yes', 'Yes'], ['no', 'No']];
-  if (f.kind === 'choice') return f.choices.map((c) => [c, c]);
+  if (hasChoices(f.kind)) return f.choices.map((c) => [c, c]);
+  if (f.kind === 'note') return [['*', 'Filled in']];
   const common = (f.common || []).map((c) => [String(c.value), fieldWords(f.kind, c.value)]);
   if (f.kind === 'date') return [['*', 'Filled in']];
   return f.kind === 'text' ? [...common, ['*', 'Filled in']] : common.length ? common : [['*', 'Filled in']];

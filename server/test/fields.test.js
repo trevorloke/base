@@ -230,7 +230,7 @@ test('a field’s kind: free while empty; with values only Text (each value kept
 
   const refused = await mgr.action('field.update', { id: F.strata.id, kind: 'number' });
   assert.equal(refused.status, 409);
-  assert.match(refused.json.error, /“Strata council member” is filled in for 3 people — it can only become Text now/);
+  assert.match(refused.json.error, /“Strata council member” is filled in for 3 people — it can only become Text or Long text now/);
   assert.equal((await mgr.action('field.update', { id: F.language.id, kind: 'yesno' })).status, 409);
 
   const conv = ok(await mgr.action('field.update', { id: F.strata.id, kind: 'text' }));

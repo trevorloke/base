@@ -403,6 +403,7 @@ const ROLE_WORDS = [
   [/scrut/, 'scrutineer'], [/runner/, 'runner'], [/greet/, 'poll_greeter'], [/dataentry|data/, 'data_entry'],
   [/event|host/, 'event_hosting'], [/zone|housecaptain/, 'zone_house_captain'], [/hirise|highrise|building/, 'highrise_captain'],
   [/food|cook/, 'food'], [/transl|interpret/, 'translation'], [/burma/, 'burmashave'], [/committee/, 'community_committee'],
+  [/aide|candidate/, 'candidate_aide'], [/social|instagram|tiktok/, 'social_media'], [/photo|video|camera/, 'photo_video'],
   [/policy/, 'policy'], [/admin|office/, 'administration'], [/mainstreet|street/, 'mainstreeting'],
 ];
 export const guessRole = (word) => {
@@ -671,7 +672,7 @@ function ImportFlow() {
   // "Sign 2022") or the field as it is. Yes/No, Number and Pick-one are tags
   // unless you say; text and dates (notes, a province) stay fields.
   const [fieldTagPick, setFieldTagPick] = useState({}); // field id → true | false, by choice
-  const tagByDefault = (kind) => kind === 'yesno' || kind === 'number' || kind === 'choice';
+  const tagByDefault = (kind) => kind === 'yesno' || kind === 'number' || kind === 'choice' || kind === 'choices';
   const pastFieldCols = useMemo(() => (source ? mapping.map((k, i) => {
     if (!k || !k.startsWith(FIELD_KEY)) return null;
     const f = custom.find((c) => c.key === k);

@@ -54,6 +54,9 @@ export const VOLUNTEER_ROLES = [
   { code: 'community_committee', label: 'Community committee', detail: 'Community (Newton, Whalley, …)' },
   { code: 'policy',              label: 'Policy' },
   { code: 'administration',      label: 'Administration' },
+  { code: 'candidate_aide',      label: 'Candidate aide' },
+  { code: 'social_media',        label: 'Social media team' },
+  { code: 'photo_video',         label: 'Photography / videography' },
 ];
 export const VOLUNTEER_ROLE_CODES = VOLUNTEER_ROLES.map((r) => r.code);
 

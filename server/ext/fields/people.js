@@ -44,6 +44,14 @@ export const personsWhere = async (db, ctx, query, w) => {
     if (f.kind === 'text') {
       w.params.push(String(p.value).toLowerCase());
       match = ` and lower(v.value #>> '{}') = $${w.params.length}`;
+    } else if (f.kind === 'note') {
+      // Long text: the words anywhere in it.
+      w.params.push(`%${String(p.value).toLowerCase().replace(/[%_\\]/g, (m) => `\\${m}`)}%`);
+      match = ` and lower(v.value #>> '{}') like $${w.params.length}`;
+    } else if (f.kind === 'choices') {
+      // Pick several: everyone with that choice among theirs.
+      w.params.push(JSON.stringify(p.value));
+      match = ` and v.value @> $${w.params.length}::jsonb`;
     } else {
       w.params.push(JSON.stringify(p.value));
       match = ` and v.value = $${w.params.length}::jsonb`;
@@ -147,6 +155,13 @@ export const SAMPLE_FIELDS = [
   },
 ];
 
+// Languages spoken in Surrey, for the Language field (Pick several). A
+// starting list — the desk adds or renames choices under Profile fields.
+export const SURREY_LANGUAGES = [
+  'English', 'Punjabi', 'Hindi', 'Mandarin', 'Tagalog', 'Cantonese',
+  'Urdu', 'Arabic', 'Korean', 'Spanish', 'Gujarati', 'Vietnamese',
+];
+
 // Imagine Surrey's standard fields: one for every column of the campaign's
 // list that the core person record has no home for. Named exactly as the
 // list's columns, so the import maps them by name with no thought. Made
@@ -168,6 +183,10 @@ export const STANDARD_FIELDS = [
   { name: 'Sign', kind: 'yesno', volunteers: true },
   { name: 'Support', kind: 'number', volunteers: false },
   { name: 'Voted', kind: 'yesno', volunteers: false },
+  // Not from the list's columns — asked for by the campaign.
+  { name: 'Voter eligibility', kind: 'choice', choices: ['Eligible', 'Ineligible'], volunteers: true },
+  { name: 'Language', kind: 'choices', choices: SURREY_LANGUAGES, volunteers: true },
+  { name: 'Notes', kind: 'note', volunteers: false },
 ];
 
 // → the fields added ({ id, name, kind }); none when every one is there.
@@ -181,11 +200,11 @@ export const addStandardFields = async (tx, ctx, emit) => {
     if (live.some((x) => nameKey(x.name) === nameKey(s.name))) continue;
     if (count >= FIELDS_MAX) break;
     top += 1; count += 1;
-    const f = { id: newId(), name: s.name, kind: s.kind, choices: [], volunteers: s.volunteers, position: top };
+    const f = { id: newId(), name: s.name, kind: s.kind, choices: s.choices || [], volunteers: s.volunteers, position: top };
     await tx.query(
       `insert into person_fields (id, workspace_id, name, kind, choices, volunteers, position, created_by)
        values ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [f.id, ws, f.name, f.kind, '[]', f.volunteers, f.position, ctx.user?.id || null],
+      [f.id, ws, f.name, f.kind, JSON.stringify(f.choices), f.volunteers, f.position, ctx.user?.id || null],
     );
     emit('person_field', f.id, 'create', { ...f, standard: true });
     added.push({ id: f.id, name: f.name, kind: f.kind });

@@ -124,8 +124,8 @@ const DATASETS = {
   people: { sql: `select p.first_name, p.middle_name, p.last_name, p.name, p.email, p.phone, p.unit, p.house_number,
       case when p.house_number is not null and p.address like p.house_number || ' %' then substr(p.address, length(p.house_number) + 2) else p.address end as street,
       p.address, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
-      to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.kind, p.created_at
-    from persons p where p.workspace_id = $1 and p.deleted_at is null order by lower(p.name)`, tags: true },
+      to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.kind, p.created_at, p.id as _id
+    from persons p where p.workspace_id = $1 and p.deleted_at is null order by lower(p.name)`, tags: true, fields: true },
   volunteers: { sql: `select p.name, p.email, p.phone, string_agg(v.role || coalesce(' (' || nullif(v.detail, '') || ')', ''), '; ' order by v.role) as roles
     from volunteer_roles v join persons p on p.id = v.person_id and p.deleted_at is null where v.workspace_id = $1 group by p.id, p.name, p.email, p.phone order by lower(p.name)` },
   signs: { sql: `select s.address, s.kind, s.status, p.name as supporter, p.phone, s.note, s.lat, s.lng, s.created_at
@@ -149,8 +149,26 @@ api.get('/export/:dataset', async (c) => {
   const ds = DATASETS[name];
   if (!ds) return c.json({ error: 'no such export' }, 404);
   const { rows } = await db.query(ds.sql, [ctx.workspaceId]);
-  const head = rows.length ? Object.keys(rows[0]) : [];
-  return csvResponse(c, `starbase-${name}`, head, rows.map((r) => head.map((k) => (k === 'tags' ? j(r[k], []).join('; ') : cell(r[k])))));
+  const head = rows.length ? Object.keys(rows[0]).filter((k) => k !== '_id') : [];
+  // People: then a column per profile field, named as the field (so People →
+  // Import maps it back by name); Pick several as "Punjabi; Hindi".
+  let extra = [];
+  const valueOf = new Map();
+  if (ds.fields && rows.length) {
+    extra = (await db.query(
+      'select id, name, kind from person_fields where workspace_id = $1 and retired_at is null order by position, created_at', [ctx.workspaceId],
+    )).rows;
+    for (const v of (await db.query(
+      `select v.person_id, v.field_id, v.value from person_field_values v
+         join person_fields f on f.id = v.field_id and f.retired_at is null
+        where v.workspace_id = $1`, [ctx.workspaceId],
+    )).rows) valueOf.set(`${v.person_id}|${v.field_id}`, v.value);
+  }
+  const fieldCell = (f, v) => (v == null ? '' : Array.isArray(v) ? v.join('; ') : f.kind === 'yesno' ? (v ? 'Yes' : 'No') : cell(v));
+  return csvResponse(c, `starbase-${name}`, [...head, ...extra.map((f) => f.name)], rows.map((r) => [
+    ...head.map((k) => (k === 'tags' ? j(r[k], []).join('; ') : cell(r[k]))),
+    ...extra.map((f) => fieldCell(f, valueOf.get(`${r._id}|${f.id}`))),
+  ]));
 });
 export const DATASET_NAMES = Object.keys(DATASETS);
 export const REPORT_NAMES = Object.keys(REPORTS);

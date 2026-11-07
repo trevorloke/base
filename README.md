@@ -108,10 +108,12 @@ than a week after they came off is refused. Contacts are door, phone, text or
 - **Signs**: billboard, large, lawn, with status and location.
 - **Donors**: one-time, monthly, **star** ($1K+/yr or $100+/mo), **superstar**
   ($3K+/yr or $250+/mo) — derived from real gifts, never self-declared.
-- **Volunteer roles** (15): driver, scrutineer, doorknocking, mainstreeting,
-  phoning, data entry, event hosting, zone house captain, hi-rise building
-  captain (+building), food, translation
-  (+language), burmashave, community committee (+area), policy, administration.
+- **Volunteer roles** (20): driver, scrutineer (+voting place), runner, poll
+  greeter (+voting place), doorknocking, mainstreeting, phoning, data entry,
+  event hosting, zone house captain, hi-rise building captain (+building),
+  food, translation (+language), burmashave, community committee (+area),
+  policy, administration, candidate aide, social media team,
+  photography / videography.
 - **Tags**: free-form, seeded with media, VIP, endorser, host, …
 - **Socials**: per-person handles for Facebook, Instagram, X, TikTok, YouTube,
   LinkedIn, Bluesky.
@@ -158,8 +160,9 @@ than a week after they came off is refused. Contacts are door, phone, text or
   value is a tag with the year (*Support 5 2022*; a Yes/No field's yes is
   *Sign 2022*, a no nothing), otherwise the field as it is — Yes/No, Number
   and Pick-one fields start ticked, text and dates (notes, a province) not.
-- **Profile fields**: the campaign's own — Text · Yes/No · Pick one · Number ·
-  Date (*Language at home*, *Strata council member*, …) — set up by a manager,
+- **Profile fields**: the campaign's own — Text · Long text · Yes/No · Pick
+  one · Pick several · Number · Date (*Language at home*, *Strata council
+  member*, …) — set up by a manager,
   filled in by the desk under *More details* (read-only with no signal),
   filtered, imported (column names in any script) and exported; volunteers
   see only the ones marked for them, read-only. Every campaign starts with
@@ -168,8 +171,16 @@ than a week after they came off is refused. Contacts are door, phone, text or
   Building notes, Access type, Dwelling type (those four shown to
   canvassers), Interaction status, Interaction date, Organizer, Email
   opt-in, SMS opt-in, Sign, Support (the list's 1–5, kept apart from the
-  rating scale) and Voted. *Profile fields → Add the standard fields* puts
-  them on a campaign set up before they existed. Every person has a
+  rating scale) and Voted — and **Voter eligibility** (Eligible ·
+  Ineligible), **Language** (Pick several: English, Punjabi, Hindi,
+  Mandarin, Tagalog, Cantonese, Urdu, Arabic, Korean, Spanish, Gujarati,
+  Vietnamese — a starting list the desk can change) and **Notes** (Long
+  text, up to 4,000 characters, its lines kept). *Profile fields → Add the
+  standard fields* puts them on a campaign set up before they existed (the
+  last three were added to every campaign once, by themselves; one renamed
+  or taken off is never put back). The People export has a column for each
+  profile field, named as the field (Pick several as *Punjabi; Hindi*), so
+  it imports straight back. Every person has a
   **House number** of its own, apart from the street (the door card, the
   profile and *Add a person* ask for both; the address line reads 13450 104
   Ave, and a number typed into the street is split out). The import takes a

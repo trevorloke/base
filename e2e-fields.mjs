@@ -125,7 +125,7 @@ await sleep(600);
 let m = await measure(page);
 // A new campaign starts with the standard fields (server/ext/fields/people.js);
 // the suite's own three sit after them.
-const STANDARD = new Set(['Home phone', 'Province', 'House notes', 'Building notes', 'Access type', 'Dwelling type', 'Interaction status', 'Interaction date', 'Organizer', 'Email opt-in', 'SMS opt-in', 'Sign', 'Support', 'Voted']);
+const STANDARD = new Set(['Home phone', 'Province', 'House notes', 'Building notes', 'Access type', 'Dwelling type', 'Interaction status', 'Interaction date', 'Organizer', 'Email opt-in', 'SMS opt-in', 'Sign', 'Support', 'Voted', 'Voter eligibility', 'Language', 'Notes']);
 const own = (fs) => fs.filter((f) => !STANDARD.has(f.name));
 check('a new campaign: the standard fields, one yellow "Add a field"', /Home phone/.test(await D.text()) && /Voted/.test(await D.text()) && m.yellow === 1 && /Add a field/i.test(await page.innerText('.btn-primary')), JSON.stringify(m));
 console.log(`      words on /people/fields (standard fields): ${m.words}`);
@@ -154,7 +154,7 @@ check('"Volunteers can see this" is off by default', sw === 'false', sw);
 m = await measure(page, 'form[aria-label="Add field"] .sv-kind, form[aria-label="Add field"] .input, form[aria-label="Add field"] .btn, form[aria-label="Add field"] .fd-switch');
 check('add form: one yellow (Add field), targets ≥ 48px', m.yellow === 1 && m.minTap >= 48 && /Add field/i.test(await page.innerText('.btn-primary')), JSON.stringify(m));
 const kinds = await page.$$eval('form[aria-label="Add field"] .sv-kind', (els) => els.map((e) => e.innerText.trim()));
-check('five types: Text · Yes/No · Pick one · Number · Date', kinds.join('|') === 'Text|Yes/No|Pick one|Number|Date', kinds.join('|'));
+check('seven types: Text · Long text · Yes/No · Pick one · Pick several · Number · Date', kinds.join('|') === 'Text|Long text|Yes/No|Pick one|Pick several|Number|Date', kinds.join('|'));
 await D.shot('02-add-form');
 await addField({ name: 'Language at home', kind: 'Pick one', choices: ['English', 'Punjabi', 'Mandarin'], volunteers: true });
 await addField({ name: 'Strata council member', kind: 'Yes/No' });
@@ -225,6 +225,26 @@ await spage.click(`${q} .sv-q:has-text("Strata council member") .sv-opt:has-text
 check('un-tapping a choice clears it (Save turns on, "✓ Saved" goes)', !(await spage.$eval(`${q} .fd-save`, (b) => b.disabled)) && !(await spage.innerText(`${q} .fd-said`)).trim());
 await spage.click(`${q} .sv-q:has-text("Strata council member") .sv-opt:has-text("Yes")`);
 check('…and tapping it back makes nothing to save', await spage.$eval(`${q} .fd-save`, (b) => b.disabled));
+// Language (Pick several) and Notes (Long text), standard fields.
+const langQ = `${q} .sv-q:has-text("any that apply")`;
+check('Language: the 12 languages, any that apply', (await spage.$$(`${langQ} .sv-opt`)).length === 12);
+await spage.click(`${langQ} .sv-opt:text-is("Hindi")`);
+await spage.click(`${langQ} .sv-opt:text-is("Punjabi")`);
+await spage.fill(`${q} textarea.fd-note`, 'Met at the Newton market.\nPrefers evening calls.');
+await spage.click(`${q} .sv-q:has-text("Voter eligibility") .sv-opt:text-is("Eligible")`);
+await spage.click(`${q} .fd-save`);
+await sleep(900);
+const std = Object.fromEntries((await S.api(`/persons/${P.harjit.id}/fields`)).json.fields.map((f) => [f.name, f.value]));
+check('saved: Language Punjabi + Hindi (in the list’s order), the note with its lines, Eligible',
+  JSON.stringify(std.Language) === '["Punjabi","Hindi"]' && std.Notes === 'Met at the Newton market.\nPrefers evening calls.' && std['Voter eligibility'] === 'Eligible', JSON.stringify([std.Language, std.Notes, std['Voter eligibility']]));
+await spage.click(`${langQ} .sv-opt:text-is("Hindi")`);
+check('un-tapping one language: Save turns on', !(await spage.$eval(`${q} .fd-save`, (b) => b.disabled)));
+await spage.click(`${langQ} .sv-opt:text-is("Hindi")`);
+// Back as they were, so the counts below are the three own fields'.
+const stdIds = Object.fromEntries((await S.api(`/persons/${P.harjit.id}/fields`)).json.fields.map((f) => [f.name, f.id]));
+await S.api('/actions/field.values.set', { person_id: P.harjit.id, values: ['Language', 'Notes', 'Voter eligibility'].map((n) => ({ field_id: stdIds[n], value: null })) });
+await spage.reload();
+await spage.waitForSelector('.pf-sec__btn:has-text("More details")', { timeout: 8000 }).catch(() => {});
 
 // ── 4. …and on a phone (390) ──
 const sphone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
@@ -298,9 +318,9 @@ await sleep(300);
 const open = '.fd-item[data-open]';
 const disabled = await page.$$eval(`${open} .sv-kind`, (els) => els.filter((e) => e.disabled).map((e) => e.innerText.trim()));
 const why = await page.innerText(`${open} .fd-why`).catch(() => '');
-check('filled in: only Text stays open, and the line says why', disabled.join('|') === 'Yes/No|Number|Date' && why === 'Filled in for 2 people — it can only become Text', `${disabled.join('|')} · ${why}`);
+check('filled in: a Pick one can become Pick several, Text or Long text — the rest closed, and the line says why', disabled.join('|') === 'Yes/No|Number|Date' && why === 'Filled in for 2 people — it can become Pick several, Text or Long text', `${disabled.join('|')} · ${why}`);
 const refuse = await D.api('/actions/field.update', { id: F['Language at home'].id, kind: 'number' });
-check('the server refuses it too, saying why', refuse.status === 409 && /filled in for 2 people — it can only become Text now/.test(refuse.json.error), refuse.raw);
+check('the server refuses it too, saying why', refuse.status === 409 && /filled in for 2 people — it can only become Text or Long text now/.test(refuse.json.error), refuse.raw);
 // A used choice can't be removed: it shows its count, no ✕.
 const kept = await page.$$eval(`${open} .fd-choice--kept`, (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
 check('used choices are kept, with their counts', kept.join('|') === 'Punjabi 1 filled in|Mandarin 1 filled in', kept.join('|'));
@@ -480,8 +500,8 @@ await page.click('ol[aria-label="Fields"] .ops-row:has-text("Union local #")');
 await sleep(300);
 const unionF = (await D.api('/fields')).json.fields.find((f) => f.name === 'Union local #');
 const whyText = await page.innerText(`${open} .fd-why`).catch(() => '');
-check('fields-08: a filled-in Text field says "… — its type stays Text", not "it can only become Text"',
-  whyText === `Filled in for ${unionF.filled} people — its type stays Text` && unionF.filled === 2, whyText);
+check('fields-08: a filled-in Text field says "… — it can become Long text", not "it can only become Text"',
+  whyText === `Filled in for ${unionF.filled} people — it can become Long text` && unionF.filled === 2, whyText);
 // fields-07 (manager, 390): typing a used choice's words into a new row keeps it an input with ✕.
 await MP.go('/people/fields');
 await mpage.click('ol[aria-label="Fields"] .ops-row:has-text("Language at home")');

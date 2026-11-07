@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import {
-  KINDS, NAME_MAX, CHOICE_MAX, CHOICES_MAX, FIELDS_MAX,
+  KINDS, HAS_CHOICES, NAME_MAX, CHOICE_MAX, CHOICES_MAX, FIELDS_MAX,
   choicesOf, cleanName, nameKey, parseValue, valueError, showValue, sameValue,
 } from './kinds.js';
 
@@ -33,7 +33,9 @@ const DESK = ['manager', 'treasurer', 'staff'];
 
 const nameIn = () => z.string().trim().min(1).max(NAME_MAX);
 const choicesIn = () => z.array(z.string().trim().min(1).max(CHOICE_MAX)).max(CHOICES_MAX);
-const valueIn = () => z.union([z.string().max(2000), z.number(), z.boolean(), z.null()]);
+// A value as sent: words (Long text up to NOTE_MAX, checked by kind), a
+// number, yes/no, a list (Pick several), or null to clear.
+const valueIn = () => z.union([z.string().max(8000), z.number(), z.boolean(), z.null(), z.array(z.string().max(200)).max(CHOICES_MAX)]);
 
 export const fieldOut = (f) => ({
   id: f.id, name: f.name, kind: f.kind, choices: choicesOf(f), volunteers: !!f.volunteers,
@@ -66,10 +68,10 @@ const checkName = async (tx, ctx, name, exceptId = null) => {
   if (taken) throw httpError(409, `there’s already a field called “${taken.name}”`);
 };
 
-// Pick one needs two or more different choices; the other kinds none.
+// Pick one and Pick several need two or more different choices; the other kinds none.
 const cleanChoices = (kind, list) => {
-  if (kind !== 'choice') {
-    if (list?.length) throw httpError(400, 'only Pick one fields have choices');
+  if (!HAS_CHOICES.has(kind)) {
+    if (list?.length) throw httpError(400, 'only Pick one and Pick several fields have choices');
     return [];
   }
   const out = (list || []).map(cleanName).filter(Boolean);
@@ -134,16 +136,18 @@ export const actions = {
       const was = choicesOf(cur);
       const values = await valuesOf(tx, ctx, cur.id);
 
-      // A new kind: free while nothing is filled in; with values, only Text.
-      if (kind !== cur.kind && values.length && kind !== 'text') {
+      // A new kind: free while nothing is filled in; with values, only Text or
+      // Long text (Text ↔ Long text both ways), or Pick one → Pick several.
+      const canTurn = kind === 'text' || kind === 'note' || (cur.kind === 'choice' && kind === 'choices');
+      if (kind !== cur.kind && values.length && !canTurn) {
         const people = new Set(values.map((v) => v.person_id)).size;
-        throw httpError(409, `“${cur.name}” is filled in for ${plural(people, 'person', 'people')} — it can only become Text now. Add a new field instead.`);
+        throw httpError(409, `“${cur.name}” is filled in for ${plural(people, 'person', 'people')} — it can only become Text or Long text now. Add a new field instead.`);
       }
-      const choices = cleanChoices(kind, kind === 'choice' ? input.choices ?? (cur.kind === 'choice' ? was : []) : input.choices);
+      const choices = cleanChoices(kind, HAS_CHOICES.has(kind) ? input.choices ?? (HAS_CHOICES.has(cur.kind) ? was : []) : input.choices);
       // A choice someone has stays on the list.
-      if (kind === 'choice' && cur.kind === 'choice') {
+      if (HAS_CHOICES.has(kind) && HAS_CHOICES.has(cur.kind)) {
         const used = new Map();
-        for (const v of values) used.set(v.value, (used.get(v.value) || 0) + 1);
+        for (const v of values) for (const one of Array.isArray(v.value) ? v.value : [v.value]) used.set(one, (used.get(one) || 0) + 1);
         for (const [label, n] of used) {
           if (!choices.includes(label)) {
             throw httpError(409, `“${label}” is filled in for ${plural(n, 'person', 'people')} — it stays`);
@@ -151,11 +155,13 @@ export const actions = {
         }
       }
 
-      // To Text: each value becomes its words (Yes / No, 2.5) — kept, readable, filterable.
+      // To Text or Long text: each value becomes its words (Yes / No, 2.5) —
+      // kept, readable, filterable. Pick one → Pick several: a list of one.
       let converted = 0;
-      if (kind !== cur.kind && kind === 'text') {
+      if (kind !== cur.kind && (kind === 'text' || kind === 'note' || kind === 'choices')) {
         for (const v of values) {
-          const words = showValue(cur.kind, v.value);
+          const words = kind === 'choices' ? (Array.isArray(v.value) ? v.value : [v.value])
+            : kind === 'text' ? showValue(cur.kind, v.value).replace(/\s+/g, ' ') : showValue(cur.kind, v.value);
           if (sameValue(words, v.value)) continue;
           await tx.query(
             'update person_field_values set value = $3, updated_at = now() where id = $1 and workspace_id = $2',
@@ -174,7 +180,7 @@ export const actions = {
       const patch = { ...input };
       delete patch.id;
       if (kind !== cur.kind) Object.assign(patch, { was: cur.kind, converted });
-      if (kind !== 'choice' && cur.kind === 'choice') patch.choices = [];
+      if (!HAS_CHOICES.has(kind) && HAS_CHOICES.has(cur.kind)) patch.choices = [];
       emit('person_field', cur.id, 'update', patch);
       return { field: fieldOut({ ...cur, name, kind, choices, volunteers }), converted };
     },

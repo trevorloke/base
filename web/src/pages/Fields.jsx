@@ -17,7 +17,7 @@ import { Link, Navigate, useOutletContext, useSearchParams } from 'react-router-
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
-import { FIELDS_QUERY, KINDS, KIND_LABEL } from '../components/FieldsBits.jsx';
+import { FIELDS_QUERY, KINDS, KIND_LABEL, hasChoices } from '../components/FieldsBits.jsx';
 import './shifts.css';
 import './surveys.css';
 import './fields.css';
@@ -47,7 +47,7 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
   const row = (words, kept = false) => ({ words, kept, key: nextKey.current++ });
   const [name, setName] = useState(initial?.name || '');
   const [kind, setKind] = useState(initial?.kind || 'text');
-  const [choices, setChoices] = useState(() => (initial?.kind === 'choice'
+  const [choices, setChoices] = useState(() => (hasChoices(initial?.kind)
     ? initial.choices.map((c) => row(c, (used.get(c) || 0) > 0))
     : [row(''), row('')]));
   const [volunteers, setVolunteers] = useState(Boolean(initial?.volunteers));
@@ -61,12 +61,12 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
     e.preventDefault();
     const clean = choices.map((c) => c.words.trim()).filter(Boolean);
     if (!name.trim()) { setError('Add a name'); return; }
-    if (kind === 'choice' && clean.length < 2) { setError('Add at least two choices'); return; }
+    if (hasChoices(kind) && clean.length < 2) { setError('Add at least two choices'); return; }
     setError(null);
     const input = {};
     if (!initial || name.trim() !== initial.name) input.name = name.trim();
     if (!initial || kind !== initial.kind) input.kind = kind;
-    if (kind === 'choice' && (!initial || kind !== initial.kind || !sameList(clean, initial.choices))) input.choices = clean;
+    if (hasChoices(kind) && (!initial || kind !== initial.kind || !sameList(clean, initial.choices))) input.choices = clean;
     if (!initial ? volunteers : volunteers !== initial.volunteers) input.volunteers = volunteers;
     const err = await onSubmit(input);
     if (err) setError(err);
@@ -75,8 +75,10 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
   // Why the kinds are as they are, in one line.
   const kindLine = !kindLocked ? null
     : kind === initial.kind
-      ? `Filled in for ${plural(filled, 'person', 'people')} — ${initial.kind === 'text' ? 'its type stays Text' : 'it can only become Text'}`
-      : `Changes ${filled} to text — nothing is lost`;
+      ? `Filled in for ${plural(filled, 'person', 'people')} — ${{
+        text: 'it can become Long text', note: 'it can become Text', choice: 'it can become Pick several, Text or Long text',
+      }[initial.kind] || 'it can only become Text or Long text'}`
+      : kind === 'choices' ? `Each of the ${filled} keeps their choice — nothing is lost` : `Changes ${filled} to text — nothing is lost`;
 
   return (
     <form className={`sv-qform fd-fform${primary ? ' card' : ''}`} onSubmit={submit} aria-label={submitLabel}>
@@ -90,14 +92,14 @@ function FieldForm({ initial = null, primary = false, submitLabel, busy, onSubmi
         <div className="sv-kinds" role="group" aria-labelledby={`${uid}-kind`}>
           {KINDS.map((k) => (
             <button key={k.code} type="button" className="sv-kind" aria-pressed={kind === k.code}
-              disabled={kindLocked && k.code !== initial.kind && k.code !== 'text'} onClick={() => setKind(k.code)}>
+              disabled={kindLocked && k.code !== initial.kind && k.code !== 'text' && k.code !== 'note' && !(initial.kind === 'choice' && k.code === 'choices')} onClick={() => setKind(k.code)}>
               {k.label}
             </button>
           ))}
         </div>
         {kindLine && <p className="fd-why muted">{kindLine}</p>}
       </div>
-      {kind === 'choice' && (
+      {hasChoices(kind) && (
         <div className="field sv-choices">
           <span className="sv-label">Choices</span>
           {choices.map((c, i) => {
