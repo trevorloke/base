@@ -10,6 +10,7 @@
     "./dayparts": "./dayparts.js",
     "./markdown": "./markdown.js",
     "./passes": "./passes.js",
-    "./names": "./names.js"
+    "./names": "./names.js",
+    "./brand": "./brand.js"
   }
 }

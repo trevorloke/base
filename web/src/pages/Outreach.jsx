@@ -1175,7 +1175,7 @@ function Connections({ focus, isManager }) {
         <span className="ot-status-dot" data-status={p.text ? 'sent' : 'queued'} aria-hidden="true" />
         {p.text ? 'Texting connected' : 'Texting not connected'}
       </p>
-      {(!p.email || !p.text) && <p className="ot-note">{isManager ? <>Set them up under <Link to="/settings/services">Settings → Services</Link>.</> : 'Ask whoever set up Starbase to connect them.'}</p>}
+      {(!p.email || !p.text) && <p className="ot-note">{isManager ? <>Set them up under <Link to="/settings/services">Settings → Services</Link>.</> : 'Ask whoever set up Base to connect them.'}</p>}
     </section>
   );
 }

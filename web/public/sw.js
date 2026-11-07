@@ -249,15 +249,15 @@ async function syncAssets(html) {
 
 function offlinePage() {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Starbase — offline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Base — offline</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5fa;color:#161a2e;
 font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding:24px;box-sizing:border-box}main{max-width:340px}
 p.e{font:600 12px system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#5d6481}
 button{font:600 15px system-ui,sans-serif;background:#6d4aff;
 color:#fff;border:0;border-radius:10px;padding:12px 18px;min-height:44px;cursor:pointer}
 @media (prefers-color-scheme:dark){body{background:#0d1226;color:#e8eaf6}p.e{color:#9aa1c2}}</style></head>
-<body><main><p class="e">Starbase · offline</p><h1>No signal yet</h1>
-<p>Open Starbase once with signal and it will work offline after that.</p>
+<body><main><p class="e">Base · offline</p><h1>No signal yet</h1>
+<p>Open Base once with signal and it will work offline after that.</p>
 <button type="button" onclick="location.reload()">Try again</button></main></body></html>`;
   return new Response(html, { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } });
 }

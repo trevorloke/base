@@ -76,6 +76,6 @@ export const page = (ws, title, inner, { wide = false, noindex = false } = {}) =
 <style>${CSS}</style></head><body><main${wide ? ' class="wide"' : ''}>
 ${ws ? `<div class="camp">${esc(ws.name)}</div>` : ''}
 ${inner}
-<footer>${site ? `<a href="${esc(site)}">← ${esc(String(site).replace(/^https?:\/\//, ''))}</a> · ` : ''}Powered by Starbase</footer>
+<footer>${site ? `<a href="${esc(site)}">← ${esc(String(site).replace(/^https?:\/\//, ''))}</a> · ` : ''}Powered by Base</footer>
 </main></body></html>`;
 };

@@ -1,4 +1,4 @@
-// What this Starbase runs for: one organization per deployment. Each
+// What this Base runs for: one organization per deployment. Each
 // client gets its own services and database; the campaign's name, rules
 // and place come from the environment, never from code:
 //
@@ -15,6 +15,10 @@
 //   STARBASE_CANDIDATES    "4D:McCallum:Opposed — Doug McCallum supporter;…"
 //                          — the opposed candidates a new rating scale starts
 //                          with (shared/scale.js); the desk edits them after
+//   BASE_WEB_URL           where Base Web (apps/web) runs, e.g.
+//                          https://imaginesurrey.ca/admin — the app switcher
+//                          links there (unset: the campaign's website + /admin)
+//   BASE_AIR_URL           where Base Air (apps/air) runs — unset: not linked
 //   STARBASE_ENV           production | staging — said on screen and at
 //                          /api/health, so nobody mistakes one for the other
 //
@@ -43,10 +47,13 @@ export const envName = () => (['production', 'staging'].includes(str('STARBASE_E
 // Sign-up past first run: only when this is set (tests, local dev).
 export const openSignupForced = () => process.env.STARBASE_OPEN_SIGNUP === '1';
 
-export const setupClosedMessage = () => `Starbase is already set up for ${orgName() || 'this campaign'} — ask a manager to invite you.`;
+export const setupClosedMessage = () => `Base is already set up for ${orgName() || 'this campaign'} — ask a manager to invite you.`;
 
 // What the app is told about this deployment (GET /api/auth/setup and /me).
+// Base's other apps, where they run (an https address, or null).
+const appUrl = (k) => (/^https?:\/\/[^\s]+$/i.test(str(k)) ? str(k).replace(/\/+$/, '') : null);
+export const appsOut = () => ({ web: appUrl('BASE_WEB_URL'), air: appUrl('BASE_AIR_URL') });
 export const orgOut = () => ({
   name: orgName(), jurisdiction: jurisdiction(), tz: timeZone(), city: city(), province: province(),
-  slates: SLATES, env: envName(),
+  slates: SLATES, env: envName(), apps: appsOut(),
 });

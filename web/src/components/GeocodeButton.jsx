@@ -147,7 +147,7 @@ function Geocoder({ onDone, compact = false }) {
       }
       if (e.status === 409) { runHere(); return; } // no background jobs on this server
       const result = { located: 0, missed: 0, errored: 0, remaining: 0, unmatched: 0,
-        error: e.status === 403 ? 'Only campaign staff can place people on the map.' : e.status ? `Starbase said: ${e.message}.` : 'Couldn’t reach Starbase — check your connection and try again.' };
+        error: e.status === 403 ? 'Only campaign staff can place people on the map.' : e.status ? `Base said: ${e.message}.` : 'Couldn’t reach Base — check your connection and try again.' };
       setSummary(result); setPhase('done'); onDone?.(result);
       return;
     }
@@ -180,7 +180,7 @@ function Geocoder({ onDone, compact = false }) {
         requestError = e.status === 403
           ? 'Only campaign staff can place people on the map.'
           : e.status === 401 ? 'You’ve been signed out. Sign in again, then try again.'
-            : e.status ? `Starbase said: ${e.message}.` : 'Couldn’t reach Starbase — check your connection and try again.';
+            : e.status ? `Base said: ${e.message}.` : 'Couldn’t reach Base — check your connection and try again.';
         break;
       }
       tot.located += r.located || 0;

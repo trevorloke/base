@@ -37,7 +37,7 @@ export default function Login({ mode = 'field' }) {
 
   return (
     <div className="auth-page">
-      <span className="brand">Starbase</span>
+      <span className="brand">Base</span>
       {setup.data?.organization && <span className="brand-org">{setup.data.organization}</span>}
       {setup.data?.org?.env === 'staging' && <span className="env-badge">Staging</span>}
       <h1>Sign in</h1>
@@ -60,7 +60,7 @@ export default function Login({ mode = 'field' }) {
       {setup.data?.open && (
         <>
           <hr className="hairline" />
-          <p className="muted"><Link to="/signup">Set up Starbase{setup.data.organization ? ` for ${setup.data.organization}` : ''}</Link></p>
+          <p className="muted"><Link to="/signup">Set up Base{setup.data.organization ? ` for ${setup.data.organization}` : ''}</Link></p>
         </>
       )}
     </div>

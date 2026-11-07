@@ -28,7 +28,7 @@ export default function DataPage() {
               <strong>People</strong>
               <span className="muted">
                 A CSV or an Excel workbook (.xlsx) — from a spreadsheet, a voter file, or another tool’s export
-                (Mailchimp, NationBuilder, VAN and the like). Starbase matches the columns — names, email, phone,
+                (Mailchimp, NationBuilder, VAN and the like). Base matches the columns — names, email, phone,
                 address, tags, ratings, voted — you check them, and nothing is saved until you say so. Importing
                 the same file again adds no one twice: it fills in blanks.
               </span>

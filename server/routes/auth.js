@@ -201,7 +201,7 @@ app.post('/join', async (c) => {
 
   let user = (await db.query('select id, password_hash from users where email = $1', [inv.email])).rows[0];
   if (user && !(await verifyPassword(password, user.password_hash))) {
-    return c.json({ error: 'that password does not match your existing Starbase account' }, 401);
+    return c.json({ error: 'that password does not match your existing Base account' }, 401);
   }
   if (!user && !name) return c.json({ error: 'name required' }, 400);
   const userId = user?.id || newId();

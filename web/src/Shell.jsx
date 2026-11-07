@@ -29,6 +29,7 @@ import { useTextingStatus } from './components/TextingStatus.js';
 import { useShareLocation } from './components/ShareLocation.js';
 import { adminHref, fieldView, mayAdmin } from './mode.js';
 import './pages/offline.css';
+import AppSwitcher from './components/AppSwitcher.jsx';
 
 // Staff, treasurers and managers. App.jsx guards the desk-only routes with it.
 export const isDesk = (me) => Boolean(me?.role) && me.role !== 'volunteer';
@@ -444,13 +445,14 @@ function SignedInShell({ who, mode }) {
     <>
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
-          <NavLink to="/" className="brand" aria-label={`${mode === 'admin' ? 'Starbase Admin' : 'Starbase'} — ${me.workspace.name}`}>
+          <NavLink to="/" className="brand" aria-label={`${mode === 'admin' ? 'Base Ground Admin' : 'Base Ground'} — ${me.workspace.name}`}>
             <img className="brand-mark" src="/star.png" alt="" height="32" />
             <span className="brand-text">
-              <span className="brand-name">Starbase{mode === 'admin' && <span className="brand-admin"> Admin</span>}</span>
+              <span className="brand-name">Base <span className="brand-app">Ground</span>{mode === 'admin' && <span className="brand-admin"> Admin</span>}</span>
               <span className="brand-org">{me.workspace.name}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
             </span>
           </NavLink>
+          <AppSwitcher me={me} />
           <nav className="links" aria-label="Main">
             {nav.map((n) => <NavLink key={n.to} to={n.to} end={n.end}><Icon name={n.icon} />{n.label}{badge(n)}</NavLink>)}
           </nav>

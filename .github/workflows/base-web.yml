@@ -1,0 +1,29 @@
+name: Base Web
+
+# The Imagine Surrey website (apps/web): its own checks, run only when it
+# changes. Base Ground's CI (ci.yml) is what promote.yml waits on.
+on:
+  push:
+    branches: [main]
+    paths: ['apps/web/**', '.github/workflows/base-web.yml']
+  pull_request:
+    paths: ['apps/web/**', '.github/workflows/base-web.yml']
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - name: Next's route types (PageProps, RouteContext)
+        run: npx next typegen
+      - run: npm run typecheck
+      - run: npm test

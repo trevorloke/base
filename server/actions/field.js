@@ -957,7 +957,7 @@ export const FIELD_ACTIONS = {
       const joinUrl = `${ctx.publicUrl || ''}/join/${token}`;
       const mail = await sendEmail({
         to: email,
-        subject: `Join ${ctx.workspace.name} on Starbase`,
+        subject: `Join ${ctx.workspace.name} on Base`,
         text: `${ctx.user.name} invited you to join ${ctx.workspace.name} as ${input.role}.\n\nSet your password and get started: ${joinUrl}\n\nThis link expires in 14 days.`,
       });
       // The token never enters the event log — only who was invited, as what.

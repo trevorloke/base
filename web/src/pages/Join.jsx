@@ -46,11 +46,11 @@ export default function Join({ mode = 'field' }) {
     }
   };
 
-  if (inv.isPending) return <div className="auth-page"><span className="brand">Starbase</span></div>;
+  if (inv.isPending) return <div className="auth-page"><span className="brand">Base</span></div>;
   if (inv.isError) {
     return (
       <div className="auth-page">
-        <span className="brand">Starbase</span>
+        <span className="brand">Base</span>
         <h1>{inv.error.status === 404 ? 'Invite not found' : 'Can’t open this invite'}</h1>
         <p className="muted">{inv.error.status === 404 ? 'Ask a manager for a new link.' : inv.error.message}</p>
       </div>
@@ -60,7 +60,7 @@ export default function Join({ mode = 'field' }) {
   const { email, role, workspaceName, hasAccount } = inv.data;
   return (
     <div className="auth-page">
-      <span className="brand">Starbase</span>
+      <span className="brand">Base</span>
       <h1>Join {workspaceName}</h1>
       <p className="muted">As {ROLE_LABEL[role] || role} · <strong>{email}</strong></p>
       <form onSubmit={submit}>
@@ -72,7 +72,7 @@ export default function Join({ mode = 'field' }) {
           </div>
         )}
         <div className="field">
-          <label htmlFor="join-password">{hasAccount ? 'Your Starbase password' : 'Choose a password'}</label>
+          <label htmlFor="join-password">{hasAccount ? 'Your Base password' : 'Choose a password'}</label>
           <input id="join-password" className="input" type="password" required minLength={8} maxLength={200} style={AUTH_INPUT}
             autoFocus={hasAccount} autoComplete={hasAccount ? 'current-password' : 'new-password'}
             placeholder={hasAccount ? undefined : '8 or more characters'}
