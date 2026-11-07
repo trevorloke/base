@@ -231,3 +231,17 @@ describe("visibility prompts", () => {
     expect(r.questions.map((q) => q.question)).toEqual(["What is the best choice for cold brew?", "Northwind Coffee or Blue Bottle: which is better?", "What do people say about Northwind Coffee?"]);
   });
 });
+
+describe("spend cap for engines without a known price", () => {
+  it("charges a conservative estimate when the provider reports no cost, and keeps a reported cost", async () => {
+    const { withCostFloor, answerEnginesFromEnv, DEFAULT_ANSWER_CALL_COST_USD } = await import("../src/engines/index.ts");
+    const base = (cost: number) => ({ id: "openai" as const, label: "ChatGPT", model: "m", ask: async () => ({ text: "t", citations: [], model: "m", usage: { inputTokens: 1, outputTokens: 1, costUsd: cost } }) });
+    expect((await withCostFloor(base(0), 0.05).ask("q", { lang: "en", region: null })).usage).toMatchObject({ costUsd: 0.05, costEstimated: true });
+    expect((await withCostFloor(base(0.012), 0.05).ask("q", { lang: "en", region: null })).usage).toMatchObject({ costUsd: 0.012 });
+    expect((await withCostFloor(base(0.012), 0.05).ask("q", { lang: "en", region: null })).usage?.costEstimated).toBeUndefined();
+    expect(DEFAULT_ANSWER_CALL_COST_USD).toBeGreaterThan(0);
+    // Every non-Claude engine from env gets the floor; the estimate is configurable.
+    const engines = answerEnginesFromEnv({ OPENAI_API_KEY: "k", GEMINI_API_KEY: "g", STARSIGN_ANSWER_CALL_COST_USD: "0.2" }, { fetch: async () => new Response(JSON.stringify({ output: [], usage: {} })) });
+    expect(engines.map((e) => e.id).sort()).toEqual(["gemini", "openai"]);
+  });
+});

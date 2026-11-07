@@ -37,5 +37,31 @@ export function answerEnginesFromEnv(env: NodeJS.ProcessEnv = process.env, opts:
   if (has(env.PERPLEXITY_API_KEY)) out.push(new PerplexityAnswerEngine({ apiKey: env.PERPLEXITY_API_KEY!.trim(), model: model(env.PERPLEXITY_ANSWER_MODEL, PERPLEXITY_DEFAULT_MODEL), fetch: opts.fetch }));
   if (has(env.GEMINI_API_KEY)) out.push(new GeminiAnswerEngine({ apiKey: env.GEMINI_API_KEY!.trim(), model: model(env.GEMINI_ANSWER_MODEL, GEMINI_DEFAULT_MODEL), fetch: opts.fetch }));
   if (out.length === 0 && env.STARSIGN_FAKE_AI === "1") out.push(new FakeAnswerEngine());
-  return out;
+  return out.map((e) => (e.id === "anthropic" || e.id === "fake" ? e : withCostFloor(e, perCallEstimate(env))));
+}
+
+/** Default charge for an answer whose provider reports no price: a grounded answer with web search, on the high side. */
+export const DEFAULT_ANSWER_CALL_COST_USD = 0.05;
+
+function perCallEstimate(env: NodeJS.ProcessEnv): number {
+  const v = Number(env.STARSIGN_ANSWER_CALL_COST_USD);
+  return Number.isFinite(v) && v >= 0 ? v : DEFAULT_ANSWER_CALL_COST_USD;
+}
+
+/**
+ * Engines whose price Starsign cannot read from the response would otherwise cost "$0" and never reach the
+ * workspace's model spend cap. Charge them a conservative estimate per call instead, marked as an estimate.
+ */
+export function withCostFloor(engine: AnswerEngine, estimateUsd: number): AnswerEngine {
+  return {
+    id: engine.id,
+    label: engine.label,
+    model: engine.model,
+    ask: async (prompt, opts) => {
+      const r = await engine.ask(prompt, opts);
+      const u = r.usage ?? { inputTokens: 0, outputTokens: 0, costUsd: 0 };
+      if (u.costUsd > 0) return r;
+      return { ...r, usage: { ...u, costUsd: estimateUsd, costEstimated: true } };
+    },
+  };
 }

@@ -148,9 +148,7 @@
 .an-delta {
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.35;
 }
 .an-up {
   color: var(--good);

@@ -711,7 +711,7 @@ function mentionsSection(doc: ReportDocument): string {
 
 function whatWorkedSection(doc: ReportDocument): string {
   const w = doc.analytics.whatWorked;
-  const items = w.comparisons.map((c) => `<li class="ww ww-${c.verdict}"><b>${esc(c.verdict === "not_enough" ? "Not enough posts yet" : fmtRatio(c.ratio))}</b> <span>${esc(c.sentence)}</span></li>`).join("");
+  const items = w.comparisons.map((c) => `<li class="ww ww-${c.verdict}"><b>${esc(c.verdict === "not_enough" ? "—" : fmtRatio(c.ratio))}</b> <span>${esc(c.sentence)}</span></li>`).join("");
   return section("what_worked", `<ul class="ww-list">${items}</ul><p class="muted small">Median engagements at 24 hours, posts from ${esc(dateIn(w.from, doc.timezone, { month: "short", day: "numeric" }))} to ${esc(dateIn(w.to, doc.timezone, { month: "short", day: "numeric" }))}. A difference is only claimed with at least ${w.minPerSide} posts on each side.</p>`);
 }
 

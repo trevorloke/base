@@ -17,8 +17,10 @@ export interface AnswerCitation {
 export interface AnswerUsage {
   inputTokens: number;
   outputTokens: number;
-  /** USD for this call where the price is known; 0 when the provider's price is not known here (see docs/visibility.md). */
+  /** USD for this call. When the provider reports no price, a conservative per-call estimate (see costEstimated). */
   costUsd: number;
+  /** True when costUsd is Starsign's estimate rather than a known price, so the spend cap still applies. */
+  costEstimated?: boolean;
   /** Web searches the engine ran for this answer, when it reports them. */
   searches?: number;
 }

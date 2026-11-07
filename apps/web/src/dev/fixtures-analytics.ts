@@ -76,7 +76,7 @@ interface HistPost {
 }
 
 const NETWORK_RATE: Record<string, number> = { x: 0.028, bluesky: 0.046, instagram: 0.052, facebook: 0.019, youtube: 0.034, tiktok: 0.061, mastodon: 0.041, threads: 0.033, linkedin: 0.024 };
-const NETWORK_REACH: Record<string, number> = { x: 4200, bluesky: 1500, instagram: 6800, facebook: 2600, youtube: 3100, tiktok: 9800, mastodon: 620, threads: 1900, linkedin: 2200 };
+const NETWORK_REACH: Record<string, number> = { x: 4200, bluesky: 2600, instagram: 4800, facebook: 3000, youtube: 3600, tiktok: 5200, mastodon: 1400, threads: 1900, linkedin: 2200 };
 const FOLLOWERS: Record<string, number> = { acc_x: 18_420, acc_bsky: 3_912, acc_ig: 41_300, acc_fb: 12_870, acc_yt: 6_240, acc_tt: 22_150, acc_masto: 1_184 };
 const KINDS_BY_NETWORK: Record<string, string[]> = { instagram: ["post", "reel", "carousel"], tiktok: ["video"], youtube: ["short", "video"], facebook: ["post", "link"] };
 
@@ -107,14 +107,14 @@ function history(accounts: Account[], tz: string): HistPost[] {
       const at = NOW - d * DAY - (NOW % DAY) + 12 * HOUR + (hour - 12 + 8) * HOUR + Math.floor(r() * 50) * 60_000;
       if (at > NOW - 2 * HOUR) continue;
       const { weekday, hour: h } = localSlot(new Date(at), tz);
-      const hasMedia = acct.network === "instagram" || acct.network === "tiktok" || acct.network === "youtube" || r() < 0.45;
+      const hasMedia = (acct.network === "instagram" || acct.network === "tiktok" || acct.network === "youtube") ? r() < 0.9 : r() < 0.4;
       const rodeTrend = r() < 0.28;
       const kinds = KINDS_BY_NETWORK[acct.network] ?? ["post"];
       const kind = kinds[Math.floor(r() * kinds.length)]!;
       const textLength = Math.round(40 + r() * 260);
       const growth = 1 + (180 - d) / 300;
-      const impressions = Math.round(NETWORK_REACH[acct.network]! * growth * (0.55 + r() * 0.9) * (hasMedia ? 1.25 : 1));
-      const rate = NETWORK_RATE[acct.network]! * timeFactor(weekday, h) * (hasMedia ? 1.45 : 1) * (rodeTrend ? 1.7 : 1) * (textLength < 120 ? 1.15 : 1) * (0.7 + r() * 0.6);
+      const impressions = Math.round(NETWORK_REACH[acct.network]! * growth * (0.55 + r() * 0.9) * (hasMedia ? 1.1 : 1));
+      const rate = NETWORK_RATE[acct.network]! * timeFactor(weekday, h) * (hasMedia ? 1.3 : 1) * (rodeTrend ? 1.7 : 1) * (textLength < 120 ? 1.15 : 1) * (0.7 + r() * 0.6);
       out.push({ id: `h${d}_${i}`, accountId: acct.id, network: acct.network, at, impressions, engagements: Math.round(impressions * rate), hasMedia, kind, rodeTrend, textLength });
     }
   }
@@ -202,7 +202,7 @@ function windowOf(deps: AnalyticsFixtureDeps, from: number, to: number, q: Analy
     for (const a of accounts) {
       const cShare = (CLICK_SHARE[a.network] ?? 0) / Math.max(1, deps.accounts().filter((x) => x.network === a.network).length);
       const c = Math.round(clicks * cShare);
-      const conv = Math.round(c * 0.031 + daily(dayIndex, 3 + a.id.length) * 0.6);
+      const conv = c ? Math.round(c * 0.031 + daily(dayIndex, 3 + a.id.length) * 0.6) : 0;
       const m = Math.round(ments * (MENTION_SHARE[a.network] ?? 0));
       for (const x of [total, net(a.network), acct(a.id)]) {
         x.linkClicks += c;
@@ -578,7 +578,8 @@ export function createAnalyticsFixtures(deps: AnalyticsFixtureDeps) {
       manager();
       const r = find(id);
       r.shares = { active: r.shares.active + 1, lastCreatedAt: new Date().toISOString() };
-      const token = Array.from({ length: 43 }, (_, i) => "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"[(i * 7 + seq++ * 13) % 56]).join("");
+      const bytes = crypto.getRandomValues(new Uint8Array(32));
+      const token = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
       return delay({ id: `rsh_fx${seq}`, url: `${window.location.origin}/r/${token}`, createdAt: new Date().toISOString() });
     },
     revokeReportShares: async (id: string): Promise<void> => {
