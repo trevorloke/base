@@ -8,7 +8,7 @@ import { PanelState } from "../components/PanelState";
 import { RelativeTime } from "../components/RelativeTime";
 import { canReply, capabilitiesFor, moderationFor } from "../lib/connectors";
 import { atHandle, authorHandleText, kindLabel, NETWORK_MAX_TEXT, networkLabel, textLength, violationText } from "../lib/format";
-import { languageName, languageTag, sameLanguage } from "../lib/lang";
+import { languageName, languageTag, mayNeedTranslating, sameLanguage } from "../lib/lang";
 import { useRoom } from "../lib/room";
 
 type KindFilter = "all" | ActivityKind;
@@ -381,7 +381,7 @@ export function FeedItem({
 
   const foreign = !sameLanguage(a.lang, home); // unknown counts as foreign: it may well need translating
   const translation = a.translation ?? null;
-  const canTranslate = !!a.text && !translation && foreign;
+  const canTranslate = !translation && mayNeedTranslating(a.lang, a.text, home);
   const where = a.conversationName && a.conversationType !== "direct" ? a.conversationName : null;
   const handle = authorHandleText(a.network, a.authorHandle);
 
