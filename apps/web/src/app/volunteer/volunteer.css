@@ -1,0 +1,316 @@
+/* Public volunteer, events and neighbourhood pages share these: badges,
+   spots-left notes, share and calendar buttons, opening and event cards. */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--pale-blue);
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.badge--citywide {
+  background: var(--yellow-pale);
+}
+.badge--task {
+  border: 0;
+}
+.on-dark .badge {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--navy);
+}
+
+.spots {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.spots--low {
+  color: var(--red-hover);
+}
+.spots--full {
+  color: var(--muted);
+}
+.on-dark .spots {
+  color: var(--yellow);
+}
+.on-dark .spots--full {
+  color: var(--pale-blue);
+}
+
+/* ── Share and calendar ───────────────────────────────────────────────── */
+
+.share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.share-heading {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.on-dark .share-heading {
+  color: #fff;
+}
+.share-buttons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.share-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 2px solid var(--navy);
+  background: #fff;
+  color: var(--navy);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.share-button:hover {
+  background: var(--outline-hover);
+  color: var(--navy);
+}
+.share-button--whatsapp {
+  background: var(--navy);
+  color: #fff;
+}
+.share-button--whatsapp:hover {
+  background: var(--navy-dark);
+  color: #fff;
+}
+.share-status {
+  margin: 0;
+  min-height: 1.4em;
+}
+.calendar-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.calendar-link {
+  min-height: 42px;
+  padding: 0 16px;
+  font-size: 15px;
+}
+
+/* ── Openings ────────────────────────────────────────────────────────── */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.filters .field {
+  flex: 1 1 200px;
+  max-width: 320px;
+}
+.filters-count {
+  margin: 0;
+  flex-basis: 100%;
+}
+.week {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.week-heading {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.opening-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 400px) {
+  .opening-list {
+    grid-template-columns: 1fr;
+  }
+}
+.opening-card {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--line);
+  scroll-margin-top: 90px;
+}
+.opening-card.is-full {
+  background: var(--surface);
+}
+.opening-date {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  background: var(--yellow);
+  color: var(--navy);
+}
+.opening-date .day {
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1;
+}
+.opening-date .mon {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.opening-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.opening-when {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.opening-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--navy);
+}
+.opening-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: 15px;
+  color: var(--ink);
+}
+.opening-notes {
+  font-size: 15px;
+  line-height: 1.55;
+}
+.opening-notes p {
+  margin: 0 0 0.6em;
+}
+.opening-notes > :last-child {
+  margin-bottom: 0;
+}
+.opening-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+  padding: 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.opening-form h4 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.opening-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  outline: none;
+}
+.opening-confirm p {
+  margin: 0;
+}
+
+/* ── Event cards on light backgrounds ─────────────────────────────────── */
+
+.event-cards {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 400px) {
+  .event-cards {
+    grid-template-columns: 1fr;
+  }
+}
+.event-card {
+  display: flex;
+  gap: 16px;
+  padding: 18px 20px;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.event-card .date-badge--sm {
+  background: var(--yellow);
+}
+.event-card-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.event-card h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.event-card h3 a {
+  color: var(--navy);
+  text-decoration: none;
+}
+.event-card h3 a:hover {
+  color: var(--red-hover);
+  text-decoration: underline;
+}
+.event-card p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.event-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}

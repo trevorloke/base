@@ -1,0 +1,85 @@
+/* Email & texts admin: the email and text log. */
+
+.comms-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 20px;
+}
+.comms-head h1 {
+  margin: 0;
+  font-size: 30px;
+}
+/* Status badges for log rows and earlier campaigns */
+.msg-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  background: var(--line);
+  color: var(--ink);
+}
+.msg-status--sent {
+  background: #157a41;
+  color: #fff;
+}
+.msg-status--sending,
+.msg-status--queued {
+  background: var(--yellow);
+  color: var(--navy);
+}
+.msg-status--failed {
+  background: #d81b1e;
+  color: #fff;
+}
+.msg-status--cancelled,
+.msg-status--skipped {
+  background: var(--pale-blue);
+  color: var(--navy);
+}
+
+/* Log */
+.log-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  margin-bottom: 20px;
+}
+.log-filters .input {
+  min-height: 44px;
+}
+.table td.wrap {
+  white-space: normal;
+  min-width: 220px;
+}
+.table td .error-text {
+  display: block;
+  color: var(--red-hover);
+  font-size: 13px;
+}
+.inline-result {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 13px;
+}
+.inline-result.is-error {
+  color: var(--red-hover);
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .comms-head h1 {
+    font-size: 24px;
+  }
+}

@@ -1,0 +1,75 @@
+.home-modules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.home-module {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  padding: 12px 14px;
+}
+.home-module.is-hidden {
+  background: var(--surface);
+}
+.home-module.is-hidden .home-module-title strong {
+  color: var(--muted);
+}
+.home-module-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.home-module-number {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  background: var(--navy);
+  color: #fff;
+}
+.home-module-title {
+  flex: 1 1 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.home-module-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  font-weight: 600;
+}
+.home-module-toggle input {
+  width: 22px;
+  height: 22px;
+}
+.home-module-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+.home-module-actions .btn {
+  min-width: 40px;
+  min-height: 40px;
+}
+.home-module-fields {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.home-module-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
