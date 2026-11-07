@@ -151,6 +151,24 @@ export const env = {
     return optional("BASE_GROUND_INBOUND_KEY")?.trim();
   },
 
+  // ── Signing in with base (SUITE.md, "Signing in once") ──
+  /** base ground's internal address for the token call: a URL or Render's bare host:port. */
+  get baseGroundInternalUrl() {
+    return optional("BASE_GROUND_INTERNAL_URL")?.trim();
+  },
+  /** The secret shared with base ground for this app (its BASE_WEB_SSO_SECRET). */
+  get baseSsoSecret() {
+    return optional("BASE_SSO_SECRET")?.trim();
+  },
+  /** "Sign in with base" is offered when base ground's address and the shared secret are set. */
+  get baseSsoEnabled() {
+    return Boolean(this.baseGroundUrl && this.baseSsoSecret);
+  },
+  /** base air's public address (e.g. https://base.win/imaginesurrey/air), for the switcher. */
+  get baseAirUrl() {
+    return optional("BASE_AIR_URL")?.trim().replace(/\/+$/, "");
+  },
+
   // ── Human check on public forms (Cloudflare Turnstile) ──
   // The site key is public (it goes to the browser); the secret stays here.
   get turnstileSiteKey() {

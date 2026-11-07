@@ -220,7 +220,7 @@ export type LoginResult =
   | { ok: "second-step"; pending: { value: string; maxAge: number }; user: AdminUser }
   | { ok: false; reason: "locked" | "invalid" };
 
-export type FirstFactor = "password" | "email-link";
+export type FirstFactor = "password" | "email-link" | "base";
 
 /** The short-lived cookie that carries the pending second step (an `admin-mfa` token). */
 export const PENDING_COOKIE = "is_admin_mfa";
@@ -265,6 +265,20 @@ export async function loginByEmail(email: string, meta: RequestMeta, next = "/ad
   const user = await db.query.adminUsers.findFirst({ where: and(eq(adminUsers.email, email.toLowerCase()), eq(adminUsers.active, true)) });
   if (!user) return { ok: false, reason: "invalid" };
   return afterFirstFactor(db, user, meta, "email-link", next);
+}
+
+/**
+ * Sign in someone base ground vouched for (SUITE.md, "The hand-off"): their
+ * existing, active staff account with the same email, matched without regard
+ * to case. Never creates an account. Two-factor sign-in still applies, as
+ * after a password or an email link.
+ */
+export async function loginWithBase(email: string, meta: RequestMeta, next = "/admin", db: Db = getDb()): Promise<LoginResult> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return { ok: false, reason: "invalid" };
+  const user = await db.query.adminUsers.findFirst({ where: and(sql`lower(${adminUsers.email}) = ${normalized}`, eq(adminUsers.active, true)) });
+  if (!user) return { ok: false, reason: "invalid" };
+  return afterFirstFactor(db, user, meta, "base", next);
 }
 
 export function requestMeta(req: Request): RequestMeta {
