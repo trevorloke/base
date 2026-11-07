@@ -115,6 +115,24 @@ than a week after they came off is refused. Contacts are door, phone, text or
 - **Tags**: free-form, seeded with media, VIP, endorser, host, …
 - **Socials**: per-person handles for Facebook, Instagram, X, TikTok, YouTube,
   LinkedIn, Bluesky.
+- **Stewardship** (Donations → *Stewardship*, the desk that handles money):
+  *To thank* — every gift no one has thanked, oldest first, with how long it
+  has waited; *Called · Emailed · Note · Letter* marks it. *Write thank-you
+  letters* starts a mailout to all of them ({{first_name}}, {{amount}},
+  {{gift_date}} filled in); marked mailed, each gift is thanked by letter.
+  *Next steps* — one per donor with a date (*Coffee after the debate*), the
+  due ones first. *Lapsed* — gave in an earlier year, not yet this one.
+  *Top donors this year* — and when each was last thanked.
+- **Mail** (Outreach → *Mail*): letters, postcards and labels to a list or
+  to the donors to thank. Write it (fill-ins for first name, full name, the
+  campaign; a return address remembered for next time); *Get the list
+  ready* fixes who it goes to — only people with a street address, never
+  do-not-mail or do-not-contact (the rest counted as left out); then print:
+  letters (one page each), #10 envelopes, Avery 5160 and 5163 address
+  labels, Avery 5167 return-address labels, 6×4 postcards (both sides) —
+  each a page to print at 100%, addressed the Canada Post way (UNIT-NUMBER
+  STREET · CITY PROVINCE  POSTAL); *Print a sample* before it's ready.
+  *Mark as mailed* keeps it on the record.
 - **Mainstreeting** (Today → *Mainstreeting*, everyone on the field
   team): meeting people where they are — an event, a bus loop, a market.
   Say where you are once (kept on the phone); then for each person first

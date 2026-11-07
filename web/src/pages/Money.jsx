@@ -452,6 +452,8 @@ export default function Money() {
   });
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief'), enabled: canMoney });
   const receiptNeeds = useQuery({ queryKey: ['receipts', 'needs'], queryFn: () => apiGet('/receipts/needs'), enabled: canMoney });
+  // Gifts no one has thanked yet (ext/stewardship): the count beside Stewardship.
+  const stewardship = useQuery({ queryKey: ['stewardship'], queryFn: () => apiGet('/stewardship'), enabled: canMoney, staleTime: 60_000, meta: { side: true } });
   // No signal: this tab's last copy (components/KeptCopies.js), read only.
   const online = useOnline();
   const giftsOffline = noSignal(gifts);
@@ -567,6 +569,7 @@ export default function Money() {
       <div className="ops-head">
         <h1>Donations</h1>
         <div className="ops-head__actions">
+          <Link className="btn ops-tap" to="/money/stewardship">Stewardship{stewardship.data?.counts?.to_thank ? ` · ${stewardship.data.counts.to_thank} to thank` : ''}</Link>
           {!showNew && (
             <button type="button" className="btn btn-primary ops-tap" disabled={!online} onClick={() => setParams({ new: '1' })}>
               Log a gift

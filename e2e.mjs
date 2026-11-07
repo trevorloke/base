@@ -298,7 +298,7 @@ await shot('8-newsletter');
 // Outreach is two modules: Email (newsletter + lists) and Texting; old addresses land in them.
 await go('/outreach/press');
 const tabsNow = await page.$$eval('.ot-tabs .ot-tab-label', (els) => els.map((e) => e.innerText.trim()));
-check('Outreach: two modules, Email and Texting; /outreach/press lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
+check('Outreach: three modules, Email, Texting and Mail; /outreach/press lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting|mail' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
 await go('/outreach/texts');
 check('/outreach/texts lands on Texting, with the Inbox and phone banks', /\/outreach\/texting/.test(page.url()) && /Inbox/.test(await text()) && /Phone banks/.test(await text()), page.url());
 
