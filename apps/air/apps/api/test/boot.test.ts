@@ -9,5 +9,8 @@ describe("host defaults", () => {
     const own: NodeJS.ProcessEnv = { BASE_AIR_PUBLIC_URL: "https://app.example.com", RENDER_EXTERNAL_URL: "https://x.onrender.com" };
     expect(applyHostDefaults(own)).toBe("https://app.example.com");
     expect(applyHostDefaults({})).toBeUndefined();
+    // Under a prefix, Render's own URL serves the app under it too.
+    const prefixed: NodeJS.ProcessEnv = { RENDER_EXTERNAL_URL: "https://base-air.onrender.com/", BASE_PATH: "/imaginesurrey/air/" };
+    expect(applyHostDefaults(prefixed)).toBe("https://base-air.onrender.com/imaginesurrey/air");
   });
 });

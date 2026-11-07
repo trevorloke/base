@@ -1,3 +1,4 @@
+import { normalizeBasePath } from "./base-path.ts";
 import { createDb, migrate, type DbHandle } from "@base-air/db";
 import { BaseAir, SecretBox, TimerScheduler, type Scheduler } from "@base-air/core";
 import { BullMQScheduler, buildRegistry, createRedis, startInProcessJobs } from "@base-air/workers";
@@ -27,7 +28,8 @@ export function gatewayFromEnv(env: NodeJS.ProcessEnv = process.env): ModelGatew
  */
 export function applyHostDefaults(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const own = env.BASE_AIR_PUBLIC_URL?.trim();
-  if (!own && env.RENDER_EXTERNAL_URL?.trim()) env.BASE_AIR_PUBLIC_URL = env.RENDER_EXTERNAL_URL.trim();
+  // Render's own URL reaches this service directly, so it is served under BASE_PATH there too.
+  if (!own && env.RENDER_EXTERNAL_URL?.trim()) env.BASE_AIR_PUBLIC_URL = `${env.RENDER_EXTERNAL_URL.trim().replace(/\/+$/, "")}${normalizeBasePath(env.BASE_PATH)}`;
   return env.BASE_AIR_PUBLIC_URL?.trim() || undefined;
 }
 

@@ -66,11 +66,12 @@ import type { AnalyticsPayload, AnalyticsQuery, Report, ReportInput, ReportSent,
 // ---- AI answer visibility
 import type { VisAnswer, VisAnswersQuery, VisEngine, VisPrompt, VisPromptInput, VisReport, VisRunResult, VisSettingsPatch, VisSettingsResponse, VisSuggestion } from "./lib/visibility";
 import { ApiError, setKeyMode } from "./lib/errors";
+import { BASE_PATH } from "./lib/base";
 
 export { ApiError, isApiError, errorText, reasonOf, sentence } from "./lib/errors";
 
-// "" by default: same origin, so the Vite dev/preview proxy forwards /v1 and /api to :4000.
-const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+// Same origin under this deployment's prefix by default (the Vite dev/preview proxy forwards /v1 and /api to :4000).
+const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "") || BASE_PATH;
 
 /** When true, every call is answered from src/dev/fixtures.ts and no network request is made. */
 export const USE_FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";

@@ -12,6 +12,7 @@ import { adaptForNetwork, gatewayKeywordExpander, gatewayTranslator, runPrompt, 
 import { createMentionSearches, type MentionSearch, type SourceAdapter } from "@base-air/sources";
 import { Network as NetworkEnum, NETWORK_LIMITS } from "@base-air/schema";
 import { allowedWithoutWorkspace, clearSessionCookie, csrfOk, CSRF_HEADER, isPublicAuthRoute, isWrite, readSessionCookie, registerAuthRoutes, setSessionCookie } from "./auth-routes.ts";
+import { clientIpFrom, normalizeBasePath } from "./base-path.ts";
 import { registerInboxRoutes } from "./routes-inbox.ts"; // ---- inbox workflow
 import { registerVisibilityRoutes } from "./routes-visibility.ts"; // ---- AI answer visibility
 import { registerAnalyticsRoutes } from "./routes-analytics.ts"; // ---- analytics & client reports
@@ -28,8 +29,12 @@ export interface AppOptions {
   gateway?: ModelGateway | null;
   /** Trend sources this deployment pulls from (for status reporting). */
   sources?: SourceAdapter[];
-  /** Public base URL of this deployment (OAuth redirects come back here). */
+  /** Public base URL of this deployment, prefix included (OAuth redirects come back here). */
   publicUrl?: string;
+  /** Where this deployment lives on its host, e.g. "/imaginesurrey/air" (SUITE.md). "" = the root. */
+  basePath?: string;
+  /** Proxies in front of this server that append to X-Forwarded-For, after the client (BASE_AIR_TRUSTED_PROXIES). */
+  trustedProxies?: number;
   /** Public mention search for the tracker's "scan now". Default: every configured search. */
   mentionSearches?: MentionSearch[];
   // ---- AI answer visibility
@@ -62,6 +67,9 @@ function startOfLocalWeek(at: Date, timezone: string): Date {
 
 export function createApp(m: BaseAir, opts: AppOptions = {}) {
   const app = new Hono<Env>();
+  const basePath = normalizeBasePath(opts.basePath);
+  /** The room's own address, under the prefix. */
+  const home = `${basePath}/`;
 
   app.onError((e, c) => {
     if (e instanceof CoreError) return c.json(err(e.code, e.message, e.details), e.httpStatus as 400);
@@ -76,14 +84,14 @@ export function createApp(m: BaseAir, opts: AppOptions = {}) {
     const name = c.req.param("connector");
     const state = c.req.query("state");
     const code = c.req.query("code");
-    if (!state || !code) return c.redirect(`/?connect_error=${encodeURIComponent(c.req.query("error") ?? "missing_code")}&connector=${encodeURIComponent(name)}`);
+    if (!state || !code) return c.redirect(`${home}?connect_error=${encodeURIComponent(c.req.query("error") ?? "missing_code")}&connector=${encodeURIComponent(name)}`);
     try {
       const accts = await m.accounts.completeOAuth({ state, code, params: c.req.query() as Record<string, string> });
       const handles = accts.map((a) => a.handle).join(",");
-      return c.redirect(`/?connected=${encodeURIComponent(name)}&handle=${encodeURIComponent(handles)}&count=${accts.length}`);
+      return c.redirect(`${home}?connected=${encodeURIComponent(name)}&handle=${encodeURIComponent(handles)}&count=${accts.length}`);
     } catch (e) {
       const reason = e instanceof CoreError ? ((e.details as { reason?: string } | undefined)?.reason ?? "failed") : "failed";
-      return c.redirect(`/?connect_error=${encodeURIComponent(reason)}&connector=${encodeURIComponent(name)}`);
+      return c.redirect(`${home}?connect_error=${encodeURIComponent(reason)}&connector=${encodeURIComponent(name)}`);
     }
   });
 
@@ -115,8 +123,7 @@ export function createApp(m: BaseAir, opts: AppOptions = {}) {
   });
 
   // ---------------------------------------------------------------- owned measurement: short links, conversions
-  const clientIp = (c: { req: { header: (n: string) => string | undefined } }) =>
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || c.req.header("cf-connecting-ip") || null;
+  const clientIp = (c: { req: { header: (n: string) => string | undefined } }) => clientIpFrom((n) => c.req.header(n), opts.trustedProxies ?? 1);
 
   app.get("/l/:slug", async (c) => {
     const location = await m.links.click(c.req.param("slug"), {
@@ -148,7 +155,7 @@ export function createApp(m: BaseAir, opts: AppOptions = {}) {
     return new Response(null, { status: 204, headers: beaconCors });
   });
   app.get("/s.js", (c) => {
-    const base = (opts.publicUrl ?? new URL(c.req.url).origin).replace(/\/+$/, "");
+    const base = (opts.publicUrl ?? `${new URL(c.req.url).origin}${basePath}`).replace(/\/+$/, "");
     return c.body(conversionSnippet(base), 200, { "content-type": "application/javascript; charset=utf-8", "cache-control": "public, max-age=3600", "access-control-allow-origin": "*" });
   });
 
@@ -159,7 +166,7 @@ export function createApp(m: BaseAir, opts: AppOptions = {}) {
   app.get("/api/health", (c) => c.json({ ok: true, version: VERSION, db: m.ctx.db.constructor.name.toLowerCase().includes("pglite") ? "pglite" : "postgres" }));
 
   // Who is asking: a bearer API key (agents, automation), else the base_air_session cookie (people), else the dev workspace.
-  const cookieOpts = { publicUrl: opts.publicUrl };
+  const cookieOpts = { publicUrl: opts.publicUrl, basePath, trustedProxies: opts.trustedProxies };
   const auth = createMiddleware<Env>(async (c, next) => {
     if (isPublicAuthRoute(c.req.method, c.req.path)) return next();
     const header = c.req.header("authorization");
@@ -211,7 +218,7 @@ export function createApp(m: BaseAir, opts: AppOptions = {}) {
   app.use("/v1/*", auth);
 
   // ---------------------------------------------------------------- people: sign-in, sessions, teams
-  registerAuthRoutes(app, m, { publicUrl: opts.publicUrl });
+  registerAuthRoutes(app, m, cookieOpts);
   registerInboxRoutes(app, m); // ---- inbox workflow
   registerVisibilityRoutes(app, m, { gateway: opts.gateway, ...(opts.answerEngines ? { answerEngines: opts.answerEngines } : {}) }); // ---- AI answer visibility
   registerAnalyticsRoutes(app, m, opts); // ---- analytics & client reports

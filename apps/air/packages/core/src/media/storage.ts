@@ -259,6 +259,11 @@ function lower(h: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(h).map(([k, v]) => [k.toLowerCase(), v]));
 }
 
+const basePathOf = (raw: string | undefined) => {
+  const parts = (raw ?? "").split("/").filter((p) => p && p !== "." && p !== "..");
+  return parts.length ? `/${parts.join("/")}` : "";
+};
+
 /** BASE_AIR_S3_* selects S3; otherwise local disk under BASE_AIR_MEDIA_DIR served from BASE_AIR_PUBLIC_URL. */
 export function storageFromEnv(env: NodeJS.ProcessEnv = process.env): MediaStorage {
   if (env.BASE_AIR_S3_BUCKET && env.BASE_AIR_S3_ACCESS_KEY_ID && env.BASE_AIR_S3_SECRET_ACCESS_KEY && env.BASE_AIR_S3_ENDPOINT && env.BASE_AIR_S3_PUBLIC_URL) {
@@ -271,5 +276,5 @@ export function storageFromEnv(env: NodeJS.ProcessEnv = process.env): MediaStora
       publicBaseUrl: env.BASE_AIR_S3_PUBLIC_URL,
     });
   }
-  return new LocalStorage(env.BASE_AIR_MEDIA_DIR ?? ".media", env.BASE_AIR_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`);
+  return new LocalStorage(env.BASE_AIR_MEDIA_DIR ?? ".media", env.BASE_AIR_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}${basePathOf(env.BASE_PATH)}`);
 }

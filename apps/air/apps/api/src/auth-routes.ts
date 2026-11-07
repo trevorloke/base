@@ -3,6 +3,7 @@ import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { CoreError, SESSION_TTL_MS, type RequestMeta, type ResolvedSession, type BaseAir } from "@base-air/core";
 import type { Env } from "./app.ts";
+import { clientIpFrom, normalizeBasePath } from "./base-path.ts";
 
 export const SESSION_COOKIE = "base_air_session";
 /** The session cookie's name before Starsign became base air. Read once, moved to SESSION_COOKIE, then cleared. */
@@ -12,6 +13,10 @@ export const CSRF_HEADER = "x-base-air-csrf";
 export interface AuthRouteOptions {
   /** Public base URL. https → the session cookie is Secure; also the base of invite and reset links. */
   publicUrl?: string;
+  /** Where the app lives on its host; cookies are scoped to it so two clients on one host never share them. */
+  basePath?: string;
+  /** See BASE_AIR_TRUSTED_PROXIES. */
+  trustedProxies?: number;
 }
 
 type C = Context<Env>;
@@ -32,7 +37,7 @@ export function allowedWithoutWorkspace(method: string, path: string): boolean {
   return path.startsWith("/v1/auth/") || (method === "POST" && path === "/v1/workspaces");
 }
 
-const cookieBase = (opts: AuthRouteOptions) => ({ httpOnly: true, sameSite: "Lax" as const, path: "/", secure: !!opts.publicUrl?.startsWith("https") });
+export const cookieBase = (opts: AuthRouteOptions) => ({ httpOnly: true, sameSite: "Lax" as const, path: normalizeBasePath(opts.basePath) || "/", secure: !!opts.publicUrl?.startsWith("https") });
 export function setSessionCookie(c: C, token: string, opts: AuthRouteOptions): void {
   setCookie(c, SESSION_COOKIE, token, { ...cookieBase(opts), maxAge: Math.floor(SESSION_TTL_MS / 1000) });
 }
@@ -54,9 +59,8 @@ export function readSessionCookie(c: C, opts: AuthRouteOptions): string | undefi
   return legacy;
 }
 
-function meta(c: C): RequestMeta {
-  const fwd = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  return { userAgent: c.req.header("user-agent") ?? null, ip: fwd || c.req.header("x-real-ip") || null };
+export function meta(c: C, opts: AuthRouteOptions = {}): RequestMeta {
+  return { userAgent: c.req.header("user-agent") ?? null, ip: clientIpFrom((n) => c.req.header(n), opts.trustedProxies ?? 1) };
 }
 
 /**
@@ -85,13 +89,13 @@ export function registerAuthRoutes(app: Hono<Env>, m: BaseAir, opts: AuthRouteOp
   };
 
   app.post("/v1/auth/signup", async (c) => {
-    const r = await m.auth.signup(await jsonBody(c), meta(c));
+    const r = await m.auth.signup(await jsonBody(c), meta(c, opts));
     await replaceSession(c, r.token);
     return c.json(r.view, 201);
   });
 
   app.post("/v1/auth/login", async (c) => {
-    const r = await m.auth.login(await jsonBody(c), meta(c));
+    const r = await m.auth.login(await jsonBody(c), meta(c, opts));
     await replaceSession(c, r.token);
     return c.json(r.view);
   });
@@ -131,7 +135,7 @@ export function registerAuthRoutes(app: Hono<Env>, m: BaseAir, opts: AuthRouteOp
 
   app.post("/v1/auth/accept-invite", async (c) => {
     const body = await jsonBody(c);
-    const r = await m.auth.acceptInvite(body, await optionalSession(c), meta(c));
+    const r = await m.auth.acceptInvite(body, await optionalSession(c), meta(c, opts));
     setSessionCookie(c, r.token, opts);
     return c.json(r.view);
   });

@@ -8,6 +8,7 @@ import { PanelState } from "../components/PanelState";
 import { useToast } from "../components/Toast";
 import { compact, plural, truncate } from "../lib/format";
 import { formatDateShort, formatRange } from "../lib/time";
+import { appUrl } from "../lib/base";
 
 const PLACEMENT_LABEL: Record<LinkPlacement, string> = {
   text: "In the text",
@@ -465,8 +466,7 @@ function LinkSettingsSection({ settings, isOwner, onSaved }: { settings: LinkSet
 
 function ConversionSnippet() {
   const copy = useCopy();
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const snippet = `<script src="${origin}/s.js" async></script>\n<script>\n  // after a purchase, on the thank-you page\n  baseAir.convert("purchase", 49, "USD");\n</script>`;
+  const snippet = `<script src="${appUrl("/s.js")}" async></script>\n<script>\n  // after a purchase, on the thank-you page\n  baseAir.convert("purchase", 49, "USD");\n</script>`;
   return (
     <section className="dsec">
       <h3 className="section-h">Count conversions</h3>

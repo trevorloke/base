@@ -1,6 +1,7 @@
 import type { Context, Hono } from "hono";
 import { CoreError, type BaseAir } from "@base-air/core";
 import type { AppOptions, Env } from "./app.ts";
+import { normalizeBasePath } from "./base-path.ts";
 
 /**
  * Analytics and client reports.
@@ -36,7 +37,7 @@ const REPORT_HEADERS = {
 };
 
 export function registerAnalyticsRoutes(app: Hono<Env>, m: BaseAir, opts: AppOptions = {}) {
-  const base = (c: Context<Env>) => (opts.publicUrl ?? new URL(c.req.url).origin).replace(/\/+$/, "");
+  const base = (c: Context<Env>) => (opts.publicUrl ?? `${new URL(c.req.url).origin}${normalizeBasePath(opts.basePath)}`).replace(/\/+$/, "");
 
   app.get("/v1/analytics", async (c) => {
     const p = c.get("principal");
