@@ -72,3 +72,16 @@ test('sent twice from a phone (the same client_id): one person, one contact; ref
   assert.equal((await vol.action('mainstreet.meet', { client_id: randomUUID(), place: '', first_name: 'X' })).status, 400, 'no place');
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });
+
+test('someone on file with no email: the one they give is theirs, and it goes on the newsletter; a different one on file stays, the new one is kept beside it', async () => {
+  const gus = await mgr.createPerson('Gus Example', { phone: '604-555-0177' });
+  ok(await meet(vol, { first_name: 'Gus', last_name: 'Example', phone: '604-555-0177', email: 'Gus@Example.org', newsletter: true }));
+  assert.equal((await db.query('select email from persons where id = $1', [gus.id])).rows[0].email, 'gus@example.org');
+  assert.equal((await db.query("select count(*)::int as n from subscriptions where email = 'gus@example.org'")).rows[0].n, 1);
+  const hal = await mgr.createPerson('Hal Example', { phone: '604-555-0178', email: 'hal.old@example.org' });
+  ok(await meet(vol, { first_name: 'Hal', last_name: 'Example', phone: '604-555-0178', email: 'hal.new@example.org', newsletter: true }));
+  const h = (await db.query("select email, attrs->>'typed_email' as typed from persons where id = $1", [hal.id])).rows[0];
+  assert.deepEqual([h.email, h.typed], ['hal.old@example.org', 'hal.new@example.org']);
+  const subs = (await db.query("select email from subscriptions where email like 'hal%' order by email")).rows.map((r) => r.email);
+  assert.deepEqual(subs, ['hal.new@example.org'], 'the address they gave, not the one on file');
+});

@@ -96,3 +96,29 @@ test('refusals: the same record twice, one already gone, a volunteer; the books 
   ok(await mgr.action('person.merge', { keep: ben[0], drop: ben[1] }));
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });
+
+test('a teammate’s own record merged in: their sign-in email stays on the kept record; links they made and brought in follow', async () => {
+  const own = (await db.query("select id from persons where lower(email) = 'vol@example.org' and deleted_at is null")).rows[0]?.id
+    ?? (await mgr.createPerson('Vol Example', { email: 'vol@example.org' })).id;
+  const keep = await mgr.createPerson('Vol Example', { email: 'vol.personal@example.org', phone: '604-555-0199' });
+  const friend = await mgr.createPerson('Fay Example');
+  const [a, b] = own < friend.id ? [own, friend.id] : [friend.id, own];
+  await db.query(
+    `insert into relationships (id, workspace_id, person_a, person_b, kind, brought_in, from_person)
+     select gen_random_uuid(), workspace_id, $1, $2, 'friend', $3, $4 from persons where id = $4`,
+    [a, b, friend.id, own],
+  );
+  ok(await mgr.action('person.merge', { keep: keep.id, drop: own }));
+  const k = (await db.query("select email, attrs->>'other_email' as other from persons where id = $1", [keep.id])).rows[0];
+  assert.deepEqual([k.email, k.other], ['vol@example.org', 'vol.personal@example.org']);
+  const rel = (await db.query('select from_person, brought_in from relationships where brought_in = $1', [friend.id])).rows[0];
+  assert.equal(rel.from_person, keep.id, 'whose circle: the kept record');
+  const mine = ok(await vol.get('/api/relationships/mine'));
+  assert.equal(mine.me?.id, keep.id, 'My people still finds them');
+});
+
+test('a volunteer granted People still can’t read the duplicates (raw emails, gifts)', async () => {
+  ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: ['people'], deny: [] }));
+  assert.equal((await vol.get('/api/duplicates')).status, 403);
+  ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
+});

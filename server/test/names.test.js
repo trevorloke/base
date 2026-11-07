@@ -52,3 +52,24 @@ test('an import keeps First Name and Surname as the file has them; the websiteâ€
   const id = (await res.json()).person_id;
   assert.deepEqual({ ...(await names(id)) }, { name: 'Jean Luc Example', first_name: 'Jean Luc', last_name: 'Example' });
 });
+
+test('made an organization: no first or last; a person again: the name follows what is given', async () => {
+  const p = ok(await mgr.action('person.create', { kind: 'person', first_name: 'Old', last_name: 'Person' })).person;
+  ok(await mgr.action('person.update', { id: p.id, kind: 'org', name: 'Acme Ltd' }));
+  assert.deepEqual({ ...(await names(p.id)) }, { name: 'Acme Ltd', first_name: null, last_name: null });
+  ok(await mgr.action('person.update', { id: p.id, kind: 'person', first_name: 'Old', last_name: 'Person' }));
+  assert.deepEqual({ ...(await names(p.id)) }, { name: 'Old Person', first_name: 'Old', last_name: 'Person' });
+  const q = ok(await mgr.action('person.create', { kind: 'org', name: 'Two Words' })).person;
+  ok(await mgr.action('person.update', { id: q.id, kind: 'person' }));
+  assert.deepEqual({ ...(await names(q.id)) }, { name: 'Two Words', first_name: 'Two', last_name: 'Words' }, 'no parts given: the name is split');
+});
+
+test('the one-time split leaves a name exactly as written', async () => {
+  const p = await mgr.createPerson('Jo  Van Sample');
+  await db.query('alter table persons disable trigger persons_names');
+  await db.query('update persons set first_name = null, last_name = null where id = $1', [p.id]);
+  await db.query('alter table persons enable trigger persons_names');
+  const { sql } = await import('../ext/names/index.js');
+  await db.exec(sql);
+  assert.deepEqual({ ...(await names(p.id)) }, { name: 'Jo  Van Sample', first_name: 'Jo Van', last_name: 'Sample' });
+});

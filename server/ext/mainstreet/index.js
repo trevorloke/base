@@ -81,13 +81,25 @@ export const actions = {
       if (person) {
         // On file: fill what's blank (never overwrite), and say where they were met.
         const tags = [...new Set([...(typeof person.tags === 'string' ? JSON.parse(person.tags) : person.tags || []), 'mainstreeting'])];
-        const row = (await tx.query('select phone, postal from persons where id = $1', [person.id])).rows[0];
+        const row = (await tx.query('select phone, postal, email, attrs from persons where id = $1', [person.id])).rows[0];
         const patch = {};
         if (!row.phone && phone) patch.phone = phone;
         if (!row.postal && postal) patch.postal = postal;
+        // The email they gave: theirs if the record has none and no one else
+        // on file holds it; otherwise kept beside the record for the desk.
+        const attrs = typeof row.attrs === 'string' ? JSON.parse(row.attrs) : row.attrs || {};
+        if (email && emailKey(row.email) !== email) {
+          const held = (await tx.query(
+            'select 1 from persons where workspace_id = $1 and lower(email) = $2 and id <> $3 and deleted_at is null limit 1',
+            [ws, email, person.id],
+          )).rows[0];
+          if (!row.email && !held) patch.email = email;
+          else { attrs.typed_email = email; patch.typed_email = email; }
+        }
         await tx.query(
-          'update persons set phone = coalesce(phone, $3), postal = coalesce(postal, $4), tags = $5, updated_at = now() where id = $1 and workspace_id = $2',
-          [person.id, ws, patch.phone || null, patch.postal || null, JSON.stringify(tags)],
+          `update persons set phone = coalesce(phone, $3), postal = coalesce(postal, $4), email = coalesce(email, $6), attrs = $7,
+                  tags = $5, updated_at = now() where id = $1 and workspace_id = $2`,
+          [person.id, ws, patch.phone || null, patch.postal || null, JSON.stringify(tags), patch.email || null, JSON.stringify(attrs)],
         );
         emit('person', person.id, 'update', { ...patch, tags, source: 'mainstreeting' });
       } else {
@@ -123,20 +135,21 @@ export const actions = {
           person_id: person.id, kind: 'volunteer', note: `Met mainstreeting at ${place}`.slice(0, 500),
         }, emit);
       }
-      // The newsletter: a new address only — never back on for someone who
-      // left it, or is do-not-email (the website's rule, ext/intake).
-      const mail = (await tx.query('select email, name, tags from persons where id = $1', [person.id])).rows[0];
-      if (input.newsletter && mail?.email) {
+      // The newsletter: the address they gave, and a new one only — never
+      // back on for someone who left it, or is do-not-email (the website's
+      // rule, ext/intake).
+      const mail = (await tx.query('select name, tags from persons where id = $1', [person.id])).rows[0];
+      if (input.newsletter && email && mail) {
         const tags = typeof mail.tags === 'string' ? JSON.parse(mail.tags) : mail.tags || [];
-        const known = (await tx.query('select 1 from subscriptions where workspace_id = $1 and lower(email) = lower($2)', [ws, mail.email])).rows[0];
+        const known = (await tx.query('select 1 from subscriptions where workspace_id = $1 and lower(email) = $2', [ws, email])).rows[0];
         if (!known && !tags.includes('do-not-email') && !tags.includes('do-not-contact')) {
           const sid = newId();
           await tx.query(
             `insert into subscriptions (id, workspace_id, email, name, status, source) values ($1, $2, $3, $4, 'subscribed', 'mainstreeting')
              on conflict (workspace_id, email) do nothing`,
-            [sid, ws, mail.email.toLowerCase(), mail.name],
+            [sid, ws, email, mail.name],
           );
-          emit('subscription', sid, 'create', { email: mail.email.toLowerCase(), source: 'mainstreeting' });
+          emit('subscription', sid, 'create', { email, source: 'mainstreeting' });
         }
       }
       return { person_id: person.id, contact_id: contactId, name: person.name };

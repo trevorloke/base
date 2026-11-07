@@ -8,7 +8,8 @@
 //                         the first ("Mary Anne Example" → Mary Anne ·
 //                         Example; one word is a first name)
 // An organization (kind 'org') keeps its name whole, with no first or last.
-// People on file before this get theirs split once, the same way.
+// People on file before this get theirs split once, the same way — before
+// the trigger is made, so their names stay exactly as written.
 export const sql = `
 alter table persons add column if not exists first_name text;
 alter table persons add column if not exists last_name text;
@@ -19,9 +20,13 @@ declare
   cut int;
 begin
   if new.kind = 'org' then
+    new.first_name := null;
+    new.last_name := null;
     return new;
   end if;
-  if tg_op = 'INSERT' then
+  -- New, or just made a person again (an org had none): the parts given
+  -- make the name; without them the name is split below.
+  if tg_op = 'INSERT' or new.kind is distinct from old.kind then
     if coalesce(trim(new.first_name), '') <> '' or coalesce(trim(new.last_name), '') <> '' then
       new.first_name := nullif(trim(new.first_name), '');
       new.last_name := nullif(trim(new.last_name), '');
@@ -52,7 +57,6 @@ begin
 end $$;
 
 drop trigger if exists persons_names on persons;
-create trigger persons_names before insert or update on persons for each row execute function persons_names();
 
 -- Once: people on file before first and last names were kept.
 update persons
@@ -63,4 +67,6 @@ update persons
                         then regexp_replace(regexp_replace(trim(name), '\\s+', ' ', 'g'), '^.* ', '')
                         else null end
  where first_name is null and last_name is null and kind <> 'org' and coalesce(trim(name), '') <> '';
+
+create trigger persons_names before insert or update on persons for each row execute function persons_names();
 `;

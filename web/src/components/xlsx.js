@@ -68,13 +68,13 @@ export async function readXlsx(buf) {
   if (!book) throw new Error('That isn’t an Excel workbook (.xlsx) we can read. Save it as CSV and choose that.');
   // The first sheet, by the workbook's own order and links.
   const wb = xml(book);
-  const first = wb.getElementsByTagName('sheet')[0];
+  const first = wb.getElementsByTagNameNS('*', 'sheet')[0];
   const sheetName = first?.getAttribute('name') || 'Sheet1';
   const rid = first?.getAttribute('r:id') || first?.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
   let path = 'xl/worksheets/sheet1.xml';
   const rels = await zip.read('xl/_rels/workbook.xml.rels');
   if (rels && rid) {
-    for (const r of xml(rels).getElementsByTagName('Relationship')) {
+    for (const r of xml(rels).getElementsByTagNameNS('*', 'Relationship')) {
       if (r.getAttribute('Id') === rid) {
         const t = r.getAttribute('Target') || '';
         path = t.startsWith('/') ? t.slice(1) : `xl/${t.replace(/^\.\//, '')}`;
@@ -87,8 +87,8 @@ export async function readXlsx(buf) {
   const shared = [];
   const sst = await zip.read('xl/sharedStrings.xml');
   if (sst) {
-    for (const si of xml(sst).getElementsByTagName('si')) {
-      shared.push([...si.getElementsByTagName('t')].map((t) => t.textContent).join(''));
+    for (const si of xml(sst).getElementsByTagNameNS('*', 'si')) {
+      shared.push([...si.getElementsByTagNameNS('*', 't')].map((t) => t.textContent).join(''));
     }
   }
   // Which cell styles are dates.
@@ -96,26 +96,26 @@ export async function readXlsx(buf) {
   const styles = await zip.read('xl/styles.xml');
   if (styles) {
     const doc = xml(styles);
-    const custom = new Map([...doc.getElementsByTagName('numFmt')].map((f) => [Number(f.getAttribute('numFmtId')), f.getAttribute('formatCode') || '']));
-    const xfs = doc.getElementsByTagName('cellXfs')[0];
-    [...(xfs ? xfs.getElementsByTagName('xf') : [])].forEach((xf, i) => {
+    const custom = new Map([...doc.getElementsByTagNameNS('*', 'numFmt')].map((f) => [Number(f.getAttribute('numFmtId')), f.getAttribute('formatCode') || '']));
+    const xfs = doc.getElementsByTagNameNS('*', 'cellXfs')[0];
+    [...(xfs ? xfs.getElementsByTagNameNS('*', 'xf') : [])].forEach((xf, i) => {
       const id = Number(xf.getAttribute('numFmtId'));
       if (DATE_IDS.has(id) || /[dy]/i.test((custom.get(id) || '').replace(/"[^"]*"|\[[^\]]*\]/g, ''))) dateStyles.add(i);
     });
   }
 
   const rows = [];
-  for (const row of xml(sheetText).getElementsByTagName('row')) {
+  for (const row of xml(sheetText).getElementsByTagNameNS('*', 'row')) {
     const r = Number(row.getAttribute('r')) || rows.length + 1;
     const cells = [];
-    for (const c of row.getElementsByTagName('c')) {
+    for (const c of row.getElementsByTagNameNS('*', 'c')) {
       const t = c.getAttribute('t');
-      const v = c.getElementsByTagName('v')[0]?.textContent ?? '';
+      const v = c.getElementsByTagNameNS('*', 'v')[0]?.textContent ?? '';
       let val;
       if (t === 's') val = shared[Number(v)] ?? '';
-      else if (t === 'inlineStr') val = [...c.getElementsByTagName('t')].map((x) => x.textContent).join('');
+      else if (t === 'inlineStr') val = [...c.getElementsByTagNameNS('*', 't')].map((x) => x.textContent).join('');
       else if (t === 'b') val = v === '1' ? 'TRUE' : 'FALSE';
-      else if (!t && v !== '' && dateStyles.has(Number(c.getAttribute('s')))) val = dayOf(v);
+      else if ((!t || t === 'n') && v !== '' && dateStyles.has(Number(c.getAttribute('s')))) val = dayOf(v);
       else val = v;
       cells[c.getAttribute('r') ? colOf(c.getAttribute('r')) : cells.length] = val;
     }

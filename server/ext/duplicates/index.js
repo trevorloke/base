@@ -113,6 +113,20 @@ const moveRelationships = async (tx, ws, keep, drop) => {
     if (clash) await tx.query('delete from relationships where id = $1', [r.id]);
     else await tx.query('update relationships set person_a = $2, person_b = $3 where id = $1', [r.id, a, b]);
   }
+  // Whose circle a link came from, and who it brought in: keep, now.
+  await tx.query('update relationships set from_person = $2 where workspace_id = $1 and from_person = $3', [ws, keep, drop]);
+  await tx.query('update relationships set brought_in = $2 where workspace_id = $1 and brought_in = $3', [ws, keep, drop]);
+};
+
+// An email someone on the team signs in with: their own record is found by
+// it (My people, Count me in), so a merge never takes it away.
+const isLoginEmail = async (tx, ws, email) => {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return false;
+  return !!(await tx.query(
+    'select 1 from users u join memberships m on m.user_id = u.id where m.workspace_id = $1 and lower(u.email) = $2',
+    [ws, e],
+  )).rows[0];
 };
 
 const FILL = ['email', 'phone', 'address', 'house_number', 'unit', 'city', 'postal', 'rating', 'rated_at', 'voted_at'];
@@ -140,6 +154,14 @@ export const actions = {
       const socials = { ...parseJ(drop.socials, {}), ...parseJ(keep.socials, {}) };
       const attrs = { ...parseJ(drop.attrs, {}), ...parseJ(keep.attrs, {}) };
       delete attrs.merged_into;
+      // Drop's email is a teammate's sign-in: it becomes keep's email, and
+      // keep's own is kept beside it.
+      const em = (x) => String(x || '').trim().toLowerCase();
+      if (em(drop.email) && em(keep.email) && em(drop.email) !== em(keep.email)
+        && !(await isLoginEmail(tx, ws, keep.email)) && (await isLoginEmail(tx, ws, drop.email))) {
+        filled.email = drop.email;
+        attrs.other_email = keep.email;
+      }
       const sets = Object.keys(filled).map((k, i) => `${q(k)} = $${i + 6}`);
       await tx.query(
         `update persons set tags = $3, socials = $4, attrs = $5, updated_at = now()${sets.length ? `, ${sets.join(', ')}` : ''}
@@ -217,6 +239,8 @@ export const api = new Hono();
 
 api.get('/duplicates', async (c) => {
   const ctx = c.get('ctx');
+  // Raw emails, gift counts and tags: the desk only, whatever areas are granted.
+  if (!DESK.includes(ctx.role)) return c.json({ error: 'the desk only' }, 403);
   const db = c.get('db');
   const ws = ctx.workspaceId;
   const pairs = (await db.query(

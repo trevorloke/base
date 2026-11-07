@@ -385,7 +385,8 @@ const ratingValuesOf = (records, col) => {
 // so it is never imported as a number (the check step says which column).
 export const SCI_RE = /^\d(\.\d+)?e\+?\d+$/i;
 // homeCol: a Home Phone column — the number to call when the row has no
-// other (it still fills the Home phone profile field too).
+// other (it still fills the Home phone profile field too); not when the
+// column is set to Don't import.
 function toRow(scale, cells, mapping, ratingMap, homeCol = -1) {
   const row = {};
   mapping.forEach((key, i) => {
@@ -398,7 +399,7 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1) {
     else if (key === 'phone' && SCI_RE.test(v)) { /* digits lost in Excel */ }
     else row[key] = v;
   });
-  if (!row.phone && homeCol >= 0) {
+  if (!row.phone && homeCol >= 0 && mapping[homeCol]) {
     const h = String(cells[homeCol] ?? '').trim();
     if (h && !SCI_RE.test(h)) row.phone = h;
   }
