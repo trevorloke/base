@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import './reports.css';
+import { withBase } from '../paths.js';
 
 const TITLES = {
   rating: 'People by rating', tags: 'Tags', cities: 'Cities', 'people-by-week': 'People added, by week',
@@ -22,7 +23,7 @@ function Report({ name, r }) {
     <section className="rp-sec" aria-labelledby={`rp-${name}`}>
       <div className="rp-sec__head">
         <h2 id={`rp-${name}`}>{TITLES[name] || name}</h2>
-        <a className="btn btn-quiet ops-tap" href={`/api/reports/${name}.csv`}>CSV</a>
+        <a className="btn btn-quiet ops-tap" href={withBase(`/api/reports/${name}.csv`)}>CSV</a>
       </div>
       {!r.rows.length ? <p className="ops-empty">Nothing yet.</p> : (
         <div className="rp-table-wrap">
@@ -58,8 +59,8 @@ export default function Reports() {
         <div className="rp-sec__head"><h2 id="rp-exports">Exports</h2></div>
         <p className="ops-meta">A whole table as a spreadsheet. Bringing data in, and the full backup, are on <Link to="/data">Import &amp; export</Link>.</p>
         <ul className="rp-exports">
-          {EXPORTS.map(([k, label]) => <li key={k}><a className="btn ops-tap" href={`/api/export/${k}.csv`}>{label}</a></li>)}
-          <li><a className="btn btn-quiet ops-tap" href="/api/export">Everything (JSON)</a></li>
+          {EXPORTS.map(([k, label]) => <li key={k}><a className="btn ops-tap" href={withBase(`/api/export/${k}.csv`)}>{label}</a></li>)}
+          <li><a className="btn btn-quiet ops-tap" href={withBase('/api/export')}>Everything (JSON)</a></li>
         </ul>
       </section>
     </div>

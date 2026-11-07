@@ -7,7 +7,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // the shared primitives so single-class page rules can override them.
 import './app.css';
 import App from './App.jsx';
-import { ADMIN_BASE, appMode } from './mode.js';
+import { adminHref, appMode, faceFor, fieldHref, routerBase } from './mode.js';
+import { withBase } from './paths.js';
 import { ME_KEY, NoSignalError, noAnswer, savedSignIn } from './api.js';
 import { keptPersister, watchKeptCopies } from './components/KeptCopies.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
@@ -104,25 +105,33 @@ if (typeof window !== 'undefined') {
       closeOutbox(); // nothing more is saved here under the sign-in that ended
       queryClient.clear();
       if (next) keepOnlyMine(next); else forgetPhoneCopies();
-      window.location.assign(appMode() === 'admin' ? (next ? `${ADMIN_BASE}/` : `${ADMIN_BASE}/login`) : (next ? '/' : '/login'));
+      window.location.assign(appMode() === 'admin' ? adminHref(next ? '/' : '/login') : fieldHref(next ? '/' : '/login'));
     }, 60);
   });
 }
 
-// /admin/… is the admin (the desk), everything else the field app (mode.js).
+// /ground/… is the desk, /field/… the field app (mode.js); an address in
+// neither (Vite's dev server, an old copy) goes to the one it belongs to.
 const mode = appMode();
-createRoot(document.getElementById('root')).render(
-  <QueryClientProvider client={queryClient}>
-    <BrowserRouter basename={mode === 'admin' ? ADMIN_BASE : undefined}>
-      <App mode={mode} />
-    </BrowserRouter>
-  </QueryClientProvider>,
-);
+const elsewhere = typeof window !== 'undefined' ? faceFor(window.location.pathname) : null;
+if (elsewhere) {
+  window.location.replace(`${elsewhere}${window.location.search}${window.location.hash}`);
+} else {
+  createRoot(document.getElementById('root')).render(
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter basename={routerBase(mode)}>
+        <App mode={mode} />
+      </BrowserRouter>
+    </QueryClientProvider>,
+  );
+}
 
 // Service worker: app shell + map tiles for the field (public/sw.js). Only in
 // production builds — in dev it would cache Vite's modules and fight HMR.
-if (import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+// Its scope is this client's prefix: on base.win another client's base
+// ground is never this one's to answer for.
+if (import.meta.env.PROD && !elsewhere && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => { /* app still works online */ });
+    navigator.serviceWorker.register(withBase('/sw.js'), { scope: withBase('/') }).catch(() => { /* app still works online */ });
   });
 }

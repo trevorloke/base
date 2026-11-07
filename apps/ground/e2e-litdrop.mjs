@@ -18,7 +18,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-litdrop';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -105,7 +106,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `riley+${tag}@litdrop.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const P = {};
 const mk = async (key, data) => { P[key] = (await D.api('/actions/person.create', data)).json.person; };
 await mk('ana', { name: 'Ana Example', phone: '604-555-0151', address: '12390 72 Ave', city: 'Surrey', lat: 49.13310, lng: -122.84950 });

@@ -9,7 +9,7 @@
 // says it was asked). The volunteer reads a person's requests as the kind
 // and when only, and can't read the desk's list. At the desk, Today's Needs
 // you says "1 request from the doors", then "2 …"; it opens Requests from
-// the doors (/admin/requests), where Done ✓ asks what you did and marks it
+// the doors (/ground/requests), where Done ✓ asks what you did and marks it
 // done, until "Nothing waiting from the doors."; the Done pill says who did
 // it and offers Reopen. Every claim on a screen is checked against the API;
 // each screen is measured (yellow buttons, sideways scroll, 48px targets).
@@ -20,7 +20,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-requests';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -103,7 +104,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `riley+${tag}@requests.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const P = {};
 const mk = async (key, data) => { P[key] = (await D.api('/actions/person.create', data)).json.person; };
 await mk('dev', { name: 'Dev Example', phone: '604-555-0151', address: '7231 132 St', city: 'Surrey', lat: 49.13400, lng: -122.85000 });
@@ -253,10 +254,10 @@ await page.waitForSelector('#today-needs-h', { timeout: 8000 }).catch(() => {});
 await sleep(600);
 needs = (await page.innerText('section[aria-labelledby="today-needs-h"]').catch(() => '')).replace(/\s+/g, ' ');
 check('Today · Needs you: "2 requests from the doors"', /\b2 requests from the doors\b/.test(needs), needs);
-await page.click('section[aria-labelledby="today-needs-h"] a[href="/admin/requests"]');
+await page.click('section[aria-labelledby="today-needs-h"] a[href="/ground/requests"]');
 await page.waitForURL(`${ADMIN}/requests`, { timeout: 8000 }).catch(() => {});
 await page.waitForSelector('.rq-row', { timeout: 8000 }).catch(() => {});
-check('it opens /admin/requests', page.url() === `${ADMIN}/requests`, page.url());
+check('it opens /ground/requests', page.url() === `${ADMIN}/requests`, page.url());
 const backLink = await page.innerText('.rq-page .ops-back').catch(() => '');
 check('title "Requests from the doors", back to Today', (await page.innerText('.rq-page h1').catch(() => '')) === 'Requests from the doors'
   && /^← Today$/i.test(backLink.trim()), backLink);

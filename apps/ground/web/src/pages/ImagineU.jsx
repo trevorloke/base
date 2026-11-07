@@ -14,6 +14,7 @@ import { renderMarkdown } from '@base-ground/shared/markdown';
 import { ApiError, action, apiGet } from '../api.js';
 import './imagineu.css';
 import '../editor.css';
+import { BASE, withBase } from '../paths.js';
 
 const DESK = ['manager', 'staff', 'treasurer'];
 const KINDS = [
@@ -159,7 +160,7 @@ function Home({ desk }) {
           )}
           {adding && adding.section_id === null && !d.unfiled.length && <LessonForm sectionId={null} sections={d.sections} onDone={() => setAdding(null)} />}
           {d.public_url && d.sections.concat([{ lessons: d.unfiled }]).some((s) => s.lessons.some((l) => l.audience === 'public')) && (
-            <p className="muted lu-note">Public modules are at <a href={d.public_url} target="_blank" rel="noopener noreferrer">{d.public_url}</a>.</p>
+            <p className="muted lu-note">Public modules are at <a href={withBase(d.public_url)} target="_blank" rel="noopener noreferrer">{withBase(d.public_url)}</a>.</p>
           )}
         </div>
       )}
@@ -376,7 +377,7 @@ function LessonForm({ lesson, sectionId, sections, onDone, onRemoved }) {
       </div>
       {preview
         // eslint-disable-next-line react/no-danger -- the site's own safe renderer
-        ? <div className="ws-md__preview-body ws-prose lu-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(f.body) || '<p class="muted">Nothing yet.</p>' }} />
+        ? <div className="ws-md__preview-body ws-prose lu-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(f.body, { base: BASE }) || '<p class="muted">Nothing yet.</p>' }} />
         : <textarea id={`${id}-b`} className="input lu-form__text" rows={f.kind === 'note' || f.kind === 'procedure' ? 10 : 5} value={f.body} maxLength={30_000}
           placeholder={f.kind === 'procedure' ? '1. Count the sheets\n2. Hand them to the field director' : f.kind === 'contacts' ? '- Field director — Priya, 604-555-0100\n- The office — 604-555-0101, 9–5' : 'Headings with #, lists with -, **bold**.'}
           onChange={(e) => set('body', e.target.value)} />}
@@ -470,7 +471,7 @@ function Lesson({ id, desk }) {
           <Media lesson={l} embed={embed} />
           {l.body && (
             // eslint-disable-next-line react/no-danger -- the site's own safe renderer: every character is escaped first
-            <div className={`ws-prose lu-prose lu-prose--${l.kind}`} dangerouslySetInnerHTML={{ __html: renderMarkdown(l.body) }} />
+            <div className={`ws-prose lu-prose lu-prose--${l.kind}`} dangerouslySetInnerHTML={{ __html: renderMarkdown(l.body, { base: BASE }) }} />
           )}
           {(l.parts || []).map((p, i) => (
             <section key={p.id || i} className="lu-part" aria-label={p.title || `${PART_LABEL[p.kind]} ${i + 1}`}>
@@ -478,7 +479,7 @@ function Lesson({ id, desk }) {
               <Media lesson={{ ...p, title: p.title || l.title }} embed={embedOf(p.link)} />
               {p.body && (
                 // eslint-disable-next-line react/no-danger -- the site's own safe renderer: every character is escaped first
-                <div className="ws-prose lu-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.body) }} />
+                <div className="ws-prose lu-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(p.body, { base: BASE }) }} />
               )}
             </section>
           ))}
@@ -488,7 +489,7 @@ function Lesson({ id, desk }) {
               {l.done ? '✓ Module done — undo' : 'Mark this module done'}
             </button>
             {err && <span className="error" role="alert">{err}</span>}
-            {l.public_url && desk && <a className="muted lu-public" href={l.public_url} target="_blank" rel="noopener noreferrer">Public page ↗</a>}
+            {l.public_url && desk && <a className="muted lu-public" href={withBase(l.public_url)} target="_blank" rel="noopener noreferrer">Public page ↗</a>}
           </div>
         </>
       )}
@@ -497,7 +498,8 @@ function Lesson({ id, desk }) {
 }
 
 function Media({ lesson: l, embed }) {
-  const a = l.asset;
+  // The server names files by their root path; on screen, under the prefix.
+  const a = l.asset && { ...l.asset, url: withBase(l.asset.url) };
   if (a) {
     if (a.kind === 'picture') return <figure className="lu-media"><img src={a.url} alt={l.title} /></figure>;
     if (a.kind === 'audio') return <div className="lu-media"><audio controls preload="none" src={a.url} /><a className="lu-dl" href={`${a.url}?download=1`}>Download {a.name}</a></div>;

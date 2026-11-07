@@ -16,6 +16,7 @@ import {
 } from '../lib/auth.js';
 import { JURISDICTIONS, orgName, jurisdiction, timeZone, openSignupForced, setupClosedMessage, orgOut } from '../lib/org.js';
 import { clientIp, makeLimiter, crossSiteWrite } from '../lib/guard.js';
+import { basePath } from '../lib/basepath.js';
 
 const app = new Hono();
 
@@ -32,8 +33,10 @@ const secureFlag = process.env.BASE_SECURE_COOKIES;
 const secure = secureFlag ? secureFlag === '1' : process.env.NODE_ENV === 'production';
 // Strict: the cookie goes only with requests the app itself makes (the app
 // is one origin; a link opened from an email loads the app, which then asks
-// for /api/auth/me itself).
-const cookieOpts = { httpOnly: true, sameSite: 'Strict', path: '/', secure, maxAge: 30 * 86400 };
+// for /api/auth/me itself). Path: this client's prefix, so two clients on
+// base.win never see each other's sign-in (SUITE.md).
+export const cookiePath = () => basePath() || '/';
+const cookieOpts = () => ({ httpOnly: true, sameSite: 'Strict', path: cookiePath(), secure, maxAge: 30 * 86400 });
 
 // Sign-in guesses: 30 tries from one address and 10 failures against one
 // email per 15 minutes, then 429 for the rest of the window.
@@ -130,7 +133,7 @@ app.post('/signup', async (c) => {
     await runHooks('workspaceCreated', tx, { workspaceId, user: { id: userId } }, { emit });
   });
   const token = await createSession(db, userId, workspaceId);
-  setCookie(c, SESSION_COOKIE, token, cookieOpts);
+  setCookie(c, SESSION_COOKIE, token, cookieOpts());
   const ctx = await loadContext(db, token);
   return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() }, 201);
 });
@@ -163,7 +166,7 @@ app.post('/login', async (c) => {
   )).rows[0];
   if (!membership) return c.json({ error: 'no workspace membership' }, 403);
   const token = await createSession(db, user.id, membership.workspace_id);
-  setCookie(c, SESSION_COOKIE, token, cookieOpts);
+  setCookie(c, SESSION_COOKIE, token, cookieOpts());
   const ctx = await loadContext(db, token);
   return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() });
 });
@@ -223,7 +226,7 @@ app.post('/join', async (c) => {
     if (m.affectedRows > 0) emit('membership', userId, 'create', { email: inv.email, role: inv.role, user_id: userId });
   });
   const sessionToken = await createSession(db, userId, inv.workspace_id);
-  setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
+  setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts());
   const ctx = await loadContext(db, sessionToken);
   return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() });
 });
@@ -231,7 +234,7 @@ app.post('/join', async (c) => {
 app.post('/logout', async (c) => {
   const db = await getDb();
   await destroySession(db, getCookie(c, SESSION_COOKIE));
-  deleteCookie(c, SESSION_COOKIE, { path: '/' });
+  deleteCookie(c, SESSION_COOKIE, { path: cookiePath(), secure });
   return c.json({ ok: true });
 });
 

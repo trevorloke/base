@@ -55,7 +55,17 @@ const emphasis = (s) => s
 
 const lines = (block) => block.map((l) => inline(l.trim())).join('<br>');
 
-export const renderMarkdown = (src) => {
+// { base }: the app's prefix (BASE_PATH, SUITE.md). A body keeps its own
+// pages as root paths (/media/<id>, /learn/…) so it means the same wherever
+// it is shown; on screen they're written under the prefix. Safe on the
+// output: every quote in the text was escaped, so the only src="…" and
+// href="…" are the ones made above.
+export const renderMarkdown = (src, { base = '' } = {}) => {
+  const html = toHtml(src);
+  return base ? html.replace(/ (src|href)="\/(?!\/)/g, (m, a) => ` ${a}="${escapeHtml(base)}/`) : html;
+};
+
+const toHtml = (src) => {
   const rows = escapeHtml(String(src ?? '').replace(/\r\n?/g, '\n')).split('\n');
   const out = [];
   let para = [];

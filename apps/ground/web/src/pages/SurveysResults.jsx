@@ -12,6 +12,7 @@ import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { plural } from './Surveys.jsx';
 import './shifts.css';
 import './surveys.css';
+import { withBase } from '../paths.js';
 
 const day = (iso) => {
   const d = new Date(iso);
@@ -119,7 +120,7 @@ export default function SurveysResults() {
         </button>
         {more && (
           <div id="sv-res-more" className="ops-more-body ops-actions">
-            <a className="btn ops-tap" href={`/api/surveys/${id}/results.csv`} download>Download for a spreadsheet</a>
+            <a className="btn ops-tap" href={withBase(`/api/surveys/${id}/results.csv`)} download>Download for a spreadsheet</a>
             <span className="ops-meta">{plural(survey.people, 'row')}</span>
           </div>
         )}

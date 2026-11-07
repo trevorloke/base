@@ -14,7 +14,8 @@ import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = `${BASE}/admin`;
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = `${BASE}/ground`;
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-data';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -69,13 +70,13 @@ const dctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, 
 const page = await dctx.newPage();
 page.on('pageerror', (e) => errors.push(`desk: ${e.message}`));
 const api = async (path) => { const r = await dctx.request.get(`${BASE}/api${path}`); return { status: r.status(), json: await r.json().catch(() => null), text: await r.text().catch(() => '') }; };
-await page.goto(`${BASE}/signup`);
+await page.goto(`${FIELD}/signup`);
 await page.fill('#su-name', 'Marco Manager');
 if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', `marco+${tag}@data.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 // ── People → More → Import & export ──
 await page.goto(`${ADMIN}/people`, { waitUntil: 'domcontentloaded' });

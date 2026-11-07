@@ -14,6 +14,7 @@ import { emailConfigured, textConfigured } from '../lib/notify.js';
 import { RECORD_TYPES } from '@base-ground/shared/registry';
 import { staleTimeZoneData } from '../lib/tzcheck.js';
 import { crossSiteWrite } from '../lib/guard.js';
+import { publicBaseFor } from '../lib/basepath.js';
 import dataRoutes from './data.js';
 import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
 import { checkCap } from '../lib/cap.js';
@@ -47,8 +48,9 @@ app.use('*', async (c, next) => {
   const db = await getDb();
   const ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
-  // Public base URL for links in outbound mail (unsubscribe).
-  ctx.publicUrl = (process.env.BASE_PUBLIC_URL || new URL(c.req.url).origin).replace(/\/$/, '');
+  // Public base URL for links in outbound mail (unsubscribe): BASE_PUBLIC_URL,
+  // else this address with the prefix (lib/basepath.js).
+  ctx.publicUrl = publicBaseFor(c);
   c.set('db', db);
   c.set('ctx', ctx);
   await next();

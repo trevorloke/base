@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { getDb } from '../db/client.js';
 import { runAction } from '../lib/events.js';
 import { page, esc, settingsOf } from '../lib/publicpage.js';
+import { basePath } from '../lib/basepath.js';
 
 const app = new Hono();
 
@@ -42,7 +43,7 @@ app.get('/u/:id', async (c) => {
   if (!found) return badUnsubscribe(c);
   if (found.row.status === 'unsubscribed') return unsubscribedPage(c, found.ws);
   return c.html(page(found.ws, 'Unsubscribe', `<h1>Unsubscribe from ${esc(found.ws.name)}?</h1>
-<form method="post" action="/u/${esc(found.row.id)}"><button type="submit">Unsubscribe</button></form>`));
+<form method="post" action="${basePath()}/u/${esc(found.row.id)}"><button type="submit">Unsubscribe</button></form>`));
 });
 
 app.post('/u/:id', async (c) => {
@@ -82,7 +83,7 @@ app.get('/bu/:id', async (c) => {
   const row = await loadBlastRecipient(await getDb(), c.req.param('id'));
   if (!row) return badUnsubscribe(c);
   return c.html(page(row.ws, 'Unsubscribe', `<h1>Unsubscribe from ${esc(row.name)}?</h1>
-<form method="post" action="/bu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`));
+<form method="post" action="${basePath()}/bu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`));
 });
 app.post('/bu/:id', async (c) => {
   const db = await getDb();

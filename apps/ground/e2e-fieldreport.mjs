@@ -2,7 +2,7 @@
 // turfs (Newton block, four doors; Fleetwood east, two), a volunteer and the
 // manager knock (a talk with a yes, a not-home twice at one door, a refusal,
 // a talk with a lean yes in Fleetwood); Reports links to "Field, by turf →";
-// /admin/field-report shows both tables with the API's numbers (a door
+// /ground/field-report shows both tables with the API's numbers (a door
 // knocked twice counts once), the pills change the range in the address
 // (and the back button goes back), Download CSV is a text/csv spreadsheet
 // whose first line is the turf head, and with no signal a reload shows the
@@ -18,7 +18,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-fieldreport';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -109,7 +110,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `riley+${tag}@fieldreport.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 const N = { lat: 49.1327, lng: -122.855 };
 const F = { lat: 49.1585, lng: -122.776 };
@@ -170,7 +171,7 @@ check('Reports links to "Field, by turf →" (not a yellow button)', (await link
 await link.click();
 await page.waitForURL(`${ADMIN}/field-report`, { timeout: 8000 }).catch(() => {});
 await page.waitForSelector('.fr-table', { timeout: 8000 }).catch(() => {});
-check('…opens /admin/field-report titled "Field, by turf"', page.url() === `${ADMIN}/field-report` && (await page.innerText('h1').catch(() => '')) === 'Field, by turf', page.url());
+check('…opens /ground/field-report titled "Field, by turf"', page.url() === `${ADMIN}/field-report` && (await page.innerText('h1').catch(() => '')) === 'Field, by turf', page.url());
 const tableRows = async (sec) => page.$$eval(`#${sec} ~ .fr-wide tbody tr`, (trs) => trs.map((tr) => [...tr.children].map((td) => td.innerText.replace(/\s+/g, ' ').trim())));
 const turfRows = await tableRows('fr-turfs');
 const newton = turfRows.find((r) => r[0] === 'Newton block') || [];
@@ -284,7 +285,7 @@ m = await measure(vpage);
 check('volunteer Today at 390: no sideways scroll, ≤ 1 yellow', m.overflow <= 0 && m.yellow <= 1, JSON.stringify(m));
 await V.shot('04-volunteer-all-time');
 await V.go('/field-report');
-check('the volunteer typing /field-report lands on Today', new URL(vpage.url()).pathname === '/', vpage.url());
+check('the volunteer typing /field-report lands on Today', /\/field\/?$/.test(new URL(vpage.url()).pathname), vpage.url());
 const vReady = await swReady(vpage);
 await vctx.setOffline(true);
 await V.go('/');

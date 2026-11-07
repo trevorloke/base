@@ -13,7 +13,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = `${BASE}/admin`;
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = `${BASE}/ground`;
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-scripts';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -35,13 +36,13 @@ const api = async (path, body) => {
   const r = body === undefined ? await dctx.request.get(`${BASE}/api${path}`) : await dctx.request.post(`${BASE}/api${path}`, { data: body });
   return { status: r.status(), json: await r.json().catch(() => null) };
 };
-await page.goto(`${BASE}/signup`);
+await page.goto(`${FIELD}/signup`);
 await page.fill('#su-name', 'Marco Manager');
 if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', `marco+${tag}@scripts.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const campaign = (await api('/auth/me')).json.workspace.name;
 
 await page.goto(`${ADMIN}/scripts`, { waitUntil: 'domcontentloaded' });
@@ -76,10 +77,10 @@ const vctx = await browser.newContext({ viewport: { width: 390, height: 844 }, i
 await tiles(vctx);
 const vp = await vctx.newPage();
 vp.on('pageerror', (e) => errors.push(`phone: ${e.message}`));
-await vp.goto(`${BASE}/login`);
+await vp.goto(`${FIELD}/login`);
 const joined = await vp.evaluate(async (t) => (await fetch('/api/auth/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: t, name: 'Jas Volunteer', password: 'knock-knock-2026' }) })).json(), invite.joinUrl.split('/').pop());
 await api('/actions/turf.assign', { turf_id: turf.id, user_id: joined.user.id });
-await vp.goto(`${BASE}/turfs/${turf.id}`, { waitUntil: 'domcontentloaded' });
+await vp.goto(`${FIELD}/turfs/${turf.id}`, { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('#walk-door-0 .walk-door__head', { timeout: 10000 });
 await sleep(800);
 const openDoorAt = async (i) => {
@@ -113,7 +114,7 @@ check('no signal, reloaded: the script still reads', offline.startsWith('Hi ') &
 await vctx.setOffline(false);
 
 // The Calls card: the phone script.
-await vp.goto(`${BASE}/calls?person=${P.ben.id}`, { waitUntil: 'domcontentloaded' });
+await vp.goto(`${FIELD}/calls?person=${P.ben.id}`, { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('section.cl-card', { timeout: 10000 }).catch(() => {});
 await sleep(600);
 if (!(await vp.$('section.cl-card .sl-words'))) await vp.tap('section.cl-card .sl-btn').catch(() => {});

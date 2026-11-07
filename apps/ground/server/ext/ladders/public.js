@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { NO_EMAIL_TAG, noEmail, tagsOf } from './shape.js';
+import { basePath } from '../../lib/basepath.js';
 
 export const publicRoutes = new Hono();
 
@@ -72,7 +73,7 @@ publicRoutes.get('/lu/:id', async (c) => {
   if (!row) return bad(c);
   if (await isOff(db, row.workspace_id, row.email)) return done(c, row);
   return c.html(page(row.name, 'Unsubscribe', `<h1>Unsubscribe from ${esc(row.name)}?</h1>
-<form method="post" action="/lu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`));
+<form method="post" action="${basePath()}/lu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`));
 });
 
 publicRoutes.post('/lu/:id', async (c) => {

@@ -14,6 +14,7 @@ import { apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import './shifts.css';
 import './field-report.css';
+import { withBase } from '../paths.js';
 
 // The days are the campaign's (its time zone, as the server counts them),
 // not this browser's: a desk in another zone sees the same week. This week
@@ -188,7 +189,7 @@ export default function FieldReport() {
       <Link className="ops-back" to="/reports">← Reports</Link>
       <div className="ops-head">
         <h1>Field, by turf</h1>
-        <a className="btn ops-tap" href={`/api/field-report.csv?from=${from}&to=${to}`}>Download CSV</a>
+        <a className="btn ops-tap" href={withBase(`/api/field-report.csv?from=${from}&to=${to}`)}>Download CSV</a>
       </div>
       <div className="fr-ranges" role="radiogroup" aria-label="Range">
         {RANGES.map((r) => (

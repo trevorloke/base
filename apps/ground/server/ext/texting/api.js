@@ -25,6 +25,7 @@
 import { Hono } from 'hono';
 import { NO_TEXT_TAG, NO_CONTACT_TAG, AWAIT_HOURS, e164, showPhone } from './rules.js';
 import { smsReady, voiceReady, publicBase, campaignNumber } from './twilio.js';
+import { publicBaseFor } from '../../lib/basepath.js';
 import {
   settingsFor, quietState, isOptedOut, isFirstOut, listConversations, unreadCount, myConversationCount, tagsOf,
   inTouch, textQueue, answerElsewhere,
@@ -201,7 +202,7 @@ api.get('/texting/settings', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const settings = await settingsFor(db, ctx.workspaceId);
-  const base = publicBase() || new URL(c.req.url).origin;
+  const base = publicBase() || publicBaseFor(c);
   const manager = ctx.role === 'manager';
   const phones = manager ? (await db.query(
     `select u.id as user_id, u.name, p.phone, p.updated_at from texting_member_phones p

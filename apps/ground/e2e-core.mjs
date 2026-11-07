@@ -23,7 +23,8 @@ mkdirSync(SHOTS, { recursive: true });
 
 let server = null;
 let BASE = process.env.BASE;
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = { toString() { return `${BASE}/field`; } }; // the field app (web/src/mode.js)
 if (!BASE) {
   server = spawn(process.execPath, ['server/index.js'], {
     env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off' },
@@ -34,7 +35,7 @@ if (!BASE) {
     server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
-  BASE = `http://127.0.0.1:${PORT}`;
+  BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix
 }
 
 const results = [];
@@ -62,7 +63,7 @@ const helpers = (page, ctx, desk = false) => ({
       : await ctx.request.post(`${BASE}/api${path}`, { data: body });
     return { status: r.status(), json: await r.json().catch(() => null) };
   },
-  go: async (path) => { await page.goto(`${desk ? ADMIN : BASE}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(1200); },
+  go: async (path) => { await page.goto(`${desk ? ADMIN : FIELD}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(1200); },
   shot: (n) => page.screenshot({ path: `${SHOTS}/${n}.png` }),
   chip: () => page.$eval('.offline-strip__chip', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => ''),
   toast: () => page.$eval('.walk-toast', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => ''),
@@ -93,7 +94,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `desk+${tag}@example.org`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 const P = {};
 const mk = async (key, data) => { P[key] = (await D.api('/actions/person.create', data)).json.person; };
@@ -113,7 +114,7 @@ await routeTiles(vctx);
 const vp = await vctx.newPage();
 vp.on('pageerror', (e) => errors.push('[vol] ' + e.message));
 const V = helpers(vp, vctx);
-await vp.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await vp.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('#join-name', { timeout: 8000 });
 await vp.fill('#join-name', 'Jas Volunteer');
 await vp.fill('#join-password', 'knock-knock-2026');

@@ -25,7 +25,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-ladders';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -124,7 +125,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `organizer.${tag}@example.org`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const me = (await D.api('/auth/me')).json;
 const slug = me.workspace.slug;
 check('desk signed up', !!slug, slug);
@@ -216,7 +217,7 @@ check('the email card says who it reaches, the number with its noun (= server)',
 const backOrig = async () => ({ text: ((await page.locator('.ops-back').first().textContent().catch(() => '')) || '').trim(), href: await page.locator('.ops-back').first().getAttribute('href').catch(() => null) });
 // The desk lives in the admin: read its links without the base.
 const backRaw = backOrig;
-const backStripped = async () => { const b = await backRaw(); return b && b.href ? { ...b, href: b.href.replace(/^\/admin(?=\/|$)/, '') || '/' } : b; };
+const backStripped = async () => { const b = await backRaw(); return b && b.href ? { ...b, href: b.href.replace(/^\/ground(?=\/|$)/, '') || '/' } : b; };
 const back = backStripped;
 let bk = await back();
 check('builder back: "← Ladders", like every screen', bk.text === '← Ladders' && bk.href === '/ladders', JSON.stringify(bk));
@@ -368,13 +369,13 @@ const vctx = await browser.newContext({ viewport: { width: 390, height: 844 }, i
 await tiles(vctx);
 const vol = await vctx.newPage();
 const V = helpers(vol, 'volunteer');
-await vol.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await vol.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
 await vol.waitForSelector('#join-name', { timeout: 8000 }).catch(() => {});
 await vol.fill('#join-name', 'Jas Volunteer');
 await vol.fill('#join-password', 'knock-knock-2026');
 await vol.click('button[type="submit"]');
-await vol.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
-check('volunteer joined', new URL(vol.url()).pathname === '/');
+await vol.waitForURL(`${FIELD}/`, { timeout: 15000 }).catch(() => {});
+check('volunteer joined', /\/field\/?$/.test(new URL(vol.url()).pathname));
 await V.go(`/map?person=${dora.id}`);
 await vol.waitForSelector('aside.door-card', { timeout: 8000 }).catch(() => {});
 await vol.tap('aside.door-card button[aria-label="1: Strong support"]').catch(() => vol.click('aside.door-card button[aria-label="1: Strong support"]'));
@@ -395,7 +396,7 @@ const dlog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.re
 check('her log: "Email skipped — didn’t ask for email"', dlog.some((x) => /^Email skipped — didn’t ask for email/.test(x)), dlog.join(' | '));
 for (const path of ['/ladders', `/ladders/${ladderId}`, '/follow-ups']) {
   await V.go(path);
-  check(`volunteer typing ${path} lands on Today`, new URL(vol.url()).pathname === '/', vol.url());
+  check(`volunteer typing ${path} lands on Today`, /\/field\/?$/.test(new URL(vol.url()).pathname), vol.url());
 }
 const vapi = [];
 for (const path of ['/ladders', `/ladders/${ladderId}`, '/ladders/followups', '/ladders/followups/count', `/persons/${ana.id}/ladders`]) {

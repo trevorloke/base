@@ -11,6 +11,7 @@
 // Every inbound request (replies, delivery reports, the call's answer and
 // status) must carry a valid X-Twilio-Signature made with TWILIO_AUTH_TOKEN;
 // anything unsigned is refused.
+import { basePath } from '../../lib/basepath.js';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { textConfigured } from '../../lib/notify.js';
 
@@ -73,8 +74,10 @@ export const verifyTwilio = (c, params) => {
   const tail = `${u.pathname}${u.search}`;
   const urls = new Set([c.req.url]);
   if (publicBase()) urls.add(publicBase() + tail);
+  // c.req.url has BASE_PATH taken off (lib/basepath.js); Twilio called the
+  // address with it, so the host-built spelling puts it back.
   const host = c.req.header('x-forwarded-host') || c.req.header('host');
-  if (host) urls.add(`${c.req.header('x-forwarded-proto') || u.protocol.replace(':', '')}://${host}${tail}`);
+  if (host) urls.add(`${c.req.header('x-forwarded-proto') || u.protocol.replace(':', '')}://${host}${basePath()}${tail}`);
   const gotBuf = Buffer.from(got);
   for (const url of urls) {
     const want = Buffer.from(twilioSignature(token, url, params));

@@ -7,6 +7,7 @@ import { getDb } from '../../db/client.js';
 import { renderMarkdown, markdownText, escapeHtml as esc } from '@base-ground/shared/markdown';
 import { page as publicPage } from '../../lib/publicpage.js';
 import { kindOfType } from './files.js';
+import { basePath } from '../../lib/basepath.js';
 import { serveAsset } from './api.js';
 
 export const publicRoutes = new Hono();
@@ -30,7 +31,7 @@ const embed = (link) => {
 };
 const media = (l) => {
   if (l.asset_id) {
-    const url = `/learn-files/${l.asset_id}`;
+    const url = `${basePath()}/learn-files/${l.asset_id}`;
     const k = kindOfType(l.asset_type);
     if (k === 'picture') return `<p><img src="${url}" alt="${esc(l.title)}" style="max-width:100%;height:auto;border-radius:12px"></p>`;
     if (k === 'audio') return `<p><audio controls preload="none" src="${url}"></audio></p>`;
@@ -49,7 +50,7 @@ publicRoutes.get('/learn/:ws', async (c) => {
     `select l.id, l.title, l.kind, l.body, s.title as section from learn_lessons l left join learn_sections s on s.id = l.section_id and s.deleted_at is null
      where ${PUBLIC} order by s.position nulls last, l.position, lower(l.title)`, [ws.id],
   )).rows;
-  const items = rows.map((l) => `<li><a href="/learn/${esc(ws.slug)}/${l.id}"><b>${esc(l.title)}</b></a> <span class="muted">· ${KIND_WORD[l.kind] || ''}${l.section ? ` · ${esc(l.section)}` : ''}</span>${l.body ? `<br><span class="muted">${esc(markdownText(l.body, 140))}</span>` : ''}</li>`).join('');
+  const items = rows.map((l) => `<li><a href="${basePath()}/learn/${esc(ws.slug)}/${l.id}"><b>${esc(l.title)}</b></a> <span class="muted">· ${KIND_WORD[l.kind] || ''}${l.section ? ` · ${esc(l.section)}` : ''}</span>${l.body ? `<br><span class="muted">${esc(markdownText(l.body, 140))}</span>` : ''}</li>`).join('');
   return page(c, db, ws, 'ImagineU', `<h1>ImagineU</h1><p>What ${esc(ws.name)} is about, and how to help.</p>${items ? `<ul class="learn-list">${items}</ul>` : '<p class="muted">Nothing here yet.</p>'}`);
 });
 
@@ -66,8 +67,8 @@ publicRoutes.get('/learn/:ws/:id', async (c) => {
     `select p.*, a.name as asset_name, a.content_type as asset_type from learn_parts p left join learn_assets a on a.id = p.asset_id
       where p.workspace_id = $1 and p.lesson_id = $2 order by p.position`, [ws.id, l.id],
   )).rows;
-  const more = parts.map((pt) => `<section class="learn-part">${pt.title ? `<h2>${esc(pt.title)}</h2>` : ''}${media({ ...pt, title: pt.title || l.title })}${pt.body ? `<div class="prose">${renderMarkdown(pt.body)}</div>` : ''}</section>`).join('');
-  return page(c, db, ws, l.title, `<p><a href="/learn/${esc(ws.slug)}">← ImagineU</a></p><h1>${esc(l.title)}</h1>${media(l)}<div class="prose">${renderMarkdown(l.body || '')}</div>${more}`);
+  const more = parts.map((pt) => `<section class="learn-part">${pt.title ? `<h2>${esc(pt.title)}</h2>` : ''}${media({ ...pt, title: pt.title || l.title })}${pt.body ? `<div class="prose">${renderMarkdown(pt.body, { base: basePath() })}</div>` : ''}</section>`).join('');
+  return page(c, db, ws, l.title, `<p><a href="${basePath()}/learn/${esc(ws.slug)}">← ImagineU</a></p><h1>${esc(l.title)}</h1>${media(l)}<div class="prose">${renderMarkdown(l.body || '', { base: basePath() })}</div>${more}`);
 });
 
 publicRoutes.get('/learn-files/:id', async (c) => {

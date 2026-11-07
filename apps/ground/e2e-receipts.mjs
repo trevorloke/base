@@ -42,7 +42,8 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-receipts';
 const MAIL_PORT = Number(process.env.MAIL_PORT) || Number(new URL(BASE).port || 3200) + 50;
 const MAIL_BASE = `http://127.0.0.1:${MAIL_PORT}`;
@@ -82,7 +83,7 @@ const helpers = (page, who, base = BASE) => {
       try { json = JSON.parse(raw); } catch { /* not json */ }
       return { status: r.status, json, raw };
     }, [path, body]),
-    go: async (path) => { await page.goto(`${/vol/.test(who) ? base : `${base}/admin`}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(900); },
+    go: async (path) => { await page.goto(`${/vol/.test(who) ? `${base}/field` : `${base}/ground`}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(900); },
   };
 };
 // Simplicity: words on the screen (not the nav/tab bar), yellow buttons,
@@ -128,7 +129,7 @@ const signup = async (page, base, { name, email, campaign }) => {
   await page.fill('#su-email', email);
   await page.fill('#su-password', 'surrey-forward-2026');
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/admin\/?$/, { timeout: 15000 }); // a desk role lands in the admin
+  await page.waitForURL(/\/ground\/?$/, { timeout: 15000 }); // a desk role lands in the admin
 };
 // Log a gift with Money's own form.
 const logGiftOnScreen = async (page, H, { donor, amount, method }) => {
@@ -197,7 +198,7 @@ const m1 = await simple(page, 'receipts list (desktop)');
 console.log(`      words on /money/receipts: ${m1.words}`);
 await D.shot('02-receipts-list');
 const connect = page.locator('main.page .rc-line a', { hasText: 'Connect' });
-check('email off: the line links to Connect (as Ladders and Outreach do)', (await connect.getAttribute('href').catch(() => null)) === '/admin/outreach/connect?connect=1');
+check('email off: the line links to Connect (as Ladders and Outreach do)', (await connect.getAttribute('href').catch(() => null)) === '/ground/outreach/connect?connect=1');
 await connect.click();
 await page.waitForURL(`${ADMIN}/outreach/connect?connect=1`, { timeout: 8000 }).catch(() => {});
 await sleep(700);
@@ -265,7 +266,7 @@ check('More: the donor’s link (Copy · Open) and Donor', await page.getByRole(
 const visitor = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 const vp = await visitor.newPage();
 vp.on('pageerror', (e) => errors.push(`[visitor] ${e.message}`));
-const donorUrl = one.link.replace(/^https?:\/\/[^/]+/, BASE);
+const donorUrl = one.link.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin);
 check('donor link is /r/<long random token>', /\/r\/[0-9a-f]{48}$/.test(donorUrl), donorUrl);
 const resp = await vp.goto(donorUrl, { waitUntil: 'domcontentloaded' });
 let vt = (await vp.innerText('body')).replace(/\s+/g, ' ');
@@ -293,7 +294,7 @@ await D.go('/money/receipts');
 const benRow = (await page.locator('#rc-list > .ops-item', { hasText: 'Ben Okafor' }).innerText()).replace(/\s+/g, ' ');
 check('list: Ben’s receipt says Void', /Ben Okafor .*-0002 Void/i.test(benRow), benRow);
 const benDoc = (await D.api(`/receipts/${rB.id}`)).json;
-await vp.goto(benDoc.link.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await vp.goto(benDoc.link.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
 vt = (await vp.innerText('body')).replace(/\s+/g, ' ');
 check('donor page of a void receipt says VOID', /VOID/.test(vt) && vt.includes(rB.number), vt.slice(0, 120));
 
@@ -404,7 +405,7 @@ await simple(page, 'Money with a gift open (phone)');
 await D.shot('11-money-gift-phone');
 await page.locator('.rc-giftline').click();
 await page.waitForURL(`${ADMIN}/money/receipts/${rA.id}`, { timeout: 8000 }).catch(() => {});
-check('the gift’s receipt line opens that receipt', new URL(page.url()).pathname === `/admin/money/receipts/${rA.id}`, page.url());
+check('the gift’s receipt line opens that receipt', new URL(page.url()).pathname.endsWith(`/ground/money/receipts/${rA.id}`), page.url());
 await page.setViewportSize({ width: 1360, height: 900 });
 
 // ── 10. A volunteer on a phone: none of it ──
@@ -413,16 +414,16 @@ const vctx = await browser.newContext({ viewport: { width: 390, height: 844 }, i
 await tiles(vctx);
 const vol = await vctx.newPage();
 const V = helpers(vol, 'volunteer');
-await vol.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await vol.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
 await vol.waitForSelector('#join-name', { timeout: 8000 }).catch(() => {});
 await vol.fill('#join-name', 'Jas Volunteer');
 await vol.fill('#join-password', 'knock-knock-2026');
 await vol.click('button[type="submit"]');
-await vol.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
-check('volunteer joined', new URL(vol.url()).pathname === '/');
+await vol.waitForURL(`${FIELD}/`, { timeout: 15000 }).catch(() => {});
+check('volunteer joined', /\/field\/?$/.test(new URL(vol.url()).pathname));
 for (const path of ['/money/receipts', `/money/receipts/${rA.id}`, '/money/receipts?settings=1']) {
   await V.go(path);
-  check(`volunteer typing ${path} lands on Today`, new URL(vol.url()).pathname === '/', vol.url());
+  check(`volunteer typing ${path} lands on Today`, /\/field\/?$/.test(new URL(vol.url()).pathname), vol.url());
 }
 for (const path of ['/receipts', '/receipts/needs', `/receipts/${rA.id}`, `/receipts/gift/${giftA.id}`, '/receipts/disclosure.csv', '/receipts/register.csv']) {
   const res = await V.api(path);

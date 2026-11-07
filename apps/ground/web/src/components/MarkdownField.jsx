@@ -12,6 +12,7 @@ import { useId, useRef, useState } from 'react';
 import { renderMarkdown } from '@base-ground/shared/markdown';
 import { action } from '../api.js';
 import '../editor.css';
+import { BASE } from '../paths.js';
 
 // ── Pictures ──
 const MAX_SIDE = 2000;
@@ -158,7 +159,7 @@ export function MarkdownField({ id, label, value, onChange, rows = 12, placehold
       </div>
       {preview
         // eslint-disable-next-line react/no-danger -- the site's own safe renderer: every character is escaped first
-        ? <div className="ws-md__preview-body ws-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(value) || '<p class="muted">Nothing yet.</p>' }} />
+        ? <div className="ws-md__preview-body ws-prose" dangerouslySetInnerHTML={{ __html: renderMarkdown(value, { base: BASE }) || '<p class="muted">Nothing yet.</p>' }} />
         : <textarea id={id} ref={ref} className="input ws-md__text" rows={rows} value={value} placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)} />}
     </div>

@@ -41,6 +41,7 @@ import { useRequestsCount } from '../components/RequestsCount.js';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
 import './today.css';
+import { withBase } from '../paths.js';
 
 // The managers' dashboard (its map and chart load with it, not with Today).
 const Dashboard = lazy(() => import('./Dashboard.jsx'));
@@ -78,7 +79,7 @@ const fmtBigMoney = (cents) => {
 
 // api.js has no DELETE helper; same error contract as apiGet/apiPost.
 const apiDelete = async (path) => {
-  const res = await fetch(`/api${path}`, { method: 'DELETE', credentials: 'same-origin' });
+  const res = await fetch(withBase(`/api${path}`), { method: 'DELETE', credentials: 'same-origin' });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, body.error || `request failed (${res.status})`);
   return body;
@@ -848,7 +849,7 @@ function DeskToday({ b, me, toast }) {
         </ul>
         <div className="today-actions today-morebox__tools">
           <button type="button" className="btn today-tap" onClick={onVerify} disabled={verify?.busy}>Verify the records</button>
-          <a className="btn today-tap" href="/api/export">Export all data</a>
+          <a className="btn today-tap" href={withBase('/api/export')}>Export all data</a>
         </div>
         {verify?.ok && <p className="mono ok-text" role="status">✓ {verify.checked} entries check out</p>}
         {verify?.ok === false && <p className="error" role="alert">The books don’t check out</p>}

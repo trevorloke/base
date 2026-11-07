@@ -46,6 +46,7 @@ import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
 import { pendingVoted, useVotedMode } from '../components/Voted.jsx';
+import { withBase } from '../paths.js';
 
 const SURREY = [49.1913, -122.849];
 // "My turf" (volunteers with a turf) comes first and is where they start:
@@ -1467,7 +1468,8 @@ export default function MapPage() {
 
   // The tile layer, from the map settings. The service worker is told which
   // provider's tiles to keep (the ones already seen, never fetched ahead).
-  const tileUrl = tiles?.url;
+  // base ground's own tiles (/tiles/…) are under the client's prefix.
+  const tileUrl = withBase(tiles?.url);
   const tileMax = tiles?.maxZoom;
   const tileCredit = tiles?.attribution;
   useEffect(() => {

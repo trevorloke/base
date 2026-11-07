@@ -27,7 +27,8 @@ import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { useKeptTime } from './components/KeptCopies.js';
 import { useTextingStatus } from './components/TextingStatus.js';
 import { useShareLocation } from './components/ShareLocation.js';
-import { adminHref, fieldView, mayAdmin } from './mode.js';
+import { adminHref, fieldHref, fieldView, mayAdmin } from './mode.js';
+import { withBase } from './paths.js';
 import './pages/offline.css';
 
 // Staff, treasurers and managers. App.jsx guards the desk-only routes with it.
@@ -236,7 +237,7 @@ function AccountMenu({ me, mode, signingOut, confirmLeft, onSignOut, onCancelSig
         {mode === 'field' && mayAdmin({ ...me, role: me.admin_role || me.role, areas: me.admin_areas || me.areas }) && (
           <a href={adminHref('/')} ref={firstRef} className="acct-item">Admin ↗</a>
         )}
-        {mode === 'admin' && <a href="/" className="acct-item">Field app ↗</a>}
+        {mode === 'admin' && <a href={fieldHref('/')} className="acct-item">Field app ↗</a>}
         {mode === 'admin' && me.role === 'manager' && <NavLink to="/settings" ref={firstRef} className="acct-item">Settings</NavLink>}
         {mode === 'admin' && me.role === 'manager' && <NavLink to="/rating-scale" className="acct-item">Rating scale</NavLink>}
         {confirmLeft > 0 ? (
@@ -445,7 +446,7 @@ function SignedInShell({ who, mode }) {
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
           <NavLink to="/" className="brand" aria-label={`${mode === 'admin' ? 'base ground admin' : 'base ground'} — ${me.workspace.name}`}>
-            <img className="brand-mark" src="/star.png" alt="" height="32" />
+            <img className="brand-mark" src={withBase('/star.png')} alt="" height="32" />
             <span className="brand-text">
               <span className="brand-name">base ground{mode === 'admin' && <span className="brand-admin"> Admin</span>}</span>
               <span className="brand-org">{me.workspace.name}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>

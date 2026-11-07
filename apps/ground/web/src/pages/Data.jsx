@@ -12,6 +12,7 @@ import { Link, useOutletContext } from 'react-router-dom';
 import { EXPORTS } from './Reports.jsx';
 import './shifts.css';
 import './data.css';
+import { withBase } from '../paths.js';
 
 export default function DataPage() {
   const { me } = useOutletContext() ?? {};
@@ -57,7 +58,7 @@ export default function DataPage() {
         <p className="ops-meta">Each as a spreadsheet (CSV, opens in Excel, Numbers or Google Sheets). The People one imports straight back in.</p>
         <ul className="dt-exports">
           {EXPORTS.map(([k, label]) => (
-            <li key={k}><a className="btn ops-tap" href={`/api/export/${k}.csv`} download>{label}</a></li>
+            <li key={k}><a className="btn ops-tap" href={withBase(`/api/export/${k}.csv`)} download>{label}</a></li>
           ))}
         </ul>
         <div className="card dt-item dt-backup">
@@ -65,7 +66,7 @@ export default function DataPage() {
             <strong>Everything, in one file</strong>
             <span className="muted">The whole campaign as JSON — people, contacts, gifts, shifts, signs, lists, the event log — for a backup or a move. Keep it somewhere safe: it holds everyone’s details.</span>
           </div>
-          <a className="btn ops-tap" href="/api/export" download>Download everything</a>
+          <a className="btn ops-tap" href={withBase('/api/export')} download>Download everything</a>
         </div>
       </section>
     </div>

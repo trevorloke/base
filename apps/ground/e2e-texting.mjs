@@ -39,8 +39,9 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const PORT = Number(process.env.PORT) || 4105;
-const BASE = `http://127.0.0.1:${PORT}`;
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-texting';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -201,7 +202,7 @@ const signup = async (page, D, name, email) => {
   await page.fill('#su-email', email);
   await page.fill('#su-password', 'surrey-forward-2026');
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+  await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
   return (await D.api('/auth/me')).json;
 };
 
@@ -222,7 +223,7 @@ let server = await startServer({ TWILIO_API_BASE: STUB });
   const sms = await page.locator('.cl-card a.cl-call[href^="sms:"]').count();
   check('not connected: Text keeps the phone\'s own Messages (sms: link)', sms === 1 && (await page.locator('.tx-send').count()) === 0, `sms links=${sms}`);
   check('not connected: says "Texting isn’t connected · Connect" once, Connect to the Connections tab', count(t, 'Texting isn’t connected · Connect') === 1
-    && (await page.locator('main.page a[href="/admin/outreach/connect?connect=1"]').count()) === 1 && !/Twilio/.test(t), t.slice(0, 200));
+    && (await page.locator('main.page a[href="/ground/outreach/connect?connect=1"]').count()) === 1 && !/Twilio/.test(t), t.slice(0, 200));
   const status = (await D.api('/texting/status')).json;
   check('not connected: the server agrees (no texts, no calls)', status?.sms === false && status?.voice === false, JSON.stringify(status));
   const refused = await D.api('/actions/text.send', { person_id: harjit.id, body: `Hi Harjit, it's Riley with ${CAMPAIGN}.` });
@@ -385,12 +386,12 @@ await D.go('/');
 await page.waitForSelector('.today-rows', { timeout: 8000 }).catch(() => {});
 t = await D.text();
 check('Today: "1 new text" under Needs you, a tap to the Inbox', /1 new text\b/.test(t)
-  && await page.locator('a.today-row[href="/admin/inbox"]').count() === 1, t.slice(0, 300));
-await page.locator('a.today-row[href="/admin/inbox"]').click();
+  && await page.locator('a.today-row[href="/ground/inbox"]').count() === 1, t.slice(0, 300));
+await page.locator('a.today-row[href="/ground/inbox"]').click();
 await page.waitForURL(`${ADMIN}/inbox`, { timeout: 8000 }).catch(() => {});
 await page.waitForSelector('.pf-back', { timeout: 8000 }).catch(() => {});
 const backToday = page.locator('main.page .pf-back').first();
-check('Inbox from Today: "← Today", back to Today', /^← Today$/i.test((await backToday.innerText().catch(() => '')).trim()) && await backToday.getAttribute('href') === '/admin',
+check('Inbox from Today: "← Today", back to Today', /^← Today$/i.test((await backToday.innerText().catch(() => '')).trim()) && await backToday.getAttribute('href') === '/ground',
   await backToday.innerText().catch(() => ''));
 await D.go('/calls?channel=text&q=Harjit');
 await page.waitForSelector('.tx-replies', { timeout: 8000 }).catch(() => {});
@@ -410,7 +411,7 @@ t = await D.text();
 check('Inbox: Harjit, new, with his reply', (await page.locator('.tx-row.is-new').count()) === 1 && /Harjit Example/.test(t) && /Yes, put me down for a sign/.test(t), t.slice(0, 200));
 const backCalls = page.locator('main.page .pf-back').first();
 check('Inbox from Calls: "← Calls", back to the same list', /^← Calls$/i.test((await backCalls.innerText().catch(() => '')).trim())
-  && /^\/admin\/calls\?channel=text\b/.test(await backCalls.getAttribute('href').catch(() => '') || ''), `${await backCalls.innerText().catch(() => '')} ${await backCalls.getAttribute('href').catch(() => '')}`);
+  && /^\/ground\/calls\?channel=text\b/.test(await backCalls.getAttribute('href').catch(() => '') || ''), `${await backCalls.innerText().catch(() => '')} ${await backCalls.getAttribute('href').catch(() => '')}`);
 const when = await page.locator('.tx-row .tx-when').first().innerText().catch(() => '');
 check('Inbox: a text from today shows the time, not the date', /^\d{1,2}:\d{2}\s?[ap]\.m\.$/i.test(when.trim()), when);
 await simple(page, 'Inbox (desk)');
@@ -478,8 +479,8 @@ await V.go(new URL(invite.json.joinUrl).pathname);
 await vPage.fill('#join-name', 'Val Volunteer');
 await vPage.fill('#join-password', 'knock-knock-2026');
 await vPage.click('button[type="submit"]');
-await vPage.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
-check('volunteer: joined', new URL(vPage.url()).pathname === '/', vPage.url());
+await vPage.waitForURL(`${FIELD}/`, { timeout: 15000 }).catch(() => {});
+check('volunteer: joined', /\/field\/?$/.test(new URL(vPage.url()).pathname), vPage.url());
 
 await V.go('/calls?channel=text&q=Grace');
 await vPage.waitForSelector('.tx-send textarea', { timeout: 8000 }).catch(() => {});
@@ -515,7 +516,7 @@ await V.go(`/people/${P.dev.id}`);
 await vPage.waitForSelector('.pf-acts', { timeout: 8000 }).catch(() => {});
 const pfText = await vPage.locator('.pf-acts').getByRole('link', { name: 'Text' }).getAttribute('href').catch(() => '');
 const pfCall = await vPage.locator('.pf-acts').getByRole('link', { name: 'Call' }).getAttribute('href').catch(() => '');
-check('profile: Text and Call open the Calls card, never sms: / tel:', /^\/calls\?channel=text&.*person=/.test(pfText || '') && /^\/calls\?channel=phone&/.test(pfCall || '')
+check('profile: Text and Call open the Calls card, never sms: / tel:', /^\/field\/calls\?channel=text&.*person=/.test(pfText || '') && /^\/field\/calls\?channel=phone&/.test(pfCall || '')
   && (await vPage.locator('a[href^="sms:"], a[href^="tel:"]').count()) === 0, `${pfText} ${pfCall}`);
 await vPage.locator('.pf-acts').getByRole('link', { name: 'Text' }).click();
 await vPage.waitForSelector('.tx-send textarea', { timeout: 8000 }).catch(() => {});
@@ -543,17 +544,17 @@ const vReply = await V.api('/actions/text.reply', { conversation_id: harjitConv,
 check('volunteer: refused every conversation but their own', vAll.status === 403 && vOther.status === 404 && vSettings.status === 403
   && vProfile.status === 403 && vReply.status === 404, `${vAll.status} ${vOther.status} ${vSettings.status} ${vProfile.status} ${vReply.status}`);
 await V.go('/inbox/settings');
-check('volunteer: Texting settings is desk-only (back to Today)', new URL(vPage.url()).pathname === '/', vPage.url());
+check('volunteer: Texting settings is desk-only (back to Today)', /\/field\/?$/.test(new URL(vPage.url()).pathname), vPage.url());
 
 check('a reply from Grace', (await inbound('+16045550143', 'Who is this?')).status === 200);
 await V.go('/calls?channel=text&q=Grace');
 await vPage.waitForSelector('.tx-replies', { timeout: 8000 }).catch(() => {});
 const vReplies = (await vPage.locator('.tx-replies').innerText().catch(() => '')).replace(/\s+/g, ' ');
 check('volunteer Calls: "New replies · 1"', /^New replies · 1$/i.test(vReplies), vReplies);
-const tab = (await vPage.locator('.tabbar a[href="/calls"] .tab-badge').innerText().catch(() => '')).replace(/\s+/g, ' ');
+const tab = (await vPage.locator('.tabbar a[href="/field/calls"] .tab-badge').innerText().catch(() => '')).replace(/\s+/g, ' ');
 check('volunteer: a small count on the Calls tab', /^1\b/.test(tab), tab);
 await vPage.locator('.tx-replies').click();
-await vPage.waitForURL(`${BASE}/inbox`, { timeout: 8000 }).catch(() => {});
+await vPage.waitForURL(`${FIELD}/inbox`, { timeout: 8000 }).catch(() => {});
 await vPage.waitForSelector('.tx-row', { timeout: 8000 }).catch(() => {});
 t = await V.text();
 check('volunteer Inbox: only Grace', (await vPage.locator('.tx-row').count()) === 1 && /Grace Example/.test(t) && !/Harjit|Maya/.test(t), t.slice(0, 200));
@@ -564,7 +565,7 @@ await vPage.evaluate(() => navigator.serviceWorker?.ready.then(() => true)).catc
 await volCtx.setOffline(true);
 await sleep(400);
 await vPage.locator('.tx-row').first().click();
-await vPage.waitForURL(`${BASE}/inbox/${graceConv}`, { timeout: 8000 }).catch(() => {});
+await vPage.waitForURL(`${FIELD}/inbox/${graceConv}`, { timeout: 8000 }).catch(() => {});
 await vPage.waitForSelector('.pp-offline', { timeout: 8000 }).catch(() => {});
 t = await V.text();
 check('no signal: their own thread says "No signal — this conversation loads when you’re back online", never "not found"',
@@ -583,7 +584,7 @@ await V.shot('12-vol-thread');
 
 // ── Call through the campaign ──
 await V.go('/');
-await vPage.locator('.tabbar a[href="/calls"]').click();
+await vPage.locator('.tabbar a[href="/field/calls"]').click();
 await vPage.waitForSelector('.cl-card', { timeout: 8000 }).catch(() => {});
 check('Calls tab: opens on Text, as they left it', /^Texts$/.test((await vPage.locator('h1').first().innerText().catch(() => '')).trim()));
 await V.go('/calls?channel=phone&q=Dev');
@@ -683,8 +684,8 @@ await page.waitForSelector('aside.door-card', { timeout: 8000 }).catch(() => {})
 await page.click('aside.door-card .fk-more__btn').catch(() => {});
 const doorText = await page.locator('aside.door-card').getByRole('link', { name: 'Text', exact: true }).getAttribute('href').catch(() => '');
 const doorCall = await page.locator('aside.door-card').getByRole('link', { name: 'Call', exact: true }).getAttribute('href').catch(() => '');
-check('door card: More → Call / Text open the Calls card, never tel: / sms:', /^\/admin\/calls\?channel=text&.*person=/.test(doorText || '')
-  && /^\/admin\/calls\?channel=phone&/.test(doorCall || '') && (await page.locator('aside.door-card a[href^="sms:"], aside.door-card a[href^="tel:"]').count()) === 0,
+check('door card: More → Call / Text open the Calls card, never tel: / sms:', /^\/ground\/calls\?channel=text&.*person=/.test(doorText || '')
+  && /^\/ground\/calls\?channel=phone&/.test(doorCall || '') && (await page.locator('aside.door-card a[href^="sms:"], aside.door-card a[href^="tel:"]').count()) === 0,
   `${doorText} ${doorCall}`);
 await D.shot('16a-door-card-more');
 await D.go('/inbox/settings');

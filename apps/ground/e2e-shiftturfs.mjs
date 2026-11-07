@@ -19,7 +19,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-shiftturfs';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -120,7 +121,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `priya+${tag}@shiftturfs.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 const lat = 49.1327; const lng = -122.855;
 const box = (dLat) => [[lat + dLat + 0.001, lng - 0.001], [lat + dLat + 0.001, lng + 0.002], [lat + dLat - 0.001, lng + 0.002], [lat + dLat - 0.001, lng - 0.001]];
@@ -159,7 +160,7 @@ check('a picked turf is pressed', (await page.getAttribute('#shift-turfs .st-opt
 await simple(page, 'new shift form (1360)', '#shift-turfs .st-opt');
 await D.shot('01-new-shift-turfs');
 await page.click('form[aria-label="New shift"] button[type="submit"]');
-await page.waitForURL(/\/admin\/shifts\/[0-9a-f-]{36}$/, { timeout: 10000 });
+await page.waitForURL(/\/ground\/shifts\/[0-9a-f-]{36}$/, { timeout: 10000 });
 const shiftId = page.url().split('/').pop();
 const st = await D.api(`/shiftturfs/${shiftId}`);
 check('server: the shift carries Newton block', st.status === 200 && st.json.turfs.map((t) => t.name).join('|') === 'Newton block', st.raw);

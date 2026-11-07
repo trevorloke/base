@@ -29,7 +29,8 @@ const TILE_URL = 'https://tiles.example/{z}/{x}/{y}.png';
 
 let server = null;
 let BASE = process.env.BASE;
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = { toString() { return `${BASE}/field`; } }; // the field app (web/src/mode.js)
 if (!BASE) {
   server = spawn(process.execPath, ['server/index.js'], {
     env: {
@@ -45,7 +46,7 @@ if (!BASE) {
     server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
-  BASE = `http://127.0.0.1:${PORT}`;
+  BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix
 }
 
 const results = [];
@@ -97,7 +98,7 @@ const helpers = (page, ctx, desk = false) => ({
       : await ctx.request.post(`${BASE}/api${path}`, { data: body });
     return { status: r.status(), json: await r.json().catch(() => null) };
   },
-  go: async (path) => { await page.goto(`${desk ? ADMIN : BASE}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(1200); },
+  go: async (path) => { await page.goto(`${desk ? ADMIN : FIELD}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(1200); },
   shot: (n) => page.screenshot({ path: `${SHOTS}/${n}.png` }),
   chip: () => page.$eval('.offline-strip__chip', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => ''),
   // SIMPLE.md's checks on what's on screen now (inside `sel`).
@@ -133,7 +134,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `desk+${tag}@example.org`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 const P = {};
 const mk = async (key, data) => { P[key] = (await D.api('/actions/person.create', data)).json.person; };
@@ -168,7 +169,7 @@ check('map tiles come from BASE_TILE_URL (not OpenStreetMap)', hits.tiles > 0 &&
 const credit = await page.$eval('.leaflet-control-attribution', (el) => ({ text: el.innerText, html: el.innerHTML })).catch(() => ({ text: '', html: '' }));
 check('the provider’s credit shows, links kept, script stripped', /Example Tiles/.test(credit.text) && /href="https:\/\/tiles\.example\/about"/.test(credit.html) && !/script|alert/i.test(credit.html), credit.html.slice(0, 120));
 const kept = await page.evaluate(async () => {
-  const c = await caches.open((await caches.keys()).find((k) => k.startsWith('base-tiles-')) || 'base-tiles-v2');
+  const c = await caches.open((await caches.keys()).find((k) => /^base-(?:[\w-]+-)?tiles-v\d+$/.test(k)) || 'base-tiles-v2');
   const keys = (await c.keys()).map((r) => r.url).filter((u) => u.includes('tiles.example'));
   const body = keys.length ? await (await c.match(keys[0])).text() : '';
   return { n: keys.length, marked: body.includes('e2e-tile') };
@@ -434,12 +435,12 @@ const vp = await vctx.newPage();
 vp.on('pageerror', (e) => errors.push('[vol] ' + e.message));
 if (process.env.DEBUG) vp.on('requestfailed', (r) => console.log('      [vol] failed', r.method(), r.url().replace(BASE, ''), r.failure()?.errorText));
 const V = helpers(vp, vctx);
-await vp.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await vp.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('#join-name', { timeout: 8000 });
 await vp.fill('#join-name', 'Jas Volunteer');
 await vp.fill('#join-password', 'knock-knock-2026');
 await vp.click('button[type="submit"]');
-await vp.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
+await vp.waitForURL(`${FIELD}/`, { timeout: 15000 }).catch(() => {});
 const volId = (await V.api('/auth/me')).json.user.id;
 await D.api('/actions/turf.assign', { turf_id: turf.id, user_id: volId });
 
@@ -621,7 +622,7 @@ t = await V.text();
 check('sign-out asks: "1 not sent yet. Sign out and delete it?"', /1 not sent yet\. Sign out and delete it\?/.test(t), t.slice(0, 160));
 await V.shot('7-vol-signout-asks');
 await vp.click('.acct-confirm button:has-text("Sign out")');
-await vp.waitForURL(`${BASE}/login`, { timeout: 8000 }).catch(() => {});
+await vp.waitForURL(`${FIELD}/login`, { timeout: 8000 }).catch(() => {});
 await sleep(500);
 const leftKeys = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('base:copy:') || k.startsWith('base:field:')).map((k) => [k.split(':').slice(-1)[0], Date.now() - (JSON.parse(localStorage.getItem(k)).at || 0)]));
 check('signed out: the phone forgets its copies and outbox', leftKeys.length === 0 && (await V.outbox()).length === 0, JSON.stringify({ leftKeys, url: vp.url() }));
