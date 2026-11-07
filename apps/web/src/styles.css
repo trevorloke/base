@@ -45,22 +45,44 @@
 
   /* Networks (text badges only) */
   --net-x: #111214;
-  --net-bluesky: #1185fe;
+  --net-bluesky: #0a6ccf;
   --net-instagram: #d6336c;
   --net-threads: #3a3a3a;
-  --net-facebook: #1877f2;
+  --net-facebook: #1465d6;
   --net-linkedin: #0a66c2;
   --net-tiktok: #0f0f0f;
   --net-youtube: #e62117;
   --net-pinterest: #bd081c;
-  --net-mastodon: #6364ff;
+  --net-mastodon: #5152e8;
   --net-reddit: #d93a00;
   --net-google_business: #1a73e8;
-  --net-telegram: #229ed9;
+  --net-telegram: #13739f;
   --net-discord: #5865f2;
-  --net-whatsapp: #128c7e;
-  --net-wechat: #2e8b22;
-  --net-line: #00a33e;
+  --net-whatsapp: #0e7a6e;
+  --net-wechat: #277a1d;
+  --net-line: #00803a;
+  --net-nostr: #7b3fe4;
+  --net-misskey: #4f7a00;
+  --net-lemmy: #00875a;
+  --net-tumblr: #2c4762;
+  --net-vk: #0068e0;
+  --net-twitch: #8040f0;
+  --net-slack: #611f69;
+  --net-matrix: #0b7a63;
+  --net-google_chat: #00832d;
+  --net-teams: #4b53bc;
+  --net-wordpress: #21759b;
+  --net-ghost: #15171a;
+  --net-mailchimp: #7a5c00;
+  --net-kit: #c2334a;
+  --net-rss: #b44f00;
+  --net-weibo: #c62827;
+  --net-douyin: #d81e45;
+  --net-wecom: #0b6fd8;
+  --net-band: #23820f;
+  --net-zalo: #0060e6;
+  --net-viber: #6650e0;
+  --net-ok: #b85a00;
 }
 
 :root[data-theme="dark"] {
@@ -101,6 +123,34 @@
   --net-whatsapp: #34c7b4;
   --net-wechat: #6bd35a;
   --net-line: #2fd36b;
+  --net-facebook: #5b9dff;
+  --net-linkedin: #4fa3ff;
+  --net-youtube: #ff5a50;
+  --net-pinterest: #ff5a6e;
+  --net-mastodon: #9a9bff;
+  --net-telegram: #4cc0f5;
+  --net-nostr: #b28cff;
+  --net-misskey: #9ad13a;
+  --net-lemmy: #3fd19b;
+  --net-tumblr: #8fa9c7;
+  --net-vk: #5aa2ff;
+  --net-twitch: #b48cff;
+  --net-slack: #d27ad9;
+  --net-matrix: #3ad1ad;
+  --net-google_chat: #4cd27a;
+  --net-teams: #8f96ff;
+  --net-wordpress: #5fb2dc;
+  --net-ghost: #e8e8e6;
+  --net-mailchimp: #ffe01b;
+  --net-kit: #ff7d8a;
+  --net-rss: #ff9a3c;
+  --net-weibo: #ff6b6a;
+  --net-douyin: #ff5a7a;
+  --net-wecom: #5aa2ff;
+  --net-band: #5cd33f;
+  --net-zalo: #4d97ff;
+  --net-viber: #a597ff;
+  --net-ok: #ff9d3c;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -142,6 +192,34 @@
     --net-whatsapp: #34c7b4;
     --net-wechat: #6bd35a;
     --net-line: #2fd36b;
+    --net-facebook: #5b9dff;
+    --net-linkedin: #4fa3ff;
+    --net-youtube: #ff5a50;
+    --net-pinterest: #ff5a6e;
+    --net-mastodon: #9a9bff;
+    --net-telegram: #4cc0f5;
+    --net-nostr: #b28cff;
+    --net-misskey: #9ad13a;
+    --net-lemmy: #3fd19b;
+    --net-tumblr: #8fa9c7;
+    --net-vk: #5aa2ff;
+    --net-twitch: #b48cff;
+    --net-slack: #d27ad9;
+    --net-matrix: #3ad1ad;
+    --net-google_chat: #4cd27a;
+    --net-teams: #8f96ff;
+    --net-wordpress: #5fb2dc;
+    --net-ghost: #e8e8e6;
+    --net-mailchimp: #ffe01b;
+    --net-kit: #ff7d8a;
+    --net-rss: #ff9a3c;
+    --net-weibo: #ff6b6a;
+    --net-douyin: #ff5a7a;
+    --net-wecom: #5aa2ff;
+    --net-band: #5cd33f;
+    --net-zalo: #4d97ff;
+    --net-viber: #a597ff;
+    --net-ok: #ff9d3c;
   }
 }
 
@@ -443,6 +521,76 @@ code {
 }
 [data-network="line"] {
   --net: var(--net-line);
+}
+[data-network="nostr"] {
+  --net: var(--net-nostr);
+}
+[data-network="misskey"] {
+  --net: var(--net-misskey);
+}
+[data-network="lemmy"] {
+  --net: var(--net-lemmy);
+}
+[data-network="tumblr"] {
+  --net: var(--net-tumblr);
+}
+[data-network="vk"] {
+  --net: var(--net-vk);
+}
+[data-network="twitch"] {
+  --net: var(--net-twitch);
+}
+[data-network="slack"] {
+  --net: var(--net-slack);
+}
+[data-network="matrix"] {
+  --net: var(--net-matrix);
+}
+[data-network="google_chat"] {
+  --net: var(--net-google_chat);
+}
+[data-network="teams"] {
+  --net: var(--net-teams);
+}
+[data-network="wordpress"] {
+  --net: var(--net-wordpress);
+}
+[data-network="ghost"] {
+  --net: var(--net-ghost);
+}
+[data-network="mailchimp"] {
+  --net: var(--net-mailchimp);
+}
+[data-network="kit"] {
+  --net: var(--net-kit);
+}
+[data-network="rss"] {
+  --net: var(--net-rss);
+}
+[data-network="weibo"] {
+  --net: var(--net-weibo);
+}
+[data-network="douyin"] {
+  --net: var(--net-douyin);
+}
+[data-network="wecom"] {
+  --net: var(--net-wecom);
+}
+[data-network="band"] {
+  --net: var(--net-band);
+}
+[data-network="zalo"] {
+  --net: var(--net-zalo);
+}
+[data-network="viber"] {
+  --net: var(--net-viber);
+}
+[data-network="ok"] {
+  --net: var(--net-ok);
+}
+/* A custom webhook is not a brand: neutral, like news. */
+[data-network="webhook"] {
+  --net: var(--fg-muted);
 }
 /* Listening only (articles from public search): a neutral badge, no brand colour. */
 [data-network="news"] {
