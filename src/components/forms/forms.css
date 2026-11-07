@@ -1,0 +1,206 @@
+/* Shared pieces of the public forms: error summary, consent boxes, postal
+   preview, language picker and the shop cart. Imported by Field.tsx. */
+
+/* 24px minimum targets on tick boxes. */
+.check input {
+  width: 24px;
+  height: 24px;
+}
+.field--check {
+  gap: 4px;
+}
+.field-hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.postal-preview {
+  margin: 0;
+  min-height: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--navy);
+}
+
+/* ── Error summary ──────────────────────────────────────────────────── */
+.error-summary {
+  padding: 16px 18px;
+  border-radius: 8px;
+  border: 2px solid var(--red);
+  background: var(--red-pale);
+  color: var(--ink);
+}
+.error-summary:focus {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+.error-summary h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--navy);
+}
+.error-summary p {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.error-summary ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.error-summary a {
+  color: var(--navy);
+  font-weight: 700;
+}
+.btn[aria-busy="true"] {
+  cursor: progress;
+}
+
+/* ── Languages (membership form) ────────────────────────────────────── */
+.lang-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px 16px;
+}
+.lang-grid .check {
+  font-size: 14px;
+  min-height: 24px;
+}
+.lang-grid .check input:disabled + span {
+  color: var(--muted);
+}
+
+/* ── Success card extras ────────────────────────────────────────────── */
+.success-card h3:focus {
+  outline: 3px solid var(--navy);
+  outline-offset: 4px;
+}
+.success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.success-actions .btn {
+  min-height: 44px;
+}
+
+/* ── Shop cart ──────────────────────────────────────────────────────── */
+.qty-input {
+  width: 64px;
+  min-height: 40px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 2px solid var(--field-border);
+  font-family: var(--font);
+  font-size: 18px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--ink);
+}
+.cart-bar .cart-summary {
+  font-size: 18px;
+  font-weight: 700;
+}
+.cart-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cart-dialog {
+  width: min(540px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgba(0, 20, 50, 0.35);
+}
+.cart-dialog::backdrop {
+  background: rgba(0, 40, 90, 0.6);
+}
+.cart-dialog-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+.cart-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cart-dialog-head h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+  color: var(--navy);
+}
+.cart-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cart-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.cart-line-name {
+  margin: 0;
+  font-weight: 700;
+  color: var(--navy);
+}
+.cart-line-price {
+  font-weight: 800;
+  white-space: nowrap;
+}
+.cart-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 2px solid var(--navy);
+  font-size: 18px;
+  font-weight: 800;
+}
+.cart-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+@media (max-width: 520px) {
+  .cart-dialog-inner {
+    padding: 18px;
+  }
+}
+
+/* The human check (Cloudflare Turnstile). Usually empty: the widget only
+   appears when Cloudflare needs a tap. Its iframe is at most 300px wide. */
+.human-check {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.human-check:focus {
+  outline: none;
+}
+.human-check:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}

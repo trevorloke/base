@@ -1,0 +1,119 @@
+/* Neighbourhood index and town-centre pages. */
+
+.postal-lookup {
+  max-width: 560px;
+}
+.postal-lookup-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.postal-lookup-row .field {
+  flex: 1 1 200px;
+}
+.hood-grid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.hood-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-height: 110px;
+  text-decoration: none;
+}
+.hood-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--navy);
+}
+.hood-tile .small {
+  color: var(--muted);
+}
+.hood-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.hood-asks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 14px;
+}
+.hood-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 22px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.hood-ask-title {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--navy);
+}
+.hood-ask-label {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.hood-ask a {
+  font-size: 14px;
+  font-weight: 700;
+}
+.promise-mini-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.promise-mini {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.promise-mini-number {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.promise-mini a {
+  flex: 1 1 240px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.hood-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 20px;
+}
+.hood-section-head h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--navy);
+}

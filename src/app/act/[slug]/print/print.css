@@ -1,0 +1,138 @@
+/* The paper signature sheet: Letter size, black on white. */
+.sheet-page {
+  padding: 32px 24px 64px;
+  background: var(--surface);
+}
+.sheet-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  max-width: 8.5in;
+  margin: 0 auto 20px;
+}
+.sheet {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 8.5in;
+  min-height: 11in;
+  margin: 0 auto;
+  padding: 0.6in;
+  background: #fff;
+  color: #000;
+  border: 1px solid var(--line);
+  font-size: 12pt;
+  line-height: 1.35;
+}
+.sheet-head {
+  margin-bottom: 14pt;
+}
+.sheet-org {
+  margin: 0 0 4pt;
+  font-size: 10pt;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--navy);
+}
+.sheet h1 {
+  margin: 0 0 8pt;
+  font-size: 22pt;
+  line-height: 1.1;
+  font-weight: 900;
+  color: var(--navy);
+}
+.sheet-statement {
+  margin: 0 0 8pt;
+  font-size: 12pt;
+  font-style: italic;
+}
+.sheet-url {
+  margin: 0;
+  font-size: 11pt;
+}
+.sheet-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.sheet-table th,
+.sheet-table td {
+  border: 1px solid #000;
+  padding: 4pt 6pt;
+  text-align: left;
+  vertical-align: top;
+  font-size: 10pt;
+}
+.sheet-table th {
+  background: #e9edf5;
+  font-weight: 800;
+}
+.sheet-num {
+  width: 22pt;
+  text-align: center;
+}
+.sheet-table th:nth-child(2) {
+  width: 28%;
+}
+.sheet-table th:nth-child(3) {
+  width: 15%;
+}
+.sheet-table th:nth-child(4) {
+  width: 30%;
+}
+.sheet-row td {
+  height: 34pt;
+}
+.sheet-box {
+  display: inline-block;
+  width: 11pt;
+  height: 11pt;
+  border: 1px solid #000;
+  vertical-align: middle;
+}
+.sheet-foot {
+  margin-top: 12pt;
+}
+.sheet-consent {
+  margin: 0 0 6pt;
+  font-size: 9pt;
+  line-height: 1.4;
+}
+.sheet-return {
+  margin: 0;
+  font-size: 9pt;
+  color: #333;
+}
+@page {
+  size: letter;
+  margin: 0.5in;
+}
+@media print {
+  body:has(.sheet) .site-header,
+  body:has(.sheet) .site-footer,
+  body:has(.sheet) .skip-link,
+  .sheet-tools {
+    display: none !important;
+  }
+  .sheet-page {
+    padding: 0;
+    background: #fff;
+  }
+  .sheet {
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .sheet h1,
+  .sheet-org {
+    color: #000;
+  }
+  .sheet-table th {
+    background: #eee;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

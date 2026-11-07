@@ -1,0 +1,359 @@
+/* Promise tracker: styles for /tracker and its subpages. The list's base
+   classes (.promise-card, .score-legend, …) live in globals.css. */
+
+.tracker-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  font-weight: 700;
+}
+.tracker-toolbar a {
+  color: var(--navy);
+  text-underline-offset: 3px;
+}
+.tracker-toolbar a:hover {
+  color: var(--red-hover);
+}
+/* On navy sections the links are white with a yellow underline. */
+.on-dark .tracker-toolbar a {
+  color: #fff;
+  text-decoration-color: var(--yellow);
+}
+.on-dark .tracker-toolbar a:hover {
+  color: var(--yellow);
+}
+
+/* Countdown and overdue chips. Each kind is told apart by text, not colour alone. */
+.due-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  border: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.due-chip--large {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 15px;
+}
+.due-chip--due {
+  background: #fff;
+  color: var(--navy);
+  border-color: var(--navy);
+}
+.due-chip--due_today {
+  background: var(--yellow);
+  color: var(--navy);
+  border-color: var(--navy);
+}
+.due-chip--overdue {
+  background: var(--red-fill);
+  color: #fff;
+  border-color: var(--red-fill);
+}
+.due-chip--waiting {
+  background: var(--surface);
+  color: #3f4c64;
+  border-color: var(--line);
+}
+/* Long chips ("Promised 202 days ago, no record yet") wrap on narrow screens instead of overflowing. */
+@media (max-width: 600px) {
+  .due-chip {
+    max-width: 100%;
+    padding: 3px 10px;
+    white-space: normal;
+    line-height: 1.25;
+    text-align: left;
+  }
+}
+.due-chip-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--red-fill);
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Neighbourhood chips link to the neighbourhood pages. */
+.hood-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.hood-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--navy);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.hood-chip:hover {
+  border-color: var(--navy);
+  color: var(--navy);
+}
+
+.promise-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.promise-title-link:hover {
+  color: var(--red-hover);
+  text-decoration: underline;
+}
+.promise-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ── One promise ───────────────────────────────────────────────────────── */
+.status-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  font-size: 16px;
+}
+.status-line .status-badge {
+  min-height: 32px;
+  padding: 0 14px;
+  font-size: 15px;
+}
+.promise-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 40px;
+  align-items: start;
+}
+.promise-main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  min-width: 0;
+}
+.promise-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+@media (max-width: 960px) {
+  .promise-page {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+}
+.record-block h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.record-block p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.record-block .update-list li {
+  scroll-margin-top: 110px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.record-block .update-list li:first-child {
+  border-top: 1px solid var(--line);
+}
+.aside-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  scroll-margin-top: 110px;
+}
+.aside-card h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--navy);
+}
+.aside-card p {
+  margin: 0;
+}
+.dates-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  align-items: baseline;
+}
+.dates-list dt {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dates-list dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.follow-done {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #fff;
+  border: 2px solid var(--navy);
+  color: var(--navy);
+}
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.share-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+  border: 2px solid var(--navy);
+  background: #fff;
+  color: var(--navy);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.share-link:hover {
+  background: var(--navy);
+  color: #fff;
+}
+.copy-status {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+  overflow-wrap: anywhere;
+}
+.council-letter textarea {
+  width: 100%;
+  min-height: 240px;
+  padding: 12px;
+  border: 1px solid var(--field-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* ── Methodology ───────────────────────────────────────────────────────── */
+.method-statuses {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+}
+.method-statuses div {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+.method-statuses dt {
+  margin: 0;
+}
+.method-statuses dd {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+}
+@media (max-width: 600px) {
+  .method-statuses div {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+.method-section {
+  max-width: 860px;
+}
+.method-section h2 {
+  margin: 0 0 10px;
+  font-size: 26px;
+  color: var(--navy);
+}
+.method-section p {
+  margin: 0 0 12px;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+/* ── Embed ─────────────────────────────────────────────────────────────── */
+.embed-preview {
+  max-width: 420px;
+  min-height: 120px;
+}
+.embed-snippet {
+  width: 100%;
+  margin: 0;
+  padding: 16px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  resize: vertical;
+}
+.embed-steps {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 17px;
+  line-height: 1.6;
+}
+.embed-steps code {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}

@@ -1,0 +1,55 @@
+/* Petitions and pledges: the list and the campaign page. */
+.act-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+.act-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.act-card h2 a {
+  text-decoration: none;
+}
+.act-card h2 a:hover {
+  text-decoration: underline;
+}
+.act-card .btn {
+  align-self: flex-start;
+}
+.act-split {
+  align-items: flex-start;
+}
+.act-main {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+.act-statement {
+  margin: 0;
+  padding: 18px 22px;
+  border-left: 6px solid var(--yellow);
+  background: var(--surface);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.act-statement p {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--navy);
+}
+.act-statement .eyebrow {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.share-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.share-links .btn {
+  min-height: 44px;
+}

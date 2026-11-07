@@ -1,0 +1,64 @@
+/* Free-form pages (/privacy, /accessibility, …): rendered Markdown. */
+.site-page {
+  max-width: 760px;
+}
+.site-page h2,
+.site-page h3,
+.site-page h4 {
+  margin: 1.5em 0 0.5em;
+  line-height: 1.2;
+  color: var(--navy);
+}
+.site-page h2 {
+  font-size: 1.5em;
+}
+.site-page h3 {
+  font-size: 1.2em;
+}
+.site-page ul,
+.site-page ol {
+  padding-left: 1.4em;
+  margin: 0 0 1em;
+}
+.site-page li {
+  margin: 0.35em 0;
+}
+.site-page blockquote {
+  margin: 0 0 1em;
+  padding: 2px 0 2px 16px;
+  border-left: 4px solid var(--yellow);
+  color: var(--muted);
+}
+.site-page img {
+  height: auto;
+  border-radius: 8px;
+}
+.site-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 1em;
+  font-size: 0.95em;
+}
+.site-page th,
+.site-page td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.site-page pre {
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.site-page hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.5em 0;
+}
+.site-page-updated {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}

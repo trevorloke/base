@@ -1,0 +1,134 @@
+/* ── Share sheet ───────────────────────────────────────────────────── */
+
+.share-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.share-sheet__label {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.share-sheet__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.share-sheet__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 2px solid var(--navy);
+  background: #fff;
+  color: var(--navy);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.share-sheet__link:hover {
+  background: var(--outline-hover);
+  color: var(--navy);
+}
+.share-sheet__link--whatsapp {
+  background: var(--navy);
+  color: #fff;
+}
+.share-sheet__link--whatsapp:hover {
+  background: var(--navy-dark);
+  color: #fff;
+}
+.share-sheet__link svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.share-sheet__url {
+  font-size: 15px;
+}
+.share-sheet__status {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+}
+.on-dark .share-sheet__label,
+.on-dark .share-sheet__status {
+  color: #fff;
+}
+
+/* ── Next step card ────────────────────────────────────────────────── */
+
+.next-step {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  padding: 28px;
+  border-radius: var(--radius);
+  background: #fff;
+  border: 3px solid var(--yellow);
+  color: var(--ink);
+}
+.next-step__thanks {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.next-step__eyebrow {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.next-step__title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--navy);
+}
+.next-step__body {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+}
+.next-step__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.next-step__secondary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.next-step__share {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 520px) {
+  .next-step {
+    padding: 22px;
+  }
+}
