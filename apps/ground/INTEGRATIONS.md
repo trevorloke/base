@@ -11,11 +11,12 @@ is written) and says exactly what is wrong if anything is.
 | Service | For | Needed to launch? | Settings |
 |---|---|---|---|
 | [Database](#database) | everything the campaign records | yes | `DATABASE_URL` |
-| [Public address](#public-address) | links in email, texting's callbacks | yes | `BASE_PUBLIC_URL` |
+| [Public address](#public-address) | links in email, texting's callbacks | yes | `BASE_PUBLIC_URL` (and `BASE_PATH` under a prefix) |
 | [Email — Resend](#email--resend) | invites, newsletters, press, ladders, shift alerts, receipts | yes | `RESEND_API_KEY`, `MAIL_FROM` |
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `BASE_TILE_URL` |
+| [base air and base web](#base-air-and-base-web) | staff open them signed in with their base ground account | no | `BASE_AIR_URL`, `BASE_AIR_SSO_SECRET`, `BASE_WEB_URL`, `BASE_WEB_SSO_SECRET` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
@@ -47,8 +48,30 @@ the addresses Twilio is told to call back (delivery reports, calls). Without
 it, links use whatever address the page was opened at, background sends
 (receipts) carry no link, and calls through the campaign's number are off.
 
+On base.win the address carries the client's prefix
+(`https://base.win/imaginesurrey`), and `BASE_PATH` must be that same
+prefix (`/imaginesurrey`): the server warns at startup, and Services marks
+the public address, when the two disagree. Behind the base.win front door
+set `BASE_TRUSTED_PROXIES=2`.
+
 **Check:** Services → Public address fetches `<address>/api/health` and
 makes sure it's this base ground.
+
+## base air and base web
+
+base ground is where staff sign in; base air and base web's admin ask it who
+someone is (SUITE.md, *Signing in once*). For each app, two settings here:
+its address (`BASE_AIR_URL=https://base.win/imaginesurrey/air`,
+`BASE_WEB_URL=https://imaginesurrey.ca`) and a long random secret
+(`BASE_AIR_SSO_SECRET`, `BASE_WEB_SSO_SECRET` — 32 characters or more,
+e.g. `openssl rand -base64 48`), the same value as `BASE_SSO_SECRET` on that
+app. With both set the app is offered in the **base** switcher to desk
+roles, and its sign-ins are accepted; a sign-in may only go back to an
+address under the app's own. `BASE_CLIENT` names the client in the answer
+(default: the last part of `BASE_PATH`).
+
+**Check:** Services shows each as *Set up* or names what's missing (no live
+call: the apps call base ground, not the other way round).
 
 ## Email — Resend
 
