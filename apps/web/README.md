@@ -1,6 +1,6 @@
-# Imagine Surrey website
+# base web
 
-The public website and organizing back office for Imagine Surrey: Next.js 16 (App Router, React 19, TypeScript), PostgreSQL through Drizzle ORM, Stripe Checkout, Resend email, Twilio texts and Supabase Storage.
+base web is the public website and organizing back office in **base**, the suite for campaigns and causes (see `../../SUITE.md`). Each client has its own copy on its own domain; **Imagine Surrey** (`imaginesurrey.ca`) is the first. Built with Next.js 16 (App Router, React 19, TypeScript), PostgreSQL through Drizzle ORM, Stripe Checkout, Resend email, Twilio texts and Supabase Storage.
 
 **Going live?** Follow [SETUP.md](SETUP.md). **Working on the code?** Read [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -41,7 +41,7 @@ Staff sign in with email and password, or a one-time emailed link, followed by a
 
 ## base ground (the desk)
 
-The campaign's database app, base ground, gets new sign-ups from this website: petition and pledge signatures, confirmed newsletter sign-ups, volunteer shift sign-ups, memberships once they are active, "delete my account" requests, and details supporters change in the portal. RSVPs, paid shop orders and promise follows go as tags on the person (`RSVP: <event>`, `Bought merch`, `Follows: promise <n>`). Every unsubscribe and text STOP goes to base ground too, and base ground can send its own to `POST /api/in/consent` (`BASE_GROUND_INBOUND_KEY`), so neither app contacts someone who said stop. The website calls base ground's API from its own server with a secret key (`BASE_GROUND_URL`, `BASE_GROUND_KEY`), through an outbox that retries, so base ground being down never breaks a form. Money is never sent: the treasurer logs each online gift at the desk from Admin → Gifts to log at the desk, because that is where contribution limits are checked. Public forms also have a Cloudflare Turnstile human check. See [SETUP.md](SETUP.md) steps 9f and 9g.
+The campaign's database app, base ground, gets new sign-ups from this website: petition and pledge signatures, confirmed newsletter sign-ups, volunteer shift sign-ups, memberships once they are active, "delete my account" requests, and details supporters change in the portal. RSVPs, paid shop orders and promise follows go as tags on the person (`RSVP: <event>`, `Bought merch`, `Follows: promise <n>`). Every unsubscribe and text STOP goes to base ground too, and base ground can send its own to `POST /api/in/consent` (`BASE_GROUND_INBOUND_KEY`), so neither app contacts someone who said stop. The website calls base ground's API from its own server with a secret key (`BASE_GROUND_URL`, `BASE_GROUND_KEY`), through an outbox that retries, so base ground being down never breaks a form. Money is never sent: the treasurer logs each online gift at the desk from Admin → Gifts to log at the desk, because that is where contribution limits are checked. Public forms also have a Cloudflare Turnstile human check. See [SETUP.md](SETUP.md) steps 3f and 3g.
 
 ## Consent and privacy, by design
 
@@ -51,10 +51,17 @@ The campaign's database app, base ground, gets new sign-ups from this website: p
 - **No public answer reveals whether an email belongs to a member, donor or signer** (political affiliation is sensitive under BC PIPA), and the public site shows no supporter counts. `/stats` redirects to the home page.
 - **Website visits are counted first-party and cookieless.** A small beacon posts each page view to `/api/v`; the site stores the path (without its query string), the referring site's hostname, the `?source`/`?ref` tag and a visitor hash: sha256 of a random salt that changes every Pacific day, the IP address and the user agent, cut short. Salts are deleted after a day, the IP address and user agent are never stored, nothing is written to the browser, and bots, `/admin`, `/me` and `/api` are skipped. Page views are kept 13 months (the daily `/api/cron/email` job deletes older ones). Four dashboard tiles show visits this week against last, the sign-up rate by source, top pages and referring sites; nothing is published.
 
+## base, clients and the look
+
+- **Sign in with base.** Staff signed in to base ground can open the admin without another password (`/auth/base`, then base ground's hand-off); the existing staff account with the same email is used and two-factor sign-in still applies. The admin's top bar has the **base** switcher to base ground's field and ground, base air and this admin. SETUP.md section 3.
+- **Clients.** `BASE_WEB_CLIENT` (fixed at build) picks a client's starting copy, places, tracker and seed data from `src/seeds/<client>/`: `imagine-surrey`, or unset for a clean, neutral site. SETUP.md section 2.
+- **Brand.** Admin → Brand sets the look (presets Imagine Surrey, Civic, Commons, Heritage and Clear; name, logo, colours, bundled fonts, corners) with a live preview and a contrast check. The root layout writes it into every page as CSS custom properties. SETUP.md section 4.
+- **Hosting.** Render: a Docker web service (`Dockerfile`, health check `/api/health`), Render Postgres, and two cron jobs (`scripts/cron.mjs`). SETUP.md section 1.
+
 ## Local development
 
 ```sh
-cp .env.example .env.local      # then fill it in
+cp .env.example .env.local      # then fill it in (BASE_WEB_CLIENT=imagine-surrey for Imagine Surrey's site)
 npm install
 npm run db:migrate              # create the tables
 npm run db:seed                 # shop, volunteer tasks, promise tracker, campaigns, sample openings, draft pages
@@ -65,7 +72,7 @@ To change the schema, edit `src/lib/db/schema.ts`, then run `npm run db:generate
 
 ### Looking around the admin locally
 
-Set `ADMIN_PREVIEW_MODE=1` in `.env.local` and open `http://localhost:3000/admin`: you're signed in as an owner automatically, with a yellow banner saying so. It only works when `DATABASE_URL` points at a database on the same machine, and never on Vercel or Render, so the live site always needs a real sign-in.
+Set `ADMIN_PREVIEW_MODE=1` in `.env.local` and open `http://localhost:3000/admin`: you're signed in as an owner automatically, with a yellow banner saying so. It only works when `DATABASE_URL` points at a database on the same machine, and never on Render, so the live site always needs a real sign-in.
 
 ## Tests
 
