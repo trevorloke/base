@@ -752,3 +752,47 @@ export const inboxRules = pgTable(
   },
   (t) => [index("inbox_rules_ws").on(t.workspaceId, t.position)],
 );
+
+// ---------------------------------------------------------------- analytics & client reports (0010_reports.sql)
+
+/** A saved client report: what to include, how it looks, who gets it and when. Rendered on demand. */
+export const reports = pgTable(
+  "reports",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    name: text("name").notNull(),
+    period: text("period").$type<"last_7_days" | "last_30_days" | "calendar_month">().notNull().default("last_7_days"),
+    sections: jsonb("sections").$type<string[]>().notNull().default([]),
+    branding: jsonb("branding").$type<Record<string, unknown>>().notNull().default({}),
+    recipients: jsonb("recipients").$type<string[]>().notNull().default([]),
+    schedule: jsonb("schedule").$type<Record<string, unknown>>().notNull().default({ kind: "none" }),
+    filters: jsonb("filters").$type<Record<string, unknown>>().notNull().default({}),
+    intro: text("intro"),
+    lastSentAt: ts("last_sent_at"),
+    /** The period key last emailed by the schedule: a period is sent once. */
+    lastSentPeriod: text("last_sent_period"),
+    createdBy: jsonb("created_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+    deletedAt: ts("deleted_at"),
+  },
+  (t) => [index("reports_ws").on(t.workspaceId, t.deletedAt)],
+);
+
+/** Read-only public links to a report. Only the token's sha256 is stored. */
+export const reportShares = pgTable(
+  "report_shares",
+  {
+    id: text("id").primaryKey(),
+    reportId: text("report_id").notNull().references(() => reports.id),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    tokenHash: text("token_hash").notNull().unique(),
+    purpose: text("purpose").$type<"link" | "email">().notNull().default("link"),
+    createdBy: jsonb("created_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+    revokedAt: ts("revoked_at"),
+    lastViewedAt: ts("last_viewed_at"),
+  },
+  (t) => [index("report_shares_report").on(t.reportId, t.revokedAt)],
+);

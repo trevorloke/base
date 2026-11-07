@@ -89,6 +89,14 @@ export const LedgerEventType = z.enum([
   "inbox.saved_reply_deleted",
   "inbox.settings_updated",
   // ---- end inbox workflow
+  // ---- analytics & client reports
+  "report.created",
+  "report.updated",
+  "report.deleted",
+  "report.sent",
+  "report.shared",
+  "report.share_revoked",
+  // ---- end analytics & client reports
 ]);
 export type LedgerEventType = z.infer<typeof LedgerEventType>;
 
