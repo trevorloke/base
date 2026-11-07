@@ -67,6 +67,7 @@ import type { AnalyticsPayload, AnalyticsQuery, Report, ReportInput, ReportSent,
 import type { VisAnswer, VisAnswersQuery, VisEngine, VisPrompt, VisPromptInput, VisReport, VisRunResult, VisSettingsPatch, VisSettingsResponse, VisSuggestion } from "./lib/visibility";
 import { ApiError, setKeyMode } from "./lib/errors";
 import { BASE_PATH } from "./lib/base";
+import { contrastReport, CORNERS, DEFAULT_BRAND, FONTS, MODES, PRESETS, type Brand, type BrandMode, type ContrastPair, type Corners, type FontId, type Preset } from "@base-air/look";
 
 export { ApiError, isApiError, errorText, reasonOf, sentence } from "./lib/errors";
 
@@ -330,7 +331,48 @@ async function requestHtml(method: "GET" | "POST", path: string, body?: unknown)
 }
 // ---- end analytics & client reports
 
+// ---- the base suite: brand
+export interface BrandChoices {
+  presets: Preset[];
+  fonts: { id: FontId; label: string }[];
+  corners: { id: Corners; label: string }[];
+  modes: { id: BrandMode; label: string }[];
+}
+export interface BrandResponse {
+  brand: Brand;
+  saved: boolean;
+  defaults: Brand;
+  updatedAt: string | null;
+  contrast: ContrastPair[];
+  choices: BrandChoices;
+}
+let fixtureBrand: Brand | null = null;
+function fixtureBrandResponse(): Promise<BrandResponse> {
+  const brand = fixtureBrand ?? { ...DEFAULT_BRAND, name: "Northwind Coffee" };
+  return Promise.resolve({
+    brand,
+    saved: !!fixtureBrand,
+    defaults: { ...DEFAULT_BRAND, name: "Northwind Coffee" },
+    updatedAt: null,
+    contrast: contrastReport(brand),
+    choices: {
+      presets: [...PRESETS],
+      fonts: FONTS.map(({ id, label }) => ({ id, label })),
+      corners: (Object.keys(CORNERS) as Corners[]).map((id) => ({ id, label: CORNERS[id].label })),
+      modes: (Object.keys(MODES) as BrandMode[]).map((id) => ({ id, label: MODES[id] })),
+    },
+  });
+}
+// ---- end the base suite: brand
+
 export const api = {
+  // ---- the base suite: brand (owners save; everyone reads)
+  brand: () => (USE_FIXTURES ? fixtureBrandResponse() : get<BrandResponse>("/v1/brand")),
+  saveBrand: (brand: Brand, confirmLowContrast = false) => {
+    if (!USE_FIXTURES) return put<BrandResponse>("/v1/brand", { brand, confirmLowContrast });
+    fixtureBrand = brand;
+    return fixtureBrandResponse();
+  },
   me: () => pick(() => get<Me>("/v1/me"), (f) => f.fixtureApi.me()),
   policy: () => pick(() => get<Policy>("/v1/policy"), (f) => f.fixtureApi.policy()),
   /** Replaces the whole policy with a new version (owners, people only). Send the full document. */

@@ -5,6 +5,8 @@ import { roleLabel } from "../lib/format";
 import { formatDateTime } from "../lib/time";
 import { browserTz } from "../lib/tz";
 import { signInWithBaseHref, useSuite } from "../lib/suite";
+import { useBrand } from "../lib/brand";
+import { BrandMark } from "../components/BrandMark";
 
 export type AuthScreen = "signin" | "signup" | "forgot" | "reset" | "invite" | "key";
 
@@ -166,6 +168,18 @@ export function AuthGate({
   );
 }
 
+/** The workspace's logo and name over the sign-in form (the server knows the brand before anyone signs in). */
+function GateBrand() {
+  const brand = useBrand();
+  return (
+    <div className="gate-brand">
+      <BrandMark />
+      {brand.name ? <span className="gate-brand-name">{brand.name}</span> : <span className="base-wordmark">base</span>}
+      <span className="gate-app">air</span>
+    </div>
+  );
+}
+
 function Notice({ text, tone = "ok" }: { text: string | null; tone?: "ok" | "bad" }) {
   if (!text) return null;
   return (
@@ -214,7 +228,7 @@ function SignInCard({
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">base air</div>
+      <GateBrand />
       <h1>Sign in</h1>
       <Notice text={notice} />
       {suite.signInWithBase ? (
@@ -294,7 +308,7 @@ function SignupCard({ initialEmail, onDone, onSignIn }: { initialEmail: string; 
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">base air</div>
+      <GateBrand />
       <h1>Create your account</h1>
       <p className="muted">You'll be the owner of a new workspace. Invite your team once you're in.</p>
       <label className="field">
@@ -368,7 +382,7 @@ function ForgotCard({ initialEmail, onBack }: { initialEmail: string; onBack: (n
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">base air</div>
+      <GateBrand />
       <h1>Reset your password</h1>
       {mail === false ? (
         <>
@@ -434,7 +448,7 @@ function ResetCard({ token, onDone, onForgot }: { token: string; onDone: () => v
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">base air</div>
+      <GateBrand />
       <h1>Choose a new password</h1>
       <label className="field">
         <span>New password</span>
@@ -519,7 +533,7 @@ function InviteCard({
   if (gone) {
     return (
       <div className="gate-card">
-        <div className="brand">base air</div>
+        <GateBrand />
         <h1>Invite not found</h1>
         <p className="muted">{gone}</p>
         <button type="button" className="btn btn-primary" onClick={onSkip}>
@@ -531,7 +545,7 @@ function InviteCard({
   if (!info) {
     return (
       <div className="gate-card">
-        <div className="brand">base air</div>
+        <GateBrand />
         <p className="muted">Opening the invite…</p>
       </div>
     );
@@ -540,7 +554,7 @@ function InviteCard({
   const role = roleLabel(info.role).toLowerCase();
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">base air</div>
+      <GateBrand />
       <h1>Join {info.workspaceName}</h1>
       <p>
         You're invited as {role === "owner" || role === "approver" || role === "editor" ? "an" : "a"} <span className="strong">{role}</span>.
@@ -631,7 +645,7 @@ function KeyCard({ onConnected, onBack, initialError }: { onConnected: (key: str
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">base air</div>
+      <GateBrand />
       <h1>Use an API key</h1>
       <p className="muted">For developers and agents. Paste a workspace API key; it stays in this browser.</p>
       <label className="field">
