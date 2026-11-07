@@ -83,7 +83,7 @@ export const NETWORK_LIMITS: Record<Network, NetworkLimits> = {
   discord: { maxText: 2000, maxMedia: 10, requiresMedia: false, supportsThread: false },
   // TODO(verify): chat apps' limits — WhatsApp text 4096, WeChat customer-service text ~2048 bytes, LINE text 5000.
   whatsapp: { maxText: 4096, maxMedia: 1, requiresMedia: false, supportsThread: false },
-  wechat: { maxText: 600, maxMedia: 1, requiresMedia: false, supportsThread: false },
+  wechat: { maxText: 20000, maxMedia: 20, requiresMedia: true, supportsThread: false }, // one article (图文): cover image required
   line: { maxText: 5000, maxMedia: 5, requiresMedia: false, supportsThread: false },
   news: { maxText: 0, maxMedia: 0, requiresMedia: false, supportsThread: false },
   // TODO(verify): limits below are conservative readings of each platform's documented maxima; connectors validate precisely.

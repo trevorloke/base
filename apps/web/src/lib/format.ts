@@ -136,7 +136,7 @@ export const NETWORK_MAX_TEXT: Record<Network, number> = {
   telegram: 4096,
   discord: 2000,
   whatsapp: 4096,
-  wechat: 600,
+  wechat: 20000,
   line: 5000,
   news: 0,
   nostr: 10000,
@@ -168,7 +168,7 @@ export const NETWORK_MAX_TEXT: Record<Network, number> = {
 export const NETWORK_THREADS: ReadonlySet<Network> = new Set<Network>(["x", "bluesky", "threads", "mastodon", "nostr", "misskey"]);
 
 /** Networks that refuse a post without an image or video. */
-export const NETWORK_NEEDS_MEDIA: ReadonlySet<Network> = new Set<Network>(["instagram", "tiktok", "pinterest", "youtube", "douyin"]);
+export const NETWORK_NEEDS_MEDIA: ReadonlySet<Network> = new Set<Network>(["instagram", "tiktok", "pinterest", "youtube", "douyin", "wechat"]);
 
 /** Most attachments a single post can carry. */
 export const NETWORK_MAX_MEDIA: Record<Network, number> = {
@@ -187,7 +187,7 @@ export const NETWORK_MAX_MEDIA: Record<Network, number> = {
   telegram: 10,
   discord: 10,
   whatsapp: 1,
-  wechat: 1,
+  wechat: 20,
   line: 5,
   news: 0,
   nostr: 4,
