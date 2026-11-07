@@ -675,3 +675,80 @@ export const schemaMigrations = pgTable("schema_migrations", {
   name: text("name").primaryKey(),
   appliedAt: ts("applied_at").notNull().default(sql`now()`),
 });
+
+// ---- inbox workflow (migration 0011_inbox.sql) --------------------------------------------------
+
+/** Shared work state over the live feed, one row per inbound activity. A conversation's state lives on its root row. */
+export const inboxItems = pgTable(
+  "inbox_items",
+  {
+    activityId: text("activity_id").primaryKey().references(() => activities.id),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    /** The conversation's first activity (itself for a root). */
+    threadId: text("thread_id").notNull(),
+    status: text("status").$type<"open" | "pending" | "done" | "spam">().notNull().default("open"),
+    assignee: text("assignee"),
+    priority: text("priority").$type<"normal" | "high" | "urgent">().notNull().default("normal"),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    firstResponseAt: ts("first_response_at"),
+    doneAt: ts("done_at"),
+    snoozedUntil: ts("snoozed_until"),
+    slaDueAt: ts("sla_due_at"),
+    lastActivityAt: ts("last_activity_at").notNull(),
+    messageCount: integer("message_count").notNull().default(1),
+    createdAt: now(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("inbox_items_thread").on(t.threadId)],
+);
+
+/** Internal notes on a conversation, with @mentions of teammates. */
+export const inboxNotes = pgTable(
+  "inbox_notes",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    threadId: text("thread_id").notNull(),
+    author: jsonb("author").$type<ActorJson>().notNull(),
+    text: text("text").notNull(),
+    mentions: jsonb("mentions").$type<string[]>().notNull().default([]),
+    createdAt: now(),
+    editedAt: ts("edited_at"),
+  },
+  (t) => [index("inbox_notes_thread").on(t.threadId, t.createdAt)],
+);
+
+/** Shared answers with variables, inserted into the reply box and edited before they go through the gate. */
+export const savedReplies = pgTable(
+  "saved_replies",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    name: text("name").notNull(),
+    text: text("text").notNull(),
+    lang: text("lang"),
+    createdBy: jsonb("created_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("saved_replies_ws").on(t.workspaceId, t.name)],
+);
+
+/** Routing rules: conditions → assignee / round robin / tags / priority / spam. Evaluated in position order. */
+export const inboxRules = pgTable(
+  "inbox_rules",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    enabled: boolean("enabled").notNull().default(true),
+    conditions: jsonb("conditions").$type<Record<string, unknown>>().notNull().default({}),
+    actions: jsonb("actions").$type<Record<string, unknown>>().notNull().default({}),
+    rrCursor: integer("rr_cursor").notNull().default(0),
+    createdBy: jsonb("created_by").$type<ActorJson>().notNull(),
+    createdAt: now(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("inbox_rules_ws").on(t.workspaceId, t.position)],
+);

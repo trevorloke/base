@@ -72,6 +72,23 @@ export const LedgerEventType = z.enum([
   "operator.alert",
   "brief.written",
   "export.requested",
+  // ---- inbox workflow
+  "inbox.item_updated",
+  "inbox.reopened",
+  "inbox.responded",
+  "inbox.note_added",
+  "inbox.note_updated",
+  "inbox.note_deleted",
+  "inbox.mentioned",
+  "inbox.rule_created",
+  "inbox.rule_updated",
+  "inbox.rule_deleted",
+  "inbox.rule_applied",
+  "inbox.saved_reply_created",
+  "inbox.saved_reply_updated",
+  "inbox.saved_reply_deleted",
+  "inbox.settings_updated",
+  // ---- end inbox workflow
 ]);
 export type LedgerEventType = z.infer<typeof LedgerEventType>;
 
