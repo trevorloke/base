@@ -11,6 +11,7 @@ import { TextareaField } from "./Inputs";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { TitleSlugFields } from "./TitleSlugFields";
 import { useCmsForm } from "./useCmsForm";
+import { clientProfile } from "@/seeds/client";
 
 export type EventFormValues = {
   id: string;
@@ -41,7 +42,7 @@ export function EventForm({ event }: { event?: EventFormValues }) {
           id="startsAt"
           name="startsAt"
           type="datetime-local"
-          label="Starts (Surrey time)"
+          label={`Starts (${clientProfile.place || "Pacific"} time)`}
           required
           defaultValue={form.text("startsAt", event ? dateToPacificLocal(new Date(event.startsAt)) : "")}
           error={fieldError(state, "startsAt")}

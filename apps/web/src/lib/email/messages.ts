@@ -1,6 +1,7 @@
 // Transactional email builders shared across features. Feature code may add
 // its own builders in its own file; keep these generic.
 import { button, esc, layout, paragraph, textVersion } from "./templates";
+import { fromAroundPlace } from "@/seeds/client";
 
 export type MessageContext = { siteUrl: string; orgName: string; orgEmail: string };
 
@@ -26,7 +27,7 @@ export function memberMagicLinkEmail(ctx: MessageContext, link: string, minutes:
 
 export function newsletterConfirmEmail(ctx: MessageContext, link: string) {
   const subject = `Confirm your ${ctx.orgName} newsletter`;
-  const bodyHtml = paragraph(`One click and you're on the list for news and events from around Surrey.`) + button(link, "Confirm my subscription") + paragraph(`If you didn't sign up, ignore this email and nothing more will be sent.`);
+  const bodyHtml = paragraph(`One click and you're on the list for news and events${fromAroundPlace}.`) + button(link, "Confirm my subscription") + paragraph(`If you didn't sign up, ignore this email and nothing more will be sent.`);
   return {
     subject,
     html: layout({ title: "Confirm your subscription", bodyHtml, siteUrl: ctx.siteUrl, orgName: ctx.orgName, orgEmail: ctx.orgEmail, reason: "Someone entered this address on our website." }),

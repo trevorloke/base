@@ -7,6 +7,7 @@ import type { Neighbourhood } from "@/lib/neighbourhoods";
 import { spotsLeft } from "@/lib/shifts";
 import { cached, TAGS } from "./cache";
 import { queryPublicOpenings, type PublicOpening } from "./volunteer";
+import { clientProfile } from "@/seeds/client";
 
 /** A published event as the public pages show it. Dates are ISO strings: cached values are served as JSON. */
 export type PublicEvent = {
@@ -87,7 +88,7 @@ export const eventPublic = cached("public-event", [TAGS.events, TAGS.counters], 
 /** The calendar entry for an event. */
 export function eventCalendarEvent(event: PublicEvent, siteUrl: string): IcsEvent {
   return {
-    uid: `event-${event.id}@imaginesurrey.ca`,
+    uid: `event-${event.id}@${clientProfile.uidDomain}`,
     title: event.title,
     start: new Date(event.startsAt),
     end: event.endsAt ? new Date(event.endsAt) : undefined,

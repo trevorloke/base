@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { keyDates, councilLetter, methodology } from "@/content/tracker";
-import { seedAnnouncements, seedPromises, seedTests } from "@/content/tracker-seed";
+import { seedAnnouncements, seedPromises, seedTests } from "@/seeds/imagine-surrey/db/promises";
 import { NEIGHBOURHOODS } from "@/lib/neighbourhoods";
 import { buildRss, countByStatus, daysBetween, dueInfo, dueInfoAt, escapeXml, neighbourhoodHref, noonInSurrey, promiseRecordToJson, promiseToJson, summarize, summaryToJson, type PublicPromiseRecord } from "@/lib/tracker";
 

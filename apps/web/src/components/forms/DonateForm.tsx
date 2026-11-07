@@ -8,6 +8,7 @@ import { donationSchema } from "@/lib/validation";
 import { AmountPicker, choiceLabel, type Choice } from "./AmountPicker";
 import { Checkbox, ErrorSummary, Honeypot, PostalCodeField, SubmitButton, TextField, TrackingFields } from "./Field";
 import { readForm, useApiForm } from "./useApiForm";
+import { clientProfile } from "@/seeds/client";
 
 const CUSTOM_ID = "amount-custom";
 
@@ -77,7 +78,7 @@ export function DonateForm({
         </div>
         <TextField id="d-address" name="address" label="Street address" required autoComplete="street-address" error={fields.address} />
         <div className="form-row">
-          <TextField id="d-city" name="city" label="City" required defaultValue="Surrey" autoComplete="address-level2" error={fields.city} />
+          <TextField id="d-city" name="city" label="City" required defaultValue={clientProfile.defaultCity} autoComplete="address-level2" error={fields.city} />
           <PostalCodeField id="d-postal" required error={fields.postalCode} hint="A BC postal code" />
         </div>
       </fieldset>

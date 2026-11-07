@@ -76,7 +76,8 @@ describe("the image", () => {
   });
   it("declares no secret as a build argument", () => {
     const args = [...dockerfile.matchAll(/^ARG (\w+)/gm)].map((m) => m[1]);
-    expect(args.every((a) => a.startsWith("NEXT_PUBLIC_") || a === "RENDER_GIT_COMMIT")).toBe(true);
+    expect(args.every((a) => a.startsWith("NEXT_PUBLIC_") || a.startsWith("BASE_WEB_") || a === "RENDER_GIT_COMMIT")).toBe(true);
+    expect(args).toEqual(expect.arrayContaining(["BASE_WEB_CLIENT", "BASE_WEB_JURISDICTION"]));
   });
   it("leaves Vercel behind: no vercel.json, no vercel-build script", () => {
     expect(existsSync(path.join(root, "vercel.json"))).toBe(false);

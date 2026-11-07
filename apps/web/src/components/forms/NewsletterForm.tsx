@@ -6,13 +6,14 @@ import { Honeypot, LiveRegion, SubmitButton } from "./Field";
 import { useTracking } from "./tracking";
 import { HumanCheck } from "./HumanCheck";
 import { useApiForm } from "./useApiForm";
+import { clientProfile } from "@/seeds/client";
 
 type Result = { ok: true; status?: "pending" | "subscribed" | "unsubscribed" };
 
 const MESSAGES: Record<NonNullable<Result["status"]>, string> = {
   pending: "Check your inbox to confirm your subscription.",
   subscribed: "You’re on the list.",
-  unsubscribed: "This address unsubscribed earlier. Email hello@imaginesurrey.ca to rejoin.",
+  unsubscribed: `This address unsubscribed earlier. Email ${clientProfile.email} to rejoin.`,
 };
 
 /**

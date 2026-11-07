@@ -45,6 +45,6 @@ function siteUrlOrDefault(): string {
   try {
     return env.siteUrl;
   } catch {
-    return "https://imaginesurrey.ca";
+    return "";
   }
 }

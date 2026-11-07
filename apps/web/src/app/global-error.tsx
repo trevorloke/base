@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { clientProfile } from "@/seeds/client";
 
 // Replaces the whole document when the root layout itself fails, so it
 // carries its own minimal styles.
@@ -12,7 +13,7 @@ export default function GlobalError({ error, retry }: { error: unknown; retry: (
   return (
     <html lang="en">
       <body style={{ margin: 0, fontFamily: "Montserrat, system-ui, sans-serif", background: "#003979", color: "#fff" }}>
-        <title>Something went wrong · Imagine Surrey</title>
+        <title>{`Something went wrong · ${clientProfile.orgName}`}</title>
         <main id="main" style={{ maxWidth: 720, margin: "0 auto", padding: "96px 24px" }}>
           <h1 style={{ fontSize: 40, fontWeight: 900, lineHeight: 1.1, margin: "0 0 16px" }}>Something went wrong</h1>
           <p style={{ fontSize: 19, lineHeight: 1.55, color: "#d3deef", margin: "0 0 28px" }}>

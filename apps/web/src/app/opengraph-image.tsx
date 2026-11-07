@@ -6,9 +6,10 @@ import { shellBrand } from "@/lib/server/brand";
 import { env } from "@/lib/env";
 import { shellSettings } from "@/lib/server/home";
 import { renderAtRequestTimeWithoutDatabase } from "@/lib/server/render-time";
+import { clientProfile } from "@/seeds/client";
 
 // The default share card for every page that doesn't set its own.
-export const alt = "Imagine Surrey";
+export const alt = clientProfile.orgName;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -25,7 +26,7 @@ export default async function OpengraphImage() {
     readFile(join(fontDir, "montserrat-medium.ttf")),
   ]);
   const c = shareImageColors(brand);
-  const name = org.name || "Imagine Surrey";
+  const name = org.name || clientProfile.orgName;
   const host = new URL(env.siteUrl).host;
   const description = seo.description.length > 190 ? `${seo.description.slice(0, 187).replace(/\s\S*$/, "")}…` : seo.description;
 

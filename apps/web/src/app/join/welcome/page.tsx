@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/dates";
 import { getDb } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { completedSession, membershipForCheckoutSession } from "@/lib/server/checkout-session";
+import { clientProfile } from "@/seeds/client";
 
 export const metadata: Metadata = { title: "Welcome", robots: { index: false } };
 
@@ -27,7 +28,7 @@ export default async function Welcome({ searchParams }: PageProps<"/join/welcome
       : "Thanks for joining. Watch your inbox for a note from us.";
   return (
     <>
-      <PageHead title={returned ? "Thanks for joining Imagine Surrey" : "Welcome to Imagine Surrey"}>{lede}</PageHead>
+      <PageHead title={returned ? `Thanks for joining ${clientProfile.orgName}` : `Welcome to ${clientProfile.orgName}`}>{lede}</PageHead>
       <section className="section">
         <div className="container stack" style={{ gap: 20, maxWidth: 760 }}>
           {returned ? (

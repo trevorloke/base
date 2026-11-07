@@ -1,4 +1,5 @@
 import "server-only";
+import { clientProfile } from "@/seeds/client";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -33,7 +34,7 @@ export const env = {
     if (isProduction()) {
       const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
       if (vercel) return `https://${vercel}`;
-      throw new Error("Set NEXT_PUBLIC_SITE_URL to the site's public address (e.g. https://imaginesurrey.ca).");
+      throw new Error("Set NEXT_PUBLIC_SITE_URL to the site's public address (e.g. https://example.org).");
     }
     const preview = process.env.VERCEL_URL;
     return preview ? `https://${preview}` : "http://localhost:3000";
@@ -79,7 +80,7 @@ export const env = {
     return optional("RESEND_API_KEY");
   },
   get emailFrom() {
-    return optional("EMAIL_FROM") ?? "Imagine Surrey <hello@imaginesurrey.ca>";
+    return optional("EMAIL_FROM") ?? `${clientProfile.orgName} <${clientProfile.email}>`;
   },
   get emailReplyTo() {
     return optional("EMAIL_REPLY_TO");
@@ -152,10 +153,6 @@ export const env = {
   },
 
   // ── The client this deployment is for (src/seeds) ──
-  /** Which client's starting content, copy and look: "imagine-surrey" or "default" (a clean, neutral site). */
-  get client() {
-    return optional("BASE_WEB_CLIENT")?.trim();
-  },
   /** A brand preset to start from when none is saved in Admin → Brand (e.g. "civic"). */
   get brandPreset() {
     return optional("BASE_WEB_BRAND_PRESET")?.trim();

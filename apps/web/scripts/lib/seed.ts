@@ -1,16 +1,17 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { campaigns, contributionLimits, products, trackerAnnouncements, trackerPromises, volunteerTasks } from "../../src/lib/db/schema";
-import { seedCampaigns } from "../../src/content/campaigns-seed";
-import { seedAnnouncements, seedPromises, seedTests } from "../../src/content/tracker-seed";
+import { contributionLimits, products, trackerAnnouncements, trackerPromises, volunteerTasks, campaigns } from "../../src/lib/db/schema";
+import { JURISDICTIONS } from "../../src/lib/jurisdiction";
 import { DEFAULT_TASKS } from "../../src/lib/shifts";
-import { seed as seedOpenings } from "../../src/content/seeds/openings";
-import { seed as seedTrackerDates } from "../../src/content/seeds/tracker";
-import { seed as seedComms } from "../../src/content/seeds/comms";
-import { seed as seedPages } from "../../src/content/seeds/pages";
+import { profile as defaultProfile } from "../../src/seeds/default/profile";
+import { seedCampaigns } from "../../src/seeds/imagine-surrey/db/campaigns";
+import { seed as seedComms } from "../../src/seeds/imagine-surrey/db/comms";
+import { seed as seedOpenings } from "../../src/seeds/imagine-surrey/db/openings";
+import { pagesFor, seed as seedPages } from "../../src/seeds/imagine-surrey/db/pages";
+import { seedAnnouncements, seedPromises, seedTests } from "../../src/seeds/imagine-surrey/db/promises";
+import { seed as seedTrackerDates } from "../../src/seeds/imagine-surrey/db/tracker";
 
-
-// The shop as designed. Safe to re-run: existing products keep their prices.
+// Imagine Surrey's shop as designed. Safe to re-run: existing products keep their prices.
 const catalogue = [
   { slug: "stop-doug-lawn-sign", name: "Stop Doug lawn sign", priceCents: 2000, tileLabel: "Stop Doug", tileBackground: "#EF2023", tileForeground: "#FFFFFF" },
   { slug: "t-shirt", name: "Imagine Surrey T-shirt", priceCents: 3000, tileLabel: "Fighting for Surrey", tileBackground: "#003979", tileForeground: "#FFF100" },
@@ -20,21 +21,39 @@ const catalogue = [
   { slug: "window-sign", name: "Window sign", priceCents: 500, tileLabel: "SkyTrain to South Surrey", tileBackground: "#FFFFFF", tileForeground: "#EF2023" },
 ];
 
-/** Adds whatever starter rows are missing. Never overwrites anything changed in /admin. */
-export async function seedDatabase(url: string): Promise<string> {
+/**
+ * Adds whatever starter rows are missing for the client this deployment is
+ * for (BASE_WEB_CLIENT, read when it runs). Never overwrites anything changed
+ * in /admin.
+ *
+ * Every client: the starter volunteer tasks, the jurisdiction's published
+ * contribution limits, and draft privacy and accessibility pages.
+ * Imagine Surrey also gets its shop, the Safe Surrey promise tracker, its
+ * pledge and petition, sample shift openings and a sample draft email.
+ */
+export async function seedDatabase(url: string, client = process.env.BASE_WEB_CLIENT, jurisdictionId = process.env.BASE_WEB_JURISDICTION): Promise<string> {
+  const imagineSurrey = client === "imagine-surrey";
+  const jurisdiction = JURISDICTIONS[jurisdictionId ?? ""] ?? JURISDICTIONS.bc;
   // prepare: false so it also works through a transaction pooler.
-  const client = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
-  const db = drizzle(client);
+  const pg = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
+  const db = drizzle(pg);
   try {
-    await db
-      .insert(products)
-      .values(catalogue.map((p, i) => ({ ...p, sortOrder: i })))
-      .onConflictDoNothing({ target: products.slug });
     // Starter volunteer tasks. Rename or recolour them in /admin/shifts.
     await db
       .insert(volunteerTasks)
       .values(DEFAULT_TASKS.map((t, i) => ({ ...t, sortOrder: i })))
       .onConflictDoNothing({ target: volunteerTasks.name });
+    // The published contribution limits (BC: 2026, $1,429.70), unless a figure for that year is stored. Later years go in Admin → Contribution limits.
+    const limits = Object.entries(jurisdiction.contributionLimits).map(([year, l]) => ({ year: Number(year), cents: l.cents, note: l.note }));
+    if (limits.length) await db.insert(contributionLimits).values(limits).onConflictDoNothing({ target: contributionLimits.year });
+    // Draft privacy policy and accessibility pages (only when missing).
+    await seedPages(db, imagineSurrey ? undefined : pagesFor({ name: defaultProfile.orgName, email: defaultProfile.email, placeLine: defaultProfile.placeLine }));
+    if (!imagineSurrey) return `Seeded ${DEFAULT_TASKS.length} volunteer tasks, ${limits.length} contribution limit(s) and the draft pages for a new client.`;
+
+    await db
+      .insert(products)
+      .values(catalogue.map((p, i) => ({ ...p, sortOrder: i })))
+      .onConflictDoNothing({ target: products.slug });
     // The promise tracker as first published. Existing rows are left alone, so
     // re-running never overwrites statuses set in /admin/tracker.
     await db
@@ -53,14 +72,10 @@ export async function seedDatabase(url: string): Promise<string> {
     await seedOpenings(db);
     // One sample draft email campaign, only when there are none.
     await seedComms(db);
-    // Draft privacy policy and accessibility pages (only when missing).
-    await seedPages(db);
     // The pledge and petition the home page is built around.
     await db.insert(campaigns).values(seedCampaigns).onConflictDoNothing({ target: campaigns.slug });
-    // The 2026 BC contribution limit ($1,429.70), unless a 2026 figure is already stored. Later years go in Admin → Contribution limits.
-    await db.insert(contributionLimits).values({ year: 2026, cents: 142970, note: "Elections BC, 2026 local elections contribution limit" }).onConflictDoNothing({ target: contributionLimits.year });
     return `Seeded ${catalogue.length} products, ${DEFAULT_TASKS.length} volunteer tasks, ${seedPromises.length} tracked promises and ${seedCampaigns.length} campaigns.`;
   } finally {
-    await client.end();
+    await pg.end();
   }
 }

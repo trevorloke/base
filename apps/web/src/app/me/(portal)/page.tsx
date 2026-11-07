@@ -11,6 +11,7 @@ import { loadPortal } from "@/lib/server/portal";
 import { getSettings } from "@/lib/server/settings";
 import { formatDay, SLOTS } from "@/lib/shifts";
 import type { Slate } from "@/lib/contributions";
+import { clientProfile } from "@/seeds/client";
 
 const SLATE_LABEL: Record<Slate, string> = { council: "City council slate", school_board: "School board slate" };
 const slotLabel = (id: string) => SLOTS.find((s) => s.id === id);
@@ -57,7 +58,7 @@ export default async function MeHome({ searchParams }: PageProps<"/me">) {
               <span className="status-pill status-pill--active">Active member</span>
               <p>
                 {membership.expiresAt ? `Renews by ${formatDate(membership.expiresAt)}.` : "No expiry date on file."}{" "}
-                {membership.votingEligible ? "You can vote at member meetings." : "Members outside Surrey can take part but don't vote at member meetings."}
+                {membership.votingEligible ? "You can vote at member meetings." : `Members outside ${clientProfile.place} can take part but don't vote at member meetings.`}
               </p>
               <div className="portal-actions">
                 <Link href="/join" className="btn btn--outline btn--sm">

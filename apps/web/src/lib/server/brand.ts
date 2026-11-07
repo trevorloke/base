@@ -4,6 +4,7 @@ import { siteBrand } from "@/lib/db/schema";
 import { brandFromPreset, brandSchema, isPresetId, type Brand } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { clientFor } from "@/seeds";
+import { CLIENT_ID } from "@/seeds/client";
 import { cached, invalidate, TAGS } from "./cache";
 import { buildingWithoutDatabase } from "./render-time";
 
@@ -12,7 +13,7 @@ import { buildingWithoutDatabase } from "./render-time";
  * (BASE_WEB_CLIENT), with its colours, font and corners from
  * BASE_WEB_BRAND_PRESET when that names a preset.
  */
-export function defaultBrand(clientId = env.client, presetSetting = env.brandPreset): Brand {
+export function defaultBrand(clientId: string | undefined = CLIENT_ID, presetSetting = env.brandPreset): Brand {
   const seed = clientFor(clientId).brand;
   if (presetSetting && !isPresetId(presetSetting)) console.error(`BASE_WEB_BRAND_PRESET="${presetSetting}" isn't a preset; using the client's.`);
   return brandFromPreset(isPresetId(presetSetting) ? presetSetting : seed.preset, { name: seed.name, logoUrl: seed.logoUrl, logoOnDarkUrl: seed.logoOnDarkUrl });

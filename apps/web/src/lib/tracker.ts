@@ -3,6 +3,7 @@
 // the database, so it runs on the server and in the browser alike.
 import * as neighbourhoodModule from "./neighbourhoods";
 import { todayInSurrey } from "./shifts";
+import { clientProfile } from "@/seeds/client";
 
 export const PROMISE_STATUSES = [
   { id: "not_started", label: "Not started", color: "#E3E7EF", text: "#0F1E33" },
@@ -251,5 +252,5 @@ export function summaryToJson(summary: TrackerSummary, siteUrl: string) {
 }
 
 export function shareTextFor(p: { number: number; title: string; status: PromiseStatus }, total: number): string {
-  return `Promise ${p.number} of ${total}: "${p.title}" is ${STATUS_BY_ID[p.status].label.toLowerCase()} on the Safe Surrey promise tracker.`;
+  return `Promise ${p.number} of ${total}: "${p.title}" is ${STATUS_BY_ID[p.status].label.toLowerCase()} on the ${clientProfile.trackerName.replace(/^Promise tracker$/, "promise tracker")}.`;
 }

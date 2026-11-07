@@ -5,12 +5,13 @@ import { env } from "@/lib/env";
 import { countByStatus, formatIsoDate, PROMISE_STATUSES } from "@/lib/tracker";
 import { loadTracker } from "@/lib/server/tracker";
 import { renderAtRequestTimeWithoutDatabase } from "@/lib/server/render-time";
+import { clientProfile } from "@/seeds/client";
 
 // The share image for /tracker: the scoreboard. Brand colours and the
 // runtime's bundled font, so no font files ship with the site.
 
 export const revalidate = 3600;
-export const alt = "The Safe Surrey promise tracker scoreboard: how many promises are kept, in progress, partly kept, broken or not started";
+export const alt = `The ${clientProfile.trackerName.replace(/^Promise tracker$/, "promise tracker")} scoreboard: how many promises are kept, in progress, partly kept, broken or not started`;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -29,7 +30,7 @@ export default async function Image() {
         <div style={{ display: "flex", flexDirection: "column", flex: 1, padding: "48px 64px 40px", justifyContent: "space-between" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "flex", color: YELLOW, fontSize: 26, letterSpacing: 3 }}>ACCOUNTABILITY</div>
-            <div style={{ display: "flex", fontSize: 64, lineHeight: 1.1 }}>Safe Surrey promise tracker</div>
+            <div style={{ display: "flex", fontSize: 64, lineHeight: 1.1 }}>{clientProfile.trackerName}</div>
             <div style={{ display: "flex", color: PALE, fontSize: 28 }}>
               {promises.length} promises from the 2026 campaign, scored against the public record
             </div>

@@ -9,6 +9,7 @@ import { Badge, TextareaField } from "./Inputs";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { TitleSlugFields } from "./TitleSlugFields";
 import { useCmsForm } from "./useCmsForm";
+import { clientProfile } from "@/seeds/client";
 
 export type NewsFormValues = {
   id: string;
@@ -75,7 +76,7 @@ export function NewsForm({ post }: { post?: NewsFormValues }) {
       {status !== "published" && (
         <div className="schedule-row">
           <div className="field">
-            <label htmlFor="scheduledAt">Or schedule for (Surrey time)</label>
+            <label htmlFor="scheduledAt">Or schedule for ({clientProfile.place || "Pacific"} time)</label>
             <input
               id="scheduledAt"
               name="scheduledAt"

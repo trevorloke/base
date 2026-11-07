@@ -1,20 +1,24 @@
+import { notFound } from "next/navigation";
 import "../volunteer/volunteer.css";
 import "./neighbourhoods.css";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PostalLookup } from "@/components/neighbourhoods/PostalLookup";
 import { PageHead } from "@/components/PageHead";
-import { NEIGHBOURHOOD_FSAS, NEIGHBOURHOOD_SLUGS, neighbourhoodFromSlug } from "@/lib/neighbourhoods";
+import { HAS_NEIGHBOURHOODS, NEIGHBOURHOOD_FSAS, NEIGHBOURHOOD_SLUGS, neighbourhoodFromSlug } from "@/lib/neighbourhoods";
 import { getSettings } from "@/lib/server/settings";
+import { clientProfile } from "@/seeds/client";
 
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "Neighbourhoods",
-  description: "Find your Surrey neighbourhood: what's happening near you, how to volunteer there, and the promises that affect it.",
+  description: `Find your ${clientProfile.place ? `${clientProfile.place} ` : ""}neighbourhood: what's happening near you, how to volunteer there, and the promises that affect it.`,
 };
 
 export default async function NeighbourhoodsIndex() {
+  // A client without neighbourhoods has no neighbourhood pages.
+  if (!HAS_NEIGHBOURHOODS) notFound();
   const { committees } = await getSettings();
   return (
     <>

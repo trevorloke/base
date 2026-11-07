@@ -109,7 +109,6 @@ describe("the look a deployment starts with", () => {
     expect(defaultBrand("imagine-surrey", undefined)).toEqual({ ...brandFromPreset("imagine-surrey"), logoUrl: "/images/logo.webp", logoOnDarkUrl: "/images/logo-light.png" });
   });
   it("a new client: Civic, with no logo (the name as a wordmark)", () => {
-    expect(defaultBrand(undefined, undefined)).toEqual(brandFromPreset("civic"));
     expect(defaultBrand("default", undefined)).toEqual(brandFromPreset("civic"));
   });
   it("BASE_WEB_BRAND_PRESET picks another preset, keeping the client's logo", () => {

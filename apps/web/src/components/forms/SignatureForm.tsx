@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { campaignShareLinks, nextAsks, SHARE_CHANNELS } from "@/app/act/links";
-import { site } from "@/content/site";
+import { clientProfile } from "@/seeds/client";
 import { signatureSchema } from "@/lib/validation";
 import { ConsentCheckbox, ErrorSummary, Honeypot, LiveRegion, PostalCodeField, SubmitButton, SuccessCard, TextField, TrackingFields } from "./Field";
 import { HumanCheck } from "./HumanCheck";
@@ -142,7 +142,7 @@ export function SignatureForm({ campaign, kind, variant, question, heading, onSi
           {petition ? "Add my name" : "Sign the pledge"}
         </SubmitButton>
         <p className="small">
-          {petition ? "We’ll deliver the names to City Hall. " : ""}Your details stay with Imagine Surrey. Read our <a href={site.privacyUrl}>privacy policy</a>.
+          {petition ? "We’ll deliver the names to City Hall. " : ""}Your details stay with {clientProfile.orgName}. Read our <a href="/privacy">privacy policy</a>.
         </p>
       </form>
     </>

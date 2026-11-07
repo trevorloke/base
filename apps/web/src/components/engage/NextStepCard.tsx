@@ -59,6 +59,6 @@ export function NextStepCard({
  *   <GenericNextStep completed="petition" as="h3" />
  */
 export function GenericNextStep({ completed, heading, shareUrl, as }: { completed: Completed; heading?: string; shareUrl?: string; as?: "h2" | "h3" }) {
-  const url = shareUrl ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://imaginesurrey.ca";
+  const url = shareUrl ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
   return <NextStepCard step={nextStep(EMPTY_STATE, completed)} thanks={THANKS[completed]} heading={heading} shareUrl={url} as={as} />;
 }

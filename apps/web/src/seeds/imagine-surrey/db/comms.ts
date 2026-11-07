@@ -3,7 +3,7 @@
 // are no campaigns at all.
 import { sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { emailCampaigns } from "../../lib/db/schema";
+import { emailCampaigns } from "../../../lib/db/schema";
 
 export const sampleCampaign = {
   subject: "What's happening in your neighbourhood this month",

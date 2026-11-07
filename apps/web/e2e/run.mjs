@@ -20,6 +20,8 @@ const suites = process.argv.slice(2).length ? process.argv.slice(2) : ["api", "s
 
 const env = {
   ...process.env,
+  // The suites test Imagine Surrey's site: its copy, town centres and tracker.
+  BASE_WEB_CLIENT: "imagine-surrey",
   DATABASE_URL: dbUrl,
   E2E_DATABASE_URL: dbUrl,
   E2E_PORT: String(port),

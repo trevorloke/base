@@ -2,7 +2,7 @@
 // the seed script (register this file's `seed` in scripts/seed.ts); both are
 // drafts for the organization to review and finish in /admin/pages.
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { sitePages } from "../../lib/db/schema";
+import { sitePages } from "../../../lib/db/schema";
 
 const PRIVACY = `> **Draft for review.** This policy was prepared as a starting point for Imagine Surrey's board. Have it reviewed before publishing, fill in the contact details, and keep it current when the way we handle information changes.
 
@@ -148,7 +148,21 @@ export const seedPages = [
   },
 ];
 
+/**
+ * The same drafts for another organization: its name, email and mailing line
+ * in place of Imagine Surrey's. Still drafts for its own board to review.
+ */
+export function pagesFor(org: { name: string; email: string; placeLine: string }): typeof seedPages {
+  const swap = (text: string) =>
+    text
+      .replaceAll("hello@imaginesurrey.ca", org.email)
+      .replaceAll("everyone in Surrey", "everyone")
+      .replaceAll(", Surrey, BC", `, ${org.placeLine || "[city and province to confirm]"}`)
+      .replaceAll("Imagine Surrey", org.name);
+  return seedPages.map((p) => ({ ...p, summary: swap(p.summary), body: swap(p.body) }));
+}
+
 /** Add the starter pages. Existing pages with the same address are left alone. */
-export async function seed(db: Pick<PostgresJsDatabase<Record<string, unknown>>, "insert">): Promise<void> {
-  await db.insert(sitePages).values(seedPages).onConflictDoNothing({ target: sitePages.slug });
+export async function seed(db: Pick<PostgresJsDatabase<Record<string, unknown>>, "insert">, pages = seedPages): Promise<void> {
+  await db.insert(sitePages).values(pages).onConflictDoNothing({ target: sitePages.slug });
 }

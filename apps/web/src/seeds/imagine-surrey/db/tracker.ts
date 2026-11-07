@@ -4,8 +4,8 @@
 // Registered in scripts/seed.ts as `await seed(db)`.
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { trackerPromises } from "../../lib/db/schema";
-import { seedPromises } from "../tracker-seed";
+import { trackerPromises } from "../../../lib/db/schema";
+import { seedPromises } from "./promises";
 
 type SeedDb = Pick<PostgresJsDatabase<Record<string, unknown>>, "update">;
 

@@ -8,6 +8,7 @@ import { forwardConsentWithdrawal } from "@/lib/server/base-ground-forward";
 import { findPersonByEmail, updatePerson, type PersonFields } from "@/lib/server/people";
 import { consumeToken, createToken } from "@/lib/server/tokens";
 import { preferencesSchema } from "@/lib/validation";
+import { clientProfile } from "@/seeds/client";
 
 const TTL_MINUTES = 60;
 
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     const token = await consumeToken(db, "preferences", data.token);
     if (!token) return error("This link has expired or was already used. Ask for a new one below.", 410, { token: "Expired link" });
     const person = await findPersonByEmail(db, token.email);
-    if (!person) return error("We couldn’t find your record. Email hello@imaginesurrey.ca and we’ll sort it out.", 404);
+    if (!person) return error(`We couldn’t find your record. Email ${clientProfile.email} and we’ll sort it out.`, 404);
 
     const phone = data.phone ?? person.phone ?? null;
     if (data.sms && !phone) return error("Please check the highlighted fields.", 422, { phone: "Add a mobile number so we can text you, or untick the text box" });

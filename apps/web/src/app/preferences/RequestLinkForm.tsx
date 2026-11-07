@@ -5,6 +5,7 @@ import { ErrorSummary, Honeypot, LiveRegion, SubmitButton, SuccessCard, TextFiel
 import { HumanCheck } from "@/components/forms/HumanCheck";
 import { readForm, useApiForm } from "@/components/forms/useApiForm";
 import { preferencesRequestSchema } from "@/lib/validation";
+import { clientProfile } from "@/seeds/client";
 
 /** "Send me a link": the public way into the preference centre. */
 export function RequestLinkForm({ expired = false }: { expired?: boolean }) {
@@ -45,7 +46,7 @@ export function RequestLinkForm({ expired = false }: { expired?: boolean }) {
         </h2>
         <p style={{ margin: 0, fontSize: 16, lineHeight: 1.55 }}>
           Enter the email address we have for you and we’ll send a one-time link. You can also use the “manage preferences” link at the bottom of any
-          Imagine Surrey email.
+          {clientProfile.orgName} email.
         </p>
         <TextField id="pref-request-email" name="email" type="email" label="Email" required autoComplete="email" error={fields.email} />
         <HumanCheck control={human} error={fields.human} />

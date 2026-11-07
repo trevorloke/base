@@ -281,7 +281,7 @@ export function AddAnnouncementForm({ today }: { today: string }) {
       <div className="form-row">
         <div className="field">
           <label htmlFor="na-src">Source</label>
-          <input id="na-src" name="sourceLabel" className="input" placeholder="e.g. Surrey Now-Leader, Nov 3, 2026" maxLength={200} />
+          <input id="na-src" name="sourceLabel" className="input" placeholder="e.g. a newspaper, Nov 3, 2026" maxLength={200} />
         </div>
         <div className="field">
           <label htmlFor="na-url">Link</label>

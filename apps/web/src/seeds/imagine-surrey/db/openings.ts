@@ -2,9 +2,9 @@
 // /volunteer. Only runs when the table is empty: organizers' own openings are
 // never touched. Wire it into scripts/seed.ts as `await seedOpenings(db)`.
 import { sql } from "drizzle-orm";
-import type { Db } from "../../lib/db";
-import { shiftOpenings, volunteerTasks } from "../../lib/db/schema";
-import { nextSaturday, todayInSurrey } from "../../lib/shifts";
+import type { Db } from "../../../lib/db";
+import { shiftOpenings, volunteerTasks } from "../../../lib/db/schema";
+import { nextSaturday, todayInSurrey } from "../../../lib/shifts";
 
 /** The parts of the database handle the seed uses, so a schema-less drizzle(client) works too. */
 type SeedDb = Pick<Db, "select" | "insert">;

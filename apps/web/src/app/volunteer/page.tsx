@@ -7,6 +7,8 @@ import { renderMarkdown } from "@/lib/markdown";
 import { getSettings } from "@/lib/server/settings";
 import { publishedOpenings } from "@/lib/server/volunteer";
 import { todayInSurrey } from "@/lib/shifts";
+import { HAS_NEIGHBOURHOODS } from "@/lib/neighbourhoods";
+import { clientProfile } from "@/seeds/client";
 
 export const revalidate = 3600;
 
@@ -31,8 +33,13 @@ export default async function VolunteerPage() {
               Pick a shift
             </h2>
             <p className="lede">
-              Every shift below has a place, a time and a few spots. Sign up, get it in your calendar, and bring a neighbour. Looking for something in
-              your own part of Surrey? <Link href="/neighbourhoods">Find your neighbourhood</Link>.
+              Every shift below has a place, a time and a few spots. Sign up, get it in your calendar, and bring a neighbour.
+              {HAS_NEIGHBOURHOODS && (
+                <>
+                  {" "}
+                  Looking for something in your own part of {clientProfile.place}? <Link href="/neighbourhoods">Find your neighbourhood</Link>.
+                </>
+              )}
             </p>
           </div>
           <OpeningsBoard openings={openings} notesHtml={notesHtml} />
@@ -56,9 +63,11 @@ export default async function VolunteerPage() {
               {c.neighbourhoodsTitle}
             </h2>
             <p style={{ margin: 0, fontSize: 17, lineHeight: 1.55 }}>{c.neighbourhoodsIntro}</p>
-            <Link href="/neighbourhoods" className="btn btn--outline" style={{ alignSelf: "flex-start" }}>
-              Find your neighbourhood
-            </Link>
+            {HAS_NEIGHBOURHOODS && (
+              <Link href="/neighbourhoods" className="btn btn--outline" style={{ alignSelf: "flex-start" }}>
+                Find your neighbourhood
+              </Link>
+            )}
           </div>
         </div>
       </section>

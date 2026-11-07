@@ -12,6 +12,7 @@ import { neighbourhoodPage } from "@/lib/server/neighbourhoods";
 import { getSettings } from "@/lib/server/settings";
 import { shareLinks } from "@/lib/share";
 import { formatLongDate, SLOT_BY_ID, todayInSurrey } from "@/lib/shifts";
+import { clientProfile } from "@/seeds/client";
 import { STATUS_BY_ID } from "@/lib/tracker";
 
 export const revalidate = 3600;
@@ -22,7 +23,7 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps<"/neighbourhoods/[slug]">): Promise<Metadata> {
   const name = neighbourhoodFromSlug((await params).slug);
-  return name ? { title: `${name}`, description: `Imagine Surrey in ${name}: events near you, volunteer shifts, and the promises that affect your neighbourhood.` } : {};
+  return name ? { title: `${name}`, description: `${clientProfile.orgName} in ${name}: events near you, volunteer shifts, and the promises that affect your neighbourhood.` } : {};
 }
 
 // The seeded campaigns live on the home page; any other campaign has its own page.
@@ -41,8 +42,8 @@ export default async function NeighbourhoodPage({ params }: PageProps<"/neighbou
   const url = `${env.siteUrl}/neighbourhoods/${slug}`;
   const links = shareLinks({
     url,
-    text: `Imagine Surrey in ${name}: what's happening near us, how to help, and the promises City Hall made to our neighbourhood.`,
-    subject: `Imagine Surrey in ${name}`,
+    text: `${clientProfile.orgName} in ${name}: what's happening near us, how to help, and the promises City Hall made to our neighbourhood.`,
+    subject: `${clientProfile.orgName} in ${name}`,
   });
 
   return (
@@ -64,7 +65,7 @@ export default async function NeighbourhoodPage({ params }: PageProps<"/neighbou
           <ul className="hood-asks" aria-label={`Ways to help in ${name}`}>
             <li className="hood-ask">
               <span className="hood-ask-title">Become a member in {name}</span>
-              <span className="hood-ask-label">Join your neighbours in Imagine Surrey.</span>
+              <span className="hood-ask-label">Join your neighbours in {clientProfile.orgName}.</span>
               <Link href={joinHref}>Become a member</Link>
             </li>
             {data.campaigns.map((c) => (
@@ -181,7 +182,7 @@ export default async function NeighbourhoodPage({ params }: PageProps<"/neighbou
 
       <section className="section">
         <div className="container stack" style={{ gap: 16 }}>
-          <ShareButtons heading={`Tell your neighbours about Imagine Surrey in ${name}`} label={`Share the ${name} page`} links={links} />
+          <ShareButtons heading={`Tell your neighbours about ${clientProfile.orgName} in ${name}`} label={`Share the ${name} page`} links={links} />
         </div>
       </section>
     </>

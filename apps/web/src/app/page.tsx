@@ -13,7 +13,7 @@ import { StatusStamp } from "@/components/shell/StatusStamp";
 import { dayAndMonth, formatDate, timeOnly } from "@/lib/dates";
 import { normalizeModules, type BuiltInKind, type HomeModule } from "@/lib/home-modules";
 import { formatCents } from "@/lib/money";
-import { NEIGHBOURHOODS } from "@/lib/neighbourhoods";
+import { HAS_NEIGHBOURHOODS, NEIGHBOURHOODS } from "@/lib/neighbourhoods";
 import { activeProducts, latestNews, upcomingEvents } from "@/lib/server/content";
 import { homeLive, shellSettings, type HomeLive } from "@/lib/server/home";
 import { formatDay, SLOTS } from "@/lib/shifts";
@@ -583,13 +583,15 @@ function ActNow({ live }: { live: HomeLive }) {
           <h2 id="act-now-title" className="rail-title">
             Act now
           </h2>
-          <Link href="/neighbourhoods" className="area-link">
-            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" />
-              <circle cx="12" cy="9.5" r="2.5" />
-            </svg>
-            What&apos;s on near you
-          </Link>
+          {HAS_NEIGHBOURHOODS && (
+            <Link href="/neighbourhoods" className="area-link">
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" />
+                <circle cx="12" cy="9.5" r="2.5" />
+              </svg>
+              What&apos;s on near you
+            </Link>
+          )}
         </div>
 
         <div className="rail-grid">

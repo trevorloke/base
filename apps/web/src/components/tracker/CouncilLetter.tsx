@@ -29,9 +29,11 @@ export function CouncilLetter({ text }: { text: string }) {
         >
           Copy the letter
         </button>
-        <a href={councilContactUrl} className="btn btn--outline" target="_blank" rel="noopener noreferrer">
-          Find council&apos;s contact details ↗
-        </a>
+        {councilContactUrl && (
+          <a href={councilContactUrl} className="btn btn--outline" target="_blank" rel="noopener noreferrer">
+            Find council&apos;s contact details ↗
+          </a>
+        )}
       </div>
       <p className="copy-status" role="status" aria-live="polite" style={{ margin: 0, minHeight: 20 }}>
         {copied === "done" ? "Letter copied. Paste it into an email or the council contact form." : copied === "failed" ? "Select the text above and copy it." : ""}

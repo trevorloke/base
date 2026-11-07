@@ -8,6 +8,7 @@ import { ShareButtons } from "@/components/ShareButtons";
 import { shareLinks } from "@/lib/share";
 import { formatDay, formatLongDate, groupByWeek, SLOT_BY_ID, textColorFor, type PublicOpening, type SignupConfirmation } from "@/lib/shifts";
 import { SignupForm } from "./SignupForm";
+import { clientProfile } from "@/seeds/client";
 
 const CITY_WIDE = "__city";
 
@@ -45,7 +46,7 @@ export function OpeningsBoard({ openings, notesHtml }: { openings: PublicOpening
     <div className="stack" style={{ gap: 28 }}>
       <div className="filters">
         <SelectField id="filter-neighbourhood" label="Neighbourhood" value={hood} onChange={(e) => setHood(e.target.value)}>
-          <option value="all">All of Surrey</option>
+          <option value="all">{clientProfile.place ? `All of ${clientProfile.place}` : "Everywhere"}</option>
           {hoods.map((n) => (
             <option key={n} value={n}>
               {n}
@@ -180,7 +181,7 @@ function OpeningCard({
               label="Share this shift"
               links={shareLinks({
                 url: confirmation.shareUrl,
-                text: `I'm volunteering with Imagine Surrey: ${confirmation.title}, ${confirmation.dateLabel}. Come with me!`,
+                text: `I'm volunteering with ${clientProfile.orgName}: ${confirmation.title}, ${confirmation.dateLabel}. Come with me!`,
                 subject: `Volunteer with me: ${confirmation.title}`,
               })}
             />

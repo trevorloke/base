@@ -6,16 +6,17 @@ import { PageHead } from "@/components/PageHead";
 import { dayAndMonth, formatEventTime } from "@/lib/dates";
 import { mapsUrl, upcomingEventsPublic } from "@/lib/server/neighbourhoods";
 import { todayInSurrey } from "@/lib/shifts";
+import { acrossPlace, clientProfile } from "@/seeds/client";
 
 export const revalidate = 3600;
 
-export const metadata: Metadata = { title: "Events", description: "Come and meet Imagine Surrey at an event near you." };
+export const metadata: Metadata = { title: "Events", description: `Come and meet ${clientProfile.orgName} at an event near you.` };
 
 export default async function EventsIndex() {
   const events = await upcomingEventsPublic(todayInSurrey());
   return (
     <>
-      <PageHead title="Come and meet us">Town halls, door-knocking, socials, and neighbourhood meetings across Surrey.</PageHead>
+      <PageHead title="Come and meet us">Town halls, door-knocking, socials, and neighbourhood meetings{acrossPlace}.</PageHead>
       <section className="section section--accent on-dark">
         <div className="container stack" style={{ gap: 16 }}>
           {events.length === 0 ? (

@@ -5,6 +5,7 @@ import { SiteImage } from "@/components/shell/SiteImage";
 import { formatDate } from "@/lib/dates";
 import { latestNews } from "@/lib/server/content";
 import { shellSettings } from "@/lib/server/home";
+import { clientProfile } from "@/seeds/client";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { org } = await shellSettings();
@@ -16,7 +17,7 @@ export default async function NewsIndex() {
   const posts = await latestNews(100);
   return (
     <>
-      <PageHead title="News">Releases and updates from Imagine Surrey.</PageHead>
+      <PageHead title="News">Releases and updates from {clientProfile.orgName}.</PageHead>
       <section className="section">
         <div className="container">
           {posts.length === 0 ? (

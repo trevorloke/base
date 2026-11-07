@@ -11,6 +11,7 @@ import { normalizePhone, sendSms } from "@/lib/server/sms";
 import { ping } from "@/lib/server/base-ground";
 import { deliverOutbox, retryOutboxRow, skipOutboxRow, type DeliveryReport } from "@/lib/server/base-ground-outbox";
 import { revalidatePath } from "next/cache";
+import { clientProfile } from "@/seeds/client";
 
 /** A test message to the signed-in admin's own address, through the same path every site email takes. */
 export const sendTestEmail = adminAction(
@@ -21,13 +22,13 @@ export const sendTestEmail = adminAction(
     const org = settings.org;
     const when = new Date().toLocaleString("en-CA", { timeZone: "America/Vancouver", dateStyle: "medium", timeStyle: "short" });
     const bodyHtml =
-      paragraph(`This is a test from the ${esc(org.name)} admin, sent ${esc(when)} (Surrey time). If you're reading it, email sending works.`) +
+      paragraph(`This is a test from the ${esc(org.name)} admin, sent ${esc(when)} (${esc(clientProfile.place || "Pacific")} time). If you're reading it, email sending works.`) +
       paragraph(`Sender: ${esc(env.emailFrom)}${env.emailReplyTo ? ` · Reply-to: ${esc(env.emailReplyTo)}` : ""}`);
     const result = await sendEmail(getDb(), {
       to: user.email,
       subject: `${org.name} test email`,
       html: layout({ title: "Test email", bodyHtml, siteUrl: env.siteUrl, orgName: org.name, orgEmail: org.email, reason: "Sent from the admin Integrations page." }),
-      text: textVersion([`This is a test from the ${org.name} admin, sent ${when} (Surrey time).`, `Sender: ${env.emailFrom}`], { orgName: org.name }),
+      text: textVersion([`This is a test from the ${org.name} admin, sent ${when} (${clientProfile.place || "Pacific"} time).`, `Sender: ${env.emailFrom}`], { orgName: org.name }),
       kind: "test",
     });
     if (result.status === "sent") return `Sent to ${user.email}. Check your inbox (and the spam folder, the first time).`;

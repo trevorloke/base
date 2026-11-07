@@ -1,4 +1,9 @@
 import { keyDates, termEnd, termStart } from "@/content/tracker";
+import { clientProfile } from "@/seeds/client";
+
+// "Key dates in the Safe Surrey term", from the tracker's name.
+const WHOSE = clientProfile.trackerName.replace(/\s*promise tracker$/i, "");
+const TERM_LABEL = WHOSE ? `Key dates in the ${WHOSE} term` : "Key dates in the term";
 
 const DAY = 86_400_000;
 const t = (iso: string) => new Date(`${iso}T12:00:00Z`).getTime();
@@ -6,6 +11,7 @@ const fmt = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en
 
 /** The term on one line: each key date placed in proportion, today marked. */
 export function KeyDates({ today }: { today: string }) {
+  if (keyDates.length === 0) return null;
   const start = t(termStart);
   const span = t(termEnd) - start;
   const pct = (iso: string) => Math.min(100, Math.max(0, ((t(iso) - start) / span) * 100));
@@ -23,7 +29,7 @@ export function KeyDates({ today }: { today: string }) {
           <span className="key-next-date">{next.end ? `${fmt(next.start)} to ${fmt(next.end)}` : fmt(next.start)}</span>
         </p>
       )}
-      <ol className="timeline" aria-label="Key dates in the Safe Surrey term">
+      <ol className="timeline" aria-label={TERM_LABEL}>
         <li className="timeline-axis" aria-hidden="true">
           {years.map((y) => (
             <span key={y} style={{ left: `${pct(`${y}-01-01`)}%` }}>

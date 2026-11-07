@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { CONSENT_WORDING } from "@/lib/consent-wording";
 import { env } from "@/lib/env";
 import { getCampaign } from "@/lib/server/campaigns";
+import { shellSettings } from "@/lib/server/home";
+import { clientProfile } from "@/seeds/client";
 import { CAMPAIGN_SLUG_RE } from "@/lib/validation";
 import { PrintButton } from "./PrintButton";
 import "./print.css";
@@ -20,6 +22,7 @@ export async function generateMetadata({ params }: PageProps<"/act/[slug]/print"
 
 /** A paper petition sheet, Letter size, for canvassing and events. */
 export default async function PrintSheet({ params }: PageProps<"/act/[slug]/print">) {
+  const { org } = await shellSettings();
   const { slug } = await params;
   if (!CAMPAIGN_SLUG_RE.test(slug)) notFound();
   const campaign = await getCampaign(slug);
@@ -37,7 +40,7 @@ export default async function PrintSheet({ params }: PageProps<"/act/[slug]/prin
       </div>
       <article className="sheet" aria-labelledby="sheet-title">
         <header className="sheet-head">
-          <p className="sheet-org">Imagine Surrey · {kind === "pledge" ? "Pledge" : "Petition"}</p>
+          <p className="sheet-org">{org.name} · {kind === "pledge" ? "Pledge" : "Petition"}</p>
           <h1 id="sheet-title">{campaign.title}</h1>
           {campaign.statement && <p className="sheet-statement">{campaign.statement}</p>}
           <p className="sheet-url">
@@ -74,9 +77,12 @@ export default async function PrintSheet({ params }: PageProps<"/act/[slug]/prin
         <footer className="sheet-foot">
           <p className="sheet-consent">
             Signing adds your name to this {kind}. Email is optional. Tick the box beside your email only if you agree: “{CONSENT_WORDING.updates}” Your details
-            stay with Imagine Surrey (privacy policy at {env.siteUrl}/privacy).
+            stay with {org.name} (privacy policy at {env.siteUrl}/privacy).
           </p>
-          <p className="sheet-return">Return completed sheets to Imagine Surrey, Surrey, BC · hello@imaginesurrey.ca</p>
+          <p className="sheet-return">
+            Return completed sheets to {org.name}
+            {clientProfile.placeLine ? `, ${clientProfile.placeLine}` : ""} · {org.email}
+          </p>
         </footer>
       </article>
     </div>

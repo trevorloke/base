@@ -2,6 +2,7 @@
 // needs no React rendering. All dynamic text goes through `esc`.
 
 const NAVY = "#003979";
+import { clientProfile } from "@/seeds/client";
 const RED = "#D81B1E";
 const YELLOW = "#FFF100";
 
@@ -39,7 +40,7 @@ export type LayoutOptions = {
 };
 
 export function layout(o: LayoutOptions): string {
-  const org = esc(o.orgName ?? "Imagine Surrey");
+  const org = esc(o.orgName ?? clientProfile.orgName);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${esc(o.title)}</title></head>
 <body style="margin:0;padding:0;background:#F2F4F8;font-family:Montserrat,Arial,Helvetica,sans-serif">
 ${o.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(o.preheader)}</div>` : ""}
@@ -50,14 +51,14 @@ ${o.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0
 <tr><td style="padding:28px 28px 8px"><h1 style="margin:0 0 18px;font-size:26px;line-height:1.2;color:${NAVY}">${esc(o.title)}</h1>${o.bodyHtml}</td></tr>
 <tr><td style="padding:16px 28px 28px;border-top:1px solid #E3E7EF;font-size:13px;line-height:1.5;color:#4A5872">
 ${o.reason ? `<p style="margin:0 0 8px">${esc(o.reason)}</p>` : ""}
-<p style="margin:0 0 8px">${org}${o.orgEmail ? ` · <a href="mailto:${esc(o.orgEmail)}" style="color:${NAVY}">${esc(o.orgEmail)}</a>` : ""} · Surrey, BC</p>
+<p style="margin:0 0 8px">${org}${o.orgEmail ? ` · <a href="mailto:${esc(o.orgEmail)}" style="color:${NAVY}">${esc(o.orgEmail)}</a>` : ""}${clientProfile.placeLine ? ` · ${esc(clientProfile.placeLine)}` : ""}</p>
 ${o.unsubscribeUrl ? `<p style="margin:0"><a href="${esc(o.unsubscribeUrl)}" style="color:${NAVY}">Unsubscribe</a> from these emails.</p>` : ""}
 </td></tr></table></td></tr></table></body></html>`;
 }
 
 /** A plain-text version from the same pieces, for clients that prefer text. */
 export function textVersion(lines: string[], o: { orgName?: string; unsubscribeUrl?: string | null }): string {
-  const out = [...lines, "", `— ${o.orgName ?? "Imagine Surrey"}`];
+  const out = [...lines, "", `— ${o.orgName ?? clientProfile.orgName}`];
   if (o.unsubscribeUrl) out.push("", `Unsubscribe: ${o.unsubscribeUrl}`);
   return out.join("\n");
 }

@@ -9,6 +9,7 @@ import { spotsLeft, type PublicOpening, type Slot } from "@/lib/shifts";
 export type { PublicOpening };
 import { cached, TAGS } from "./cache";
 import { findOrCreatePerson } from "./people";
+import { clientProfile } from "@/seeds/client";
 
 const signedUpCount = sql<number>`(select count(*)::int from ${shifts} where ${shifts.openingId} = ${shiftOpenings.id} and ${shifts.status} <> 'cancelled')`;
 
@@ -57,7 +58,7 @@ export function openingCalendarEvent(opening: OpeningForCalendar, siteUrl: strin
   const hours = SLOT_HOURS[opening.slot];
   const where = [opening.location, opening.neighbourhood].filter(Boolean).join(", ");
   return {
-    uid: `opening-${opening.id}@imaginesurrey.ca`,
+    uid: `opening-${opening.id}@${clientProfile.uidDomain}`,
     title: `Volunteer: ${opening.title}`,
     start: pacificDate(opening.date, hours.start),
     end: pacificDate(opening.date, hours.end),

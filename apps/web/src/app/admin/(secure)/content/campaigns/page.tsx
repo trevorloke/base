@@ -14,7 +14,7 @@ export default async function CampaignsAdmin({ searchParams }: PageProps<"/admin
     <AdminPage
       title="Petitions and pledges"
       crumbs={[{ href: "/admin/content", label: "Content" }]}
-      intro="The pledge and the SkyTrain petition are built into the home page. Other campaigns get their own page at /act/<address>. Signatures are exported from the dashboard."
+      intro="The home page's pledge and petition, if this site has them, are built into the home page. Other campaigns get their own page at /act/<address>. Signatures are exported from the dashboard."
       actions={
         <>
           <a href="/api/admin/export/signatures" className="btn btn--outline">
