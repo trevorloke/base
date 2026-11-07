@@ -29,6 +29,8 @@ import { useTextingStatus } from './components/TextingStatus.js';
 import { useShareLocation } from './components/ShareLocation.js';
 import { adminHref, fieldView, mayAdmin } from './mode.js';
 import './pages/offline.css';
+import BrandMark from './components/BrandMark.jsx';
+import { useBrand } from './brand.js';
 
 // Staff, treasurers and managers. App.jsx guards the desk-only routes with it.
 export const isDesk = (me) => Boolean(me?.role) && me.role !== 'volunteer';
@@ -285,6 +287,8 @@ function SignedInShell({ who, mode }) {
   const nav = mode === 'admin'
     ? (desk ? NAV_DESK.filter((t) => hasArea(me, t.area)) : NAV_DESK.filter((t) => t.area && areasOf(me).includes(t.area)))
     : NAV_VOLUNTEER;
+  // The campaign's name and logo (Settings → Brand), applied as it loads.
+  const brand = useBrand();
   // New replies to your texts: a small count on Calls.
   const unread = Number(useTextingStatus(me).data?.unread) || 0;
   // "Share my location while I'm out" (the map's switch): pings while it's on.
@@ -444,11 +448,11 @@ function SignedInShell({ who, mode }) {
     <>
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
-          <NavLink to="/" className="brand" aria-label={`${mode === 'admin' ? 'base ground admin' : 'base ground'} — ${me.workspace.name}`}>
-            <img className="brand-mark" src="/star.png" alt="" height="32" />
+          <NavLink to="/" className="brand" aria-label={`${brand.name || me.workspace.name} — ${mode === 'admin' ? 'base ground admin' : 'base ground'}`}>
+            <BrandMark logo={brand.logo} />
             <span className="brand-text">
-              <span className="brand-name">base ground{mode === 'admin' && <span className="brand-admin"> Admin</span>}</span>
-              <span className="brand-org">{me.workspace.name}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
+              <span className="brand-name">{brand.name || me.workspace.name}</span>
+              <span className="brand-org">base ground{mode === 'admin' && <span className="brand-admin"> · Admin</span>}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
             </span>
           </NavLink>
           <nav className="links" aria-label="Main">

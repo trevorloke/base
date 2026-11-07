@@ -484,17 +484,31 @@ when you're back online.*
 
 ## The brand
 
-Imagine Surrey's brand guidelines (2.1) are applied in one place and nowhere
-else: `web/src/app.css` (the staff app's tokens: Surrey Navy `#003979`,
-Deep Navy `#00224d`, Marigold `#ffc72c`, the text-safe red `#c8151b`, Sky,
-Paper, Rule, Ink and Slate). Barlow Condensed carries headlines and labels,
-Inter everything people read; both are self-hosted under `web/public/fonts/`
-(Latin and Latin Extended, SIL Open Font License). The rules the code keeps: marigold is never text on white or
-cream; white on Signal Red only at 19px bold and up, so buttons use the
-text-safe red; grounds are flat, and depth is the rise — a Deep Navy block
-with an edge climbing at 24 degrees — never a gradient. The logo is the
-supplied artwork only; the staff app's own tile (`web/public/icon.svg`)
-is the rise and the marigold bar, no star.
+base ground's look is the campaign's own, set by a manager under
+**Settings → Brand** (`web/src/components/BrandSettings.jsx`): a preset
+(**Ground**, the default — deep forest green, signal amber, warm
+off-white, Atkinson Hyperlegible, big tap targets, made to read outdoors;
+**Civic**, navy and marigold with condensed headlines; **Night**, dark;
+**Harvest**, warm, serif headlines, round corners), the name and logo in the
+top bar, six colours, a font and a corner style, with a live preview and a
+contrast check (field body text 7:1, everything else 4.5:1; saving under the
+line asks first). It is stored on the workspace (`workspaces.brand`,
+`ext/brand`), on the event log like every setting, and can be
+pre-configured from the environment (*One deployment per client*, *The
+look*).
+
+`shared/brand.js` turns a brand into the design tokens `web/src/app.css`
+reads (`--paper`, `--ink`, `--mark`, `--accent`, `--nav-*`, `--focus`,
+`--r-*`, `--font-*` …; the header of `app.css` lists them by job), mixing
+the quiet tones from the brand's own colours and pushing them until they
+read; `shared/contrast.js` is the WCAG maths both sides share. The server
+writes the tokens into every `index.html` it sends (`server/lib/brand.js`,
+`brandHead`), so the first paint is already in the brand, and into its own
+public pages (unsubscribe, receipts, lessons). The map's pin colours and
+chrome are fixed whatever the brand: a green pin means support on every
+campaign's phone. Fonts are self-hosted under `web/public/fonts/` (Latin
+and Latin Extended, SIL Open Font License); nothing is fetched from a font
+service.
 
 ## Architecture
 
@@ -555,6 +569,21 @@ environment (`server/lib/org.js`); the code names no client.
 | `BASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
 | `BASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
 | `BASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
+
+**The look** (*pre-configuration*): the campaign's brand before anyone
+saves one under **Settings → Brand** (`server/lib/brand.js`,
+`shared/brand.js`). Each is optional and anything invalid is ignored; once a
+manager saves a brand, the saved one wins (and *Back to the pre-configured
+brand* returns to these).
+
+| Variable | What it sets | Default |
+|---|---|---|
+| `BASE_BRAND_PRESET` | `ground`, `civic`, `night` or `harvest` — the starting look | `ground` |
+| `BASE_BRAND_NAME` | the name in the top bar, on sign-in and on public pages | the campaign's name |
+| `BASE_BRAND_LOGO` | an `https://` address of the logo | base ground's own mark |
+| `BASE_BRAND_PRIMARY`, `BASE_BRAND_ACCENT`, `BASE_BRAND_SURFACE`, `BASE_BRAND_INK`, `BASE_BRAND_ON_PRIMARY`, `BASE_BRAND_ON_ACCENT` | colours, `#rrggbb` (the `#` optional): buttons and the top bar, the spark, the page, its text, text on primary, text on accent | the preset's |
+| `BASE_BRAND_FONT` | `atkinson`, `public-sans`, `inter`, `source-serif` or `system` (all bundled; no font is fetched from anywhere else) | the preset's |
+| `BASE_BRAND_CORNERS` | `sharp`, `soft` or `round` | the preset's |
 
 Two environments per client: **staging** deploys every push to `main`,
 **production** deploys the `production` branch, which the *Promote to

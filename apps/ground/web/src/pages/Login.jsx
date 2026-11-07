@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost } from '../api.js';
 import { landing } from '../mode.js';
+import { AuthBrand } from '../components/BrandMark.jsx';
 
 // Big, thumb-sized controls (auth pages load before any page stylesheet).
 const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
@@ -37,8 +38,7 @@ export default function Login({ mode = 'field' }) {
 
   return (
     <div className="auth-page">
-      <span className="brand">base ground</span>
-      {setup.data?.organization && <span className="brand-org">{setup.data.organization}</span>}
+      <AuthBrand org={setup.data?.organization} />
       {setup.data?.org?.env === 'staging' && <span className="env-badge">Staging</span>}
       <h1>Sign in</h1>
       <form onSubmit={submit}>
