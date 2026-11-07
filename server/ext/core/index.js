@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { pointInPolygon } from '../../lib/geo.js';
 import { httpError } from '../../actions/util.js';
+import { splitFirst } from '@starbase/shared/names';
 
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 const parseJ = (v, fb) => (typeof v === 'string' ? JSON.parse(v) : (v ?? fb));
@@ -95,10 +96,15 @@ export const actions = {
       name: z.string().trim().min(1).max(300),
       // First and last apart, as the campaign's lists keep them (ext/names).
       first_name: z.string().trim().max(150).nullish(),
+      middle_name: z.string().trim().max(150).nullish(),
       last_name: z.string().trim().max(150).nullish(),
       phone: z.string().trim().max(40).nullish(),
     }),
-    handler: async (tx, ctx, { id: clientId, housemate_id: housemateId, name, first_name: firstName, last_name: lastName, phone }, emit) => {
+    handler: async (tx, ctx, { id: clientId, housemate_id: housemateId, name, first_name: typedFirst, middle_name: typedMiddle, last_name: lastName, phone }, emit) => {
+      // "Mary Anne" typed as a first name: Mary, middle Anne (shared/names.js).
+      const cut = !typedMiddle ? splitFirst(typedFirst) : null;
+      const firstName = cut ? cut.first : typedFirst;
+      const middleName = cut ? cut.middle : typedMiddle;
       if (clientId) {
         const cur = (await tx.query('select * from persons where id = $1', [clientId])).rows[0];
         if (cur && cur.workspace_id !== ctx.workspaceId) throw httpError(409, 'that id is already taken');
@@ -121,12 +127,12 @@ export const actions = {
         postal: home.postal || null, lat: home.lat, lng: home.lng,
       };
       await tx.query(
-        `insert into persons (id, workspace_id, kind, name, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, first_name, last_name)
-         values ($1, $2, 'person', $3, $4, $5, $11, $6, $7, $8, $9, $10, '[]', '{}', $12, $13)`,
+        `insert into persons (id, workspace_id, kind, name, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, first_name, last_name, middle_name)
+         values ($1, $2, 'person', $3, $4, $5, $11, $6, $7, $8, $9, $10, '[]', '{}', $12, $13, $14)`,
         [id, ctx.workspaceId, name, person.phone, person.address, person.unit, person.city, person.postal, person.lat, person.lng, person.house_number,
-         firstName || null, lastName || null],
+         firstName || null, lastName || null, middleName || null],
       );
-      Object.assign(person, (await tx.query('select name, first_name, last_name from persons where id = $1', [id])).rows[0]);
+      Object.assign(person, (await tx.query('select name, first_name, middle_name, last_name from persons where id = $1', [id])).rows[0]);
       emit('person', id, 'create', { ...person, tags: [], at_door_of: housemateId });
       return { person: doorPerson(person) };
     },

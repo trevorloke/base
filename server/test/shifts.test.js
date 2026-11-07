@@ -15,13 +15,16 @@ before(async () => {
   await c.signup({ workspaceName: 'Shift WS' });
 });
 
+// Two days from now: always upcoming (a fixed date would slip into the past).
+const SOON = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+
 test('create a shift, assign volunteers, see fill count', async () => {
   const s = await c.action('shift.create', {
     title: 'Saturday canvass — Newton',
     role: 'doorknocking',
     location: 'Newton Rec Centre, 13730 72 Ave',
-    starts_at: '2026-11-07T10:00:00-07:00',
-    ends_at: '2026-11-07T13:00:00-07:00',
+    starts_at: `${SOON}T10:00:00-07:00`,
+    ends_at: `${SOON}T13:00:00-07:00`,
     instructions: 'Wear comfortable shoes. Meet at the north entrance.',
     link: 'https://imaginesurrey.ca/canvass',
     capacity: 2,

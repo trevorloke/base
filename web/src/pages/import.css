@@ -332,3 +332,10 @@
 .imp-headrow input:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 /* Touch screens keep :hover after a tap: the drop box only darkens for a mouse. */
 @media (hover: none) { .imp-drop:hover { border-color: var(--rule-2); } }
+.imp-split { display: flex; gap: var(--s-2); align-items: flex-start; margin: 0 0 var(--s-4); padding: var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); font-size: 14px; color: var(--text-2); }
+.imp-split input { margin-top: 3px; }
+.imp-past { margin: 0 0 var(--s-4); padding: var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); }
+.imp-past.is-on { border-color: var(--text-2); }
+.imp-past__toggle { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; font-size: 15px; }
+.imp-past__year { width: 6.5ch; }
+.imp-past .imp-hint { margin-bottom: 0; }

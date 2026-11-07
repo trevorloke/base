@@ -31,7 +31,7 @@ const personInput = z.object({
 });
 
 const rowToPerson = (r) => ({
-  id: r.id, kind: r.kind, name: r.name, first_name: r.first_name ?? null, last_name: r.last_name ?? null, email: r.email,
+  id: r.id, kind: r.kind, name: r.name, first_name: r.first_name ?? null, middle_name: r.middle_name ?? null, last_name: r.last_name ?? null, email: r.email,
   phone: r.phone, address: r.address, house_number: r.house_number, unit: r.unit, city: r.city, postal: r.postal,
   lat: r.lat, lng: r.lng,
   tags: typeof r.tags === 'string' ? JSON.parse(r.tags) : (r.tags || []),
@@ -47,7 +47,7 @@ export const ACTIONS = {
     // name: the whole name — or leave it out and send first_name / last_name.
     input: personInput.extend({ id: z.uuid().nullish(), name: z.string().trim().max(300).nullish() }),
     handler: async (tx, ctx, { id: clientId, ...input }, emit) => {
-      const parts = [input.first_name, input.last_name].map((x) => String(x ?? '').trim()).filter(Boolean);
+      const parts = [input.first_name, input.middle_name, input.last_name].map((x) => String(x ?? '').trim()).filter(Boolean);
       if (!String(input.name ?? '').trim()) input.name = parts.join(' ');
       if (!input.name) throw httpError(400, 'a name, or a first or last name');
       if (clientId) {
@@ -59,16 +59,16 @@ export const ACTIONS = {
       // The house number and the street, however they came (lib/address.js).
       Object.assign(input, civic(input));
       await tx.query(
-        `insert into persons (id, workspace_id, kind, name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, first_name, last_name)
-         values ($1, $2, $3, $4, $5, $6, $7, $15, $8, $9, $10, $11, $12, $13, $14, $16, $17)`,
+        `insert into persons (id, workspace_id, kind, name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, first_name, last_name, middle_name)
+         values ($1, $2, $3, $4, $5, $6, $7, $15, $8, $9, $10, $11, $12, $13, $14, $16, $17, $18)`,
         [id, ctx.workspaceId, input.kind, input.name, input.email || null,
          input.phone || null, input.address || null, input.unit || null,
          input.city || null, input.postal || null, input.lat ?? null, input.lng ?? null,
          JSON.stringify(input.tags || []), JSON.stringify(input.socials || {}), input.house_number,
-         input.first_name || null, input.last_name || null],
+         input.first_name || null, input.last_name || null, input.middle_name || null],
       );
       // The names as the database settled them (ext/names).
-      const named = (await tx.query('select name, first_name, last_name from persons where id = $1', [id])).rows[0];
+      const named = (await tx.query('select name, first_name, middle_name, last_name from persons where id = $1', [id])).rows[0];
       Object.assign(input, named);
       const payload = { id, ...input };
       emit('person', id, 'create', payload);
@@ -99,21 +99,22 @@ export const ACTIONS = {
       const addrChanged = (('address' in patch || 'house_number' in patch) && (next.address || null) !== (cur.address || null))
         || ('unit' in patch && (patch.unit || null) !== (cur.unit || null));
       if (addrChanged && !('lat' in patch) && !('lng' in patch)) { next.lat = null; next.lng = null; }
-      // Names: first or last sent → the whole follows; the whole alone → it is
+      // Names: first, middle or last sent → the whole follows; the whole alone → it is
       // split again (ext/names). Neither sent: as they were.
-      const namesSent = 'first_name' in patch || 'last_name' in patch;
+      const namesSent = 'first_name' in patch || 'middle_name' in patch || 'last_name' in patch;
       await tx.query(
         `update persons set kind = $3, name = $4, email = $5, phone = $6, address = $7,
            unit = $8, city = $9, postal = $10, lat = $11, lng = $12, tags = $13, socials = $14, house_number = $15,
-           first_name = $16, last_name = $17, updated_at = now()
+           first_name = $16, last_name = $17, middle_name = $18, updated_at = now()
          where id = $1 and workspace_id = $2`,
         [id, ctx.workspaceId, next.kind, next.name, next.email || null,
          next.phone || null, next.address || null, next.unit || null,
          next.city || null, next.postal || null, next.lat ?? null, next.lng ?? null,
          JSON.stringify(next.tags || []), JSON.stringify(next.socials || {}), next.house_number || null,
-         namesSent ? (next.first_name || null) : cur.first_name, namesSent ? (next.last_name || null) : cur.last_name],
+         namesSent ? (next.first_name || null) : cur.first_name, namesSent ? (next.last_name || null) : cur.last_name,
+         namesSent ? (next.middle_name || null) : cur.middle_name],
       );
-      const named = (await tx.query('select name, first_name, last_name from persons where id = $1', [id])).rows[0];
+      const named = (await tx.query('select name, first_name, middle_name, last_name from persons where id = $1', [id])).rows[0];
       Object.assign(next, named);
       if (namesSent || 'name' in patch) Object.assign(patch, named);
       emit('person', id, 'update', { ...patch, ...(('address' in patch || 'house_number' in patch) ? { address: next.address, house_number: next.house_number } : {}) });

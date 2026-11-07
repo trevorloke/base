@@ -3,8 +3,8 @@
 import { civic } from '../lib/address.js';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { matchRating, offeredCodes } from '@starbase/shared/scale';
-import { OUTCOMES, VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
+import { matchRating, offeredCodes, ratingByCode } from '@starbase/shared/scale';
+import { OUTCOMES, VOLUNTEER_ROLES, VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
 import { dateFrom } from '../ext/fields/kinds.js';
 import { timeZone } from '../lib/org.js';
 import { fromLocal } from '../lib/tzsql.js';
@@ -14,6 +14,7 @@ import { geocodeAddress } from '../lib/geocode.js';
 import { buildSample } from '../lib/sample.js';
 import { logGift } from '../lib/gifts.js';
 import { runHooks } from '../lib/hooks.js';
+import { readVoted } from '../ext/voted/import.js';
 
 const app = new Hono();
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -41,6 +42,7 @@ const nameOnly = (p) => !p.email && !p.phone && !p.address;
 const rowSchema = z.object({
   name: z.string().max(300).nullish(),
   first: z.string().max(150).nullish(),
+  middle: z.string().max(150).nullish(),
   last: z.string().max(150).nullish(),
   email: z.string().max(320).nullish(),
   phone: z.string().max(40).nullish(),
@@ -81,6 +83,11 @@ const importInput = z.object({
   rows: z.array(z.record(z.string(), z.unknown())).min(1).max(2000),
   tag: z.string().trim().max(40).nullish(),   // applied to every imported row
   dryRun: z.boolean().default(false),
+  // A list from a past election: what it says about support, signs, voting
+  // and volunteering comes in as tags with the year ("Strong support 2022",
+  // "Lawn sign 2022", "Voted 2022"), never as today's rating, sign, voted
+  // mark, knock or role. Names, phones, emails and addresses come in as usual.
+  past: z.object({ year: z.number().int().min(1950).max(2100) }).nullish(),
 });
 
 // A 1/0 column: 1, yes, y, true, x (any case) say yes.
@@ -95,22 +102,47 @@ const coord = (v, max) => {
 
 // scale: the campaign's (ext/scale). A rating is a code or its words, any
 // case; a new rating must be on the list (one taken off it is refused).
-const cleanRow = (raw, i, scale) => {
+// A past election's say about a person, as tags with its year.
+const PAST_TALK = { contacted: 'Talked', refused: 'Refused', moved: 'Moved' };
+const pastTag = (words, year) => `${String(words).slice(0, 34).trim()} ${year}`;
+const pastTags = (row, raw, year, scale) => {
+  const tags = [];
+  if (row.rating) {
+    const r = ratingByCode(scale, row.rating);
+    // "Strong support 2022", "Undecided 2022", "Voting Locke 2022", "Opposed 2022".
+    const words = r?.band === 'opposed' ? (r.name && r.name !== 'Other' ? `Voting ${r.name}` : 'Opposed') : (r?.label || r?.word || `Rated ${row.rating}`);
+    tags.push(pastTag(words, year));
+  }
+  for (const code of row.roles) tags.push(pastTag(VOLUNTEER_ROLES.find((x) => x.code === code)?.label || code, year));
+  if (row.history && PAST_TALK[row.history.outcome]) tags.push(pastTag(PAST_TALK[row.history.outcome], year));
+  if (row.sign) tags.push(pastTag(row.sign === 'installed' ? 'Lawn sign' : 'Lawn sign request', year));
+  if (row.tags.includes('volunteer')) tags.push(pastTag('Volunteer', year));
+  if (row.tags.includes('donor')) tags.push(pastTag('Donor', year));
+  if (readVoted(raw.voted).value === true) tags.push(pastTag('Voted', year));
+  return {
+    ...row,
+    rating: null, roles: [], history: null, sign: null,
+    tags: [...new Set([...row.tags.filter((t) => t !== 'volunteer' && t !== 'donor'), ...tags])].slice(0, 50),
+  };
+};
+
+const cleanRow = (raw, i, scale, past = null) => {
   const r = rowSchema.safeParse(raw);
   if (!r.success) return { error: `row ${i + 1}: ${r.error.issues[0].path.join('.')} ${r.error.issues[0].message}` };
   const v = r.data;
   // First and last as the file keeps them; a whole name alone is split by
   // the database (ext/names).
   const first = norm(v.first) || null;
+  const middle = norm(v.middle) || null;
   const last = norm(v.last) || null;
-  const name = norm(v.name) || [first, last].filter(Boolean).join(' ');
+  const name = norm(v.name) || [first, middle, last].filter(Boolean).join(' ');
   if (!name) return { error: `row ${i + 1}: no name` };
   const email = lower(v.email) || null;
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: `row ${i + 1}: invalid email “${v.email}”` };
   const said = norm(v.rating);
   const hit = said ? matchRating(scale, said) : null;
   if (said && !hit) return { error: `row ${i + 1}: rating “${v.rating}” is not on the scale` };
-  if (hit?.off) return { error: `row ${i + 1}: rating “${v.rating}” is off the list` };
+  if (hit?.off && !past) return { error: `row ${i + 1}: rating “${v.rating}” is off the list` };
   const rating = hit?.code || null;
   const tags = Array.isArray(v.tags) ? [...v.tags] : norm(v.tags).split(/[;,|]/);
   if (yes(v.volunteer)) tags.push('volunteer');
@@ -125,7 +157,7 @@ const cleanRow = (raw, i, scale) => {
   const pin = lat != null && lng != null && !(lat === 0 && lng === 0) ? { lat, lng } : null;
   return {
     row: {
-      name, first: norm(v.name) ? null : first, last: norm(v.name) ? null : last, email, rating, socials, pin, house_number,
+      name, first: norm(v.name) ? null : first, middle: norm(v.name) ? null : middle, last: norm(v.name) ? null : last, email, rating, socials, pin, house_number,
       phone: norm(v.phone) || null,
       address,
       unit: norm(v.unit) || null,
@@ -208,7 +240,7 @@ app.post('/import', async (c) => {
   const ctx = c.get('ctx');
   const parsed = importInput.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0].message }, 400);
-  const { rows, tag, dryRun } = parsed.data;
+  const { rows, tag, dryRun, past } = parsed.data;
 
   // Features' own columns (ext/fields: a person's profile fields), checked
   // with the row — a cell that doesn't fit refuses it — and filled after it.
@@ -224,8 +256,10 @@ app.post('/import', async (c) => {
   const clean = [];
   const scale = await loadScale(c.get('db'), ctx.workspaceId);
   rows.forEach((raw, i) => {
-    const r = cleanRow(raw, i, scale);
-    const more = r.error ? [] : extras.map((x) => x.check(raw));
+    const r0 = cleanRow(raw, i, scale, past);
+    const r = r0.error || !past ? r0 : { row: pastTags(r0.row, raw, past.year, scale) };
+    // A past election's Voted column is a tag, never today's voted mark.
+    const more = r.error ? [] : extras.map((x) => x.check(past ? { ...raw, voted: null } : raw));
     const bad = more.find((m) => m.error);
     if (r.error) errors.push(r.error);
     else if (bad) errors.push(`row ${i + 1}: ${bad.error}`);
@@ -355,14 +389,14 @@ app.post('/import', async (c) => {
         const p = { id, name: r.name, email: r.email, phone: r.phone, address: r.address, unit: r.unit,
           city: r.city, postal: r.postal, tags: r.tags, socials: r.socials, rating: r.rating,
           lat: r.pin?.lat ?? null, lng: r.pin?.lng ?? null, house_number: r.house_number,
-          ...(r.first || r.last ? { first_name: r.first, last_name: r.last } : {}) };
+          ...(r.first || r.middle || r.last ? { first_name: r.first, middle_name: r.middle, last_name: r.last } : {}) };
         if (write) {
           await tx.query(
-            `insert into persons (id, workspace_id, name, email, phone, address, unit, city, postal, tags, socials, rating, lat, lng, house_number, first_name, last_name)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+            `insert into persons (id, workspace_id, name, email, phone, address, unit, city, postal, tags, socials, rating, lat, lng, house_number, first_name, last_name, middle_name)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
             [id, ctx.workspaceId, p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal,
              JSON.stringify(p.tags), JSON.stringify(p.socials), p.rating, p.lat, p.lng, p.house_number,
-             r.first || null, r.last || null],
+             r.first || null, r.last || null, r.middle || null],
           );
           emit('person', id, 'create', { ...p, source: 'import' });
         }

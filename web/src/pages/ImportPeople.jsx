@@ -12,6 +12,7 @@ import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { matchRating, offeredCandidates, offeredCodes } from '@starbase/shared/scale';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { splitFirst } from '@starbase/shared/names';
 import { apiPost } from '../api.js';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
@@ -203,6 +204,7 @@ function shapeTable(all, header) {
 const FIELDS = [
   { key: 'name', label: 'Full name' },
   { key: 'first', label: 'First name' },
+  { key: 'middle', label: 'Middle name' },
   { key: 'last', label: 'Last name' },
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
@@ -240,6 +242,7 @@ const fieldKey = (s) => String(s || '').normalize('NFKD').replace(/[\u0300-\u036
 const EXACT = [
   ['email', /^(e?mail|emailaddress|emailaddr|primaryemail|personalemail|homeemail|email\d|courriel)$/],
   ['first', /^(first|firstname|fname|given|givenname|forename|firstnames)$/],
+  ['middle', /^(middle|middlename|middlenames|middleinitial|mi|mname|secondname)$/],
   ['last', /^(last|lastname|lname|surname|familyname)$/],
   ['name', /^(name|fullname|contactname|displayname|votername|membername|donorname|person|contact|names)$/],
   ['phone', /^(phone|phonenumber|phoneno|tel|telephone|mobile|mobilephone|mobilenumber|cell|cellphone|cellnumber|primaryphone|phone\d)$/],
@@ -263,6 +266,7 @@ const EXACT = [
 const CONTAINS = [
   ['email', /e?mail/],
   ['first', /firstname|givenname|forename/],
+  ['middle', /middlename|middleinitial/],
   ['last', /lastname|surname|familyname/],
   ['phone', /^(?!home).*(phone|mobile|cellular)|^cell|^tel/],
   ['house_number', /housenumber|civicnumber|streetnumber/],
@@ -477,7 +481,10 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, v
     if (h && !SCI_RE.test(h)) row.phone = h;
   }
   if (roles.size) row.roles = [...roles];
-  const { statusCol = -1, dateCol = -1, signCol = -1, historyMap, signMap } = more;
+  const { statusCol = -1, dateCol = -1, signCol = -1, historyMap, signMap, splitFirsts = false } = more;
+  // "Mary Anne" in First name, nothing in Middle: Mary · Anne (shared/names.js).
+  const cut = splitFirsts && !row.middle ? splitFirst(row.first) : null;
+  if (cut) { row.first = cut.first; row.middle = cut.middle; }
   // Only columns that are coming in (not set to Don't import).
   const st = statusCol >= 0 && mapping[statusCol] ? String(cells[statusCol] ?? '').trim() : '';
   const day = dateCol >= 0 && mapping[dateCol] ? String(cells[dateCol] ?? '').trim() : '';
@@ -498,7 +505,7 @@ function errText(e) {
   return m ? `Starbase said: ${m}.` : `Something went wrong (${e.status}). Try again.`;
 }
 
-const displayName = (r) => r.name || [r.first, r.last].filter(Boolean).join(' ');
+const displayName = (r) => r.name || [r.first, r.middle, r.last].filter(Boolean).join(' ');
 const displayAddress = (r) =>
   [[r.unit ? `${r.unit} –` : null, r.address].filter(Boolean).join(' '), r.city, r.postal].filter(Boolean).join(', ');
 const splitTags = (s) => String(s || '').split(/[;,|]/).map((t) => t.trim()).filter(Boolean);
@@ -653,6 +660,14 @@ function ImportFlow() {
   const [roleMap, setRoleMap] = useState({}); // volunteer-role tags (lower-cased words) → role codes ('' a tag only), by choice
   const [historyMap, setHistoryMap] = useState({}); // Interaction Status values → 'door:no_answer'… ('' a field only), by choice
   const [signMap, setSignMap] = useState({}); // Sign values → 'requested' | 'installed' ('' a field only), by choice
+  const [splitFirsts, setSplitFirsts] = useState(true); // a first name's second word or initial → Middle name
+  // A list from a past election: its support, signs, voting and volunteering
+  // come in as tags with the year ("Strong support 2022"), not as today's.
+  const [past, setPast] = useState(false);
+  const [pastYear, setPastYear] = useState(String(new Date().getFullYear()));
+  const pastY = Number(pastYear);
+  const pastOk = !past || (/^\d{4}$/.test(pastYear) && pastY >= 1950 && pastY <= 2100);
+  const pastBody = past && pastOk ? { past: { year: pastY } } : {};
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [tag, setTag] = useState('');
   const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, parts, error }
@@ -801,7 +816,7 @@ function ImportFlow() {
   const statusCol = headCol(source?.headers, STATUS_HEADS);
   const dateCol = headCol(source?.headers, DATE_HEADS);
   const signCol = headCol(source?.headers, SIGN_HEADS);
-  const more = useMemo(() => ({ statusCol, dateCol, signCol, historyMap, signMap }), [statusCol, dateCol, signCol, historyMap, signMap]);
+  const more = useMemo(() => ({ statusCol, dateCol, signCol, historyMap, signMap, splitFirsts }), [statusCol, dateCol, signCol, historyMap, signMap, splitFirsts]);
   const volCols = useMemo(
     () => new Set(source ? source.headers.map((h, i) => (/volunteer/i.test(h) ? i : -1)).filter((i) => i >= 0) : []),
     [source],
@@ -824,7 +839,7 @@ function ImportFlow() {
     return out;
   }, [source, mapping, homeCol]);
   const ratingCol = mapping.indexOf('rating');
-  const hasName = mapping.some((k) => k === 'name' || k === 'first' || k === 'last');
+  const hasName = mapping.some((k) => k === 'name' || k === 'first' || k === 'middle' || k === 'last');
   const usedCount = mapping.filter(Boolean).length;
   const usedFields = allFields.filter((f) => mapping.includes(f.key)).map((f) => f.label);
   const tagClean = tag.trim();
@@ -895,6 +910,21 @@ function ImportFlow() {
     return source.records.filter((r) => String(r.cells[statusCol] ?? '').trim()
       && !(dateCol >= 0 && mapping[dateCol] && String(r.cells[dateCol] ?? '').trim())).length;
   }, [source, mapping, statusCol, dateCol]);
+  // First names with a second word or an initial (no Middle name column
+  // value beside them): how many, and one for the example.
+  const firstSplits = useMemo(() => {
+    const fc = mapping.indexOf('first');
+    const mc = mapping.indexOf('middle');
+    if (!source || fc < 0) return { n: 0, example: null };
+    let n = 0; let example = null;
+    for (const r of source.records) {
+      if (mc >= 0 && String(r.cells[mc] ?? '').trim()) continue;
+      const c = splitFirst(r.cells[fc]);
+      if (c) { n += 1; if (!example) example = { from: String(r.cells[fc]).trim(), ...c }; }
+    }
+    return { n, example };
+  }, [source, mapping]);
+  const fieldCols = source ? mapping.map((k, i) => (k && k.startsWith(FIELD_KEY) ? source.headers[i] : null)).filter(Boolean) : [];
   const setHistoryMeaning = (value, code) => { setHistoryMap((m) => ({ ...m, [value.toLowerCase()]: code })); setCheck(null); };
   const setSignMeaning = (value, code) => { setSignMap((m) => ({ ...m, [value.toLowerCase()]: code })); setCheck(null); };
   const setRoleMeaning = (word, code) => {
@@ -923,7 +953,7 @@ function ImportFlow() {
     try {
       for (let start = 0; start < total; start += CHECK_CHUNK) {
         const part = partAt(start, CHECK_CHUNK);
-        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true });
+        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true, ...pastBody });
         acc.created += r.created || 0;
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
@@ -951,7 +981,7 @@ function ImportFlow() {
     try {
       for (; start < total; start += IMPORT_CHUNK) {
         const part = partAt(start, IMPORT_CHUNK);
-        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined });
+        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, ...pastBody });
         acc.created += r.created || 0;
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
@@ -1166,6 +1196,16 @@ function ImportFlow() {
                 )}
               </section>
             )}
+            {firstSplits.n > 0 && (
+              <label className="imp-split">
+                <input type="checkbox" checked={splitFirsts} disabled={locked}
+                  onChange={(e) => { setSplitFirsts(e.target.checked); setCheck(null); }} />
+                <span>
+                  <strong>Second first names to Middle name</strong> — {plural(firstSplits.n, 'first name has', 'first names have')} a second word or an initial
+                  {' '}(“{firstSplits.example.from}” → {firstSplits.example.first} · <em>{firstSplits.example.middle}</em>). Hyphenated names (Mary-Anne) stay whole.
+                </span>
+              </label>
+            )}
             {roleWords.length > 0 && (
               <section className="imp-rmap" aria-labelledby="imp-roles-h">
                 <h3 id="imp-roles-h" className="imp-rmap__h">Volunteer roles</h3>
@@ -1196,7 +1236,7 @@ function ImportFlow() {
               <section className="imp-rmap" aria-labelledby="imp-hist-h">
                 <h3 id="imp-hist-h" className="imp-rmap__h">Past conversations</h3>
                 <p className="imp-hint imp-hint--sm">
-                  Each person’s last interaction in the list ({source.headers[statusCol]}{dateCol >= 0 ? ` on ${source.headers[dateCol]}` : ''}). Say what each status was, and it comes in as a knock or a call on that day — on the map, the field report and their history, marked as from this list. Left as a profile field, it stays just that.
+                  Each person’s last interaction in the list ({source.headers[statusCol]}{dateCol >= 0 ? ` on ${source.headers[dateCol]}` : ''}). Say what each status was, and it comes in as a knock or a call on that day — on the map, the field report and their history, marked as from this list. Left as a profile field, it stays just that.{past && ' From a past election: a talk, a refusal or a move is a tag with the year instead.'}
                 </p>
                 <ul className="imp-rmap__list">
                   {statusValues.map(({ value, n }) => {
@@ -1229,7 +1269,7 @@ function ImportFlow() {
               <section className="imp-rmap" aria-labelledby="imp-sign-h">
                 <h3 id="imp-sign-h" className="imp-rmap__h">Signs</h3>
                 <p className="imp-hint imp-hint--sm">
-                  What the list’s {source.headers[signCol]} column means. A lawn sign to put up (or one that’s up) goes on the sign list at their address — never a second one for someone who has a sign.
+                  What the list’s {source.headers[signCol]} column means. A lawn sign to put up (or one that’s up) goes on the sign list at their address — never a second one for someone who has a sign.{past && ' From a past election: a tag with the year instead (Lawn sign, Lawn sign request).'}
                 </p>
                 <ul className="imp-rmap__list">
                   {signValues.map(({ value, n }) => {
@@ -1257,6 +1297,23 @@ function ImportFlow() {
                 Match a column to <strong>Full name</strong>, or <strong>First</strong> + <strong>Last name</strong>.
               </p>
             )}
+
+            <section className={`imp-past${past ? ' is-on' : ''}`} aria-labelledby="imp-past-h">
+              <label className="imp-past__toggle">
+                <input type="checkbox" checked={past} disabled={locked} onChange={(e) => { setPast(e.target.checked); setCheck(null); }} />
+                <span id="imp-past-h"><strong>From a past election</strong></span>
+                {past && (
+                  <input className="input mono imp-past__year" inputMode="numeric" maxLength={4} aria-label="Which election’s year"
+                    value={pastYear} disabled={locked} onChange={(e) => { setPastYear(e.target.value.replace(/\D/g, '')); setCheck(null); }} />
+                )}
+              </label>
+              <p className="imp-hint imp-hint--sm">
+                {past
+                  ? <>Nothing here becomes today’s. Ratings, signs, voted, volunteer and donor, roles and conversations come in as tags with the year — <em>Strong support {pastOk ? pastY : '…'}</em>, <em>Voting Locke {pastOk ? pastY : '…'}</em>, <em>Lawn sign {pastOk ? pastY : '…'}</em>, <em>Voted {pastOk ? pastY : '…'}</em> — and someone already on file keeps their rating. Names, phones, emails and addresses come in as usual.{fieldCols.length > 0 && <> Profile fields come in as they are ({fieldCols.slice(0, 4).join(', ')}{fieldCols.length > 4 ? '…' : ''}) — set any from that election to Don’t import.</>}</>
+                  : <>An old list (a past campaign’s)? Tick this and its ratings, signs and voted marks come in as tags with that year, not as today’s.</>}
+              </p>
+              {!pastOk && <p className="imp-need" role="alert">A year like 2022.</p>}
+            </section>
 
             <Reveal label={tagClean ? `Tag: ${tagWord(tagClean)}` : 'Tag everyone'} defaultOpen={Boolean(tagClean)}>
               <div className="field imp-tagfield">
@@ -1328,7 +1385,7 @@ function ImportFlow() {
               </div>
             ) : (
               <div className="imp-actions">
-                <button type="button" className="btn btn-primary imp-tap" onClick={runCheck} disabled={!hasName || busy || locked}>
+                <button type="button" className="btn btn-primary imp-tap" onClick={runCheck} disabled={!hasName || !pastOk || busy || locked}>
                   Check {plural(total, 'row', 'rows')}
                 </button>
                 <span className="imp-line imp-line--inline">{fmtN(usedCount)} of {fmtN(source.headers.length)} columns</span>

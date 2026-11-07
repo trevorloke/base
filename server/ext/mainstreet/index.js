@@ -22,6 +22,7 @@ import { FIELD_ACTIONS } from '../../actions/field.js';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
 import { findKnown, maybeSame, emailKey } from '../relationships/match.js';
 import { actions as requestActions } from '../requests/actions.js';
+import { splitFirst } from '@starbase/shared/names';
 
 export const sql = `
 alter table contacts add column if not exists place text;
@@ -68,9 +69,12 @@ export const actions = {
       )).rows[0];
       if (dup) return { person_id: dup.person_id, contact_id: dup.id, name: dup.name, duplicate: true };
 
-      const first = clean(input.first_name);
+      // "Mary Anne" typed as a first name: Mary, middle Anne (shared/names.js).
+      const cut = splitFirst(clean(input.first_name));
+      const first = cut ? cut.first : clean(input.first_name);
+      const middle = cut ? cut.middle : '';
       const last = clean(input.last_name);
-      const name = [first, last].filter(Boolean).join(' ');
+      const name = [first, middle, last].filter(Boolean).join(' ');
       if (!name) throw httpError(400, 'a first or last name');
       const phone = clean(input.phone) || null;
       const email = emailKey(input.email) || null;
@@ -112,11 +116,11 @@ export const actions = {
         const keepEmail = email && !(same && same.email);
         if (email && !keepEmail) attrs.typed_email = email;
         await tx.query(
-          `insert into persons (id, workspace_id, kind, name, first_name, last_name, email, phone, postal, tags, socials, attrs)
-           values ($1, $2, 'person', $3, $4, $5, $6, $7, $8, $9, '{}', $10)`,
-          [id, ws, name, first || null, last || null, keepEmail ? email : null, phone, postal, JSON.stringify(['mainstreeting']), JSON.stringify(attrs)],
+          `insert into persons (id, workspace_id, kind, name, first_name, last_name, email, phone, postal, tags, socials, attrs, middle_name)
+           values ($1, $2, 'person', $3, $4, $5, $6, $7, $8, $9, '{}', $10, $11)`,
+          [id, ws, name, first || null, last || null, keepEmail ? email : null, phone, postal, JSON.stringify(['mainstreeting']), JSON.stringify(attrs), middle || null],
         );
-        emit('person', id, 'create', { id, kind: 'person', name, first_name: first || null, last_name: last || null, email: keepEmail ? email : null, phone, postal, tags: ['mainstreeting'], source: 'mainstreeting', place });
+        emit('person', id, 'create', { id, kind: 'person', name, first_name: first || null, middle_name: middle || null, last_name: last || null, email: keepEmail ? email : null, phone, postal, tags: ['mainstreeting'], source: 'mainstreeting', place });
         person = { id, name };
       }
 

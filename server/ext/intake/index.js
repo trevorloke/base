@@ -31,6 +31,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { makeLimiter } from '../../lib/guard.js';
 import { civic } from '../../lib/address.js';
 import { httpError } from '../../actions/util.js';
+import { splitFirst } from '@starbase/shared/names';
 
 export const sql = `
 create table if not exists intake_keys (
@@ -109,6 +110,7 @@ const str = (max) => z.string().trim().max(max).optional().nullable();
 const personIn = z.object({
   name: str(300),
   first_name: str(150),
+  middle_name: str(150),
   last_name: str(150),
   email: z.string().trim().toLowerCase().email().max(320).optional().nullable(),
   phone: str(40),
@@ -170,7 +172,7 @@ publicRoutes.get('/in/v1/ping', (c) => {
 // without an email, a match by name and phone only gets the tags. An email
 // that matches nobody is a new person, never added to someone found by name.
 const takeIn = async (tx, ws, p, emit) => {
-  const name = norm(p.name) || [norm(p.first_name), norm(p.last_name)].filter(Boolean).join(' ') || p.email.split('@')[0];
+  const name = norm(p.name) || [norm(p.first_name), norm(p.middle_name), norm(p.last_name)].filter(Boolean).join(' ') || p.email.split('@')[0];
   const source = slug(p.source || 'website') || 'website';
   const tags = [...new Set([source, ...(p.tags || []).map(tagAsSent).filter(Boolean), ...(p.newsletter ? ['newsletter'] : [])])];
   const addr = p.address ? civic({ address: norm(p.address) }) : null;
@@ -215,12 +217,15 @@ const takeIn = async (tx, ws, p, emit) => {
       city: norm(p.city) || null, postal: norm(p.postal).toUpperCase() || null, tags,
     };
     // First and last as the form sent them; a whole name alone is split (ext/names).
-    const firstLast = !norm(p.name) && (norm(p.first_name) || norm(p.last_name));
+    // A first name with a second word ("Mary Anne"): Mary, middle Anne (shared/names.js).
+    const firstLast = !norm(p.name) && (norm(p.first_name) || norm(p.middle_name) || norm(p.last_name));
+    const cut = firstLast && !norm(p.middle_name) ? splitFirst(p.first_name) : null;
     await tx.query(
-      `insert into persons (id, workspace_id, kind, name, email, phone, address, house_number, unit, city, postal, tags, socials, first_name, last_name)
-       values ($1, $2, 'person', $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}', $12, $13)`,
+      `insert into persons (id, workspace_id, kind, name, email, phone, address, house_number, unit, city, postal, tags, socials, first_name, last_name, middle_name)
+       values ($1, $2, 'person', $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}', $12, $13, $14)`,
       [personId, ws, row.name, row.email, row.phone, row.address, row.house_number, row.unit, row.city, row.postal, JSON.stringify(tags),
-       firstLast ? norm(p.first_name) || null : null, firstLast ? norm(p.last_name) || null : null],
+       firstLast ? (cut ? cut.first : norm(p.first_name) || null) : null, firstLast ? norm(p.last_name) || null : null,
+       firstLast ? (cut ? cut.middle : norm(p.middle_name) || null) : null],
     );
     emit('person', personId, 'create', { ...row, source: 'website' });
   }

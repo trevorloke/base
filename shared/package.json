@@ -9,6 +9,7 @@
     "./scale": "./scale.js",
     "./dayparts": "./dayparts.js",
     "./markdown": "./markdown.js",
-    "./passes": "./passes.js"
+    "./passes": "./passes.js",
+    "./names": "./names.js"
   }
 }

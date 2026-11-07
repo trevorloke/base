@@ -40,8 +40,8 @@ test('the reports: totals and tables; CSV of any report and any dataset; volunte
   const people = await app.request('/api/export/people.csv', { headers: { cookie: mgr.cookie } });
   assert.equal(people.status, 200);
   const text = await people.text();
-  assert.match(text, /^﻿?first_name,last_name,name,email,phone,unit,house_number,street,address/);
-  assert.match(text, /Bob,Voter,Bob Voter,,604-555-0102/);
+  assert.match(text, /^﻿?first_name,middle_name,last_name,name,email,phone,unit,house_number,street,address/);
+  assert.match(text, /Bob,,Voter,Bob Voter,,604-555-0102/);
   assert.match(text, /member; yard-sign/);
   for (const d of ['gifts', 'subscribers', 'contacts', 'lists']) {
     const res = await app.request(`/api/export/${d}.csv`, { headers: { cookie: mgr.cookie } });

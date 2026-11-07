@@ -62,7 +62,7 @@ test('volunteer person list: their own note rides along — same row shape, some
   const row = (await vol.get('/api/persons?has=phone')).json.persons.find((p) => p.id === donor.id);
   assert.equal(row.note, 'Call after 6');
   assert.deepEqual(Object.keys(row).sort(), [
-    'address', 'city', 'email', 'first_name', 'house_number', 'id', 'kind', 'last_name', 'lat', 'lng', 'name', 'note', 'phone', 'postal', 'rated_at', 'rating', 'socials', 'tags', 'unit', 'voted_at',
+    'address', 'city', 'email', 'first_name', 'house_number', 'id', 'kind', 'last_name', 'lat', 'lng', 'middle_name', 'name', 'note', 'phone', 'postal', 'rated_at', 'rating', 'socials', 'tags', 'unit', 'voted_at',
   ], 'no gifts, totals, tiers or other attrs in the list');
   assert.equal(row.email, null, 'the key stays; the address does not reach a volunteer');
   assert.equal(row.phone, '604-555-0142', 'phones stay — volunteers call');

@@ -655,3 +655,8 @@ html:has(.auth-page) body { background: transparent; }
   .disclose::after { width: auto; height: auto; background: none; content: '+'; content: '+' / ''; }
   .disclose[aria-expanded='true']::after { content: '−'; content: '−' / ''; }
 }
+
+/* A quiet text button inside a line of words (NameFields' Undo, Move it). */
+.btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--link, var(--text-1)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.btn-link:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
+.name-note { margin: calc(-1 * var(--s-2, 8px)) 0 var(--s-3, 12px); font-size: 14px; }

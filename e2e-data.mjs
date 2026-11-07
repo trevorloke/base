@@ -115,7 +115,7 @@ const L1 = ['Riya', 'Sample', '', '16045550188', `riya.${tag}@example.org`, '1',
 L1[20] = 'Not Home'; L1[21] = '10/04/2026'; L1[26] = 'Yes';
 const L2 = [...L1]; L2[0] = 'Omar'; L2[1] = 'Listed'; L2[2] = '604-555-0177'; L2[3] = ''; L2[4] = ''; L2[8] = ''; L2[9] = '9001'; L2[16] = ''; L2[25] = '';
 L2[20] = 'Spoke - supporter';
-const L3 = [...L1]; L3[0] = 'Lee'; L3[1] = 'Listed'; L3[3] = '1.6045E+10'; L3[4] = `lee.${tag}@example.org`; L3[9] = '9002'; L3[25] = ''; L3[20] = ''; L3[21] = ''; L3[26] = '';
+const L3 = [...L1]; L3[0] = 'Lee Ann'; L3[1] = 'Listed'; L3[3] = '1.6045E+10'; L3[4] = `lee.${tag}@example.org`; L3[9] = '9002'; L3[25] = ''; L3[20] = ''; L3[21] = ''; L3[26] = '';
 await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
 await page.click('button:has-text("Paste text")');
 await page.fill('#imp-paste', [LHEAD, L1, L2, L3].map((r) => r.join('\t')).join('\n'));
@@ -130,6 +130,8 @@ check('a phone Excel cut short is named, and won’t be imported', /lost its las
 const roleRows = Object.fromEntries(await page.$$eval('section[aria-labelledby="imp-roles-h"] .imp-rmap__row', (rows) => rows.map((r) => [r.querySelector('.imp-rmap__word').innerText.trim(), (() => { const x = r.querySelector('select'); return x.options[x.selectedIndex].text; })()])));
 check('Volunteer roles: Vol: Door Knocker → Doorknocking; Vol: GOTV a tag only', roleRows['Vol: Door Knocker'] === 'Doorknocking' && roleRows['Vol: GOTV'] === 'A tag only', JSON.stringify(roleRows));
 await page.selectOption('select[aria-label="The role “Vol: GOTV” is"]', 'driver');
+const split = await page.innerText('.imp-split').catch(() => '');
+check('the import offers “Lee Ann” → Lee · Ann, ticked', /1 first name has a second word/.test(split) && /Lee Ann.*Lee · Ann/s.test(split) && await page.isChecked('.imp-split input'), split);
 const readRows = (sec) => page.$$eval(`section[aria-labelledby="${sec}"] .imp-rmap__row`, (rows) => Object.fromEntries(rows.map((r) => [r.querySelector('.imp-rmap__word').innerText.trim(), (() => { const x = r.querySelector('select'); return x.options[x.selectedIndex].text; })()])));
 const hist = await readRows('imp-hist-h');
 check('Past conversations: Not Home → Not home; Spoke - supporter → Talked', hist['Not Home'] === 'Not home' && hist['Spoke - supporter'] === 'Talked', JSON.stringify(hist));
@@ -170,8 +172,49 @@ check('a new last name: the whole name follows (Riya Example)', re.name === 'Riy
 await page.screenshot({ path: `${SHOTS}/04-names.png` });
 const omar2 = await lp('Omar Listed');
 check('Omar (no mobile): his home phone is the number to call', omar2?.phone === '604-555-0177', JSON.stringify(omar2));
-const lee = await lp('Lee Listed');
+const lee = await lp('Lee Ann Listed');
+check('Lee Ann: first Lee, middle Ann (the import’s suggestion, on by default)', lee?.first_name === 'Lee' && lee?.middle_name === 'Ann' && lee?.last_name === 'Listed', JSON.stringify(lee && [lee.first_name, lee.middle_name, lee.last_name]));
 check('Lee (1.6045E+10): no wrong number on file', lee && !lee.phone, JSON.stringify(lee));
+
+// ── Add a person: a first name with a second word goes to Middle name ──
+await page.goto(`${ADMIN}/people?new=1`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#np-first', { timeout: 8000 }).catch(async () => { await page.goto(`${ADMIN}/people`); await page.click('button:has-text("Add person")'); await page.waitForSelector('#np-first'); });
+await page.fill('#np-first', 'Mary Anne');
+await page.press('#np-first', 'Tab');
+check('Add a person: “Mary Anne” → First Mary, Middle Anne, with Undo', (await page.inputValue('#np-first')) === 'Mary' && (await page.inputValue('#np-middle')) === 'Anne' && /Moved “Anne” to Middle name/.test(await page.innerText('.name-note')));
+await page.click('.name-note button');
+check('Undo: Mary Anne is one first name again', (await page.inputValue('#np-first')) === 'Mary Anne' && (await page.inputValue('#np-middle')) === '');
+await page.fill('#np-first', 'Mary-Anne');
+await page.press('#np-first', 'Tab');
+check('hyphenated: stays whole', (await page.inputValue('#np-first')) === 'Mary-Anne' && (await page.inputValue('#np-middle')) === '');
+await page.fill('#np-first', 'Jo B.');
+await page.press('#np-first', 'Tab');
+await page.fill('#np-last', 'Middleton');
+await page.click('form.pp-add button[type="submit"]');
+await page.waitForURL(/\/people\/[0-9a-f-]{36}$/, { timeout: 8000 }).catch(() => {});
+const jo = (await lp('Jo B. Middleton'));
+check('saved: Jo · B. · Middleton', jo?.first_name === 'Jo' && jo?.middle_name === 'B.' && jo?.last_name === 'Middleton', JSON.stringify(jo && [jo.name, jo.first_name, jo.middle_name, jo.last_name]));
+
+// ── A list from a past election: tags with the year, not today's marks ──
+await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
+await page.click('button:has-text("Paste text")');
+await page.fill('#imp-paste', ['First Name\tSurname\tPhone\tRating\tSign\tVoted', 'Pat\tPastyear\t604-555-0199\t1\tYes\tyes'].join('\n'));
+await page.click('button:has-text("Use this text")');
+await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+await page.selectOption('select[aria-label="What a sign “Yes” means"]', 'installed');
+await page.check('.imp-past__toggle input');
+await page.fill('.imp-past__year', '2022');
+const pastNote = await page.innerText('.imp-past');
+check('From a past election: says ratings, signs and voted become tags with the year', /Strong support 2022/.test(pastNote) && /Voted 2022/.test(pastNote), pastNote);
+await page.screenshot({ path: `${SHOTS}/05-past-election.png`, fullPage: true });
+await page.click('button:has-text("Check 1 row")');
+await sleep(1500);
+await page.getByRole('button', { name: /^Import \d+ (person|people)$/ }).click();
+await sleep(2000);
+const pat = await lp('Pat Pastyear');
+check('Pat: Strong support 2022, Lawn sign 2022, Voted 2022 — no rating, not voted, no sign',
+  pat && !pat.rating && !pat.voted_at && ['Strong support 2022', 'Lawn sign 2022', 'Voted 2022'].every((t) => pat.tags.includes(t))
+  && (await api(`/persons/${pat.id}`)).json.signs.length === 0, JSON.stringify(pat && [pat.rating, pat.voted_at, pat.tags]));
 
 // ── And out ──
 for (const k of ['people', 'contacts', 'gifts', 'volunteers', 'signs', 'shifts', 'subscribers', 'lists']) {

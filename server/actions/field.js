@@ -1055,6 +1055,7 @@ export const personFieldExtensions = {
   // First and last, kept apart as the campaign's lists keep them (ext/names
   // keeps name — the whole — in step).
   first_name: z.string().trim().max(150).nullish(),
+  middle_name: z.string().trim().max(150).nullish(),
   last_name: z.string().trim().max(150).nullish(),
   unit: z.string().max(40).nullish(),
   city: z.string().max(120).nullish(),

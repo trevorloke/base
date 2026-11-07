@@ -33,6 +33,7 @@ import { VotedRow } from '../components/Voted.jsx';
 import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs } from '../components/FieldCuts.jsx';
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
+import NameFields from '../components/NameFields.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared widgets + helpers (also used by Person.jsx)
@@ -548,7 +549,7 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Add person (inline, ?new=1)
 // ─────────────────────────────────────────────────────────────────────────────
-const emptyPerson = (me) => ({ name: '', first: '', last: '', kind: 'person', email: '', phone: '', address: '', unit: '', city: me?.org?.city || 'Surrey', postal: '' });
+const emptyPerson = (me) => ({ name: '', first: '', middle: '', last: '', kind: 'person', email: '', phone: '', address: '', unit: '', city: me?.org?.city || 'Surrey', postal: '' });
 
 function AddPersonForm({ onClose, me }) {
   const queryClient = useQueryClient();
@@ -564,7 +565,7 @@ function AddPersonForm({ onClose, me }) {
   const submit = async (e) => {
     e.preventDefault();
     const isOrg = form.kind === 'org';
-    const whole = isOrg ? form.name.trim() : [form.first, form.last].map((x) => x.trim()).filter(Boolean).join(' ');
+    const whole = isOrg ? form.name.trim() : [form.first, form.middle, form.last].map((x) => x.trim()).filter(Boolean).join(' ');
     if (!whole) return;
     // A typed address nobody picked: the first door that matches it, if the
     // service knows it (the server looks again when it can't).
@@ -576,7 +577,7 @@ function AddPersonForm({ onClose, me }) {
     }
     const res = await act.run('person.create', {
       name: whole,
-      ...(isOrg ? {} : { first_name: form.first.trim() || undefined, last_name: form.last.trim() || undefined }),
+      ...(isOrg ? {} : { first_name: form.first.trim() || undefined, middle_name: form.middle.trim() || undefined, last_name: form.last.trim() || undefined }),
       kind: form.kind,
       email: opt(form.email),
       phone: opt(form.phone),
@@ -603,16 +604,7 @@ function AddPersonForm({ onClose, me }) {
           <input id="np-name" className="input" required autoFocus maxLength={300} value={form.name} onChange={set('name')} />
         </div>
       ) : (
-        <div className="form-row">
-          <div className="field">
-            <label htmlFor="np-first">First name</label>
-            <input id="np-first" className="input" autoFocus maxLength={150} value={form.first} onChange={set('first')} />
-          </div>
-          <div className="field">
-            <label htmlFor="np-last">Last name</label>
-            <input id="np-last" className="input" maxLength={150} value={form.last} onChange={set('last')} />
-          </div>
-        </div>
+        <NameFields id="np" form={form} setForm={setForm} autoFocus />
       )}
       <div className="form-row">
         <div className="field">

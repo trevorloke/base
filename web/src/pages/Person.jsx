@@ -37,6 +37,7 @@ import {
   TextingPersonLink, callsCard, noTexts, textingOn, useTextingPerson, useTextingStatus,
 } from '../components/TextingCard.jsx';
 import { KnowsNudge, PersonKnows, usePersonKnows } from '../components/RelationshipsBits.jsx';
+import NameFields from '../components/NameFields.jsx';
 
 const TIER_LABEL = {
   superstar: DONOR_TIERS.superstar.label,
@@ -349,18 +350,17 @@ function RatingCard({ person, refresh, channel, setChannel, cardRef }) {
 // the pin with the save; a new address nobody picked is looked up when it's
 // saved, and the server keeps looking if it can't be found yet.
 const EDIT_KEYS = ['kind', 'phone', 'email', 'address', 'unit', 'city', 'postal'];
-// A record from before first and last were kept: split at the last space,
-// as the server does (ext/names).
+// A record from before the parts were kept: the first word is the first
+// name, the last the last name (as the server splits, ext/names).
 const splitName = (name) => {
-  const w = String(name || '').trim().replace(/\s+/g, ' ');
-  const at = w.lastIndexOf(' ');
-  return at > 0 ? [w.slice(0, at), w.slice(at + 1)] : [w, ''];
+  const w = String(name || '').trim().replace(/\s+/g, ' ').split(' ');
+  return w.length > 1 ? [w[0], w.slice(1, -1).join(' '), w[w.length - 1]] : [w[0] || '', '', ''];
 };
 function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
-  const [first0, last0] = person.first_name != null || person.last_name != null
-    ? [person.first_name || '', person.last_name || ''] : splitName(person.name);
+  const [first0, middle0, last0] = person.first_name != null || person.last_name != null || person.middle_name != null
+    ? [person.first_name || '', person.middle_name || '', person.last_name || ''] : splitName(person.name);
   const start = {
-    name: person.name || '', first: first0, last: last0, kind: person.kind || 'person', phone: person.phone || '', email: person.email || '',
+    name: person.name || '', first: first0, middle: middle0, last: last0, kind: person.kind || 'person', phone: person.phone || '', email: person.email || '',
     address: person.address || '', unit: person.unit || '', city: person.city || '', postal: person.postal || '',
   };
   const [form, setForm] = useState(start);
@@ -384,10 +384,11 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
     // Names: a person's first and last (the whole follows on the server); an
     // organization's one name.
     if (form.kind === 'org') {
-      if (form.name.trim() !== start.name.trim() || patch.kind) patch.name = form.name.trim() || [form.first, form.last].join(' ').trim();
-    } else if (form.first.trim() !== start.first.trim() || form.last.trim() !== start.last.trim() || patch.kind) {
-      if (!form.first.trim() && !form.last.trim()) return;
+      if (form.name.trim() !== start.name.trim() || patch.kind) patch.name = form.name.trim() || [form.first, form.middle, form.last].map((x) => x.trim()).filter(Boolean).join(' ');
+    } else if (form.first.trim() !== start.first.trim() || form.middle.trim() !== start.middle.trim() || form.last.trim() !== start.last.trim() || patch.kind) {
+      if (!form.first.trim() && !form.middle.trim() && !form.last.trim()) return;
       patch.first_name = form.first.trim() || null;
+      patch.middle_name = form.middle.trim() || null;
       patch.last_name = form.last.trim() || null;
     }
     if (!Object.keys(patch).length) { onClose(); return; }
@@ -407,34 +408,31 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
     : !form.address.trim() ? 'No address: the pin comes off the map'
       : located ? 'The pin moves to the new address when you save' : 'Found on the map when you save';
 
+  const kindField = (
+    <div className="field" style={{ flex: '0 1 150px' }}>
+      <label htmlFor="ed-kind">Kind</label>
+      <select id="ed-kind" className="input" value={form.kind} onChange={set('kind')}>
+        <option value="person">Person</option>
+        <option value="org">Organization</option>
+      </select>
+    </div>
+  );
   return (
     <form className="inline-form pf-edit-form" onSubmit={submit} ref={formRef} aria-label="Edit details">
-      <div className="form-row">
-        {form.kind === 'org' ? (
+      {form.kind === 'org' ? (
+        <div className="form-row">
           <div className="field">
             <label htmlFor="ed-name">Name</label>
             <input id="ed-name" className="input" required maxLength={300} autoFocus={focus === 'name'} value={form.name} onChange={set('name')} />
           </div>
-        ) : (
-          <>
-            <div className="field">
-              <label htmlFor="ed-first">First name</label>
-              <input id="ed-first" className="input" maxLength={150} autoFocus={focus === 'name'} value={form.first} onChange={set('first')} />
-            </div>
-            <div className="field">
-              <label htmlFor="ed-last">Last name</label>
-              <input id="ed-last" className="input" maxLength={150} value={form.last} onChange={set('last')} />
-            </div>
-          </>
-        )}
-        <div className="field" style={{ flex: '0 1 150px' }}>
-          <label htmlFor="ed-kind">Kind</label>
-          <select id="ed-kind" className="input" value={form.kind} onChange={set('kind')}>
-            <option value="person">Person</option>
-            <option value="org">Organization</option>
-          </select>
+          {kindField}
         </div>
-      </div>
+      ) : (
+        <>
+          <NameFields id="ed" form={form} setForm={setForm} autoFocus={focus === 'name'} />
+          <div className="form-row">{kindField}</div>
+        </>
+      )}
       <div className="form-row">
         <div className="field">
           <label htmlFor="ed-phone">Phone</label>
