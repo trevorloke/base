@@ -13,7 +13,7 @@ export const publicRoutes = new Hono();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const settingsOf = (ws) => (typeof ws.settings === 'string' ? JSON.parse(ws.settings) : (ws.settings || {}));
 const wsBySlug = async (db, slug) => {
-  const ws = (await db.query('select id, name, slug, jurisdiction, settings from workspaces where slug = $1', [slug])).rows[0];
+  const ws = (await db.query('select id, name, slug, jurisdiction, settings, brand from workspaces where slug = $1', [slug])).rows[0];
   if (ws) ws.settings = settingsOf(ws);
   return ws;
 };

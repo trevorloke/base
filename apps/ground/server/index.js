@@ -1,7 +1,8 @@
 // base ground server. Hono app: /api/auth (public), /api/* (workspace-scoped),
 // static web build. Exported for in-process tests via app.request().
 import { Hono } from 'hono';
-import { relative } from 'node:path';
+import { join, relative } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
@@ -14,6 +15,7 @@ import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
 import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
+import { brandHead } from './lib/brand.js';
 
 export const app = new Hono();
 
@@ -48,8 +50,22 @@ app.route('/api', apiRoutes);
 // Static web build (SPA fallback to index.html for URL routing). Resolved
 // from this file, not the working directory, so any launch location works.
 const WEB_ROOT = relative(process.cwd(), fileURLToPath(new URL('../web/dist', import.meta.url))) || '.';
+// index.html (the root, /index.html and every app route) goes out with the
+// campaign's brand in its <head>, never straight from disk.
+const sendIndex = async (c) => {
+  const html = await readFile(join(WEB_ROOT, 'index.html'), 'utf8').catch(() => null);
+  if (html === null) return c.text('not found', 404);
+  // BRAND: the campaign's look as CSS custom properties (lib/brand.js), so
+  // there's no flash of the default look. At merge this moves into
+  // headTags(...) in lib/htmlhead.js.
+  const head = await brandHead(await getDb());
+  c.header('Cache-Control', 'no-cache');
+  return c.html(html.replace('</head>', `${head}</head>`));
+};
+app.get('/', sendIndex);
+app.get('/index.html', sendIndex);
 app.use('*', serveStatic({ root: WEB_ROOT }));
-app.get('*', serveStatic({ root: WEB_ROOT, path: 'index.html' }));
+app.get('*', sendIndex);
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {

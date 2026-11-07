@@ -1,7 +1,11 @@
 // The look of base ground's own public pages — unsubscribe, a public lesson:
 // one column, the campaign's name on top, one big button, and a link back
 // to the campaign's website (workspace settings.website) when it has one.
-// The campaign's website itself lives elsewhere.
+// The campaign's website itself lives elsewhere. In the campaign's brand
+// (lib/brand.js: its colours, name and logo — ws.brand when the caller
+// selected it, else the pre-configured one).
+import { publicBrand, publicMasthead, PUBLIC_MASTHEAD_CSS } from './brand.js';
+
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 export const settingsOf = (ws) => (typeof ws?.settings === 'string' ? JSON.parse(ws.settings) : (ws?.settings || {}));
 
@@ -12,7 +16,7 @@ const CSS = `
   body{margin:0;background:var(--paper);color:var(--ink);font:18px/1.5 Georgia,'Times New Roman',serif}
   main{max-width:520px;margin:0 auto;padding:28px 16px 56px}
   main.wide{max-width:720px}
-  .camp{font-size:30px;font-weight:700;line-height:1.1;margin:0 0 24px;padding-bottom:12px;border-bottom:4px solid var(--mark);overflow-wrap:anywhere}
+  .camp{font-size:30px;font-weight:700;line-height:1.1;margin:0 0 24px;padding-bottom:12px;border-bottom:4px solid var(--accent,var(--mark));overflow-wrap:anywhere}
   h1{font-size:26px;line-height:1.2;margin:0 0 12px}
   h2{font-size:21px;line-height:1.25;margin:22px 0 8px}
   p{color:var(--ink2);margin:0 0 14px}
@@ -29,7 +33,7 @@ const CSS = `
   legend{margin:0 0 6px}
   input,textarea,select{display:block;width:100%;min-height:52px;font:inherit;font-size:18px;padding:12px 14px;border:1px solid var(--rule);background:var(--card);color:var(--ink);border-radius:4px}
   textarea{min-height:100px}
-  input:focus,textarea:focus,select:focus{outline:3px solid var(--mark);outline-offset:1px;border-color:var(--ink)}
+  input:focus,textarea:focus,select:focus{outline:3px solid var(--focus,var(--mark));outline-offset:1px;border-color:var(--ink)}
   .checks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .amounts{grid-template-columns:1fr 1fr 1fr}
   @media(max-width:360px){.checks{grid-template-columns:1fr}.amounts{grid-template-columns:1fr 1fr}}
@@ -53,10 +57,10 @@ const CSS = `
   summary::before{content:'+';font:700 20px/1 ui-monospace,Menlo,monospace;margin-right:12px}
   details[open] summary::before{content:'−'}
   details[open] summary{margin-bottom:8px}
-  summary:focus-visible{outline:3px solid var(--mark);outline-offset:1px}
-  button,.btn{display:block;width:100%;min-height:56px;margin-top:24px;font:700 15px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;background:var(--mark);color:#171410;border:0;padding:16px 22px;border-radius:4px;cursor:pointer;text-align:center;text-decoration:none}
+  summary:focus-visible{outline:3px solid var(--focus,var(--mark));outline-offset:1px}
+  button,.btn{display:block;width:100%;min-height:56px;margin-top:24px;font:700 15px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;background:var(--mark);color:var(--mark-ink,#171410);border:0;padding:16px 22px;border-radius:4px;cursor:pointer;text-align:center;text-decoration:none}
   button:focus-visible,.btn:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
-  .done{border:1px solid var(--rule);border-left:4px solid var(--mark);background:var(--card);padding:18px;margin-top:16px}
+  .done{border:1px solid var(--rule);border-left:4px solid var(--accent,var(--mark));background:var(--card);padding:18px;margin-top:16px}
   .err{border-left-color:var(--bad);margin:0 0 8px}
   .note{font-size:15px;margin:16px 0 0}
   .learn-list{list-style:none;margin:0;padding:0}
@@ -64,17 +68,18 @@ const CSS = `
   .learn-video{position:relative;padding-top:56.25%;margin:0 0 14px}
   .learn-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:4px}
   footer{margin-top:40px;border-top:1px solid var(--rule);padding-top:12px;font:13px/1.6 ui-monospace,Menlo,monospace;color:var(--ink2)}
-  a{color:inherit}
+  a{color:var(--link,inherit)}
 `;
 
 // page(ws, title, inner, { wide, noindex }): ws may be null (a link that
 // names no campaign).
 export const page = (ws, title, inner, { wide = false, noindex = false } = {}) => {
   const site = ws ? settingsOf(ws).website : null;
+  const pb = publicBrand(ws);
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}${ws ? ` · ${esc(ws.name)}` : ''}</title>${noindex ? '<meta name="robots" content="noindex">' : ''}
-<style>${CSS}</style></head><body><main${wide ? ' class="wide"' : ''}>
-${ws ? `<div class="camp">${esc(ws.name)}</div>` : ''}
+<style>${CSS}${PUBLIC_MASTHEAD_CSS}${pb.css}</style></head><body><main${wide ? ' class="wide"' : ''}>
+${ws ? publicMasthead(pb, esc) : ''}
 ${inner}
 <footer>${site ? `<a href="${esc(site)}">← ${esc(String(site).replace(/^https?:\/\//, ''))}</a> · ` : ''}Powered by base</footer>
 </main></body></html>`;
