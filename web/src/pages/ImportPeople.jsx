@@ -667,7 +667,18 @@ function ImportFlow() {
   const [pastYear, setPastYear] = useState(String(new Date().getFullYear()));
   const pastY = Number(pastYear);
   const pastOk = !past || (/^\d{4}$/.test(pastYear) && pastY >= 1950 && pastY <= 2100);
-  const pastBody = past && pastOk ? { past: { year: pastY } } : {};
+  // Profile fields from that election: each a year tag ("Support 5 2022",
+  // "Sign 2022") or the field as it is. Yes/No, Number and Pick-one are tags
+  // unless you say; text and dates (notes, a province) stay fields.
+  const [fieldTagPick, setFieldTagPick] = useState({}); // field id → true | false, by choice
+  const tagByDefault = (kind) => kind === 'yesno' || kind === 'number' || kind === 'choice';
+  const pastFieldCols = useMemo(() => (source ? mapping.map((k, i) => {
+    if (!k || !k.startsWith(FIELD_KEY)) return null;
+    const f = custom.find((c) => c.key === k);
+    return { id: k.slice(FIELD_KEY.length), head: source.headers[i], name: f?.label || source.headers[i], kind: f?.kind };
+  }).filter(Boolean) : []), [source, mapping, custom]);
+  const tagsField = (c) => (Object.hasOwn(fieldTagPick, c.id) ? fieldTagPick[c.id] : tagByDefault(c.kind));
+  const pastBody = past && pastOk ? { past: { year: pastY, field_tags: pastFieldCols.filter(tagsField).map((c) => c.id) } } : {};
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [tag, setTag] = useState('');
   const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, parts, error }
@@ -924,7 +935,6 @@ function ImportFlow() {
     }
     return { n, example };
   }, [source, mapping]);
-  const fieldCols = source ? mapping.map((k, i) => (k && k.startsWith(FIELD_KEY) ? source.headers[i] : null)).filter(Boolean) : [];
   const setHistoryMeaning = (value, code) => { setHistoryMap((m) => ({ ...m, [value.toLowerCase()]: code })); setCheck(null); };
   const setSignMeaning = (value, code) => { setSignMap((m) => ({ ...m, [value.toLowerCase()]: code })); setCheck(null); };
   const setRoleMeaning = (word, code) => {
@@ -1309,9 +1319,26 @@ function ImportFlow() {
               </label>
               <p className="imp-hint imp-hint--sm">
                 {past
-                  ? <>Nothing here becomes today’s. Ratings, signs, voted, volunteer and donor, roles and conversations come in as tags with the year — <em>Strong support {pastOk ? pastY : '…'}</em>, <em>Voting Locke {pastOk ? pastY : '…'}</em>, <em>Lawn sign {pastOk ? pastY : '…'}</em>, <em>Voted {pastOk ? pastY : '…'}</em> — and someone already on file keeps their rating. Names, phones, emails and addresses come in as usual.{fieldCols.length > 0 && <> Profile fields come in as they are ({fieldCols.slice(0, 4).join(', ')}{fieldCols.length > 4 ? '…' : ''}) — set any from that election to Don’t import.</>}</>
+                  ? <>Nothing here becomes today’s. Ratings, signs, voted, volunteer and donor, roles and conversations come in as tags with the year — <em>Strong support {pastOk ? pastY : '…'}</em>, <em>Voting Locke {pastOk ? pastY : '…'}</em>, <em>Lawn sign {pastOk ? pastY : '…'}</em>, <em>Voted {pastOk ? pastY : '…'}</em> — and someone already on file keeps their rating. Names, phones, emails and addresses come in as usual.</>
                   : <>An old list (a past campaign’s)? Tick this and its ratings, signs and voted marks come in as tags with that year, not as today’s.</>}
               </p>
+              {past && pastFieldCols.length > 0 && (
+                <div className="imp-past__fields">
+                  <p className="imp-hint imp-hint--sm">Your profile fields from that election — ticked ones come in as a tag with the year, the rest as the field:</p>
+                  <ul className="imp-past__list">
+                    {pastFieldCols.map((c) => (
+                      <li key={c.id}>
+                        <label>
+                          <input type="checkbox" checked={tagsField(c)} disabled={locked}
+                            onChange={(e) => { setFieldTagPick((m) => ({ ...m, [c.id]: e.target.checked })); setCheck(null); }} />
+                          <span>{c.head}</span>
+                          <span className="mono muted">{tagsField(c) ? `→ ${c.kind === 'yesno' ? `${c.name} ${pastOk ? pastY : '…'}` : `${c.name} … ${pastOk ? pastY : '…'}`}` : '→ the field'}</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {!pastOk && <p className="imp-need" role="alert">A year like 2022.</p>}
             </section>
 

@@ -206,6 +206,8 @@ await page.check('.imp-past__toggle input');
 await page.fill('.imp-past__year', '2022');
 const pastNote = await page.innerText('.imp-past');
 check('From a past election: says ratings, signs and voted become tags with the year', /Strong support 2022/.test(pastNote) && /Voted 2022/.test(pastNote), pastNote);
+const pastFields = await page.innerText('.imp-past__fields').catch(() => '');
+check('its profile fields: Sign ticked, as “Sign 2022”', /Sign\s+→ Sign 2022/.test(pastFields) && await page.isChecked('.imp-past__list input'), pastFields);
 await page.screenshot({ path: `${SHOTS}/05-past-election.png`, fullPage: true });
 await page.click('button:has-text("Check 1 row")');
 await sleep(1500);
@@ -213,7 +215,8 @@ await page.getByRole('button', { name: /^Import \d+ (person|people)$/ }).click()
 await sleep(2000);
 const pat = await lp('Pat Pastyear');
 check('Pat: Strong support 2022, Lawn sign 2022, Voted 2022 — no rating, not voted, no sign',
-  pat && !pat.rating && !pat.voted_at && ['Strong support 2022', 'Lawn sign 2022', 'Voted 2022'].every((t) => pat.tags.includes(t))
+  pat && !pat.rating && !pat.voted_at && ['Strong support 2022', 'Lawn sign 2022', 'Voted 2022', 'Sign 2022'].every((t) => pat.tags.includes(t))
+  && !(await api(`/persons/${pat.id}/fields`)).json.fields.some((f) => f.name === 'Sign' && f.value != null)
   && (await api(`/persons/${pat.id}`)).json.signs.length === 0, JSON.stringify(pat && [pat.rating, pat.voted_at, pat.tags]));
 
 // ── And out ──

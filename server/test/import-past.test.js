@@ -56,3 +56,26 @@ test('an opposed candidate’s supporter is “Voting <name> <year>”; a bad ye
   assert.equal((await mgr.post('/api/data/import', { rows: [{ name: 'Eve' }], past: { year: 1200 } })).status, 400);
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });
+
+test('profile fields chosen for tags: Support 5 2022, Sign 2022 (a no is nothing); the rest stay fields', async () => {
+  const add = async (name, kind, extra = {}) => ok(await mgr.action('field.create', { name, kind, ...extra })).field;
+  const support = await add('Past support', 'number');
+  const sign = await add('Past sign', 'yesno');
+  const notes = await add('Past notes', 'text');
+  const rows = [
+    { first: 'Fay', last: 'Example', phone: '604-555-0111', fields: { [support.id]: '5', [sign.id]: 'yes', [notes.id]: 'Corner lot' } },
+    { first: 'Gil', last: 'Example', phone: '604-555-0112', fields: { [support.id]: '2', [sign.id]: 'f' } },
+  ];
+  ok(await imp(rows, { past: { year: 2022, field_tags: [support.id, sign.id] } }));
+  const fay = await person('Fay');
+  assert.deepEqual([...fay.tags].sort(), ['Past sign 2022', 'Past support 5 2022']);
+  const gil = await person('Gil');
+  assert.deepEqual([...gil.tags].sort(), ['Past support 2 2022'], 'a no on a Yes/No field is no tag');
+  const vals = (await db.query(
+    'select f.name, v.value from person_field_values v join person_fields f on f.id = v.field_id where v.person_id = any($1::uuid[]) order by f.name',
+    [[fay.id, gil.id]],
+  )).rows.map((r) => [r.name, r.value]);
+  assert.deepEqual(vals, [['Past notes', 'Corner lot']], 'only the unticked field is a field');
+  const bad = ok(await imp([{ first: 'Hal', last: 'Example', fields: { [support.id]: 'lots' } }], { past: { year: 2022, field_tags: [support.id] } }));
+  assert.equal(bad.invalid.length, 1, 'a value that doesn’t fit is still refused');
+});

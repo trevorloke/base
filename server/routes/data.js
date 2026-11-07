@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { matchRating, offeredCodes, ratingByCode } from '@starbase/shared/scale';
 import { OUTCOMES, VOLUNTEER_ROLES, VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
-import { dateFrom } from '../ext/fields/kinds.js';
+import { dateFrom, parseValue, valueError } from '../ext/fields/kinds.js';
 import { timeZone } from '../lib/org.js';
 import { fromLocal } from '../lib/tzsql.js';
 import { loadScale } from '../ext/scale/rules.js';
@@ -87,7 +87,12 @@ const importInput = z.object({
   // and volunteering comes in as tags with the year ("Strong support 2022",
   // "Lawn sign 2022", "Voted 2022"), never as today's rating, sign, voted
   // mark, knock or role. Names, phones, emails and addresses come in as usual.
-  past: z.object({ year: z.number().int().min(1950).max(2100) }).nullish(),
+  // field_tags: profile fields whose values from that election are tags too
+  // ("Support 5 2022", "Sign 2022"), not the field's value today.
+  past: z.object({
+    year: z.number().int().min(1950).max(2100),
+    field_tags: z.array(z.uuid()).max(40).default([]),
+  }).nullish(),
 });
 
 // A 1/0 column: 1, yes, y, true, x (any case) say yes.
@@ -105,8 +110,13 @@ const coord = (v, max) => {
 // A past election's say about a person, as tags with its year.
 const PAST_TALK = { contacted: 'Talked', refused: 'Refused', moved: 'Moved' };
 const pastTag = (words, year) => `${String(words).slice(0, 34).trim()} ${year}`;
-const pastTags = (row, raw, year, scale) => {
-  const tags = [];
+// A profile field's value from a past election → its tag, or null (a no).
+const pastFieldTag = (f, value, year) => {
+  if (f.kind === 'yesno') return value === true ? pastTag(f.name, year) : null;
+  return pastTag(`${f.name} ${Array.isArray(value) ? value.join(', ') : value}`, year);
+};
+const pastTags = (row, raw, year, scale, fieldTags = []) => {
+  const tags = [...fieldTags];
   if (row.rating) {
     const r = ratingByCode(scale, row.rating);
     // "Strong support 2022", "Undecided 2022", "Voting Locke 2022", "Opposed 2022".
@@ -255,11 +265,33 @@ app.post('/import', async (c) => {
   const errors = [];
   const clean = [];
   const scale = await loadScale(c.get('db'), ctx.workspaceId);
+  // A past election's profile fields to tag: read here, by id, so their
+  // cells never reach the fields as today's values.
+  const tagFields = new Map(past?.field_tags?.length ? (await c.get('db').query(
+    'select id, name, kind, choices from person_fields where workspace_id = $1 and id = any($2::uuid[])',
+    [ctx.workspaceId, past.field_tags],
+  )).rows.map((f) => [f.id, f]) : []);
   rows.forEach((raw, i) => {
-    const r0 = cleanRow(raw, i, scale, past);
-    const r = r0.error || !past ? r0 : { row: pastTags(r0.row, raw, past.year, scale) };
+    let given = raw;
+    const fieldTags = [];
+    let fieldError = null;
+    if (past && tagFields.size && raw?.fields && typeof raw.fields === 'object' && !Array.isArray(raw.fields)) {
+      const fields = { ...raw.fields };
+      for (const [id, f] of tagFields) {
+        if (!(id in fields)) continue;
+        const cell = fields[id];
+        delete fields[id];
+        const v = parseValue(f, typeof cell === 'number' || typeof cell === 'boolean' || cell === null ? cell : String(cell ?? ''));
+        if (v.error) { fieldError ||= `row ${i + 1}: ${valueError(f, v.error)}`; continue; }
+        if (!v.empty) { const t = pastFieldTag(f, v.value, past.year); if (t) fieldTags.push(t); }
+      }
+      given = { ...raw, fields };
+    }
+    const r0 = cleanRow(given, i, scale, past);
+    const r = r0.error || !past ? r0 : { row: pastTags(r0.row, given, past.year, scale, fieldTags) };
     // A past election's Voted column is a tag, never today's voted mark.
-    const more = r.error ? [] : extras.map((x) => x.check(past ? { ...raw, voted: null } : raw));
+    const more = r.error ? [] : extras.map((x) => x.check(past ? { ...given, voted: null } : given));
+    if (!r.error && fieldError) { errors.push(fieldError); return; }
     const bad = more.find((m) => m.error);
     if (r.error) errors.push(r.error);
     else if (bad) errors.push(`row ${i + 1}: ${bad.error}`);

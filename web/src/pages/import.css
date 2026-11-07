@@ -339,3 +339,6 @@
 .imp-past__toggle { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; font-size: 15px; }
 .imp-past__year { width: 6.5ch; }
 .imp-past .imp-hint { margin-bottom: 0; }
+.imp-past__fields { margin-top: var(--s-2); }
+.imp-past__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.imp-past__list label { display: flex; gap: var(--s-2); align-items: baseline; flex-wrap: wrap; font-size: 14px; }

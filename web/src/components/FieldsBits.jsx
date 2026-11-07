@@ -278,7 +278,7 @@ export const FIELD_KEY = 'field:';
 export function useImportFields() {
   const list = useFieldsList();
   return useMemo(
-    () => (list.data?.fields || []).filter((f) => !f.retired).map((f) => ({ key: `${FIELD_KEY}${f.id}`, label: f.name })),
+    () => (list.data?.fields || []).filter((f) => !f.retired).map((f) => ({ key: `${FIELD_KEY}${f.id}`, label: f.name, kind: f.kind })),
     [list.data],
   );
 }

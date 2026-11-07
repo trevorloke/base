@@ -154,8 +154,10 @@ than a week after they came off is refused. Contacts are door, phone, text or
   do signs (*Lawn sign 2022*), voted (*Voted 2022*), volunteer and donor,
   roles (*Doorknocking 2022*) and talks (*Talked 2022*). Someone already on
   file keeps today's rating. Names, phones, emails and addresses come in as
-  usual; profile fields as they are (set any from that election to Don't
-  import).
+  usual. Its profile-field columns are listed with a tick each: ticked, the
+  value is a tag with the year (*Support 5 2022*; a Yes/No field's yes is
+  *Sign 2022*, a no nothing), otherwise the field as it is — Yes/No, Number
+  and Pick-one fields start ticked, text and dates (notes, a province) not.
 - **Profile fields**: the campaign's own — Text · Yes/No · Pick one · Number ·
   Date (*Language at home*, *Strata council member*, …) — set up by a manager,
   filled in by the desk under *More details* (read-only with no signal),
