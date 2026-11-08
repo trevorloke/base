@@ -74,7 +74,7 @@ describe("create_post", () => {
     expect(text).toContain('Post pst_pending "Snow day WFH"');
     expect(text).toContain("status: pending_approval");
     expect(text).toContain("landed in the approval queue");
-    expect(text).toContain("human must approve it in the base air app");
+    expect(text).toContain("human must approve it in the Base Air app");
     expect(text).toContain("publishes at 2026-11-03T16:00:00Z");
     expect(text).toContain("Approvals: requested.");
     expect(text).not.toContain("violations");

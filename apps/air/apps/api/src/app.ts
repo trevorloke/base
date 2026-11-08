@@ -35,11 +35,11 @@ export interface AppOptions {
   publicUrl?: string;
   /** Where this deployment lives on its host, e.g. "/imaginesurrey/air" (SUITE.md). "" = the root. */
   basePath?: string;
-  /** Sign in with base (BASE_GROUND_URL + BASE_SSO_SECRET). Null or absent: email and password only. */
+  /** Sign in with Base (BASE_GROUND_URL + BASE_SSO_SECRET). Null or absent: email and password only. */
   sso?: SsoConfig | null;
-  /** The other base apps' addresses, for the switcher (BASE_GROUND_URL, BASE_WEB_URL). */
+  /** The other Base apps' addresses, for the switcher (BASE_GROUND_URL, BASE_WEB_URL). */
   suite?: SuiteLinks;
-  /** Test seam for the call to base ground's token endpoint. */
+  /** Test seam for the call to Base Ground's token endpoint. */
   ssoFetch?: typeof fetch;
   /** Proxies in front of this server that append to X-Forwarded-For, after the client (BASE_AIR_TRUSTED_PROXIES). */
   trustedProxies?: number;
@@ -231,7 +231,7 @@ export function createApp(m: BaseAir, opts: AppOptions = {}) {
   registerInboxRoutes(app, m); // ---- inbox workflow
   registerVisibilityRoutes(app, m, { gateway: opts.gateway, ...(opts.answerEngines ? { answerEngines: opts.answerEngines } : {}) }); // ---- AI answer visibility
   registerAnalyticsRoutes(app, m, opts); // ---- analytics & client reports
-  registerBrandRoutes(app, m); // ---- the base suite: brand
+  registerBrandRoutes(app, m); // ---- the Base suite: brand
 
   // ---------------------------------------------------------------- identity & workspace
   app.get("/v1/me", async (c) => {

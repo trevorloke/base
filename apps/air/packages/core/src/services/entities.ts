@@ -13,7 +13,7 @@ import type { MentionSearch } from "@base-air/sources";
 /**
  * The tracker. Named organisations (a party, a brand, a company) and people (a candidate, a spokesperson, a creator,
  * an individual's own brand), each with every way people write them: aliases in other languages and scripts,
- * nicknames, abbreviations, and social handles. Every message base air ingests (inboxes, chat groups, public search,
+ * nicknames, abbreviations, and social handles. Every message Base Air ingests (inboxes, chat groups, public search,
  * translations) is scanned for them; people roll up into the organisation they belong to.
  */
 

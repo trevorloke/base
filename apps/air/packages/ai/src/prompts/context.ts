@@ -15,7 +15,7 @@ export interface BrandProfile {
   competitors: string[];
 }
 
-/** Everything a prompt needs to sound like the brand and stay inside its red lines. The operators app builds it from base air. */
+/** Everything a prompt needs to sound like the brand and stay inside its red lines. The operators app builds it from Base Air. */
 export interface BrandContext {
   workspace: { name: string; slug?: string; profile: Record<string, unknown> };
   policy: {

@@ -1,6 +1,6 @@
 # Architecture
 
-base air is one TypeScript monorepo with two spines running through every package.
+Base Air is one TypeScript monorepo with two spines running through every package.
 
 ## The data spine
 
@@ -9,7 +9,7 @@ Two append-only logs. Postgres triggers refuse `UPDATE` and `DELETE` on both.
 | Log | What goes in | Why it exists |
 |---|---|---|
 | `raw_events` | Every payload received from any source, verbatim, hash-deduplicated | Nothing observed is ever lost; derivations can be rebuilt with better models later |
-| `ledger_events` | Every fact base air asserts (`post.created`, `policy.blocked`, `variant.published`, `outcome.captured`, `operator.alert`, …) with the actor who caused it | The ledger is the product's memory and its audit trail; the brief, the lift analysis and the voice model all read from it |
+| `ledger_events` | Every fact Base Air asserts (`post.created`, `policy.blocked`, `variant.published`, `outcome.captured`, `operator.alert`, …) with the actor who caused it | The ledger is the product's memory and its audit trail; the brief, the lift analysis and the voice model all read from it |
 
 Everything else is a derivation. `posts`, `activities`, `metrics`, `trend_forecasts` and friends are indexed, queryable
 projections that could be recomputed from the logs. Derived tables carry `model_version` / `prompt_version` where a model
@@ -56,7 +56,7 @@ forecast    pure: resample → EWMA kinematics → stage → damped Holt → ban
 db          drizzle schema + SQL migration + client (PGlite in dev/tests, Postgres in prod)
 ledger      EventStore (raw + ledger), OutcomeScheduler, ApprovalDiffs, prefixed ids
 connectors  Connector interface, per-network validation, registry, mock, bluesky, x, zernio
-core        base air: auth/workspaces/accounts/policy/posts/approvals/publishing/listening/metrics/trends/ops/export
+core        Base Air: auth/workspaces/accounts/policy/posts/approvals/publishing/listening/metrics/trends/ops/export
 ai          ModelGateway (Anthropic SDK) with versioned prompts, pricing, FakeGateway
 ```
 
@@ -64,7 +64,7 @@ Dependency direction is strictly downward: `schema` ← `policy`/`forecast`/`db`
 
 ## Apps
 
-- **api** (Hono): the HTTP contract in `docs/API.md`, SSE fan-out from `base air.emitter`, serves `apps/web/dist`.
+- **api** (Hono): the HTTP contract in `docs/API.md`, SSE fan-out from `Base Air.emitter`, serves `apps/web/dist`.
   Boot: migrate → connectors → scheduler (BullMQ when `REDIS_URL`, else in-process timers re-armed from the database).
 - **workers** (BullMQ): durable publish queue (one delayed job per post, idempotent per variant), repeatable jobs for
   ingest (with metered-read caps), outcome capture, forecast refresh.
@@ -103,7 +103,7 @@ from `members` on every request, so a role change or removal applies immediately
 ## Owned measurement
 
 Network metrics are rented: each platform decides what it reports, renames it, rate-limits it or prices it. So every
-link base air publishes can go through a short link it controls (`LinkService`, `packages/core/src/services/links.ts`).
+link Base Air publishes can go through a short link it controls (`LinkService`, `packages/core/src/services/links.ts`).
 `PublishingService` asks it to wrap a variant's links just before sending; the stored variant keeps the approved text.
 The redirect (`GET /l/:slug`) appends UTM tags and a click id (`ssclid`); the customer's site reports conversions with
 that id, server to server (`POST /v1/conversions`, idempotent by `externalId`) or from the browser (`/s.js` → `POST /c`,
@@ -137,7 +137,7 @@ Implement `Connector` from `@base-air/connectors` (publish / fetchActivity / fet
 
 ## Adding an operator
 
-An operator is a function `(m: base air, gateway: ModelGateway, workspaceId) => summary` wrapped in
+An operator is a function `(m: Base Air, gateway: ModelGateway, workspaceId) => summary` wrapped in
 `m.ops.startRun/finishRun`. It reads through core, writes through core (so the gate applies), and attaches evidence to
 everything it proposes. If it needs a new prompt, add one to `packages/ai/src/prompts` with a version string.
 

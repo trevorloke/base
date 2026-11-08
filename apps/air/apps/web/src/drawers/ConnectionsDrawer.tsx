@@ -27,7 +27,7 @@ const CONNECT_HINT: Partial<Record<Network, string>> = {
   tiktok: "You'll sign in on TikTok and come back here. Posting needs a TikTok business or creator account.",
   youtube: "You'll pick a Google account and the channel to post as.",
   pinterest: "You'll sign in on Pinterest and come back here.",
-  mastodon: "base air registers itself on your server first, then you sign in there.",
+  mastodon: "Base Air registers itself on your server first, then you sign in there.",
   reddit: "You'll sign in on Reddit and come back here.",
   google_business: "You'll pick the Google account that manages your business profiles.",
   telegram: "Make your bot an admin of the channel, then paste its token from @BotFather.",
@@ -42,13 +42,13 @@ const CONNECTOR_HINT: Record<string, string> = {
   discord_bot: "Create a bot in the Discord Developer Portal, turn on Message Content, and invite it to your server.",
 };
 
-/** One plain sentence on what base air can see once connected, where people reasonably wonder. */
+/** One plain sentence on what Base Air can see once connected, where people reasonably wonder. */
 const CAN_SEE: Record<string, string> = {
-  discord: "A webhook only posts. base air doesn't read the server through it.",
-  discord_bot: "base air sees the channels the bot can read, nothing else.",
-  whatsapp: "base air sees messages to your business number and groups your business created, never personal groups.",
-  wechat: "base air sees messages people send to your Official Account.",
-  line: "base air sees the groups and chats your official account's bot is in.",
+  discord: "A webhook only posts. Base Air doesn't read the server through it.",
+  discord_bot: "Base Air sees the channels the bot can read, nothing else.",
+  whatsapp: "Base Air sees messages to your business number and groups your business created, never personal groups.",
+  wechat: "Base Air sees messages people send to your Official Account.",
+  line: "Base Air sees the groups and chats your official account's bot is in.",
 };
 
 /**
@@ -75,8 +75,8 @@ function unsetNote(network: Network, hasConnector: boolean): string {
   if (!hasConnector) return `This server doesn't have a way to connect ${label} yet.`;
   const env = SETUP_ENV[network];
   return env
-    ? `${label} needs its app keys on this server first: whoever runs base air sets ${env} (see docs/integrations), then restarts it.`
-    : `${label} needs its app keys added to this server before anyone can connect it. Whoever runs base air can follow docs/integrations to set it up.`;
+    ? `${label} needs its app keys on this server first: whoever runs Base Air sets ${env} (see docs/integrations), then restarts it.`
+    : `${label} needs its app keys added to this server before anyone can connect it. Whoever runs Base Air can follow docs/integrations to set it up.`;
 }
 
 type Group = "connected" | "available" | "unset";

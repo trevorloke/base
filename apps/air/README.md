@@ -1,11 +1,11 @@
-# base air
+# Base Air
 
-**Attention and social for a campaign or cause.** base air is one of the three apps of **base** (broad application for
+**Attention and social for a campaign or cause.** Base Air is one of the three apps of **base** (broad application for
 social engagement, served at base.win; see `SUITE.md` at the repository root). It observes every surface where attention
 forms, forecasts where it is going (with honest confidence bands), acts through operator agents inside the client's
-declared red lines, and proves what moved the outcome. A few staff use it; volunteers live in base ground.
+declared red lines, and proves what moved the outcome. A few staff use it; volunteers live in Base Ground.
 
-Each client gets its own base air deployment, with its own servers and database, at `https://base.win/<client>/air`.
+Each client gets its own Base Air deployment, with its own servers and database, at `https://base.win/<client>/air`.
 Until November 2026 this was the standalone Starsign repository.
 
 - `docs/product-thesis.md` — what this is and why it wins (the five systems, the moat, the 24-month arc)
@@ -14,18 +14,18 @@ Until November 2026 this was the standalone Starsign repository.
 
 ![The room: Radar, Queue, Feed, Brief](docs/screenshots/room.png)
 
-## In the base suite
+## In the Base suite
 
 - **Address.** Served under `BASE_PATH` (e.g. `/imaginesurrey/air`). The server strips the prefix, answers
   `/api/health` with or without it and sends anything else without it to the prefixed path (308). `index.html` gets
   `<base href>` and `window.__BASE_PATH__`; the web build uses relative assets; one helper (`apps/web/src/lib/base.ts`)
   builds every absolute path in the browser; cookies are scoped to the prefix. `BASE_AIR_PUBLIC_URL` includes the
   prefix, so links in posts, emails and webhook registrations do too. `BASE_PATH` empty: everything at the root.
-- **Sign in with base.** base ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set, the sign-in
-  screen offers "Sign in with base" (`/auth/base?next=…`): base ground says who the person is, and base air signs them
+- **Sign in with Base.** Base Ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set, the sign-in
+  screen offers "Sign in with Base" (`/auth/base?next=…`): Base Ground says who the person is, and Base Air signs them
   in to their own account with the same email, or tells them to ask an owner for an invite. It never creates accounts.
   Email and password sign-in stays.
-- **The base switcher** in the top bar links to base ground's field and ground, base air, and base web's admin when
+- **The Base switcher** in the top bar links to Base Ground's field and ground, Base Air, and Base Web's admin when
   `BASE_WEB_URL` is set.
 - **Look and brand.** The default look is **Air**: dark, sky blue and violet on deep navy, IBM Plex Mono for figures.
   Owners set the workspace's brand on the **Brand** page (user menu → Brand): a preset (Air, Daylight, Ember, Lagoon,
@@ -107,7 +107,7 @@ data-loyal.
 
 `Dockerfile` (build context `apps/air`) builds one image: the API with the built web room. The same image runs three
 ways (web, workers, operators). The services themselves are defined in the suite's root `render.yaml`, per client and
-per environment; base air needs:
+per environment; Base Air needs:
 
 | Service | Kind | Command | Notes |
 |---|---|---|---|
@@ -129,5 +129,5 @@ was deliberately left. Invariants worth defending are listed in `docs/ARCHITECTU
 
 ## Status
 
-Phase 0 scaffold, built 2026-11-02 as Starsign; renamed base air and brought into the base suite 2026-11-07. Native connectors post for real once credentials exist; platform reviews (Meta,
+Phase 0 scaffold, built 2026-11-02 as Starsign; renamed Base Air and brought into the Base suite 2026-11-07. Native connectors post for real once credentials exist; platform reviews (Meta,
 TikTok, LinkedIn pages) and the Google Trends alpha are external clocks — start them now.

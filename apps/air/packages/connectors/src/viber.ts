@@ -10,14 +10,14 @@ import { ConnectorError } from "./types.ts";
  * Viber through its official REST APIs at https://chatapi.viber.com/pa. Two kinds of account, chosen at connect:
  *
  * - **Channel** (Channels Post API): the channel's auth token from Channel settings → Developer tools (superadmins
- *   only). base air posts to the channel as its superadmin (`from`). Channels have no inbox: posts by the channel
+ *   only). Base Air posts to the channel as its superadmin (`from`). Channels have no inbox: posts by the channel
  *   and members' reactions produce no callbacks, so nothing is read back.
  * - **Bot** (REST Bot API): the bot's auth token. Since February 2024 new bots are only for businesses with a
  *   commercial agreement with Viber, and messages a bot starts are charged. People's messages and subscriptions
  *   arrive on `${BASE_AIR_PUBLIC_URL}/webhooks/viber?account=<id>`; replies are send_message.
  *
  * Both need a webhook set with set_webhook (the Channels Post API refuses posts until one is set). Viber checks the
- * URL by calling it at once, which base air can only answer once the account is saved, so connect tries and the
+ * URL by calling it at once, which Base Air can only answer once the account is saved, so connect tries and the
  * first poll (fetchActivity) or a publish refused with "webhook not set" sets it again.
  *
  * Every callback is signed with the account's own token (X-Viber-Content-Signature = hex HMAC-SHA256 of the raw
@@ -36,7 +36,7 @@ export interface ViberConnectorOptions {
   apiBase?: string;
   fetch?: FetchLike;
   now?: () => Date;
-  /** BASE_AIR_PUBLIC_URL: the webhook base air sets is `${publicUrl}/webhooks/viber?account=<id>`. */
+  /** BASE_AIR_PUBLIC_URL: the webhook Base Air sets is `${publicUrl}/webhooks/viber?account=<id>`. */
   publicUrl?: string;
 }
 
@@ -273,7 +273,7 @@ export class ViberConnector implements Connector {
         webhookSet = true;
       } catch (err) {
         if (err instanceof ConnectorError && err.kind === "auth") throw err;
-        // Expected on first connect: Viber checks the URL before base air has saved the account. Set again later.
+        // Expected on first connect: Viber checks the URL before Base Air has saved the account. Set again later.
       }
     }
     const config: ViberAccountConfig = { kind, accountId: info.id, name: info.name ?? null, uri: info.uri ?? null, from, subscribersCount: typeof info.subscribers_count === "number" ? info.subscribers_count : null, webhookUrl, webhookSet };
@@ -424,7 +424,7 @@ export class ViberConnector implements Connector {
       if (!input.text.trim()) throw new ConnectorError("viber reply: text is empty", "rejected", false);
       if ([...input.text].length > LIMITS.text) throw new ConnectorError(`viber reply: messages are at most ${LIMITS.text} characters`, "rejected", false);
       const token = parseAuth(account).authToken;
-      const sender = (cfg.name ?? account.handle ?? "base air").slice(0, LIMITS.senderName);
+      const sender = (cfg.name ?? account.handle ?? "Base Air").slice(0, LIMITS.senderName);
       const r = await this.call<{ message_token?: string | number }>(token, "/send_message", { receiver, min_api_version: 1, sender: { name: sender }, type: "text", text: input.text }, "send_message");
       return { externalId: `${receiver}:${String(r.message_token ?? `sent-${input.idempotencyKey}`)}`, url: null, raw: r };
     });
@@ -497,7 +497,7 @@ function fileName(m: Media): string {
   return "file.pdf";
 }
 
-/** Registry entry for Viber. No env is required; BASE_AIR_PUBLIC_URL lets base air set each account's webhook. */
+/** Registry entry for Viber. No env is required; BASE_AIR_PUBLIC_URL lets Base Air set each account's webhook. */
 export function createViberConnectors(env: NodeJS.ProcessEnv): Connector[] {
   return [new ViberConnector({ ...(env.VIBER_API_BASE ? { apiBase: env.VIBER_API_BASE } : {}), ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}) })];
 }

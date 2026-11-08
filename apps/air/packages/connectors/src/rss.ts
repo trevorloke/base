@@ -22,7 +22,7 @@ const TEXT_CAP = 4000;
 export interface RssConnectorOptions {
   fetch?: FetchLike;
   now?: () => Date;
-  /** BASE_AIR_ALLOW_PRIVATE_URLS=1: allow feeds on private/loopback hosts (an intranet feed next to a self-hosted base air). */
+  /** BASE_AIR_ALLOW_PRIVATE_URLS=1: allow feeds on private/loopback hosts (an intranet feed next to a self-hosted Base Air). */
   allowPrivate?: boolean;
   lookup?: LookupFn;
   /** Per request, including the body. */

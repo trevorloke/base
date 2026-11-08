@@ -15,7 +15,7 @@ Connector `telegram` · networks `["telegram"]` · `packages/connectors/src/tele
 ## Setup
 1. In Telegram, talk to **@BotFather** → `/newbot` → copy the token.
 2. Add the bot to the channel as an **administrator** with "Post messages" (and "Delete messages" for moderation). For comments, also add it to the channel's linked discussion group (admin, so it receives all messages despite privacy mode).
-3. In base air, connect Telegram with the token and the channel's @username or id.
+3. In Base Air, connect Telegram with the token and the channel's @username or id.
 - Redirect URI: none (not OAuth).
 - Webhook URL: `${BASE_AIR_PUBLIC_URL}/webhooks/telegram` (registered automatically on connect when the secret is configured).
 - Env vars: `TELEGRAM_WEBHOOK_SECRET` (1–256 chars of `A-Z a-z 0-9 _ -`; enables webhooks), `BASE_AIR_PUBLIC_URL`, optional `TELEGRAM_API_BASE` (self-hosted Bot API server).
@@ -34,6 +34,6 @@ None. Any bot token works immediately; the only requirement is admin rights in t
 - Telegram's documentation site was not reachable from the sandbox; method names and fields come from long-standing Bot API behaviour (reply_parameters since 7.0, InputPollOption since 7.3, setMessageReaction since 7.0).
 
 ## Questions for the owner
-- Should base air own the bot's webhook? `setWebhook` replaces any webhook the bot already has (and disables `getUpdates` for other tools using the same bot). Use a dedicated bot per brand if unsure.
+- Should Base Air own the bot's webhook? `setWebhook` replaces any webhook the bot already has (and disables `getUpdates` for other tools using the same bot). Use a dedicated bot per brand if unsure.
 - Disconnecting does not call `deleteWebhook`; should it?
 - Are long polls (> 10 minutes) acceptable as "open until closed manually"? Telegram's `open_period` caps at 600 seconds.

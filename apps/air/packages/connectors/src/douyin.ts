@@ -89,7 +89,7 @@ export const DOUYIN_LIMITS = {
 } as const;
 
 /**
- * base air privacy → create_video `private_status`.
+ * Base Air privacy → create_video `private_status`.
  * TODO(verify): 0 = everyone, 1 = only me, 2 = friends. Douyin has no "followers only" or "unlisted".
  */
 export const DOUYIN_PRIVACY: Record<NonNullable<VariantOptions["privacy"]>, number | null> = {

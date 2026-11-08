@@ -4,7 +4,7 @@ import type { Scheduler } from "@base-air/core";
 
 export const PUBLISH_QUEUE = "base-air-publish";
 export const MAINTENANCE_QUEUE = "base-air-maintenance";
-/** Queue names from before Starsign became base air. Nothing listens on them any more. */
+/** Queue names from before Starsign became Base Air. Nothing listens on them any more. */
 export const LEGACY_QUEUES = ["starsign-publish", "starsign-maintenance"] as const;
 
 /** The little of a BullMQ Queue that retiring an old one needs (a fake in tests). */

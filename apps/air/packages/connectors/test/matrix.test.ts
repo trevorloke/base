@@ -20,7 +20,7 @@ const acct: AccountRef = {
   config: {
     homeserver: HS,
     userId: ME,
-    displayName: "base air",
+    displayName: "Base Air",
     rooms: [
       { id: ROOM, alias: "#community:example.org", name: "Community", encrypted: false },
       { id: SECRET_ROOM, alias: null, name: null, encrypted: true },
@@ -67,7 +67,7 @@ describe("matrix connect", () => {
       if (u === "https://example.org/.well-known/matrix/client") return json({ "m.homeserver": { base_url: "https://matrix.example.org/" } });
       if (u === `${HS}/_matrix/client/v3/login`) return json({ access_token: TOKEN, user_id: ME, device_id: "DEV1" });
       if (u.endsWith("/account/whoami")) return json({ user_id: ME, device_id: "DEV1" });
-      if (u.includes("/profile/")) return json({ displayname: "base air" });
+      if (u.includes("/profile/")) return json({ displayname: "Base Air" });
       if (u.endsWith("/joined_rooms")) return json({ joined_rooms: [SECRET_ROOM] });
       if (u.includes("/directory/room/")) return json({ room_id: ROOM, servers: ["example.org"] });
       if (u.includes("/join/")) return json({ room_id: ROOM });
@@ -78,18 +78,18 @@ describe("matrix connect", () => {
     });
     const accounts = await connector().connectWithInputs({ network: "matrix", inputs: { homeserver: "example.org", user: "baseair", password: "hunter2-hunter2", rooms: "#community:example.org, !secret:example.org" } });
     const login = fetchMock.mock.calls.find((c) => String(c[0]).endsWith("/login"))!;
-    expect(JSON.parse(String(login[1]?.body))).toEqual({ type: "m.login.password", identifier: { type: "m.id.user", user: "baseair" }, password: "hunter2-hunter2", initial_device_display_name: "base air" });
+    expect(JSON.parse(String(login[1]?.body))).toEqual({ type: "m.login.password", identifier: { type: "m.id.user", user: "baseair" }, password: "hunter2-hunter2", initial_device_display_name: "Base Air" });
     const join = fetchMock.mock.calls.find((c) => String(c[0]).includes("/join/"))!;
     expect(String(join[0])).toBe(`${HS}/_matrix/client/v3/join/${encodeURIComponent("#community:example.org")}`);
     expect(accounts).toEqual([
       {
         network: "matrix",
-        identity: { externalId: ME, handle: ME, displayName: "base air" },
+        identity: { externalId: ME, handle: ME, displayName: "Base Air" },
         auth: { homeserver: HS, accessToken: TOKEN, userId: ME, deviceId: "DEV1" },
         config: {
           homeserver: HS,
           userId: ME,
-          displayName: "base air",
+          displayName: "Base Air",
           rooms: [
             { id: ROOM, alias: "#community:example.org", name: "Community", encrypted: false },
             { id: SECRET_ROOM, alias: null, name: null, encrypted: true },
@@ -125,7 +125,7 @@ describe("matrix connect", () => {
 });
 
 describe("matrix event mapping", () => {
-  const ctx = { userId: ME, displayName: "base air", roomName: () => "Community", memberName: () => "Alice" };
+  const ctx = { userId: ME, displayName: "Base Air", roomName: () => "Community", memberName: () => "Alice" };
   it("maps a message to kind message in a group conversation", () => {
     expect(matrixEventToActivity(ROOM, ev("$e1", { body: "hello all" }), ctx)).toEqual({
       network: "matrix",
@@ -143,10 +143,10 @@ describe("matrix event mapping", () => {
   });
   it("detects mentions via m.mentions, else MXID or display name", () => {
     expect(mentionsUser(ev("$1", { body: "hey", "m.mentions": { user_ids: [ME] } }), ME)).toBe(true);
-    expect(mentionsUser(ev("$1", { body: "base air is great", "m.mentions": {} }), ME, "base air")).toBe(false); // m.mentions present and empty wins
+    expect(mentionsUser(ev("$1", { body: "Base Air is great", "m.mentions": {} }), ME, "Base Air")).toBe(false); // m.mentions present and empty wins
     expect(mentionsUser(ev("$1", { body: "ping @baseair:example.org" }), ME)).toBe(true);
-    expect(mentionsUser(ev("$1", { body: "thanks base air!" }), ME, "base air")).toBe(true);
-    expect(mentionsUser(ev("$1", { body: "base airlines" }), ME, "base air")).toBe(false);
+    expect(mentionsUser(ev("$1", { body: "thanks Base Air!" }), ME, "Base Air")).toBe(true);
+    expect(mentionsUser(ev("$1", { body: "base airlines" }), ME, "Base Air")).toBe(false);
     expect(matrixEventToActivity(ROOM, ev("$2", { body: "hey", "m.mentions": { user_ids: [ME] } }), ctx)).toMatchObject({ kind: "mention" });
   });
   it("maps replies (in_reply_to) to our messages as reply, strips legacy fallbacks, and skips noise", () => {

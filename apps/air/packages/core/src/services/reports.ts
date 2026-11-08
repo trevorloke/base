@@ -543,7 +543,7 @@ export class ReportService {
     const doc = await this.document(r.workspaceId, r, at, viewUrl);
     const html = renderReportHtml(doc);
     const subject = `${doc.title} · ${doc.periodLabel}`;
-    const text = `${doc.title}${doc.clientName ? ` for ${doc.clientName}` : ""}, ${doc.periodLabel}.\n\n${viewUrl ? `Read it in your browser: ${viewUrl}\n\n` : ""}Sent by ${doc.workspaceName} with base air.`;
+    const text = `${doc.title}${doc.clientName ? ` for ${doc.clientName}` : ""}, ${doc.periodLabel}.\n\n${viewUrl ? `Read it in your browser: ${viewUrl}\n\n` : ""}Sent by ${doc.workspaceName} with Base Air.`;
     for (const to of r.recipients) await this.mailer.send({ to, subject, text, html });
     const period = reportPeriod(r.period, at, doc.timezone);
     await this.ctx.events.append({ workspaceId: r.workspaceId, type: "report.sent", subjectType: "report", subjectId: r.id, actor, data: { trigger, recipients: r.recipients, period: period.key, shareId: share?.id ?? null } });

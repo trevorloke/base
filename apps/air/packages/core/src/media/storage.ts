@@ -128,7 +128,7 @@ export interface S3Config {
 
 /**
  * Any S3-compatible store (AWS S3, Cloudflare R2, MinIO, Backblaze B2) with path-style requests signed by
- * AWS Signature V4. No SDK: a handful of verbs are all base air needs.
+ * AWS Signature V4. No SDK: a handful of verbs are all Base Air needs.
  */
 export class S3Storage implements MediaStorage {
   readonly name = "s3";

@@ -51,7 +51,7 @@ export function ghostToken(adminApiKey: string, now: Date, audience = "/admin/")
   return `${header}.${payload}.${signature}`;
 }
 
-/** base air visibility → Ghost post visibility: public (default), unlisted → members only, private/direct → paid members only. */
+/** Base Air visibility → Ghost post visibility: public (default), unlisted → members only, private/direct → paid members only. */
 export function ghostVisibility(o: VariantOptions): "public" | "members" | "paid" {
   if (o.visibility === "unlisted") return "members";
   if (o.visibility === "private" || o.visibility === "direct") return "paid";
@@ -363,7 +363,7 @@ function commentToActivity(c: GhostComment, siteUrl: string | null): ActivityInp
     network: "ghost",
     kind: "comment",
     externalId: c.id,
-    // Members are identified by email in Ghost; the email is never copied into base air.
+    // Members are identified by email in Ghost; the email is never copied into Base Air.
     authorHandle: null,
     authorName: c.member?.name ?? null,
     text: c.html ? htmlToText(c.html) : null,

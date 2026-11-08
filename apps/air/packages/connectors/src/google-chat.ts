@@ -12,7 +12,7 @@ import { ConnectorError } from "./types.ts";
  * only post into that one space. Reading a space needs a Chat app (Chat API + Google Workspace admin approval for
  * the app's scopes): a later step.
  *
- * Threads: every post names a `threadKey` derived from base air's idempotency key with
+ * Threads: every post names a `threadKey` derived from Base Air's idempotency key with
  * messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD, so thread segments and later replies to a post land in its
  * thread (or start one).
  */
@@ -56,7 +56,7 @@ export function toChatText(text: string): string {
 
 /** A stable thread key for a post (also what later replies use). */
 export function chatThreadKey(idempotencyKey: string): string {
-  // The "starsign" namespace predates the rename to base air and must stay: replies to existing posts re-derive this key.
+  // The "starsign" namespace predates the rename to Base Air and must stay: replies to existing posts re-derive this key.
   return `starsign-${createHash("sha256").update(`starsign:gchat:${idempotencyKey}`).digest("hex").slice(0, 24)}`;
 }
 

@@ -2,11 +2,11 @@ import { z } from "zod";
 import { Actor, Id, Timestamp } from "./common.ts";
 
 /**
- * base air Open Event Schema v0.
+ * Base Air Open Event Schema v0.
  *
  * Two append-only logs:
  *  - raw_events:    every payload received from any source, verbatim. Never updated, never deleted.
- *  - ledger_events: every domain fact base air asserts (a post was created, a policy blocked something,
+ *  - ledger_events: every domain fact Base Air asserts (a post was created, a policy blocked something,
  *                   an operator acted, an outcome was captured). Derived tables are rebuildable from these.
  */
 export const RawEventInput = z.object({
@@ -104,13 +104,13 @@ export const LedgerEventType = z.enum([
   "visibility.settings_updated",
   "visibility.run_completed",
   // ---- end AI answer visibility
-  // ---- the base suite
+  // ---- the Base suite
   "auth.base_handoff",
   "base_link.created",
   "base_link.refused",
   "base_link.removed",
   "brand.updated",
-  // ---- end the base suite
+  // ---- end the Base suite
 ]);
 export type LedgerEventType = z.infer<typeof LedgerEventType>;
 

@@ -4,7 +4,7 @@ Connector `slack` · networks `["slack"]` · `packages/connectors/src/slack.ts` 
 
 For a company's own workspace or a community workspace, through an **internal Slack app** (installed only to that
 workspace, so no Slack Marketplace review). Uses the official Web API (`https://slack.com/api/<method>`) and the
-Events API. One base air account = one workspace (externalId = the team id `T…`).
+Events API. One Base Air account = one workspace (externalId = the team id `T…`).
 
 ## What works
 - **Connect** (`connectMethod: "bot_token"`): inputs `botToken` (secret, the Bot User OAuth Token `xoxb-…`),
@@ -60,7 +60,7 @@ Events API. One base air account = one workspace (externalId = the team id `T…
   (retryable, `retryAfter` from the header); `internal_error`, `fatal_error`, 5xx, transport errors → retryable
   `network`; other codes → `rejected`. Messages never contain the token.
 
-## What base air can and cannot see
+## What Base Air can and cannot see
 - **Can see**: messages in the public and private channels the app was invited to, direct messages people send to
   the app, group DMs that include the app, and mentions of the app. Reaction counts and reply counts on the app's own
   posts. Files show as `[file: name]`, not their contents.
@@ -75,13 +75,13 @@ Events API. One base air account = one workspace (externalId = the team id `T…
    `im:history`, `mpim:history`, `chat:write`, `reactions:read`, `reactions:write`, `files:write`, `files:read`,
    `users:read`, `app_mentions:read`. Then **Install to Workspace** and copy the **Bot User OAuth Token** (`xoxb-…`).
 3. **Basic Information → App Credentials** → copy the **Signing Secret**.
-4. In base air, connect Slack with the token, the signing secret and optionally channel ids. base air shows the
+4. In Base Air, connect Slack with the token, the signing secret and optionally channel ids. Base Air shows the
    Request URL (`${BASE_AIR_PUBLIC_URL}/webhooks/slack?team=<team id>`).
 5. **Event Subscriptions** → On → Request URL = that URL (Slack sends `url_verification`; it must show "Verified").
    **Subscribe to bot events**: `message.channels`, `message.groups`, `message.im`, `message.mpim`, `app_mention`.
    Save, and reinstall the app if Slack asks.
 6. In each channel to watch: `/invite @<app name>`. To accept DMs, **App Home → Messages Tab** on.
-- Redirect URI: none (not OAuth in base air; the app is installed from its own settings page).
+- Redirect URI: none (not OAuth in Base Air; the app is installed from its own settings page).
 - Webhook URL: `${BASE_AIR_PUBLIC_URL}/webhooks/slack?team=<team id>`.
 - Env vars: `BASE_AIR_PUBLIC_URL` (to show the Request URL), optional `SLACK_API_BASE` (tests or a proxy).
 
@@ -114,5 +114,5 @@ limits on `conversations.history`, Slack Marketplace approval: not needed or use
 ## Questions for the owner
 - **Core change for `url_verification`**: done (`WebhookHandler.respond`). The Request URL still needs `?team=`,
   because Slack's handshake body names no workspace.
-- Should base air also poll thread replies (`conversations.replies`) for workspaces that cannot use events?
+- Should Base Air also poll thread replies (`conversations.replies`) for workspaces that cannot use events?
 - Is posting as the app fine, or do you want a per-post username/icon (`chat:write.customize`)?

@@ -1,11 +1,11 @@
 # KakaoTalk (카카오톡)
 
-There is **no KakaoTalk connector**, and this page explains why and what base air does for Korean audiences instead.
+There is **no KakaoTalk connector**, and this page explains why and what Base Air does for Korean audiences instead.
 
 ## What cannot be done through any official API
 - **KakaoTalk chats and open chats (오픈채팅)** cannot be read or posted to by a third-party service. Kakao offers no API for
   group chats or open chats, and the tools that try (automating the PC client, reading its database, unofficial bots) break
-  Kakao's terms and get accounts suspended. base air does not use them.
+  Kakao's terms and get accounts suspended. Base Air does not use them.
 - **Kakao Talk Channel (카카오톡 채널) posts** (the channel's feed, "소식") have no publishing API. They are written in the Kakao
   Talk Channel admin center by hand.
 - **Kakao Talk Channel 1:1 chat** has no open API to read or answer messages from outside Kakao's own admin tools and its
@@ -20,7 +20,7 @@ Message, and others). They need a business-verified Kakao Talk Channel, message 
 AlimTalk), and they cost money per message. They are one-way notifications, not conversations. If you want them, they belong in
 a separate "business messaging" feature with a dealer contract, not in the social inbox.
 
-## What base air does for Korean audiences instead
+## What Base Air does for Korean audiences instead
 - **Naver Band** (`band`): publish to the bands you belong to, and read members' posts and comments. See `band.md`.
 - **Instagram**, **YouTube**, **Threads** and **X**: publishing, comments and metrics, all widely used in Korea.
 - **News and RSS in Korean**: the tracker and the radar read Korean-language news sites and blogs through RSS (Naver blogs and

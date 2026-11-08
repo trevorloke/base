@@ -27,7 +27,7 @@ export function connectFailureReason(e: unknown, connectorName: string): string 
   const kind = e instanceof ConnectorError ? e.kind : null;
   const clean = detail ? detail.charAt(0).toUpperCase() + detail.slice(1) : "";
   const sentence = clean && !/[.!?)]$/.test(clean) ? `${clean}.` : clean;
-  if (kind === "network" || TRANSPORT.test(detail)) return "base air couldn't reach the network from this server. Check the address you typed, then try again in a minute.";
+  if (kind === "network" || TRANSPORT.test(detail)) return "Base Air couldn't reach the network from this server. Check the address you typed, then try again in a minute.";
   if (kind === "rate_limit") return "The network is limiting requests right now. Try again in a few minutes.";
   if (kind === "auth") return sentence && !/^(unauthori[sz]ed|forbidden|401|403)\b/i.test(detail) ? `The credentials were not accepted: ${sentence}` : "The credentials were not accepted. Check them and try again.";
   return sentence || "The network refused the connection. Check what you typed and try again.";
@@ -186,7 +186,7 @@ export class AccountService {
     } catch {
       throw new CoreError("invalid", "the network did not accept the authorization", { reason: "exchange_failed" });
     }
-    if (found.length === 0) throw new CoreError("invalid", "the login has no accounts base air can manage", { reason: "no_accounts" });
+    if (found.length === 0) throw new CoreError("invalid", "the login has no accounts Base Air can manage", { reason: "no_accounts" });
     const principal: Principal = { workspaceId: row.workspaceId, actor: row.actor };
     const connected = [];
     for (const a of found) {

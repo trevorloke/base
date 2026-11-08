@@ -1,7 +1,7 @@
-# base air HTTP API v1 (contract)
+# Base Air HTTP API v1 (contract)
 
-Base URL in dev: `http://localhost:4000`. In the base suite every path below lives under the deployment's `BASE_PATH`
-(e.g. `https://base.win/imaginesurrey/air/v1/me`); see "base air in the base suite" at the end. All bodies and responses
+Base URL in dev: `http://localhost:4000`. In the Base suite every path below lives under the deployment's `BASE_PATH`
+(e.g. `https://base.win/imaginesurrey/air/v1/me`); see "Base Air in the Base suite" at the end. All bodies and responses
 are JSON. Times are ISO-8601 strings.
 
 ## Authentication
@@ -191,7 +191,7 @@ The redirect adds `utm_source=<network>`, `utm_medium=social`, `utm_campaign=<op
 post-<id>>`, `utm_content=<slug>` (tags the author already set are kept) and `ssclid=<click id>`. Instagram and TikTok
 captions are left alone (links there are not clickable), as is any segment the short link would push over the limit.
 Pinterest, Reddit and Google Business distrust redirecting links, so there the real destination is kept and only the
-UTM tags are added (web analytics still attribute the visit; base air does not count those clicks itself).
+UTM tags are added (web analytics still attribute the visit; Base Air does not count those clicks itself).
 A variant opts out with `options.trackLinks: false`.
 
 Public:
@@ -296,7 +296,7 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
     `{ posts, impressions, engagements, engagementRate, linkClicks, conversions, conversionValue, followersGained, mentions }`.
     A post's numbers are its 72h outcome snapshot, else its 24h one, else its latest metrics; engagements are the
     network's `engagements`, else likes + replies + reposts + quotes + shares + saves; engagement rate is over posts
-    that reported impressions. Link clicks are non-bot clicks on base air short links; followers gained comes from the
+    that reported impressions. Link clicks are non-bot clicks on Base Air short links; followers gained comes from the
     accounts' `followers_total` series; mentions are mention/reply/comment/quote items the accounts received.
     `change[k]` is fractional (0.12 = +12%), null when the previous value was 0.
   - `topPosts` (10, by engagements): `{ postId, variantIds, text, networks, url, publishedAt, impressions, engagements,
@@ -418,9 +418,9 @@ Every change is a ledger event.
 - MCP: `list_inbox` (read) and `update_inbox_item` (status, labels, note; write).
 <!-- ---- end inbox workflow -->
 
-## base air in the base suite
+## Base Air in the Base suite
 
-base air is one of the base suite's apps (see the repository's SUITE.md). Each client's deployment is served under a
+Base Air is one of the Base suite's apps (see the repository's SUITE.md). Each client's deployment is served under a
 prefix, `BASE_PATH` (e.g. `/imaginesurrey/air`):
 
 - Requests under `${BASE_PATH}` are handled as if at the root. `/api/health` also answers without the prefix; anything
@@ -430,7 +430,7 @@ prefix, `BASE_PATH` (e.g. `/imaginesurrey/air`):
 - Cookies (`base_air_session`, `base_air_sso_state`) are set with `Path=${BASE_PATH}` (or `/`).
 - Links in emails, posts and webhook registrations come from `BASE_AIR_PUBLIC_URL`, which includes the prefix.
 - Client IPs (sessions, link clicks) come from `X-Forwarded-For`, `BASE_AIR_TRUSTED_PROXIES` (default 1) entries from
-  the right: base's front door sits behind Render's load balancer, so the client is the second-to-last entry.
+  the right: Base's front door sits behind Render's load balancer, so the client is the second-to-last entry.
 
 ### Sign in with Base
 Base Ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set, Base Air signs people in **by link,

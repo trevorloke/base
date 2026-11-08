@@ -1,4 +1,4 @@
-/** A fake base air API: an injectable `fetch` that records calls and answers from a route table. No network. */
+/** A fake Base Air API: an injectable `fetch` that records calls and answers from a route table. No network. */
 import { vi } from "vitest";
 import type { PolicyDecision } from "@base-air/schema";
 import type { Alert, BrandContext, Brief, Post, PostDetail, PostVariant, RadarEntry } from "../src/types.ts";

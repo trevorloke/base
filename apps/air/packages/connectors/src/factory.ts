@@ -43,7 +43,7 @@ import { createWebhookConnectors } from "./webhook.ts";
 import { createRssConnectors } from "./rss.ts";
 
 /**
- * The registry a base air process boots with. Native adapters are always present (their credentials
+ * The registry a Base Air process boots with. Native adapters are always present (their credentials
  * live on each account, not in the environment); Zernio needs a workspace-wide API key, so it joins
  * only when ZERNIO_API_KEY is set; the mock joins outside production (or with BASE_AIR_ENABLE_MOCK=1).
  * Env is injectable so tests and tools can build registries without touching process.env.

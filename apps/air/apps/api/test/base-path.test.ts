@@ -76,7 +76,7 @@ describe("serving under BASE_PATH", () => {
     await m.auth.signup({ email: "ann@acme.test", password: "correct horse 1", name: "Ann", workspaceName: "Ann Co" }, {});
     dist = mkdtempSync(join(tmpdir(), "air-dist-"));
     mkdirSync(join(dist, "assets"));
-    writeFileSync(join(dist, "index.html"), '<!doctype html><html lang="en"><head><title>base air</title><script type="module" src="./assets/app.js"></script></head><body></body></html>');
+    writeFileSync(join(dist, "index.html"), '<!doctype html><html lang="en"><head><title>Base Air</title><script type="module" src="./assets/app.js"></script></head><body></body></html>');
     writeFileSync(join(dist, "assets", "app.js"), "console.log('room')");
     const app = createApp(m, { basePath: BASE, publicUrl: `${ORIGIN}${BASE}` });
     registerWebApp(app, { dist, basePath: BASE });

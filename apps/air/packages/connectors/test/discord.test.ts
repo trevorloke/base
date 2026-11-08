@@ -6,7 +6,7 @@ const ID = "1234567890123456789";
 const TOKEN = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcdefghijklmnopqrstuvwxyzABCD";
 const URL_IN = `https://discord.com/api/webhooks/${ID}/${TOKEN}`;
 const BASE = `https://discord.com/api/v10/webhooks/${ID}/${TOKEN}`;
-const acct: AccountRef = { id: "d1", workspaceId: "w", network: "discord", externalId: ID, handle: "base air", auth: { webhookUrl: BASE }, config: { webhookId: ID, guildId: "111", channelId: "222", threadId: null, name: "base air" } };
+const acct: AccountRef = { id: "d1", workspaceId: "w", network: "discord", externalId: ID, handle: "Base Air", auth: { webhookUrl: BASE }, config: { webhookId: ID, guildId: "111", channelId: "222", threadId: null, name: "Base Air" } };
 const input: PublishInput = { variantId: "v1", text: "Launch day @everyone", media: [], thread: [], idempotencyKey: "k1" };
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
@@ -34,12 +34,12 @@ describe("discord connect", () => {
   });
 
   it("GETs the webhook to verify it and returns its guild and channel", async () => {
-    fetchMock.mockResolvedValueOnce(json({ id: ID, type: 1, name: "base air", guild_id: "111", channel_id: "222", token: TOKEN }));
+    fetchMock.mockResolvedValueOnce(json({ id: ID, type: 1, name: "Base Air", guild_id: "111", channel_id: "222", token: TOKEN }));
     const c = createDiscordConnectors({})[0] as DiscordConnector;
     const accounts = await c.connectWithInputs({ network: "discord", inputs: { webhookUrl: URL_IN } });
     expect(call(0).url.href).toBe(BASE);
     expect(call(0).method).toBe("GET");
-    expect(accounts).toEqual([{ network: "discord", identity: { externalId: ID, handle: "base air", displayName: "base air" }, auth: { webhookUrl: BASE }, config: { webhookId: ID, guildId: "111", channelId: "222", threadId: null, name: "base air" } }]);
+    expect(accounts).toEqual([{ network: "discord", identity: { externalId: ID, handle: "Base Air", displayName: "Base Air" }, auth: { webhookUrl: BASE }, config: { webhookId: ID, guildId: "111", channelId: "222", threadId: null, name: "Base Air" } }]);
     expect(c.connectMethod).toBe("webhook_url");
     expect(c.capabilities()).toMatchObject({ fetchActivity: false, fetchMetrics: false, reply: false, accountMetrics: false, moderate: true });
   });

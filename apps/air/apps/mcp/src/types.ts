@@ -1,5 +1,5 @@
 /**
- * Shapes of the base air HTTP API v1 as documented in docs/API.md.
+ * Shapes of the Base Air HTTP API v1 as documented in docs/API.md.
  * Where `@base-air/schema` already defines the shape (posts, variants, activities, ledger events,
  * policy, policy decisions) we reuse it; the rest is declared here against the contract.
  */

@@ -10,7 +10,7 @@ import { ConnectorError } from "./types.ts";
 /**
  * Slack workspaces through an internal Slack app (Web API + Events API). The workspace admin creates an app at
  * api.slack.com/apps, installs it to the workspace only (no Slack Marketplace review), and pastes the Bot User OAuth
- * Token (xoxb-…) and the app's Signing Secret. One base air account = one workspace (externalId = team id).
+ * Token (xoxb-…) and the app's Signing Secret. One Base Air account = one workspace (externalId = team id).
  *
  * Listening, two ways:
  * - Events API: Slack POSTs to `${BASE_AIR_PUBLIC_URL}/webhooks/slack?team=<team id>`, signed with the app's signing

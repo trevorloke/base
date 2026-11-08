@@ -94,5 +94,5 @@ export {
 export { AnalyticsService, LEARNING_DAYS, type AnalyticsQuery, type AnalyticsFilters } from "./services/analytics.ts";
 export { ReportService, ReportInput, ReportPatch, ReportSchedule, ReportPeriod, DEFAULT_SECTIONS, reportPeriod, lastOccurrence, nextOccurrence, duePeriod, zonedTime, type ReportView, type ReportOptions } from "./services/reports.ts";
 export * from "./services/analytics-shared.ts";
-// ---- the base suite: brand
+// ---- the Base suite: brand
 export { LookService, type BrandView } from "./services/look.ts";

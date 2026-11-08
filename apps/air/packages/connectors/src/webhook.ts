@@ -26,7 +26,7 @@ import { ConnectorError } from "./types.ts";
 export const SIGNATURE_HEADER = "x-base-air-signature";
 export const TIMESTAMP_HEADER = "x-base-air-timestamp";
 /**
- * The names these headers had before Starsign became base air. Receivers and senders set up before the rename keep
+ * The names these headers had before Starsign became Base Air. Receivers and senders set up before the rename keep
  * working: outbound deliveries carry both pairs, inbound accepts either pair (the new one wins when both are sent).
  */
 export const LEGACY_SIGNATURE_HEADER = "x-starsign-signature";
@@ -129,7 +129,7 @@ export interface UrlPolicy {
 }
 
 /**
- * Refuse URLs that would make base air's server talk to itself or its private network (SSRF): non-http(s) schemes,
+ * Refuse URLs that would make Base Air's server talk to itself or its private network (SSRF): non-http(s) schemes,
  * private hostnames and IP literals, and hostnames that resolve to private addresses. A host that re-resolves
  * between this check and the request (DNS rebinding) is not covered; see the docs.
  */
@@ -142,7 +142,7 @@ export async function assertPublicHttpUrl(raw: string, policy: UrlPolicy, what: 
   }
   if (url.protocol !== "https:" && !(url.protocol === "http:" && policy.allowHttp)) throw new ConnectorError(`${what}: the URL must start with https://`, "rejected", false);
   if (policy.allowPrivate) return url;
-  if (isPrivateHostname(url.hostname)) throw new ConnectorError(`${what}: ${url.hostname} is a private or local address; base air only sends to public hosts`, "rejected", false);
+  if (isPrivateHostname(url.hostname)) throw new ConnectorError(`${what}: ${url.hostname} is a private or local address; Base Air only sends to public hosts`, "rejected", false);
   if (!isIP(url.hostname.replace(/^\[|\]$/g, ""))) {
     let addrs: { address: string }[];
     try {
@@ -150,7 +150,7 @@ export async function assertPublicHttpUrl(raw: string, policy: UrlPolicy, what: 
     } catch (err) {
       throw new ConnectorError(`${what}: could not resolve ${url.hostname}`, "network", true, err);
     }
-    if (addrs.some((a) => isPrivateAddress(a.address))) throw new ConnectorError(`${what}: ${url.hostname} resolves to a private address; base air only sends to public hosts`, "rejected", false);
+    if (addrs.some((a) => isPrivateAddress(a.address))) throw new ConnectorError(`${what}: ${url.hostname} resolves to a private address; Base Air only sends to public hosts`, "rejected", false);
   }
   return url;
 }
@@ -162,7 +162,7 @@ export function mapWebhookError(status: number, headers: Headers, body: unknown,
   const detail = typeof body === "string" ? body.slice(0, 200) : body !== undefined ? JSON.stringify(body).slice(0, 200) : "";
   const msg = `webhook ${host}: HTTP ${status}${detail ? ` ${detail}` : ""}`;
   const cause: { status: number; retryAfter?: number } = { status };
-  if (status >= 300 && status < 400) return new ConnectorError(`${msg} (base air does not follow redirects; use the final URL)`, "rejected", false, cause);
+  if (status >= 300 && status < 400) return new ConnectorError(`${msg} (Base Air does not follow redirects; use the final URL)`, "rejected", false, cause);
   if (status === 429) {
     const ra = headers.get("retry-after");
     const after = ra ? (/^\d+$/.test(ra) ? Number(ra) : Math.max(0, Math.round((Date.parse(ra) - Date.now()) / 1000))) : NaN;
@@ -296,7 +296,7 @@ export class WebhookConnector implements Connector {
   readonly connectConfigured = true;
   readonly credentialInputs = [
     { key: "name", label: "Name for this endpoint", placeholder: "Zapier: new posts to Slack", optional: true },
-    { key: "outboundUrl", label: "Outbound URL (base air POSTs published posts here; https)", placeholder: "https://hooks.zapier.com/hooks/catch/123/abc/", optional: true, secret: true },
+    { key: "outboundUrl", label: "Outbound URL (Base Air POSTs published posts here; https)", placeholder: "https://hooks.zapier.com/hooks/catch/123/abc/", optional: true, secret: true },
     { key: "secret", label: `Signing secret (${MIN_SECRET}+ characters; signs both directions; empty = no inbound)`, placeholder: "openssl rand -base64 32", optional: true, secret: true },
   ] as const;
   readonly webhook: WebhookHandler;
@@ -371,7 +371,7 @@ export class WebhookConnector implements Connector {
     if (outboundUrl) {
       await this.deliver(auth, "ping", {
         id: `ping_${accountId}`,
-        text: "base air connected this endpoint. Published posts will arrive in this shape.",
+        text: "Base Air connected this endpoint. Published posts will arrive in this shape.",
         thread: [],
         media: [],
         options: {},

@@ -59,7 +59,7 @@ export function brandHead(m: BaseAir, opts: BrandHeadOptions) {
         `<style id="base-air-brand">${brandCss(brand)}</style>`,
         `<script>window.__BASE_SUITE__=${suite};window.__BASE_AIR_BRAND__=${inlineJson(brand)};</script>`,
       ].join("\n    "),
-      title: brand.name ? `${escText(brand.name)} · base air` : "base air",
+      title: brand.name ? `${escText(brand.name)} · Base Air` : "Base Air",
       htmlAttrs: { "data-brand-mode": brand.mode, ...(theme ? { "data-theme": theme } : {}) },
     };
   };

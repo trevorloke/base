@@ -35,13 +35,13 @@ Connector `vk` · networks `["vk"]` · `packages/connectors/src/vk.ts` · factor
   invalid; reconnect), 7/17/18/27/28/200/203 → auth; 6/9/29 → rate_limit retryable; 14 (captcha) → rejected; 15, 100, 113,
   212–214, 219–224 → rejected; 1/10 → network retryable; other codes → unknown. HTTP-level failures use the shared mapping.
 
-## What base air can and cannot see
-base air sees comments (and comment threads) on the 20 most recent posts of each connected wall, with the commenters'
+## What Base Air can and cannot see
+Base Air sees comments (and comment threads) on the 20 most recent posts of each connected wall, with the commenters'
 public names. It does not see private messages, community chats, comments on older posts, or other people's walls.
 
 ## Setup
 1. Create an app at https://id.vk.com/about/business/go (VK ID business account) → "Web" platform.
-2. Trusted redirect URL: `${BASE_AIR_PUBLIC_URL}/oauth/vk/callback`; base domain = your base air domain.
+2. Trusted redirect URL: `${BASE_AIR_PUBLIC_URL}/oauth/vk/callback`; base domain = your Base Air domain.
 3. Request access to the API scopes below in the app's settings.
 4. Copy the app ID (client id) and, if issued, the protected key (client secret).
 - Scopes requested: `vkid.personal_info wall photos video groups stats`.

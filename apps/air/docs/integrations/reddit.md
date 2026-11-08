@@ -3,7 +3,7 @@
 Connector name `reddit`, network `reddit`, file `packages/connectors/src/reddit.ts`, factory `createRedditConnectors(env)`.
 OAuth 2.0 runs on `https://www.reddit.com/api/v1`; the Data API on `https://oauth.reddit.com`.
 
-> **Policy status (November 2026): read this before relying on Reddit.** Under the Responsible Builder Policy (late 2025), creating a new app requires Reddit's manual approval. On 2026‑09‑30 Reddit announced a move of Data API apps to its Developer Platform (Devvit): app registration was due 2026‑09‑30, **new requests for public Data API access stopped being accepted after 2026‑10‑31**, Reddit begins removing access from unregistered apps on 2027‑01‑12, and **remaining public Data API access ends in March 2027**. Credentials that were already approved still work. It is not clear whether a multi-tenant scheduler posting on users' behalf will be offered a path after March 2027; commercial use already required a written agreement. These dates come from secondary coverage of Reddit's posts (sources listed under Unverified). **Unless base air already holds an approved, registered OAuth app, this connector cannot be enabled in production.**
+> **Policy status (November 2026): read this before relying on Reddit.** Under the Responsible Builder Policy (late 2025), creating a new app requires Reddit's manual approval. On 2026‑09‑30 Reddit announced a move of Data API apps to its Developer Platform (Devvit): app registration was due 2026‑09‑30, **new requests for public Data API access stopped being accepted after 2026‑10‑31**, Reddit begins removing access from unregistered apps on 2027‑01‑12, and **remaining public Data API access ends in March 2027**. Credentials that were already approved still work. It is not clear whether a multi-tenant scheduler posting on users' behalf will be offered a path after March 2027; commercial use already required a written agreement. These dates come from secondary coverage of Reddit's posts (sources listed under Unverified). **Unless Base Air already holds an approved, registered OAuth app, this connector cannot be enabled in production.**
 
 ## What works
 
@@ -46,12 +46,12 @@ OAuth 2.0 runs on `https://www.reddit.com/api/v1`; the Data API on `https://oaut
 - **App approval**: under the Responsible Builder Policy, every new app needs Reddit's manual approval. Third-party reports describe weeks of waiting and rejections without a stated reason. After 2026‑10‑31 Reddit no longer takes new public Data API access requests.
 - **Registration**: existing apps had to register by 2026‑09‑30 (migration support applications by 2026‑11‑30). Unregistered apps start losing access on 2027‑01‑12.
 - **Commercial use**: Reddit's Data API terms require a written agreement for commercial use. A SaaS publishing tool is commercial use.
-- **Shutdown**: remaining public Data API access ends in **March 2027**. Long term, base air needs either a commercial agreement with Reddit or a Developer Platform (Devvit) based integration, which today is aimed at in-Reddit apps and moderation tools, not off-platform schedulers.
+- **Shutdown**: remaining public Data API access ends in **March 2027**. Long term, Base Air needs either a commercial agreement with Reddit or a Developer Platform (Devvit) based integration, which today is aimed at in-Reddit apps and moderation tools, not off-platform schedulers.
 - Before approval, nothing works: OAuth needs an approved client id and secret.
 
 ## Limits and quotas
 
-- **100 queries per minute per OAuth client id**, averaged over a 10-minute window. Responses carry `X-Ratelimit-Used`, `X-Ratelimit-Remaining` and `X-Ratelimit-Reset` (seconds). Because the limit is per client id, it is shared by every base air workspace on the same deployment.
+- **100 queries per minute per OAuth client id**, averaged over a 10-minute window. Responses carry `X-Ratelimit-Used`, `X-Ratelimit-Remaining` and `X-Ratelimit-Reset` (seconds). Because the limit is per client id, it is shared by every Base Air workspace on the same deployment.
 - Posting is also limited by Reddit's anti-spam rules per account and per subreddit (new or low-karma accounts get "you are doing that too much" → `RATELIMIT` → `rate_limit`). Subreddit rules (required flair, text-only or link-only, minimum karma or account age) appear as `rejected`.
 - Title ≤300 characters. Self text ≤40,000. Gallery ≤20 images. One video per post, with a poster image. Images and video cannot be mixed. Polls are not available through the API.
 
@@ -72,7 +72,7 @@ Facts that came only from search summaries or memory (the sandbox could not reac
 ## Questions for the owner
 
 1. **Do we hold an approved, registered Reddit OAuth app?** If not, new access requests closed on 2026‑10‑31, and the connector cannot be enabled. Should Reddit be hidden in the room until we have one?
-2. **Commercial terms**: will base air seek a commercial Data API agreement with Reddit, which is needed for a paid product and after March 2027? Who owns that conversation?
+2. **Commercial terms**: will Base Air seek a commercial Data API agreement with Reddit, which is needed for a paid product and after March 2027? Who owns that conversation?
 3. **User-Agent**: which Reddit username should appear in `REDDIT_USER_AGENT` (`web:base-air:<version> (by /u/<name>)`)?
 4. **NSFW flag**: `VariantOptions` has no NSFW field, so the connector reads the tag `nsfw`. Should a proper `nsfw: boolean` option be added?
 5. **Body of link/media posts**: is posting the text as the first comment the behaviour you want, or should the text be dropped for non-text posts?

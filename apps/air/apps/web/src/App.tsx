@@ -194,7 +194,7 @@ export function App() {
   if (auth.kind === "checking") {
     return (
       <main className="gate">
-        <span className="muted">Opening base air…</span>
+        <span className="muted">Opening Base Air…</span>
       </main>
     );
   }
@@ -248,7 +248,7 @@ function connectErrorText(reason: string, net: string): string {
     case "unknown_state":
       return "that sign-in link was already used. Start again from Connections.";
     case "no_accounts":
-      return `this ${net} login doesn't manage any accounts base air can post as.`;
+      return `this ${net} login doesn't manage any accounts Base Air can post as.`;
     default:
       return "something went wrong on the way back. Try again.";
   }

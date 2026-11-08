@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { LEGACY_QUEUES, MAINTENANCE_QUEUE, PUBLISH_QUEUE, retireLegacyQueues } from "../src/queues.ts";
 
 describe("queue names after the rename", () => {
-  it("uses base air's names and empties the pre-rename queues", async () => {
+  it("uses Base Air's names and empties the pre-rename queues", async () => {
     expect([PUBLISH_QUEUE, MAINTENANCE_QUEUE]).toEqual(["base-air-publish", "base-air-maintenance"]);
     const seen: string[] = [];
     const closed: string[] = [];

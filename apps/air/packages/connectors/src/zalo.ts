@@ -9,7 +9,7 @@ import { ConnectorError } from "./types.ts";
 
 /**
  * Zalo Official Accounts (OA) through the Zalo OA Open API (https://openapi.zalo.me). The OA's administrator grants
- * the base air app access with OAuth v4 for OA (oauth.zaloapp.com, PKCE; the app secret travels in a `secret_key`
+ * the Base Air app access with OAuth v4 for OA (oauth.zaloapp.com, PKCE; the app secret travels in a `secret_key`
  * header at the token endpoint). One login = one OA (externalId = oa_id). Access tokens last about 25 hours; refresh
  * tokens are single-use and rotate on every refresh.
  *
@@ -356,7 +356,7 @@ export class ZaloConnector implements Connector {
     if (!o.title?.trim()) issues.push({ code: "empty", message: "a Zalo article needs a title (options.title)" });
     else if ([...o.title].length > LIMITS.title) issues.push({ code: "too_long", message: `Zalo article titles are at most ${LIMITS.title} characters` });
     if (!coverOf(input)) issues.push({ code: "media_required", message: "a Zalo article needs a cover image: add an image or a thumbnail URL" });
-    if (input.media.some((m) => m.kind === "video" || m.kind === "document")) issues.push({ code: "unsupported_media", message: "Zalo articles from base air take images only" });
+    if (input.media.some((m) => m.kind === "video" || m.kind === "document")) issues.push({ code: "unsupported_media", message: "Zalo articles from Base Air take images only" });
     if (input.media.some((m) => !/^https:\/\//i.test(m.url))) issues.push({ code: "unsupported_media", message: "Zalo fetches article images itself: image URLs must be public HTTPS" });
     if (input.thread.length > 0) issues.push({ code: "thread_unsupported", message: "Zalo articles have no threads" });
     return issues;

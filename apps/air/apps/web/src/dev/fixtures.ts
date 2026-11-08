@@ -2787,7 +2787,7 @@ function trackerApi() {
       const name = (input.name ?? "").trim();
       if (!name) throw new ApiError(400, "invalid", "Give it a name.");
       if (name.length > 200) throw new ApiError(400, "invalid", "Keep the name under 200 characters.");
-      if (input.relation && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one base air knows.");
+      if (input.relation && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one Base Air knows.");
       if (all.some((e) => !e.archivedAt && e.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, "conflict", `${name} is already tracked.`);
       checkParent(all, input.parentId || undefined);
       const aliases = cleanTerms(input.aliases, 60, "Aliases");
@@ -2829,7 +2829,7 @@ function trackerApi() {
         throw new ApiError(400, "invalid", "People belong to this organisation. Move them first.");
       }
       if (input.parentId !== undefined) checkParent(all, input.parentId || undefined, id);
-      if (input.relation !== undefined && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one base air knows.");
+      if (input.relation !== undefined && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one Base Air knows.");
       if (input.name !== undefined) e.name = input.name.trim();
       if (input.kind !== undefined) e.kind = input.kind;
       if (input.role !== undefined) e.role = input.role.trim() || null;

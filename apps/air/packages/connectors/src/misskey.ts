@@ -106,7 +106,7 @@ export function normalizeServerHost(input: string, label: string, allowPrivate =
   return host;
 }
 
-/** base air visibility (Mastodon words) → Misskey visibility. */
+/** Base Air visibility (Mastodon words) → Misskey visibility. */
 export function misskeyVisibility(v: "public" | "unlisted" | "private" | "direct" | undefined): "public" | "home" | "followers" | "specified" {
   if (v === "unlisted") return "home";
   if (v === "private") return "followers";

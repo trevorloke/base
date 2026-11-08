@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Every network base air can observe or publish to. Open protocols first-class. */
+/** Every network Base Air can observe or publish to. Open protocols first-class. */
 export const Network = z.enum([
   "x",
   "bluesky",
@@ -99,7 +99,7 @@ export function networkLabel(n: string): string {
   return (NETWORK_LABEL as Record<string, string>)[n] ?? n.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
-/** Networks base air only listens to (nothing can be published there). */
+/** Networks Base Air only listens to (nothing can be published there). */
 export const LISTEN_ONLY_NETWORKS: ReadonlySet<Network> = new Set<Network>(["news", "rss"]);
 
 /** Hard publishing limits per network. Soft limits (engagement cliffs) live in the ledger, learned. */
@@ -209,7 +209,7 @@ export const VariantOptions = z
     /** Google Business Profile event/offer details (topicType, event dates, offer coupon/terms); validated by the connector. */
     googleBusiness: z.record(z.string(), z.unknown()).optional(),
     /** Poll (Mastodon, Telegram, X): options and duration. */
-    /** Wrap links in base air short links with UTM tags (default: on when link tracking is configured). */
+    /** Wrap links in Base Air short links with UTM tags (default: on when link tracking is configured). */
     trackLinks: z.boolean().optional(),
     /** utm_campaign for this variant's links. Default: the workspace's default campaign, else the post. */
     campaign: z.string().max(100).optional(),

@@ -24,7 +24,7 @@ export const Media = z.object({
   durationSeconds: z.number().nonnegative().optional(),
   /** Size in bytes, when known (uploads always know). */
   bytes: z.number().int().nonnegative().optional(),
-  /** base air media library id when the file was uploaded here. */
+  /** Base Air media library id when the file was uploaded here. */
   assetId: z.string().optional(),
   /** C2PA manifest attached on export, when signed. */
   contentCredentials: z

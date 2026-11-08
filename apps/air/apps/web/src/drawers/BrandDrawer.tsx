@@ -130,7 +130,7 @@ export function BrandDrawer({ myRole, workspaceName, onClose }: { myRole: Role |
     ) : null;
 
   return (
-    <Drawer title="Brand" subtitle={`How base air looks for everyone in ${workspaceName || "this workspace"}`} onClose={onClose} className="brand-drawer" footer={footer}>
+    <Drawer title="Brand" subtitle={`How Base Air looks for everyone in ${workspaceName || "this workspace"}`} onClose={onClose} className="brand-drawer" footer={footer}>
       {!draft || !data ? (
         <PanelState loading={!error} error={error} onRetry={load} />
       ) : (
@@ -158,7 +158,7 @@ export function BrandDrawer({ myRole, workspaceName, onClose }: { myRole: Role |
             <fieldset className="brand-section" disabled={!canEdit}>
               <legend>Name and logo</legend>
               <label className="field">
-                <span>Name shown in base air</span>
+                <span>Name shown in Base Air</span>
                 <input className="input" value={draft.name} maxLength={60} placeholder={workspaceName} onChange={(e) => update((d) => ({ ...d, name: e.target.value }))} />
               </label>
               <LogoField value={draft.logoUrl} name={draft.name || workspaceName} onChange={(logoUrl) => update((d) => ({ ...d, logoUrl }))} />
@@ -373,7 +373,7 @@ function LogoField({ value, name, onChange }: { value: string; name: string; onC
   return (
     <div className="brand-logo">
       <div className="brand-logo-preview" aria-hidden="true">
-        {value ? <img src={value} alt="" /> : <span className="base-wordmark">base</span>}
+        {value ? <img src={value} alt="" /> : <span className="base-wordmark">Base</span>}
       </div>
       <div className="brand-logo-fields">
         <label className="field">
@@ -407,7 +407,7 @@ function LogoField({ value, name, onChange }: { value: string; name: string; onC
               Remove logo
             </button>
           ) : (
-            <span className="muted small">Empty: base air's own mark.</span>
+            <span className="muted small">Empty: Base Air's own mark.</span>
           )}
         </div>
         {uploadError ? (
@@ -442,8 +442,8 @@ function BrandPreview({ brand, scheme, fallbackName, onScheme }: { brand: Brand;
       <div className="brand-preview" data-theme={scheme}>
         <div className="bp-topbar">
           <span className="base-switcher-btn bp-switch" aria-hidden="true">
-            <span className="base-wordmark">base</span>
-            <span className="base-switcher-app">air</span>
+            <span className="base-wordmark">Base</span>
+            <span className="base-switcher-app">Air</span>
           </span>
           {brand.logoUrl ? <img className="brand-logo-img" src={brand.logoUrl} alt="" /> : null}
           <span className="bp-name">{name}</span>

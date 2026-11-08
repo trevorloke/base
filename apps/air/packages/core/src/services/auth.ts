@@ -791,8 +791,8 @@ export class AuthService {
     const inviteUrl = this.link(baseUrl, "invite", token);
     this.sendLater({
       to: input.email,
-      subject: `You're invited to ${ws.name} on base air`,
-      text: `You've been invited to join ${ws.name} on base air as ${input.role}.\n\nAccept the invite: ${inviteUrl}\n\nThe link works once and expires ${expiresAt.toUTCString()}.`,
+      subject: `You're invited to ${ws.name} on Base Air`,
+      text: `You've been invited to join ${ws.name} on Base Air as ${input.role}.\n\nAccept the invite: ${inviteUrl}\n\nThe link works once and expires ${expiresAt.toUTCString()}.`,
     });
     return { inviteUrl, expiresAt: expiresAt.toISOString(), emailed: this.mailer !== null };
   }
@@ -931,7 +931,7 @@ export class AuthService {
     await this.ctx.db.insert(passwordResets).values({ id: newId("pwr"), tokenHash: sha256(token), userId: u.id, expiresAt: new Date(now.getTime() + RESET_TTL_MS), createdAt: now });
     const url = this.link(baseUrl, "reset", token);
     if (this.mailer) {
-      this.sendLater({ to: email, subject: "Reset your base air password", text: `Someone asked to reset the password for ${email} on base air.\n\nChoose a new password: ${url}\n\nThe link works once and expires in an hour. If this wasn't you, ignore this email.` });
+      this.sendLater({ to: email, subject: "Reset your Base Air password", text: `Someone asked to reset the password for ${email} on Base Air.\n\nChoose a new password: ${url}\n\nThe link works once and expires in an hour. If this wasn't you, ignore this email.` });
     } else if (this.opts.logLinks ?? process.env.NODE_ENV !== "production") {
       console.info(`[auth] no mail configured (RESEND_API_KEY + MAIL_FROM); password reset link for ${email}: ${url}`);
     }

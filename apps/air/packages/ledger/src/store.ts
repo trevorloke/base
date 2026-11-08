@@ -35,7 +35,7 @@ export interface LedgerQuery {
 
 /**
  * The event store. Two append-only logs; the database refuses UPDATE/DELETE on both.
- * Everything else in base air is a derivation that could be rebuilt from here.
+ * Everything else in Base Air is a derivation that could be rebuilt from here.
  */
 export class EventStore {
   constructor(

@@ -176,7 +176,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError(0, "network", "Couldn't reach base air.");
+    throw new ApiError(0, "network", "Couldn't reach Base Air.");
   }
 
   if (res.status === 204) return undefined as T;
@@ -292,7 +292,7 @@ function multipart(file: File, alt: string | undefined, onProgress: (p: number) 
         reject(toApiError(xhr.status, xhr.statusText, xhr.responseText));
       }
     };
-    xhr.onerror = () => reject(new ApiError(0, "network", "Couldn't reach base air."));
+    xhr.onerror = () => reject(new ApiError(0, "network", "Couldn't reach Base Air."));
     xhr.onabort = () => reject(new ApiError(0, "aborted", "Upload cancelled."));
     const form = new FormData();
     form.append("file", file, file.name);
@@ -321,7 +321,7 @@ async function requestHtml(method: "GET" | "POST", path: string, body?: unknown)
   try {
     res = await fetch(`${BASE}${path}`, { method, headers, credentials: "include", body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    throw new ApiError(0, "network", "Couldn't reach base air.");
+    throw new ApiError(0, "network", "Couldn't reach Base Air.");
   }
   const text = await res.text();
   if (!res.ok) {
@@ -332,7 +332,7 @@ async function requestHtml(method: "GET" | "POST", path: string, body?: unknown)
 }
 // ---- end analytics & client reports
 
-// ---- the base suite: brand
+// ---- the Base suite: brand
 export interface BrandChoices {
   presets: Preset[];
   fonts: { id: FontId; label: string }[];
@@ -364,10 +364,10 @@ function fixtureBrandResponse(): Promise<BrandResponse> {
     },
   });
 }
-// ---- end the base suite: brand
+// ---- end the Base suite: brand
 
 export const api = {
-  // ---- the base suite: brand (owners save; everyone reads)
+  // ---- the Base suite: brand (owners save; everyone reads)
   brand: () => (USE_FIXTURES ? fixtureBrandResponse() : get<BrandResponse>("/v1/brand")),
   saveBrand: (brand: Brand, confirmLowContrast = false) => {
     if (!USE_FIXTURES) return put<BrandResponse>("/v1/brand", { brand, confirmLowContrast });

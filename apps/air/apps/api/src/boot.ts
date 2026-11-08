@@ -33,7 +33,7 @@ export function applyHostDefaults(env: NodeJS.ProcessEnv = process.env): string 
   return env.BASE_AIR_PUBLIC_URL?.trim() || undefined;
 }
 
-/** Shared boot for the API process: database, migrations, connectors, scheduler, base air. */
+/** Shared boot for the API process: database, migrations, connectors, scheduler, Base Air. */
 export async function boot(env: NodeJS.ProcessEnv = process.env): Promise<Booted> {
   applyHostDefaults(env);
   const handle = await createDb({ url: env.DATABASE_URL, pglitePath: env.DATABASE_URL ? undefined : env.PGLITE_PATH ?? ".pglite" });

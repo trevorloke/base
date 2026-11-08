@@ -36,8 +36,8 @@ For creators and brands with a channel: watch and answer chat, delete messages, 
 - **Refresh**: `refreshAuth` with the stored refresh token (user tokens last about 4 hours).
 - **Errors**: 401 → auth; 403 → auth; 429 → rate_limit retryable with the `Ratelimit-Reset` time; 409/400 → rejected; 5xx/network → retryable.
 
-## What base air can and cannot see
-base air sees messages typed in the connected broadcaster's own chat while subscriptions are active, and new followers.
+## What Base Air can and cannot see
+Base Air sees messages typed in the connected broadcaster's own chat while subscriptions are active, and new followers.
 It does not see whispers (private messages), other channels' chats, chat from before the connection, or VOD/stream content.
 Nothing is collected when `BASE_AIR_PUBLIC_URL`/`TWITCH_EVENTSUB_SECRET` are not configured.
 
@@ -73,10 +73,10 @@ broadcaster limits.
 - `TODO(verify)`: reading chat as the broadcaster (`user_id` = `broadcaster_user_id`) satisfies the `user:bot` + `channel:bot`
   requirement for app-token webhook subscriptions without a separate bot account.
 - Chat send limits above; whether `channel:bot` is still required when the reader is the broadcaster.
-- Timestamps of chat items are the time base air received the delivery (the event has no timestamp; the message timestamp
+- Timestamps of chat items are the time Base Air received the delivery (the event has no timestamp; the message timestamp
   header is not passed to `parse` by core).
 
 ## Questions for the owner
-- Should base air speak in chat as the broadcaster (today) or as a separate bot account (a second login with `user:bot`)?
+- Should Base Air speak in chat as the broadcaster (today) or as a separate bot account (a second login with `user:bot`)?
 - Should "announce" use `/helix/chat/announcements` (highlighted message, needs `moderator:manage:announcements`)?
 - Do you want subscriptions, cheers, raids or channel-point redemptions in the feed (more EventSub types and scopes)?

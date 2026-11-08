@@ -39,7 +39,7 @@ export const ActivityInput = z.object({
   raw: z.unknown(),
   /** Where a chat message was said: the group, channel or server channel, or a direct conversation. */
   conversation: Conversation.optional(),
-  /** Language the connector already knows (e.g. from the platform); otherwise base air detects it at ingest. */
+  /** Language the connector already knows (e.g. from the platform); otherwise Base Air detects it at ingest. */
   lang: z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/).optional(),
 });
 export type ActivityInput = z.infer<typeof ActivityInput>;

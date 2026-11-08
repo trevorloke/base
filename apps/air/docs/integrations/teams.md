@@ -3,7 +3,7 @@
 Connector `teams` · networks `["teams"]` · `packages/connectors/src/teams.ts` · factory `createTeamsConnectors(env)`
 
 Post-only through a **Teams Workflows webhook** (Power Automate), the replacement for the retired Office 365
-connectors ("Incoming Webhook"). One base air account = one workflow (externalId = the workflow id from the URL).
+connectors ("Incoming Webhook"). One Base Air account = one workflow (externalId = the workflow id from the URL).
 
 ## What works
 - **Connect** (`connectMethod: "webhook_url"`): input `webhookUrl` (secret). Accepted: `https://` URLs on
@@ -24,9 +24,9 @@ connectors ("Incoming Webhook"). One base air account = one workflow (externalId
   (flow deleted, off, or URL changed); other 4xx → `rejected`; 5xx and transport errors → retryable `network`. The
   `sig` (raw or encoded) is scrubbed from error messages.
 
-## What base air can and cannot see
+## What Base Air can and cannot see
 - **Can see**: nothing. The workflow only posts cards.
-- **Cannot see**: channel messages, replies to base air's cards, reactions, members. A 202 means the flow accepted
+- **Cannot see**: channel messages, replies to Base Air's cards, reactions, members. A 202 means the flow accepted
   the request, not that the card reached the channel (failures appear in the flow's run history in Power Automate).
   Reading channels needs Microsoft Graph with tenant admin consent, and Microsoft's protected-API approval for
   reading message content (a later step).
@@ -36,8 +36,8 @@ connectors ("Incoming Webhook"). One base air account = one workflow (externalId
    channel"** (trigger "When a Teams webhook request is received", action "Post card in a chat or channel"). Pick the
    team and channel, create it, and copy the URL shown.
 2. Optional: in Power Automate, restrict who can trigger the flow (the default is "Anyone" with the signed URL).
-3. In base air, connect Teams with that URL.
-- Redirect URI: none. Webhook URL (inbound to base air): none.
+3. In Base Air, connect Teams with that URL.
+- Redirect URI: none. Webhook URL (inbound to Base Air): none.
 - Env vars: none.
 
 ## Review and access requirements

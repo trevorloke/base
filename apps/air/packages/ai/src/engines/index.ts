@@ -16,7 +16,7 @@ export * from "./fake.ts";
 const has = (v: string | undefined) => typeof v === "string" && v.trim().length > 0;
 const model = (v: string | undefined, fallback: string) => (has(v) ? v!.trim() : fallback);
 
-/** Every engine base air knows, whether this deployment has its key, and which variable turns it on. */
+/** Every engine Base Air knows, whether this deployment has its key, and which variable turns it on. */
 export function answerEngineStatus(env: NodeJS.ProcessEnv = process.env): AnswerEngineStatus[] {
   return [
     { id: "anthropic", label: "Claude", configured: has(env.ANTHROPIC_API_KEY), envVar: "ANTHROPIC_API_KEY", modelEnvVar: "BASE_AIR_MODEL", model: resolveModel(env), priced: true },
@@ -49,7 +49,7 @@ function perCallEstimate(env: NodeJS.ProcessEnv): number {
 }
 
 /**
- * Engines whose price base air cannot read from the response would otherwise cost "$0" and never reach the
+ * Engines whose price Base Air cannot read from the response would otherwise cost "$0" and never reach the
  * workspace's model spend cap. Charge them a conservative estimate per call instead, marked as an estimate.
  */
 export function withCostFloor(engine: AnswerEngine, estimateUsd: number): AnswerEngine {

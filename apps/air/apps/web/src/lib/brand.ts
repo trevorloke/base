@@ -36,7 +36,7 @@ export function applyBrand(b: Brand): void {
     }
     el.textContent = brandCss(b);
     document.documentElement.setAttribute("data-brand-mode", b.mode);
-    document.title = b.name ? `${b.name} · base air` : "base air";
+    document.title = b.name ? `${b.name} · Base Air` : "Base Air";
   }
   for (const l of listeners) l(b);
 }

@@ -15,7 +15,7 @@ import {
   themeAttr,
 } from "../src/index.ts";
 
-describe("base air's look", () => {
+describe("Base Air's look", () => {
   it("computes WCAG contrast", () => {
     expect(contrastRatio("#000000", "#ffffff")).toBeCloseTo(21, 5);
     expect(contrastRatio("#777777", "#ffffff")).toBeCloseTo(4.48, 2);

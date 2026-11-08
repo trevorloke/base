@@ -1,6 +1,6 @@
 # Integrations: status and owner checklist
 
-Fourteen networks are built into base air. What each one can do, how to set it up, and what the platform must
+Fourteen networks are built into Base Air. What each one can do, how to set it up, and what the platform must
 approve are in the per-network files in this folder. This page is the owner's checklist: everything that code
 cannot do.
 
@@ -50,16 +50,16 @@ so each connector is tested against the documented request and response shapes. 
 | Zalo Official Account (messages to the OA, articles) | `zalo` | OAuth v4 for OA with PKCE + webhook | Yes, for an OA linked to your app | App linked to the OA; some APIs need a verified OA or paid OA package; replies only within Zalo's window (see zalo.md) |
 | Viber Channel (publish) / Viber bot (messages) | `viber` | Channel or bot auth token | Channels yes; bots only with an existing bot | Bots: commercial agreement with Viber since 2024, paid messages (see viber.md) |
 | OK.ru (user feed + groups administered) | `ok` | OAuth 2.0 + signed API calls | User feed only | Group, video and long-token permissions granted on request by OK API support (see ok.md) |
-| KakaoTalk (카카오톡) | none | Not connectable | No API for chats, open chats or channel posts | See kakao.md for what base air does instead |
+| KakaoTalk (카카오톡) | none | Not connectable | No API for chats, open chats or channel posts | See kakao.md for what Base Air does instead |
 | Weibo (微博) | `weibo` | OAuth 2.0 (token expires, no refresh: reconnect) | Test users only; posts must link to the app's security domain | App review on open.weibo.com; advanced interfaces for the comment/mention inbox; mainland realities (see weibo.md) |
 | Douyin (抖音; not TikTok) | `douyin` | OAuth (`client_key`, refresh + renew) | No | Mainland-China enterprise developer account; app review + per-capability review (publish, data, comments) (see douyin.md) |
-| Xiaohongshu (小红书), WeChat Channels (视频号), Bilibili, Kuaishou, Zhihu, Baidu Tieba | none | Not connectable | No open API for outside tools (Bilibili, Kuaishou: partners only) | See china-platforms.md for what base air does instead |
+| Xiaohongshu (小红书), WeChat Channels (视频号), Bilibili, Kuaishou, Zhihu, Baidu Tieba | none | Not connectable | No open API for outside tools (Bilibili, Kuaishou: partners only) | See china-platforms.md for what Base Air does instead |
 
-**What chat monitoring can and cannot see.** base air reads only what each platform's official API allows: Discord
+**What chat monitoring can and cannot see.** Base Air reads only what each platform's official API allows: Discord
 channels its bot can read; Telegram groups its bot is in; LINE groups and chats its bot is in; messages people send
 to a WhatsApp business number and groups the business created; messages people send to a WeChat Official Account.
 Personal WhatsApp groups and WeChat group chats (群聊) cannot be monitored through any official API, and the
-unofficial tools that try get numbers and accounts banned, so base air does not use them.
+unofficial tools that try get numbers and accounts banned, so Base Air does not use them.
 
 ## Do these first (they take weeks)
 
@@ -85,7 +85,7 @@ unofficial tools that try get numbers and accounts banned, so base air does not 
 
 ## Decisions only you can make
 
-- **One base air-owned app per platform** (recommended: one review, clients sign in through it) or each client brings its own.
+- **One Base Air-owned app per platform** (recommended: one review, clients sign in through it) or each client brings its own.
 - **Meta**: which Business portfolio owns the app; whether to request DM permissions later (separate review); whether
   Page stories and reels are in the first review.
 - **Threads**: keep `threads_delete` (shorter review without it); mention webhooks (extra permission and review).
@@ -93,9 +93,9 @@ unofficial tools that try get numbers and accounts banned, so base air does not 
 - **YouTube**: expected uploads per day (over ~6/day needs a quota extension); default notify-subscribers and category.
 - **Google Business**: Pub/Sub for near-real-time review alerts, or polling.
 - **TikTok**: agents may draft but a person must confirm every TikTok post in the room (TikTok requires explicit consent);
-  whether to set TikTok's AI-generated label from base air's disclosure record.
+  whether to set TikTok's AI-generated label from Base Air's disclosure record.
 - **Reddit**: hide it in the room until an approved app exists.
-- **Telegram**: use a dedicated bot per brand (base air takes over the bot's webhook).
+- **Telegram**: use a dedicated bot per brand (Base Air takes over the bot's webhook).
 - **Discord**: whether posts may ping roles or @everyone (suppressed today); a bot for inbox and metrics is a separate build.
 - **Bluesky**: move from app passwords to Bluesky OAuth.
 

@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboard
 import { suiteLinks, useSuite } from "../lib/suite";
 
 /**
- * The base switcher (SUITE.md, "The app switcher"): a "base" wordmark in the top bar that opens a short menu of this
- * client's apps — field and ground in base ground, base air (here), base web's admin when it is set up.
+ * The Base switcher (SUITE.md, "The app switcher"): a "Base" wordmark in the top bar that opens a short menu of this
+ * client's apps — field and ground in Base Ground, Base Air (here), Base Web's admin when it is set up.
  *
  * A real button with aria-haspopup/aria-expanded; the menu takes the arrow keys, Home/End, Escape (back to the
  * button) and Tab (closes); items are plain links, so they open in a new tab with the usual modifier keys.
@@ -97,18 +97,18 @@ export function BaseSwitcher() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
-        aria-label="base apps: you are in air"
+        aria-label="Base apps: you are in Base Air"
         onClick={() => (open ? close(false) : openWith(null))}
         onKeyDown={onButtonKey}
       >
-        <span className="base-wordmark">base</span>
-        <span className="base-switcher-app">air</span>
+        <span className="base-wordmark">Base</span>
+        <span className="base-switcher-app">Air</span>
         <svg className="base-switcher-caret" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
           <path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
       {open ? (
-        <div id={menuId} className="base-switcher-menu" role="menu" aria-label="base apps" onKeyDown={onMenuKey}>
+        <div id={menuId} className="base-switcher-menu" role="menu" aria-label="Base apps" onKeyDown={onMenuKey}>
           {links.map((l, i) => (
             <a
               key={l.id}
@@ -123,12 +123,13 @@ export function BaseSwitcher() {
               onClick={() => setOpen(false)}
             >
               <span className="base-switcher-name">
-                <span className="base-wordmark small">base</span> {l.name}
+                {l.name}
+                {l.face ? <span className="base-switcher-face"> · {l.face}</span> : null}
               </span>
               <span className="base-switcher-detail">{l.current ? "You are here" : l.detail}</span>
             </a>
           ))}
-          {links.length === 1 ? <p className="base-switcher-note">base ground isn't linked to this base air yet.</p> : null}
+          {links.length === 1 ? <p className="base-switcher-note">Base Ground isn't linked to this Base Air yet.</p> : null}
         </div>
       ) : null}
     </div>

@@ -1,14 +1,14 @@
 # @base-air/mcp
 
-base air's MCP server: the front door for agents.
+Base Air's MCP server: the front door for agents.
 
-base air is the system of record for attention. It observes every surface a brand owns, forecasts where attention is going (the trend radar), acts through operators inside the brand's red lines, and proves what moved (the outcome ledger). This package lets Claude (Desktop, Code), ChatGPT and any other MCP client see the radar, the live feed, the ledger and the red lines, and **propose** posts that land in the brand's approval queue.
+Base Air is the system of record for attention. It observes every surface a brand owns, forecasts where attention is going (the trend radar), acts through operators inside the brand's red lines, and proves what moved (the outcome ledger). This package lets Claude (Desktop, Code), ChatGPT and any other MCP client see the radar, the live feed, the ledger and the red lines, and **propose** posts that land in the brand's approval queue.
 
-Everything goes through base air's HTTP API (`docs/API.md`). The server holds no state and makes no decisions of its own, so authentication, policy and the ledger stay centralized in the API.
+Everything goes through Base Air's HTTP API (`docs/API.md`). The server holds no state and makes no decisions of its own, so authentication, policy and the ledger stay centralized in the API.
 
 ## Trust model
 
-- **Agents propose; humans approve.** `create_post` runs the brand's red lines and autonomy dial on the server and lands the post where the dial says: usually `pending_approval` (the approval queue), otherwise `draft` or `scheduled`. Humans approve, edit or reject in the base air app. The result of every call states plainly where the post landed.
+- **Agents propose; humans approve.** `create_post` runs the brand's red lines and autonomy dial on the server and lands the post where the dial says: usually `pending_approval` (the approval queue), otherwise `draft` or `scheduled`. Humans approve, edit or reject in the Base Air app. The result of every call states plainly where the post landed.
 - **Red lines are enforced by the server, on every post, from every actor.** A block is final: the API still returns the post with `status: "blocked"` and the violations, and records the attempt. `check_policy` is a dry run of the same rules, so agents can fix text before proposing.
 - **Everything is in the ledger.** The API key carries the actor it acts as (an `mcp` actor), so every post, every policy decision and every schedule or cancel request is attributed to that agent. Posts created here carry the disclosure `{ aiAssisted, aiContributions: ["text_drafted"], humanReviewed: false, model: "mcp-client" }`; `humanReviewed` flips when a human approves in the app.
 - **Deliberately not exposed:** approving or rejecting posts (`POST /v1/posts/:id/decide`), publishing immediately, editing the policy or red lines, connecting or removing social accounts, acknowledging alerts. Those are human decisions made in the app. An agent that wants more latitude asks a human to move the autonomy dial.
@@ -23,7 +23,7 @@ Environment variables read by this server:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `BASE_AIR_API_URL` | `http://localhost:4000` | Base URL of the base air API |
+| `BASE_AIR_API_URL` | `http://localhost:4000` | Base URL of the Base Air API |
 | `BASE_AIR_API_KEY` | (none) | Workspace API key. Required in stdio mode (without it requests go out unauthenticated, which only works against a dev API running with `BASE_AIR_DEV_WORKSPACE`). Ignored in HTTP mode: every HTTP request must carry its own bearer. |
 | `BASE_AIR_MCP_PORT` | `4001` | Port for `--http` when none is given on the command line |
 

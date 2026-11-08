@@ -1,5 +1,5 @@
 /**
- * Thin typed wrapper over the base air HTTP API (docs/API.md).
+ * Thin typed wrapper over the Base Air HTTP API (docs/API.md).
  * Everything the MCP tools do goes through here, so auth, policy and the ledger stay in the API.
  */
 import type {
@@ -55,8 +55,8 @@ export class BaseAirApiError extends Error {
   toText(): string {
     const head =
       this.status > 0
-        ? `base air API error ${this.status} (${this.code}) on ${this.method} ${this.path}: ${this.message}`
-        : `base air API unreachable (${this.code}) on ${this.method} ${this.path}: ${this.message}`;
+        ? `Base Air API error ${this.status} (${this.code}) on ${this.method} ${this.path}: ${this.message}`
+        : `Base Air API unreachable (${this.code}) on ${this.method} ${this.path}: ${this.message}`;
     if (this.details === undefined || this.details === null) return head;
     return `${head}\nDetails: ${JSON.stringify(this.details, null, 2)}`;
   }
@@ -263,7 +263,7 @@ export class BaseAirClient {
       throw new BaseAirApiError({
         status: 0,
         code: "unavailable",
-        message: `Could not reach the base air API at ${this.baseUrl} (${cause}). Is it running? Check BASE_AIR_API_URL.`,
+        message: `Could not reach the Base Air API at ${this.baseUrl} (${cause}). Is it running? Check BASE_AIR_API_URL.`,
         method,
         path,
       });

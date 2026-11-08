@@ -6,7 +6,7 @@ import type { Env } from "./app.ts";
 import { clientIpFrom, normalizeBasePath } from "./base-path.ts";
 
 export const SESSION_COOKIE = "base_air_session";
-/** The session cookie's name before Starsign became base air. Read once, moved to SESSION_COOKIE, then cleared. */
+/** The session cookie's name before Starsign became Base Air. Read once, moved to SESSION_COOKIE, then cleared. */
 export const LEGACY_SESSION_COOKIE = "starsign_session";
 export const CSRF_HEADER = "x-base-air-csrf";
 

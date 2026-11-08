@@ -2,7 +2,7 @@
   "name": "base-air",
   "private": true,
   "version": "0.1.0",
-  "description": "base air — the system of record for attention. Observe every surface, forecast where attention is going, act through operators inside your red lines, prove what moved.",
+  "description": "Base Air — the system of record for attention. Observe every surface, forecast where attention is going, act through operators inside your red lines, prove what moved.",
   "type": "module",
   "packageManager": "pnpm@10.28.0",
   "engines": { "node": ">=22" },

@@ -32,7 +32,7 @@ export interface LineConnectorOptions {
   apiBase?: string;
   fetch?: FetchLike;
   now?: () => Date;
-  /** BASE_AIR_PUBLIC_URL: used at connect to tell whether the channel's webhook URL points at base air. */
+  /** BASE_AIR_PUBLIC_URL: used at connect to tell whether the channel's webhook URL points at Base Air. */
   publicUrl?: string;
   /** Upper bound of name lookups per resolveNames call. */
   maxNameLookups?: number;
@@ -108,9 +108,9 @@ export function lineSignatureValid(channelSecret: string, rawBody: string, signa
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-/** A stable UUID (RFC 4122 layout, version 5 bits) for X-Line-Retry-Key, derived from base air's idempotency key. */
+/** A stable UUID (RFC 4122 layout, version 5 bits) for X-Line-Retry-Key, derived from Base Air's idempotency key. */
 export function lineRetryKey(idempotencyKey: string): string {
-  // The "starsign" namespace predates the rename to base air and must stay: retries re-derive this key.
+  // The "starsign" namespace predates the rename to Base Air and must stay: retries re-derive this key.
   const h = createHash("sha1").update(`starsign:line:${idempotencyKey}`).digest();
   h[6] = (h[6]! & 0x0f) | 0x50;
   h[8] = (h[8]! & 0x3f) | 0x80;
@@ -262,7 +262,7 @@ export interface LineAccountConfig {
   displayName: string | null;
   pictureUrl: string | null;
   chatMode: string | null;
-  /** Webhook URL set on the channel at connect time, whether "Use webhook" is on, and whether it points at base air. */
+  /** Webhook URL set on the channel at connect time, whether "Use webhook" is on, and whether it points at Base Air. */
   webhookEndpoint: string | null;
   webhookActive: boolean | null;
   webhookPointsHere: boolean | null;

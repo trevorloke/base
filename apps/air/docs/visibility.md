@@ -18,7 +18,7 @@ For every question, every enabled engine, every language and every region it is 
 - **Position**: the order in which tracked names first appear in the answer (#1 = named first). Untracked names do not
   count.
 - **Tone** (-1 to 1), **a one-line summary** of what the answer says about the name, and **flags** for statements
-  that contradict what base air knows (for your own organisation, the brand profile's description). One model call per
+  that contradict what Base Air knows (for your own organisation, the brand profile's description). One model call per
   answer that names anything (`judgeAnswer` prompt), at low effort.
 - **Citations**: the sources the engine cites, and whether each is one of the name's own domains (set per name in the
   drawer).
@@ -36,10 +36,10 @@ Each run also writes two canonical metrics per tracked name, `ai_answer_mentions
 - **Answers vary.** The same question asked twice gets different wording, order and sources. One answer proves little;
   the share over a period and its trend are the signal. The screens say so.
 - **It is a sample, not what every person sees.** Consumer apps add memory, personalisation, location and their own
-  system prompts. base air asks through each provider's API with web search on, without a system prompt, as a new
+  system prompts. Base Air asks through each provider's API with web search on, without a system prompt, as a new
   person would.
 - **Position is among tracked names only**, and only by first appearance in the text.
-- **Tone and flags are a model's reading** of the answer. Flags check against what base air knows (the brand profile),
+- **Tone and flags are a model's reading** of the answer. Flags check against what Base Air knows (the brand profile),
   not the web; without facts they only catch internal contradictions. Without a model configured, tone and summaries
   are left empty and everything else still works.
 - **Languages.** Give a question in each language as a native speaker would ask it (`translations`); without one the
@@ -63,7 +63,7 @@ or the API process without Redis, for the hourly job).
 `BASE_AIR_FAKE_AI=1` with no keys adds a demo engine that answers offline, for development. Owners can turn any
 configured engine off for their workspace, and limit editors to weekly questions.
 
-The judge and the question helper use the same model gateway as the rest of base air (`ANTHROPIC_API_KEY`).
+The judge and the question helper use the same model gateway as the rest of Base Air (`ANTHROPIC_API_KEY`).
 
 ## Costs
 
@@ -76,7 +76,7 @@ What is counted:
 
 - **Claude**: tokens at the model's price (`packages/ai/src/pricing.ts`) plus web searches at $10 per 1,000.
 - **Perplexity**: the request cost Perplexity reports in `usage.cost.total_cost`, when present.
-- **ChatGPT and Gemini** (and Perplexity when it reports no cost): their prices are not in base air's price table,
+- **ChatGPT and Gemini** (and Perplexity when it reports no cost): their prices are not in Base Air's price table,
   so each call is charged a conservative estimate, **$0.05 per answer** by default (`BASE_AIR_ANSWER_CALL_COST_USD`
   changes it), marked as an estimate. That keeps every engine under the spend cap. Tokens are recorded on each
   answer; check the real bills at the provider and adjust the estimate to match.

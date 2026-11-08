@@ -31,7 +31,7 @@ if (registerWebApp(app, { dist, basePath, head })) console.log(`[web] serving ${
 
 const port = Number(process.env.PORT ?? 4000);
 serve({ fetch: withBasePath(app.fetch, basePath), port }, () => {
-  console.log(`[api] base air ${VERSION} on http://localhost:${port}${basePath}/ (db=${handle.kind}${process.env.BASE_AIR_DEV_WORKSPACE ? `, dev workspace=${process.env.BASE_AIR_DEV_WORKSPACE}` : ""})`);
+  console.log(`[api] Base Air ${VERSION} on http://localhost:${port}${basePath}/ (db=${handle.kind}${process.env.BASE_AIR_DEV_WORKSPACE ? `, dev workspace=${process.env.BASE_AIR_DEV_WORKSPACE}` : ""})`);
 });
 
 const shutdown = async () => {

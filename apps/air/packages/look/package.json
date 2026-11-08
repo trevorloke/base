@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "base air's look: brand presets, design tokens, contrast checks. No dependencies; shared by the server and the room.",
+  "description": "Base Air's look: brand presets, design tokens, contrast checks. No dependencies; shared by the server and the room.",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } }
 }
