@@ -5,7 +5,8 @@ export default defineConfig({
   plugins: [react()],
   // Relative: built files resolve against the <base href> the server writes
   // into index.html, so one build serves any client's prefix (SUITE.md,
-  // BASE_PATH) — /imaginesurrey/assets/… on base.win, /assets/… on a laptop.
+  // BASE_PATH) — /assets/… at the root (base.win, a laptop), /ground/assets/…
+  // under a path.
   base: './',
   server: {
     // The dev server has no prefix: the field app at /field/, the desk at

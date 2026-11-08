@@ -40,19 +40,22 @@ time. Delete the folder to start over.
 ## 2 · Deploy for the team (Render)
 
 The repo's `render.yaml` is a Blueprint for one client's two environments
-(GOING-LIVE.md): **base-ground-staging** from `main` and **base-ground** from
-`production`, each with its own managed Postgres database (backups
+(GOING-LIVE.md): **base-ground-imaginesurrey-staging** from `main` and
+**base-ground-imaginesurrey** from `production`, each with its own managed Postgres database (backups
 included). Every setting below, and where its key comes from:
 INTEGRATIONS.md.
 
 1. Render → **New → Blueprint** → pick this repo (`main` branch)
-   → it creates `base-ground-staging` + `base-ground-staging-db` and `base-ground` +
-   `base-ground-db` (paid plans — check Render’s current pricing).
-2. In the `base-ground` service → **Environment**, set:
+   → it creates `base-ground-imaginesurrey-staging` + its `-db` and
+   `base-ground-imaginesurrey` + its `-db` (paid plans — check Render’s
+   current pricing). They are private services, reached through the front
+   door at `https://imaginesurrey.staging.base.win` and
+   `https://imaginesurrey.base.win`.
+2. In each Base Ground service → **Environment**, set:
 
 | Variable | What for | Needed to test? |
 |---|---|---|
-| `BASE_PUBLIC_URL` | your address, e.g. `https://base.imaginesurrey.ca` — used in invite and unsubscribe links | **yes** |
+| `BASE_PUBLIC_URL` | your address, e.g. `https://imaginesurrey.base.win` (staging: `https://imaginesurrey.staging.base.win`) — used in invite and unsubscribe links | **yes** |
 | `BASE_ORG_NAME`, `BASE_JURISDICTION`, `BASE_TZ`, `BASE_CITY`, `BASE_SLATES` | the campaign this deployment runs for (README → *One deployment per client*) | set them before the first sign-in |
 | `BASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |

@@ -13,7 +13,7 @@ import { redirectOk } from '../lib/suite.js';
 import { safeNext } from '@base-ground/shared/paths';
 
 const tag = Math.random().toString(36).slice(2, 8);
-const AIR = 'https://base.win/imaginesurrey/air';
+const AIR = 'https://imaginesurrey.base.win/air'; // SUITE.md: Base Air under /air on the client's subdomain
 const WEB = 'https://imaginesurrey.ca';
 const AIR_SECRET = 'air-secret-0123456789abcdefghijklmnopqrstuvwxyz';
 const WEB_SECRET = 'web-secret-0123456789abcdefghijklmnopqrstuvwxyz';
@@ -203,18 +203,21 @@ test('redirect_uri must be the app’s own address — no way to send the code e
     'https://evil.example/auth/base/callback',
     `${AIR}`, // the app itself, not under it
     `${AIR}evil/callback`, // /airevil
-    'https://base.win/imaginesurrey/airx/cb',
-    'https://base.win/otherclient/air/auth/base/callback',
+    'https://imaginesurrey.base.win/airx/cb',
+    'https://imaginesurrey.base.win/auth/base/callback', // Base Ground's own root, not Base Air
+    'https://otherclient.base.win/air/auth/base/callback', // another client's Base Air
+    'https://imaginesurrey.staging.base.win/air/auth/base/callback', // staging is not production
+    'https://base.win/imaginesurrey/air/cb',
     `${AIR}/../../otherclient/air/cb`,
     `${AIR}/%2e%2e/%2e%2e/otherclient/air/cb`,
     `${AIR}/auth/..%2f..%2fx`,
     `${AIR}/cb#frag`,
     `${AIR}/cb\\@evil.example`,
-    `https://user@base.win/imaginesurrey/air/cb`,
-    'http://base.win/imaginesurrey/air/cb',
-    'https://base.win.evil.example/imaginesurrey/air/cb',
-    `//evil.example/imaginesurrey/air/cb`,
-    'javascript:alert(1)//base.win/imaginesurrey/air/',
+    'https://user@imaginesurrey.base.win/air/cb',
+    'http://imaginesurrey.base.win/air/cb',
+    'https://imaginesurrey.base.win.evil.example/air/cb',
+    '//evil.example/air/cb',
+    'javascript:alert(1)//imaginesurrey.base.win/air/',
     '',
   ];
   for (const uri of bad) {
@@ -252,6 +255,7 @@ test('GET /api/suite: the apps this person may open', async () => {
   delete process.env.BASE_PATH;
   assert.equal(m.client, 'imaginesurrey');
   assert.deepEqual(m.apps.map((a) => a.key), ['field', 'ground', 'air', 'web']);
+  assert.deepEqual(m.apps.map((a) => a.name), ['Field', 'Ground', 'Air', 'Web'], 'shown after the switcher’s "Base"');
   assert.equal(m.apps.find((a) => a.key === 'ground').href, '/ground/', 'the browser adds its prefix');
   assert.equal(m.apps.find((a) => a.key === 'air').href, `${AIR}/auth/base`);
   assert.equal(m.apps.find((a) => a.key === 'web').href, `${WEB}/auth/base`);

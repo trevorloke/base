@@ -166,6 +166,9 @@ test('BASE_PUBLIC_URL and BASE_PATH must agree (said, never a crash); the client
   assert.equal(publicUrlMismatch({ BASE_PATH: '/imaginesurrey', BASE_PUBLIC_URL: 'https://base.win/imaginesurrey' }), null);
   assert.equal(publicUrlMismatch({ BASE_PATH: '/imaginesurrey', BASE_PUBLIC_URL: 'https://base.win/imaginesurrey/' }), null);
   assert.equal(publicUrlMismatch({ BASE_PATH: '', BASE_PUBLIC_URL: 'https://base.imaginesurrey.ca' }), null);
+  // base.win: the client's own subdomain, Base Ground at its root.
+  assert.equal(publicUrlMismatch({ BASE_PUBLIC_URL: 'https://imaginesurrey.base.win' }), null);
+  assert.equal(publicUrlMismatch({ BASE_PUBLIC_URL: 'https://imaginesurrey.staging.base.win/' }), null);
   assert.equal(publicUrlMismatch({ BASE_PATH: '/imaginesurrey' }), null);
   assert.match(publicUrlMismatch({ BASE_PATH: '/imaginesurrey', BASE_PUBLIC_URL: 'https://base.win' }), /BASE_PATH is "\/imaginesurrey"/);
   assert.match(publicUrlMismatch({ BASE_PATH: '', BASE_PUBLIC_URL: 'https://base.win/other' }), /ends in "\/other"/);

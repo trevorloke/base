@@ -18,9 +18,10 @@
 //        Base switcher in the top bar.
 //
 // Settings (each app is set up when both of its are set):
-//   BASE_AIR_URL, BASE_AIR_SSO_SECRET   Base Air, e.g. https://base.win/imaginesurrey/air
+//   BASE_AIR_URL, BASE_AIR_SSO_SECRET   Base Air, e.g. https://imaginesurrey.base.win/air
 //   BASE_WEB_URL, BASE_WEB_SSO_SECRET   Base Web, e.g. https://imaginesurrey.ca
-//   BASE_CLIENT                         the client's slug in the token's answer;
+//   BASE_CLIENT                         the client's slug in the token's answer
+//                                       (imaginesurrey; set it on base.win);
 //                                       unset: the last part of BASE_PATH
 //
 // A code is 32 random bytes; only its SHA-256 is kept, with who, which app,

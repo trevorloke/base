@@ -1,8 +1,9 @@
 // Where this Base Ground lives on its address (SUITE.md, "BASE_PATH").
 //
-//   BASE_PATH   /imaginesurrey on base.win (the front door passes the path
-//               on as it is). Empty, as on a laptop: everything at the root,
-//               exactly as before.
+//   BASE_PATH   Empty on base.win (each client has its own subdomain and
+//               Base Ground runs at its root) and on a laptop: everything
+//               at the root. '/ground', say, for a deployment that puts the
+//               app under a path.
 //
 // withBasePath(fetch) wraps the Hono app's fetch: a request under the prefix
 // is handled with the prefix taken off, as if the app were at the root, so
@@ -23,7 +24,7 @@ export const basePath = () => {
   if (base === null) {
     // A BASE_PATH that isn't a plain path is ignored rather than written
     // into pages and redirects; said once per value so the log shows it.
-    if (warnedBad !== raw) console.warn(`Base Ground: BASE_PATH "${raw}" isn't a plain path like /imaginesurrey — ignored`);
+    if (warnedBad !== raw) console.warn(`Base Ground: BASE_PATH "${raw}" isn't a plain path like /ground — ignored`);
     warnedBad = raw;
     return '';
   }

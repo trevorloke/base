@@ -6,9 +6,9 @@ signs, volunteers, shifts, money, compliance, and outreach around it.
 
 ## Two apps: the field app and the admin
 
-One build, two apps, told apart by the address (both under the client's
-prefix on base.win — `/imaginesurrey/field/`, `/imaginesurrey/ground/`; see
-*Addresses and signing in once* below):
+One build, two apps, told apart by the address (both on the client's own
+subdomain of base.win — `https://imaginesurrey.base.win/field/`,
+`…/ground/`; see *Addresses and signing in once* below):
 
 | | Address | Who | What |
 |---|---|---|---|
@@ -24,14 +24,20 @@ goes to the same screen under `/field`.
 ## Addresses and signing in once
 
 Base Ground is one app of the **Base** suite (`../../SUITE.md` is the
-contract). On base.win each client's apps live under its own prefix:
+contract). On base.win each client has its own subdomain
+(`imaginesurrey.base.win`; staging `imaginesurrey.staging.base.win`) and
+its own origin: Base Ground runs at its root, Base Air under `/air`. The
+browser keeps clients apart by origin, and the sign-in cookie is host-only
+(never a `Domain`), so it stays on the client's own subdomain. Base Ground
+is a Render private service: every request reaches it through the front
+door (`apps/gateway`).
 
 | Setting | Example | What it does |
 |---|---|---|
-| `BASE_PATH` | `/imaginesurrey` | where this Base Ground lives. The server handles everything under it as if at the root; a request without it gets a 308 to the same address under it, except `/api/health` (Render's check). The prefix is written into `index.html` (`<base href>`, `window.__BASE_PATH__`); the browser builds every address through `web/src/paths.js`; the service worker's scope is the prefix; the sign-in cookie's `Path` is the prefix. Unset (a laptop): everything at the root, as before |
-| `BASE_PUBLIC_URL` | `https://base.win/imaginesurrey` | must end in `BASE_PATH` — the server says so loudly at startup, and Settings → Services shows it, when they disagree |
-| `BASE_CLIENT` | `imaginesurrey` | the client's slug, answered to the apps that sign in through Base Ground. Unset: the last part of `BASE_PATH` |
-| `BASE_TRUSTED_PROXIES` | `2` behind the base.win front door | how many proxies append to `X-Forwarded-For` (Render's, then the front door's), so sign-in limits count the visitor and not the door |
+| `BASE_PUBLIC_URL` | `https://imaginesurrey.base.win` | this environment's address, for every link in an email or text. Under a `BASE_PATH` it must end in it — the server says so loudly at startup, and Settings → Services shows it, when they disagree |
+| `BASE_CLIENT` | `imaginesurrey` | the client's slug, answered to the apps that sign in through Base Ground. Set it on base.win; unset, the last part of `BASE_PATH` |
+| `BASE_TRUSTED_PROXIES` | `2` behind the base.win front door | how many proxies append to `X-Forwarded-For` (Render's load balancer, then the front door's), so sign-in limits count the visitor and not the door |
+| `BASE_PATH` | unset on base.win; `/ground` for a deployment under a path | where this Base Ground lives. The server handles everything under it as if at the root; a request without it gets a 308 to the same address under it, except `/api/health` (Render's check, which never names the organization). The prefix is written into `index.html` (`<base href>`, `window.__BASE_PATH__`); the browser builds every address through `web/src/paths.js`; the service worker's scope is the prefix; the sign-in cookie's `Path` is the prefix. Unset (base.win, a laptop): everything at the root |
 
 **Base Ground is the sign-in hub** for Base Air and Base Web's admin
 (`server/ext/sso`, tests in `server/test/sso.test.js`):
@@ -42,8 +48,9 @@ only its SHA-256 kept, 60 seconds, once, bound to the app and the exact
 first and comes back (the sign-in page follows `next` only to this app's
 own addresses under its prefix). The app's server trades the code at
 `POST /api/sso/token` with `Authorization: Bearer <secret>` (compared in
-constant time) for `{ email, name, role, areas, organization, client }`;
-anything wrong is `400 {"error":"invalid_grant"}`. A volunteer with no
+constant time) for `{ sub, email, name, role, areas, organization, client }`
+(`sub`: the person's stable Base Ground id, the user's id as an opaque
+string, which the app links its own account to); anything wrong is `400 {"error":"invalid_grant"}`. A volunteer with no
 area is refused. Settings: `BASE_AIR_URL` + `BASE_AIR_SSO_SECRET`,
 `BASE_WEB_URL` + `BASE_WEB_SSO_SECRET` (each app is offered once both of its
 are set; Settings → Services shows which are connected). `/web` sends a
@@ -429,7 +436,7 @@ and STOP land where the desk reads them. Managers, staff and treasurers
 counsel before the first send: the texting module was built for
 one-to-one texts, and election texting rules are the campaign's to meet.
 
-Set `BASE_PUBLIC_URL` (e.g. `https://base.imaginesurrey.ca`) so links
+Set `BASE_PUBLIC_URL` (e.g. `https://imaginesurrey.base.win`) so links
 in outbound mail — newsletter unsubscribe footers, invite links, the
 pictures in a message — point at the public host. Every newsletter and ladder email ends with "Sent by <campaign>"
 and the reader's own unsubscribe link, and carries `List-Unsubscribe` /

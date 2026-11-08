@@ -42,17 +42,20 @@ built-in database on the server's disk (`BASE_DATA`, default
 ## Public address
 
 `BASE_PUBLIC_URL` — this environment's own `https://` address
-(`https://base.imaginesurrey.ca`; staging its own). Every link in an
+(`https://imaginesurrey.base.win`; staging
+`https://imaginesurrey.staging.base.win`). Every link in an
 email (invites, unsubscribe, receipts, pictures) is built from it, and so are
 the addresses Twilio is told to call back (delivery reports, calls). Without
 it, links use whatever address the page was opened at, background sends
 (receipts) carry no link, and calls through the campaign's number are off.
 
-On base.win the address carries the client's prefix
-(`https://base.win/imaginesurrey`), and `BASE_PATH` must be that same
-prefix (`/imaginesurrey`): the server warns at startup, and Services marks
-the public address, when the two disagree. Behind the base.win front door
-set `BASE_TRUSTED_PROXIES=2`.
+On base.win each client has its own subdomain and Base Ground runs at its
+root: no `BASE_PATH`, and the address has no path. A deployment that puts
+Base Ground under a path sets `BASE_PATH` to it (`/ground`, say) and ends
+the address with it (`https://example.org/ground`): the server warns at
+startup, and Services marks the public address, when the two disagree.
+Behind the base.win front door set `BASE_TRUSTED_PROXIES=2` (Render's load
+balancer, then the front door).
 
 **Check:** Services → Public address fetches `<address>/api/health` and
 makes sure it's this Base Ground.
@@ -61,14 +64,16 @@ makes sure it's this Base Ground.
 
 Base Ground is where staff sign in; Base Air and Base Web's admin ask it who
 someone is (SUITE.md, *Signing in once*). For each app, two settings here:
-its address (`BASE_AIR_URL=https://base.win/imaginesurrey/air`,
+its address (`BASE_AIR_URL=https://imaginesurrey.base.win/air`,
 `BASE_WEB_URL=https://imaginesurrey.ca`) and a long random secret
 (`BASE_AIR_SSO_SECRET`, `BASE_WEB_SSO_SECRET` — 32 characters or more,
 e.g. `openssl rand -base64 48`), the same value as `BASE_SSO_SECRET` on that
 app. With both set the app is offered in the **Base** switcher to desk
 roles, and its sign-ins are accepted; a sign-in may only go back to an
 address under the app's own. `BASE_CLIENT` names the client in the answer
-(default: the last part of `BASE_PATH`).
+(`imaginesurrey`; set it on base.win — unset, it's the last part of
+`BASE_PATH`, and there is none there). The answer also carries `sub`, this
+person's stable Base Ground id, which the app links its own account to.
 
 **Check:** Services shows each as *Set up* or names what's missing (no live
 call: the apps call Base Ground, not the other way round).
@@ -271,7 +276,7 @@ minute on one key. Everything accepted is on the event log, as the
 manager who made the key. A key stops working when it is revoked, and when the manager who made it leaves the campaign.
 
 ```sh
-curl https://base.imaginesurrey.ca/in/v1/people \
+curl https://imaginesurrey.base.win/in/v1/people \
   -H "Authorization: Bearer $BASE_GROUND_KEY" -H "Content-Type: application/json" \
   -H "Idempotency-Key: form-2026-10-12-0193" \
   -d '{"first_name":"Asha","last_name":"Example","email":"asha@example.org",

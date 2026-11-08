@@ -12,8 +12,8 @@ own Render web service and Postgres database:
 
 | Environment | Deploys | Address | Who uses it |
 |---|---|---|---|
-| staging | every push to `main`, by itself | `https://starbase-staging.onrender.com` (or a `staging.` host) | you, to try a change before anyone else sees it; it says *Staging* on every screen |
-| production | the `production` branch | the campaign's address | the campaign |
+| staging | every push to `main`, by itself | `https://imaginesurrey.staging.base.win` | you, to try a change before anyone else sees it; it says *Staging* on every screen |
+| production | the `production` branch | `https://imaginesurrey.base.win` | the campaign |
 
 **Pushing staging to production.** GitHub → **Actions** → *Promote to
 production* → **Run workflow**. It fast-forwards `production` to what `main`
@@ -25,11 +25,14 @@ promote the code — the production database is the campaign's alone.
 ## 1 · Deploy
 
 1. Render → **New → Blueprint** → this repo, `main`. `render.yaml` creates
-   `base-ground-staging` (from `main`) and `base-ground` (from `production`), each
-   with its own database.
+   `base-ground-imaginesurrey-staging` (from `main`) and
+   `base-ground-imaginesurrey` (from `production`), each with its own
+   database.
 2. Wait for the first deploy, then open
-   `https://<service>.onrender.com/api/health`. It answers
-   `{"ok":true,"service":"base-ground","env":"staging","organization":"Imagine Surrey","tzdataCurrent":true}`.
+   `https://imaginesurrey.staging.base.win/api/health` (through the front
+   door: Base Ground has no address of its own). It answers
+   `{"ok":true,"service":"base-ground","env":"staging","commit":"…","tzdataCurrent":true}`
+   — never the campaign's name; `commit` is the build that's live.
    `tzdataCurrent: false` means the server's time-zone rules predate B.C.'s
    permanent UTC-7 (every time after 1 Nov 2026 would show an hour off):
    redeploy on a newer Node image before going further.
@@ -38,9 +41,12 @@ promote the code — the production database is the campaign's alone.
 
 | Host | What it serves | Where |
 |---|---|---|
-| `base.imaginesurrey.ca` | the staff and volunteer app, and the public forms | Render → Settings → Custom Domains |
+| `imaginesurrey.base.win` (staging: `imaginesurrey.staging.base.win`) | the staff and volunteer app, and the public forms — Base Ground at the root, Base Air under `/air` | the front door (`apps/gateway`, SUITE.md *Addresses*) |
 
-Add the DNS records Render shows; it issues the certificates. The
+Base Ground is a Render private service: it has no public address, and
+every request reaches it through the front door, which serves the client's
+subdomain and passes the path on as it is. Nothing to add on Base Ground's
+own service; the front door's domains are set on the front door. The
 campaign's website (`imaginesurrey.ca`) is its own thing, hosted apart; it
 links to Base Ground's public pages, and its server sends sign-ups in with a
 website key from Settings → Services (INTEGRATIONS.md, *The campaign's
@@ -60,9 +66,10 @@ the candidates the code ships with (`shared/scale.js`).
 |---|---|---|
 | `BASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
 | `BASE_ORG_NAME`, `BASE_JURISDICTION`, `BASE_TZ`, `BASE_CITY`, `BASE_SLATES`, `BASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name on sign-in, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
-| `BASE_PATH` | `/imaginesurrey` on base.win (SUITE.md); unset on a domain of its own | where the app lives under its address; the sign-in cookie is kept to it |
+| `BASE_PATH` | leave unset on base.win: Base Ground runs at the root of the client's subdomain (SUITE.md). Only for a deployment that puts it under a path (`/ground`, say) | where the app lives under its address; the sign-in cookie's path follows it |
+| `BASE_CLIENT` | `imaginesurrey` | the client's slug, given to Base Air and Base Web when they sign someone in; with no `BASE_PATH` to take it from, set it |
 | `BASE_BRAND_PRESET`, `BASE_BRAND_PRIMARY`, … (optional) | the campaign's look before anyone saves one (README → *One deployment per client*, *The look*); a manager changes it under Settings → Brand | the colours, name and logo on every screen and public page |
-| `BASE_PUBLIC_URL` | `https://base.win/imaginesurrey` (or `https://base.imaginesurrey.ca`; staging: its own address) — it must end in `BASE_PATH` | every link in an email: invites, unsubscribe, receipts |
+| `BASE_PUBLIC_URL` | `https://imaginesurrey.base.win` (staging: `https://imaginesurrey.staging.base.win`) — no path on base.win; under a `BASE_PATH` it must end in it | every link in an email: invites, unsubscribe, receipts |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on a domain verified there | email; without it invites are shown to copy and sends wait as *queued* |
 
 Then, as each one is ready:
@@ -74,10 +81,10 @@ Then, as each one is ready:
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
 | `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
 | `BASE_TRUSTED_PROXIES` | `2` behind the base.win front door (Render's proxy, then the front door, each add to `X-Forwarded-For`); unset (one proxy) when Render is the only thing in front. Count every proxy in front, a CDN too | rate limits reading the right address |
-| `BASE_AIR_URL`, `BASE_AIR_SSO_SECRET`, `BASE_WEB_URL`, `BASE_WEB_SSO_SECRET` | Base Air's and Base Web's addresses, and long random secrets — each the same value as `BASE_SSO_SECRET` on that app (SUITE.md) | staff opening Base Air and Base Web's admin signed in with their Base Ground account |
+| `BASE_AIR_URL`, `BASE_AIR_SSO_SECRET`, `BASE_WEB_URL`, `BASE_WEB_SSO_SECRET` | Base Air's and Base Web's addresses (`https://imaginesurrey.base.win/air`, `https://imaginesurrey.ca`), and long random secrets — each the same value as `BASE_SSO_SECRET` on that app (SUITE.md) | staff opening Base Air and Base Web's admin signed in with their Base Ground account |
 
 Twilio: set the number's incoming-message webhook to
-`https://base.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST). The
+`https://imaginesurrey.base.win/api/public/twilio/sms` (HTTP POST). The
 other addresses Twilio calls back (delivery reports, calls) are sent with
 each text and call, built from `BASE_PUBLIC_URL`; nothing else to set.
 
@@ -91,10 +98,10 @@ public address and the database.
 
 The first sign-in lands in the **admin** (`/ground/`); the field app at
 `/field/` is what volunteers get, and what you see under *Field app ↗* in your
-account menu (and in the **Base** switcher in the top bar). On base.win both
-are under the client's prefix: `https://base.win/imaginesurrey/ground/`.
+account menu (and in the **Base** switcher in the top bar). Both are on the
+client's own subdomain: `https://imaginesurrey.base.win/ground/`.
 
-1. Open `https://base.imaginesurrey.ca/field/login` → **Set up Base Ground for
+1. Open `https://imaginesurrey.base.win/field/login` → **Set up Base Ground for
    Imagine Surrey** (the name `BASE_ORG_NAME` gives; a deployment that
    gives none asks for it here). The first account is the manager; this
    creates the campaign's workspace (its jurisdiction's rules, the
@@ -151,7 +158,7 @@ shared, and the code names no client.
 
 ## 7 · Before the public link goes out
 
-- `https://base.imaginesurrey.ca/` loads over https and signs in.
+- `https://imaginesurrey.base.win/` loads over https and signs in.
 - A test newsletter reaches a real inbox with a working unsubscribe link.
 - A test gift logged under **Donations** gets its receipt emailed.
 - Backups: Render's managed Postgres keeps daily backups; **Today → Export
