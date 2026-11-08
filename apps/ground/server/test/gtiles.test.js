@@ -1,5 +1,5 @@
 // Google Maps as the field map's tiles (lib/gtiles.js + ext/offline):
-// /api/map/config points the map at /tiles/…, which base ground serves from
+// /api/map/config points the map at /tiles/…, which Base Ground serves from
 // Google with a session it keeps. Google is mocked.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,7 +53,7 @@ test('off by default: OpenStreetMap, and /tiles is not a thing', async () => {
   assert.deepEqual(noKey.setup.ignored, ['google']);
 });
 
-test('on: the map draws /tiles from base ground, credited to Google, up to zoom 22', async () => {
+test('on: the map draws /tiles from Base Ground, credited to Google, up to zoom 22', async () => {
   process.env.GOOGLE_MAPS_TILES = '1';
   process.env.GOOGLE_MAPS_SERVER_KEY = 'tiles-key';
   _resetForTest();

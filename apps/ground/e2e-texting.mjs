@@ -74,7 +74,7 @@ const STUB = `http://127.0.0.1:${stub.address().port}`;
 const texts = () => twilio.filter((r) => r.kind === 'sms');
 const calls = () => twilio.filter((r) => r.kind === 'call');
 
-// ── The base ground server, fresh and in memory each time ──
+// ── The Base Ground server, fresh and in memory each time ──
 const PROVIDER_ENV = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'TWILIO_API_BASE', 'TWILIO_VOICE',
   'TWILIO_WORKSPACE', 'BASE_PUBLIC_URL', 'RESEND_API_KEY', 'MAIL_FROM', 'STRIPE_SECRET_KEY', 'DATABASE_URL'];
 const serverLog = [];
@@ -86,7 +86,7 @@ const startServer = async (extra) => {
   child.stderr.on('data', (d) => serverLog.push(String(d)));
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(`server did not start: ${serverLog.join('')}`)), 20000);
-    child.stdout.on('data', (d) => { if (/base ground on/.test(String(d))) { clearTimeout(t); resolve(); } });
+    child.stdout.on('data', (d) => { if (/Base Ground on/.test(String(d))) { clearTimeout(t); resolve(); } });
     child.once('exit', (code) => { clearTimeout(t); reject(new Error(`server exited ${code}: ${serverLog.join('')}`)); });
   });
   return child;

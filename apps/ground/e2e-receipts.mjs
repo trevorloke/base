@@ -271,7 +271,7 @@ check('donor link is /r/<long random token>', /\/r\/[0-9a-f]{48}$/.test(donorUrl
 const resp = await vp.goto(donorUrl, { waitUntil: 'domcontentloaded' });
 let vt = (await vp.innerText('body')).replace(/\s+/g, ' ');
 check('donor page: that receipt', resp.status() === 200 && [rA.number, 'Ana Souza', '$150.00', NOTICE, 'Jordan Agent'].every((w) => vt.includes(w)), vt.slice(0, 200));
-check('donor page: nothing else (no other donor, no email, no phone)', !['Ben Okafor', '$50.00', `ana.${tag}@example.org`, '604-555-0161', 'base ground'].some((w) => vt.includes(w)));
+check('donor page: nothing else (no other donor, no email, no phone)', !['Ben Okafor', '$50.00', `ana.${tag}@example.org`, '604-555-0161', 'Base Ground'].some((w) => vt.includes(w)));
 check('donor page: never cached, never indexed', resp.headers()['cache-control'] === 'no-store' && /noindex/.test(resp.headers()['x-robots-tag'] || ''));
 const vOverflow = await vp.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 check('donor page: no sideways scroll at 390px', vOverflow <= 0, vOverflow);

@@ -106,7 +106,7 @@ test('the two faces: / → /field/, /admin… → /ground/…, /join → the fie
   }
 });
 
-test('/web: base web’s admin, through its sign-in from base ground', async () => {
+test('/web: Base Web’s admin, through its sign-in from Base Ground', async () => {
   assert.equal((await req('/web')).status, 404);
   process.env.BASE_WEB_URL = 'https://imaginesurrey.ca/';
   assert.equal(where(await req('/web')), 'https://imaginesurrey.ca/auth/base');

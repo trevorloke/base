@@ -1,4 +1,4 @@
-# Testing base ground
+# Testing Base Ground
 
 Everything below works from a fresh install. Start with **Run it on your
 computer** — five minutes, no accounts needed — then deploy when you want your
@@ -18,7 +18,7 @@ npm run build
 npm start                 # → http://localhost:3200
 ```
 
-1. Open **http://localhost:3200/field/signup** and set up base ground for Imagine
+1. Open **http://localhost:3200/field/signup** and set up Base Ground for Imagine
    Surrey: your name, email and password. You become its manager (the
    workspace is *Imagine Surrey*, **BC — Municipal**). Setup works once:
    after that `/signup` says it's already set up, and everyone else joins
@@ -83,11 +83,11 @@ one tap away under **More**.
 
 ### Manager (you)
 - **Two apps.** Sign in at `/field/login` (or `/ground/login`) and you land
-  in the **admin** at `/ground/` (the brand reads *base ground admin*): every screen below. Your
+  in the **admin** at `/ground/` (the brand reads *Base Ground Admin*): every screen below. Your
   account menu has *Field app ↗* — open it and you see exactly what a
   volunteer sees (Today · Map · Calls · Shifts · ImagineU), with *Admin ↗*
   to come back. A volunteer who opens `/ground/` is told it isn't theirs.
-  The **base** button in the top bar lists the base apps you may open.
+  The **Base** button in the top bar lists the Base apps you may open.
 - **Today → Dashboard → In the field** — tap a dot: who, the outcome, who
   logged it and when, with *Profile* and *On the map* links; tap a person's
   initials for their day and *Only their contacts*; tap a turf for its name.
@@ -588,7 +588,7 @@ the same file never creates duplicates.
 
 ---
 
-**Time-zone rules.** B.C. stays on UTC-7 all year from March 2026. base ground
+**Time-zone rules.** B.C. stays on UTC-7 all year from March 2026. Base Ground
 needs a Node 22 new enough to know that, or every time after Nov 1, 2026
 shows an hour off. It checks at startup: an out-of-date server logs a
 warning, shows a banner on the manager's Today, and reports

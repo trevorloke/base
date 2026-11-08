@@ -1,6 +1,6 @@
-// Google Maps as the field map's tiles, through base ground. Google's Map Tiles
+// Google Maps as the field map's tiles, through Base Ground. Google's Map Tiles
 // API hands out tiles against a session, not a plain {z}/{x}/{y} address, so
-// the map asks base ground for /tiles/{z}/{x}/{y}.png (signed in) and base ground
+// the map asks Base Ground for /tiles/{z}/{x}/{y}.png (signed in) and Base Ground
 // fetches each tile from Google with a session it keeps and renews. Tiles
 // come back with a day's cache life, and the phone's service worker keeps
 // the ones it has drawn for offline canvassing, as with any provider.

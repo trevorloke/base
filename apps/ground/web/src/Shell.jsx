@@ -449,11 +449,11 @@ function SignedInShell({ who, mode }) {
     <>
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
-          <NavLink to="/" className="brand" aria-label={`${brand.name || me.workspace.name} — ${mode === 'admin' ? 'base ground admin' : 'base ground'}`}>
+          <NavLink to="/" className="brand" aria-label={`${brand.name || me.workspace.name} — ${mode === 'admin' ? 'Base Ground Admin' : 'Base Ground'}`}>
             <BrandMark logo={brand.logo} />
             <span className="brand-text">
               <span className="brand-name">{brand.name || me.workspace.name}</span>
-              <span className="brand-org">base ground{mode === 'admin' && <span className="brand-admin"> · Admin</span>}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
+              <span className="brand-org">Base Ground{mode === 'admin' && <span className="brand-admin"> · Admin</span>}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
             </span>
           </NavLink>
           <BaseSwitcher me={me} current={mode === 'admin' ? 'ground' : 'field'} />

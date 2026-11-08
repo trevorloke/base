@@ -1,4 +1,4 @@
-// base ground server. Hono app: /api/auth (public), /api/* (workspace-scoped),
+// Base Ground server. Hono app: /api/auth (public), /api/* (workspace-scoped),
 // static web build. Exported for in-process tests via app.request().
 // Addresses (SUITE.md): the field app at /field/, the desk at /ground/, both
 // under BASE_PATH (lib/basepath.js) — app.fetch takes the prefix off first.
@@ -71,7 +71,7 @@ const readIndex = async () => {
 };
 const sendIndex = async (c) => {
   let html;
-  try { html = await readIndex(); } catch { return c.text('base ground: the web app isn’t built — run npm run build', 503); }
+  try { html = await readIndex(); } catch { return c.text('Base Ground: the web app isn’t built — run npm run build', 503); }
   const tags = await headTags({ db: await getDb() });
   // Never cached: it names the build's files, and a new deploy must show.
   return c.html(injectHead(html, tags), 200, { 'Cache-Control': 'no-cache' });
@@ -85,7 +85,7 @@ app.get('/admin', (c) => go(c, '/ground/', 308));
 app.get('/admin/*', (c) => go(c, `/ground${c.req.path.slice('/admin'.length)}`, 308));
 // An invite link (/join/<token>, in emails already sent) opens in the field app.
 app.get('/join/*', (c) => go(c, `/field${c.req.path}`, 302));
-// /web: base web's admin, signed in through base ground (SUITE.md).
+// /web: Base Web's admin, signed in through Base Ground (SUITE.md).
 app.get('/web', (c) => {
   const web = String(process.env.BASE_WEB_URL || '').trim().replace(/\/+$/, '');
   return web ? c.redirect(`${web}/auth/base`, 302) : c.notFound();
@@ -106,14 +106,14 @@ const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split
 if (isMain) {
   const port = Number(process.env.PORT) || 3200;
   const server = serve({ fetch: app.fetch, port }, () => {
-    console.log(`base ground on :${port}`);
+    console.log(`Base Ground on :${port}`);
   });
   const tz = staleTimeZoneData();
-  if (tz) console.warn(`base: ${tz}`);
+  if (tz) console.warn(`Base Ground: ${tz}`);
   // BASE_PUBLIC_URL and BASE_PATH must agree, or emailed links miss the app.
   const mismatch = publicUrlMismatch();
-  if (mismatch) console.warn(`\n*** base: ${mismatch} ***\n`);
-  if (basePath()) console.log(`base ground under ${basePath()}`);
+  if (mismatch) console.warn(`\n*** Base Ground: ${mismatch} ***\n`);
+  if (basePath()) console.log(`Base Ground under ${basePath()}`);
   // Background jobs (ladder steps, A/B winners). BASE_JOBS=off disables.
   if (process.env.BASE_JOBS !== 'off') {
     getDb().then((db) => startJobRunner(db, { everyMs: Number(process.env.BASE_JOBS_EVERY_MS) || 30_000 }));

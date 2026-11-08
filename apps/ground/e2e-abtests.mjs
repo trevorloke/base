@@ -1,4 +1,4 @@
-// base ground A/B subject lines + open/click tracking — browser check.
+// Base Ground A/B subject lines + open/click tracking — browser check.
 //
 // Starts its own fresh in-memory server with a stand-in email provider
 // (fetch to Resend is answered locally and each message written to a

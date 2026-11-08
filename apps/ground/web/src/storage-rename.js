@@ -1,4 +1,4 @@
-// Starbase became base ground (November 2026). Everything this browser kept
+// Starbase became Base Ground (November 2026). Everything this browser kept
 // under the old names — the offline outbox of knocks not yet sent, kept
 // copies, walk lists, preferences — moves to the new names once, before any
 // other module reads them. Imported first by main.jsx.

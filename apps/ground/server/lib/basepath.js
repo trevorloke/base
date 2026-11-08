@@ -1,4 +1,4 @@
-// Where this base ground lives on its address (SUITE.md, "BASE_PATH").
+// Where this Base Ground lives on its address (SUITE.md, "BASE_PATH").
 //
 //   BASE_PATH   /imaginesurrey on base.win (the front door passes the path
 //               on as it is). Empty, as on a laptop: everything at the root,
@@ -23,14 +23,14 @@ export const basePath = () => {
   if (base === null) {
     // A BASE_PATH that isn't a plain path is ignored rather than written
     // into pages and redirects; said once per value so the log shows it.
-    if (warnedBad !== raw) console.warn(`base: BASE_PATH "${raw}" isn't a plain path like /imaginesurrey — ignored`);
+    if (warnedBad !== raw) console.warn(`Base Ground: BASE_PATH "${raw}" isn't a plain path like /imaginesurrey — ignored`);
     warnedBad = raw;
     return '';
   }
   return base;
 };
 
-// The client's slug, for the apps signing in through base ground: BASE_CLIENT
+// The client's slug, for the apps signing in through Base Ground: BASE_CLIENT
 // when it's set, else the last part of BASE_PATH (/imaginesurrey → imaginesurrey).
 export const clientSlug = () => {
   const own = String(process.env.BASE_CLIENT || '').trim().toLowerCase();

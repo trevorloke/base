@@ -1,4 +1,4 @@
-// base ground desk-with-no-signal E2E — a fresh in-memory server, the Imagine
+// Base Ground desk-with-no-signal E2E — a fresh in-memory server, the Imagine
 // Surrey sample campaign, a manager on a laptop (1360 and 390 wide) and a
 // volunteer on a 390×844 phone:
 //   · with signal the manager opens Today, People, two profiles, Shifts,
@@ -49,7 +49,7 @@ if (!BASE) {
   });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-    server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    server.stdout.on('data', (b) => { if (/Base Ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
   BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix
@@ -97,7 +97,7 @@ const helpers = (page, ctx, desk = false) => ({
   shot: (n) => page.screenshot({ path: `${SHOTS}/${n}.png` }),
   kept: () => page.$eval('.offline-strip__kept', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => ''),
   chip: () => page.$eval('.offline-strip__chip', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => ''),
-  // What this browser keeps: { local: {key: text}, session: {key: text} } for base ground's copies.
+  // What this browser keeps: { local: {key: text}, session: {key: text} } for Base Ground's copies.
   stored: () => page.evaluate(() => {
     const grab = (s) => { const o = {}; try { for (let i = 0; i < s.length; i += 1) { const k = s.key(i); if (k && k.startsWith('base:copy:')) o[k] = s.getItem(k); } } catch { /* blocked */ } return o; };
     return { local: grab(localStorage), session: grab(sessionStorage) };
@@ -670,7 +670,7 @@ await until(async () => !(await V.chip()), 20000);
 const vAfter = (await M.api(`/persons/${harjit.id}`)).json;
 check('back online: the volunteer’s knock once', vAfter.contacts.length === vBefore + 1 && vAfter.person.rating === '2', `${vAfter.contacts.length} vs ${vBefore}`);
 
-// Made treasurer while their base ground is open (this tab still thinks
+// Made treasurer while their Base Ground is open (this tab still thinks
 // "volunteer"): Today's money lands in this tab only, never in the browser.
 const volUser = (await V.api('/auth/me')).json.user;
 await V.go('/map');

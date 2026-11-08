@@ -1,6 +1,6 @@
-// Signing in once (SUITE.md, "Signing in once: base ground is the hub").
-// base air and base web don't keep their own passwords for staff: they ask
-// base ground who is signed in, then sign that person in to their own
+// Signing in once (SUITE.md, "Signing in once: Base Ground is the hub").
+// Base Air and Base Web don't keep their own passwords for staff: they ask
+// Base Ground who is signed in, then sign that person in to their own
 // account, linked once to (client, sub) — never by the email alone.
 //
 //   GET  /api/sso/authorize?app=air|web&redirect_uri=…&state=…
@@ -15,11 +15,11 @@
 //        links its own account to (client, sub), never to the email alone.
 //        client: the client's slug.
 //   GET  /api/suite      (signed in) the apps this person may open, for the
-//        base switcher in the top bar.
+//        Base switcher in the top bar.
 //
 // Settings (each app is set up when both of its are set):
-//   BASE_AIR_URL, BASE_AIR_SSO_SECRET   base air, e.g. https://base.win/imaginesurrey/air
-//   BASE_WEB_URL, BASE_WEB_SSO_SECRET   base web, e.g. https://imaginesurrey.ca
+//   BASE_AIR_URL, BASE_AIR_SSO_SECRET   Base Air, e.g. https://base.win/imaginesurrey/air
+//   BASE_WEB_URL, BASE_WEB_SSO_SECRET   Base Web, e.g. https://imaginesurrey.ca
 //   BASE_CLIENT                         the client's slug in the token's answer;
 //                                       unset: the last part of BASE_PATH
 //
@@ -70,7 +70,7 @@ publicRoutes.get('/api/sso/authorize', async (c) => {
   const state = c.req.query('state');
   // Nothing goes back to an address that isn't the app's own: these answer
   // here, never by a redirect.
-  if (!Object.hasOwn(APPS, key || '')) return refusePage(c, 400, 'Unknown app', 'This sign-in link names no base app.');
+  if (!Object.hasOwn(APPS, key || '')) return refusePage(c, 400, 'Unknown app', 'This sign-in link names no Base app.');
   if (!appReady(key)) return refusePage(c, 400, `${APPS[key].name} isn’t set up`, `Ask a manager to connect ${esc(APPS[key].name)} under Settings → Services.`);
   if (!redirectOk(key, redirectUri)) return refusePage(c, 400, 'This sign-in link isn’t valid', `It doesn’t lead back to ${esc(APPS[key].name)}.`);
   if (!state || state.length > 500) return refusePage(c, 400, 'This sign-in link isn’t valid', 'It’s missing its state — open the app and try again.');
@@ -151,18 +151,19 @@ publicRoutes.post('/api/sso/token', async (c) => {
   }, 200, { 'Cache-Control': 'no-store' });
 });
 
-// ── The base switcher: GET /api/suite ──
-// field: everyone. ground, air and web: desk roles and anyone given an area —
+// ── The Base switcher: GET /api/suite ──
+// Field: everyone. Ground, Air and Web: desk roles and anyone given an area —
 // the same people the hand-off lets through (air and web once set up). The
 // other app still decides: it only signs in someone it has an account for. Addresses of this app's own faces are root paths
 // (the browser puts its prefix on, web/src/paths.js); the others are whole
 // addresses, each through its /auth/base so the hop is already signed in.
 export const suiteFor = (role, areas) => {
   const staff = isStaff(role, areas);
-  const apps = [{ key: 'field', name: 'field', what: 'Canvass, calls and shifts', href: '/field/' }];
-  if (staff) apps.push({ key: 'ground', name: 'ground', what: 'The campaign desk', href: '/ground/' });
-  if (staff && appReady('air')) apps.push({ key: 'air', name: 'air', what: 'Listening and social', href: `${appUrl('air')}/auth/base` });
-  if (staff && appReady('web')) apps.push({ key: 'web', name: 'web', what: 'The website’s admin', href: `${appUrl('web')}/auth/base` });
+  // name: what the switcher shows after its "Base" (Base Field, Base Ground, …).
+  const apps = [{ key: 'field', name: 'Field', what: 'Canvass, calls and shifts', href: '/field/' }];
+  if (staff) apps.push({ key: 'ground', name: 'Ground', what: 'The campaign desk', href: '/ground/' });
+  if (staff && appReady('air')) apps.push({ key: 'air', name: 'Air', what: 'Listening and social', href: `${appUrl('air')}/auth/base` });
+  if (staff && appReady('web')) apps.push({ key: 'web', name: 'Web', what: 'The website’s admin', href: `${appUrl('web')}/auth/base` });
   return apps;
 };
 

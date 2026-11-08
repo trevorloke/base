@@ -1,4 +1,4 @@
-// Settings → Services (managers): every outside service base ground uses, what
+// Settings → Services (managers): every outside service Base Ground uses, what
 // it's for, whether it's set up, and "Check" — one real call to the service
 // (GET /api/connections, POST /api/connections/check — ext/connections).
 // Keys live in the hosting's settings (Render → the service → Environment),

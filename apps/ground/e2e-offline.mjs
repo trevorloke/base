@@ -1,4 +1,4 @@
-// base ground offline field mode E2E — a fresh in-memory server with its own tile
+// Base Ground offline field mode E2E — a fresh in-memory server with its own tile
 // provider (BASE_TILE_*), then, as a desk user on a laptop and a
 // volunteer on a 390×844 phone: tiles from the configured provider, kept by
 // the service worker; the map, Calls and Shifts opening with no signal from
@@ -43,7 +43,7 @@ if (!BASE) {
   });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-    server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    server.stdout.on('data', (b) => { if (/Base Ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
   BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix

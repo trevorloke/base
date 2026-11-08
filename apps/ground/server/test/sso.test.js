@@ -1,5 +1,5 @@
-// Signing in once (ext/sso, lib/suite.js — SUITE.md "The hand-off"): base
-// air and base web send the browser to /api/sso/authorize, get a one-time
+// Signing in once (ext/sso, lib/suite.js — SUITE.md "The hand-off"): Base
+// Air and Base Web send the browser to /api/sso/authorize, get a one-time
 // code back on their own address, and trade it from their server at
 // /api/sso/token for who the person is. And GET /api/suite, the switcher's
 // list of apps.
@@ -73,7 +73,7 @@ const grantRefused = async (res) => {
   assert.deepEqual(await res.json(), { error: 'invalid_grant' }, 'no detail');
 };
 
-test('happy path: a manager opens base air signed in, once', async () => {
+test('happy path: a manager opens Base Air signed in, once', async () => {
   process.env.BASE_ORG_NAME = 'Imagine Surrey';
   process.env.BASE_PATH = '/imaginesurrey';
   const res = await raw(`/imaginesurrey${authorizeUrl()}`, { cookie: mgr.cookie });
@@ -163,7 +163,7 @@ test('an app that isn’t set up is neither offered nor trusted', async () => {
   const res = await raw(authorizeUrl({ app: 'web', redirect: WEB_CB }), { cookie: mgr.cookie });
   assert.equal(res.status, 400);
   assert.equal(res.headers.get('location'), null);
-  assert.match(await res.text(), /base web isn’t set up/);
+  assert.match(await res.text(), /Base Web isn’t set up/);
   // An empty secret matches nothing, even an empty Bearer.
   await grantRefused(await token('x', { auth: 'Bearer ' }));
   assert.equal((await raw(authorizeUrl({ app: 'nope' }), { cookie: mgr.cookie })).status, 400);
@@ -174,7 +174,7 @@ test('volunteers are refused; a volunteer given an area is let through', async (
   const res = await raw(authorizeUrl(), { cookie: vol.cookie });
   assert.equal(res.status, 403);
   assert.equal(res.headers.get('location'), null);
-  assert.match(await res.text(), /base air is for staff/);
+  assert.match(await res.text(), /Base Air is for staff/);
   const { code } = await codeFor(volGranted);
   const who = await (await token(code)).json();
   assert.equal(who.role, 'volunteer');

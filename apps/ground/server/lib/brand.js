@@ -70,7 +70,7 @@ export const savedOf = (wsRow) => {
 
 export const brandSource = (saved) => (saved ? 'saved' : settingsBrand() ? 'settings' : 'default');
 export const effectiveBrand = (saved) => brandOf(saved || settingsBrand() || {});
-export const brandName = (brand, ws) => brand?.name || ws?.name || orgName() || 'base ground';
+export const brandName = (brand, ws) => brand?.name || ws?.name || orgName() || 'Base Ground';
 
 // The server's own paths ('/media/…') under the app's prefix (SUITE.md,
 // BASE_PATH). An https:// logo is left as it is.
@@ -118,7 +118,7 @@ export const forgetBrandCache = () => { cache = null; };
 export const brandHead = async (db) => {
   if (cache && Date.now() - cache.at < CACHE_MS) return cache.html;
   // The name: the brand's, else the campaign's; empty before first-run
-  // setup names it (the page then says "base ground").
+  // setup names it (the page then says "Base Ground").
   const nameOf = (brand, row) => brand.name || row?.name || orgName() || '';
   let row = null;
   try {

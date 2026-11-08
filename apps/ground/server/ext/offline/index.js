@@ -18,7 +18,7 @@
 // Read on every request, so a restart is all a change needs.
 // Google Maps instead (lib/gtiles.js): GOOGLE_MAPS_TILES=1 with a
 // GOOGLE_MAPS_SERVER_KEY that has the Map Tiles API enabled. The map then
-// draws /tiles/{z}/{x}/{y}.png from base ground (signed in), which fetches each
+// draws /tiles/{z}/{x}/{y}.png from Base Ground (signed in), which fetches each
 // tile from Google; BASE_TILE_* is ignored while it's on.
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';

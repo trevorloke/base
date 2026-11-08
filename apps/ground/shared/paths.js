@@ -1,4 +1,4 @@
-// Where base ground lives under its address (SUITE.md, "BASE_PATH"): the
+// Where Base Ground lives under its address (SUITE.md, "BASE_PATH"): the
 // same rules for the server and the browser, so they can't disagree.
 //
 //   cleanBase(raw)        '/imaginesurrey' from ' imaginesurrey/ ', '' for

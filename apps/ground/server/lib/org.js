@@ -1,4 +1,4 @@
-// What this base ground runs for: one organization per deployment. Each
+// What this Base Ground runs for: one organization per deployment. Each
 // client gets its own services and database; the campaign's name, rules
 // and place come from the environment, never from code:
 //
@@ -43,7 +43,7 @@ export const envName = () => (['production', 'staging'].includes(str('BASE_ENV')
 // Sign-up past first run: only when this is set (tests, local dev).
 export const openSignupForced = () => process.env.BASE_OPEN_SIGNUP === '1';
 
-export const setupClosedMessage = () => `base ground is already set up for ${orgName() || 'this campaign'} — ask a manager to invite you.`;
+export const setupClosedMessage = () => `Base Ground is already set up for ${orgName() || 'this campaign'} — ask a manager to invite you.`;
 
 // What the app is told about this deployment (GET /api/auth/setup and /me).
 export const orgOut = () => ({

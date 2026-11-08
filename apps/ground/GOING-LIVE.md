@@ -42,7 +42,7 @@ promote the code — the production database is the campaign's alone.
 
 Add the DNS records Render shows; it issues the certificates. The
 campaign's website (`imaginesurrey.ca`) is its own thing, hosted apart; it
-links to base ground's public pages, and its server sends sign-ups in with a
+links to Base Ground's public pages, and its server sends sign-ups in with a
 website key from Settings → Services (INTEGRATIONS.md, *The campaign's
 website*: the fields, the answers, an example).
 
@@ -74,7 +74,7 @@ Then, as each one is ready:
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
 | `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
 | `BASE_TRUSTED_PROXIES` | `2` behind the base.win front door (Render's proxy, then the front door, each add to `X-Forwarded-For`); unset (one proxy) when Render is the only thing in front. Count every proxy in front, a CDN too | rate limits reading the right address |
-| `BASE_AIR_URL`, `BASE_AIR_SSO_SECRET`, `BASE_WEB_URL`, `BASE_WEB_SSO_SECRET` | base air's and base web's addresses, and long random secrets — each the same value as `BASE_SSO_SECRET` on that app (SUITE.md) | staff opening base air and base web's admin signed in with their base ground account |
+| `BASE_AIR_URL`, `BASE_AIR_SSO_SECRET`, `BASE_WEB_URL`, `BASE_WEB_SSO_SECRET` | Base Air's and Base Web's addresses, and long random secrets — each the same value as `BASE_SSO_SECRET` on that app (SUITE.md) | staff opening Base Air and Base Web's admin signed in with their Base Ground account |
 
 Twilio: set the number's incoming-message webhook to
 `https://base.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST). The
@@ -91,10 +91,10 @@ public address and the database.
 
 The first sign-in lands in the **admin** (`/ground/`); the field app at
 `/field/` is what volunteers get, and what you see under *Field app ↗* in your
-account menu (and in the **base** switcher in the top bar). On base.win both
+account menu (and in the **Base** switcher in the top bar). On base.win both
 are under the client's prefix: `https://base.win/imaginesurrey/ground/`.
 
-1. Open `https://base.imaginesurrey.ca/field/login` → **Set up base ground for
+1. Open `https://base.imaginesurrey.ca/field/login` → **Set up Base Ground for
    Imagine Surrey** (the name `BASE_ORG_NAME` gives; a deployment that
    gives none asks for it here). The first account is the manager; this
    creates the campaign's workspace (its jurisdiction's rules, the
@@ -160,7 +160,7 @@ shared, and the code names no client.
   Anyone who leaves the campaign is removed under **Admin → Members**, which ends their
   sign-in everywhere at once.
 
-## What base ground does on its own
+## What Base Ground does on its own
 
 - Sign-in: 30 tries per address and 10 failures per email in 15 minutes,
   then a wait. Sessions last 30 days and end at sign-out or removal.

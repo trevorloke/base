@@ -83,7 +83,7 @@ function RequireAuth({ mode }) {
 function NotForYou({ me }) {
   return (
     <div className="auth-page">
-      <span className="brand">base ground admin</span>
+      <span className="brand">Base Ground Admin</span>
       <span className="brand-org">{me?.workspace?.name}</span>
       <h1>Not for your role</h1>
       <p className="muted">The admin is the campaign office’s. You are signed in as {me?.user?.name} (volunteer) — your app is the field app.</p>

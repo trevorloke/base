@@ -1,4 +1,4 @@
-// Where this base ground lives on its address (SUITE.md, "BASE_PATH"). The
+// Where this Base Ground lives on its address (SUITE.md, "BASE_PATH"). The
 // server writes window.__BASE_PATH__ into index.html ('/imaginesurrey' on
 // base.win, '' on a laptop and under Vite's dev server). Every absolute path
 // the browser builds — fetch, links, router bases, the service worker — goes

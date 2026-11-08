@@ -1,4 +1,4 @@
-# base ground
+# Base Ground
 
 The campaign OS built for **Imagine Surrey**. Field-first: a map with every
 door on it, a one-tap rating scale at the door, phone, and by text — with
@@ -13,7 +13,7 @@ prefix on base.win — `/imaginesurrey/field/`, `/imaginesurrey/ground/`; see
 | | Address | Who | What |
 |---|---|---|---|
 | **Field app** | `/field/` (`/` sends you there) | everyone — it is what a volunteer sees and uses | Today · Map · Calls · Shifts · ImagineU, the door card, walk lists, your call lists, your people, your texts. A manager who opens it gets exactly a volunteer's screens (and *Admin ↗* in the account menu). |
-| **Admin** (the desk, *base ground*) | `/ground/` (the old `/admin/…` addresses send you on) | managers, staff, treasurers — and a volunteer given an area under Permissions | everything: the dashboard, the map with turfs, People and imports, Shifts, Donations, Signs, Outreach, ImagineU's editor and Progress, phone banks, **Settings** (members, teams, permissions), the rating scale. A plain volunteer who opens it is told it isn't theirs. |
+| **Admin** (the desk, *Base Ground*) | `/ground/` (the old `/admin/…` addresses send you on) | managers, staff, treasurers — and a volunteer given an area under Permissions | everything: the dashboard, the map with turfs, People and imports, Shifts, Donations, Signs, Outreach, ImagineU's editor and Progress, phone banks, **Settings** (members, teams, permissions), the rating scale. A plain volunteer who opens it is told it isn't theirs. |
 
 Signing in sends each person to their app: a desk role to the admin, a
 volunteer to the field app. A desk address typed into the field app
@@ -23,17 +23,17 @@ goes to the same screen under `/field`.
 
 ## Addresses and signing in once
 
-base ground is one app of the **base** suite (`../../SUITE.md` is the
+Base Ground is one app of the **Base** suite (`../../SUITE.md` is the
 contract). On base.win each client's apps live under its own prefix:
 
 | Setting | Example | What it does |
 |---|---|---|
-| `BASE_PATH` | `/imaginesurrey` | where this base ground lives. The server handles everything under it as if at the root; a request without it gets a 308 to the same address under it, except `/api/health` (Render's check). The prefix is written into `index.html` (`<base href>`, `window.__BASE_PATH__`); the browser builds every address through `web/src/paths.js`; the service worker's scope is the prefix; the sign-in cookie's `Path` is the prefix. Unset (a laptop): everything at the root, as before |
+| `BASE_PATH` | `/imaginesurrey` | where this Base Ground lives. The server handles everything under it as if at the root; a request without it gets a 308 to the same address under it, except `/api/health` (Render's check). The prefix is written into `index.html` (`<base href>`, `window.__BASE_PATH__`); the browser builds every address through `web/src/paths.js`; the service worker's scope is the prefix; the sign-in cookie's `Path` is the prefix. Unset (a laptop): everything at the root, as before |
 | `BASE_PUBLIC_URL` | `https://base.win/imaginesurrey` | must end in `BASE_PATH` — the server says so loudly at startup, and Settings → Services shows it, when they disagree |
-| `BASE_CLIENT` | `imaginesurrey` | the client's slug, answered to the apps that sign in through base ground. Unset: the last part of `BASE_PATH` |
+| `BASE_CLIENT` | `imaginesurrey` | the client's slug, answered to the apps that sign in through Base Ground. Unset: the last part of `BASE_PATH` |
 | `BASE_TRUSTED_PROXIES` | `2` behind the base.win front door | how many proxies append to `X-Forwarded-For` (Render's, then the front door's), so sign-in limits count the visitor and not the door |
 
-**base ground is the sign-in hub** for base air and base web's admin
+**Base Ground is the sign-in hub** for Base Air and Base Web's admin
 (`server/ext/sso`, tests in `server/test/sso.test.js`):
 `GET /api/sso/authorize?app=air|web&redirect_uri=…&state=…` sends a
 signed-in staffer back to the app with a one-time code (32 random bytes,
@@ -47,12 +47,13 @@ anything wrong is `400 {"error":"invalid_grant"}`. A volunteer with no
 area is refused. Settings: `BASE_AIR_URL` + `BASE_AIR_SSO_SECRET`,
 `BASE_WEB_URL` + `BASE_WEB_SSO_SECRET` (each app is offered once both of its
 are set; Settings → Services shows which are connected). `/web` sends a
-staffer to base web's admin through its own `/auth/base`.
+staffer to Base Web's admin through its own `/auth/base`.
 
-**The base switcher** in the top bar of both faces (`web/src/components/
+**The Base switcher** in the top bar of both faces (`web/src/components/
 BaseSwitcher.jsx`, its own `base-switcher.css`) lists what
-`GET /api/suite` says this person may open: field (everyone), ground (desk
-roles and anyone with an area), air and web (desk roles, once connected).
+`GET /api/suite` says this person may open, each written after its
+**Base** wordmark: Field (everyone), Ground (desk roles and anyone with an
+area), Air and Web (the same people, once connected).
 
 ## The seven things a campaign does (the whole tab bar)
 
@@ -66,7 +67,7 @@ button, no paragraphs, everything else one tap away.
 | **Scripts** | What to say at the door and on the phone (`/scripts`, desk): shown as *Script* above the rating buttons on the walk list, the door card and Calls, the voter's and the canvasser's first names filled in, kept on the phone |
 | **People** | Everyone, filterable by rating / tag / role / the campaign's own fields, and by the field's cuts (never knocked or not in 7–30 days, the last outcome, a turf, a postal code, without a tag — saved lists, blasts and Calls keep them); profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time; **My people** is each volunteer's own circle |
 | **Shifts** | Schedule volunteers, assign by role, notify by email + text with instructions and a link; volunteers tap *Count me in*; a shift can carry turfs; *Count me in* puts the walk list on your phone; the desk can *Edit* a shift (moved in time or place → *Let them know*) or *Call off* one, which takes back the walk lists it gave |
-| **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers — the only money base ground tracks |
+| **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers — the only money Base Ground tracks |
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
 | **Lists** | Saved filters (a tag, a rating band, a role, has an email…) and hand-picked lists of people: an audience for an email or text blast, a CSV, a report; People's *Save as a list* starts one |
 | **Reports** | The campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export; Field, by turf (coverage, talks, support found, not-homes; by canvasser; CSV) |
@@ -332,7 +333,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
 
 ## Coverage vs. the tools it replaces
 
-| | base ground today | Next |
+| | Base Ground today | Next |
 |---|---|---|
 | **Ecanvasser** | map canvass, door cards, household grouping, ratings, no-answer outcomes, signs at the door, place-on-map, call/text lists, turf cutting & assignment, walk lists, survey builder (door and calls), custom person fields, offline field mode, offline desk (each sign-in's last copy of every screen, money and donor lists in the tab only; ratings, notes and tags queued; one outbox across tabs) | — |
 | **Action Builder** | assessments (= the rating scale, its words and Voting-for list edited per campaign), tags, roles, relational notes, relationship graph (My people, Knows with a nudge, Most connected, brought in by), event-logged every touch | — |
@@ -348,7 +349,7 @@ INTEGRATIONS.md, *The campaign's website*): matched only by the same
 email (a visitor's typing never lands on someone else's record), never back
 on the newsletter for someone who left it, a volunteer or a message filed
 as a request under *Needs you*; the answer is only the person's id. Donations and RSVPs aren't
-taken that way. base ground's own public pages are the ones every email needs,
+taken that way. Base Ground's own public pages are the ones every email needs,
 no login:
 
 - `/u/:subscriptionId` — unsubscribe from the newsletter (the link asks; one
@@ -481,7 +482,7 @@ same key.
 **Google Maps** instead: `GOOGLE_MAPS_TILES=1` with a `GOOGLE_MAPS_SERVER_KEY`
 that has the **Map Tiles API** enabled (`GOOGLE_MAPS_TILE_TYPE` roadmap |
 satellite | terrain). Google hands tiles out against a session, so the map
-draws `/tiles/{z}/{x}/{y}.png` from base ground (signed in), which fetches
+draws `/tiles/{z}/{x}/{y}.png` from Base Ground (signed in), which fetches
 each tile from Google with a session it keeps for everyone and renews
 (`server/lib/gtiles.js`, served by `server/ext/offline`), credited to
 Google, up to zoom 22; the service worker keeps the ones a phone has drawn
@@ -521,7 +522,7 @@ when you're back online.*
 
 ## The brand
 
-base ground's look is the campaign's own, set by a manager under
+Base Ground's look is the campaign's own, set by a manager under
 **Settings → Brand** (`web/src/components/BrandSettings.jsx`): a preset
 (**Ground**, the default — deep forest green, signal amber, warm
 off-white, Atkinson Hyperlegible, big tap targets, made to read outdoors;
@@ -617,7 +618,7 @@ brand* returns to these).
 |---|---|---|
 | `BASE_BRAND_PRESET` | `ground`, `civic`, `night` or `harvest` — the starting look | `ground` |
 | `BASE_BRAND_NAME` | the name in the top bar, on sign-in and on public pages | the campaign's name |
-| `BASE_BRAND_LOGO` | an `https://` address of the logo | base ground's own mark |
+| `BASE_BRAND_LOGO` | an `https://` address of the logo | Base Ground's own mark |
 | `BASE_BRAND_PRIMARY`, `BASE_BRAND_ACCENT`, `BASE_BRAND_SURFACE`, `BASE_BRAND_INK`, `BASE_BRAND_ON_PRIMARY`, `BASE_BRAND_ON_ACCENT` | colours, `#rrggbb` (the `#` optional): buttons and the top bar, the spark, the page, its text, text on primary, text on accent | the preset's |
 | `BASE_BRAND_FONT` | `atkinson`, `public-sans`, `inter`, `source-serif` or `system` (all bundled; no font is fetched from anywhere else) | the preset's |
 | `BASE_BRAND_CORNERS` | `sharp`, `soft` or `round` | the preset's |

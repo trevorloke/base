@@ -1,5 +1,5 @@
 // Import people — three steps, one button each: choose a CSV (or paste it),
-// match its columns to base ground fields and check it (a dry run: nothing is
+// match its columns to Base Ground fields and check it (a dry run: nothing is
 // saved), then import it in chunks of 1,000 and place everyone on the map.
 // The CSV is parsed here in the browser; the server validates, dedupes against
 // people already on file (email → name+phone → name+address; a row with none
@@ -499,11 +499,11 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, v
 
 // fetch/ApiError → one plain sentence that says what to do.
 function errText(e) {
-  if (!e?.status) return 'Couldn’t reach base ground. Check your connection and try again.';
+  if (!e?.status) return 'Couldn’t reach Base Ground. Check your connection and try again.';
   if (e.status === 401) return 'You’ve been signed out. Sign in again in another tab, then try again.';
   if (e.status === 403) return 'Only campaign staff can import people.';
   const m = String(e.message || '').trim();
-  return m ? `base ground said: ${m}.` : `Something went wrong (${e.status}). Try again.`;
+  return m ? `Base Ground said: ${m}.` : `Something went wrong (${e.status}). Try again.`;
 }
 
 const displayName = (r) => r.name || [r.first, r.middle, r.last].filter(Boolean).join(' ');

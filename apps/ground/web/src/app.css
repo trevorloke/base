@@ -1,4 +1,4 @@
-/* base ground — one stylesheet, on a small set of design tokens.
+/* Base Ground — one stylesheet, on a small set of design tokens.
 
    The look is the campaign's brand (Settings → Brand): six colours, a font
    and a corner style become the tokens below (shared/brand.js, tokens()).
@@ -328,7 +328,7 @@ h2 { font-size: 20px; }
   display: inline-flex; align-items: center; gap: 10px; min-width: 0;
   text-decoration: none; color: var(--nav-ink);
 }
-/* The campaign's logo (Settings → Brand) at 32px tall, or base ground's
+/* The campaign's logo (Settings → Brand) at 32px tall, or Base Ground's
    own mark (components/BrandMark.jsx). */
 .brand-mark { width: auto; height: 32px; max-width: 120px; object-fit: contain; flex: none; display: block; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }

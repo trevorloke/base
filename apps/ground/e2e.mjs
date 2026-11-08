@@ -1,4 +1,4 @@
-// base ground release E2E — one fresh Imagine Surrey workspace, end to end across
+// Base Ground release E2E — one fresh Imagine Surrey workspace, end to end across
 // every screen: signup → seed Surrey doors → map (rate, outcome, sign, deep
 // link, filters) → people (tags) → Calls → profile → shifts (assign +
 // notify) → outreach (newsletter, press) → public
@@ -68,7 +68,7 @@ await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const me = (await api('/auth/me')).json;
 check('workspace created with slug', me.workspace.slug === 'imagine-surrey', me.workspace.slug);
 check('setup is BC municipal', me.workspace.jurisdiction === 'bc-municipal', me.workspace.jurisdiction);
-check('brand reads base ground', /base ground/i.test(await text()));
+check('brand reads Base Ground', /Base Ground/i.test(await text()));
 
 // ── 2. Seed Surrey doors (Newton) ──
 const P = {};

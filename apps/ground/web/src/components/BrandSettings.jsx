@@ -1,11 +1,11 @@
-// Settings → Brand (managers): how base ground looks for the campaign — on
+// Settings → Brand (managers): how Base Ground looks for the campaign — on
 // every volunteer's phone, in the desk, on the sign-in page and on the
 // server's public pages (unsubscribe, receipts, lessons).
 //
 //   Preset      a starting look (shared/brand.js PRESETS); picking one fills
 //               the colours, font and corners. Reset to preset puts them back.
-//   Name, logo  the top bar's (empty: the campaign's own name, base
-//               ground's own mark); a logo is an upload (blast.picture,
+//   Name, logo  the top bar's (empty: the campaign's own name, Base
+//               Ground's own mark); a logo is an upload (blast.picture,
 //               /media/…) or an https:// address
 //   Colours     primary, accent, background, text, text on primary, text on
 //               accent: a colour picker and a hex field each
@@ -142,7 +142,7 @@ export default function BrandSettings({ me }) {
   return (
     <div className="bs">
       <p className="bs-lead">
-        How base ground looks for {campaign}: on every volunteer’s phone, in the desk, on the sign-in page and on the
+        How Base Ground looks for {campaign}: on every volunteer’s phone, in the desk, on the sign-in page and on the
         pages the server sends (unsubscribe, receipts, lessons).
       </p>
       <p className="bs-source">
@@ -193,7 +193,7 @@ export default function BrandSettings({ me }) {
               <div className="bs-logo__acts">
                 <input id="bs-logo-file" type="file" accept="image/jpeg,image/png,image/webp" className="bs-file" onChange={onUpload} disabled={busy || !online} />
                 <label htmlFor="bs-logo-file" className={`btn ops-tap${busy || !online ? ' is-disabled' : ''}`}>Upload a logo</label>
-                {form.logo && <button type="button" className="btn btn-quiet" onClick={() => set({ logo: '' })}>Use base ground’s mark</button>}
+                {form.logo && <button type="button" className="btn btn-quiet" onClick={() => set({ logo: '' })}>Use Base Ground’s mark</button>}
               </div>
             </div>
             <div className="field">
@@ -300,7 +300,7 @@ function Preview({ brand, name, logo }) {
           {logo ? <img className="bs-pv-logo" src={assetUrl(logo)} alt="" /> : <OwnMark className="bs-pv-logo" />}
           <span className="bs-pv-names">
             <span className="bs-pv-name">{name}</span>
-            <span className="bs-pv-app">base ground</span>
+            <span className="bs-pv-app">Base Ground</span>
           </span>
         </span>
         <span className="avatar" aria-hidden="true">AC</span>

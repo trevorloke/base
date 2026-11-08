@@ -44,7 +44,7 @@ test('manager invites a volunteer; the invitee joins with a new account in that 
   assert.equal(li.json.workspace.name, 'Imagine Surrey');
 });
 
-test('an existing base ground user joins by proving their password', async () => {
+test('an existing Base Ground user joins by proving their password', async () => {
   const other = new Client();
   await other.signup({ email: 'organizer@example.org', password: 'organizer-pass-1', workspaceName: 'Their Own Campaign' });
   const inv = await mgr.action('member.invite', { email: 'organizer@example.org', role: 'staff' });

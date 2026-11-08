@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "base ground \u2014 the organizing app in base, the broad application for social engagement. See README.md.",
+  "description": "Base Ground \u2014 the organizing app in Base, the broad application for social engagement. See README.md.",
   "workspaces": [
     "shared",
     "server",

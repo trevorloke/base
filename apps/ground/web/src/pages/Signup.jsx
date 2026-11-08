@@ -1,4 +1,4 @@
-// First-run setup: base ground runs for one campaign. The first person sets it
+// First-run setup: Base Ground runs for one campaign. The first person sets it
 // up (name, email, password — and the campaign's name, unless the deployment
 // already says it) and becomes its manager; once that's
 // done this page says so and points to Sign in — everyone else joins by invite.
@@ -82,7 +82,7 @@ export default function Signup({ mode = 'field' }) {
       <div className="auth-page">
         {brand}
         <h1>Already set up</h1>
-        <p className="muted">base ground is set up{org ? ` for ${org}` : ''}. Ask a manager for an invite.</p>
+        <p className="muted">Base Ground is set up{org ? ` for ${org}` : ''}. Ask a manager for an invite.</p>
         <hr className="hairline" />
         <p className="muted"><Link to="/login">Sign in</Link></p>
       </div>
@@ -92,7 +92,7 @@ export default function Signup({ mode = 'field' }) {
   return (
     <div className="auth-page">
       {brand}
-      <h1>Set up base ground{org ? ` for ${org}` : ''}</h1>
+      <h1>Set up Base Ground{org ? ` for ${org}` : ''}</h1>
       <form onSubmit={submit} onInvalidCapture={onInvalid}>
         {!org && (
           <div className="field">
@@ -120,7 +120,7 @@ export default function Signup({ mode = 'field' }) {
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" className="btn btn-primary" style={AUTH_BUTTON} disabled={busy}
           onClick={() => { saidMissing.current = false; }}>
-          {busy ? 'Setting up…' : 'Set up base ground'}
+          {busy ? 'Setting up…' : 'Set up Base Ground'}
         </button>
       </form>
       <hr className="hairline" />

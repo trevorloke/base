@@ -1,11 +1,11 @@
-// The other base apps this base ground signs people in to (SUITE.md): which
+// The other Base apps this Base Ground signs people in to (SUITE.md): which
 // are set up, where they live, and the one check on where a sign-in may go
 // back to. Used by ext/sso (the hand-off, the switcher) and ext/connections
 // (Settings → Services).
 export const DESK = ['manager', 'staff', 'treasurer'];
 export const APPS = {
-  air: { name: 'base air', url: 'BASE_AIR_URL', secret: 'BASE_AIR_SSO_SECRET' },
-  web: { name: 'base web', url: 'BASE_WEB_URL', secret: 'BASE_WEB_SSO_SECRET' },
+  air: { name: 'Base Air', url: 'BASE_AIR_URL', secret: 'BASE_AIR_SSO_SECRET' },
+  web: { name: 'Base Web', url: 'BASE_WEB_URL', secret: 'BASE_WEB_SSO_SECRET' },
 };
 
 export const env = (k) => String(process.env[k] || '').trim();
