@@ -12,7 +12,7 @@ const TITLES = {
   contacts: 'Contacts by week', donations: 'Donations by month', subscribers: 'Newsletter list, by month', sends: 'Sends',
 };
 export const EXPORTS = [
-  ['people', 'People'], ['contacts', 'Contacts (doors, calls, texts)'], ['gifts', 'Gifts'],
+  ['people', 'People'], ['contacts', 'Contacts (doors, calls, texts)'], ['gifts', 'Gifts'], ['members', 'Members (paper and website)'],
   ['volunteers', 'Volunteers and their roles'], ['signs', 'Signs'], ['shifts', 'Shifts'],
   ['subscribers', 'Newsletter subscribers'], ['lists', 'Lists (hand-picked)'],
 ];

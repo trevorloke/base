@@ -126,6 +126,13 @@ const DATASETS = {
       p.address, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
       to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.kind, p.created_at, p.id as _id
     from persons p where p.workspace_id = $1 and p.deleted_at is null order by lower(p.name)`, tags: true, fields: true },
+  // Everyone who has been a member: each term, paper or website.
+  members: { sql: `select p.first_name, p.last_name, p.email, p.phone, p.address, p.city, p.postal,
+      m.term_years, to_char(m.starts_on, 'YYYY-MM-DD') as starts_on, to_char(m.ends_on, 'YYYY-MM-DD') as ends_on,
+      case when m.ends_on >= current_date then 'current' else 'lapsed' end as status,
+      m.youth, m.citizenship, m.source, to_char(m.declaration_on, 'YYYY-MM-DD') as declaration_on
+    from member_terms m join persons p on p.id = m.person_id and p.deleted_at is null
+    where m.workspace_id = $1 and m.voided_at is null order by m.ends_on desc, lower(p.name)` },
   volunteers: { sql: `select p.name, p.email, p.phone, string_agg(v.role || coalesce(' (' || nullif(v.detail, '') || ')', ''), '; ' order by v.role) as roles
     from volunteer_roles v join persons p on p.id = v.person_id and p.deleted_at is null where v.workspace_id = $1 group by p.id, p.name, p.email, p.phone order by lower(p.name)` },
   signs: { sql: `select s.address, s.kind, s.status, p.name as supporter, p.phone, s.note, s.lat, s.lng, s.created_at

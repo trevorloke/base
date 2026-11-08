@@ -86,8 +86,8 @@ const SIGN_STATUS_WORD = { requested: 'To put up', installed: 'Up', removed: 'Ta
 // A request that never went up is taken back (sign.cancel), not "taken down".
 const SIGN_CANCEL = 'cancel';
 // Most-asked first, like the door card.
-const SIGN_ORDER = ['lawn', 'large', 'billboard'];
-const SIGN_SHORT = { lawn: 'Lawn', large: 'Large', billboard: 'Billboard' };
+const SIGN_ORDER = ['lawn', 'window', 'large', 'billboard'];
+const SIGN_SHORT = { lawn: 'Lawn', window: 'Window', large: 'Large', billboard: 'Billboard' };
 const SIGN_BUTTONS = [...SIGN_KINDS].sort((a, b) => SIGN_ORDER.indexOf(a.code) - SIGN_ORDER.indexOf(b.code));
 
 const stripHandle = (h) => String(h || '').trim().replace(/^@/, '');

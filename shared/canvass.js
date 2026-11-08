@@ -31,6 +31,8 @@ export const SIGN_KINDS = [
   { code: 'billboard', label: 'Billboard (4×8)' },
   { code: 'large',     label: 'Large sign (4×4)' },
   { code: 'lawn',      label: 'Lawn sign' },
+  // In a window: the membership form offers lawn, window, 4×4 and 8×4.
+  { code: 'window',    label: 'Window sign' },
 ];
 export const SIGN_KIND_CODES = SIGN_KINDS.map((s) => s.code);
 export const SIGN_STATUSES = ['requested', 'installed', 'removed'];

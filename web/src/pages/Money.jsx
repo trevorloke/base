@@ -33,8 +33,8 @@ import './shifts.css';
 // (server: MONEY_ROLES; volunteers get 403 on both reads and writes).
 const MONEY_ROLES = ['manager', 'treasurer', 'staff'];
 // Registry: gift.method / gift.cadence select options, in plain words.
-const METHODS = ['card', 'etransfer', 'cheque', 'cash', 'in-kind'];
-const METHOD_WORD = { card: 'Card', etransfer: 'E-transfer', cheque: 'Cheque', cash: 'Cash', 'in-kind': 'In-kind' };
+const METHODS = ['card', 'etransfer', 'cheque', 'cash', 'pad', 'in-kind'];
+const METHOD_WORD = { card: 'Card', etransfer: 'E-transfer', cheque: 'Cheque', cash: 'Cash', pad: 'Pre-authorized debit', 'in-kind': 'In-kind' };
 const methodWord = (m) => METHOD_WORD[m] ?? m;
 const CADENCES = [
   { code: 'one-time', label: 'One-time' },

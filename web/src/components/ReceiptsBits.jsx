@@ -7,7 +7,7 @@ import '../pages/receipts.css';
 
 export const fmtBig = (cents) => fmtMoney(cents).replace(/\.00$/, '');
 
-const METHOD_WORD = { card: 'Card', etransfer: 'E-transfer', cheque: 'Cheque', cash: 'Cash', 'in-kind': 'In-kind' };
+const METHOD_WORD = { card: 'Card', etransfer: 'E-transfer', cheque: 'Cheque', cash: 'Cash', pad: 'Pre-authorized debit', 'in-kind': 'In-kind' };
 export const methodWord = (m) => (m ? METHOD_WORD[m] ?? m : 'Not recorded');
 
 // "October 1, 2026"

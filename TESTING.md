@@ -514,6 +514,20 @@ one tap away under **More**.
   Disclosure** picks a period (this campaign, or a calendar year) and
   downloads contributors over $100 for a spreadsheet, with an *Over limit*
   column. Sample gifts are never in it.
+- **People → More → Enter a membership form** — type a paper form for a
+  made-up person: a birth date 25 years ago (*the $5 youth rate applies*),
+  *Canadian citizen*, a union local, a campus, *I'd like to volunteer*, *A
+  sign → Window*, two languages and *Other: Tamil*, two interests, *1 year*,
+  *Give once → Superstar Club*, *Cheque*, *Signed*. *Save the form* says
+  what was done — a youth membership for a year, $1,429.70 to each slate, a
+  window sign to put up — and *Office use: entered in base.win by you*. On
+  their profile every box is a field (Tamil under *Other language*); they're
+  tagged member and volunteer, on Signs and in the volunteer requests.
+  *Enter another form*, type the same email: *Already on file?* →
+  *That's them*; *4 years*, $20, *Cash*, *Signed*: the new term starts when
+  the first ends, and *Check:* says what to look at. Pick *Credit card*: a
+  note to black out the card number — there’s no box for it. **Data →
+  Take data out → Members** lists every member, paper and website.
 - **Today → More → Verify the records** replays the tamper-evident log;
   **Export all data** downloads everything.
 - **Donations and People with no signal** read only in the same browser tab

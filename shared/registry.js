@@ -24,7 +24,7 @@ export const RECORD_TYPES = {
       { key: 'amount_cents', label: 'Amount', type: 'money',  required: true },
       { key: 'date',         label: 'Date',   type: 'date',   required: true },
       { key: 'method',       label: 'Method', type: 'select',
-        options: ['card', 'etransfer', 'cheque', 'cash', 'in-kind'] },
+        options: ['card', 'etransfer', 'cheque', 'cash', 'pad', 'in-kind'] },
       { key: 'cadence',      label: 'Cadence', type: 'select',
         options: ['one-time', 'monthly'], default: 'one-time' },
       // Which slate the contribution is to (shared/canvass.js SLATES); the

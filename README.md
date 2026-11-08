@@ -151,6 +151,28 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Next steps* — one per donor with a date (*Coffee after the debate*), the
   due ones first. *Lapsed* — gave in an earlier year, not yet this one.
   *Top donors this year* — and when each was last thanked.
+- **Membership form** (People → More → *Enter a membership form*, the desk
+  that handles money): the paper membership form, box for box and in its
+  order. Name, gender, birth date, email, mobile, address; citizen or
+  permanent resident; union member (+local); campus; volunteer, candidate
+  interest, a sign (lawn, window, large, billboard); languages (one not on
+  the list goes in *Other language*); interests; a 1- or 4-year membership;
+  giving once or monthly — Superstar Club and Star Club amounts come from
+  the year's contribution limit (2026: $1,429.70 a slate); cash, cheque,
+  credit card, e-transfer or pre-authorized debit; the signed declaration
+  and its date. While the name, email or phone is typed, people already on
+  file are offered (*That's them* · *Not them*). *Save the form* does it all:
+  the person and their profile fields, a membership (the $5 youth rate when
+  they were 14 to 30 on the day signed; a renewal starts when the current
+  term ends), the gifts on the right slates (Superstar splits across both),
+  a monthly pledge and its first month, a volunteer request, a sign
+  request, and the email/text opt-in (never re-adding someone who left the
+  list). It says what to check (below the minimum, over the limit, nothing
+  ticked for citizenship) and who entered it, for the form's *Office use*
+  box. Card numbers and bank details are never typed — black them out on
+  the paper. A website membership (Base Web tags it *Member (joined
+  online)*) is a membership too, and **Data → Take data out → Members** lists
+  both, current or lapsed.
 - **Mainstreeting** (Today → *Mainstreeting*, everyone on the field
   team): meeting people where they are — an event, a bus loop, a market.
   Say where you are once (kept on the phone); then for each person first

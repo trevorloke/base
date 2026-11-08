@@ -353,7 +353,7 @@ test('export: every field (with its settings) and every value', async () => {
   assert.equal((await mgr.get('/api/audit/verify')).json.ok, true, 'the books still verify');
 });
 
-test('sample campaign: three fields with values; clearing removes them, and keeps one you filled in', async () => {
+test('sample campaign: its fields with values (Union local onto the standard field); clearing removes them, and keeps one you filled in', async () => {
   const s = new Client();
   await s.signup({ workspaceName: `Sample Fields ${tag}`, email: `fd-sample+${tag}@example.org`, jurisdiction: 'bc-municipal' });
   ok(await s.post('/api/data/sample', {}));
@@ -361,9 +361,11 @@ test('sample campaign: three fields with values; clearing removes them, and keep
   const standard = new Set(STANDARD_FIELDS.map((f) => f.name));
   const list = ok(await s.get('/api/fields')).fields.filter((f) => !standard.has(f.name));
   assert.deepEqual(list.map((f) => [f.name, f.kind, f.volunteers]), [
-    ['Language at home', 'choice', true], ['Strata council member', 'yesno', false], ['Union local', 'text', false],
+    ['Language at home', 'choice', true], ['Strata council member', 'yesno', false],
   ]);
   assert.ok(list.every((f) => f.filled >= 2), 'each has a few values');
+  const union = ok(await s.get('/api/fields')).fields.find((f) => f.name === 'Union local');
+  assert.ok(union.filled >= 2, 'the sample’s union locals go on the standard Union local field');
   const lang = list[0];
   const punjabi = (await s.get(`/api/persons?field=${lang.id}:Punjabi`)).json.persons;
   assert.ok(punjabi.length >= 3 && punjabi.some((p) => p.name === 'Harjit Gill'));
@@ -403,7 +405,7 @@ test('sample campaign: three fields with values; clearing removes them, and keep
 
   // A second load reuses your same-named field rather than making a twin.
   ok(await s.post('/api/data/sample', {}));
-  assert.deepEqual(ok(await s.get('/api/fields')).fields.filter((f) => !standard.has(f.name)).map((f) => f.name), ['Language at home', 'Strata council member', 'Union local']);
+  assert.deepEqual(ok(await s.get('/api/fields')).fields.filter((f) => !standard.has(f.name)).map((f) => f.name), ['Language at home', 'Strata council member']);
   const c2 = ok(await s.req('DELETE', '/api/data/sample'));
   assert.doesNotMatch(c2.message, /Kept the field/, 'your fields were never sample: nothing to say');
   assert.deepEqual(ok(await s.get('/api/fields')).fields.filter((f) => !standard.has(f.name)).map((f) => [f.name, f.filled]), [['Language at home', 2], ['Strata council member', 1]]);

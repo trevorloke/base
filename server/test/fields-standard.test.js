@@ -18,11 +18,10 @@ before(async () => {
   F = await fieldsBy();
 });
 
-test('a new campaign has them: eligibility (Eligible/Ineligible), Language (12, pick several), Notes (long text)', async () => {
+test('a new campaign has them: eligibility (Eligible/Ineligible), Language (the membership form’s list, pick several), Notes (long text)', async () => {
   assert.deepEqual([F['Voter eligibility'].kind, F['Voter eligibility'].choices], ['choice', ['Eligible', 'Ineligible']]);
   assert.equal(F.Language.kind, 'choices');
-  assert.equal(F.Language.choices.length, 12);
-  assert.ok(['English', 'Punjabi', 'Mandarin', 'Tagalog', 'Cantonese'].every((l) => F.Language.choices.includes(l)));
+  assert.deepEqual(F.Language.choices, ['English', 'Punjabi', 'Hindi', 'Urdu', 'Mandarin', 'Cantonese', 'Filipino', 'Korean', 'Vietnamese', 'Arabic', 'Farsi', 'Gujarati', 'Spanish', 'French', 'Other']);
   assert.equal(F.Notes.kind, 'note');
 });
 
@@ -87,4 +86,22 @@ test('Pick one → Pick several keeps everyone’s choice', async () => {
   ok(await mgr.action('field.update', { id: f.id, kind: 'choices' }));
   const v = ok(await mgr.get(`/api/persons/${p.id}/fields`)).fields.find((x) => x.name === 'Ward').value;
   assert.deepEqual(v, ['North']);
+});
+
+test('the first Language list on a campaign from before becomes the form’s: Tagalog → Filipino, values kept', async () => {
+  const { sql } = await import('../ext/fields/sql.js');
+  const old = ['English', 'Punjabi', 'Hindi', 'Mandarin', 'Tagalog', 'Cantonese', 'Urdu', 'Arabic', 'Korean', 'Spanish', 'Gujarati', 'Vietnamese'];
+  const lang = (await fieldsBy()).Language;
+  await db.query('update person_fields set choices = $2 where id = $1', [lang.id, JSON.stringify(old)]);
+  const p = await mgr.createPerson('Tala Example');
+  await db.query(`insert into person_field_values (id, workspace_id, field_id, person_id, value) values (gen_random_uuid(), $1, $2, $3, '["Tagalog","English"]')`, [ws, lang.id, p.id]);
+  await db.exec(sql);
+  const after = (await fieldsBy()).Language;
+  assert.ok(after.choices.includes('Filipino') && !after.choices.includes('Tagalog') && after.choices.includes('Farsi'));
+  const v = ok(await mgr.get(`/api/persons/${p.id}/fields`)).fields.find((f) => f.name === 'Language').value;
+  assert.deepEqual(v, ['Filipino', 'English']);
+  // A list the desk changed is theirs: left as it is.
+  await db.query('update person_fields set choices = $2 where id = $1', [lang.id, JSON.stringify(['English', 'Tagalog', 'Klingon'])]);
+  await db.exec(sql);
+  assert.deepEqual((await fieldsBy()).Language.choices, ['English', 'Tagalog', 'Klingon']);
 });

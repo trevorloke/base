@@ -176,12 +176,12 @@ export const SAMPLE_FIELDS = [
   },
 ];
 
-// Languages spoken in Surrey, for the Language field (Pick several). A
-// starting list — the desk adds or renames choices under Profile fields.
-export const SURREY_LANGUAGES = [
-  'English', 'Punjabi', 'Hindi', 'Mandarin', 'Tagalog', 'Cantonese',
-  'Urdu', 'Arabic', 'Korean', 'Spanish', 'Gujarati', 'Vietnamese',
-];
+// The Language field's choices (Pick several): the campaign's membership
+// form's own list, in its order, with Other (the language itself goes in
+// Other language). The desk can change them under Profile fields.
+export const SURREY_LANGUAGES = ['English', 'Punjabi', 'Hindi', 'Urdu', 'Mandarin', 'Cantonese', 'Filipino', 'Korean', 'Vietnamese', 'Arabic', 'Farsi', 'Gujarati', 'Spanish', 'French', 'Other'];
+// The membership form's interests, in its order (Interests, Pick several).
+export const FORM_INTERESTS = ['Safer streets', 'Faster commutes', 'Smarter investments', 'Lower costs', 'Stronger services', 'Homes I can afford', 'Support for small business', 'Healthier communities', 'Better schools / school board issues', 'Climate / parks', 'Metro Vancouver / regional issues'];
 
 // Imagine Surrey's standard fields: one for every column of the campaign's
 // list that the core person record has no home for. Named exactly as the
@@ -208,6 +208,16 @@ export const STANDARD_FIELDS = [
   { name: 'Voter eligibility', kind: 'choice', choices: ['Eligible', 'Ineligible'], volunteers: true },
   { name: 'Language', kind: 'choices', choices: SURREY_LANGUAGES, volunteers: true },
   { name: 'Notes', kind: 'note', volunteers: false },
+  // The membership form's (ext/membership): what a member tells the campaign.
+  { name: 'Gender', kind: 'text', volunteers: false },
+  { name: 'Birth date', kind: 'date', volunteers: false },
+  { name: 'Citizenship', kind: 'choice', choices: ['Canadian citizen', 'Permanent resident'], volunteers: false },
+  { name: 'Union member', kind: 'yesno', volunteers: false },
+  { name: 'Union local', kind: 'text', volunteers: false },
+  { name: 'Campus', kind: 'text', volunteers: false },
+  { name: 'Other language', kind: 'text', volunteers: true },
+  { name: 'Interests', kind: 'choices', choices: FORM_INTERESTS, volunteers: false },
+  { name: 'Interested in being a candidate', kind: 'yesno', volunteers: false },
 ];
 
 // → the fields added ({ id, name, kind }); none when every one is there.

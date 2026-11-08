@@ -27,10 +27,10 @@ import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 // The registry label carries the size ("Large sign (4×4)"); it rides along as a tooltip.
 const kindSize = (code) => SIGN_KINDS.find((k) => k.code === code)?.label ?? code;
 // Most common first: lawn signs, then large, then billboards.
-const KIND_ORDER = ['lawn', 'large', 'billboard'];
+const KIND_ORDER = ['lawn', 'window', 'large', 'billboard'];
 const KINDS = [...SIGN_KINDS].sort((a, b) => KIND_ORDER.indexOf(a.code) - KIND_ORDER.indexOf(b.code));
 // The same words in the chip, the toggle and the form.
-const KIND_WORD = { lawn: 'Lawn sign', large: 'Large sign', billboard: 'Billboard' };
+const KIND_WORD = { lawn: 'Lawn sign', window: 'Window sign', large: 'Large sign', billboard: 'Billboard' };
 const kindWord = (code) => KIND_WORD[code] ?? kindSize(code);
 // The sign crew's words, everywhere.
 const STATUS_LABEL = { requested: 'To put up', installed: 'Up', removed: 'Taken down' };

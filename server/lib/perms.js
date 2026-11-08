@@ -38,7 +38,7 @@ const ACTION_AREA = {
   person: 'people', relationship: 'people', call: 'people', volunteer: 'people', contact: 'people',
   turf: 'map',
   shift: 'shifts',
-  gift: 'money', receipt: 'money', donor: 'money',
+  gift: 'money', receipt: 'money', donor: 'money', membership: 'money',
   sign: 'signs',
   blast: 'outreach', survey: 'outreach',
   ladder: 'outreach', text: 'outreach', texting: 'outreach', subscription: 'outreach', script: 'outreach',
@@ -61,7 +61,8 @@ export const areaOfAction = (name) => {
 const PATH_AREA = [
   [/^\/api\/(records|export|events|audit|reports)(\/|$)/, 'data'],
   [/^\/api\/data\/(import|export)/, 'data'],
-  [/^\/api\/(gifts|receipts|money|cap|stewardship)(\/|$)/, 'money'],
+  [/^\/api\/(gifts|receipts|money|cap|stewardship|membership)(\/|$)/, 'money'],
+  [/^\/api\/persons\/[^/]+\/membership$/, 'money'],
   [/^\/api\/(blasts|surveys|ladders|subscriptions|texting|inbox)(\/|$)/, 'outreach'],
   [/^\/api\/shifts(\/|$)/, 'shifts'],
   [/^\/api\/signs(\/|$)/, 'signs'],

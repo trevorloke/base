@@ -125,7 +125,7 @@ await sleep(600);
 let m = await measure(page);
 // A new campaign starts with the standard fields (server/ext/fields/people.js);
 // the suite's own three sit after them.
-const STANDARD = new Set(['Home phone', 'Province', 'House notes', 'Building notes', 'Access type', 'Dwelling type', 'Interaction status', 'Interaction date', 'Organizer', 'Email opt-in', 'SMS opt-in', 'Sign', 'Support', 'Voted', 'Voter eligibility', 'Language', 'Notes']);
+const STANDARD = new Set(['Home phone', 'Province', 'House notes', 'Building notes', 'Access type', 'Dwelling type', 'Interaction status', 'Interaction date', 'Organizer', 'Email opt-in', 'SMS opt-in', 'Sign', 'Support', 'Voted', 'Voter eligibility', 'Language', 'Notes', 'Gender', 'Birth date', 'Citizenship', 'Union member', 'Union local', 'Campus', 'Other language', 'Interests', 'Interested in being a candidate']);
 const own = (fs) => fs.filter((f) => !STANDARD.has(f.name));
 check('a new campaign: the standard fields, one yellow "Add a field"', /Home phone/.test(await D.text()) && /Voted/.test(await D.text()) && m.yellow === 1 && /Add a field/i.test(await page.innerText('.btn-primary')), JSON.stringify(m));
 console.log(`      words on /people/fields (standard fields): ${m.words}`);
@@ -158,21 +158,21 @@ check('seven types: Text · Long text · Yes/No · Pick one · Pick several · N
 await D.shot('02-add-form');
 await addField({ name: 'Language at home', kind: 'Pick one', choices: ['English', 'Punjabi', 'Mandarin'], volunteers: true });
 await addField({ name: 'Strata council member', kind: 'Yes/No' });
-await addField({ name: 'Union local', kind: 'Text' });
+await addField({ name: 'Tenant group', kind: 'Text' });
 let list = (await D.api('/fields')).json.fields;
 check('three fields saved as typed', own(list).map((f) => `${f.name}:${f.kind}:${f.volunteers}`).join('|')
-  === 'Language at home:choice:true|Strata council member:yesno:false|Union local:text:false', own(list).map((f) => `${f.name}:${f.kind}:${f.volunteers}`).join('|'));
+  === 'Language at home:choice:true|Strata council member:yesno:false|Tenant group:text:false', own(list).map((f) => `${f.name}:${f.kind}:${f.volunteers}`).join('|'));
 check('choices saved in order', JSON.stringify(own(list)[0].choices) === '["English","Punjabi","Mandarin"]', JSON.stringify(own(list)[0].choices));
 const rowNames = await page.$$eval('ol[aria-label="Fields"] .ops-row__name', (els) => els.map((e) => e.textContent));
 check('the list shows them in the API’s order', rowNames.join('|') === list.map((f) => f.name).join('|'), rowNames.join('|'));
 check('row says the type and "Volunteers see it"', /Pick one · 0 filled in · Volunteers see it/.test(await page.innerText('ol[aria-label="Fields"] .ops-item:has-text("Language at home") .ops-row__sub')));
 
-// Reorder: Union local up one.
-await page.click('ol[aria-label="Fields"] .ops-row:has-text("Union local")');
+// Reorder: Tenant group up one.
+await page.click('ol[aria-label="Fields"] .ops-row:has-text("Tenant group")');
 await page.click('.fd-item[data-open] button:has-text("Move up")');
 await sleep(700);
 list = (await D.api('/fields')).json.fields;
-check('Move up reorders on the server', own(list).map((f) => f.name).join('|') === 'Language at home|Union local|Strata council member', own(list).map((f) => f.name).join('|'));
+check('Move up reorders on the server', own(list).map((f) => f.name).join('|') === 'Language at home|Tenant group|Strata council member', own(list).map((f) => f.name).join('|'));
 const F = Object.fromEntries(list.map((f) => [f.name, f]));
 m = await measure(page);
 check('fields screen: one yellow button', m.yellow === 1, JSON.stringify(m));
@@ -200,7 +200,7 @@ await sec.click();
 await sleep(300);
 const q = 'form[aria-label="More details"]';
 const labels = await spage.$$eval(`${q} .fd-q__label`, (els) => els.map((e) => e.textContent));
-check('each field, in order', labels.filter((l) => !STANDARD.has(l)).join('|') === 'Language at home|Union local|Strata council member', labels.join('|'));
+check('each field, in order', labels.filter((l) => !STANDARD.has(l)).join('|') === 'Language at home|Tenant group|Strata council member', labels.join('|'));
 check('Yes/No and Pick one are tap buttons, not selects', (await spage.$$(`${q} select`)).length === 0
   && (await spage.$$(`${q} .sv-q:has-text("Language at home") .sv-opt`)).length === 3 && (await spage.$$(`${q} .sv-q:has-text("Strata council member") .sv-opt`)).length === 2);
 m = await measure(spage, `${q} .sv-opt, ${q} input, ${q} .fd-save`);
@@ -208,14 +208,14 @@ check('profile at 1360: field targets ≥ 48px, no new yellow', m.minTap >= 48 &
 check('Save is off until something changes', await spage.$eval(`${q} .fd-save`, (b) => b.disabled));
 await spage.click(`${q} .sv-q:has-text("Language at home") .sv-opt:has-text("Punjabi")`);
 await spage.click(`${q} .sv-q:has-text("Strata council member") .sv-opt:has-text("Yes")`);
-await spage.fill(`${q} .sv-q:has-text("Union local") input`, 'CUPE 402');
+await spage.fill(`${q} .sv-q:has-text("Tenant group") input`, 'Newton Tenants');
 await spage.click(`${q} .fd-save`);
 await sleep(900);
 const saidLine = await spage.innerText(`${q} .fd-said`).catch(() => '');
 let vals = (await S.api(`/persons/${P.harjit.id}/fields`)).json.fields;
 const byName = (list2) => Object.fromEntries(list2.filter((f) => !STANDARD.has(f.name)).map((f) => [f.name, f.value]));
 check('"✓ Saved" — and the server has exactly that', saidLine.trim() === '✓ Saved'
-  && JSON.stringify(byName(vals)) === JSON.stringify({ 'Language at home': 'Punjabi', 'Union local': 'CUPE 402', 'Strata council member': true }), `${saidLine} ${JSON.stringify(byName(vals))}`);
+  && JSON.stringify(byName(vals)) === JSON.stringify({ 'Language at home': 'Punjabi', 'Tenant group': 'Newton Tenants', 'Strata council member': true }), `${saidLine} ${JSON.stringify(byName(vals))}`);
 check('the section counts what’s filled in: 3', (await spage.innerText('.pf-sec__btn:has-text("More details") .pf-sec__count')).trim() === '3');
 const evs = (await D.api('/events?limit=500')).json.events.filter((e) => e.entity_type === 'person_field_value');
 check('each value is on the event log (field.values.set)', evs.length === 3 && evs.every((e) => e.action === 'field.values.set'), evs.length);
@@ -226,8 +226,8 @@ check('un-tapping a choice clears it (Save turns on, "✓ Saved" goes)', !(await
 await spage.click(`${q} .sv-q:has-text("Strata council member") .sv-opt:has-text("Yes")`);
 check('…and tapping it back makes nothing to save', await spage.$eval(`${q} .fd-save`, (b) => b.disabled));
 // Language (Pick several) and Notes (Long text), standard fields.
-const langQ = `${q} .sv-q:has-text("any that apply")`;
-check('Language: the 12 languages, any that apply', (await spage.$$(`${langQ} .sv-opt`)).length === 12);
+const langQ = `${q} .sv-q:has-text("any that apply"):has-text("Punjabi")`;
+check('Language: the form’s 14 languages and Other, any that apply', (await spage.$$(`${langQ} .sv-opt`)).length === 15);
 await spage.click(`${langQ} .sv-opt:text-is("Hindi")`);
 await spage.click(`${langQ} .sv-opt:text-is("Punjabi")`);
 await spage.fill(`${q} textarea.fd-note`, 'Met at the Newton market.\nPrefers evening calls.');
@@ -265,7 +265,7 @@ await ppage.click(`${q} .fd-save`);
 await sleep(900);
 vals = (await PH.api(`/persons/${P.maya.id}/fields`)).json.fields;
 check('phone save: "✓ Saved" and the server agrees', (await ppage.innerText(`${q} .fd-said`)).trim() === '✓ Saved'
-  && byName(vals)['Language at home'] === 'Mandarin' && byName(vals)['Strata council member'] === false && byName(vals)['Union local'] === null, JSON.stringify(byName(vals)));
+  && byName(vals)['Language at home'] === 'Mandarin' && byName(vals)['Strata council member'] === false && byName(vals)['Tenant group'] === null, JSON.stringify(byName(vals)));
 // A value that doesn't fit is refused in the server's words, nothing saved.
 const refused = await PH.api('/actions/field.values.set', { person_id: P.tom.id, values: [{ field_id: F['Language at home'].id, value: 'Klingon' }] });
 check('the server refuses a value that isn’t a choice, with the field’s name', refused.status === 400 && /“Language at home”: “Klingon” isn’t one of the choices/.test(refused.json.error), refused.raw);
@@ -279,7 +279,7 @@ check('Filter’s first look: no field groups (they wait under More filters)', !
 await spage.click('.pp-morefilters');
 await sleep(400);
 sheet = await spage.innerText('.pp-sheet');
-check('More filters: a group per field — choices, Yes/No, common words', /Language at home/i.test(sheet) && /Strata council member/i.test(sheet) && /Union local/i.test(sheet) && /CUPE 402/i.test(sheet), sheet.slice(-300));
+check('More filters: a group per field — choices, Yes/No, common words', /Language at home/i.test(sheet) && /Strata council member/i.test(sheet) && /Tenant group/i.test(sheet) && /Newton Tenants/i.test(sheet), sheet.slice(-300));
 m = await measure(spage, '.pp-sheet .pp-pick');
 check('filter chips ≥ 48px', m.minTap >= 48, JSON.stringify(m));
 await spage.click('.pp-sheet fieldset:has(legend:text-is("Language at home")) .pp-pick:has-text("Punjabi")');
@@ -333,11 +333,11 @@ await sleep(800);
 list = (await D.api('/fields')).json.fields;
 check('a choice added: "✓ Saved", in order', JSON.stringify(own(list)[0].choices) === '["English","Punjabi","Mandarin","Tagalog"]' && /✓ Saved/.test(await D.text()), JSON.stringify(own(list)[0].choices));
 // Rename.
-await page.click('ol[aria-label="Fields"] .ops-row:has-text("Union local")');
-await page.fill(`${open} input[placeholder="Language at home"]`, 'Union local #');
+await page.click('ol[aria-label="Fields"] .ops-row:has-text("Tenant group")');
+await page.fill(`${open} input[placeholder="Language at home"]`, 'Tenant group #');
 await page.click(`${open} button[type="submit"]`);
 await sleep(700);
-check('rename', (await D.api('/fields')).json.fields.some((f) => f.name === 'Union local #'));
+check('rename', (await D.api('/fields')).json.fields.some((f) => f.name === 'Tenant group #'));
 const pm = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
 await pm.addCookies((await dctx.cookies()).map((c) => ({ ...c })));
 const mpage = await pm.newPage();
@@ -353,24 +353,24 @@ check('field editor at 390: targets ≥ 48px, no sideways scroll', m.minTap >= 4
 await MP.full('08-field-editor-phone');
 
 // ── 7. Take off keeps everything; Bring back ──
-await page.click('ol[aria-label="Fields"] .ops-row:has-text("Union local #")');
+await page.click('ol[aria-label="Fields"] .ops-row:has-text("Tenant group #")');
 await page.click(`${open} button:has-text("Take off")`);
 check('take off asks in place: "Take off? Everything filled in is kept."', /Take off\? Everything filled in is kept\./.test(await D.text()));
 await page.click(`${open} .ops-confirm button:has-text("Yes")`);
 await sleep(800);
 list = (await D.api('/fields')).json.fields;
-const off = list.find((f) => f.name === 'Union local #');
+const off = list.find((f) => f.name === 'Tenant group #');
 check('taken off on the server, its value kept', off.retired === true && off.filled === 1, JSON.stringify(off));
 check('"Taken off · 1" under the list', /Taken off · 1/.test(await D.text()));
 const harjitFields = (await S.api(`/persons/${P.harjit.id}/fields`)).json.fields;
-check('gone from the profile', !harjitFields.some((f) => f.name === 'Union local #'));
+check('gone from the profile', !harjitFields.some((f) => f.name === 'Tenant group #'));
 const exp = (await D.api('/export')).json;
-check('still in the export, with its value', exp.person_fields.some((f) => f.name === 'Union local #' && f.retired_at)
-  && exp.person_field_values.some((v) => v.field_id === off.id && v.value === 'CUPE 402'));
+check('still in the export, with its value', exp.person_fields.some((f) => f.name === 'Tenant group #' && f.retired_at)
+  && exp.person_field_values.some((v) => v.field_id === off.id && v.value === 'Newton Tenants'));
 await page.click('button.ops-more:has-text("Taken off")');
 await page.click('#fd-off button:has-text("Bring back")');
 await sleep(800);
-check('Bring back: on the profile again with its value', (await S.api(`/persons/${P.harjit.id}/fields`)).json.fields.some((f) => f.name === 'Union local #' && f.value === 'CUPE 402'));
+check('Bring back: on the profile again with its value', (await S.api(`/persons/${P.harjit.id}/fields`)).json.fields.some((f) => f.name === 'Tenant group #' && f.value === 'Newton Tenants'));
 
 // ── 8. Import: a column fills a field by its name; a bad cell is refused by row ──
 await S.go('/people/import');
@@ -402,7 +402,7 @@ const joined = await V.api('/auth/join', { token: invite.joinUrl.split('/').pop(
 check('volunteer joined', joined.status === 200 && joined.json.role === 'volunteer', joined.status);
 const vf = await V.api(`/persons/${P.harjit.id}/fields`);
 check('volunteer reads only the filled-in field marked for volunteers, words only',
-  vf.status === 200 && JSON.stringify(vf.json.fields) === JSON.stringify([{ id: F['Language at home'].id, name: 'Language at home', kind: 'choice', value: 'Punjabi' }]) && !vf.raw.includes('CUPE'), vf.raw);
+  vf.status === 200 && JSON.stringify(vf.json.fields) === JSON.stringify([{ id: F['Language at home'].id, name: 'Language at home', kind: 'choice', value: 'Punjabi' }]) && !vf.raw.includes('Tenants'), vf.raw);
 check('volunteer refused the list of fields', (await V.api('/fields')).status === 403);
 check('volunteer may not fill one in', (await V.api('/actions/field.values.set', { person_id: P.harjit.id, values: [{ field_id: F['Language at home'].id, value: 'English' }] })).status === 403);
 check('volunteer’s list never matches on a hidden field', (await V.api(`/persons?field=${F['Strata council member'].id}:yes`)).json.persons.length === 0);
@@ -411,7 +411,7 @@ await vpage.waitForSelector('.pf-sec__btn:has-text("More details")', { timeout: 
 await vpage.click('.pf-sec__btn:has-text("More details")');
 await sleep(300);
 const vsec = await vpage.innerText('.pf-sec:has(.pf-sec__btn:has-text("More details")) .pf-sec__body').catch(() => '');
-check('volunteer profile: "More details" shows Language at home: Punjabi — nothing else', /Language at home/i.test(vsec) && /Punjabi/.test(vsec) && !/Strata|Union|CUPE/i.test(vsec), vsec);
+check('volunteer profile: "More details" shows Language at home: Punjabi — nothing else', /Language at home/i.test(vsec) && /Punjabi/.test(vsec) && !/Strata|Tenant/i.test(vsec), vsec);
 check('…read-only: no inputs, no buttons, no Save', (await vpage.$$('.pf-sec:has(.pf-sec__btn:has-text("More details")) .pf-sec__body :is(input, button)')).length === 0);
 m = await measure(vpage);
 check('volunteer profile at 390: no sideways scroll, ≤ 1 yellow', m.overflow <= 0 && m.yellow <= 1, JSON.stringify(m));
@@ -444,15 +444,15 @@ const mkAt = async (name, phone) => (await D.api('/actions/person.create', { nam
 P.alpha = await mkAt('Alpha Example', '604-555-0161');
 P.bravo = await mkAt('Bravo Example', '604-555-0162');
 const follow = async (pg, id) => { await openSec(pg, 'Details'); await pg.click(`${secBody('Details')} a[href="${pg === vpage ? '' : '/admin'}/people/${id}"]`); await sleep(1300); };
-const unionIn = `${q} .sv-q:has-text("Union local #") input`;
+const unionIn = `${q} .sv-q:has-text("Tenant group #") input`;
 const saveOff = (pg) => pg.$eval(`${q} .fd-save`, (b) => b.disabled).catch(() => null);
 const saidOn = async (pg) => ((await pg.innerText(`${q} .fd-said`).catch(() => '')) || '').trim();
 await PH.go(`/people/${P.alpha.id}`);
 await openSec(ppage, 'More details');
-await ppage.fill(unionIn, 'CUPE 402');
+await ppage.fill(unionIn, 'Newton Tenants');
 await follow(ppage, P.bravo.id);
 await openSec(ppage, 'More details');
-check('fields-02: a draft typed on Alpha stays on Alpha — Bravo’s Union local is empty, Save off',
+check('fields-02: a draft typed on Alpha stays on Alpha — Bravo’s Tenant group is empty, Save off',
   /Bravo Example/.test(await ppage.innerText('h1')) && (await ppage.inputValue(unionIn)) === '' && (await saveOff(ppage)) === true,
   `${await ppage.innerText('h1')} · "${await ppage.inputValue(unionIn).catch(() => '?')}"`);
 await ppage.click(`${q} .sv-q:has-text("Strata council member") .sv-opt:has-text("Yes")`);
@@ -466,19 +466,19 @@ const aVals = byName((await PH.api(`/persons/${P.alpha.id}/fields`)).json.fields
 const bVals = byName((await PH.api(`/persons/${P.bravo.id}/fields`)).json.fields);
 check('…Bravo’s “✓ Saved” stays on Bravo: back on Alpha nothing is said, Save is off, and only Bravo was saved',
   bSaid === '✓ Saved' && aSaid === '' && (await saveOff(ppage)) === true
-  && Object.values(aVals).every((v) => v === null) && bVals['Strata council member'] === true && bVals['Union local #'] === null,
+  && Object.values(aVals).every((v) => v === null) && bVals['Strata council member'] === true && bVals['Tenant group #'] === null,
   `B said "${bSaid}" · A said "${aSaid}" · A ${JSON.stringify(aVals)} · B ${JSON.stringify(bVals)}`);
 // fields-11: a save the server takes as no change still reads as saved.
-await ppage.fill(unionIn, 'CUPE 402');
+await ppage.fill(unionIn, 'Newton Tenants');
 await ppage.click(`${q} .fd-save`);
 await sleep(1000);
-await ppage.fill(unionIn, 'CUPE  402');
+await ppage.fill(unionIn, 'Newton  Tenants');
 const onBefore = (await saveOff(ppage)) === false;
 await ppage.click(`${q} .fd-save`);
 await sleep(1000);
-check('fields-11: "CUPE  402" over a stored "CUPE 402" → “✓ Saved”, the box reads as stored, Save off',
-  onBefore && (await saidOn(ppage)) === '✓ Saved' && (await ppage.inputValue(unionIn)) === 'CUPE 402' && (await saveOff(ppage)) === true
-  && byName((await PH.api(`/persons/${P.alpha.id}/fields`)).json.fields)['Union local #'] === 'CUPE 402',
+check('fields-11: "Newton  Tenants" over a stored "Newton Tenants" → “✓ Saved”, the box reads as stored, Save off',
+  onBefore && (await saidOn(ppage)) === '✓ Saved' && (await ppage.inputValue(unionIn)) === 'Newton Tenants' && (await saveOff(ppage)) === true
+  && byName((await PH.api(`/persons/${P.alpha.id}/fields`)).json.fields)['Tenant group #'] === 'Newton Tenants',
   `"${await saidOn(ppage)}" · "${await ppage.inputValue(unionIn)}"`);
 await simple(ppage, 'profile after a household link at 390', `${q} .sv-opt, ${q} input, ${q} .fd-save, .pf-sec__btn`);
 await PH.shot('11-profile-after-link-phone');
@@ -496,9 +496,9 @@ check('…a field they can’t see reads "Profile field: Yes" — never a bare "
 
 // fields-08 (manager, 1360): a filled-in Text field's type stays Text.
 await D.go('/people/fields');
-await page.click('ol[aria-label="Fields"] .ops-row:has-text("Union local #")');
+await page.click('ol[aria-label="Fields"] .ops-row:has-text("Tenant group #")');
 await sleep(300);
-const unionF = (await D.api('/fields')).json.fields.find((f) => f.name === 'Union local #');
+const unionF = (await D.api('/fields')).json.fields.find((f) => f.name === 'Tenant group #');
 const whyText = await page.innerText(`${open} .fd-why`).catch(() => '');
 check('fields-08: a filled-in Text field says "… — it can become Long text", not "it can only become Text"',
   whyText === `Filled in for ${unionF.filled} people — it can become Long text` && unionF.filled === 2, whyText);
@@ -572,7 +572,7 @@ const punjabiOn = await spage.$eval(`${q} .sv-q:has-text("Language at home") .sv
 check('fields-03: no signal, a kept profile: More details is there with its count (3), from the kept copy',
   sReady && (await spage.innerText('.pf-sec__btn:has-text("More details") .pf-sec__count').catch(() => '')).trim() === '3', `sw ${sReady}`);
 check('…read-only: every control and Save off, the values shown, one line "Changing these needs signal"',
-  offControls.length > 3 && offControls.every(Boolean) && punjabiOn === 'Punjabi' && (await spage.inputValue(`${q} .sv-q:has-text("Union local #") input`)) === 'CUPE 402'
+  offControls.length > 3 && offControls.every(Boolean) && punjabiOn === 'Punjabi' && (await spage.inputValue(`${q} .sv-q:has-text("Tenant group #") input`)) === 'Newton Tenants'
   && /Changing these needs signal/.test(offText), `${offControls.join(',')} · ${punjabiOn} · ${offText.slice(0, 120)}`);
 await simple(spage, 'profile, no signal (1360)');
 await S.shot('13-profile-no-signal-desk');
@@ -598,7 +598,7 @@ await sleep(1500);
 await openSec(vpage, 'More details');
 const vOff = ((await vpage.innerText(secBody('More details')).catch(() => '')) || '').replace(/\s+/g, ' ');
 check('volunteer, no signal: More details from the kept copy — Language at home: Punjabi, nothing else, read-only',
-  /Language at home/i.test(vOff) && /Punjabi/.test(vOff) && !/Strata|Union|CUPE/i.test(vOff)
+  /Language at home/i.test(vOff) && /Punjabi/.test(vOff) && !/Strata|Tenant/i.test(vOff)
   && (await vpage.$$(`${secBody('More details')} :is(input, button)`)).length === 0, vOff);
 await simple(vpage, 'volunteer profile, no signal (390)');
 await vctx.setOffline(false);

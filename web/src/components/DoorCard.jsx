@@ -64,6 +64,7 @@ const SIGN_BUTTONS = [
   { code: 'lawn', label: 'Lawn sign' },
   { code: 'large', label: 'Large sign' },
   { code: 'billboard', label: 'Billboard' },
+  { code: 'window', label: 'Window' },
 ];
 export const SIGN_LABEL = Object.fromEntries(SIGN_KINDS.map((s) => [s.code, s.label]));
 // "To put up" is a neutral ochre chip (fk-wait), never the brand yellow.
