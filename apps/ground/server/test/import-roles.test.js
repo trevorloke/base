@@ -1,7 +1,7 @@
 // Volunteer roles from an import (routes/data.js): the roles a row names —
 // chosen on the import screen from tags like "Vol: Door Knocker" — are added
 // to the person, new or already on file, never twice; a dry run adds none;
-// a role that isn't base ground's is refused.
+// a role that isn't Base Ground's is refused.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';

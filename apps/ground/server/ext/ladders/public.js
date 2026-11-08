@@ -43,7 +43,7 @@ const page = (campaign, title, inner, ws = null) => { const pb = publicBrand(ws 
 </style></head><body><main>
 ${campaign ? publicMasthead(pb, esc) : ''}
 ${inner}
-<footer>Powered by base</footer>
+<footer>Powered by Base</footer>
 </main></body></html>`; };
 
 const bad = (c) => c.html(page(null, 'Unsubscribe',

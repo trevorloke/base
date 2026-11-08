@@ -1,4 +1,4 @@
-// base ground's brand: the presets, the fields a manager sets (Settings →
+// Base Ground's brand: the presets, the fields a manager sets (Settings →
 // Brand), and the design tokens they become. Shared by the server (it
 // writes the tokens into every page it sends — server/lib/brand.js — so
 // there's no flash of the default look) and the browser (the Brand page's
@@ -10,8 +10,8 @@
 //   preset     a key of PRESETS — the look it started from
 //   name       shown in the top bar and on public pages (null: the
 //              campaign's own name)
-//   logo       '/media/<id>' (an upload) or an https:// URL (null: base
-//              ground's own mark)
+//   logo       '/media/<id>' (an upload) or an https:// URL (null: Base
+//              Ground's own mark)
 //   colours    '#rrggbb'; surface is the page, ink the text on it,
 //              onPrimary / onAccent the text on those
 //   font       a key of FONTS (all bundled in web/public/fonts — no
@@ -98,7 +98,7 @@ export const CORNER_KEYS = Object.keys(CORNERS);
 export const PRESETS = {
   ground: {
     label: 'Ground',
-    about: 'Field-ready and high-contrast: deep forest green, signal amber, warm off-white. base ground’s own.',
+    about: 'Field-ready and high-contrast: deep forest green, signal amber, warm off-white. Base Ground’s own.',
     primary: '#17462b',
     accent: '#ffb000',
     surface: '#f6f3ea',

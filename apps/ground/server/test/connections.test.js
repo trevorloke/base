@@ -58,7 +58,7 @@ const check = async (key) => ok(await mgr.post('/api/connections/check', { key }
 test('nothing set: what each service is for and which settings are missing — managers only', async () => {
   const s = byKey(await list());
   assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'air', 'web']);
-  // base air and base web, signing in through base ground (ext/sso): optional.
+  // Base Air and Base Web, signing in through Base Ground (ext/sso): optional.
   assert.deepEqual(s.air.missing, ['BASE_AIR_URL', 'BASE_AIR_SSO_SECRET']);
   assert.deepEqual([s.web.state, s.web.launch], ['missing', false]);
   assert.deepEqual(s.email.missing, ['RESEND_API_KEY', 'MAIL_FROM']);

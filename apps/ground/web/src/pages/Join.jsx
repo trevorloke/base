@@ -1,5 +1,5 @@
 // Join a campaign from an invite link. New people set a name and password;
-// people who already use base ground confirm with their existing password.
+// people who already use Base Ground confirm with their existing password.
 // Everyone lands on Today, whose one big button is "Start canvassing".
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -73,7 +73,7 @@ export default function Join({ mode = 'field' }) {
           </div>
         )}
         <div className="field">
-          <label htmlFor="join-password">{hasAccount ? 'Your base ground password' : 'Choose a password'}</label>
+          <label htmlFor="join-password">{hasAccount ? 'Your Base Ground password' : 'Choose a password'}</label>
           <input id="join-password" className="input" type="password" required minLength={8} maxLength={200} style={AUTH_INPUT}
             autoFocus={hasAccount} autoComplete={hasAccount ? 'current-password' : 'new-password'}
             placeholder={hasAccount ? undefined : '8 or more characters'}

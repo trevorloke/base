@@ -1,6 +1,6 @@
 // Lessons for supporters: a lesson whose audience is "public" has a page
 // of its own — /learn/<slug> lists them, /learn/<slug>/<id> is one — in
-// the look of base ground's public pages (lib/publicpage.js). Its file is at
+// the look of Base Ground's public pages (lib/publicpage.js). Its file is at
 // /learn-files/<id>. Nothing else of ImagineU is public.
 import { Hono } from 'hono';
 import { getDb } from '../../db/client.js';

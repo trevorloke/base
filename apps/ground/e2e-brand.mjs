@@ -1,4 +1,4 @@
-// base ground brand E2E — a fresh in-memory server, a manager on a laptop
+// Base Ground brand E2E — a fresh in-memory server, a manager on a laptop
 // and a volunteer on a 390×844 phone, with the sample campaign loaded:
 //   · the first paint is already in the brand: index.html carries the
 //     brand's <style> (Ground until anything is saved), the app's tokens
@@ -33,7 +33,7 @@ if (!BASE) {
   process.on('unhandledRejection', (e) => { console.error(e); process.exit(1); });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-    server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    server.stdout.on('data', (b) => { if (/Base Ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
   BASE = `http://127.0.0.1:${PORT}`;
@@ -164,7 +164,7 @@ await vp.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('.nav .brand', { timeout: 10000 });
 check('Ground on the phone: --mark is forest green, the font is Atkinson Hyperlegible',
   (await rootVar(vp, '--mark')) === '#17462b' && /Atkinson/.test(await vp.evaluate(() => getComputedStyle(document.body).fontFamily)));
-check('the top bar shows the campaign’s name and base ground’s own mark',
+check('the top bar shows the campaign’s name and Base Ground’s own mark',
   /Imagine Surrey/.test(await vp.$eval('.nav .brand', (el) => el.innerText)) && !!(await vp.$('.nav .brand svg.brand-mark--own')));
 const g = await shoot('ground');
 check('sign-in page: the campaign’s name and the mark', /Imagine Surrey/.test(g.signIn), g.signIn);

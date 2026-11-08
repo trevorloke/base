@@ -1,6 +1,6 @@
 {
-  "name": "base ground",
-  "short_name": "base ground",
+  "name": "Base",
+  "short_name": "Base",
   "description": "Walk lists, door knocks and signs for the campaign — keeps working when you lose signal.",
   "start_url": "field/map",
   "scope": "./",

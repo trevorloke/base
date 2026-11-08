@@ -121,6 +121,29 @@ test('a write with the cookie must be the app’s own: JSON, from the same origi
   assert.match(join.headers.get('set-cookie') || '', /SameSite=Strict/i);
 });
 
+test('another client’s subdomain is same-site, not this app: its writes are refused', async () => {
+  // On base.win every client has its own subdomain, so a page on
+  // otherclient.base.win posting to imaginesurrey.base.win is "same-site"
+  // to the browser (until base.win is on the Public Suffix List) — and it
+  // would carry the cookie if the cookie weren't SameSite=Strict. Refused
+  // either way, before anything is read or written.
+  const from = (origin) => ({ origin, 'sec-fetch-site': 'same-site' });
+  const at = 'https://imaginesurrey.base.win';
+  for (const origin of ['https://otherclient.base.win', 'https://imaginesurrey.staging.base.win', 'https://base.win']) {
+    const write = await req(`${at}/api/actions/person.create`, { method: 'POST', body: { name: 'Sibling Victim' }, cookie: mgr.cookie, headers: from(origin) });
+    assert.equal(write.status, 403, origin);
+    assert.match((await write.json()).error, /other sites/);
+    assert.equal((await req(`${at}/api/auth/logout`, { method: 'POST', body: {}, cookie: mgr.cookie, headers: from(origin) })).status, 403, origin);
+    assert.equal((await req(`${at}/api/auth/login`, { method: 'POST', body: { email: 'hard.manager@example.org', password: 'hardening-2026' }, headers: from(origin) })).status, 403, origin);
+  }
+  const list = await (await req('/api/persons?q=Sibling%20Victim', { cookie: mgr.cookie })).json();
+  assert.equal(list.persons.length, 0, 'nothing was created');
+  assert.equal((await req('/api/auth/me', { cookie: mgr.cookie })).status, 200, 'still signed in: the logout was refused too');
+  // The app's own page, on its own subdomain, still writes.
+  const own = await req(`${at}/api/actions/person.create`, { method: 'POST', body: { name: 'Own Write' }, cookie: mgr.cookie, headers: { origin: at, 'sec-fetch-site': 'same-origin' } });
+  assert.equal(own.status, 200);
+});
+
 test('odd ids and names are a 400 or 404, never a 500', async () => {
   assert.equal((await req('/media/constructor')).status, 404);
   assert.equal((await req('/media/__proto__')).status, 404);

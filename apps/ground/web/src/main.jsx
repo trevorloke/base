@@ -128,8 +128,8 @@ if (elsewhere) {
 
 // Service worker: app shell + map tiles for the field (public/sw.js). Only in
 // production builds — in dev it would cache Vite's modules and fight HMR.
-// Its scope is this client's prefix: on base.win another client's base
-// ground is never this one's to answer for.
+// Its scope is this app's prefix (the root on base.win, where the client's
+// subdomain is its own origin; public/sw.js leaves Base Air's /air alone).
 if (import.meta.env.PROD && !elsewhere && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(withBase('/sw.js'), { scope: withBase('/') }).catch(() => { /* app still works online */ });

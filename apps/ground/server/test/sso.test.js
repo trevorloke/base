@@ -1,5 +1,5 @@
-// Signing in once (ext/sso, lib/suite.js — SUITE.md "The hand-off"): base
-// air and base web send the browser to /api/sso/authorize, get a one-time
+// Signing in once (ext/sso, lib/suite.js — SUITE.md "The hand-off"): Base
+// Air and Base Web send the browser to /api/sso/authorize, get a one-time
 // code back on their own address, and trade it from their server at
 // /api/sso/token for who the person is. And GET /api/suite, the switcher's
 // list of apps.
@@ -13,7 +13,7 @@ import { redirectOk } from '../lib/suite.js';
 import { safeNext } from '@base-ground/shared/paths';
 
 const tag = Math.random().toString(36).slice(2, 8);
-const AIR = 'https://base.win/imaginesurrey/air';
+const AIR = 'https://imaginesurrey.base.win/air'; // SUITE.md: Base Air under /air on the client's subdomain
 const WEB = 'https://imaginesurrey.ca';
 const AIR_SECRET = 'air-secret-0123456789abcdefghijklmnopqrstuvwxyz';
 const WEB_SECRET = 'web-secret-0123456789abcdefghijklmnopqrstuvwxyz';
@@ -73,7 +73,7 @@ const grantRefused = async (res) => {
   assert.deepEqual(await res.json(), { error: 'invalid_grant' }, 'no detail');
 };
 
-test('happy path: a manager opens base air signed in, once', async () => {
+test('happy path: a manager opens Base Air signed in, once', async () => {
   process.env.BASE_ORG_NAME = 'Imagine Surrey';
   process.env.BASE_PATH = '/imaginesurrey';
   const res = await raw(`/imaginesurrey${authorizeUrl()}`, { cookie: mgr.cookie });
@@ -95,7 +95,9 @@ test('happy path: a manager opens base air signed in, once', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('cache-control'), 'no-store');
   const who = await r.json();
-  assert.deepEqual(Object.keys(who).sort(), ['areas', 'client', 'email', 'name', 'organization', 'role']);
+  assert.deepEqual(Object.keys(who).sort(), ['areas', 'client', 'email', 'name', 'organization', 'role', 'sub']);
+  assert.equal(typeof who.sub, 'string');
+  assert.equal(who.sub, (await db.query('select id from users where email = $1', [who.email])).rows[0].id, 'sub: the user’s id here');
   assert.equal(who.email, `sso-mgr+${tag}@example.org`);
   assert.equal(who.name, 'Morgan Manager');
   assert.equal(who.role, 'manager');
@@ -109,6 +111,9 @@ test('happy path: a manager opens base air signed in, once', async () => {
   const s = await (await token(again.code)).json();
   assert.equal(s.client, 'surrey-2026', 'BASE_CLIENT wins');
   assert.equal(s.role, 'staff');
+  assert.notEqual(s.sub, who.sub, 'each person their own sub');
+  const later = await (await token((await codeFor(mgr)).code)).json();
+  assert.equal(later.sub, who.sub, 'the same person, the same sub, every time');
   delete process.env.BASE_CLIENT;
   delete process.env.BASE_ORG_NAME;
 });
@@ -158,7 +163,7 @@ test('an app that isn’t set up is neither offered nor trusted', async () => {
   const res = await raw(authorizeUrl({ app: 'web', redirect: WEB_CB }), { cookie: mgr.cookie });
   assert.equal(res.status, 400);
   assert.equal(res.headers.get('location'), null);
-  assert.match(await res.text(), /base web isn’t set up/);
+  assert.match(await res.text(), /Base Web isn’t set up/);
   // An empty secret matches nothing, even an empty Bearer.
   await grantRefused(await token('x', { auth: 'Bearer ' }));
   assert.equal((await raw(authorizeUrl({ app: 'nope' }), { cookie: mgr.cookie })).status, 400);
@@ -169,7 +174,7 @@ test('volunteers are refused; a volunteer given an area is let through', async (
   const res = await raw(authorizeUrl(), { cookie: vol.cookie });
   assert.equal(res.status, 403);
   assert.equal(res.headers.get('location'), null);
-  assert.match(await res.text(), /base air is for staff/);
+  assert.match(await res.text(), /Base Air is for staff/);
   const { code } = await codeFor(volGranted);
   const who = await (await token(code)).json();
   assert.equal(who.role, 'volunteer');
@@ -198,18 +203,21 @@ test('redirect_uri must be the app’s own address — no way to send the code e
     'https://evil.example/auth/base/callback',
     `${AIR}`, // the app itself, not under it
     `${AIR}evil/callback`, // /airevil
-    'https://base.win/imaginesurrey/airx/cb',
-    'https://base.win/otherclient/air/auth/base/callback',
+    'https://imaginesurrey.base.win/airx/cb',
+    'https://imaginesurrey.base.win/auth/base/callback', // Base Ground's own root, not Base Air
+    'https://otherclient.base.win/air/auth/base/callback', // another client's Base Air
+    'https://imaginesurrey.staging.base.win/air/auth/base/callback', // staging is not production
+    'https://base.win/imaginesurrey/air/cb',
     `${AIR}/../../otherclient/air/cb`,
     `${AIR}/%2e%2e/%2e%2e/otherclient/air/cb`,
     `${AIR}/auth/..%2f..%2fx`,
     `${AIR}/cb#frag`,
     `${AIR}/cb\\@evil.example`,
-    `https://user@base.win/imaginesurrey/air/cb`,
-    'http://base.win/imaginesurrey/air/cb',
-    'https://base.win.evil.example/imaginesurrey/air/cb',
-    `//evil.example/imaginesurrey/air/cb`,
-    'javascript:alert(1)//base.win/imaginesurrey/air/',
+    'https://user@imaginesurrey.base.win/air/cb',
+    'http://imaginesurrey.base.win/air/cb',
+    'https://imaginesurrey.base.win.evil.example/air/cb',
+    '//evil.example/air/cb',
+    'javascript:alert(1)//imaginesurrey.base.win/air/',
     '',
   ];
   for (const uri of bad) {
@@ -247,6 +255,7 @@ test('GET /api/suite: the apps this person may open', async () => {
   delete process.env.BASE_PATH;
   assert.equal(m.client, 'imaginesurrey');
   assert.deepEqual(m.apps.map((a) => a.key), ['field', 'ground', 'air', 'web']);
+  assert.deepEqual(m.apps.map((a) => a.name), ['Field', 'Ground', 'Air', 'Web'], 'shown after the switcher’s "Base"');
   assert.equal(m.apps.find((a) => a.key === 'ground').href, '/ground/', 'the browser adds its prefix');
   assert.equal(m.apps.find((a) => a.key === 'air').href, `${AIR}/auth/base`);
   assert.equal(m.apps.find((a) => a.key === 'web').href, `${WEB}/auth/base`);

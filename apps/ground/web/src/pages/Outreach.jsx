@@ -1152,7 +1152,7 @@ function PressTab({ me, canWrite, creating, onClose }) {
   );
 }
 
-// Email & texting: on or off, said once. They're switched on where base ground
+// Email & texting: on or off, said once. They're switched on where Base Ground
 // is hosted, not here — so the line says who to ask.
 function Connections({ focus, isManager }) {
   // A side read of Today's brief (its time isn't this screen's, KeptCopies.js).
@@ -1175,7 +1175,7 @@ function Connections({ focus, isManager }) {
         <span className="ot-status-dot" data-status={p.text ? 'sent' : 'queued'} aria-hidden="true" />
         {p.text ? 'Texting connected' : 'Texting not connected'}
       </p>
-      {(!p.email || !p.text) && <p className="ot-note">{isManager ? <>Set them up under <Link to="/settings/services">Settings → Services</Link>.</> : 'Ask whoever set up base ground to connect them.'}</p>}
+      {(!p.email || !p.text) && <p className="ot-note">{isManager ? <>Set them up under <Link to="/settings/services">Settings → Services</Link>.</> : 'Ask whoever set up Base Ground to connect them.'}</p>}
     </section>
   );
 }

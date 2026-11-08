@@ -1,4 +1,4 @@
-// base ground core field fixes E2E — a fresh in-memory server, a desk user on a
+// Base Ground core field fixes E2E — a fresh in-memory server, a desk user on a
 // laptop and a volunteer on a 390×844 phone:
 //   · the walk list door's More: "Wants a sign?" (with Undo on the toast) and
 //     "+ Person at this door" (name, phone — the door's address comes with
@@ -32,7 +32,7 @@ if (!BASE) {
   });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
-    server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
+    server.stdout.on('data', (b) => { if (/Base Ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
   BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix

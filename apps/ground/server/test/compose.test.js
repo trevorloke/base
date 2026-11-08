@@ -1,4 +1,4 @@
-// Richer emails from base ground: a newsletter or press release is written in
+// Richer emails from Base Ground: a newsletter or press release is written in
 // Markdown and goes out laid out (headings, bold, lists, pictures from
 // /media with their full address), its links — typed as [words](url) or as
 // bare addresses — tracked by number, a plain-text part alongside, and

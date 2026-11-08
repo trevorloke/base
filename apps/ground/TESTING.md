@@ -1,4 +1,4 @@
-# Testing base ground
+# Testing Base Ground
 
 Everything below works from a fresh install. Start with **Run it on your
 computer** — five minutes, no accounts needed — then deploy when you want your
@@ -18,7 +18,7 @@ npm run build
 npm start                 # → http://localhost:3200
 ```
 
-1. Open **http://localhost:3200/field/signup** and set up base ground for Imagine
+1. Open **http://localhost:3200/field/signup** and set up Base Ground for Imagine
    Surrey: your name, email and password. You become its manager (the
    workspace is *Imagine Surrey*, **BC — Municipal**). Setup works once:
    after that `/signup` says it's already set up, and everyone else joins
@@ -40,19 +40,22 @@ time. Delete the folder to start over.
 ## 2 · Deploy for the team (Render)
 
 The repo's `render.yaml` is a Blueprint for one client's two environments
-(GOING-LIVE.md): **base-ground-staging** from `main` and **base-ground** from
-`production`, each with its own managed Postgres database (backups
+(GOING-LIVE.md): **base-ground-imaginesurrey-staging** from `main` and
+**base-ground-imaginesurrey** from `production`, each with its own managed Postgres database (backups
 included). Every setting below, and where its key comes from:
 INTEGRATIONS.md.
 
 1. Render → **New → Blueprint** → pick this repo (`main` branch)
-   → it creates `base-ground-staging` + `base-ground-staging-db` and `base-ground` +
-   `base-ground-db` (paid plans — check Render’s current pricing).
-2. In the `base-ground` service → **Environment**, set:
+   → it creates `base-ground-imaginesurrey-staging` + its `-db` and
+   `base-ground-imaginesurrey` + its `-db` (paid plans — check Render’s
+   current pricing). They are private services, reached through the front
+   door at `https://imaginesurrey.staging.base.win` and
+   `https://imaginesurrey.base.win`.
+2. In each Base Ground service → **Environment**, set:
 
 | Variable | What for | Needed to test? |
 |---|---|---|
-| `BASE_PUBLIC_URL` | your address, e.g. `https://base.imaginesurrey.ca` — used in invite and unsubscribe links | **yes** |
+| `BASE_PUBLIC_URL` | your address, e.g. `https://imaginesurrey.base.win` (staging: `https://imaginesurrey.staging.base.win`) — used in invite and unsubscribe links | **yes** |
 | `BASE_ORG_NAME`, `BASE_JURISDICTION`, `BASE_TZ`, `BASE_CITY`, `BASE_SLATES` | the campaign this deployment runs for (README → *One deployment per client*) | set them before the first sign-in |
 | `BASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
@@ -83,11 +86,11 @@ one tap away under **More**.
 
 ### Manager (you)
 - **Two apps.** Sign in at `/field/login` (or `/ground/login`) and you land
-  in the **admin** at `/ground/` (the brand reads *base ground admin*): every screen below. Your
+  in the **admin** at `/ground/` (the brand reads *Base Ground Admin*): every screen below. Your
   account menu has *Field app ↗* — open it and you see exactly what a
   volunteer sees (Today · Map · Calls · Shifts · ImagineU), with *Admin ↗*
   to come back. A volunteer who opens `/ground/` is told it isn't theirs.
-  The **base** button in the top bar lists the base apps you may open.
+  The **Base** button in the top bar lists the Base apps you may open.
 - **Today → Dashboard → In the field** — tap a dot: who, the outcome, who
   logged it and when, with *Profile* and *On the map* links; tap a person's
   initials for their day and *Only their contacts*; tap a turf for its name.
@@ -588,7 +591,7 @@ the same file never creates duplicates.
 
 ---
 
-**Time-zone rules.** B.C. stays on UTC-7 all year from March 2026. base ground
+**Time-zone rules.** B.C. stays on UTC-7 all year from March 2026. Base Ground
 needs a Node 22 new enough to know that, or every time after Nov 1, 2026
 shows an hour off. It checks at startup: an out-of-date server logs a
 warning, shows a banner on the manager's Today, and reports

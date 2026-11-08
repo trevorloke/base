@@ -1,6 +1,6 @@
 # Integrations
 
-Every outside service base ground talks to, what it is for, the settings it
+Every outside service Base Ground talks to, what it is for, the settings it
 reads, where each key comes from, and how to check it works. Keys and tokens
 go in the hosting's environment (Render → the service → **Environment**),
 never in the code, the repo or a chat. Once they are set, a manager opens
@@ -16,7 +16,7 @@ is written) and says exactly what is wrong if anything is.
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `BASE_TILE_URL` |
-| [base air and base web](#base-air-and-base-web) | staff open them signed in with their base ground account | no | `BASE_AIR_URL`, `BASE_AIR_SSO_SECRET`, `BASE_WEB_URL`, `BASE_WEB_SSO_SECRET` |
+| [Base Air and Base Web](#base-air-and-base-web) | staff open them signed in with their Base Ground account | no | `BASE_AIR_URL`, `BASE_AIR_SSO_SECRET`, `BASE_WEB_URL`, `BASE_WEB_SSO_SECRET` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
@@ -27,7 +27,7 @@ The campaign's website sends people in with a key; the API is
 ## Database
 
 Postgres. On Render, `render.yaml` creates one per environment and fills
-`DATABASE_URL` from it. Without `DATABASE_URL` base ground keeps everything in a
+`DATABASE_URL` from it. Without `DATABASE_URL` Base Ground keeps everything in a
 built-in database on the server's disk (`BASE_DATA`, default
 `./data/base-ground`) — fine on a laptop, not for the team.
 
@@ -42,36 +42,41 @@ built-in database on the server's disk (`BASE_DATA`, default
 ## Public address
 
 `BASE_PUBLIC_URL` — this environment's own `https://` address
-(`https://base.imaginesurrey.ca`; staging its own). Every link in an
+(`https://imaginesurrey.base.win`; staging
+`https://imaginesurrey.staging.base.win`). Every link in an
 email (invites, unsubscribe, receipts, pictures) is built from it, and so are
 the addresses Twilio is told to call back (delivery reports, calls). Without
 it, links use whatever address the page was opened at, background sends
 (receipts) carry no link, and calls through the campaign's number are off.
 
-On base.win the address carries the client's prefix
-(`https://base.win/imaginesurrey`), and `BASE_PATH` must be that same
-prefix (`/imaginesurrey`): the server warns at startup, and Services marks
-the public address, when the two disagree. Behind the base.win front door
-set `BASE_TRUSTED_PROXIES=2`.
+On base.win each client has its own subdomain and Base Ground runs at its
+root: no `BASE_PATH`, and the address has no path. A deployment that puts
+Base Ground under a path sets `BASE_PATH` to it (`/ground`, say) and ends
+the address with it (`https://example.org/ground`): the server warns at
+startup, and Services marks the public address, when the two disagree.
+Behind the base.win front door set `BASE_TRUSTED_PROXIES=2` (Render's load
+balancer, then the front door).
 
 **Check:** Services → Public address fetches `<address>/api/health` and
-makes sure it's this base ground.
+makes sure it's this Base Ground.
 
-## base air and base web
+## Base Air and Base Web
 
-base ground is where staff sign in; base air and base web's admin ask it who
+Base Ground is where staff sign in; Base Air and Base Web's admin ask it who
 someone is (SUITE.md, *Signing in once*). For each app, two settings here:
-its address (`BASE_AIR_URL=https://base.win/imaginesurrey/air`,
+its address (`BASE_AIR_URL=https://imaginesurrey.base.win/air`,
 `BASE_WEB_URL=https://imaginesurrey.ca`) and a long random secret
 (`BASE_AIR_SSO_SECRET`, `BASE_WEB_SSO_SECRET` — 32 characters or more,
 e.g. `openssl rand -base64 48`), the same value as `BASE_SSO_SECRET` on that
-app. With both set the app is offered in the **base** switcher to desk
+app. With both set the app is offered in the **Base** switcher to desk
 roles, and its sign-ins are accepted; a sign-in may only go back to an
 address under the app's own. `BASE_CLIENT` names the client in the answer
-(default: the last part of `BASE_PATH`).
+(`imaginesurrey`; set it on base.win — unset, it's the last part of
+`BASE_PATH`, and there is none there). The answer also carries `sub`, this
+person's stable Base Ground id, which the app links its own account to.
 
 **Check:** Services shows each as *Set up* or names what's missing (no live
-call: the apps call base ground, not the other way round).
+call: the apps call Base Ground, not the other way round).
 
 ## Email — Resend
 
@@ -93,8 +98,8 @@ retry is never a second copy.
 | `MAIL_FROM` | `onboarding@resend.dev` | Resend's test sender reaches only the account's owner — set it |
 | `BASE_EMAIL_TIMEOUT_MS` | `15000` | one email's time limit |
 
-There is nothing to point back at base ground: opens and clicks are counted by
-base ground itself (`/o`, `/c`), and unsubscribes are base ground's own pages.
+There is nothing to point back at Base Ground: opens and clicks are counted by
+Base Ground itself (`/o`, `/c`), and unsubscribes are Base Ground's own pages.
 
 **Check:** Services → Email asks Resend for the account's domains: the key
 works, and `MAIL_FROM`'s domain is there and verified (a sending-only key
@@ -116,7 +121,7 @@ the phone's own dialer and messages, and nothing is lost.
    in*: **Webhook**, `https://<public address>/api/public/twilio/sms`,
    **HTTP POST**. That is the only one set by hand.
 
-base ground tells Twilio where to call back with each text and call, all built
+Base Ground tells Twilio where to call back with each text and call, all built
 from `BASE_PUBLIC_URL`, and checks Twilio's signature
 (`X-Twilio-Signature`, with the auth token) on every one:
 
@@ -140,7 +145,7 @@ first (TESTING.md, *Texting and calls — confirm with counsel*).
 
 **Check:** Services → Texting asks Twilio for the number on this account:
 the SID and token work, the number is on the account, and its incoming
-messages come to this base ground (if they go elsewhere, it names both).
+messages come to this Base Ground (if they go elsewhere, it names both).
 
 ## Address lookup
 
@@ -183,7 +188,7 @@ then, either:
 - **Google Maps:** `GOOGLE_MAPS_TILES=1` with `GOOGLE_MAPS_SERVER_KEY` (Map
   Tiles API enabled, above); `GOOGLE_MAPS_TILE_TYPE` roadmap | satellite |
   terrain (the standard look; each person can switch to the others under
-  Show → Map). base ground fetches them for signed-in phones (`/tiles/…`), so
+  Show → Map). Base Ground fetches them for signed-in phones (`/tiles/…`), so
   the key stays on the server.
 - **Another provider:** `BASE_TILE_URL` (`https://…/{z}/{x}/{y}.png`, a
   key may ride in the query string — the phones see it),
@@ -220,7 +225,7 @@ browser: the key would be visible to anyone.
 
 **A key:** Settings → Services → *Website keys* → name it (*Website*) →
 **Make a key**. It is shown once — copy it into the website's own secret
-settings. base ground keeps only a hash of it, lists it by its first characters
+settings. Base Ground keeps only a hash of it, lists it by its first characters
 with when it was last used, and **Revoke** stops it at once. Use one key per
 website or form service.
 
@@ -271,7 +276,7 @@ minute on one key. Everything accepted is on the event log, as the
 manager who made the key. A key stops working when it is revoked, and when the manager who made it leaves the campaign.
 
 ```sh
-curl https://base.imaginesurrey.ca/in/v1/people \
+curl https://imaginesurrey.base.win/in/v1/people \
   -H "Authorization: Bearer $BASE_GROUND_KEY" -H "Content-Type: application/json" \
   -H "Idempotency-Key: form-2026-10-12-0193" \
   -d '{"first_name":"Asha","last_name":"Example","email":"asha@example.org",
@@ -283,5 +288,5 @@ Donations and RSVPs are not taken this way: a gift is logged at the desk
 
 Also, without a key: **files in** — People → Import takes a CSV or
 spreadsheet (a dry run first; a `voted` column marks who voted and never
-un-marks anyone); **pages out** — the website can link to base ground's public
+un-marks anyone); **pages out** — the website can link to Base Ground's public
 lessons (`/learn/…`); every email carries its own unsubscribe page.

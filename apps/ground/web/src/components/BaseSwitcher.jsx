@@ -1,6 +1,6 @@
-// The base switcher (SUITE.md, "The app switcher"): a small "base" button in
+// The Base switcher (SUITE.md, "The app switcher"): a small "Base" button in
 // the top bar of both faces that opens the list of this client's apps the
-// person may open — field, ground, and air and web once they're set up
+// person may open — Field, Ground, and Air and Web once they're set up
 // (GET /api/suite, ext/sso). With no answer (no signal) it still lists the
 // two faces this person has, worked out here the same way.
 //
@@ -18,8 +18,8 @@ import { mayAdmin } from '../mode.js';
 import './base-switcher.css';
 
 const OWN = {
-  field: { name: 'field', what: 'Canvass, calls and shifts', href: '/field/' },
-  ground: { name: 'ground', what: 'The campaign desk', href: '/ground/' },
+  field: { name: 'Field', what: 'Canvass, calls and shifts', href: '/field/' },
+  ground: { name: 'Ground', what: 'The campaign desk', href: '/ground/' },
 };
 
 // me: who is signed in as they really are (the field app's view of a
@@ -64,10 +64,10 @@ export default function BaseSwitcher({ me, current }) {
   };
 
   return (
-    <nav className="bsw" ref={wrapRef} aria-label="base apps" onKeyDown={onKeyDown}>
+    <nav className="bsw" ref={wrapRef} aria-label="Base apps" onKeyDown={onKeyDown}>
       <button type="button" ref={btnRef} className="bsw-btn" aria-expanded={open} aria-controls={panelId} onClick={toggle}>
-        <span className="bsw-word" aria-hidden="true">base</span>
-        <span className="bsw-sr">base apps — you’re in {current}</span>
+        <span className="bsw-word" aria-hidden="true">Base</span>
+        <span className="bsw-sr">Base apps — you’re in Base {OWN[current]?.name || current}</span>
         <svg className="bsw-chev" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
           <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
@@ -79,7 +79,7 @@ export default function BaseSwitcher({ me, current }) {
             <li key={a.key}>
               <a className="bsw-link" href={withBase(a.href)} aria-current={here ? 'true' : undefined}
                 onClick={here ? (e) => { e.preventDefault(); close(true); } : undefined}>
-                <span className="bsw-name"><span className="bsw-name__base">base</span> {a.name}</span>
+                <span className="bsw-name"><span className="bsw-name__base">Base</span> {a.name}</span>
                 <span className="bsw-what">{a.what}{here ? ' · you’re here' : ''}</span>
               </a>
             </li>

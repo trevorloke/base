@@ -1,6 +1,6 @@
 // Sign in: email, password, one button. The first-run setup link shows only
 // until the campaign is set up (after that, people join by invite).
-// ?next=: where to go after, when another base app sent the person here to
+// ?next=: where to go after, when another Base app sent the person here to
 // sign in (/api/sso/authorize, SUITE.md). Only this app's own addresses under
 // its prefix are followed (paths.js safeNext); anything else is ignored.
 // Someone already signed in goes straight on: the app that sent them may be
@@ -88,7 +88,7 @@ export default function Login({ mode = 'field' }) {
       {setup.data?.open && (
         <>
           <hr className="hairline" />
-          <p className="muted"><Link to="/signup">Set up base ground{setup.data.organization ? ` for ${setup.data.organization}` : ''}</Link></p>
+          <p className="muted"><Link to="/signup">Set up Base Ground{setup.data.organization ? ` for ${setup.data.organization}` : ''}</Link></p>
         </>
       )}
     </div>

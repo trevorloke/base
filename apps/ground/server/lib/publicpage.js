@@ -1,4 +1,4 @@
-// The look of base ground's own public pages — unsubscribe, a public lesson:
+// The look of Base Ground's own public pages — unsubscribe, a public lesson:
 // one column, the campaign's name on top, one big button, and a link back
 // to the campaign's website (workspace settings.website) when it has one.
 // The campaign's website itself lives elsewhere. In the campaign's brand
@@ -81,6 +81,6 @@ export const page = (ws, title, inner, { wide = false, noindex = false } = {}) =
 <style>${CSS}${PUBLIC_MASTHEAD_CSS}${pb.css}</style></head><body><main${wide ? ' class="wide"' : ''}>
 ${ws ? publicMasthead(pb, esc) : ''}
 ${inner}
-<footer>${site ? `<a href="${esc(site)}">← ${esc(String(site).replace(/^https?:\/\//, ''))}</a> · ` : ''}Powered by base</footer>
+<footer>${site ? `<a href="${esc(site)}">← ${esc(String(site).replace(/^https?:\/\//, ''))}</a> · ` : ''}Powered by Base</footer>
 </main></body></html>`;
 };

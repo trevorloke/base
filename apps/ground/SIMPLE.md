@@ -1,6 +1,6 @@
-# Simple — the base ground interface rules
+# Simple — the Base Ground interface rules
 
-base ground is used at a door, on a phone, by a volunteer who has never seen it
+Base Ground is used at a door, on a phone, by a volunteer who has never seen it
 before and has thirty seconds. Every screen follows these rules. When a rule
 and a feature disagree, the feature moves behind a tap — it is never deleted
 and never crowds the screen.

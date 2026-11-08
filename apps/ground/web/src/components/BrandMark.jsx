@@ -1,5 +1,5 @@
 // The mark in the top bar and on the sign-in page: the campaign's logo
-// (Settings → Brand), or base ground's own — a map pin on the ground, in
+// (Settings → Brand), or Base Ground's own — a map pin on the ground, in
 // the brand's accent — when there is none. Decorative: the name beside it
 // says who it is.
 import { assetUrl, bootBrand } from '../brand.js';
@@ -22,7 +22,7 @@ export default function BrandMark({ logo, className = 'brand-mark' }) {
 
 // The sign-in, set-up and join pages: the mark and the campaign's name
 // (from the page the server sent — nobody is signed in yet), with
-// "base ground" under it. org: the campaign's name from /api/auth/setup.
+// "Base Ground" under it. org: the campaign's name from /api/auth/setup.
 export function AuthBrand({ org = null }) {
   const b = bootBrand();
   const name = b.name || org;
@@ -30,8 +30,8 @@ export function AuthBrand({ org = null }) {
     <span className="brand">
       <BrandMark logo={b.logo} />
       <span className="brand-text">
-        <span>{name || 'base ground'}</span>
-        {name && <span className="brand-sub">base ground</span>}
+        <span>{name || 'Base Ground'}</span>
+        {name && <span className="brand-sub">Base Ground</span>}
       </span>
     </span>
   );

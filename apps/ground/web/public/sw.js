@@ -1,4 +1,4 @@
-/* base ground service worker — keeps the field app opening with no signal.
+/* Base Ground service worker — keeps the field app opening with no signal.
  *
  *   App shell   index.html + every built /assets/* file. Navigations are
  *               network-first (short timeout on bad signal) and fall back to
@@ -21,12 +21,18 @@
  *               pictures in messages (/media),
  *               or any non-GET.
  *
- * Under a prefix (BASE_PATH, SUITE.md): this worker is registered at
- * <prefix>/sw.js with the prefix as its scope, and every path above is under
- * it (<prefix>/api, <prefix>/assets …). Caches are one store per site, so on
- * base.win each client's base ground names its own caches after its prefix
- * and never touches another's. Navigations outside the two faces (base air
- * at <prefix>/air, say) go straight to the network.
+ * On base.win (SUITE.md) each client has its own subdomain, its own origin,
+ * and Base Ground runs at its root, so this worker's scope is the whole
+ * host — Base Air's /air included. Base Air is never this worker's: every
+ * request under /air goes straight to the network, so its pages are never
+ * answered with Base Ground's shell, and its index.html never becomes the
+ * offline copy of this app.
+ *
+ * Under a prefix (BASE_PATH, a deployment under a path): this worker is
+ * registered at <prefix>/sw.js with the prefix as its scope, and every path
+ * above is under it (<prefix>/api, <prefix>/assets …). Caches are one store
+ * per origin, so it names its own after its prefix and never touches
+ * another's. Navigations outside the two faces go straight to the network.
  *
  * Bump VERSION to throw every cache away on the next activate.
  */
@@ -56,6 +62,8 @@ const TILE_AT = 'x-base-cached-at';
 // pictures): straight to the network, never the app shell.
 // (Tested against the path with the prefix taken off.)
 const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files|in|web)(?:\/|$)/;
+// The other Base apps on this host (Base Air under /air): never this worker's.
+const OTHER_APP = /^\/air(?:\/|$)/;
 // The app's own screens: the field app and the desk. Only these get the app
 // shell for a navigation.
 const FACE = /^\/(?:field|ground)(?:\/|$)/;
@@ -117,7 +125,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const names = await caches.keys();
-    // Starbase became base ground: the map tiles kept for no-signal canvassing
+    // Starbase became Base Ground: the map tiles kept for no-signal canvassing
     // and the tile provider move to the new caches before the old ones go, so
     // a volunteer's offline map survives the rename.
     for (const [from, to, keyFrom, keyTo] of [
@@ -153,7 +161,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(tile(event, url));
     return;
   }
-  // base ground's own tiles (Google Maps through the server): the same cache,
+  // Base Ground's own tiles (Google Maps through the server): the same cache,
   // fetched with the sign-in cookie.
   const path = url.origin === self.location.origin ? inScope(url.pathname) : null;
   if (path !== null && path.startsWith('/tiles/')) {
@@ -170,13 +178,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(loadMatcher().then((m) => (isConfiguredTile(url, m) ? tile(event, url) : fetch(req))));
     return;
   }
-  // Another app on this site (another client, base air): not this worker's.
-  if (path === null || NEVER.test(path)) return; // straight to the network, untouched
+  // Outside this worker's prefix, the server's own pages, or another Base app
+  // on this host (Base Air): not this worker's.
+  if (path === null || NEVER.test(path) || OTHER_APP.test(path)) return; // straight to the network, untouched
 
   if (req.mode === 'navigate') {
     // At the root the worker has the whole site, as it always did (an old
-    // home-screen icon opens /map, offline too). Under a prefix, only the
-    // app's own screens: base air and the rest share the prefix.
+    // home-screen icon opens /map, offline too) but Base Air's /air, above.
+    // Under a prefix, only the app's own screens.
     if (!BASE || FACE.test(path) || path === '/') event.respondWith(navigate(event));
     return;
   }
@@ -295,15 +304,15 @@ async function syncAssets(html) {
 
 function offlinePage() {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>base ground — offline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Base Ground — offline</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5fa;color:#161a2e;
 font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding:24px;box-sizing:border-box}main{max-width:340px}
 p.e{font:600 12px system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#5d6481}
 button{font:600 15px system-ui,sans-serif;background:#6d4aff;
 color:#fff;border:0;border-radius:10px;padding:12px 18px;min-height:44px;cursor:pointer}
 @media (prefers-color-scheme:dark){body{background:#0d1226;color:#e8eaf6}p.e{color:#9aa1c2}}</style></head>
-<body><main><p class="e">base ground · offline</p><h1>No signal yet</h1>
-<p>Open base ground once with signal and it will work offline after that.</p>
+<body><main><p class="e">Base Ground · offline</p><h1>No signal yet</h1>
+<p>Open Base Ground once with signal and it will work offline after that.</p>
 <button type="button" onclick="location.reload()">Try again</button></main></body></html>`;
   return new Response(html, { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } });
 }

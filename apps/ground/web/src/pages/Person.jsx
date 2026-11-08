@@ -136,7 +136,7 @@ function BackLink({ desk, className = 'eyebrow pf-back' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from;
-  const inApp = location.key !== 'default'; // opened from another base ground screen
+  const inApp = location.key !== 'default'; // opened from another Base Ground screen
   if (from?.to) {
     return inApp
       ? <button type="button" className={className} onClick={() => navigate(-1)}>← {from.label || 'Back'}</button>

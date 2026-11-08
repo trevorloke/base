@@ -1,4 +1,4 @@
-/* The base switcher (BaseSwitcher.jsx): a "base" wordmark button in the top
+/* The Base switcher (BaseSwitcher.jsx): a "Base" wordmark button in the top
    bar and the list of the client's apps under it. Self-contained: every
    colour, size and font comes from a CSS variable with a fallback, so the
    app's tokens — and a client's brand — apply without touching this file. */
@@ -15,7 +15,6 @@
 .bsw-word {
   font-family: var(--font-display, system-ui, sans-serif);
   font-size: 17px; font-weight: 700; letter-spacing: 0.04em; line-height: 1;
-  text-transform: lowercase;
 }
 .bsw-chev { flex: none; transition: transform 120ms ease; }
 .bsw-btn[aria-expanded='true'] .bsw-chev { transform: rotate(180deg); }

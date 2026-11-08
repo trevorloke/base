@@ -58,8 +58,9 @@ const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
 export const crossSiteWrite = (c) => {
   if (SAFE.has(c.req.method)) return null;
   const site = c.req.header('sec-fetch-site');
-  // same-site is another host under the same domain (the public website,
-  // say): not the app, so not allowed to write with its cookie either.
+  // same-site is another host under the same domain — another client's
+  // subdomain of base.win, or the public website: not the app, so not
+  // allowed to write with its cookie either.
   if (site && site !== 'same-origin' && site !== 'none') return 'requests from other sites are refused';
   const type = c.req.header('content-type');
   if (type && !/^application\/json\b/i.test(type)) return 'send JSON (Content-Type: application/json)';

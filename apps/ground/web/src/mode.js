@@ -1,5 +1,5 @@
 // Two apps from one build, told apart by the address (SUITE.md), both under
-// the client's prefix (paths.js):
+// the app's prefix, if any (paths.js):
 //   /field/…    the field app — what a volunteer sees and uses (Today ·
 //               Map · Calls · Shifts · ImagineU). Anyone may open it; a
 //               manager or staffer gets the same screens a volunteer does.

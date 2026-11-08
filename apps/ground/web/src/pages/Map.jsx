@@ -1468,7 +1468,7 @@ export default function MapPage() {
 
   // The tile layer, from the map settings. The service worker is told which
   // provider's tiles to keep (the ones already seen, never fetched ahead).
-  // base ground's own tiles (/tiles/…) are under the client's prefix.
+  // Base Ground's own tiles (/tiles/…) are under the client's prefix.
   const tileUrl = withBase(tiles?.url);
   const tileMax = tiles?.maxZoom;
   const tileCredit = tiles?.attribution;
