@@ -253,7 +253,7 @@ test('GET /api/suite: the apps this person may open', async () => {
   assert.deepEqual((await vol.get('/api/suite')).json.apps.map((a) => a.key), ['field']);
   assert.deepEqual((await staff.get('/api/suite')).json.apps.map((a) => a.key), ['field', 'ground', 'air', 'web']);
   assert.equal((await mgr.action('permission.member.set', { user_id: volId, grant: ['people'] })).status, 200);
-  assert.deepEqual((await volGranted.get('/api/suite')).json.apps.map((a) => a.key), ['field', 'ground'], 'an area opens the desk, not air or web');
+  assert.deepEqual((await volGranted.get('/api/suite')).json.apps.map((a) => a.key), ['field', 'ground', 'air', 'web'], 'an area makes them staff: the same people the hand-off lets through');
   delete process.env.BASE_AIR_SSO_SECRET;
   assert.deepEqual((await mgr.get('/api/suite')).json.apps.map((a) => a.key), ['field', 'ground', 'web'], 'not set up: not listed');
   setUp();

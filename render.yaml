@@ -116,12 +116,22 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase: { name: base-web-imaginesurrey-staging-db, property: connectionString }
-      - key: NEXT_PUBLIC_SITE_URL          # this service's public https:// address
+      - key: NEXT_PUBLIC_SITE_URL          # this service's public https:// address (built into the pages)
         sync: false
+      - key: BASE_WEB_CLIENT               # Imagine Surrey's copy, places and look; built into the pages
+        value: imagine-surrey
+      - key: BASE_WEB_JURISDICTION
+        value: bc
       - key: BASE_WEB_BRAND_PRESET
         value: imagine-surrey
+      - key: ADMIN_SESSION_SECRET
+        generateValue: true
       - key: CRON_SECRET
         generateValue: true
+      - key: ADMIN_EMAIL                   # the first owner
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
       - key: BASE_GROUND_URL
         value: https://staging.base.win/imaginesurrey
       - key: BASE_GROUND_INTERNAL_URL
@@ -138,9 +148,17 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      - key: SUPABASE_URL                  # image uploads (Supabase Storage); required on Render
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - key: RESEND_API_KEY
         sync: false
-      - key: MAIL_FROM
+      - key: EMAIL_FROM
+        sync: false
+      - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
         sync: false
 
   - type: cron
@@ -149,12 +167,12 @@ services:
     plan: starter
     region: oregon
     branch: main
-    rootDir: ./apps/gateway                # nothing to build: the job is one curl
+    rootDir: ./apps/web
     schedule: "7 17 * * *"                 # about 10 a.m. Pacific
-    buildCommand: "true"
-    startCommand: 'curl -fsS -H "Authorization: Bearer $CRON_SECRET" "http://$WEB_HOSTPORT/api/cron/reminders"'
+    buildCommand: echo "nothing to build"
+    startCommand: node scripts/cron.mjs reminders
     envVars:
-      - key: WEB_HOSTPORT
+      - key: BASE_WEB_INTERNAL_URL
         fromService: { type: web, name: base-web-imaginesurrey-staging, property: hostport }
       - key: CRON_SECRET
         fromService: { type: web, name: base-web-imaginesurrey-staging, envVarKey: CRON_SECRET }
@@ -165,12 +183,12 @@ services:
     plan: starter
     region: oregon
     branch: main
-    rootDir: ./apps/gateway
+    rootDir: ./apps/web
     schedule: "37 17 * * *"
-    buildCommand: "true"
-    startCommand: 'curl -fsS -H "Authorization: Bearer $CRON_SECRET" "http://$WEB_HOSTPORT/api/cron/email"'
+    buildCommand: echo "nothing to build"
+    startCommand: node scripts/cron.mjs email
     envVars:
-      - key: WEB_HOSTPORT
+      - key: BASE_WEB_INTERNAL_URL
         fromService: { type: web, name: base-web-imaginesurrey-staging, property: hostport }
       - key: CRON_SECRET
         fromService: { type: web, name: base-web-imaginesurrey-staging, envVarKey: CRON_SECRET }
@@ -225,7 +243,7 @@ services:
     branch: main
     dockerContext: ./apps/air
     dockerfilePath: ./apps/air/Dockerfile
-    dockerCommand: pnpm --filter @base-air/workers start
+    dockerCommand: node --import tsx /app/apps/workers/src/main.ts
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -246,7 +264,7 @@ services:
     branch: main
     dockerContext: ./apps/air
     dockerfilePath: ./apps/air/Dockerfile
-    dockerCommand: pnpm --filter @base-air/operators start
+    dockerCommand: node --import tsx /app/apps/operators/src/main.ts
     autoDeploy: true
     envVars:
       - key: NODE_ENV

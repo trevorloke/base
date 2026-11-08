@@ -30,6 +30,18 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
+    # A real Postgres, so the tests that read and write the database run too.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: base_web_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/base_web_test
     defaults:
       run:
         working-directory: apps/web
@@ -42,6 +54,10 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - name: Migrate the test database
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
       - run: npm test
       - run: npm run build
 

@@ -127,8 +127,10 @@ link can say "open base air, signed in" in one URL.
 ### The app switcher
 
 Every app shows the same small **base** switcher in its top bar, listing the
-client's apps the person may open: field, ground (desk roles and anyone with
-areas), air and web (desk roles, when set up). ground learns which are set
+client's apps the person may open: field for everyone; ground, air and web
+for staff — a desk role (manager, staff, treasurer) or a volunteer given an
+area — the same people the hand-off lets through (air and web once set up).
+The other app still decides: it only signs in someone it has an account for. ground learns which are set
 up from its settings and serves them at `GET ${BASE_PATH}/api/suite`
 (signed in). air and web build their list from `BASE_GROUND_URL`,
 `BASE_WEB_URL` / `BASE_AIR_URL` (whichever they have) and link to the other

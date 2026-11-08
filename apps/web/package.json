@@ -8,7 +8,7 @@
     "build": "ICU_TIMEZONE_FILES_DIR=./tzdata next build",
     "build:deploy": "tsx scripts/predeploy.ts && ICU_TIMEZONE_FILES_DIR=./tzdata next build",
     "start": "ICU_TIMEZONE_FILES_DIR=./tzdata next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "ICU_TIMEZONE_FILES_DIR=./tzdata vitest run",
     "e2e": "node e2e/run.mjs",
     "db:generate": "drizzle-kit generate",

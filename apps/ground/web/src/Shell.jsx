@@ -29,7 +29,6 @@ import { useKeptTime } from './components/KeptCopies.js';
 import { useTextingStatus } from './components/TextingStatus.js';
 import { useShareLocation } from './components/ShareLocation.js';
 import { adminHref, fieldHref, fieldView, mayAdmin } from './mode.js';
-import { withBase } from './paths.js';
 import './pages/offline.css';
 import BrandMark from './components/BrandMark.jsx';
 import { useBrand } from './brand.js';

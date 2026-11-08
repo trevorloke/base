@@ -33,7 +33,7 @@ import { orgName } from '../../lib/org.js';
 import { basePath, clientSlug } from '../../lib/basepath.js';
 import { clientIp, makeLimiter } from '../../lib/guard.js';
 import { page, esc } from '../../lib/publicpage.js';
-import { APPS, DESK, env, isStaff, appUrl, appReady, redirectOk } from '../../lib/suite.js';
+import { APPS, env, isStaff, appUrl, appReady, redirectOk } from '../../lib/suite.js';
 
 export const sql = `
 create table if not exists sso_codes (
@@ -148,16 +148,17 @@ publicRoutes.post('/api/sso/token', async (c) => {
 });
 
 // ── The base switcher: GET /api/suite ──
-// field: everyone. ground: desk roles and anyone given an area. air and web:
-// desk roles, once set up. Addresses of this app's own faces are root paths
+// field: everyone. ground, air and web: desk roles and anyone given an area —
+// the same people the hand-off lets through (air and web once set up). The
+// other app still decides: it only signs in someone it has an account for. Addresses of this app's own faces are root paths
 // (the browser puts its prefix on, web/src/paths.js); the others are whole
 // addresses, each through its /auth/base so the hop is already signed in.
 export const suiteFor = (role, areas) => {
-  const desk = DESK.includes(role);
+  const staff = isStaff(role, areas);
   const apps = [{ key: 'field', name: 'field', what: 'Canvass, calls and shifts', href: '/field/' }];
-  if (desk || areas.length > 0) apps.push({ key: 'ground', name: 'ground', what: 'The campaign desk', href: '/ground/' });
-  if (desk && appReady('air')) apps.push({ key: 'air', name: 'air', what: 'Listening and social', href: `${appUrl('air')}/auth/base` });
-  if (desk && appReady('web')) apps.push({ key: 'web', name: 'web', what: 'The website’s admin', href: `${appUrl('web')}/auth/base` });
+  if (staff) apps.push({ key: 'ground', name: 'ground', what: 'The campaign desk', href: '/ground/' });
+  if (staff && appReady('air')) apps.push({ key: 'air', name: 'air', what: 'Listening and social', href: `${appUrl('air')}/auth/base` });
+  if (staff && appReady('web')) apps.push({ key: 'web', name: 'web', what: 'The website’s admin', href: `${appUrl('web')}/auth/base` });
   return apps;
 };
 
