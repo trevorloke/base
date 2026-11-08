@@ -71,6 +71,8 @@ services:
         fromDatabase: { name: base-ground-imaginesurrey-staging-db, property: connectionString }
       - key: BASE_PUBLIC_URL
         value: https://imaginesurrey.staging.base.win
+      - key: BASE_CLIENT                   # the slug Base Air and Base Web link accounts under
+        value: imaginesurrey
       - key: BASE_TRUSTED_PROXIES          # Render's load balancer, then the front door
         value: "2"
       - key: BASE_ORG_NAME
