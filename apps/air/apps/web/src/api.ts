@@ -66,16 +66,18 @@ import type { AnalyticsPayload, AnalyticsQuery, Report, ReportInput, ReportSent,
 // ---- AI answer visibility
 import type { VisAnswer, VisAnswersQuery, VisEngine, VisPrompt, VisPromptInput, VisReport, VisRunResult, VisSettingsPatch, VisSettingsResponse, VisSuggestion } from "./lib/visibility";
 import { ApiError, setKeyMode } from "./lib/errors";
+import { BASE_PATH } from "./lib/base";
+import { contrastReport, CORNERS, DEFAULT_BRAND, FONTS, MODES, PRESETS, type Brand, type BrandMode, type ContrastPair, type Corners, type FontId, type Preset } from "@base-air/look";
 
 export { ApiError, isApiError, errorText, reasonOf, sentence } from "./lib/errors";
 
-// "" by default: same origin, so the Vite dev/preview proxy forwards /v1 and /api to :4000.
-const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+// Same origin under this deployment's prefix by default (the Vite dev/preview proxy forwards /v1 and /api to :4000).
+const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "") || BASE_PATH;
 
 /** When true, every call is answered from src/dev/fixtures.ts and no network request is made. */
 export const USE_FIXTURES = import.meta.env.VITE_USE_FIXTURES === "1";
 
-export const API_KEY_STORAGE = "starsign.apiKey";
+export const API_KEY_STORAGE = "base-air.apiKey";
 
 // Kept in memory too, so a private window (no storage) still works for this page load.
 let memoryKey: string | null = null;
@@ -111,7 +113,7 @@ function authHeaders(method: string): Record<string, string> {
   const headers: Record<string, string> = {};
   const key = getApiKey();
   if (key) headers.Authorization = `Bearer ${key}`;
-  if (method !== "GET" && method !== "HEAD") headers["x-starsign-csrf"] = "1";
+  if (method !== "GET" && method !== "HEAD") headers["x-base-air-csrf"] = "1";
   return headers;
 }
 
@@ -173,7 +175,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError(0, "network", "Couldn't reach Starsign.");
+    throw new ApiError(0, "network", "Couldn't reach base air.");
   }
 
   if (res.status === 204) return undefined as T;
@@ -289,7 +291,7 @@ function multipart(file: File, alt: string | undefined, onProgress: (p: number) 
         reject(toApiError(xhr.status, xhr.statusText, xhr.responseText));
       }
     };
-    xhr.onerror = () => reject(new ApiError(0, "network", "Couldn't reach Starsign."));
+    xhr.onerror = () => reject(new ApiError(0, "network", "Couldn't reach base air."));
     xhr.onabort = () => reject(new ApiError(0, "aborted", "Upload cancelled."));
     const form = new FormData();
     form.append("file", file, file.name);
@@ -318,7 +320,7 @@ async function requestHtml(method: "GET" | "POST", path: string, body?: unknown)
   try {
     res = await fetch(`${BASE}${path}`, { method, headers, credentials: "include", body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    throw new ApiError(0, "network", "Couldn't reach Starsign.");
+    throw new ApiError(0, "network", "Couldn't reach base air.");
   }
   const text = await res.text();
   if (!res.ok) {
@@ -329,7 +331,48 @@ async function requestHtml(method: "GET" | "POST", path: string, body?: unknown)
 }
 // ---- end analytics & client reports
 
+// ---- the base suite: brand
+export interface BrandChoices {
+  presets: Preset[];
+  fonts: { id: FontId; label: string }[];
+  corners: { id: Corners; label: string }[];
+  modes: { id: BrandMode; label: string }[];
+}
+export interface BrandResponse {
+  brand: Brand;
+  saved: boolean;
+  defaults: Brand;
+  updatedAt: string | null;
+  contrast: ContrastPair[];
+  choices: BrandChoices;
+}
+let fixtureBrand: Brand | null = null;
+function fixtureBrandResponse(): Promise<BrandResponse> {
+  const brand = fixtureBrand ?? { ...DEFAULT_BRAND, name: "Northwind Coffee" };
+  return Promise.resolve({
+    brand,
+    saved: !!fixtureBrand,
+    defaults: { ...DEFAULT_BRAND, name: "Northwind Coffee" },
+    updatedAt: null,
+    contrast: contrastReport(brand),
+    choices: {
+      presets: [...PRESETS],
+      fonts: FONTS.map(({ id, label }) => ({ id, label })),
+      corners: (Object.keys(CORNERS) as Corners[]).map((id) => ({ id, label: CORNERS[id].label })),
+      modes: (Object.keys(MODES) as BrandMode[]).map((id) => ({ id, label: MODES[id] })),
+    },
+  });
+}
+// ---- end the base suite: brand
+
 export const api = {
+  // ---- the base suite: brand (owners save; everyone reads)
+  brand: () => (USE_FIXTURES ? fixtureBrandResponse() : get<BrandResponse>("/v1/brand")),
+  saveBrand: (brand: Brand, confirmLowContrast = false) => {
+    if (!USE_FIXTURES) return put<BrandResponse>("/v1/brand", { brand, confirmLowContrast });
+    fixtureBrand = brand;
+    return fixtureBrandResponse();
+  },
   me: () => pick(() => get<Me>("/v1/me"), (f) => f.fixtureApi.me()),
   policy: () => pick(() => get<Policy>("/v1/policy"), (f) => f.fixtureApi.policy()),
   /** Replaces the whole policy with a new version (owners, people only). Send the full document. */

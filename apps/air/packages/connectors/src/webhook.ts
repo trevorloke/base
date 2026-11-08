@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { ActivityKind, type ActivityInput, type MetricInput, type Network } from "@starsign/schema";
+import { ActivityKind, type ActivityInput, type MetricInput, type Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -13,18 +13,24 @@ import { ConnectorError } from "./types.ts";
  *
  * - **Out**: every post published to this account is POSTed as JSON to the person's outbound URL (a Zapier/Make/n8n
  *   catch hook, an IFTTT applet, their own server). Any 2xx is success.
- * - **In**: anything POSTed to `${STARSIGN_PUBLIC_URL}/webhooks/webhook?account=<externalId>` in the documented
+ * - **In**: anything POSTed to `${BASE_AIR_PUBLIC_URL}/webhooks/webhook?account=<externalId>` in the documented
  *   shape lands in the live feed and the tracker (form entries, reviews, tickets, other networks).
  *
  * Both directions use one signing secret that the person chooses (and pastes into the other system too):
- * `X-Starsign-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>">` with `X-Starsign-Timestamp: <unix
+ * `X-Base-Air-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>">` with `X-Base-Air-Timestamp: <unix
  * seconds>`. The timestamp is inside the signed text so a captured delivery cannot be replayed later with a fresh
  * timestamp. Systems that cannot compute an HMAC (IFTTT, a no-code Zapier step) may send
  * `Authorization: Bearer <secret>` instead. Without a secret, inbound is disabled and outbound deliveries are unsigned.
  */
 
-export const SIGNATURE_HEADER = "x-starsign-signature";
-export const TIMESTAMP_HEADER = "x-starsign-timestamp";
+export const SIGNATURE_HEADER = "x-base-air-signature";
+export const TIMESTAMP_HEADER = "x-base-air-timestamp";
+/**
+ * The names these headers had before Starsign became base air. Receivers and senders set up before the rename keep
+ * working: outbound deliveries carry both pairs, inbound accepts either pair (the new one wins when both are sent).
+ */
+export const LEGACY_SIGNATURE_HEADER = "x-starsign-signature";
+export const LEGACY_TIMESTAMP_HEADER = "x-starsign-timestamp";
 /** Deliveries signed more than this far from now (either way) are refused. */
 export const SIGNATURE_TOLERANCE_SECONDS = 300;
 /** Items read from one inbound delivery; the rest are dropped. */
@@ -67,13 +73,16 @@ function parseTimestamp(v: string | undefined): number | null {
  */
 export function verifyWebhookRequest(secret: string, headers: Record<string, string>, rawBody: string, now: Date = new Date()): boolean {
   if (!secret) return false;
-  const sig = header(headers, SIGNATURE_HEADER)?.trim();
+  const legacy = !header(headers, SIGNATURE_HEADER) && !!header(headers, LEGACY_SIGNATURE_HEADER);
+  const sigName = legacy ? LEGACY_SIGNATURE_HEADER : SIGNATURE_HEADER;
+  const tsName = legacy ? LEGACY_TIMESTAMP_HEADER : TIMESTAMP_HEADER;
+  const sig = header(headers, sigName)?.trim();
   if (sig) {
-    const ts = parseTimestamp(header(headers, TIMESTAMP_HEADER));
+    const ts = parseTimestamp(header(headers, tsName));
     if (ts === null || Math.abs(Math.floor(now.getTime() / 1000) - ts) > SIGNATURE_TOLERANCE_SECONDS) return false;
     // The sender signs the timestamp exactly as it sends it. Several comma-separated signatures are accepted
     // (handy while rotating a secret on the sending side).
-    const want = signWebhookPayload(secret, header(headers, TIMESTAMP_HEADER)!.trim(), rawBody);
+    const want = signWebhookPayload(secret, header(headers, tsName)!.trim(), rawBody);
     return sig.split(",").some((s) => safeEqual(s.trim().toLowerCase(), want));
   }
   const auth = header(headers, "authorization")?.trim();
@@ -114,13 +123,13 @@ const defaultLookup: LookupFn = (hostname) => dnsLookup(hostname, { all: true, v
 export interface UrlPolicy {
   /** Plain http allowed (RSS: yes; webhooks: only with allowPrivate). */
   allowHttp: boolean;
-  /** Private/loopback destinations allowed (self-hosted n8n on the same network). STARSIGN_ALLOW_PRIVATE_URLS=1. */
+  /** Private/loopback destinations allowed (self-hosted n8n on the same network). BASE_AIR_ALLOW_PRIVATE_URLS=1. */
   allowPrivate: boolean;
   lookup?: LookupFn;
 }
 
 /**
- * Refuse URLs that would make Starsign's server talk to itself or its private network (SSRF): non-http(s) schemes,
+ * Refuse URLs that would make base air's server talk to itself or its private network (SSRF): non-http(s) schemes,
  * private hostnames and IP literals, and hostnames that resolve to private addresses. A host that re-resolves
  * between this check and the request (DNS rebinding) is not covered; see the docs.
  */
@@ -133,7 +142,7 @@ export async function assertPublicHttpUrl(raw: string, policy: UrlPolicy, what: 
   }
   if (url.protocol !== "https:" && !(url.protocol === "http:" && policy.allowHttp)) throw new ConnectorError(`${what}: the URL must start with https://`, "rejected", false);
   if (policy.allowPrivate) return url;
-  if (isPrivateHostname(url.hostname)) throw new ConnectorError(`${what}: ${url.hostname} is a private or local address; Starsign only sends to public hosts`, "rejected", false);
+  if (isPrivateHostname(url.hostname)) throw new ConnectorError(`${what}: ${url.hostname} is a private or local address; base air only sends to public hosts`, "rejected", false);
   if (!isIP(url.hostname.replace(/^\[|\]$/g, ""))) {
     let addrs: { address: string }[];
     try {
@@ -141,7 +150,7 @@ export async function assertPublicHttpUrl(raw: string, policy: UrlPolicy, what: 
     } catch (err) {
       throw new ConnectorError(`${what}: could not resolve ${url.hostname}`, "network", true, err);
     }
-    if (addrs.some((a) => isPrivateAddress(a.address))) throw new ConnectorError(`${what}: ${url.hostname} resolves to a private address; Starsign only sends to public hosts`, "rejected", false);
+    if (addrs.some((a) => isPrivateAddress(a.address))) throw new ConnectorError(`${what}: ${url.hostname} resolves to a private address; base air only sends to public hosts`, "rejected", false);
   }
   return url;
 }
@@ -153,7 +162,7 @@ export function mapWebhookError(status: number, headers: Headers, body: unknown,
   const detail = typeof body === "string" ? body.slice(0, 200) : body !== undefined ? JSON.stringify(body).slice(0, 200) : "";
   const msg = `webhook ${host}: HTTP ${status}${detail ? ` ${detail}` : ""}`;
   const cause: { status: number; retryAfter?: number } = { status };
-  if (status >= 300 && status < 400) return new ConnectorError(`${msg} (Starsign does not follow redirects; use the final URL)`, "rejected", false, cause);
+  if (status >= 300 && status < 400) return new ConnectorError(`${msg} (base air does not follow redirects; use the final URL)`, "rejected", false, cause);
   if (status === 429) {
     const ra = headers.get("retry-after");
     const after = ra ? (/^\d+$/.test(ra) ? Number(ra) : Math.max(0, Math.round((Date.parse(ra) - Date.now()) / 1000))) : NaN;
@@ -247,13 +256,13 @@ export function inboundToActivities(body: unknown, account: { externalId: string
 
 /** What decodeAccount hands to parse: the body plus the account it was verified for. */
 interface InboundEnvelope {
-  starsignWebhook: { accountExternalId: string; network: Network };
+  baseAirWebhook: { accountExternalId: string; network: Network };
   payload: unknown;
 }
 
 function isEnvelope(b: unknown): b is InboundEnvelope {
   const e = b as Partial<InboundEnvelope> | null;
-  return !!e && typeof e === "object" && !!e.starsignWebhook && typeof e.starsignWebhook.accountExternalId === "string";
+  return !!e && typeof e === "object" && !!e.baseAirWebhook && typeof e.baseAirWebhook.accountExternalId === "string";
 }
 
 // ---------------------------------------------------------------- connector
@@ -269,9 +278,9 @@ export type WebhookAuth = z.infer<typeof WebhookAuth>;
 export interface WebhookConnectorOptions {
   fetch?: FetchLike;
   now?: () => Date;
-  /** STARSIGN_PUBLIC_URL: used to show the inbound URL. */
+  /** BASE_AIR_PUBLIC_URL: used to show the inbound URL. */
   publicUrl?: string;
-  /** STARSIGN_ALLOW_PRIVATE_URLS=1: allow http:// and private/loopback outbound URLs (self-hosted n8n next door). */
+  /** BASE_AIR_ALLOW_PRIVATE_URLS=1: allow http:// and private/loopback outbound URLs (self-hosted n8n next door). */
   allowPrivate?: boolean;
   lookup?: LookupFn;
   /** Outbound request timeout. */
@@ -287,7 +296,7 @@ export class WebhookConnector implements Connector {
   readonly connectConfigured = true;
   readonly credentialInputs = [
     { key: "name", label: "Name for this endpoint", placeholder: "Zapier: new posts to Slack", optional: true },
-    { key: "outboundUrl", label: "Outbound URL (Starsign POSTs published posts here; https)", placeholder: "https://hooks.zapier.com/hooks/catch/123/abc/", optional: true, secret: true },
+    { key: "outboundUrl", label: "Outbound URL (base air POSTs published posts here; https)", placeholder: "https://hooks.zapier.com/hooks/catch/123/abc/", optional: true, secret: true },
     { key: "secret", label: `Signing secret (${MIN_SECRET}+ characters; signs both directions; empty = no inbound)`, placeholder: "openssl rand -base64 32", optional: true, secret: true },
   ] as const;
   readonly webhook: WebhookHandler;
@@ -321,11 +330,11 @@ export class WebhookConnector implements Connector {
         const secret = typeof account.auth?.secret === "string" ? account.auth.secret : "";
         return verifyWebhookRequest(secret, headers, rawBody, this.now());
       },
-      decodeAccount: (account, rawBody): InboundEnvelope => ({ starsignWebhook: { accountExternalId: account.externalId, network: account.network }, payload: JSON.parse(rawBody) as unknown }),
-      decode: (rawBody, query): InboundEnvelope => ({ starsignWebhook: { accountExternalId: query.account ?? "", network: "webhook" }, payload: JSON.parse(rawBody) as unknown }),
+      decodeAccount: (account, rawBody): InboundEnvelope => ({ baseAirWebhook: { accountExternalId: account.externalId, network: account.network }, payload: JSON.parse(rawBody) as unknown }),
+      decode: (rawBody, query): InboundEnvelope => ({ baseAirWebhook: { accountExternalId: query.account ?? "", network: "webhook" }, payload: JSON.parse(rawBody) as unknown }),
       parse: (body): WebhookBatch[] => {
-        if (!isEnvelope(body) || !ACCOUNT_ID.test(body.starsignWebhook.accountExternalId)) return [];
-        const target = { externalId: body.starsignWebhook.accountExternalId, network: body.starsignWebhook.network };
+        if (!isEnvelope(body) || !ACCOUNT_ID.test(body.baseAirWebhook.accountExternalId)) return [];
+        const target = { externalId: body.baseAirWebhook.accountExternalId, network: body.baseAirWebhook.network };
         const { items } = inboundToActivities(body.payload, target, this.now());
         return [{ network: target.network, accountExternalId: target.externalId, items }];
       },
@@ -362,7 +371,7 @@ export class WebhookConnector implements Connector {
     if (outboundUrl) {
       await this.deliver(auth, "ping", {
         id: `ping_${accountId}`,
-        text: "Starsign connected this endpoint. Published posts will arrive in this shape.",
+        text: "base air connected this endpoint. Published posts will arrive in this shape.",
         thread: [],
         media: [],
         options: {},
@@ -425,12 +434,13 @@ export class WebhookConnector implements Connector {
     const ts = Math.floor(this.now().getTime() / 1000);
     const headers: Record<string, string> = {
       "content-type": "application/json",
-      "user-agent": "Starsign-Webhook/1",
-      "x-starsign-event": event,
-      "x-starsign-delivery": String(fields.id ?? ""),
+      "user-agent": "Base-Air-Webhook/1",
+      "x-base-air-event": event,
+      "x-base-air-delivery": String(fields.id ?? ""),
       [TIMESTAMP_HEADER]: String(ts),
+      [LEGACY_TIMESTAMP_HEADER]: String(ts),
     };
-    if (auth.secret) headers[SIGNATURE_HEADER] = signWebhookPayload(auth.secret, ts, body);
+    if (auth.secret) headers[SIGNATURE_HEADER] = headers[LEGACY_SIGNATURE_HEADER] = signWebhookPayload(auth.secret, ts, body);
     // fetch refuses URLs with credentials; send them as Basic auth (n8n's Basic Auth webhook option).
     if (url.username || url.password) {
       headers.authorization = `Basic ${Buffer.from(`${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`).toString("base64")}`;
@@ -466,5 +476,5 @@ function authOf(account: AccountRef): WebhookAuth {
 }
 
 export function createWebhookConnectors(env: NodeJS.ProcessEnv): Connector[] {
-  return [new WebhookConnector({ ...(env.STARSIGN_PUBLIC_URL ? { publicUrl: env.STARSIGN_PUBLIC_URL } : {}), allowPrivate: env.STARSIGN_ALLOW_PRIVATE_URLS === "1" })];
+  return [new WebhookConnector({ ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}), allowPrivate: env.BASE_AIR_ALLOW_PRIVATE_URLS === "1" })];
 }

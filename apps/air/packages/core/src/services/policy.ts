@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
-import { policies, policyDecisions, posts, postVariants } from "@starsign/db";
-import { newId } from "@starsign/ledger";
-import { DEFAULT_POLICY, Policy, type Actor, type PolicyDecision } from "@starsign/schema";
+import { policies, policyDecisions, posts, postVariants } from "@base-air/db";
+import { newId } from "@base-air/ledger";
+import { DEFAULT_POLICY, Policy, type Actor, type PolicyDecision } from "@base-air/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { localDayRange } from "../time.ts";
 

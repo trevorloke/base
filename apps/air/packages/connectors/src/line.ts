@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import type { ActivityInput, ActivityKind, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, MetricInput, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -11,7 +11,7 @@ import { ConnectorError } from "./types.ts";
  * Messaging API channel (= one bot user). A person pastes the channel's long-lived channel access token and
  * channel secret; there is no OAuth for bots.
  *
- * Inbox is webhook-only: LINE pushes events to `${STARSIGN_PUBLIC_URL}/webhooks/line`, each delivery signed with
+ * Inbox is webhook-only: LINE pushes events to `${BASE_AIR_PUBLIC_URL}/webhooks/line`, each delivery signed with
  * that channel's own secret (x-line-signature = base64 HMAC-SHA256 of the raw body) and naming the bot in
  * `destination`. So the handler uses `route` + `verifyAccount` (per-account secret), never `verify`.
  *
@@ -32,7 +32,7 @@ export interface LineConnectorOptions {
   apiBase?: string;
   fetch?: FetchLike;
   now?: () => Date;
-  /** STARSIGN_PUBLIC_URL: used at connect to tell whether the channel's webhook URL points at Starsign. */
+  /** BASE_AIR_PUBLIC_URL: used at connect to tell whether the channel's webhook URL points at base air. */
   publicUrl?: string;
   /** Upper bound of name lookups per resolveNames call. */
   maxNameLookups?: number;
@@ -108,8 +108,9 @@ export function lineSignatureValid(channelSecret: string, rawBody: string, signa
   return got.length === want.length && timingSafeEqual(got, want);
 }
 
-/** A stable UUID (RFC 4122 layout, version 5 bits) for X-Line-Retry-Key, derived from Starsign's idempotency key. */
+/** A stable UUID (RFC 4122 layout, version 5 bits) for X-Line-Retry-Key, derived from base air's idempotency key. */
 export function lineRetryKey(idempotencyKey: string): string {
+  // The "starsign" namespace predates the rename to base air and must stay: retries re-derive this key.
   const h = createHash("sha1").update(`starsign:line:${idempotencyKey}`).digest();
   h[6] = (h[6]! & 0x0f) | 0x50;
   h[8] = (h[8]! & 0x3f) | 0x80;
@@ -261,7 +262,7 @@ export interface LineAccountConfig {
   displayName: string | null;
   pictureUrl: string | null;
   chatMode: string | null;
-  /** Webhook URL set on the channel at connect time, whether "Use webhook" is on, and whether it points at Starsign. */
+  /** Webhook URL set on the channel at connect time, whether "Use webhook" is on, and whether it points at base air. */
   webhookEndpoint: string | null;
   webhookActive: boolean | null;
   webhookPointsHere: boolean | null;
@@ -654,5 +655,5 @@ function defaultGroupOf(account: AccountRef): string | null {
 }
 
 export function createLineConnectors(env: NodeJS.ProcessEnv): Connector[] {
-  return [new LineConnector({ ...(env.LINE_API_BASE ? { apiBase: env.LINE_API_BASE } : {}), ...(env.STARSIGN_PUBLIC_URL ? { publicUrl: env.STARSIGN_PUBLIC_URL } : {}) })];
+  return [new LineConnector({ ...(env.LINE_API_BASE ? { apiBase: env.LINE_API_BASE } : {}), ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}) })];
 }

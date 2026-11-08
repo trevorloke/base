@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox } from "@starsign/core";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox } from "@base-air/core";
 import { createApp } from "../src/app.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let app: ReturnType<typeof createApp>;
 let wsId: string;
 let acct: string;
@@ -26,7 +26,7 @@ const call = (key: string, method: string, path: string, body?: unknown) => app.
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
   const ws = await m.workspaces.create({ slug: "support", name: "Northwind" }, { type: "human", id: "u-owner" });
   wsId = ws.id;
   const member = async (email: string, name: string, role: "owner" | "approver" | "editor" | "viewer") => {

@@ -3,13 +3,13 @@
 Connector `matrix` · networks `["matrix"]` · `packages/connectors/src/matrix.ts` · factory `createMatrixConnectors(env)`
 
 Any Matrix homeserver (Synapse, Conduit/conduwuit, Dendrite, matrix.org…) through the official **Client-Server API
-v3**. One Starsign account = one Matrix user (externalId = the MXID, e.g. `@starsign:example.org`, which already
-names the homeserver). Use a dedicated account for Starsign, not a person's own account.
+v3**. One base air account = one Matrix user (externalId = the MXID, e.g. `@baseair:example.org`, which already
+names the homeserver). Use a dedicated account for base air, not a person's own account.
 
 ## What works
 - **Connect** (`connectMethod: "api_key"`): inputs `homeserver` (URL or server name), `accessToken` (secret,
   optional), or `user` + `password` (optional; used once for `POST /_matrix/client/v3/login` with
-  `m.login.password`, device name "Starsign"; the password is never stored), and `rooms` (optional comma list of room
+  `m.login.password`, device name "base air"; the password is never stored), and `rooms` (optional comma list of room
   ids `!…` or aliases `#…`; the first unencrypted one is where posts go). A bare server name is resolved through
   `/.well-known/matrix/client`. `GET /account/whoami` verifies the token (guests refused); the display name comes from
   `/profile/{userId}/displayname`. Aliases resolve via `GET /directory/room/{alias}`. A listed room the account is not
@@ -52,8 +52,8 @@ names the homeserver). Use a dedicated account for Starsign, not a person's own 
   `retry_after_ms` (waited once when ≤ 5 s); 403 `M_FORBIDDEN` on room actions → `rejected` (on login → `auth`);
   5xx and transport errors → retryable `network`. Messages never contain the token.
 
-## What Starsign can and cannot see
-- **Can see**: unencrypted messages in the rooms the Starsign account has joined and you chose to watch, including
+## What base air can and cannot see
+- **Can see**: unencrypted messages in the rooms the base air account has joined and you chose to watch, including
   direct chats with it, and who wrote them. Images and files show as short descriptions, not their contents.
 - **Cannot see**: **end-to-end encrypted rooms** (most DMs and many private rooms created by Element default to
   encryption). Reading them needs an E2EE-capable device holding Olm/Megolm keys, which this connector does not
@@ -61,18 +61,18 @@ names the homeserver). Use a dedicated account for Starsign, not a person's own 
   joined (beyond what /sync returns), edits and deletions.
 
 ## Setup
-1. Create a dedicated Matrix account for Starsign on your homeserver (or matrix.org).
+1. Create a dedicated Matrix account for base air on your homeserver (or matrix.org).
 2. Get an access token: in Element, **Settings → Help & About → Advanced → Access Token** (treat it as a password;
-   logging that session out invalidates it). Or let Starsign log in once with user + password.
+   logging that session out invalidates it). Or let base air log in once with user + password.
 3. Invite the account to the rooms to watch (or make sure they are public), and give it a power level that allows
    redaction if it should delete others' messages.
-4. In Starsign, connect Matrix with the homeserver, the token (or user + password) and the rooms.
+4. In base air, connect Matrix with the homeserver, the token (or user + password) and the rooms.
 - Redirect URI: none. Webhook URL: none (polling /sync).
 - Env vars: none.
 
 ## Review and access requirements
 None. Matrix is an open protocol; any account on a homeserver that allows it can use the Client-Server API. Some
-homeservers restrict registration or rate-limit new accounts; ask the server admin to exempt the Starsign account
+homeservers restrict registration or rate-limit new accounts; ask the server admin to exempt the base air account
 from rate limits if it is busy.
 
 ## Limits and quotas
@@ -92,7 +92,7 @@ from rate limits if it is busy.
   them and strips them from incoming messages.
 
 ## Questions for the owner
-- Should Starsign persist the `/sync` `next_batch` token (it lives in memory today, so a restart re-reads the latest
+- Should base air persist the `/sync` `next_batch` token (it lives in memory today, so a restart re-reads the latest
   50 events per room, deduped by core)?
 - Do you want E2EE support later (a device with key storage and cross-signing), or are unencrypted community rooms
   enough?

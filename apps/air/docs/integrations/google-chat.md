@@ -4,7 +4,7 @@ Connector `google_chat` · networks `["google_chat"]` · `packages/connectors/sr
 `createGoogleChatConnectors(env)`
 
 Post-only through a space's **incoming webhook**: the simplest official route, with no Chat app, no OAuth and no
-admin review. One Starsign account = one webhook (externalId = `spaces/<space id>`).
+admin review. One base air account = one webhook (externalId = `spaces/<space id>`).
 
 ## What works
 - **Connect** (`connectMethod: "webhook_url"`): input `webhookUrl` (secret). The URL must be
@@ -28,16 +28,16 @@ admin review. One Starsign account = one webhook (externalId = `spaces/<space id
   changed); 400 → `rejected`; 5xx and transport errors → retryable `network`. The key and token (raw or URL-encoded)
   are scrubbed from error messages.
 
-## What Starsign can and cannot see
+## What base air can and cannot see
 - **Can see**: nothing. The webhook only posts.
-- **Cannot see**: any message in the space, replies to Starsign's posts, members, reactions. Reading spaces needs a
+- **Cannot see**: any message in the space, replies to base air's posts, members, reactions. Reading spaces needs a
   Google Chat app using the Chat API with Google Workspace admin approval (a later step).
 
 ## Setup
 1. In Google Chat, open the space → space name → **Apps & integrations** → **Webhooks** → **Add webhook**
-   (name "Starsign", optional avatar URL) → copy the URL. Workspace admins can disable webhooks for the domain.
-2. In Starsign, connect Google Chat with that URL.
-- Redirect URI: none. Webhook URL (inbound to Starsign): none.
+   (name "base air", optional avatar URL) → copy the URL. Workspace admins can disable webhooks for the domain.
+2. In base air, connect Google Chat with that URL.
+- Redirect URI: none. Webhook URL (inbound to base air): none.
 - Env vars: none.
 
 ## Review and access requirements
@@ -62,4 +62,4 @@ enabled, app configuration) and, for user-data scopes, Workspace admin approval 
 ## Questions for the owner
 - Do you want to set up a Chat app later (to read spaces and reply), and do you have a Workspace admin who can
   approve it?
-- Should each publish start its own thread (current behaviour) or should all Starsign posts go into one thread?
+- Should each publish start its own thread (current behaviour) or should all base air posts go into one thread?

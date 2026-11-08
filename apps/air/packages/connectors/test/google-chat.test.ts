@@ -73,7 +73,7 @@ describe("google chat publish", () => {
     await new GoogleChatConnector().publish(acct, { ...input, idempotencyKey: "k2", options: { link: "https://acme.example/launch", title: "Launch notes", thumbnailUrl: "https://cdn.example/t.png" } });
     expect(call(0).json().cardsV2).toEqual([
       {
-        cardId: "starsign-link",
+        cardId: "base-air-link",
         card: {
           header: { title: "Launch notes", subtitle: "acme.example" },
           sections: [{ widgets: [{ image: { imageUrl: "https://cdn.example/t.png", altText: "Launch notes" } }, { buttonList: { buttons: [{ text: "Open", onClick: { openLink: { url: "https://acme.example/launch" } } }] } }] }],

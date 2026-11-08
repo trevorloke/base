@@ -383,7 +383,7 @@ export function EntityForm({
           <span className="field-label">Notes</span>
           <textarea className="textarea" rows={3} maxLength={4000} value={draft.notes} placeholder="For the team: who they are, what to watch for" onChange={(e) => set({ notes: e.target.value })} />
         </label>
-        {!entity ? <p className="muted small">Starsign looks back over the last 90 days when you save.</p> : null}
+        {!entity ? <p className="muted small">base air looks back over the last 90 days when you save.</p> : null}
         {errors.form ? (
           <div className="card-error" role="alert">
             {errors.form}

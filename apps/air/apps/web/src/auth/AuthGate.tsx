@@ -4,6 +4,9 @@ import { api, errorText, isApiError, reasonOf, sentence, setApiKey, USE_FIXTURES
 import { roleLabel } from "../lib/format";
 import { formatDateTime } from "../lib/time";
 import { browserTz } from "../lib/tz";
+import { signInWithBaseHref, useSuite } from "../lib/suite";
+import { useBrand } from "../lib/brand";
+import { BrandMark } from "../components/BrandMark";
 
 export type AuthScreen = "signin" | "signup" | "forgot" | "reset" | "invite" | "key";
 
@@ -165,6 +168,18 @@ export function AuthGate({
   );
 }
 
+/** The workspace's logo and name over the sign-in form (the server knows the brand before anyone signs in). */
+function GateBrand() {
+  const brand = useBrand();
+  return (
+    <div className="gate-brand">
+      <BrandMark />
+      {brand.name ? <span className="gate-brand-name">{brand.name}</span> : <span className="base-wordmark">base</span>}
+      <span className="gate-app">air</span>
+    </div>
+  );
+}
+
 function Notice({ text, tone = "ok" }: { text: string | null; tone?: "ok" | "bad" }) {
   if (!text) return null;
   return (
@@ -196,6 +211,7 @@ function SignInCard({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const suite = useSuite();
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -212,12 +228,25 @@ function SignInCard({
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">Starsign</div>
+      <GateBrand />
       <h1>Sign in</h1>
       <Notice text={notice} />
+      {suite.signInWithBase ? (
+        <>
+          <a className="btn btn-base" href={signInWithBaseHref("/")}>
+            <span className="base-mark" aria-hidden="true">
+              base
+            </span>
+            Sign in with base
+          </a>
+          <div className="gate-or" role="separator">
+            <span>or with email and password</span>
+          </div>
+        </>
+      ) : null}
       <label className="field">
         <span>Email</span>
-        <input className="input" type="email" autoComplete="username" value={email} onChange={(e) => onEmail(e.target.value)} autoFocus={!email} />
+        <input className="input" type="email" autoComplete="username" value={email} onChange={(e) => onEmail(e.target.value)} autoFocus={!email && !suite.signInWithBase} />
       </label>
       <div className="field">
         <span className="field-row">
@@ -279,7 +308,7 @@ function SignupCard({ initialEmail, onDone, onSignIn }: { initialEmail: string; 
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">Starsign</div>
+      <GateBrand />
       <h1>Create your account</h1>
       <p className="muted">You'll be the owner of a new workspace. Invite your team once you're in.</p>
       <label className="field">
@@ -353,13 +382,13 @@ function ForgotCard({ initialEmail, onBack }: { initialEmail: string; onBack: (n
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">Starsign</div>
+      <GateBrand />
       <h1>Reset your password</h1>
       {mail === false ? (
         <>
           <p>This server doesn't send email yet, so a reset link can't be mailed to you.</p>
           <p className="muted small">
-            Ask whoever runs Starsign for a one-time reset link. From a shell on the server: <code>node --import tsx src/admin.ts reset-link you@example.com</code>
+            Ask whoever runs base air for a one-time reset link. From a shell on the server: <code>node --import tsx src/admin.ts reset-link you@example.com</code>
           </p>
           <button type="button" className="btn btn-primary" onClick={() => onBack(null)}>
             Back to sign in
@@ -419,7 +448,7 @@ function ResetCard({ token, onDone, onForgot }: { token: string; onDone: () => v
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">Starsign</div>
+      <GateBrand />
       <h1>Choose a new password</h1>
       <label className="field">
         <span>New password</span>
@@ -504,11 +533,11 @@ function InviteCard({
   if (gone) {
     return (
       <div className="gate-card">
-        <div className="brand">Starsign</div>
+        <GateBrand />
         <h1>Invite not found</h1>
         <p className="muted">{gone}</p>
         <button type="button" className="btn btn-primary" onClick={onSkip}>
-          {signedIn ? "Go to Starsign" : "Sign in"}
+          {signedIn ? "Go to base air" : "Sign in"}
         </button>
       </div>
     );
@@ -516,7 +545,7 @@ function InviteCard({
   if (!info) {
     return (
       <div className="gate-card">
-        <div className="brand">Starsign</div>
+        <GateBrand />
         <p className="muted">Opening the invite…</p>
       </div>
     );
@@ -525,7 +554,7 @@ function InviteCard({
   const role = roleLabel(info.role).toLowerCase();
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">Starsign</div>
+      <GateBrand />
       <h1>Join {info.workspaceName}</h1>
       <p>
         You're invited as {role === "owner" || role === "approver" || role === "editor" ? "an" : "a"} <span className="strong">{role}</span>.
@@ -544,7 +573,7 @@ function InviteCard({
         <p className="muted small">You're signed in as {session.user.email}.</p>
       ) : existing ? (
         <>
-          <p className="muted small">This email already has a Starsign account. Enter its password to join.</p>
+          <p className="muted small">This email already has a base air account. Enter its password to join.</p>
           <div className="field">
             <span className="field-row">
               <label htmlFor="invite-password">Password</label>
@@ -557,7 +586,7 @@ function InviteCard({
         </>
       ) : (
         <>
-          <p className="muted small">New to Starsign? Add your name and a password.</p>
+          <p className="muted small">New to base air? Add your name and a password.</p>
           <label className="field">
             <span>Your name</span>
             <input className="input" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
@@ -616,7 +645,7 @@ function KeyCard({ onConnected, onBack, initialError }: { onConnected: (key: str
 
   return (
     <form className="gate-card" onSubmit={(e) => void submit(e)}>
-      <div className="brand">Starsign</div>
+      <GateBrand />
       <h1>Use an API key</h1>
       <p className="muted">For developers and agents. Paste a workspace API key; it stays in this browser.</p>
       <label className="field">
@@ -626,7 +655,7 @@ function KeyCard({ onConnected, onBack, initialError }: { onConnected: (key: str
           type="password"
           autoComplete="off"
           spellCheck={false}
-          placeholder="star_…"
+          placeholder="air_…"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           autoFocus

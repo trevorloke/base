@@ -1,8 +1,8 @@
 {
-  "name": "@starsign/forecast",
+  "name": "@base-air/forecast",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
-  "dependencies": { "@starsign/schema": "workspace:*" }
+  "dependencies": { "@base-air/schema": "workspace:*" }
 }

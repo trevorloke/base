@@ -1,7 +1,7 @@
-import { draftForTrend, pct, runPrompt, type BrandContext, type DraftForTrendVars, type Effort, type GatewayUsage, type ModelGateway } from "@starsign/ai";
-import { validateVariant } from "@starsign/connectors";
-import { CoreError, type Starsign } from "@starsign/core";
-import { AUTONOMY_ORDER, type AutonomyLevel, type Network } from "@starsign/schema";
+import { draftForTrend, pct, runPrompt, type BrandContext, type DraftForTrendVars, type Effort, type GatewayUsage, type ModelGateway } from "@base-air/ai";
+import { validateVariant } from "@base-air/connectors";
+import { CoreError, type BaseAir } from "@base-air/core";
+import { AUTONOMY_ORDER, type AutonomyLevel, type Network } from "@base-air/schema";
 import { DAY_MS, HOUR_MS, STUDIO_ACTOR, WATCH_ACTOR, activeAccountsByNetwork, buildBrandContext, principalFor, type ActiveAccount } from "../context.ts";
 import type { StewardClassifier } from "./steward.ts";
 
@@ -60,7 +60,7 @@ const toStringList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x):
  * evidence, then (if the autonomy dial allows) have the Studio draft for it through the single policy gate.
  * Everything lands in the ledger; the run row carries token and cost totals.
  */
-export async function runWatch(m: Starsign, gw: ModelGateway, workspaceId: string, opts: WatchOptions = {}): Promise<WatchSummary> {
+export async function runWatch(m: BaseAir, gw: ModelGateway, workspaceId: string, opts: WatchOptions = {}): Promise<WatchSummary> {
   const minConfidence = opts.minConfidence ?? 0.5;
   const minScore = opts.minScore ?? 0.25;
   const reactAfterMs = (opts.reactAfterHours ?? 48) * HOUR_MS;
@@ -246,7 +246,7 @@ export async function runWatch(m: Starsign, gw: ModelGateway, workspaceId: strin
 }
 
 /** A topic this workspace acted on, or was alerted about, within the window is left alone. */
-async function handledRecently(m: Starsign, workspaceId: string, topicId: string, now: Date, withinMs: number): Promise<boolean> {
+async function handledRecently(m: BaseAir, workspaceId: string, topicId: string, now: Date, withinMs: number): Promise<boolean> {
   const actions = (await m.metrics.actionsForTopic(topicId)).filter((a) => a.workspaceId === workspaceId);
   const alerts = (await m.ops.alerts(workspaceId, { limit: 200 })).filter((a) => a.kind === "trend_window" && a.topicId === topicId);
   const stamps = [...actions.map((a) => a.createdAt.getTime()), ...alerts.map((a) => a.createdAt.getTime())];
@@ -255,7 +255,7 @@ async function handledRecently(m: Starsign, workspaceId: string, topicId: string
   return now.getTime() - Math.max(...stamps) < withinMs;
 }
 
-async function recentTopPosts(m: Starsign, workspaceId: string, now: Date, timezone: string): Promise<RecentTop> {
+async function recentTopPosts(m: BaseAir, workspaceId: string, now: Date, timezone: string): Promise<RecentTop> {
   const s = await m.metrics.summary(workspaceId, new Date(now.getTime() - 14 * DAY_MS), now, timezone);
   return s.top.map((p) => ({ postId: p.postId, network: p.network, text: p.text, engagements: p.engagements, impressions: p.impressions }));
 }

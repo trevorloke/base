@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Network } from "@starsign/schema";
+import type { Network } from "@base-air/schema";
 import { COMMON_RULES, renderBrandContext, renderNetworkLimits, type BrandContext } from "./context.ts";
 import { VariantOutput } from "./shared.ts";
 import { definePrompt } from "./types.ts";

@@ -1,7 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { posts, postVariants, socialAccounts } from "@starsign/db";
-import { ConnectorError, validateVariant, type PublishInput } from "@starsign/connectors";
-import type { Media, Network, VariantOptions } from "@starsign/schema";
+import { posts, postVariants, socialAccounts } from "@base-air/db";
+import { ConnectorError, validateVariant, type PublishInput } from "@base-air/connectors";
+import type { Media, Network, VariantOptions } from "@base-air/schema";
 import { SYSTEM, type CoreContext } from "../context.ts";
 import { RetryablePublishError } from "../errors.ts";
 import type { AccountService } from "./accounts.ts";

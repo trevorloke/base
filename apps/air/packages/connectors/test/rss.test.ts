@@ -304,11 +304,11 @@ describe("rss connector", () => {
     }
   });
 
-  it("factory honours STARSIGN_ALLOW_PRIVATE_URLS", async () => {
-    const [c] = createRssConnectors({ STARSIGN_ALLOW_PRIVATE_URLS: "1", STARSIGN_PUBLIC_URL: "https://starsign.example.com" }) as [RssConnector];
+  it("factory honours BASE_AIR_ALLOW_PRIVATE_URLS", async () => {
+    const [c] = createRssConnectors({ BASE_AIR_ALLOW_PRIVATE_URLS: "1", BASE_AIR_PUBLIC_URL: "https://air.example.com" }) as [RssConnector];
     fetchMock.mockResolvedValueOnce(xml(RDF));
     const out = await c.fetchActivity(account("http://intranet.local/rss"), null);
     expect(out[0]).toMatchObject({ kind: "mention", lang: "de", authorName: "Max", conversation: { id: "http://intranet.local/rss", name: "Example News", type: "channel" } });
-    expect(call(0).headers["user-agent"]).toBe("Starsign-RSS/1 (+https://starsign.example.com)");
+    expect(call(0).headers["user-agent"]).toBe("Base-Air-RSS/1 (+https://air.example.com)");
   });
 });

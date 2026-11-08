@@ -43,9 +43,9 @@ import { createWebhookConnectors } from "./webhook.ts";
 import { createRssConnectors } from "./rss.ts";
 
 /**
- * The registry a Starsign process boots with. Native adapters are always present (their credentials
+ * The registry a base air process boots with. Native adapters are always present (their credentials
  * live on each account, not in the environment); Zernio needs a workspace-wide API key, so it joins
- * only when ZERNIO_API_KEY is set; the mock joins outside production (or with STARSIGN_ENABLE_MOCK=1).
+ * only when ZERNIO_API_KEY is set; the mock joins outside production (or with BASE_AIR_ENABLE_MOCK=1).
  * Env is injectable so tests and tools can build registries without touching process.env.
  */
 export function createDefaultRegistry(env: NodeJS.ProcessEnv = process.env): ConnectorRegistry {
@@ -103,6 +103,6 @@ export function createDefaultRegistry(env: NodeJS.ProcessEnv = process.env): Con
   if (env.ZERNIO_API_KEY) registry.register(new ZernioConnector({ apiKey: env.ZERNIO_API_KEY, ...(env.ZERNIO_BASE_URL ? { baseUrl: env.ZERNIO_BASE_URL } : {}) }));
   // The mock never reaches production: a "published" post that touched no network would be a lie in the ledger.
   // Resolution is strict (by the account's connector name), so the mock only serves accounts that chose it.
-  if (env.NODE_ENV !== "production" || env.STARSIGN_ENABLE_MOCK === "1") registry.register(new MockConnector());
+  if (env.NODE_ENV !== "production" || env.BASE_AIR_ENABLE_MOCK === "1") registry.register(new MockConnector());
   return registry;
 }

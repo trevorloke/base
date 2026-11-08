@@ -1,10 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FakeGateway, defaultFakeHandlers } from "@starsign/ai";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox } from "@starsign/core";
-import type { DbHandle } from "@starsign/db";
-import { createTestDb } from "@starsign/db/test";
+import { FakeGateway, defaultFakeHandlers } from "@base-air/ai";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox } from "@base-air/core";
+import type { DbHandle } from "@base-air/db";
+import { createTestDb } from "@base-air/db/test";
 import { analystDue, isoWeekKey, localParts, serve, tick, type ServeState } from "../src/index.ts";
 
 // Monday 2026-11-02 17:00Z: 10:00 in Phoenix (UTC-7, no DST), 02:00 Tuesday in Tokyo. Exact-hour assertions use
@@ -45,13 +45,13 @@ describe("calendar helpers", () => {
 
 describe("tick", () => {
   let h: DbHandle;
-  let m: Starsign;
+  let m: BaseAir;
   let clock = mondayNine.getTime();
   const gw = new FakeGateway(defaultFakeHandlers());
 
   beforeAll(async () => {
     h = await createTestDb();
-    m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now: () => new Date(clock) });
+    m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now: () => new Date(clock) });
     await m.workspaces.create({ slug: "tick-co", name: "Tick Co", timezone: "America/Vancouver" }, { type: "human", id: "u" });
     await m.workspaces.create({ slug: "tokyo-co", name: "Tokyo Co", timezone: "Asia/Tokyo" }, { type: "human", id: "u" });
   });

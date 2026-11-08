@@ -1,5 +1,5 @@
 {
-  "name": "@starsign/db",
+  "name": "@base-air/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
   "scripts": { "migrate": "tsx src/cli.ts migrate" },
   "dependencies": {
     "@electric-sql/pglite": "^0.4.6",
-    "@starsign/schema": "workspace:*",
+    "@base-air/schema": "workspace:*",
     "drizzle-orm": "^0.45.0",
     "pg": "^8.13.0"
   },

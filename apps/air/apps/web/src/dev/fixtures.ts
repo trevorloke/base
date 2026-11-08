@@ -947,7 +947,7 @@ const brief: Brief = {
 - Pumpkin spice backlash is rising with a ~6h window. One proposal is waiting on you.
 - Instagram needs reconnecting; 1 queued variant will fail until it is.
 
-Evidence: [lift by stage](https://starsign.local/metrics/lift) · [ledger export](https://starsign.local/export)
+Evidence: [lift by stage](https://air.local/metrics/lift) · [ledger export](https://air.local/export)
 `,
 };
 
@@ -1372,7 +1372,7 @@ interface FxStore {
   invites?: Record<string, (PendingInvite & { token: string })[]>;
 }
 
-const FX_STORE_KEY = "starsign.fixtures.v2";
+const FX_STORE_KEY = "base-air.fixtures.v2";
 
 function seedStore(): FxStore {
   return {
@@ -2042,7 +2042,7 @@ function linkStatsOf(spec: LinkSpec): LinkStats {
 }
 
 function utmFor(network: string | null, campaign: string, medium: string): Record<string, string> {
-  return { utm_source: network ?? "starsign", utm_medium: medium, utm_campaign: campaign };
+  return { utm_source: network ?? "base-air", utm_medium: medium, utm_campaign: campaign };
 }
 
 function targetOf(destination: string, utm: Record<string, string>, on: boolean): string {
@@ -2761,7 +2761,7 @@ function trackerApi() {
       const name = (input.name ?? "").trim();
       if (!name) throw new ApiError(400, "invalid", "Give it a name.");
       if (name.length > 200) throw new ApiError(400, "invalid", "Keep the name under 200 characters.");
-      if (input.relation && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one Starsign knows.");
+      if (input.relation && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one base air knows.");
       if (all.some((e) => !e.archivedAt && e.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, "conflict", `${name} is already tracked.`);
       checkParent(all, input.parentId || undefined);
       const aliases = cleanTerms(input.aliases, 60, "Aliases");
@@ -2803,7 +2803,7 @@ function trackerApi() {
         throw new ApiError(400, "invalid", "People belong to this organisation. Move them first.");
       }
       if (input.parentId !== undefined) checkParent(all, input.parentId || undefined, id);
-      if (input.relation !== undefined && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one Starsign knows.");
+      if (input.relation !== undefined && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one base air knows.");
       if (input.name !== undefined) e.name = input.name.trim();
       if (input.kind !== undefined) e.kind = input.kind;
       if (input.role !== undefined) e.role = input.role.trim() || null;
@@ -2948,7 +2948,7 @@ const policyHistory: PolicyVersion[] = (() => {
     createdBy: by,
     createdAt: ago(hoursAgo),
   });
-  return [row(v3, 24 * 20, MAYA, true), row(v2, 24 * 60, MAYA), row(v1, 24 * 90, { type: "system", id: "starsign" })];
+  return [row(v3, 24 * 20, MAYA, true), row(v2, 24 * 60, MAYA), row(v1, 24 * 90, { type: "system", id: "base-air" })];
 })();
 
 const profiles: Record<string, Record<string, unknown>> = {};

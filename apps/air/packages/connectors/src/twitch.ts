@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { ActivityInput, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, MetricInput, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -11,9 +11,9 @@ import { ConnectorError } from "./types.ts";
  * Twitch adapter for creators and brands with a channel: watch chat, answer it, delete messages, count followers.
  *
  * One account = the broadcaster who logged in (GET /helix/users). Chat is real-time only, so the inbox is EventSub
- * over the **webhook** transport: on connect (when STARSIGN_PUBLIC_URL and TWITCH_EVENTSUB_SECRET are set) the
+ * over the **webhook** transport: on connect (when BASE_AIR_PUBLIC_URL and TWITCH_EVENTSUB_SECRET are set) the
  * connector subscribes `channel.chat.message` and `channel.follow` (v2) for the broadcaster with an app access token
- * (client credentials), pointing at `${STARSIGN_PUBLIC_URL}/webhooks/twitch`. Deliveries are verified with
+ * (client credentials), pointing at `${BASE_AIR_PUBLIC_URL}/webhooks/twitch`. Deliveries are verified with
  * HMAC-SHA256 over message id + timestamp + raw body. `fetchActivity` returns [] (nothing to poll).
  *
  * Publishing sends a chat message as the broadcaster (POST /helix/chat/messages, 500 characters, no media).
@@ -338,7 +338,7 @@ export class TwitchConnector implements Connector {
    */
   async subscribe(broadcasterId: string): Promise<{ status: "subscribed" | "not_configured" | "failed"; detail?: string; callback?: string }> {
     if (!this.eventsubConfigured) {
-      return { status: "not_configured", detail: "set STARSIGN_PUBLIC_URL (HTTPS) and TWITCH_EVENTSUB_SECRET, then reconnect, to receive chat and follows" };
+      return { status: "not_configured", detail: "set BASE_AIR_PUBLIC_URL (HTTPS) and TWITCH_EVENTSUB_SECRET, then reconnect, to receive chat and follows" };
     }
     const callback = `${this.publicUrl}/webhooks/twitch`;
     // TODO(verify): reading chat as the broadcaster (user_id = broadcaster_user_id) satisfies the user:bot +
@@ -494,7 +494,7 @@ function authFromToken(t: OAuth2Token, me: { id: string; login?: string }): Twit
   };
 }
 
-/** Registry entry for Twitch: TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET, TWITCH_EVENTSUB_SECRET, STARSIGN_PUBLIC_URL. */
+/** Registry entry for Twitch: TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET, TWITCH_EVENTSUB_SECRET, BASE_AIR_PUBLIC_URL. */
 export function createTwitchConnectors(env: NodeJS.ProcessEnv): Connector[] {
   const { clientId, clientSecret } = clientFromEnv(env, "TWITCH");
   return [
@@ -502,7 +502,7 @@ export function createTwitchConnectors(env: NodeJS.ProcessEnv): Connector[] {
       ...(clientId ? { clientId } : {}),
       ...(clientSecret ? { clientSecret } : {}),
       ...(env.TWITCH_EVENTSUB_SECRET ? { eventsubSecret: env.TWITCH_EVENTSUB_SECRET } : {}),
-      ...(env.STARSIGN_PUBLIC_URL ? { publicUrl: env.STARSIGN_PUBLIC_URL } : {}),
+      ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}),
     }),
   ];
 }

@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { metrics, postOutcomes, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
+import { createTestDb } from "@base-air/db/test";
+import { metrics, postOutcomes, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
 import {
   InMemoryScheduler,
   MIN_PER_SIDE,
   SecretBox,
-  Starsign,
+  BaseAir,
   bestTimesFrom,
   compareGroups,
   engagementsOf,
@@ -105,7 +105,7 @@ describe("analytics math", () => {
 
 describe("analytics from the ledger", () => {
   let h: DbHandle;
-  let m: Starsign;
+  let m: BaseAir;
   let mock: MockConnector;
   let owner: Principal;
   let viewer: Principal;
@@ -133,7 +133,7 @@ describe("analytics from the ledger", () => {
     h = await createTestDb();
     mock = new MockConnector();
     mock.now = now;
-    m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now, linkBaseUrl: "https://go.acme.test" });
+    m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(mock), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now, linkBaseUrl: "https://go.acme.test" });
     const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
     owner = { workspaceId: ws.id, actor: { type: "human", id: "u1" }, role: "owner" };
     viewer = { workspaceId: ws.id, actor: { type: "human", id: "u2" }, role: "viewer" };

@@ -54,7 +54,7 @@ describe("kit connect", () => {
 });
 
 describe("kit publish", () => {
-  const input: PublishInput = { variantId: "v", text: "Hello <friends> & fans\n\nRead [more](https://acme.test/more)", media: [{ kind: "image", url: "https://cdn.starsign.test/h.jpg", alt: "Header" }], thread: [], idempotencyKey: "k1", options: { title: "This week" } };
+  const input: PublishInput = { variantId: "v", text: "Hello <friends> & fans\n\nRead [more](https://acme.test/more)", media: [{ kind: "image", url: "https://cdn.air.test/h.jpg", alt: "Header" }], thread: [], idempotencyKey: "k1", options: { title: "This week" } };
 
   it("creates a public broadcast sent now and returns its public url", async () => {
     route(() => json({ broadcast: { id: 987, subject: "This week", public: true, public_url: "https://acme.kit.com/posts/this-week", send_at: NOW.toISOString() } }, 201));
@@ -64,11 +64,11 @@ describe("kit publish", () => {
     expect(calls[0]?.url.pathname).toBe("/v4/broadcasts");
     expect(bodyJson(calls[0])).toEqual({
       subject: "This week",
-      content: '<p>Hello &lt;friends&gt; &amp; fans</p>\n<p>Read <a href="https://acme.test/more">more</a></p>\n<figure><img src="https://cdn.starsign.test/h.jpg" alt="Header"></figure>',
+      content: '<p>Hello &lt;friends&gt; &amp; fans</p>\n<p>Read <a href="https://acme.test/more">more</a></p>\n<figure><img src="https://cdn.air.test/h.jpg" alt="Header"></figure>',
       public: true,
       published_at: NOW.toISOString(),
       send_at: NOW.toISOString(),
-      thumbnail_url: "https://cdn.starsign.test/h.jpg",
+      thumbnail_url: "https://cdn.air.test/h.jpg",
       thumbnail_alt: "Header",
     });
     expect(res).toMatchObject({ externalId: "987", url: "https://acme.kit.com/posts/this-week" });

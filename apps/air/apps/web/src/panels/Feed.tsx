@@ -33,7 +33,7 @@ export interface FeedEntityFilter {
 }
 
 // ---- inbox workflow: the panel is the plain feed or the team inbox, the person's pick (remembered on this device).
-const FEED_MODE_STORAGE = "starsign.feedMode";
+const FEED_MODE_STORAGE = "base-air.feedMode";
 type FeedMode = "feed" | "inbox";
 function readFeedMode(): FeedMode {
   try {

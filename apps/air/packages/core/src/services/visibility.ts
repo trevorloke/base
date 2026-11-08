@@ -1,8 +1,8 @@
 import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
-import { metrics, visibilityAnswers, visibilityMentions, visibilityPrompts, visibilitySettings, workspaces, type VisibilityCitationJson } from "@starsign/db";
-import { phraseRegex } from "@starsign/policy";
-import { newId } from "@starsign/ledger";
+import { metrics, visibilityAnswers, visibilityMentions, visibilityPrompts, visibilitySettings, workspaces, type VisibilityCitationJson } from "@base-air/db";
+import { phraseRegex } from "@base-air/policy";
+import { newId } from "@base-air/ledger";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import { matchEntity, type EntityRow, type EntityService } from "./entities.ts";
@@ -11,7 +11,7 @@ import type { PolicyService } from "./policy.ts";
 
 /**
  * AI answer visibility. People ask ChatGPT, Claude, Perplexity and Gemini instead of searching. A workspace keeps a
- * list of the questions its audience asks; on a cadence Starsign asks every configured engine each question, in
+ * list of the questions its audience asks; on a cadence base air asks every configured engine each question, in
  * each language and region, and records the answer, its sources, and for every tracked name: mentioned or not, where
  * among the tracked names it came first, the tone, one line on what was said, and whether the sources were its own.
  *
@@ -93,7 +93,7 @@ const DEFAULT_SETTINGS: VisibilitySettings = { engines: null, cadences: ["daily"
 
 // ---------------------------------------------------------------- the runtime (wired by a process that has keys)
 
-/** One assistant to ask (structurally the same as @starsign/ai's AnswerEngine; core does not depend on ai). */
+/** One assistant to ask (structurally the same as @base-air/ai's AnswerEngine; core does not depend on ai). */
 export interface VisibilityEngine {
   readonly id: string;
   readonly label: string;

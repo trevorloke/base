@@ -1,6 +1,6 @@
 /**
- * Shapes of the Starsign HTTP API v1 as documented in docs/API.md.
- * Where `@starsign/schema` already defines the shape (posts, variants, activities, ledger events,
+ * Shapes of the base air HTTP API v1 as documented in docs/API.md.
+ * Where `@base-air/schema` already defines the shape (posts, variants, activities, ledger events,
  * policy, policy decisions) we reuse it; the rest is declared here against the contract.
  */
 import type {
@@ -16,9 +16,9 @@ import type {
   PostVariant,
   RedLineSeverity,
   TrendStage,
-} from "@starsign/schema";
+} from "@base-air/schema";
 
-export type { Activity, LedgerEvent, Policy, PolicyDecision, Post, PostVariant } from "@starsign/schema";
+export type { Activity, LedgerEvent, Policy, PolicyDecision, Post, PostVariant } from "@base-air/schema";
 
 /** `{ error: { code, message, details } }` as every non-2xx response carries it. */
 export interface ApiErrorBody {

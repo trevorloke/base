@@ -4,11 +4,11 @@
  *   node --import tsx src/admin.ts users                 # who is on this deployment and who can sign in
  *   node --import tsx src/admin.ts reset-link <email>    # a one-time link (1 hour) to set a new password
  *
- * Locally: pnpm --filter @starsign/api admin users
+ * Locally: pnpm --filter @base-air/api admin users
  */
-import { createDb, migrate } from "@starsign/db";
-import { ConnectorRegistry } from "@starsign/connectors";
-import { InMemoryScheduler, SecretBox, Starsign } from "@starsign/core";
+import { createDb, migrate } from "@base-air/db";
+import { ConnectorRegistry } from "@base-air/connectors";
+import { InMemoryScheduler, SecretBox, BaseAir } from "@base-air/core";
 
 const [command, arg] = process.argv.slice(2);
 const usage = "usage: admin users | admin reset-link <email>";
@@ -21,14 +21,14 @@ const handle = await createDb({ url: process.env.DATABASE_URL, pglitePath: proce
 let code = 0;
 try {
   await migrate(handle);
-  const m = new Starsign({ handle, connectors: new ConnectorRegistry(), scheduler: new InMemoryScheduler(), secrets: SecretBox.fromEnv() });
+  const m = new BaseAir({ handle, connectors: new ConnectorRegistry(), scheduler: new InMemoryScheduler(), secrets: SecretBox.fromEnv() });
   if (command === "users") {
     const rows = await m.auth.listUsers();
     if (rows.length === 0) console.log("No users yet. The first person to open the app creates the owner account.");
     for (const u of rows) console.log(`${u.email}\t${u.canSignIn ? "can sign in" : "no password (cannot sign in)"}\t${u.name ?? ""}`);
   } else {
-    const base = process.env.STARSIGN_PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL;
-    if (!base) console.warn("STARSIGN_PUBLIC_URL is not set; put this deployment's address in front of the link below.");
+    const base = process.env.BASE_AIR_PUBLIC_URL ?? process.env.RENDER_EXTERNAL_URL;
+    if (!base) console.warn("BASE_AIR_PUBLIC_URL is not set; put this deployment's address in front of the link below.");
     const link = await m.auth.adminResetLink(arg!, base);
     console.log(`Open this within an hour to set a new password for ${arg} (it works once):\n${link}`);
   }

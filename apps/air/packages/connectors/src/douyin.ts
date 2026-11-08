@@ -1,4 +1,4 @@
-import type { ActivityInput, Media, MetricInput, MetricName, Network, VariantOptions } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, MetricName, Network, VariantOptions } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, isAfter, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -89,7 +89,7 @@ export const DOUYIN_LIMITS = {
 } as const;
 
 /**
- * Starsign privacy → create_video `private_status`.
+ * base air privacy → create_video `private_status`.
  * TODO(verify): 0 = everyone, 1 = only me, 2 = friends. Douyin has no "followers only" or "unlisted".
  */
 export const DOUYIN_PRIVACY: Record<NonNullable<VariantOptions["privacy"]>, number | null> = {

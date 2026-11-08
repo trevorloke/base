@@ -1,4 +1,4 @@
-import type { ActivityInput, ActivityKind, Media, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -12,7 +12,7 @@ import { ConnectorError } from "./types.ts";
  * server (guild) id. One account = one server; the bot's readable text, announcement and forum channels are listed
  * at connect and polled with GET /channels/{id}/messages?after=<snowflake>.
  *
- * No Gateway: Starsign workers poll, so nothing arrives in real time. Real-time delivery needs a Gateway (WebSocket)
+ * No Gateway: base air workers poll, so nothing arrives in real time. Real-time delivery needs a Gateway (WebSocket)
  * session and is a later step.
  *
  * External ids are "<channel id>:<message id>" so reply/moderate can find the channel again.
@@ -287,7 +287,7 @@ export class DiscordBotConnector implements Connector {
     if (!/^\d{15,25}$/.test(guildId)) throw new ConnectorError("discord: the server ID is a number like 123456789012345678 (turn on Developer Mode, right-click the server → Copy Server ID)", "rejected", false);
 
     const bot = await this.api<{ id: string; username: string; bot?: boolean }>(token, "GET", "/users/@me", "check bot token");
-    if (bot.bot === false) throw new ConnectorError("discord: that token belongs to a user account; Starsign only connects bot tokens", "auth", false);
+    if (bot.bot === false) throw new ConnectorError("discord: that token belongs to a user account; base air only connects bot tokens", "auth", false);
 
     let guild: DiscordGuild;
     try {
@@ -541,7 +541,7 @@ export class DiscordBotConnector implements Connector {
   // ---- transport ------------------------------------------------------------------------
 
   private async api<T>(token: string, method: string, path: string, what: string, body?: string | FormData | StreamingForm): Promise<T> {
-    const headers: Record<string, string> = { authorization: `Bot ${token}`, "user-agent": "DiscordBot (https://starsign.app, 1)" };
+    const headers: Record<string, string> = { authorization: `Bot ${token}`, "user-agent": "DiscordBot (https://base.win, 1)" };
     if (typeof body === "string") headers["content-type"] = "application/json";
     for (let attempt = 0; ; attempt++) {
       let res: Response;

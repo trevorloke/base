@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LISTEN_ONLY_NETWORKS, Network, NETWORK_LABEL, NETWORK_LIMITS, networkLabel } from "@starsign/schema";
+import { LISTEN_ONLY_NETWORKS, Network, NETWORK_LABEL, NETWORK_LIMITS, networkLabel } from "@base-air/schema";
 import { networkName } from "../src/services/analytics-shared.ts";
 
 // The web app is built by Vite with its own module settings, so it is loaded at run time rather than type-checked here.

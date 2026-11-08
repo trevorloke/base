@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Network } from "@starsign/schema";
+import { Network } from "@base-air/schema";
 import { ConnectorError, ZernioConnector, type AccountRef, type PublishInput } from "../src/index.ts";
 
 const NOW = new Date("2026-11-02T00:00:00.000Z");

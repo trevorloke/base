@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { mediaAssets, reports, reportShares, workspaces } from "@starsign/db";
-import { newId } from "@starsign/ledger";
-import type { Actor } from "@starsign/schema";
+import { mediaAssets, reports, reportShares, workspaces } from "@base-air/db";
+import { newId } from "@base-air/ledger";
+import type { Actor } from "@base-air/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { sha256 } from "../crypto.ts";
 import { CoreError } from "../errors.ts";
@@ -106,7 +106,7 @@ export interface ReportView {
 export interface ReportOptions {
   /** Undefined: Resend from the environment when configured. Null: never send mail. */
   mailer?: Mailer | null;
-  /** Base for share links in scheduled emails. Default: STARSIGN_PUBLIC_URL. */
+  /** Base for share links in scheduled emails. Default: BASE_AIR_PUBLIC_URL. */
   publicUrl?: string;
 }
 
@@ -543,7 +543,7 @@ export class ReportService {
     const doc = await this.document(r.workspaceId, r, at, viewUrl);
     const html = renderReportHtml(doc);
     const subject = `${doc.title} · ${doc.periodLabel}`;
-    const text = `${doc.title}${doc.clientName ? ` for ${doc.clientName}` : ""}, ${doc.periodLabel}.\n\n${viewUrl ? `Read it in your browser: ${viewUrl}\n\n` : ""}Sent by ${doc.workspaceName} with Starsign.`;
+    const text = `${doc.title}${doc.clientName ? ` for ${doc.clientName}` : ""}, ${doc.periodLabel}.\n\n${viewUrl ? `Read it in your browser: ${viewUrl}\n\n` : ""}Sent by ${doc.workspaceName} with base air.`;
     for (const to of r.recipients) await this.mailer.send({ to, subject, text, html });
     const period = reportPeriod(r.period, at, doc.timezone);
     await this.ctx.events.append({ workspaceId: r.workspaceId, type: "report.sent", subjectType: "report", subjectId: r.id, actor, data: { trigger, recipients: r.recipients, period: period.key, shareId: share?.id ?? null } });
@@ -571,7 +571,7 @@ export class ReportService {
       .from(reports)
       .where(and(isNull(reports.deletedAt), sql`${reports.schedule}->>'kind' IN ('weekly', 'monthly')`));
     const tzs = new Map<string, string>();
-    const base = (this.opts.publicUrl ?? process.env.STARSIGN_PUBLIC_URL ?? "").trim() || null;
+    const base = (this.opts.publicUrl ?? process.env.BASE_AIR_PUBLIC_URL ?? "").trim() || null;
     for (const r of rows) {
       const schedule = ReportSchedule.safeParse(r.schedule);
       if (!schedule.success) continue;

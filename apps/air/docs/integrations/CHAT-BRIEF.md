@@ -1,6 +1,6 @@
 # Chat connector addendum (read after BRIEF.md)
 
-These connectors bring **conversations** into Starsign's live feed: group chats, server channels and messages sent to a
+These connectors bring **conversations** into base air's live feed: group chats, server channels and messages sent to a
 business account. Monitoring is the main job; replying is second; publishing only where the platform has a real
 broadcast surface. Everything goes through the platform's **official** API. Never automate a personal account, never
 scrape a web client, never use unofficial libraries (whatsapp-web.js, Baileys, itchat, wechaty puppets, self-bots):
@@ -11,7 +11,7 @@ they break the platforms' terms and get numbers and accounts banned.
   business, `"mention"` when the message mentions the bot/business, `"reply"` when it replies to one of the business's
   messages, `"follow"` for joins/subscribes where that is the only signal.
 - `ActivityInput.conversation?: { id, name?, type: "group" | "channel" | "direct" }`: always set it for chat items.
-- `ActivityInput.lang?`: set only when the platform tells you the language. Starsign detects it otherwise.
+- `ActivityInput.lang?`: set only when the platform tells you the language. base air detects it otherwise.
 - External ids must be unique per network and let `reply`/`moderate` find the message again: use
   `"<conversation id>:<message id>"` where the message id alone is not globally unique.
 - `WebhookHandler` (packages/connectors/src/types.ts):
@@ -36,4 +36,4 @@ numbers in `authorHandle` in clear when the platform gives a stable opaque id in
 exists (WhatsApp), keep it (it is how the business replies) but never put it in `authorName`.
 
 ## Your doc
-`docs/integrations/<network>.md` also needs a short "What Starsign can and cannot see" section in plain words.
+`docs/integrations/<network>.md` also needs a short "What base air can and cannot see" section in plain words.

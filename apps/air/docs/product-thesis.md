@@ -1,4 +1,4 @@
-# Starsign: Product Thesis
+# base air: Product Thesis
 
 *v1, 2026-11-01. Companion to `social-command-center-plan.md`, which holds the API constraints, stack, and schema. This document is the "what and why" that the plan should now serve.*
 
@@ -196,7 +196,7 @@ The plan's stack stands. The thesis adds emphasis, not technology.
 
 ## 9. Name and position
 
-The product is **Starsign**: the fixed point you steer attention by. It sounds like something a strategist runs,
+The product is **base air**: the fixed point you steer attention by. It sounds like something a strategist runs,
 not something a social media manager uses, which is the point.
 
 Position: *"The system of record for attention. See it coming, act inside your red lines, prove what moved."*

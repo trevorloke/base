@@ -10,6 +10,10 @@ import { ComposeDrawer } from "./drawers/ComposeDrawer";
 import { ConnectionsDrawer } from "./drawers/ConnectionsDrawer";
 import { PostDrawer } from "./drawers/PostDrawer";
 import { TeamDrawer } from "./drawers/TeamDrawer";
+import { BrandDrawer } from "./drawers/BrandDrawer";
+import { BaseSwitcher } from "./components/BaseSwitcher";
+import { BrandMark } from "./components/BrandMark";
+import { applyBrand, useBrand } from "./lib/brand";
 import { LinksDrawer } from "./drawers/LinksDrawer";
 import { LanguagesDrawer } from "./drawers/LanguagesDrawer";
 import { TopicDrawer } from "./drawers/TopicDrawer";
@@ -34,9 +38,9 @@ import { Analytics } from "./panels/Analytics";
 import { ReportsDrawer } from "./drawers/ReportsDrawer";
 
 type Theme = "light" | "dark";
-const THEME_STORAGE = "starsign.theme";
-const TAB_STORAGE = "starsign.tab";
-const CENTER_STORAGE = "starsign.center";
+const THEME_STORAGE = "base-air.theme";
+const TAB_STORAGE = "base-air.tab";
+const CENTER_STORAGE = "base-air.center";
 
 type CenterView = "queue" | "calendar" | "tracker" | "analytics";
 const CENTER_VIEWS: CenterView[] = ["queue", "calendar", "tracker", "analytics"];
@@ -57,8 +61,12 @@ function systemTheme(): Theme {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-/** Follows the system until the person picks; the pick is remembered in localStorage. */
+/**
+ * The brand's mode until the person picks (a brand that follows the device follows it); the pick is remembered in
+ * localStorage and wins over the brand.
+ */
 function useTheme(): { theme: Theme; toggle: () => void } {
+  const brandMode = useBrand().mode;
   const [stored, setStored] = useState<Theme | null>(readStoredTheme);
   const [system, setSystem] = useState<Theme>(systemTheme);
 
@@ -70,11 +78,12 @@ function useTheme(): { theme: Theme; toggle: () => void } {
   }, []);
 
   useEffect(() => {
-    if (stored) document.documentElement.setAttribute("data-theme", stored);
+    const pinned = stored ?? (brandMode === "device" ? null : brandMode);
+    if (pinned) document.documentElement.setAttribute("data-theme", pinned);
     else document.documentElement.removeAttribute("data-theme");
-  }, [stored]);
+  }, [stored, brandMode]);
 
-  const theme = stored ?? system;
+  const theme = stored ?? (brandMode === "device" ? system : brandMode);
   const toggle = useCallback(() => {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setStored(next);
@@ -183,7 +192,7 @@ export function App() {
   if (auth.kind === "checking") {
     return (
       <main className="gate">
-        <span className="muted">Opening Starsign…</span>
+        <span className="muted">Opening base air…</span>
       </main>
     );
   }
@@ -237,7 +246,7 @@ function connectErrorText(reason: string, net: string): string {
     case "unknown_state":
       return "that sign-in link was already used. Start again from Connections.";
     case "no_accounts":
-      return `this ${net} login doesn't manage any accounts Starsign can post as.`;
+      return `this ${net} login doesn't manage any accounts base air can post as.`;
     default:
       return "something went wrong on the way back. Try again.";
   }
@@ -291,6 +300,7 @@ type DrawerState =
   | { kind: "compose"; prefill?: ComposePrefill }
   | { kind: "accounts" }
   | { kind: "team" }
+  | { kind: "brand" }
   | { kind: "links" }
   | { kind: "languages" }
   | { kind: "settings"; section?: SettingsSectionId }
@@ -388,6 +398,21 @@ function Room({
   });
 
   const live = useLive(true);
+
+  // The workspace's look. The server already painted it into the page; this catches a workspace switch and the
+  // Vite dev server, which paints nothing. The Room is keyed by workspace, so this runs once per workspace.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .brand()
+      .then((r) => !cancelled && applyBrand(r.brand))
+      .catch(() => {
+        // keep whatever look the page has
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Identity doubles as the auth check: a lapsed session or a dead key sends the person back to the gate.
   const keyMode = session === null;
@@ -599,7 +624,8 @@ function Room({
         <header className="topbar">
           <div className="topbar-left">
             <div className="topbar-id">
-              <span className="brand">Starsign</span>
+              <BaseSwitcher />
+              <BrandMark />
               {session ? (
                 <WorkspaceSwitcher session={session} onSession={onSession} />
               ) : (
@@ -701,6 +727,17 @@ function Room({
                       }}
                     >
                       Team
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="menu-item"
+                      onClick={() => {
+                        close();
+                        setDrawer({ kind: "brand" });
+                      }}
+                    >
+                      Brand
                     </button>
                     <button
                       type="button"
@@ -876,6 +913,9 @@ function Room({
             myUserId={session?.user.id ?? null}
             onClose={closeDrawer}
           />
+        ) : null}
+        {drawer?.kind === "brand" ? (
+          <BrandDrawer myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null} workspaceName={currentWorkspace?.name ?? me?.workspace.name ?? ""} onClose={closeDrawer} />
         ) : null}
         {drawer?.kind === "reports" ? <ReportsDrawer myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null} onClose={closeDrawer} /> : null}
         {drawer?.kind === "links" ? <LinksDrawer myRole={(currentWorkspace?.role ?? (me?.role as Role | null | undefined)) ?? null} onClose={closeDrawer} /> : null}

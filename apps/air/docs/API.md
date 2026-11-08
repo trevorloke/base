@@ -1,14 +1,16 @@
-# Starsign HTTP API v1 (contract)
+# base air HTTP API v1 (contract)
 
-Base URL in dev: `http://localhost:4000`. All bodies and responses are JSON. Times are ISO-8601 strings.
+Base URL in dev: `http://localhost:4000`. In the base suite every path below lives under the deployment's `BASE_PATH`
+(e.g. `https://base.win/imaginesurrey/air/v1/me`); see "base air in the base suite" at the end. All bodies and responses
+are JSON. Times are ISO-8601 strings.
 
 ## Authentication
 
-`Authorization: Bearer star_...` — an API key minted per workspace. The key carries the actor it acts as:
+`Authorization: Bearer air_...` — an API key minted per workspace. The key carries the actor it acts as:
 a human user with a role (`owner | approver | editor | viewer`), or an agent (`mcp` / `operator` actor types) governed by
 the workspace's autonomy dial. Every write is attributed to that actor in the ledger.
 
-Dev convenience: when the server runs with `STARSIGN_DEV_WORKSPACE=<slug>` and a request has no bearer, it acts as the
+Dev convenience: when the server runs with `BASE_AIR_DEV_WORKSPACE=<slug>` and a request has no bearer, it acts as the
 human owner `dev` of that workspace. Never set in production.
 
 Errors: `{ "error": { "code": "not_found|forbidden|invalid|conflict|policy_blocked|unavailable|unauthorized|rate_limited", "message": "...", "details": ... } }`
@@ -23,7 +25,8 @@ Agents may create posts within the autonomy dial and may only schedule, edit or 
 - `DELETE /v1/keys/:id` → 204, revokes the key immediately (owner; recorded in the ledger)
 
 ## Health
-- `GET /api/health` → `{ ok: true, version: "0.1.0", db: "pglite" | "postgres" }` (no auth)
+- `GET /api/health` → `{ ok: true, version: "0.1.0", db: "pglite" | "postgres" }` (no auth). Answers with or without the
+  `BASE_PATH` prefix, so the host's health check needs no prefix.
 
 ## Identity & workspace
 - `GET /v1/me` → `{ workspace: Workspace, actor: { type, id }, role: string | null }`
@@ -37,7 +40,7 @@ Agents may create posts within the autonomy dial and may only schedule, edit or 
 - `DELETE /v1/accounts/:id` → `204`
 
 ## Policy (red lines, autonomy)
-- `GET /v1/policy` → `Policy` (see `@starsign/schema` `Policy`)
+- `GET /v1/policy` → `Policy` (see `@base-air/schema` `Policy`)
 - `PUT /v1/policy` body `Policy` without `version` → new `Policy` (owner only; version increments)
 - `GET /v1/policy/history` → `{ version, document, active, createdBy, createdAt }[]`
 - `POST /v1/policy/check` body `{ variants: { network, text }[], scheduledAt?, actionClass?, disclosure? }` → `PolicyDecision` dry run, nothing stored.
@@ -126,7 +129,7 @@ Agents may create posts within the autonomy dial and may only schedule, edit or 
 - `POST /v1/accounts/connect/x/start` → `{ authorizeUrl, expiresAt }` (owner/approver). Send the person's browser to
   `authorizeUrl`. X returns them to `GET /oauth/x/callback`, which connects the account and redirects to
   `/?connected=x&handle=<handle>` or `/?connect_error=<reason>` (`expired`, `exchange_failed`, `access_denied`, …).
-  Needs `X_CLIENT_ID` (and `X_CLIENT_SECRET` for confidential clients) and `STARSIGN_PUBLIC_URL`; otherwise `503`.
+  Needs `X_CLIENT_ID` (and `X_CLIENT_SECRET` for confidential clients) and `BASE_AIR_PUBLIC_URL`; otherwise `503`.
   `GET /v1/connectors` reports `configured: false` for X until those exist.
 
 ## Experiments (v1.1)
@@ -140,22 +143,22 @@ Any post can be an arm: create the experiment, then create posts with `experimen
 - Creating a post with an `experimentId` from another workspace, a stopped experiment, or an unknown arm is refused.
 
 ## People, sign-in, teams (v1.2)
-Two ways to authenticate every `/v1` route: `Authorization: Bearer star_...` (API keys, unchanged) or the `starsign_session`
-cookie (HttpOnly, SameSite=Lax, Secure when STARSIGN_PUBLIC_URL is https). Cookie-authenticated requests that change state
-(POST/PUT/PATCH/DELETE) must send `x-starsign-csrf: 1` or get `403 forbidden`. A session acts as the signed-in user in their
+Two ways to authenticate every `/v1` route: `Authorization: Bearer air_...` (API keys, unchanged) or the `base_air_session`
+cookie (HttpOnly, SameSite=Lax, Secure when BASE_AIR_PUBLIC_URL is https). Cookie-authenticated requests that change state
+(POST/PUT/PATCH/DELETE) must send `x-base-air-csrf: 1` or get `403 forbidden`. A session acts as the signed-in user in their
 current workspace with their member role.
 - `POST /v1/auth/signup` `{ email, password (>= 10 chars), name, workspaceName }` → `201 { user, workspaces, currentWorkspaceId }` + cookie.
-  Allowed when no user exists yet (first owner) or `STARSIGN_ALLOW_SIGNUP=1`; otherwise `403`.
+  Allowed when no user exists yet (first owner) or `BASE_AIR_ALLOW_SIGNUP=1`; otherwise `403`.
 - `POST /v1/auth/login` `{ email, password }` → `{ user, workspaces, currentWorkspaceId }` + cookie. `401 unauthorized` on bad credentials
   (same message for unknown email and wrong password). Repeated failures → `429` for 15 minutes per email.
 - `POST /v1/auth/logout` → 204, clears the cookie and revokes the session.
 - `GET /v1/auth/session` → `{ user: { id, email, name }, workspaces: { id, slug, name, role }[], currentWorkspaceId }` or 401.
 - `POST /v1/auth/switch` `{ workspaceId }` → same shape; must be a member.
 - `POST /v1/auth/forgot` `{ email }` → 204 always (sends a reset link when email is configured: RESEND_API_KEY + MAIL_FROM).
-- `POST /v1/auth/reset` `{ token, password }` → 204. Reset links: `${STARSIGN_PUBLIC_URL}/?reset=<token>` (one hour, single use; signs the user out everywhere).
+- `POST /v1/auth/reset` `{ token, password }` → 204. Reset links: `${BASE_AIR_PUBLIC_URL}/?reset=<token>` (one hour, single use; signs the user out everywhere).
 - `POST /v1/workspaces` `{ name, slug?, timezone? }` → `201 Workspace` (any signed-in user; creator is owner). For agencies adding a client.
 - `GET /v1/members` → `{ id, userId, email, name, role, createdAt }[]`
-- `POST /v1/invites` `{ email, role }` (owner) → `201 { inviteUrl, expiresAt }` (also emailed when configured). Invite links: `${STARSIGN_PUBLIC_URL}/?invite=<token>`.
+- `POST /v1/invites` `{ email, role }` (owner) → `201 { inviteUrl, expiresAt }` (also emailed when configured). Invite links: `${BASE_AIR_PUBLIC_URL}/?invite=<token>`.
 - `GET /v1/invites/:token` → `{ workspaceName, email, role, expiresAt }` (no auth) or 404.
 - `POST /v1/auth/accept-invite` `{ token, name?, password? }` → `{ user, workspaces, currentWorkspaceId }` + cookie (creates the user when new).
 - `PATCH /v1/members/:id` `{ role }` (owner; cannot demote the last owner) → member. `DELETE /v1/members/:id` (owner; not the last owner) → 204.
@@ -167,7 +170,7 @@ current workspace with their member role.
 - `POST /v1/accounts/connect/:connector/credentials` `{ network, inputs: { ... } }` → `201 Account[]` for non-OAuth connectors
   (Bluesky app password, Telegram bot token + channel, Discord webhook URL). `400` with `details.reason` on rejection.
 - `POST /v1/media` multipart `file` (+ `alt`) → `201 { id, url, kind, mime, bytes, width, height, durationSeconds, media: Media }`; `GET /v1/media`; `DELETE /v1/media/:id`.
-  `413 too_large` above `STARSIGN_MAX_UPLOAD_MB` (default 100): this path holds the file in memory.
+  `413 too_large` above `BASE_AIR_MAX_UPLOAD_MB` (default 100): this path holds the file in memory.
 - Direct-to-bucket uploads (v1.3, S3-compatible storage only): `GET /v1/media/limits` → `{ maxUploadBytes, direct, directLimits, types }`.
   `POST /v1/media/uploads` `{ mime, bytes, filename? }` → `201 { uploadId, method: "PUT", url, headers, expiresAt, maxBytes }`;
   the browser PUTs the file to `url` with exactly `headers` (valid 1 hour); then `POST /v1/media/uploads/complete`
@@ -181,14 +184,14 @@ current workspace with their member role.
 - Variants accept `options` (see VariantOptions in packages/schema/src/networks.ts) and `replyToExternalId`.
 
 ## Links & conversions (v1.3)
-Owned measurement. When a short-link base is configured (`STARSIGN_LINK_BASE_URL`, else `<STARSIGN_PUBLIC_URL>/l` when
+Owned measurement. When a short-link base is configured (`BASE_AIR_LINK_BASE_URL`, else `<BASE_AIR_PUBLIC_URL>/l` when
 that is not localhost), every link in a published post (text, thread segments, `options.link`, `options.firstComment`)
 goes out as `<base>/<slug>`. The stored variant keeps the approved text; `variant.published` events list the slugs used.
 The redirect adds `utm_source=<network>`, `utm_medium=social`, `utm_campaign=<options.campaign | workspace default |
 post-<id>>`, `utm_content=<slug>` (tags the author already set are kept) and `ssclid=<click id>`. Instagram and TikTok
 captions are left alone (links there are not clickable), as is any segment the short link would push over the limit.
 Pinterest, Reddit and Google Business distrust redirecting links, so there the real destination is kept and only the
-UTM tags are added (web analytics still attribute the visit; Starsign does not count those clicks itself).
+UTM tags are added (web analytics still attribute the visit; base air does not count those clicks itself).
 A variant opts out with `options.trackLinks: false`.
 
 Public:
@@ -197,7 +200,7 @@ Public:
 - `POST /c` `{ clickId, name?, value?, currency? }` (JSON, `text/plain` accepted for `sendBeacon`, CORS `*`) → always `204`.
   Counts only for a real, non-bot click from the last 30 days, once per click and name.
 - `GET /s.js` → the browser snippet: keeps `ssclid` from the landing URL for 30 days in first-party storage and exposes
-  `starsign.convert(name, value?, currency?)`.
+  `baseAir.convert(name, value?, currency?)`.
 
 Authenticated:
 - `GET /v1/links?limit=` → `{ baseUrl, settings, links: (link & { shortUrl, stats: { links, clicks, uniqueVisitors, previews, conversions, conversionValue } })[] }`
@@ -273,8 +276,8 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
 - Connect errors (`400`, `details.reason`) say whether the network was unreachable, the credentials were refused, or
   the network refused, with the connector's own hint.
 - Without `REDIS_URL` the API process runs the background jobs itself (ingest, outcomes, account metrics, link
-  rollups, tracker scan, trend sources, forecasts) on timers; `STARSIGN_INPROCESS_JOBS=0` turns that off.
-- `STARSIGN_PUBLIC_URL` falls back to `RENDER_EXTERNAL_URL` on Render's web service.
+  rollups, tracker scan, trend sources, forecasts) on timers; `BASE_AIR_INPROCESS_JOBS=0` turns that off.
+- `BASE_AIR_PUBLIC_URL` falls back to `RENDER_EXTERNAL_URL` on Render's web service.
 - Webhook handlers may answer a delivery from its own signed body (`respond`), and OAuth callbacks pass every query
   parameter to the connector (`callbackParams`).
 - `GET /v1/invites` (owner) → pending invites `{ id, email, role, invitedBy: { id, name, email }, expiresAt, createdAt }[]`;
@@ -293,7 +296,7 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
     `{ posts, impressions, engagements, engagementRate, linkClicks, conversions, conversionValue, followersGained, mentions }`.
     A post's numbers are its 72h outcome snapshot, else its 24h one, else its latest metrics; engagements are the
     network's `engagements`, else likes + replies + reposts + quotes + shares + saves; engagement rate is over posts
-    that reported impressions. Link clicks are non-bot clicks on Starsign short links; followers gained comes from the
+    that reported impressions. Link clicks are non-bot clicks on base air short links; followers gained comes from the
     accounts' `followers_total` series; mentions are mention/reply/comment/quote items the accounts received.
     `change[k]` is fractional (0.12 = +12%), null when the previous value was 0.
   - `topPosts` (10, by engagements): `{ postId, variantIds, text, networks, url, publishedAt, impressions, engagements,
@@ -414,3 +417,44 @@ Every change is a ledger event.
 - Live: the SSE stream gains `event: inbox`, `data: { workspaceId, kind: new|updated|assigned|mention|note|settings, ids?, userIds?, noteId? }`.
 - MCP: `list_inbox` (read) and `update_inbox_item` (status, labels, note; write).
 <!-- ---- end inbox workflow -->
+
+## base air in the base suite
+
+base air is one of the base suite's apps (see the repository's SUITE.md). Each client's deployment is served under a
+prefix, `BASE_PATH` (e.g. `/imaginesurrey/air`):
+
+- Requests under `${BASE_PATH}` are handled as if at the root. `/api/health` also answers without the prefix; anything
+  else without it gets `308` to the same path and query under it. `BASE_PATH` empty: everything at the root, as before.
+- `index.html` carries `<base href="${BASE_PATH}/">`, `window.__BASE_PATH__`, the workspace's brand as CSS custom
+  properties (`<style id="base-air-brand">`, `data-theme`), `window.__BASE_AIR_BRAND__` and `window.__BASE_SUITE__`.
+- Cookies (`base_air_session`, `base_air_sso_state`) are set with `Path=${BASE_PATH}` (or `/`).
+- Links in emails, posts and webhook registrations come from `BASE_AIR_PUBLIC_URL`, which includes the prefix.
+- Client IPs (sessions, link clicks) come from `X-Forwarded-For`, `BASE_AIR_TRUSTED_PROXIES` (default 1) entries from
+  the right: base's front door sits behind Render's load balancer, so the client is the second-to-last entry.
+
+### Sign in with base
+base ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set:
+- `GET /auth/base?next=<path>` → `302` to `${BASE_GROUND_URL}/api/sso/authorize?app=air&redirect_uri=…&state=…`, with
+  `state` kept in the `base_air_sso_state` cookie (HttpOnly, SameSite=Lax, ten minutes). `next` is honoured only when it
+  is a same-origin path under the prefix; anything else lands on the room.
+- `GET /auth/base/callback?code&state` → checks `state` against the cookie, posts `{ code, redirect_uri }` to
+  `${BASE_GROUND_INTERNAL_URL or BASE_GROUND_URL}/api/sso/token` with `Authorization: Bearer <BASE_SSO_SECRET>`
+  (`BASE_GROUND_INTERNAL_URL` is used as an origin only, `http://` assumed for a bare `host:port`, followed by the path
+  of `BASE_GROUND_URL`), finds the user by email (case-insensitive) and starts a normal session (`302` to `next`).
+  No account is ever created: someone without one gets a page saying "No base air account for <email> — ask an owner
+  to invite you." Bad state, `invalid_grant` and an unreachable ground each get a plain page. Every hand-off, refused
+  or not, is in the ledger as `auth.base_handoff` (`data.outcome`: `signed_in | no_account | bad_state |
+  invalid_grant | ground_error | not_configured`).
+- `GET /api/suite` (no auth) → `{ signInWithBase, groundUrl, webUrl }`: what the sign-in screen and the base switcher
+  show.
+
+### Brand
+- `GET /v1/brand` → `{ brand, saved, defaults, updatedAt, contrast: ContrastPair[], choices: { presets, fonts, corners,
+  modes } }`. `brand` = `{ preset, name, logoUrl, palettes: { light, dark }, font, corners, mode }`, each palette
+  `{ primary, onPrimary, accent, onAccent, surface, ink }` as `#rrggbb`; `mode` is `light | dark | device`. Unsaved,
+  the deployment's default applies (`BASE_AIR_BRAND_PRESET`, `_NAME`, `_LOGO_URL`, `_MODE`, `_FONT`, `_CORNERS`,
+  `_PRIMARY`, `_ACCENT`; else the Air preset), named after the workspace.
+- `PUT /v1/brand` `{ brand, confirmLowContrast? }` (owner, people only) → same shape plus `lowContrast`. Any
+  text-and-background pair under 4.5:1 answers `409 conflict` with `details.lowContrast: { id, label, scheme, fg, bg,
+  ratio }[]` until `confirmLowContrast: true`. Invalid values → `400` with `details.problems: { field, message }[]`.
+  Recorded in the ledger as `brand.updated` with the fields that changed.

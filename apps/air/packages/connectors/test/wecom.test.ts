@@ -387,7 +387,7 @@ describe("wecom misc", () => {
     const c = connector();
     expect(c.capabilities()).toMatchObject({ publish: true, fetchActivity: true, reply: true, moderate: false, webhooks: true, fetchMetrics: false, kinds: ["post", "link"] });
     expect(await c.fetchMetrics()).toEqual([]);
-    const [f] = createWeComConnectors({ STARSIGN_PUBLIC_URL: "https://s.example", WECOM_API_BASE: "https://qyapi.weixin.qq.com/" });
+    const [f] = createWeComConnectors({ BASE_AIR_PUBLIC_URL: "https://s.example", WECOM_API_BASE: "https://qyapi.weixin.qq.com/" });
     expect(f?.name).toBe("wecom");
     expect(f?.networks).toEqual(["wecom"]);
     expect(mapWeComError(-1, "busy", "x")).toMatchObject({ kind: "network", retryable: true });

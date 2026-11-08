@@ -5,14 +5,14 @@ Connector `whatsapp` · networks `["whatsapp"]` · `packages/connectors/src/what
 Built only on Meta's official **WhatsApp Business Platform (Cloud API)**. No WhatsApp Web automation, no unofficial
 libraries (whatsapp-web.js, Baileys and similar): they break WhatsApp's terms and get numbers banned.
 
-## What Starsign can and cannot see
-- **Starsign sees** messages that people send to the business's own WhatsApp number (1:1 chats), and messages in
+## What base air can and cannot see
+- **base air sees** messages that people send to the business's own WhatsApp number (1:1 chats), and messages in
   **groups the business created itself through Meta's Groups API**, where people joined through the business's invite link.
-- **Starsign cannot see** personal WhatsApp chats, personal WhatsApp groups, or groups created by anyone else, even when
+- **base air cannot see** personal WhatsApp chats, personal WhatsApp groups, or groups created by anyone else, even when
   the business owner is a member. No official API offers that, for any app. Tools that claim to do it log into a
-  personal WhatsApp account through WhatsApp Web; WhatsApp detects them and bans the number. Starsign will not do it.
-- Starsign cannot read older messages: only messages that arrive after the number is connected, as they arrive.
-- WhatsApp Channels (the one-to-many broadcast feature) have no API, so Starsign can neither post to nor read them.
+  personal WhatsApp account through WhatsApp Web; WhatsApp detects them and bans the number. base air will not do it.
+- base air cannot read older messages: only messages that arrive after the number is connected, as they arrive.
+- WhatsApp Channels (the one-to-many broadcast feature) have no API, so base air can neither post to nor read them.
 
 ## What works
 - **Connect** (`connectMethod: "api_key"`): inputs `phoneNumberId`, `wabaId` (WhatsApp Business Account ID) and
@@ -70,12 +70,12 @@ libraries (whatsapp-web.js, Baileys and similar): they break WhatsApp's terms an
    app's WhatsApp → API setup page.
 2. In Business Settings → Users → **System users**, create a system user (admin), assign it the app and the WhatsApp
    account (full control), and generate a token that **never expires** with `whatsapp_business_messaging` and
-   `whatsapp_business_management`. This is the token pasted into Starsign.
+   `whatsapp_business_management`. This is the token pasted into base air.
 3. In the app's WhatsApp → Configuration, set the webhook:
-   - Callback URL: `${STARSIGN_PUBLIC_URL}/webhooks/whatsapp`
+   - Callback URL: `${BASE_AIR_PUBLIC_URL}/webhooks/whatsapp`
    - Verify token: the value of `WHATSAPP_VERIFY_TOKEN`
    - Subscribe the **`messages`** field.
-4. Connect WhatsApp in Starsign with the three values. Starsign subscribes the app to the WABA (`subscribed_apps`).
+4. Connect WhatsApp in base air with the three values. base air subscribes the app to the WABA (`subscribed_apps`).
 - Redirect URI: none yet (not OAuth). **Embedded Signup** (Facebook Login for Business with the WhatsApp configuration,
   so a customer onboards their own number without copying IDs or tokens) is a later step; it needs the app to be a Tech
   Provider / Solution Partner.
@@ -87,7 +87,7 @@ libraries (whatsapp-web.js, Baileys and similar): they break WhatsApp's terms an
 | `WHATSAPP_VERIFY_TOKEN` | yes | Any random string; must match the verify token typed in the app's webhook settings |
 | `WHATSAPP_GRAPH_VERSION` | no | Graph API version, default the same as `meta.ts` (`v26.0`) |
 | `WHATSAPP_APPSECRET_PROOF` | no | `true` to send `appsecret_proof` (needed when the app has "Require App Secret" on) |
-| `STARSIGN_PUBLIC_URL` | yes | Base of the webhook URL |
+| `BASE_AIR_PUBLIC_URL` | yes | Base of the webhook URL |
 
 ## Review and access requirements
 - A Cloud API number can message right away in **development** with up to 5 test recipients. Production needs a
@@ -98,7 +98,7 @@ libraries (whatsapp-web.js, Baileys and similar): they break WhatsApp's terms an
   time is days to a few weeks.
 - **Groups API** is open to businesses with an **Official Business Account** (OBA, the verified badge) on the Cloud API
   (per Meta's Groups API page, updated June 2026). Older third-party guides cite a 100k-conversation tier instead.
-  Numbers onboarded to Multi-solution Conversations reportedly cannot use it. Without OBA, Starsign still works for 1:1
+  Numbers onboarded to Multi-solution Conversations reportedly cannot use it. Without OBA, base air still works for 1:1
   chats; group monitoring and publishing are unavailable.
 
 ## Limits and quotas
@@ -131,7 +131,7 @@ libraries (whatsapp-web.js, Baileys and similar): they break WhatsApp's terms an
 
 ## Questions for the owner
 - Does the business have (or plan to apply for) an **Official Business Account**? Without it, there are no groups.
-- Which group should receive posts (`defaultGroupId`)? Should Starsign create groups and invite links itself?
+- Which group should receive posts (`defaultGroupId`)? Should base air create groups and invite links itself?
 - Should failed-delivery status webhooks (e.g. 131047 after a late reply) be shown in the inbox?
 - Is WhatsApp on the same Meta app as Facebook/Instagram (shared secret) or a separate app?
-- Should Starsign later send approved templates to re-open conversations (and accept the per-message cost)?
+- Should base air later send approved templates to re-open conversations (and accept the per-message cost)?

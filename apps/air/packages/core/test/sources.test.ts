@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import type { SourceAdapter } from "@starsign/sources";
-import { InMemoryScheduler, SecretBox, Starsign, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import type { SourceAdapter } from "@base-air/sources";
+import { InMemoryScheduler, SecretBox, BaseAir, type Principal } from "../src/index.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let clock = Date.parse("2026-11-02T18:30:00Z");
 const now = () => new Date(clock);
 const H = 3_600_000;
@@ -16,7 +16,7 @@ let topicId: string;
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   owner = { workspaceId: ws.id, actor: { type: "human", id: "u1" }, role: "owner" };
   topicId = (await m.trends.createTopic({ workspaceId: ws.id, name: "First snow", keywords: ["first snow", "microspikes"] })).id;

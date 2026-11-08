@@ -1,5 +1,5 @@
 {
-  "name": "@starsign/operators",
+  "name": "@base-air/operators",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,12 +8,12 @@
     "start": "tsx src/main.ts serve"
   },
   "dependencies": {
-    "@starsign/ai": "workspace:*",
-    "@starsign/connectors": "workspace:*",
-    "@starsign/core": "workspace:*",
-    "@starsign/db": "workspace:*",
-    "@starsign/schema": "workspace:*",
-    "@starsign/sources": "workspace:*",
+    "@base-air/ai": "workspace:*",
+    "@base-air/connectors": "workspace:*",
+    "@base-air/core": "workspace:*",
+    "@base-air/db": "workspace:*",
+    "@base-air/schema": "workspace:*",
+    "@base-air/sources": "workspace:*",
     "zod": "^4.0.0"
   },
   "devDependencies": {

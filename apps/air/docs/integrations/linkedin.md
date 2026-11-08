@@ -36,7 +36,7 @@ Other behavior:
   the text.
 - **Idempotency.** Posts and comments are deduplicated per idempotency key within the process. Uploaded media URNs are
   remembered per key. If video processing times out (retryable error), the retry polls again instead of uploading again.
-- **Media bytes** come from `this.media.fetch` (Starsign storage). When that is unset, the connector downloads `media.url`.
+- **Media bytes** come from `this.media.fetch` (base air storage). When that is unset, the connector downloads `media.url`.
 - **Errors.**
   - 401 and 403 → `auth`.
   - 426 (version sunset) → `rejected`, with a hint to update `LINKEDIN_API_VERSION`.
@@ -52,7 +52,7 @@ Other behavior:
    - **Sign In with LinkedIn using OpenID Connect**: `openid`, `profile`, `email`. Self-serve.
    - **Share on LinkedIn**: `w_member_social`. Self-serve.
    - **Community Management API**: page scopes and member analytics. Needs approval (see below).
-3. Under **Auth → OAuth 2.0 settings**, add the redirect URL `${STARSIGN_PUBLIC_URL}/oauth/linkedin/callback`.
+3. Under **Auth → OAuth 2.0 settings**, add the redirect URL `${BASE_AIR_PUBLIC_URL}/oauth/linkedin/callback`.
 4. Scopes the connector requests by default:
    `openid profile email w_member_social w_organization_social r_organization_social rw_organization_admin r_organization_admin`.
    - Before Community Management approval, set `LINKEDIN_SCOPES="openid profile email w_member_social"`. Otherwise LinkedIn
@@ -60,10 +60,10 @@ Other behavior:
    - After approval, add `r_member_postAnalytics` (and the member follower analytics permission) for member analytics.
    - Add the `*_social_feed` scopes too if the app shows them (see Unverified).
 5. Webhooks (page accounts only; needs Community Management):
-   - In the app's **Webhooks** tab, register `${STARSIGN_PUBLIC_URL}/webhooks/linkedin`. LinkedIn validates it with a GET
+   - In the app's **Webhooks** tab, register `${BASE_AIR_PUBLIC_URL}/webhooks/linkedin`. LinkedIn validates it with a GET
      `?challengeCode=…`, and the connector answers with the HMAC-SHA256 of the code.
    - Subscribe each organization with `PUT /rest/eventSubscriptions/(developerApplication:…,user:…,entity:…,eventType:ORGANIZATION_SOCIAL_ACTION_NOTIFICATIONS)`.
-     Starsign does not do this subscription step automatically yet.
+     base air does not do this subscription step automatically yet.
 6. Environment variables:
 
 | Variable | Required | Meaning |
@@ -76,7 +76,7 @@ Other behavior:
 
 ## Review and access requirements
 
-- **Self-serve, no review:** Sign In with OpenID Connect and Share on LinkedIn. With only these, Starsign can connect the
+- **Self-serve, no review:** Sign In with OpenID Connect and Share on LinkedIn. With only these, base air can connect the
   member, publish every post kind as the member, comment and like as the member, and refresh nothing (60-day tokens).
 - **Community Management API** (LinkedIn review; formerly Marketing Developer Platform) is needed for:
   - company pages: connecting organizations, posting as a page, reading page posts and comments, page analytics, followers;
@@ -103,7 +103,7 @@ Other behavior:
   - Video: 3 seconds to 30 minutes, MP4, 75 KB to 5 GB (multi-part upload).
   - Documents: PDF, PPT(X) or DOC(X), up to 100 MB / 300 pages.
   - One video or one document per post, and neither can be mixed with other media.
-  - Starsign's generic limit for LinkedIn video is 900 seconds (`NETWORK_LIMITS`), which is stricter than LinkedIn's.
+  - base air's generic limit for LinkedIn video is 900 seconds (`NETWORK_LIMITS`), which is stricter than LinkedIn's.
 - Polls: question up to 140 characters, 2–4 options of up to 30 characters, duration 1 day, 3 days, 1 week or 2 weeks. The
   connector rounds `durationMinutes` up to the next allowed value.
 - Rate limits are per app and per member, per day, and reset at midnight UTC. LinkedIn does not publish fixed numbers; the
@@ -133,7 +133,7 @@ Every `TODO(verify)` in `linkedin.ts`:
 12. Whether comments and reactions also need the June-2023 feed scopes (`r_organization_social_feed`,
     `w_organization_social_feed`, `w_member_social_feed`).
 13. Whether the Reactions API accepts a comment URN as `root`, for liking comments.
-14. Whether LinkedIn accepts the challenge JSON when Starsign's API serves it as `text/plain`. `apps/api` returns `c.text(...)`;
+14. Whether LinkedIn accepts the challenge JSON when base air's API serves it as `text/plain`. `apps/api` returns `c.text(...)`;
     if LinkedIn insists on `application/json`, the GET route needs a content-type change, which is outside this connector.
 
 Also not implemented:
@@ -142,11 +142,11 @@ Also not implemented:
 
 ## Questions for the owner
 
-1. Has Starsign's LinkedIn app been approved for the **Community Management API**? Which tier: Development or Standard?
+1. Has base air's LinkedIn app been approved for the **Community Management API**? Which tier: Development or Standard?
    Until it is, deploy with `LINKEDIN_SCOPES="openid profile email w_member_social"`.
 2. Is the app enabled for **programmatic refresh tokens**? If not, members will be asked to reconnect every 60 days.
 3. Which LinkedIn Page is the developer app associated with, and who is the Page admin who can verify it?
-4. Should Starsign subscribe page webhooks automatically when a page connects (needs an `eventSubscriptions` call and the app's
+4. Should base air subscribe page webhooks automatically when a page connects (needs an `eventSubscriptions` call and the app's
    developer application id)?
 5. Should we request member analytics permissions (`r_member_postAnalytics`, follower analytics) in the default scopes once
    they are granted?

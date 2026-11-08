@@ -48,7 +48,7 @@ const acct: AccountRef = {
   config: {
     guildId: GUILD,
     botId: BOT,
-    botUsername: "starsign",
+    botUsername: "baseair",
     channels: [
       { id: GENERAL, name: "general", type: 0 },
       { id: NEWS, name: "news", type: 5 },
@@ -74,7 +74,7 @@ describe("discord_bot connect", () => {
     { id: FORUM, type: 15, name: "help", position: 5 },
   ];
   const ok = {
-    "GET /users/@me": () => json({ id: BOT, username: "starsign", bot: true }),
+    "GET /users/@me": () => json({ id: BOT, username: "baseair", bot: true }),
     [`GET /guilds/${GUILD}?with_counts=true`]: () => json(guildBody),
     "GET /applications/@me": () => json({ id: BOT, flags: 1 << 19 }),
     [`GET /guilds/${GUILD}/channels`]: () => json(channels),
@@ -97,7 +97,7 @@ describe("discord_bot connect", () => {
         config: {
           guildId: GUILD,
           botId: BOT,
-          botUsername: "starsign",
+          botUsername: "baseair",
           channels: [
             { id: GENERAL, name: "general", type: 0 },
             { id: NEWS, name: "news", type: 5 },
@@ -199,7 +199,7 @@ describe("discord_bot listen", () => {
   });
 
   it("maps kinds, conversation, author, url, attachments; skips own and system messages", async () => {
-    const own = msg("10", { author: { id: BOT, username: "starsign", bot: true } });
+    const own = msg("10", { author: { id: BOT, username: "baseair", bot: true } });
     const items = [
       msg("1"),
       msg("2", { mentions: [{ id: BOT }], content: `<@${BOT}> help?` }),

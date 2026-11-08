@@ -84,7 +84,7 @@ describe("slack connect", () => {
     fetchMock.mockImplementation(async (url, init) => {
       const u = String(url);
       const form = Object.fromEntries(new URLSearchParams(String(init?.body)));
-      if (u.endsWith("/auth.test")) return json({ ok: true, url: "https://acme.slack.com/", team: "Acme", user: "starsign", team_id: TEAM, user_id: BOT, bot_id: "B0BOT" });
+      if (u.endsWith("/auth.test")) return json({ ok: true, url: "https://acme.slack.com/", team: "Acme", user: "baseair", team_id: TEAM, user_id: BOT, bot_id: "B0BOT" });
       if (u.endsWith("/conversations.list") && !form.cursor)
         return json({ ok: true, channels: [{ id: "C0GENERAL", name: "general", is_member: true }, { id: "C0RANDOM", name: "random", is_member: false }], response_metadata: { next_cursor: "dGVhbTpD" } });
       if (u.endsWith("/conversations.list")) return json({ ok: true, channels: [{ id: "G0PRIVATE", name: "launch", is_private: true, is_member: true }], response_metadata: { next_cursor: "" } });

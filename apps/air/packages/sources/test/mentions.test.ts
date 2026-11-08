@@ -28,7 +28,7 @@ describe("Bluesky mention search", () => {
   });
   it("says plainly when search needs a token", async () => {
     const r = recorder(() => json({ error: "AuthRequired" }, 401));
-    await expect(new BlueskyMentionSearch({ fetch: r.fetch }).search({ terms: ["x"], since, now })).rejects.toThrow(/STARSIGN_BLUESKY_SEARCH_TOKEN/);
+    await expect(new BlueskyMentionSearch({ fetch: r.fetch }).search({ terms: ["x"], since, now })).rejects.toThrow(/BASE_AIR_BLUESKY_SEARCH_TOKEN/);
   });
 });
 
@@ -73,8 +73,8 @@ describe("GDELT news search", () => {
     const plain = recorder(() => new Response("Your search contained a phrase that was too short.", { status: 200 }));
     expect(await new GdeltNewsSearch({ fetch: plain.fetch }).search({ terms: ["Green Party"], since, now })).toEqual([]);
   });
-  it("lists only configured searches and honours STARSIGN_MENTION_SOURCES", () => {
+  it("lists only configured searches and honours BASE_AIR_MENTION_SOURCES", () => {
     expect(createMentionSearches({}).map((s) => s.name)).toEqual(["bluesky", "mastodon", "news"]);
-    expect(createMentionSearches({ YOUTUBE_API_KEY: "k", STARSIGN_MENTION_SOURCES: "news,youtube" }).map((s) => s.name)).toEqual(["youtube", "news"]);
+    expect(createMentionSearches({ YOUTUBE_API_KEY: "k", BASE_AIR_MENTION_SOURCES: "news,youtube" }).map((s) => s.name)).toEqual(["youtube", "news"]);
   });
 });

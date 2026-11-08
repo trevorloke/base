@@ -172,7 +172,7 @@ function parseElements(s: string): WeChatXml {
       value = trimmed.startsWith("<") && !trimmed.startsWith("<![CDATA[") ? parseElements(inner) : leafText(inner);
       after = end + name.length + 3;
     }
-    // Repeated elements (e.g. <item> lists) keep the first; Starsign does not read those events.
+    // Repeated elements (e.g. <item> lists) keep the first; base air does not read those events.
     if (!(name in out)) out[name] = value;
     i = skipMisc(s, after);
   }

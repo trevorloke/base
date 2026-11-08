@@ -4,11 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
-    <title>Starsign</title>
+    <title>base air</title>
     <script>
+      // Settings this browser kept under the pre-rename "starsign." prefix move to "base-air." once.
+      try {
+        for (var i = localStorage.length - 1; i >= 0; i--) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf("starsign.") === 0) {
+            var nk = "base-air." + k.slice(9);
+            if (localStorage.getItem(nk) === null) localStorage.setItem(nk, localStorage.getItem(k));
+            localStorage.removeItem(k);
+          }
+        }
+      } catch (e) {}
       // Apply the stored theme before first paint so the room never flashes.
       try {
-        var t = localStorage.getItem("starsign.theme");
+        var t = localStorage.getItem("base-air.theme");
         if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
       } catch (e) {}
     </script>

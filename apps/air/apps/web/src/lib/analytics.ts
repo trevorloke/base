@@ -21,7 +21,7 @@ export const PRESETS: { id: AnalyticsPreset; label: string; days: number; long: 
   { id: "custom", label: "Custom", days: 0, long: "previous period" },
 ];
 
-const STORAGE = "starsign.analytics";
+const STORAGE = "base-air.analytics";
 
 const ymd = (ms: number, tz: string) => {
   const w = wallParts(ms, tz);

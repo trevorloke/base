@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
 import { z } from "zod";
-import { INBOX_PRIORITIES, INBOX_STATUSES, type InboxQuery, type Starsign } from "@starsign/core";
+import { INBOX_PRIORITIES, INBOX_STATUSES, type InboxQuery, type BaseAir } from "@base-air/core";
 import type { Env } from "./app.ts";
 
 const list = (v: string | undefined) => (v ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
@@ -11,7 +11,7 @@ const Sort = z.enum(["newest", "oldest", "due", "priority"]);
  * Roles are checked in core (InboxService): viewers read; editors and up work items; owners and approvers manage
  * rules, labels and response targets; agents set status, labels and notes, never assignment or rules.
  */
-export function registerInboxRoutes(app: Hono<Env>, m: Starsign, _opts: object = {}) {
+export function registerInboxRoutes(app: Hono<Env>, m: BaseAir, _opts: object = {}) {
   // ---------------------------------------------------------------- settings: labels, response targets, business hours
   app.get("/v1/inbox/settings", async (c) => c.json(await m.inbox.settings(c.get("principal").workspaceId)));
   app.patch("/v1/inbox/settings", async (c) => c.json(await m.inbox.updateSettings(c.get("principal"), await c.req.json())));

@@ -1,11 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { FakeGateway, defaultFakeHandlers, type ClassifyTopicVars } from "@starsign/ai";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox, type Principal } from "@starsign/core";
-import type { DbHandle } from "@starsign/db";
-import { createTestDb } from "@starsign/db/test";
-import type { RedLine } from "@starsign/schema";
+import { FakeGateway, defaultFakeHandlers, type ClassifyTopicVars } from "@base-air/ai";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox, type Principal } from "@base-air/core";
+import type { DbHandle } from "@base-air/db";
+import { createTestDb } from "@base-air/db/test";
+import type { RedLine } from "@base-air/schema";
 import { makeClassifier, stewardClassifier } from "../src/index.ts";
 
 const politics: RedLine = { id: "t1", kind: "forbidden_topic", description: "No politics", severity: "block", keywords: ["ballot"], semantic: true };
@@ -64,7 +64,7 @@ describe("stewardClassifier", () => {
 
 describe("Steward wired into the gate", () => {
   let h: DbHandle;
-  let m: Starsign;
+  let m: BaseAir;
   let owner: Principal;
   let acct: string;
   const gw = semanticGateway();
@@ -72,7 +72,7 @@ describe("Steward wired into the gate", () => {
 
   beforeAll(async () => {
     h = await createTestDb();
-    m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), classifyTopic: steward.classify });
+    m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), classifyTopic: steward.classify });
     const ws = await m.workspaces.create({ slug: "civic", name: "Civic", timezone: "UTC" }, { type: "human", id: "u" });
     owner = { workspaceId: ws.id, actor: { type: "human", id: "u" }, role: "owner" };
     acct = (await m.accounts.connect(owner, { network: "x", externalId: "1", handle: "civic", connector: "mock" })).id;

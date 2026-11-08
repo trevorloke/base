@@ -42,14 +42,14 @@ export function reasonOf(e: unknown): string | null {
 /** A short, human sentence for any thrown value. */
 export function errorText(e: unknown): string {
   if (isApiError(e)) {
-    if (e.status === 0) return "Couldn't reach Starsign.";
+    if (e.status === 0) return "Couldn't reach base air.";
     if (e.status === 401) return keyMode ? "That key didn't work." : "You're signed out. Sign in again.";
     if (e.status === 403) {
       if (keyMode) return "Your key isn't allowed to do that.";
       return e.message && !e.code.startsWith("http_") ? sentence(e.message) : "You aren't allowed to do that.";
     }
     if (e.status === 429) return e.code === "rate_limited" || e.code.startsWith("http_") ? "Too many attempts. Try again in 15 minutes." : sentence(e.message);
-    if (e.status >= 500 && e.code.startsWith("http_")) return "Starsign isn't answering right now.";
+    if (e.status >= 500 && e.code.startsWith("http_")) return "base air isn't answering right now.";
     // A schema refusal says which field and why, not just "Validation failed."
     if (e.code === "invalid" && /^validation failed$/i.test(e.message) && Array.isArray(e.details) && e.details.length) {
       const first = e.details[0] as { path?: unknown; message?: unknown };

@@ -1,9 +1,38 @@
 import { Queue, type ConnectionOptions } from "bullmq";
 import { Redis } from "ioredis";
-import type { Scheduler } from "@starsign/core";
+import type { Scheduler } from "@base-air/core";
 
-export const PUBLISH_QUEUE = "starsign-publish";
-export const MAINTENANCE_QUEUE = "starsign-maintenance";
+export const PUBLISH_QUEUE = "base-air-publish";
+export const MAINTENANCE_QUEUE = "base-air-maintenance";
+/** Queue names from before Starsign became base air. Nothing listens on them any more. */
+export const LEGACY_QUEUES = ["starsign-publish", "starsign-maintenance"] as const;
+
+/** The little of a BullMQ Queue that retiring an old one needs (a fake in tests). */
+export interface RetirableQueue {
+  obliterate(opts: { force: boolean }): Promise<void>;
+  close(): Promise<void>;
+}
+
+/**
+ * Empty the pre-rename queues. Call it after `publishing.rearm`, which has already put every scheduled post on the new
+ * publish queue from the database, so a post waiting in the old queue is not lost and cannot be published twice.
+ * The old maintenance schedule is dropped; the new one is set up by startWorkers. Failures are logged, never fatal.
+ */
+export async function retireLegacyQueues(open: (name: string) => RetirableQueue, log: (line: string) => void = console.log): Promise<string[]> {
+  const retired: string[] = [];
+  for (const name of LEGACY_QUEUES) {
+    const q = open(name);
+    try {
+      await q.obliterate({ force: true });
+      retired.push(name);
+    } catch (e) {
+      log(`[workers] could not empty the old queue ${name}: ${(e as Error).message}`);
+    } finally {
+      await q.close().catch(() => {});
+    }
+  }
+  return retired;
+}
 
 export function createRedis(url = process.env.REDIS_URL ?? "redis://127.0.0.1:6379"): Redis {
   // BullMQ requires maxRetriesPerRequest: null on its connections.

@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, sql } from "drizzle-orm";
-import { ledgerEvents, rawEvents, rowsOf, trendPoints } from "@starsign/db";
-import type { SourceAdapter, TrendingItem } from "@starsign/sources";
-import type { TrendSource } from "@starsign/schema";
+import { ledgerEvents, rawEvents, rowsOf, trendPoints } from "@base-air/db";
+import type { SourceAdapter, TrendingItem } from "@base-air/sources";
+import type { TrendSource } from "@base-air/schema";
 import { SYSTEM, type CoreContext } from "../context.ts";
 import type { TrendService } from "./trends.ts";
 

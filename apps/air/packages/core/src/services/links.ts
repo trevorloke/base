@@ -1,15 +1,15 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { conversions, linkClicks, metrics, postVariants, rowsOf, trackedLinks, workspaces } from "@starsign/db";
-import { NETWORK_LIMITS, type Network, type VariantOptions } from "@starsign/schema";
-import { textLength } from "@starsign/connectors";
-import { newId } from "@starsign/ledger";
+import { conversions, linkClicks, metrics, postVariants, rowsOf, trackedLinks, workspaces } from "@base-air/db";
+import { NETWORK_LIMITS, type Network, type VariantOptions } from "@base-air/schema";
+import { textLength } from "@base-air/connectors";
+import { newId } from "@base-air/ledger";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 
 /**
- * Owned measurement. Every link Starsign publishes can go through a short link it controls: the redirect adds UTM
+ * Owned measurement. Every link base air publishes can go through a short link it controls: the redirect adds UTM
  * tags (so the customer's web analytics attribute the visit to the right network and post) and a click id, ssclid,
  * that the customer's site hands back with a conversion. Clicks and conversions are first-party rows here, so the
  * outcome ledger records what a post caused, not only what a network chose to report about it.
@@ -35,9 +35,9 @@ export interface LinkOptions {
 }
 
 export function linkBaseFromEnv(env: NodeJS.ProcessEnv = process.env): string | null {
-  const explicit = env.STARSIGN_LINK_BASE_URL?.trim();
+  const explicit = env.BASE_AIR_LINK_BASE_URL?.trim();
   if (explicit) return explicit.replace(/\/+$/, "");
-  const pub = env.STARSIGN_PUBLIC_URL?.trim();
+  const pub = env.BASE_AIR_PUBLIC_URL?.trim();
   // A localhost base would publish links nobody can open.
   if (!pub || /\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:|\/|$)/.test(pub)) return null;
   return `${pub.replace(/\/+$/, "")}/l`;
@@ -46,7 +46,7 @@ export function linkBaseFromEnv(env: NodeJS.ProcessEnv = process.env): string | 
 // Networks whose captions do not make links clickable: wrapping would only make the text longer.
 const NON_CLICKABLE_TEXT: ReadonlySet<Network> = new Set<Network>(["instagram", "tiktok"]);
 // Networks whose spam filters distrust redirecting links: their links keep the real destination, with UTM tags added
-// in place, so web analytics still attribute the visit (Starsign just does not count those clicks itself).
+// in place, so web analytics still attribute the visit (base air just does not count those clicks itself).
 const NO_REDIRECTS: ReadonlySet<Network> = new Set<Network>(["pinterest", "reddit", "google_business"]);
 
 const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"'`]+/gi;
@@ -167,7 +167,7 @@ export class LinkService {
   }
 
   shortUrl(slug: string): string {
-    if (!this.baseUrl) throw new CoreError("unavailable", "link tracking needs STARSIGN_LINK_BASE_URL or a public STARSIGN_PUBLIC_URL");
+    if (!this.baseUrl) throw new CoreError("unavailable", "link tracking needs BASE_AIR_LINK_BASE_URL or a public BASE_AIR_PUBLIC_URL");
     return `${this.baseUrl}/${slug}`;
   }
 
@@ -225,7 +225,7 @@ export class LinkService {
 
   private utmFor(settings: LinkSettings, network: string | null, campaign: string, slug: string): Record<string, string> {
     if (!settings.utm) return {};
-    return { utm_source: network ?? "starsign", utm_medium: settings.medium, utm_campaign: campaign, utm_content: slug };
+    return { utm_source: network ?? "base-air", utm_medium: settings.medium, utm_campaign: campaign, utm_content: slug };
   }
 
   /** A link made by hand (bio links, a campaign landing page). */
@@ -240,7 +240,7 @@ export class LinkService {
     }
     if (!/^https?:$/.test(url.protocol)) throw new CoreError("invalid", "url must be http or https");
     const settings = await this.settings(p.workspaceId);
-    const campaign = input.campaign ?? settings.defaultCampaign ?? "starsign";
+    const campaign = input.campaign ?? settings.defaultCampaign ?? "base-air";
     const row = await this.mint({
       workspaceId: p.workspaceId,
       destination: url.toString(),
@@ -599,9 +599,9 @@ export class LinkService {
       const s = stats.get(v.id);
       if (!s || !v.externalId) continue;
       rows.push(
-        { entityType: "post_variant", entityId: v.externalId, metric: "tracked_clicks", value: s.uniqueVisitors, observedAt: now, source: "starsign" },
-        { entityType: "post_variant", entityId: v.externalId, metric: "conversions", value: s.conversions, observedAt: now, source: "starsign" },
-        { entityType: "post_variant", entityId: v.externalId, metric: "conversion_value", value: s.conversionValue, observedAt: now, source: "starsign" },
+        { entityType: "post_variant", entityId: v.externalId, metric: "tracked_clicks", value: s.uniqueVisitors, observedAt: now, source: "base-air" },
+        { entityType: "post_variant", entityId: v.externalId, metric: "conversions", value: s.conversions, observedAt: now, source: "base-air" },
+        { entityType: "post_variant", entityId: v.externalId, metric: "conversion_value", value: s.conversionValue, observedAt: now, source: "base-air" },
       );
     }
     if (rows.length) await this.ctx.db.insert(metrics).values(rows);

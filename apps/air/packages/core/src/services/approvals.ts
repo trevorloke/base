@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
-import { approvals, posts, postVariants } from "@starsign/db";
-import { validateVariant } from "@starsign/connectors";
-import { ApprovalDecisionInput, type Media, type Network } from "@starsign/schema";
+import { approvals, posts, postVariants } from "@base-air/db";
+import { validateVariant } from "@base-air/connectors";
+import { ApprovalDecisionInput, type Media, type Network } from "@base-air/schema";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import type { PolicyService } from "./policy.ts";

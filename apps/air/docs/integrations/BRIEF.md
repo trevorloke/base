@@ -1,7 +1,7 @@
 # Connector builder brief (shared by every platform builder)
 
-Starsign is a social media command center (publishing, inbox, analytics, trend radar, agents inside red lines).
-Repo: /home/user/starsign, pnpm TypeScript monorepo, ESM, strict, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`.
+base air is a social media command center (publishing, inbox, analytics, trend radar, agents inside red lines).
+Repo: apps/air (base suite), pnpm TypeScript monorepo, ESM, strict, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`.
 Relative imports include `.ts`. zod v4. Node 22 `fetch`. Never run `pnpm install` (no new dependencies) or `git`.
 
 ## Read first
@@ -25,7 +25,7 @@ Relative imports include `.ts`. zod v4. Node 22 `fetch`. Never run `pnpm install
    uses those instead of refresh tokens).
 2. **Publish** every post kind the network supports through its official API: text, link, single image, multi-image/carousel,
    video (and reels/shorts/stories where offered), threads/first comment where offered, the relevant `VariantOptions`.
-   Pull-style networks get `media.url` (public URLs from Starsign's media library); upload-style networks read bytes with
+   Pull-style networks get `media.url` (public URLs from base air's media library); upload-style networks read bytes with
    `this.media.fetch(media)` (set by core; fall back to fetching `media.url` if unset). Use resumable/chunked upload where
    the network requires it for large files. Poll asynchronous processing (containers, upload status) with bounded waits and
    return a clear retryable error if processing is still running. Idempotency: `IdempotencyCache` like x.ts.
@@ -51,7 +51,7 @@ in code, and list it under "Unverified" in your doc. Never invent certainty.
 - `packages/connectors/test/<network>.test.ts` — network-free tests covering connect (incl. multi-account), every publish kind,
   async processing waits, reply, moderate, activity mapping, metrics mapping, refresh, webhook verify/parse, error mapping.
 - `docs/integrations/<network>.md` with these sections: What works · Setup (developer app steps, exact scopes/permissions,
-  redirect URI = `${STARSIGN_PUBLIC_URL}/oauth/<connector name>/callback`, webhook URL = `${STARSIGN_PUBLIC_URL}/webhooks/<connector name>`,
+  redirect URI = `${BASE_AIR_PUBLIC_URL}/oauth/<connector name>/callback`, webhook URL = `${BASE_AIR_PUBLIC_URL}/webhooks/<connector name>`,
   env vars) · Review and access requirements (what the platform must approve, typical timeline, what happens before approval) ·
   Limits and quotas · Unverified (every TODO(verify)) · Questions for the owner (decisions or facts only the account owner can supply).
 - Gates before finishing (from repo root): `pnpm vitest run packages/connectors` and `pnpm tsc -p tsconfig.json --noEmit` both pass.

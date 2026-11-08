@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { z } from "zod";
-import { CoreError, slotFor, type Starsign, type VisibilityEngine, type VisibilityRuntime } from "@starsign/core";
-import { answerEngineStatus, answerEnginesFromEnv, gatewayAnswerJudge, gatewayQuestionSuggester, type AnswerEngineStatus, type ModelGateway } from "@starsign/ai";
+import { CoreError, slotFor, type BaseAir, type VisibilityEngine, type VisibilityRuntime } from "@base-air/core";
+import { answerEngineStatus, answerEnginesFromEnv, gatewayAnswerJudge, gatewayQuestionSuggester, type AnswerEngineStatus, type ModelGateway } from "@base-air/ai";
 import type { Env } from "./app.ts";
 
 export interface VisibilityRouteOptions {
@@ -26,13 +26,13 @@ function date(v: string | undefined, fallback: Date): Date {
  * Roles are checked in core (VisibilityService): viewers and agents read; editors and up manage questions and run
  * them; owners choose engines and cadence limits.
  */
-export function registerVisibilityRoutes(app: Hono<Env>, m: Starsign, opts: VisibilityRouteOptions = {}) {
+export function registerVisibilityRoutes(app: Hono<Env>, m: BaseAir, opts: VisibilityRouteOptions = {}) {
   const env = opts.env ?? process.env;
   let engines: VisibilityEngine[] | null = opts.answerEngines ?? null;
   const enginesNow = () => (engines ??= answerEnginesFromEnv(env));
   const runtime = (): VisibilityRuntime => ({ engines: enginesNow(), judge: opts.gateway ? gatewayAnswerJudge(opts.gateway) : null });
 
-  /** Every engine Starsign knows: configured here (its key is set), and enabled for this workspace. */
+  /** Every engine base air knows: configured here (its key is set), and enabled for this workspace. */
   const engineList = async (workspaceId: string): Promise<(AnswerEngineStatus & { enabled: boolean })[]> => {
     const live = enginesNow();
     const settings = await m.visibility.settings(workspaceId);
@@ -41,7 +41,7 @@ export function registerVisibilityRoutes(app: Hono<Env>, m: Starsign, opts: Visi
       return { ...s, configured: !!e, model: e?.model ?? s.model };
     });
     for (const e of live) {
-      if (!known.some((k) => k.id === e.id)) known.push({ id: e.id as AnswerEngineStatus["id"], label: e.label, configured: true, envVar: "STARSIGN_FAKE_AI", modelEnvVar: null, model: e.model, priced: true });
+      if (!known.some((k) => k.id === e.id)) known.push({ id: e.id as AnswerEngineStatus["id"], label: e.label, configured: true, envVar: "BASE_AIR_FAKE_AI", modelEnvVar: null, model: e.model, priced: true });
     }
     return known.map((k) => ({ ...k, enabled: k.configured && (settings.engines === null || settings.engines.includes(k.id)) }));
   };

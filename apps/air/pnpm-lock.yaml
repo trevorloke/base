@@ -23,33 +23,36 @@ importers:
 
   apps/api:
     dependencies:
+      '@base-air/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@base-air/connectors':
+        specifier: workspace:*
+        version: link:../../packages/connectors
+      '@base-air/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@base-air/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@base-air/look':
+        specifier: workspace:*
+        version: link:../../packages/look
+      '@base-air/policy':
+        specifier: workspace:*
+        version: link:../../packages/policy
+      '@base-air/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+      '@base-air/sources':
+        specifier: workspace:*
+        version: link:../../packages/sources
+      '@base-air/workers':
+        specifier: workspace:*
+        version: link:../workers
       '@hono/node-server':
         specifier: ^1.13.0
         version: 1.19.17(hono@4.13.16)
-      '@starsign/ai':
-        specifier: workspace:*
-        version: link:../../packages/ai
-      '@starsign/connectors':
-        specifier: workspace:*
-        version: link:../../packages/connectors
-      '@starsign/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@starsign/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@starsign/policy':
-        specifier: workspace:*
-        version: link:../../packages/policy
-      '@starsign/schema':
-        specifier: workspace:*
-        version: link:../../packages/schema
-      '@starsign/sources':
-        specifier: workspace:*
-        version: link:../../packages/sources
-      '@starsign/workers':
-        specifier: workspace:*
-        version: link:../workers
       drizzle-orm:
         specifier: ^0.45.0
         version: 0.45.4(@electric-sql/pglite@0.4.6)(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
@@ -66,12 +69,12 @@ importers:
 
   apps/mcp:
     dependencies:
+      '@base-air/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@modelcontextprotocol/sdk':
         specifier: ^1.12.0
         version: 1.32.2(zod@4.6.7)
-      '@starsign/schema':
-        specifier: workspace:*
-        version: link:../../packages/schema
       zod:
         specifier: ^4.0.0
         version: 4.6.7
@@ -82,22 +85,22 @@ importers:
 
   apps/operators:
     dependencies:
-      '@starsign/ai':
+      '@base-air/ai':
         specifier: workspace:*
         version: link:../../packages/ai
-      '@starsign/connectors':
+      '@base-air/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
-      '@starsign/core':
+      '@base-air/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@starsign/db':
+      '@base-air/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@starsign/sources':
+      '@base-air/sources':
         specifier: workspace:*
         version: link:../../packages/sources
       zod:
@@ -110,11 +113,23 @@ importers:
 
   apps/web:
     dependencies:
+      '@base-air/look':
+        specifier: workspace:*
+        version: link:../../packages/look
       '@fontsource/ibm-plex-mono':
         specifier: ^5.1.0
         version: 5.3.0
+      '@fontsource/ibm-plex-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource/inter':
         specifier: ^5.1.0
+        version: 5.3.0
+      '@fontsource/source-serif-4':
+        specifier: ^5.3.1
+        version: 5.3.1
+      '@fontsource/space-grotesk':
+        specifier: ^5.3.0
         version: 5.3.0
       react:
         specifier: ^18.3.1
@@ -141,22 +156,22 @@ importers:
 
   apps/workers:
     dependencies:
-      '@starsign/ai':
+      '@base-air/ai':
         specifier: workspace:*
         version: link:../../packages/ai
-      '@starsign/connectors':
+      '@base-air/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors
-      '@starsign/core':
+      '@base-air/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@starsign/db':
+      '@base-air/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../../packages/schema
-      '@starsign/sources':
+      '@base-air/sources':
         specifier: workspace:*
         version: link:../../packages/sources
       bullmq:
@@ -175,7 +190,7 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^1.3.0
         version: 1.3.0(zod@4.6.7)
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../schema
       zod:
@@ -187,7 +202,7 @@ importers:
       '@atproto/api':
         specifier: ^0.30.0
         version: 0.30.0
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../schema
       zod:
@@ -196,25 +211,28 @@ importers:
 
   packages/core:
     dependencies:
-      '@starsign/connectors':
+      '@base-air/connectors':
         specifier: workspace:*
         version: link:../connectors
-      '@starsign/db':
+      '@base-air/db':
         specifier: workspace:*
         version: link:../db
-      '@starsign/forecast':
+      '@base-air/forecast':
         specifier: workspace:*
         version: link:../forecast
-      '@starsign/ledger':
+      '@base-air/ledger':
         specifier: workspace:*
         version: link:../ledger
-      '@starsign/policy':
+      '@base-air/look':
+        specifier: workspace:*
+        version: link:../look
+      '@base-air/policy':
         specifier: workspace:*
         version: link:../policy
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../schema
-      '@starsign/sources':
+      '@base-air/sources':
         specifier: workspace:*
         version: link:../sources
       drizzle-orm:
@@ -229,12 +247,12 @@ importers:
 
   packages/db:
     dependencies:
+      '@base-air/schema':
+        specifier: workspace:*
+        version: link:../schema
       '@electric-sql/pglite':
         specifier: ^0.4.6
         version: 0.4.6
-      '@starsign/schema':
-        specifier: workspace:*
-        version: link:../schema
       drizzle-orm:
         specifier: ^0.45.0
         version: 0.45.4(@electric-sql/pglite@0.4.6)(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
@@ -251,25 +269,27 @@ importers:
 
   packages/forecast:
     dependencies:
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../schema
 
   packages/ledger:
     dependencies:
-      '@starsign/db':
+      '@base-air/db':
         specifier: workspace:*
         version: link:../db
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../schema
       drizzle-orm:
         specifier: ^0.45.0
         version: 0.45.4(@electric-sql/pglite@0.4.6)(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(pg@8.23.1)
 
+  packages/look: {}
+
   packages/policy:
     dependencies:
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../schema
       zod:
@@ -284,7 +304,7 @@ importers:
 
   packages/sources:
     dependencies:
-      '@starsign/schema':
+      '@base-air/schema':
         specifier: workspace:*
         version: link:../schema
       zod:
@@ -873,8 +893,17 @@ packages:
   '@fontsource/ibm-plex-mono@5.3.0':
     resolution: {integrity: sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q==}
 
+  '@fontsource/ibm-plex-sans@5.3.0':
+    resolution: {integrity: sha512-CbE4CbbEEZJX860XyUiRpsksXIQR8Rp2XDva2VO53NJox9tVNtusrysd2x5YkUEY3ErQ66W1IiiQL8/wihhw5w==}
+
   '@fontsource/inter@5.3.0':
     resolution: {integrity: sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g==}
+
+  '@fontsource/source-serif-4@5.3.1':
+    resolution: {integrity: sha512-cWcTCXjYYrgF9A67fThVir1VSc0lPEYmwQ6jA4pPt01s2MSCi/maINUcZoCzaqnU8fyUReDO97eGcBUkHgOeug==}
+
+  '@fontsource/space-grotesk@5.3.0':
+    resolution: {integrity: sha512-ksnGizDPXIDuvqcTYTSrmZ+evx9sDlS8rp7+42BQ7wU+spt3twEoXfbJz672C+5CLg6VeUQwRy5RXshWb67LcQ==}
 
   '@hono/node-server@1.19.17':
     resolution: {integrity: sha512-dSneS5qhiauZWGDCeK4o695Xd9nUNjviSZCMQrj10eetr8Uln1ucn6bbphOM6UynAMMtNIzZNSpL9vnASJwrPQ==}
@@ -2497,7 +2526,13 @@ snapshots:
 
   '@fontsource/ibm-plex-mono@5.3.0': {}
 
+  '@fontsource/ibm-plex-sans@5.3.0': {}
+
   '@fontsource/inter@5.3.0': {}
+
+  '@fontsource/source-serif-4@5.3.1': {}
+
+  '@fontsource/space-grotesk@5.3.0': {}
 
   '@hono/node-server@1.19.17(hono@4.13.16)':
     dependencies:

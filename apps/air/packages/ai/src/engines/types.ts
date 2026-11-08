@@ -1,6 +1,6 @@
 /**
  * Answer engines: the assistants people now ask instead of searching (Claude, ChatGPT, Perplexity, Gemini).
- * Starsign asks each one the questions a workspace cares about and records what comes back, so a brand or a
+ * base air asks each one the questions a workspace cares about and records what comes back, so a brand or a
  * campaign can see whether it is mentioned, how, and on which sources the answer rests.
  *
  * Every adapter here asks with the engine's own web search turned on, because that is what a person using the
@@ -19,7 +19,7 @@ export interface AnswerUsage {
   outputTokens: number;
   /** USD for this call. When the provider reports no price, a conservative per-call estimate (see costEstimated). */
   costUsd: number;
-  /** True when costUsd is Starsign's estimate rather than a known price, so the spend cap still applies. */
+  /** True when costUsd is base air's estimate rather than a known price, so the spend cap still applies. */
   costEstimated?: boolean;
   /** Web searches the engine ran for this answer, when it reports them. */
   searches?: number;
@@ -48,7 +48,7 @@ export interface AnswerEngine {
   ask(prompt: string, opts: AskOptions): Promise<AnswerResult>;
 }
 
-/** What the settings screen shows: every engine Starsign knows, whether this deployment can use it, and how to turn it on. */
+/** What the settings screen shows: every engine base air knows, whether this deployment can use it, and how to turn it on. */
 export interface AnswerEngineStatus {
   id: AnswerEngineId;
   label: string;

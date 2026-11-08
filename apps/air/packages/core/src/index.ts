@@ -3,7 +3,7 @@ export * from "./crypto.ts";
 export * from "./scheduler.ts";
 export * from "./time.ts";
 export * from "./context.ts";
-export * from "./starsign.ts";
+export * from "./base-air.ts";
 export type { PostDetail, PostRow, VariantRow } from "./services/posts.ts";
 export { matchesStream } from "./services/listening.ts";
 export type { BrandContextData } from "./services/brand.ts";
@@ -89,3 +89,5 @@ export {
 export { AnalyticsService, LEARNING_DAYS, type AnalyticsQuery, type AnalyticsFilters } from "./services/analytics.ts";
 export { ReportService, ReportInput, ReportPatch, ReportSchedule, ReportPeriod, DEFAULT_SECTIONS, reportPeriod, lastOccurrence, nextOccurrence, duePeriod, zonedTime, type ReportView, type ReportOptions } from "./services/reports.ts";
 export * from "./services/analytics-shared.ts";
+// ---- the base suite: brand
+export { LookService, type BrandView } from "./services/look.ts";

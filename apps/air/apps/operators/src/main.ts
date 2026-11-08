@@ -1,6 +1,6 @@
-import { AnthropicGateway, FakeGateway, defaultFakeHandlers, type ModelGateway } from "@starsign/ai";
-import { Starsign, SecretBox, TimerScheduler, type Scheduler } from "@starsign/core";
-import { createDb, migrate } from "@starsign/db";
+import { AnthropicGateway, FakeGateway, defaultFakeHandlers, type ModelGateway } from "@base-air/ai";
+import { BaseAir, SecretBox, TimerScheduler, type Scheduler } from "@base-air/core";
+import { createDb, migrate } from "@base-air/db";
 import { runAnalyst } from "./operators/analyst.ts";
 import { stewardClassifier } from "./operators/steward.ts";
 import { runWatch } from "./operators/watch.ts";
@@ -13,7 +13,7 @@ const USAGE = `usage:
   operators analyst --workspace <slug> [--days 7]  one weekly brief now
 
 env: DATABASE_URL (unset = PGlite at ./.pglite), REDIS_URL (set = the workers app owns publishing),
-     STARSIGN_MASTER_KEY, STARSIGN_MODEL (default claude-opus-5-5), STARSIGN_FAKE_AI=1 (no model calls),
+     BASE_AIR_MASTER_KEY, BASE_AIR_MODEL (default claude-opus-5-5), BASE_AIR_FAKE_AI=1 (no model calls),
      ANTHROPIC_API_KEY or an \`ant auth login\` profile for the real gateway.`;
 
 function parseFlags(args: string[]): Record<string, string> {
@@ -48,20 +48,20 @@ if (command === "--help" || command === "-h" || command === "help") {
 const handle = await createDb({ url: process.env.DATABASE_URL, pglitePath: process.env.DATABASE_URL ? undefined : (process.env.PGLITE_PATH ?? ".pglite") });
 await migrate(handle);
 
-const gw: ModelGateway = process.env.STARSIGN_FAKE_AI === "1" ? new FakeGateway(defaultFakeHandlers()) : new AnthropicGateway({ log: (l) => console.log(l) });
+const gw: ModelGateway = process.env.BASE_AIR_FAKE_AI === "1" ? new FakeGateway(defaultFakeHandlers()) : new AnthropicGateway({ log: (l) => console.log(l) });
 // The Steward: semantic red lines consult this synchronous cache; the Watch primes it before every draft hits the gate.
 const steward = stewardClassifier(gw);
 
 // Operators propose; humans approve through the API, which arms its own scheduler. The scheduler here only matters
 // for anything this process schedules directly, which is nothing by default. Without Redis, in-process timers publish
 // (single-node dev); with Redis, the workers app owns publishing and this one records intent only.
-let m: Starsign;
+let m: BaseAir;
 const scheduler: Scheduler = process.env.REDIS_URL
   ? new NoopScheduler()
   : new TimerScheduler(async (postId) => {
       await m.publishing.publishPost(postId);
     });
-m = new Starsign({ handle, connectors: buildRegistry(), scheduler, secrets: SecretBox.fromEnv(), classifyTopic: steward.classify });
+m = new BaseAir({ handle, connectors: buildRegistry(), scheduler, secrets: SecretBox.fromEnv(), classifyTopic: steward.classify });
 
 const describeGateway = gw instanceof AnthropicGateway ? `anthropic:${gw.model}` : "fake";
 

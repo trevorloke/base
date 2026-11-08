@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { StarsignClient } from "../src/client.ts";
+import { BaseAirClient } from "../src/client.ts";
 import { inboxHandlers, type ToolContext } from "../src/tools.ts";
 import { NOW, fakeApi, textOf } from "./helpers.ts";
 
-const ctx = (api: ReturnType<typeof fakeApi>): ToolContext => ({ client: new StarsignClient({ baseUrl: "http://api.test", apiKey: "star_t", fetch: api.fetch }), now: () => NOW });
+const ctx = (api: ReturnType<typeof fakeApi>): ToolContext => ({ client: new BaseAirClient({ baseUrl: "http://api.test", apiKey: "air_t", fetch: api.fetch }), now: () => NOW });
 
 const entry = {
   activity: { id: "act_1", network: "whatsapp", kind: "dm", authorName: "Lucía", authorHandle: "5215512345678", text: "¿Hacen envíos a CDMX?", translation: "Do you ship to Mexico City?", lang: "es" },

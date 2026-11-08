@@ -55,7 +55,7 @@ const connector = () => {
 
 describe("vk connect", () => {
   it("builds the VK ID authorize URL with PKCE", () => {
-    const url = new URL(connector().oauthAuthorizeUrl({ state: "st", codeChallenge: "chal", redirectUri: "https://starsign.example/oauth/vk/callback" }));
+    const url = new URL(connector().oauthAuthorizeUrl({ state: "st", codeChallenge: "chal", redirectUri: "https://air.example/oauth/vk/callback" }));
     expect(url.origin + url.pathname).toBe("https://id.vk.com/authorize");
     expect(url.searchParams.get("code_challenge")).toBe("chal");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
@@ -68,7 +68,7 @@ describe("vk connect", () => {
     on(TOKEN, json({ access_token: "tok", refresh_token: "ref", id_token: "idt", expires_in: 3600, user_id: 42, scope: "wall photos groups", state: "st" }));
     method("users.get", [{ id: 42, first_name: "Ivan", last_name: "Petrov", screen_name: "ivan" }]);
     method("groups.get", { count: 2, items: [{ id: 777, name: "Acme", screen_name: "acme", admin_level: 3 }, { id: 888, name: "Acme Shop" }] });
-    const accounts = await connector().oauthConnect({ code: "code1", codeVerifier: "ver", redirectUri: "https://starsign.example/oauth/vk/callback", callbackParams: { device_id: "dev-1", state: "st" } });
+    const accounts = await connector().oauthConnect({ code: "code1", codeVerifier: "ver", redirectUri: "https://air.example/oauth/vk/callback", callbackParams: { device_id: "dev-1", state: "st" } });
     expect(accounts.map((a) => [a.identity.externalId, a.identity.handle, a.identity.displayName, a.config?.ownerId])).toEqual([
       ["42", "ivan", "Ivan Petrov", 42],
       ["-777", "acme", "Acme", -777],

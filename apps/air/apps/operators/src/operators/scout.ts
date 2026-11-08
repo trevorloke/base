@@ -1,6 +1,6 @@
-import { clusterSignals, runPrompt, type ModelGateway } from "@starsign/ai";
-import type { Starsign } from "@starsign/core";
-import type { Actor } from "@starsign/schema";
+import { clusterSignals, runPrompt, type ModelGateway } from "@base-air/ai";
+import type { BaseAir } from "@base-air/core";
+import type { Actor } from "@base-air/schema";
 import { buildBrandContext } from "../context.ts";
 
 export const SCOUT_ACTOR: Actor = { type: "operator", id: "scout" };
@@ -30,7 +30,7 @@ const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").tri
  * The Scout turns what the outside world says is trending (Google Trends, Wikipedia, Hacker News, YouTube) into
  * topics this brand should track, scored against the brand's own profile. It never posts; it only widens the radar.
  */
-export async function runScout(m: Starsign, gw: ModelGateway, workspaceId: string, opts: ScoutOptions = {}): Promise<ScoutSummary> {
+export async function runScout(m: BaseAir, gw: ModelGateway, workspaceId: string, opts: ScoutOptions = {}): Promise<ScoutSummary> {
   const log = opts.log ?? (() => {});
   const minRelevance = opts.minRelevance ?? 0.6;
   const maxNew = opts.maxNewTopics ?? 3;

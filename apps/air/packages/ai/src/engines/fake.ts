@@ -1,7 +1,7 @@
 import type { AnswerEngine, AnswerEngineId, AnswerResult, AskOptions } from "./types.ts";
 
 /**
- * An engine that never leaves the process: for tests and `STARSIGN_FAKE_AI=1` development. By default it answers
+ * An engine that never leaves the process: for tests and `BASE_AIR_FAKE_AI=1` development. By default it answers
  * with the question's own words and one example source, so nothing it says is invented; tests pass `answer` to
  * script exactly what comes back.
  */

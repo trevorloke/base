@@ -9,7 +9,7 @@ interface SearchPosts {
 /**
  * Bluesky post search (app.bsky.feed.searchPosts): open network, real time. Counts posts mentioning the
  * keywords per hour. Works against the public AppView; if it requires auth, pass an access token
- * (STARSIGN_BLUESKY_SEARCH_TOKEN) or point baseUrl at a PDS-proxied endpoint.
+ * (BASE_AIR_BLUESKY_SEARCH_TOKEN) or point baseUrl at a PDS-proxied endpoint.
  */
 export class BlueskySearchSource implements SourceAdapter {
   readonly name = "bluesky_search" as const;
@@ -43,7 +43,7 @@ export class BlueskySearchSource implements SourceAdapter {
           body = await getJson<SearchPosts>(this.fetchFn, this.name, `${this.baseUrl}/app.bsky.feed.searchPosts?${params}`, headers);
         } catch (e) {
           if (e instanceof SourceError && (e.status === 401 || e.status === 403)) {
-            throw new SourceError(`${this.name}: search requires authentication; set STARSIGN_BLUESKY_SEARCH_TOKEN`, this.name, false, e.status);
+            throw new SourceError(`${this.name}: search requires authentication; set BASE_AIR_BLUESKY_SEARCH_TOKEN`, this.name, false, e.status);
           }
           throw e;
         }

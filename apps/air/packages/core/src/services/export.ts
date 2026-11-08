@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
-import * as t from "@starsign/db";
-import { SCHEMA_VERSION } from "@starsign/schema";
+import * as t from "@base-air/db";
+import { SCHEMA_VERSION } from "@base-air/schema";
 import type { CoreContext, Principal } from "../context.ts";
 
 /** Everything a workspace owns, as one JSON document. Portability is a feature, not a risk. */
@@ -20,7 +20,7 @@ export class ExportService {
     const topicIds = topics.map((x) => x.id);
     await this.ctx.events.append({ workspaceId: ws, type: "export.requested", subjectType: "workspace", subjectId: ws, actor: p.actor });
     return {
-      starsign: { schemaVersion: SCHEMA_VERSION, exportedAt: this.ctx.now().toISOString() },
+      baseAir: { schemaVersion: SCHEMA_VERSION, exportedAt: this.ctx.now().toISOString() },
       workspace: (await db.select().from(t.workspaces).where(eq(t.workspaces.id, ws)))[0] ?? null,
       policies: await db.select().from(t.policies).where(eq(t.policies.workspaceId, ws)),
       policyDecisions: await db.select().from(t.policyDecisions).where(eq(t.policyDecisions.workspaceId, ws)),

@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { mediaAssets, postOutcomes, reportShares, reports, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, SecretBox, Starsign, duePeriod, lastOccurrence, nextOccurrence, reportPeriod, scheduleSummary, sha256, type MailMessage, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import { mediaAssets, postOutcomes, reportShares, reports, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, SecretBox, BaseAir, duePeriod, lastOccurrence, nextOccurrence, reportPeriod, scheduleSummary, sha256, type MailMessage, type Principal } from "../src/index.ts";
 
 describe("report periods and schedules", () => {
   const tz = "America/New_York";
@@ -48,7 +48,7 @@ describe("report periods and schedules", () => {
 
 describe("client reports", () => {
   let h: DbHandle;
-  let m: Starsign;
+  let m: BaseAir;
   let owner: Principal;
   let editor: Principal;
   let viewer: Principal;
@@ -65,7 +65,7 @@ describe("client reports", () => {
     h = await createTestDb();
     const mock = new MockConnector();
     mock.now = now;
-    m = new Starsign({
+    m = new BaseAir({
       handle: h,
       connectors: new ConnectorRegistry().register(mock),
       scheduler: new InMemoryScheduler(),

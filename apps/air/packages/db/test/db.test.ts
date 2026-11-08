@@ -24,6 +24,23 @@ describe("db", () => {
     await h.close();
   });
 
+  it("guards the logs with the renamed function and carries old metric sources over", async () => {
+    const h = await createTestDb();
+    const { rowsOf } = await import("../src/client.ts");
+    const fns = rowsOf<{ proname: string }>(await h.db.execute(sql`SELECT proname FROM pg_proc WHERE proname IN ('base_air_append_only', 'starsign_append_only')`));
+    expect(fns.map((f) => f.proname)).toEqual(["base_air_append_only"]);
+    const triggers = rowsOf<{ tgname: string; proname: string }>(
+      await h.db.execute(sql`SELECT t.tgname, p.proname FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid WHERE t.tgname LIKE '%_append_only' ORDER BY t.tgname`),
+    );
+    expect(triggers).toEqual([
+      { tgname: "conversions_append_only", proname: "base_air_append_only" },
+      { tgname: "ledger_events_append_only", proname: "base_air_append_only" },
+      { tgname: "link_clicks_append_only", proname: "base_air_append_only" },
+      { tgname: "raw_events_append_only", proname: "base_air_append_only" },
+    ]);
+    await h.close();
+  });
+
   it("has pgvector available", async () => {
     const h = await createTestDb();
     const { rowsOf } = await import("../src/client.ts");

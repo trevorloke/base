@@ -443,7 +443,7 @@ export function actorPhrase(actor: Actor | null | undefined, people?: ReadonlyMa
     case "mcp":
       return `an MCP agent (${actor.id})`;
     case "system":
-      return "Starsign";
+      return "base air";
     default:
       return actor.id;
   }

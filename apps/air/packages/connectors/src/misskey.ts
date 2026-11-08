@@ -1,4 +1,4 @@
-import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -106,7 +106,7 @@ export function normalizeServerHost(input: string, label: string, allowPrivate =
   return host;
 }
 
-/** Starsign visibility (Mastodon words) → Misskey visibility. */
+/** base air visibility (Mastodon words) → Misskey visibility. */
 export function misskeyVisibility(v: "public" | "unlisted" | "private" | "direct" | undefined): "public" | "home" | "followers" | "specified" {
   if (v === "unlisted") return "home";
   if (v === "private") return "followers";

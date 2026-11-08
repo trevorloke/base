@@ -1,4 +1,4 @@
-// Types mirroring docs/API.md (Starsign HTTP API v1). Kept hand-written so the web app
+// Types mirroring docs/API.md (base air HTTP API v1). Kept hand-written so the web app
 // has no build-time dependency on the server packages.
 
 export type Network =
@@ -36,7 +36,7 @@ export type Network =
   | "mailchimp"
   | "kit"
   | "webhook"
-  /** Listening only: feeds Starsign reads (blogs, news sites, podcasts). */
+  /** Listening only: feeds base air reads (blogs, news sites, podcasts). */
   | "rss"
   | "weibo"
   | "douyin"
@@ -196,7 +196,7 @@ export interface Media {
   height?: number;
   durationSeconds?: number;
   bytes?: number;
-  /** Starsign media library id when the file was uploaded here. */
+  /** base air media library id when the file was uploaded here. */
   assetId?: string;
 }
 
@@ -669,7 +669,7 @@ export interface VariantOptions {
   allowStitch?: boolean;
   visibility?: MastodonVisibility;
   poll?: { options: string[]; durationMinutes: number };
-  /** Wrap this variant's links in Starsign short links with UTM tags. Omitted means on (when the server has a link base). */
+  /** Wrap this variant's links in base air short links with UTM tags. Omitted means on (when the server has a link base). */
   trackLinks?: boolean;
   /** utm_campaign for this variant's links. Default: the workspace's default campaign, else the post. */
   campaign?: string;
@@ -794,7 +794,7 @@ export interface InviteInfo {
   email: string;
   role: Role;
   expiresAt: string;
-  /** True when that email already has a Starsign account: accepting asks for its password, not a new one. */
+  /** True when that email already has a base air account: accepting asks for its password, not a new one. */
   userExists: boolean;
 }
 

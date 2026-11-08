@@ -128,7 +128,7 @@ export interface S3Config {
 
 /**
  * Any S3-compatible store (AWS S3, Cloudflare R2, MinIO, Backblaze B2) with path-style requests signed by
- * AWS Signature V4. No SDK: a handful of verbs are all Starsign needs.
+ * AWS Signature V4. No SDK: a handful of verbs are all base air needs.
  */
 export class S3Storage implements MediaStorage {
   readonly name = "s3";
@@ -259,17 +259,22 @@ function lower(h: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(h).map(([k, v]) => [k.toLowerCase(), v]));
 }
 
-/** STARSIGN_S3_* selects S3; otherwise local disk under STARSIGN_MEDIA_DIR served from STARSIGN_PUBLIC_URL. */
+const basePathOf = (raw: string | undefined) => {
+  const parts = (raw ?? "").split("/").filter((p) => p && p !== "." && p !== "..");
+  return parts.length ? `/${parts.join("/")}` : "";
+};
+
+/** BASE_AIR_S3_* selects S3; otherwise local disk under BASE_AIR_MEDIA_DIR served from BASE_AIR_PUBLIC_URL. */
 export function storageFromEnv(env: NodeJS.ProcessEnv = process.env): MediaStorage {
-  if (env.STARSIGN_S3_BUCKET && env.STARSIGN_S3_ACCESS_KEY_ID && env.STARSIGN_S3_SECRET_ACCESS_KEY && env.STARSIGN_S3_ENDPOINT && env.STARSIGN_S3_PUBLIC_URL) {
+  if (env.BASE_AIR_S3_BUCKET && env.BASE_AIR_S3_ACCESS_KEY_ID && env.BASE_AIR_S3_SECRET_ACCESS_KEY && env.BASE_AIR_S3_ENDPOINT && env.BASE_AIR_S3_PUBLIC_URL) {
     return new S3Storage({
-      endpoint: env.STARSIGN_S3_ENDPOINT,
-      region: env.STARSIGN_S3_REGION ?? "auto",
-      bucket: env.STARSIGN_S3_BUCKET,
-      accessKeyId: env.STARSIGN_S3_ACCESS_KEY_ID,
-      secretAccessKey: env.STARSIGN_S3_SECRET_ACCESS_KEY,
-      publicBaseUrl: env.STARSIGN_S3_PUBLIC_URL,
+      endpoint: env.BASE_AIR_S3_ENDPOINT,
+      region: env.BASE_AIR_S3_REGION ?? "auto",
+      bucket: env.BASE_AIR_S3_BUCKET,
+      accessKeyId: env.BASE_AIR_S3_ACCESS_KEY_ID,
+      secretAccessKey: env.BASE_AIR_S3_SECRET_ACCESS_KEY,
+      publicBaseUrl: env.BASE_AIR_S3_PUBLIC_URL,
     });
   }
-  return new LocalStorage(env.STARSIGN_MEDIA_DIR ?? ".media", env.STARSIGN_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}`);
+  return new LocalStorage(env.BASE_AIR_MEDIA_DIR ?? ".media", env.BASE_AIR_PUBLIC_URL ?? `http://localhost:${env.PORT ?? 4000}${basePathOf(env.BASE_PATH)}`);
 }

@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
-import { experiments, postOutcomes, posts } from "@starsign/db";
-import { newId } from "@starsign/ledger";
+import { experiments, postOutcomes, posts } from "@base-air/db";
+import { newId } from "@base-air/ledger";
 import { z } from "zod";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";

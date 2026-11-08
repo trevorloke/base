@@ -1,8 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { apiKeys, members, policies, users, workspaces } from "@starsign/db";
-import { newId } from "@starsign/ledger";
-import { DEFAULT_POLICY, type Actor } from "@starsign/schema";
-import type { MemberRole } from "@starsign/policy";
+import { apiKeys, members, policies, users, workspaces } from "@base-air/db";
+import { newId } from "@base-air/ledger";
+import { DEFAULT_POLICY, type Actor } from "@base-air/schema";
+import type { MemberRole } from "@base-air/policy";
 import type { CoreContext, Principal } from "../context.ts";
 import { randomToken, sha256 } from "../crypto.ts";
 import { CoreError } from "../errors.ts";
@@ -73,7 +73,7 @@ export class WorkspaceService {
 
   /** Mint an API key. The secret is returned once and stored only as a hash. */
   async createApiKey(input: { workspaceId: string; name: string; actorType: "human" | "mcp" | "operator"; actorId: string; role?: MemberRole }) {
-    const secret = randomToken("star");
+    const secret = randomToken("air");
     const [row] = await this.ctx.db
       .insert(apiKeys)
       .values({
@@ -86,7 +86,7 @@ export class WorkspaceService {
         role: input.role ?? null,
       })
       .returning();
-    await this.ctx.events.append({ workspaceId: input.workspaceId, type: "apikey.created", subjectType: "api_key", subjectId: row!.id, actor: { type: "system", id: "starsign" }, data: { name: input.name, actorType: input.actorType, role: input.role ?? null } });
+    await this.ctx.events.append({ workspaceId: input.workspaceId, type: "apikey.created", subjectType: "api_key", subjectId: row!.id, actor: { type: "system", id: "base-air" }, data: { name: input.name, actorType: input.actorType, role: input.role ?? null } });
     return { secret, key: row! };
   }
 

@@ -45,12 +45,12 @@ describe("mastodon connect", () => {
   });
 
   it("registers an app once per instance and redirect, returns a PKCE authorize URL and the client credentials", async () => {
-    fetchMock.mockResolvedValue(json({ id: "1", name: "Starsign", client_id: "cid-1", client_secret: "sec-1", redirect_uris: ["https://app.example/oauth/mastodon/callback"] }));
+    fetchMock.mockResolvedValue(json({ id: "1", name: "base air", client_id: "cid-1", client_secret: "sec-1", redirect_uris: ["https://app.example/oauth/mastodon/callback"] }));
     const c = connector();
     const p = { inputs: { instance: "Mastodon.social" }, redirectUri: "https://app.example/oauth/mastodon/callback", state: "st", codeChallenge: "ch" };
     const res = await c.oauthPrepare(p);
     expect(call(0).url.href).toBe("https://mastodon.social/api/v1/apps");
-    expect(call(0).json()).toEqual({ client_name: "Starsign", redirect_uris: "https://app.example/oauth/mastodon/callback", scopes: "read write push" });
+    expect(call(0).json()).toEqual({ client_name: "base air", redirect_uris: "https://app.example/oauth/mastodon/callback", scopes: "read write push" });
     expect(res.config).toEqual({ instance: "mastodon.social", clientId: "cid-1", clientSecret: "sec-1" });
     const url = new URL(res.authorizeUrl);
     expect(url.origin + url.pathname).toBe("https://mastodon.social/oauth/authorize");

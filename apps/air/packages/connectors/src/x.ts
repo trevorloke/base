@@ -1,4 +1,4 @@
-import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, downloadMedia, isAfter, isoSeconds, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -114,7 +114,7 @@ function xStatusOf(err: unknown): number | undefined {
  * core calls refreshAuth() explicitly.
  */
 /**
- * Scopes a Starsign X account needs: read and write posts, read the user, upload media, like/unlike,
+ * Scopes a base air X account needs: read and write posts, read the user, upload media, like/unlike,
  * hide replies, refresh without the user.
  */
 export const X_OAUTH_SCOPES = ["tweet.read", "tweet.write", "users.read", "media.write", "like.write", "tweet.moderate.write", "offline.access"];
@@ -604,7 +604,7 @@ function parseAuth(account: AccountRef): XAuth {
   return parsed.data;
 }
 
-/** Native metric names → Starsign's canon. Only metrics X actually returned become rows. */
+/** Native metric names → base air's canon. Only metrics X actually returned become rows. */
 function tweetMetrics(t: XTweet, observedAt: string): MetricInput[] {
   const pub = t.public_metrics ?? {};
   const priv = t.non_public_metrics ?? {};

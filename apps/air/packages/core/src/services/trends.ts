@@ -1,8 +1,8 @@
 import { and, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
-import { postOutcomes, trendActions, trendForecasts, trendPoints, trendTopics } from "@starsign/db";
-import { forecastTopic, toForecastRecord, type SourceSeries } from "@starsign/forecast";
-import { newId } from "@starsign/ledger";
-import { TrendPointInput, type Actor, type TrendSource, type TrendStage } from "@starsign/schema";
+import { postOutcomes, trendActions, trendForecasts, trendPoints, trendTopics } from "@base-air/db";
+import { forecastTopic, toForecastRecord, type SourceSeries } from "@base-air/forecast";
+import { newId } from "@base-air/ledger";
+import { TrendPointInput, type Actor, type TrendSource, type TrendStage } from "@base-air/schema";
 import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 

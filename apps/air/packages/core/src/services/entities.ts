@@ -1,19 +1,19 @@
 import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
-import { activities, entityMentions, trackedEntities, trendTopics } from "@starsign/db";
-import { findPhrases } from "@starsign/policy";
-import { Network } from "@starsign/schema";
-import { newId } from "@starsign/ledger";
+import { activities, entityMentions, trackedEntities, trendTopics } from "@base-air/db";
+import { findPhrases } from "@base-air/policy";
+import { Network } from "@base-air/schema";
+import { newId } from "@base-air/ledger";
 import type { CoreContext, Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 import type { TrendService } from "./trends.ts";
 import type { ListeningService } from "./listening.ts";
-import type { MentionSearch } from "@starsign/sources";
+import type { MentionSearch } from "@base-air/sources";
 
 /**
  * The tracker. Named organisations (a party, a brand, a company) and people (a candidate, a spokesperson, a creator,
  * an individual's own brand), each with every way people write them: aliases in other languages and scripts,
- * nicknames, abbreviations, and social handles. Every message Starsign ingests (inboxes, chat groups, public search,
+ * nicknames, abbreviations, and social handles. Every message base air ingests (inboxes, chat groups, public search,
  * translations) is scanned for them; people roll up into the organisation they belong to.
  */
 

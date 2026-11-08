@@ -22,7 +22,7 @@ APIs used:
 | `EVENT` | Needs `options.title` (or `event.title`) and `options.googleBusiness.event` = `{startDate, endDate, startTime?, endTime?}` (`YYYY-MM-DD`, `HH:MM`). |
 | `OFFER` | Same event dates, plus `options.googleBusiness.offer` = `{couponCode?, redeemOnlineUrl?, termsConditions?}`. |
 | Call to action | `options.callToAction` (BOOK, ORDER, SHOP, LEARN_MORE, SIGN_UP, CALL) plus `options.link`. `CALL` needs no link (Google uses the listing's phone number). The others need `options.link`, which `validate()` enforces. A link without a CTA becomes `LEARN_MORE`. OFFER posts get no CTA button. |
-| Photo | One photo: `media[0]` must be an image, JPG/PNG, 10 KB–5 MB, at least 250×250 when the metadata is known. Sent as `{mediaFormat: "PHOTO", sourceUrl}` (pull-style: Google fetches the public URL from Starsign's media library). Video is refused. |
+| Photo | One photo: `media[0]` must be an image, JPG/PNG, 10 KB–5 MB, at least 250×250 when the metadata is known. Sent as `{mediaFormat: "PHOTO", sourceUrl}` (pull-style: Google fetches the public URL from base air's media library). Video is refused. |
 | Inbox | `fetchActivity` lists reviews (`orderBy=updateTime desc`, 50 per page, up to 4 pages) and stops at `since`. Each review becomes `kind: "comment"`, `externalId` = review resource name, `parentExternalId` = location, `authorName` = reviewer (null when anonymous), `text` = comment (null for a rating-only review), `url` = the location's Maps URL, `raw` = the review plus `rating` (1–5). |
 | Reply | Only to reviews: `PUT …/reviews/{id}/reply` with `{comment}` (at most 4,096 bytes). The call creates the reply or replaces the existing one, so it is naturally idempotent. Returns `externalId` = `…/reviews/{id}/reply`. Local posts cannot be replied to, so core's first-comment step records a clear error if `options.firstComment` is set. |
 | Moderate | `delete` on a review or reply id → `DELETE …/reviews/{id}/reply` (removes the business's reply). Google offers no API to hide or delete reviews themselves, so every other action → `rejected`. |
@@ -43,9 +43,9 @@ Capabilities: `publish`, `fetchActivity`, `reply`, `moderate`, `accountMetrics`;
    - Business Profile Performance API
 2. **Request API access** (see the next section). Until Google approves it, the quotas read 0 and every call returns 429.
 3. OAuth consent screen: as for YouTube, add the scope `https://www.googleapis.com/auth/business.manage`.
-4. OAuth client (Web application): add the redirect URI `${STARSIGN_PUBLIC_URL}/oauth/google_business/callback`.
+4. OAuth client (Web application): add the redirect URI `${BASE_AIR_PUBLIC_URL}/oauth/google_business/callback`.
 5. Env vars (shared with YouTube): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-6. Webhook URL: not used (`${STARSIGN_PUBLIC_URL}/webhooks/google_business` is not registered).
+6. Webhook URL: not used (`${BASE_AIR_PUBLIC_URL}/webhooks/google_business` is not registered).
 
 The person connecting must be an owner or manager of the Business Profile(s). Only locations that are verified can publish posts (config `hasVoiceOfMerchant: true`).
 
@@ -95,4 +95,4 @@ The person connecting must be an owner or manager of the Business Profile(s). On
 2. **EVENT/OFFER fields**: core's `VariantOptions` has no event dates or offer fields, and its zod schema strips unknown keys, so `options.googleBusiness` does not survive the public API today. Add `googleBusiness: {topicType, event, offer}` (or generic `event`/`offer` fields) to `VariantOptions`? Until then, only STANDARD posts (with a CTA) can be published end to end.
 3. **Metrics shape**: `MetricName` has no names for calls, direction requests or per-surface impressions. Should the canon gain `calls`, `direction_requests` and surface-specific impressions, or is `fetchPerformance()` enough?
 4. **First comment on Google Business**: should the composer hide `firstComment` for this network? Today core attempts it and records an error.
-5. **Review notifications**: is a Pub/Sub topic acceptable for near-real-time review alerts? It needs a GCP topic, a push subscription to Starsign and OIDC token verification. Otherwise reviews are polled.
+5. **Review notifications**: is a Pub/Sub topic acceptable for near-real-time review alerts? It needs a GCP topic, a push subscription to base air and OIDC token verification. Otherwise reviews are polled.

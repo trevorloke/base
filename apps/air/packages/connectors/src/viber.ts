@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { ActivityInput, Media, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -10,14 +10,14 @@ import { ConnectorError } from "./types.ts";
  * Viber through its official REST APIs at https://chatapi.viber.com/pa. Two kinds of account, chosen at connect:
  *
  * - **Channel** (Channels Post API): the channel's auth token from Channel settings → Developer tools (superadmins
- *   only). Starsign posts to the channel as its superadmin (`from`). Channels have no inbox: posts by the channel
+ *   only). base air posts to the channel as its superadmin (`from`). Channels have no inbox: posts by the channel
  *   and members' reactions produce no callbacks, so nothing is read back.
  * - **Bot** (REST Bot API): the bot's auth token. Since February 2024 new bots are only for businesses with a
  *   commercial agreement with Viber, and messages a bot starts are charged. People's messages and subscriptions
- *   arrive on `${STARSIGN_PUBLIC_URL}/webhooks/viber?account=<id>`; replies are send_message.
+ *   arrive on `${BASE_AIR_PUBLIC_URL}/webhooks/viber?account=<id>`; replies are send_message.
  *
  * Both need a webhook set with set_webhook (the Channels Post API refuses posts until one is set). Viber checks the
- * URL by calling it at once, which Starsign can only answer once the account is saved, so connect tries and the
+ * URL by calling it at once, which base air can only answer once the account is saved, so connect tries and the
  * first poll (fetchActivity) or a publish refused with "webhook not set" sets it again.
  *
  * Every callback is signed with the account's own token (X-Viber-Content-Signature = hex HMAC-SHA256 of the raw
@@ -36,7 +36,7 @@ export interface ViberConnectorOptions {
   apiBase?: string;
   fetch?: FetchLike;
   now?: () => Date;
-  /** STARSIGN_PUBLIC_URL: the webhook Starsign sets is `${publicUrl}/webhooks/viber?account=<id>`. */
+  /** BASE_AIR_PUBLIC_URL: the webhook base air sets is `${publicUrl}/webhooks/viber?account=<id>`. */
   publicUrl?: string;
 }
 
@@ -186,7 +186,7 @@ export function mapViberError(code: number | undefined, message: string | undefi
     if (code === 12) return new ConnectorError(`${msg} (rate limited; try again shortly)`, "rate_limit", true, cause);
     if (code === 5 || code === 6 || code === 11) return new ConnectorError(`${msg} (this person cannot receive messages from the account: not subscribed or no suitable device)`, "rejected", false, cause);
     if (code === 23 || code === 24) return new ConnectorError(`${msg} (the bot's message allowance or balance is used up)`, "rejected", false, cause);
-    if (code === 10) return new ConnectorError(`${msg} (Viber needs a webhook set before it accepts posts; check STARSIGN_PUBLIC_URL)`, "rejected", false, cause);
+    if (code === 10) return new ConnectorError(`${msg} (Viber needs a webhook set before it accepts posts; check BASE_AIR_PUBLIC_URL)`, "rejected", false, cause);
     return new ConnectorError(msg, "rejected", false, cause);
   }
   const { kind, retryable } = classifyHttpStatus(httpStatus);
@@ -273,7 +273,7 @@ export class ViberConnector implements Connector {
         webhookSet = true;
       } catch (err) {
         if (err instanceof ConnectorError && err.kind === "auth") throw err;
-        // Expected on first connect: Viber checks the URL before Starsign has saved the account. Set again later.
+        // Expected on first connect: Viber checks the URL before base air has saved the account. Set again later.
       }
     }
     const config: ViberAccountConfig = { kind, accountId: info.id, name: info.name ?? null, uri: info.uri ?? null, from, subscribersCount: typeof info.subscribers_count === "number" ? info.subscribers_count : null, webhookUrl, webhookSet };
@@ -299,7 +299,7 @@ export class ViberConnector implements Connector {
     return this.call(token, "/set_webhook", { url, ...(kind === "bot" ? { event_types: ["subscribed", "unsubscribed", "conversation_started", "delivered", "seen", "failed"] } : {}), send_name: true, send_photo: false }, "set_webhook");
   }
 
-  /** Set the account's webhook once per process (needs STARSIGN_PUBLIC_URL). Returns whether it is set. */
+  /** Set the account's webhook once per process (needs BASE_AIR_PUBLIC_URL). Returns whether it is set. */
   async ensureWebhook(account: AccountRef): Promise<boolean> {
     const url = this.webhookUrlFor(account.externalId);
     if (!url) return false;
@@ -424,7 +424,7 @@ export class ViberConnector implements Connector {
       if (!input.text.trim()) throw new ConnectorError("viber reply: text is empty", "rejected", false);
       if ([...input.text].length > LIMITS.text) throw new ConnectorError(`viber reply: messages are at most ${LIMITS.text} characters`, "rejected", false);
       const token = parseAuth(account).authToken;
-      const sender = (cfg.name ?? account.handle ?? "Starsign").slice(0, LIMITS.senderName);
+      const sender = (cfg.name ?? account.handle ?? "base air").slice(0, LIMITS.senderName);
       const r = await this.call<{ message_token?: string | number }>(token, "/send_message", { receiver, min_api_version: 1, sender: { name: sender }, type: "text", text: input.text }, "send_message");
       return { externalId: `${receiver}:${String(r.message_token ?? `sent-${input.idempotencyKey}`)}`, url: null, raw: r };
     });
@@ -497,7 +497,7 @@ function fileName(m: Media): string {
   return "file.pdf";
 }
 
-/** Registry entry for Viber. No env is required; STARSIGN_PUBLIC_URL lets Starsign set each account's webhook. */
+/** Registry entry for Viber. No env is required; BASE_AIR_PUBLIC_URL lets base air set each account's webhook. */
 export function createViberConnectors(env: NodeJS.ProcessEnv): Connector[] {
-  return [new ViberConnector({ ...(env.VIBER_API_BASE ? { apiBase: env.VIBER_API_BASE } : {}), ...(env.STARSIGN_PUBLIC_URL ? { publicUrl: env.STARSIGN_PUBLIC_URL } : {}) })];
+  return [new ViberConnector({ ...(env.VIBER_API_BASE ? { apiBase: env.VIBER_API_BASE } : {}), ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}) })];
 }

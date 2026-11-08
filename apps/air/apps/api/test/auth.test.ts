@@ -1,15 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { ledgerEvents, sessions, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox, type MailMessage } from "@starsign/core";
+import { createTestDb } from "@base-air/db/test";
+import { ledgerEvents, sessions, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox, type MailMessage } from "@base-air/core";
 import { createApp } from "../src/app.ts";
 
-const PUBLIC_URL = "https://starsign.test";
+const PUBLIC_URL = "https://air.test";
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let app: ReturnType<typeof createApp>;
 let clock = Date.parse("2026-11-03T12:00:00Z");
 const now = () => new Date(clock);
@@ -30,13 +30,13 @@ interface CallOpts {
 function call(method: string, path: string, o: CallOpts = {}): Promise<Response> {
   const headers: Record<string, string> = { ...(o.headers ?? {}) };
   if (o.body !== undefined && !("content-type" in headers)) headers["content-type"] = "application/json";
-  if (o.cookie) headers.cookie = `starsign_session=${o.cookie}`;
-  if (o.csrf ?? true) headers["x-starsign-csrf"] = "1";
+  if (o.cookie) headers.cookie = `base_air_session=${o.cookie}`;
+  if (o.csrf ?? true) headers["x-base-air-csrf"] = "1";
   return Promise.resolve(app.request(path, { method, headers, body: o.body === undefined ? undefined : typeof o.body === "string" ? o.body : JSON.stringify(o.body) }));
 }
 function setCookie(r: Response): { value: string; raw: string } | null {
   for (const c of r.headers.getSetCookie()) {
-    const match = /^starsign_session=([^;]*)/.exec(c);
+    const match = /^base_air_session=([^;]*)/.exec(c);
     if (match) return { value: match[1]!, raw: c };
   }
   return null;
@@ -64,7 +64,7 @@ let annKey = "";
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({
+  m = new BaseAir({
     handle: h,
     connectors: new ConnectorRegistry().register(new MockConnector()),
     scheduler: new InMemoryScheduler(),
@@ -77,7 +77,7 @@ beforeAll(async () => {
 afterAll(() => h.close());
 
 describe("people: sign-up, sign-in, sessions", () => {
-  it("lets the first person sign up, then closes sign-up unless STARSIGN_ALLOW_SIGNUP", async () => {
+  it("lets the first person sign up, then closes sign-up unless BASE_AIR_ALLOW_SIGNUP", async () => {
     const notJson = await call("POST", "/v1/auth/signup", { body: JSON.stringify(ANN), headers: { "content-type": "text/plain" } });
     expect(notJson.status).toBe(400);
 
@@ -148,6 +148,16 @@ describe("people: sign-up, sign-in, sessions", () => {
     expect((await call("GET", "/v1/me", { csrf: false })).status).toBe(401);
   });
 
+  it("keeps a session signed in under the pre-rename cookie name and moves it to the new one", async () => {
+    const { cookie } = await login(ANN.email, ANN.password);
+    const r = await call("GET", "/v1/me", { csrf: false, headers: { cookie: `starsign_session=${cookie}` } });
+    expect(r.status).toBe(200);
+    expect((await json(r)).actor).toEqual({ type: "human", id: annId });
+    const set = r.headers.getSetCookie();
+    expect(set.find((c) => c.startsWith(`base_air_session=${cookie}`))).toBeTruthy();
+    expect(set.find((c) => c.startsWith("starsign_session=") && /Max-Age=0/.test(c))).toBeTruthy();
+  });
+
   it("answers 429 after five failures for an email, for fifteen minutes", async () => {
     for (let i = 0; i < 5; i++) expect((await call("POST", "/v1/auth/login", { body: { email: CARL.email, password: `wrong ${i}` } })).status).toBe(401);
     const locked = await call("POST", "/v1/auth/login", { body: { email: CARL.email, password: CARL.password } });
@@ -159,7 +169,7 @@ describe("people: sign-up, sign-in, sessions", () => {
     await login(CARL.email, CARL.password);
   });
 
-  it("requires x-starsign-csrf on cookie writes, never on bearer keys", async () => {
+  it("requires x-base-air-csrf on cookie writes, never on bearer keys", async () => {
     const { cookie } = await login(ANN.email, ANN.password);
     const stream = { name: "Support", query: { keywords: ["warranty"] } };
     const noHeader = await call("POST", "/v1/streams", { cookie, csrf: false, body: stream });
@@ -438,7 +448,7 @@ describe("api keys and dev mode still work", () => {
     const me = await json(await call("GET", "/v1/me", { csrf: false, headers: { authorization: `Bearer ${annKey}` } }));
     expect(me.actor).toEqual({ type: "human", id: annId });
     expect(me.role).toBe("owner");
-    expect((await call("GET", "/v1/me", { csrf: false, headers: { authorization: "Bearer star_nope" } })).status).toBe(401);
+    expect((await call("GET", "/v1/me", { csrf: false, headers: { authorization: "Bearer air_nope" } })).status).toBe(401);
     expect((await call("GET", "/v1/auth/session", { csrf: false, headers: { authorization: `Bearer ${annKey}` } })).status).toBe(401);
     // A bearer key wins over a cookie.
     const both = await json(await call("GET", "/v1/me", { csrf: false, cookie: "garbage", headers: { authorization: `Bearer ${annKey}` } }));

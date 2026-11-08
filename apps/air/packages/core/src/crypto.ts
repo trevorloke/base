@@ -7,9 +7,9 @@ export class SecretBox {
   }
 
   static fromEnv(env: NodeJS.ProcessEnv = process.env): SecretBox {
-    const raw = env.STARSIGN_MASTER_KEY;
+    const raw = env.BASE_AIR_MASTER_KEY;
     if (raw) return new SecretBox(Buffer.from(raw, "base64"));
-    console.warn("[starsign] STARSIGN_MASTER_KEY is not set; using an ephemeral key. Stored credentials will not survive a restart.");
+    console.warn("[base-air] BASE_AIR_MASTER_KEY is not set; using an ephemeral key. Stored credentials will not survive a restart.");
     return new SecretBox(randomBytes(32));
   }
 

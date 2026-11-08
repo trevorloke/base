@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Starsign } from "@starsign/core";
+import type { BaseAir } from "@base-air/core";
 import { maintenanceJobs, startInProcessJobs } from "../src/maintenance.ts";
 
-function fakeStarsign() {
+function fakeBaseAir() {
   return {
     metrics: { captureAccountMetrics: vi.fn(async () => ({ accounts: 0, metrics: 0 })) },
     links: { rollup: vi.fn(async () => 0) },
@@ -21,9 +21,9 @@ describe("background jobs without Redis", () => {
 
   it("runs jobs on their timers after a staggered start", async () => {
     vi.useFakeTimers();
-    const m = fakeStarsign();
+    const m = fakeBaseAir();
     const log: string[] = [];
-    const jobs = startInProcessJobs(m as unknown as Starsign, { firstRunAfterMs: 1000, log: (l) => log.push(l) });
+    const jobs = startInProcessJobs(m as unknown as BaseAir, { firstRunAfterMs: 1000, log: (l) => log.push(l) });
     expect(log[0]).toMatch(/running 9 background jobs/);
     await vi.advanceTimersByTimeAsync(500);
     expect(m.metrics.captureAccountMetrics).not.toHaveBeenCalled(); // nothing before the server is up
@@ -39,11 +39,11 @@ describe("background jobs without Redis", () => {
   });
 
   it("never runs two of the same job at once, and logs a failing job instead of throwing", async () => {
-    const m = fakeStarsign();
+    const m = fakeBaseAir();
     let release!: () => void;
     m.links.rollup.mockImplementationOnce(() => new Promise<number>((r) => (release = () => r(0))));
     const log: string[] = [];
-    const jobs = startInProcessJobs(m as unknown as Starsign, { firstRunAfterMs: 3_600_000, log: (l) => log.push(l) });
+    const jobs = startInProcessJobs(m as unknown as BaseAir, { firstRunAfterMs: 3_600_000, log: (l) => log.push(l) });
     const first = jobs.runNow("links");
     expect(await jobs.runNow("links")).toBeNull(); // skipped while the first is running
     release();

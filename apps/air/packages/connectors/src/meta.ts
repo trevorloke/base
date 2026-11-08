@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, classifyHttpStatus, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -616,7 +616,7 @@ export class MetaConnector implements Connector {
     // The bytes from file_offset on go up as one streamed body (exact Content-Length), so the video is never held whole.
     return withMedia(mediaSource(this.media, this.fetchImpl), media, async (file) => {
       const session = await this.graph<{ id?: string }>("POST", `/${this.clientId}/uploads`, token, {
-        query: { file_name: `starsign-${Date.now()}.mp4`, file_length: file.size, file_type: file.mime },
+        query: { file_name: `base-air-${Date.now()}.mp4`, file_length: file.size, file_type: file.mime },
         what: "upload session",
         creating: true,
       });

@@ -3,11 +3,11 @@ import { randomBytes } from "node:crypto";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector, openMedia, readChunks, type MediaFetcher } from "@starsign/connectors";
-import type { Media } from "@starsign/schema";
-import { InMemoryScheduler, LocalStorage, S3Storage, SecretBox, Starsign, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector, openMedia, readChunks, type MediaFetcher } from "@base-air/connectors";
+import type { Media } from "@base-air/schema";
+import { InMemoryScheduler, LocalStorage, S3Storage, SecretBox, BaseAir, type Principal } from "../src/index.ts";
 
 const MiB = 1024 * 1024;
 const byteAt = (i: number) => (i * 13 + 5) & 255;
@@ -118,8 +118,8 @@ afterAll(async () => {
   await h.close();
 });
 
-async function starsign(storage: LocalStorage | S3Storage) {
-  const m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), mediaStorage: storage });
+async function baseAir(storage: LocalStorage | S3Storage) {
+  const m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), mediaStorage: storage });
   const ws = await m.workspaces.create({ slug: `ws${randomBytes(4).toString("hex")}`, name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   const owner: Principal = { workspaceId: ws.id, actor: { type: "human", id: "u1" }, role: "owner" };
   return { m, owner };
@@ -148,7 +148,7 @@ async function expectReads(fetcher: MediaFetcher, media: Media, file: Uint8Array
 
 describe("media fetcher on local disk", () => {
   it("serves size, positional ranges, a 1 MB-piece stream and chunks for an uploaded video", async () => {
-    const { m, owner } = await starsign(new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000"));
+    const { m, owner } = await baseAir(new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000"));
     const file = mp4(3 * MiB + 777);
     const row = await m.media.upload(owner, { bytes: file, filename: "clip.mp4" });
     await expectReads(m.media.fetcher(), m.media.toMedia(row), file);
@@ -174,7 +174,7 @@ describe("media fetcher on S3", () => {
   it("uses ranged GETs for range and one streamed GET for stream", async () => {
     const bucket = new FakeBucket();
     const s3 = new S3Storage({ endpoint: "https://r2.example", region: "auto", bucket: "media", accessKeyId: "AK", secretAccessKey: "SK", publicBaseUrl: "https://cdn.acme.test" }, bucket.fetch);
-    const { m, owner } = await starsign(s3);
+    const { m, owner } = await baseAir(s3);
     const file = mp4(3 * MiB + 99);
     const row = await m.media.upload(owner, { bytes: file, filename: "clip.mp4" });
     const fetcher = m.media.fetcher();
@@ -205,7 +205,7 @@ describe("media fetcher for external URLs", () => {
   const media: Media = { kind: "video", url: "https://cdn.other.example/clip.mp4", mime: "video/mp4" };
 
   it("uses HEAD for the size and Range GETs for reads when the server supports ranges", async () => {
-    const { m } = await starsign(new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000"));
+    const { m } = await baseAir(new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000"));
     const file = pattern(3 * MiB + 1);
     const web = webServer(file, { ranges: true });
     const fetcher = m.media.fetcher(web.fetchImpl);
@@ -215,7 +215,7 @@ describe("media fetcher for external URLs", () => {
   });
 
   it("without Range support: size is unknown, range slices a full GET, and readers stream it once", async () => {
-    const { m } = await starsign(new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000"));
+    const { m } = await baseAir(new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000"));
     const file = pattern(3 * MiB + 1);
     const web = webServer(file, { ranges: false });
     const fetcher = m.media.fetcher(web.fetchImpl);
@@ -236,7 +236,7 @@ describe("media fetcher for external URLs", () => {
   });
 
   it("reports an HTTP error from the media URL", async () => {
-    const { m } = await starsign(new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000"));
+    const { m } = await baseAir(new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000"));
     const fetcher = m.media.fetcher((async () => new Response("gone", { status: 404 })) as typeof fetch);
     expect(await fetcher.size!(media)).toBeNull();
     await expect(fetcher.stream!(media)).rejects.toThrow(/HTTP 404/);

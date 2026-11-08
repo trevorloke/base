@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, WeChatConnector, toWeChatXml, wechatSignature } from "@starsign/connectors";
-import { InMemoryScheduler, Starsign, SecretBox } from "@starsign/core";
-import { FakeGateway, defaultFakeHandlers } from "@starsign/ai";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, WeChatConnector, toWeChatXml, wechatSignature } from "@base-air/connectors";
+import { InMemoryScheduler, BaseAir, SecretBox } from "@base-air/core";
+import { FakeGateway, defaultFakeHandlers } from "@base-air/ai";
 import { createApp } from "../src/app.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let app: ReturnType<typeof createApp>;
 let ownerKey: string;
 let editorKey: string;
@@ -21,12 +21,12 @@ const wechatFetch = async (url: string | URL | Request) =>
 
 beforeAll(async () => {
   h = await createTestDb();
-  const wechat = new WeChatConnector({ fetch: wechatFetch as typeof fetch, publicUrl: "https://starsign.test" });
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(wechat), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
+  const wechat = new WeChatConnector({ fetch: wechatFetch as typeof fetch, publicUrl: "https://air.test" });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(wechat), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme" }, { type: "human", id: "u1" });
   ownerKey = (await m.workspaces.createApiKey({ workspaceId: ws.id, name: "o", actorType: "human", actorId: "u1", role: "owner" })).secret;
   editorKey = (await m.workspaces.createApiKey({ workspaceId: ws.id, name: "e", actorType: "human", actorId: "u2", role: "editor" })).secret;
-  app = createApp(m, { gateway: new FakeGateway(defaultFakeHandlers()), publicUrl: "https://starsign.test" });
+  app = createApp(m, { gateway: new FakeGateway(defaultFakeHandlers()), publicUrl: "https://air.test" });
 });
 afterAll(() => h.close());
 

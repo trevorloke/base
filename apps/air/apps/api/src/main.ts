@@ -1,27 +1,37 @@
-import { existsSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
-import { serveStatic } from "@hono/node-server/serve-static";
 import { createApp, VERSION } from "./app.ts";
+import { normalizeBasePath, trustedProxiesFromEnv, withBasePath } from "./base-path.ts";
 import { boot } from "./boot.ts";
+import { brandHead } from "./routes-brand.ts";
+import { ssoConfigFromEnv, suiteLinksFromEnv } from "./sso.ts";
+import { registerWebApp } from "./web-app.ts";
 
 const { m, handle, close, gateway, sources } = await boot();
-const app = createApp(m, { devWorkspace: process.env.STARSIGN_DEV_WORKSPACE, gateway, sources, publicUrl: process.env.STARSIGN_PUBLIC_URL });
+const basePath = normalizeBasePath(process.env.BASE_PATH);
+const sso = ssoConfigFromEnv();
+const suite = suiteLinksFromEnv();
+const app = createApp(m, {
+  devWorkspace: process.env.BASE_AIR_DEV_WORKSPACE,
+  gateway,
+  sources,
+  publicUrl: process.env.BASE_AIR_PUBLIC_URL,
+  basePath,
+  trustedProxies: trustedProxiesFromEnv(),
+  sso,
+  suite,
+});
 
 // Serve the built web app from the same process when it exists (single-container deploys).
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "..", "web", "dist");
-if (existsSync(dist)) {
-  const root = relative(process.cwd(), dist) || ".";
-  app.use("/*", serveStatic({ root }));
-  app.get("*", serveStatic({ path: join(root, "index.html") }));
-  console.log(`[web] serving ${root}`);
-}
+const head = brandHead(m, { publicUrl: process.env.BASE_AIR_PUBLIC_URL, basePath, devWorkspace: process.env.BASE_AIR_DEV_WORKSPACE, sso, suite });
+if (registerWebApp(app, { dist, basePath, head })) console.log(`[web] serving ${dist}`);
 
 const port = Number(process.env.PORT ?? 4000);
-serve({ fetch: app.fetch, port }, () => {
-  console.log(`[api] starsign ${VERSION} on http://localhost:${port} (db=${handle.kind}${process.env.STARSIGN_DEV_WORKSPACE ? `, dev workspace=${process.env.STARSIGN_DEV_WORKSPACE}` : ""})`);
+serve({ fetch: withBasePath(app.fetch, basePath), port }, () => {
+  console.log(`[api] base air ${VERSION} on http://localhost:${port}${basePath}/ (db=${handle.kind}${process.env.BASE_AIR_DEV_WORKSPACE ? `, dev workspace=${process.env.BASE_AIR_DEV_WORKSPACE}` : ""})`);
 });
 
 const shutdown = async () => {

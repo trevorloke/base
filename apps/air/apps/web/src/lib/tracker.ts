@@ -17,7 +17,7 @@ export function periodOf(id: TrackerPeriod) {
   return PERIODS.find((p) => p.id === id) ?? PERIODS[1]!;
 }
 
-const PERIOD_STORAGE = "starsign.trackerPeriod";
+const PERIOD_STORAGE = "base-air.trackerPeriod";
 
 export function readTrackerPeriod(): TrackerPeriod {
   try {

@@ -1,14 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { activities, operatorRuns, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import type { ActivityInput } from "@starsign/schema";
-import { InMemoryScheduler, SecretBox, Starsign, detectLanguage, type Principal, type Translator } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import { activities, operatorRuns, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import type { ActivityInput } from "@base-air/schema";
+import { InMemoryScheduler, SecretBox, BaseAir, detectLanguage, type Principal, type Translator } from "../src/index.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let owner: Principal;
 let acct: string;
 let n = 0;
@@ -35,7 +35,7 @@ const fakeTranslate: Translator = async (items, to) => {
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)) });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme" }, { type: "human", id: "u" });
   owner = { workspaceId: ws.id, actor: { type: "human", id: "u" }, role: "owner" };
   acct = (await m.accounts.connect(owner, { network: "line", externalId: "bot-1", handle: "acme_jp", connector: "mock" })).id;

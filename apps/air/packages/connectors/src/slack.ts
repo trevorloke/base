@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { ActivityInput, ActivityKind, Media, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, Media, MetricInput, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
@@ -10,10 +10,10 @@ import { ConnectorError } from "./types.ts";
 /**
  * Slack workspaces through an internal Slack app (Web API + Events API). The workspace admin creates an app at
  * api.slack.com/apps, installs it to the workspace only (no Slack Marketplace review), and pastes the Bot User OAuth
- * Token (xoxb-…) and the app's Signing Secret. One Starsign account = one workspace (externalId = team id).
+ * Token (xoxb-…) and the app's Signing Secret. One base air account = one workspace (externalId = team id).
  *
  * Listening, two ways:
- * - Events API: Slack POSTs to `${STARSIGN_PUBLIC_URL}/webhooks/slack?team=<team id>`, signed with the app's signing
+ * - Events API: Slack POSTs to `${BASE_AIR_PUBLIC_URL}/webhooks/slack?team=<team id>`, signed with the app's signing
  *   secret (`X-Slack-Signature: v0=hex(HMAC-SHA256(secret, "v0:{timestamp}:{raw body}"))`). The secret is per app,
  *   and every workspace has its own app, so the handler uses `route` + `verifyAccount`.
  *   The `url_verification` handshake has no team id in its body, hence `?team=` in the Request URL; its `challenge`
@@ -61,7 +61,7 @@ export interface SlackAccountConfig {
   watchChannelIds: string[];
   /** Where publish posts. */
   defaultChannelId: string | null;
-  /** The Request URL to paste into Event Subscriptions (null when STARSIGN_PUBLIC_URL is unset). */
+  /** The Request URL to paste into Event Subscriptions (null when BASE_AIR_PUBLIC_URL is unset). */
   eventsRequestUrl: string | null;
 }
 
@@ -285,7 +285,7 @@ export interface SlackConnectorOptions {
   fetch?: FetchLike;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
-  /** STARSIGN_PUBLIC_URL, to tell the person the Events API Request URL at connect. */
+  /** BASE_AIR_PUBLIC_URL, to tell the person the Events API Request URL at connect. */
   publicUrl?: string;
   /** Pages of history read per channel per poll (200 messages each). */
   maxPages?: number;
@@ -793,5 +793,5 @@ function configOf(account: AccountRef): SlackAccountConfig {
 }
 
 export function createSlackConnectors(env: NodeJS.ProcessEnv): Connector[] {
-  return [new SlackConnector({ ...(env.SLACK_API_BASE ? { apiBase: env.SLACK_API_BASE } : {}), ...(env.STARSIGN_PUBLIC_URL ? { publicUrl: env.STARSIGN_PUBLIC_URL } : {}) })];
+  return [new SlackConnector({ ...(env.SLACK_API_BASE ? { apiBase: env.SLACK_API_BASE } : {}), ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}) })];
 }

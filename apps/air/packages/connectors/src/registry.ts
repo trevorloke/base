@@ -1,4 +1,4 @@
-import type { Network } from "@starsign/schema";
+import type { Network } from "@base-air/schema";
 import type { Connector } from "./types.ts";
 
 /** Resolves the adapter for an account: by explicit connector name first, else any adapter serving the network. */

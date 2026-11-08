@@ -4,19 +4,19 @@ Connector `wecom` · networks `["wecom"]` · `packages/connectors/src/wecom.ts` 
 
 Uses WeCom's official server API (`qyapi.weixin.qq.com`) only. No personal-account automation, no web-client scraping, no hooks into the WeCom or WeChat desktop apps.
 
-One Starsign account holds up to two parts, each optional:
+One base air account holds up to two parts, each optional:
 
-- **WeChat Customer Service (微信客服)**: the official way for a business to chat with WeChat users. Customers tap a link or scan a QR code inside WeChat and talk to the business; they stay in WeChat, the business answers from WeCom or through the API. Starsign listens and replies.
-- **Group bot (群机器人)**: a webhook that posts into one internal WeCom group. Starsign publishes there; bots cannot read.
+- **WeChat Customer Service (微信客服)**: the official way for a business to chat with WeChat users. Customers tap a link or scan a QR code inside WeChat and talk to the business; they stay in WeChat, the business answers from WeCom or through the API. base air listens and replies.
+- **Group bot (群机器人)**: a webhook that posts into one internal WeCom group. base air publishes there; bots cannot read.
 
 An account with only a bot URL is publish-only. An account with only customer service is listen and reply only.
 
-## What Starsign can and cannot see
-- **Customer service chats: yes.** Messages customers send to your WeChat Customer Service account (text, plus short summaries of images, voice, video, files, locations, links and mini programs, and a note when a customer opens the chat), with the customer's WeChat nickname when WeCom provides it. Starsign can answer them within WeCom's limits (48 hours, 5 messages).
+## What base air can and cannot see
+- **Customer service chats: yes.** Messages customers send to your WeChat Customer Service account (text, plus short summaries of images, voice, video, files, locations, links and mini programs, and a note when a customer opens the chat), with the customer's WeChat nickname when WeCom provides it. base air can answer them within WeCom's limits (48 hours, 5 messages).
 - **Internal WeCom groups: posting only, through group bots.** A bot can post into the group it was added to. It cannot read anything in the group.
-- **External customer groups (客户群): not here.** WeCom's customer-contact APIs give group metadata (name, owner, members) only. Message contents are available only through the paid **会话内容存档 (conversation content archive)**, which needs the archive licence, member consent notices, and WeCom's native C/C++ SDK with an RSA key pair. Starsign does not support it.
-- **Personal WeChat chats and personal WeChat groups: never.** No official API exposes them, and Starsign does not use unofficial tools that log in as a personal account (they get accounts banned).
-- Starsign does not see customer phone numbers or real names; the customer id is WeCom's opaque `external_userid`.
+- **External customer groups (客户群): not here.** WeCom's customer-contact APIs give group metadata (name, owner, members) only. Message contents are available only through the paid **会话内容存档 (conversation content archive)**, which needs the archive licence, member consent notices, and WeCom's native C/C++ SDK with an RSA key pair. base air does not support it.
+- **Personal WeChat chats and personal WeChat groups: never.** No official API exposes them, and base air does not use unofficial tools that log in as a personal account (they get accounts banned).
+- base air does not see customer phone numbers or real names; the customer id is WeCom's opaque `external_userid`.
 
 ## What works
 - **Connect** (`connectMethod: "api_key"`), every input optional, at least one part required:
@@ -45,19 +45,19 @@ An account with only a bot URL is publish-only. An account with only customer se
 ## Setup
 Customer service (微信客服):
 1. WeCom admin console (work.weixin.qq.com) → **应用管理 → 微信客服** (or the standalone 微信客服 admin at kf.weixin.qq.com): create a customer service account and note its ID if you have several.
-2. 微信客服 → **API**: enable API access, note the **Secret** (the Customer Service Secret), and set the **callback**: URL = `${STARSIGN_PUBLIC_URL}/webhooks/wecom?account=<CorpID>`, Token and EncodingAESKey (generate them there). Save after connecting in Starsign (step 4), because WeCom checks the URL when you save.
-3. Add the Starsign servers' static outbound IPs as **trusted IPs (企业可信IP)** for the customer service API.
-4. In Starsign, connect WeCom with CorpID (My Company → Company Information → 企业ID), the Secret, Token, EncodingAESKey and optionally the customer service account ID. Then save the callback in WeCom.
+2. 微信客服 → **API**: enable API access, note the **Secret** (the Customer Service Secret), and set the **callback**: URL = `${BASE_AIR_PUBLIC_URL}/webhooks/wecom?account=<CorpID>`, Token and EncodingAESKey (generate them there). Save after connecting in base air (step 4), because WeCom checks the URL when you save.
+3. Add the base air servers' static outbound IPs as **trusted IPs (企业可信IP)** for the customer service API.
+4. In base air, connect WeCom with CorpID (My Company → Company Information → 企业ID), the Secret, Token, EncodingAESKey and optionally the customer service account ID. Then save the callback in WeCom.
 5. Hand the customer service link or QR code to customers (in WeChat, on the website, in a mini program).
-6. When an account is managed by the API, its chats are handled by the API/bot ("智能助手") until a staff member takes over in WeCom. Starsign's replies work while the chat is new or with the API; once a person is handling it in WeCom, the API cannot send (95018).
+6. When an account is managed by the API, its chats are handled by the API/bot ("智能助手") until a staff member takes over in WeCom. base air's replies work while the chat is new or with the API; once a person is handling it in WeCom, the API cannot send (95018).
 
 Group bot (群机器人):
 1. In the WeCom client, open the internal group → **group settings → 群机器人 → 添加机器人** → create a new bot.
-2. Copy its **webhook URL** and paste it into Starsign's "Group bot webhook URL". Anyone with the URL can post into the group: treat it as a secret.
+2. Copy its **webhook URL** and paste it into base air's "Group bot webhook URL". Anyone with the URL can post into the group: treat it as a secret.
 
 - Redirect URI: none (not OAuth).
-- Webhook URL: `${STARSIGN_PUBLIC_URL}/webhooks/wecom?account=<CorpID>` (customer service only). It must answer within 5 seconds from WeCom's servers in China; the URL check must be answered within 1 second.
-- Env vars: `STARSIGN_PUBLIC_URL`; optional `WECOM_API_BASE` (default `https://qyapi.weixin.qq.com`).
+- Webhook URL: `${BASE_AIR_PUBLIC_URL}/webhooks/wecom?account=<CorpID>` (customer service only). It must answer within 5 seconds from WeCom's servers in China; the URL check must be answered within 1 second.
+- Env vars: `BASE_AIR_PUBLIC_URL`; optional `WECOM_API_BASE` (default `https://qyapi.weixin.qq.com`).
 
 ## Review and access requirements
 - A WeCom organisation. WeChat Customer Service needs the organisation to be **verified (企业认证)** for meaningful use (unverified organisations have low limits on accounts and reception); verification takes days to a couple of weeks and costs a fee.
@@ -69,9 +69,9 @@ Group bot (群机器人):
 ## Limits and quotas
 - Customer service replies: within **48 hours** of the customer's last message, at most **5 messages** until they write again.
 - sync_msg: messages from the last **3 days** only; `limit` up to 1000 per page; without the callback token the call is strictly rate limited. Media over the size limits (image 2 MB, voice 2 MB, video 10 MB, file 20 MB) arrive as a text notice.
-- Access tokens: 7200 s; gettoken is rate limited (cache it, as Starsign does).
-- Group bot: **20 messages per minute** per bot; markdown up to 4096 bytes; text up to 2048 bytes; images JPG/PNG up to 2 MB before base64; news cards 1–8 articles (Starsign sends one), titles over 128 bytes and descriptions over 512 bytes are cut.
-- Starsign's shared limits for `wecom`: 2048 characters, 1 media item.
+- Access tokens: 7200 s; gettoken is rate limited (cache it, as base air does).
+- Group bot: **20 messages per minute** per bot; markdown up to 4096 bytes; text up to 2048 bytes; images JPG/PNG up to 2 MB before base64; news cards 1–8 articles (base air sends one), titles over 128 bytes and descriptions over 512 bytes are cut.
+- base air's shared limits for `wecom`: 2048 characters, 1 media item.
 
 ## Unverified
 Sources reachable from the build sandbox were search results only (developer.work.weixin.qq.com and developers.weixin.qq.com could not be fetched). Marked `// TODO(verify)` in code:
@@ -87,9 +87,9 @@ Sources reachable from the build sandbox were search results only (developer.wor
 Today the callback can only store the sync token; messages land at the next ingest run (up to 5 minutes later). Core would need one of: (a) an async webhook hook, e.g. `webhook.pull?(account, body): Promise<ActivityInput[]>`, awaited by `WebhookService.receiveRouted` after `decodeAccount` (WeCom expects the 200 within 5 seconds, so core could also answer first and pull in the background); or (b) a way for a webhook to enqueue an immediate `ingestAccount(accountId)` for the verified account. A persisted per-account connector cursor (instead of process memory) would also stop a restart from re-reading 3 days. The in-memory sync token is only useful when the API process (which receives callbacks) and the worker (which ingests) share a process; otherwise the worker pulls without a token, which works but is rate limited.
 
 ## Questions for the owner
-- Is your WeCom organisation verified, and do you already use WeChat Customer Service? Which customer service account(s) should Starsign answer for? (One Starsign account per CorpID, with one customer service account.)
-- Is anything else (a CRM, another vendor) already receiving the customer service callback? Only one callback URL can be set; Starsign would replace it.
-- Should staff still answer some chats in WeCom? While a person handles a chat there, Starsign's API replies are refused.
-- What are the static outbound IPs of the Starsign servers (for the trusted IP list), and where is Starsign hosted for the 5-second callback from mainland China?
+- Is your WeCom organisation verified, and do you already use WeChat Customer Service? Which customer service account(s) should base air answer for? (One base air account per CorpID, with one customer service account.)
+- Is anything else (a CRM, another vendor) already receiving the customer service callback? Only one callback URL can be set; base air would replace it.
+- Should staff still answer some chats in WeCom? While a person handles a chat there, base air's API replies are refused.
+- What are the static outbound IPs of the base air servers (for the trusted IP list), and where is base air hosted for the 5-second callback from mainland China?
 - Which internal groups should get group bots, and who may see the bot URLs?
 - Do you need customer-group (客户群) monitoring? That needs the paid 会话内容存档 and WeCom's native SDK, which this connector does not cover.

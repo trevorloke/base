@@ -1,10 +1,10 @@
-import type { Network, Policy } from "@starsign/schema";
+import type { Network, Policy } from "@base-air/schema";
 import type { CoreContext } from "../context.ts";
 import type { AccountService } from "./accounts.ts";
 import type { PolicyService } from "./policy.ts";
 import type { WorkspaceService } from "./workspaces.ts";
 
-/** The brand block every model call is grounded in. Structurally identical to @starsign/ai's BrandContext. */
+/** The brand block every model call is grounded in. Structurally identical to @base-air/ai's BrandContext. */
 export interface BrandContextData {
   workspace: { name: string; slug?: string; profile: Record<string, unknown> };
   policy: { redLines: Policy["redLines"]; timezone: string; autonomy?: Policy["autonomy"]; visibleTextForAi?: string; competitors?: string[] };

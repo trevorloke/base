@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ActivityInput, Media, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, Network } from "@base-air/schema";
 import { asNetworkError, classifyHttpStatus, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";
 import { mediaSource } from "./media-io.ts";
@@ -8,7 +8,7 @@ import { ConnectorError } from "./types.ts";
 import { decodeAesKey, field, parseWeChatXml, signatureMatches, wechatDecrypt, wechatSignature, type WeChatXml } from "./wechat-crypto.ts";
 
 /**
- * WeCom (企业微信) through its official server API at qyapi.weixin.qq.com. One Starsign account can hold two parts,
+ * WeCom (企业微信) through its official server API at qyapi.weixin.qq.com. One base air account can hold two parts,
  * each optional:
  *
  * - **WeChat Customer Service (微信客服)**: customers tap a link or QR code inside WeChat and chat with the business.
@@ -73,7 +73,7 @@ export interface WeComConnectorOptions {
   apiBase?: string;
   fetch?: FetchLike;
   now?: () => Date;
-  /** STARSIGN_PUBLIC_URL, used to tell the owner which callback URL to configure. */
+  /** BASE_AIR_PUBLIC_URL, used to tell the owner which callback URL to configure. */
   publicUrl?: string;
 }
 
@@ -750,5 +750,5 @@ function requireKf(account: AccountRef): KfAuth {
 }
 
 export function createWeComConnectors(env: NodeJS.ProcessEnv): Connector[] {
-  return [new WeComConnector({ ...(env.STARSIGN_PUBLIC_URL ? { publicUrl: env.STARSIGN_PUBLIC_URL } : {}), ...(env.WECOM_API_BASE ? { apiBase: env.WECOM_API_BASE } : {}) })];
+  return [new WeComConnector({ ...(env.BASE_AIR_PUBLIC_URL ? { publicUrl: env.BASE_AIR_PUBLIC_URL } : {}), ...(env.WECOM_API_BASE ? { apiBase: env.WECOM_API_BASE } : {}) })];
 }

@@ -3,10 +3,10 @@ import { randomBytes } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTestDb } from "@starsign/db/test";
-import type { DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, LocalStorage, S3Storage, SecretBox, Starsign, mp4DurationFromRanges, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import type { DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, LocalStorage, S3Storage, SecretBox, BaseAir, mp4DurationFromRanges, type Principal } from "../src/index.ts";
 
 /** An S3-compatible bucket in memory: PUT, HEAD, ranged GET, DELETE. Counts bytes served so tests can check reads stay small. */
 class FakeBucket {
@@ -56,7 +56,7 @@ function phoneVideo(): Uint8Array {
 const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 4, 0, 0, 0, 3, 0, 8, 2, 0, 0, 0]);
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let bucket: FakeBucket;
 let owner: Principal;
 
@@ -64,7 +64,7 @@ beforeAll(async () => {
   h = await createTestDb();
   bucket = new FakeBucket();
   const s3 = new S3Storage({ endpoint: "https://r2.example", region: "auto", bucket: "media", accessKeyId: "AK", secretAccessKey: "SK", publicBaseUrl: "https://cdn.acme.test" }, bucket.fetch);
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), mediaStorage: s3 });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), mediaStorage: s3 });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   owner = { workspaceId: ws.id, actor: { type: "human", id: "u1" }, role: "owner" };
 });
@@ -121,7 +121,7 @@ describe("direct uploads", () => {
   });
 
   it("is unavailable on local disk, where the regular upload is the path", async () => {
-    const local = new Starsign({ handle: h, connectors: new ConnectorRegistry(), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), mediaStorage: new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000") });
+    const local = new BaseAir({ handle: h, connectors: new ConnectorRegistry(), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), mediaStorage: new LocalStorage(mkdtempSync(join(tmpdir(), "ss-")), "http://localhost:4000") });
     expect(local.media.limits().direct).toBe(false);
     await expect(local.media.createDirectUpload(owner, { mime: "image/png", bytes: 10 })).rejects.toMatchObject({ code: "unavailable" });
   });

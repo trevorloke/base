@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Media } from "@starsign/schema";
+import type { Media } from "@base-air/schema";
 import { STREAM_PIECE_BYTES, StreamingForm, openMedia, readChunks, streamInit, withMedia, type MediaFetcher } from "../src/index.ts";
 import { probeMp4, probeMp4Ranged } from "../src/youtube.ts";
 import { MiB, bigVideo, byteAt } from "./big-video.ts";

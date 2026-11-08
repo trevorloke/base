@@ -17,7 +17,7 @@ import { PromptsSection } from "./visibility/PromptsSection";
 import { AnswerCard, ShareBar, ShareSpark, Tone } from "./visibility/parts";
 import "./visibility/visibility.css";
 
-const PERIOD_STORAGE = "starsign.visibility.period";
+const PERIOD_STORAGE = "base-air.visibility.period";
 function readPeriod(): VisPeriodId {
   try {
     const v = localStorage.getItem(PERIOD_STORAGE);

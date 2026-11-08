@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { metrics, operatorRuns, visibilityAnswers, visibilityMentions, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector } from "@starsign/connectors";
-import { InMemoryScheduler, SecretBox, Starsign, citationDomain, detectMentions, highlightSpans, ownerOf, slotFor, type AnswerJudge, type Principal, type QuestionSuggester, type VisibilityEngine } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import { metrics, operatorRuns, visibilityAnswers, visibilityMentions, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector } from "@base-air/connectors";
+import { InMemoryScheduler, SecretBox, BaseAir, citationDomain, detectMentions, highlightSpans, ownerOf, slotFor, type AnswerJudge, type Principal, type QuestionSuggester, type VisibilityEngine } from "../src/index.ts";
 
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let owner: Principal;
 let editor: Principal;
 let viewer: Principal;
@@ -33,7 +33,7 @@ function engine(id: string, label: string, answer: (q: string, lang: string) => 
 
 beforeAll(async () => {
   h = await createTestDb();
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now: () => clock });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(new MockConnector()), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now: () => clock });
   const ws = await m.workspaces.create({ slug: "roasters", name: "Northwind" }, { type: "human", id: "u" });
   owner = { workspaceId: ws.id, actor: { type: "human", id: "u" }, role: "owner" };
   editor = { workspaceId: ws.id, actor: { type: "human", id: "e" }, role: "editor" };

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import type { ActivityInput, ActivityKind, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, ActivityKind, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { IdempotencyCache } from "./idempotency.ts";
 import { bytesToHex, finalizeEvent, getPublicKey, hexToBytes, neventEncode, nip19Decode, npubEncode, parseSecretKey, verifyEvent, type NostrEvent } from "./nostr-crypto.ts";
@@ -16,7 +16,7 @@ import { ConnectorError } from "./types.ts";
  * Every event read from a relay is checked (id hash + signature) and dropped when invalid.
  *
  * Media is pull-style: Nostr has no upload in the core protocol (NIP-96 / Blossom servers are separate), so public
- * Starsign media URLs go into the content with NIP-92 `imeta` tags.
+ * base air media URLs go into the content with NIP-92 `imeta` tags.
  */
 
 // TODO(verify): a sensible default write/read set as of November 2026. These are long-running, free, open relays.

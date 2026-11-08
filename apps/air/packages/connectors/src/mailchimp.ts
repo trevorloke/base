@@ -1,4 +1,4 @@
-import type { ActivityInput, MetricInput, Network } from "@starsign/schema";
+import type { ActivityInput, MetricInput, Network } from "@base-air/schema";
 import { z } from "zod";
 import { escapeHtml, firstLine, httpFailure, safeUrl, textToHtml } from "./html.ts";
 import { asNetworkError, readJson, resolveFetch, type FetchLike } from "./http.ts";
@@ -10,9 +10,9 @@ import { ConnectorError } from "./types.ts";
  * Mailchimp Marketing API v3 with an API key ("<32 hex>-<data center>", e.g. "…-us6"; the data center picks the host
  * https://<dc>.api.mailchimp.com/3.0). One account = one audience (list).
  *
- * Publishing a Starsign post sends a regular campaign to the whole audience: create the campaign, set its HTML content,
- * check Mailchimp's send checklist, then send. Starsign already schedules, so the campaign is sent immediately.
- * Images are referenced by their public Starsign media URLs.
+ * Publishing a base air post sends a regular campaign to the whole audience: create the campaign, set its HTML content,
+ * check Mailchimp's send checklist, then send. base air already schedules, so the campaign is sent immediately.
+ * Images are referenced by their public base air media URLs.
  *
  * Mailchimp OAuth (for agencies connecting clients' accounts) is a later step; see docs/integrations/mailchimp.md.
  */
@@ -274,7 +274,7 @@ export class MailchimpConnector implements Connector {
   private async request<T>(auth: MailchimpAuth, method: string, path: string, opts: { query?: Record<string, string | number>; json?: unknown }, what: string): Promise<T> {
     const base = this.apiBase ?? `https://${mailchimpDataCenter(auth.apiKey)}.api.mailchimp.com/3.0`;
     const qs = new URLSearchParams(Object.entries(opts.query ?? {}).map(([k, v]): [string, string] => [k, String(v)])).toString();
-    const headers: Record<string, string> = { authorization: `Basic ${Buffer.from(`starsign:${auth.apiKey}`).toString("base64")}`, accept: "application/json" };
+    const headers: Record<string, string> = { authorization: `Basic ${Buffer.from(`base-air:${auth.apiKey}`).toString("base64")}`, accept: "application/json" };
     if (opts.json !== undefined) headers["content-type"] = "application/json";
     let res: Response;
     try {

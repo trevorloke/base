@@ -8,7 +8,7 @@ export function fetchOf(custom?: FetchLike): FetchLike {
 export async function getText(fetchFn: FetchLike, source: string, url: string, headers: Record<string, string> = {}): Promise<string> {
   let res: Response;
   try {
-    res = await fetchFn(url, { headers: { "user-agent": "Starsign/0.1 (trend radar; contact: ops@starsign.app)", ...headers } });
+    res = await fetchFn(url, { headers: { "user-agent": "base-air/0.1 (trend radar; contact: ops@base.win)", ...headers } });
   } catch (e) {
     throw new SourceError(`${source}: network error: ${(e as Error).message}`, source, true);
   }

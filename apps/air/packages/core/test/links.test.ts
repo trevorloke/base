@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { createTestDb } from "@starsign/db/test";
-import { linkClicks, postOutcomes, rowsOf, type DbHandle } from "@starsign/db";
-import { ConnectorRegistry, MockConnector, type AccountRef, type PublishInput } from "@starsign/connectors";
-import { InMemoryScheduler, SecretBox, Starsign, classifyAgent, findUrls, newSlug, trimUrl, withUtm, type Principal } from "../src/index.ts";
+import { createTestDb } from "@base-air/db/test";
+import { linkClicks, postOutcomes, rowsOf, type DbHandle } from "@base-air/db";
+import { ConnectorRegistry, MockConnector, type AccountRef, type PublishInput } from "@base-air/connectors";
+import { InMemoryScheduler, SecretBox, BaseAir, classifyAgent, findUrls, newSlug, trimUrl, withUtm, type Principal } from "../src/index.ts";
 
 /** The mock, remembering exactly what each publish sent. */
 class Recorder extends MockConnector {
@@ -18,7 +18,7 @@ class Recorder extends MockConnector {
 const BASE = "https://go.acme.test";
 const HUMAN_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148";
 let h: DbHandle;
-let m: Starsign;
+let m: BaseAir;
 let rec: Recorder;
 let owner: Principal;
 let acctX: string;
@@ -38,7 +38,7 @@ beforeAll(async () => {
   h = await createTestDb();
   rec = new Recorder();
   rec.now = now;
-  m = new Starsign({ handle: h, connectors: new ConnectorRegistry().register(rec), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now, linkBaseUrl: BASE });
+  m = new BaseAir({ handle: h, connectors: new ConnectorRegistry().register(rec), scheduler: new InMemoryScheduler(), secrets: new SecretBox(randomBytes(32)), now, linkBaseUrl: BASE });
   const ws = await m.workspaces.create({ slug: "acme", name: "Acme", timezone: "UTC" }, { type: "human", id: "u1" });
   owner = { workspaceId: ws.id, actor: { type: "human", id: "u1" }, role: "owner" };
   await m.policy.update(owner, { autonomy: { new_post: "autopost", reply: "autopost", dm: "suggest", repost: "draft", campaign: "suggest" }, redLines: [] });
@@ -136,7 +136,7 @@ describe("publishing through tracked links", () => {
 });
 
 async function getVariant(id: string) {
-  const { postVariants } = await import("@starsign/db");
+  const { postVariants } = await import("@base-air/db");
   const [v] = await m.ctx.db.select().from(postVariants).where(eq(postVariants.id, id)).limit(1);
   return v!;
 }

@@ -184,14 +184,14 @@ describe("single-request uploads stream the body", () => {
       if (p === "/api/media/asset.json") return lease(`a${++leases}`);
       if (r.url.host.startsWith("reddit-uploaded-media")) return new Response(`<PostResponse><Location>https://reddit-uploaded-media.s3-accelerate.amazonaws.com/rte_images%2Fa${leases}.jpg</Location></PostResponse>`, { status: 201 });
       if (p === "/api/submit") return json({ json: { errors: [], data: { websocket_url: "wss://ws.example/x" } } });
-      if (p === "/user/acme/submitted") return json({ kind: "Listing", data: { after: null, children: [{ kind: "t3", data: { id: "p4", name: "t3_p4", title: "Big", subreddit: "starsign", created_utc: NOW.getTime() / 1000 } }] } });
+      if (p === "/user/acme/submitted") return json({ kind: "Listing", data: { after: null, children: [{ kind: "t3", data: { id: "p4", name: "t3_p4", title: "Big", subreddit: "baseair", created_utc: NOW.getTime() / 1000 } }] } });
       if (p === "/api/comment") return json({ json: { errors: [], data: { things: [{ kind: "t1", data: { id: "c4", name: "t1_c4" } }] } } });
       return undefined;
     });
-    const c = new RedditConnector({ clientId: "cid", clientSecret: "sec", userAgent: "web:starsign:0.1", now: () => NOW, sleep: async () => {} });
+    const c = new RedditConnector({ clientId: "cid", clientSecret: "sec", userAgent: "web:base-air:0.1", now: () => NOW, sleep: async () => {} });
     c.media = fetcher;
     const rd = acct("reddit", { accessToken: "tok", refreshToken: "rt", userId: "t2_abc", username: "acme", expiresAt: "2026-11-04T01:00:00.000Z" });
-    const res = await c.publish(rd, { ...base, media: [media], options: { subreddit: "starsign", title: "Big", thumbnailUrl: "https://media.example/poster.jpg" } });
+    const res = await c.publish(rd, { ...base, media: [media], options: { subreddit: "baseair", title: "Big", thumbnailUrl: "https://media.example/poster.jpg" } });
     expect(res.externalId).toBe("t3_p4");
     const s3 = sent.filter((r) => r.url.host.startsWith("reddit-uploaded-media"));
     expect(s3).toHaveLength(2);

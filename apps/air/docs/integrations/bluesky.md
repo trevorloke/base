@@ -15,7 +15,7 @@ Connector `bluesky` · networks `["bluesky"]` · `packages/connectors/src/bluesk
 
 ## Setup
 1. In Bluesky: Settings → Privacy and security → App passwords → Add (do not allow DM access unless needed).
-2. In Starsign, connect Bluesky with the handle and the app password.
+2. In base air, connect Bluesky with the handle and the app password.
 - Redirect URI: none (app password; Bluesky OAuth is not used yet). Webhook URL: none. Env vars: none.
 
 ## Review and access requirements
@@ -32,5 +32,5 @@ None. Video upload requires the account to have a **verified email** and is subj
 - Upload limits (`getUploadLimits`) are not checked before uploading.
 
 ## Questions for the owner
-- Link cards fetch the linked page from the Starsign server. Acceptable, or should Starsign use Bluesky's card service (cardyb) or only build cards when `options.link` is set?
-- Should Starsign move from app passwords to Bluesky OAuth?
+- Link cards fetch the linked page from the base air server. Acceptable, or should base air use Bluesky's card service (cardyb) or only build cards when `options.link` is set?
+- Should base air move from app passwords to Bluesky OAuth?

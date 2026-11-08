@@ -1,4 +1,4 @@
-import type { ActivityInput, Media, MetricInput, MetricName, Network, VariantOptions } from "@starsign/schema";
+import type { ActivityInput, Media, MetricInput, MetricName, Network, VariantOptions } from "@base-air/schema";
 import { z } from "zod";
 import { GoogleAuth, googleClientFromEnv, googleOAuthClient, googleRequest, googleStatusOf, googleTokenToAuth, mapGoogleError, refreshGoogleAuth, type GoogleRequestOptions } from "./google-oauth.ts";
 import { asNetworkError, downloadMedia, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";

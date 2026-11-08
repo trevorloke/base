@@ -3,7 +3,7 @@
 Connector `band` · networks `["band"]` · `packages/connectors/src/band.ts` · factory `createBandConnectors(env)`
 
 BAND is where many Korean communities live: school parents, clubs, churches, fan groups, neighbourhoods, small shops
-and their regulars. A band is a closed group, so Starsign treats each band as a group conversation.
+and their regulars. A band is a closed group, so base air treats each band as a group conversation.
 
 ## What works
 - **Connect** (`connectMethod: "oauth"`, OAuth 2.0 authorization code, no PKCE, no scopes in the request).
@@ -35,14 +35,14 @@ and their regulars. A band is a closed group, so Starsign treats each band as a 
   cool-down) → rate_limit retryable; 10403, 2142 (leaders only), 60000–60999 (not a member, band or post gone) and the rest →
   rejected. HTTP failures use the shared mapping (5xx retryable).
 
-## What Starsign can and cannot see
-Starsign sees the newest posts in each connected band and the comments on the 10 most recent of them, with members' BAND
+## What base air can and cannot see
+base air sees the newest posts in each connected band and the comments on the 10 most recent of them, with members' BAND
 names. It sees only bands the connecting person belongs to. It does not see band chats (밴드 채팅), private messages, older
 posts beyond the newest page, or bands the person is not in. It never posts as anyone but the person who connected.
 
 ## Setup
 1. Sign in at https://developers.band.us with a BAND account and register a service ("내 서비스" → 등록).
-2. Redirect URI: `${STARSIGN_PUBLIC_URL}/oauth/band/callback`.
+2. Redirect URI: `${BASE_AIR_PUBLIC_URL}/oauth/band/callback`.
 3. Copy the Client ID and Client Secret.
 - Scopes: none in the request; the person approves access on BAND's consent screen.
 - Webhook URL: none (BAND has no webhooks; the inbox polls).

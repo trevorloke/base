@@ -1,4 +1,4 @@
-import type { ActivityInput, MetricInput, MetricName, Network } from "@starsign/schema";
+import type { ActivityInput, MetricInput, MetricName, Network } from "@base-air/schema";
 import { z } from "zod";
 import { asNetworkError, isAfter, readJson, resolveFetch, type FetchLike } from "./http.ts";
 import { IdempotencyCache } from "./idempotency.ts";

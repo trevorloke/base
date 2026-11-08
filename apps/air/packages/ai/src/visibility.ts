@@ -39,7 +39,7 @@ export function gatewayQuestionSuggester(gw: ModelGateway) {
   };
 }
 
-// ---------------------------------------------------------------- fake handlers (tests, STARSIGN_FAKE_AI=1)
+// ---------------------------------------------------------------- fake handlers (tests, BASE_AIR_FAKE_AI=1)
 
 const POSITIVE = ["best", "great", "excellent", "recommend", "recommended", "popular", "favourite", "favorite", "praised", "ethical", "sustainable", "trusted", "loved", "top", "leading", "strong", "おすすめ", "人気", "最高", "mejor", "excelente", "recomendado"];
 const NEGATIVE = ["avoid", "criticised", "criticized", "controversy", "scandal", "overpriced", "lawsuit", "poor", "worst", "complaints", "recall", "weak", "decline", "declined", "problem", "problems", "批判", "malo", "peor"];
