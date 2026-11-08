@@ -1,7 +1,9 @@
-// "Sign in with base" (SUITE.md, "The hand-off"), against a fake base ground
+// "Sign in with Base" (SUITE.md, "The hand-off"), against a fake Base Ground
 // that behaves like the real one: one-time codes bound to the app and the
 // redirect_uri, the shared secret checked, and 400 invalid_grant for anything
-// wrong.
+// wrong. The person is signed in by their link (client + sub), never by the
+// email alone; tests/base-link.test.ts covers making a link against a
+// database.
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -16,15 +18,15 @@ type LoginResult = import("@/lib/server/admin-auth").LoginResult;
 type AdminUser = import("@/lib/server/admin-auth").AdminUser;
 
 const SECRET = "shared-secret-for-web-0123456789";
-const config = { groundUrl: "https://base.win/imaginesurrey", secret: SECRET, siteUrl: "https://imaginesurrey.ca", cookieSecret: "cookie-signing-secret-0123456789" };
+const config = { groundUrl: "https://imaginesurrey.base.win", secret: SECRET, siteUrl: "https://imaginesurrey.ca", cookieSecret: "cookie-signing-secret-0123456789" };
 
-/** A base ground with one signed-in person, answering /api/sso/token like the real one. */
-function fakeGround(email: string, opts: { secret?: string } = {}) {
+/** A Base Ground with one signed-in person, answering /api/sso/token like the real one. */
+function fakeGround(email: string, opts: { secret?: string; sub?: string | null } = {}) {
   const codes = new Map<string, { email: string; redirectUri: string; used: boolean; expires: number }>();
   const calls: { url: string; auth: string | null; body: Record<string, unknown> }[] = [];
   const authorize = (location: string) => {
     const url = new URL(location);
-    expect(url.origin + url.pathname).toBe("https://base.win/imaginesurrey/api/sso/authorize");
+    expect(url.origin + url.pathname).toBe("https://imaginesurrey.base.win/api/sso/authorize");
     expect(url.searchParams.get("app")).toBe("web");
     const redirectUri = url.searchParams.get("redirect_uri")!;
     // Ground's own check: the redirect_uri begins with BASE_WEB_URL + "/".
@@ -42,34 +44,52 @@ function fakeGround(email: string, opts: { secret?: string } = {}) {
     const entry = codes.get(createHash("sha256").update(String(body.code ?? "")).digest("hex"));
     if (!entry || entry.used || entry.expires < Date.now() || entry.redirectUri !== body.redirect_uri) return bad();
     entry.used = true;
-    return Response.json({ email: entry.email, name: "Pat Organizer", role: "manager", areas: [], organization: "Imagine Surrey", client: "imaginesurrey" });
+    const sub = opts.sub === undefined ? "ground-user-1" : opts.sub;
+    return Response.json({ ...(sub === null ? {} : { sub }), email: entry.email, name: "Pat Organizer", role: "manager", areas: [], organization: "Imagine Surrey", client: "imaginesurrey" });
   }) as typeof fetch;
   return { authorize, fetch: fetchFn, calls };
 }
 
 const staff: AdminUser = { id: "00000000-0000-0000-0000-000000000001", email: "pat@example.ca", name: "Pat", role: "organizer" };
 
-function deps(ground: ReturnType<typeof fakeGround>, login: (email: string, next: string) => Promise<LoginResult>) {
+type Linked = (link: { client: string; sub: string }, next: string) => Promise<LoginResult | null>;
+type Account = { user: AdminUser; linked: boolean } | null;
+
+/** The app's side: which Base Ground login is linked to what, and which staff accounts exist. */
+function deps(ground: ReturnType<typeof fakeGround>, linked: Linked, account: Account = null) {
   const audits: { user: AdminUser | null; action: string; details: Record<string, unknown> }[] = [];
-  const logins: { email: string; next: string }[] = [];
+  const logins: { link: { client: string; sub: string }; next: string }[] = [];
+  const lookups: string[] = [];
+  const started: { identity: import("@/lib/server/base-sso").GroundIdentity; user: AdminUser; next: string }[] = [];
   return {
     audits,
     logins,
+    lookups,
+    started,
     deps: {
       fetch: ground.fetch,
-      login: async (email: string, next: string) => {
-        logins.push({ email, next });
-        return login(email, next);
+      loginLinked: async (link: { client: string; sub: string }, next: string) => {
+        logins.push({ link, next });
+        return linked(link, next);
+      },
+      findAccount: async (email: string) => {
+        lookups.push(email);
+        return account;
+      },
+      startLinking: async (identity: import("@/lib/server/base-sso").GroundIdentity, user: AdminUser, next: string) => {
+        started.push({ identity, user, next });
+        return { value: "waiting-hand-off", maxAge: 900 };
       },
       audit: async (user: AdminUser | null, action: string, details: Record<string, unknown>) => void audits.push({ user, action, details }),
     },
   };
 }
 
+const noLink: Linked = async () => null;
 const sessionFor = async (): Promise<LoginResult> => ({ ok: true, cookie: { value: "session-cookie", maxAge: 43200 }, user: staff });
 
-describe("sign in with base: the happy path", () => {
-  it("goes to ground, comes back with a code, exchanges it from the server and signs in the same email", async () => {
+describe("sign in with Base: the happy path", () => {
+  it("goes to Base Ground, comes back with a code, exchanges it from the server and signs in the linked account", async () => {
     const ground = fakeGround("Pat@Example.ca");
     const start = sso.startHandOff(config, "/admin/people?tag=x");
     const { code, state } = ground.authorize(start.location);
@@ -78,10 +98,20 @@ describe("sign in with base: the happy path", () => {
     const outcome = await sso.finishHandOff(config, { code, state }, start.cookie, t.deps);
 
     expect(outcome).toMatchObject({ kind: "session", next: "/admin/people?tag=x", cookie: { value: "session-cookie" } });
-    expect(t.logins).toEqual([{ email: "Pat@Example.ca", next: "/admin/people?tag=x" }]);
+    expect(t.logins).toEqual([{ link: { client: "imaginesurrey", sub: "ground-user-1" }, next: "/admin/people?tag=x" }]);
+    expect(t.lookups).toEqual([]);
     expect(ground.calls).toHaveLength(1);
-    expect(ground.calls[0]).toMatchObject({ url: "https://base.win/imaginesurrey/api/sso/token", auth: `Bearer ${SECRET}`, body: { code, redirect_uri: "https://imaginesurrey.ca/auth/base/callback" } });
-    expect(t.audits).toEqual([{ user: staff, action: "signin", details: { method: "base", client: "imaginesurrey" } }]);
+    expect(ground.calls[0]).toMatchObject({ url: "https://imaginesurrey.base.win/api/sso/token", auth: `Bearer ${SECRET}`, body: { code, redirect_uri: "https://imaginesurrey.ca/auth/base/callback" } });
+    expect(t.audits).toEqual([{ user: staff, action: "signin", details: { method: "base", client: "imaginesurrey", sub: "ground-user-1" } }]);
+  });
+
+  it("a linked login is signed in by its sub: the email Base Ground sends is ignored", async () => {
+    // The email changed on Base Ground (or names someone else entirely): the link decides.
+    const ground = fakeGround("somebody-else@example.org", { sub: "ground-user-1" });
+    const start = sso.startHandOff(config, "/admin");
+    const t = deps(ground, async (link) => (link.sub === "ground-user-1" ? sessionFor() : null));
+    expect(await sso.finishHandOff(config, ground.authorize(start.location), start.cookie, t.deps)).toMatchObject({ kind: "session", user: staff });
+    expect(t.lookups).toEqual([]);
   });
 
   it("the authorize URL carries app=web, the callback and the state; the state is 32 random bytes", () => {
@@ -94,7 +124,7 @@ describe("sign in with base: the happy path", () => {
   });
 });
 
-describe("sign in with base: refusals", () => {
+describe("sign in with Base: refusals", () => {
   it("a state that doesn't match the cookie (or no cookie, or a forged one) stops before ground is called", async () => {
     const ground = fakeGround("pat@example.ca");
     const start = sso.startHandOff(config, "/admin");
@@ -157,13 +187,52 @@ describe("sign in with base: refusals", () => {
     expect(await sso.finishHandOff(config, { error: "access_denied", state: start.state }, start.cookie, t.deps)).toMatchObject({ kind: "refused", error: "base-denied" });
   });
 
-  it("an email with no staff account here: 'No staff account', with the email, audited, nothing created", async () => {
+  it("an email with no staff account here: 'No Base Web staff account', with the email, audited, nothing created", async () => {
     const ground = fakeGround("newcomer@example.ca");
     const start = sso.startHandOff(config, "/admin");
-    const t = deps(ground, async () => ({ ok: false, reason: "invalid" }));
+    const t = deps(ground, noLink, null);
     const outcome = await sso.finishHandOff(config, ground.authorize(start.location), start.cookie, t.deps);
     expect(outcome).toEqual({ kind: "refused", error: "base-no-account", email: "newcomer@example.ca" });
-    expect(t.audits).toEqual([{ user: null, action: "signin.base-refused", details: { reason: "base-no-account", email: "newcomer@example.ca", client: "imaginesurrey" } }]);
+    expect(t.started).toEqual([]);
+    expect(t.audits).toEqual([{ user: null, action: "signin.base-refused", details: { reason: "base-no-account", email: "newcomer@example.ca", client: "imaginesurrey", sub: "ground-user-1" } }]);
+  });
+
+  it("no link yet: the account with that email must be proven first; nobody is signed in", async () => {
+    const ground = fakeGround("Pat@Example.ca", { sub: "ground-user-7" });
+    const start = sso.startHandOff(config, "/admin/people");
+    const t = deps(ground, noLink, { user: staff, linked: false });
+    const outcome = await sso.finishHandOff(config, ground.authorize(start.location), start.cookie, t.deps);
+    expect(outcome).toEqual({ kind: "link", pending: { value: "waiting-hand-off", maxAge: 900 }, user: staff });
+    expect(t.lookups).toEqual(["Pat@Example.ca"]);
+    expect(t.started).toHaveLength(1);
+    expect(t.started[0]).toMatchObject({ identity: { sub: "ground-user-7", client: "imaginesurrey", email: "Pat@Example.ca" }, user: staff, next: "/admin/people" });
+    expect(t.audits).toEqual([{ user: null, action: "signin.base-link-started", details: { accountId: staff.id, email: "Pat@Example.ca", client: "imaginesurrey", sub: "ground-user-7" } }]);
+  });
+
+  it("an account already linked to a different Base Ground login is refused", async () => {
+    const ground = fakeGround("pat@example.ca", { sub: "a-new-ground-login" });
+    const start = sso.startHandOff(config, "/admin");
+    const t = deps(ground, noLink, { user: staff, linked: true });
+    expect(await sso.finishHandOff(config, ground.authorize(start.location), start.cookie, t.deps)).toEqual({ kind: "refused", error: "base-linked-elsewhere", email: undefined });
+    expect(t.started).toEqual([]);
+    expect(t.audits[0]).toMatchObject({ action: "signin.base-refused", details: { reason: "base-linked-elsewhere", sub: "a-new-ground-login" } });
+  });
+
+  it("a link to a deactivated account signs nobody in", async () => {
+    const ground = fakeGround("pat@example.ca");
+    const start = sso.startHandOff(config, "/admin");
+    const t = deps(ground, async () => ({ ok: false, reason: "invalid" }), { user: staff, linked: true });
+    expect(await sso.finishHandOff(config, ground.authorize(start.location), start.cookie, t.deps)).toMatchObject({ kind: "refused", error: "base-inactive" });
+    expect(t.lookups).toEqual([]);
+  });
+
+  it("an answer without a sub is not a sign-in", async () => {
+    const ground = fakeGround("pat@example.ca", { sub: null });
+    const start = sso.startHandOff(config, "/admin");
+    const t = deps(ground, sessionFor, { user: staff, linked: false });
+    expect(await sso.finishHandOff(config, ground.authorize(start.location), start.cookie, t.deps)).toMatchObject({ kind: "refused", error: "base-unreachable" });
+    expect(t.logins).toEqual([]);
+    expect(t.lookups).toEqual([]);
   });
 
   it("without BASE_GROUND_URL and BASE_SSO_SECRET it is off, and says so", async () => {
@@ -172,19 +241,19 @@ describe("sign in with base: refusals", () => {
   });
 });
 
-describe("sign in with base: two-factor sign-in still applies", () => {
-  it("an account with two-factor on gets the code step, not a session", async () => {
+describe("sign in with Base: two-factor sign-in still applies", () => {
+  it("a linked account with two-factor on gets the code step, not a session", async () => {
     const ground = fakeGround("owner@example.ca");
     const start = sso.startHandOff(config, "/admin/brand");
     const owner: AdminUser = { ...staff, role: "owner", email: "owner@example.ca" };
     const t = deps(ground, async () => ({ ok: "second-step", pending: { value: "pending-token", maxAge: 600 }, user: owner }));
     const outcome = await sso.finishHandOff(config, ground.authorize(start.location), start.cookie, t.deps);
     expect(outcome).toEqual({ kind: "second-step", pending: { value: "pending-token", maxAge: 600 }, user: owner });
-    expect(t.audits).toEqual([{ user: owner, action: "signin.base", details: { outcome: "second-step", client: "imaginesurrey" } }]);
+    expect(t.audits).toEqual([{ user: owner, action: "signin.base", details: { outcome: "second-step", client: "imaginesurrey", sub: "ground-user-1" } }]);
   });
 });
 
-describe("sign in with base: where it sends people afterwards", () => {
+describe("sign in with Base: where it sends people afterwards", () => {
   it("honours only same-origin relative paths", () => {
     for (const ok of ["/admin", "/admin/people?tag=Member%20(joined%20online)", "/admin/brand#preview", "/"]) expect(sso.safeRelativePath(ok)).toBe(ok);
     for (const bad of ["//evil.example", "https://evil.example/admin", "/\\evil.example", "\\/evil.example", "/%2F%2Fevil.example", "/%5cevil.example", " /admin", "/admin\n/x", "javascript:alert(1)", "admin", "", null, 42, "/" + "a".repeat(2001)]) {
@@ -208,14 +277,16 @@ describe("sign in with base: where it sends people afterwards", () => {
   });
 });
 
-describe("sign in with base: the token call's address", () => {
+describe("sign in with Base: the token call's address", () => {
   it("uses BASE_GROUND_URL when there is no internal address", () => {
+    expect(sso.tokenEndpoint("https://imaginesurrey.base.win")).toBe("https://imaginesurrey.base.win/api/sso/token");
+    expect(sso.tokenEndpoint("https://imaginesurrey.base.win/")).toBe("https://imaginesurrey.base.win/api/sso/token");
     expect(sso.tokenEndpoint("https://base.win/imaginesurrey")).toBe("https://base.win/imaginesurrey/api/sso/token");
-    expect(sso.tokenEndpoint("https://base.win/imaginesurrey/")).toBe("https://base.win/imaginesurrey/api/sso/token");
     expect(sso.tokenEndpoint("https://ground.example.org")).toBe("https://ground.example.org/api/sso/token");
   });
 
-  it("treats Render's bare host:port as an origin: http://, then ground's prefix from BASE_GROUND_URL", () => {
+  it("treats Render's bare host:port as an origin: http://, then any prefix from BASE_GROUND_URL", () => {
+    expect(sso.tokenEndpoint("https://imaginesurrey.base.win", "base-ground-imaginesurrey-staging:10000")).toBe("http://base-ground-imaginesurrey-staging:10000/api/sso/token");
     expect(sso.tokenEndpoint("https://base.win/imaginesurrey", "base-ground-imaginesurrey-staging:10000")).toBe("http://base-ground-imaginesurrey-staging:10000/imaginesurrey/api/sso/token");
     expect(sso.tokenEndpoint("https://base.win/imaginesurrey", "http://base-ground-imaginesurrey:10000/")).toBe("http://base-ground-imaginesurrey:10000/imaginesurrey/api/sso/token");
     // An origin only: any path on the internal address is ignored.
@@ -228,56 +299,9 @@ describe("sign in with base: the token call's address", () => {
     const start = sso.startHandOff(internal, "/admin");
     const t = deps(ground, sessionFor);
     expect((await sso.finishHandOff(internal, ground.authorize(start.location), start.cookie, t.deps)).kind).toBe("session");
-    expect(ground.calls[0].url).toBe("http://base-ground-imaginesurrey-staging:10000/imaginesurrey/api/sso/token");
+    expect(ground.calls[0].url).toBe("http://base-ground-imaginesurrey-staging:10000/api/sso/token");
     // The browser still goes to the public address.
-    expect(start.location.startsWith("https://base.win/imaginesurrey/api/sso/authorize?")).toBe(true);
+    expect(start.location.startsWith("https://imaginesurrey.base.win/api/sso/authorize?")).toBe(true);
   });
 });
 
-// The account lookup itself, against a real database when TEST_DATABASE_URL
-// names one ending in _test or _e2e.
-const url = process.env.TEST_DATABASE_URL;
-const usable = Boolean(url && /(_e2e|_test)$/.test(new URL(url).pathname));
-
-describe.skipIf(!usable)("loginWithBase (database)", async () => {
-  vi.stubEnv("ADMIN_SESSION_SECRET", "test-session-secret-0123456789abcdef");
-  const { loginWithBase } = await import("@/lib/server/admin-auth");
-  const client = usable ? postgres(url!, { max: 1, onnotice: () => {} }) : null;
-  const db = client ? (drizzle(client, { schema }) as unknown as import("@/lib/db").Db) : null;
-  const stamp = Date.now();
-  const emails = [`sso-editor-${stamp}@example.ca`, `sso-owner-${stamp}@example.ca`, `sso-gone-${stamp}@example.ca`];
-
-  beforeAll(async () => {
-    await db!.insert(schema.adminUsers).values([
-      { email: emails[0], name: "Editor", role: "editor" },
-      { email: emails[1], name: "Owner", role: "owner", totpSecret: "x", totpEnabledAt: new Date() },
-      { email: emails[2], name: "Gone", role: "admin", active: false },
-    ]);
-  });
-  afterAll(async () => {
-    const ids = (await db!.select({ id: schema.adminUsers.id }).from(schema.adminUsers).where(inArray(schema.adminUsers.email, emails))).map((r) => r.id);
-    if (ids.length) {
-      await db!.delete(schema.adminSessions).where(inArray(schema.adminSessions.userId, ids));
-      await db!.delete(schema.adminUsers).where(inArray(schema.adminUsers.id, ids));
-    }
-    await db!.delete(schema.authTokens).where(inArray(schema.authTokens.email, emails));
-    await client!.end();
-    vi.unstubAllEnvs();
-  });
-
-  it("matches the email whatever its case and starts a session", async () => {
-    const r = await loginWithBase(emails[0].toUpperCase(), {}, "/admin", db!);
-    expect(r.ok).toBe(true);
-    if (r.ok === true) expect(r.user.email).toBe(emails[0]);
-  });
-  it("asks an account with two-factor on for its code", async () => {
-    const r = await loginWithBase(`  ${emails[1].replace("sso", "SSO")} `, {}, "/admin", db!);
-    expect(r.ok).toBe("second-step");
-  });
-  it("refuses a deactivated account and an unknown email, and never creates one", async () => {
-    expect((await loginWithBase(emails[2], {}, "/admin", db!)).ok).toBe(false);
-    const stranger = `sso-stranger-${stamp}@example.ca`;
-    expect((await loginWithBase(stranger, {}, "/admin", db!)).ok).toBe(false);
-    expect(await db!.select().from(schema.adminUsers).where(eq(schema.adminUsers.email, stranger))).toEqual([]);
-  });
-});

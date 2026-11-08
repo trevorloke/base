@@ -1,12 +1,12 @@
 import "server-only";
-import { getDb } from "@/lib/db";
+import { getDb, type Db } from "@/lib/db";
 import { auditLog } from "@/lib/db/schema";
 import type { AdminUser } from "./admin-auth";
 
 /** Record who did what in the admin. Never throws: an audit failure must not undo the action. */
-export async function audit(user: AdminUser | null, action: string, details?: Record<string, unknown>, entity?: string, entityId?: string): Promise<void> {
+export async function audit(user: AdminUser | null, action: string, details?: Record<string, unknown>, entity?: string, entityId?: string, db?: Db): Promise<void> {
   try {
-    await getDb()
+    await (db ?? getDb())
       .insert(auditLog)
       .values({ userId: user?.id ?? null, userEmail: user?.email ?? null, action, entity: entity ?? null, entityId: entityId ?? null, details: details ? trim(details) : null });
   } catch (err) {

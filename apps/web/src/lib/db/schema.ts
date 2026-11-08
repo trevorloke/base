@@ -607,6 +607,30 @@ export const loginAttempts = pgTable(
   (t) => [index("login_attempts_key_idx").on(t.key, t.at)],
 ).enableRLS();
 
+// "Sign in with Base" links (SUITE.md, "The hand-off", step 6): a Base Ground
+// login (the client's slug + Base Ground's stable `sub`) tied to one staff
+// account here. Made once, after the person proves the account is theirs
+// with its password or an emailed link; the email Base Ground sends is never
+// enough by itself. One link per Base Ground login and one per staff account.
+export const baseLinks = pgTable(
+  "base_links",
+  {
+    id: id(),
+    client: text("client").notNull(),
+    sub: text("sub").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => adminUsers.id, { onDelete: "cascade" }),
+    // The Base Ground email at the time of linking, for the Staff page only;
+    // sign-in never looks at it.
+    groundEmail: text("ground_email"),
+    // How the person proved the account was theirs: "password" or "email-link".
+    linkedVia: text("linked_via").notNull(),
+    linkedAt: timestamp("linked_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("base_links_client_sub_idx").on(t.client, t.sub), uniqueIndex("base_links_user_idx").on(t.userId)],
+).enableRLS();
+
 // Who changed what in the admin.
 export const auditLog = pgTable(
   "audit_log",

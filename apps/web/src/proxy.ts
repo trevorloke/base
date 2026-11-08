@@ -6,7 +6,7 @@ import { adminPreviewAllowed } from "@/lib/preview-mode";
 // check the session row in the database (revocation, deactivated accounts).
 // Runs without a database so it stays fast and can run at the edge.
 
-const OPEN = ["/admin/login", "/api/admin/login", "/api/admin/logout", "/api/admin/magic-link", "/api/admin/preview"];
+const OPEN = ["/admin/login", "/api/admin/login", "/api/admin/logout", "/api/admin/magic-link", "/api/admin/base-link", "/api/admin/preview"];
 const COOKIE = "is_admin_session";
 
 export async function proxy(req: NextRequest) {

@@ -5,7 +5,7 @@ import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb, type Db } from "@/lib/db";
-import { adminSessions, adminUsers, loginAttempts } from "@/lib/db/schema";
+import { adminSessions, adminUsers, baseLinks, loginAttempts } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { mustEnrol } from "@/lib/mfa-policy";
 import { createToken } from "./tokens";
@@ -227,10 +227,10 @@ export const PENDING_COOKIE = "is_admin_mfa";
 /** Minutes the second step stays open after a correct password or link. */
 export const PENDING_MINUTES = 10;
 
-type UserRow = typeof adminUsers.$inferSelect;
+export type UserRow = typeof adminUsers.$inferSelect;
 
 /** After a correct password or link: a session, or the second step when two-factor sign-in is on. */
-async function afterFirstFactor(db: Db, user: UserRow, meta: RequestMeta, method: FirstFactor, next: string): Promise<LoginResult> {
+export async function afterFirstFactor(db: Db, user: UserRow, meta: RequestMeta, method: FirstFactor, next: string): Promise<LoginResult> {
   const summary = { id: user.id, email: user.email, name: user.name, role: user.role };
   if (user.totpEnabledAt) {
     const until = Date.now() + PENDING_MINUTES * 60_000;
@@ -268,17 +268,26 @@ export async function loginByEmail(email: string, meta: RequestMeta, next = "/ad
 }
 
 /**
- * Sign in someone base ground vouched for (SUITE.md, "The hand-off"): their
- * existing, active staff account with the same email, matched without regard
- * to case. Never creates an account. Two-factor sign-in still applies, as
- * after a password or an email link.
+ * Sign in someone Base Ground vouched for (SUITE.md, "The hand-off", step 6)
+ * by their link: the staff account linked to this Base Ground login
+ * (client + sub). The email Base Ground sends plays no part, so a changed
+ * email on either side doesn't matter and a Base Ground login made for
+ * someone else's address gets nothing. Null when there is no link yet (see
+ * base-link.ts for making one); refused when the linked account is
+ * deactivated. Two-factor sign-in still applies, as after a password or an
+ * email link.
  */
-export async function loginWithBase(email: string, meta: RequestMeta, next = "/admin", db: Db = getDb()): Promise<LoginResult> {
-  const normalized = email.trim().toLowerCase();
-  if (!normalized) return { ok: false, reason: "invalid" };
-  const user = await db.query.adminUsers.findFirst({ where: and(sql`lower(${adminUsers.email}) = ${normalized}`, eq(adminUsers.active, true)) });
-  if (!user) return { ok: false, reason: "invalid" };
-  return afterFirstFactor(db, user, meta, "base", next);
+export async function loginWithBase(link: { client: string; sub: string }, meta: RequestMeta, next = "/admin", db: Db = getDb()): Promise<LoginResult | null> {
+  if (!link.sub) return null;
+  const [row] = await db
+    .select({ user: adminUsers })
+    .from(baseLinks)
+    .innerJoin(adminUsers, eq(adminUsers.id, baseLinks.userId))
+    .where(and(eq(baseLinks.client, link.client), eq(baseLinks.sub, link.sub)))
+    .limit(1);
+  if (!row) return null;
+  if (!row.user.active) return { ok: false, reason: "invalid" };
+  return afterFirstFactor(db, row.user, meta, "base", next);
 }
 
 export function requestMeta(req: Request): RequestMeta {

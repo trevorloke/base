@@ -6,6 +6,7 @@ import { adminUsers } from "@/lib/db/schema";
 import { MFA_REQUIRED_ROLES, mustEnrol } from "@/lib/mfa-policy";
 import { qrSvgPath } from "@/lib/qr";
 import { parseSessionCookie, PASSWORD_MIN_LENGTH, requireAdmin, ROLE_LABELS, SESSION_COOKIE } from "@/lib/server/admin-auth";
+import { baseLinkFor } from "@/lib/server/base-link";
 import { enrolmentUri, twoFactorStatus } from "@/lib/server/mfa";
 import { getSettings } from "@/lib/server/settings";
 import { describeUserAgent, listSessions } from "@/lib/server/staff";
@@ -15,11 +16,12 @@ import {
   confirmTwoFactorAction,
   disableTwoFactorAction,
   regenerateCodesAction,
+  removeOwnBaseLinkAction,
   renameAction,
   signOutEverywhereAction,
   startTwoFactorAction,
 } from "./actions";
-import { PasswordForm, RenameForm, SignOutEverywhereForm } from "./AccountForms";
+import { PasswordForm, RemoveBaseLinkForm, RenameForm, SignOutEverywhereForm } from "./AccountForms";
 import { TwoFactorCard } from "./TwoFactorCard";
 import "../people/people.css";
 import { clientProfile } from "@/seeds/client";
@@ -35,12 +37,13 @@ const WHEN = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", y
 export default async function AccountPage() {
   const user = await requireAdmin(undefined, { enrolling: true });
   const db = getDb();
-  const [account, sessions, currentId, twoFactor, { org }] = await Promise.all([
+  const [account, sessions, currentId, twoFactor, { org }, baseLink] = await Promise.all([
     db.query.adminUsers.findFirst({ where: eq(adminUsers.id, user.id), columns: { passwordHash: true } }),
     listSessions(db, user.id),
     cookies().then((jar) => parseSessionCookie(jar.get(SESSION_COOKIE)?.value)?.id ?? null),
     twoFactorStatus(db, user.id),
     getSettings(),
+    baseLinkFor(db, user.id),
   ]);
   const enrolFirst = mustEnrol(user.role, twoFactor.enabled);
   const setup = twoFactor.pendingSecret
@@ -121,6 +124,19 @@ export default async function AccountPage() {
               ))}
             </ul>
             <SignOutEverywhereForm action={signOutEverywhereAction} />
+          </section>
+          <section className="profile-card" aria-labelledby="baselink-title">
+            <h2 id="baselink-title">Sign in with Base</h2>
+            {baseLink ? (
+              <>
+                <p>
+                  Linked to your Base Ground login{baseLink.groundEmail ? ` (${baseLink.groundEmail})` : ""} since {DAY.format(baseLink.linkedAt)}. &ldquo;Sign in with Base&rdquo; opens this admin as you.
+                </p>
+                <RemoveBaseLinkForm action={removeOwnBaseLinkAction} />
+              </>
+            ) : (
+              <p>Not linked. The first time you use &ldquo;Sign in with Base&rdquo;, you confirm once that this account is yours.</p>
+            )}
           </section>
         </div>
       </div>

@@ -5,7 +5,7 @@ import type { Db } from "@/lib/db";
 import { authTokens } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 
-export type TokenPurpose = "admin-login" | "admin-mfa" |"member-login" | "newsletter-confirm" | "membership-confirm" | "email-change" | "promise-follow" | "volunteer-cancel" | "preferences";
+export type TokenPurpose = "admin-login" | "admin-mfa" | "admin-base-link" | "admin-base-link-email" | "member-login" | "newsletter-confirm" | "membership-confirm" | "email-change" | "promise-follow" | "volunteer-cancel" | "preferences";
 
 const hash = (raw: string) => createHash("sha256").update(raw).digest("hex");
 
@@ -31,6 +31,26 @@ export async function consumeToken(db: Db, purpose: TokenPurpose, raw: string): 
     .where(and(eq(authTokens.tokenHash, hash(raw)), eq(authTokens.purpose, purpose), isNull(authTokens.usedAt), gt(authTokens.expiresAt, new Date())))
     .returning({ email: authTokens.email, data: authTokens.data });
   return row ? { email: row.email, data: (row.data as Record<string, unknown> | null) ?? null } : null;
+}
+
+/**
+ * Read a token without spending it: null if unknown, used or expired. For a
+ * step that may be retried (a wrong password) before the token is redeemed
+ * with consumeToken.
+ */
+export async function peekToken(db: Db, purpose: TokenPurpose, raw: string): Promise<{ email: string; data: Record<string, unknown> | null; expiresAt: Date } | null> {
+  if (!raw || raw.length > 200) return null;
+  const [row] = await db
+    .select({ email: authTokens.email, data: authTokens.data, expiresAt: authTokens.expiresAt })
+    .from(authTokens)
+    .where(and(eq(authTokens.tokenHash, hash(raw)), eq(authTokens.purpose, purpose), isNull(authTokens.usedAt), gt(authTokens.expiresAt, new Date())))
+    .limit(1);
+  return row ? { email: row.email, data: (row.data as Record<string, unknown> | null) ?? null, expiresAt: row.expiresAt } : null;
+}
+
+/** The SHA-256 of a raw token, as stored: lets one token name another without carrying it. */
+export function tokenHash(raw: string): string {
+  return hash(raw);
 }
 
 export function tokenUrl(path: string, raw: string): string {

@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { ActionError, adminAction, formToObject, type ActionState } from "@/lib/server/actions";
 import { isLocked, parseSessionCookie, PASSWORD_MIN_LENGTH, recordAttempt, requireAdmin, SESSION_COOKIE, type AdminUser, type Permission } from "@/lib/server/admin-auth";
 import { audit } from "@/lib/server/audit";
+import { removeBaseLink } from "@/lib/server/base-link";
 import { confirmEnrolment, disableTwoFactor, regenerateRecoveryCodes, startEnrolment } from "@/lib/server/mfa";
 import { changeOwnPassword, renameSelf, signOutEverywhere } from "@/lib/server/staff";
 import { fieldErrors } from "@/lib/validation";
@@ -51,6 +52,14 @@ export const signOutEverywhereAction = adminAction(ANY_ADMIN, z.object({}), asyn
   await audit(user, "account.signout-all", {}, "admin_user", user.id);
   (await cookies()).delete(SESSION_COOKIE);
   return { ok: true, message: "Signed out everywhere.", redirect: "/admin/login?signedout=1" };
+});
+
+export const removeOwnBaseLinkAction = adminAction(ANY_ADMIN, z.object({}), async (_data, { user }) => {
+  const removed = await removeBaseLink(getDb(), user.id);
+  if (!removed) throw new ActionError("Your account has no Base Ground link.");
+  await audit(user, "account.base-unlink", { client: removed.client, sub: removed.sub, groundEmail: removed.groundEmail }, "admin_user", user.id);
+  revalidatePath("/admin/account");
+  return "Link removed.";
 });
 
 // ── Two-factor sign-in ─────────────────────────────────────────────────────

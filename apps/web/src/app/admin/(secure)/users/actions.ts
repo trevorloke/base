@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import { ActionError, adminAction } from "@/lib/server/actions";
 import { ROLE_LABELS, type Role } from "@/lib/server/admin-auth";
 import { audit } from "@/lib/server/audit";
+import { removeBaseLink } from "@/lib/server/base-link";
 import { changeRole, inviteStaff, resetPassword, resetStaffTwoFactor, ROLES, sendSignInLink, setActive } from "@/lib/server/staff";
 
 // Handlers write their own audit entry so it names the account (entity
@@ -85,4 +86,12 @@ export const resetTwoFactorAction = adminAction("users", z.object({ id }), async
   await audit(user, "staff.reset-2fa", {}, "admin_user", data.id);
   refresh();
   return "Two-factor sign-in was reset and they were signed out everywhere. Owners and administrators set it up again when they next sign in.";
+});
+
+export const removeBaseLinkAction = adminAction("users", z.object({ id }), async (data, { user }) => {
+  const removed = await removeBaseLink(getDb(), data.id);
+  if (!removed) throw new ActionError("That account has no Base Ground link.");
+  await audit(user, "staff.base-unlink", { client: removed.client, sub: removed.sub, groundEmail: removed.groundEmail }, "admin_user", data.id);
+  refresh();
+  return "Base Ground link removed. Their next \"Sign in with Base\" asks them to confirm the account again.";
 });
