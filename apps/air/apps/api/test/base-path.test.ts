@@ -11,23 +11,24 @@ import { createApp } from "../src/app.ts";
 import { clientIpFrom, normalizeBasePath, safeNextPath, trustedProxiesFromEnv, withBasePath } from "../src/base-path.ts";
 import { registerWebApp, renderIndexHtml } from "../src/web-app.ts";
 
-const BASE = "/imaginesurrey/air";
-const ORIGIN = "https://base.win";
+const BASE = "/air";
+const ORIGIN = "https://imaginesurrey.base.win";
 
 describe("BASE_PATH helpers", () => {
   it("normalizes the prefix", () => {
     expect(normalizeBasePath(undefined)).toBe("");
     expect(normalizeBasePath("")).toBe("");
     expect(normalizeBasePath("/")).toBe("");
-    expect(normalizeBasePath("imaginesurrey/air/")).toBe(BASE);
-    expect(normalizeBasePath("//imaginesurrey//air")).toBe(BASE);
+    expect(normalizeBasePath("air/")).toBe(BASE);
+    expect(normalizeBasePath("//air//")).toBe(BASE);
+    expect(normalizeBasePath("//imaginesurrey//air")).toBe("/imaginesurrey/air");
     expect(normalizeBasePath("/a/../b")).toBe("/a/b");
   });
 
   it("honours only same-origin next paths under the prefix", () => {
     expect(safeNextPath(`${BASE}/?tab=queue`, BASE)).toBe(`${BASE}/?tab=queue`);
     expect(safeNextPath(BASE, BASE)).toBe(BASE);
-    for (const bad of ["https://evil.test/", "//evil.test/x", "/\\evil.test", "/imaginesurrey/web", "/imaginesurrey/airx", `${BASE}/../../evil`, "javascript:alert(1)", "", undefined, "/x\nSet-Cookie: a=b"]) {
+    for (const bad of ["https://evil.test/", "//evil.test/x", "/\\evil.test", "/web", "/ground/", "/airx", `${BASE}/../../evil`, "javascript:alert(1)", "", undefined, "/x\nSet-Cookie: a=b"]) {
       expect(safeNextPath(bad, BASE), String(bad)).toBe(`${BASE}/`);
     }
     expect(safeNextPath("/anything", "")).toBe("/anything");
@@ -104,7 +105,7 @@ describe("serving under BASE_PATH", () => {
     expect(root.status).toBe(308);
     expect(root.headers.get("location")).toBe(`${BASE}/`);
     // a sibling app's path is not ours
-    expect((await fetch(req("/imaginesurrey/airplane"))).headers.get("location")).toBe(`${BASE}/imaginesurrey/airplane`);
+    expect((await fetch(req("/airplane"))).headers.get("location")).toBe(`${BASE}/airplane`);
   });
 
   it("passes request bodies through the rewrite", async () => {

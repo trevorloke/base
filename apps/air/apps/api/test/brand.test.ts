@@ -13,8 +13,8 @@ import { withBasePath } from "../src/base-path.ts";
 import { brandHead } from "../src/routes-brand.ts";
 import { registerWebApp } from "../src/web-app.ts";
 
-const ORIGIN = "https://base.win";
-const BASE = "/imaginesurrey/air";
+const ORIGIN = "https://imaginesurrey.base.win";
+const BASE = "/air";
 let h: DbHandle;
 let m: BaseAir;
 let fetchApp: (r: Request) => Promise<Response>;

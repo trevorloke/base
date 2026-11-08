@@ -6,7 +6,7 @@ import react from "@vitejs/plugin-react";
 const API = "http://localhost:4000";
 
 // base: "./" — assets resolve against the <base href> the server writes into index.html, so one build serves under
-// any prefix (BASE_PATH, e.g. /imaginesurrey/air) and at the root.
+// any prefix (BASE_PATH, e.g. /air) and at the root.
 export default defineConfig({
   base: "./",
   plugins: [react()],

@@ -13,7 +13,11 @@ export const CSRF_HEADER = "x-base-air-csrf";
 export interface AuthRouteOptions {
   /** Public base URL. https → the session cookie is Secure; also the base of invite and reset links. */
   publicUrl?: string;
-  /** Where the app lives on its host; cookies are scoped to it so two clients on one host never share them. */
+  /**
+   * Where the app lives on its host; cookies are set with this path (and never a Domain), so they stay with Base Air on
+   * the client's own subdomain. Separation between clients comes from each having its own subdomain (origin), not
+   * from cookie paths.
+   */
   basePath?: string;
   /** See BASE_AIR_TRUSTED_PROXIES. */
   trustedProxies?: number;

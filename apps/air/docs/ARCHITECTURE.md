@@ -99,6 +99,15 @@ from `members` on every request, so a role change or removal applies immediately
   and reset links go to the API log outside production.
 - Limits: 5 failed sign-ins per email per 15 minutes, then 429. The counter is **in memory, per process**: several API
   replicas each keep their own and a restart clears it. Put a shared limiter in front if that matters.
+- Sign in with Base (SUITE.md "The hand-off"): Base Ground vouches for a person, and Base Air signs them in **by link,
+  not by email**. `base_links` maps (client, Base Ground `sub`) to one user, unique both ways. The first time, the
+  account's own password proves it is theirs (the verified hand-off waits in `base_link_pending`: ten minutes, single
+  use, token hashed, the browser holding only the token in an HttpOnly, SameSite=Strict cookie); wrong passwords count
+  toward the same lockout. A Base Ground manager can make a ground login for any email address, so the email alone
+  never signs anyone in. Owners see and remove links; every link made, refused or removed is in the ledger.
+- Separation between clients: each client has its own subdomain (`<client>.base.win`), so its own browser origin.
+  Cookies carry `Path=${BASE_PATH}` and never a `Domain`, which keeps them with Base Air on that host; the path is not
+  a security boundary, and nothing relies on it as one.
 
 ## Owned measurement
 
@@ -152,5 +161,6 @@ everything it proposes. If it needs a new prompt, add one to `packages/ai/src/pr
 7. Role gates are for humans; agent keys never pass them. Agents act only through the autonomy dial, on their own posts.
 8. Connector resolution is strict and the mock connector never runs in production: a "published" post always touched a network.
 9. API keys never appear in URLs; the live stream uses single-use, sixty-second tokens.
-10. No password, session, invite or reset token is stored in a recoverable form; cookie writes need the CSRF header.
+10. No password, session, invite, reset or pending-link token is stored in a recoverable form; cookie writes need the CSRF header.
 11. No raw visitor IP is stored; clicks and conversions are append-only, and tracking never changes the text people approved.
+12. Sign in with Base never matches on email alone: a (client, sub) link, made once with the account's own password.

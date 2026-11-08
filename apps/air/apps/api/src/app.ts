@@ -33,7 +33,7 @@ export interface AppOptions {
   sources?: SourceAdapter[];
   /** Public base URL of this deployment, prefix included (OAuth redirects come back here). */
   publicUrl?: string;
-  /** Where this deployment lives on its host, e.g. "/imaginesurrey/air" (SUITE.md). "" = the root. */
+  /** Where this deployment lives on its host, e.g. "/air" on https://imaginesurrey.base.win (SUITE.md). "" = the root. */
   basePath?: string;
   /** Sign in with Base (BASE_GROUND_URL + BASE_SSO_SECRET). Null or absent: email and password only. */
   sso?: SsoConfig | null;

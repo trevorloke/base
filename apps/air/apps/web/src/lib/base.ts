@@ -1,6 +1,6 @@
 /**
  * Where the room lives on its host. The server writes `window.__BASE_PATH__` (and `<base href>`) into index.html, e.g.
- * "/imaginesurrey/air" on base.win; "" at the root (local development). Every absolute path the browser builds (API
+ * "/air" on imaginesurrey.base.win; "" at the root (local development). Every absolute path the browser builds (API
  * calls, the live stream, links, sign-in hand-offs) goes through `appPath`, so nothing escapes the prefix.
  */
 
@@ -19,7 +19,7 @@ export function normalizeBasePath(raw: unknown): string {
 
 export const BASE_PATH: string = normalizeBasePath(typeof window !== "undefined" ? window.__BASE_PATH__ : "");
 
-/** `/v1/me` → `/imaginesurrey/air/v1/me`. Paths are always given from the app's root. */
+/** `/v1/me` → `/air/v1/me`. Paths are always given from the app's root. */
 export function joinBase(base: string, path: string): string {
   return `${normalizeBasePath(base)}${path.startsWith("/") ? path : `/${path}`}`;
 }

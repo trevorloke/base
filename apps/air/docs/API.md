@@ -1,7 +1,7 @@
 # Base Air HTTP API v1 (contract)
 
 Base URL in dev: `http://localhost:4000`. In the Base suite every path below lives under the deployment's `BASE_PATH`
-(e.g. `https://base.win/imaginesurrey/air/v1/me`); see "Base Air in the Base suite" at the end. All bodies and responses
+(e.g. `https://imaginesurrey.base.win/air/v1/me`); see "Base Air in the Base suite" at the end. All bodies and responses
 are JSON. Times are ISO-8601 strings.
 
 ## Authentication
@@ -277,7 +277,8 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
   the network refused, with the connector's own hint.
 - Without `REDIS_URL` the API process runs the background jobs itself (ingest, outcomes, account metrics, link
   rollups, tracker scan, trend sources, forecasts) on timers; `BASE_AIR_INPROCESS_JOBS=0` turns that off.
-- `BASE_AIR_PUBLIC_URL` falls back to `RENDER_EXTERNAL_URL` on Render's web service.
+- `BASE_AIR_PUBLIC_URL` falls back to `RENDER_EXTERNAL_URL` when Base Air runs as a standalone Render web service. In
+  the Base suite it is a private service behind the front door, with no external URL, so the setting is required.
 - Webhook handlers may answer a delivery from its own signed body (`respond`), and OAuth callbacks pass every query
   parameter to the connector (`callbackParams`).
 - `GET /v1/invites` (owner) → pending invites `{ id, email, role, invitedBy: { id, name, email }, expiresAt, createdAt }[]`;
@@ -420,14 +421,17 @@ Every change is a ledger event.
 
 ## Base Air in the Base suite
 
-Base Air is one of the Base suite's apps (see the repository's SUITE.md). Each client's deployment is served under a
-prefix, `BASE_PATH` (e.g. `/imaginesurrey/air`):
+Base Air is one of the Base suite's apps (see the repository's SUITE.md). Each client has its own subdomain
+(`https://imaginesurrey.base.win`), with Base Ground at its root and Base Air under the prefix `BASE_PATH=/air`. Base
+Air is a Render private service: every request reaches it through the front door, which passes the path on as it is.
 
 - Requests under `${BASE_PATH}` are handled as if at the root. `/api/health` also answers without the prefix; anything
   else without it gets `308` to the same path and query under it. `BASE_PATH` empty: everything at the root, as before.
 - `index.html` carries `<base href="${BASE_PATH}/">`, `window.__BASE_PATH__`, the workspace's brand as CSS custom
   properties (`<style id="base-air-brand">`, `data-theme`), `window.__BASE_AIR_BRAND__` and `window.__BASE_SUITE__`.
-- Cookies (`base_air_session`, `base_air_sso_state`) are set with `Path=${BASE_PATH}` (or `/`).
+- Cookies (`base_air_session`, `base_air_sso_state`, `base_air_sso_link`) are set with `Path=${BASE_PATH}` (or `/`)
+  and never with a `Domain`, so they stay on the client's own host. Clients are kept apart by their subdomains (each
+  its own origin), not by cookie paths.
 - Links in emails, posts and webhook registrations come from `BASE_AIR_PUBLIC_URL`, which includes the prefix.
 - Client IPs (sessions, link clicks) come from `X-Forwarded-For`, `BASE_AIR_TRUSTED_PROXIES` (default 1) entries from
   the right: Base's front door sits behind Render's load balancer, so the client is the second-to-last entry.

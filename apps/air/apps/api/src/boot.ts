@@ -21,9 +21,10 @@ export function gatewayFromEnv(env: NodeJS.ProcessEnv = process.env): ModelGatew
 }
 
 /**
- * The deployment's public address. Render gives every web service RENDER_EXTERNAL_URL; without falling back to it,
- * a Render deploy that never set BASE_AIR_PUBLIC_URL refuses every OAuth connect (503), mails relative invite and
- * reset links and turns link tracking off. Fills BASE_AIR_PUBLIC_URL in place so every reader (auth, links, media,
+ * The deployment's public address. In the Base suite Base Air is a Render private service behind the front door, with
+ * no address of its own, so BASE_AIR_PUBLIC_URL (`https://<client>.base.win/air`) must be set. A standalone Render
+ * web service gets RENDER_EXTERNAL_URL; without falling back to it, a deploy that never set BASE_AIR_PUBLIC_URL refuses
+ * every OAuth connect (503), mails relative invite and reset links and turns link tracking off. Fills BASE_AIR_PUBLIC_URL in place so every reader (auth, links, media,
  * connector webhooks) sees the same value.
  */
 export function applyHostDefaults(env: NodeJS.ProcessEnv = process.env): string | undefined {
