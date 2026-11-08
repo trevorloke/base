@@ -17,6 +17,13 @@ Settings, + `/admin`). Each app keeps its own deploy, tests and CI
 Internal names — the `STARBASE_*` settings, package names, the database —
 are unchanged, so nothing deployed moves.
 
+**base.win** is where Base runs for clients: `base.win/<client>/field` is the
+volunteers' app, `/desk` the office's, `/web` and `/air` the other two —
+each client on its own servers and database, behind one front door
+(`apps/door`; [setting it up](apps/door/README.md)). Ground goes under a
+client's path with `BASE_PATH=/<client>` (and keeps answering at its own
+address); unset, it runs at a site's root as it always has.
+
 Web and Air came in with `git subtree` from their own repositories; work done
 there comes in with:
 

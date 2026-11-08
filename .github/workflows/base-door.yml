@@ -1,0 +1,22 @@
+name: Base door
+
+# The front door at base.win (apps/door): its tests, run only when it changes.
+on:
+  push:
+    branches: [main]
+    paths: ['apps/door/**', '.github/workflows/base-door.yml']
+  pull_request:
+    paths: ['apps/door/**', '.github/workflows/base-door.yml']
+
+jobs:
+  door:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/door
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm test

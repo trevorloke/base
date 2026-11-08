@@ -1,17 +1,21 @@
 // Base's three apps — Ground (here), Web, Air (shared/brand.js). Web and Air
 // run on their own; this links to them: BASE_WEB_URL / BASE_AIR_URL on the
-// server (me.org.apps), else Web is the campaign's website + /admin. One
-// not set up yet shows as such (a manager is told what to set).
+// server (me.org.apps); else, on base.win, /<client>/web and /<client>/air
+// (the front door, apps/door); else Web is the campaign's website + /admin.
+// One not set up yet shows as such (a manager is told what to set).
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { APPS } from '@starbase/shared/brand';
 import { fieldHref } from '../mode.js';
+import { BASE } from '../base.js';
 
 export const appLinks = (me) => {
   const site = String(me?.workspace?.settings?.website || '').trim().replace(/\/+$/, '');
   return {
     ground: fieldHref('/'),
-    web: me?.org?.apps?.web || (/^https?:\/\//i.test(site) ? `${site}/admin` : null),
-    air: me?.org?.apps?.air || null,
+    // On base.win (a client's path) the front door knows where Web and Air
+    // are: /<client>/web and /<client>/air.
+    web: me?.org?.apps?.web || (BASE ? `${BASE}/web` : /^https?:\/\//i.test(site) ? `${site}/admin` : null),
+    air: me?.org?.apps?.air || (BASE ? `${BASE}/air` : null),
   };
 };
 

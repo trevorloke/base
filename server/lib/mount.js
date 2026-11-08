@@ -4,7 +4,9 @@
 //
 // One client's Ground per deployment (its own server and database); the
 // front door at base.win (apps/door) sends /<client>/field, /<client>/desk,
-// /<client>/api… here with the path as it came. On the way in the client's
+// /<client>/api… here with the path as it came. Its own address (the host's,
+// e.g. on Render) keeps answering at the root as before, so people can move
+// over to base.win in their own time. On the way in the client's
 // path is taken off, so every route inside is the same as at a root; on the
 // way out it is put back where a browser will read it:
 //   Location     a redirect to /x goes to /imaginesurrey/x
@@ -97,11 +99,10 @@ export const mountAt = (app, base) => {
   return async (req, env) => {
     const url = new URL(req.url);
     const p = url.pathname;
-    // The host's own health check may ask without the client's path.
-    if (p === '/api/health') return app.fetch(req, { ...(env || {}), base });
-    if (!(p === base || p.startsWith(`${base}/`))) {
-      return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
-    }
+    // Not under the client's path: the server's own address, as it always
+    // was (a site's root) — so moving to base.win breaks no bookmark, no
+    // invite already sent, and no knock still waiting on a phone to send.
+    if (!(p === base || p.startsWith(`${base}/`))) return app.fetch(req, env);
     let inner = p.slice(base.length) || '/';
     // The client's path alone, or an address from before (/admin, /login…):
     // the volunteers' app, or the office's for /admin.

@@ -27,13 +27,15 @@ test('BASE_PATH: one segment, tidied; anything else is no path', () => {
   assert.equal(here({ env: {} }, '/tiles/1/2/3.png'), '/tiles/1/2/3.png');
 });
 
-test('the API answers under the client’s path; the host’s health check without it; another client’s path is not ours', async () => {
+test('the API answers under the client’s path — and at the server’s own address, as before', async () => {
   const h = await call(`${B}/api/health`);
   assert.equal(h.status, 200);
   assert.equal((await h.json()).ok, true);
   assert.equal((await call('/api/health')).status, 200, 'the host checks /api/health as it is');
-  assert.equal((await call('/someoneelse/api/health')).status, 404);
-  assert.equal((await call('/imaginesurreyx/api/health')).status, 404, 'a longer name is another client');
+  const old = await call('/api/auth/me');
+  assert.equal(old.status, 401, 'the old address still answers, not redirected');
+  const longer = await call('/imaginesurreyx/api/health');
+  assert.notEqual(longer.headers.get('location') || '', `${B}x/api/health`, 'a longer name is not this client’s path');
 });
 
 test('the client’s path alone opens the field app; /admin goes to /desk; an old /login to the field app’s', async () => {
@@ -59,6 +61,11 @@ test('signing in: the cookie is kept to the client’s path, and works there', a
   assert.ok(set.length >= 1);
   assert.ok(set.every((c) => /;\s*Path=\/imaginesurrey(;|$)/i.test(c)), set.join(' | '));
   cookie = set.map((c) => c.split(';')[0]).join('; ');
+  const old = await call('/api/auth/signup', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: 'Old Address', email: 'old@example.org', password: 'surrey-forward-2026', workspaceName: 'Old', jurisdiction: 'bc-municipal' }),
+  });
+  if (old.status === 201) assert.ok(old.headers.getSetCookie().every((c) => /Path=\/(;|$)/i.test(c)), 'at the old address the cookie is the site’s, as before');
   const me = await call(`${B}/api/auth/me`, { headers: { cookie } });
   assert.equal(me.status, 200);
   assert.equal((await me.json()).workspace.name, 'Imagine Surrey');
