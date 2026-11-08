@@ -1,7 +1,9 @@
-// BASE_PATH (lib/basepath.js, lib/htmlhead.js — SUITE.md): base ground under
-// a prefix on base.win (/imaginesurrey/…), the two faces at /field and
-// /ground, the old addresses sent on, and the session cookie kept to the
-// client's own prefix. Without BASE_PATH everything is where it always was.
+// BASE_PATH (lib/basepath.js, lib/htmlhead.js — SUITE.md): Base Ground under
+// a prefix (/imaginesurrey/…) when a deployment puts it under one, the two
+// faces at /field and /ground, the old addresses sent on, and the session
+// cookie host-only, on the prefix's path. On base.win each client has its
+// own subdomain and Base Ground runs at the root (no BASE_PATH): everything
+// is where it always was.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -55,12 +57,19 @@ test('under a prefix: handled as if at the root; outside it, 308 to the same add
     assert.equal(where(await req('/field/map')), '/imaginesurrey/field/map');
     assert.equal(where(await req('/imaginesurreyx/field')), '/imaginesurrey/imaginesurreyx/field', 'a longer name is not the prefix');
     // The health check answers without the prefix (Render calls /api/health) and with it.
+    // Neither says whose it is: the unprefixed one answers whatever the
+    // prefix, so it must not name the client.
+    process.env.BASE_ORG_NAME = 'Imagine Surrey';
     for (const p of ['/api/health', '/imaginesurrey/api/health']) {
       const h = await req(p);
       assert.equal(h.status, 200, p);
-      assert.equal((await h.json()).ok, true);
+      const j = await h.json();
+      assert.equal(j.ok, true);
+      assert.deepEqual(Object.keys(j).sort(), ['commit', 'env', 'ok', 'service', 'tzdataCurrent'], p);
+      assert.equal(j.service, 'base-ground');
+      assert.ok(!JSON.stringify(j).includes('Imagine Surrey'), p);
     }
-  } finally { delete process.env.BASE_PATH; }
+  } finally { delete process.env.BASE_PATH; delete process.env.BASE_ORG_NAME; }
 });
 
 test('the two faces: / → /field/, /admin… → /ground/…, /join → the field app', async () => {
@@ -116,12 +125,13 @@ test('the head tags: <base href> and window.__BASE_PATH__, escaped; one place to
   assert.ok(out.indexOf('<base') < out.indexOf('<link'), 'before anything that loads a file');
 });
 
-test('the session cookie is kept to the client’s prefix', async () => {
+test('the session cookie: host-only (never a Domain), on the prefix’s path', async () => {
   const c = async () => (await req('/api/auth/signup', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: 'C', email: `bp-c${Math.random().toString(36).slice(2, 7)}@example.org`, password: 'cookie-pass-1', workspaceName: 'Cookie' }),
   })).headers.get('set-cookie');
   assert.match(await c(), /Path=\/(;|$)/);
+  assert.doesNotMatch(await c(), /Domain=/i, 'host-only: never a Domain, so another client’s subdomain never gets it');
   process.env.BASE_PATH = '/imaginesurrey';
   try {
     const res = await req('/imaginesurrey/api/auth/signup', {
@@ -129,6 +139,7 @@ test('the session cookie is kept to the client’s prefix', async () => {
       body: JSON.stringify({ name: 'C', email: `bp-d${tag}@example.org`, password: 'cookie-pass-1', workspaceName: 'Cookie 2' }),
     });
     assert.match(res.headers.get('set-cookie'), /Path=\/imaginesurrey(;|$)/);
+    assert.doesNotMatch(res.headers.get('set-cookie'), /Domain=/i);
     const out = await req('/imaginesurrey/api/auth/logout', { method: 'POST', headers: { 'content-type': 'application/json', cookie: res.headers.get('set-cookie').split(';')[0] } });
     assert.match(out.headers.get('set-cookie'), /Path=\/imaginesurrey(;|$)/);
   } finally { delete process.env.BASE_PATH; }

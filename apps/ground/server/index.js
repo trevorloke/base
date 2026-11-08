@@ -15,7 +15,7 @@ import { getDb } from './db/client.js';
 import { EXTENSIONS } from './ext.js';
 import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
-import { envName, orgName } from './lib/org.js';
+import { envName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
 import { basePath, withBasePath, publicUrlMismatch } from './lib/basepath.js';
 import { headTags, injectHead } from './lib/htmlhead.js';
@@ -46,9 +46,11 @@ app.use('*', async (c, next) => {
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 });
 // commit: which build is live (Render sets RENDER_GIT_COMMIT), so anyone can
-// check a deploy landed — open /api/health and compare with GitHub.
+// check a deploy landed — open /api/health and compare with GitHub. It never
+// names the organization: under a BASE_PATH it answers without the prefix
+// too, and on a shared host that would say which clients live there.
 const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null;
-app.get('/api/health', (c) => c.json({ ok: true, service: 'base-ground', env: envName(), organization: orgName(), commit: COMMIT, tzdataCurrent: !staleTimeZoneData() }));
+app.get('/api/health', (c) => c.json({ ok: true, service: 'base-ground', env: envName(), commit: COMMIT, tzdataCurrent: !staleTimeZoneData() }));
 app.route('/api/auth', authRoutes);
 app.route('/', publicRoutes); // /u, /bu — no auth
 for (const e of EXTENSIONS) if (e.publicRoutes) app.route('/', e.publicRoutes);

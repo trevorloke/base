@@ -33,8 +33,9 @@ const secureFlag = process.env.BASE_SECURE_COOKIES;
 const secure = secureFlag ? secureFlag === '1' : process.env.NODE_ENV === 'production';
 // Strict: the cookie goes only with requests the app itself makes (the app
 // is one origin; a link opened from an email loads the app, which then asks
-// for /api/auth/me itself). Path: this client's prefix, so two clients on
-// base.win never see each other's sign-in (SUITE.md).
+// for /api/auth/me itself). Never a Domain: the cookie stays on this host,
+// the client's own subdomain — that, not the path, keeps clients apart
+// (SUITE.md). Path: BASE_PATH, or / at the root.
 export const cookiePath = () => basePath() || '/';
 const cookieOpts = () => ({ httpOnly: true, sameSite: 'Strict', path: cookiePath(), secure, maxAge: 30 * 86400 });
 

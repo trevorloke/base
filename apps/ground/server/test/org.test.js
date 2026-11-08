@@ -51,7 +51,7 @@ test('/api/health says which environment this is', async () => {
   const j = await res.json();
   assert.equal(j.ok, true);
   assert.equal(j.env, 'staging');
-  assert.equal(j.organization, null);
+  assert.ok(!('organization' in j), 'never the organization’s name');
   assert.ok('commit' in j, 'which build is live (RENDER_GIT_COMMIT), null locally');
 });
 
