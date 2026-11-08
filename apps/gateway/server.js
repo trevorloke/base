@@ -1,25 +1,29 @@
-// The front door: base.win itself. It sends /<client>/… to that client's own
-// apps (SUITE.md "Addresses") and keeps nothing of its own — no database, no
-// sessions, no client list on show.
+// The front door: base.win itself. Each client has a subdomain of its own
+// (SUITE.md "Addresses"), so each is a separate browser origin; this sends
+// <client>.base.win to that client's own apps and keeps nothing of its own —
+// no database, no sessions, no client list on show.
 //
-//   /<client>/            → 302 /<client>/field/
-//   /<client>/air/…       → the client's base air
-//   /<client>/web         → 302 to the client's base web admin, signed in
-//   /<client>/…           → the client's base ground (field, desk, api, its pages)
-//   /healthz              → { ok: true }
-//   /                     → a plain landing page
+//   <client>.base.win/            → 302 /field/
+//   <client>.base.win/air/…       → the client's Base Air
+//   <client>.base.win/web         → 302 to the client's Base Web admin, signed in
+//   <client>.base.win/…           → the client's Base Ground (field, desk, api, its pages)
+//   base.win/                     → a plain landing page (www. redirects here)
+//   any host /healthz             → { ok: true }
 //
+// BASE_HOST is the apex this front door serves: base.win in production,
+// staging.base.win on staging (clients are then <client>.staging.base.win).
 // Clients come from settings, one per app, so a Render Blueprint can fill
 // them with each service's private address:
 //   BASE_CLIENT_IMAGINESURREY_GROUND=base-ground-imaginesurrey:10000
 //   BASE_CLIENT_IMAGINESURREY_AIR=base-air-imaginesurrey:10000
 //   BASE_CLIENT_IMAGINESURREY_WEB=https://imaginesurrey.ca
 // The slug is the part between BASE_CLIENT_ and the app, lower-cased, with _
-// read as - (BASE_CLIENT_NORTH_SHORE_GROUND → north-shore).
+// read as - (BASE_CLIENT_NORTH_SHORE_GROUND → north-shore.base.win).
 //
-// The path is passed on unchanged: each app knows its own prefix (BASE_PATH).
-// Bodies stream both ways (300 MB list imports, server-sent events), and
-// WebSocket upgrades are piped through.
+// The path is passed on unchanged. Bodies stream both ways (300 MB list
+// imports, server-sent events); a chunked body is re-chunked, never passed
+// on without its framing; WebSocket upgrades are spliced only after the app
+// answers 101.
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -27,7 +31,8 @@ import tls from 'node:tls';
 
 const APPS = ['GROUND', 'AIR', 'WEB'];
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
-const RESERVED = new Set(['healthz', 'favicon.ico', 'robots.txt', 'assets']);
+// Subdomains that are Base's own, never a client's.
+const RESERVED = new Set(['www', 'staging', 'api', 'admin', 'app', 'mail', 'status', 'docs', 'help']);
 
 // A target written as host:port (Render's private "hostport") is plain http
 // inside the private network; anything else must be a full URL.
@@ -52,7 +57,7 @@ export const readClients = (env = process.env) => {
     if (!SLUG.test(slug) || RESERVED.has(slug)) { problems.push(`${key}: "${slug}" can't be a client's address`); continue; }
     if (!url) { problems.push(`${key}: not an address`); continue; }
     if (m[2] === 'WEB' && url.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1)$/.test(url.hostname)) {
-      problems.push(`${key}: base web is the public site, so it must be https://`);
+      problems.push(`${key}: Base Web is the public site, so it must be https://`);
       continue;
     }
     const c = clients.get(slug) || {};
@@ -60,15 +65,18 @@ export const readClients = (env = process.env) => {
     clients.set(slug, c);
   }
   for (const [slug, c] of clients) {
-    if (!c.ground) problems.push(`${slug}: no base ground (BASE_CLIENT_${slug.toUpperCase().replace(/-/g, '_')}_GROUND); its addresses answer 404`);
+    if (!c.ground) problems.push(`${slug}: no Base Ground (BASE_CLIENT_${slug.toUpperCase().replace(/-/g, '_')}_GROUND); its addresses answer 404`);
   }
   return { clients, problems };
 };
 
+// The host a request names: lower-case, without a port or a trailing dot.
+const hostOf = (raw) => String(raw || '').trim().toLowerCase().replace(/:\d+$/, '').replace(/\.$/, '');
+
 // Where a request goes. Pure, so it's tested on its own.
-export const route = (clients, requested) => {
-  // Dot segments (also written %2e) are resolved first, so /a/../b can't
-  // reach past the client it names or be read differently upstream.
+export const route = (clients, apex, rawHost, requested) => {
+  // Dot segments (also written %2e) are resolved first, so /a/../b can't be
+  // read differently upstream.
   let rawPath;
   try {
     const u = new URL(requested, 'http://front.door');
@@ -80,22 +88,23 @@ export const route = (clients, requested) => {
   const path = q === -1 ? rawPath : rawPath.slice(0, q);
   const query = q === -1 ? '' : rawPath.slice(q);
   if (path === '/healthz') return { kind: 'health' };
-  if (path === '/' || path === '') return { kind: 'landing' };
-  const parts = path.split('/');
-  const slug = parts[1];
-  const client = SLUG.test(slug) ? clients.get(slug) : null;
+  const host = hostOf(rawHost);
+  if (host === apex) return path === '/' ? { kind: 'landing' } : { kind: 'unknown' };
+  if (host === `www.${apex}`) return { kind: 'redirect', location: `https://${apex}${rawPath}` };
+  if (!host.endsWith(`.${apex}`)) return { kind: 'unknown' };
+  const slug = host.slice(0, -(apex.length + 1));
+  const client = SLUG.test(slug) ? clients.get(slug) : null; // one label only: a.b.base.win is nobody
   if (!client || !client.ground) return { kind: 'unknown' };
-  const rest = parts.slice(2);
-  if (rest.length === 0 || (rest.length === 1 && rest[0] === '')) return { kind: 'redirect', location: `/${slug}/field/${query}` };
-  if (rest[0] === 'web') {
-    if (!client.web) return { kind: 'unknown' };
+  if (path === '/') return { kind: 'redirect', location: `/field/${query}` };
+  const first = path.split('/')[1];
+  if (first === 'web') {
     // Only the bare /web address: the site's own pages live on its domain.
-    if (rest.length > 2 || (rest.length === 2 && rest[1] !== '')) return { kind: 'unknown' };
+    if (!client.web || (path !== '/web' && path !== '/web/')) return { kind: 'unknown' };
     const to = new URL('/auth/base', client.web);
     to.searchParams.set('next', '/admin');
     return { kind: 'redirect', location: to.href };
   }
-  if (rest[0] === 'air') {
+  if (first === 'air') {
     if (!client.air) return { kind: 'unknown' };
     return { kind: 'proxy', target: client.air, path: rawPath, slug, app: 'air' };
   }
@@ -118,15 +127,15 @@ main{max-width:34rem;padding:2.5rem 1.5rem}
 p{margin:.6rem 0;color:var(--muted)}h1{font-size:1.15rem;margin:1.5rem 0 .25rem}
 code{background:var(--line);padding:.1em .35em;border-radius:4px;color:var(--ink)}
 </style></head><body><main>
-<p class="mark" aria-label="base">base<span aria-hidden="true"></span></p>
+<p class="mark" aria-label="Base">Base<span aria-hidden="true"></span></p>
 ${body}
 </main></body></html>`;
 
-const LANDING = page(200, 'base', `<p>The broad application for social engagement: organizing, the website and attention, for one campaign at a time.</p>
+const LANDING = page(200, 'Base', `<p>The broad application for social engagement: organizing, the website and attention, for one campaign at a time.</p>
 <h1>Looking for your campaign?</h1>
-<p>Its address looks like <code>base.win/<i>your-campaign</i>/field</code>. Ask whoever invited you for the link.</p>`);
+<p>Its address looks like <code><i>your-campaign</i>.base.win/field</code>. Ask whoever invited you for the link.</p>`);
 const UNKNOWN = page(404, 'Not here', `<h1>Nothing at this address</h1>
-<p>Check the link you were sent. A campaign's address looks like <code>base.win/<i>your-campaign</i>/field</code>.</p>`);
+<p>Check the link you were sent. A campaign's address looks like <code><i>your-campaign</i>.base.win/field</code>.</p>`);
 const DOWN = page(502, 'Back soon', `<h1>This campaign's app isn't answering</h1>
 <p>It may be starting up or being updated. Try again in a minute; anything you saved on your phone stays there until it's sent.</p>`);
 
@@ -156,22 +165,35 @@ const forwardHeaders = (req, target) => {
   const ip = req.socket.remoteAddress || '';
   out['x-forwarded-for'] = req.headers['x-forwarded-for'] ? `${req.headers['x-forwarded-for']}, ${ip}` : ip;
   out['x-forwarded-proto'] = req.headers['x-forwarded-proto'] || (req.socket.encrypted ? 'https' : 'http');
-  out['x-forwarded-host'] = req.headers['x-forwarded-host'] || req.headers.host || '';
+  out['x-forwarded-host'] = req.headers.host || ''; // never a visitor's own say-so
   out.host = target.host;
   return out;
 };
 
 const transportFor = (target) => (target.protocol === 'https:' ? https : http);
 
+// A body framed by Transfer-Encoding (Node has already decoded it) is sent
+// on chunked again: dropped framing would let the body be read upstream as a
+// second request on a reused connection. Both framings at once is refused
+// outright (RFC 9112 §6.1).
+export const framingProblem = (headers) => (headers['transfer-encoding'] && headers['content-length'] !== undefined
+  ? 'both Content-Length and Transfer-Encoding'
+  : null);
+
 const proxy = (req, res, r) => {
   const { target } = r;
+  const headers = forwardHeaders(req, target);
+  if (req.headers['transfer-encoding']) {
+    headers['transfer-encoding'] = 'chunked';
+    delete headers['content-length'];
+  }
   const upstream = transportFor(target).request({
     protocol: target.protocol,
     hostname: target.hostname,
     port: target.port || (target.protocol === 'https:' ? 443 : 80),
     method: req.method,
     path: r.path,
-    headers: forwardHeaders(req, target),
+    headers,
   }, (up) => {
     const headers = { ...up.headers };
     for (const h of HOP) delete headers[h];
@@ -188,40 +210,60 @@ const proxy = (req, res, r) => {
   req.pipe(upstream);
 };
 
-const upgrade = (clients) => (req, socket, head) => {
-  const r = route(clients, req.url || '/');
-  if (r.kind !== 'proxy') { socket.end('HTTP/1.1 404 Not Found\r\n\r\n'); return; }
+const upgrade = (clients, apex) => (req, socket, head) => {
+  const r = route(clients, apex, req.headers.host, req.url || '/');
+  if (r.kind !== 'proxy' || framingProblem(req.headers)) { socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n'); return; }
   const { target } = r;
   const port = Number(target.port) || (target.protocol === 'https:' ? 443 : 80);
   const up = target.protocol === 'https:'
     ? tls.connect({ host: target.hostname, port, servername: target.hostname })
     : net.connect({ host: target.hostname, port });
-  up.on('connect', () => {
+  const close = () => { socket.destroy(); up.destroy(); };
+  up.on('error', close);
+  socket.on('error', close);
+  up.once(target.protocol === 'https:' ? 'secureConnect' : 'connect', () => {
     const headers = forwardHeaders(req, target);
     headers.connection = 'Upgrade';
     headers.upgrade = req.headers.upgrade;
     const lines = [`${req.method} ${r.path} HTTP/1.1`, ...Object.entries(headers).flatMap(([k, v]) => (Array.isArray(v) ? v.map((x) => `${k}: ${x}`) : [`${k}: ${v}`]))];
     up.write(`${lines.join('\r\n')}\r\n\r\n`);
-    if (head?.length) up.write(head);
-    up.pipe(socket);
-    socket.pipe(up);
+    // The two sockets are joined only once the app has said 101. Anything else
+    // is passed back as the answer and both connections close, so a request
+    // that merely claims Upgrade can't turn the connection into a raw tunnel.
+    let buf = Buffer.alloc(0);
+    const onData = (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      const end = buf.indexOf('\r\n\r\n');
+      if (end === -1) { if (buf.length > 16384) close(); return; }
+      up.off('data', onData);
+      const switching = /^HTTP\/1\.1 101 /.test(buf.subarray(0, Math.min(end, 64)).toString('latin1'));
+      socket.write(buf);
+      if (!switching) { socket.end(); up.destroy(); return; }
+      if (head?.length) up.write(head);
+      up.pipe(socket);
+      socket.pipe(up);
+    };
+    up.on('data', onData);
   });
-  const close = () => { socket.destroy(); up.destroy(); };
-  up.on('error', close);
-  socket.on('error', close);
 };
 
 const log = (...parts) => console.log(new Date().toISOString(), ...parts);
 
 export const createGateway = (env = process.env) => {
   const { clients, problems } = readClients(env);
-  for (const p of problems) console.warn(`base front door: ${p}`);
+  const apex = hostOf(env.BASE_HOST || 'base.win');
+  for (const p of problems) console.warn(`Base front door: ${p}`);
   const server = http.createServer((req, res) => {
-    const r = route(clients, req.url || '/');
+    if (framingProblem(req.headers)) {
+      res.writeHead(400, { connection: 'close', 'content-type': 'text/plain' });
+      res.end('Bad request');
+      return;
+    }
+    const r = route(clients, apex, req.headers.host, req.url || '/');
     switch (r.kind) {
       case 'health':
         res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-        res.end(JSON.stringify({ ok: true, service: 'base-gateway', clients: clients.size, commit: String(env.RENDER_GIT_COMMIT || '').slice(0, 7) || null }));
+        res.end(JSON.stringify({ ok: true, service: 'base-gateway', commit: String(env.RENDER_GIT_COMMIT || '').slice(0, 7) || null }));
         return;
       case 'landing':
         send(res, 200, req.method === 'HEAD' ? '' : LANDING);
@@ -237,20 +279,20 @@ export const createGateway = (env = process.env) => {
         send(res, 404, UNKNOWN);
     }
   });
-  server.on('upgrade', upgrade(clients));
+  server.on('upgrade', upgrade(clients, apex));
   // Keep-alive longer than Render's load balancer so it never reuses a
   // connection this side has just closed.
   server.keepAliveTimeout = 75_000;
   server.headersTimeout = 80_000;
   server.requestTimeout = 0; // big uploads take as long as they take
-  return { server, clients };
+  return { server, clients, apex };
 };
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
-  const { server, clients } = createGateway();
+  const { server, clients, apex } = createGateway();
   const port = Number(process.env.PORT) || 10000;
-  server.listen(port, () => log(`base front door on :${port}, ${clients.size} client${clients.size === 1 ? '' : 's'}: ${[...clients.keys()].join(', ') || 'none'}`));
+  server.listen(port, () => log(`Base front door on :${port} for ${apex}, ${clients.size} client${clients.size === 1 ? '' : 's'}: ${[...clients.keys()].join(', ') || 'none'}`));
   const stop = () => server.close(() => process.exit(0));
   process.on('SIGTERM', stop);
   process.on('SIGINT', stop);

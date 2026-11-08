@@ -1,9 +1,10 @@
-# Render Blueprint for base (SUITE.md). One client today: Imagine Surrey
+# Render Blueprint for Base (SUITE.md). One client today: Imagine Surrey
 # (slug `imaginesurrey`). Every client has its own copy of each app — its own
-# services and its own databases; only the front door (base.win) is shared.
+# services, its own databases and its own subdomain; only the front door is
+# shared.
 #
-#   *-staging    deploys every push to `main`        → staging.base.win
-#   the rest     deploys the `production` branch     → base.win, moved forward
+#   *-staging    deploys every push to `main`        → <client>.staging.base.win
+#   the rest     deploys the `production` branch     → <client>.base.win, moved forward
 #                only by "Promote to production" (GitHub → Actions), when Trevor
 #                says so
 #
@@ -13,7 +14,11 @@
 # the `production` branch doesn't hold apps/web, apps/air or apps/gateway until
 # then, so a service built from it now would fail.
 #
-# A new client is a copy of the four `imaginesurrey` blocks under its own slug
+# Base Ground and Base Air are private services (`pserv`): no public address,
+# so everything reaches them through the front door. Base Web is public: it
+# serves the client's own domain.
+#
+# A new client is a copy of the `imaginesurrey` blocks under its own slug
 # (names are unique per Render workspace) plus BASE_CLIENT_<SLUG>_* lines on
 # the front door. See SUITE.md.
 #
@@ -35,24 +40,27 @@ services:
     dockerfilePath: ./apps/gateway/Dockerfile
     healthCheckPath: /healthz
     autoDeploy: true
+    # Custom domains (added in the dashboard, with DNS at GoDaddy):
+    # staging.base.win and *.staging.base.win
     envVars:
+      - key: BASE_HOST
+        value: staging.base.win
       - key: BASE_CLIENT_IMAGINESURREY_GROUND
-        fromService: { type: web, name: base-ground-imaginesurrey-staging, property: hostport }
+        fromService: { type: pserv, name: base-ground-imaginesurrey-staging, property: hostport }
       - key: BASE_CLIENT_IMAGINESURREY_AIR
-        fromService: { type: web, name: base-air-imaginesurrey-staging, property: hostport }
-      - key: BASE_CLIENT_IMAGINESURREY_WEB   # base web staging's public https:// address
+        fromService: { type: pserv, name: base-air-imaginesurrey-staging, property: hostport }
+      - key: BASE_CLIENT_IMAGINESURREY_WEB   # Base Web staging's public https:// address
         sync: false
 
-  # ── Imagine Surrey · base ground (staging) ──────────────────────────────
-  - type: web
+  # ── Imagine Surrey · Base Ground (staging) ──────────────────────────────
+  - type: pserv
     name: base-ground-imaginesurrey-staging
     runtime: docker
     plan: starter
     region: oregon
     branch: main
     dockerContext: .
-    dockerfilePath: ./Dockerfile          # base ground's image, at the root (see the Dockerfile)
-    healthCheckPath: /api/health
+    dockerfilePath: ./Dockerfile          # Base Ground's image, at the root (see the Dockerfile)
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -61,10 +69,8 @@ services:
         value: staging
       - key: DATABASE_URL
         fromDatabase: { name: base-ground-imaginesurrey-staging-db, property: connectionString }
-      - key: BASE_PATH
-        value: /imaginesurrey
       - key: BASE_PUBLIC_URL
-        value: https://staging.base.win/imaginesurrey
+        value: https://imaginesurrey.staging.base.win
       - key: BASE_TRUSTED_PROXIES          # Render's load balancer, then the front door
         value: "2"
       - key: BASE_ORG_NAME
@@ -80,10 +86,10 @@ services:
       # Signing in once (SUITE.md): ground is the hub; each app's secret is
       # made here and handed to that app below.
       - key: BASE_AIR_URL
-        value: https://staging.base.win/imaginesurrey/air
+        value: https://imaginesurrey.staging.base.win/air
       - key: BASE_AIR_SSO_SECRET
         generateValue: true
-      - key: BASE_WEB_URL                  # base web staging's public https:// address
+      - key: BASE_WEB_URL                  # Base Web staging's public https:// address
         sync: false
       - key: BASE_WEB_SSO_SECRET
         generateValue: true
@@ -100,7 +106,7 @@ services:
       - key: GOOGLE_MAPS_SERVER_KEY
         sync: false
 
-  # ── Imagine Surrey · base web (staging) ─────────────────────────────────
+  # ── Imagine Surrey · Base Web (staging) ─────────────────────────────────
   - type: web
     name: base-web-imaginesurrey-staging
     runtime: docker
@@ -133,14 +139,14 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: BASE_GROUND_URL
-        value: https://staging.base.win/imaginesurrey
+        value: https://imaginesurrey.staging.base.win
       - key: BASE_GROUND_INTERNAL_URL
-        fromService: { type: web, name: base-ground-imaginesurrey-staging, property: hostport }
+        fromService: { type: pserv, name: base-ground-imaginesurrey-staging, property: hostport }
       - key: BASE_SSO_SECRET
-        fromService: { type: web, name: base-ground-imaginesurrey-staging, envVarKey: BASE_WEB_SSO_SECRET }
+        fromService: { type: pserv, name: base-ground-imaginesurrey-staging, envVarKey: BASE_WEB_SSO_SECRET }
       - key: BASE_AIR_URL
-        value: https://staging.base.win/imaginesurrey/air
-      - key: BASE_GROUND_KEY               # a website key made in base ground (Settings → Services)
+        value: https://imaginesurrey.staging.base.win/air
+      - key: BASE_GROUND_KEY               # a website key made in Base Ground (Settings → Services)
         sync: false
       - key: BASE_GROUND_INBOUND_KEY
         sync: false
@@ -193,10 +199,10 @@ services:
       - key: CRON_SECRET
         fromService: { type: web, name: base-web-imaginesurrey-staging, envVarKey: CRON_SECRET }
 
-  # ── Imagine Surrey · base air (staging) ─────────────────────────────────
+  # ── Imagine Surrey · Base Air (staging) ─────────────────────────────────
   # One image, three services: the API (which serves the web app), the
   # workers (publishing queue, ingest, schedules) and the operators (agents).
-  - type: web
+  - type: pserv
     name: base-air-imaginesurrey-staging
     runtime: docker
     plan: starter
@@ -204,7 +210,6 @@ services:
     branch: main
     dockerContext: ./apps/air
     dockerfilePath: ./apps/air/Dockerfile
-    healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
@@ -214,20 +219,20 @@ services:
       - key: REDIS_URL
         fromService: { type: keyvalue, name: base-air-imaginesurrey-staging-redis, property: connectionString }
       - key: BASE_PATH
-        value: /imaginesurrey/air
+        value: /air
       - key: BASE_AIR_PUBLIC_URL
-        value: https://staging.base.win/imaginesurrey/air
+        value: https://imaginesurrey.staging.base.win/air
       - key: BASE_AIR_MASTER_KEY
         generateValue: true
       - key: BASE_AIR_BRAND_PRESET
         value: air
       - key: BASE_GROUND_URL
-        value: https://staging.base.win/imaginesurrey
+        value: https://imaginesurrey.staging.base.win
       - key: BASE_GROUND_INTERNAL_URL
-        fromService: { type: web, name: base-ground-imaginesurrey-staging, property: hostport }
+        fromService: { type: pserv, name: base-ground-imaginesurrey-staging, property: hostport }
       - key: BASE_SSO_SECRET
-        fromService: { type: web, name: base-ground-imaginesurrey-staging, envVarKey: BASE_AIR_SSO_SECRET }
-      - key: BASE_WEB_URL                  # base web staging's public https:// address
+        fromService: { type: pserv, name: base-ground-imaginesurrey-staging, envVarKey: BASE_AIR_SSO_SECRET }
+      - key: BASE_WEB_URL                  # Base Web staging's public https:// address
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
@@ -253,9 +258,9 @@ services:
       - key: REDIS_URL
         fromService: { type: keyvalue, name: base-air-imaginesurrey-staging-redis, property: connectionString }
       - key: BASE_AIR_PUBLIC_URL
-        value: https://staging.base.win/imaginesurrey/air
+        value: https://imaginesurrey.staging.base.win/air
       - key: BASE_AIR_MASTER_KEY
-        fromService: { type: web, name: base-air-imaginesurrey-staging, envVarKey: BASE_AIR_MASTER_KEY }
+        fromService: { type: pserv, name: base-air-imaginesurrey-staging, envVarKey: BASE_AIR_MASTER_KEY }
   - type: worker
     name: base-air-imaginesurrey-staging-operators
     runtime: docker
@@ -274,9 +279,9 @@ services:
       - key: REDIS_URL
         fromService: { type: keyvalue, name: base-air-imaginesurrey-staging-redis, property: connectionString }
       - key: BASE_AIR_PUBLIC_URL
-        value: https://staging.base.win/imaginesurrey/air
+        value: https://imaginesurrey.staging.base.win/air
       - key: BASE_AIR_MASTER_KEY
-        fromService: { type: web, name: base-air-imaginesurrey-staging, envVarKey: BASE_AIR_MASTER_KEY }
+        fromService: { type: pserv, name: base-air-imaginesurrey-staging, envVarKey: BASE_AIR_MASTER_KEY }
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: BASE_AIR_MODEL
@@ -287,7 +292,7 @@ services:
     region: oregon
     ipAllowList: []                        # private network only
 
-  # ── Imagine Surrey · base ground (production) ───────────────────────────
+  # ── Imagine Surrey · Base Ground (production) ───────────────────────────
   # Still named `starbase` and on its old settings until the first promotion
   # of the suite. The BASE_* settings below are added beside the old
   # STARBASE_* ones (a Blueprint never deletes a setting), so the code
@@ -352,11 +357,14 @@ databases:
 
 # ── At the first promotion of the suite ─────────────────────────────────────
 # Production follows staging's blocks above with `branch: production`, the
-# names without `-staging`, base.win in place of staging.base.win, and:
-#   base-gateway                      the front door at base.win
-#   base-ground-imaginesurrey         rename of `starbase` (+ BASE_PATH, BASE_PUBLIC_URL=https://base.win/imaginesurrey,
-#                                     BASE_TRUSTED_PROXIES=2, the SSO settings); drop the STARBASE_* lines
-#   base-ground-imaginesurrey-db      rename of `starbase-db` — the same database, renamed in place
+# names without `-staging`, and base.win in place of staging.base.win:
+#   base-gateway                      the front door: BASE_HOST=base.win, domains base.win and *.base.win
+#   base-ground-imaginesurrey         a new private service (a public service can't become private) on
+#                                     production's existing database, renamed in place from `starbase-db` to
+#                                     `base-ground-imaginesurrey-db`: same data, nothing copied.
+#                                     BASE_PUBLIC_URL=https://imaginesurrey.base.win, BASE_TRUSTED_PROXIES=2,
+#                                     the SSO settings; no STARBASE_* lines. The old public `starbase` service is
+#                                     suspended once imaginesurrey.base.win answers, then removed.
 #   base-web-imaginesurrey (+ its two crons) on imaginesurrey.ca, using the website's existing database
 #                                     (`imagine-surrey-db`, renamed in place), replacing the old
 #                                     ImagineSurreyWebsite service
