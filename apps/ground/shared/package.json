@@ -11,6 +11,8 @@
     "./markdown": "./markdown.js",
     "./passes": "./passes.js",
     "./names": "./names.js",
-    "./paths": "./paths.js"
+    "./paths": "./paths.js",
+    "./brand": "./brand.js",
+    "./contrast": "./contrast.js"
   }
 }

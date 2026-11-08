@@ -1,7 +1,7 @@
 /* /people/duplicates: each pair a card, its two records side by side (stacked on a phone). */
 .dup-list { list-style: none; margin: var(--s-4) 0 0; padding: 0; display: grid; gap: var(--s-3); }
 .dup-pair { padding: var(--s-4); display: grid; gap: var(--s-3); }
-.dup-why { margin: 0; font-size: 12.5px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-3); }
+.dup-why { margin: 0; font-size: 12.5px; font-family: var(--font-sans); text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-3); }
 .dup-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
 .dup-side { display: flex; flex-direction: column; gap: 2px; padding: var(--s-3); border: var(--border); border-radius: var(--r-ctrl); min-width: 0; }
 .dup-name { font-weight: 600; font-size: 17px; color: var(--text-1); }

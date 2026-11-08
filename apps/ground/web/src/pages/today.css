@@ -16,7 +16,7 @@
   justify-content: center;
   text-align: center;
 }
-.today-chev { font-family: var(--font-serif); font-size: 22px; line-height: 1; color: var(--text-3); flex: none; }
+.today-chev { font-family: var(--font-sans); font-size: 22px; line-height: 1; color: var(--text-3); flex: none; }
 .today-empty { color: var(--text-3); margin: 0; padding: var(--s-2) 0; }
 .today-sr {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -24,7 +24,7 @@
 }
 .today-section { margin: var(--s-5) 0; }
 h2.today-h {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -35,7 +35,7 @@ h2.today-h {
 .today-subh { font-size: 15px; margin: var(--s-4) 0 var(--s-1); }
 .today-fieldline { font-size: 12px; color: var(--text-3); margin: var(--s-3) 0; }
 .today-more-link {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -89,10 +89,10 @@ h2.today-h {
 @media (hover: hover) {
   .today-num:hover { border-color: var(--mark); }
 }
-.today-num:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.today-num:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .today-num[aria-expanded='true'] { border-color: var(--mark); box-shadow: 0 0 0 3px var(--mark-soft); }
 .today-num__n {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(28px, 8vw, 56px);
   font-weight: 800;
   line-height: 1;
@@ -107,7 +107,7 @@ h2.today-h {
   justify-content: space-between;
   gap: 4px;
   width: 100%;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11.5px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -118,7 +118,7 @@ h2.today-h {
    (the same plus as every "More" row, app.css .disclose). */
 .today-num__go {
   flex: none;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 20px;
   line-height: 0.7;
   letter-spacing: 0;
@@ -147,7 +147,7 @@ h2.today-h {
 .today-bar.is-small { height: 6px; gap: 1px; }
 .today-bar > span { display: block; height: 100%; min-width: 3px; }
 .today-bar [data-band='support'] { background: var(--ok); }
-.today-bar [data-band='undecided'] { background: var(--amber); }
+.today-bar [data-band='undecided'] { background: var(--pin-undecided); }
 .today-bar [data-band='opposed'] { background: var(--danger); }
 
 .card.today-support { margin: 0 0 var(--s-2); }
@@ -155,7 +155,7 @@ h2.today-h {
 .today-legend li { display: inline-flex; align-items: baseline; gap: 6px; }
 .today-support .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; align-self: center; flex: none; }
 .today-support .sw[data-band='support'] { background: var(--ok); }
-.today-support .sw[data-band='undecided'] { background: var(--amber); border: 1px solid var(--amber-deep); }
+.today-support .sw[data-band='undecided'] { background: var(--pin-undecided); border: 1px solid var(--pin-undecided-edge); }
 .today-support .sw[data-band='opposed'] { background: var(--danger); }
 .today-legend .mono { font-size: 13px; }
 .today-legend .pct { color: var(--text-3); }
@@ -200,7 +200,7 @@ h2.today-h {
 @media (hover: hover) {
   .today-row:hover { background: var(--paper-1); }
 }
-.today-row:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.today-row:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .today-row__main {
   flex: 1 1 auto;
   min-width: 0;
@@ -211,14 +211,14 @@ h2.today-h {
 .today-row__main strong { font-weight: 600; }
 .today-row__kicker {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11.5px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--text-3);
 }
 .today-row__title { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
-.today-row__when { display: block; font-family: var(--font-mono); font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; }
+.today-row__when { display: block; font-family: var(--font-sans); font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; }
 .today-row .chip { flex: none; }
 /* "Over limit", "5 short", "Due today": amber outline, as on Money and
    Shifts — yellow belongs to the one primary button. */
@@ -242,7 +242,7 @@ h2.today-h {
 .today-event { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-3); padding: var(--s-2) var(--s-4); }
 .today-event .today-row__main { white-space: normal; flex: 1 1 200px; }
 .today-rsvp {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   letter-spacing: 0.06em;
   color: var(--text-2);
@@ -285,7 +285,7 @@ h2.today-h {
 @media (hover: hover) {
   .today-go__link:hover .today-go__turf { text-decoration: underline; text-decoration-color: var(--mark-deep); text-underline-offset: 3px; }
 }
-.today-go__link:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.today-go__link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .today-go__meta {
   display: flex;
   align-items: center;
@@ -317,7 +317,7 @@ h2.today-h {
 
 /* Quiet line under the title; "Clear sample data" is under More. */
 .today-sample-line {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   letter-spacing: 0.06em;
   color: var(--text-3);
@@ -368,7 +368,7 @@ h2.today-h {
 }
 .today-mine__pair { white-space: nowrap; }
 .today-mine__n {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: clamp(28px, 8vw, 40px);
   font-weight: 600;
   line-height: 1;

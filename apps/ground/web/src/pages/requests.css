@@ -14,7 +14,7 @@
 }
 @media (hover: hover) { .rq-kind:hover { border-color: var(--ink); color: var(--text-1); } }
 .rq-kind.is-on { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
-.rq-kind:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.rq-kind:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .rq-note { width: 100%; min-height: 48px; box-sizing: border-box; }
 .rq-error { margin: 0; }
 .rq-acts { display: flex; gap: var(--s-2); flex-wrap: wrap; }
@@ -34,7 +34,7 @@
 .rq-pill:first-child { border-left: 0; }
 @media (hover: hover) { .rq-pill:hover { background: var(--paper-1); color: var(--text-1); } }
 .rq-pill.is-on { background: var(--ink); color: var(--paper-0); }
-.rq-pill:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.rq-pill:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .rq-row .ops-row { min-height: 0; padding-bottom: var(--s-2); }
 .rq-who { color: inherit; }
 .rq-kind-word { font-weight: 500; color: var(--text-2); }

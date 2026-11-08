@@ -11,7 +11,7 @@
 
 /* Week: ‹ Oct 26 – Nov 1 › · This week */
 .sb-week { display: flex; align-items: center; gap: var(--s-1) var(--s-2); flex-wrap: wrap; margin: 0 0 var(--s-3); }
-.sb-week__label { font-family: var(--font-mono); font-size: 15px; font-weight: 600; color: var(--text-1); min-width: 9em; text-align: center; }
+.sb-week__label { font-family: var(--font-sans); font-size: 15px; font-weight: 600; color: var(--text-1); min-width: 9em; text-align: center; }
 .btn.sb-nav { min-width: 44px; min-height: 44px; padding: 0; font-size: 22px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .btn.sb-today { min-height: 44px; }
 
@@ -69,13 +69,13 @@
 .sb-person:hover { border-color: var(--rule-2); }
 .sb-person[aria-pressed='true'] { background: var(--mark-soft); border-color: var(--mark); }
 .sb-person:focus-visible, .sb-chip__name:focus-visible, .sb-shift__head:focus-visible, .sb-add:focus-visible, .sb-day:focus-visible {
-  outline: 2px solid var(--mark); outline-offset: 1px;
+  outline: 3px solid var(--focus); outline-offset: 1px;
 }
 .sb-person:disabled { cursor: default; opacity: 0.6; }
 .sb-person__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .sb-person__n {
   flex: none;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--text-3);
@@ -114,7 +114,7 @@
 .sb-grid[data-narrow] { grid-template-columns: minmax(0, 1fr); }
 .sb-row { display: contents; }
 .sb-colhead {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-3);
   text-align: center;
@@ -136,7 +136,7 @@
   font-weight: 600;
   color: var(--text-2);
 }
-.sb-rowhead small, .sb-cell__part small { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--text-4); }
+.sb-rowhead small, .sb-cell__part small { font-family: var(--font-sans); font-size: 11px; font-weight: 400; color: var(--text-4); }
 
 /* A slot: that day's morning, afternoon or evening */
 .sb-cell {
@@ -181,7 +181,7 @@
 }
 .sb-shift__head:hover { background: var(--paper-1); }
 .sb-shift__title { font-size: 13px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; color: var(--text-1); }
-.sb-shift__meta { display: flex; justify-content: space-between; gap: var(--s-1); flex-wrap: wrap; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.sb-shift__meta { display: flex; justify-content: space-between; gap: var(--s-1); flex-wrap: wrap; font-family: var(--font-sans); font-size: 11px; color: var(--text-3); }
 .sb-cap { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-2); }
 .sb-cap[data-full] { color: var(--ok); }
 
@@ -281,7 +281,7 @@
   cursor: pointer;
 }
 .sb-day__wd { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
-.sb-day__n { font-family: var(--font-mono); font-size: 15px; font-weight: 600; }
+.sb-day__n { font-family: var(--font-sans); font-size: 15px; font-weight: 600; }
 .sb-day[data-today] .sb-day__wd { color: var(--mark-deep); font-weight: 700; }
 .sb-day[aria-pressed='true'] { background: var(--mark); border-color: var(--mark); color: var(--mark-ink); }
 .sb-day[aria-pressed='true'] .sb-day__wd { color: var(--mark-ink); }

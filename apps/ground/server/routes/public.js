@@ -31,10 +31,10 @@ const badUnsubscribe = (c) => c.html(page(null, 'Unsubscribe',
 const loadSub = async (db, sid) => {
   if (!UUID.test(sid)) return null;
   const row = (await db.query(
-    'select s.id, s.status, s.workspace_id, w.name, w.slug, w.settings from subscriptions s join workspaces w on w.id = s.workspace_id where s.id = $1',
+    'select s.id, s.status, s.workspace_id, w.name, w.slug, w.settings, w.brand from subscriptions s join workspaces w on w.id = s.workspace_id where s.id = $1',
     [sid],
   )).rows[0];
-  return row ? { row, ws: { id: row.workspace_id, name: row.name, slug: row.slug, settings: row.settings } } : null;
+  return row ? { row, ws: { id: row.workspace_id, name: row.name, slug: row.slug, settings: row.settings, brand: row.brand } } : null;
 };
 const unsubscribedPage = (c, ws) => c.html(page(ws, 'Unsubscribed', `<h1>Unsubscribed.</h1><div class="done">You won't receive further newsletters from ${esc(ws.name)}.</div>`));
 
@@ -72,12 +72,12 @@ app.post('/u/:id', async (c) => {
 const loadBlastRecipient = async (db, id) => {
   if (!UUID.test(id)) return null;
   const row = (await db.query(
-    `select r.id, r.workspace_id, r.email, w.name, w.slug, w.settings from blast_recipients r
+    `select r.id, r.workspace_id, r.email, w.name, w.slug, w.settings, w.brand from blast_recipients r
      join blasts b on b.id = r.blast_id join workspaces w on w.id = r.workspace_id
      where r.id = $1 and b.kind = 'eblast'`, [id],
   )).rows[0];
   const email = String(row?.email || '').trim().toLowerCase();
-  return row && email ? { ...row, email, ws: { id: row.workspace_id, name: row.name, slug: row.slug, settings: settingsOf(row) } } : null;
+  return row && email ? { ...row, email, ws: { id: row.workspace_id, name: row.name, slug: row.slug, settings: settingsOf(row), brand: row.brand } } : null;
 };
 app.get('/bu/:id', async (c) => {
   const row = await loadBlastRecipient(await getDb(), c.req.param('id'));

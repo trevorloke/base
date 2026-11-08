@@ -5,12 +5,15 @@
 import { Hono } from 'hono';
 import { getDb } from '../../db/client.js';
 import { loadSettings, docOf, campaignName, money, longDate, methodWord, agentLine } from './core.js';
+import { publicBrand } from '../../lib/brand.js';
 
 export const publicRoutes = new Hono();
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
-const page = (title, inner) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+// pb: the campaign's brand (lib/brand.js) — its colours, and its logo
+// over the receipt. Printed, a receipt is black on white whatever the brand.
+const page = (title, inner, pb = publicBrand(null)) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>${esc(title)}</title>
 <style>
   :root{--paper:#f4f5fa;--card:#ffffff;--ink:#161a2e;--ink2:#5d6481;--rule:#dde0ec;--mark:#6d4aff;--bad:#d43c3c}
@@ -28,10 +31,15 @@ const page = (title, inner) => `<!doctype html><html lang="en"><head><meta chars
   p{margin:0 0 10px}
   .notice{font-weight:700}
   .muted{color:var(--ink2)}
-  button{display:block;width:100%;min-height:56px;margin-top:24px;font:600 17px/1.2 system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--mark);color:#fff;border:0;padding:16px 22px;border-radius:12px;cursor:pointer}
+  button{display:block;width:100%;min-height:56px;margin-top:24px;font:600 17px/1.2 system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--mark);color:var(--mark-ink,#fff);border:0;padding:16px 22px;border-radius:12px;cursor:pointer}
+  button:focus-visible{outline:3px solid var(--focus,var(--mark));outline-offset:2px}
+  .camp{border-bottom-color:var(--accent,var(--mark))}
+  .logo{display:block;height:44px;width:auto;max-width:200px;object-fit:contain;margin:0 0 14px}
   @media(max-width:420px){dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:8px}}
-  @media print{:root{--paper:#fff;--card:#fff;--ink:#000;--ink2:#333}button{display:none}main{padding:0}}
+  ${pb.css}
+  @media print{html:root{--paper:#fff;--card:#fff;--ink:#000;--ink2:#333}button{display:none}main{padding:0}}
 </style></head><body><main>
+${pb.logo ? `<img class="logo" src="${esc(pb.logo)}" alt="">` : ''}
 ${inner}
 </main></body></html>`;
 
@@ -68,6 +76,7 @@ publicRoutes.get('/r/:token', async (c) => {
   if (!r) return send(c, 404, page('Receipt not found', '<h1>This receipt link isn’t valid.</h1>'));
   const settings = await loadSettings(db, r.workspace_id);
   const doc = docOf(r, settings, await campaignName(db, r.workspace_id));
+  const ws = (await db.query('select name, brand from workspaces where id = $1', [r.workspace_id])).rows[0];
   return send(c, 200, page(`Receipt ${doc.number} · ${doc.campaign}`,
-    `${receiptHtml(doc)}\n<button type="button" onclick="window.print()">Print</button>`));
+    `${receiptHtml(doc)}\n<button type="button" onclick="window.print()">Print</button>`, publicBrand(ws)));
 });

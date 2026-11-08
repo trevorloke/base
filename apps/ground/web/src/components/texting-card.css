@@ -11,7 +11,7 @@
   background: var(--paper-0);
   margin-bottom: var(--s-2);
 }
-.tx-msg:focus-within { outline: 2px solid var(--mark-deep); outline-offset: 1px; border-color: var(--ink); }
+.tx-msg:focus-within { outline: 3px solid var(--focus); outline-offset: 1px; border-color: var(--ink); }
 .tx-body {
   display: block;
   width: 100%;
@@ -20,7 +20,7 @@
   border: 0;
   background: transparent;
   color: var(--text-1);
-  font: 16px/1.45 var(--font-serif);
+  font: 16px/1.45 var(--font-sans);
   padding: var(--s-3);
   outline: none;
 }
@@ -45,17 +45,17 @@
 
 .tx-quiet {
   display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--s-3);
-  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.03em; text-transform: uppercase;
+  font-family: var(--font-sans); font-size: 12px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-3); background: transparent; border: 0; cursor: pointer; text-decoration: none;
 }
 @media (hover: hover) { .tx-quiet:hover { color: var(--text-1); text-decoration: underline; } }
-.tx-quiet:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.tx-quiet:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .tx-quiet--block { display: flex; margin: var(--s-1) auto 0; }
 
 .tx-myphone { margin-bottom: var(--s-3); }
 .tx-label {
   display: block; margin-bottom: var(--s-1);
-  font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3);
+  font-family: var(--font-sans); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3);
 }
 .input.tx-input { min-height: 48px; font-size: 16px; margin-bottom: var(--s-2); }
 .tx-live {
@@ -67,23 +67,23 @@
 
 /* Your conversation's last texts on the card: who and when, then the words. */
 .tx-recent { list-style: none; margin: 0 0 var(--s-2); padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
-.tx-recent__msg { padding: var(--s-2) var(--s-3); border-radius: 10px; border: 1px solid var(--rule-2); max-width: 92%; }
+.tx-recent__msg { padding: var(--s-2) var(--s-3); border-radius: var(--r-card); border: 1px solid var(--rule-2); max-width: 92%; }
 .tx-recent__msg--out { align-self: flex-end; background: var(--paper-0); border-color: var(--ink); }
 .tx-recent__msg--in { align-self: flex-start; background: var(--paper-2); }
-.tx-recent__who { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.tx-recent__who { display: block; font-family: var(--font-sans); font-size: 11px; color: var(--text-3); }
 .tx-recent__body { display: block; font-size: 16px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tx-quiet.tx-next { color: var(--text-1); font-size: 13px; }
 
 /* Calls' "New replies · N" (else "Inbox"): quiet, one tap to the inbox. */
 .tx-replies {
   display: inline-flex; align-items: center; gap: 4px; min-height: 48px; margin: 0 0 var(--s-2); padding: 0 var(--s-1);
-  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.03em; text-transform: uppercase;
+  font-family: var(--font-sans); font-size: 12px; letter-spacing: 0.03em; text-transform: uppercase;
   color: var(--text-2); text-decoration: none;
 }
 .tx-replies.is-new { color: var(--text-1); font-weight: 600; }
 .tx-replies.is-new::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 4px; }
 @media (hover: hover) { .tx-replies:hover { text-decoration: underline; } }
-.tx-replies:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.tx-replies:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* The profile's "Texts" row: the same shape as its sections, an arrow, not a +. */
 .tx-pflink {
@@ -91,6 +91,6 @@
   padding: var(--s-2) var(--disclose-x, 0); border-top: 1px solid var(--rule);
   font-size: 16px; font-weight: 600; color: var(--text-2); text-decoration: none;
 }
-.tx-pflink::after { content: '→'; margin-left: var(--s-2); font-family: var(--font-mono); font-weight: 400; }
+.tx-pflink::after { content: '→'; margin-left: var(--s-2); font-family: var(--font-sans); font-weight: 400; }
 @media (hover: hover) { .tx-pflink:hover { color: var(--text-1); } }
-.tx-pflink:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.tx-pflink:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }

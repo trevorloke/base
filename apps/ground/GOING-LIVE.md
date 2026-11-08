@@ -61,6 +61,7 @@ the candidates the code ships with (`shared/scale.js`).
 | `BASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
 | `BASE_ORG_NAME`, `BASE_JURISDICTION`, `BASE_TZ`, `BASE_CITY`, `BASE_SLATES`, `BASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name on sign-in, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
 | `BASE_PATH` | `/imaginesurrey` on base.win (SUITE.md); unset on a domain of its own | where the app lives under its address; the sign-in cookie is kept to it |
+| `BASE_BRAND_PRESET`, `BASE_BRAND_PRIMARY`, … (optional) | the campaign's look before anyone saves one (README → *One deployment per client*, *The look*); a manager changes it under Settings → Brand | the colours, name and logo on every screen and public page |
 | `BASE_PUBLIC_URL` | `https://base.win/imaginesurrey` (or `https://base.imaginesurrey.ca`; staging: its own address) — it must end in `BASE_PATH` | every link in an email: invites, unsubscribe, receipts |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on a domain verified there | email; without it invites are shown to copy and sends wait as *queued* |
 

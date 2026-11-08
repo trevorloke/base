@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost } from '../api.js';
 import { landing } from '../mode.js';
+import { AuthBrand } from '../components/BrandMark.jsx';
 
 const ROLE_LABEL = { manager: 'a manager', treasurer: 'the treasurer', staff: 'staff', volunteer: 'a volunteer' };
 
@@ -46,11 +47,11 @@ export default function Join({ mode = 'field' }) {
     }
   };
 
-  if (inv.isPending) return <div className="auth-page"><span className="brand">base ground</span></div>;
+  if (inv.isPending) return <div className="auth-page"><AuthBrand /></div>;
   if (inv.isError) {
     return (
       <div className="auth-page">
-        <span className="brand">base ground</span>
+        <AuthBrand />
         <h1>{inv.error.status === 404 ? 'Invite not found' : 'Can’t open this invite'}</h1>
         <p className="muted">{inv.error.status === 404 ? 'Ask a manager for a new link.' : inv.error.message}</p>
       </div>
@@ -60,7 +61,7 @@ export default function Join({ mode = 'field' }) {
   const { email, role, workspaceName, hasAccount } = inv.data;
   return (
     <div className="auth-page">
-      <span className="brand">base ground</span>
+      <AuthBrand />
       <h1>Join {workspaceName}</h1>
       <p className="muted">As {ROLE_LABEL[role] || role} · <strong>{email}</strong></p>
       <form onSubmit={submit}>

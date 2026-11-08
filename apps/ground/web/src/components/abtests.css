@@ -15,7 +15,7 @@
 
 /* Past sends: "Opened 42% · Clicked 8%" and the test's one line */
 .ab-stats, .ab-line, .ab-b {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;

@@ -10,6 +10,7 @@
 // below (the brand's CSS variables, say): each part is a string, or a promise
 // of one; an empty string adds nothing.
 import { basePath } from './basepath.js';
+import { brandHead } from './brand.js';
 
 const attr = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 // A string inside <script>: JSON, with < escaped so "</script>" can't end it.
@@ -22,6 +23,10 @@ export const headTags = async ({ db } = {}) => {
   const parts = [
     baseTags(),
     // ── More head tags go here, one entry each (a string or a promise of one). ──
+    // The campaign's look as CSS custom properties (lib/brand.js), so the app
+    // never flashes the default look. `html:root` outranks app.css wherever
+    // the tag sits.
+    db ? brandHead(db) : '',
   ];
   return (await Promise.all(parts)).join('');
 };

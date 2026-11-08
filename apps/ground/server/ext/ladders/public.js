@@ -13,14 +13,16 @@ import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { NO_EMAIL_TAG, noEmail, tagsOf } from './shape.js';
 import { basePath } from '../../lib/basepath.js';
+import { publicBrand, publicMasthead, PUBLIC_MASTHEAD_CSS } from '../../lib/brand.js';
 
 export const publicRoutes = new Hono();
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
-// The public pages' look (routes/public.js): the campaign name big, one line.
-const page = (campaign, title, inner) => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+// The public pages' look (routes/public.js): the campaign name big, one line,
+// in the campaign's brand (lib/brand.js; ws: { name, brand }).
+const page = (campaign, title, inner, ws = null) => { const pb = publicBrand(ws ? { ...ws, name: campaign } : null); return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}${campaign ? ` · ${esc(campaign)}` : ''}</title>
 <style>
   :root{--paper:#f4f5fa;--card:#ffffff;--ink:#161a2e;--ink2:#5d6481;--rule:#dde0ec;--mark:#6d4aff}
@@ -32,14 +34,17 @@ const page = (campaign, title, inner) => `<!doctype html><html lang="en"><head><
   h1{font-size:26px;line-height:1.2;margin:0 0 12px}
   .done{border:1px solid var(--rule);border-left:4px solid var(--mark);border-radius:12px;background:var(--card);padding:18px;margin-top:16px}
   form{margin-top:8px}
-  button{display:block;width:100%;min-height:56px;margin-top:24px;font:600 17px/1.2 system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--mark);color:#fff;border:0;padding:16px 22px;border-radius:12px;cursor:pointer}
-  button:focus-visible{outline:3px solid var(--mark);outline-offset:2px}
+  button{display:block;width:100%;min-height:56px;margin-top:24px;font:600 17px/1.2 system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--mark);color:var(--mark-ink,#fff);border:0;padding:16px 22px;border-radius:12px;cursor:pointer}
+  button:focus-visible{outline:3px solid var(--focus,var(--mark));outline-offset:2px}
+  .camp{border-bottom-color:var(--accent,var(--mark))}
+  ${PUBLIC_MASTHEAD_CSS}
+  ${pb.css}
   footer{margin-top:40px;border-top:1px solid var(--rule);padding-top:12px;font:13px/1.6 system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:var(--ink2)}
 </style></head><body><main>
-${campaign ? `<div class="camp">${esc(campaign)}</div>` : ''}
+${campaign ? publicMasthead(pb, esc) : ''}
 ${inner}
 <footer>Powered by base</footer>
-</main></body></html>`;
+</main></body></html>`; };
 
 const bad = (c) => c.html(page(null, 'Unsubscribe',
   "<h1>This unsubscribe link isn't valid — reply to the email to be removed.</h1>"), 404);
@@ -48,7 +53,7 @@ const bad = (c) => c.html(page(null, 'Unsubscribe',
 const load = async (db, id) => {
   if (!UUID.test(id)) return null;
   const row = (await db.query(
-    `select r.id, r.workspace_id, p.email, w.name from ladder_runs r
+    `select r.id, r.workspace_id, p.email, w.name, w.brand from ladder_runs r
      join persons p on p.id = r.person_id join workspaces w on w.id = r.workspace_id
      where r.id = $1`,
     [id],
@@ -65,7 +70,7 @@ const isOff = async (db, ws, email) => {
   return people.length > 0 && people.every(noEmail);
 };
 const done = (c, row) => c.html(page(row.name, 'Unsubscribed',
-  `<h1>Unsubscribed.</h1><div class="done">You won't receive further newsletters or automatic emails from ${esc(row.name)}.</div>`));
+  `<h1>Unsubscribed.</h1><div class="done">You won't receive further newsletters or automatic emails from ${esc(row.name)}.</div>`, row));
 
 publicRoutes.get('/lu/:id', async (c) => {
   const db = await getDb();
@@ -73,7 +78,7 @@ publicRoutes.get('/lu/:id', async (c) => {
   if (!row) return bad(c);
   if (await isOff(db, row.workspace_id, row.email)) return done(c, row);
   return c.html(page(row.name, 'Unsubscribe', `<h1>Unsubscribe from ${esc(row.name)}?</h1>
-<form method="post" action="${basePath()}/lu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`));
+<form method="post" action="${basePath()}/lu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`, row));
 });
 
 publicRoutes.post('/lu/:id', async (c) => {

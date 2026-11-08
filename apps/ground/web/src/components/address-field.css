@@ -7,7 +7,7 @@
 }
 .af-opt {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 48px;
-  padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text-1);
+  padding: 6px 10px; border: 0; border-radius: var(--r-ctrl); background: transparent; color: var(--text-1);
   text-align: left; cursor: pointer; font: inherit;
 }
 .af-opt:hover, .af-opt.is-active { background: var(--paper-1); }

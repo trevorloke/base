@@ -47,6 +47,10 @@ export const OUTCOME_SERIES = [
   { key: 'left_message', label: OUTCOME_LABEL.left_message, color: '#a0457a' },
 ];
 const COLOR = Object.fromEntries(OUTCOME_SERIES.map((o) => [o.key, o.color]));
+// A design token's value (the campaign's brand, app.css), for Leaflet's
+// lines, which take a colour, not a CSS variable.
+const cssVar = (name, fallback) => (typeof document === 'undefined' ? fallback
+  : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback);
 const PERIODS = [
   { key: 'today', label: 'Today' }, { key: '7d', label: '7 days' }, { key: '30d', label: '30 days' }, { key: 'all', label: 'All time' },
 ];
@@ -343,7 +347,7 @@ function Field({ d, tiles, sel, onSel, period }) {
     const nameOf = new Map(d.people.map((p) => [p.id, p.name]));
     for (const t of d.turfs) {
       if (!Array.isArray(t.polygon) || t.polygon.length < 3) continue;
-      const poly = L.polygon(t.polygon.map(([a, b]) => [Number(a), Number(b)]), { color: t.color || '#003979', weight: 1.5, fillOpacity: 0.05 }).addTo(ly.turfs);
+      const poly = L.polygon(t.polygon.map(([a, b]) => [Number(a), Number(b)]), { color: t.color || cssVar('--mark', '#17462b'), weight: 1.5, fillOpacity: 0.05 }).addTo(ly.turfs);
       poly.bindTooltip(t.name, { sticky: true, className: 'dash-tt' });
       poly.bindPopup(`<div class="dash-pop"><strong>${esc(t.name)}</strong><br><a href="${esc(adminHref(`/map?turf=${t.id}`))}">Open on the map ›</a></div>`);
     }
@@ -360,7 +364,7 @@ function Field({ d, tiles, sel, onSel, period }) {
       </div>`);
     }
     if (selected?.trail?.length > 1) {
-      L.polyline(selected.trail.map(([a, b]) => [a, b]), { color: '#003979', weight: 3, opacity: 0.7, dashArray: '2 6', interactive: false }).addTo(ly.trail);
+      L.polyline(selected.trail.map(([a, b]) => [a, b]), { color: cssVar('--mark', '#17462b'), weight: 3, opacity: 0.7, dashArray: '2 6', interactive: false }).addTo(ly.trail);
     }
     for (const p of d.people) {
       if (!p.where) continue;

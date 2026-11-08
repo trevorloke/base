@@ -16,14 +16,14 @@ a.chip.pass-chip {
   text-decoration: none;
 }
 @media (hover: hover) { a.chip.pass-chip:hover { background: var(--paper-2); } }
-a.chip.pass-chip:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+a.chip.pass-chip:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .chip.pass-chip--quiet { display: inline-flex; align-items: center; min-height: 32px; }
 /* "Try again · 1 of 2": amber — the door is still to do, not done */
-.chip.pass-again { background: #fff3d6; border-color: transparent; color: #8a5a00; }
+.chip.pass-again { background: color-mix(in srgb, var(--warn) 13%, var(--paper-0)); border-color: transparent; color: var(--warn); }
 
 /* ── Show: All · Not knocked · Try again (the walk list) ── */
 .pass-show { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
-.pass-show__label { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.pass-show__label { font-family: var(--font-sans); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
 .pass-show__pill {
   display: inline-flex;
   align-items: center;
@@ -40,7 +40,7 @@ a.chip.pass-chip:focus-visible { outline: 2px solid var(--mark-deep); outline-of
   touch-action: manipulation;
 }
 .pass-show__pill[aria-pressed='true'] { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
-.pass-show__pill:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.pass-show__pill:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
 /* ── /passes (desk) ── */
 .pass-page { max-width: 720px; margin: 0 auto; }

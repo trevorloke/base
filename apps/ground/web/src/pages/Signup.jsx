@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost } from '../api.js';
 import { landing } from '../mode.js';
+import { AuthBrand } from '../components/BrandMark.jsx';
 
 // Big, thumb-sized controls (auth pages load before any page stylesheet).
 const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
@@ -68,8 +69,7 @@ export default function Signup({ mode = 'field' }) {
   const org = setup.data?.organization || null;
   const brand = (
     <>
-      <span className="brand">base ground</span>
-      {org && <span className="brand-org">{org}</span>}
+      <AuthBrand org={org} />
       {setup.data?.org?.env === 'staging' && <span className="env-badge">Staging</span>}
     </>
   );

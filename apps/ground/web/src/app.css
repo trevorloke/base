@@ -1,98 +1,107 @@
-/* base ground — one stylesheet.
-   Imagine Surrey's field app, in the party's own colours (brand guidelines
-   2.1): Surrey Navy leads (the sidebar, the one primary button), Marigold is
-   the spark (the active tab's bar, badges, focus on navy), red is for action
-   and danger only, Sky and Paper give everything room. Barlow Condensed for
-   headlines and labels, Inter for everything people read (self-hosted,
-   /fonts/fonts.css). Dark mode is Deep Navy with marigold accents, as the
-   guidelines say. The brand lives in these tokens only. */
+/* base ground — one stylesheet, on a small set of design tokens.
+
+   The look is the campaign's brand (Settings → Brand): six colours, a font
+   and a corner style become the tokens below (shared/brand.js, tokens()).
+   The server writes the brand's own values into every page's <head>
+   (server/lib/brand.js, as html:root, which outranks this :root), so the
+   values here are only the default, the Ground preset — field-ready and
+   high-contrast: deep forest green, signal amber, warm off-white, near-
+   black ink with a green cast, Atkinson Hyperlegible (made to be read in
+   poor conditions), big tap targets. server/test/brand.test.js keeps this
+   block equal to tokens(ground).
+
+   Tokens by job:
+     --paper / --paper-0 / --paper-1 / --paper-2   page · card · tinted panel · deeper tint
+     --ink (= --text-1) / --text-2 / --text-3 / --text-4   body · secondary (7:1) · quiet (4.5:1) · decoration
+     --rule / --rule-2                             hairlines · control edges
+     --mark / --mark-ink / --mark-deep / --mark-soft   the primary: fills · text on it · pressed · tint
+     --accent / --accent-ink                       the spark: badges, the avatar, the active tab's bar
+     --link / --focus                              links (4.5:1) · focus rings (3:1)
+     --nav-*                                       the top bar / sidebar
+     --ok / --warn / --danger                      support · undecided · opposed and errors
+     --font-sans / --font-display, --r-ctrl / --r-card / --r-btn, --shadow-1/2, --scrim
+   Fixed, whatever the brand (they mean the same on every campaign's phone):
+   spacing, tap sizes, and the map's pin and chrome colours. */
 
 :root {
-  /* Type — Inter for reading, Barlow Condensed for headlines and labels. */
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-display: 'Barlow Condensed', 'Arial Narrow', 'Inter', system-ui, Arial, sans-serif;
-  /* Older names, kept so every screen picks up the same face. */
-  --font-serif: var(--font-sans);
-  --font-mono: var(--font-sans);
-
-  /* Brand */
-  --navy: #003979;        /* Surrey Navy: grounds, headlines */
-  --navy-2: #00224d;      /* Deep Navy: depth, overlays */
-  --navy-text: #c9d6ea;   /* quiet text on navy */
-  --gold: #ffc72c;        /* Marigold: the spark — never as text on white or cream */
-  --red: #ef2023;         /* Signal Red: buttons and large type only (19px bold up) */
-  --red-text: #c8151b;    /* red that reads as text on white */
-  --cream: #f3ebda;
-
-  /* Surfaces: --paper is the page, --paper-0 a card, --paper-1 Sky panels */
-  --ink: #141a26;
-  --paper-0: #ffffff;
-  --paper: #f6f7f9;
-  --paper-1: #e9f0f9;
-  --paper-2: #dbe5f2;
-  --rule: #d6dce5;
-  --rule-2: #bfc8d6;
-
-  --text-1: var(--ink);
-  --text-2: #2a3444;
-  --text-3: #5b6472;
-  --text-4: #8a94a6;
-
-  /* The mark — the one accent (primary button, active item, focus): navy. */
-  --mark: var(--navy);
+  --font-sans: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Atkinson Hyperlegible Next', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --display-weight: 800;
+  --display-tracking: -0.01em;
+  --r-ctrl: 8px;
+  --r-card: 12px;
+  --r-btn: 8px;
+  --paper: #f6f3ea;
+  --paper-0: #fcfbf9;
+  --paper-1: #eceeeb;
+  --paper-2: #dce2dc;
+  --ink: #111a14;
+  --text-2: #313832;
+  --text-3: #636861;
+  --text-4: #8f918a;
+  --rule: #d8d7ce;
+  --rule-2: #babbb2;
+  --mark: #17462b;
   --mark-ink: #ffffff;
-  --mark-soft: var(--paper-1);
-  --mark-deep: var(--navy-2);
+  --mark-deep: #153a25;
+  --mark-soft: #e1e5e0;
+  --accent: #ffb000;
+  --accent-ink: #1b1606;
+  --link: #17462b;
+  --focus: #153a25;
+  --nav-bg: #17462b;
+  --nav-ink: #ffffff;
+  --nav-quiet: #c7d3cc;
+  --nav-active: #10311e;
+  --nav-spark: #ffb000;
+  --ok: #17703f;
+  --warn: #8a5300;
+  --danger: #b3261e;
+  --danger-ink: #ffffff;
+  --shadow-1: 0 1px 2px rgba(17, 26, 20, 0.08), 0 1px 1px rgba(17, 26, 20, 0.04);
+  --shadow-2: 0 10px 30px rgba(17, 26, 20, 0.16);
+  --scrim: rgba(17, 26, 20, 0.35);
+  color-scheme: light;
 
-  /* Status */
-  --ok: #1f7a4d;
-  --warn: #9a5b00;
-  --danger: var(--red-text);
-  /* Undecided — the map pins' amber. */
-  --amber: #f5a524;
-  --amber-deep: #b87400;
-
-  /* Geometry */
-  --r-ctrl: 10px;
-  --r-card: 14px;
-  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px;
-  --shadow-1: 0 1px 2px rgba(0, 34, 77, 0.06), 0 1px 1px rgba(0, 34, 77, 0.03);
-  --shadow-2: 0 8px 28px rgba(0, 34, 77, 0.14);
-  --side-w: 232px;
-
+  /* Derived, never set by a brand. */
+  --text-1: var(--ink);
   --border: 1px solid var(--rule);
   --border-2: 1px solid var(--rule-2);
-  --border-ink: 1px solid var(--rule-2);
+
+  /* Fixed: spacing, tap targets, layout. */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px;
+  --tap: 44px;        /* the least anything tappable is, on a touch screen */
+  --tap-field: 48px;  /* field screens' buttons */
+  --tap-rate: 72px;   /* the door-rating buttons */
+  --side-w: 232px;
   /* One column for every screen (Map is the only full-width one). --max-w is
      the column plus its side gutters, for the nav and page boxes. */
   --page-w: 960px;
   --max-w: calc(var(--page-w) + 2 * var(--s-4));
+
+  /* Fixed: the map's pins and chrome. Map tiles are always light, and a
+     green pin means support on every campaign's phone. */
+  --pin-support: #138a52;
+  --pin-undecided: #f5a524;
+  --pin-undecided-edge: #b87400;
+  --pin-opposed: #d43c3c;
+  --pin-unrated: #8a90a6;
+  --pin-ink: #161a2e;
+  --map-ink: #161a2e;
+  --map-paper: #ffffff;
+  --map-paper-2: #eef0f7;
+  --map-rule: #dde0ec;
+  --map-ground: #e8ebf3;
+  --map-me: #1a73e8;
 }
 
-/* Dark mode: Deep Navy ground, white text, marigold links and accents. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #f6f7f9;
-    --paper-0: #0b3068;
-    --paper: #00224d;
-    --paper-1: #164082;
-    --paper-2: #1e4a8f;
-    --rule: #2a4f8a;
-    --rule-2: #3b63a3;
-    --text-2: #d6deeb;
-    --text-3: #a9b6cc;
-    --text-4: #7f8ea8;
-    --navy: #001a3d;
-    --navy-2: #0b3068;
-    --mark: #ffc72c;
-    --mark-ink: #00224d;
-    --mark-soft: #2b3f66;
-    --mark-deep: #f2bb1f;
-    --danger: #ff8a8a;
-    --ok: #5fd39a;
-    --warn: #f0b955;
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.5);
+/* Motion: a quiet screen for anyone who asks the device for one. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -112,11 +121,14 @@ html, body {
 
 a { color: inherit; }
 ::selection { background: var(--mark-soft); color: var(--text-1); }
+/* One clear focus ring everywhere a keyboard lands; screens may move it in
+   (outline-offset) but never take it away. */
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 
-/* Headlines in Barlow Condensed (700), sentence case, tight. */
-h1, h2, h3 { font-family: var(--font-display); font-weight: 700; margin: 0 0 var(--s-3); line-height: 1.1; letter-spacing: 0; }
-h1 { font-size: 30px; }
-h2 { font-size: 21px; }
+/* Headlines in the brand's display face, sentence case, tight. */
+h1, h2, h3 { font-family: var(--font-display); font-weight: var(--display-weight); margin: 0 0 var(--s-3); line-height: 1.12; letter-spacing: var(--display-tracking); }
+h1 { font-size: 28px; }
+h2 { font-size: 20px; }
 
 /* ── 1. Micro-label (eyebrow) — small, uppercase, quiet ── */
 .eyebrow {
@@ -125,7 +137,7 @@ h2 { font-size: 21px; }
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-3);
-  font-weight: 600;
+  font-weight: 700;
 }
 .mono { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
 
@@ -136,13 +148,13 @@ h2 { font-size: 21px; }
 .btn {
   font-family: var(--font-sans);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
   color: var(--text-1);
   background: var(--paper-0);
   border: var(--border-2);
-  border-radius: var(--r-ctrl);
+  border-radius: var(--r-btn);
   padding: 8px 14px;
   cursor: pointer;
   text-decoration: none;
@@ -152,7 +164,7 @@ h2 { font-size: 21px; }
 }
 .btn-primary {
   background: var(--mark); color: var(--mark-ink); border: 1px solid var(--mark);
-  box-shadow: 0 1px 2px rgba(0, 34, 77, 0.25);
+  box-shadow: var(--shadow-1);
 }
 .btn-quiet { border-color: transparent; background: transparent; color: var(--text-3); }
 /* Hover only where a pointer hovers. On a phone a tapped button keeps
@@ -164,9 +176,10 @@ h2 { font-size: 21px; }
   .btn-quiet:hover { color: var(--text-1); border-color: var(--rule-2); background: transparent; }
 }
 .btn:focus-visible, .input:focus-visible, a:focus-visible, [role='option']:focus-visible {
-  outline: 2px solid var(--mark);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+.btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
 /* ── 4. Input + field ── */
@@ -180,15 +193,16 @@ h2 { font-size: 21px; }
   padding: 9px 12px;
   width: 100%;
 }
-.input:focus { outline: 3px solid var(--mark-soft); outline-offset: 0; border-color: var(--mark); }
+.input:focus { outline: 3px solid color-mix(in srgb, var(--focus) 35%, transparent); outline-offset: 0; border-color: var(--focus); }
+.input:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
 .field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); }
 .field > label {
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .form-row { display: flex; gap: var(--s-3); flex-wrap: wrap; }
 .form-row > .field { flex: 1 1 140px; }
@@ -244,7 +258,7 @@ h2 { font-size: 21px; }
   color: var(--text-2);
   background: var(--paper-1);
 }
-.chip-warn { background: #fff3d6; border-color: transparent; color: #8a5a00; }
+.chip-warn { background: color-mix(in srgb, var(--warn) 13%, var(--paper-0)); border-color: transparent; color: var(--warn); }
 .chip-danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--paper-0)); border-color: transparent; }
 .chip-ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, var(--paper-0)); border-color: transparent; }
 
@@ -267,9 +281,9 @@ h2 { font-size: 21px; }
   bottom: var(--s-5);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--navy);
-  color: #fff;
-  border-radius: 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--r-card);
   box-shadow: var(--shadow-2);
   padding: var(--s-3) var(--s-4);
   display: flex;
@@ -293,11 +307,12 @@ h2 { font-size: 21px; }
 }
 
 /* ── 10. Nav / shell ──
-   Desktop: a navy sidebar down the left. Phones (≤ 720px): a navy top bar
-   with the brand and avatar, and the tab bar along the bottom (§11). */
+   Desktop: a sidebar down the left in the brand's bar colour. Phones
+   (≤ 720px): a top bar with the logo, the name and the avatar, and the tab
+   bar along the bottom (§11). */
 .nav {
-  background: var(--navy);
-  color: var(--navy-text);
+  background: var(--nav-bg);
+  color: var(--nav-quiet);
 }
 .nav-inner {
   max-width: var(--max-w);
@@ -310,41 +325,44 @@ h2 { font-size: 21px; }
   flex-wrap: wrap;
 }
 .nav .brand {
-  display: inline-flex; align-items: center; gap: 10px;
-  text-decoration: none; color: #fff;
+  display: inline-flex; align-items: center; gap: 10px; min-width: 0;
+  text-decoration: none; color: var(--nav-ink);
 }
-/* The star device at its natural width: 32px tall, the guidelines' minimum. */
-.brand-mark { width: auto; height: 32px; flex: none; display: block; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-admin { color: var(--gold); font-weight: 600; }
-.brand-name { font-family: var(--font-display); font-size: 19px; font-weight: 700; letter-spacing: 0.01em; }
-.brand-org { font-size: 12px; font-weight: 600; color: var(--gold); }
+/* The campaign's logo (Settings → Brand) at 32px tall, or base ground's
+   own mark (components/BrandMark.jsx). */
+.brand-mark { width: auto; height: 32px; max-width: 120px; object-fit: contain; flex: none; display: block; }
+.brand-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.brand-admin { color: var(--nav-spark); font-weight: 700; }
+.brand-name { font-family: var(--font-display); font-size: 19px; font-weight: var(--display-weight); letter-spacing: var(--display-tracking); overflow-wrap: anywhere; }
+.brand-org { font-size: 12.5px; font-weight: 700; color: var(--nav-spark); }
 /* Staging, said on every screen so nobody mistakes it for production. */
-.env-badge { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--gold); color: var(--navy); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; vertical-align: middle; }
+.env-badge { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; vertical-align: middle; }
 .nav .links { display: flex; gap: var(--s-1); }
 .nav .links a {
   display: flex; align-items: center; gap: 10px;
   font-family: var(--font-sans);
-  font-size: 14.5px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   text-decoration: none;
-  color: var(--navy-text);
+  color: var(--nav-quiet);
+  min-height: var(--tap);
   padding: 9px 12px;
-  border-radius: 10px;
+  border-radius: var(--r-ctrl);
 }
 .nav .links .tab-icon { width: 20px; height: 20px; flex: none; opacity: 0.9; }
-@media (hover: hover) { .nav .links a:hover { color: #fff; background: var(--navy-2); } }
-.nav .links a.active { color: #fff; background: var(--navy-2); box-shadow: inset 3px 0 0 var(--gold); }
-.nav .links a:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+@media (hover: hover) { .nav .links a:hover { color: var(--nav-ink); background: var(--nav-active); } }
+.nav .links a.active { color: var(--nav-ink); background: var(--nav-active); box-shadow: inset 4px 0 0 var(--nav-spark); font-weight: 700; }
+.nav .links a.active .tab-icon { color: var(--nav-spark); }
+.nav .brand:focus-visible, .nav .links a:focus-visible { outline: 3px solid var(--nav-spark); outline-offset: 1px; }
 /* A small count on a tab (new replies on Calls). */
 .tab-badge {
   display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
-  margin-left: 6px; border-radius: 9px; background: var(--gold); color: var(--navy);
+  margin-left: 6px; border-radius: 9px; background: var(--accent); color: var(--accent-ink);
   font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: 0;
 }
 .tab-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .spacer { flex: 1; }
-.nav .ws { font-size: 13px; color: var(--navy-text); }
+.nav .ws { font-size: 13px; color: var(--nav-quiet); }
 
 @media (min-width: 721px) {
   #root:has(> .nav) { padding-left: var(--side-w); }
@@ -375,22 +393,22 @@ h2 { font-size: 21px; }
 .acct-btn__who { display: none; }
 .acct-btn[aria-expanded='true'] .avatar { background: var(--mark); color: var(--mark-ink); }
 @media (hover: hover) { .acct-btn:hover .avatar { background: var(--mark); color: var(--mark-ink); } }
-.acct-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 0; }
+.acct-btn:focus-visible { outline: 3px solid var(--nav-spark); outline-offset: 0; }
 @media (min-width: 721px) {
   .acct-btn {
     width: 100%; height: auto; margin: 0; padding: 8px; justify-content: flex-start;
-    border-radius: 10px; text-align: left;
+    border-radius: var(--r-ctrl); text-align: left;
   }
-  @media (hover: hover) { .acct-btn:hover { background: var(--navy-2); } }
+  @media (hover: hover) { .acct-btn:hover { background: var(--nav-active); } }
   .acct-btn__who { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
-  .acct-btn__name { color: #fff; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .acct-btn__role { color: var(--navy-text); font-size: 12px; text-transform: capitalize; opacity: 0.8; }
+  .acct-btn__name { color: var(--nav-ink); font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct-btn__role { color: var(--nav-quiet); font-size: 12px; text-transform: capitalize; }
 }
 .acct-panel {
   position: absolute; right: calc(-1 * var(--s-2)); top: calc(100% + 6px); z-index: 960;
   min-width: 220px; max-width: calc(100vw - 2 * var(--s-4));
   background: var(--paper-0); color: var(--text-1);
-  border: var(--border); border-radius: 12px;
+  border: var(--border); border-radius: var(--r-card);
   box-shadow: var(--shadow-2);
   padding: var(--s-1) 0;
   overflow: hidden;
@@ -412,12 +430,12 @@ h2 { font-size: 21px; }
 @media (hover: hover) { .acct-item:hover { background: var(--paper-1); } }
 .acct-item.active { box-shadow: inset 3px 0 0 var(--mark); }
 .acct-item:disabled { opacity: 0.5; cursor: default; }
-.acct-item:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.acct-item:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .acct-confirm { padding: var(--s-3) var(--s-4); border-top: 1px solid var(--rule); }
 .acct-confirm p { margin: 0 0 var(--s-3); font-size: 14px; }
 .acct-confirm__row { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .btn.acct-danger { color: var(--danger); border-color: var(--danger); }
-@media (hover: hover) { .btn.acct-danger:hover { background: var(--danger); color: #fff; } }
+@media (hover: hover) { .btn.acct-danger:hover { background: var(--danger); color: var(--danger-ink); } }
 
 .avatar {
   font-family: var(--font-sans);
@@ -430,8 +448,8 @@ h2 { font-size: 21px; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--navy);
-  background: var(--gold);
+  color: var(--accent-ink);
+  background: var(--accent);
 }
 
 .page { max-width: var(--max-w); margin: 0 auto; padding: var(--s-6) var(--s-5) var(--s-7); }
@@ -483,7 +501,7 @@ h2 { font-size: 21px; }
 .no-signal {
   margin: var(--s-3) 0;
   padding: var(--s-3) var(--s-4);
-  border-left: 3px solid var(--rule-2);
+  border-left: 4px solid var(--rule-2);
   border-radius: 0 var(--r-ctrl) var(--r-ctrl) 0;
   background: var(--paper-0);
   color: var(--text-2);
@@ -492,8 +510,8 @@ h2 { font-size: 21px; }
 .error {
   color: var(--danger);
   font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 700;
   margin: var(--s-2) 0;
 }
 .list-plain { list-style: none; margin: 0; padding: 0; }
@@ -501,30 +519,29 @@ h2 { font-size: 21px; }
 .list-plain li:last-child { border-bottom: 0; }
 .footer-row { display: flex; align-items: center; gap: var(--s-4); margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--rule); flex-wrap: wrap; }
 
-/* Sign in / set up: a white card on Surrey Navy, with the rise — a Deep
-   Navy block whose edge climbs at 24 degrees, the brand's one device. */
-html:has(.auth-page) { min-height: 100%; background: linear-gradient(156deg, var(--navy) 0 64%, var(--navy-2) 64%) fixed; }
+/* Sign in / set up: a card on the brand's bar colour, with the rise — a
+   deeper block whose edge climbs at 24 degrees. */
+html:has(.auth-page) { min-height: 100%; background: linear-gradient(156deg, var(--nav-bg) 0 64%, var(--nav-active) 64%) fixed; }
 html:has(.auth-page) body { background: transparent; }
 .auth-page {
   max-width: 420px; margin: 9vh auto var(--s-6); padding: 28px;
   background: var(--paper-0); color: var(--text-1);
-  border-radius: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  border-radius: calc(var(--r-card) + 6px); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 @media (max-width: 460px) { .auth-page { margin: 6vh var(--s-3) var(--s-5); padding: 22px; } }
 .auth-page .brand {
-  display: flex; align-items: center; gap: 10px;
-  font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: 0.01em; text-transform: none;
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--font-display); font-size: 22px; font-weight: var(--display-weight); letter-spacing: var(--display-tracking); text-transform: none;
   color: var(--text-1); background: none; padding: 0;
   margin-bottom: var(--s-5);
 }
-.auth-page .brand::before {
-  content: ''; width: 72px; height: 36px; flex: none;
-  background: url('/star.png') center / contain no-repeat;
-}
-.auth-page .brand-org { color: var(--mark); }
+.auth-page .brand .brand-mark { height: 40px; max-width: 160px; }
+.auth-page .brand-text { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; overflow-wrap: anywhere; }
+.auth-page .brand-sub { font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: 0; color: var(--text-3); }
+.auth-page .brand-org { color: var(--text-3); font-weight: 700; }
 .auth-page h1 { font-size: 28px; }
-/* The marigold bar: a short bar under a headline, one per page. */
-.auth-page h1::after { content: ''; display: block; width: 44px; height: 5px; margin-top: 10px; background: var(--gold); }
+/* The accent bar: a short bar under a headline, one per page. */
+.auth-page h1::after { content: ''; display: block; width: 44px; height: 5px; margin-top: 10px; background: var(--accent); border-radius: 2px; }
 .check { font-family: var(--font-sans); }
 .done { text-decoration: line-through; color: var(--text-4); }
 
@@ -545,24 +562,24 @@ html:has(.auth-page) body { background: transparent; }
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
     display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
     gap: 2px;
-    background: var(--navy);
+    background: var(--nav-bg);
     padding: 6px var(--s-2) calc(6px + env(safe-area-inset-bottom));
   }
   .tabbar a {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
     min-width: 0; min-height: 54px; padding: 5px 3px 4px;
-    font-family: var(--font-sans); font-size: 11.5px; font-weight: 500; line-height: 1.2; letter-spacing: 0; text-transform: none;
-    text-decoration: none; color: var(--navy-text); text-align: center;
-    border-radius: 10px;
+    font-family: var(--font-sans); font-size: 11.5px; font-weight: 600; line-height: 1.2; letter-spacing: 0; text-transform: none;
+    text-decoration: none; color: var(--nav-quiet); text-align: center;
+    border-radius: var(--r-ctrl);
     -webkit-tap-highlight-color: transparent;
   }
   .tabbar .tab-icon { width: 22px; height: 22px; flex: none; }
   .tabbar .tab-iconwrap { position: relative; display: inline-flex; }
   .tabbar .tab-badge { position: absolute; top: -6px; right: -12px; margin: 0; }
   .tabbar .tab-label { display: block; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
-  .tabbar a.active { color: #fff; background: var(--navy-2); font-weight: 700; }
-  .tabbar a.active .tab-icon { stroke-width: 2.2; color: var(--gold); }
-  .tabbar a:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .tabbar a.active { color: var(--nav-ink); background: var(--nav-active); font-weight: 800; box-shadow: inset 0 3px 0 var(--nav-spark); }
+  .tabbar a.active .tab-icon { stroke-width: 2.2; color: var(--nav-spark); }
+  .tabbar a:focus-visible { outline: 3px solid var(--nav-spark); outline-offset: -3px; }
   /* Volunteers: four tabs, so everything is bigger. */
   .tabbar[data-count='4'] a { min-height: 60px; font-size: 13.5px; gap: 4px; }
   .tabbar[data-count='4'] .tab-icon { width: 26px; height: 26px; }
@@ -585,12 +602,12 @@ html:has(.auth-page) body { background: transparent; }
    computed from the font size so the label stays centred whatever a page sets. */
 @media (pointer: coarse), (max-width: 720px) {
   .btn {
-    min-height: 44px;
-    padding-top: max(7px, calc((44px - 1.3em) / 2 - 1px));
-    padding-bottom: max(7px, calc((44px - 1.3em) / 2 - 1px));
+    min-height: var(--tap);
+    padding-top: max(7px, calc((var(--tap) - 1.3em) / 2 - 1px));
+    padding-bottom: max(7px, calc((var(--tap) - 1.3em) / 2 - 1px));
   }
-  button.chip, a.chip, label.chip { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s-3); }
-  .input { min-height: 44px; font-size: 16px; } /* 16px: iOS won't zoom on focus */
+  button.chip, a.chip, label.chip { display: inline-flex; align-items: center; min-height: var(--tap); padding: 0 var(--s-3); }
+  .input { min-height: var(--tap); font-size: 16px; } /* 16px: iOS won't zoom on focus */
 }
 
 /* ── 14. Disclosure — the one "show more" shape ──
@@ -640,7 +657,7 @@ html:has(.auth-page) body { background: transparent; }
 .disclose[aria-expanded='true'] { color: var(--text-1); }
 .disclose[aria-expanded='true']::after { background: linear-gradient(currentColor, currentColor) center / 14px 2px no-repeat; }
 @media (hover: hover) { .disclose:hover { color: var(--text-1); } }
-.disclose:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.disclose:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .disclose:disabled { opacity: 0.5; cursor: default; }
 .disclose--inline {
   display: inline-flex;
@@ -657,6 +674,6 @@ html:has(.auth-page) body { background: transparent; }
 }
 
 /* A quiet text button inside a line of words (NameFields' Undo, Move it). */
-.btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--link, var(--text-1)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.btn-link:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
+.btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--link); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.btn-link:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .name-note { margin: calc(-1 * var(--s-2, 8px)) 0 var(--s-3, 12px); font-size: 14px; }
