@@ -76,6 +76,7 @@ export const importRows = async (db, ctx, extras) => {
   // time, when a row first brings them a value (never the whole workspace).
   const filled = new Set();
   const read = new Set();
+  const queued = []; // [id, field_id, person_id, value] for new people (finish)
   const readFilled = async (tx, personId) => {
     if (read.has(personId)) return;
     read.add(personId);
@@ -104,14 +105,21 @@ export const importRows = async (db, ctx, extras) => {
       return { value: out };
     },
     // → the names of the fields it filled (or would, in the dry run).
-    async apply(tx, personId, values, { write }, emit) {
+    // fresh: a person this import just added — nothing of theirs is filled
+    // yet, so nothing is read, and the values are written in batches when
+    // the chunk is done (finish), not one round trip each.
+    async apply(tx, personId, values, { write, fresh = false }, emit) {
       const names = [];
-      if (values?.length) await readFilled(tx, personId);
+      if (values?.length && !fresh) await readFilled(tx, personId);
       for (const { f, value } of values || []) {
         const key = `${personId}|${f.id}`;
         if (filled.has(key)) continue;
         filled.add(key);
-        if (write) {
+        if (write && fresh) {
+          const id = newId();
+          queued.push([id, f.id, personId, JSON.stringify(value)]);
+          emit('person_field_value', id, 'create', { id, field_id: f.id, person_id: personId, value, source: 'import' });
+        } else if (write) {
           const id = newId();
           const row = (await tx.query(
             `insert into person_field_values (id, workspace_id, field_id, person_id, value, updated_by)
@@ -124,6 +132,19 @@ export const importRows = async (db, ctx, extras) => {
         names.push(f.name);
       }
       return names;
+    },
+    // The new people’s values, 250 to a statement (kept small: an embedded database has a modest wire buffer).
+    async finish(tx) {
+      for (let i = 0; i < queued.length; i += 250) {
+        const part = queued.slice(i, i + 250);
+        await tx.query(
+          `insert into person_field_values (id, workspace_id, field_id, person_id, value, updated_by)
+           select v.id, $1, v.field_id, v.person_id, v.value::jsonb, $2
+             from unnest($3::uuid[], $4::uuid[], $5::uuid[], $6::text[]) as v(id, field_id, person_id, value)`,
+          [ws, ctx.user?.id || null, part.map((r) => r[0]), part.map((r) => r[1]), part.map((r) => r[2]), part.map((r) => r[3])],
+        );
+      }
+      queued.length = 0;
     },
   });
 };

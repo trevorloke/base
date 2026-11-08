@@ -24,6 +24,8 @@ export const chainHash = (prevHash, seq, action, entityType, entityId, op, actor
 // Run one action transactionally. `emit` collects events; they are appended
 // with sequence numbers and chained hashes just before commit, under a row
 // lock on the workspace so the per-workspace sequence is gapless and ordered.
+const EVENT_BATCH = 100;
+
 export const runAction = async (db, { workspaceId, actorId, action, clientTs }, handler) => {
   return db.transaction(async (tx) => {
     const ws = (await tx.query(
@@ -43,6 +45,7 @@ export const runAction = async (db, { workspaceId, actorId, action, clientTs }, 
 
     let seq = Number(ws.event_seq);
     let prev = ws.last_event_hash;
+    const rows = [];
     for (const ev of pending) {
       seq += 1;
       // Normalize exactly as it will be stored (drops undefined, etc.) so the
@@ -50,13 +53,23 @@ export const runAction = async (db, { workspaceId, actorId, action, clientTs }, 
       const payload = JSON.parse(JSON.stringify(ev.payload ?? {}));
       const payloadHash = sha256(canonical(payload));
       const hash = chainHash(prev, seq, action, ev.entityType, ev.entityId, ev.op, actorId, payloadHash);
+      rows.push([seq, ev.entityType, ev.entityId, ev.op, JSON.stringify(payload), payloadHash, hash]);
+      prev = hash;
+    }
+    // Written in batches, not one round trip each: an import of 1,000 people
+    // with five profile fields is 6,000 events (a hosted database is a
+    // network hop away). The chain is computed above, in order, either way.
+    for (let i = 0; i < rows.length; i += EVENT_BATCH) {
+      const part = rows.slice(i, i + EVENT_BATCH);
+      const col = (k) => part.map((r) => r[k]);
       await tx.query(
         `insert into events (workspace_id, seq, action, entity_type, entity_id, op, payload, actor_id, client_ts, payload_hash, hash)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [workspaceId, seq, action, ev.entityType, ev.entityId, ev.op,
-         JSON.stringify(payload), actorId || null, clientTs || null, payloadHash, hash],
+         select $1, e.seq, $2, e.entity_type, e.entity_id, e.op, e.payload::jsonb, $3, $4, e.payload_hash, e.hash
+           from unnest($5::bigint[], $6::text[], $7::uuid[], $8::text[], $9::text[], $10::text[], $11::text[])
+             as e(seq, entity_type, entity_id, op, payload, payload_hash, hash)`,
+        [workspaceId, action, actorId || null, clientTs || null,
+         col(0), col(1), col(2), col(3), col(4), col(5), col(6)],
       );
-      prev = hash;
     }
     await tx.query(
       'update workspaces set event_seq = $2, last_event_hash = $3 where id = $1',

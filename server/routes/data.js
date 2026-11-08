@@ -256,9 +256,9 @@ app.post('/import', async (c) => {
   // with the row — a cell that doesn't fit refuses it — and filled after it.
   const extras = [];
   await runHooks('importRows', c.get('db'), ctx, extras);
-  const fillExtras = async (tx, personId, r, write, emit) => {
+  const fillExtras = async (tx, personId, r, write, emit, fresh = false) => {
     const out = [];
-    for (const [k, x] of extras.entries()) out.push(...await x.apply(tx, personId, r.extras[k], { write }, emit));
+    for (const [k, x] of extras.entries()) out.push(...await x.apply(tx, personId, r.extras[k], { write, fresh }, emit));
     return out;
   };
 
@@ -432,13 +432,15 @@ app.post('/import', async (c) => {
           );
           emit('person', id, 'create', { ...p, source: 'import' });
         }
-        await fillExtras(tx, id, r, write, emit);
+        await fillExtras(tx, id, r, write, emit, true);
         await addRoles(tx, id, r.roles, write, emit, true);
         await addHistory(tx, id, r.history, write, emit, true);
         await addSign(tx, p, r.sign, write, emit, true);
         index(p); // later rows in the same file dedupe against this one
       }
     }
+    // What the features held back for a batch (a new person's profile fields).
+    if (write) for (const x of extras) if (x.finish) await x.finish(tx);
     return { created, merged, unchanged, decisions };
   };
 
