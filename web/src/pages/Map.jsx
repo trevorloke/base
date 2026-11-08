@@ -95,7 +95,10 @@ const writeSignsPref = (v) => { try { localStorage.setItem(SIGNS_PREF, JSON.stri
 // (Satellite, Terrain) from /api/map/config views.
 const VIEW_PREF = `${NS}map:view`;
 const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: 'Muted' }, { key: 'dark', label: 'Dark' }];
-const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'standard'; } catch { return 'standard'; } };
+// Muted by default: the base map's own colours stay quiet, so the pins'
+// colours (support, undecided, opposed) are what you see. Standard and
+// Dark are a tap away (Show → Map), and a choice made is kept.
+const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'muted'; } catch { return 'muted'; } };
 const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch { /* storage blocked */ } };
 
 const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
@@ -232,6 +235,12 @@ const CLUSTER_PX = 36;
 // edge pins (half a 48px hit box), so neighbours land far enough apart.
 const PIN_INSET = 20;
 const CLUSTER_OFF_ZOOM = 19; // everything apart (or the tiles' max zoom, if lower)
+// How near two doors may be before they share a bubble, by zoom: a whole
+// city reads as a handful of bubbles, a neighbourhood as dots, a street as
+// pins. (Below PIN_ZOOM a lone door is a small dot in its band's colour;
+// from PIN_ZOOM it is the full pin, with its household and sign flags.)
+const clusterRadius = (zoom) => (zoom <= 12 ? 90 : zoom <= 14 ? 72 : zoom <= 16 ? 56 : CLUSTER_PX);
+const PIN_ZOOM = 17;
 
 // The service worker keeps tiles from this provider once they've been seen
 // (never fetched ahead — tile servers' rules).
@@ -271,6 +280,18 @@ function pinIcon(door, selected, signOk = () => true) {
   });
 }
 
+// A lone door below street zoom: a dot in its band's colour (household and
+// flags show on the full pin, closer in), in the same 48px hit box.
+function dotIcon(door, selected) {
+  const cls = ['map-dot', `map-dot--${door.band}`, door.persons.length > 1 ? 'map-dot--multi' : '', selected ? 'map-dot--selected' : ''].filter(Boolean).join(' ');
+  return L.divIcon({
+    className: 'map-pin-wrap map-dot-wrap',
+    html: `<div class="${cls}"></div>`,
+    iconSize: [48, 48],
+    iconAnchor: [24 - door.offset[0], 24 - door.offset[1]],
+  });
+}
+
 // A bubble for several nearby doors: the count, ringed by their bands.
 function clusterIcon(doors, offset) {
   const c = { support: 0, undecided: 0, opposed: 0, unrated: 0 };
@@ -279,11 +300,15 @@ function clusterIcon(doors, offset) {
   const a = c.support;
   const b = a + c.undecided;
   const o = b + c.opposed;
+  // Bigger for more doors, so where the people are reads at a glance.
+  const n = doors.length;
+  const size = n < 10 ? 40 : n < 100 ? 48 : n < 1000 ? 58 : 68;
+  const label = n >= 10000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n);
   return L.divIcon({
     className: 'map-cluster-wrap',
-    html: `<div class="map-cluster" style="--a:${pct(a)};--b:${pct(b)};--c:${pct(o)}"><span class="map-cluster__n">${HOUSE_SVG}${doors.length}</span></div>`,
-    iconSize: [48, 48],
-    iconAnchor: [24 - offset[0], 44 - offset[1]], // bubble where the pin bodies would be
+    html: `<div class="map-cluster" style="--a:${pct(a)};--b:${pct(b)};--c:${pct(o)};--size:${size}px"><span class="map-cluster__n">${label}</span></div>`,
+    iconSize: [size + 6, size + 6],
+    iconAnchor: [(size + 6) / 2 - offset[0], (size + 6) / 2 - offset[1]],
   });
 }
 
@@ -300,18 +325,23 @@ function signIcon(status, kind) {
 // Group doors whose pins would sit closer than CLUSTER_PX at this zoom.
 // Projection math only (no map instance needed); offsets are the stacked
 // units' fan-out, in pixels.
-function clusterDoors(doors, zoom, offZoom = CLUSTER_OFF_ZOOM) {
+// Only the doors on screen (and a margin, so a short pan doesn't show
+// empty edges) are grouped and drawn: a whole voter list is tens of
+// thousands of doors, and every marker is a page element.
+function clusterDoors(doors, zoom, offZoom = CLUSTER_OFF_ZOOM, bounds = null) {
   if (zoom == null) return EMPTY_LIST;
-  if (zoom >= offZoom) return doors.map((d) => [d]);
-  const R2 = CLUSTER_PX * CLUSTER_PX;
+  const inView = bounds ? doors.filter((d) => bounds.contains([d.lat, d.lng])) : doors;
+  if (zoom >= offZoom) return inView.map((d) => [d]);
+  const RADIUS = clusterRadius(zoom);
+  const R2 = RADIUS * RADIUS;
   const cells = new Map();
   const groups = [];
-  for (const d of doors) {
+  for (const d of inView) {
     const pt = L.CRS.EPSG3857.latLngToPoint(L.latLng(d.lat, d.lng), zoom);
     const x = pt.x + d.offset[0];
     const y = pt.y + d.offset[1];
-    const cx = Math.floor(x / CLUSTER_PX);
-    const cy = Math.floor(y / CLUSTER_PX);
+    const cx = Math.floor(x / RADIUS);
+    const cy = Math.floor(y / RADIUS);
     let hit = null;
     for (let i = -1; i <= 1 && !hit; i += 1) {
       for (let j = -1; j <= 1 && !hit; j += 1) {
@@ -988,6 +1018,7 @@ export default function MapPage() {
   const [addAt, setAddAt] = useState(null);     // { lat, lng } for a brand-new door
   const [locating, setLocating] = useState(false);
   const [zoom, setZoom] = useState(null);        // drives the count bubbles
+  const [viewBounds, setViewBounds] = useState(null); // what's on screen (padded): only that is drawn
   const [signSel, setSignSel] = useState(null);  // an orphan sign's sheet
   const [filterOpen, setFilterOpen] = useState(false);
   const filterBtnRef = useRef(null);
@@ -1449,6 +1480,10 @@ export default function MapPage() {
     map.on('click', (e) => onMapClickRef.current?.(e.latlng));
     map.on('zoomend', () => setZoom(map.getZoom()));
     setZoom(map.getZoom());
+    // What's on screen, with a margin: only those doors are drawn.
+    const seeBounds = () => setViewBounds(map.getBounds().pad(0.35));
+    map.on('moveend', seeBounds);
+    seeBounds();
     map.on('contextmenu', (e) => { e.originalEvent?.preventDefault?.(); onLongPressRef.current?.(e.latlng); });
     mapRef.current = map;
     layersRef.current = layers;
@@ -1564,7 +1599,7 @@ export default function MapPage() {
 
   // Pins (or count bubbles) for the filtered doors, at this zoom. A selected
   // door inside a bubble is pulled out so its pin always shows.
-  const groups = useMemo(() => clusterDoors(visible, zoom, offZoom), [visible, zoom, offZoom]);
+  const groups = useMemo(() => clusterDoors(visible, zoom, offZoom, viewBounds), [visible, zoom, offZoom, viewBounds]);
   const pulledKey = useMemo(
     () => (selectedKey && groups.some((g) => g.length > 1 && g.some((d) => d.key === selectedKey)) ? selectedKey : null),
     [groups, selectedKey],
@@ -1578,7 +1613,7 @@ export default function MapPage() {
     const addPin = (door) => {
       const selected = door.key === selectedKeyRef.current;
       const marker = L.marker([door.lat, door.lng], {
-        icon: pinIcon(door, selected, signOk),
+        icon: (zoom ?? PIN_ZOOM) >= Math.min(PIN_ZOOM, offZoom) || selected ? pinIcon(door, selected, signOk) : dotIcon(door, selected),
         title: `${doorTitle(door)} — ${door.persons.map((p) => personTitle(scale, p)).join(', ')}`,
         riseOnHover: true,
         zIndexOffset: selected ? 1000 : 0,
@@ -1614,14 +1649,16 @@ export default function MapPage() {
           .addTo(layers.signs);
       }
     }
-  }, [groups, pulledKey, orphanSigns, filter, scale, signOk]);
+  }, [groups, pulledKey, orphanSigns, filter, scale, signOk, zoom]);
 
   // Highlight the selected pin without rebuilding every marker.
   useEffect(() => {
     const paint = (key, on) => {
       const marker = key ? markersRef.current.get(key) : null;
       if (!marker) return;
-      marker.getElement()?.querySelector('.map-pin')?.classList.toggle('map-pin--selected', on);
+      const el = marker.getElement();
+      el?.querySelector('.map-pin')?.classList.toggle('map-pin--selected', on);
+      el?.querySelector('.map-dot')?.classList.toggle('map-dot--selected', on);
       marker.setZIndexOffset(on ? 1000 : 0);
     };
     paint(prevSelectedRef.current, false);

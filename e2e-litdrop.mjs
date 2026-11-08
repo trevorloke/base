@@ -286,7 +286,7 @@ const csv = await page.evaluate(async () => (await fetch('/api/reports/contacts.
 const lines = csv.replace(/^﻿/, '').trim().split(/\r?\n/).map((l) => l.split(','));
 const head = lines[0] || [];
 const sum = (col) => lines.slice(1).reduce((a, r) => a + Number(r[head.indexOf(col)] || 0), 0);
-check('Contacts by week: a Lit column, 4 drops; Reached counts none of them', head.join('|') === 'Week of|Doors|Calls|Texts|Reached|No answer|Refused|Lit' && sum('Lit') === 4 && sum('Reached') === 0, `${head.join('|')} · lit ${sum('Lit')} · reached ${sum('Reached')}`);
+check('Contacts by week: a Lit column, 4 drops; Reached counts none of them', head.join('|') === 'Week of|Doors|Calls|Texts|Mainstreeting|Reached|No answer|Refused|Lit' && sum('Lit') === 4 && sum('Reached') === 0, `${head.join('|')} · lit ${sum('Lit')} · reached ${sum('Reached')}`);
 const dash = await D.api('/dashboard?period=7d');
 check('the dashboard answers, its rows count the drops', dash.status === 200 && dash.json.series.reduce((a, r) => a + (r.left_lit || 0), 0) === 4, dash.status);
 const v = (await D.api('/audit/verify')).json;

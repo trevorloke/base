@@ -116,8 +116,8 @@
   position: absolute;
   left: 3px;
   top: 3px;
-  width: 42px;
-  height: 42px;
+  width: var(--size, 42px);
+  height: var(--size, 42px);
   border-radius: 50%;
   background: conic-gradient(#138a52 0 var(--a), #f5a524 0 var(--b), #d43c3c 0 var(--c), #8a90a6 0);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
@@ -127,8 +127,8 @@
   transition: transform 120ms ease;
 }
 .map-cluster__n {
-  width: 32px;
-  height: 32px;
+  width: calc(var(--size, 42px) - 9px);
+  height: calc(var(--size, 42px) - 9px);
   border-radius: 50%;
   background: #ffffff;
   color: #161a2e;
@@ -137,7 +137,7 @@
   align-items: center;
   justify-content: center;
   gap: 1px;
-  font: 700 12px/1 var(--font-mono);
+  font: 700 13px/1 var(--font-mono);
 }
 .map-cluster__n svg { width: 10px; height: 9px; fill: #161a2e; }
 @media (hover: hover) { .leaflet-marker-icon:hover .map-cluster { transform: scale(1.08); } }
@@ -937,3 +937,19 @@
 .map-vchip--satellite .map-vchip__swatch { background: linear-gradient(135deg, #3d5a3a, #8a7b55); }
 .map-vchip--terrain .map-vchip__swatch { background: linear-gradient(135deg, #cfe0c3, #e9dcc0); }
 .map-vchip:not(.is-on) { text-decoration: none; }
+
+/* A lone door before street zoom: a dot in its band's colour, ringed white
+   so it reads on any map; a household (two or more people) a little bigger.
+   The full pin, with its household and sign flags, shows from street zoom. */
+.map-dot {
+  position: absolute; left: 17px; top: 17px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--dot, #8a90a6); border: 2px solid #ffffff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box; transition: transform 120ms ease;
+}
+.map-dot--multi { left: 15px; top: 15px; width: 18px; height: 18px; }
+.map-dot--support   { --dot: #138a52; }
+.map-dot--undecided { --dot: #f5a524; }
+.map-dot--opposed   { --dot: #d43c3c; }
+.map-dot--unrated   { --dot: #8a90a6; }
+.map-dot--selected  { transform: scale(1.4); box-shadow: 0 0 0 3px #161a2e; }
+@media (hover: hover) { .leaflet-marker-icon:hover .map-dot { transform: scale(1.3); } }
