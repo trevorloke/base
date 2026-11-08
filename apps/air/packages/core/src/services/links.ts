@@ -9,7 +9,7 @@ import { SYSTEM, type CoreContext, type Principal } from "../context.ts";
 import { CoreError } from "../errors.ts";
 
 /**
- * Owned measurement. Every link base air publishes can go through a short link it controls: the redirect adds UTM
+ * Owned measurement. Every link Base Air publishes can go through a short link it controls: the redirect adds UTM
  * tags (so the customer's web analytics attribute the visit to the right network and post) and a click id, ssclid,
  * that the customer's site hands back with a conversion. Clicks and conversions are first-party rows here, so the
  * outcome ledger records what a post caused, not only what a network chose to report about it.
@@ -46,7 +46,7 @@ export function linkBaseFromEnv(env: NodeJS.ProcessEnv = process.env): string | 
 // Networks whose captions do not make links clickable: wrapping would only make the text longer.
 const NON_CLICKABLE_TEXT: ReadonlySet<Network> = new Set<Network>(["instagram", "tiktok"]);
 // Networks whose spam filters distrust redirecting links: their links keep the real destination, with UTM tags added
-// in place, so web analytics still attribute the visit (base air just does not count those clicks itself).
+// in place, so web analytics still attribute the visit (Base Air just does not count those clicks itself).
 const NO_REDIRECTS: ReadonlySet<Network> = new Set<Network>(["pinterest", "reddit", "google_business"]);
 
 const URL_IN_TEXT = /\bhttps?:\/\/[^\s<>"'`]+/gi;

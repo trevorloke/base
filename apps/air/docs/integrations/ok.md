@@ -43,8 +43,8 @@ Uzbekistan and the Russian-speaking diaspora. Most brand activity happens in gro
   signature) → auth; 8/11/26/5000 (flood, limits) → rate_limit retryable; 10 (permission denied) → rejected with an explanation;
   1/2/50/51 → network retryable; the rest → rejected. HTTP failures use the shared mapping.
 
-## What base air can and cannot see
-base air sees comments on the 10 most recent topics of each connected group (and of the user's own feed), with commenters' ids
+## What Base Air can and cannot see
+Base Air sees comments on the 10 most recent topics of each connected group (and of the user's own feed), with commenters' ids
 and, where OK returns them, names. It does not see private messages, group chats, comments on older topics, or groups the person
 does not administer or moderate.
 

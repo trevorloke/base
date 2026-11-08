@@ -1,7 +1,7 @@
-# base air HTTP API v1 (contract)
+# Base Air HTTP API v1 (contract)
 
-Base URL in dev: `http://localhost:4000`. In the base suite every path below lives under the deployment's `BASE_PATH`
-(e.g. `https://base.win/imaginesurrey/air/v1/me`); see "base air in the base suite" at the end. All bodies and responses
+Base URL in dev: `http://localhost:4000`. In the Base suite every path below lives under the deployment's `BASE_PATH`
+(e.g. `https://imaginesurrey.base.win/air/v1/me`); see "Base Air in the Base suite" at the end. All bodies and responses
 are JSON. Times are ISO-8601 strings.
 
 ## Authentication
@@ -191,7 +191,7 @@ The redirect adds `utm_source=<network>`, `utm_medium=social`, `utm_campaign=<op
 post-<id>>`, `utm_content=<slug>` (tags the author already set are kept) and `ssclid=<click id>`. Instagram and TikTok
 captions are left alone (links there are not clickable), as is any segment the short link would push over the limit.
 Pinterest, Reddit and Google Business distrust redirecting links, so there the real destination is kept and only the
-UTM tags are added (web analytics still attribute the visit; base air does not count those clicks itself).
+UTM tags are added (web analytics still attribute the visit; Base Air does not count those clicks itself).
 A variant opts out with `options.trackLinks: false`.
 
 Public:
@@ -277,7 +277,8 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
   the network refused, with the connector's own hint.
 - Without `REDIS_URL` the API process runs the background jobs itself (ingest, outcomes, account metrics, link
   rollups, tracker scan, trend sources, forecasts) on timers; `BASE_AIR_INPROCESS_JOBS=0` turns that off.
-- `BASE_AIR_PUBLIC_URL` falls back to `RENDER_EXTERNAL_URL` on Render's web service.
+- `BASE_AIR_PUBLIC_URL` falls back to `RENDER_EXTERNAL_URL` when Base Air runs as a standalone Render web service. In
+  the Base suite it is a private service behind the front door, with no external URL, so the setting is required.
 - Webhook handlers may answer a delivery from its own signed body (`respond`), and OAuth callbacks pass every query
   parameter to the connector (`callbackParams`).
 - `GET /v1/invites` (owner) → pending invites `{ id, email, role, invitedBy: { id, name, email }, expiresAt, createdAt }[]`;
@@ -296,7 +297,7 @@ candidate, spokesperson, creator, an individual's own brand). A person or sub-br
     `{ posts, impressions, engagements, engagementRate, linkClicks, conversions, conversionValue, followersGained, mentions }`.
     A post's numbers are its 72h outcome snapshot, else its 24h one, else its latest metrics; engagements are the
     network's `engagements`, else likes + replies + reposts + quotes + shares + saves; engagement rate is over posts
-    that reported impressions. Link clicks are non-bot clicks on base air short links; followers gained comes from the
+    that reported impressions. Link clicks are non-bot clicks on Base Air short links; followers gained comes from the
     accounts' `followers_total` series; mentions are mention/reply/comment/quote items the accounts received.
     `change[k]` is fractional (0.12 = +12%), null when the previous value was 0.
   - `topPosts` (10, by engagements): `{ postId, variantIds, text, networks, url, publishedAt, impressions, engagements,
@@ -418,34 +419,56 @@ Every change is a ledger event.
 - MCP: `list_inbox` (read) and `update_inbox_item` (status, labels, note; write).
 <!-- ---- end inbox workflow -->
 
-## base air in the base suite
+## Base Air in the Base suite
 
-base air is one of the base suite's apps (see the repository's SUITE.md). Each client's deployment is served under a
-prefix, `BASE_PATH` (e.g. `/imaginesurrey/air`):
+Base Air is one of the Base suite's apps (see the repository's SUITE.md). Each client has its own subdomain
+(`https://imaginesurrey.base.win`), with Base Ground at its root and Base Air under the prefix `BASE_PATH=/air`. Base
+Air is a Render private service: every request reaches it through the front door, which passes the path on as it is.
 
 - Requests under `${BASE_PATH}` are handled as if at the root. `/api/health` also answers without the prefix; anything
   else without it gets `308` to the same path and query under it. `BASE_PATH` empty: everything at the root, as before.
 - `index.html` carries `<base href="${BASE_PATH}/">`, `window.__BASE_PATH__`, the workspace's brand as CSS custom
   properties (`<style id="base-air-brand">`, `data-theme`), `window.__BASE_AIR_BRAND__` and `window.__BASE_SUITE__`.
-- Cookies (`base_air_session`, `base_air_sso_state`) are set with `Path=${BASE_PATH}` (or `/`).
+- Cookies (`base_air_session`, `base_air_sso_state`, `base_air_sso_link`) are set with `Path=${BASE_PATH}` (or `/`)
+  and never with a `Domain`, so they stay on the client's own host. Clients are kept apart by their subdomains (each
+  its own origin), not by cookie paths.
 - Links in emails, posts and webhook registrations come from `BASE_AIR_PUBLIC_URL`, which includes the prefix.
 - Client IPs (sessions, link clicks) come from `X-Forwarded-For`, `BASE_AIR_TRUSTED_PROXIES` (default 1) entries from
-  the right: base's front door sits behind Render's load balancer, so the client is the second-to-last entry.
+  the right: Base's front door sits behind Render's load balancer, so the client is the second-to-last entry.
 
-### Sign in with base
-base ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set:
+### Sign in with Base
+Base Ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set, Base Air signs people in **by link,
+not by email** (SUITE.md "The hand-off", step 6): a Base Ground manager can make a ground login for any address, so the
+email Base Ground sends is never enough on its own.
 - `GET /auth/base?next=<path>` → `302` to `${BASE_GROUND_URL}/api/sso/authorize?app=air&redirect_uri=…&state=…`, with
   `state` kept in the `base_air_sso_state` cookie (HttpOnly, SameSite=Lax, ten minutes). `next` is honoured only when it
   is a same-origin path under the prefix; anything else lands on the room.
 - `GET /auth/base/callback?code&state` → checks `state` against the cookie, posts `{ code, redirect_uri }` to
   `${BASE_GROUND_INTERNAL_URL or BASE_GROUND_URL}/api/sso/token` with `Authorization: Bearer <BASE_SSO_SECRET>`
   (`BASE_GROUND_INTERNAL_URL` is used as an origin only, `http://` assumed for a bare `host:port`, followed by the path
-  of `BASE_GROUND_URL`), finds the user by email (case-insensitive) and starts a normal session (`302` to `next`).
-  No account is ever created: someone without one gets a page saying "No base air account for <email> — ask an owner
-  to invite you." Bad state, `invalid_grant` and an unreachable ground each get a plain page. Every hand-off, refused
-  or not, is in the ledger as `auth.base_handoff` (`data.outcome`: `signed_in | no_account | bad_state |
-  invalid_grant | ground_error | not_configured`).
-- `GET /api/suite` (no auth) → `{ signInWithBase, groundUrl, webUrl }`: what the sign-in screen and the base switcher
+  of `BASE_GROUND_URL`). The answer must carry `sub` and `client`. Then:
+  - a link for (`client`, `sub`) → that account's session starts (`302` to `next`), whatever email the answer has;
+  - no link, and an account with that email (case-insensitive) → `200` "Link your Base Air account": a form asking
+    for **that account's Base Air password**. The verified hand-off stays on the server (`base_link_pending`: ten
+    minutes, single use, only the token's sha256 stored); the browser holds only its token, in `base_air_sso_link`
+    (HttpOnly, SameSite=Strict, `Path=${BASE_PATH}`). Nothing about the person goes in a URL;
+  - an account already linked to a different `sub` → `403`, refused;
+  - an account with no password → `403` "Set a Base Air password first", with a link to `/?forgot=1`;
+  - no account → `403` "No Base Air account for <email> — ask an owner to invite you." No account is ever created.
+  Bad state, `invalid_grant` and an unreachable Base Ground each get a plain page.
+- `GET /auth/base/link` → the password page again while the pending link is live; `400` once it is used or expired.
+- `POST /auth/base/link` (form: `password`; same origin only) → right password: the link is stored, the pending link is
+  spent, the session starts (`303` to `next`). Wrong password: `401`, the page again; it counts toward the same
+  per-email lockout as `POST /v1/auth/login` (five in fifteen minutes, then `429`). Used, expired or missing: `400`.
+  Linked meanwhile (another tab): `409`.
+- `GET /v1/base-links` (owner) → `[{ id, client, sub, userId, email, name, groundEmail, linkedAt }]` for this
+  workspace's members. `DELETE /v1/base-links/:id` (owner) → `204`; that person's next Sign in with Base asks for their
+  password again (sessions already open stay open).
+- The ledger records every hand-off as `auth.base_handoff` (`data.outcome`: `signed_in | link_required | link_expired |
+  linked_elsewhere | no_password | no_account | bad_state | invalid_grant | ground_error | not_configured`), and every
+  link as `base_link.created`, `base_link.refused` (`data.reason`: `wrong_password | rate_limited | linked_to_another |
+  sub_linked_elsewhere`) or `base_link.removed`, in each workspace the person belongs to.
+- `GET /api/suite` (no auth) → `{ signInWithBase, groundUrl, webUrl }`: what the sign-in screen and the Base switcher
   show.
 
 ### Brand

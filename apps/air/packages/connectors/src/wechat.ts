@@ -12,7 +12,7 @@ import { decodeAesKey, field, parseWeChatXml, signatureMatches, wechatDecrypt, w
 /**
  * WeChat Official Account (公众号 / 服务号) through the official platform API at api.weixin.qq.com.
  *
- * One base air account = one Official Account. The owner pastes AppID, AppSecret, the original ID (gh_…), the server
+ * One Base Air account = one Official Account. The owner pastes AppID, AppSecret, the original ID (gh_…), the server
  * Token and, for safe mode, the EncodingAESKey, and points the account's server URL at
  * `${BASE_AIR_PUBLIC_URL}/webhooks/wechat?account=<gh_id>`. Messages people send to the account arrive by webhook
  * (XML, plaintext or AES-encrypted), signed with that account's own Token, so the webhook handler uses the per-account
@@ -179,7 +179,7 @@ const isPermissionError = (e: unknown) => e instanceof ConnectorError && [48001,
 
 // ---- message mapping ----------------------------------------------------------------------
 
-/** One inbound message → the account (ToUserName) and the activity, or null for messages base air ignores. */
+/** One inbound message → the account (ToUserName) and the activity, or null for messages Base Air ignores. */
 export function wechatMessageToActivity(m: WeChatXml): { accountExternalId: string; item: ActivityInput } | null {
   const to = field(m, "ToUserName");
   const openid = field(m, "FromUserName");
@@ -598,7 +598,7 @@ export class WeChatConnector implements Connector {
       const openid = openidOf(input.parentExternalId);
       if (!input.text.trim()) throw new ConnectorError("wechat reply: the message is empty", "rejected", false);
       const raw = await this.call(auth, "message/custom/send", "POST", { touser: openid, msgtype: "text", text: { content: input.text } });
-      // The API returns no message id; this id is base air's own, unique per reply.
+      // The API returns no message id; this id is Base Air's own, unique per reply.
       return { externalId: `${openid}:reply:${input.idempotencyKey}`, url: null, raw };
     });
   }

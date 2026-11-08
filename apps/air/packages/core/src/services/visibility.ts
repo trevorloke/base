@@ -11,7 +11,7 @@ import type { PolicyService } from "./policy.ts";
 
 /**
  * AI answer visibility. People ask ChatGPT, Claude, Perplexity and Gemini instead of searching. A workspace keeps a
- * list of the questions its audience asks; on a cadence base air asks every configured engine each question, in
+ * list of the questions its audience asks; on a cadence Base Air asks every configured engine each question, in
  * each language and region, and records the answer, its sources, and for every tracked name: mentioned or not, where
  * among the tracked names it came first, the tone, one line on what was said, and whether the sources were its own.
  *

@@ -27,7 +27,7 @@ import { VisibilityService } from "./services/visibility.ts";
 // ---- analytics & client reports
 import { AnalyticsService } from "./services/analytics.ts";
 import { ReportService } from "./services/reports.ts";
-// ---- the base suite: brand
+// ---- the Base suite: brand
 import { LookService } from "./services/look.ts";
 
 /** The one object every front door (API, MCP, operators, workers) talks to. */

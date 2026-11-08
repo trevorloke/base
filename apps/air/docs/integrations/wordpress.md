@@ -19,20 +19,20 @@ Connector `wordpress` · networks `["wordpress"]` · `packages/connectors/src/wo
 - **Metrics**: none. Core REST has no per-post statistics; `capabilities.fetchMetrics` is false and there is no `fetchAccountMetrics`. Jetpack Stats (`/wpcom/v2` or the WordPress.com stats API) is a later step.
 - **Errors**: 401 → auth ("check the username and Application Password"); 403 → auth (role lacks the capability); 404/400 → rejected (WordPress `code: message` in the text); 429 → rate_limit with `Retry-After`; 5xx and transport failures → retryable network. Messages never contain the password.
 
-## What base air can and cannot see
-base air sees comments on the site's posts that are approved or waiting for moderation (when the connected user may moderate), with the commenter's display name, website and comment text. It does not read commenter email addresses or IP addresses, spam or trashed comments, private messages, or anything outside the REST API.
+## What Base Air can and cannot see
+Base Air sees comments on the site's posts that are approved or waiting for moderation (when the connected user may moderate), with the commenter's display name, website and comment text. It does not read commenter email addresses or IP addresses, spam or trashed comments, private messages, or anything outside the REST API.
 
 ## Setup
-1. Use WordPress 5.6+ over HTTPS. On the site, sign in as the user base air should post as (Author, Editor or Administrator).
-2. **Users → Profile → Application Passwords**: name it "base air", click *Add New Application Password*, copy the password.
-3. In base air, connect WordPress with the site URL, the username and that password.
+1. Use WordPress 5.6+ over HTTPS. On the site, sign in as the user Base Air should post as (Author, Editor or Administrator).
+2. **Users → Profile → Application Passwords**: name it "Base Air", click *Add New Application Password*, copy the password.
+3. In Base Air, connect WordPress with the site URL, the username and that password.
 - If the REST API is blocked by a security plugin or host firewall, allow `/wp-json/wp/v2/*` (or `?rest_route=`) for authenticated requests.
 - WordPress.com: only Business/Commerce plans (plugins enabled, "Application Passwords" available) work with this connector. Other WordPress.com plans need WordPress.com OAuth (`https://public-api.wordpress.com/oauth2/authorize`, REST at `public-api.wordpress.com/wp/v2/sites/<site>/…`), which is a **later step**: redirect URI would be `${BASE_AIR_PUBLIC_URL}/oauth/wordpress/callback`.
 - Redirect URI: none today (not OAuth). Webhook URL: none (WordPress core does not push events; polling is used).
 - Env vars: none.
 
 ## Review and access requirements
-None. Application Passwords work as soon as the user creates one. Some managed hosts disable Application Passwords or the REST API for unauthenticated users; base air authenticates every call, but hosts that strip the `Authorization` header (some Apache/CGI setups) need the usual `.htaccess` fix (`SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1`).
+None. Application Passwords work as soon as the user creates one. Some managed hosts disable Application Passwords or the REST API for unauthenticated users; Base Air authenticates every call, but hosts that strip the `Authorization` header (some Apache/CGI setups) need the usual `.htaccess` fix (`SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1`).
 
 ## Limits and quotas
 - Core WordPress has no API rate limit; hosts, CDNs and security plugins may impose one (429 is handled as a retryable rate limit).
@@ -46,6 +46,6 @@ None. Application Passwords work as soon as the user creates one. Some managed h
 
 ## Questions for the owner
 - Is `unlisted`/`direct` → **draft** the right mapping, or should those variants be refused?
-- Should base air also read comments in the `spam` queue for moderation, or leave spam to Akismet?
+- Should Base Air also read comments in the `spam` queue for moderation, or leave spam to Akismet?
 - Is the Jetpack/WordPress.com Stats integration (views per post) wanted for analytics, and are the sites on Jetpack?
 - Should the excerpt be left to WordPress (or the theme) instead of the first paragraph?

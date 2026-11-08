@@ -28,7 +28,7 @@ export interface ZernioHttpFailure {
   body: unknown;
 }
 
-/** ASSUMED analytics field names → base air's canonical metric names. */
+/** ASSUMED analytics field names → Base Air's canonical metric names. */
 const METRIC_ALIASES: Record<string, MetricName> = {
   impressions: "impressions",
   views: "impressions",
@@ -74,7 +74,7 @@ export function mapZernioError(status: number, headers: Headers, body: unknown, 
 }
 
 /**
- * Zernio (formerly Late) unified posting API. One API key fronts every network base air knows, so
+ * Zernio (formerly Late) unified posting API. One API key fronts every network Base Air knows, so
  * this adapter serves all of them; `account.externalId` is Zernio's id for the connected account.
  *
  * Ids: `externalId` is Zernio's post id, not the network's, because the analytics endpoint is keyed

@@ -1,11 +1,12 @@
-# base air
+# Base Air
 
-**Attention and social for a campaign or cause.** base air is one of the three apps of **base** (broad application for
+**Attention and social for a campaign or cause.** Base Air is one of the three apps of **Base** (broad application for
 social engagement, served at base.win; see `SUITE.md` at the repository root). It observes every surface where attention
 forms, forecasts where it is going (with honest confidence bands), acts through operator agents inside the client's
-declared red lines, and proves what moved the outcome. A few staff use it; volunteers live in base ground.
+declared red lines, and proves what moved the outcome. A few staff use it; volunteers live in Base Ground.
 
-Each client gets its own base air deployment, with its own servers and database, at `https://base.win/<client>/air`.
+Each client gets its own Base Air deployment, with its own servers and database, on the client's own subdomain:
+`https://<client>.base.win/air` (for Imagine Surrey, `https://imaginesurrey.base.win/air`).
 Until November 2026 this was the standalone Starsign repository.
 
 - `docs/product-thesis.md` — what this is and why it wins (the five systems, the moat, the 24-month arc)
@@ -14,18 +15,24 @@ Until November 2026 this was the standalone Starsign repository.
 
 ![The room: Radar, Queue, Feed, Brief](docs/screenshots/room.png)
 
-## In the base suite
+## In the Base suite
 
-- **Address.** Served under `BASE_PATH` (e.g. `/imaginesurrey/air`). The server strips the prefix, answers
-  `/api/health` with or without it and sends anything else without it to the prefixed path (308). `index.html` gets
-  `<base href>` and `window.__BASE_PATH__`; the web build uses relative assets; one helper (`apps/web/src/lib/base.ts`)
-  builds every absolute path in the browser; cookies are scoped to the prefix. `BASE_AIR_PUBLIC_URL` includes the
-  prefix, so links in posts, emails and webhook registrations do too. `BASE_PATH` empty: everything at the root.
-- **Sign in with base.** base ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set, the sign-in
-  screen offers "Sign in with base" (`/auth/base?next=…`): base ground says who the person is, and base air signs them
-  in to their own account with the same email, or tells them to ask an owner for an invite. It never creates accounts.
-  Email and password sign-in stays.
-- **The base switcher** in the top bar links to base ground's field and ground, base air, and base web's admin when
+- **Address.** Each client has its own subdomain; Base Ground is at its root and Base Air under `BASE_PATH=/air`. The
+  server strips the prefix, answers `/api/health` with or without it and sends anything else without it to the
+  prefixed path (308). `index.html` gets `<base href>` and `window.__BASE_PATH__`; the web build uses relative assets;
+  one helper (`apps/web/src/lib/base.ts`) builds every absolute path in the browser. Cookies are set with
+  `Path=/air` and no `Domain`, so they stay on the client's host; what keeps clients apart is the subdomain (each its
+  own origin), not the cookie path. `BASE_AIR_PUBLIC_URL` (`https://imaginesurrey.base.win/air`) includes the prefix,
+  so links in posts, emails and webhook registrations do too. `BASE_PATH` empty: everything at the root.
+- **Sign in with Base.** Base Ground is the sign-in hub. With `BASE_GROUND_URL` (`https://imaginesurrey.base.win`) and
+  `BASE_SSO_SECRET` set, the sign-in screen offers "Sign in with Base" (`/auth/base?next=…`). Base Ground says who the
+  person is, and Base Air signs them in **by link, not by email**: the first time, "Link your Base Air account" asks
+  for the password of the Base Air account with that email, and from then on Base Ground's id for the person (`sub`)
+  signs them straight in, whatever email it sends. (A Base Ground manager can make a ground login for any address, so
+  the email alone is never enough.) An account linked to another Base Ground login is refused; an account without a
+  password is asked to set one first; no account: ask an owner for an invite. It never creates accounts. Owners see
+  and remove links in **Team**. Email and password sign-in stays.
+- **The Base switcher** in the top bar links to Base Ground's field and ground, Base Air, and Base Web's admin when
   `BASE_WEB_URL` is set.
 - **Look and brand.** The default look is **Air**: dark, sky blue and violet on deep navy, IBM Plex Mono for figures.
   Owners set the workspace's brand on the **Brand** page (user menu → Brand): a preset (Air, Daylight, Ember, Lagoon,
@@ -52,7 +59,7 @@ existing passwordless user, such as the seed's, claims that user and its workspa
 `BASE_AIR_ALLOW_SIGNUP=1`. Set `RESEND_API_KEY` and `MAIL_FROM` to email invites and reset links. API keys remain, for
 agents and automation (the MCP server, operators, scripts); people no longer paste them.
 
-Locked out and no mail configured? From a shell on the server (Render: the web service's Shell tab, which starts in
+Locked out and no mail configured? From a shell on the server (Render: the Base Air service's Shell tab, which starts in
 `apps/api`):
 
 ```bash
@@ -62,8 +69,8 @@ node --import tsx src/admin.ts reset-link you@example.com   # one-time link, val
 
 Locally the same is `pnpm --filter @base-air/api admin users`.
 
-To try it under a prefix the way base.win serves it: `BASE_PATH=/imaginesurrey/air pnpm dev:api` after
-`pnpm build:web`, then open `http://localhost:4000/imaginesurrey/air/`.
+To try it under its prefix the way base.win serves it: `BASE_PATH=/air pnpm dev:api` after `pnpm build:web`, then
+open `http://localhost:4000/air/`.
 
 Set `BASE_AIR_DEV_WORKSPACE=acme` to skip signing in locally. Set `DATABASE_URL` (Postgres + pgvector) and `REDIS_URL`
 for durable queues; then run `pnpm dev:workers` and `pnpm dev:operators` as separate processes. `ANTHROPIC_API_KEY`
@@ -107,20 +114,27 @@ data-loyal.
 
 `Dockerfile` (build context `apps/air`) builds one image: the API with the built web room. The same image runs three
 ways (web, workers, operators). The services themselves are defined in the suite's root `render.yaml`, per client and
-per environment; base air needs:
+per environment; Base Air needs:
 
 | Service | Kind | Command | Notes |
 |---|---|---|---|
-| web | Render web service, Docker | the image's default (`node --import tsx src/main.ts` in `apps/api`) | health check `/api/health` |
+| web | Render **private service**, Docker | the image's default (`node --import tsx src/main.ts` in `apps/api`) | reached only through the front door; health check `/api/health` |
 | workers | Render background worker, Docker | `node --import tsx /app/apps/workers/src/main.ts` | BullMQ: publishing, ingest, outcomes, forecasts |
 | operators | Render background worker, Docker | `node --import tsx /app/apps/operators/src/main.ts` | Scout, Watch, Analyst, Steward |
 
 plus Postgres 16 with the `vector` extension (TimescaleDB is used when present and skipped when not) and Redis
 (Render Key Value). Settings all three share: `DATABASE_URL`, `REDIS_URL`, `BASE_AIR_MASTER_KEY` (same value
-everywhere), `BASE_AIR_PUBLIC_URL` (`https://base.win/<client>/air`), `NODE_ENV=production`. The web service also takes
-`BASE_PATH`, `BASE_GROUND_URL`, `BASE_GROUND_INTERNAL_URL`, `BASE_SSO_SECRET`, `BASE_WEB_URL`,
-`BASE_AIR_TRUSTED_PROXIES` and `BASE_AIR_BRAND_*`; the web service and operators take `ANTHROPIC_API_KEY` and
-`BASE_AIR_MODEL`. Connector app keys go on the web service and the workers.
+everywhere), `BASE_AIR_PUBLIC_URL` (`https://<client>.base.win/air`), `NODE_ENV=production`. The web service also
+takes `BASE_PATH=/air`, `BASE_GROUND_URL` (`https://<client>.base.win`), `BASE_GROUND_INTERNAL_URL` (Base Ground's
+private `host:port`), `BASE_SSO_SECRET`, `BASE_WEB_URL`, `BASE_AIR_TRUSTED_PROXIES` and `BASE_AIR_BRAND_*`; the web
+service and operators take `ANTHROPIC_API_KEY` and `BASE_AIR_MODEL`. Connector app keys go on the web service and the
+workers.
+
+The web service is a private service: it has no public address of its own, so every request (people, OAuth
+callbacks, network webhooks, short links) reaches it through the front door at `https://<client>.base.win/air/…`, and
+the `X-Forwarded-For` it trusts is the one the front door wrote. `BASE_AIR_PUBLIC_URL` must therefore be set (there is
+no `RENDER_EXTERNAL_URL` to fall back on), and OAuth redirect URIs and webhook addresses registered with the networks
+use it.
 
 ## Review
 
@@ -129,5 +143,6 @@ was deliberately left. Invariants worth defending are listed in `docs/ARCHITECTU
 
 ## Status
 
-Phase 0 scaffold, built 2026-11-02 as Starsign; renamed base air and brought into the base suite 2026-11-07. Native connectors post for real once credentials exist; platform reviews (Meta,
-TikTok, LinkedIn pages) and the Google Trends alpha are external clocks — start them now.
+Phase 0 scaffold, built 2026-11-02 as Starsign; renamed Base Air and brought into the Base suite 2026-11-07; moved to
+a subdomain per client with sign-in by link 2026-11-08. Native connectors post for real once credentials exist;
+platform reviews (Meta, TikTok, LinkedIn pages) and the Google Trends alpha are external clocks — start them now.

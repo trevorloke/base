@@ -30,7 +30,7 @@ export interface PublishInput {
 /** Reads media bytes for upload-style APIs (X, Bluesky, LinkedIn, YouTube, TikTok FILE_UPLOAD, Reddit). */
 export interface MediaFetcher {
   /**
-   * Bytes and type of a media item, from base air storage when it has an assetId, else by URL. The whole file is in
+   * Bytes and type of a media item, from Base Air storage when it has an assetId, else by URL. The whole file is in
    * memory: use it for images and small files only. Video paths read through `openMedia` / `readChunks` (media-io.ts),
    * which use the methods below when present and fall back to this one.
    */

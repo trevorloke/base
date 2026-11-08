@@ -1,5 +1,5 @@
 /**
- * base air's look (SUITE.md, "Look and brand"): presets, the brand a workspace saves, the design tokens it becomes,
+ * Base Air's look (SUITE.md, "Look and brand"): presets, the brand a workspace saves, the design tokens it becomes,
  * and the contrast check. Pure and dependency-free: the server writes the tokens into the HTML it sends (no flash of
  * the default look) and the room uses the same code for the Brand page's live preview.
  *
@@ -139,7 +139,7 @@ export interface Brand {
   preset: string;
   /** Shown in the app. Empty: the workspace's (organization's) name. */
   name: string;
-  /** An uploaded image or an https URL. Empty: base air's own mark. */
+  /** An uploaded image or an https URL. Empty: Base Air's own mark. */
   logoUrl: string;
   palettes: Record<Scheme, Palette>;
   font: FontId;

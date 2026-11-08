@@ -57,7 +57,7 @@ function useCopy() {
   );
 }
 
-/** Short links base air put in published posts: who clicked, what they bought, and the settings behind it. */
+/** Short links Base Air put in published posts: who clicked, what they bought, and the settings behind it. */
 export function LinksDrawer({ myRole, onClose }: { myRole: Role | null; onClose: () => void }) {
   const toast = useToast();
   const copy = useCopy();
@@ -315,7 +315,7 @@ function MakeLink({ onMade }: { onMade: () => void }) {
   return (
     <section className="dsec">
       <h3 className="section-h">Make a link</h3>
-      <p className="muted small links-lede">For a bio, a newsletter or anywhere base air doesn't post for you.</p>
+      <p className="muted small links-lede">For a bio, a newsletter or anywhere Base Air doesn't post for you.</p>
       <form className="links-make" onSubmit={(e) => void submit(e)}>
         <label className="field links-make-url">
           <span>Web address</span>

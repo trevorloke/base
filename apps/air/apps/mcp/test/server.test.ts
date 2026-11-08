@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { BaseAirClient } from "../src/client.ts";
-import { INSTRUCTIONS, SERVER_NAME, SERVER_VERSION, createServer } from "../src/server.ts";
+import { INSTRUCTIONS, SERVER_NAME, SERVER_TITLE, SERVER_VERSION, createServer } from "../src/server.ts";
 import { TOOL_NAMES } from "../src/tools.ts";
 import { NOW, fakeApi, pendingDetail, radar, textOf } from "./helpers.ts";
 
@@ -27,10 +27,10 @@ async function connect(api: ReturnType<typeof fakeApi>) {
   return client;
 }
 
-describe("base air MCP server", () => {
+describe("Base Air MCP server", () => {
   it("identifies itself and carries instructions that say to call get_brand_context first", async () => {
     const client = await connect(fakeApi([]));
-    expect(client.getServerVersion()).toMatchObject({ name: SERVER_NAME, version: SERVER_VERSION });
+    expect(client.getServerVersion()).toMatchObject({ name: SERVER_NAME, title: SERVER_TITLE, version: SERVER_VERSION });
     expect(client.getInstructions()).toBe(INSTRUCTIONS);
     expect(INSTRUCTIONS).toContain("get_brand_context first");
     expect(INSTRUCTIONS).toContain("approval queue");

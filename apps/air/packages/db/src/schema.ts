@@ -596,7 +596,7 @@ export const entityMentions = pgTable(
 
 // ---------------------------------------------------------------- owned measurement: links, clicks, conversions
 
-/** Short links base air minted for published posts (or by hand). `target` is the destination with UTM tags. */
+/** Short links Base Air minted for published posts (or by hand). `target` is the destination with UTM tags. */
 export const trackedLinks = pgTable(
   "tracked_links",
   {

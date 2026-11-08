@@ -13,8 +13,8 @@ import { withBasePath } from "../src/base-path.ts";
 import { brandHead } from "../src/routes-brand.ts";
 import { registerWebApp } from "../src/web-app.ts";
 
-const ORIGIN = "https://base.win";
-const BASE = "/imaginesurrey/air";
+const ORIGIN = "https://imaginesurrey.base.win";
+const BASE = "/air";
 let h: DbHandle;
 let m: BaseAir;
 let fetchApp: (r: Request) => Promise<Response>;
@@ -36,7 +36,7 @@ beforeAll(async () => {
   const viewerKey = await m.workspaces.createApiKey({ workspaceId: wsId, name: "v", actorType: "human", actorId: "u2", role: "viewer" });
   viewer = viewerKey.secret;
   const dist = mkdtempSync(join(tmpdir(), "air-brand-dist-"));
-  writeFileSync(join(dist, "index.html"), '<!doctype html><html lang="en"><head><title>base air</title><link rel="stylesheet" href="./assets/app.css"></head><body><div id="root"></div></body></html>');
+  writeFileSync(join(dist, "index.html"), '<!doctype html><html lang="en"><head><title>Base Air</title><link rel="stylesheet" href="./assets/app.css"></head><body><div id="root"></div></body></html>');
   const opts = { basePath: BASE, publicUrl: `${ORIGIN}${BASE}` };
   const app = createApp(m, opts);
   registerWebApp(app, { dist, basePath: BASE, head: brandHead(m, { ...opts, sso: null, suite: {} }) });
@@ -106,7 +106,7 @@ describe("the Brand page's API", () => {
     expect(html).toContain('<html lang="en" data-brand-mode="dark" data-theme="dark">');
     expect(html).toMatch(/<link rel="stylesheet"[^>]*>\s*<style id="base-air-brand">/); // after the stylesheet it overrides
     expect(html).toContain("--primary:#ff8a4c");
-    expect(html).toContain("<title>Imagine Surrey Air · base air</title>");
+    expect(html).toContain("<title>Imagine Surrey Air · Base Air</title>");
     expect(html).toContain('window.__BASE_AIR_BRAND__={"preset":"ember"');
     // Signed out: the deployment's (first workspace's) brand, so the sign-in screen matches.
     const anon = await (await fetchApp(new Request(`${ORIGIN}${BASE}/`))).text();

@@ -8,8 +8,8 @@ Follow any RSS or Atom feed: blogs, news sites, press rooms, podcasts, changelog
 ## What works
 - **Connect** (`connectMethod: "webhook_url"`, the form takes a URL). Inputs: **Feed URL** (http or https, required) and **Name** (optional).
   - A URL without a scheme gets `https://`.
-  - base air fetches the URL once to check that it is a feed and to read its title.
-  - If you paste a website address instead of the feed, base air reads the page's `<link rel="alternate" type="application/rss+xml|atom+xml">` and uses the feed it advertises.
+  - Base Air fetches the URL once to check that it is a feed and to read its title.
+  - If you paste a website address instead of the feed, Base Air reads the page's `<link rel="alternate" type="application/rss+xml|atom+xml">` and uses the feed it advertises.
   - One account per feed URL: externalId = the feed URL (without `#fragment`); handle = your name, else the feed title, else the host.
   - Auth: `{ feedUrl }`. Config: `{ feedUrl, title, siteUrl, host, format, language, name }`.
 - **Listen** (`fetchActivity(account, since)`): GET the feed with `If-None-Match` / `If-Modified-Since` from the previous answer. Validators are kept in memory per account and feed, so one workspace's 304 never hides items from another. A 304 returns nothing. Validators are saved only after a body parses.
@@ -48,12 +48,12 @@ Follow any RSS or Atom feed: blogs, news sites, press rooms, podcasts, changelog
    - Google Alerts: choose "Deliver to: RSS feed".
    - Reddit: `https://www.reddit.com/r/<sub>/.rss`.
    - YouTube channel: `https://www.youtube.com/feeds/videos.xml?channel_id=<id>`.
-2. In base air: Accounts → Connect → RSS / Atom, paste the URL, and optionally a name.
+2. In Base Air: Accounts → Connect → RSS / Atom, paste the URL, and optionally a name.
 3. Add the account to a stream, or add tracker keywords. New items flow into the live feed at the listening poll interval.
 - Env vars: none required. `BASE_AIR_PUBLIC_URL` (optional) is shown in the User-Agent. `BASE_AIR_ALLOW_PRIVATE_URLS=1` (self-hosted only) allows feeds on intranet hosts.
 - Redirect URI: none. Webhook URL: none (polling only).
 
-## What base air can and cannot see
+## What Base Air can and cannot see
 - **Can see**: what the feed publishes to everyone: titles, summaries or full text when the feed includes it, links, author names and dates.
 - **Cannot see**: pages behind a login or paywall, comments on the articles, anything not in the feed, or items that dropped out of the feed between two polls. Feeds that require a login are not supported (no credentials are sent).
 
@@ -63,7 +63,7 @@ None. Public feeds need no approval. Respect each site's terms: some sites forbi
 ## Limits and quotas
 - One feed per account; 5 MB per response; 20 s timeout; 5 redirects.
 - 50 items on the first poll, 200 per later poll, 4000 characters of text per item.
-- Polling frequency is base air's listening interval. Conditional requests keep most polls to a 304. Some hosts rate-limit aggressive pollers (Reddit in particular); a 429 is retried later.
+- Polling frequency is Base Air's listening interval. Conditional requests keep most polls to a 304. Some hosts rate-limit aggressive pollers (Reddit in particular); a 429 is retried later.
 - Validators and the "seen undated items" set live in memory. After a restart, the first poll downloads the feed in full and relies on `since` and core deduplication.
 
 ## Unverified

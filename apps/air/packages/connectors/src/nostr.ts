@@ -16,7 +16,7 @@ import { ConnectorError } from "./types.ts";
  * Every event read from a relay is checked (id hash + signature) and dropped when invalid.
  *
  * Media is pull-style: Nostr has no upload in the core protocol (NIP-96 / Blossom servers are separate), so public
- * base air media URLs go into the content with NIP-92 `imeta` tags.
+ * Base Air media URLs go into the content with NIP-92 `imeta` tags.
  */
 
 // TODO(verify): a sensible default write/read set as of November 2026. These are long-running, free, open relays.

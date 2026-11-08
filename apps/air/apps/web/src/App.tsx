@@ -130,6 +130,8 @@ export function App() {
   const { theme, toggle } = useTheme();
   const [inviteToken] = useState(() => readParam("invite"));
   const [resetToken] = useState(() => readParam("reset"));
+  // "Set a password" from the Sign in with Base page: open on Forgot password.
+  const [forgot] = useState(() => readParam("forgot") === "1");
   const [auth, setAuth] = useState<Auth>(() => {
     const key = getApiKey();
     if (key && !inviteToken && !resetToken) return { kind: "key", key };
@@ -146,21 +148,21 @@ export function App() {
         if (cancelled) return;
         if (inviteToken) setAuth({ kind: "gate", screen: "invite", signupAllowed: null, message: null, session });
         else {
-          if (resetToken) stripAuthParams();
+          if (resetToken || forgot) stripAuthParams();
           setAuth({ kind: "session", session });
         }
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         // Nobody can sign in yet on this deployment: start on creating the first account.
-        const screen: AuthScreen = inviteToken ? "invite" : resetToken ? "reset" : firstRunHint(e) ? "signup" : "signin";
+        const screen: AuthScreen = inviteToken ? "invite" : resetToken ? "reset" : forgot ? "forgot" : firstRunHint(e) ? "signup" : "signin";
         const message = isApiError(e) && e.status !== 401 ? errorText(e) : null;
         setAuth({ kind: "gate", screen, signupAllowed: signupHint(e), message, session: null });
       });
     return () => {
       cancelled = true;
     };
-  }, [auth.kind, inviteToken, resetToken]);
+  }, [auth.kind, inviteToken, resetToken, forgot]);
 
   const signedOut = useCallback((message?: string) => {
     setApiKey(null);
@@ -192,7 +194,7 @@ export function App() {
   if (auth.kind === "checking") {
     return (
       <main className="gate">
-        <span className="muted">Opening base air…</span>
+        <span className="muted">Opening Base Air…</span>
       </main>
     );
   }
@@ -246,7 +248,7 @@ function connectErrorText(reason: string, net: string): string {
     case "unknown_state":
       return "that sign-in link was already used. Start again from Connections.";
     case "no_accounts":
-      return `this ${net} login doesn't manage any accounts base air can post as.`;
+      return `this ${net} login doesn't manage any accounts Base Air can post as.`;
     default:
       return "something went wrong on the way back. Try again.";
   }

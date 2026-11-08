@@ -22,7 +22,12 @@ export {
   SESSION_TTL_MS,
   INVITE_TTL_MS,
   RESET_TTL_MS,
+  BASE_LINK_PENDING_TTL_MS,
   type AuthOptions,
+  type BaseIdentity,
+  type BaseHandoffOutcome,
+  type BaseHandoffResult,
+  type BaseLinkView,
   type Mailer,
   type MailMessage,
   type MemberView,
@@ -89,5 +94,5 @@ export {
 export { AnalyticsService, LEARNING_DAYS, type AnalyticsQuery, type AnalyticsFilters } from "./services/analytics.ts";
 export { ReportService, ReportInput, ReportPatch, ReportSchedule, ReportPeriod, DEFAULT_SECTIONS, reportPeriod, lastOccurrence, nextOccurrence, duePeriod, zonedTime, type ReportView, type ReportOptions } from "./services/reports.ts";
 export * from "./services/analytics-shared.ts";
-// ---- the base suite: brand
+// ---- the Base suite: brand
 export { LookService, type BrandView } from "./services/look.ts";

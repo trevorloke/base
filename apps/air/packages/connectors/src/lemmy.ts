@@ -333,7 +333,7 @@ export class LemmyConnector implements Connector {
 
   /**
    * Upload the image to the instance's pict-rs (POST /pictrs/image, field images[]) and use its URL. When the instance
-   * refuses uploads (disabled, too large, unsupported type) fall back to linking base air's public media URL.
+   * refuses uploads (disabled, too large, unsupported type) fall back to linking Base Air's public media URL.
    * TODO(verify): Lemmy 1.0 uploads via POST /api/v4/image.
    */
   private async mediaUrl(account: AccountRef, auth: LemmyAuth, media: Media): Promise<string> {

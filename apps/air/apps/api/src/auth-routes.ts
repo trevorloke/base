@@ -6,14 +6,18 @@ import type { Env } from "./app.ts";
 import { clientIpFrom, normalizeBasePath } from "./base-path.ts";
 
 export const SESSION_COOKIE = "base_air_session";
-/** The session cookie's name before Starsign became base air. Read once, moved to SESSION_COOKIE, then cleared. */
+/** The session cookie's name before Starsign became Base Air. Read once, moved to SESSION_COOKIE, then cleared. */
 export const LEGACY_SESSION_COOKIE = "starsign_session";
 export const CSRF_HEADER = "x-base-air-csrf";
 
 export interface AuthRouteOptions {
   /** Public base URL. https → the session cookie is Secure; also the base of invite and reset links. */
   publicUrl?: string;
-  /** Where the app lives on its host; cookies are scoped to it so two clients on one host never share them. */
+  /**
+   * Where the app lives on its host; cookies are set with this path (and never a Domain), so they stay with Base Air on
+   * the client's own subdomain. Separation between clients comes from each having its own subdomain (origin), not
+   * from cookie paths.
+   */
   basePath?: string;
   /** See BASE_AIR_TRUSTED_PROXIES. */
   trustedProxies?: number;
@@ -164,6 +168,13 @@ export function registerAuthRoutes(app: Hono<Env>, m: BaseAir, opts: AuthRouteOp
   app.get("/v1/invites", async (c) => c.json(await m.auth.listInvites(c.get("principal"))));
   app.delete("/v1/invites/:id", async (c) => {
     await m.auth.revokeInvite(c.get("principal"), c.req.param("id"));
+    return c.body(null, 204);
+  });
+
+  /** Base Ground links of this workspace's members (owners only). Removing one makes the next Sign in with Base ask for the password again. */
+  app.get("/v1/base-links", async (c) => c.json(await m.auth.listBaseLinks(c.get("principal"))));
+  app.delete("/v1/base-links/:id", async (c) => {
+    await m.auth.removeBaseLink(c.get("principal"), c.req.param("id"));
     return c.body(null, 204);
   });
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { createTestDb } from "../src/test-utils.ts";
-import { ledgerEvents, rawEvents, workspaces } from "../src/schema.ts";
+import { ledgerEvents, rawEvents, users, workspaces } from "../src/schema.ts";
+import { baseLinks } from "../src/schema-base-links.ts";
 
 describe("db", () => {
   it("migrates, inserts, and enforces append-only logs", async () => {
@@ -46,6 +47,20 @@ describe("db", () => {
     const { rowsOf } = await import("../src/client.ts");
     const r = rowsOf<{ d: number }>(await h.db.execute(sql`SELECT '[1,2,3]'::vector(3) <-> '[1,2,4]'::vector(3) AS d`));
     expect(Number(r[0]?.d)).toBeCloseTo(1);
+    await h.close();
+  });
+
+  it("allows one Base Ground link per (client, sub) and one per user", async () => {
+    const h = await createTestDb();
+    await h.db.insert(users).values([
+      { id: "u1", email: "a@x.test" },
+      { id: "u2", email: "b@x.test" },
+    ]);
+    await h.db.insert(baseLinks).values({ id: "l1", client: "c", sub: "s1", userId: "u1" });
+    await expect(h.db.insert(baseLinks).values({ id: "l2", client: "c", sub: "s1", userId: "u2" })).rejects.toThrow();
+    await expect(h.db.insert(baseLinks).values({ id: "l3", client: "c", sub: "s2", userId: "u1" })).rejects.toThrow();
+    await h.db.insert(baseLinks).values({ id: "l4", client: "other", sub: "s1", userId: "u2" });
+    expect(await h.db.select().from(baseLinks)).toHaveLength(2);
     await h.close();
   });
 });

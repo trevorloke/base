@@ -12,7 +12,7 @@ export interface AnalyticsTotals {
   engagements: number;
   /** engagements / impressions over the posts that reported impressions; null when none did. */
   engagementRate: number | null;
-  /** Non-bot clicks on base air's own short links. */
+  /** Non-bot clicks on Base Air's own short links. */
   linkClicks: number;
   conversions: number;
   conversionValue: number;
@@ -853,7 +853,7 @@ ${view ? `<p class="small muted">Read this report in your browser: <a href="${es
 <header class="top">${logo}<div><h1>${esc(doc.title)}</h1><div class="sub">${esc(sub)}</div></div></header>
 ${doc.intro ? `<p class="intro">${esc(doc.intro)}</p>` : ""}
 ${body}
-<footer class="foot">Prepared for ${esc(doc.clientName ?? doc.workspaceName)} by ${esc(doc.workspaceName)} with base air · ${esc(generated)} (${esc(doc.timezone)}) · Numbers are each post's 24-hour or 72-hour snapshot, or its latest when none was taken.</footer>
+<footer class="foot">Prepared for ${esc(doc.clientName ?? doc.workspaceName)} by ${esc(doc.workspaceName)} with Base Air · ${esc(generated)} (${esc(doc.timezone)}) · Numbers are each post's 24-hour or 72-hour snapshot, or its latest when none was taken.</footer>
 </div></body></html>`;
 }
 

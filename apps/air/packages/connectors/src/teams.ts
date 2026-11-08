@@ -14,7 +14,7 @@ import { ConnectorError } from "./types.ts";
  *
  * Posts are one Adaptive Card per message (text, optional image, optional link button) in the documented envelope
  * `{ type: "message", attachments: [{ contentType: "application/vnd.microsoft.card.adaptive", content }] }`.
- * The workflow answers 202 Accepted with no message id: base air cannot edit, delete, read or measure what it posted.
+ * The workflow answers 202 Accepted with no message id: Base Air cannot edit, delete, read or measure what it posted.
  * Reading channels needs Microsoft Graph with tenant admin consent (and Microsoft's protected-API approval for
  * message reads): a later step.
  */

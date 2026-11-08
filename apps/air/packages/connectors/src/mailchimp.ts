@@ -10,9 +10,9 @@ import { ConnectorError } from "./types.ts";
  * Mailchimp Marketing API v3 with an API key ("<32 hex>-<data center>", e.g. "…-us6"; the data center picks the host
  * https://<dc>.api.mailchimp.com/3.0). One account = one audience (list).
  *
- * Publishing a base air post sends a regular campaign to the whole audience: create the campaign, set its HTML content,
- * check Mailchimp's send checklist, then send. base air already schedules, so the campaign is sent immediately.
- * Images are referenced by their public base air media URLs.
+ * Publishing a Base Air post sends a regular campaign to the whole audience: create the campaign, set its HTML content,
+ * check Mailchimp's send checklist, then send. Base Air already schedules, so the campaign is sent immediately.
+ * Images are referenced by their public Base Air media URLs.
  *
  * Mailchimp OAuth (for agencies connecting clients' accounts) is a later step; see docs/integrations/mailchimp.md.
  */

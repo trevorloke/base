@@ -1,7 +1,7 @@
 # Connector builder brief (shared by every platform builder)
 
-base air is a social media command center (publishing, inbox, analytics, trend radar, agents inside red lines).
-Repo: apps/air (base suite), pnpm TypeScript monorepo, ESM, strict, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`.
+Base Air is a social media command center (publishing, inbox, analytics, trend radar, agents inside red lines).
+Repo: apps/air (Base suite), pnpm TypeScript monorepo, ESM, strict, `verbatimModuleSyntax`, `noUncheckedIndexedAccess`.
 Relative imports include `.ts`. zod v4. Node 22 `fetch`. Never run `pnpm install` (no new dependencies) or `git`.
 
 ## Read first
@@ -25,7 +25,7 @@ Relative imports include `.ts`. zod v4. Node 22 `fetch`. Never run `pnpm install
    uses those instead of refresh tokens).
 2. **Publish** every post kind the network supports through its official API: text, link, single image, multi-image/carousel,
    video (and reels/shorts/stories where offered), threads/first comment where offered, the relevant `VariantOptions`.
-   Pull-style networks get `media.url` (public URLs from base air's media library); upload-style networks read bytes with
+   Pull-style networks get `media.url` (public URLs from Base Air's media library); upload-style networks read bytes with
    `this.media.fetch(media)` (set by core; fall back to fetching `media.url` if unset). Use resumable/chunked upload where
    the network requires it for large files. Poll asynchronous processing (containers, upload status) with bounded waits and
    return a clear retryable error if processing is still running. Idempotency: `IdempotencyCache` like x.ts.

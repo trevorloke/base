@@ -24,7 +24,7 @@ function date(v: string | undefined, fallback: Date): Date {
 }
 
 /**
- * A rendered report is a document from base air, never an app page: no scripts run, nothing loads but inline styles
+ * A rendered report is a document from Base Air, never an app page: no scripts run, nothing loads but inline styles
  * and images (the logo), and it is never framed by another site or indexed.
  */
 const REPORT_HEADERS = {

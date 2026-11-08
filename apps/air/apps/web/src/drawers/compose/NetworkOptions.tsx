@@ -531,7 +531,7 @@ export function NetworkOptions({
 
       {linkTracking ? (
         <div className="opt-row opt-links">
-          <label className="check" title="Wrap links in base air short links with UTM tags, so clicks are counted">
+          <label className="check" title="Wrap links in Base Air short links with UTM tags, so clicks are counted">
             <input type="checkbox" checked={tracking} onChange={(e) => setTracking(e.target.checked)} /> Track links
           </label>
           {tracking ? (

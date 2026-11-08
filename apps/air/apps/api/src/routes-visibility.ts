@@ -32,7 +32,7 @@ export function registerVisibilityRoutes(app: Hono<Env>, m: BaseAir, opts: Visib
   const enginesNow = () => (engines ??= answerEnginesFromEnv(env));
   const runtime = (): VisibilityRuntime => ({ engines: enginesNow(), judge: opts.gateway ? gatewayAnswerJudge(opts.gateway) : null });
 
-  /** Every engine base air knows: configured here (its key is set), and enabled for this workspace. */
+  /** Every engine Base Air knows: configured here (its key is set), and enabled for this workspace. */
   const engineList = async (workspaceId: string): Promise<(AnswerEngineStatus & { enabled: boolean })[]> => {
     const live = enginesNow();
     const settings = await m.visibility.settings(workspaceId);

@@ -1,6 +1,6 @@
 # Architecture
 
-base air is one TypeScript monorepo with two spines running through every package.
+Base Air is one TypeScript monorepo with two spines running through every package.
 
 ## The data spine
 
@@ -9,7 +9,7 @@ Two append-only logs. Postgres triggers refuse `UPDATE` and `DELETE` on both.
 | Log | What goes in | Why it exists |
 |---|---|---|
 | `raw_events` | Every payload received from any source, verbatim, hash-deduplicated | Nothing observed is ever lost; derivations can be rebuilt with better models later |
-| `ledger_events` | Every fact base air asserts (`post.created`, `policy.blocked`, `variant.published`, `outcome.captured`, `operator.alert`, …) with the actor who caused it | The ledger is the product's memory and its audit trail; the brief, the lift analysis and the voice model all read from it |
+| `ledger_events` | Every fact Base Air asserts (`post.created`, `policy.blocked`, `variant.published`, `outcome.captured`, `operator.alert`, …) with the actor who caused it | The ledger is the product's memory and its audit trail; the brief, the lift analysis and the voice model all read from it |
 
 Everything else is a derivation. `posts`, `activities`, `metrics`, `trend_forecasts` and friends are indexed, queryable
 projections that could be recomputed from the logs. Derived tables carry `model_version` / `prompt_version` where a model
@@ -56,7 +56,7 @@ forecast    pure: resample → EWMA kinematics → stage → damped Holt → ban
 db          drizzle schema + SQL migration + client (PGlite in dev/tests, Postgres in prod)
 ledger      EventStore (raw + ledger), OutcomeScheduler, ApprovalDiffs, prefixed ids
 connectors  Connector interface, per-network validation, registry, mock, bluesky, x, zernio
-core        base air: auth/workspaces/accounts/policy/posts/approvals/publishing/listening/metrics/trends/ops/export
+core        Base Air: auth/workspaces/accounts/policy/posts/approvals/publishing/listening/metrics/trends/ops/export
 ai          ModelGateway (Anthropic SDK) with versioned prompts, pricing, FakeGateway
 ```
 
@@ -64,7 +64,7 @@ Dependency direction is strictly downward: `schema` ← `policy`/`forecast`/`db`
 
 ## Apps
 
-- **api** (Hono): the HTTP contract in `docs/API.md`, SSE fan-out from `base air.emitter`, serves `apps/web/dist`.
+- **api** (Hono): the HTTP contract in `docs/API.md`, SSE fan-out from `Base Air.emitter`, serves `apps/web/dist`.
   Boot: migrate → connectors → scheduler (BullMQ when `REDIS_URL`, else in-process timers re-armed from the database).
 - **workers** (BullMQ): durable publish queue (one delayed job per post, idempotent per variant), repeatable jobs for
   ingest (with metered-read caps), outcome capture, forecast refresh.
@@ -99,11 +99,20 @@ from `members` on every request, so a role change or removal applies immediately
   and reset links go to the API log outside production.
 - Limits: 5 failed sign-ins per email per 15 minutes, then 429. The counter is **in memory, per process**: several API
   replicas each keep their own and a restart clears it. Put a shared limiter in front if that matters.
+- Sign in with Base (SUITE.md "The hand-off"): Base Ground vouches for a person, and Base Air signs them in **by link,
+  not by email**. `base_links` maps (client, Base Ground `sub`) to one user, unique both ways. The first time, the
+  account's own password proves it is theirs (the verified hand-off waits in `base_link_pending`: ten minutes, single
+  use, token hashed, the browser holding only the token in an HttpOnly, SameSite=Strict cookie); wrong passwords count
+  toward the same lockout. A Base Ground manager can make a ground login for any email address, so the email alone
+  never signs anyone in. Owners see and remove links; every link made, refused or removed is in the ledger.
+- Separation between clients: each client has its own subdomain (`<client>.base.win`), so its own browser origin.
+  Cookies carry `Path=${BASE_PATH}` and never a `Domain`, which keeps them with Base Air on that host; the path is not
+  a security boundary, and nothing relies on it as one.
 
 ## Owned measurement
 
 Network metrics are rented: each platform decides what it reports, renames it, rate-limits it or prices it. So every
-link base air publishes can go through a short link it controls (`LinkService`, `packages/core/src/services/links.ts`).
+link Base Air publishes can go through a short link it controls (`LinkService`, `packages/core/src/services/links.ts`).
 `PublishingService` asks it to wrap a variant's links just before sending; the stored variant keeps the approved text.
 The redirect (`GET /l/:slug`) appends UTM tags and a click id (`ssclid`); the customer's site reports conversions with
 that id, server to server (`POST /v1/conversions`, idempotent by `externalId`) or from the browser (`/s.js` → `POST /c`,
@@ -137,7 +146,7 @@ Implement `Connector` from `@base-air/connectors` (publish / fetchActivity / fet
 
 ## Adding an operator
 
-An operator is a function `(m: base air, gateway: ModelGateway, workspaceId) => summary` wrapped in
+An operator is a function `(m: Base Air, gateway: ModelGateway, workspaceId) => summary` wrapped in
 `m.ops.startRun/finishRun`. It reads through core, writes through core (so the gate applies), and attaches evidence to
 everything it proposes. If it needs a new prompt, add one to `packages/ai/src/prompts` with a version string.
 
@@ -152,5 +161,6 @@ everything it proposes. If it needs a new prompt, add one to `packages/ai/src/pr
 7. Role gates are for humans; agent keys never pass them. Agents act only through the autonomy dial, on their own posts.
 8. Connector resolution is strict and the mock connector never runs in production: a "published" post always touched a network.
 9. API keys never appear in URLs; the live stream uses single-use, sixty-second tokens.
-10. No password, session, invite or reset token is stored in a recoverable form; cookie writes need the CSRF header.
+10. No password, session, invite, reset or pending-link token is stored in a recoverable form; cookie writes need the CSRF header.
 11. No raw visitor IP is stored; clicks and conversions are append-only, and tracking never changes the text people approved.
+12. Sign in with Base never matches on email alone: a (client, sub) link, made once with the account's own password.

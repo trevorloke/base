@@ -10,11 +10,11 @@ It uses Login Kit (OAuth 2.0 with `client_key`), Content Posting API v2 (Direct 
 | Connect | OAuth through `OAuth2Client` (`client_key`, scopes separated by `,`, client secret sent in the body). One login connects one creator. `externalId` is the `open_id` and `handle` is the `username`. `describeAccount` calls `GET /v2/user/info/`. |
 | Refresh | `refreshAuth` uses the refresh token. The access token lasts about 24 h and the refresh token about 365 days. TikTok rotates refresh tokens, and the new one is stored. It returns `null` once the refresh token has expired, so the person reconnects. |
 | Publish: video | Direct Post `POST /v2/post/publish/video/init/`. **FILE_UPLOAD** is the default: the connector reads bytes through `media.fetch` and sends them as chunked `PUT`s with `Content-Range`. **PULL_FROM_URL** is used when `TIKTOK_VIDEO_SOURCE=PULL_FROM_URL` or the account config has `videoSource: "PULL_FROM_URL"`, and it needs a verified domain. |
-| Publish: photos (1–35) | `POST /v2/post/publish/content/init/` with `media_type: "PHOTO"`, `post_mode: "DIRECT_POST"` and `photo_images` set to base air media URLs. **Photo posts work only with PULL_FROM_URL**, so the media domain must be verified. `options.title` becomes the photo title (≤90 characters) and the post text becomes the description (≤4000). |
+| Publish: photos (1–35) | `POST /v2/post/publish/content/init/` with `media_type: "PHOTO"`, `post_mode: "DIRECT_POST"` and `photo_images` set to Base Air media URLs. **Photo posts work only with PULL_FROM_URL**, so the media domain must be verified. `options.title` becomes the photo title (≤90 characters) and the post text becomes the description (≤4000). |
 | Creator checks | `creator_info/query` runs **before every post** and the post is checked against it. `options.privacy` must map to one of `privacy_level_options`. Comments, duets or stitches turned off by the creator cannot be turned on. Video duration must be ≤ `max_video_post_duration_sec`. Breaking any of these gives `ConnectorError("rejected")`, and no post is made. |
 | Privacy mapping | public→`PUBLIC_TO_EVERYONE`, friends→`MUTUAL_FOLLOW_FRIENDS`, followers→`FOLLOWER_OF_CREATOR`, self/private→`SELF_ONLY`. `unlisted` is rejected. **Privacy has no default**: a missing `options.privacy` fails validation and is rejected at publish. |
 | Interactions | `allowComments`, `allowDuet` and `allowStitch` are **off unless set to true**, as TikTok's UX rule requires. Photo posts only have comments. |
-| Commercial content | `options.brandedContent: true` → `brand_content_toggle: true` ("Branded content", a paid partnership). Branded content set to private is rejected. "Your brand" (`brand_organic_toggle`) is always `false` because base air has no option for it yet (see Questions). |
+| Commercial content | `options.brandedContent: true` → `brand_content_toggle: true` ("Branded content", a paid partnership). Branded content set to private is rejected. "Your brand" (`brand_organic_toggle`) is always `false` because Base Air has no option for it yet (see Questions). |
 | Status polling | `POST /v2/post/publish/status/fetch/` runs until `PUBLISH_COMPLETE` or `FAILED`, with at most 20 checks 3 s apart by default. If the post is still processing, the connector returns a retryable `network` error. A retry with the same idempotency key **resumes polling the same `publish_id`** and does not post again. |
 | Post id | When the post is public and has passed moderation, `externalId` is the video id from `publicaly_available_post_id` (TikTok's spelling), and the URL is `https://www.tiktok.com/@user/video/<id>`. Otherwise (SELF_ONLY, followers-only, or moderation still running) `externalId` is the `publish_id` and the URL is `null`. `fetchMetrics` resolves a stored `publish_id` to the video id once one exists. The connector keeps int64 ids exact by quoting them before JSON parsing. |
 | Inbox | Only the account's own videos are fetched (`video/list` → `own_post`). **TikTok's public API has no comments or DMs**, so `reply` and `moderate` are not implemented and the capabilities report `false`. |
@@ -28,8 +28,8 @@ It uses Login Kit (OAuth 2.0 with `client_key`), Content Posting API v2 (Direct 
 1. Create an app at <https://developers.tiktok.com> → Manage apps. Add the products **Login Kit** and **Content Posting API**, and turn on **Direct Post** in the Content Posting API settings.
 2. Platform: **Web**. Add the redirect URI exactly: `${BASE_AIR_PUBLIC_URL}/oauth/tiktok/callback`.
 3. Scopes (all must be approved for the app): `user.info.basic`, `user.info.profile`, `user.info.stats`, `video.publish`, `video.upload`, `video.list`.
-   (`video.upload` is for Upload-to-inbox drafts, which base air does not use today. It is requested so the room can add drafts without asking users to reconnect.)
-4. **Verify the media domain** under Content Posting API → *Manage URL properties*: add the domain or URL prefix that serves base air media (the host of `BASE_AIR_PUBLIC_URL/media/...` or the S3/CDN host). This is **required for photo posts** and for PULL_FROM_URL video.
+   (`video.upload` is for Upload-to-inbox drafts, which Base Air does not use today. It is requested so the room can add drafts without asking users to reconnect.)
+4. **Verify the media domain** under Content Posting API → *Manage URL properties*: add the domain or URL prefix that serves Base Air media (the host of `BASE_AIR_PUBLIC_URL/media/...` or the S3/CDN host). This is **required for photo posts** and for PULL_FROM_URL video.
 5. Webhooks (optional): set the callback URL to `${BASE_AIR_PUBLIC_URL}/webhooks/tiktok` and subscribe to the Content Posting events.
 6. Environment:
    - `TIKTOK_CLIENT_KEY`: the app's client key. Required to connect.
@@ -44,7 +44,7 @@ It uses Login Kit (OAuth 2.0 with `client_key`), Content Posting API v2 (Direct 
 - **Direct Post audit**: this is separate from app review. Until the app passes the Content Posting audit:
   - every post is forced to **SELF_ONLY**, and the creator's account must be **private** when posting;
   - at most **5 creators** may post through the app in any 24 h window;
-  - the API answers `unaudited_client_can_only_post_to_private_accounts` or `reached_active_user_cap`, and base air surfaces both as `rejected` with an explanation.
+  - the API answers `unaudited_client_can_only_post_to_private_accounts` or `reached_active_user_cap`, and Base Air surfaces both as `rejected` with an explanation.
 
   The audit checks that the posting UI follows TikTok's Content Sharing Guidelines (below). Plan for several weeks and at least one revision round.
 - **UX requirements the room must implement**, checked in the audit:
@@ -54,7 +54,7 @@ It uses Login Kit (OAuth 2.0 with `client_key`), Content Posting API v2 (Direct 
   4. **Commercial content disclosure**: a "Disclose post content" toggle, off by default. When it is on, the person must tick at least one of **Your brand** (promoting themselves) and **Branded content** (paid partnership for a third party). Show the resulting label: "Promotional content" for Your brand, "Paid partnership" for Branded content. If Branded content is ticked, the "Only me" privacy option must be disabled with the explanation "Branded content visibility cannot be set to private".
   5. **Declarations next to the publish button**: "By posting, you agree to TikTok's Music Usage Confirmation". When Branded content is ticked, it becomes "By posting, you agree to TikTok's Branded Content Policy and Music Usage Confirmation". Each policy name must link to TikTok's page.
   6. **Duration limit**: block videos longer than `max_video_post_duration_sec` before upload.
-  7. **Preview and explicit consent**: show the media and caption, and let the person edit the caption. Posting needs an explicit action by the person. Do not add watermarks or base air branding to the media.
+  7. **Preview and explicit consent**: show the media and caption, and let the person edit the caption. Posting needs an explicit action by the person. Do not add watermarks or Base Air branding to the media.
   8. **After posting**, tell the person that TikTok may take a few minutes to process the post and that it will appear on their profile once done.
 - Before approval, the connector still connects and posts, but only SELF_ONLY posts to private accounts, and only for app developers or testers listed in the developer portal.
 
@@ -82,8 +82,8 @@ Every `TODO(verify)` in the code, plus facts that came only from search summarie
 ## Questions for the owner
 
 1. **Audit**: who submits the Direct Post audit, and under which legal entity, privacy policy and terms URLs? Until it passes, TikTok posting is SELF_ONLY on private accounts.
-2. **Media domain**: which domain serves base air media in production (app host or CDN/S3)? It must be verified in the TikTok portal for photo posts and PULL_FROM_URL.
+2. **Media domain**: which domain serves Base Air media in production (app host or CDN/S3)? It must be verified in the TikTok portal for photo posts and PULL_FROM_URL.
 3. **Agents and scheduling**: TikTok requires the person's explicit consent per post, and every privacy choice must be made by the person. Should agents be barred from creating TikTok posts that a human has not confirmed in the UI described above?
 4. **"Your brand" disclosure**: add a schema option (for example `brandOrganic: boolean`, or make `brandedContent` an enum `none | your_brand | branded | both`)? Until then, only "Branded content" can be disclosed.
-5. **AI-generated label**: TikTok has an `is_aigc` flag. Should base air set it from the post's Disclosure record (`aiContributions` includes generated media)? That needs the disclosure passed to connectors.
+5. **AI-generated label**: TikTok has an `is_aigc` flag. Should Base Air set it from the post's Disclosure record (`aiContributions` includes generated media)? That needs the disclosure passed to connectors.
 6. **Music**: photo posts send `auto_add_music: false`. Should creators be offered TikTok's auto-music for photo posts?

@@ -9,7 +9,7 @@ import { ConnectorError } from "./types.ts";
 /**
  * Kit (formerly ConvertKit) API v4 with a v4 API key in the `X-Kit-Api-Key` header. One account = one Kit account.
  *
- * Publishing a base air post creates a broadcast with `send_at` = now, so Kit sends it right away (base air already
+ * Publishing a Base Air post creates a broadcast with `send_at` = now, so Kit sends it right away (Base Air already
  * scheduled it). `public: true` also publishes it to the creator's web newsletter feed; that is the default, and
  * options.visibility "unlisted"/"private"/"direct" keeps it email-only.
  *

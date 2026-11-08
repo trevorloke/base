@@ -1,8 +1,8 @@
 /**
- * Where this deployment lives on its host (SUITE.md, "BASE_PATH"). base air for the client `imaginesurrey` is served at
- * `https://base.win/imaginesurrey/air`, so BASE_PATH is `/imaginesurrey/air`. The front door passes the path on as it
- * is; the server strips the prefix and handles the rest as if it were at the root. Empty means the root (local
- * development), with today's behaviour unchanged.
+ * Where this deployment lives on its host (SUITE.md, "BASE_PATH"). Each client has its own subdomain; Base Air for the
+ * client `imaginesurrey` is served at `https://imaginesurrey.base.win/air`, so BASE_PATH is `/air`. The front door
+ * passes the path on as it is; the server strips the prefix and handles the rest as if it were at the root. Empty
+ * means the root (local development), with today's behaviour unchanged.
  */
 
 /** "" or "/a/b": one leading slash, no trailing slash, no empty or dot segments. */
@@ -57,7 +57,7 @@ function rewrite(req: Request, url: URL): Request {
   } as RequestInit);
 }
 
-/** An absolute path inside the app, under the prefix: `prefixed("/imaginesurrey/air", "/v1/x")` → `/imaginesurrey/air/v1/x`. */
+/** An absolute path inside the app, under the prefix: `prefixed("/air", "/v1/x")` → `/air/v1/x`. */
 export function prefixed(basePath: string, path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${normalizeBasePath(basePath)}${p}`;
@@ -90,7 +90,7 @@ export function safeNextPath(next: string | undefined | null, basePath: string, 
 /**
  * The client's IP from X-Forwarded-For. Each proxy appends the address it received the request from, so the
  * client is `trustedProxies` entries from the right: 0 when the host's own load balancer is the only proxy (its
- * entry is the client), 1 (the default) when base's front door sits behind that load balancer, which makes the
+ * entry is the client), 1 (the default) when Base's front door sits behind that load balancer, which makes the
  * client the second-to-last entry. Setting: BASE_AIR_TRUSTED_PROXIES.
  */
 export function clientIpFrom(header: (name: string) => string | undefined, trustedProxies = 1): string | null {

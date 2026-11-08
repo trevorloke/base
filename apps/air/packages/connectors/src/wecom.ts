@@ -8,7 +8,7 @@ import { ConnectorError } from "./types.ts";
 import { decodeAesKey, field, parseWeChatXml, signatureMatches, wechatDecrypt, wechatSignature, type WeChatXml } from "./wechat-crypto.ts";
 
 /**
- * WeCom (企业微信) through its official server API at qyapi.weixin.qq.com. One base air account can hold two parts,
+ * WeCom (企业微信) through its official server API at qyapi.weixin.qq.com. One Base Air account can hold two parts,
  * each optional:
  *
  * - **WeChat Customer Service (微信客服)**: customers tap a link or QR code inside WeChat and chat with the business.

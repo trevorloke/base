@@ -56,7 +56,7 @@ interface WordPressUser {
   capabilities?: Record<string, boolean>;
 }
 
-/** base air visibility → WordPress post status. public (default) publishes; private is WordPress's native private post; unlisted/direct save a draft. */
+/** Base Air visibility → WordPress post status. public (default) publishes; private is WordPress's native private post; unlisted/direct save a draft. */
 export function wordpressStatus(o: VariantOptions): "publish" | "private" | "draft" {
   const v = o.visibility ?? (o.privacy === "private" || o.privacy === "self" ? "private" : o.privacy === "unlisted" ? "unlisted" : undefined);
   if (v === "private") return "private";

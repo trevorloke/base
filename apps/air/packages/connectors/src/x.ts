@@ -114,7 +114,7 @@ function xStatusOf(err: unknown): number | undefined {
  * core calls refreshAuth() explicitly.
  */
 /**
- * Scopes a base air X account needs: read and write posts, read the user, upload media, like/unlike,
+ * Scopes a Base Air X account needs: read and write posts, read the user, upload media, like/unlike,
  * hide replies, refresh without the user.
  */
 export const X_OAUTH_SCOPES = ["tweet.read", "tweet.write", "users.read", "media.write", "like.write", "tweet.moderate.write", "offline.access"];
@@ -604,7 +604,7 @@ function parseAuth(account: AccountRef): XAuth {
   return parsed.data;
 }
 
-/** Native metric names → base air's canon. Only metrics X actually returned become rows. */
+/** Native metric names → Base Air's canon. Only metrics X actually returned become rows. */
 function tweetMetrics(t: XTweet, observedAt: string): MetricInput[] {
   const pub = t.public_metrics ?? {};
   const priv = t.non_public_metrics ?? {};

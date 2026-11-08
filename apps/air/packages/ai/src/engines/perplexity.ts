@@ -62,7 +62,7 @@ export function parsePerplexityResponse(json: SonarResponse, fallbackModel: stri
     text: text.trim(),
     citations: dedupeCitations(citations),
     model: json.model ?? fallbackModel,
-    // Perplexity reports the request's cost itself; when it does not, $0 (the price is not in base air's table).
+    // Perplexity reports the request's cost itself; when it does not, $0 (the price is not in Base Air's table).
     usage: { inputTokens: json.usage?.prompt_tokens ?? 0, outputTokens: json.usage?.completion_tokens ?? 0, costUsd: typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : 0 },
   };
 }

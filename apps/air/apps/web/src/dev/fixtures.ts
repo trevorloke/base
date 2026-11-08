@@ -61,6 +61,7 @@ import type {
   Network,
   OAuthStart,
   PendingInvite,
+  BaseLink,
   Policy,
   PolicyCheckInput,
   PolicyDecision,
@@ -1370,6 +1371,8 @@ interface FxStore {
   members: Member[];
   /** Pending invites, per workspace. Older stored states lack it; it is seeded on load. */
   invites?: Record<string, (PendingInvite & { token: string })[]>;
+  /** Base Ground links (Sign in with Base). Older stored states lack it; it is seeded on load. */
+  baseLinks?: BaseLink[];
 }
 
 const FX_STORE_KEY = "base-air.fixtures.v2";
@@ -1423,6 +1426,10 @@ function loadStore(): FxStore {
 
 const store: FxStore = loadStore();
 store.invites ??= seedInvites();
+store.baseLinks ??= [
+  { id: "bln_maya", client: "northwind", sub: "g_7f3a91", userId: "usr_maya", email: "maya@northwind.coffee", name: "Maya Chen", groundEmail: "maya@northwind.coffee", linkedAt: ago(24 * 6) },
+  { id: "bln_dev", client: "northwind", sub: "g_2c08d4", userId: "usr_dev", email: "dev@northwind.coffee", name: "Dev Patel", groundEmail: "dev.patel@northwind.coffee", linkedAt: ago(30) },
+];
 
 function invitesHere(): (PendingInvite & { token: string })[] {
   const all = (store.invites ??= {});
@@ -1628,6 +1635,25 @@ function peopleApi() {
       const i = list.findIndex((x) => x.id === id);
       if (i < 0) throw new ApiError(404, "not_found", "That invite was already used, expired or revoked.");
       delete INVITES[list[i]!.token];
+      list.splice(i, 1);
+      save();
+    },
+
+    baseLinks: async (): Promise<BaseLink[]> => {
+      await delay(null, 160);
+      requireSession();
+      if (currentWs().role !== "owner") throw new ApiError(403, "forbidden", "Only an owner can see Base Ground links.");
+      const here = new Set(store.members.map((m) => m.userId));
+      return clone((store.baseLinks ?? []).filter((l) => here.has(l.userId)));
+    },
+
+    removeBaseLink: async (id: string): Promise<void> => {
+      await delay(null, 280);
+      requireSession();
+      if (currentWs().role !== "owner") throw new ApiError(403, "forbidden", "Only an owner can remove Base Ground links.");
+      const list = store.baseLinks ?? [];
+      const i = list.findIndex((l) => l.id === id);
+      if (i < 0) throw new ApiError(404, "not_found", "link not found");
       list.splice(i, 1);
       save();
     },
@@ -2761,7 +2787,7 @@ function trackerApi() {
       const name = (input.name ?? "").trim();
       if (!name) throw new ApiError(400, "invalid", "Give it a name.");
       if (name.length > 200) throw new ApiError(400, "invalid", "Keep the name under 200 characters.");
-      if (input.relation && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one base air knows.");
+      if (input.relation && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one Base Air knows.");
       if (all.some((e) => !e.archivedAt && e.name.toLowerCase() === name.toLowerCase())) throw new ApiError(409, "conflict", `${name} is already tracked.`);
       checkParent(all, input.parentId || undefined);
       const aliases = cleanTerms(input.aliases, 60, "Aliases");
@@ -2803,7 +2829,7 @@ function trackerApi() {
         throw new ApiError(400, "invalid", "People belong to this organisation. Move them first.");
       }
       if (input.parentId !== undefined) checkParent(all, input.parentId || undefined, id);
-      if (input.relation !== undefined && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one base air knows.");
+      if (input.relation !== undefined && !RELATIONS.includes(input.relation)) throw new ApiError(400, "invalid", "That relation isn't one Base Air knows.");
       if (input.name !== undefined) e.name = input.name.trim();
       if (input.kind !== undefined) e.kind = input.kind;
       if (input.role !== undefined) e.role = input.role.trim() || null;

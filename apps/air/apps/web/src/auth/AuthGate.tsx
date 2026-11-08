@@ -12,11 +12,11 @@ export type AuthScreen = "signin" | "signup" | "forgot" | "reset" | "invite" | "
 
 const MIN_PASSWORD = 10;
 
-/** Takes `?invite=` / `?reset=` out of the address bar once they have been read. */
+/** Takes `?invite=` / `?reset=` / `?forgot=` out of the address bar once they have been read. */
 export function stripAuthParams(): void {
   const url = new URL(window.location.href);
   let changed = false;
-  for (const k of ["invite", "reset"]) {
+  for (const k of ["invite", "reset", "forgot"]) {
     if (url.searchParams.has(k)) {
       url.searchParams.delete(k);
       changed = true;
@@ -97,7 +97,15 @@ export function AuthGate({
       card = <SignupCard initialEmail={email} onDone={(s) => void finishSignIn(s)} onSignIn={() => go("signin")} />;
       break;
     case "forgot":
-      card = <ForgotCard initialEmail={email} onBack={(note) => go("signin", note)} />;
+      card = (
+        <ForgotCard
+          initialEmail={email}
+          onBack={(note) => {
+            stripAuthParams();
+            go("signin", note);
+          }}
+        />
+      );
       break;
     case "reset":
       card = (
@@ -174,8 +182,8 @@ function GateBrand() {
   return (
     <div className="gate-brand">
       <BrandMark />
-      {brand.name ? <span className="gate-brand-name">{brand.name}</span> : <span className="base-wordmark">base</span>}
-      <span className="gate-app">air</span>
+      {brand.name ? <span className="gate-brand-name">{brand.name}</span> : <span className="base-wordmark">Base</span>}
+      <span className="gate-app">Air</span>
     </div>
   );
 }
@@ -235,9 +243,9 @@ function SignInCard({
         <>
           <a className="btn btn-base" href={signInWithBaseHref("/")}>
             <span className="base-mark" aria-hidden="true">
-              base
+              Base
             </span>
-            Sign in with base
+            Sign in with Base
           </a>
           <div className="gate-or" role="separator">
             <span>or with email and password</span>
@@ -388,7 +396,7 @@ function ForgotCard({ initialEmail, onBack }: { initialEmail: string; onBack: (n
         <>
           <p>This server doesn't send email yet, so a reset link can't be mailed to you.</p>
           <p className="muted small">
-            Ask whoever runs base air for a one-time reset link. From a shell on the server: <code>node --import tsx src/admin.ts reset-link you@example.com</code>
+            Ask whoever runs Base Air for a one-time reset link. From a shell on the server: <code>node --import tsx src/admin.ts reset-link you@example.com</code>
           </p>
           <button type="button" className="btn btn-primary" onClick={() => onBack(null)}>
             Back to sign in
@@ -537,7 +545,7 @@ function InviteCard({
         <h1>Invite not found</h1>
         <p className="muted">{gone}</p>
         <button type="button" className="btn btn-primary" onClick={onSkip}>
-          {signedIn ? "Go to base air" : "Sign in"}
+          {signedIn ? "Go to Base Air" : "Sign in"}
         </button>
       </div>
     );
@@ -573,7 +581,7 @@ function InviteCard({
         <p className="muted small">You're signed in as {session.user.email}.</p>
       ) : existing ? (
         <>
-          <p className="muted small">This email already has a base air account. Enter its password to join.</p>
+          <p className="muted small">This email already has a Base Air account. Enter its password to join.</p>
           <div className="field">
             <span className="field-row">
               <label htmlFor="invite-password">Password</label>
@@ -586,7 +594,7 @@ function InviteCard({
         </>
       ) : (
         <>
-          <p className="muted small">New to base air? Add your name and a password.</p>
+          <p className="muted small">New to Base Air? Add your name and a password.</p>
           <label className="field">
             <span>Your name</span>
             <input className="input" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />

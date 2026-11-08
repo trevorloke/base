@@ -30,7 +30,7 @@ export const MastodonAuth = z.object({
 export type MastodonAuth = z.infer<typeof MastodonAuth>;
 
 export interface MastodonConnectorOptions {
-  /** Shown on the instance's authorization page and on posts ("via base air"). */
+  /** Shown on the instance's authorization page and on posts ("via Base Air"). */
   appName?: string;
   appWebsite?: string;
   fetch?: FetchLike;
@@ -168,7 +168,7 @@ export class MastodonConnector implements Connector {
   private readonly uploaded = new Map<string, MastodonMedia[]>();
 
   constructor(opts: MastodonConnectorOptions = {}) {
-    this.appName = opts.appName ?? "base air";
+    this.appName = opts.appName ?? "Base Air";
     this.appWebsite = opts.appWebsite;
     this.fetchImpl = opts.fetch;
     this.now = opts.now ?? (() => new Date());
@@ -537,5 +537,5 @@ function statusActivity(st: MastodonStatus, kind: ActivityKind, externalId: stri
 }
 
 export function createMastodonConnectors(env: NodeJS.ProcessEnv): Connector[] {
-  return [new MastodonConnector({ appName: env.MASTODON_APP_NAME || "base air", ...(env.BASE_AIR_PUBLIC_URL ? { appWebsite: env.BASE_AIR_PUBLIC_URL } : {}) })];
+  return [new MastodonConnector({ appName: env.MASTODON_APP_NAME || "Base Air", ...(env.BASE_AIR_PUBLIC_URL ? { appWebsite: env.BASE_AIR_PUBLIC_URL } : {}) })];
 }

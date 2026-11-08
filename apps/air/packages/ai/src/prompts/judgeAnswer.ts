@@ -10,7 +10,7 @@ export type JudgeAnswerVars = {
   lang: string;
   engine: string;
   answer: string;
-  /** The tracked names the answer mentions (found by base air's own matcher), with what the team knows about each. */
+  /** The tracked names the answer mentions (found by Base Air's own matcher), with what the team knows about each. */
   entities: { id: string; name: string; kind: "organization" | "person"; role?: string | null; relation: string; matched: string; facts?: string | null }[];
 };
 

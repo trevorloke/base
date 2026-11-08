@@ -32,7 +32,7 @@ import {
 } from "./analytics-shared.ts";
 
 /**
- * Analytics: one payload for the Analytics view and for client reports. Everything is read from what base air
+ * Analytics: one payload for the Analytics view and for client reports. Everything is read from what Base Air
  * already records: outcome snapshots (post_outcomes at 24h / 72h, falling back to the latest metrics), owned clicks
  * and conversions, account follower series and the feed. Deterministic given the database and the clock.
  */

@@ -1,4 +1,4 @@
-# base air — one container: API + the built web room. Workers and operators run the same image with a different command.
+# Base Air — one container: API + the built web room. Workers and operators run the same image with a different command.
 # Data: set DATABASE_URL (Postgres with pgvector; TimescaleDB optional) and REDIS_URL. Without them the API runs
 # single-process on embedded PGlite at /data/pglite with in-process timers (dev/preview only).
 ARG NODE_IMAGE=node:22-alpine

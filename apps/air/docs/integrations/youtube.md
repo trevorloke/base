@@ -68,7 +68,7 @@ Capabilities: `publish`, `fetchActivity`, `fetchMetrics`, `reply`, `moderate`, `
 
 ## Limits and quotas
 
-- Quota is per Google Cloud project, shared by every base air workspace and channel on the deployment, and resets at
+- Quota is per Google Cloud project, shared by every Base Air workspace and channel on the deployment, and resets at
   midnight Pacific.
   - Default pool: 10,000 units/day. Lists cost 1 unit; `commentThreads.insert`, `comments.insert`, `setModerationStatus`, `comments.delete` and `thumbnails.set` cost about 50 each.
   - Uploads (current docs, since 1 June 2026): a separate "Video Uploads" bucket of **100 `videos.insert` calls/day**,

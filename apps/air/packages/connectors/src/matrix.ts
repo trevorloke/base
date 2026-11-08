@@ -10,7 +10,7 @@ import { ConnectorError } from "./types.ts";
 /**
  * Matrix rooms through the Client-Server API (v3) of any homeserver. A person connects a (preferably dedicated)
  * Matrix account with an access token, or with user + password once (the password is used for /login and never
- * stored). One base air account = one Matrix user (externalId = the MXID, "@baseair:example.org", which already
+ * stored). One Base Air account = one Matrix user (externalId = the MXID, "@baseair:example.org", which already
  * names the homeserver).
  *
  * Listening is polling /sync with the `next_batch` token kept in memory per account and a filter limited to the
@@ -95,9 +95,9 @@ export interface MatrixParseContext {
 
 // ---- pure helpers -----------------------------------------------------------------------
 
-/** Transaction id derived from base air's idempotency key: the homeserver dedupes sends with the same txnId per device. */
+/** Transaction id derived from Base Air's idempotency key: the homeserver dedupes sends with the same txnId per device. */
 export function matrixTxnId(idempotencyKey: string): string {
-  // The "starsign" namespace predates the rename to base air and must stay: retries and replies re-derive these ids.
+  // The "starsign" namespace predates the rename to Base Air and must stay: retries and replies re-derive these ids.
   return `starsign-${createHash("sha256").update(`starsign:matrix:${idempotencyKey}`).digest("hex").slice(0, 32)}`;
 }
 
@@ -352,7 +352,7 @@ export class MatrixConnector implements Connector {
         type: "m.login.password",
         identifier: { type: "m.id.user", user },
         password,
-        initial_device_display_name: "base air",
+        initial_device_display_name: "Base Air",
       }).catch((err) => {
         // 403 M_FORBIDDEN on /login is a wrong user or password.
         if (failureOf(err)?.status === 403) throw new ConnectorError("matrix: the homeserver refused that user name and password", "auth", false, failureOf(err));
