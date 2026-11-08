@@ -114,10 +114,10 @@ services:
 
 databases:
   - name: starbase-staging-db
-    plan: basic-256mb
+    plan: basic-1gb            # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
     region: oregon
     postgresMajorVersion: "16"
   - name: starbase-db
-    plan: basic-256mb
+    plan: basic-1gb            # 0.5 CPU, 1 GB RAM ($19/month); upgraded Nov 2026 for speed
     region: oregon
     postgresMajorVersion: "16"
