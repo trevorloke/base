@@ -24,7 +24,7 @@ function payloadContact(payload: Record<string, unknown>): string {
   return typeof v === "string" && v ? v : "—";
 }
 
-/** Everything the website has queued for base ground, newest first, with Retry and Skip. */
+/** Everything the website has queued for Base Ground, newest first, with Retry and Skip. */
 export default async function BaseGroundOutboxPage({ searchParams }: PageProps<"/admin/integrations/base-ground">) {
   const user = await requireAdmin("integrations");
   const filters = parseOutboxFilters(await searchParams);
@@ -40,21 +40,21 @@ export default async function BaseGroundOutboxPage({ searchParams }: PageProps<"
       <div className="crm-head">
         <div>
           <p className="small">
-            <Link href="/admin/integrations">Integrations</Link> / base ground
+            <Link href="/admin/integrations">Integrations</Link> / Base Ground
           </p>
-          <h1 className="h3">Sent to base ground (the desk)</h1>
+          <h1 className="h3">Sent to Base Ground (the desk)</h1>
         </div>
       </div>
       <p style={{ maxWidth: 760 }}>
         Each row is one sign-up, portal edit, tag or consent withdrawal the website forwarded, and exactly what was sent. Its id is the Idempotency-Key, so sending it again
-        never makes a second person in base ground. Waiting rows are retried after 1 minute, 5 minutes, 30 minutes, 2 hours, then every 12 hours, and marked refused after 8
+        never makes a second person in Base Ground. Waiting rows are retried after 1 minute, 5 minutes, 30 minutes, 2 hours, then every 12 hours, and marked refused after 8
         attempts.
       </p>
       {notSupported > 0 && (
         <p className="alert alert--note" role="note" style={{ maxWidth: 760 }}>
           {notSupported} unsubscribe{notSupported === 1 ? "" : "s"} and STOP{notSupported === 1 ? "" : "s"} (kind “consent”) {notSupported === 1 ? "is" : "are"} waiting because
-          this base ground doesn&apos;t take consent changes yet (it answers 404 at /in/v1/consent). {notSupported === 1 ? "It isn't" : "They aren't"} failed: each is tried again every
-          6 hours and with Send now, and goes once base ground has the endpoint.
+          this Base Ground doesn&apos;t take consent changes yet (it answers 404 at /in/v1/consent). {notSupported === 1 ? "It isn't" : "They aren't"} failed: each is tried again every
+          6 hours and with Send now, and goes once Base Ground has the endpoint.
         </p>
       )}
 
@@ -103,7 +103,7 @@ export default async function BaseGroundOutboxPage({ searchParams }: PageProps<"
       ) : (
         <div className="table-wrap">
           <table className="table">
-            <caption className="visually-hidden">Sign-ups forwarded to base ground</caption>
+            <caption className="visually-hidden">Sign-ups forwarded to Base Ground</caption>
             <thead>
               <tr>
                 <th scope="col">Queued</th>
@@ -145,7 +145,7 @@ export default async function BaseGroundOutboxPage({ searchParams }: PageProps<"
                     {r.sentAt ? WHEN.format(r.sentAt) : ""}
                     {r.baseGroundPersonId && (
                       <span className="small" style={{ display: "block" }}>
-                        base ground id {r.baseGroundPersonId}
+                        Base Ground id {r.baseGroundPersonId}
                       </span>
                     )}
                   </td>

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import "@/components/admin/base-suite.css";
 import { env } from "@/lib/env";
 import { getAdminAccount } from "@/lib/server/admin-auth";
+import { LOGIN_EMAIL_COOKIE } from "@/lib/server/admin-redirect";
 
 export const metadata: Metadata = { title: "Admin sign in", robots: { index: false } };
 
@@ -15,11 +17,18 @@ const MESSAGES: Record<string, { tone: "error" | "note"; text: string }> = {
   sent: { tone: "note", text: "If that address belongs to a staff account, a sign-in link is on its way. It works once and expires in 20 minutes." },
   signedout: { tone: "note", text: "You're signed out." },
   setup: { tone: "error", text: "Sign-in couldn't finish because the site isn't fully set up. See the note below." },
-  "base-not-configured": { tone: "error", text: "Signing in with base isn't set up on this site. Use your email and password, or an email link." },
-  "base-state": { tone: "error", text: "That sign-in with base took too long or was started in another tab. Try again." },
-  "base-denied": { tone: "error", text: "base didn't sign you in here. Try again, or use your email and password." },
-  "base-refused": { tone: "error", text: "base couldn't confirm who you are (the sign-in may have been used already). Try again." },
-  "base-unreachable": { tone: "error", text: "base didn't answer. Try again in a moment, or use your email and password." },
+  "base-not-configured": { tone: "error", text: "Signing in with Base isn't set up on this site. Use your email and password, or an email link." },
+  "base-state": { tone: "error", text: "That sign-in with Base took too long or was started in another tab. Try again." },
+  "base-denied": { tone: "error", text: "Base didn't sign you in here. Try again, or use your email and password." },
+  "base-refused": { tone: "error", text: "Base couldn't confirm who you are (the sign-in may have been used already). Try again." },
+  "base-unreachable": { tone: "error", text: "Base didn't answer. Try again in a moment, or use your email and password." },
+  "base-inactive": { tone: "error", text: "The Base Web staff account linked to your Base Ground login is deactivated. Ask an owner." },
+  "base-linked-elsewhere": {
+    tone: "error",
+    text: "That Base Web staff account is already linked to a different Base Ground login. Sign in with your email and password, or ask an owner to remove the old link under Staff.",
+  },
+  "base-link-expired": { tone: "error", text: "Linking your Base Ground login took too long or was already finished. Sign in with Base again." },
+  "base-link-other-browser": { tone: "error", text: "Open the emailed link in the browser where you signed in with Base. If you didn't ask for it, ignore it and tell an owner." },
 };
 
 /**
@@ -39,10 +48,11 @@ export default async function AdminLogin({ searchParams }: PageProps<"/admin/log
   // Signed in already (including someone who still has to set up two-factor sign-in).
   if (await getAdminAccount()) redirect("/admin");
   const sp = await searchParams;
-  const email = typeof sp.email === "string" ? sp.email.slice(0, 320) : "";
+  // Set by the sign-in routes for this page only (never carried in the URL).
+  const email = ((await cookies()).get(LOGIN_EMAIL_COOKIE)?.value ?? "").slice(0, 320);
   const message =
     sp.error === "base-no-account"
-      ? { tone: "error" as const, text: `No staff account for ${email || "that email"} — ask an owner to invite you.` }
+      ? { tone: "error" as const, text: `No Base Web staff account for ${email || "that email"} — ask an owner to invite you.` }
       : MESSAGES[typeof sp.error === "string" ? sp.error : typeof sp.sent === "string" ? "sent" : typeof sp.signedout === "string" ? "signedout" : ""];
   const next = typeof sp.next === "string" && /^\/admin(\/|$)/.test(sp.next) ? sp.next : "/admin";
   const baseOn = env.baseSsoEnabled;
@@ -76,12 +86,12 @@ export default async function AdminLogin({ searchParams }: PageProps<"/admin/log
           <div className="form-card" style={{ gap: 10 }}>
             <a href={`/auth/base?next=${encodeURIComponent(next)}`} className="btn btn--primary btn--lg base-signin">
               <span className="base-wordmark" aria-hidden="true">
-                base
+                Base
               </span>
-              Sign in with base
+              Sign in with Base
             </a>
             <p className="small" style={{ margin: 0 }}>
-              Signed in to base ground already? This opens the admin with the staff account for the same email.
+              Signed in to Base Ground already? This opens the admin with your linked staff account. The first time, you confirm once that the account is yours.
             </p>
           </div>
         )}

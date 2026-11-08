@@ -4,9 +4,9 @@ import type { Db } from "@/lib/db";
 import { contributions, people } from "@/lib/db/schema";
 import { csvLine } from "./admin-data";
 
-// Online gifts the treasurer still has to log at the desk (base ground →
+// Online gifts the treasurer still has to log at the desk (Base Ground →
 // Donations → Log a gift), where the contribution limits are checked across
-// every channel. Nothing about money is ever sent to base ground automatically:
+// every channel. Nothing about money is ever sent to Base Ground automatically:
 // this list is how online gifts get there, typed in by a person.
 
 // Money that arrived: a succeeded payment, including ones refunded since.

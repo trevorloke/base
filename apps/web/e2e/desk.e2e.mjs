@@ -1,8 +1,8 @@
-// base ground ("the desk") and the human check, end to end: what the website
-// forwards to the fake base ground in fake-stripe.mjs (and what it never does),
+// Base Ground ("the desk") and the human check, end to end: what the website
+// forwards to the fake Base Ground in fake-stripe.mjs (and what it never does),
 // engagement tags (RSVP, paid order, promise follow), portal edits, consent
 // withdrawals both ways (to /in/v1/consent, which the fake answers 404 until
-// it is switched on, and from base ground to /api/in/consent with the inbound
+// it is switched on, and from Base Ground to /api/in/consent with the inbound
 // key), retries, refusals and a wrong key through the admin, the treasurer's
 // list of gifts to log at the desk, and the human check enforced by a second
 // server started with the Turnstile keys.
@@ -48,7 +48,7 @@ async function savePortal(page) {
   await page.waitForTimeout(150);
 }
 
-/** POST to the inbound consent endpoint as base ground would. */
+/** POST to the inbound consent endpoint as Base Ground would. */
 async function inbound(body, { key = INBOUND_KEY, idem = randomBytes(8).toString("hex"), base = BASE, raw } = {}) {
   const headers = { "content-type": "application/json", "x-forwarded-for": `10.77.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}` };
   if (key !== null) headers.authorization = `Bearer ${key}`;
@@ -59,11 +59,11 @@ async function inbound(body, { key = INBOUND_KEY, idem = randomBytes(8).toString
 
 // ── Before: what the other suites forwarded ───────────────────────────────
 const leftover = await until(async () => Number((await sql`select count(*)::int as n from base_ground_outbox where status = 'pending' and endpoint = '/in/v1/people'`)[0].n) === 0, 10_000);
-ok(leftover === true, "nothing the earlier suites forwarded is left waiting (every sign-up reached the fake base ground)");
+ok(leftover === true, "nothing the earlier suites forwarded is left waiting (every sign-up reached the fake Base Ground)");
 const earlierConsent = await sql`select status, attempts, last_error from base_ground_outbox where endpoint = ${CONSENT}`;
 ok(
   earlierConsent.length > 0 && earlierConsent.every((r) => r.status === "pending" && r.attempts === 0) && earlierConsent.some((r) => r.last_error?.startsWith("Not supported yet")),
-  `the earlier suites' unsubscribes and STOPs wait, unfailed, while base ground has no consent endpoint (${earlierConsent.length})`,
+  `the earlier suites' unsubscribes and STOPs wait, unfailed, while Base Ground has no consent endpoint (${earlierConsent.length})`,
 );
 await control("reset");
 
@@ -82,7 +82,7 @@ let r = await post("/api/signatures", {
 ok(r.status === 200, "a petition signature is accepted");
 let row = await sentRow("desk-signer@example.com");
 let req = row && (await baseGround()).find((x) => x.idempotencyKey === row.id);
-ok(Boolean(row && req), "the signature reaches base ground, and the outbox row is sent");
+ok(Boolean(row && req), "the signature reaches Base Ground, and the outbox row is sent");
 ok(req?.authorization === `Bearer ${KEY}` && /^application\/json/.test(req?.contentType ?? ""), "sent from the server with the Bearer website key, as JSON");
 ok(req?.idempotencyKey === row?.id, "the Idempotency-Key is the outbox row id");
 ok(
@@ -98,10 +98,10 @@ ok(
       source: `petition-${petition.slug}`,
       tags: [`Petition: ${petition.title}`.slice(0, 40).trim()],
     }),
-  "the person's fields, the petition tag, the source and newsletter (consent recorded) are what base ground got",
+  "the person's fields, the petition tag, the source and newsletter (consent recorded) are what Base Ground got",
 );
 const [signer] = await sql`select base_ground_person_id from people where email = 'desk-signer@example.com'`;
-ok(Boolean(row?.base_ground_person_id) && signer?.base_ground_person_id === row.base_ground_person_id && req?.answer?.person_id === row.base_ground_person_id, "base ground's person id is kept on the outbox row and on the supporter");
+ok(Boolean(row?.base_ground_person_id) && signer?.base_ground_person_id === row.base_ground_person_id && req?.answer?.person_id === row.base_ground_person_id, "Base Ground's person id is kept on the outbox row and on the supporter");
 
 r = await post("/api/signatures", { campaign: petition.slug, firstName: "Quiet", lastName: "Signer", email: "desk-quiet@example.com", postalCode: "V3W 2A1" });
 row = await sentRow("desk-quiet@example.com");
@@ -158,7 +158,7 @@ const s = await fakeSession(donationSession);
 let w = await stripeEvent("checkout.session.completed", { id: donationSession, object: "checkout.session", mode: s.mode, metadata: s.metadata, payment_status: "paid", payment_intent: `pi_${donationSession}`, customer: "cus_desk", amount_total: s.amount_total });
 ok(w.status === 200, "the donation is paid");
 await sleep(1500);
-ok((await rowsFor("desk-donor@example.com")).length === 0 && (await requestsFor("desk-donor@example.com")).length === 0, "a donation (checkout and payment) sends nothing to base ground");
+ok((await rowsFor("desk-donor@example.com")).length === 0 && (await requestsFor("desk-donor@example.com")).length === 0, "a donation (checkout and payment) sends nothing to Base Ground");
 ok((await outboxCount()) === countBefore, "and neither does the shop checkout before it is paid: nothing was queued at all");
 
 w = await stripeEvent("checkout.session.completed", {
@@ -186,9 +186,9 @@ ok(JSON.stringify(req?.body) === JSON.stringify({ email: "desk-follow@example.co
 r = await post("/api/tracker/follow", { promiseId: promise.id, email: "desk-follow@example.com", consent: true });
 await sleep(800);
 ok(r.status === 200 && (await rowsFor("desk-follow@example.com")).length === 1, "following the same promise again sends nothing more");
-ok((await baseGround()).every((x) => !x.raw || !/amount|cents|fee|stripe|pi_|cs_test|total|quantity/i.test(x.raw)), "no request to base ground has ever carried money or a payment reference");
+ok((await baseGround()).every((x) => !x.raw || !/amount|cents|fee|stripe|pi_|cs_test|total|quantity/i.test(x.raw)), "no request to Base Ground has ever carried money or a payment reference");
 
-// ── Consent out: an unsubscribe, while base ground has no consent endpoint ───
+// ── Consent out: an unsubscribe, while Base Ground has no consent endpoint ───
 r = await post("/api/newsletter", { email: "desk-unsub@example.com", source: "home" });
 await sentRow("desk-unsub@example.com");
 const [unsubToken] = await sql`select unsubscribe_token from newsletter_subscribers where email = 'desk-unsub@example.com'`;
@@ -200,10 +200,10 @@ ok(
   "an unsubscribe is queued for /in/v1/consent: { email, channel: email, action: withdraw, reason: unsubscribe, at }",
 );
 const notFound = (await consentRequests()).find((x) => x.idempotencyKey === unsub?.id);
-ok(notFound?.status === 404 && notFound.authorization === `Bearer ${KEY}`, "it was sent with the website key and the row id as Idempotency-Key, and the fake base ground answered 404");
+ok(notFound?.status === 404 && notFound.authorization === `Bearer ${KEY}`, "it was sent with the website key and the row id as Idempotency-Key, and the fake Base Ground answered 404");
 ok(unsub?.status === "pending" && unsub.attempts === 0 && unsub.last_error.startsWith("Not supported yet") && new Date(unsub.next_attempt_at) > new Date(Date.now() + 5 * 3_600_000), "a 404 there keeps the row pending (not failed), uses no try, and waits 6 hours");
 r = await post("/api/signatures", { campaign: petition.slug, firstName: "After", lastName: "Unsub", email: "desk-after-unsub@example.com", postalCode: "V3T 1V8" });
-ok(Boolean(await sentRow("desk-after-unsub@example.com")), "sign-ups keep going to base ground meanwhile");
+ok(Boolean(await sentRow("desk-after-unsub@example.com")), "sign-ups keep going to Base Ground meanwhile");
 
 // ── A membership, once paid ───────────────────────────────────────────────
 const member = { firstName: "Mem", lastName: "Desk", email: "desk-member@example.com", phone: "604-555-0144", address: "20 Fraser Hwy", city: "Surrey", postalCode: "V3S 1A1", neighbourhood: "Cloverdale", birthdate: "1985-01-02", citizenshipStatus: "Citizen", gender: "", languages: ["English"], student: false, campus: "", issue: "Safer streets", interestVolunteer: true, interestLawnSign: true, updatesConsent: true, consent: true, website: "" };
@@ -239,11 +239,11 @@ const browser = await chromium.launch();
 const page = await (await browser.newContext()).newPage();
 await adminLogin(page);
 
-// base ground down (503): the row waits with a backoff; "Send now" delivers it with the same key.
+// Base Ground down (503): the row waits with a backoff; "Send now" delivers it with the same key.
 await control("fail", { status: 503, times: 1, path: "/in/v1/people" });
 r = await post("/api/signatures", { campaign: petition.slug, firstName: "Retry", lastName: "Later", email: "desk-retry@example.com", postalCode: "V3T 1V8" });
 row = await until(async () => (await rowsFor("desk-retry@example.com")).find((x) => x.attempts === 1));
-ok(r.status === 200, "the visitor's signature succeeds while base ground is down");
+ok(r.status === 200, "the visitor's signature succeeds while Base Ground is down");
 ok(row?.status === "pending" && row.next_attempt_at && new Date(row.next_attempt_at) > new Date() && /^503/.test(row.last_error ?? ""), "a 503 leaves the row pending, with a next attempt time and the error");
 await page.goto(BASE + "/admin/integrations");
 await page.getByRole("button", { name: /^Send now/ }).click();
@@ -252,13 +252,13 @@ const retried = await sentRow("desk-retry@example.com");
 const both = await requestsFor("desk-retry@example.com");
 ok(retried && both.length === 2 && both[0].status === 503 && both[1].status === 200 && both[0].idempotencyKey === retried.id && both[1].idempotencyKey === retried.id && both[0].raw === both[1].raw, "\"Send now\" delivers it with the same Idempotency-Key and body");
 
-// base ground refuses (400): failed with the message; Retry in the outbox page sends it again.
+// Base Ground refuses (400): failed with the message; Retry in the outbox page sends it again.
 await control("fail", { status: 400, times: 1, path: "/in/v1/people" });
 r = await post("/api/signatures", { campaign: petition.slug, firstName: "Refused", lastName: "Once", email: "desk-refused@example.com", postalCode: "V3T 1V8" });
 row = await until(async () => (await rowsFor("desk-refused@example.com")).find((x) => x.status === "failed"));
-ok(row?.last_error === "400: simulated 400" && row.attempts === 1, "a 400 marks the row failed, with base ground's message");
+ok(row?.last_error === "400: simulated 400" && row.attempts === 1, "a 400 marks the row failed, with Base Ground's message");
 const dash = await (await fetch(BASE + "/admin", { headers: { cookie: await adminCookie() } })).text();
-ok(dash.replace(/<!--.*?-->/g, "").includes("sign-ups base ground refused"), "the dashboard flags sign-ups base ground refused");
+ok(dash.replace(/<!--.*?-->/g, "").includes("sign-ups Base Ground refused"), "the dashboard flags sign-ups Base Ground refused");
 await page.goto(BASE + "/admin/integrations/base-ground?status=failed");
 const failedRow = page.locator(`tr[data-outbox="${row?.id}"]`);
 ok((await failedRow.count()) === 1 && (await failedRow.textContent()).includes("400: simulated 400"), "the outbox page lists the failed row with its error");
@@ -277,7 +277,7 @@ r = await post("/api/signatures", { campaign: petition.slug, firstName: "Wrong",
 row = await until(async () => (await rowsFor("desk-key@example.com")).find((x) => x.last_error));
 ok(r.status === 200 && row?.status === "pending" && row.attempts === 0 && /^401/.test(row.last_error), "a 401 leaves the row pending with no attempt counted");
 await page.goto(BASE + "/admin/integrations");
-const card = page.locator("section[aria-label='base ground (the desk)']");
+const card = page.locator("section[aria-label='Base Ground (the desk)']");
 const cardText = await card.textContent();
 ok(cardText.includes("401") && cardText.includes("Check the key") && cardText.includes("problem"), "the integrations card shows the key problem");
 await card.getByRole("button", { name: "Test connection" }).click();
@@ -287,32 +287,32 @@ await control("key", { key: KEY });
 await card.getByRole("button", { name: "Test connection" }).click();
 await card.locator("[role=status]", { hasText: "Connected to Imagine Surrey (test)" }).first().waitFor({ timeout: 15_000 });
 ok(true, "Test connection names the campaign and the key once the key works");
-ok(cardText.includes("waiting: not supported yet"), "the card shows unsubscribes waiting because base ground doesn't take them yet");
+ok(cardText.includes("waiting: not supported yet"), "the card shows unsubscribes waiting because Base Ground doesn't take them yet");
 await card.getByRole("button", { name: /^Send now/ }).click();
 await card.locator("[role=status]", { hasText: "sent" }).first().waitFor({ timeout: 20_000 });
 ok((await rowsFor("desk-key@example.com"))[0].status === "sent", "with the key fixed, Send now delivers what was waiting");
 
-// The supporter's profile shows the base ground id and what was sent.
+// The supporter's profile shows the Base Ground id and what was sent.
 const [keyPerson] = await sql`select id, base_ground_person_id from people where email = 'desk-key@example.com'`;
 await page.goto(`${BASE}/admin/people/${keyPerson.id}`);
 const profile = await page.locator("main, body").first().textContent();
-ok(Boolean(keyPerson.base_ground_person_id) && profile.includes(keyPerson.base_ground_person_id) && profile.includes("Sent to base ground"), "the profile shows the base ground id and the person's outbox rows");
+ok(Boolean(keyPerson.base_ground_person_id) && profile.includes(keyPerson.base_ground_person_id) && profile.includes("Sent to Base Ground"), "the profile shows the Base Ground id and the person's outbox rows");
 
-// ── Consent out, once base ground has the endpoint ──────────────────────────
+// ── Consent out, once Base Ground has the endpoint ──────────────────────────
 await page.goto(BASE + "/admin/integrations/base-ground?kind=consent");
 ok((await page.locator("[role=note]", { hasText: "doesn't take consent changes yet" }).count()) === 1, "the outbox page explains why unsubscribes are waiting");
 const unsubRow = page.locator(`tr[data-outbox="${unsub?.id}"]`);
 ok((await unsubRow.getAttribute("data-status")) === "pending" && (await unsubRow.textContent()).includes("Not supported yet"), "and lists the unsubscribe as waiting, not failed");
 await control("consent", { supported: true });
 await page.goto(BASE + "/admin/integrations");
-await page.locator("section[aria-label='base ground (the desk)']").getByRole("button", { name: /^Send now/ }).click();
+await page.locator("section[aria-label='Base Ground (the desk)']").getByRole("button", { name: /^Send now/ }).click();
 await page.locator("[role=status]", { hasText: "sent" }).first().waitFor({ timeout: 20_000 });
 unsub = await until(async () => (await consentRows(sql`id = ${unsub.id}`)).find((x) => x.status === "sent"));
 const accepted = (await consentRequests()).filter((x) => x.idempotencyKey === unsub?.id);
-ok(Boolean(unsub) && accepted.length === 2 && accepted[1].status === 200 && accepted[0].raw === accepted[1].raw, "once base ground has /in/v1/consent, Send now delivers it, with the same key and body");
+ok(Boolean(unsub) && accepted.length === 2 && accepted[1].status === 200 && accepted[0].raw === accepted[1].raw, "once Base Ground has /in/v1/consent, Send now delivers it, with the same key and body");
 ok(
   JSON.stringify(accepted[1]?.body) === JSON.stringify({ action: "withdraw", at: unsub?.payload.at, channel: "email", email: "desk-unsub@example.com", reason: "unsubscribe" }),
-  "base ground got exactly { action, at, channel, email, reason }",
+  "Base Ground got exactly { action, at, channel, email, reason }",
 );
 ok((await sql`select count(*)::int as n from base_ground_outbox where endpoint = ${CONSENT} and status <> 'sent'`)[0].n === 0, "every waiting unsubscribe and STOP from the earlier suites went too");
 
@@ -320,7 +320,7 @@ ok((await sql`select count(*)::int as n from base_ground_outbox where endpoint =
 await sql`insert into people (email, first_name, phone, sms_consent_at) values ('desk-stop@example.com', 'Stop', '604-555-0177', now())`;
 res = await fetch(BASE + "/api/sms/inbound", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ From: "+16045550177", To: "+16045550000", Body: "STOP", MessageSid: `SMdesk${Date.now()}` }) });
 const stopRow = await until(async () => (await consentRows(sql`payload->>'phone' = '+16045550177'`)).find((x) => x.status === "sent"));
-ok(res.status === 200 && stopRow?.payload.channel === "sms" && stopRow.payload.reason === "stop" && stopRow.payload.email === undefined, "a text STOP goes to base ground with the number");
+ok(res.status === 200 && stopRow?.payload.channel === "sms" && stopRow.payload.reason === "stop" && stopRow.payload.email === undefined, "a text STOP goes to Base Ground with the number");
 
 // The preference centre (a token link): unticking both.
 await sql`insert into people (email, first_name, phone, contact_consent_at, sms_consent_at) values ('desk-pref@example.com', 'Pref', '604-555-0178', now(), now())`;
@@ -353,10 +353,10 @@ const portalRow = await until(async () => (await rowsFor("desk-portal@example.co
 req = portalRow && (await baseGround()).find((x) => x.idempotencyKey === portalRow.id);
 ok(
   JSON.stringify(req?.body) === JSON.stringify({ address: "77 Portal Way", email: "desk-portal@example.com", first_name: "Port", last_name: "Al", phone: "604-555-0179", postal: "V3W 1A1", source: "portal" }),
-  "a portal edit sends the person's details, source portal (base ground fills blanks only)",
+  "a portal edit sends the person's details, source portal (Base Ground fills blanks only)",
 );
 const portalWithdraw = await until(async () => (await consentRows(sql`payload->>'email' = 'desk-portal@example.com'`)).find((x) => x.status === "sent"));
-ok(portalWithdraw?.payload.channel === "email" && portalWithdraw.payload.reason === "preference", "unticking email updates at /me goes to base ground as a withdrawal");
+ok(portalWithdraw?.payload.channel === "email" && portalWithdraw.payload.reason === "preference", "unticking email updates at /me goes to Base Ground as a withdrawal");
 const portalCount = (await rowsFor("desk-portal@example.com")).length;
 await memberPage.selectOption("#pref-locale", "pa");
 await savePortal(memberPage);
@@ -364,7 +364,7 @@ await sleep(800);
 ok((await rowsFor("desk-portal@example.com")).length === portalCount && (await consentRows(sql`payload->>'email' = 'desk-portal@example.com'`)).length === 1, "saving again with only the language changed sends nothing");
 await memberPage.context().close();
 
-// A deletion (anonymize): base ground is told, then the address leaves the row.
+// A deletion (anonymize): Base Ground is told, then the address leaves the row.
 const [doomed] = await sql`insert into people (email, first_name, phone, contact_consent_at) values ('desk-delete@example.com', 'Del', '604-555-0180', now()) returning id`;
 await page.goto(`${BASE}/admin/people/${doomed.id}`);
 await page.locator('input[name="confirm"]').check();
@@ -376,12 +376,12 @@ const deletionRows = await until(async () => {
   const rows = await sql`select * from base_ground_outbox where kind = 'consent' and person_id = ${doomed.id}`;
   return rows.length === 2 && rows.every((x) => x.status === "sent") ? rows : null;
 });
-ok(Boolean(deletionRows) && deletionRows.every((x) => x.payload.reason === "deletion") && deletionRows.some((x) => x.payload.channel === "sms"), "an anonymized supporter's email and texts are withdrawn in base ground (reason deletion)");
+ok(Boolean(deletionRows) && deletionRows.every((x) => x.payload.reason === "deletion") && deletionRows.some((x) => x.payload.channel === "sms"), "an anonymized supporter's email and texts are withdrawn in Base Ground (reason deletion)");
 const deletionSent = (await consentRequests()).filter((x) => deletionRows?.some((d) => d.id === x.idempotencyKey));
-ok(deletionSent.some((x) => x.body?.email === "desk-delete@example.com") && deletionSent.some((x) => x.body?.phone === "+16045550180"), "base ground got the address and the number to stop");
+ok(deletionSent.some((x) => x.body?.email === "desk-delete@example.com") && deletionSent.some((x) => x.body?.phone === "+16045550180"), "Base Ground got the address and the number to stop");
 ok(deletionRows?.every((x) => !JSON.stringify(x.payload).includes("desk-delete@example.com") && !JSON.stringify(x.payload).includes("555-0180") && !JSON.stringify(x.payload).includes("5550180")), "and once sent they are removed from the rows here");
 
-// ── Consent in: withdrawals made in base ground ──────────────────────────────
+// ── Consent in: withdrawals made in Base Ground ──────────────────────────────
 await sql`insert into people (email, first_name, phone, contact_consent_at, sms_consent_at) values ('desk-in@example.com', 'Inna', '(604) 555-0181', now(), now())`;
 await sql`insert into newsletter_subscribers (email, status, source, unsubscribe_token, confirmed_at) values ('desk-in@example.com', 'subscribed', 'e2e', 'desk-in-token', now())`;
 const outboxBefore = await outboxCount();
@@ -402,21 +402,21 @@ ok((await inPerson()).contact_consent_at === null && (await sql`select status fr
 const ledger = await sql`select * from consent_events where email = 'desk-in@example.com' and action = 'withdraw'`;
 ok(ledger.length === 1 && ledger[0].source === "base-ground" && ledger[0].channel === "email" && ledger[0].wording.includes("unsubscribe"), "it is in the consent ledger with source base-ground");
 await sleep(800);
-ok((await outboxCount()) === outboxBefore, "and nothing is sent back to base ground (no echo)");
+ok((await outboxCount()) === outboxBefore, "and nothing is sent back to Base Ground (no echo)");
 i = await inbound(withdraw, { idem: "sb-desk-in-1" });
 ok(i.status === 200 && i.body?.replayed === true && (await sql`select count(*)::int as n from consent_events where email = 'desk-in@example.com'`)[0].n === 1, "the same Idempotency-Key and body replays the answer and records nothing twice");
 i = await inbound({ ...withdraw, reason: "preference" }, { idem: "sb-desk-in-1" });
 ok(i.status === 409, "the same Idempotency-Key with another body: 409");
 i = await inbound({ phone: "+16045550181", channel: "sms", action: "withdraw", reason: "stop", at });
-ok(i.status === 200 && i.body?.applied === 1 && (await inPerson()).sms_consent_at === null, "a text STOP made in base ground clears SMS consent for the number, whatever its format here");
+ok(i.status === 200 && i.body?.applied === 1 && (await inPerson()).sms_consent_at === null, "a text STOP made in Base Ground clears SMS consent for the number, whatever its format here");
 await sql`update people set contact_consent_at = null where email = 'desk-in@example.com'`;
 i = await inbound({ email: "desk-in@example.com", channel: "email", action: "grant", reason: "preference", at });
-ok(i.status === 200 && i.body?.applied === 0 && (await inPerson()).contact_consent_at === null, "a grant from base ground is answered but never applied");
+ok(i.status === 200 && i.body?.applied === 0 && (await inPerson()).contact_consent_at === null, "a grant from Base Ground is answered but never applied");
 i = await inbound({ email: "desk-in-new@example.com", channel: "email", action: "withdraw", reason: "deletion", at });
 ok(i.status === 200 && i.body?.applied === 0 && (await sql`select count(*)::int as n from consent_events where email = 'desk-in-new@example.com' and source = 'base-ground'`)[0].n === 1, "an address the website doesn't have is still kept in the ledger, so a public form can't sign it up again");
 ok((await sql`select count(*)::int as n from audit_log where entity = 'base-ground-consent'`)[0].n === 4, "every call applied or answered is in the audit log, without the address");
 ok((await sql`select count(*)::int as n from audit_log where entity = 'base-ground-consent' and details::text like '%desk-in%'`)[0].n === 0, "(the audit entries hold no address)");
-ok((await outboxCount()) === outboxBefore, "none of it is echoed back to base ground");
+ok((await outboxCount()) === outboxBefore, "none of it is echoed back to Base Ground");
 
 // ── Gifts to log at the desk ──────────────────────────────────────────────
 const [gift] = await sql`select id, desk_logged_at from contributions where stripe_checkout_session_id = ${donationSession}`;

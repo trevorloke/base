@@ -1,6 +1,6 @@
-# base web
+# Base Web
 
-base web is the public website and organizing back office in **base**, the suite for campaigns and causes (see `../../SUITE.md`). Each client has its own copy on its own domain; **Imagine Surrey** (`imaginesurrey.ca`) is the first. Built with Next.js 16 (App Router, React 19, TypeScript), PostgreSQL through Drizzle ORM, Stripe Checkout, Resend email, Twilio texts and Supabase Storage.
+Base Web is the public website and organizing back office in **Base**, the suite for campaigns and causes (see `../../SUITE.md`). Each client has its own copy on its own domain; **Imagine Surrey** (`imaginesurrey.ca`) is the first. Built with Next.js 16 (App Router, React 19, TypeScript), PostgreSQL through Drizzle ORM, Stripe Checkout, Resend email, Twilio texts and Supabase Storage.
 
 **Going live?** Follow [SETUP.md](SETUP.md). **Working on the code?** Read [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -31,17 +31,17 @@ Staff sign in with email and password, or a one-time emailed link, followed by a
 | **Dashboard** | Active members, monthly donors, money raised this year net of refunds, subscribers, signatures, volunteers this week and orders to ship, with 12-week trends, website visits and a "needs attention" list. |
 | **Supporters** | Search and filter everyone (membership, town centre, interests, tags, source, newsletter, texts, language). Each person has a timeline, tags, notes, a read-only consent panel and referrals. Bulk-tag a filtered list, export it as CSV, and anonymize a person when they ask to be deleted (BC PIPA). **Sources** shows which links, shares and referrers bring people in. |
 | **Volunteer shifts** | A Sunday–Saturday calendar of 9–12, 1–4 and 5–8 shifts. Drag a name onto a shift and colour-code the task. Every drag also works from the keyboard and by tapping. An openings panel publishes shifts people can sign up for, with capacity and a list of who signed up. |
-| **Email and texts** | The log of every email and text the website sent and every text it received. Newsletters, campaign emails and text blasts go out from base ground, which has the full list; the website sends only transactional messages (confirmations, receipts, reminders, promise-tracker alerts, sign-in links) and handles STOP and START on its own number. |
+| **Email and texts** | The log of every email and text the website sent and every text it received. Newsletters, campaign emails and text blasts go out from Base Ground, which has the full list; the website sends only transactional messages (confirmations, receipts, reminders, promise-tracker alerts, sign-in links) and handles STOP and START on its own number. |
 | **Content** | News (with drafts and scheduled posts), events (with RSVP check-in and walk-ins), shop products and campaigns. **Pages** makes free-form pages, **Media** is the image library, and **Site settings** edits every section of copy on the public pages. |
 | **Promise tracker** | Score promises with dated, sourced updates. Followers are emailed when a status changes. |
-| **Integrations** | What's connected (Stripe, email, texts, storage, base ground, the human check, analytics, cron, database), with test buttons. |
-| **Gifts to log at the desk** | Online gifts the treasurer still has to enter in base ground (Donations → Log a gift), with a CSV and "Mark logged". |
+| **Integrations** | What's connected (Stripe, email, texts, storage, Base Ground, the human check, analytics, cron, database), with test buttons. |
+| **Gifts to log at the desk** | Online gifts the treasurer still has to enter in Base Ground (Donations → Log a gift), with a CSV and "Mark logged". |
 | **Contribution limits** | The BC limit per person for each calendar year, with its Elections BC source. Every check uses the figure for the year a gift is paid in, so next year's takes effect at midnight on January 1 (Pacific) by itself. Audited. |
 | **Exports**, **Staff**, **Audit log**, **My account** | |
 
-## base ground (the desk)
+## Base Ground (the desk)
 
-The campaign's database app, base ground, gets new sign-ups from this website: petition and pledge signatures, confirmed newsletter sign-ups, volunteer shift sign-ups, memberships once they are active, "delete my account" requests, and details supporters change in the portal. RSVPs, paid shop orders and promise follows go as tags on the person (`RSVP: <event>`, `Bought merch`, `Follows: promise <n>`). Every unsubscribe and text STOP goes to base ground too, and base ground can send its own to `POST /api/in/consent` (`BASE_GROUND_INBOUND_KEY`), so neither app contacts someone who said stop. The website calls base ground's API from its own server with a secret key (`BASE_GROUND_URL`, `BASE_GROUND_KEY`), through an outbox that retries, so base ground being down never breaks a form. Money is never sent: the treasurer logs each online gift at the desk from Admin → Gifts to log at the desk, because that is where contribution limits are checked. Public forms also have a Cloudflare Turnstile human check. See [SETUP.md](SETUP.md) steps 3f and 3g.
+The campaign's database app, Base Ground, gets new sign-ups from this website: petition and pledge signatures, confirmed newsletter sign-ups, volunteer shift sign-ups, memberships once they are active, "delete my account" requests, and details supporters change in the portal. RSVPs, paid shop orders and promise follows go as tags on the person (`RSVP: <event>`, `Bought merch`, `Follows: promise <n>`). Every unsubscribe and text STOP goes to Base Ground too, and Base Ground can send its own to `POST /api/in/consent` (`BASE_GROUND_INBOUND_KEY`), so neither app contacts someone who said stop. The website calls Base Ground's API from its own server with a secret key (`BASE_GROUND_URL`, `BASE_GROUND_KEY`), through an outbox that retries, so Base Ground being down never breaks a form. Money is never sent: the treasurer logs each online gift at the desk from Admin → Gifts to log at the desk, because that is where contribution limits are checked. Public forms also have a Cloudflare Turnstile human check. See [SETUP.md](SETUP.md) steps 3f and 3g.
 
 ## Consent and privacy, by design
 
@@ -51,9 +51,9 @@ The campaign's database app, base ground, gets new sign-ups from this website: p
 - **No public answer reveals whether an email belongs to a member, donor or signer** (political affiliation is sensitive under BC PIPA), and the public site shows no supporter counts. `/stats` redirects to the home page.
 - **Website visits are counted first-party and cookieless.** A small beacon posts each page view to `/api/v`; the site stores the path (without its query string), the referring site's hostname, the `?source`/`?ref` tag and a visitor hash: sha256 of a random salt that changes every Pacific day, the IP address and the user agent, cut short. Salts are deleted after a day, the IP address and user agent are never stored, nothing is written to the browser, and bots, `/admin`, `/me` and `/api` are skipped. Page views are kept 13 months (the daily `/api/cron/email` job deletes older ones). Four dashboard tiles show visits this week against last, the sign-up rate by source, top pages and referring sites; nothing is published.
 
-## base, clients and the look
+## Base, clients and the look
 
-- **Sign in with base.** Staff signed in to base ground can open the admin without another password (`/auth/base`, then base ground's hand-off); the existing staff account with the same email is used and two-factor sign-in still applies. The admin's top bar has the **base** switcher to base ground's field and ground, base air and this admin. SETUP.md section 3.
+- **Sign in with Base.** Staff signed in to Base Ground can open the admin without another password (`/auth/base`, then Base Ground's hand-off). They are signed in by a link to their staff account, made once when they prove the account with the same email is theirs (its password or an emailed link); two-factor sign-in still applies. The admin's top bar has the **Base** switcher to Base Ground's Field and Ground, Base Air and this admin. SETUP.md section 3.
 - **Clients.** `BASE_WEB_CLIENT` (fixed at build) picks a client's starting copy, places, tracker and seed data from `src/seeds/<client>/`: `imagine-surrey`, or unset for a clean, neutral site. SETUP.md section 2.
 - **Brand.** Admin → Brand sets the look (presets Imagine Surrey, Civic, Commons, Heritage and Clear; name, logo, colours, bundled fonts, corners) with a live preview and a contrast check. The root layout writes it into every page as CSS custom properties. SETUP.md section 4.
 - **Hosting.** Render: a Docker web service (`Dockerfile`, health check `/api/health`), Render Postgres, and two cron jobs (`scripts/cron.mjs`). SETUP.md section 1.
@@ -83,12 +83,12 @@ ADMIN_EMAIL=admin@example.com npm run e2e   # builds the site and runs every end
 ADMIN_EMAIL=admin@example.com npm run e2e -- portal forms   # selected suites
 ```
 
-The end-to-end runner wipes the database in `E2E_DATABASE_URL`, and refuses unless the name ends in `_e2e` or `_test`. It starts a fake services server (Stripe, base ground and Turnstile's check), gives each suite a clean staff table and refreshed page caches, and runs these suites: api, shifts, tracker, admin, volunteer, portal, forms, comms, content, shell, desk and visits. The desk suite also starts a second server, with the human check on, on `E2E_PORT + 1`.
+The end-to-end runner wipes the database in `E2E_DATABASE_URL`, and refuses unless the name ends in `_e2e` or `_test`. It starts a fake services server (Stripe, Base Ground and Turnstile's check), gives each suite a clean staff table and refreshed page caches, and runs these suites: api, shifts, tracker, admin, volunteer, portal, forms, comms, content, shell, desk and visits. The desk suite also starts a second server, with the human check on, on `E2E_PORT + 1`.
 
 ## Before launch: decisions for the organization
 
 - **Membership by donation**: `MEMBERSHIP_FEE_CENTS` is the minimum, $10 a year by default. Youth members (14 to 30 on the day they join, from the birthdate on the form) have half of it, or `MEMBERSHIP_YOUTH_MIN_CENTS` if set. The most anyone can choose is the year's contribution limit. Set `MEMBERSHIP_FEE_CENTS` to `0` for free membership.
-- **Contribution limit**: stored per year in Admin → Contribution limits (2026: $1,429.70, seeded). Enter next year's figure as soon as Elections BC publishes it; from December 1 the dashboard asks for it. `CONTRIBUTION_LIMIT_CENTS` is only the fallback for a year with no figure. base ground keeps its own.
+- **Contribution limit**: stored per year in Admin → Contribution limits (2026: $1,429.70, seeded). Enter next year's figure as soon as Elections BC publishes it; from December 1 the dashboard asks for it. `CONTRIBUTION_LIMIT_CENTS` is only the fallback for a year with no figure. Base Ground keeps its own.
 - **Over-limit memberships**: everyone joining goes to checkout, so the site never reveals that someone is near the limit. The limit check runs on the amount chosen once it is paid: any part over the limit is refunded automatically, and if none of it can be kept the membership is cancelled with a private email to the payer. Each refund costs the Stripe fee.
 - **Privacy policy**: the seeded `/privacy` page is a **draft**. Have the board and privacy officer review it before launch.
 - **Election-law review**: have your financial agent confirm the contributor fields, the disclosure exports and the treatment of merchandise. Under the LECFA, any amount paid over a merch item's market value can count as a contribution.

@@ -38,7 +38,7 @@ export function TestSmsForm() {
   );
 }
 
-/** base ground: "Test connection" (ping) and "Send now" (deliver everything waiting). */
+/** Base Ground: "Test connection" (ping) and "Send now" (deliver everything waiting). */
 export function BaseGroundForms({ waiting }: { waiting: number }) {
   const [testState, testAction] = useActionState(testBaseGround, null);
   const [sendState, sendAction] = useActionState(sendBaseGroundNow, null);
@@ -85,7 +85,7 @@ export function OutboxRowActions({ id, status }: { id: string; status: string })
         {canSkip && (
           <form action={skipAction}>
             <input type="hidden" name="id" value={id} />
-            <SubmitButton className="btn btn--outline btn--compact" pendingText="Saving…" confirm="Skip this one? It won't be sent to base ground.">
+            <SubmitButton className="btn btn--outline btn--compact" pendingText="Saving…" confirm="Skip this one? It won't be sent to Base Ground.">
               Skip
             </SubmitButton>
           </form>

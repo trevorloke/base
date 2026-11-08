@@ -58,3 +58,17 @@ export function SignOutEverywhereForm({ action }: { action: Action }) {
     </form>
   );
 }
+
+export function RemoveBaseLinkForm({ action }: { action: Action }) {
+  const [state, formAction] = useActionState(action, null);
+  return (
+    <form action={formAction} className="stack" style={{ gap: 12 }}>
+      <Notice state={state} />
+      <div>
+        <SubmitButton className="btn btn--outline btn--compact" pendingText="Removing…" confirm={'Remove the link? "Sign in with Base" will ask you to confirm this account again.'}>
+          Remove the link
+        </SubmitButton>
+      </div>
+    </form>
+  );
+}

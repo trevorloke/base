@@ -22,13 +22,13 @@ import {
   type BaseGroundPerson,
 } from "./base-ground";
 
-// The outbox between the website and base ground. A public route only writes a
+// The outbox between the website and Base Ground. A public route only writes a
 // row (enqueueBaseGround) and asks for delivery after its response
 // (deliverSoon); the daily job and the admin "Send now" deliver the rest. So
-// base ground being slow, down or misconfigured never fails or slows a form.
+// Base Ground being slow, down or misconfigured never fails or slows a form.
 //
 // Without BASE_GROUND_URL and BASE_GROUND_KEY rows are still written, as
-// "skipped": the admin can see what would have gone, and connecting base ground
+// "skipped": the admin can see what would have gone, and connecting Base Ground
 // later sends only what comes in from then on instead of a flood of old
 // sign-ups (any of them can still be sent one at a time with Retry).
 
@@ -38,10 +38,10 @@ export const OUTBOX_STATUSES: OutboxStatus[] = ["pending", "sent", "failed", "sk
 
 export type OutboxRow = typeof baseGroundOutbox.$inferSelect;
 
-const NOT_CONNECTED = "base ground isn't connected (BASE_GROUND_URL and BASE_GROUND_KEY), so this wasn't sent.";
+const NOT_CONNECTED = "Base Ground isn't connected (BASE_GROUND_URL and BASE_GROUND_KEY), so this wasn't sent.";
 
 /**
- * Write one person for base ground. Never throws and returns the row id (the
+ * Write one person for Base Ground. Never throws and returns the row id (the
  * Idempotency-Key), or null when nothing was written: the payload couldn't
  * be sent (no email or phone) or the write itself failed.
  */
@@ -72,7 +72,7 @@ async function enqueue(db: Db, kind: OutboxKind, endpoint: BaseGroundEndpoint, p
       .returning({ id: baseGroundOutbox.id });
     return row?.id ?? null;
   } catch (err) {
-    console.error(`Could not queue a ${kind} for base ground`, err);
+    console.error(`Could not queue a ${kind} for Base Ground`, err);
     return null;
   }
 }
@@ -112,7 +112,7 @@ export type DeliverOptions = {
 /**
  * Send due pending rows, oldest first, until none are left or `budgetMs` has
  * passed. Stops at the first wrong-key, rate-limit or outage answer (it would
- * be the same for every row). An endpoint base ground doesn't have yet is left
+ * be the same for every row). An endpoint Base Ground doesn't have yet is left
  * out for the rest of the run, and everything else still goes. Never throws.
  */
 export async function deliverWith(store: OutboxStore, budgetMs: number, options: DeliverOptions = {}): Promise<DeliveryReport> {
@@ -148,7 +148,7 @@ export async function deliverWith(store: OutboxStore, budgetMs: number, options:
       }
     }
   } catch (err) {
-    console.error("base ground delivery stopped", err);
+    console.error("Base Ground delivery stopped", err);
     report.problem = err instanceof Error ? err.message : String(err);
   }
   return report;
@@ -187,7 +187,7 @@ export function dbOutboxStore(db: Db): OutboxStore {
 
 /**
  * A deletion's withdrawal carries the address and number the person asked us
- * to erase, only so base ground can stop contacting them too. Once base ground has
+ * to erase, only so Base Ground can stop contacting them too. Once Base Ground has
  * it, they are removed from the row here.
  */
 export function scrubbedOnceSent(row: Pick<OutboxRow, "endpoint" | "payload">): { payload: Record<string, unknown> } | null {
@@ -196,7 +196,7 @@ export function scrubbedOnceSent(row: Pick<OutboxRow, "endpoint" | "payload">): 
   return { payload: { ...rest, ...(email ? { email: "(removed after sending)" } : {}), ...(phone ? { phone: "(removed after sending)" } : {}) } };
 }
 
-/** Deliver from the database. Without base ground configured it sends nothing and says why. Never throws. */
+/** Deliver from the database. Without Base Ground configured it sends nothing and says why. Never throws. */
 export async function deliverOutbox(db: Db, budgetMs = 8_000, options: DeliverOptions = {}): Promise<DeliveryReport> {
   if (!env.baseGroundEnabled) return { sent: 0, failed: 0, retrying: 0, problem: NOT_CONNECTED, unsupported: 0 };
   const problem = baseGroundUrlProblem(env.baseGroundUrl);
@@ -239,7 +239,7 @@ export type OutboxStats = {
   lastError: { message: string; at: Date | null; status: OutboxStatus } | null;
   oldestPendingAt: Date | null;
   lastSentAt: Date | null;
-  /** Consent withdrawals: waiting in all, and of those, waiting because base ground answered "not supported yet". */
+  /** Consent withdrawals: waiting in all, and of those, waiting because Base Ground answered "not supported yet". */
   consent: { pending: number; notSupported: number; sent: number };
 };
 

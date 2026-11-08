@@ -7,7 +7,7 @@ import { deliverOutbox } from "@/lib/server/base-ground-outbox";
 import { pruneVisits } from "@/lib/server/visits";
 
 // Sends anything still queued (campaigns normally drain right after "Send"),
-// then anything still waiting for base ground (sign-ups normally go right after
+// then anything still waiting for Base Ground (sign-ups normally go right after
 // the form; this catches retries and outages). A Render cron job calls it
 // daily with "Authorization: Bearer $CRON_SECRET" (SETUP.md, "Scheduled
 // jobs"); it can run more often. Without CRON_SECRET it refuses every call

@@ -1,11 +1,11 @@
-// What reaches base ground ("the desk"), and from where. Sign-up forms forward
+// What reaches Base Ground ("the desk"), and from where. Sign-up forms forward
 // the person; an RSVP, a paid shop order and a confirmed promise follow
 // forward a tag only; a withdrawal (unsubscribe, STOP, preference change,
 // deletion) goes to the consent endpoint; a supporter's own portal edit
 // forwards their details. Money never does: donations, monthly gifts, fees,
 // order totals and items, and gift amounts are logged at the desk by the
 // treasurer, where the contribution limits are checked. Admin edits to a
-// supporter never do either, and a withdrawal that came from base ground is never
+// supporter never do either, and a withdrawal that came from Base Ground is never
 // sent back. This test reads the import graph of each code path and fails if
 // one of them can reach the outbox through anything but its own forward.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
@@ -63,7 +63,7 @@ function edges(file: string): Edge[] {
 
 type Allowance = (from: string, edge: Edge) => boolean;
 
-/** The path from `entry` to a base ground module that `allowed` doesn't excuse, or null. */
+/** The path from `entry` to a Base Ground module that `allowed` doesn't excuse, or null. */
 function reachesBaseGround(entry: string, allowed: Allowance): string[] | null {
   const seen = new Set<string>();
   const stack: string[][] = [[entry]];
@@ -128,7 +128,7 @@ function walk(dir: string): string[] {
   });
 }
 
-describe("what is forwarded to base ground, and from where", () => {
+describe("what is forwarded to Base Ground, and from where", () => {
   it.each(DESIGNATED_ONLY)("%s reaches the outbox only through its own forwards", (file) => {
     const entry = src(file);
     expect(existsSync(entry), `${file} exists`).toBe(true);
@@ -148,8 +148,8 @@ describe("what is forwarded to base ground, and from where", () => {
     expect(leaks).toEqual([]);
   });
 
-  it("a withdrawal that came from base ground is never sent back", () => {
-    // The inbound endpoint may read base ground's channel and reason names, nothing else.
+  it("a withdrawal that came from Base Ground is never sent back", () => {
+    // The inbound endpoint may read Base Ground's channel and reason names, nothing else.
     const constantsOnly: Allowance = (_from, edge) => edge.target === BASE_GROUND && only(edge.names, ["CONSENT_CHANNELS", "CONSENT_REASONS"]);
     expect(reachesBaseGround(src("app/api/in/consent/route.ts"), constantsOnly)).toBeNull();
   });

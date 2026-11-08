@@ -1,7 +1,7 @@
 import "server-only";
 import { getDb, type Db } from "@/lib/db";
 import { siteBrand } from "@/lib/db/schema";
-import { brandFromPreset, brandSchema, isPresetId, type Brand } from "@/lib/brand";
+import { brandFromPreset, brandSchema, isLogoUrl, isPresetId, type Brand } from "@/lib/brand";
 import { env } from "@/lib/env";
 import { clientFor } from "@/seeds";
 import { CLIENT_ID } from "@/seeds/client";
@@ -19,9 +19,23 @@ export function defaultBrand(clientId: string | undefined = CLIENT_ID, presetSet
   return brandFromPreset(isPresetId(presetSetting) ? presetSetting : seed.preset, { name: seed.name, logoUrl: seed.logoUrl, logoOnDarkUrl: seed.logoOnDarkUrl });
 }
 
-/** A stored brand, or null when there is none or it no longer fits the schema (logged). */
+/**
+ * A stored brand, or null when there is none or it no longer fits the schema
+ * (logged). A logo address saved before addresses were checked, and no
+ * longer allowed, is dropped (the name shows instead) rather than the whole
+ * brand.
+ */
 export function parseStoredBrand(value: unknown): Brand | null {
-  const parsed = brandSchema.safeParse(value);
+  let parsed = brandSchema.safeParse(value);
+  if (!parsed.success && value && typeof value === "object") {
+    const v = value as Record<string, unknown>;
+    const keep = (u: unknown) => (typeof u === "string" && isLogoUrl(u.trim()) ? u : "");
+    const retry = brandSchema.safeParse({ ...v, logoUrl: keep(v.logoUrl), logoOnDarkUrl: keep(v.logoOnDarkUrl) });
+    if (retry.success) {
+      console.error("site_brand holds a logo address that isn't allowed; showing the name instead");
+      parsed = retry;
+    }
+  }
   if (parsed.success) return parsed.data;
   console.error("site_brand holds a brand that no longer fits; using the default look", parsed.error.issues);
   return null;

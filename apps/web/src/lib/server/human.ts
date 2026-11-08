@@ -2,7 +2,7 @@ import "server-only";
 import { env } from "@/lib/env";
 
 // The human check on public forms: Cloudflare Turnstile. Every accepted
-// sign-up becomes a supporter record here and in base ground, and can file a
+// sign-up becomes a supporter record here and in Base Ground, and can file a
 // request for the desk or send an email, so these forms have their own spam
 // protection on top of the honeypot and the rate limits. Turnstile is free,
 // shows most people nothing at all (no puzzles), sets no ad-tracking cookies

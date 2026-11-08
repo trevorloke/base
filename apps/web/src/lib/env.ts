@@ -129,14 +129,14 @@ export const env = {
     return optional("CRON_SECRET");
   },
 
-  // ── base ground ("the desk"): the campaign's database app ──
+  // ── Base Ground ("the desk"): the campaign's database app ──
   // Called only from this server: the key would be visible to anyone if a
   // browser sent it, so it never has a NEXT_PUBLIC_ name.
-  /** e.g. https://base.win/imaginesurrey, without a trailing slash. */
+  /** e.g. https://imaginesurrey.base.win, without a trailing slash. */
   get baseGroundUrl() {
     return optional("BASE_GROUND_URL")?.trim().replace(/\/+$/, "");
   },
-  /** A website key from base ground → Settings → Services → Website keys (sbk_…). */
+  /** A website key from Base Ground → Settings → Services → Website keys (sbk_…). */
   get baseGroundKey() {
     return optional("BASE_GROUND_KEY")?.trim();
   },
@@ -144,7 +144,7 @@ export const env = {
     return Boolean(this.baseGroundUrl && this.baseGroundKey);
   },
   /**
-   * The key base ground sends to POST /api/in/consent (Authorization: Bearer …),
+   * The key Base Ground sends to POST /api/in/consent (Authorization: Bearer …),
    * so a withdrawal made there is applied here. A different secret from
    * BASE_GROUND_KEY; without it the endpoint refuses every call.
    */
@@ -158,20 +158,20 @@ export const env = {
     return optional("BASE_WEB_BRAND_PRESET")?.trim();
   },
 
-  // ── Signing in with base (SUITE.md, "Signing in once") ──
-  /** base ground's internal address for the token call: a URL or Render's bare host:port. */
+  // ── Signing in with Base (SUITE.md, "Signing in once") ──
+  /** Base Ground's internal address for the token call: a URL or Render's bare host:port. */
   get baseGroundInternalUrl() {
     return optional("BASE_GROUND_INTERNAL_URL")?.trim();
   },
-  /** The secret shared with base ground for this app (its BASE_WEB_SSO_SECRET). */
+  /** The secret shared with Base Ground for this app (its BASE_WEB_SSO_SECRET). */
   get baseSsoSecret() {
     return optional("BASE_SSO_SECRET")?.trim();
   },
-  /** "Sign in with base" is offered when base ground's address and the shared secret are set. */
+  /** "Sign in with Base" is offered when Base Ground's address and the shared secret are set. */
   get baseSsoEnabled() {
     return Boolean(this.baseGroundUrl && this.baseSsoSecret);
   },
-  /** base air's public address (e.g. https://base.win/imaginesurrey/air), for the switcher. */
+  /** Base Air's public address (e.g. https://imaginesurrey.base.win/air), for the switcher. */
   get baseAirUrl() {
     return optional("BASE_AIR_URL")?.trim().replace(/\/+$/, "");
   },

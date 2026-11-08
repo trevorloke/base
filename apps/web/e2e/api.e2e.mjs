@@ -172,7 +172,7 @@ ok(
 const pwycForward = await sql`select payload from base_ground_outbox where kind='membership' and person_id=(select id from people where email='pwyc@example.com')`;
 ok(
   pwycForward.length === 1 && !JSON.stringify(pwycForward[0].payload).includes("2550") && !JSON.stringify(pwycForward[0].payload).includes("25.50") && !/amount|cents|fee/i.test(Object.keys(pwycForward[0].payload).join()),
-  "the membership forwarded to base ground carries no money",
+  "the membership forwarded to Base Ground carries no money",
 );
 const pwycWelcome = await (await fetch(`${BASE}/join/welcome?session_id=${pwycSession}`)).text();
 ok(pwycWelcome.includes("your $25.50 membership") && pwycWelcome.includes("runs until"), "the welcome page thanks the member for the amount they chose");

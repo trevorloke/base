@@ -38,7 +38,7 @@ export default async function LimitsPage() {
       <p style={{ maxWidth: 760 }}>
         BC’s annual contribution limit per person, by calendar year (Pacific time). Elections BC indexes it every January. Every gift, membership and monthly
         payment is checked against the limit for the year it is paid in, and the donate page, the forms and the supporter portal show this year’s. A year with no
-        figure here uses <code>CONTRIBUTION_LIMIT_CENTS</code> ({formatCents(fallback)}). base ground keeps its own figure: change it there too.
+        figure here uses <code>CONTRIBUTION_LIMIT_CENTS</code> ({formatCents(fallback)}). Base Ground keeps its own figure: change it there too.
       </p>
 
       <div className="profile-grid">

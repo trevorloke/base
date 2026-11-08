@@ -12,6 +12,7 @@ import {
   contrastPairs,
   derivedColors,
   FONTS,
+  isLogoUrl,
   PRESET_IDS,
   PRESETS,
 } from "@/lib/brand";
@@ -101,6 +102,50 @@ describe("the stored brand", () => {
     const b = brandFromPreset("civic");
     expect(brandCss(b)).toMatch(/^:root\{--primary:#0f4c5c;.*\}$/);
     expect(brandCss(b)).not.toMatch(/<|>/);
+  });
+});
+
+describe("logo addresses", () => {
+  const brand = (logoUrl: string, logoOnDarkUrl = "") => brandSchema.safeParse({ ...brandFromPreset("civic"), logoUrl, logoOnDarkUrl });
+
+  it("take https:// URLs and the site's own media paths, and blank", () => {
+    for (const ok of ["", "https://project.supabase.co/storage/v1/object/public/site-media/2026/11/ab12-logo.png", "https://cdn.example.org/logo.svg?v=2", "/images/logo.webp", "/uploads/2026/11/ab12cd-logo.png", "/icons/icon-512.png"]) {
+      expect(isLogoUrl(ok)).toBe(true);
+      expect(brand(ok, ok).success).toBe(true);
+    }
+  });
+
+  it("refuse other schemes, other hosts by path, credentials, traversal and odd characters", () => {
+    for (const bad of [
+      "http://cdn.example.org/logo.png",
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg onload=alert(1)>",
+      "//evil.example/logo.png",
+      "/\\evil.example/logo.png",
+      "https://user:pass@cdn.example.org/logo.png",
+      "/images/../admin",
+      "/images/%2e%2e/admin",
+      "/admin/logo.png",
+      "/api/admin/export/people",
+      "logo.png",
+      'https://cdn.example.org/logo.png" onerror="x',
+      "https:///nohost",
+    ]) {
+      expect(isLogoUrl(bad), bad).toBe(false);
+      expect(brand(bad).success, bad).toBe(false);
+      expect(brand("", bad).success, bad).toBe(false);
+    }
+  });
+
+  it("keep the length limit, and name the field that's wrong", () => {
+    expect(brand(`https://cdn.example.org/${"a".repeat(480)}.png`).success).toBe(false);
+    const r = brand("http://cdn.example.org/logo.png");
+    expect(r.success ? [] : r.error.issues.map((i) => i.path.join("."))).toEqual(["logoUrl"]);
+  });
+
+  it("a stored brand with a logo address that is no longer allowed keeps its look and loses only the logo", () => {
+    const stored = { ...brandFromPreset("clear"), name: "Somewhere", logoUrl: "javascript:alert(1)", logoOnDarkUrl: "/images/logo-light.png" };
+    expect(parseStoredBrand(stored)).toEqual({ ...brandFromPreset("clear"), name: "Somewhere", logoUrl: "", logoOnDarkUrl: "/images/logo-light.png" });
   });
 });
 

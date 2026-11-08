@@ -15,6 +15,30 @@ export function adminMagicLinkEmail(ctx: MessageContext, link: string, minutes: 
   };
 }
 
+/** Proof that a staff account is yours, the first time you sign in to the admin with Base. */
+export function baseLinkEmail(ctx: MessageContext, link: string, minutes: number, groundEmail: string) {
+  const subject = `Confirm signing in to the ${ctx.orgName} admin with Base`;
+  const who = groundEmail ? ` as ${esc(groundEmail)}` : "";
+  const bodyHtml =
+    paragraph(`Someone signed in to Base Ground${who} and asked to open the ${esc(ctx.orgName)} admin with this staff account. If that was you, click the button in the same browser to link the two; after that, "Sign in with Base" opens the admin directly.`) +
+    button(link, "Link and sign in", "navy") +
+    paragraph(`The link works once, only in the browser where you started, and expires in ${minutes} minutes. If this wasn't you, don't click it: ignore this email and tell an owner of the admin.`);
+  return {
+    subject,
+    html: layout({ title: "Link your Base Ground login", bodyHtml, siteUrl: ctx.siteUrl, orgName: ctx.orgName, orgEmail: ctx.orgEmail }),
+    text: textVersion(
+      [
+        `Someone signed in to Base Ground${groundEmail ? ` as ${groundEmail}` : ""} and asked to open the ${ctx.orgName} admin with this staff account.`,
+        `If that was you, open this link in the same browser (works once, expires in ${minutes} minutes):`,
+        link,
+        "",
+        "If this wasn't you, don't open it: ignore this email and tell an owner of the admin.",
+      ],
+      { orgName: ctx.orgName },
+    ),
+  };
+}
+
 export function memberMagicLinkEmail(ctx: MessageContext, link: string, minutes: number) {
   const subject = `Your ${ctx.orgName} sign-in link`;
   const bodyHtml = paragraph(`Click the button to open your ${esc(ctx.orgName)} account. The link works once and expires in ${minutes} minutes.`) + button(link, "Open my account") + paragraph(`If you didn't ask for this, you can ignore this email.`);

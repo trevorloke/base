@@ -3,8 +3,9 @@ import { getDb } from "@/lib/db";
 import { env } from "@/lib/env";
 import { PERMISSIONS, requireAdmin, ROLE_LABELS, ROLE_PERMISSIONS } from "@/lib/server/admin-auth";
 import { MFA_REQUIRED_ROLES } from "@/lib/mfa-policy";
+import { listBaseLinks } from "@/lib/server/base-link";
 import { listStaff, ROLES } from "@/lib/server/staff";
-import { changeRoleAction, deactivateAction, inviteAction, reactivateAction, resendLinkAction, resetPasswordAction, resetTwoFactorAction } from "./actions";
+import { changeRoleAction, deactivateAction, inviteAction, reactivateAction, removeBaseLinkAction, resendLinkAction, resetPasswordAction, resetTwoFactorAction } from "./actions";
 import { InviteForm, StaffControls } from "./StaffForms";
 import "../people/people.css";
 
@@ -18,9 +19,18 @@ const ROLE_OPTIONS = ROLES.map((id) => ({
 
 export default async function StaffPage() {
   const user = await requireAdmin("users");
-  const staff = await listStaff(getDb());
+  const db = getDb();
+  const [staff, links] = await Promise.all([listStaff(db), listBaseLinks(db)]);
   const emailEnabled = env.emailEnabled;
-  const actions = { changeRole: changeRoleAction, deactivate: deactivateAction, reactivate: reactivateAction, resetPassword: resetPasswordAction, resendLink: resendLinkAction, resetTwoFactor: resetTwoFactorAction };
+  const actions = {
+    changeRole: changeRoleAction,
+    deactivate: deactivateAction,
+    reactivate: reactivateAction,
+    resetPassword: resetPasswordAction,
+    resendLink: resendLinkAction,
+    resetTwoFactor: resetTwoFactorAction,
+    removeBaseLink: removeBaseLinkAction,
+  };
 
   return (
     <>
@@ -40,10 +50,12 @@ export default async function StaffPage() {
             {staff.length} account{staff.length === 1 ? "" : "s"}
           </h2>
           <p className="small" style={{ marginBottom: 14 }}>
-            The last active owner can&apos;t be demoted or deactivated, and nobody can deactivate themselves. Owners and administrators must use two-factor sign-in; an owner can reset it for someone who has lost their phone and recovery codes.
+            The last active owner can&apos;t be demoted or deactivated, and nobody can deactivate themselves. Owners and administrators must use two-factor sign-in; an owner can reset it for someone who has lost their phone and recovery codes. A Base Ground link lets someone open the admin with &ldquo;Sign in with Base&rdquo;; it is made once, when they confirm the account with its password or an emailed link. Remove a link if it isn&apos;t theirs.
           </p>
           <ul className="staff-list">
-            {staff.map((s) => (
+            {staff.map((s) => {
+              const link = links.get(s.id) ?? null;
+              return (
               <li key={s.id} className={`staff ${s.active ? "" : "staff--inactive"}`}>
                 <div className="staff__who">
                   <strong>{s.name}</strong>{" "}
@@ -60,6 +72,11 @@ export default async function StaffPage() {
                     {s.invitedBy && ` · invited by ${s.invitedBy}`}
                     {` · added ${WHEN.format(s.createdAt)}`}
                   </p>
+                  <p>
+                    {link
+                      ? `Linked to Base Ground${link.groundEmail ? ` (${link.groundEmail})` : ""} on ${WHEN.format(link.linkedAt)}, confirmed by ${link.linkedVia === "password" ? "password" : "emailed link"}`
+                      : "Not linked to Base Ground"}
+                  </p>
                 </div>
                 <StaffControls
                   id={s.id}
@@ -72,10 +89,12 @@ export default async function StaffPage() {
                   actorIsOwner={user.role === "owner"}
                   emailEnabled={emailEnabled}
                   roles={ROLE_OPTIONS}
+                  baseLinked={Boolean(link)}
                   actions={actions}
                 />
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       </div>

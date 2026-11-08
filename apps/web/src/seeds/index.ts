@@ -1,4 +1,4 @@
-// The clients base web knows how to start up as. BASE_WEB_CLIENT picks one;
+// The clients Base Web knows how to start up as. BASE_WEB_CLIENT picks one;
 // unset (or unknown) means "default", a clean, neutral site.
 import { client as defaultClient } from "./default";
 import { client as imagineSurrey } from "./imagine-surrey";

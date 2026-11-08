@@ -8,10 +8,10 @@ import { DeskGiftsForm, type DeskGiftView } from "./DeskGiftsForm";
 import "../people/people.css";
 
 /**
- * Online gifts to log at the desk. base ground is where the contribution limits
+ * Online gifts to log at the desk. Base Ground is where the contribution limits
  * are checked across every channel, so each gift taken here is typed into
- * base ground → Donations → Log a gift by the treasurer, then marked logged.
- * Nothing about money is sent to base ground automatically.
+ * Base Ground → Donations → Log a gift by the treasurer, then marked logged.
+ * Nothing about money is sent to Base Ground automatically.
  */
 export default async function DeskGiftsPage() {
   await requireAdmin("money");
@@ -43,9 +43,9 @@ export default async function DeskGiftsPage() {
         </nav>
       </div>
       <p style={{ maxWidth: 760 }}>
-        Contribution limits are checked at the desk, across every way people give. Each online gift below goes into base ground by hand: open{" "}
+        Contribution limits are checked at the desk, across every way people give. Each online gift below goes into Base Ground by hand: open{" "}
         <strong>Donations → Log a gift</strong>, enter what the row shows, then mark it logged here. Oldest first; times are Pacific. Nothing about money is ever sent to
-        base ground by the website.
+        Base Ground by the website.
       </p>
       <DeskGiftsForm gifts={view} action={markGiftsLogged} />
     </>

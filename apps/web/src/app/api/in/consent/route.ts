@@ -4,10 +4,10 @@ import { env } from "@/lib/env";
 import { error, json, rateLimited } from "@/lib/server/api";
 import { applyInboundConsent, bearerMatches, inboundConsentSchema, schemaError } from "@/lib/server/base-ground-inbound";
 
-// POST /api/in/consent: a withdrawal made in base ground, applied here. Called by
-// base ground's server with Authorization: Bearer $BASE_GROUND_INBOUND_KEY and an
+// POST /api/in/consent: a withdrawal made in Base Ground, applied here. Called by
+// Base Ground's server with Authorization: Bearer $BASE_GROUND_INBOUND_KEY and an
 // Idempotency-Key; see src/lib/server/base-ground-inbound.ts and SETUP.md.
-// Answers in base ground's own style: { ok: true, … } or { error }.
+// Answers in Base Ground's own style: { ok: true, … } or { error }.
 
 const MAX_BODY = 10_000;
 
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     const answer = await applyInboundConsent(getDb(), parsed.data, idempotencyKey, raw);
     return json(answer.body, answer.status);
   } catch (err) {
-    console.error("Could not apply a consent change from base ground", err);
+    console.error("Could not apply a consent change from Base Ground", err);
     return error("Something went wrong applying it; try again.", 500);
   }
 }

@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { redirectTo } from "@/lib/redirect";
 import { loginWithPassword, PENDING_COOKIE, requestMeta, SESSION_COOKIE, sessionCookieOptions } from "@/lib/server/admin-auth";
-import { safeNext } from "@/lib/server/admin-redirect";
+import { loginEmailCookie, safeNext } from "@/lib/server/admin-redirect";
 import { audit } from "@/lib/server/audit";
 
 export async function POST(req: NextRequest) {
@@ -9,7 +9,12 @@ export async function POST(req: NextRequest) {
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
   const next = safeNext(form.get("next"));
-  const back = (query: string) => redirectTo(`/admin/login?${query}&email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`, 303);
+  // The email goes back to the form in a short-lived cookie, never in the URL.
+  const back = (query: string) => {
+    const res = redirectTo(`/admin/login?${query}&next=${encodeURIComponent(next)}`, 303);
+    if (email) res.cookies.set(loginEmailCookie(email));
+    return res;
+  };
 
   if (!email || !password) return back("error=invalid");
   try {

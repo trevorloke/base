@@ -10,7 +10,7 @@ import { audit } from "@/lib/server/audit";
 import { sendEmail } from "@/lib/server/email";
 import { getSettings } from "@/lib/server/settings";
 import { consumeToken, createToken, tokenUrl } from "@/lib/server/tokens";
-import { safeNext } from "@/lib/server/admin-redirect";
+import { loginEmailCookie, safeNext } from "@/lib/server/admin-redirect";
 
 const LINK_MINUTES = 20;
 
@@ -24,7 +24,12 @@ export async function POST(req: NextRequest) {
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const next = safeNext(form.get("next"));
   const meta = requestMeta(req);
-  const back = (query: string) => redirectTo(`/admin/login?${query}&email=${encodeURIComponent(email)}&next=${encodeURIComponent(next)}`, 303);
+  // The email goes back to the form in a short-lived cookie, never in the URL.
+  const back = (query: string) => {
+    const res = redirectTo(`/admin/login?${query}&next=${encodeURIComponent(next)}`, 303);
+    if (email) res.cookies.set(loginEmailCookie(email));
+    return res;
+  };
   if (!env.emailEnabled) return back("error=email-not-configured");
   const db = getDb();
   await ensureBootstrapOwner(db);

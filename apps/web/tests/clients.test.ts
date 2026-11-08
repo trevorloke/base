@@ -1,4 +1,4 @@
-// base web is a product with Imagine Surrey as its first client: a new
+// Base Web is a product with Imagine Surrey as its first client: a new
 // client's fresh deployment is a clean, neutral site, and Imagine Surrey's
 // is exactly what it was. The client is fixed when the site is built
 // (BASE_WEB_CLIENT), so each case loads the code afresh.

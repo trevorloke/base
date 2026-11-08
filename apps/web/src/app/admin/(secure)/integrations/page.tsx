@@ -73,7 +73,7 @@ export default async function IntegrationsPage() {
   const analytics = env.plausibleDomain ? `Plausible (${env.plausibleDomain})` : env.gaMeasurementId ? `Google Analytics (${env.gaMeasurementId})` : null;
   const queueStale = stats.email.oldestQueuedAt ? Date.now() - stats.email.oldestQueuedAt.getTime() > 10 * 60_000 : false;
 
-  // base ground: the key is shown only by the first characters base ground lists it by.
+  // Base Ground: the key is shown only by the first characters Base Ground lists it by.
   const baseGroundOn = env.baseGroundEnabled;
   const baseGroundUrlIssue = baseGroundOn ? baseGroundUrlProblem(env.baseGroundUrl) : null;
   const deskError = desk.lastError;
@@ -140,20 +140,20 @@ export default async function IntegrationsPage() {
           )}
         </Card>
         <Card
-          title="base ground (the desk)"
+          title="Base Ground (the desk)"
           tone={baseGroundTone}
           rows={[
             ["Connection", baseGroundOn ? (baseGroundUrlIssue ?? `Configured: ${env.baseGroundUrl}`) : "Not configured: sign-ups are kept here as skipped and not sent"],
             ["Website key", env.baseGroundKey ? `Set (${env.baseGroundKey.slice(0, 10)}…)` : "Not set"],
             ["Waiting to send", String(desk.counts.pending)],
             ["Sent", `${desk.counts.sent}${desk.lastSentAt ? ` (last ${when(desk.lastSentAt)})` : ""}`],
-            ["Refused by base ground", String(desk.counts.failed)],
+            ["Refused by Base Ground", String(desk.counts.failed)],
             ["Skipped", String(desk.counts.skipped)],
             [
-              "Unsubscribes and STOPs to base ground",
+              "Unsubscribes and STOPs to Base Ground",
               desk.consent.notSupported > 0 ? (
                 <span style={{ fontWeight: 700 }}>
-                  {desk.consent.notSupported} waiting: {NOT_SUPPORTED_YET.toLowerCase()} (this base ground has no /in/v1/consent). They go once it does.
+                  {desk.consent.notSupported} waiting: {NOT_SUPPORTED_YET.toLowerCase()} (this Base Ground has no /in/v1/consent). They go once it does.
                 </span>
               ) : desk.consent.pending > 0 ? (
                 `${desk.consent.pending} waiting, ${desk.consent.sent} sent`
@@ -161,7 +161,7 @@ export default async function IntegrationsPage() {
                 `${desk.consent.sent} sent`
               ),
             ],
-            ["Unsubscribes from base ground", inboundOn ? "On: base ground can withdraw consent here (POST /api/in/consent)" : "Off: BASE_GROUND_INBOUND_KEY isn't set"],
+            ["Unsubscribes from Base Ground", inboundOn ? "On: Base Ground can withdraw consent here (POST /api/in/consent)" : "Off: BASE_GROUND_INBOUND_KEY isn't set"],
             [
               "Last problem",
               deskError ? (
@@ -202,7 +202,7 @@ export default async function IntegrationsPage() {
         >
           {!env.humanCheckEnabled && (
             <p className="small" style={{ color: "var(--accent-hover)", fontWeight: 700 }}>
-              The live site should have this on: every accepted sign-up becomes a supporter record here and in base ground, and can file a request for the desk. Make a free
+              The live site should have this on: every accepted sign-up becomes a supporter record here and in Base Ground, and can file a request for the desk. Make a free
               Turnstile widget in Cloudflare and set both keys.
             </p>
           )}

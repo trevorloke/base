@@ -129,14 +129,42 @@ export const PRESETS: Record<PresetId, Preset> = {
 
 // ── The stored brand ──
 
+/** Folders under public/ (and local uploads) a logo may come from on this site. */
+export const LOGO_PATH_PREFIXES = ["/images/", "/uploads/", "/icons/"] as const;
+
+/**
+ * A logo address: blank, an https:// URL (an upload in Supabase Storage, or
+ * another host), or a path to one of this site's own media files. Anything
+ * else (http://, javascript:, data:, "//host", credentials in the URL,
+ * "../") is refused.
+ */
+export function isLogoUrl(value: string): boolean {
+  if (value === "") return true;
+  if (value.startsWith("/")) {
+    if (!LOGO_PATH_PREFIXES.some((p) => value.startsWith(p))) return false;
+    if (!/^[A-Za-z0-9._~%/-]+$/.test(value) || /(^|\/)\.\.?(\/|$)/.test(value) || /%2f|%5c|%2e/i.test(value)) return false;
+    return true;
+  }
+  if (!/^https:\/\/[^/]/i.test(value) || /[\s"'<>\\]/.test(value)) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && Boolean(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+const LOGO_MESSAGE = `Use an https:// address or an uploaded image (a path starting ${LOGO_PATH_PREFIXES.join(", ")})`;
+const logoUrl = z.string().trim().max(500).default("").refine(isLogoUrl, LOGO_MESSAGE);
+
 export const brandSchema = z.object({
   preset: z.enum(PRESET_IDS),
   /** Shown in the header when there is no logo, in the admin, and as the logo's alt text. Blank: the organization's name. */
   name: z.string().trim().max(80).default(""),
-  /** An uploaded image (Admin → Media) or a URL. Blank: the name as a wordmark. */
-  logoUrl: z.string().trim().max(500).default(""),
+  /** An uploaded image (Admin → Media) or an https:// URL. Blank: the name as a wordmark. */
+  logoUrl,
   /** A version of the logo for dark backgrounds (the footer). Blank: the logo. */
-  logoOnDarkUrl: z.string().trim().max(500).default(""),
+  logoOnDarkUrl: logoUrl,
   colors: z.object(Object.fromEntries(COLOR_FIELDS.map((c) => [c.id, hex])) as Record<ColorId, typeof hex>),
   font: z.enum(FONT_IDS as [FontId, ...FontId[]]),
   corners: z.enum(CORNER_IDS as [CornerId, ...CornerId[]]),

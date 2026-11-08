@@ -16,7 +16,7 @@ const TTL_MINUTES = 60;
  * Save email and text preferences. The token proves control of the address
  * and is single use; the response carries a fresh one so the page can save
  * again. Every tick that changed is written to the consent ledger, and a
- * withdrawal is passed to base ground.
+ * withdrawal is passed to Base Ground.
  */
 export async function POST(req: NextRequest) {
   return handle(async () => {

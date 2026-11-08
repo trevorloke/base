@@ -53,7 +53,7 @@ export const sendTestSms = adminAction(
   "integrations.test-sms",
 );
 
-// ── base ground ("the desk") ─────────────────────────────────────────────────
+// ── Base Ground ("the desk") ─────────────────────────────────────────────────
 
 function refreshBaseGround() {
   revalidatePath("/admin/integrations");
@@ -64,7 +64,7 @@ function describe(report: DeliveryReport): string {
   const parts = [`${report.sent} sent`];
   if (report.failed) parts.push(`${report.failed} refused`);
   if (report.retrying) parts.push(`${report.retrying} will be retried`);
-  if (report.unsupported) parts.push("unsubscribes and STOPs still wait: this base ground doesn't take them yet (/in/v1/consent)");
+  if (report.unsupported) parts.push("unsubscribes and STOPs still wait: this Base Ground doesn't take them yet (/in/v1/consent)");
   return parts.join(", ");
 }
 
@@ -73,11 +73,11 @@ export const testBaseGround = adminAction(
   "integrations",
   z.object({}),
   async () => {
-    if (!env.baseGroundEnabled) throw new ActionError("base ground isn't configured: set BASE_GROUND_URL and BASE_GROUND_KEY.");
+    if (!env.baseGroundEnabled) throw new ActionError("Base Ground isn't configured: set BASE_GROUND_URL and BASE_GROUND_KEY.");
     const r = await ping();
-    if (r.ok) return `Connected to ${r.campaign || "base ground"} with the key “${r.key || "unnamed"}”.`;
-    const hint = r.status === 401 ? " The key is wrong or was revoked: make a new one in base ground → Settings → Services → Website keys." : "";
-    throw new ActionError(`base ground answered: ${r.status ? `${r.status} ` : ""}${r.error}.${hint}`);
+    if (r.ok) return `Connected to ${r.campaign || "Base Ground"} with the key “${r.key || "unnamed"}”.`;
+    const hint = r.status === 401 ? " The key is wrong or was revoked: make a new one in Base Ground → Settings → Services → Website keys." : "";
+    throw new ActionError(`Base Ground answered: ${r.status ? `${r.status} ` : ""}${r.error}.${hint}`);
   },
   "integrations.base-ground-test",
 );
@@ -87,7 +87,7 @@ export const sendBaseGroundNow = adminAction(
   "integrations",
   z.object({}),
   async () => {
-    if (!env.baseGroundEnabled) throw new ActionError("base ground isn't configured: set BASE_GROUND_URL and BASE_GROUND_KEY.");
+    if (!env.baseGroundEnabled) throw new ActionError("Base Ground isn't configured: set BASE_GROUND_URL and BASE_GROUND_KEY.");
     const report = await deliverOutbox(getDb(), 45_000, { ignoreBackoff: true });
     refreshBaseGround();
     if (report.problem && report.sent === 0) throw new ActionError(`Nothing could be sent. ${report.problem}`);
@@ -106,9 +106,9 @@ export const retryBaseGroundRow = adminAction(
     const { row, report } = await retryOutboxRow(getDb(), id);
     refreshBaseGround();
     if (!row) throw new ActionError("That row no longer exists.");
-    if (row.status === "sent") return "Sent to base ground.";
-    if (!report) return row.status === "pending" ? "Queued again. It goes once base ground is connected." : `Only failed or skipped rows can be retried (this one is ${row.status}).`;
-    return `Queued again. ${row.lastError ? `base ground answered: ${row.lastError}` : "It will be sent shortly."}`;
+    if (row.status === "sent") return "Sent to Base Ground.";
+    if (!report) return row.status === "pending" ? "Queued again. It goes once Base Ground is connected." : `Only failed or skipped rows can be retried (this one is ${row.status}).`;
+    return `Queued again. ${row.lastError ? `Base Ground answered: ${row.lastError}` : "It will be sent shortly."}`;
   },
   "integrations.base-ground-retry",
 );

@@ -59,17 +59,20 @@ export type StaffControlsProps = {
   actorIsOwner: boolean;
   emailEnabled: boolean;
   roles: RoleOption[];
-  actions: { changeRole: Action; deactivate: Action; reactivate: Action; resetPassword: Action; resendLink: Action; resetTwoFactor: Action };
+  /** The account has a Base Ground link ("Sign in with Base"). */
+  baseLinked: boolean;
+  actions: { changeRole: Action; deactivate: Action; reactivate: Action; resetPassword: Action; resendLink: Action; resetTwoFactor: Action; removeBaseLink: Action };
 };
 
-/** Role, active state, password reset and sign-in link for one account. */
+/** Role, active state, password reset, sign-in link and Base Ground link for one account. */
 export function StaffControls(p: StaffControlsProps) {
   const [roleState, changeRole] = useActionState(p.actions.changeRole, null);
   const [activeState, setActive] = useActionState(p.active ? p.actions.deactivate : p.actions.reactivate, null);
   const [resetState, resetPassword] = useActionState(p.actions.resetPassword, null);
   const [linkState, resendLink] = useActionState(p.actions.resendLink, null);
   const [twoFactorState, resetTwoFactor] = useActionState(p.actions.resetTwoFactor, null);
-  const states = [roleState, activeState, resetState, linkState, twoFactorState];
+  const [baseLinkState, removeBaseLink] = useActionState(p.actions.removeBaseLink, null);
+  const states = [roleState, activeState, resetState, linkState, twoFactorState, baseLinkState];
   const notices = states.filter(Boolean);
   return (
     <>
@@ -116,6 +119,18 @@ export function StaffControls(p: StaffControlsProps) {
               confirm={`Reset ${p.name}'s two-factor sign-in? Their authenticator app and recovery codes stop working and they are signed out everywhere.`}
             >
               Reset two-factor
+            </SubmitButton>
+          </form>
+        )}
+        {p.baseLinked && (
+          <form action={removeBaseLink}>
+            <input type="hidden" name="id" value={p.id} />
+            <SubmitButton
+              className="btn btn--outline btn--compact"
+              pendingText="Removing…"
+              confirm={`Remove ${p.name}'s Base Ground link? "Sign in with Base" will ask them to confirm this account again before it opens the admin.`}
+            >
+              Remove Base link
             </SubmitButton>
           </form>
         )}

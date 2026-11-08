@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useId, useMemo, useState } from "react";
-import { Notice } from "@/components/admin/Notice";
+import { fieldError, Notice } from "@/components/admin/Notice";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 import { ImageControl } from "@/components/admin/content/ImageField";
 import { AmountPicker, type Choice } from "@/components/forms/AmountPicker";
@@ -87,13 +87,22 @@ export function BrandEditor({ initial, orgName, limitCents }: { initial: Brand; 
               Shown when there is no logo, and as the logo&apos;s description. Blank uses the organization&apos;s name ({orgName}).
             </p>
           </div>
-          <ImageControl idPrefix="brand-logo" label="Logo" showAlt={false} altRequired={false} value={{ url: brand.logoUrl, alt: "" }} onChange={(v) => setBrand((b) => ({ ...b, logoUrl: v.url }))} />
+          <ImageControl
+            idPrefix="brand-logo"
+            label="Logo"
+            showAlt={false}
+            altRequired={false}
+            value={{ url: brand.logoUrl, alt: "" }}
+            urlError={fieldError(state, "logoUrl")}
+            onChange={(v) => setBrand((b) => ({ ...b, logoUrl: v.url }))}
+          />
           <ImageControl
             idPrefix="brand-logo-dark"
             label="Logo on dark backgrounds (the footer)"
             showAlt={false}
             altRequired={false}
             value={{ url: brand.logoOnDarkUrl, alt: "" }}
+            urlError={fieldError(state, "logoOnDarkUrl")}
             onChange={(v) => setBrand((b) => ({ ...b, logoOnDarkUrl: v.url }))}
           />
           <p className="small">With no logo, the name is shown as a wordmark.</p>

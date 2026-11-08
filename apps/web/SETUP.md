@@ -1,8 +1,8 @@
 # Going live on Render
 
-This guide takes base web (one client's public website and its admin) from this repository to a live site on Render: a Docker web service, a Render Postgres database, two cron jobs, Stripe, and the client's own domain. Allow about an hour. You need a Render account, Stripe, and (for image uploads) a Supabase project used only for Storage.
+This guide takes Base Web (one client's public website and its admin) from this repository to a live site on Render: a Docker web service, a Render Postgres database, two cron jobs, Stripe, and the client's own domain. Allow about an hour. You need a Render account, Stripe, and (for image uploads) a Supabase project used only for Storage.
 
-base web is a product. Each client gets its own copy: its own web service, database and domain. **Imagine Surrey** is the first client; a new client's deployment starts as a clean, neutral site in the **Civic** look (step 2).
+Base Web is a product. Each client gets its own copy: its own web service, database and domain. **Imagine Surrey** is the first client; a new client's deployment starts as a clean, neutral site in the **Civic** look (step 2).
 
 ## 1. The pieces on Render
 
@@ -84,18 +84,18 @@ The Blueprint entries (for the root `render.yaml`; production shown, staging is 
         sync: false
       - key: TURNSTILE_SECRET_KEY
         sync: false
-      # base ground: sign-ups, consent, and signing in with base (section 3, and step 3f).
-      - key: BASE_GROUND_URL           # e.g. https://base.win/imaginesurrey
+      # Base Ground: sign-ups, consent, and signing in with Base (section 3, and step 3f).
+      - key: BASE_GROUND_URL           # e.g. https://imaginesurrey.base.win
         sync: false
-      - key: BASE_GROUND_INTERNAL_URL  # base ground over the private network, for the sign-in token call
+      - key: BASE_GROUND_INTERNAL_URL  # Base Ground over the private network, for the sign-in token call
         fromService: { type: web, name: base-ground-imaginesurrey, property: hostport }
-      - key: BASE_SSO_SECRET           # the same value as BASE_WEB_SSO_SECRET on base ground
+      - key: BASE_SSO_SECRET           # the same value as BASE_WEB_SSO_SECRET on Base Ground
         fromService: { type: web, name: base-ground-imaginesurrey, envVarKey: BASE_WEB_SSO_SECRET }
-      - key: BASE_GROUND_KEY           # a website key made in base ground (step 3f)
+      - key: BASE_GROUND_KEY           # a website key made in Base Ground (step 3f)
         sync: false
-      - key: BASE_GROUND_INBOUND_KEY   # given to base ground too, for consent sent here
+      - key: BASE_GROUND_INBOUND_KEY   # given to Base Ground too, for consent sent here
         generateValue: true
-      - key: BASE_AIR_URL              # optional: base air in the switcher, e.g. https://base.win/imaginesurrey/air
+      - key: BASE_AIR_URL              # optional: Base Air in the switcher, e.g. https://imaginesurrey.base.win/air
         sync: false
 
   - type: cron
@@ -136,7 +136,7 @@ databases:
   # Production uses Imagine Surrey's existing database, imagine-surrey-db.
 ```
 
-The cron jobs run `scripts/cron.mjs`, which has no dependencies: it calls `/api/cron/reminders` (day-before reminders for RSVPs and shifts) or `/api/cron/email` (anything still queued: email, and sign-ups waiting for base ground; it also prunes old page views) with `Authorization: Bearer $CRON_SECRET`, over Render's private network (`BASE_WEB_INTERNAL_URL`, or `NEXT_PUBLIC_SITE_URL` if that isn't set), and fails the run if the site doesn't answer 2xx. Without `CRON_SECRET` on the web service, both job URLs refuse every call.
+The cron jobs run `scripts/cron.mjs`, which has no dependencies: it calls `/api/cron/reminders` (day-before reminders for RSVPs and shifts) or `/api/cron/email` (anything still queued: email, and sign-ups waiting for Base Ground; it also prunes old page views) with `Authorization: Bearer $CRON_SECRET`, over Render's private network (`BASE_WEB_INTERNAL_URL`, or `NEXT_PUBLIC_SITE_URL` if that isn't set), and fails the run if the site doesn't answer 2xx. Without `CRON_SECRET` on the web service, both job URLs refuse every call.
 
 ### Moving Imagine Surrey's live site
 
@@ -156,15 +156,17 @@ Imagine Surrey's site already runs on Render as a Node web service with its data
 
 The seed adds, for every client: the starter volunteer tasks, the jurisdiction's published contribution limit, and draft privacy and accessibility pages in the client's name. Imagine Surrey's also adds its shop, the 26 tracked promises, its pledge and petition, two sample shift openings and a sample draft email. A client's own words, places and starting data live in `src/seeds/<client>/` (CONTRIBUTING.md, "Clients").
 
-## 3. Sign in with base
+## 3. Sign in with Base
 
-Staff who are signed in to base ground can open the admin without another password (SUITE.md, "The hand-off"). On this service set `BASE_GROUND_URL` (base ground's public address, e.g. `https://base.win/imaginesurrey`) and `BASE_SSO_SECRET` (the same value as `BASE_WEB_SSO_SECRET` on base ground), and optionally `BASE_GROUND_INTERNAL_URL` (Render's private `host:port` for base ground; `http://` is added and base ground's path is taken from `BASE_GROUND_URL`). On base ground set `BASE_WEB_URL` to this site's address (e.g. `https://imaginesurrey.ca`).
+Staff who are signed in to Base Ground can open the admin without another password (SUITE.md, "The hand-off"). On this service set `BASE_GROUND_URL` (Base Ground's public address, e.g. `https://imaginesurrey.base.win`, or `https://imaginesurrey.staging.base.win` for staging) and `BASE_SSO_SECRET` (the same value as `BASE_WEB_SSO_SECRET` on Base Ground), and optionally `BASE_GROUND_INTERNAL_URL` (Render's private `host:port` for Base Ground; `http://` is added and any path is taken from `BASE_GROUND_URL`). On Base Ground set `BASE_WEB_URL` to this site's address (e.g. `https://imaginesurrey.ca`).
 
-- The admin sign-in page then shows **Sign in with base**. Passwords and email links still work.
+- The admin sign-in page then shows **Sign in with Base**. Passwords and email links still work.
 - `/auth/base?next=/admin/…` starts the hand-off from anywhere (only paths on this site are followed).
-- It signs in the **existing** staff account with the same email (any capitals). It never creates one: anyone else sees "No staff account for <email> — ask an owner to invite you." Owners and administrators still give their authenticator code afterwards.
-- Every hand-off, refused or not, is in the audit log (`signin` with method `base`, `signin.base`, or `signin.base-refused` with the reason).
-- With `BASE_GROUND_URL` set, the admin's top bar has the **base** switcher: base ground's field and ground, base air (when `BASE_AIR_URL` is set) and this admin.
+- People are signed in by a **link** between their Base Ground login (its client and `sub`) and a staff account here, never by the email alone: a Base Ground manager can make a ground login for any address. The first time, Base Web finds the **existing** staff account with the same email (any capitals) and the person proves once that it is theirs, with that account's password or a one-time link emailed to its address (opened in the same browser); then the link is stored. After that the link decides, whatever the email says. Wrong passwords count toward the usual lockout.
+- It never creates an account: anyone else sees "No Base Web staff account for <email> — ask an owner to invite you." A staff account already linked to a different Base Ground login is refused. Owners and administrators still give their authenticator code afterwards.
+- Owners see each person's link under **Admin → Staff** and can remove it (the next sign-in asks for the proof again); everyone can see and remove their own under **My account**.
+- Every hand-off and every link made, refused or removed is in the audit log (`signin` with method `base`, `signin.base`, `signin.base-refused` with the reason, `signin.base-link-started`, `staff.base-link`, `signin.base-link-refused`, `staff.base-unlink`, `account.base-unlink`).
+- With `BASE_GROUND_URL` set, the admin's top bar has the **Base** switcher: Base Ground's Field and Ground, Base Air (when `BASE_AIR_URL` is set) and this admin.
 
 ## 4. The look: Admin → Brand
 
@@ -215,30 +217,30 @@ Owners and administrators set the public site's look in **Admin → Brand**: a p
    - The app secrets are stored encrypted with a key derived from `ADMIN_SESSION_SECRET`. **Changing `ADMIN_SESSION_SECRET` stops every authenticator app's codes from matching** (and signs everyone out): staff then sign in with a recovery code and set the app up again, or an owner resets them.
    - `ADMIN_MFA_REQUIRED=0` switches the requirement off, but only on a development copy (`NODE_ENV` not `production`) or under the end-to-end test runner. It is **ignored when `RENDER=true`** (Render sets this on every service), so the live site always requires two-factor sign-in for owners and administrators. The local admin preview mode skips it too, since it only runs on a copy with a local database.
 
-3e. **Content.** Review the draft `/privacy` page in Admin → Pages: name your privacy officer and confirm the processors (Render, Supabase Storage, Stripe, Resend, Twilio, Cloudflare Turnstile, analytics) and what goes to base ground. Then fill in Admin → Site settings: the organization's address, the financial agent's authorization line, the board, and the social accounts. After any bulk change made directly in the database, POST to `/api/admin/revalidate` (signed in) to refresh the public pages, or simply wait up to an hour.
+3e. **Content.** Review the draft `/privacy` page in Admin → Pages: name your privacy officer and confirm the processors (Render, Supabase Storage, Stripe, Resend, Twilio, Cloudflare Turnstile, analytics) and what goes to Base Ground. Then fill in Admin → Site settings: the organization's address, the financial agent's authorization line, the board, and the social accounts. After any bulk change made directly in the database, POST to `/api/admin/revalidate` (signed in) to refresh the public pages, or simply wait up to an hour.
 
-3f. **Connect base ground (the desk).** base ground is the campaign's database. The website sends it new sign-ups so organizers see one record per supporter.
-   - **Make a website key.** In base ground, a manager opens **Settings → Services → Website keys**, names the key (*Website*) and clicks **Make a key**. The key (`sbk_…`) is shown once: copy it straight into the Render service's Environment.
-   - **Set two variables on the Render service:** `BASE_GROUND_URL` is base ground's public address with no trailing slash, e.g. `https://base.win/imaginesurrey` (it must be `https://`), and `BASE_GROUND_KEY` is the key. Never give the key a `NEXT_PUBLIC_` name: the website calls base ground from its own server, never from the visitor's browser, so the key stays secret.
-   - **Test it.** In Admin → Integrations, the **base ground (the desk)** card has **Test connection**. It should name your campaign and the key. **Send now** sends anything waiting, and the card links to everything sent (Admin → Integrations → base ground), where a refused sign-up can be retried or skipped.
+3f. **Connect Base Ground (the desk).** Base Ground is the campaign's database. The website sends it new sign-ups so organizers see one record per supporter.
+   - **Make a website key.** In Base Ground, a manager opens **Settings → Services → Website keys**, names the key (*Website*) and clicks **Make a key**. The key (`sbk_…`) is shown once: copy it straight into the Render service's Environment.
+   - **Set two variables on the Render service:** `BASE_GROUND_URL` is Base Ground's public address with no trailing slash, e.g. `https://imaginesurrey.base.win` (it must be `https://`), and `BASE_GROUND_KEY` is the key. Never give the key a `NEXT_PUBLIC_` name: the website calls Base Ground from its own server, never from the visitor's browser, so the key stays secret.
+   - **Test it.** In Admin → Integrations, the **Base Ground (the desk)** card has **Test connection**. It should name your campaign and the key. **Send now** sends anything waiting, and the card links to everything sent (Admin → Integrations → Base Ground), where a refused sign-up can be retried or skipped.
    - **What is sent, and when.** Each one only after the website has accepted it, and only what the person typed into that form:
      - a new petition or pledge signature, tagged `Petition: <title>` (or `Pledge: …`), with newsletter only if they ticked email updates
      - a newsletter sign-up, once it is confirmed (or at once when email isn't set up)
      - a volunteer shift sign-up, which files a *Wants to volunteer* request under Today → Needs you with the shift in the note
      - a membership once it is paid (or at once when membership is free): name and contact details from the form, tagged `Member (joined online)`, with a volunteer request or a lawn-sign note if they ticked those. The fee is never sent.
-     - a "delete my account" request from `/me`, as a request for the desk to do the same in base ground (it sends the email and name only)
+     - a "delete my account" request from `/me`, as a request for the desk to do the same in Base Ground (it sends the email and name only)
      - **engagement tags**, so the desk sees who is engaged: a new RSVP adds `RSVP: <event title>` (source `rsvp`, with the name and email), a paid shop order adds `Bought merch` (source `shop`, sent after the Stripe webhook has recorded the payment), and a confirmed promise follow adds `Follows: promise <number>` (source `tracker`). A tag and nothing else: no guests, items, totals or payment details.
-     - **portal edits**: when a signed-in supporter changes their name, phone, street address or postal code at `/me/preferences`, those details (source `portal`). base ground fills blanks only, so what the desk has on file is never overwritten.
+     - **portal edits**: when a signed-in supporter changes their name, phone, street address or postal code at `/me/preferences`, those details (source `portal`). Base Ground fills blanks only, so what the desk has on file is never overwritten.
      - **every withdrawal** (below)
    - **What is never sent:** money of any kind (donations, monthly gifts, membership fees, order totals and items) and anything staff change in `/admin`. Money is never sent because contribution limits are checked at the desk, where every gift is logged by hand (below).
-   - **Unsubscribes both ways (consent sync).** So that neither app emails or texts someone who said stop, every withdrawal on the website goes to base ground, and base ground can send its own to the website.
-     - **Website → base ground.** A newsletter unsubscribe, unticking email or texts in the preference centre or at `/me`, a text STOP to the website's number, and an anonymized supporter (Admin → Supporters → Anonymize) each send `POST <BASE_GROUND_URL>/in/v1/consent`, with the same website key and an `Idempotency-Key` (the outbox row's id), retried like sign-ups:
+   - **Unsubscribes both ways (consent sync).** So that neither app emails or texts someone who said stop, every withdrawal on the website goes to Base Ground, and Base Ground can send its own to the website.
+     - **Website → Base Ground.** A newsletter unsubscribe, unticking email or texts in the preference centre or at `/me`, a text STOP to the website's number, and an anonymized supporter (Admin → Supporters → Anonymize) each send `POST <BASE_GROUND_URL>/in/v1/consent`, with the same website key and an `Idempotency-Key` (the outbox row's id), retried like sign-ups:
        ```json
        { "email": "pat@example.com", "channel": "email", "action": "withdraw", "reason": "unsubscribe", "at": "2026-11-07T18:30:00.000Z" }
        ```
-       `email` and/or `phone` (`+1…`), `channel` is `email` or `sms`, `reason` is `unsubscribe`, `stop`, `preference` or `deletion`, and `at` is when it happened. base ground should answer `200 { "ok": true }` and apply it the way its own unsubscribe and STOP do. A deletion's address and number are removed from the website's copy once base ground has them (and nothing is queued for a deletion while base ground isn't connected).
-     - **Until base ground has that endpoint** it answers 404. The website treats that as *not supported yet*: the withdrawal stays waiting (never refused, no tries used), is tried again every 6 hours and with **Send now**, and the Integrations card and the outbox page say how many are waiting. Sign-ups keep going meanwhile. Once base ground has the endpoint, press **Send now** once.
-     - **base ground → website.** Make a long random secret (`openssl rand -base64 32`), set it as `BASE_GROUND_INBOUND_KEY` on the website, and give the same secret to base ground. base ground then calls:
+       `email` and/or `phone` (`+1…`), `channel` is `email` or `sms`, `reason` is `unsubscribe`, `stop`, `preference` or `deletion`, and `at` is when it happened. Base Ground should answer `200 { "ok": true }` and apply it the way its own unsubscribe and STOP do. A deletion's address and number are removed from the website's copy once Base Ground has them (and nothing is queued for a deletion while Base Ground isn't connected).
+     - **Until Base Ground has that endpoint** it answers 404. The website treats that as *not supported yet*: the withdrawal stays waiting (never refused, no tries used), is tried again every 6 hours and with **Send now**, and the Integrations card and the outbox page say how many are waiting. Sign-ups keep going meanwhile. Once Base Ground has the endpoint, press **Send now** once.
+     - **Base Ground → website.** Make a long random secret (`openssl rand -base64 32`), set it as `BASE_GROUND_INBOUND_KEY` on the website, and give the same secret to Base Ground. Base Ground then calls:
        ```
        POST https://imaginesurrey.ca/api/in/consent
        Authorization: Bearer <BASE_GROUND_INBOUND_KEY>
@@ -247,13 +249,13 @@ Owners and administrators set the public site's look in **Admin → Brand**: a p
 
        { "email": "pat@example.com", "channel": "email", "action": "withdraw", "reason": "unsubscribe", "at": "2026-11-07T10:30:00-08:00" }
        ```
-       The body has the same shape (`email` and/or `phone`). A withdrawal is applied to everyone here with that email or phone number (in any format): email clears their email consent and unsubscribes the address from the newsletter, sms clears their text consent, and an address nobody here has yet is still recorded, so a public form can't sign it up again. Each one is written to the consent ledger with source `base-ground` and to the audit log (without the address), and is never sent back to base ground. A grant (`"action": "grant"`) is answered but **not applied**: only withdrawals flow between the apps on their own; saying yes again is done on the site where the person sees the wording.
+       The body has the same shape (`email` and/or `phone`). A withdrawal is applied to everyone here with that email or phone number (in any format): email clears their email consent and unsubscribes the address from the newsletter, sms clears their text consent, and an address nobody here has yet is still recorded, so a public form can't sign it up again. Each one is written to the consent ledger with source `base-ground` and to the audit log (without the address), and is never sent back to Base Ground. A grant (`"action": "grant"`) is answered but **not applied**: only withdrawals flow between the apps on their own; saying yes again is done on the site where the person sees the wording.
        Answers: `200 { "ok": true, "applied": <people changed> }`; the same `Idempotency-Key` and body again gives the first answer with `"replayed": true`, and with another body `409`; `400` for a missing `Idempotency-Key` or a body outside the shape (the message names the field); `401` without the right key; `415` if not JSON; `429` over 120 calls a minute; `503` while `BASE_GROUND_INBOUND_KEY` isn't set.
-   - **When base ground is down or slow,** the visitor's form still works. Sign-ups (and withdrawals) wait in an outbox and are retried after 1 minute, 5 minutes, 30 minutes, 2 hours, then every 12 hours (by the daily job), and are marked refused after 8 tries. A wrong or revoked key (401) keeps everything waiting, without using up tries, until the key is fixed; the Integrations card shows the problem. Each sign-up carries its own Idempotency-Key, so a retry never makes a second person.
-   - **Before it is connected,** sign-ups are kept as *skipped*, so connecting base ground later sends only new sign-ups instead of a flood of old ones. Any skipped one can still be sent with **Retry**.
-   - **The treasurer's routine (daily, or as gifts come in).** Open **Admin → Gifts to log at the desk** (`/admin/desk-gifts`, the `money` permission). It lists every online gift not yet logged, oldest first: contributor name, address, city, postal code, email, amount (and net of refunds), slate, kind (donation, membership fee or monthly payment), when it was paid (Pacific time) and the Stripe reference. Refunded gifts and gifts over the limit are flagged. For each one, enter it in base ground under **Donations → Log a gift**, then click **Mark logged** (or tick several and mark them together). **Download this list (CSV)** gives the same rows. The dashboard shows how many are waiting. The first time, mark any gifts you already entered by hand.
+   - **When Base Ground is down or slow,** the visitor's form still works. Sign-ups (and withdrawals) wait in an outbox and are retried after 1 minute, 5 minutes, 30 minutes, 2 hours, then every 12 hours (by the daily job), and are marked refused after 8 tries. A wrong or revoked key (401) keeps everything waiting, without using up tries, until the key is fixed; the Integrations card shows the problem. Each sign-up carries its own Idempotency-Key, so a retry never makes a second person.
+   - **Before it is connected,** sign-ups are kept as *skipped*, so connecting Base Ground later sends only new sign-ups instead of a flood of old ones. Any skipped one can still be sent with **Retry**.
+   - **The treasurer's routine (daily, or as gifts come in).** Open **Admin → Gifts to log at the desk** (`/admin/desk-gifts`, the `money` permission). It lists every online gift not yet logged, oldest first: contributor name, address, city, postal code, email, amount (and net of refunds), slate, kind (donation, membership fee or monthly payment), when it was paid (Pacific time) and the Stripe reference. Refunded gifts and gifts over the limit are flagged. For each one, enter it in Base Ground under **Donations → Log a gift**, then click **Mark logged** (or tick several and mark them together). **Download this list (CSV)** gives the same rows. The dashboard shows how many are waiting. The first time, mark any gifts you already entered by hand.
 
-3g. **Turn on the human check (Cloudflare Turnstile).** Every accepted sign-up becomes a supporter record, here and in base ground, and can file a request for the desk or send an email, so the public forms need their own spam check on top of the hidden honeypot field and the rate limits. Turnstile is free, shows most people nothing at all (no puzzles), sets no advertising cookies and works with screen readers.
+3g. **Turn on the human check (Cloudflare Turnstile).** Every accepted sign-up becomes a supporter record, here and in Base Ground, and can file a request for the desk or send an email, so the public forms need their own spam check on top of the hidden honeypot field and the rate limits. Turnstile is free, shows most people nothing at all (no puzzles), sets no advertising cookies and works with screen readers.
    - In the Cloudflare dashboard, open **Turnstile → Add widget**, add your domain (and the `*.onrender.com` address while testing), and choose **Managed** mode.
    - Put the **site key** in `NEXT_PUBLIC_TURNSTILE_SITE_KEY` and the **secret key** in `TURNSTILE_SECRET_KEY`, then redeploy with a fresh build (the site key is built into the pages).
    - With both set, the petition, pledge, newsletter, membership, volunteer, RSVP, promise-follow, `/me` sign-in and preference-link forms all need a pass. If Cloudflare can't be reached, those forms ask people to try again in a moment. The donation and shop checkouts don't use it: Stripe screens payments itself.
@@ -286,7 +288,7 @@ Every table the site creates has **row-level security** turned on (a test checks
 | Shop | `orders`, `order_items` |
 | Volunteer shifts | `shift_openings` (published openings), `shifts` (one row per volunteer per shift), `volunteer_tasks` |
 | Promise follows | `promise_follows` |
-| Sent to base ground | `base_ground_outbox` (one row per forwarded sign-up), plus `people.base_ground_person_id` |
+| Sent to Base Ground | `base_ground_outbox` (one row per forwarded sign-up), plus `people.base_ground_person_id` |
 | Logged at the desk | `contributions.desk_logged_at` and `desk_logged_by` |
 | Email and text consent | `consent_events` (append-only proof), plus `people.contact_consent_at` and `people.sms_consent_at` as the current state |
 | Everything sent | `email_log`, `sms_log`, `email_campaigns` |
