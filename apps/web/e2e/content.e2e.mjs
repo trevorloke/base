@@ -94,7 +94,7 @@ const seeded = spawnSync(
   [
     "tsx",
     "--eval",
-    'import { drizzle } from "drizzle-orm/postgres-js"; import postgres from "postgres"; import { seed } from "./src/content/seeds/pages.ts"; (async () => { const c = postgres(process.env.DATABASE_URL, { max: 1 }); await seed(drizzle(c)); await c.end(); })().catch((e) => { console.error(e); process.exit(1); });',
+    'import { drizzle } from "drizzle-orm/postgres-js"; import postgres from "postgres"; import { seed } from "./src/seeds/imagine-surrey/db/pages.ts"; (async () => { const c = postgres(process.env.DATABASE_URL, { max: 1 }); await seed(drizzle(c)); await c.end(); })().catch((e) => { console.error(e); process.exit(1); });',
   ],
   { cwd: root, env: { ...process.env, DATABASE_URL: process.env.E2E_DATABASE_URL ?? process.env.DATABASE_URL }, encoding: "utf8" },
 );

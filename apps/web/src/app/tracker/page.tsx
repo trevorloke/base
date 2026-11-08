@@ -8,12 +8,13 @@ import { todayInSurrey } from "@/lib/shifts";
 import { countByStatus, PROMISE_STATUSES } from "@/lib/tracker";
 import { loadTracker } from "@/lib/server/tracker";
 import "./tracker.css";
+import { clientProfile } from "@/seeds/client";
 
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
-  title: "Safe Surrey promise tracker",
-  description: "Every promise Doug McCallum and the Safe Surrey Coalition made in the 2026 campaign, tracked against delivery.",
+  title: trackerIntro.title,
+  description: trackerIntro.lede,
   alternates: { canonical: "/tracker", types: { "application/rss+xml": "/tracker/feed.xml" } },
 };
 
@@ -45,9 +46,9 @@ export default async function TrackerPage() {
 
   return (
     <>
-      <section className="section--navy on-dark page-head">
+      <section className="section--primary on-dark page-head">
         <div className="container stack" style={{ gap: 18 }}>
-          <p className="eyebrow eyebrow--yellow">Accountability</p>
+          <p className="eyebrow eyebrow--highlight">Accountability</p>
           <h1 className="display pop">{trackerIntro.title}</h1>
           <p className="lede" style={{ maxWidth: 760 }}>
             {trackerIntro.lede}
@@ -72,7 +73,7 @@ export default async function TrackerPage() {
                 <span className="score-label">Promises tracked</span>
               </li>
             </ul>
-            <p className="small" style={{ color: "var(--pale-blue)" }}>
+            <p className="small" style={{ color: "var(--primary-pale)" }}>
               {lastUpdated ? `Last updated ${formatDate(lastUpdated)}.` : "Tracking began October 18, 2026."} Scored against the public record, with sources for every line.
             </p>
           </div>
@@ -100,6 +101,7 @@ export default async function TrackerPage() {
           <p className="lede" style={{ maxWidth: 860, color: "var(--ink)", fontWeight: 600 }}>
             {trackerIntro.summary}
           </p>
+          {trackerHighlights.length > 0 && (
           <div className="features">
             {trackerHighlights.map((h) => (
               <article key={h.title} className="feature">
@@ -109,6 +111,7 @@ export default async function TrackerPage() {
               </article>
             ))}
           </div>
+          )}
         </div>
       </section>
 
@@ -166,7 +169,7 @@ export default async function TrackerPage() {
         </div>
       </section>
 
-      <section id="subscribe" className="section section--navy on-dark">
+      <section id="subscribe" className="section section--primary on-dark">
         <div className="container split">
           <div className="stack" style={{ flex: "1 1 420px", gap: 14 }}>
             <h2 className="display pop" style={{ fontSize: "clamp(32px, 4.4vw, 52px)" }}>
@@ -177,7 +180,7 @@ export default async function TrackerPage() {
               there.
             </p>
             <div className="btn-row">
-              <Link href="/#join" className="btn btn--yellow btn--lg">
+              <Link href="/#join" className="btn btn--highlight btn--lg">
                 Become a member
               </Link>
               <Link href="/donate" className="btn btn--ghost btn--lg">
@@ -201,7 +204,7 @@ export default async function TrackerPage() {
           <div className="newsletter-bar" style={{ flex: "1 1 420px", alignSelf: "center" }}>
             <div className="copy">
               <label htmlFor="nl-email">Promise tracker updates</label>
-              <p className="small">By subscribing you agree to receive email from Imagine Surrey. Unsubscribe anytime.</p>
+              <p className="small">By subscribing you agree to receive email from {clientProfile.orgName}. Unsubscribe anytime.</p>
             </div>
             <NewsletterForm source="tracker" />
           </div>
@@ -213,9 +216,11 @@ export default async function TrackerPage() {
           <h2 className="h3" style={{ fontSize: 28 }}>
             Sources
           </h2>
-          <p className="body" style={{ maxWidth: 860 }}>
-            {sourcesNote}
-          </p>
+          {sourcesNote && (
+            <p className="body" style={{ maxWidth: 860 }}>
+              {sourcesNote}
+            </p>
+          )}
           <div className="source-groups">
             {sourceGroups.map((g) => (
               <div key={g.label}>
@@ -234,7 +239,7 @@ export default async function TrackerPage() {
           </div>
           <p className="small">
             See something we&apos;ve missed or scored wrong? <Link href="/tracker/methodology#dispute">Dispute a score</Link>: email{" "}
-            <a href="mailto:hello@imaginesurrey.ca">hello@imaginesurrey.ca</a> with a link to the record.
+            <a href={`mailto:${clientProfile.email}`}>{clientProfile.email}</a> with a link to the record.
           </p>
         </div>
       </section>

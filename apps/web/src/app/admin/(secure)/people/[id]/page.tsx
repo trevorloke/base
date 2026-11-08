@@ -8,7 +8,7 @@ import { LOCALES } from "@/components/admin/people/query";
 import { getDb } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { can, requireAdmin } from "@/lib/server/admin-auth";
-import { outboxForPerson } from "@/lib/server/starbase-outbox";
+import { outboxForPerson } from "@/lib/server/base-ground-outbox";
 import { displayName, filterFacets, loadPerson, type TimelineEntry } from "@/lib/server/supporters";
 import { addNoteAction, addTagAction, anonymizeAction, removeTagAction, savePerson } from "./actions";
 import "../people.css";
@@ -28,7 +28,7 @@ const STATUS_TONE: Record<string, string> = {
   pending: "badge--warn",
   pending_payment: "badge--warn",
   queued: "badge--warn",
-  scheduled: "badge--navy",
+  scheduled: "badge--primary",
   expired: "badge--bad",
   failed: "badge--bad",
   cancelled: "badge--bad",
@@ -75,7 +75,7 @@ export default async function PersonPage({ params }: PageProps<"/admin/people/[i
           {membership.status === "active" && <span className="badge badge--ok">Member until {membership.expiresAt ? DAY.format(membership.expiresAt) : ""}</span>}
           {membership.status === "expired" && <span className="badge badge--bad">Membership expired</span>}
           {membership.status === "pending" && <span className="badge badge--warn">Membership pending payment</span>}
-          {money && profile.donatedThisYearCents > 0 && <span className="badge badge--navy">Gave {formatCents(profile.donatedThisYearCents)} this year</span>}
+          {money && profile.donatedThisYearCents > 0 && <span className="badge badge--primary">Gave {formatCents(profile.donatedThisYearCents)} this year</span>}
           {anonymized && <span className="badge badge--bad">Anonymized</span>}
         </div>
       </div>
@@ -104,8 +104,8 @@ export default async function PersonPage({ params }: PageProps<"/admin/people/[i
               <dd>{person.issue ?? "—"}</dd>
               <dt>Source</dt>
               <dd>{person.source ?? "—"}</dd>
-              <dt>Starbase id</dt>
-              <dd>{person.starbasePersonId ? <span className="secret">{person.starbasePersonId}</span> : "—"}</dd>
+              <dt>base ground id</dt>
+              <dd>{person.baseGroundPersonId ? <span className="secret">{person.baseGroundPersonId}</span> : "—"}</dd>
               <dt>Added</dt>
               <dd>{WHEN.format(person.createdAt)}</dd>
             </dl>
@@ -204,11 +204,11 @@ export default async function PersonPage({ params }: PageProps<"/admin/people/[i
           </section>
 
           <section className="profile-card" aria-labelledby="desk-title">
-            <h2 id="desk-title">Sent to Starbase</h2>
+            <h2 id="desk-title">Sent to base ground</h2>
             {desk.length === 0 ? (
               <p className="small">Nothing from this supporter has been forwarded to the desk.</p>
             ) : (
-              <ul className="notes" data-starbase-rows>
+              <ul className="notes" data-base-ground-rows>
                 {desk.map((r) => (
                   <li key={r.id} className="note">
                     <span className="note__meta">

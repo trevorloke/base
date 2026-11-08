@@ -5,8 +5,9 @@ import { PreferencesForm } from "./PreferencesForm";
 import { RequestLinkForm } from "./RequestLinkForm";
 import { peekPreferencesToken, preferenceState } from "./server";
 import "./preferences.css";
+import { clientProfile } from "@/seeds/client";
 
-export const metadata: Metadata = { title: "Your preferences", description: "Choose what Imagine Surrey sends you.", robots: { index: false } };
+export const metadata: Metadata = { title: "Your preferences", description: `Choose what ${clientProfile.orgName} sends you.`, robots: { index: false } };
 
 /**
  * The preference centre. With a valid one-time token (from an email footer's
@@ -22,7 +23,7 @@ export default async function PreferencesPage({ searchParams }: PageProps<"/pref
 
   return (
     <>
-      <PageHead title="Your preferences">Choose what Imagine Surrey sends you: email updates, texts, and the language you prefer.</PageHead>
+      <PageHead title="Your preferences">Choose what {clientProfile.orgName} sends you: email updates, texts, and the language you prefer.</PageHead>
       <section className="section">
         <div className="container prefs-container">
           {state ? <PreferencesForm token={token} initial={state} /> : <RequestLinkForm expired={Boolean(token)} />}

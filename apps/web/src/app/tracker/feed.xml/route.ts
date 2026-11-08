@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
 import { buildRss, noonInSurrey, promisePath, STATUS_BY_ID } from "@/lib/tracker";
 import { latestUpdates } from "@/lib/server/tracker";
+import { clientProfile } from "@/seeds/client";
 
 // RSS 2.0 of the newest updates across every promise. Rendered per request
 // from the cached loader, so it is never more than one admin write behind.
@@ -10,9 +11,9 @@ export async function GET() {
   const siteUrl = env.siteUrl;
   const updates = await latestUpdates(50);
   const xml = buildRss({
-    title: "Safe Surrey promise tracker: updates",
+    title: `${clientProfile.trackerName}: updates`,
     link: `${siteUrl}/tracker`,
-    description: "Every change to the score of a Safe Surrey Coalition promise, with the record behind it. From Imagine Surrey.",
+    description: `Every change to the score of a promise on the ${clientProfile.trackerName.replace(/^Promise tracker$/, "promise tracker")}, with the record behind it. From ${clientProfile.orgName}.`,
     selfUrl: `${siteUrl}/tracker/feed.xml`,
     lastBuildDate: updates[0] ? new Date(updates[0].createdAt) : new Date(),
     items: updates.map((u) => ({

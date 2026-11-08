@@ -25,7 +25,7 @@ export default async function MemberVerify({ searchParams }: PageProps<"/me/veri
               <input type="hidden" name="next" value={next} />
               <p>The link works once and lasts 30 minutes from when we sent it.</p>
               <div>
-                <button type="submit" className="btn btn--red btn--lg">
+                <button type="submit" className="btn btn--accent btn--lg">
                   Sign in
                 </button>
               </div>

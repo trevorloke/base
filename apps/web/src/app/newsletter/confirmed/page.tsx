@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHead } from "@/components/PageHead";
 import { getSettings } from "@/lib/server/settings";
+import { fromAroundPlace } from "@/seeds/client";
 
 export const metadata: Metadata = { title: "Subscription confirmed", robots: { index: false } };
 
@@ -20,7 +21,7 @@ export default async function Confirmed({ searchParams }: PageProps<"/newsletter
         </PageHead>
         <section className="section">
           <div className="container">
-            <a href={`mailto:${org.email}?subject=${encodeURIComponent("Please add me back to the newsletter")}`} className="btn btn--navy btn--lg">
+            <a href={`mailto:${org.email}?subject=${encodeURIComponent("Please add me back to the newsletter")}`} className="btn btn--primary btn--lg">
               Email {org.email}
             </a>
           </div>
@@ -34,11 +35,11 @@ export default async function Confirmed({ searchParams }: PageProps<"/newsletter
       <PageHead title={invalid ? "That link has expired" : "You're subscribed"}>
         {invalid
           ? "Confirmation links work once and last three days. Sign up again and we'll send a fresh one."
-          : "Thanks for confirming. You'll get news and events from around Surrey, and you can unsubscribe from the bottom of any email."}
+          : `Thanks for confirming. You'll get news and events${fromAroundPlace}, and you can unsubscribe from the bottom of any email.`}
       </PageHead>
       <section className="section">
         <div className="container">
-          <Link href={invalid ? "/#newsletter" : "/"} className="btn btn--navy btn--lg">
+          <Link href={invalid ? "/#newsletter" : "/"} className="btn btn--primary btn--lg">
             {invalid ? "Sign up again" : "Back to the home page"}
           </Link>
         </div>

@@ -8,8 +8,9 @@ import { DEFAULT_CENTS, starClubCents } from "@/lib/contributions";
 import { formatCents } from "@/lib/money";
 import { currentLimit } from "@/lib/server/limits";
 import { getSettings } from "@/lib/server/settings";
+import { clientProfile } from "@/seeds/client";
 
-export const metadata: Metadata = { title: "Chip in", description: "Contribute to Imagine Surrey, one-time or monthly." };
+export const metadata: Metadata = { title: "Chip in", description: `Contribute to ${clientProfile.orgName}, one-time or monthly.` };
 
 export default async function DonatePage({ searchParams }: PageProps<"/donate">) {
   await connection();

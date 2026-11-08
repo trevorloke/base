@@ -58,9 +58,9 @@ export const people = pgTable(
     // Relational organizing: the share code this person hands out, and who brought them in.
     referralCode: text("referral_code"),
     referredById: uuid("referred_by_id").references((): AnyPgColumn => people.id, { onDelete: "set null" }),
-    // The id the campaign's database (Starbase, "the desk") answered for this
+    // The id the campaign's database (base ground, "the desk") answered for this
     // person, so staff can find the same supporter there.
-    starbasePersonId: text("starbase_person_id"),
+    baseGroundPersonId: text("base_ground_person_id"),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -158,9 +158,9 @@ export const contributions = pgTable(
     stripeInvoiceId: text("stripe_invoice_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
-    // When the treasurer logged this gift at the desk (Starbase → Donations →
+    // When the treasurer logged this gift at the desk (base ground → Donations →
     // Log a gift), where the contribution limits are checked. Online gifts are
-    // never sent to Starbase automatically.
+    // never sent to base ground automatically.
     deskLoggedAt: timestamp("desk_logged_at", { withTimezone: true }),
     deskLoggedById: uuid("desk_logged_by").references((): AnyPgColumn => adminUsers.id, { onDelete: "set null" }),
     createdAt: createdAt(),
@@ -652,6 +652,20 @@ export const siteSettings = pgTable("site_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
+// The site's look (Admin → Brand): one row, the brand as src/lib/brand.ts
+// defines it. With no row, the preset from BASE_WEB_BRAND_PRESET or the
+// client's seed applies.
+export const siteBrand = pgTable(
+  "site_brand",
+  {
+    id: integer("id").primaryKey().default(1),
+    value: jsonb("value").notNull(),
+    updatedById: uuid("updated_by_id").references(() => adminUsers.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("site_brand_one_row", sql`${t.id} = 1`)],
+).enableRLS();
+
 // Free-form pages such as the privacy policy, served at /<slug>.
 export const sitePages = pgTable(
   "site_pages",
@@ -797,37 +811,37 @@ export const consentEvents = pgTable(
   (t) => [index("consent_events_person_idx").on(t.personId, t.createdAt), index("consent_events_email_idx").on(t.email, t.createdAt)],
 ).enableRLS();
 
-// ── Starbase ("the desk") ─────────────────────────────────────────────────
+// ── base ground ("the desk") ─────────────────────────────────────────────────
 // Sign-ups the website forwards to the campaign's database. Public routes
 // only write a row here; delivery happens after the response (and from the
-// daily job), so Starbase being slow or down never touches a visitor's form.
+// daily job), so base ground being slow or down never touches a visitor's form.
 // The row id is the Idempotency-Key, so a retry never makes a second person.
 // Money, RSVPs, orders and follows are never written here.
-export const starbaseOutboxStatus = pgEnum("starbase_outbox_status", ["pending", "sent", "failed", "skipped"]);
+export const baseGroundOutboxStatus = pgEnum("base_ground_outbox_status", ["pending", "sent", "failed", "skipped"]);
 
-export const starbaseOutbox = pgTable(
-  "starbase_outbox",
+export const baseGroundOutbox = pgTable(
+  "base_ground_outbox",
   {
     id: id(),
     // petition | pledge | newsletter | volunteer-shift | membership | deletion-request
     kind: text("kind").notNull(),
     personId: uuid("person_id").references(() => people.id, { onDelete: "set null" }),
-    // Which Starbase endpoint the row goes to, and the exact body sent there.
+    // Which base ground endpoint the row goes to, and the exact body sent there.
     endpoint: text("endpoint").notNull().default("/in/v1/people"),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
-    status: starbaseOutboxStatus("status").notNull().default("pending"),
+    status: baseGroundOutboxStatus("status").notNull().default("pending"),
     attempts: integer("attempts").notNull().default(0),
     lastError: text("last_error"),
     lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
-    starbasePersonId: text("starbase_person_id"),
+    baseGroundPersonId: text("base_ground_person_id"),
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow(),
     createdAt: createdAt(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
   },
   (t) => [
-    index("starbase_outbox_due_idx").on(t.status, t.nextAttemptAt),
-    index("starbase_outbox_person_idx").on(t.personId),
-    index("starbase_outbox_created_idx").on(t.createdAt),
+    index("base_ground_outbox_due_idx").on(t.status, t.nextAttemptAt),
+    index("base_ground_outbox_person_idx").on(t.personId),
+    index("base_ground_outbox_created_idx").on(t.createdAt),
   ],
 ).enableRLS();
 

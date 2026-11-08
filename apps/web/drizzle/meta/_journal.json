@@ -57,6 +57,20 @@
       "when": 1794036272339,
       "tag": "0007_memo_build",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794600000000,
+      "tag": "0008_base_ground",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794084520272,
+      "tag": "0009_site_brand",
+      "breakpoints": true
     }
   ]
 }

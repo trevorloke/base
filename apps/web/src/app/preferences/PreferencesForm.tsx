@@ -90,7 +90,7 @@ export function PreferencesForm({ token: initialToken, initial }: { token: strin
             </Link>
           </p>
         ) : null}
-        <SubmitButton pending={pending} disabled={expired} className="btn btn--navy btn--lg" pendingLabel="Saving…">
+        <SubmitButton pending={pending} disabled={expired} className="btn btn--primary btn--lg" pendingLabel="Saving…">
           Save my preferences
         </SubmitButton>
         <p className="small">

@@ -5,6 +5,7 @@ import { rsvpSchema } from "@/lib/validation";
 import { Checkbox, ConsentCheckbox, ErrorSummary, Honeypot, LiveRegion, PostalCodeField, SubmitButton, SuccessCard, TextField, TrackingFields } from "./Field";
 import { HumanCheck } from "./HumanCheck";
 import { readForm, useApiForm } from "./useApiForm";
+import { clientProfile } from "@/seeds/client";
 
 /**
  * RSVP to an event. Sends the full rsvpSchema body: name, email, guests,
@@ -72,12 +73,12 @@ export function RsvpForm({ slug, eventTitle }: { slug: string; eventTitle?: stri
           error={fields.guests}
         />
         <Checkbox id="r-newsletter" name="newsletter" error={fields.newsletter}>
-          Send me the Imagine Surrey newsletter too. I can unsubscribe at any time.
+          Send me the {clientProfile.orgName} newsletter too. I can unsubscribe at any time.
         </Checkbox>
         <ConsentCheckbox id="r-sms" kind="sms" error={fields.smsConsent} />
         <HumanCheck control={human} error={fields.human} />
         <ErrorSummary ref={summaryRef} error={error} fields={fields} />
-        <SubmitButton pending={pending} className="btn btn--red btn--lg">
+        <SubmitButton pending={pending} className="btn btn--accent btn--lg">
           RSVP
         </SubmitButton>
       </form>

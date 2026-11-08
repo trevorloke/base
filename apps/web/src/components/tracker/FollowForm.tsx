@@ -67,7 +67,7 @@ export function FollowForm({ promiseId, promiseNumber }: { promiseId: string; pr
         {followCopy.consent}
       </Checkbox>
       <HumanCheck control={human} />
-      <button type="submit" className="btn btn--navy" aria-busy={pending} aria-disabled={pending} onClick={(e) => pending && e.preventDefault()}>
+      <button type="submit" className="btn btn--primary" aria-busy={pending} aria-disabled={pending} onClick={(e) => pending && e.preventDefault()}>
         {pending ? "Saving…" : followCopy.button}
       </button>
       <p className="small" style={{ margin: 0 }}>

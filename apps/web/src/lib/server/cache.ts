@@ -9,6 +9,7 @@ import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
  */
 export const TAGS = {
   settings: "settings",
+  brand: "brand",
   pages: "pages",
   news: "news",
   events: "events",

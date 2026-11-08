@@ -31,8 +31,8 @@
 }
 .msg-status--sending,
 .msg-status--queued {
-  background: var(--yellow);
-  color: var(--navy);
+  background: var(--highlight);
+  color: var(--primary);
 }
 .msg-status--failed {
   background: #d81b1e;
@@ -40,8 +40,8 @@
 }
 .msg-status--cancelled,
 .msg-status--skipped {
-  background: var(--pale-blue);
-  color: var(--navy);
+  background: var(--primary-pale);
+  color: var(--primary);
 }
 
 /* Log */
@@ -65,7 +65,7 @@
 }
 .table td .error-text {
   display: block;
-  color: var(--red-hover);
+  color: var(--accent-hover);
   font-size: 13px;
 }
 .inline-result {
@@ -74,7 +74,7 @@
   font-size: 13px;
 }
 .inline-result.is-error {
-  color: var(--red-hover);
+  color: var(--accent-hover);
   font-weight: 700;
 }
 

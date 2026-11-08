@@ -10,7 +10,7 @@ import { ActionError, checkbox, optionalText, type ActionState } from "@/lib/ser
 import { recordConsent } from "@/lib/server/consent";
 import { updatePerson } from "@/lib/server/people";
 import { memberAction } from "@/lib/server/portal";
-import { forwardConsentWithdrawal, forwardPortalEdit } from "@/lib/server/starbase-forward";
+import { forwardConsentWithdrawal, forwardPortalEdit } from "@/lib/server/base-ground-forward";
 
 const schema = z.object({
   firstName: optionalText(80),
@@ -28,8 +28,8 @@ const schema = z.object({
  * the ledger gets the exact wording shown, and the person's current-state
  * columns follow from it (recordConsent does both). A signed-in member has
  * proved control of the address, so the grant is verified. A withdrawal goes
- * to Starbase, and so does a changed name, phone, street address or postal
- * code (Starbase fills blanks only). The action gives the submitted values
+ * to base ground, and so does a changed name, phone, street address or postal
+ * code (base ground fills blanks only). The action gives the submitted values
  * back and the form shows them after React resets it.
  */
 const save = memberAction("/me/preferences", schema, async (data, { person, meta }) => {
@@ -63,7 +63,7 @@ const save = memberAction("/me/preferences", schema, async (data, { person, meta
 
 type Details = { firstName: string | null; lastName: string | null; phone: string | null; address: string | null; postalCode: string | null };
 
-/** Whether any detail Starbase keeps changed: a new value, not a cleared one (Starbase never clears a field from here). */
+/** Whether any detail base ground keeps changed: a new value, not a cleared one (base ground never clears a field from here). */
 function portalDetailsChanged(before: Details, after: Details): boolean {
   const same = (a: string | null, b: string | null) => (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
   return (Object.keys(after) as (keyof Details)[]).some((k) => Boolean(after[k]?.trim()) && !same(before[k], after[k]));

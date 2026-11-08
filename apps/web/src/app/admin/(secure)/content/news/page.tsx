@@ -21,7 +21,7 @@ export default async function NewsAdmin({ searchParams }: PageProps<"/admin/cont
       crumbs={[{ href: "/admin/content", label: "Content" }]}
       intro="Posts appear on /news and the home page once published. Scheduled posts go live on their own at the chosen time."
       actions={
-        <Link href={`${ADMIN_PATHS.news}/new`} className="btn btn--red">
+        <Link href={`${ADMIN_PATHS.news}/new`} className="btn btn--accent">
           Write a post
         </Link>
       }

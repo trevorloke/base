@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { LOCALES, normalizeTag } from "@/components/admin/people/query";
 import { getDb } from "@/lib/db";
-import { CAMPUSES, NEIGHBOURHOODS, normalizePostalCode, OUTSIDE_SURREY, POSTAL_CODE_RE } from "@/lib/neighbourhoods";
+import { CAMPUSES, choices, NEIGHBOURHOODS, normalizePostalCode, OUTSIDE_SURREY, POSTAL_CODE_RE } from "@/lib/neighbourhoods";
 import { ActionError, adminAction, checkbox, optionalText } from "@/lib/server/actions";
 import { audit } from "@/lib/server/audit";
 import { updatePerson } from "@/lib/server/people";
@@ -34,13 +34,13 @@ export const savePerson = adminAction(
     city: optionalText(80),
     province: optionalText(40),
     postalCode: optionalText(10).refine((v) => !v || POSTAL_CODE_RE.test(v), "Enter a postal code like A1A 1A1"),
-    neighbourhood: z.enum([...NEIGHBOURHOODS, OUTSIDE_SURREY, ""]),
+    neighbourhood: z.enum(choices(NEIGHBOURHOODS, ...(OUTSIDE_SURREY ? [OUTSIDE_SURREY] : []), "")),
     birthdate: z.union([z.literal(""), z.iso.date("Enter a date like 1990-04-12")]),
     citizenshipStatus: z.enum(["Citizen", "Permanent resident", "Other", ""]),
     gender: optionalText(40),
     languages: optionalText(300),
     student: checkbox(),
-    campus: z.enum([...CAMPUSES, ""]),
+    campus: z.enum(choices(CAMPUSES, "")),
     issue: optionalText(200),
     interestVolunteer: checkbox(),
     interestLawnSign: checkbox(),

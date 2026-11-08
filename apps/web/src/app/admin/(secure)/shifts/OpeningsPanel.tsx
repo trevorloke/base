@@ -182,7 +182,7 @@ export function OpeningsPanel({ initialOpenings, tasks, today }: { initialOpenin
             />
             <span>Show past openings</span>
           </label>
-          <button type="button" className="btn btn--navy" style={{ minHeight: 40 }} onClick={() => startEdit("new")} aria-expanded={editing === "new"}>
+          <button type="button" className="btn btn--primary" style={{ minHeight: 40 }} onClick={() => startEdit("new")} aria-expanded={editing === "new"}>
             + New opening
           </button>
         </div>
@@ -250,7 +250,7 @@ export function OpeningsPanel({ initialOpenings, tasks, today }: { initialOpenin
           </Checkbox>
           {error && <Alert>{error}</Alert>}
           <div className="btn-row" style={{ gap: 8 }}>
-            <button type="submit" className="btn btn--navy" aria-busy={pending} aria-disabled={pending}>
+            <button type="submit" className="btn btn--primary" aria-busy={pending} aria-disabled={pending}>
               {pending ? "Saving…" : current ? "Save opening" : "Add opening"}
             </button>
             <button type="button" className="btn btn--outline" onClick={() => setEditing(null)}>

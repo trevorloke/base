@@ -35,6 +35,7 @@ import { contributionTotals } from "./payments";
 import { limitForYear } from "./limits";
 import { ensureReferralCode, type Person } from "./people";
 import { getSettings } from "./settings";
+import { clientProfile } from "@/seeds/client";
 
 // ── Server actions for supporters ──────────────────────────────────────────
 
@@ -194,7 +195,7 @@ export async function upcomingShifts(db: Db, personId: string, now = new Date())
 export function shiftToIcs(s: Omit<UpcomingShift, "calendarUrl">): IcsEvent {
   return {
     uid: `shift-${s.id}@${uidHost()}`,
-    title: `${s.title} (Imagine Surrey)`,
+    title: `${s.title} (${clientProfile.orgName})`,
     start: s.start,
     end: s.end,
     location: s.location || undefined,

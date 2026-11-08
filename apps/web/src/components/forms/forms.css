@@ -21,26 +21,26 @@
   font-size: 14px;
   font-weight: 700;
   line-height: 1.4;
-  color: var(--navy);
+  color: var(--primary);
 }
 
 /* ── Error summary ──────────────────────────────────────────────────── */
 .error-summary {
   padding: 16px 18px;
-  border-radius: 8px;
-  border: 2px solid var(--red);
-  background: var(--red-pale);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--accent);
+  background: var(--accent-pale);
   color: var(--ink);
 }
 .error-summary:focus {
-  outline: 3px solid var(--navy);
+  outline: 3px solid var(--primary);
   outline-offset: 2px;
 }
 .error-summary h3 {
   margin: 0 0 6px;
   font-size: 18px;
   line-height: 1.25;
-  color: var(--navy);
+  color: var(--primary);
 }
 .error-summary p {
   margin: 0 0 8px;
@@ -56,7 +56,7 @@
   line-height: 1.45;
 }
 .error-summary a {
-  color: var(--navy);
+  color: var(--primary);
   font-weight: 700;
 }
 .btn[aria-busy="true"] {
@@ -79,7 +79,7 @@
 
 /* ── Success card extras ────────────────────────────────────────────── */
 .success-card h3:focus {
-  outline: 3px solid var(--navy);
+  outline: 3px solid var(--primary);
   outline-offset: 4px;
 }
 .success-actions {
@@ -96,7 +96,7 @@
   width: 64px;
   min-height: 40px;
   padding: 0 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 2px solid var(--field-border);
   font-family: var(--font);
   font-size: 18px;
@@ -120,7 +120,7 @@
   padding: 0;
   border: 0;
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--bg);
   color: var(--ink);
   box-shadow: 0 24px 64px rgba(0, 20, 50, 0.35);
 }
@@ -143,7 +143,7 @@
   margin: 0;
   font-size: 24px;
   line-height: 1.2;
-  color: var(--navy);
+  color: var(--primary);
 }
 .cart-lines {
   list-style: none;
@@ -164,7 +164,7 @@
 .cart-line-name {
   margin: 0;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .cart-line-price {
   font-weight: 800;
@@ -175,7 +175,7 @@
   justify-content: space-between;
   gap: 12px;
   padding-top: 12px;
-  border-top: 2px solid var(--navy);
+  border-top: 2px solid var(--primary);
   font-size: 18px;
   font-weight: 800;
 }
@@ -201,6 +201,6 @@
   outline: none;
 }
 .human-check:focus-visible {
-  outline: 3px solid var(--navy);
+  outline: 3px solid var(--primary);
   outline-offset: 2px;
 }

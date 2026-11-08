@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NEIGHBOURHOODS, POSTAL_CODE_RE } from "./neighbourhoods";
+import { choices, NEIGHBOURHOODS, POSTAL_CODE_RE } from "./neighbourhoods";
 import { HEX_COLOR_RE, ISO_DATE_RE } from "./shifts";
 import { rsvpSchema } from "./validation";
 
@@ -27,7 +27,7 @@ const openingFields = {
   taskId,
   title: z.string().trim().min(1, "Give the opening a title").max(120),
   location: z.string().trim().max(200),
-  neighbourhood: z.enum(NEIGHBOURHOODS).nullable(),
+  neighbourhood: z.enum(choices(NEIGHBOURHOODS)).nullable(),
   capacity: z.number().int("Whole numbers only").min(1, "At least one spot").max(500, "At most 500 spots"),
   notes: z.string().trim().max(2000),
   published: z.boolean(),

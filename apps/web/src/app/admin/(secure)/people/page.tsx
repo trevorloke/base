@@ -179,7 +179,7 @@ export default async function AdminPeople({ searchParams }: PageProps<"/admin/pe
           )}
         </div>
         <div className="crm-filters__actions">
-          <button type="submit" className="btn btn--navy btn--compact">
+          <button type="submit" className="btn btn--primary btn--compact">
             Apply
           </button>
           {hasFilters(query) && (

@@ -9,6 +9,8 @@ import { shareLinks, withRef, type ShareLinks } from "@/lib/share";
 import { STATUS_BY_ID, type PromiseStatus } from "@/lib/tracker";
 import type { MessageContext } from "./messages";
 import { button, esc, layout, paragraph, textVersion } from "./templates";
+import { clientProfile } from "@/seeds/client";
+import { jurisdiction } from "@/lib/jurisdiction";
 
 export type EmailAttachment = { filename: string; /** base64 */ content: string; contentType?: string };
 export type BuiltEmail = { subject: string; html: string; text: string; attachments?: EmailAttachment[] };
@@ -36,7 +38,7 @@ function icsAttachment(filename: string, event: IcsEvent): EmailAttachment {
   return { filename, content: Buffer.from(icsCalendar([event]), "utf8").toString("base64"), contentType: "text/calendar" };
 }
 
-const ICS_DOMAIN = "imaginesurrey.ca";
+const ICS_DOMAIN = clientProfile.uidDomain;
 
 export function eventToIcs(ctx: MessageContext, event: { id: string; slug: string; title: string; startsAt: Date; endsAt?: Date | null; location: string; address?: string | null; summary: string }): IcsEvent {
   return {
@@ -64,7 +66,7 @@ export function membershipWelcomeEmail(ctx: MessageContext, m: { firstName?: str
     paragraph(greet(m.firstName)) +
     paragraph(`Thanks for joining ${esc(org)}. You're one of the residents making sure City Hall gets the basics right.`) +
     paragraph(until ? `Your membership runs until <strong>${esc(until)}</strong>. ` : "") +
-    paragraph(m.votingEligible ? `As a member you have a vote at member meetings and a say in what we stand for.` : `Because you live outside Surrey you can take part in everything but the votes at member meetings.`) +
+    paragraph(m.votingEligible ? `As a member you have a vote at member meetings and a say in what we stand for.` : `Because you live outside ${clientProfile.place} you can take part in everything but the votes at member meetings.`) +
     heading("What happens next") +
     bullets([
       `We'll email you about member meetings, your neighbourhood committee and ways to help.`,
@@ -81,7 +83,7 @@ export function membershipWelcomeEmail(ctx: MessageContext, m: { firstName?: str
     [
       `Thanks for joining ${org}.`,
       until ? `Your membership runs until ${until}.` : "",
-      m.votingEligible ? "As a member you have a vote at member meetings." : "Because you live outside Surrey you can take part in everything but the votes at member meetings.",
+      m.votingEligible ? "As a member you have a vote at member meetings." : `Because you live outside ${clientProfile.place} you can take part in everything but the votes at member meetings.`,
       "",
       "What happens next: we'll email you about member meetings, your neighbourhood committee and ways to help.",
       `Your supporter portal: ${portal}`,
@@ -107,12 +109,12 @@ export function donationThanksEmail(ctx: MessageContext, d: { firstName?: string
 
   const bodyHtml =
     paragraph(greet(d.firstName)) +
-    paragraph(`Thank you. Your contribution of <strong>${esc(amounts)}</strong> is recorded. It pays for organizers, printing and outreach in every town centre.`) +
+    paragraph(`Thank you. Your contribution of <strong>${esc(amounts)}</strong> is recorded. It pays for organizers, printing and outreach${clientProfile.places.names.length ? " in every town centre" : ""}.`) +
     paragraph(`Stripe emails your receipt separately. Contributions to an elector organization aren't tax deductible.`) +
-    (d.refundedOverLimit ? paragraph(`Any part of a gift over the yearly limit set by Elections BC is refunded to your card automatically.`) : "") +
+    (d.refundedOverLimit ? paragraph(`Any part of a gift over the yearly limit set by ${jurisdiction.authority} is refunded to your card automatically.`) : "") +
     (monthly
-      ? paragraph(`Monthly gifts support the Imagine Victory Fund, our war chest for the next election. To change or cancel, email ${link(`mailto:${ctx.orgEmail}`, ctx.orgEmail)}.`)
-      : heading("Make it monthly?") + paragraph(`A monthly gift, even a small one, lets us plan ahead and builds the Imagine Victory Fund for the next election.`) + button(upsell, "Give monthly"));
+      ? paragraph(`${clientProfile.fundName ? `Monthly gifts support the ${clientProfile.fundName}, our war chest for the next election. ` : ""}To change or cancel, email ${link(`mailto:${ctx.orgEmail}`, ctx.orgEmail)}.`)
+      : heading("Make it monthly?") + paragraph(`A monthly gift, even a small one, lets us plan ahead${clientProfile.fundName ? ` and builds the ${clientProfile.fundName} for the next election` : ""}.`) + button(upsell, "Give monthly"));
 
   const html = layout({ title: "Thank you", bodyHtml, siteUrl: ctx.siteUrl, orgName: org, orgEmail: ctx.orgEmail, reason: "You're getting this because you made a contribution.", unsubscribeUrl: null });
   const text = textVersion(
@@ -132,7 +134,7 @@ export function recurringStartedEmail(ctx: MessageContext, r: { firstName?: stri
   const parts = (Object.keys(r.slateAmounts) as Slate[]).filter((s) => r.slateAmounts[s]).map((s) => `${formatCents(r.slateAmounts[s]!)} a month to the ${SLATE_LABEL[s]}`);
   const bodyHtml =
     paragraph(greet(r.firstName)) +
-    paragraph(`Thank you. Your monthly gift of <strong>${esc(parts.join(" and "))}</strong> is set up and supports the Imagine Victory Fund.`) +
+    paragraph(`Thank you. Your monthly gift of <strong>${esc(parts.join(" and "))}</strong> is set up${clientProfile.fundName ? ` and supports the ${clientProfile.fundName}` : ""}.`) +
     paragraph(`Each payment is recorded as a contribution under BC's campaign financing rules, and Stripe emails a receipt every month.`) +
     heading("Changing or cancelling") +
     paragraph(`Email us at ${link(`mailto:${ctx.orgEmail}`, ctx.orgEmail)} any time and we'll change the amount or stop the gift, no questions asked.`);
@@ -182,7 +184,7 @@ export function signatureEmail(
   const share = shareBlock("Share it with a neighbour", shareLinks({ url, text: shareText, subject: c.title }));
   const name = [s.firstName, s.lastName].filter(Boolean).join(" ");
   const mailto = c.targetEmails.length
-    ? `mailto:${c.targetEmails.join(",")}?subject=${encodeURIComponent(c.title)}&body=${encodeURIComponent(`${c.statement || c.title}\n\n${name}\nSurrey resident`)}`
+    ? `mailto:${c.targetEmails.join(",")}?subject=${encodeURIComponent(c.title)}&body=${encodeURIComponent(`${c.statement || c.title}\n\n${name}\n${clientProfile.place ? `${clientProfile.place} resident` : "Resident"}`)}`
     : null;
   const joinUrl = withRef(`${ctx.siteUrl}/#join`, s.referralCode);
   const donateUrl = `${ctx.siteUrl}/donate`;

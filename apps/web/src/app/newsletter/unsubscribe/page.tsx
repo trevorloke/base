@@ -24,7 +24,7 @@ export default async function Unsubscribe({ searchParams }: PageProps<"/newslett
             {token ? (
               <form method="post" action="/api/newsletter/unsubscribe">
                 <input type="hidden" name="token" value={token} />
-                <button type="submit" className="btn btn--navy btn--lg">
+                <button type="submit" className="btn btn--primary btn--lg">
                   Unsubscribe me
                 </button>
               </form>

@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { CAMPUSES, NEIGHBOURHOODS, OUTSIDE_SURREY, POSTAL_CODE_RE, BC_POSTAL_CODE_RE } from "./neighbourhoods";
+import { CAMPUSES, choices, HAS_NEIGHBOURHOODS, NEIGHBOURHOODS, OUTSIDE_SURREY, POSTAL_CODE_RE, BC_POSTAL_CODE_RE } from "./neighbourhoods";
+import { clientProfile } from "@/seeds/client";
 
 const trimmed = (max: number) => z.string().trim().max(max);
 const name = trimmed(80).min(1, "Required");
@@ -56,13 +57,14 @@ export const membershipSchema = z
     address: trimmed(200).min(1, "Required"),
     city: trimmed(80).min(1, "Required"),
     postalCode,
-    neighbourhood: z.enum([...NEIGHBOURHOODS, OUTSIDE_SURREY], { error: "Choose your neighbourhood" }),
+    // A client without neighbourhoods has no neighbourhood field.
+    neighbourhood: HAS_NEIGHBOURHOODS ? z.enum(choices(NEIGHBOURHOODS, ...(OUTSIDE_SURREY ? [OUTSIDE_SURREY] : [])), { error: "Choose your neighbourhood" }) : z.literal("").optional().default(""),
     birthdate: z.iso.date("Enter your date of birth"),
     citizenshipStatus: z.enum(["Citizen", "Permanent resident", "Other"], { error: "Choose one" }),
     gender: z.enum(["Male", "Female", "Other", ""]).optional(),
     languages: z.array(trimmed(40)).max(6, "Choose up to 6 languages").optional().default([]),
     student: checkbox,
-    campus: z.enum([...CAMPUSES, ""]).optional(),
+    campus: z.enum(choices(CAMPUSES, "")).optional(),
     issue: optional(200),
     interestVolunteer: checkbox,
     interestLawnSign: checkbox,
@@ -84,10 +86,11 @@ export type MembershipInput = z.input<typeof membershipSchema>;
 export const newsletterSchema = z.object({ email, source: trackingFields.source, ref: trackingFields.ref, ...honeypot }).strict();
 
 /** @deprecated Campaigns live in the `campaigns` table; routes validate the slug against it. Kept for older imports. */
-export const CAMPAIGNS = {
-  "stop-mccallum-pledge": { title: "Stop Doug McCallum and Mandeep Nagra pledge" },
-  "skytrain-south-surrey": { title: "SkyTrain to South Surrey petition" },
-} as const;
+export const CAMPAIGNS: Record<string, { title: string }> = Object.fromEntries(
+  [clientProfile.homeCampaigns.pledge, clientProfile.homeCampaigns.petition]
+    .filter((slug): slug is string => Boolean(slug))
+    .map((slug) => [slug, { title: clientProfile.homeCampaigns.titles?.[slug] ?? slug }]),
+);
 /** @deprecated Use `string`: any active campaign slug is valid. */
 export type CampaignSlug = keyof typeof CAMPAIGNS;
 

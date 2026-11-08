@@ -49,7 +49,7 @@ export function PostalLookup() {
           onChange={(e) => setPostal(e.target.value)}
           error={error ?? undefined}
         />
-        <button type="submit" className="btn btn--red" aria-busy={pending} aria-disabled={pending}>
+        <button type="submit" className="btn btn--accent" aria-busy={pending} aria-disabled={pending}>
           {pending ? "One moment…" : "Find it"}
         </button>
       </div>

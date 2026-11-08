@@ -622,7 +622,7 @@ function ShiftMenu({
           </select>
         </div>
         <div className="btn-row" style={{ gap: 8 }}>
-          <button type="button" className="btn btn--navy" style={{ minHeight: 38 }} onClick={() => onMove(moveDay, moveSlot)}>
+          <button type="button" className="btn btn--primary" style={{ minHeight: 38 }} onClick={() => onMove(moveDay, moveSlot)}>
             Move
           </button>
           <button type="button" className="btn btn--outline" style={{ minHeight: 38 }} onClick={() => setView("menu")}>
@@ -795,7 +795,7 @@ function TaskPalette({
             </div>
           </fieldset>
           <div className="btn-row" style={{ gap: 8, alignItems: "flex-end" }}>
-            <button type="submit" className="btn btn--navy">
+            <button type="submit" className="btn btn--primary">
               {editing === "new" ? "Add task" : "Save"}
             </button>
             <button type="button" className="btn btn--outline" onClick={() => setEditing(null)}>

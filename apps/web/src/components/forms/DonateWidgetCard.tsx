@@ -24,7 +24,7 @@ export function DonateWidgetCard({
   return (
     <div className="donate-card">
       <AmountPicker choice={choice} onChange={setChoice} limitCents={limitCents} monthlyNote={monthlyNote} clubNote={clubNote} idPrefix="widget-amount" />
-      <Link href={href} className="btn btn--red btn--xl btn--block">
+      <Link href={href} className="btn btn--accent btn--xl btn--block">
         Donate {choiceLabel(choice, limitCents)}
       </Link>
       <Link href="/donate" className="text-link" style={{ fontSize: 15, fontWeight: 600, alignSelf: "flex-start" }}>

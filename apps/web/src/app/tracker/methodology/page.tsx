@@ -56,7 +56,7 @@ export default async function MethodologyPage() {
               <p key={i}>{text}</p>
             ))}
             <p>
-              <a href={mailto} className="btn btn--navy">
+              <a href={mailto} className="btn btn--primary">
                 Email {email}
               </a>
             </p>

@@ -8,6 +8,7 @@ import { donationSchema } from "@/lib/validation";
 import { AmountPicker, choiceLabel, type Choice } from "./AmountPicker";
 import { Checkbox, ErrorSummary, Honeypot, PostalCodeField, SubmitButton, TextField, TrackingFields } from "./Field";
 import { readForm, useApiForm } from "./useApiForm";
+import { clientProfile } from "@/seeds/client";
 
 const CUSTOM_ID = "amount-custom";
 
@@ -63,7 +64,7 @@ export function DonateForm({
       <AmountPicker choice={choice} onChange={setChoice} onCustomError={setCustomError} limitCents={limitCents} allowCustom monthlyNote={monthlyNote} clubNote={clubNote} />
 
       <fieldset className="group" style={{ gap: 14 }}>
-        <legend style={{ fontSize: 18, fontWeight: 700, color: "var(--navy)" }}>Your details</legend>
+        <legend style={{ fontSize: 18, fontWeight: 700, color: "var(--primary)" }}>Your details</legend>
         <p className="hint" style={{ margin: "-4px 0 0" }}>
           BC law requires us to record the name and address of everyone who contributes.
         </p>
@@ -77,7 +78,7 @@ export function DonateForm({
         </div>
         <TextField id="d-address" name="address" label="Street address" required autoComplete="street-address" error={fields.address} />
         <div className="form-row">
-          <TextField id="d-city" name="city" label="City" required defaultValue="Surrey" autoComplete="address-level2" error={fields.city} />
+          <TextField id="d-city" name="city" label="City" required defaultValue={clientProfile.defaultCity} autoComplete="address-level2" error={fields.city} />
           <PostalCodeField id="d-postal" required error={fields.postalCode} hint="A BC postal code" />
         </div>
       </fieldset>
@@ -99,7 +100,7 @@ export function DonateForm({
       </Checkbox>
 
       <ErrorSummary ref={summaryRef} error={error} fields={summaryFields} />
-      <SubmitButton pending={pending} className="btn btn--red btn--xl btn--block" pendingLabel="Taking you to secure checkout…">
+      <SubmitButton pending={pending} className="btn btn--accent btn--xl btn--block" pendingLabel="Taking you to secure checkout…">
         Donate {choiceLabel(choice, limitCents)}
       </SubmitButton>
       <p className="small">

@@ -1,5 +1,6 @@
 // Calendar files (.ics) and "add to calendar" links for events and shifts.
 // Pure functions, usable on server and client.
+import { clientProfile } from "@/seeds/client";
 
 export type IcsEvent = {
   /** Stable per event, e.g. `event-<id>@imaginesurrey.ca`, so updates replace rather than duplicate. */
@@ -41,9 +42,9 @@ function fold(line: string): string {
   return out.join("\r\n");
 }
 
-export function icsCalendar(events: IcsEvent[], calendarName = "Imagine Surrey"): string {
+export function icsCalendar(events: IcsEvent[], calendarName = clientProfile.orgName): string {
   const now = utc(new Date());
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Imagine Surrey//Website//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", `X-WR-CALNAME:${escapeText(calendarName)}`];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", `PRODID:-//${clientProfile.orgName.replace(/[/\r\n]/g, " ")}//Website//EN`, "CALSCALE:GREGORIAN", "METHOD:PUBLISH", `X-WR-CALNAME:${escapeText(calendarName)}`];
   for (const e of events) {
     const end = e.end ?? new Date(e.start.getTime() + 2 * 3600_000);
     lines.push("BEGIN:VEVENT", `UID:${e.uid}`, `DTSTAMP:${now}`, `DTSTART:${utc(e.start)}`, `DTEND:${utc(end)}`, `SUMMARY:${escapeText(e.title)}`);

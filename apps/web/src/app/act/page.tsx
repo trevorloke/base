@@ -4,19 +4,20 @@ import { PageHead } from "@/components/PageHead";
 import { excerpt } from "@/lib/markdown";
 import { listActiveCampaigns } from "@/lib/server/campaigns";
 import "./act.css";
+import { clientProfile } from "@/seeds/client";
 
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "Take action",
-  description: "Petitions and pledges from Imagine Surrey: add your name and help hold City Hall to account.",
+  description: `Petitions and pledges from ${clientProfile.orgName}: add your name and help hold City Hall to account.`,
 };
 
 export default async function ActIndex() {
   const campaigns = await listActiveCampaigns();
   return (
     <>
-      <PageHead title="Take action">Add your name to a petition or a pledge. Every signature is a Surrey resident City Hall has to answer to.</PageHead>
+      <PageHead title="Take action">Add your name to a petition or a pledge. Every signature is a {clientProfile.place ? `${clientProfile.place} resident` : "resident"} City Hall has to answer to.</PageHead>
       <section className="section section--surface">
         <div className="container stack" style={{ gap: 24 }}>
           {campaigns.length === 0 ? (
@@ -30,7 +31,7 @@ export default async function ActIndex() {
                     <Link href={`/act/${c.slug}`}>{c.title}</Link>
                   </h2>
                   <p>{excerpt(c.body || c.statement, 180)}</p>
-                  <Link href={`/act/${c.slug}`} className="btn btn--red">
+                  <Link href={`/act/${c.slug}`} className="btn btn--accent">
                     {c.kind === "pledge" ? "Sign the pledge" : "Add my name"}
                     <span className="visually-hidden">: {c.title}</span>
                   </Link>

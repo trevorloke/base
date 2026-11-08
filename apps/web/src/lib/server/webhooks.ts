@@ -21,7 +21,7 @@ import { notifyDonationSucceeded, notifyMembershipActive, notifyOrderPaid, notif
 import { latestActiveMembershipExpiry } from "./payments";
 import { findOrCreatePerson } from "./people";
 import { getSettings } from "./settings";
-import { forwardMembership, forwardOrder } from "./starbase-forward";
+import { forwardMembership, forwardOrder } from "./base-ground-forward";
 import { issuePendingRefunds, reconcileRefunds } from "./stripe-refunds";
 
 type Tx = Querier;

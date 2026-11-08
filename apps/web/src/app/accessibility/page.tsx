@@ -2,12 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PageHead } from "@/components/PageHead";
 import { shellSettings } from "@/lib/server/home";
+import { clientProfile, inPlace } from "@/seeds/client";
 
 export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: "Accessibility",
-  description: "How we make the Imagine Surrey website work for everyone, what still needs fixing, and how to tell us about a problem.",
+  description: `How we make the ${clientProfile.orgName} website work for everyone, what still needs fixing, and how to tell us about a problem.`,
   alternates: { canonical: "/accessibility" },
 };
 
@@ -19,7 +20,7 @@ export default async function AccessibilityPage() {
   return (
     <>
       <PageHead title="Accessibility" eyebrow="Accessibility statement">
-        Everyone in Surrey should be able to read this site, sign a petition, join, give and volunteer, whatever device or assistive technology they use.
+        Everyone{inPlace} should be able to read this site, sign a petition, join, give and volunteer, whatever device or assistive technology they use.
       </PageHead>
       <section className="section">
         <div className="container stack prose statement" style={{ gap: 8 }}>

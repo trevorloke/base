@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { Cart } from "@/components/Cart";
 import { PageHead } from "@/components/PageHead";
 import { activeProducts } from "@/lib/server/content";
+import { clientProfile } from "@/seeds/client";
 
-export const metadata: Metadata = { title: "Shop", description: "Lawn signs, shirts, buttons and more from Imagine Surrey." };
+export const metadata: Metadata = { title: "Shop", description: `Lawn signs, shirts, buttons and more from ${clientProfile.orgName}.` };
 
 export default async function ShopPage() {
   const products = await activeProducts();

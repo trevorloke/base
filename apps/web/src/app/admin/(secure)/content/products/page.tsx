@@ -16,7 +16,7 @@ export default async function ProductsAdmin({ searchParams }: PageProps<"/admin/
       crumbs={[{ href: "/admin/content", label: "Content" }]}
       intro="Products for sale on /shop. Prices are in dollars; orders are paid through Stripe Checkout."
       actions={
-        <Link href={`${ADMIN_PATHS.products}/new`} className="btn btn--red">
+        <Link href={`${ADMIN_PATHS.products}/new`} className="btn btn--accent">
           Add a product
         </Link>
       }

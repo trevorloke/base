@@ -34,7 +34,16 @@ function BarLink({ href, className, current, children }: { href: string; classNa
  * Site settings → Title bar (none by default), one call to action and a
  * Menu button that opens every section of the site.
  */
-export function Header({ links = [], cta = { label: "Donate", href: "/donate" } }: { links?: HeaderLink[]; cta?: HeaderLink }) {
+export function Header({
+  links = [],
+  cta = { label: "Donate", href: "/donate" },
+  brand,
+}: {
+  links?: HeaderLink[];
+  cta?: HeaderLink;
+  /** The name (the logo's alt text, or the wordmark when there is no logo) and logo from Admin → Brand. */
+  brand: { name: string; logoUrl: string };
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname() ?? "/";
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -60,8 +69,12 @@ export function Header({ links = [], cta = { label: "Donate", href: "/donate" } 
     <header className="site-header">
       <nav className="site-nav" aria-label="Main">
         <Link href="/" className="logo-link" aria-current={pathname === "/" ? "page" : undefined}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- the logo animates its height on scroll */}
-          <img src="/images/logo.webp" alt="Imagine Surrey" className="logo" width={997} height={474} />
+          {brand.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- the logo animates its height on scroll, and may be any uploaded image
+            <img src={brand.logoUrl} alt={brand.name} className="logo" {...(brand.logoUrl === "/images/logo.webp" ? { width: 997, height: 474 } : {})} />
+          ) : (
+            <span className="logo logo--text">{brand.name}</span>
+          )}
         </Link>
         <div className="nav-bar">
           {links.map((item) => (
@@ -70,7 +83,7 @@ export function Header({ links = [], cta = { label: "Donate", href: "/donate" } 
             </BarLink>
           ))}
           {cta.label && cta.href && (
-            <BarLink href={cta.href} className="btn btn--red nav-cta" current={current(cta.href)}>
+            <BarLink href={cta.href} className="btn btn--accent nav-cta" current={current(cta.href)}>
               {cta.label}
             </BarLink>
           )}

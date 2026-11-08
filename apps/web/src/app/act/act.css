@@ -28,7 +28,7 @@
 .act-statement {
   margin: 0;
   padding: 18px 22px;
-  border-left: 6px solid var(--yellow);
+  border-left: 6px solid var(--highlight);
   background: var(--surface);
   border-radius: 0 var(--radius) var(--radius) 0;
 }
@@ -37,7 +37,7 @@
   font-size: 18px;
   line-height: 1.5;
   font-weight: 600;
-  color: var(--navy);
+  color: var(--primary);
 }
 .act-statement .eyebrow {
   margin-bottom: 8px;

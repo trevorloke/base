@@ -34,7 +34,7 @@ export function SettingsForm({ sectionKey, spec, initial, defaults, customized }
         <Field spec={spec} path={[]} label="" value={value} update={update} state={state} />
         <Notice state={state} />
         <div className="cms-publish">
-          <SubmitButton className="btn btn--red">Save changes</SubmitButton>
+          <SubmitButton className="btn btn--accent">Save changes</SubmitButton>
         </div>
       </form>
       <form action={resetAction} className="cms-danger">

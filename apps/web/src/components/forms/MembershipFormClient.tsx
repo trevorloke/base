@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { site } from "@/content/site";
 import {
   isYouthMember,
   membershipAmountProblem,
@@ -13,7 +12,11 @@ import {
   type MembershipMinimums,
 } from "@/lib/contributions";
 import { formatCents } from "@/lib/money";
-import { ageOn, CAMPUSES, MIN_MEMBER_AGE, NEIGHBOURHOODS, neighbourhoodForPostalCode, OUTSIDE_SURREY } from "@/lib/neighbourhoods";
+import { ageOn, CAMPUSES, HAS_NEIGHBOURHOODS, MIN_MEMBER_AGE, NEIGHBOURHOODS, neighbourhoodForPostalCode, OUTSIDE_SURREY } from "@/lib/neighbourhoods";
+import { clientProfile } from "@/seeds/client";
+
+const ORG = clientProfile.orgName;
+const PLACE = clientProfile.place;
 import { membershipSchema } from "@/lib/validation";
 import { Alert, Checkbox, ConsentCheckbox, ErrorSummary, Honeypot, LiveRegion, PostalCodeField, SelectField, SubmitButton, SuccessCard, TextField, TrackingFields } from "./Field";
 import { HumanCheck } from "./HumanCheck";
@@ -91,7 +94,7 @@ export function MembershipFormClient({
   const blocked = tooYoung || (notEligible && feeCents > 0);
 
   if (done && done.status !== "checkout") {
-    const title = done.status === "already_member" ? "You’re already a member" : "Welcome to Imagine Surrey";
+    const title = done.status === "already_member" ? "You’re already a member" : `Welcome to ${ORG}`;
     return (
       <>
         <LiveRegion message={live} />
@@ -131,7 +134,7 @@ export function MembershipFormClient({
       window.location.assign(result.url);
       return;
     }
-    setLive(result.status === "already_member" ? "You’re already a member. We’ve updated your details." : "Welcome to Imagine Surrey. Thanks for joining.");
+    setLive(result.status === "already_member" ? "You’re already a member. We’ve updated your details." : `Welcome to ${ORG}. Thanks for joining.`);
     setDone(result);
   }
 
@@ -167,12 +170,12 @@ export function MembershipFormClient({
             name="city"
             label="City"
             required
-            defaultValue="Surrey"
+            defaultValue={clientProfile.defaultCity}
             autoComplete="address-level2"
             error={fields.city}
             onChange={(e) => {
               const city = e.target.value.trim().toLowerCase();
-              const outside = city !== "" && city !== "surrey";
+              const outside = Boolean(PLACE && OUTSIDE_SURREY) && city !== "" && city !== PLACE.toLowerCase();
               setOutsideSurrey(outside);
               if (outside) setHood(OUTSIDE_SURREY);
               else if (hood === OUTSIDE_SURREY) setHood("");
@@ -181,7 +184,7 @@ export function MembershipFormClient({
         </div>
         {outsideSurrey && (
           <Alert tone="note">
-            <strong>You live outside Surrey.</strong> You’re welcome to join and help, but members who live outside Surrey don’t have voting rights at
+            <strong>You live outside {PLACE}.</strong> You’re welcome to join and help, but members who live outside {PLACE} don’t have voting rights at
             member meetings.
           </Alert>
         )}
@@ -195,6 +198,7 @@ export function MembershipFormClient({
               if (match) setHood(match);
             }}
           />
+          {HAS_NEIGHBOURHOODS && (
           <SelectField
             id="m-hood"
             name="neighbourhood"
@@ -213,10 +217,11 @@ export function MembershipFormClient({
                 {n}
               </option>
             ))}
-            <option value={OUTSIDE_SURREY}>I live outside Surrey</option>
+            {OUTSIDE_SURREY && <option value={OUTSIDE_SURREY}>I live outside {PLACE}</option>}
           </SelectField>
+          )}
         </div>
-        <p className="hint">Every member joins their neighbourhood committee automatically, so you’ll hear about meetings close to home.</p>
+        {HAS_NEIGHBOURHOODS && <p className="hint">Every member joins their neighbourhood committee automatically, so you’ll hear about meetings close to home.</p>}
 
         <fieldset className="group">
           <legend>About you</legend>
@@ -314,7 +319,7 @@ export function MembershipFormClient({
           <Checkbox id="m-student" name="student" onChange={(e) => setStudent(e.currentTarget.checked)} error={fields.student}>
             I’m a student and I’d like to join a campus club
           </Checkbox>
-          {student && (
+          {student && CAMPUSES.length > 0 && (
             <SelectField id="m-campus" name="campus" label="Which campus?" defaultValue="" error={fields.campus}>
               <option value="">Choose one</option>
               {CAMPUSES.map((c) => (
@@ -326,7 +331,7 @@ export function MembershipFormClient({
           )}
         </fieldset>
 
-        <TextField id="m-issue" name="issue" label="What’s one thing that you imagine for Surrey?" list="m-issue-options" placeholder="Pick one or type your own" error={fields.issue} />
+        <TextField id="m-issue" name="issue" label={`What’s one thing that you imagine for ${PLACE || "your community"}?`} list="m-issue-options" placeholder="Pick one or type your own" error={fields.issue} />
         <datalist id="m-issue-options">
           {ISSUES.map((i) => (
             <option key={i} value={i} />
@@ -403,19 +408,19 @@ export function MembershipFormClient({
           </fieldset>
         )}
         <Checkbox id="m-consent" name="consent" required error={fields.consent}>
-          I’m applying to become a member of Imagine Surrey. The details above are mine and accurate, and I’ve read the{" "}
-          <a href={site.privacyUrl}>privacy policy</a>.
+          I’m applying to become a member of {ORG}. The details above are mine and accurate, and I’ve read the{" "}
+          <a href="/privacy">privacy policy</a>.
         </Checkbox>
 
         <HumanCheck control={human} error={fields.human} />
         <ErrorSummary ref={summaryRef} error={error} fields={fields} />
-        <SubmitButton pending={pending} disabled={blocked} className="btn btn--red btn--lg btn--block">
-          {feeCents > 0 && amountCents !== null && !(pick === "other" && other.error) ? `Join Imagine Surrey · ${formatCents(amountCents)} a year` : "Join Imagine Surrey"}
+        <SubmitButton pending={pending} disabled={blocked} className="btn btn--accent btn--lg btn--block">
+          {feeCents > 0 && amountCents !== null && !(pick === "other" && other.error) ? `Join ${ORG} · ${formatCents(amountCents)} a year` : `Join ${ORG}`}
         </SubmitButton>
         <p className="small">
           {feeCents > 0 &&
             `You’ll pay securely with Stripe. Membership runs for a year, and you renew at whatever amount you choose. It counts as a contribution under BC election law (up to ${formatCents(maxCents)} a year in all) and isn’t tax deductible. `}
-          Your details stay with Imagine Surrey.
+          Your details stay with {ORG}.
         </p>
       </form>
     </>

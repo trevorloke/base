@@ -21,6 +21,7 @@ import {
 } from "@/lib/contributions";
 import { formatCents } from "@/lib/money";
 import { cached, TAGS } from "./cache";
+import { clientProfile } from "@/seeds/client";
 
 /** A database handle or a transaction: everything here works inside either. */
 export type Querier = PgDatabase<PostgresJsQueryResultHKT, typeof schema>;
@@ -41,7 +42,7 @@ export const SLATE_LABEL: Record<Slate, string> = { council: "city council slate
  * this email has given before, so nobody can probe a supporter's giving.
  */
 export function overLimitMessage(slate: Slate, limitCents: number): string {
-  return `That would take you over this year's ${formatCents(limitCents)} contribution limit for our ${SLATE_LABEL[slate]}. Try a smaller amount, or email hello@imaginesurrey.ca if you think this is a mistake.`;
+  return `That would take you over this year's ${formatCents(limitCents)} contribution limit for our ${SLATE_LABEL[slate]}. Try a smaller amount, or email ${clientProfile.email} if you think this is a mistake.`;
 }
 
 // ── The limit for a year ───────────────────────────────────────────────────

@@ -36,7 +36,7 @@ export default async function ContentHub() {
                 Open
               </Link>
               {c.add && (
-                <Link href={c.add.href} className="btn btn--navy btn--sm">
+                <Link href={c.add.href} className="btn btn--primary btn--sm">
                   {c.add.label}
                 </Link>
               )}

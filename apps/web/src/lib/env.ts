@@ -1,4 +1,5 @@
 import "server-only";
+import { clientProfile } from "@/seeds/client";
 
 function required(name: string): string {
   const value = process.env[name];
@@ -33,7 +34,7 @@ export const env = {
     if (isProduction()) {
       const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL;
       if (vercel) return `https://${vercel}`;
-      throw new Error("Set NEXT_PUBLIC_SITE_URL to the site's public address (e.g. https://imaginesurrey.ca).");
+      throw new Error("Set NEXT_PUBLIC_SITE_URL to the site's public address (e.g. https://example.org).");
     }
     const preview = process.env.VERCEL_URL;
     return preview ? `https://${preview}` : "http://localhost:3000";
@@ -79,7 +80,7 @@ export const env = {
     return optional("RESEND_API_KEY");
   },
   get emailFrom() {
-    return optional("EMAIL_FROM") ?? "Imagine Surrey <hello@imaginesurrey.ca>";
+    return optional("EMAIL_FROM") ?? `${clientProfile.orgName} <${clientProfile.email}>`;
   },
   get emailReplyTo() {
     return optional("EMAIL_REPLY_TO");
@@ -128,27 +129,51 @@ export const env = {
     return optional("CRON_SECRET");
   },
 
-  // ── Starbase ("the desk"): the campaign's database app ──
+  // ── base ground ("the desk"): the campaign's database app ──
   // Called only from this server: the key would be visible to anyone if a
   // browser sent it, so it never has a NEXT_PUBLIC_ name.
-  /** e.g. https://starbase.imaginesurrey.ca, without a trailing slash. */
-  get starbaseUrl() {
-    return optional("STARBASE_URL")?.trim().replace(/\/+$/, "");
+  /** e.g. https://base.win/imaginesurrey, without a trailing slash. */
+  get baseGroundUrl() {
+    return optional("BASE_GROUND_URL")?.trim().replace(/\/+$/, "");
   },
-  /** A website key from Starbase → Settings → Services → Website keys (sbk_…). */
-  get starbaseKey() {
-    return optional("STARBASE_KEY")?.trim();
+  /** A website key from base ground → Settings → Services → Website keys (sbk_…). */
+  get baseGroundKey() {
+    return optional("BASE_GROUND_KEY")?.trim();
   },
-  get starbaseEnabled() {
-    return Boolean(this.starbaseUrl && this.starbaseKey);
+  get baseGroundEnabled() {
+    return Boolean(this.baseGroundUrl && this.baseGroundKey);
   },
   /**
-   * The key Starbase sends to POST /api/in/consent (Authorization: Bearer …),
+   * The key base ground sends to POST /api/in/consent (Authorization: Bearer …),
    * so a withdrawal made there is applied here. A different secret from
-   * STARBASE_KEY; without it the endpoint refuses every call.
+   * BASE_GROUND_KEY; without it the endpoint refuses every call.
    */
-  get starbaseInboundKey() {
-    return optional("STARBASE_INBOUND_KEY")?.trim();
+  get baseGroundInboundKey() {
+    return optional("BASE_GROUND_INBOUND_KEY")?.trim();
+  },
+
+  // ── The client this deployment is for (src/seeds) ──
+  /** A brand preset to start from when none is saved in Admin → Brand (e.g. "civic"). */
+  get brandPreset() {
+    return optional("BASE_WEB_BRAND_PRESET")?.trim();
+  },
+
+  // ── Signing in with base (SUITE.md, "Signing in once") ──
+  /** base ground's internal address for the token call: a URL or Render's bare host:port. */
+  get baseGroundInternalUrl() {
+    return optional("BASE_GROUND_INTERNAL_URL")?.trim();
+  },
+  /** The secret shared with base ground for this app (its BASE_WEB_SSO_SECRET). */
+  get baseSsoSecret() {
+    return optional("BASE_SSO_SECRET")?.trim();
+  },
+  /** "Sign in with base" is offered when base ground's address and the shared secret are set. */
+  get baseSsoEnabled() {
+    return Boolean(this.baseGroundUrl && this.baseSsoSecret);
+  },
+  /** base air's public address (e.g. https://base.win/imaginesurrey/air), for the switcher. */
+  get baseAirUrl() {
+    return optional("BASE_AIR_URL")?.trim().replace(/\/+$/, "");
   },
 
   // ── Human check on public forms (Cloudflare Turnstile) ──

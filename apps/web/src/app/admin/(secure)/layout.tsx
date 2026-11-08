@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { BaseSwitcher } from "@/components/admin/BaseSwitcher";
+import { env } from "@/lib/env";
 import { adminPreviewAllowed } from "@/lib/preview-mode";
+import { suiteLinks } from "@/lib/suite";
+import { shellSettings } from "@/lib/server/home";
 import { can, getAdminAccount, ROLE_LABELS, type Permission } from "@/lib/server/admin-auth";
 
 export const metadata: Metadata = { title: "Admin", robots: { index: false } };
@@ -21,6 +25,7 @@ const NAV: { href: string; label: string; permission?: Permission }[] = [
   { href: "/admin/desk-gifts", label: "Gifts to log at the desk", permission: "money" },
   { href: "/admin/limits", label: "Contribution limits", permission: "money" },
   { href: "/admin/settings", label: "Site settings", permission: "settings" },
+  { href: "/admin/brand", label: "Brand", permission: "settings" },
   { href: "/admin/integrations", label: "Integrations", permission: "integrations" },
   { href: "/admin/exports", label: "Exports" },
   { href: "/admin/users", label: "Staff", permission: "users" },
@@ -35,15 +40,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Enrol first: an owner or administrator without two-factor sign-in gets
   // only My account (requireAdmin on every other page sends them there).
   const nav = mustEnrol ? NAV.filter((item) => item.href === "/admin/account") : NAV.filter((item) => !item.permission || can(user, item.permission));
+  const { org } = await shellSettings();
+  const suite = env.baseGroundUrl ? suiteLinks({ groundUrl: env.baseGroundUrl, airUrl: env.baseAirUrl }) : [];
   return (
     <div className="admin">
       {adminPreviewAllowed() && (
-        <p role="status" className="no-print" style={{ margin: 0, padding: "8px 16px", background: "var(--yellow)", color: "var(--navy)", fontWeight: 700 }}>
+        <p role="status" className="no-print" style={{ margin: 0, padding: "8px 16px", background: "var(--highlight)", color: "var(--primary)", fontWeight: 700 }}>
           Preview mode: signed in automatically on this local copy. It cannot be turned on for the live site.
         </p>
       )}
       <nav className="admin-nav no-print" aria-label="Admin">
-        <strong style={{ color: "var(--navy)", fontSize: 18 }}>Imagine Surrey admin</strong>
+        {suite.length > 0 && <BaseSwitcher apps={suite} />}
+        <strong style={{ color: "var(--primary)", fontSize: 18 }}>{org.name} admin</strong>
         {nav.map((item) => (
           <Link key={item.href} href={item.href}>
             {item.label}

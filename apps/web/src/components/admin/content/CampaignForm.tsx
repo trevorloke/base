@@ -76,7 +76,7 @@ export function CampaignForm({ campaign, slugLock = null }: { campaign?: Campaig
       </Checkbox>
       <Notice state={state} />
       <div className="cms-publish">
-        <SubmitButton className="btn btn--red">{campaign ? "Save changes" : "Create campaign"}</SubmitButton>
+        <SubmitButton className="btn btn--accent">{campaign ? "Save changes" : "Create campaign"}</SubmitButton>
       </div>
     </form>
   );

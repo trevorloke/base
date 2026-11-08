@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/lib/db";
 import { trackerAnnouncements, trackerPromises, trackerUpdates } from "@/lib/db/schema";
-import { NEIGHBOURHOODS } from "@/lib/neighbourhoods";
+import { choices, NEIGHBOURHOODS } from "@/lib/neighbourhoods";
 import { ActionError, adminAction, httpUrl, multi, optionalText } from "@/lib/server/actions";
 import { invalidate, TAGS } from "@/lib/server/cache";
 import { insertPromise, notifyStatusChange } from "@/lib/server/tracker";
@@ -24,7 +24,7 @@ const statusOrKeep = z
   .enum([...STATUS_IDS, ""])
   .optional()
   .transform((v) => (v ? v : null));
-const neighbourhoods = multi().pipe(z.array(z.enum(NEIGHBOURHOODS)).max(NEIGHBOURHOODS.length));
+const neighbourhoods = multi().pipe(z.array(z.enum(choices(NEIGHBOURHOODS))).max(NEIGHBOURHOODS.length));
 const sourceList = (label: string | undefined, url: string | null) => (label ? [{ label, ...(url ? { url } : {}) }] : []);
 
 /** Score a promise: log what happened and, optionally, change its status. */

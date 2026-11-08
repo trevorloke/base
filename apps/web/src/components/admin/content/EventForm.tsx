@@ -11,6 +11,7 @@ import { TextareaField } from "./Inputs";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { TitleSlugFields } from "./TitleSlugFields";
 import { useCmsForm } from "./useCmsForm";
+import { clientProfile } from "@/seeds/client";
 
 export type EventFormValues = {
   id: string;
@@ -41,7 +42,7 @@ export function EventForm({ event }: { event?: EventFormValues }) {
           id="startsAt"
           name="startsAt"
           type="datetime-local"
-          label="Starts (Surrey time)"
+          label={`Starts (${clientProfile.place || "Pacific"} time)`}
           required
           defaultValue={form.text("startsAt", event ? dateToPacificLocal(new Date(event.startsAt)) : "")}
           error={fieldError(state, "startsAt")}
@@ -71,7 +72,7 @@ export function EventForm({ event }: { event?: EventFormValues }) {
       </Checkbox>
       <Notice state={state} />
       <div className="cms-publish">
-        <SubmitButton className="btn btn--red">{event ? "Save changes" : "Add event"}</SubmitButton>
+        <SubmitButton className="btn btn--accent">{event ? "Save changes" : "Add event"}</SubmitButton>
       </div>
     </form>
   );
@@ -89,7 +90,7 @@ export function WalkInForm({ eventId }: { eventId: string }) {
         <TextField id="walkin-name" name="name" label="Name" required maxLength={120} autoComplete="off" defaultValue={form.text("name", "")} error={fieldError(state, "name")} />
         <TextField id="walkin-email" name="email" type="email" label="Email" required maxLength={254} autoComplete="off" defaultValue={form.text("email", "")} error={fieldError(state, "email")} />
         <TextField id="walkin-guests" name="guests" type="number" min={0} max={10} defaultValue={form.text("guests", "0")} label="Guests" style={{ maxWidth: 110 }} error={fieldError(state, "guests")} />
-        <SubmitButton className="btn btn--navy" pendingText="Adding…">
+        <SubmitButton className="btn btn--primary" pendingText="Adding…">
           Add walk-in
         </SubmitButton>
       </div>

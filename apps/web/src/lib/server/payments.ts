@@ -19,7 +19,7 @@ import {
   type Slate,
 } from "@/lib/contributions";
 import { formatCents } from "@/lib/money";
-import { ageOn, BC_POSTAL_CODE_RE, MIN_MEMBER_AGE, normalizePostalCode, OUTSIDE_SURREY } from "@/lib/neighbourhoods";
+import { ageOn, BC_POSTAL_CODE_RE, livesInPlace, MIN_MEMBER_AGE, normalizePostalCode } from "@/lib/neighbourhoods";
 import type { cartSchema, donationSchema, membershipSchema } from "@/lib/validation";
 import { assertWithinLimit, limitForYear, lockPerson, SLATE_LABEL, UserFacingError, type Querier } from "./limits";
 import { notifyMembershipActive } from "./notifications";
@@ -28,7 +28,8 @@ import { subscribe } from "./newsletter";
 import { trackingFromRequest, type Tracking } from "./attribution";
 import { CONSENT_WORDING, consentMeta, recordConsent } from "./consent";
 import { normalizePhone } from "./sms";
-import { forwardMembership } from "./starbase-forward";
+import { forwardMembership } from "./base-ground-forward";
+import { clientProfile } from "@/seeds/client";
 
 export { contributionRoom, contributionTotals, currentLimit, limitForYear, UserFacingError } from "./limits";
 export { addYear } from "@/lib/contributions";
@@ -201,7 +202,7 @@ export async function createDonationCheckout(db: Db, input: z.output<typeof dona
   };
   const slates = Object.keys(slateAmounts) as Slate[];
   const lineName = (slate: Slate) =>
-    slates.length > 1 ? `Contribution to Imagine Surrey (${SLATE_LABEL[slate]})` : "Contribution to Imagine Surrey";
+    slates.length > 1 ? `Contribution to ${clientProfile.orgName} (${SLATE_LABEL[slate]})` : `Contribution to ${clientProfile.orgName}`;
 
   if (input.frequency === "monthly") {
     // The limit check and the row insert share one transaction and the person's lock.
@@ -225,7 +226,7 @@ export async function createDonationCheckout(db: Db, input: z.output<typeof dona
             currency: "cad",
             unit_amount: slateAmounts[slate]!,
             recurring: { interval: "month" as const },
-            product_data: { name: `Monthly ${lineName(slate).toLowerCase()} · Imagine Victory Fund` },
+            product_data: { name: `Monthly ${lineName(slate).toLowerCase()}${clientProfile.fundName ? ` · ${clientProfile.fundName}` : ""}` },
           },
         })),
         metadata,
@@ -377,7 +378,7 @@ export async function createMembership(db: Db, input: z.output<typeof membership
     sms: input.smsConsent ? { phone: input.phone } : null,
   });
 
-  const votingEligible = input.neighbourhood !== OUTSIDE_SURREY && input.city.trim().toLowerCase() === "surrey";
+  const votingEligible = livesInPlace(input.neighbourhood, input.city);
   // The details as given on this form, kept with the membership for the voting roll.
   const snapshot = {
     personId: person.id,
@@ -448,9 +449,9 @@ export async function createMembership(db: Db, input: z.output<typeof membership
       ...customerParams(customerId, person.email, "payment"),
       ...checkoutBase(),
       mode: "payment",
-      line_items: [{ quantity: 1, price_data: { currency: "cad", unit_amount: feeCents, product_data: { name: "Imagine Surrey membership (1 year, by donation)" } } }],
+      line_items: [{ quantity: 1, price_data: { currency: "cad", unit_amount: feeCents, product_data: { name: `${clientProfile.orgName} membership (1 year, by donation)` } } }],
       metadata,
-      payment_intent_data: { metadata, description: `Imagine Surrey membership by donation: ${formatCents(feeCents)}` },
+      payment_intent_data: { metadata, description: `${clientProfile.orgName} membership by donation: ${formatCents(feeCents)}` },
       success_url: `${env.siteUrl}/join/welcome?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${env.siteUrl}/#join`,
     }));

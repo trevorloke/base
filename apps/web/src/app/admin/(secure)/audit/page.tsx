@@ -71,7 +71,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/audi
           <input id="entity" name="entity" className="input input--compact" defaultValue={filters.entity} maxLength={120} placeholder="person, admin_user, or a record id" />
         </div>
         <div className="crm-filters__actions">
-          <button type="submit" className="btn btn--navy btn--compact">
+          <button type="submit" className="btn btn--primary btn--compact">
             Apply
           </button>
           {(filters.user || filters.action || filters.entity) && (

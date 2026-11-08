@@ -39,7 +39,7 @@ export default async function SettingsIndex() {
                 )}
               </p>
               <div className="btn-row" style={{ gap: 8, marginTop: 4 }}>
-                <Link href={editHref} className="btn btn--navy btn--sm">
+                <Link href={editHref} className="btn btn--primary btn--sm">
                   Edit<span className="visually-hidden"> {section.label}</span>
                 </Link>
                 <Link href={PREVIEW_PATHS[key]} className="btn btn--outline btn--sm" target="_blank" rel="noreferrer">

@@ -6,7 +6,7 @@
   max-width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 .event-feature .event-meta {
   display: flex;
@@ -16,11 +16,11 @@
   margin: 0;
 }
 .event-feature .event-meta a {
-  color: #fff;
+  color: var(--on-primary);
 }
 .event-feature .event-going {
   margin: 0;
-  color: var(--pale-blue);
+  color: var(--primary-pale);
   font-size: 15px;
   font-weight: 600;
 }

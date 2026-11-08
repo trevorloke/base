@@ -7,7 +7,7 @@ import { getDb } from "@/lib/db";
 import { ActionError, adminAction } from "@/lib/server/actions";
 import { requeueEmail, sendQueued } from "@/lib/server/email";
 
-// Newsletters, campaign emails and text blasts go out from Starbase, so the
+// Newsletters, campaign emails and text blasts go out from base ground, so the
 // only thing done from the log is sending a failed one-off email again.
 
 export const resendEmailAction = adminAction(

@@ -1,7 +1,7 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Markdown } from "@/components/shell/Markdown";
 import { SmartLink } from "@/components/shell/SmartLink";
+import { brandName, type Brand } from "@/lib/brand";
 import { shellSettings } from "@/lib/server/home";
 
 // Ways to take part that every page should offer, whatever the editable
@@ -14,7 +14,7 @@ const TAKE_PART = [
   { href: "/preferences", label: "Email preferences" },
 ];
 
-export async function Footer() {
+export async function Footer({ brand }: { brand: Brand }) {
   const { org, footer, socials } = await shellSettings();
   const editable = new Set(footer.links.map((l) => l.href));
   const takePart = TAKE_PART.filter((l) => !editable.has(l.href));
@@ -24,7 +24,12 @@ export async function Footer() {
       <div className="container stack" style={{ gap: 40 }}>
         <div className="footer-top">
           <div className="footer-brand">
-            <Image src="/images/logo-light.png" alt={org.name} width={202} height={96} style={{ height: 96, width: "auto" }} />
+            {brand.logoOnDarkUrl || brand.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- any uploaded image, at the logo's own proportions
+              <img src={brand.logoOnDarkUrl || brand.logoUrl} alt={brandName(brand, org.name)} height={96} loading="lazy" decoding="async" style={{ height: 96, width: "auto" }} />
+            ) : (
+              <span className="footer-wordmark">{brandName(brand, org.name)}</span>
+            )}
             {org.address && <p className="footer-address">{org.address}</p>}
             <a href={`mailto:${org.email}`} className="text-link" style={{ fontSize: 15, fontWeight: 400 }}>
               {org.email}

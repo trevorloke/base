@@ -1,10 +1,10 @@
-# Working on the Imagine Surrey site
+# Working on base web
 
 These conventions keep the site consistent whoever (or whatever) is writing the code. Read this before adding a feature.
 
 ## Stack and layout
 
-- Next.js 16 App Router, React 19, TypeScript, PostgreSQL via Drizzle ORM, Stripe Checkout, hosted on Vercel. **Next 16 differs from older Next.js**: read `node_modules/next/dist/docs/` when unsure.
+- Next.js 16 App Router, React 19, TypeScript, PostgreSQL via Drizzle ORM, Stripe Checkout, hosted on Render (Docker, `output: "standalone"`). **Next 16 differs from older Next.js**: read `node_modules/next/dist/docs/` when unsure.
 - `src/app` pages and route handlers · `src/components` UI · `src/lib` shared logic (`src/lib/server/*` is server-only) · `src/content` seed/default copy · `drizzle/` migrations · `e2e/` end-to-end suites · `tests/` unit tests.
 
 ## Data
@@ -38,7 +38,7 @@ These conventions keep the site consistent whoever (or whatever) is writing the 
 
 - Route handlers under `src/app/api/*` use `parseBody(req, schema, bucket)` (honeypot, rate limit, zod). Schemas live in `src/lib/validation.ts` and must match the form exactly, including `maxLength`s.
 - A public route that creates a record, sends an email or files a request for the desk passes `{ human: true }` to `parseBody` (the Cloudflare Turnstile check, when configured), and its form renders `<HumanCheck control={form.human} />` before the submit button. Stripe checkout routes don't.
-- Forwarding to Starbase (the campaign's database) goes through `src/lib/server/starbase-forward.ts`, after the website has accepted the submission. RSVPs, paid orders and promise follows go as tags only, withdrawals go to the consent endpoint, and only the module listed for each forward may call it. Never forward money (donations, fees, order totals or items) or admin edits; `tests/starbase-boundary.test.ts` checks the import graph.
+- Forwarding to base ground (the campaign's database) goes through `src/lib/server/base-ground-forward.ts`, after the website has accepted the submission. RSVPs, paid orders and promise follows go as tags only, withdrawals go to the consent endpoint, and only the module listed for each forward may call it. Never forward money (donations, fees, order totals or items) or admin edits; `tests/base-ground-boundary.test.ts` checks the import graph.
 - Client forms use `useApiForm` and the fields in `src/components/forms/Field.tsx`. Show field errors next to fields and the form error in an `Alert`; move focus to the first error or the success card after submit. Keep submit buttons enabled (use `aria-busy`), so focus never drops.
 - Consent: email requires the person's own tick (`contactConsentAt`); texts require `smsConsentAt`. Newsletter sign-ups are double opt-in when email is configured. Never flip `unsubscribed` back without a confirmation click.
 
@@ -52,8 +52,14 @@ These conventions keep the site consistent whoever (or whatever) is writing the 
 ## Styling and accessibility
 
 - Design tokens and shared classes are in `src/app/globals.css` (`.btn`, `.card`, `.field`, `.input`, `.alert`, `.display`, `.pop`, sections). Put feature-specific styles in a `*.css` file next to the page and import it there; don't grow `globals.css` without reason.
-- Brand: navy `#003979`, red `#EF2023` (decorative) / `#D81B1E` (fills with white text), yellow `#FFF100`, Montserrat. Text contrast ≥ 4.5:1 (3:1 for ≥24px). Keyboard: visible focus everywhere, no keyboard traps, every drag-and-drop has a tap/keyboard path. Labels for every input; `role="alert"` for errors; `prefers-reduced-motion` respected; anything that moves for more than 5 seconds can be paused.
+- Colours, font and corners are design tokens (`--primary`, `--on-primary`, `--accent`, `--accent-fill`, `--on-accent`, `--highlight`, `--bg`, `--surface`, `--ink`, `--muted`, `--line`, `--radius`, `--radius-btn`, `--font`…), set per site in Admin → Brand (`src/lib/brand.ts`). Never hard-code a colour: text on a coloured fill uses its `--on-*` token, white surfaces use `--bg`. Imagine Surrey's preset is its navy `#003979`, red `#EF2023` (decorative) / `#D81B1E` (fills with white text), yellow `#FFF100` and Montserrat. Text contrast ≥ 4.5:1 (3:1 for ≥24px); every preset passes the Brand page's contrast check (a test checks it). Keyboard: visible focus everywhere, no keyboard traps, every drag-and-drop has a tap/keyboard path. Labels for every input; `role="alert"` for errors; `prefers-reduced-motion` respected; anything that moves for more than 5 seconds can be paused.
 - Phone first: no horizontal scroll at 360px wide.
+
+## Clients
+
+- base web is one product with many clients. Nothing about a client goes in product code: its copy is `src/seeds/<client>/settings.ts`, its name, places and campaigns are its profile (`src/seeds/<client>/profile.ts`, read through `clientProfile` from `@/seeds/client`), its tracker copy and database seed sit beside them, and the jurisdiction's rules are `src/lib/jurisdiction.ts`. `tests/clients.test.ts` fails if a client's name appears in product code.
+- `BASE_WEB_CLIENT` is fixed at build time (next.config.ts `env`), so any module, server or browser, can read the profile directly. Unit tests run as Imagine Surrey; `tests/clients.test.ts` reloads the code as a new client.
+- A new client: add `src/seeds/<client>/` (profile, settings, optional tracker copy and seed), register it in `src/seeds/client.ts` and `src/seeds/index.ts`, and give its brand a preset in `src/lib/brand.ts` if it needs its own.
 
 ## Tests
 

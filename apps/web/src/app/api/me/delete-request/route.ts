@@ -3,12 +3,12 @@ import { redirectTo } from "@/lib/redirect";
 import { getDb } from "@/lib/db";
 import { getMember } from "@/lib/server/member-auth";
 import { requestDeletion } from "@/lib/server/portal";
-import { forwardDeletionRequest } from "@/lib/server/starbase-forward";
+import { forwardDeletionRequest } from "@/lib/server/base-ground-forward";
 
 /**
  * "Ask us to delete my account": tags the record, notes it, emails the
  * office, and files a request at the desk (with the email and name only) so
- * Starbase's copy is dealt with too.
+ * base ground's copy is dealt with too.
  */
 export async function POST(req: NextRequest) {
   const person = await getMember();

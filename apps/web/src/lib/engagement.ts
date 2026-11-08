@@ -2,6 +2,7 @@
 // the client, the server and the unit tests can all use them.
 import { checkAnnualLimit, type Slate, type SlateAmounts } from "./contributions";
 import { withSource } from "./share";
+import { clientProfile, fromAroundPlace } from "@/seeds/client";
 
 // ── The ladder ─────────────────────────────────────────────────────────────
 // Each action a supporter takes ends with the next rung up. The order is the
@@ -41,14 +42,16 @@ export type NextStep = {
   secondary?: { label: string; href: string };
 };
 
-export const CAMPAIGN_SLUGS = { pledge: "stop-mccallum-pledge", petition: "skytrain-south-surrey" } as const;
+/** The home page's pledge and petition (the client's profile); "" when it has none. */
+export const CAMPAIGN_SLUGS = { pledge: clientProfile.homeCampaigns.pledge ?? "", petition: clientProfile.homeCampaigns.petition ?? "" };
 
 const SOURCE = "next-step";
 const link = (path: string) => withSource(path, SOURCE);
 
 const RUNG_DONE: Record<Rung, (s: EngagementState) => boolean> = {
-  pledge: (s) => s.signedPledge,
-  petition: (s) => s.signedPetition,
+  // A client without a home-page pledge or petition skips those rungs.
+  pledge: (s) => !CAMPAIGN_SLUGS.pledge || s.signedPledge,
+  petition: (s) => !CAMPAIGN_SLUGS.petition || s.signedPetition,
   newsletter: (s) => s.newsletterConfirmed,
   shift: (s) => s.hasShift,
   member: (s) => s.memberActive,
@@ -86,14 +89,14 @@ const STEPS: Record<Rung, (s: EngagementState) => NextStep> = {
   }),
   petition: () => ({
     rung: "petition",
-    title: "Sign the SkyTrain petition",
-    body: "Call on the mayor to keep his promise and bring SkyTrain all the way to South Surrey.",
+    title: clientProfile.homeCampaigns.petitionAsk?.title ?? "Sign the petition",
+    body: clientProfile.homeCampaigns.petitionAsk?.body ?? "Add your name and help hold City Hall to account.",
     cta: { label: "Sign the petition", href: link(`/act/${CAMPAIGN_SLUGS.petition}`) },
   }),
   newsletter: () => ({
     rung: "newsletter",
     title: "Get the newsletter",
-    body: "News and events from around Surrey, a couple of times a month. Unsubscribe any time.",
+    body: `News and events${fromAroundPlace}, a couple of times a month. Unsubscribe any time.`,
     cta: { label: "Get the newsletter", href: link("/#newsletter") },
   }),
   shift: () => ({
@@ -113,7 +116,7 @@ const STEPS: Record<Rung, (s: EngagementState) => NextStep> = {
   monthly: () => ({
     rung: "monthly",
     title: "Give monthly",
-    body: "A monthly gift pays for organizers and outreach all year, and supports the Imagine Victory Fund.",
+    body: `A monthly gift pays for organizers and outreach all year${clientProfile.fundName ? `, and supports the ${clientProfile.fundName}` : ""}.`,
     cta: { label: "Give monthly", href: link("/donate") },
   }),
   recruit: (s) => ({
@@ -143,7 +146,7 @@ export const THANKS: Record<Completed, string> = {
   newsletter: "Thanks for subscribing. Watch your inbox for the confirmation.",
   rsvp: "You're on the list. See you there.",
   shift: "Thanks for taking a shift. We'll send the details.",
-  member: "Welcome aboard. You're a member of Imagine Surrey.",
+  member: `Welcome aboard. You're a member of ${clientProfile.orgName}.`,
   donation: "Thank you for chipping in.",
   order: "Thanks for your order. We'll ship it soon.",
 };
@@ -222,4 +225,4 @@ export type Locale = (typeof LOCALES)[number]["id"];
 export const LOCALE_IDS = LOCALES.map((l) => l.id) as [Locale, ...Locale[]];
 
 /** The message a share sheet starts with when a supporter passes on their link. */
-export const SHARE_TEXT = "I’m with Imagine Surrey. Join me:";
+export const SHARE_TEXT = `I’m with ${clientProfile.orgName}. Join me:`;

@@ -18,7 +18,7 @@ export default async function EventsAdmin({ searchParams }: PageProps<"/admin/co
       crumbs={[{ href: "/admin/content", label: "Content" }]}
       intro="Published events are listed on /events with an RSVP form. Open an event to see who is coming and check people in at the door."
       actions={
-        <Link href={`${ADMIN_PATHS.events}/new`} className="btn btn--red">
+        <Link href={`${ADMIN_PATHS.events}/new`} className="btn btn--accent">
           Add an event
         </Link>
       }

@@ -50,7 +50,7 @@ export default async function AdminTracker() {
           return (
             <details key={p.id} className="card card--white" style={{ padding: 0 }}>
               <summary style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 14px", padding: "16px 20px", cursor: "pointer" }}>
-                <strong style={{ fontSize: 20, color: "var(--navy)", minWidth: 28 }}>{p.number}</strong>
+                <strong style={{ fontSize: 20, color: "var(--primary)", minWidth: 28 }}>{p.number}</strong>
                 <StatusBadge status={p.status} />
                 <span style={{ flex: "1 1 300px", fontWeight: 700 }}>{p.title}</span>
                 <span className="small">

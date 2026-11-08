@@ -85,7 +85,7 @@ export default async function EditEvent({ params, searchParams }: PageProps<"/ad
                       <ActionForm
                         action={setRsvpCheckedIn}
                         fields={{ rsvpId: r.id, checkedIn: r.checkedInAt ? "0" : "1" }}
-                        buttonClassName={r.checkedInAt ? "btn btn--navy btn--sm" : "btn btn--outline btn--sm"}
+                        buttonClassName={r.checkedInAt ? "btn btn--primary btn--sm" : "btn btn--outline btn--sm"}
                         buttonProps={{ "aria-pressed": Boolean(r.checkedInAt), "aria-label": `${r.checkedInAt ? "Undo check-in for" : "Check in"} ${r.name}` }}
                         pendingText="Saving…"
                       >
@@ -129,7 +129,7 @@ export default async function EditEvent({ params, searchParams }: PageProps<"/ad
         {counts.rsvps > 0 ? (
           <>
             <p>This event has RSVPs, so it can&apos;t be deleted. Unpublishing hides it and closes RSVPs; the list above stays.</p>
-            <ActionForm action={setEventPublished} fields={{ id: event.id, publish: event.published ? "0" : "1" }} buttonClassName={event.published ? "btn btn--outline" : "btn btn--navy"} confirm={event.published ? "Unpublish this event? It disappears from the site and RSVPs close." : undefined}>
+            <ActionForm action={setEventPublished} fields={{ id: event.id, publish: event.published ? "0" : "1" }} buttonClassName={event.published ? "btn btn--outline" : "btn btn--primary"} confirm={event.published ? "Unpublish this event? It disappears from the site and RSVPs close." : undefined}>
               {event.published ? "Unpublish" : "Publish"}
             </ActionForm>
           </>

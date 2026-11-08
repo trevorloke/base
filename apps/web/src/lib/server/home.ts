@@ -8,6 +8,7 @@ import { todayInSurrey, type Slot } from "@/lib/shifts";
 import type { PromiseStatus } from "@/lib/tracker";
 import { TAGS } from "./cache";
 import { getSettings } from "./settings";
+import { buildingWithoutDatabase } from "@/lib/server/render-time";
 
 export type HomeLive = {
   /** Dates are ISO strings: cached values travel as JSON. */
@@ -87,7 +88,7 @@ export async function shellSettings(): Promise<Settings> {
   try {
     return await getSettings();
   } catch (err) {
-    console.error("Site settings could not be loaded; using the defaults", err);
+    if (!buildingWithoutDatabase()) console.error("Site settings could not be loaded; using the defaults", err);
     return defaultSettings();
   }
 }

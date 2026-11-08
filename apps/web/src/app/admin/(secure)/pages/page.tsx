@@ -17,7 +17,7 @@ export default async function PagesAdmin({ searchParams }: PageProps<"/admin/pag
       crumbs={[{ href: "/admin/content", label: "Content" }]}
       intro="Free-form pages such as the privacy policy, served at /<address>. Tick 'Link to it from the footer' to list a page there."
       actions={
-        <Link href={`${ADMIN_PATHS.pages}/new`} className="btn btn--red">
+        <Link href={`${ADMIN_PATHS.pages}/new`} className="btn btn--accent">
           Create a page
         </Link>
       }

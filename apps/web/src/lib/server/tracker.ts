@@ -13,7 +13,7 @@ import { cached, TAGS } from "./cache";
 import { sendEmail } from "./email";
 import { notifyPromiseStatusChanged } from "./notifications";
 import { findOrCreatePerson } from "./people";
-import { forwardFollow } from "./starbase-forward";
+import { forwardFollow } from "./base-ground-forward";
 import { consumeToken, createToken, tokenUrl } from "./tokens";
 
 // ── Loaders ────────────────────────────────────────────────────────────────

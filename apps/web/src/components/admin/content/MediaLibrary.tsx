@@ -152,7 +152,7 @@ export function MediaUpload() {
         </div>
       )}
       <div>
-        <button type="submit" className="btn btn--navy" aria-busy={busy} aria-disabled={busy}>
+        <button type="submit" className="btn btn--primary" aria-busy={busy} aria-disabled={busy}>
           {busy ? "Uploading…" : "Upload"}
         </button>
       </div>

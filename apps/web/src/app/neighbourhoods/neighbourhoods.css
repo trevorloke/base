@@ -31,7 +31,7 @@
 .hood-name {
   font-size: 22px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--primary);
 }
 .hood-tile .small {
   color: var(--muted);
@@ -62,7 +62,7 @@
   font-size: 20px;
   font-weight: 800;
   line-height: 1.2;
-  color: var(--navy);
+  color: var(--primary);
 }
 .hood-ask-label {
   font-size: 14px;
@@ -89,7 +89,7 @@
   gap: 8px 14px;
   padding: 14px 18px;
   border-radius: var(--radius);
-  background: #fff;
+  background: var(--bg);
   border: 1px solid var(--line);
 }
 .promise-mini-number {
@@ -102,7 +102,7 @@
   flex: 1 1 240px;
   font-size: 17px;
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }
 .hood-section-head {
   display: flex;
@@ -115,5 +115,5 @@
   margin: 0;
   font-size: 26px;
   font-weight: 800;
-  color: var(--navy);
+  color: var(--primary);
 }

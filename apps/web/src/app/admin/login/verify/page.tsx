@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getAdminAccount, PENDING_COOKIE } from "@/lib/server/admin-auth";
+import { clientProfile } from "@/seeds/client";
 
 export const metadata: Metadata = { title: "Two-factor sign in", robots: { index: false } };
 
@@ -31,7 +32,7 @@ export default async function VerifySignIn({ searchParams }: PageProps<"/admin/l
           <div className="field">
             <label htmlFor="code">Code from your authenticator app</label>
             <p id="code-hint" className="small" style={{ margin: 0 }}>
-              The 6-digit code for Imagine Surrey. Lost your phone? Type one of your recovery codes instead.
+              The 6-digit code for {clientProfile.orgName}. Lost your phone? Type one of your recovery codes instead.
             </p>
             <input
               id="code"
@@ -48,7 +49,7 @@ export default async function VerifySignIn({ searchParams }: PageProps<"/admin/l
               autoFocus
             />
           </div>
-          <button type="submit" className="btn btn--navy btn--lg">
+          <button type="submit" className="btn btn--primary btn--lg">
             Sign in
           </button>
         </form>

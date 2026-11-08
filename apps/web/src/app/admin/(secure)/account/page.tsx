@@ -22,6 +22,7 @@ import {
 import { PasswordForm, RenameForm, SignOutEverywhereForm } from "./AccountForms";
 import { TwoFactorCard } from "./TwoFactorCard";
 import "../people/people.css";
+import { clientProfile } from "@/seeds/client";
 
 const DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", year: "numeric", month: "short", day: "numeric" });
 const WHEN = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Vancouver", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -43,7 +44,7 @@ export default async function AccountPage() {
   ]);
   const enrolFirst = mustEnrol(user.role, twoFactor.enabled);
   const setup = twoFactor.pendingSecret
-    ? { ...qrSvgPath(enrolmentUri(twoFactor.pendingSecret, user.email, org.name || "Imagine Surrey")), secret: twoFactor.pendingSecret, grouped: groupSecret(twoFactor.pendingSecret) }
+    ? { ...qrSvgPath(enrolmentUri(twoFactor.pendingSecret, user.email, org.name || clientProfile.orgName)), secret: twoFactor.pendingSecret, grouped: groupSecret(twoFactor.pendingSecret) }
     : null;
   const twoFactorCard = (
     <section className="profile-card" aria-labelledby="twofactor-title">

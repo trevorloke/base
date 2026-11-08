@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 
 export function PageHead({ title, children, eyebrow }: { title: ReactNode; children?: ReactNode; eyebrow?: string }) {
   return (
-    <section className="section--navy on-dark page-head">
+    <section className="section--primary on-dark page-head">
       <div className="container stack" style={{ gap: 14 }}>
-        {eyebrow && <p className="eyebrow eyebrow--yellow">{eyebrow}</p>}
+        {eyebrow && <p className="eyebrow eyebrow--highlight">{eyebrow}</p>}
         <h1 className="display pop">{title}</h1>
         {children && (
           <p className="lede" style={{ maxWidth: 760 }}>

@@ -139,7 +139,7 @@ export function Cart({ products }: { products: ShopProduct[] }) {
             <button ref={opener} type="button" className="btn btn--outline btn--lg" style={{ borderColor: "#fff", color: "#fff" }} onClick={() => setOpen(true)} aria-haspopup="dialog">
               View cart
             </button>
-            <button type="button" className="btn btn--yellow btn--lg" onClick={checkout} aria-busy={pending || undefined} aria-disabled={pending || undefined}>
+            <button type="button" className="btn btn--highlight btn--lg" onClick={checkout} aria-busy={pending || undefined} aria-disabled={pending || undefined}>
               {pending ? "Opening checkout…" : "Check out"}
             </button>
           </div>
@@ -185,7 +185,7 @@ export function Cart({ products }: { products: ShopProduct[] }) {
               <button type="button" className="btn btn--outline btn--lg" onClick={closeDrawer}>
                 Keep shopping
               </button>
-              <button type="button" className="btn btn--red btn--lg" onClick={checkout} aria-busy={pending || undefined} aria-disabled={pending || undefined}>
+              <button type="button" className="btn btn--accent btn--lg" onClick={checkout} aria-busy={pending || undefined} aria-disabled={pending || undefined}>
                 {pending ? "Opening checkout…" : "Check out"}
               </button>
             </div>

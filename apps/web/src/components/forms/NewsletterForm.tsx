@@ -6,13 +6,14 @@ import { Honeypot, LiveRegion, SubmitButton } from "./Field";
 import { useTracking } from "./tracking";
 import { HumanCheck } from "./HumanCheck";
 import { useApiForm } from "./useApiForm";
+import { clientProfile } from "@/seeds/client";
 
 type Result = { ok: true; status?: "pending" | "subscribed" | "unsubscribed" };
 
 const MESSAGES: Record<NonNullable<Result["status"]>, string> = {
   pending: "Check your inbox to confirm your subscription.",
   subscribed: "You’re on the list.",
-  unsubscribed: "This address unsubscribed earlier. Email hello@imaginesurrey.ca to rejoin.",
+  unsubscribed: `This address unsubscribed earlier. Email ${clientProfile.email} to rejoin.`,
 };
 
 /**
@@ -38,7 +39,7 @@ export function NewsletterForm({ source = "website", id = "nl-email" }: { source
     return (
       <>
         <LiveRegion message={done} />
-        <p ref={status} role="status" tabIndex={-1} style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--navy)" }}>
+        <p ref={status} role="status" tabIndex={-1} style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--primary)" }}>
           {done}
         </p>
       </>
@@ -77,7 +78,7 @@ export function NewsletterForm({ source = "website", id = "nl-email" }: { source
         aria-describedby={message ? `${id}-error` : undefined}
       />
       <HumanCheck control={human} />
-      <SubmitButton pending={pending} className="btn btn--navy" pendingLabel="Sending…">
+      <SubmitButton pending={pending} className="btn btn--primary" pendingLabel="Sending…">
         Subscribe
       </SubmitButton>
       {message && (

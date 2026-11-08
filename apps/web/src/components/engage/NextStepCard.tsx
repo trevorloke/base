@@ -33,7 +33,7 @@ export function NextStepCard({
       </Heading>
       <p className="next-step__body">{step.body}</p>
       <div className="next-step__actions">
-        <Link href={step.cta.href} className="btn btn--red btn--lg">
+        <Link href={step.cta.href} className="btn btn--accent btn--lg">
           {step.cta.label}
         </Link>
         {step.secondary && (
@@ -59,6 +59,6 @@ export function NextStepCard({
  *   <GenericNextStep completed="petition" as="h3" />
  */
 export function GenericNextStep({ completed, heading, shareUrl, as }: { completed: Completed; heading?: string; shareUrl?: string; as?: "h2" | "h3" }) {
-  const url = shareUrl ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://imaginesurrey.ca";
+  const url = shareUrl ?? process.env.NEXT_PUBLIC_SITE_URL ?? "";
   return <NextStepCard step={nextStep(EMPTY_STATE, completed)} thanks={THANKS[completed]} heading={heading} shareUrl={url} as={as} />;
 }

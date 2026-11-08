@@ -12,7 +12,7 @@ export function SubmitButton({
   children,
   pendingText,
   confirm,
-  className = "btn btn--navy",
+  className = "btn btn--primary",
   ...rest
 }: { children: React.ReactNode; pendingText?: string; confirm?: string } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "type">) {
   const { pending } = useFormStatus();

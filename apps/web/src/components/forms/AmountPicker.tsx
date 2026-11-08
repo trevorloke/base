@@ -4,6 +4,7 @@ import { useState } from "react";
 import { DEFAULT_CENTS, PRESETS_CENTS, starClubCents, type Frequency } from "@/lib/contributions";
 import { formatCents } from "@/lib/money";
 import { applyCustomAmount, parseCustomAmount, presetPressed, type Choice } from "./amount";
+import { clientProfile } from "@/seeds/client";
 
 export type { Choice } from "./amount";
 
@@ -16,7 +17,9 @@ export function choiceLabel(choice: Choice, limitCents: number): string {
   return formatCents(choiceTotalCents(choice, limitCents)) + (choice.frequency === "monthly" ? " a month" : "");
 }
 
-export const DEFAULT_MONTHLY_NOTE = "Monthly donors automatically support the Imagine Victory Fund, our war chest for the next election.";
+export const DEFAULT_MONTHLY_NOTE = clientProfile.fundName
+  ? `Monthly donors automatically support the ${clientProfile.fundName}, our war chest for the next election.`
+  : "Monthly donors let us plan ahead and keep organizing all year.";
 export const DEFAULT_CLUB_NOTE =
   "The Star Club is our name for donors who give the yearly maximum, all at once or spread across twelve months. The Superstar Club gives the maximum to both our city council and school board slates: two contributions, one payment.";
 

@@ -59,9 +59,9 @@ export default async function PromisePage({ params }: PageProps<"/tracker/[numbe
 
   return (
     <>
-      <section className="section--navy on-dark page-head">
+      <section className="section--primary on-dark page-head">
         <div className="container stack" style={{ gap: 14 }}>
-          <p className="eyebrow eyebrow--yellow">
+          <p className="eyebrow eyebrow--highlight">
             Promise {p.number} of {total} · {p.area}
           </p>
           <h1 className="display pop" style={{ fontSize: "clamp(30px, 4.6vw, 54px)" }}>

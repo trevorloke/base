@@ -6,8 +6,8 @@
   margin: 0;
   padding: 12px 16px;
   border-radius: 8px;
-  border: 2px solid var(--yellow);
-  background: var(--yellow-pale);
+  border: 2px solid var(--highlight);
+  background: var(--highlight-pale);
   font-weight: 700;
-  color: var(--navy);
+  color: var(--primary);
 }

@@ -3,6 +3,7 @@ import { PageHead } from "@/components/PageHead";
 import { NextStep } from "@/components/engage/NextStep";
 import { formatCents } from "@/lib/money";
 import { completedSession } from "@/lib/server/checkout-session";
+import { clientProfile } from "@/seeds/client";
 
 export const metadata: Metadata = { title: "Thank you", robots: { index: false } };
 
@@ -20,7 +21,7 @@ export default async function DonateThanks({ searchParams }: PageProps<"/donate/
         <div className="container stack" style={{ gap: 20, maxWidth: 760 }}>
           <p className="body">
             Contributions like yours pay for the work that wins: organizers, printing, and outreach in every town centre.
-            {monthly && " Your monthly gift supports the Imagine Victory Fund, our war chest for the next election."}
+            {monthly && clientProfile.fundName && ` Your monthly gift supports the ${clientProfile.fundName}, our war chest for the next election.`}
           </p>
           {/* The payer's own completed Checkout session identifies them; nothing comes from the URL but the session id. */}
           <NextStep completed="donation" email={session?.customer_details?.email ?? session?.customer_email ?? null} as="h2" />

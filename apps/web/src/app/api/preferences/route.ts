@@ -4,10 +4,11 @@ import { neighbourhoodForPostalCode, normalizePostalCode, OUTSIDE_SURREY } from 
 import { error, json, parseBody } from "@/lib/server/api";
 import { CONSENT_WORDING, consentMeta, recordConsent } from "@/lib/server/consent";
 import { handle } from "@/lib/server/handle";
-import { forwardConsentWithdrawal } from "@/lib/server/starbase-forward";
+import { forwardConsentWithdrawal } from "@/lib/server/base-ground-forward";
 import { findPersonByEmail, updatePerson, type PersonFields } from "@/lib/server/people";
 import { consumeToken, createToken } from "@/lib/server/tokens";
 import { preferencesSchema } from "@/lib/validation";
+import { clientProfile } from "@/seeds/client";
 
 const TTL_MINUTES = 60;
 
@@ -15,7 +16,7 @@ const TTL_MINUTES = 60;
  * Save email and text preferences. The token proves control of the address
  * and is single use; the response carries a fresh one so the page can save
  * again. Every tick that changed is written to the consent ledger, and a
- * withdrawal is passed to Starbase.
+ * withdrawal is passed to base ground.
  */
 export async function POST(req: NextRequest) {
   return handle(async () => {
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
     const token = await consumeToken(db, "preferences", data.token);
     if (!token) return error("This link has expired or was already used. Ask for a new one below.", 410, { token: "Expired link" });
     const person = await findPersonByEmail(db, token.email);
-    if (!person) return error("We couldn’t find your record. Email hello@imaginesurrey.ca and we’ll sort it out.", 404);
+    if (!person) return error(`We couldn’t find your record. Email ${clientProfile.email} and we’ll sort it out.`, 404);
 
     const phone = data.phone ?? person.phone ?? null;
     if (data.sms && !phone) return error("Please check the highlighted fields.", 422, { phone: "Add a mobile number so we can text you, or untick the text box" });

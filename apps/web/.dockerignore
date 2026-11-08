@@ -1,0 +1,12 @@
+node_modules
+.next
+dist
+e2e
+tests
+.env
+.env.*
+!.env.example
+public/uploads
+*.tsbuildinfo
+Dockerfile
+.dockerignore

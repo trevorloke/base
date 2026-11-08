@@ -49,7 +49,7 @@ export function DeskGiftsForm({ gifts, action }: { gifts: DeskGiftView[]; action
           {gifts.length === 0 ? "Every online gift has been logged at the desk." : `${gifts.length} gift${gifts.length === 1 ? "" : "s"} to log${ticked.size ? ` · ${ticked.size} ticked` : ""}`}
         </p>
         {gifts.length > 0 && (
-          <SubmitButton className="btn btn--navy btn--compact" pendingText="Saving…">
+          <SubmitButton className="btn btn--primary btn--compact" pendingText="Saving…">
             Mark ticked gifts logged
           </SubmitButton>
         )}

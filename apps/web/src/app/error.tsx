@@ -11,7 +11,7 @@ export default function PageError({ error, retry }: { error: unknown; retry: () 
 
   return (
     <>
-      <section className="section--navy on-dark page-head">
+      <section className="section--primary on-dark page-head">
         <div className="container stack" style={{ gap: 14 }}>
           <h1 className="display pop">Something went wrong</h1>
           <p className="lede" style={{ maxWidth: 760 }}>
@@ -22,7 +22,7 @@ export default function PageError({ error, retry }: { error: unknown; retry: () 
       <section className="section">
         <div className="container stack" style={{ gap: 20 }}>
           <div className="btn-row">
-            <button type="button" className="btn btn--red btn--lg" onClick={() => retry()}>
+            <button type="button" className="btn btn--accent btn--lg" onClick={() => retry()}>
               Try again
             </button>
             <Link href="/" className="btn btn--outline btn--lg">

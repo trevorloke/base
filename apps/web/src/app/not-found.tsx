@@ -31,7 +31,7 @@ export default function NotFound() {
             ))}
           </ul>
           <div className="btn-row">
-            <Link href="/#join" className="btn btn--red btn--lg">
+            <Link href="/#join" className="btn btn--accent btn--lg">
               Become a member
             </Link>
           </div>

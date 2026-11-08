@@ -55,7 +55,7 @@ export function SignupForm({ opening, onDone, onCancel }: { opening: PublicOpeni
       <HumanCheck control={human} />
       {error && <Alert>{error}</Alert>}
       <div className="btn-row" style={{ gap: 10 }}>
-        <button type="submit" className="btn btn--red" aria-busy={pending} aria-disabled={pending}>
+        <button type="submit" className="btn btn--accent" aria-busy={pending} aria-disabled={pending}>
           {pending ? "One moment…" : "Sign me up"}
         </button>
         <button type="button" className="btn btn--outline" onClick={onCancel}>

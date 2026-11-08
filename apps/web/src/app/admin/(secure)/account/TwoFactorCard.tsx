@@ -37,7 +37,7 @@ export function TwoFactorCard(p: TwoFactorCardProps) {
       <div className="stack" style={{ gap: 16 }}>
         <Notice state={disableState} />
         <p style={{ margin: 0 }}>
-          <span className="badge badge--navy">On</span> Sign-in asks for a code from your authenticator app{p.enabledOn ? ` (since ${p.enabledOn})` : ""}. You have{" "}
+          <span className="badge badge--primary">On</span> Sign-in asks for a code from your authenticator app{p.enabledOn ? ` (since ${p.enabledOn})` : ""}. You have{" "}
           <strong>{p.recoveryCodesLeft}</strong> unused recovery code{p.recoveryCodesLeft === 1 ? "" : "s"}.
         </p>
         <form action={regenerate} className="stack" style={{ gap: 12 }}>
@@ -61,7 +61,7 @@ export function TwoFactorCard(p: TwoFactorCardProps) {
             hint={p.required ? "Owners and administrators must use two-factor sign-in, so you'll be asked to set it up again straight away (for example, on a new phone)." : undefined}
           />
           <div>
-            <SubmitButton className="btn btn--red btn--compact" pendingText="Turning off…" confirm="Turn off two-factor sign-in? Your password alone will open your account.">
+            <SubmitButton className="btn btn--accent btn--compact" pendingText="Turning off…" confirm="Turn off two-factor sign-in? Your password alone will open your account.">
               Turn off two-factor sign-in
             </SubmitButton>
           </div>
@@ -134,7 +134,7 @@ export function TwoFactorCard(p: TwoFactorCardProps) {
 function RecoveryCodes({ codes, message, continueTo }: { codes: string[]; message?: string; continueTo: string }) {
   return (
     <div className="stack" style={{ gap: 14 }} role="status" aria-live="polite">
-      {message && <p style={{ margin: 0, fontWeight: 700, color: "var(--navy)" }}>{message}</p>}
+      {message && <p style={{ margin: 0, fontWeight: 700, color: "var(--primary)" }}>{message}</p>}
       <p style={{ margin: 0 }}>
         Save these recovery codes somewhere safe, like a password manager or printed paper. Each one signs you in once if you lose your phone. <strong>They are shown only now.</strong>
       </p>
@@ -146,7 +146,7 @@ function RecoveryCodes({ codes, message, continueTo }: { codes: string[]; messag
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
         <CopyButton text={codes.join("\n")} label="Copy the codes" />
         {/* A full page load, so the admin re-checks the account. */}
-        <a className="btn btn--navy btn--compact" href={continueTo}>
+        <a className="btn btn--primary btn--compact" href={continueTo}>
           I&apos;ve saved them
         </a>
       </div>

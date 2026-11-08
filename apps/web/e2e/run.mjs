@@ -20,6 +20,8 @@ const suites = process.argv.slice(2).length ? process.argv.slice(2) : ["api", "s
 
 const env = {
   ...process.env,
+  // The suites test Imagine Surrey's site: its copy, town centres and tracker.
+  BASE_WEB_CLIENT: "imagine-surrey",
   DATABASE_URL: dbUrl,
   E2E_DATABASE_URL: dbUrl,
   E2E_PORT: String(port),
@@ -33,13 +35,13 @@ const env = {
   ADMIN_EMAIL: "admin@example.com",
   ADMIN_PASSWORD: "local-admin-pw",
   ADMIN_SESSION_SECRET: "e2e-session-secret-0123456789abcdef",
-  // Every suite forwards to the fake Starbase in fake-stripe.mjs. The human
+  // Every suite forwards to the fake base ground in fake-stripe.mjs. The human
   // check stays off (Cloudflare's widget can't load offline); the desk suite
   // starts a second server with it on, against the fake siteverify.
-  STARBASE_URL: `http://localhost:${stripePort}`,
-  STARBASE_KEY: "sbk_e2eTestKey0123456789abcdefABCDEF",
-  // The key the desk suite sends to POST /api/in/consent, as Starbase would.
-  STARBASE_INBOUND_KEY: "e2e-inbound-key-0123456789abcdefABCDEF",
+  BASE_GROUND_URL: `http://localhost:${stripePort}`,
+  BASE_GROUND_KEY: "sbk_e2eTestKey0123456789abcdefABCDEF",
+  // The key the desk suite sends to POST /api/in/consent, as base ground would.
+  BASE_GROUND_INBOUND_KEY: "e2e-inbound-key-0123456789abcdefABCDEF",
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: "",
   TURNSTILE_SECRET_KEY: "",
   TURNSTILE_VERIFY_URL: "",
