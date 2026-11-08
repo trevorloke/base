@@ -3,8 +3,8 @@ import { z } from "zod";
 import { env } from "@/lib/env";
 import { formatLongDate, SLOT_BY_ID, type Slot } from "@/lib/shifts";
 
-// The website's side of base ground ("the desk"), the campaign's database app.
-// base ground takes people in through a small JSON API with a website key:
+// The website's side of Base Ground ("the desk"), the campaign's database app.
+// Base Ground takes people in through a small JSON API with a website key:
 //
 //   Authorization: Bearer sbk_…
 //   GET  /in/v1/ping     → { ok, campaign, key }
@@ -20,7 +20,7 @@ import { formatLongDate, SLOT_BY_ID, type Slot } from "@/lib/shifts";
 // paid shop orders and promise follows go as tags on the person, nothing more.
 //
 // /in/v1/consent carries withdrawals (unsubscribe, text STOP, a preference
-// change, a deletion) so both apps stop contacting the person. base ground may
+// change, a deletion) so both apps stop contacting the person. Base Ground may
 // not have it yet: a 404 there means "not supported yet", and those rows wait.
 
 // ── The payload ────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ import { formatLongDate, SLOT_BY_ID, type Slot } from "@/lib/shifts";
 export const BASE_GROUND_FIELDS = ["name", "first_name", "last_name", "email", "phone", "address", "unit", "city", "postal", "tags", "newsletter", "volunteer", "note", "source"] as const;
 export type BaseGroundField = (typeof BASE_GROUND_FIELDS)[number];
 
-/** base ground's own limits (server/ext/intake/index.js), counted after trimming. */
+/** Base Ground's own limits (server/ext/intake/index.js), counted after trimming. */
 export const BASE_GROUND_LIMITS = {
   name: 300,
   first_name: 150,
@@ -99,7 +99,7 @@ function cap(value: unknown, max: number): string | undefined {
 
 const emailSchema = z.email();
 
-/** Lower-cased and checked the way base ground checks it; undefined when it would be refused. */
+/** Lower-cased and checked the way Base Ground checks it; undefined when it would be refused. */
 function cleanEmail(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const s = value.trim().toLowerCase();
@@ -124,10 +124,10 @@ export function sourceWord(value: unknown): string | undefined {
 
 /**
  * A body POST /in/v1/people will accept, from one in its own field names:
- * trimmed, empty values dropped, every text cut to base ground's limit, the
- * email lower-cased (and dropped if base ground would refuse it), at most 20
+ * trimmed, empty values dropped, every text cut to Base Ground's limit, the
+ * email lower-cased (and dropped if Base Ground would refuse it), at most 20
  * tags of 40 characters, the two flags sent only when true, and nothing
- * outside BASE_GROUND_FIELDS. Null when it can't be sent: base ground needs an
+ * outside BASE_GROUND_FIELDS. Null when it can't be sent: Base Ground needs an
  * email or a phone, and a name or an email.
  */
 export function cleanBaseGroundPerson(raw: Record<string, unknown> | null | undefined): BaseGroundPerson | null {
@@ -250,7 +250,7 @@ export const MEMBER_TAG = "Member (joined online)";
 /**
  * A membership that has become active, from the details given on its form
  * (the membership snapshot). Deliberately takes no fee: nothing about money
- * ever goes to base ground.
+ * ever goes to Base Ground.
  */
 export function membershipPerson(m: {
   memberName: Text;
@@ -285,7 +285,7 @@ export function deletionRequestPerson(p: { firstName?: Text; lastName?: Text; em
     firstName: p.firstName,
     lastName: p.lastName,
     email: p.email,
-    note: `Asked us to delete their data (supporter portal, ${p.date}). Please action it in base ground too.`,
+    note: `Asked us to delete their data (supporter portal, ${p.date}). Please action it in Base Ground too.`,
     source: "supporter-portal",
   });
 }
@@ -313,7 +313,7 @@ export function followPerson(f: { email: string; number: number }): BaseGroundPe
 
 /**
  * Details a signed-in supporter changed in the portal (/me/preferences).
- * base ground fills blanks only, the same rule as every sign-up, so what is on
+ * Base Ground fills blanks only, the same rule as every sign-up, so what is on
  * file there is never overwritten.
  */
 export function portalPerson(p: { firstName?: Text; lastName?: Text; email: string; phone?: Text; address?: Text; postalCode?: Text }): BaseGroundPerson | null {
@@ -339,7 +339,7 @@ export type ConsentPayload = {
 };
 
 /**
- * A withdrawal base ground can match: the email (checked and lower-cased) or the
+ * A withdrawal Base Ground can match: the email (checked and lower-cased) or the
  * phone, the channel, the reason and the time. Null when there is nothing to
  * match on, or the channel or reason is unknown.
  */
@@ -355,13 +355,13 @@ export function cleanConsentPayload(raw: Record<string, unknown> | null | undefi
   return { ...(email ? { email } : {}), ...(phone ? { phone } : {}), channel, action: "withdraw", reason, at };
 }
 
-/** A withdrawal recorded on the website, for base ground. */
+/** A withdrawal recorded on the website, for Base Ground. */
 export function consentPayload(w: { email?: Text; phone?: Text; channel: ConsentSyncChannel; reason: ConsentReason; at?: Date }): ConsentPayload | null {
   return cleanConsentPayload({ email: w.email, phone: w.phone, channel: w.channel, action: "withdraw", reason: w.reason, at: (w.at ?? new Date()).toISOString() });
 }
 
 /**
- * JSON with keys in sorted order at every level. base ground compares the raw
+ * JSON with keys in sorted order at every level. Base Ground compares the raw
  * body of a retry with the first one (same Idempotency-Key, different body is
  * a 409), and a payload read back from a jsonb column can come back with its
  * keys reordered, so every send serializes this way.
@@ -386,7 +386,7 @@ export function baseGroundUrlProblem(url: string | undefined): string | null {
   try {
     parsed = new URL(url);
   } catch {
-    return "BASE_GROUND_URL is not a web address (e.g. https://base.win/imaginesurrey).";
+    return "BASE_GROUND_URL is not a web address (e.g. https://imaginesurrey.base.win).";
   }
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
   if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && local)) return "BASE_GROUND_URL must start with https://, so the key is never sent unencrypted.";
@@ -397,21 +397,21 @@ function config(c: BaseGroundConfig = {}) {
   return { url: c.url ?? env.baseGroundUrl, key: c.key ?? env.baseGroundKey, fetch: c.fetch ?? fetch, timeoutMs: c.timeoutMs ?? BASE_GROUND_TIMEOUT_MS };
 }
 
-/** base ground's two intake endpoints. Every outbox row names the one it goes to. */
+/** Base Ground's two intake endpoints. Every outbox row names the one it goes to. */
 export const PEOPLE_ENDPOINT = "/in/v1/people";
 export const CONSENT_ENDPOINT = "/in/v1/consent";
 export type BaseGroundEndpoint = typeof PEOPLE_ENDPOINT | typeof CONSENT_ENDPOINT;
 export const BASE_GROUND_ENDPOINTS: BaseGroundEndpoint[] = [PEOPLE_ENDPOINT, CONSENT_ENDPOINT];
 
-/** How a waiting row says base ground has no consent endpoint yet (never starts with a status, so it isn't read as a key problem). */
+/** How a waiting row says Base Ground has no consent endpoint yet (never starts with a status, so it isn't read as a key problem). */
 export const NOT_SUPPORTED_YET = "Not supported yet";
 
 /**
  * What one call came to:
- *   ok           base ground took it (a replay of an earlier answer counts)
+ *   ok           Base Ground took it (a replay of an earlier answer counts)
  *   refused      400, 409, 415 or another 4xx: this body will never be taken as it is
  *   config       401, 403, 404: the key or address is wrong; nothing about the row is
- *   unsupported  a 404 from /in/v1/consent: this base ground doesn't take consent yet
+ *   unsupported  a 404 from /in/v1/consent: this Base Ground doesn't take consent yet
  *   retry        429, 5xx, a timeout, a network error or an answer we can't read
  */
 export type BaseGroundAnswer =
@@ -427,11 +427,11 @@ export function classifyAnswer(status: number, body: unknown, endpoint: string =
   const message = typeof b.error === "string" && b.error ? b.error.slice(0, 500) : `HTTP ${status}`;
   if (status >= 200 && status < 300) {
     const personId = typeof b.person_id === "string" && b.person_id ? b.person_id : null;
-    // A person always comes back with base ground's id; a consent change needs only ok.
+    // A person always comes back with Base Ground's id; a consent change needs only ok.
     if (b.ok === true && (personId || endpoint === CONSENT_ENDPOINT)) return { kind: "ok", personId, replayed: b.replayed === true };
-    return { kind: "retry", status, error: endpoint === CONSENT_ENDPOINT ? "base ground answered without ok" : "base ground answered without a person id" };
+    return { kind: "retry", status, error: endpoint === CONSENT_ENDPOINT ? "Base Ground answered without ok" : "Base Ground answered without a person id" };
   }
-  if (status === 404 && endpoint === CONSENT_ENDPOINT) return { kind: "unsupported", status, error: `${NOT_SUPPORTED_YET}: this base ground has no ${CONSENT_ENDPOINT} (404), so the withdrawal waits here until it does` };
+  if (status === 404 && endpoint === CONSENT_ENDPOINT) return { kind: "unsupported", status, error: `${NOT_SUPPORTED_YET}: this Base Ground has no ${CONSENT_ENDPOINT} (404), so the withdrawal waits here until it does` };
   if (status === 401 || status === 403 || status === 404) return { kind: "config", status, error: message };
   if (status === 429 || status === 408 || status >= 500) return { kind: "retry", status, error: message };
   return { kind: "refused", status, error: message };
@@ -439,14 +439,14 @@ export function classifyAnswer(status: number, body: unknown, endpoint: string =
 
 /**
  * POST one body to an intake endpoint. The Idempotency-Key makes a retry
- * safe: base ground answers a repeat of the same key and body with its first
+ * safe: Base Ground answers a repeat of the same key and body with its first
  * answer. Never throws.
  */
 export async function sendToBaseGround(endpoint: string, payload: Record<string, unknown>, idempotencyKey: string, c?: BaseGroundConfig): Promise<BaseGroundAnswer> {
   const { url, key, fetch: doFetch, timeoutMs } = config(c);
   const problem = baseGroundUrlProblem(url) ?? (key ? null : "BASE_GROUND_KEY is not set.");
   if (problem) return { kind: "config", status: 0, error: problem };
-  if (!(BASE_GROUND_ENDPOINTS as string[]).includes(endpoint)) return { kind: "refused", status: 0, error: `Unknown base ground endpoint ${endpoint}` };
+  if (!(BASE_GROUND_ENDPOINTS as string[]).includes(endpoint)) return { kind: "refused", status: 0, error: `Unknown Base Ground endpoint ${endpoint}` };
   let res: Response;
   try {
     res = await doFetch(`${url}${endpoint}`, {
@@ -463,7 +463,7 @@ export async function sendToBaseGround(endpoint: string, payload: Record<string,
     });
   } catch (err) {
     const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-    return { kind: "retry", status: null, error: timedOut ? `No answer within ${Math.round(timeoutMs / 1000)} seconds` : `Could not reach base ground: ${err instanceof Error ? err.message : String(err)}` };
+    return { kind: "retry", status: null, error: timedOut ? `No answer within ${Math.round(timeoutMs / 1000)} seconds` : `Could not reach Base Ground: ${err instanceof Error ? err.message : String(err)}` };
   }
   let body: unknown = null;
   try {
@@ -497,7 +497,7 @@ export async function ping(c?: BaseGroundConfig): Promise<PingResult> {
     return { ok: false, status: res.status, error: typeof body?.error === "string" ? body.error : `HTTP ${res.status}` };
   } catch (err) {
     const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-    return { ok: false, status: null, error: timedOut ? `No answer within ${Math.round(timeoutMs / 1000)} seconds` : `Could not reach base ground: ${err instanceof Error ? err.message : String(err)}` };
+    return { ok: false, status: null, error: timedOut ? `No answer within ${Math.round(timeoutMs / 1000)} seconds` : `Could not reach Base Ground: ${err instanceof Error ? err.message : String(err)}` };
   }
 }
 
@@ -529,8 +529,8 @@ export const UNSUPPORTED_WAIT_MS = 6 * 3_600_000;
 
 /**
  * The row after one attempt:
- *   ok           → sent, with the id base ground answered (people only)
- *   refused      → failed for good, with base ground's message (staff can Retry it)
+ *   ok           → sent, with the id Base Ground answered (people only)
+ *   refused      → failed for good, with Base Ground's message (staff can Retry it)
  *   config       → still pending and due, attempts unchanged: a wrong key or
  *                  address is not the row's fault, and is shown in the admin
  *   unsupported  → still pending, attempts unchanged, tried again in 6 hours

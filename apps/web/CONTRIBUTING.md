@@ -1,4 +1,4 @@
-# Working on base web
+# Working on Base Web
 
 These conventions keep the site consistent whoever (or whatever) is writing the code. Read this before adding a feature.
 
@@ -24,6 +24,7 @@ These conventions keep the site consistent whoever (or whatever) is writing the 
 - Permissions: `users`, `settings`, `integrations`, `content`, `tracker`, `people`, `shifts`, `comms`, `money`. Roles map to them in `ROLE_PERMISSIONS`.
 - Forms submit to server actions built with `adminAction(permission, zodSchema, handler, auditAction)` from `src/lib/server/actions.ts`, used with `useActionState`. Show results with `<Notice state={state} />` and field errors with `fieldError(state, "name")`; submit with `<SubmitButton>` (pending state, optional `confirm`). Never `.parse()` raw FormData in an action; never leave an action that can throw on bad input.
 - Use `checkbox()`, `multi()`, `optionalText()`, `httpUrl()` from `actions.ts` in action schemas. Numbers: `z.coerce.number()`.
+- Staff sign in with a password, an emailed link, or "Sign in with Base". The last goes by a link between the Base Ground login (client + `sub`) and the staff account (`src/lib/server/base-link.ts`), made once after the person proves the account is theirs. Never sign anyone in by an email another app vouches for, and never put an email or an identity in a URL (the sign-in page gets its email from a short-lived HttpOnly cookie).
 - Destructive actions ask for confirmation. Prefer unpublish/deactivate over hard delete when other data points at the row.
 - Record changes with `audit()` (the `auditAction` argument does it for you).
 
@@ -38,7 +39,7 @@ These conventions keep the site consistent whoever (or whatever) is writing the 
 
 - Route handlers under `src/app/api/*` use `parseBody(req, schema, bucket)` (honeypot, rate limit, zod). Schemas live in `src/lib/validation.ts` and must match the form exactly, including `maxLength`s.
 - A public route that creates a record, sends an email or files a request for the desk passes `{ human: true }` to `parseBody` (the Cloudflare Turnstile check, when configured), and its form renders `<HumanCheck control={form.human} />` before the submit button. Stripe checkout routes don't.
-- Forwarding to base ground (the campaign's database) goes through `src/lib/server/base-ground-forward.ts`, after the website has accepted the submission. RSVPs, paid orders and promise follows go as tags only, withdrawals go to the consent endpoint, and only the module listed for each forward may call it. Never forward money (donations, fees, order totals or items) or admin edits; `tests/base-ground-boundary.test.ts` checks the import graph.
+- Forwarding to Base Ground (the campaign's database) goes through `src/lib/server/base-ground-forward.ts`, after the website has accepted the submission. RSVPs, paid orders and promise follows go as tags only, withdrawals go to the consent endpoint, and only the module listed for each forward may call it. Never forward money (donations, fees, order totals or items) or admin edits; `tests/base-ground-boundary.test.ts` checks the import graph.
 - Client forms use `useApiForm` and the fields in `src/components/forms/Field.tsx`. Show field errors next to fields and the form error in an `Alert`; move focus to the first error or the success card after submit. Keep submit buttons enabled (use `aria-busy`), so focus never drops.
 - Consent: email requires the person's own tick (`contactConsentAt`); texts require `smsConsentAt`. Newsletter sign-ups are double opt-in when email is configured. Never flip `unsubscribed` back without a confirmation click.
 
@@ -57,7 +58,7 @@ These conventions keep the site consistent whoever (or whatever) is writing the 
 
 ## Clients
 
-- base web is one product with many clients. Nothing about a client goes in product code: its copy is `src/seeds/<client>/settings.ts`, its name, places and campaigns are its profile (`src/seeds/<client>/profile.ts`, read through `clientProfile` from `@/seeds/client`), its tracker copy and database seed sit beside them, and the jurisdiction's rules are `src/lib/jurisdiction.ts`. `tests/clients.test.ts` fails if a client's name appears in product code.
+- Base Web is one product with many clients. Nothing about a client goes in product code: its copy is `src/seeds/<client>/settings.ts`, its name, places and campaigns are its profile (`src/seeds/<client>/profile.ts`, read through `clientProfile` from `@/seeds/client`), its tracker copy and database seed sit beside them, and the jurisdiction's rules are `src/lib/jurisdiction.ts`. `tests/clients.test.ts` fails if a client's name appears in product code.
 - `BASE_WEB_CLIENT` is fixed at build time (next.config.ts `env`), so any module, server or browser, can read the profile directly. Unit tests run as Imagine Surrey; `tests/clients.test.ts` reloads the code as a new client.
 - A new client: add `src/seeds/<client>/` (profile, settings, optional tracker copy and seed), register it in `src/seeds/client.ts` and `src/seeds/index.ts`, and give its brand a preset in `src/lib/brand.ts` if it needs its own.
 

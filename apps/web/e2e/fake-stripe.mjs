@@ -1,6 +1,6 @@
 // A stand-in for the outside services the site calls, so the end-to-end
 // suites run without accounts: the Stripe API endpoints (point the site at it
-// with STRIPE_API_BASE=http://localhost:<port>), base ground's website API
+// with STRIPE_API_BASE=http://localhost:<port>), Base Ground's website API
 // (BASE_GROUND_URL=http://localhost:<port>) and Cloudflare Turnstile's siteverify
 // (TURNSTILE_VERIFY_URL=http://localhost:<port>/turnstile/siteverify).
 //
@@ -34,12 +34,12 @@ function parseForm(body) {
   return out;
 }
 
-// ── Fake base ground: GET /in/v1/ping, POST /in/v1/people, /in/v1/consent ───
-// The same rules as base ground's server/ext/intake/index.js: a Bearer website
+// ── Fake Base Ground: GET /in/v1/ping, POST /in/v1/people, /in/v1/consent ───
+// The same rules as Base Ground's server/ext/intake/index.js: a Bearer website
 // key, JSON only, the same strict field schema and limits, and
 // Idempotency-Key replays (same key + same body → the first answer with
 // replayed: true; same key + another body → 409). POST /in/v1/consent (the
-// consent withdrawals the website sends) answers 404, as a base ground without
+// consent withdrawals the website sends) answers 404, as a Base Ground without
 // the endpoint does, until it is switched on. Test-only endpoints:
 // GET /__base-ground lists every request; POST /__base-ground/fail {status, times,
 // path?} answers the next `times` requests (to `path`, if given) with

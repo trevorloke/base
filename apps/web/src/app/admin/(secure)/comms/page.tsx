@@ -13,7 +13,7 @@ const str = (v: unknown, max = 100) => (typeof v === "string" ? v.slice(0, max) 
 
 /**
  * The email and text log. Newsletters, campaign emails and text blasts go out
- * from base ground; the website sends only transactional messages (confirmations,
+ * from Base Ground; the website sends only transactional messages (confirmations,
  * receipts, reminders, tracker alerts, sign-in links) and answers texts sent
  * to its number, and every one of them is listed here.
  */
@@ -42,9 +42,9 @@ export default async function CommsLog({ searchParams }: PageProps<"/admin/comms
           i
         </span>
         <span>
-          Newsletters, campaign emails and text blasts go out from <strong>base ground</strong>, which has the full list. This website sends only transactional messages
+          Newsletters, campaign emails and text blasts go out from <strong>Base Ground</strong>, which has the full list. This website sends only transactional messages
           (confirmations, receipts, reminders, promise-tracker alerts and sign-in links) and answers texts sent to its number, including STOP and START. Every unsubscribe and
-          STOP here is passed to base ground{can(user, "integrations") ? <> (<Link href="/admin/integrations/base-ground?kind=consent">see them</Link>)</> : null}.
+          STOP here is passed to Base Ground{can(user, "integrations") ? <> (<Link href="/admin/integrations/base-ground?kind=consent">see them</Link>)</> : null}.
           {!env.emailEnabled && " Email isn't configured yet, so messages are logged as skipped."}
         </span>
       </div>
@@ -204,7 +204,7 @@ export default async function CommsLog({ searchParams }: PageProps<"/admin/comms
       {campaigns.length > 0 && (
         <section className="stack" style={{ gap: 10 }}>
           <h2 className="h3" style={{ fontSize: 20 }}>
-            Earlier campaigns <span className="small">(sent from this website before base ground took over)</span>
+            Earlier campaigns <span className="small">(sent from this website before Base Ground took over)</span>
           </h2>
           <div className="table-wrap">
             <table className="table">

@@ -1,6 +1,6 @@
 // Imagine Surrey's site copy: the defaults of every Site settings section for
 // its deployment (BASE_WEB_CLIENT=imagine-surrey), exactly as the site had
-// them before base web became a product. Admin → Site settings overrides any
+// them before Base Web became a product. Admin → Site settings overrides any
 // section; "Reset" comes back here.
 import { DEFAULT_MODULES } from "@/lib/home-modules";
 import { board, committees, heroWords, memberBenefits, pillars, site, skytrainAsks, socials, stopItems } from "./site";

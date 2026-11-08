@@ -142,7 +142,7 @@ export async function confirmSubscriptionDetails(
 /**
  * Stop bulk email for a token from an email link, record the withdrawal in
  * the consent ledger (which also clears the person's contact consent) and
- * pass it to base ground. Returns whether a row changed.
+ * pass it to Base Ground. Returns whether a row changed.
  */
 export async function unsubscribeByToken(db: Db, token: string, proof: RequestProof = {}): Promise<boolean> {
   if (!token || token.length > 200) return false;
@@ -155,7 +155,7 @@ export async function unsubscribeByToken(db: Db, token: string, proof: RequestPr
   const { email, personId } = rows[0];
   const id = personId ?? (await findPersonByEmail(db, email))?.id ?? null;
   await recordConsent(db, { personId: id, email, channel: "email", purpose: "updates", action: "withdraw", source: "unsubscribe", ...proof });
-  // base ground stops emailing them too.
+  // Base Ground stops emailing them too.
   await forwardConsentWithdrawal(db, { personId: id, email, channel: "email", reason: "unsubscribe" });
   return true;
 }

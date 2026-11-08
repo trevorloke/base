@@ -58,7 +58,7 @@ export const people = pgTable(
     // Relational organizing: the share code this person hands out, and who brought them in.
     referralCode: text("referral_code"),
     referredById: uuid("referred_by_id").references((): AnyPgColumn => people.id, { onDelete: "set null" }),
-    // The id the campaign's database (base ground, "the desk") answered for this
+    // The id the campaign's database (Base Ground, "the desk") answered for this
     // person, so staff can find the same supporter there.
     baseGroundPersonId: text("base_ground_person_id"),
     createdAt: createdAt(),
@@ -158,9 +158,9 @@ export const contributions = pgTable(
     stripeInvoiceId: text("stripe_invoice_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
     paidAt: timestamp("paid_at", { withTimezone: true }),
-    // When the treasurer logged this gift at the desk (base ground → Donations →
+    // When the treasurer logged this gift at the desk (Base Ground → Donations →
     // Log a gift), where the contribution limits are checked. Online gifts are
-    // never sent to base ground automatically.
+    // never sent to Base Ground automatically.
     deskLoggedAt: timestamp("desk_logged_at", { withTimezone: true }),
     deskLoggedById: uuid("desk_logged_by").references((): AnyPgColumn => adminUsers.id, { onDelete: "set null" }),
     createdAt: createdAt(),
@@ -835,10 +835,10 @@ export const consentEvents = pgTable(
   (t) => [index("consent_events_person_idx").on(t.personId, t.createdAt), index("consent_events_email_idx").on(t.email, t.createdAt)],
 ).enableRLS();
 
-// ── base ground ("the desk") ─────────────────────────────────────────────────
+// ── Base Ground ("the desk") ─────────────────────────────────────────────────
 // Sign-ups the website forwards to the campaign's database. Public routes
 // only write a row here; delivery happens after the response (and from the
-// daily job), so base ground being slow or down never touches a visitor's form.
+// daily job), so Base Ground being slow or down never touches a visitor's form.
 // The row id is the Idempotency-Key, so a retry never makes a second person.
 // Money, RSVPs, orders and follows are never written here.
 export const baseGroundOutboxStatus = pgEnum("base_ground_outbox_status", ["pending", "sent", "failed", "skipped"]);
@@ -850,7 +850,7 @@ export const baseGroundOutbox = pgTable(
     // petition | pledge | newsletter | volunteer-shift | membership | deletion-request
     kind: text("kind").notNull(),
     personId: uuid("person_id").references(() => people.id, { onDelete: "set null" }),
-    // Which base ground endpoint the row goes to, and the exact body sent there.
+    // Which Base Ground endpoint the row goes to, and the exact body sent there.
     endpoint: text("endpoint").notNull().default("/in/v1/people"),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
     status: baseGroundOutboxStatus("status").notNull().default("pending"),

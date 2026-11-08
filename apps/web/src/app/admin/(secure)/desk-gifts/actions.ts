@@ -11,7 +11,7 @@ const uuid = z.uuid({ error: "Not a gift id" });
 
 /**
  * "Mark logged": the treasurer has entered these gifts at the desk
- * (base ground → Donations → Log a gift). The row's button sends `one`; the
+ * (Base Ground → Donations → Log a gift). The row's button sends `one`; the
  * bulk button sends the ticked `ids`.
  */
 export const markGiftsLogged = adminAction(

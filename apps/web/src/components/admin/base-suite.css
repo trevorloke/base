@@ -1,13 +1,12 @@
-/* The base suite's own marks: the switcher in the admin's top bar and the
-   "Sign in with base" button. They keep the suite's neutral ink whatever the
-   client's brand is, so "base" looks the same in every app. */
+/* The Base suite's own marks: the switcher in the admin's top bar and the
+   "Sign in with Base" button. They keep the suite's neutral ink whatever the
+   client's brand is, so "Base" looks the same in every app. */
 .base-wordmark {
   font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
   font-weight: 800;
   letter-spacing: -0.03em;
   font-size: 19px;
   line-height: 1;
-  text-transform: lowercase;
 }
 .base-wordmark::after {
   content: "";

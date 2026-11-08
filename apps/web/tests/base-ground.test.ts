@@ -1,5 +1,5 @@
-// The base ground ("the desk") client: the payload rules that keep every
-// website submission acceptable to base ground's strict schema, and the outbox
+// The Base Ground ("the desk") client: the payload rules that keep every
+// website submission acceptable to Base Ground's strict schema, and the outbox
 // delivery state machine, with fetch and the database replaced by fakes.
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,7 +15,7 @@ const ALLOWED = new Set<string>(sb.BASE_GROUND_FIELDS);
 const keysOf = (o: object | null) => Object.keys(o ?? {});
 
 describe("toBaseGroundPerson", () => {
-  it("maps the website's fields to base ground's names, trimmed, in a fixed order", () => {
+  it("maps the website's fields to Base Ground's names, trimmed, in a fixed order", () => {
     const p = sb.toBaseGroundPerson({
       firstName: "  Asha ",
       lastName: "Example",
@@ -52,7 +52,7 @@ describe("toBaseGroundPerson", () => {
     expect(p).toEqual({ email: "a@b.ca" });
   });
 
-  it("never emits a field outside base ground's list, whatever it is given", () => {
+  it("never emits a field outside Base Ground's list, whatever it is given", () => {
     const input = {
       email: "donor@example.com",
       firstName: "D",
@@ -71,7 +71,7 @@ describe("toBaseGroundPerson", () => {
     expect(raw).toEqual({ email: "x@y.ca" });
   });
 
-  it("caps every text at base ground's own limit, after trimming", () => {
+  it("caps every text at Base Ground's own limit, after trimming", () => {
     const long = (n: number) => "x".repeat(n);
     const p = sb.toBaseGroundPerson({
       name: long(400),
@@ -123,7 +123,7 @@ describe("toBaseGroundPerson", () => {
     expect(sb.toBaseGroundPerson({ email: "only@example.com" })).toEqual({ email: "only@example.com" });
   });
 
-  it("drops an email base ground would refuse, and then may have nothing to send", () => {
+  it("drops an email Base Ground would refuse, and then may have nothing to send", () => {
     expect(sb.toBaseGroundPerson({ name: "Pat", email: "not-an-email" })).toBeNull();
     expect(sb.toBaseGroundPerson({ name: "Pat", email: "not-an-email", phone: "604 555 0100" })).toEqual({ name: "Pat", phone: "604 555 0100" });
     expect(sb.toBaseGroundPerson({ email: `${"a".repeat(320)}@example.com` })).toBeNull();
@@ -229,7 +229,7 @@ describe("what each form forwards", () => {
       first_name: "Pat",
       last_name: "Lee",
       email: "pat@example.com",
-      note: "Asked us to delete their data (supporter portal, November 6, 2026). Please action it in base ground too.",
+      note: "Asked us to delete their data (supporter portal, November 6, 2026). Please action it in Base Ground too.",
       source: "supporter-portal",
     });
   });
@@ -244,11 +244,12 @@ describe("stableJson", () => {
   });
 });
 
-describe("the base ground URL", () => {
+describe("the Base Ground URL", () => {
   it("must be https, except on this machine", () => {
-    expect(sb.baseGroundUrlProblem("https://base.win/imaginesurrey")).toBeNull();
+    expect(sb.baseGroundUrlProblem("https://imaginesurrey.base.win")).toBeNull();
+    expect(sb.baseGroundUrlProblem("https://imaginesurrey.staging.base.win")).toBeNull();
     expect(sb.baseGroundUrlProblem("http://localhost:12111")).toBeNull();
-    expect(sb.baseGroundUrlProblem("http://base.win/imaginesurrey")).toMatch(/https/);
+    expect(sb.baseGroundUrlProblem("http://imaginesurrey.base.win")).toMatch(/https/);
     expect(sb.baseGroundUrlProblem("base-ground")).toMatch(/web address/);
     expect(sb.baseGroundUrlProblem(undefined)).toMatch(/not set/);
   });
@@ -382,7 +383,7 @@ describe("the delivery state machine", () => {
     expect(state.attempts).toBe(sb.MAX_ATTEMPTS);
   });
 
-  it("200 → sent, with base ground's id on the row and on the person; the key is the row id", async () => {
+  it("200 → sent, with Base Ground's id on the row and on the person; the key is the row id", async () => {
     const r = row();
     const { store, linked } = memoryStore([r]);
     const { fn, calls } = fakeFetch([reply(200, { ok: true, person_id: "sb-42" })]);
@@ -393,7 +394,7 @@ describe("the delivery state machine", () => {
     expect((calls[0].init.headers as Record<string, string>)["idempotency-key"]).toBe(r.id);
   });
 
-  it("400 → failed for good, with base ground's message, and the next row still goes", async () => {
+  it("400 → failed for good, with Base Ground's message, and the next row still goes", async () => {
     const bad = row({ createdAt: new Date(1) });
     const good = row({ createdAt: new Date(2) });
     const { store } = memoryStore([good, bad]);
@@ -511,7 +512,7 @@ describe("engagement tags: a tag on the person, never money", () => {
       tags: ["RSVP: Newton town hall"],
       source: "rsvp",
     });
-    // A long title is cut to base ground's 40 characters.
+    // A long title is cut to Base Ground's 40 characters.
     expect(sb.rsvpPerson({ email: "a@b.ca", eventTitle: "A very long event title that goes on and on" })!.tags![0].length).toBeLessThanOrEqual(40);
   });
 
@@ -608,7 +609,7 @@ describe("consent withdrawals for /in/v1/consent", () => {
     expect(state).toMatchObject({ status: "pending", attempts: 0 });
   });
 
-  it("delivery: consent rows wait when base ground has no endpoint, and the sign-ups behind them still go", async () => {
+  it("delivery: consent rows wait when Base Ground has no endpoint, and the sign-ups behind them still go", async () => {
     const consentPayload = sb.consentPayload({ email: "u@b.ca", channel: "email", reason: "unsubscribe" })! as Record<string, unknown>;
     const c1 = row({ kind: "consent", endpoint: sb.CONSENT_ENDPOINT, payload: consentPayload, createdAt: new Date(1) });
     const c2 = row({ kind: "consent", endpoint: sb.CONSENT_ENDPOINT, payload: consentPayload, createdAt: new Date(2) });
@@ -623,7 +624,7 @@ describe("consent withdrawals for /in/v1/consent", () => {
     expect(c2).toMatchObject({ status: "pending", attempts: 0, lastError: null });
     expect(person.status).toBe("sent");
 
-    // Once base ground has it, "Send now" sends them all.
+    // Once Base Ground has it, "Send now" sends them all.
     const later = fakeFetch([reply(200, { ok: true }), reply(200, { ok: true, replayed: false })]);
     const again = await deliverWith(store, 5_000, { send: sender(later.fn), ignoreBackoff: true });
     expect(again).toMatchObject({ sent: 2, unsupported: 0 });
@@ -631,7 +632,7 @@ describe("consent withdrawals for /in/v1/consent", () => {
     expect(c2.status).toBe("sent");
   });
 
-  it("a deletion's address and number are removed from the row once base ground has it", () => {
+  it("a deletion's address and number are removed from the row once Base Ground has it", () => {
     const deletion = { endpoint: sb.CONSENT_ENDPOINT, payload: { email: "gone@example.com", phone: "+16045550100", channel: "sms", action: "withdraw", reason: "deletion", at: "x" } };
     expect(scrubbedOnceSent(deletion)).toEqual({ payload: { email: "(removed after sending)", phone: "(removed after sending)", channel: "sms", action: "withdraw", reason: "deletion", at: "x" } });
     expect(scrubbedOnceSent({ ...deletion, payload: { ...deletion.payload, reason: "stop" } })).toBeNull();

@@ -7,9 +7,9 @@ import { auditLog, people } from "@/lib/db/schema";
 import { recordConsent } from "./consent";
 import { CONSENT_CHANNELS, CONSENT_REASONS } from "./base-ground";
 
-// Withdrawals made in base ground, applied here: POST /api/in/consent with
+// Withdrawals made in Base Ground, applied here: POST /api/in/consent with
 // Authorization: Bearer $BASE_GROUND_INBOUND_KEY. The body is the same shape the
-// website sends to base ground's /in/v1/consent:
+// website sends to Base Ground's /in/v1/consent:
 //
 //   { email?, phone?, channel: "email" | "sms", action: "withdraw" | "grant",
 //     reason: "unsubscribe" | "stop" | "preference" | "deletion", at }
@@ -17,7 +17,7 @@ import { CONSENT_CHANNELS, CONSENT_REASONS } from "./base-ground";
 // A withdrawal is recorded in the consent ledger with source "base-ground" (which
 // clears the person's consent and unsubscribes the address from the
 // newsletter). A grant is answered but never applied: only withdrawals flow
-// between the apps on their own. Nothing here forwards to base ground, so a
+// between the apps on their own. Nothing here forwards to Base Ground, so a
 // withdrawal that came from there is never echoed back.
 //
 // Each call carries an Idempotency-Key. The answer is kept in the audit log
@@ -53,7 +53,7 @@ export type InboundConsent = z.output<typeof inboundConsentSchema>;
 
 export type InboundAnswer = { status: number; body: Record<string, unknown> };
 
-/** Error text in base ground's style for a refused body: "channel: Invalid option…". */
+/** Error text in Base Ground's style for a refused body: "channel: Invalid option…". */
 export function schemaError(error: z.ZodError): string {
   const issue = error.issues[0];
   return `${issue.path.length ? `${issue.path.join(".")}: ` : ""}${issue.message}`;
@@ -84,7 +84,7 @@ async function matchingPeople(q: Tx, c: InboundConsent): Promise<{ id: string; e
 }
 
 /**
- * Apply one call from base ground, once per Idempotency-Key. `raw` is the body
+ * Apply one call from Base Ground, once per Idempotency-Key. `raw` is the body
  * exactly as received, to tell a replay from a reused key.
  */
 export async function applyInboundConsent(db: Db, c: InboundConsent, idempotencyKey: string, raw: string): Promise<InboundAnswer> {
@@ -106,10 +106,10 @@ export async function applyInboundConsent(db: Db, c: InboundConsent, idempotency
     let answer: Record<string, unknown>;
     if (c.action === "grant") {
       // Someone saying yes again is for them to do on this site, where the ledger records the wording they saw.
-      answer = { ok: true, applied: 0, note: "Grants are not applied from base ground; only withdrawals are." };
+      answer = { ok: true, applied: 0, note: "Grants are not applied from Base Ground; only withdrawals are." };
     } else {
       const matches = await matchingPeople(tx, c);
-      const wording = `Withdrawn in base ground (${c.reason}) at ${c.at}`;
+      const wording = `Withdrawn in Base Ground (${c.reason}) at ${c.at}`;
       const ledger = tx as unknown as Db;
       const purpose = c.channel === "sms" ? "sms" : "updates";
       for (const m of matches) await recordConsent(ledger, { personId: m.id, email: m.email, channel: c.channel, purpose, action: "withdraw", wording, source: "base-ground" });

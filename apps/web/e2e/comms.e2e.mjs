@@ -1,6 +1,6 @@
 // Communications: newsletter opt-in and unsubscribe, inbound STOP handling,
 // the day-before reminders cron and the log. Newsletters, campaign emails
-// and text blasts go out from base ground, so the admin has no composer or text
+// and text blasts go out from Base Ground, so the admin has no composer or text
 // sender: only the log (checked in a real browser). Email and Twilio are not
 // configured in e2e, so messages are logged as "skipped" but every row still
 // exists.
@@ -125,7 +125,7 @@ await adminLogin(bp);
 
 await bp.goto(BASE + "/admin/comms");
 ok((await bp.locator("h1").textContent())?.includes("Email & text log"), "Email & texts is the log");
-ok((await bp.locator("[role=note]").textContent())?.includes("go out from base ground"), "it says newsletters and texts go out from base ground");
+ok((await bp.locator("[role=note]").textContent())?.includes("go out from Base Ground"), "it says newsletters and texts go out from Base Ground");
 ok((await bp.locator(".stat").filter({ hasText: "Confirmed subscribers" }).locator(".value").textContent()) === String((await sql`select count(*)::int c from newsletter_subscribers where status='subscribed' and confirmed_at is not null`)[0].c), "stats show confirmed subscribers");
 ok((await bp.getByRole("link", { name: /New email campaign|Send a text/ }).count()) === 0 && (await bp.locator("textarea, #c-subject, #sms-message").count()) === 0, "no composer and no text sender");
 const cookie = (await bp.context().cookies()).map((c) => `${c.name}=${c.value}`).join("; ");
@@ -178,10 +178,10 @@ ok((await sql`select sms_consent_at from people where email = 'sub1@comms.exampl
 ok((await sql`select count(*)::int c from sms_log where kind = 'inbound-stop' and "to" = '+16045550101'`)[0].c === 1, "STOP is logged");
 ok((await sql`select count(*)::int c from consent_events where person_id = ${sub1.id} and channel = 'sms' and action = 'withdraw' and source = 'sms-stop'`)[0].c === 1, "STOP records an SMS withdrawal in the consent ledger");
 const stopRows = await sql`select * from base_ground_outbox where kind = 'consent' and payload->>'phone' = '+16045550101'`;
-ok(stopRows.length === 1 && stopRows[0].endpoint === "/in/v1/consent" && stopRows[0].payload.channel === "sms" && stopRows[0].payload.reason === "stop" && stopRows[0].payload.action === "withdraw", "STOP is passed to base ground as a consent withdrawal for the number");
+ok(stopRows.length === 1 && stopRows[0].endpoint === "/in/v1/consent" && stopRows[0].payload.channel === "sms" && stopRows[0].payload.reason === "stop" && stopRows[0].payload.action === "withdraw", "STOP is passed to Base Ground as a consent withdrawal for the number");
 t = await inbound("START");
 ok((await sql`select sms_consent_at from people where email = 'sub1@comms.example'`)[0].sms_consent_at !== null && t.text.includes("Reply STOP to opt out"), "START restores consent and the reply ends with the STOP line");
-ok((await sql`select count(*)::int c from base_ground_outbox where kind = 'consent' and payload->>'phone' = '+16045550101'`)[0].c === 1, "START sends nothing to base ground (only withdrawals flow on their own)");
+ok((await sql`select count(*)::int c from base_ground_outbox where kind = 'consent' and payload->>'phone' = '+16045550101'`)[0].c === 1, "START sends nothing to Base Ground (only withdrawals flow on their own)");
 t = await inbound("Punjabi");
 ok((await sql`select locale from people where email = 'sub1@comms.example'`)[0].locale === "pa" && t.text.includes("Punjabi"), "PUNJABI sets the locale and is acknowledged");
 t = await inbound("HELP");

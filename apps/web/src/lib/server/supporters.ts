@@ -352,7 +352,7 @@ export async function addNote(db: Db, id: string, author: { id: string; name: st
  * in the same transaction: the email and text logs are deleted, the consent
  * ledger keeps only what was decided and when, orders lose the address and
  * shipping details, and outstanding sign-in links are deleted.
- * base ground is then told to stop emailing and texting them (a "deletion"
+ * Base Ground is then told to stop emailing and texting them (a "deletion"
  * withdrawal); the address and number in it are removed here once sent.
  * Returns the address the record used to have, for the audit entry.
  */
@@ -417,7 +417,7 @@ export async function anonymizePerson(db: Db, id: string): Promise<{ previousEma
     await tx.update(eventRsvps).set({ name: "Removed Supporter", email }).where(eq(eventRsvps.personId, id));
     await tx.update(memberships).set({ memberName: "Removed Supporter", memberAddress: null, memberCity: null, memberPostalCode: null, memberPhone: null }).where(eq(memberships.personId, id));
     // What was queued for the desk carries their details too. Whatever already
-    // reached base ground is removed there by staff (people.base_ground_person_id,
+    // reached Base Ground is removed there by staff (people.base_ground_person_id,
     // kept, says which record).
     await tx.delete(baseGroundOutbox).where(or(eq(baseGroundOutbox.personId, id), sql`${baseGroundOutbox.payload} ->> 'email' = ${person.email}`));
     await tx.delete(promiseFollows).where(sql`${promiseFollows.personId} = ${id} or ${promiseFollows.email} = ${person.email}`);

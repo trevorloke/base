@@ -8,7 +8,7 @@ import { forwardDeletionRequest } from "@/lib/server/base-ground-forward";
 /**
  * "Ask us to delete my account": tags the record, notes it, emails the
  * office, and files a request at the desk (with the email and name only) so
- * base ground's copy is dealt with too.
+ * Base Ground's copy is dealt with too.
  */
 export async function POST(req: NextRequest) {
   const person = await getMember();

@@ -50,7 +50,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
     { n: attention.stalePendingMemberships, text: "memberships pending payment for over an hour", href: "/admin/people?membership=pending", link: "See who", level: "warn", permission: "people" },
     { n: attention.overduePromises, text: "promises past their target date", href: "/admin/tracker", link: "Score them", level: "warn", permission: "tracker" },
     { n: attention.deskGiftsToLog, text: "online gifts to log at the desk", href: "/admin/desk-gifts", link: "Log them", level: "warn", permission: "money" },
-    { n: attention.baseGroundFailed, text: "sign-ups base ground refused", href: "/admin/integrations/base-ground?status=failed", link: "See why", level: "bad", permission: "integrations" },
+    { n: attention.baseGroundFailed, text: "sign-ups Base Ground refused", href: "/admin/integrations/base-ground?status=failed", link: "See why", level: "bad", permission: "integrations" },
   ];
   const open = items.filter((i) => i.n > 0);
   // One-off reminders with no count: next year's contribution limit, and a second owner.

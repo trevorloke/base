@@ -22,9 +22,9 @@ import {
 import { deliverSoon, enqueueConsent, enqueueBaseGround, type OutboxKind } from "./base-ground-outbox";
 import { normalizePhone } from "./sms";
 
-// What the website forwards to base ground, and from where. Each is called only
+// What the website forwards to Base Ground, and from where. Each is called only
 // after the website itself has accepted the submission, with only what the
-// person typed into that form. None of them throws: a problem with base ground
+// person typed into that form. None of them throws: a problem with Base Ground
 // must never fail a visitor's form or a Stripe webhook.
 //
 // RSVPs, paid shop orders and confirmed promise follows go as a tag on the
@@ -39,7 +39,7 @@ async function forward(db: Db, kind: OutboxKind, personId: string | null, person
   try {
     if (await enqueueBaseGround(db, { kind, personId, person })) deliverSoon(db);
   } catch (err) {
-    console.error(`Could not forward a ${kind} to base ground`, err);
+    console.error(`Could not forward a ${kind} to Base Ground`, err);
   }
 }
 
@@ -108,7 +108,7 @@ export async function forwardMembership(db: Db, membershipId: string): Promise<v
     });
     await forward(db, "membership", m.personId, payload);
   } catch (err) {
-    console.error("Could not forward a membership to base ground", err);
+    console.error("Could not forward a membership to Base Ground", err);
   }
 }
 
@@ -136,7 +136,7 @@ export async function forwardOrder(db: Db, orderId: string): Promise<void> {
     if (!email) return;
     await forward(db, "order", order.personId, orderPerson({ firstName: person?.firstName, lastName: person?.lastName, email }));
   } catch (err) {
-    console.error("Could not forward an order to base ground", err);
+    console.error("Could not forward an order to Base Ground", err);
   }
 }
 
@@ -145,7 +145,7 @@ export async function forwardFollow(db: Db, f: { personId: string | null; email:
   await forward(db, "follow", f.personId, followPerson(f));
 }
 
-/** Details a signed-in supporter changed at /me/preferences. base ground fills blanks only. */
+/** Details a signed-in supporter changed at /me/preferences. Base Ground fills blanks only. */
 export async function forwardPortalEdit(
   db: Db,
   p: { id: string; email: string; firstName?: string | null; lastName?: string | null; phone?: string | null; address?: string | null; postalCode?: string | null },
@@ -155,12 +155,12 @@ export async function forwardPortalEdit(
 
 /**
  * A withdrawal recorded on the website (newsletter unsubscribe, the
- * preference centre, /me, a text STOP, a deletion), for base ground's
+ * preference centre, /me, a text STOP, a deletion), for Base Ground's
  * /in/v1/consent, so neither app contacts the person on that channel again.
- * Never called for a withdrawal that came from base ground (no echo back).
+ * Never called for a withdrawal that came from Base Ground (no echo back).
  *
  * A deletion carries the details being erased, so it is written only when
- * base ground is connected (and they are scrubbed from the row once sent).
+ * Base Ground is connected (and they are scrubbed from the row once sent).
  */
 export async function forwardConsentWithdrawal(
   db: Db,
@@ -171,6 +171,6 @@ export async function forwardConsentWithdrawal(
     const consent = consentPayload({ email: w.email, phone: normalizePhone(w.phone) ?? w.phone, channel: w.channel, reason: w.reason });
     if (await enqueueConsent(db, { personId: w.personId ?? null, consent })) deliverSoon(db);
   } catch (err) {
-    console.error("Could not forward a consent withdrawal to base ground", err);
+    console.error("Could not forward a consent withdrawal to Base Ground", err);
   }
 }

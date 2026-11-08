@@ -6,8 +6,8 @@ import { safeRelativePath, ssoConfig, startHandOff, STATE_COOKIE, STATE_COOKIE_P
 export const dynamic = "force-dynamic";
 
 /**
- * "Open base web, signed in": /auth/base?next=/admin/… sends the browser to
- * base ground to vouch for the person (SUITE.md, "The hand-off"). Someone
+ * "Open Base Web, signed in": /auth/base?next=/admin/… sends the browser to
+ * Base Ground to vouch for the person (SUITE.md, "The hand-off"). Someone
  * already signed in here goes straight to `next`.
  */
 export async function GET(req: NextRequest) {

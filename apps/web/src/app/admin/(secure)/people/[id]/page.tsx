@@ -104,7 +104,7 @@ export default async function PersonPage({ params }: PageProps<"/admin/people/[i
               <dd>{person.issue ?? "—"}</dd>
               <dt>Source</dt>
               <dd>{person.source ?? "—"}</dd>
-              <dt>base ground id</dt>
+              <dt>Base Ground id</dt>
               <dd>{person.baseGroundPersonId ? <span className="secret">{person.baseGroundPersonId}</span> : "—"}</dd>
               <dt>Added</dt>
               <dd>{WHEN.format(person.createdAt)}</dd>
@@ -204,7 +204,7 @@ export default async function PersonPage({ params }: PageProps<"/admin/people/[i
           </section>
 
           <section className="profile-card" aria-labelledby="desk-title">
-            <h2 id="desk-title">Sent to base ground</h2>
+            <h2 id="desk-title">Sent to Base Ground</h2>
             {desk.length === 0 ? (
               <p className="small">Nothing from this supporter has been forwarded to the desk.</p>
             ) : (
