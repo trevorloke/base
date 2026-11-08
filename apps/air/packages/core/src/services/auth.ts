@@ -1,6 +1,6 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
-import { and, asc, count, desc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
-import { invites, members, passwordResets, sessions, users, workspaces } from "@base-air/db";
+import { and, asc, count, desc, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { baseLinkPending, baseLinks, invites, members, passwordResets, sessions, users, workspaces } from "@base-air/db";
 import { newId } from "@base-air/ledger";
 import type { Actor } from "@base-air/schema";
 import type { MemberRole } from "@base-air/policy";
@@ -187,6 +187,42 @@ export interface InviteView {
   createdAt: string;
 }
 
+/** Who Base Ground says the person is (its token answer, SUITE.md "The hand-off", step 5). */
+export interface BaseIdentity {
+  client: string;
+  sub: string;
+  email: string;
+  name?: string | null;
+}
+export type BaseHandoffOutcome =
+  | "signed_in"
+  | "link_required"
+  | "link_expired"
+  | "linked_elsewhere"
+  | "no_password"
+  | "no_account"
+  | "bad_state"
+  | "invalid_grant"
+  | "ground_error"
+  | "not_configured";
+export type BaseHandoffResult =
+  | { kind: "signed_in"; token: string; view: SessionView; next: string }
+  | { kind: "link_required"; pendingToken: string; email: string; expiresAt: Date }
+  | { kind: "linked_elsewhere"; email: string }
+  | { kind: "no_password"; email: string }
+  | { kind: "no_account"; email: string };
+/** A Base Ground link as owners see it. */
+export interface BaseLinkView {
+  id: string;
+  client: string;
+  sub: string;
+  userId: string;
+  email: string;
+  name: string | null;
+  groundEmail: string | null;
+  linkedAt: string;
+}
+
 export interface AuthOptions {
   /** Whether people may sign up once a first user exists. Default: BASE_AIR_ALLOW_SIGNUP=1, read on each call. */
   allowSignup?: () => boolean;
@@ -201,6 +237,7 @@ export interface AuthOptions {
 export const SESSION_TTL_MS = 30 * 86_400_000;
 export const INVITE_TTL_MS = 7 * 86_400_000;
 export const RESET_TTL_MS = 3_600_000;
+export const BASE_LINK_PENDING_TTL_MS = 10 * 60_000;
 const SESSION_TOUCH_MS = 5 * 60_000;
 const LOGIN_MAX_FAILURES = 5;
 const LOGIN_WINDOW_MS = 15 * 60_000;
@@ -458,11 +495,19 @@ export class AuthService {
     return w?.id ?? null;
   }
 
+  /** Where an event about a person goes: every workspace they belong to, else the deployment's first. */
+  private async auditWorkspaces(userId: string | null | undefined): Promise<string[]> {
+    const mine = userId ? (await this.memberships(userId)).map((w) => w.id) : [];
+    if (mine.length) return mine;
+    const home = await this.homeWorkspace();
+    return home ? [home] : [];
+  }
+
   /**
-   * Record a hand-off from base ground, refused or not. A refusal that names nobody here is recorded in the
+   * Record a hand-off from Base Ground, refused or not. A refusal that names nobody here is recorded in the
    * deployment's first workspace (one client per deployment, so that is the client's log).
    */
-  async recordBaseHandoff(input: { outcome: "signed_in" | "no_account" | "bad_state" | "invalid_grant" | "ground_error" | "not_configured"; email?: string | null; userId?: string | null; workspaceId?: string | null; ip?: string | null; detail?: string }): Promise<void> {
+  async recordBaseHandoff(input: { outcome: BaseHandoffOutcome; email?: string | null; userId?: string | null; workspaceId?: string | null; ip?: string | null; detail?: string; client?: string | null; sub?: string | null }): Promise<void> {
     const workspaceId = input.workspaceId ?? (await this.homeWorkspace());
     if (!workspaceId) return;
     await this.ctx.events.append({
@@ -471,24 +516,185 @@ export class AuthService {
       subjectType: "user",
       subjectId: input.userId ?? input.email ?? "unknown",
       actor: input.userId ? { type: "human", id: input.userId } : { type: "system", id: "base-ground" },
-      data: { outcome: input.outcome, email: input.email ?? null, ip: input.ip ?? null, ...(input.detail ? { detail: input.detail } : {}) },
+      data: {
+        outcome: input.outcome,
+        email: input.email ?? null,
+        ip: input.ip ?? null,
+        ...(input.client ? { client: input.client } : {}),
+        ...(input.sub ? { sub: input.sub } : {}),
+        ...(input.detail ? { detail: input.detail } : {}),
+      },
     });
   }
 
+  /** A link made, refused or removed, in the ledger of every workspace the person belongs to. */
+  private async recordLinkEvent(
+    type: "base_link.created" | "base_link.refused" | "base_link.removed",
+    input: { userId: string | null; linkId?: string | null; actor?: Actor; data: Record<string, unknown>; workspaceIds?: string[] },
+  ): Promise<void> {
+    const wsIds = new Set([...(input.workspaceIds ?? []), ...(await this.auditWorkspaces(input.userId))]);
+    const actor: Actor = input.actor ?? (input.userId ? { type: "human", id: input.userId } : { type: "system", id: "base-ground" });
+    for (const workspaceId of wsIds) {
+      await this.ctx.events.append({ workspaceId, type, subjectType: "base_link", subjectId: input.linkId ?? input.userId ?? "unknown", actor, data: input.data });
+    }
+  }
+
+  private async linkFor(client: string, sub: string) {
+    const [l] = await this.ctx.db.select().from(baseLinks).where(and(eq(baseLinks.client, client), eq(baseLinks.sub, sub))).limit(1);
+    return l ?? null;
+  }
+  private async linkOfUser(userId: string) {
+    const [l] = await this.ctx.db.select().from(baseLinks).where(eq(baseLinks.userId, userId)).limit(1);
+    return l ?? null;
+  }
+
   /**
-   * Start a session for the person base ground vouched for, by email (case-insensitive). Never creates a user:
-   * null when nobody here has that email. The hand-off is recorded either way.
+   * Base Ground vouched for someone (SUITE.md "The hand-off", step 6). Signs in by link, never by email alone:
+   *
+   * - a link for (client, sub): that account, whatever email Base Ground sends now;
+   * - else the account with that email (case-insensitive) must prove itself once with its own password: a short-lived,
+   *   single-use pending record is made and its token returned (the caller keeps it in an HttpOnly cookie);
+   * - an account already linked to another sub is refused; an account without a password must set one first;
+   * - nobody with that email: no_account. Never creates a user.
+   *
+   * Every outcome is in the ledger (auth.base_handoff; base_link.refused for a refusal).
    */
-  async signInFromBase(rawEmail: string, meta: RequestMeta = {}) {
-    const email = rawEmail.trim().toLowerCase();
+  async signInFromBase(who: BaseIdentity, meta: RequestMeta = {}, next = "/"): Promise<BaseHandoffResult> {
+    const client = who.client.trim();
+    const sub = who.sub.trim();
+    const email = who.email.trim().toLowerCase();
+    const ip = meta.ip ?? null;
+    if (!client || !sub) throw new CoreError("invalid", "Base Ground's answer must name the client and the person (sub)");
+
+    const link = await this.linkFor(client, sub);
+    if (link) {
+      const started = await this.start(link.userId, null, meta);
+      await this.recordBaseHandoff({ outcome: "signed_in", email: started.view.user.email, userId: link.userId, workspaceId: started.view.currentWorkspaceId, ip, client, sub, detail: "by link" });
+      return { kind: "signed_in", ...started, next };
+    }
+
     const [u] = email ? await this.ctx.db.select().from(users).where(sql`lower(${users.email}) = ${email}`).limit(1) : [];
     if (!u) {
-      await this.recordBaseHandoff({ outcome: "no_account", email: email || null, ip: meta.ip ?? null });
-      return null;
+      await this.recordBaseHandoff({ outcome: "no_account", email: email || null, ip, client, sub });
+      return { kind: "no_account", email };
     }
-    const started = await this.start(u.id, null, meta);
-    await this.recordBaseHandoff({ outcome: "signed_in", email: u.email, userId: u.id, workspaceId: started.view.currentWorkspaceId, ip: meta.ip ?? null });
-    return started;
+    const existing = await this.linkOfUser(u.id);
+    if (existing) {
+      // Linked to another Base Ground person: whoever holds this sub only shares the email. Refused.
+      await this.recordBaseHandoff({ outcome: "linked_elsewhere", email: u.email, userId: null, workspaceId: (await this.auditWorkspaces(u.id))[0] ?? null, ip, client, sub });
+      await this.recordLinkEvent("base_link.refused", { userId: u.id, linkId: existing.id, actor: { type: "system", id: "base-ground" }, data: { reason: "linked_to_another", client, sub, groundEmail: email, ip } });
+      return { kind: "linked_elsewhere", email: u.email };
+    }
+    if (!u.passwordHash) {
+      await this.recordBaseHandoff({ outcome: "no_password", email: u.email, workspaceId: (await this.auditWorkspaces(u.id))[0] ?? null, ip, client, sub });
+      return { kind: "no_password", email: u.email };
+    }
+
+    const token = newToken();
+    const now = this.ctx.now();
+    const expiresAt = new Date(now.getTime() + BASE_LINK_PENDING_TTL_MS);
+    await this.ctx.db.delete(baseLinkPending).where(lt(baseLinkPending.expiresAt, new Date(now.getTime() - 86_400_000)));
+    await this.ctx.db.insert(baseLinkPending).values({ id: sha256(token), client, sub, groundEmail: email, userId: u.id, next, expiresAt, createdAt: now });
+    await this.recordBaseHandoff({ outcome: "link_required", email: u.email, workspaceId: (await this.auditWorkspaces(u.id))[0] ?? null, ip, client, sub });
+    return { kind: "link_required", pendingToken: token, email: u.email, expiresAt };
+  }
+
+  private async livePending(token: string | null | undefined) {
+    if (!token || token.length > 200) return null;
+    const [row] = await this.ctx.db
+      .select()
+      .from(baseLinkPending)
+      .where(and(eq(baseLinkPending.id, sha256(token)), isNull(baseLinkPending.usedAt), gt(baseLinkPending.expiresAt, this.ctx.now())))
+      .limit(1);
+    return row ?? null;
+  }
+
+  /** The account a pending link is for (to show on the password page), or null when it is unknown, used or expired. */
+  async pendingBaseLink(token: string | null | undefined): Promise<{ email: string; expiresAt: Date } | null> {
+    const row = await this.livePending(token);
+    if (!row) return null;
+    const [u] = await this.ctx.db.select({ email: users.email }).from(users).where(eq(users.id, row.userId)).limit(1);
+    return u ? { email: u.email, expiresAt: row.expiresAt } : null;
+  }
+
+  /**
+   * Finish a first-time link with the Base Air account's own password. A wrong password counts toward the per-email
+   * sign-in lockout and leaves the pending record usable until it expires; the right one spends it, makes the link
+   * and starts a session. Unknown, used or expired: `invalid`. Linked meanwhile: `conflict`.
+   */
+  async completeBaseLink(token: string | null | undefined, password: string, meta: RequestMeta = {}): Promise<{ token: string; view: SessionView; next: string }> {
+    const ip = meta.ip ?? null;
+    const pending = await this.livePending(token);
+    if (!pending) {
+      await this.recordBaseHandoff({ outcome: "link_expired", ip });
+      throw new CoreError("invalid", "this sign-in has expired or was already used; start again from Base Ground");
+    }
+    const { client, sub, userId } = pending;
+    const u = await this.userById(userId);
+    try {
+      await this.checkPassword(u.email, String(password ?? "").slice(0, 1024));
+    } catch (e) {
+      if (!(e instanceof CoreError)) throw e;
+      const reason = e.code === "rate_limited" ? "rate_limited" : "wrong_password";
+      await this.recordLinkEvent("base_link.refused", { userId, actor: { type: "system", id: "base-ground" }, data: { reason, client, sub, groundEmail: pending.groundEmail, ip } });
+      if (e.code === "unauthorized") throw new CoreError("unauthorized", "that isn't the password for this Base Air account");
+      throw e;
+    }
+    // Spend the pending record: only one tab, once.
+    const [claimed] = await this.ctx.db
+      .update(baseLinkPending)
+      .set({ usedAt: this.ctx.now() })
+      .where(and(eq(baseLinkPending.id, pending.id), isNull(baseLinkPending.usedAt)))
+      .returning({ id: baseLinkPending.id });
+    if (!claimed) throw new CoreError("invalid", "this sign-in has expired or was already used; start again from Base Ground");
+
+    const refuse = async (why: string) => {
+      await this.recordLinkEvent("base_link.refused", { userId, actor: { type: "system", id: "base-ground" }, data: { reason: why, client, sub, groundEmail: pending.groundEmail, ip } });
+      throw new CoreError("conflict", why === "linked_to_another" ? "this Base Air account is already linked to another Base Ground login" : "that Base Ground login is already linked to another Base Air account");
+    };
+    if (await this.linkOfUser(userId)) return refuse("linked_to_another");
+    if (await this.linkFor(client, sub)) return refuse("sub_linked_elsewhere");
+    const id = newId("bln");
+    try {
+      await this.ctx.db.insert(baseLinks).values({ id, client, sub, userId, groundEmail: pending.groundEmail, linkedAt: this.ctx.now() });
+    } catch {
+      // Lost a race against another tab: the unique indexes said no.
+      return refuse("linked_to_another");
+    }
+    await this.recordLinkEvent("base_link.created", { userId, linkId: id, data: { client, sub, groundEmail: pending.groundEmail, ip } });
+    const started = await this.start(userId, null, meta);
+    await this.recordBaseHandoff({ outcome: "signed_in", email: u.email, userId, workspaceId: started.view.currentWorkspaceId, ip, client, sub, detail: "linked" });
+    return { ...started, next: pending.next };
+  }
+
+  /** Links of this workspace's members (owners only). */
+  async listBaseLinks(p: Principal): Promise<BaseLinkView[]> {
+    this.workspaces.requireRole(p, ["owner"]);
+    const rows = await this.ctx.db
+      .select({ id: baseLinks.id, client: baseLinks.client, sub: baseLinks.sub, userId: baseLinks.userId, email: users.email, name: users.name, groundEmail: baseLinks.groundEmail, linkedAt: baseLinks.linkedAt })
+      .from(baseLinks)
+      .innerJoin(users, eq(users.id, baseLinks.userId))
+      .innerJoin(members, and(eq(members.userId, baseLinks.userId), eq(members.workspaceId, p.workspaceId)))
+      .orderBy(desc(baseLinks.linkedAt));
+    return rows.map((r) => ({ ...r, linkedAt: r.linkedAt.toISOString() }));
+  }
+
+  /**
+   * Remove a member's link (owners only). Their next Base sign-in asks for their Base Air password again. Sessions
+   * already open are left alone; remove the member to end those.
+   */
+  async removeBaseLink(p: Principal, linkId: string): Promise<void> {
+    this.workspaces.requireRole(p, ["owner"]);
+    const [row] = await this.ctx.db
+      .select({ link: baseLinks })
+      .from(baseLinks)
+      .innerJoin(members, and(eq(members.userId, baseLinks.userId), eq(members.workspaceId, p.workspaceId)))
+      .where(eq(baseLinks.id, linkId))
+      .limit(1);
+    if (!row) throw new CoreError("not_found", "link not found");
+    const l = row.link;
+    await this.ctx.db.delete(baseLinks).where(eq(baseLinks.id, l.id));
+    await this.recordLinkEvent("base_link.removed", { userId: l.userId, linkId: l.id, actor: p.actor, workspaceIds: [p.workspaceId], data: { client: l.client, sub: l.sub, groundEmail: l.groundEmail } });
   }
 
   // ------------------------------------------------------------ workspaces

@@ -106,6 +106,9 @@ export const LedgerEventType = z.enum([
   // ---- end AI answer visibility
   // ---- the base suite
   "auth.base_handoff",
+  "base_link.created",
+  "base_link.refused",
+  "base_link.removed",
   "brand.updated",
   // ---- end the base suite
 ]);

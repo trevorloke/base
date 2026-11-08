@@ -6,3 +6,5 @@ export * from "./schema.ts";
 export * from "./schema-visibility.ts";
 // ---- the base suite: brand
 export * from "./schema-brand.ts";
+// ---- the base suite: signing in with Base by link
+export * from "./schema-base-links.ts";

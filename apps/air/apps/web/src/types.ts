@@ -808,6 +808,21 @@ export interface PendingInvite {
   createdAt: string;
 }
 
+/** GET /v1/base-links (owners): which Base Ground login signs in which member here (Sign in with Base). */
+export interface BaseLink {
+  id: string;
+  /** The client's slug, as Base Ground names it. */
+  client: string;
+  /** Base Ground's stable id for the person. */
+  sub: string;
+  userId: string;
+  email: string;
+  name: string | null;
+  /** What Base Ground called them when the link was made. Never matched on. */
+  groundEmail: string | null;
+  linkedAt: string;
+}
+
 export interface AcceptInviteInput {
   token: string;
   name?: string;

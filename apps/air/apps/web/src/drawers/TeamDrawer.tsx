@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { InviteCreated, Member, PendingInvite, Role } from "../types";
+import type { BaseLink, InviteCreated, Member, PendingInvite, Role } from "../types";
 import { api, errorText } from "../api";
 import { Drawer } from "../components/Drawer";
 import { PanelState } from "../components/PanelState";
@@ -8,6 +8,7 @@ import { RelativeTime } from "../components/RelativeTime";
 import { useToast } from "../components/Toast";
 import { plural, ROLE_HINT, ROLE_LABEL } from "../lib/format";
 import { formatDateTime } from "../lib/time";
+import { useSuite } from "../lib/suite";
 
 const ROLES: Role[] = ["owner", "approver", "editor", "viewer"];
 
@@ -135,6 +136,8 @@ export function TeamDrawer({ workspaceName, myRole, myUserId, onClose }: { works
 
       {isOwner && members ? <PendingInvites tick={invitesTick} /> : null}
 
+      {isOwner && members ? <BaseLinks /> : null}
+
       {isOwner ? (
         <InviteForm onSent={() => setInvitesTick((t) => t + 1)} />
       ) : members ? (
@@ -234,6 +237,102 @@ function PendingInvites({ tick }: { tick: number }) {
                 <div className="acct-actions">
                   <button type="button" className="btn btn-small btn-ghost" aria-label={`Revoke the invite for ${inv.email}`} onClick={() => setConfirming(inv.id)}>
                     Revoke
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Which Base Ground login signs in which person here (Sign in with Base). A link is made once, with the person's own
+ * Base Air password; removing it makes their next Sign in with Base ask for that password again. Owners only.
+ */
+function BaseLinks() {
+  const toast = useToast();
+  const suite = useSuite();
+  const [links, setLinks] = useState<BaseLink[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; text: string } | null>(null);
+
+  const load = useCallback(() => {
+    setError(null);
+    api
+      .baseLinks()
+      .then(setLinks)
+      .catch((e: unknown) => setError(errorText(e)));
+  }, []);
+  useEffect(load, [load]);
+
+  async function remove(l: BaseLink) {
+    setBusy(l.id);
+    setRowError(null);
+    try {
+      await api.removeBaseLink(l.id);
+      setConfirming(null);
+      setLinks((list) => list?.filter((x) => x.id !== l.id) ?? null);
+      toast(`Removed the Base Ground link for ${l.name || l.email}`);
+    } catch (e) {
+      setRowError({ id: l.id, text: errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // Nothing to say where Sign in with Base isn't set up and nobody is linked.
+  if (!suite.signInWithBase && !error && (!links || !links.length)) return null;
+  return (
+    <section className="dsec">
+      <h3 className="section-h">Base Ground links</h3>
+      <p className="muted small">
+        Who Sign in with Base signs in. Each person links their Base Ground login once, with their own Base Air password. Remove a link and their next sign-in from Base Ground asks for that password again.
+      </p>
+      <PanelState error={error} loading={!links && !error} onRetry={load} />
+      {links && !links.length ? <p className="muted small">Nobody has linked a Base Ground login yet.</p> : null}
+      {links?.length ? (
+        <ul className="acct-list">
+          {links.map((l) => (
+            <li key={l.id} className="acct-row team-row">
+              <div className="acct-main">
+                <div className="acct-id">
+                  <span className="strong">{l.name || l.email}</span>
+                </div>
+                <div className="acct-meta muted small">
+                  <span>{l.email}</span>
+                  {l.groundEmail && l.groundEmail !== l.email ? <span>Base Ground: {l.groundEmail}</span> : null}
+                  <span>
+                    linked <RelativeTime iso={l.linkedAt} />
+                  </span>
+                </div>
+                {rowError?.id === l.id ? (
+                  <div className="card-error" role="alert">
+                    {rowError.text}
+                  </div>
+                ) : null}
+              </div>
+              {confirming === l.id ? (
+                <div className="acct-confirm" role="group" aria-label={`Remove the Base Ground link for ${l.name || l.email}?`}>
+                  <span>Remove it?</span>
+                  <button type="button" className="btn btn-small btn-danger" disabled={busy === l.id} onClick={() => void remove(l)}>
+                    {busy === l.id ? "…" : "Yes"}
+                  </button>
+                  <span className="sep" aria-hidden="true">
+                    ·
+                  </span>
+                  <button type="button" className="btn btn-small btn-ghost" onClick={() => setConfirming(null)}>
+                    No
+                  </button>
+                </div>
+              ) : (
+                <div className="acct-actions">
+                  <button type="button" className="btn btn-small btn-ghost" aria-label={`Remove the Base Ground link for ${l.name || l.email}`} onClick={() => setConfirming(l.id)}>
+                    Remove
                   </button>
                 </div>
               )}

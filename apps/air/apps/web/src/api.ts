@@ -1,5 +1,6 @@
 import type {
   AcceptInviteInput,
+  BaseLink,
   Account,
   AccountMetrics,
   Activity,
@@ -464,6 +465,10 @@ export const api = {
   invites: () => pick(() => get<PendingInvite[]>("/v1/invites"), (f) => f.fixtureApi.invites()),
   /** Owners only; the link stops working at once. */
   revokeInvite: (id: string) => pick(() => del<void>(`/v1/invites/${enc(id)}`), (f) => f.fixtureApi.revokeInvite(id)),
+  /** Owners only: Base Ground links of this workspace's members. */
+  baseLinks: () => pick(() => get<BaseLink[]>("/v1/base-links"), (f) => f.fixtureApi.baseLinks()),
+  /** Owners only; their next Sign in with Base asks for their Base Air password again. */
+  removeBaseLink: (id: string) => pick(() => del<void>(`/v1/base-links/${enc(id)}`), (f) => f.fixtureApi.removeBaseLink(id)),
   inviteInfo: (token: string) => pick(() => get<InviteInfo>(`/v1/invites/${enc(token)}`), (f) => f.fixtureApi.inviteInfo(token)),
   acceptInvite: (input: AcceptInviteInput) => pick(() => post<Session>("/v1/auth/accept-invite", input), (f) => f.fixtureApi.acceptInvite(input)),
 

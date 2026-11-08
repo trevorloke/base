@@ -432,20 +432,39 @@ prefix, `BASE_PATH` (e.g. `/imaginesurrey/air`):
 - Client IPs (sessions, link clicks) come from `X-Forwarded-For`, `BASE_AIR_TRUSTED_PROXIES` (default 1) entries from
   the right: base's front door sits behind Render's load balancer, so the client is the second-to-last entry.
 
-### Sign in with base
-base ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set:
+### Sign in with Base
+Base Ground is the sign-in hub. With `BASE_GROUND_URL` and `BASE_SSO_SECRET` set, Base Air signs people in **by link,
+not by email** (SUITE.md "The hand-off", step 6): a Base Ground manager can make a ground login for any address, so the
+email Base Ground sends is never enough on its own.
 - `GET /auth/base?next=<path>` → `302` to `${BASE_GROUND_URL}/api/sso/authorize?app=air&redirect_uri=…&state=…`, with
   `state` kept in the `base_air_sso_state` cookie (HttpOnly, SameSite=Lax, ten minutes). `next` is honoured only when it
   is a same-origin path under the prefix; anything else lands on the room.
 - `GET /auth/base/callback?code&state` → checks `state` against the cookie, posts `{ code, redirect_uri }` to
   `${BASE_GROUND_INTERNAL_URL or BASE_GROUND_URL}/api/sso/token` with `Authorization: Bearer <BASE_SSO_SECRET>`
   (`BASE_GROUND_INTERNAL_URL` is used as an origin only, `http://` assumed for a bare `host:port`, followed by the path
-  of `BASE_GROUND_URL`), finds the user by email (case-insensitive) and starts a normal session (`302` to `next`).
-  No account is ever created: someone without one gets a page saying "No base air account for <email> — ask an owner
-  to invite you." Bad state, `invalid_grant` and an unreachable ground each get a plain page. Every hand-off, refused
-  or not, is in the ledger as `auth.base_handoff` (`data.outcome`: `signed_in | no_account | bad_state |
-  invalid_grant | ground_error | not_configured`).
-- `GET /api/suite` (no auth) → `{ signInWithBase, groundUrl, webUrl }`: what the sign-in screen and the base switcher
+  of `BASE_GROUND_URL`). The answer must carry `sub` and `client`. Then:
+  - a link for (`client`, `sub`) → that account's session starts (`302` to `next`), whatever email the answer has;
+  - no link, and an account with that email (case-insensitive) → `200` "Link your Base Air account": a form asking
+    for **that account's Base Air password**. The verified hand-off stays on the server (`base_link_pending`: ten
+    minutes, single use, only the token's sha256 stored); the browser holds only its token, in `base_air_sso_link`
+    (HttpOnly, SameSite=Strict, `Path=${BASE_PATH}`). Nothing about the person goes in a URL;
+  - an account already linked to a different `sub` → `403`, refused;
+  - an account with no password → `403` "Set a Base Air password first", with a link to `/?forgot=1`;
+  - no account → `403` "No Base Air account for <email> — ask an owner to invite you." No account is ever created.
+  Bad state, `invalid_grant` and an unreachable Base Ground each get a plain page.
+- `GET /auth/base/link` → the password page again while the pending link is live; `400` once it is used or expired.
+- `POST /auth/base/link` (form: `password`; same origin only) → right password: the link is stored, the pending link is
+  spent, the session starts (`303` to `next`). Wrong password: `401`, the page again; it counts toward the same
+  per-email lockout as `POST /v1/auth/login` (five in fifteen minutes, then `429`). Used, expired or missing: `400`.
+  Linked meanwhile (another tab): `409`.
+- `GET /v1/base-links` (owner) → `[{ id, client, sub, userId, email, name, groundEmail, linkedAt }]` for this
+  workspace's members. `DELETE /v1/base-links/:id` (owner) → `204`; that person's next Sign in with Base asks for their
+  password again (sessions already open stay open).
+- The ledger records every hand-off as `auth.base_handoff` (`data.outcome`: `signed_in | link_required | link_expired |
+  linked_elsewhere | no_password | no_account | bad_state | invalid_grant | ground_error | not_configured`), and every
+  link as `base_link.created`, `base_link.refused` (`data.reason`: `wrong_password | rate_limited | linked_to_another |
+  sub_linked_elsewhere`) or `base_link.removed`, in each workspace the person belongs to.
+- `GET /api/suite` (no auth) → `{ signInWithBase, groundUrl, webUrl }`: what the sign-in screen and the Base switcher
   show.
 
 ### Brand

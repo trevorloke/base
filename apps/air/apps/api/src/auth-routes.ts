@@ -166,4 +166,11 @@ export function registerAuthRoutes(app: Hono<Env>, m: BaseAir, opts: AuthRouteOp
     await m.auth.revokeInvite(c.get("principal"), c.req.param("id"));
     return c.body(null, 204);
   });
+
+  /** Base Ground links of this workspace's members (owners only). Removing one makes the next Sign in with Base ask for the password again. */
+  app.get("/v1/base-links", async (c) => c.json(await m.auth.listBaseLinks(c.get("principal"))));
+  app.delete("/v1/base-links/:id", async (c) => {
+    await m.auth.removeBaseLink(c.get("principal"), c.req.param("id"));
+    return c.body(null, 204);
+  });
 }

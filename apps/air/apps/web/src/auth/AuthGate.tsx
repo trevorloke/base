@@ -12,11 +12,11 @@ export type AuthScreen = "signin" | "signup" | "forgot" | "reset" | "invite" | "
 
 const MIN_PASSWORD = 10;
 
-/** Takes `?invite=` / `?reset=` out of the address bar once they have been read. */
+/** Takes `?invite=` / `?reset=` / `?forgot=` out of the address bar once they have been read. */
 export function stripAuthParams(): void {
   const url = new URL(window.location.href);
   let changed = false;
-  for (const k of ["invite", "reset"]) {
+  for (const k of ["invite", "reset", "forgot"]) {
     if (url.searchParams.has(k)) {
       url.searchParams.delete(k);
       changed = true;
@@ -97,7 +97,15 @@ export function AuthGate({
       card = <SignupCard initialEmail={email} onDone={(s) => void finishSignIn(s)} onSignIn={() => go("signin")} />;
       break;
     case "forgot":
-      card = <ForgotCard initialEmail={email} onBack={(note) => go("signin", note)} />;
+      card = (
+        <ForgotCard
+          initialEmail={email}
+          onBack={(note) => {
+            stripAuthParams();
+            go("signin", note);
+          }}
+        />
+      );
       break;
     case "reset":
       card = (
