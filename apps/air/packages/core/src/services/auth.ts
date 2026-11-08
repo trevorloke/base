@@ -626,7 +626,8 @@ export class AuthService {
     const ip = meta.ip ?? null;
     const pending = await this.livePending(token);
     if (!pending) {
-      await this.recordBaseHandoff({ outcome: "link_expired", ip });
+      // Only a browser that held a pending link is worth a ledger line; a bare POST is noise.
+      if (token) await this.recordBaseHandoff({ outcome: "link_expired", ip });
       throw new CoreError("invalid", "this sign-in has expired or was already used; start again from Base Ground");
     }
     const { client, sub, userId } = pending;
