@@ -1,5 +1,6 @@
 // Thin fetch layer over the v2 API. Cookie session auth; money is always
 // integer cents on the wire and dollars on screen.
+import { NS, at } from './base.js';
 
 export class ApiError extends Error {
   constructor(status, message, body = {}) {
@@ -38,10 +39,10 @@ export const noSignalWords = (write) => (offlineNow()
 const unreached = (write) => () => { throw new NoSignalError(noSignalWords(write)); };
 
 export const apiGet = (path) =>
-  fetch(`/api${path}`, { credentials: 'same-origin' }).catch(unreached(false)).then(handle);
+  fetch(at(`/api${path}`), { credentials: 'same-origin' }).catch(unreached(false)).then(handle);
 
 export const apiPost = (path, body) =>
-  fetch(`/api${path}`, {
+  fetch(at(`/api${path}`), {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
@@ -51,7 +52,7 @@ export const apiPost = (path, body) =>
 // The sign-in this browser remembers (main.jsx keeps it: name, email,
 // campaign, role — no voter data), or null. The app opens on it when the
 // server can't be reached, so what's kept and saved here stays reachable.
-export const ME_KEY = 'starbase:me:v1';
+export const ME_KEY = `${NS}me:v1`;
 export const savedSignIn = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(ME_KEY) || 'null');

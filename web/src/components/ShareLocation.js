@@ -8,9 +8,10 @@
 // sent later would be wrong, not late).
 import { useCallback, useEffect, useState } from 'react';
 import { action } from '../api.js';
+import { NS } from '../base.js';
 
-const PREF = 'starbase:map:share';
-const EVENT = 'starbase:share';
+const PREF = `${NS}map:share`;
+const EVENT = `${NS}share`;
 const MIN_MS = 60_000;
 const MIN_M = 25;
 

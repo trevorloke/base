@@ -14,6 +14,7 @@ import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
 import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
+import { appRedirect, basePath, mountAt } from './lib/mount.js';
 
 export const app = new Hono();
 
@@ -49,13 +50,19 @@ app.route('/api', apiRoutes);
 // from this file, not the working directory, so any launch location works.
 const WEB_ROOT = relative(process.cwd(), fileURLToPath(new URL('../web/dist', import.meta.url))) || '.';
 app.use('*', serveStatic({ root: WEB_ROOT }));
+// Under a client's path (BASE_PATH, lib/mount.js) an address that isn't the
+// app's — /join/…, an old /login — goes to the volunteers' app at /field.
+app.get('*', async (c, next) => appRedirect(c) || next());
 app.get('*', serveStatic({ root: WEB_ROOT, path: 'index.html' }));
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop());
 if (isMain) {
   const port = Number(process.env.PORT) || 3200;
-  const server = serve({ fetch: app.fetch, port }, () => {
-    console.log(`starbase on :${port}`);
+  // BASE_PATH=/imaginesurrey: this Ground answers under base.win/imaginesurrey
+  // (lib/mount.js); unset, at the site's root.
+  const base = basePath();
+  const server = serve({ fetch: mountAt(app, base), port }, () => {
+    console.log(`starbase on :${port}${base ? ` at ${base}` : ''}`);
   });
   const tz = staleTimeZoneData();
   if (tz) console.warn(`starbase: ${tz}`);

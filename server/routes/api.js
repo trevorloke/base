@@ -48,7 +48,7 @@ app.use('*', async (c, next) => {
   const ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
   // Public base URL for links in outbound mail (unsubscribe).
-  ctx.publicUrl = (process.env.STARBASE_PUBLIC_URL || new URL(c.req.url).origin).replace(/\/$/, '');
+  ctx.publicUrl = (process.env.STARBASE_PUBLIC_URL || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
   c.set('db', db);
   c.set('ctx', ctx);
   await next();

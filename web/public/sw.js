@@ -22,16 +22,28 @@
  *               or any non-GET.
  *
  * Bump VERSION to throw every cache away on the next activate.
+ *
+ * Under a client's path on a shared domain (base.win/imaginesurrey — the
+ * worker's scope), every address below is under that path and the caches
+ * carry its name: another campaign's Base on the same domain has its own,
+ * and this worker never touches them. At a site's root, BASE is '' and the
+ * names are what they always were.
  */
+const BASE = new URL(self.registration.scope).pathname.replace(/\/+$/, '');
 const VERSION = 'v2';
-const SHELL = `starbase-shell-${VERSION}`;
-const ASSETS = `starbase-assets-${VERSION}`;
-const TILES = `starbase-tiles-${VERSION}`;
-const META = `starbase-meta-${VERSION}`; // the map's tile provider
+const NAME = BASE ? `starbase-${BASE.slice(1)}` : 'starbase';
+const SHELL = `${NAME}-shell-${VERSION}`;
+const ASSETS = `${NAME}-assets-${VERSION}`;
+const TILES = `${NAME}-tiles-${VERSION}`;
+const META = `${NAME}-meta-${VERSION}`; // the map's tile provider
 const KEEP = [SHELL, ASSETS, TILES, META];
+// This worker's own caches, old versions included — never another client's.
+const MINE = BASE ? new RegExp(`^${NAME}-(?:shell|assets|tiles|meta)-`) : /^starbase-(?:shell|assets|tiles|meta)-/;
 
-const INDEX = '/index.html';
-const SHELL_EXTRAS = ['/manifest.webmanifest', '/icon.svg'];
+const INDEX = `${BASE}/index.html`;
+const SHELL_EXTRAS = [`${BASE}/manifest.webmanifest`, `${BASE}/icon.svg`];
+// A path inside Ground: the address with the client's path taken off.
+const inside = (pathname) => (BASE && (pathname === BASE || pathname.startsWith(`${BASE}/`)) ? pathname.slice(BASE.length) || '/' : pathname);
 const NAV_TIMEOUT_MS = 4000;  // then show the cached app, let the network finish in the background
 const TILE_TIMEOUT_MS = 5000;
 const TILE_MAX = 1500;
@@ -97,7 +109,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const names = await caches.keys();
     await Promise.all(names
-      .filter((n) => n.startsWith('starbase-') && !KEEP.includes(n))
+      .filter((n) => MINE.test(n) && !KEEP.includes(n))
       .map((n) => caches.delete(n)));
     await self.clients.claim();
   })());
@@ -116,7 +128,7 @@ self.addEventListener('fetch', (event) => {
   }
   // Starbase's own tiles (Google Maps through the server): the same cache,
   // fetched with the sign-in cookie.
-  if (url.origin === self.location.origin && url.pathname.startsWith('/tiles/')) {
+  if (url.origin === self.location.origin && inside(url.pathname).startsWith('/tiles/')) {
     event.respondWith(tile(event, url, true));
     return;
   }
@@ -130,13 +142,15 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(loadMatcher().then((m) => (isConfiguredTile(url, m) ? tile(event, url) : fetch(req))));
     return;
   }
-  if (NEVER.test(url.pathname)) return; // straight to the network, untouched
+  // Another client's Base on the same domain: not this worker's business.
+  if (BASE && !(url.pathname === BASE || url.pathname.startsWith(`${BASE}/`))) return;
+  if (NEVER.test(inside(url.pathname))) return; // straight to the network, untouched
 
   if (req.mode === 'navigate') {
     event.respondWith(navigate(event));
     return;
   }
-  if (url.pathname.startsWith('/assets/')) {
+  if (inside(url.pathname).startsWith('/assets/')) {
     event.respondWith(asset(req));
     return;
   }
@@ -208,8 +222,8 @@ async function adoptIndex(res, previous) {
 const ASSET_REF = /\/?assets\/[A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf)\b/g;
 const SIBLING_REF = /["'`]\.\/([A-Za-z0-9._-]+\.(?:js|css))["'`]/g;
 const refsIn = (text, inAssets = false) => {
-  const out = new Set((text.match(ASSET_REF) || []).map((p) => (p.startsWith('/') ? p : `/${p}`)));
-  if (inAssets) for (const m of text.matchAll(SIBLING_REF)) out.add(`/assets/${m[1]}`);
+  const out = new Set((text.match(ASSET_REF) || []).map((p) => `${BASE}${p.startsWith('/') ? p : `/${p}`}`));
+  if (inAssets) for (const m of text.matchAll(SIBLING_REF)) out.add(`${BASE}/assets/${m[1]}`);
   return [...out];
 };
 

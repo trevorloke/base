@@ -29,6 +29,8 @@ import { apiGet, initials } from '../api.js';
 import { DEFAULT_TILES, SURREY_BOUNDS, safeAttribution } from '../components/tiles.js';
 import { OUTCOME_LABEL } from '../components/RatingButtons.jsx';
 import './dashboard.css';
+import { adminHref } from '../mode.js';
+import { NS } from '../base.js';
 
 // The outcomes, in a fixed order with a fixed colour each (a filter never
 // repaints a survivor). The hues pass the colour-vision checks on both the
@@ -49,7 +51,7 @@ const PERIODS = [
   { key: 'today', label: 'Today' }, { key: '7d', label: '7 days' }, { key: '30d', label: '30 days' }, { key: 'all', label: 'All time' },
 ];
 const PERIOD_WORD = { today: 'today', '7d': 'in the last 7 days', '30d': 'in the last 30 days', all: 'in all' };
-const PERIOD_PREF = 'starbase:dash:period';
+const PERIOD_PREF = `${NS}dash:period`;
 const readPeriod = () => { try { return PERIODS.some((p) => p.key === localStorage.getItem(PERIOD_PREF)) ? localStorage.getItem(PERIOD_PREF) : '30d'; } catch { return '30d'; } };
 const num = (n) => (Number(n) || 0).toLocaleString('en-CA');
 const plural = (n, w, many = `${w}s`) => (n === 1 ? w : many);
@@ -343,7 +345,7 @@ function Field({ d, tiles, sel, onSel, period }) {
       if (!Array.isArray(t.polygon) || t.polygon.length < 3) continue;
       const poly = L.polygon(t.polygon.map(([a, b]) => [Number(a), Number(b)]), { color: t.color || '#003979', weight: 1.5, fillOpacity: 0.05 }).addTo(ly.turfs);
       poly.bindTooltip(t.name, { sticky: true, className: 'dash-tt' });
-      poly.bindPopup(`<div class="dash-pop"><strong>${esc(t.name)}</strong><br><a href="/map?turf=${esc(t.id)}">Open on the map ›</a></div>`);
+      poly.bindPopup(`<div class="dash-pop"><strong>${esc(t.name)}</strong><br><a href="${adminHref(`/map?turf=${esc(t.id)}`)}">Open on the map ›</a></div>`);
     }
     const pins = sel ? d.pins.filter((p) => p.user_id === sel) : d.pins;
     for (const p of pins) {
@@ -354,7 +356,7 @@ function Field({ d, tiles, sel, onSel, period }) {
         <strong>${esc(p.name)}</strong>${p.address ? `<br><span class="dash-pop__sub">${esc(p.address)}</span>` : ''}
         <br><span class="dash-pop__dot" style="background:${COLOR[p.outcome] || '#5b6472'}"></span> ${esc(label)}${p.rating ? ` · rated ${esc(p.rating)}` : ''}${p.channel !== 'door' ? ` · by ${esc(p.channel)}` : ''}
         <br><span class="dash-pop__sub">${esc(nameOf.get(p.user_id) || 'someone')} · ${esc(new Date(p.at).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}</span>
-        <br><a href="/people/${esc(p.person_id)}">Profile ›</a> · <a href="/map?person=${esc(p.person_id)}">On the map ›</a>
+        <br><a href="${adminHref(`/people/${esc(p.person_id)}`)}">Profile ›</a> · <a href="${adminHref(`/map?person=${esc(p.person_id)}`)}">On the map ›</a>
       </div>`);
     }
     if (selected?.trail?.length > 1) {

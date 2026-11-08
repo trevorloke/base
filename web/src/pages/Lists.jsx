@@ -18,6 +18,7 @@ import { useAction, ratingBands } from './People.jsx';
 import { CUT_KEYS, CutFields, useTurfs } from '../components/FieldCuts.jsx';
 import './shifts.css';
 import './lists.css';
+import { at } from '../base.js';
 
 const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field', ...CUT_KEYS];
 const HAS = [['', 'Anyone'], ['email', 'An email address'], ['phone', 'A phone number'], ['location', 'A pin on the map']];
@@ -184,7 +185,7 @@ function OneList({ id }) {
       </div>
       <p className="ls-preview"><Counts counts={list.data.counts} kind={l.kind} /></p>
       <div className="ops-actions ls-tools">
-        <a className="btn btn-quiet ops-tap" href={`/api/lists/${id}/export.csv`}>Download CSV</a>
+        <a className="btn btn-quiet ops-tap" href={at(`/api/lists/${id}/export.csv`)}>Download CSV</a>
         {l.kind === 'filter' && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setEditing((v) => !v)}>{editing ? 'Close' : 'Edit the filter'}</button>}
         {asking ? (
           <span className="ops-confirm"><span>Delete this list?</span>

@@ -6,14 +6,18 @@
 //               treasurers (and a volunteer given an area under Permissions).
 // main.jsx picks the router's base from the address; links across the two
 // are plain hrefs (a full load), inside each they are router links.
-export const ADMIN_BASE = '/admin';
+// On base.win (a client's path, base.js) the two are /<client>/field and
+// /<client>/desk; at a site's root, / and /admin as they always were.
+import { BASE } from './base.js';
+export const FIELD_BASE = BASE ? `${BASE}/field` : '';
+export const ADMIN_BASE = BASE ? `${BASE}/desk` : '/admin';
 export const appMode = () => {
   if (typeof window === 'undefined') return 'field';
   const p = window.location.pathname;
   return p === ADMIN_BASE || p.startsWith(`${ADMIN_BASE}/`) ? 'admin' : 'field';
 };
 export const adminHref = (path = '/') => `${ADMIN_BASE}${path}`;
-export const fieldHref = (path = '/') => path;
+export const fieldHref = (path = '/') => `${FIELD_BASE}${path}`;
 const DESK = ['manager', 'staff', 'treasurer'];
 export const isDeskRole = (me) => DESK.includes(me?.role);
 // Who may open the admin: a desk role, or a volunteer given an area.

@@ -14,9 +14,10 @@ import RatingButtons from '../components/RatingButtons.jsx';
 import { queuedText } from '../components/queued.js';
 import './shifts.css';
 import './mainstreet.css';
+import { NS } from '../base.js';
 
-const PLACE_KEY = 'starbase:mainstreet:place';
-const MET_KEY = 'starbase:mainstreet:met';
+const PLACE_KEY = `${NS}mainstreet:place`;
+const MET_KEY = `${NS}mainstreet:met`;
 const read = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || 'null') ?? d; } catch { return d; } };
 const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
 const today = () => new Date().toDateString();

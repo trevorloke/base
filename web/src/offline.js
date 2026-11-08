@@ -54,6 +54,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { SIGN_KINDS } from '@starbase/shared/canvass';
 import { action, ApiError } from './api.js';
+import { BASE, NS } from './base.js';
 
 // The writes a phone may do with no signal (the door card, walk list, Calls,
 // the map's pins and Shifts). person.addAtDoor: a new housemate at a door
@@ -75,8 +76,8 @@ const personOf = (it) => (it.name === 'person.locate' || it.name === 'person.tag
 // Kept on an item about someone this phone added, whose adding was refused.
 const NOT_ADDED = { status: 400, code: 'not_added', message: 'Not saved — this person wasn’t added' };
 
-const KEY = 'starbase:outbox:v2';
-const V1_KEY = 'starbase:outbox:v1'; // knocks only (before this outbox)
+const KEY = `${NS}outbox:v2`;
+const V1_KEY = `${NS}outbox:v1`; // knocks only (before this outbox)
 const listeners = new Set();
 const sentListeners = new Set();
 let flushing = null; // the running flush (a promise), or null
@@ -385,7 +386,7 @@ const oneTabAtATime = (fn) => {
   if (!locks?.request) return fn();
   let ran = false;
   try {
-    return locks.request('starbase-outbox', () => { ran = true; return fn(); })
+    return locks.request((BASE ? `${NS}outbox` : 'starbase-outbox'), () => { ran = true; return fn(); })
       .catch((err) => { if (ran) throw err; return fn(); });
   } catch { return fn(); }
 };

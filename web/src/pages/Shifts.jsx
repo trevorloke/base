@@ -59,9 +59,10 @@ import { NeedsSignal, NeedsSignalLine, useOnline } from '../components/NoSignal.
 import ShiftsBoard from './ShiftsBoard.jsx';
 import { TurfPicker, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import './shifts.css';
+import { NS } from '../base.js';
 
 // The desk's last choice of List or Week, on this device only.
-const VIEW_KEY = 'starbase:shifts-view';
+const VIEW_KEY = `${NS}shifts-view`;
 const savedView = () => { try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'week'; } catch { return 'week'; } };
 const saveView = (v) => { try { localStorage.setItem(VIEW_KEY, v); } catch { /* private window */ } };
 

@@ -5,11 +5,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // the shared primitives so single-class page rules can override them.
 import './app.css';
 import App from './App.jsx';
-import { ADMIN_BASE, appMode } from './mode.js';
+import { ADMIN_BASE, FIELD_BASE, fieldHref, appMode } from './mode.js';
 import { ME_KEY, NoSignalError, noAnswer, savedSignIn } from './api.js';
 import { keptPersister, watchKeptCopies } from './components/KeptCopies.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { closeOutbox } from './offline.js';
+import { at } from './base.js';
 
 // Once more after a second — except a 401 / 404, or no signal at all (the
 // browser says it's offline): then the screen says so straight away, and
@@ -102,7 +103,7 @@ if (typeof window !== 'undefined') {
       closeOutbox(); // nothing more is saved here under the sign-in that ended
       queryClient.clear();
       if (next) keepOnlyMine(next); else forgetPhoneCopies();
-      window.location.assign(appMode() === 'admin' ? (next ? `${ADMIN_BASE}/` : `${ADMIN_BASE}/login`) : (next ? '/' : '/login'));
+      window.location.assign(appMode() === 'admin' ? (next ? `${ADMIN_BASE}/` : `${ADMIN_BASE}/login`) : fieldHref(next ? '/' : '/login'));
     }, 60);
   });
 }
@@ -111,7 +112,7 @@ if (typeof window !== 'undefined') {
 const mode = appMode();
 createRoot(document.getElementById('root')).render(
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter basename={mode === 'admin' ? ADMIN_BASE : undefined}>
+    <BrowserRouter basename={mode === 'admin' ? ADMIN_BASE : (FIELD_BASE || undefined)}>
       <App mode={mode} />
     </BrowserRouter>
   </QueryClientProvider>,
@@ -121,6 +122,6 @@ createRoot(document.getElementById('root')).render(
 // production builds — in dev it would cache Vite's modules and fight HMR.
 if (import.meta.env.PROD && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => { /* app still works online */ });
+    navigator.serviceWorker.register(at('/sw.js'), { scope: at('/') }).catch(() => { /* app still works online */ });
   });
 }

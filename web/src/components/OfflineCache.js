@@ -28,10 +28,11 @@
 // desk sign-in, in this tab only ('session' — gone when the tab closes).
 // Sign-out forgets both.
 import { useEffect } from 'react';
+import { NS } from '../base.js';
 
-const PREFIX = 'starbase:copy:v1:';
+const PREFIX = `${NS}copy:v1:`;
 // The walk list's own copies (pages/Turfs.jsx) are forgotten with these.
-const FIELD_PREFIX = 'starbase:field:v1:';
+const FIELD_PREFIX = `${NS}field:v1:`;
 const TTL = 24 * 3600 * 1000;
 const ENTRY_MAX = 1_500_000; // characters of JSON
 const TOTAL_MAX = 3_000_000;
@@ -202,7 +203,7 @@ const forget = (keep) => {
 };
 
 // Whose copies these are, and the role they were made under ("ws:user:role").
-const ROLE_MARK = 'starbase:copy-role:v1';
+const ROLE_MARK = `${NS}copy-role:v1`;
 let checked = null;
 // Sign-out: every copy on this phone goes (walk lists too).
 export const forgetPhoneCopies = () => {

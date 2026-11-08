@@ -46,6 +46,7 @@ import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
 import { pendingVoted, useVotedMode } from '../components/Voted.jsx';
+import { NS } from '../base.js';
 
 const SURREY = [49.1913, -122.849];
 // "My turf" (volunteers with a turf) comes first and is where they start:
@@ -77,7 +78,7 @@ const opponentFilters = (scale) => scale.candidates.map((c) => ({ key: `r:${c.co
 
 // Signs on the map: which statuses (up, requested) and kinds show — the
 // flags on doors, the signs with no door, and "Has a sign". Kept per phone.
-const SIGNS_PREF = 'starbase:map:signs';
+const SIGNS_PREF = `${NS}map:signs`;
 const SIGN_SHOW_STATUS = [['installed', 'Up'], ['requested', 'Requested']];
 const readSignsPref = () => {
   try {
@@ -92,7 +93,7 @@ const writeSignsPref = (v) => { try { localStorage.setItem(SIGNS_PREF, JSON.stri
 // standard tiles; Muted (grey, so the pins stand out) and Dark (for night),
 // drawn over any tiles; and, with Google Maps on, its other looks
 // (Satellite, Terrain) from /api/map/config views.
-const VIEW_PREF = 'starbase:map:view';
+const VIEW_PREF = `${NS}map:view`;
 const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: 'Muted' }, { key: 'dark', label: 'Dark' }];
 const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'standard'; } catch { return 'standard'; } };
 const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch { /* storage blocked */ } };
@@ -117,13 +118,13 @@ const isTyping = (el) =>
 // yellow or red), so a turf outline can't be mistaken for support/opposed.
 const TURF_COLORS = ['#2b6cb0', '#7b3fa0', '#b5651d', '#1f7a6d', '#a0306a', '#4c5a8a'];
 const MAX_TURF_POINTS = 500; // turf.create: polygon max(500)
-const TURFS_PREF = 'starbase:map:turfs';
+const TURFS_PREF = `${NS}map:turfs`;
 const EMPTY_LIST = [];
 const EMPTY_DRAFT = { points: [], naming: false };
 const readTurfsPref = () => { try { return localStorage.getItem(TURFS_PREF) !== '0'; } catch { return true; } };
 const writeTurfsPref = (on) => { try { localStorage.setItem(TURFS_PREF, on ? '1' : '0'); } catch { /* storage blocked */ } };
 // A volunteer's first-visit hint, once per browser (blocked storage: once per visit).
-const HINT_PREF = 'starbase:map:hint-seen';
+const HINT_PREF = `${NS}map:hint-seen`;
 const readHintSeen = () => { try { return localStorage.getItem(HINT_PREF) === '1'; } catch { return false; } };
 const writeHintSeen = () => { try { localStorage.setItem(HINT_PREF, '1'); } catch { /* storage blocked */ } };
 

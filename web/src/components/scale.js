@@ -16,10 +16,11 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DEFAULT_SCALE, normalizeScale } from '@starbase/shared/scale';
 import { apiGet } from '../api.js';
+import { NS } from '../base.js';
 
 // OfflineCache.js's prefix and scope, so forgetPhoneCopies() / keepOnlyMine()
 // clear this one with the rest.
-const PREFIX = 'starbase:copy:v1:';
+const PREFIX = `${NS}copy:v1:`;
 const keyFor = (me) => (me?.user?.id && me?.workspace?.id ? `${PREFIX}${me.workspace.id}:${me.user.id}:scale` : null);
 const ls = () => { try { return globalThis.localStorage || null; } catch { return null; } };
 

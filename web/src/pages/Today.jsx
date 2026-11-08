@@ -41,6 +41,8 @@ import { useRequestsCount } from '../components/RequestsCount.js';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
 import './today.css';
+import { at } from '../base.js';
+import { NS } from '../base.js';
 
 // The managers' dashboard (its map and chart load with it, not with Today).
 const Dashboard = lazy(() => import('./Dashboard.jsx'));
@@ -78,7 +80,7 @@ const fmtBigMoney = (cents) => {
 
 // api.js has no DELETE helper; same error contract as apiGet/apiPost.
 const apiDelete = async (path) => {
-  const res = await fetch(`/api${path}`, { method: 'DELETE', credentials: 'same-origin' });
+  const res = await fetch(at(`/api${path}`), { method: 'DELETE', credentials: 'same-origin' });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, body.error || `request failed (${res.status})`);
   return body;
@@ -604,7 +606,7 @@ function TurfRows({ turfs, statsById }) {
 // out) so /turfs/:id opens with no signal. With the brief offline, Today
 // reads those keys to send "Start canvassing" to the most recently loaded
 // one — never to an empty map. Read only; Turfs.jsx owns the format.
-const FIELD_CACHE = 'starbase:field:v1:';
+const FIELD_CACHE = `${NS}field:v1:`;
 const FIELD_TTL = 24 * 3600 * 1000;
 function cachedWalkList(me) {
   if (!me?.user?.id || !me?.workspace?.id) return null;
@@ -848,7 +850,7 @@ function DeskToday({ b, me, toast }) {
         </ul>
         <div className="today-actions today-morebox__tools">
           <button type="button" className="btn today-tap" onClick={onVerify} disabled={verify?.busy}>Verify the records</button>
-          <a className="btn today-tap" href="/api/export">Export all data</a>
+          <a className="btn today-tap" href={at('/api/export')}>Export all data</a>
         </div>
         {verify?.ok && <p className="mono ok-text" role="status">✓ {verify.checked} entries check out</p>}
         {verify?.ok === false && <p className="error" role="alert">The books don’t check out</p>}

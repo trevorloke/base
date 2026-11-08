@@ -32,6 +32,7 @@ import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
 import './survey-questions.css';
+import { NS } from '../base.js';
 
 const TEXT_MAX = 500;
 const SCALE = [1, 2, 3, 4, 5];
@@ -56,7 +57,7 @@ export const answersSaid = (list, reply) => {
 };
 
 // ── The phone's copy of what to ask ──
-const CACHE_PREFIX = 'starbase:surveys:v1:';
+const CACHE_PREFIX = `${NS}surveys:v1:`;
 const CACHE_TTL = 24 * 3600 * 1000;
 const cacheKey = (me, name) => (me?.user?.id && me?.workspace?.id ? `${CACHE_PREFIX}${me.workspace.id}:${me.user.id}:${name}` : null);
 function readCache(key) {

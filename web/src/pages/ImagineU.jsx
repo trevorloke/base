@@ -14,6 +14,7 @@ import { renderMarkdown } from '@starbase/shared/markdown';
 import { ApiError, action, apiGet } from '../api.js';
 import './imagineu.css';
 import '../editor.css';
+import { at } from '../base.js';
 
 const DESK = ['manager', 'staff', 'treasurer'];
 const KINDS = [
@@ -159,7 +160,7 @@ function Home({ desk }) {
           )}
           {adding && adding.section_id === null && !d.unfiled.length && <LessonForm sectionId={null} sections={d.sections} onDone={() => setAdding(null)} />}
           {d.public_url && d.sections.concat([{ lessons: d.unfiled }]).some((s) => s.lessons.some((l) => l.audience === 'public')) && (
-            <p className="muted lu-note">Public modules are at <a href={d.public_url} target="_blank" rel="noopener noreferrer">{d.public_url}</a>.</p>
+            <p className="muted lu-note">Public modules are at <a href={at(d.public_url)} target="_blank" rel="noopener noreferrer">{d.public_url}</a>.</p>
           )}
         </div>
       )}
@@ -488,7 +489,7 @@ function Lesson({ id, desk }) {
               {l.done ? '✓ Module done — undo' : 'Mark this module done'}
             </button>
             {err && <span className="error" role="alert">{err}</span>}
-            {l.public_url && desk && <a className="muted lu-public" href={l.public_url} target="_blank" rel="noopener noreferrer">Public page ↗</a>}
+            {l.public_url && desk && <a className="muted lu-public" href={at(l.public_url)} target="_blank" rel="noopener noreferrer">Public page ↗</a>}
           </div>
         </>
       )}
@@ -499,18 +500,18 @@ function Lesson({ id, desk }) {
 function Media({ lesson: l, embed }) {
   const a = l.asset;
   if (a) {
-    if (a.kind === 'picture') return <figure className="lu-media"><img src={a.url} alt={l.title} /></figure>;
-    if (a.kind === 'audio') return <div className="lu-media"><audio controls preload="none" src={a.url} /><a className="lu-dl" href={`${a.url}?download=1`}>Download {a.name}</a></div>;
-    if (a.kind === 'video') return <div className="lu-media"><video controls preload="metadata" src={a.url} /></div>;
+    if (a.kind === 'picture') return <figure className="lu-media"><img src={at(a.url)} alt={l.title} /></figure>;
+    if (a.kind === 'audio') return <div className="lu-media"><audio controls preload="none" src={at(a.url)} /><a className="lu-dl" href={at(`${a.url}?download=1`)}>Download {a.name}</a></div>;
+    if (a.kind === 'video') return <div className="lu-media"><video controls preload="metadata" src={at(a.url)} /></div>;
     if (a.content_type === 'application/pdf') {
       return (
         <div className="lu-media lu-media--doc">
-          <iframe className="lu-pdf" src={a.url} title={a.name} />
-          <p><a className="btn" href={a.url} target="_blank" rel="noopener noreferrer">Open the PDF</a> <a className="lu-dl" href={`${a.url}?download=1`}>Download</a></p>
+          <iframe className="lu-pdf" src={at(a.url)} title={a.name} />
+          <p><a className="btn" href={at(a.url)} target="_blank" rel="noopener noreferrer">Open the PDF</a> <a className="lu-dl" href={at(`${a.url}?download=1`)}>Download</a></p>
         </div>
       );
     }
-    return <div className="lu-media lu-media--doc"><a className="btn" href={`${a.url}?download=1`}>Download {a.name}</a> <span className="muted mono">{kb(a.bytes)}</span></div>;
+    return <div className="lu-media lu-media--doc"><a className="btn" href={at(`${a.url}?download=1`)}>Download {a.name}</a> <span className="muted mono">{kb(a.bytes)}</span></div>;
   }
   if (embed) return <div className="lu-media lu-video"><iframe src={embed} title={l.title} allow="encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" /></div>;
   if (l.link) return <p className="lu-media"><a className="btn" href={l.link} target="_blank" rel="noopener noreferrer">Open {l.kind === 'video' ? 'the video' : l.kind === 'audio' ? 'the recording' : 'the link'} ↗</a></p>;

@@ -4,11 +4,12 @@
 // not set up yet shows as such (a manager is told what to set).
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { APPS } from '@starbase/shared/brand';
+import { fieldHref } from '../mode.js';
 
 export const appLinks = (me) => {
   const site = String(me?.workspace?.settings?.website || '').trim().replace(/\/+$/, '');
   return {
-    ground: '/',
+    ground: fieldHref('/'),
     web: me?.org?.apps?.web || (/^https?:\/\//i.test(site) ? `${site}/admin` : null),
     air: me?.org?.apps?.air || null,
   };

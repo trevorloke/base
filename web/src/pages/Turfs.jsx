@@ -45,6 +45,7 @@ import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import RequestAsk from '../components/RequestAsk.jsx';
 import './turfs.css';
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
+import { NS } from '../base.js';
 
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
 const TURF_COLORS = ['#2b6cb0', '#7b3fa0', '#b5651d', '#1f7a6d', '#a0306a', '#4c5a8a'];
@@ -78,7 +79,7 @@ const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce
 // different sign-in on a shared phone never reads them), kept one day, and
 // wiped when the app signs out (the ['me'] query is removed by
 // queryClient.clear()). forgetFieldCache() is exported for the shell too.
-const CACHE_PREFIX = 'starbase:field:v1:';
+const CACHE_PREFIX = `${NS}field:v1:`;
 const CACHE_TTL = 24 * 3600 * 1000;
 const cacheKey = (me, name) => (me?.user?.id && me?.workspace?.id ? `${CACHE_PREFIX}${me.workspace.id}:${me.user.id}:${name}` : null);
 function readCache(key) {
