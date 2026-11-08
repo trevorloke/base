@@ -95,7 +95,9 @@ test('happy path: a manager opens base air signed in, once', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('cache-control'), 'no-store');
   const who = await r.json();
-  assert.deepEqual(Object.keys(who).sort(), ['areas', 'client', 'email', 'name', 'organization', 'role']);
+  assert.deepEqual(Object.keys(who).sort(), ['areas', 'client', 'email', 'name', 'organization', 'role', 'sub']);
+  assert.equal(typeof who.sub, 'string');
+  assert.equal(who.sub, (await db.query('select id from users where email = $1', [who.email])).rows[0].id, 'sub: the user’s id here');
   assert.equal(who.email, `sso-mgr+${tag}@example.org`);
   assert.equal(who.name, 'Morgan Manager');
   assert.equal(who.role, 'manager');
@@ -109,6 +111,9 @@ test('happy path: a manager opens base air signed in, once', async () => {
   const s = await (await token(again.code)).json();
   assert.equal(s.client, 'surrey-2026', 'BASE_CLIENT wins');
   assert.equal(s.role, 'staff');
+  assert.notEqual(s.sub, who.sub, 'each person their own sub');
+  const later = await (await token((await codeFor(mgr)).code)).json();
+  assert.equal(later.sub, who.sub, 'the same person, the same sub, every time');
   delete process.env.BASE_CLIENT;
   delete process.env.BASE_ORG_NAME;
 });

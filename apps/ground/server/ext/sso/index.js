@@ -1,15 +1,19 @@
 // Signing in once (SUITE.md, "Signing in once: base ground is the hub").
 // base air and base web don't keep their own passwords for staff: they ask
 // base ground who is signed in, then sign that person in to their own
-// account with the same email.
+// account, linked once to (client, sub) — never by the email alone.
 //
 //   GET  /api/sso/authorize?app=air|web&redirect_uri=…&state=…
 //        (the browser, sent by the app) → 302 to redirect_uri?code=…&state=…
 //        Not signed in: to the desk's sign-in, and back here after.
 //        A volunteer (no desk role, no areas) is refused.
 //   POST /api/sso/token  (the app's SERVER; Authorization: Bearer <secret>)
-//        { code, redirect_uri } → { email, name, role, areas, organization, client }
+//        { code, redirect_uri } → { sub, email, name, role, areas, organization, client }
 //        once; anything wrong is 400 { error: 'invalid_grant' }, no detail.
+//        sub: this person's stable id here (their user id, an opaque
+//        string that never changes, even when their email does) — the app
+//        links its own account to (client, sub), never to the email alone.
+//        client: the client's slug.
 //   GET  /api/suite      (signed in) the apps this person may open, for the
 //        base switcher in the top bar.
 //
@@ -129,7 +133,7 @@ publicRoutes.post('/api/sso/token', async (c) => {
   )).rows[0];
   if (!row) return fail();
   const who = (await db.query(
-    `select u.email, u.name, m.role, m.permissions, w.name as ws_name, w.settings
+    `select u.id, u.email, u.name, m.role, m.permissions, w.name as ws_name, w.settings
      from users u join memberships m on m.user_id = u.id and m.workspace_id = $2
      join workspaces w on w.id = m.workspace_id where u.id = $1`,
     [row.user_id, row.workspace_id],
@@ -142,7 +146,7 @@ publicRoutes.post('/api/sso/token', async (c) => {
   const areas = areasFor({ role: who.role, perms: permsOf(who.role, settings, own) });
   if (!isStaff(who.role, areas)) return fail();
   return c.json({
-    email: who.email, name: who.name, role: who.role, areas,
+    sub: String(who.id), email: who.email, name: who.name, role: who.role, areas,
     organization: orgName() || who.ws_name, client: clientSlug(),
   }, 200, { 'Cache-Control': 'no-store' });
 });
