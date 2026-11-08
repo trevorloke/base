@@ -18,7 +18,7 @@ npm run build
 npm start                 # → http://localhost:3200
 ```
 
-1. Open **http://localhost:3200/signup** and set up base ground for Imagine
+1. Open **http://localhost:3200/field/signup** and set up base ground for Imagine
    Surrey: your name, email and password. You become its manager (the
    workspace is *Imagine Surrey*, **BC — Municipal**). Setup works once:
    after that `/signup` says it's already set up, and everyone else joins
@@ -82,11 +82,12 @@ Every screen has one yellow button: that's the main job. Everything else is
 one tap away under **More**.
 
 ### Manager (you)
-- **Two apps.** Sign in at `/login` and you land in the **admin** at
-  `/admin/` (the brand reads *base ground admin*): every screen below. Your
+- **Two apps.** Sign in at `/field/login` (or `/ground/login`) and you land
+  in the **admin** at `/ground/` (the brand reads *base ground admin*): every screen below. Your
   account menu has *Field app ↗* — open it and you see exactly what a
   volunteer sees (Today · Map · Calls · Shifts · ImagineU), with *Admin ↗*
-  to come back. A volunteer who opens `/admin/` is told it isn't theirs.
+  to come back. A volunteer who opens `/ground/` is told it isn't theirs.
+  The **base** button in the top bar lists the base apps you may open.
 - **Today → Dashboard → In the field** — tap a dot: who, the outcome, who
   logged it and when, with *Profile* and *On the map* links; tap a person's
   initials for their day and *Only their contacts*; tap a turf for its name.

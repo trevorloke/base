@@ -15,6 +15,8 @@
 import { Hono } from 'hono';
 import { suggestAddresses } from '../../lib/geocode.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
+import { publicBaseFor, publicUrlMismatch } from '../../lib/basepath.js';
+import { APPS, appUrl, appReady } from '../../lib/suite.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -40,8 +42,8 @@ export const services = () => {
       missing: has('DATABASE_URL') || process.env.NODE_ENV !== 'production' ? [] : ['DATABASE_URL'],
     }),
     row('public', 'Public address', 'Links in every email (invites, unsubscribe, receipts), texting’s delivery reports and calls', true, ['BASE_PUBLIC_URL'], {
-      detail: pub ? `${pub}${/^https:\/\//.test(pub) ? '' : ' — must start with https://'}` : 'Not set: links use whatever address the page was opened at',
-      state: pub && /^https:\/\//.test(pub) ? 'ready' : 'missing',
+      detail: pub ? `${pub}${/^https:\/\//.test(pub) ? '' : ' — must start with https://'}${publicUrlMismatch() ? ` — ${publicUrlMismatch()}` : ''}` : 'Not set: links use whatever address the page was opened at',
+      state: pub && /^https:\/\//.test(pub) && !publicUrlMismatch() ? 'ready' : 'missing',
     }),
     row('email', 'Email (Resend)', 'Invites, newsletters, press releases, ladder emails, shift alerts, donation receipts', true, ['RESEND_API_KEY', 'MAIL_FROM'], {
       detail: has('MAIL_FROM') ? `From ${env('MAIL_FROM')}` : 'MAIL_FROM not set: Resend’s test sender only reaches the account’s owner',
@@ -71,6 +73,23 @@ export const services = () => {
       state: jobRunnerOn() ? 'ready' : 'missing',
       checkable: false,
     }),
+    // The other base apps, signing in through this one (ext/sso, SUITE.md).
+    ...Object.entries(APPS).map(([key, a]) => {
+      const url = appUrl(key);
+      const secret = env(a.secret);
+      const notes = [
+        has(a.url) && !url ? `${a.url} isn’t an address` : null,
+        url && !/^https:\/\//.test(url) && process.env.NODE_ENV === 'production' ? 'must start with https://' : null,
+        secret && secret.length < 32 ? `${a.secret} is short — use 32 or more random characters` : null,
+      ].filter(Boolean);
+      return row(key, `${a.name} (signs in through base ground)`, key === 'air' ? 'Listening and social, for staff: signed in with their base ground account'
+        : 'The website’s admin, for staff: signed in with their base ground account', false, [a.url, a.secret], {
+        detail: (appReady(key) ? `Staff open ${url.replace(/^https?:\/\//, '')} signed in` : `Not connected: set ${a.url} and ${a.secret} (the same secret as BASE_SSO_SECRET on ${a.name})`)
+          + (notes.length ? ` — ${notes.join('; ')}` : ''),
+        state: appReady(key) && !notes.length ? 'ready' : 'missing',
+        checkable: false,
+      });
+    }),
   ];
   return list;
 };
@@ -81,7 +100,7 @@ const inbound = (base) => [
   { name: 'Twilio — a message comes in', url: `${base}/api/public/twilio/sms`, how: 'Set by hand: Twilio → the number → Messaging → “A message comes in”, HTTP POST' },
   { name: 'Twilio — delivery reports, calls', url: `${base}/api/public/twilio/…`, how: 'Sent by base ground with each text and call (from the public address); nothing to set' },
   { name: 'The website — people in', url: `${base}/in/v1/people`, how: 'From the website’s server with a website key (below): sign-ups, petitions, volunteers, the newsletter' },
-  { name: 'Lists and voted files', url: `${base}/admin/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
+  { name: 'Lists and voted files', url: `${base}/ground/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
 ];
 
 const within = (p) => Promise.race([p, new Promise((_, rej) => { setTimeout(() => rej(new Error('no answer in 8 s')), TIMEOUT_MS); })]);
@@ -167,7 +186,7 @@ const managerOnly = (c) => (c.get('ctx').role === MANAGER ? null : c.json({ erro
 api.get('/connections', (c) => {
   const denied = managerOnly(c);
   if (denied) return denied;
-  const base = publicUrl() || new URL(c.req.url).origin;
+  const base = publicBaseFor(c);
   return c.json({ services: services(), inbound: inbound(base), publicUrl: publicUrl() || null });
 });
 

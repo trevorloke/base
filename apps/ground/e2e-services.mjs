@@ -18,7 +18,8 @@ const SHOTS = process.env.SHOTS || '/tmp/base-ground-services';
 mkdirSync(SHOTS, { recursive: true });
 let server = null;
 let BASE = process.env.BASE;
-const ADMIN = { toString() { return `${BASE}/admin`; } };
+const ADMIN = { toString() { return `${BASE}/ground`; } };
+const FIELD = { toString() { return `${BASE}/field`; } }; // the field app (web/src/mode.js)
 if (!BASE) {
   const env = { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off' };
   for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'BASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GEOCODER']) delete env[k];
@@ -28,7 +29,7 @@ if (!BASE) {
     server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
-  BASE = `http://127.0.0.1:${PORT}`;
+  BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix
 }
 process.on('exit', () => { server?.kill(); });
 
@@ -46,13 +47,13 @@ const text = async (p, sel = 'main') => ((await p.innerText(sel).catch(() => '')
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
 const page = await ctx.newPage();
 page.on('pageerror', (e) => errors.push(e.message));
-await page.goto(`${BASE}/signup`);
+await page.goto(`${FIELD}/signup`);
 await page.fill('#su-name', 'Marco Manager');
 if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', `marco+${tag}@services.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.sv2-row', { timeout: 10000 }).catch(() => {});
@@ -113,7 +114,7 @@ const token = (await inv.json()).joinUrl.split('/join/')[1];
 const sctx = await browser.newContext({ viewport: { width: 1360, height: 900 } });
 const sp = await sctx.newPage();
 sp.on('pageerror', (e) => errors.push(`staff: ${e.message}`));
-await sp.goto(`${BASE}/login`);
+await sp.goto(`${FIELD}/login`);
 await sp.evaluate(async (t) => fetch('/api/auth/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: t, name: 'Sam Example', password: 'services-pass-1' }) }), token);
 await sp.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await sleep(1200);

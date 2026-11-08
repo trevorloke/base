@@ -1,10 +1,29 @@
 // Sign in: email, password, one button. The first-run setup link shows only
 // until the campaign is set up (after that, people join by invite).
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// ?next=: where to go after, when another base app sent the person here to
+// sign in (/api/sso/authorize, SUITE.md). Only this app's own addresses under
+// its prefix are followed (paths.js safeNext); anything else is ignored.
+// Someone already signed in goes straight on: the app that sent them may be
+// on another site, and the sign-in cookie (SameSite=Strict) only rides along
+// once the hop starts here.
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost } from '../api.js';
 import { landing } from '../mode.js';
+import { safeNext } from '../paths.js';
+
+// Straight on once per address in a short while — never round and round if
+// the hop comes back here anyway.
+const ONWARD_KEY = 'base:login-onward';
+const wentOnJustNow = (next) => {
+  try {
+    const last = JSON.parse(sessionStorage.getItem(ONWARD_KEY) || 'null');
+    if (last?.next === next && Date.now() - last.at < 15_000) return true;
+    sessionStorage.setItem(ONWARD_KEY, JSON.stringify({ next, at: Date.now() }));
+  } catch { /* storage blocked: go on anyway */ }
+  return false;
+};
 
 // Big, thumb-sized controls (auth pages load before any page stylesheet).
 const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
@@ -13,6 +32,14 @@ const AUTH_BUTTON = { width: '100%', minHeight: 52, fontSize: 13, marginTop: 'va
 export default function Login({ mode = 'field' }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [params] = useSearchParams();
+  const next = safeNext(params.get('next'));
+  // Its own key, not ['me']: a "not signed in" here must not count as a
+  // sign-out (main.jsx forgets this phone's copies on one).
+  const signedIn = useQuery({ queryKey: ['login-next-me'], queryFn: () => apiGet('/auth/me'), retry: false, enabled: Boolean(next) });
+  useEffect(() => {
+    if (next && signedIn.data?.user && !wentOnJustNow(next)) window.location.assign(next);
+  }, [next, signedIn.data]);
   const setup = useQuery({ queryKey: ['auth-setup'], queryFn: () => apiGet('/auth/setup'), retry: false });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,6 +53,7 @@ export default function Login({ mode = 'field' }) {
     try {
       const me = await apiPost('/auth/login', { email, password });
       queryClient.setQueryData(['me'], me);
+      if (next) { window.location.assign(next); return; }
       const go = landing(me, mode);
       if (go.href) window.location.assign(go.href); else navigate(go.to);
     } catch (err) {

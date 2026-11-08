@@ -6,16 +6,53 @@ signs, volunteers, shifts, money, compliance, and outreach around it.
 
 ## Two apps: the field app and the admin
 
-One build, two apps, told apart by the address:
+One build, two apps, told apart by the address (both under the client's
+prefix on base.win — `/imaginesurrey/field/`, `/imaginesurrey/ground/`; see
+*Addresses and signing in once* below):
 
 | | Address | Who | What |
 |---|---|---|---|
-| **Field app** | `/` | everyone — it is what a volunteer sees and uses | Today · Map · Calls · Shifts · ImagineU, the door card, walk lists, your call lists, your people, your texts. A manager who opens it gets exactly a volunteer's screens (and *Admin ↗* in the account menu). |
-| **Admin** | `/admin/` | managers, staff, treasurers — and a volunteer given an area under Permissions | everything: the dashboard, the map with turfs, People and imports, Shifts, Donations, Signs, Outreach, ImagineU's editor and Progress, phone banks, **Settings** (members, teams, permissions), the rating scale. A plain volunteer who opens it is told it isn't theirs. |
+| **Field app** | `/field/` (`/` sends you there) | everyone — it is what a volunteer sees and uses | Today · Map · Calls · Shifts · ImagineU, the door card, walk lists, your call lists, your people, your texts. A manager who opens it gets exactly a volunteer's screens (and *Admin ↗* in the account menu). |
+| **Admin** (the desk, *base ground*) | `/ground/` (the old `/admin/…` addresses send you on) | managers, staff, treasurers — and a volunteer given an area under Permissions | everything: the dashboard, the map with turfs, People and imports, Shifts, Donations, Signs, Outreach, ImagineU's editor and Progress, phone banks, **Settings** (members, teams, permissions), the rating scale. A plain volunteer who opens it is told it isn't theirs. |
 
 Signing in sends each person to their app: a desk role to the admin, a
 volunteer to the field app. A desk address typed into the field app
-(`/people`, `/money`, an old bookmark) goes to the admin.
+(`/field/people`, `/field/money`, an old bookmark) goes to the admin; a
+field address from before the move (`/map`, `/login`, a home-screen icon)
+goes to the same screen under `/field`.
+
+## Addresses and signing in once
+
+base ground is one app of the **base** suite (`../../SUITE.md` is the
+contract). On base.win each client's apps live under its own prefix:
+
+| Setting | Example | What it does |
+|---|---|---|
+| `BASE_PATH` | `/imaginesurrey` | where this base ground lives. The server handles everything under it as if at the root; a request without it gets a 308 to the same address under it, except `/api/health` (Render's check). The prefix is written into `index.html` (`<base href>`, `window.__BASE_PATH__`); the browser builds every address through `web/src/paths.js`; the service worker's scope is the prefix; the sign-in cookie's `Path` is the prefix. Unset (a laptop): everything at the root, as before |
+| `BASE_PUBLIC_URL` | `https://base.win/imaginesurrey` | must end in `BASE_PATH` — the server says so loudly at startup, and Settings → Services shows it, when they disagree |
+| `BASE_CLIENT` | `imaginesurrey` | the client's slug, answered to the apps that sign in through base ground. Unset: the last part of `BASE_PATH` |
+| `BASE_TRUSTED_PROXIES` | `2` behind the base.win front door | how many proxies append to `X-Forwarded-For` (Render's, then the front door's), so sign-in limits count the visitor and not the door |
+
+**base ground is the sign-in hub** for base air and base web's admin
+(`server/ext/sso`, tests in `server/test/sso.test.js`):
+`GET /api/sso/authorize?app=air|web&redirect_uri=…&state=…` sends a
+signed-in staffer back to the app with a one-time code (32 random bytes,
+only its SHA-256 kept, 60 seconds, once, bound to the app and the exact
+`redirect_uri`); someone not signed in goes to `/ground/login?next=…`
+first and comes back (the sign-in page follows `next` only to this app's
+own addresses under its prefix). The app's server trades the code at
+`POST /api/sso/token` with `Authorization: Bearer <secret>` (compared in
+constant time) for `{ email, name, role, areas, organization, client }`;
+anything wrong is `400 {"error":"invalid_grant"}`. A volunteer with no
+area is refused. Settings: `BASE_AIR_URL` + `BASE_AIR_SSO_SECRET`,
+`BASE_WEB_URL` + `BASE_WEB_SSO_SECRET` (each app is offered once both of its
+are set; Settings → Services shows which are connected). `/web` sends a
+staffer to base web's admin through its own `/auth/base`.
+
+**The base switcher** in the top bar of both faces (`web/src/components/
+BaseSwitcher.jsx`, its own `base-switcher.css`) lists what
+`GET /api/suite` says this person may open: field (everyone), ground (desk
+roles and anyone with an area), air and web (desk roles, once connected).
 
 ## The seven things a campaign does (the whole tab bar)
 

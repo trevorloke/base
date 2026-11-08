@@ -9,7 +9,8 @@
 import { chromium } from 'playwright-core';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-shots';
 const results = [];
 const check = (name, ok, extra = '') => {
@@ -63,7 +64,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', 'trevor@imaginesurrey.example');
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const me = (await api('/auth/me')).json;
 check('workspace created with slug', me.workspace.slug === 'imagine-surrey', me.workspace.slug);
 check('setup is BC municipal', me.workspace.jurisdiction === 'bc-municipal', me.workspace.jurisdiction);
@@ -212,7 +213,7 @@ t = await text();
 check('media tag filter', /Lin Reporter/.test(t) && !/Harjit Gill/.test(t));
 // The old phone-bank link still works: it lands on Calls.
 await go('/people?bank=phone&has=phone');
-check('old phone-bank link redirects to Calls', new URL(page.url()).pathname === '/admin/calls' && !/channel=text/.test(page.url()), page.url());
+check('old phone-bank link redirects to Calls', new URL(page.url()).pathname.endsWith('/ground/calls') && !/channel=text/.test(page.url()), page.url());
 await page.waitForSelector('section.cl-card', { timeout: 8000 }).catch(() => {});
 const current = await page.$eval('section.cl-card', (el) => el.getAttribute('aria-label')).catch(() => '');
 if (current !== 'Grace Kim') {
@@ -332,25 +333,25 @@ await page.waitForSelector('[data-testid="join-url"]', { timeout: 8000 }).catch(
 const joinUrl = await page.$eval('[data-testid="join-url"]', (el) => el.textContent).catch(() => '');
 check('Team: invite produces a join link', /\/join\/[0-9a-f]{48}$/.test(joinUrl), joinUrl);
 await shot('10-team-invite');
-await volPage.goto(joinUrl.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await volPage.goto(joinUrl.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
 await volPage.waitForSelector('#join-name', { timeout: 8000 }).catch(() => {});
 check('join page names the campaign and role', /Join Imagine Surrey/.test(await volPage.innerText('body')) && /a volunteer/.test(await volPage.innerText('body')));
 await volPage.fill('#join-name', 'Jas Volunteer');
 await volPage.fill('#join-password', 'knock-knock-2026');
 await volPage.click('button[type="submit"]');
-await volPage.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
-const moved = new URL(volPage.url()).pathname === '/';
+await volPage.waitForURL(`${FIELD}/`, { timeout: 15000 }).catch(() => {});
+const moved = /\/field\/?$/.test(new URL(volPage.url()).pathname);
 check('volunteer joins and lands on Today', moved, volPage.url());
 await volPage.waitForSelector('text=/start canvassing/i', { timeout: 8000 }).catch(() => {});
 check('Today offers Start canvassing', /start canvassing/i.test(await volPage.innerText('body').catch(() => '')), (await volPage.innerText('body').catch(() => '')).replace(/\s+/g, ' ').slice(0, 160));
 if (moved) {
-  await volPage.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  await volPage.goto(`${FIELD}/`, { waitUntil: 'domcontentloaded' });
   await sleep(1200);
   const vt = ((await volPage.innerText('body')) || '').replace(/\s+/g, ' ');
   check('volunteer Today: field stats, no money', /doors this week/i.test(vt) && !/total raised/i.test(vt) && !/verify my books/i.test(vt), vt.slice(0, 160));
   const gifts = await volPage.evaluate(() => fetch('/api/records/gift').then((r) => r.status));
   check('volunteer refused the gift ledger', gifts === 403, gifts);
-  await volPage.goto(`${BASE}/map?person=${P.maya.id}`, { waitUntil: 'domcontentloaded' });
+  await volPage.goto(`${FIELD}/map?person=${P.maya.id}`, { waitUntil: 'domcontentloaded' });
   await volPage.waitForSelector('aside.door-card', { timeout: 8000 }).catch(() => {});
   await volPage.tap('aside.door-card button[aria-label="3: Undecided"]').catch(() => volPage.click('aside.door-card button[aria-label="3: Undecided"]'));
   await sleep(800);
@@ -364,9 +365,9 @@ if (moved) {
   const overflow = await volPage.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check('no sideways scroll at 390px', overflow <= 0, overflow);
   await volPage.screenshot({ path: `${SHOTS}/11-volunteer-phone-map.png` });
-  await volPage.goto(`${BASE}/money`, { waitUntil: 'domcontentloaded' });
+  await volPage.goto(`${FIELD}/money`, { waitUntil: 'domcontentloaded' });
   await sleep(900);
-  check('volunteer typing /money lands on Today', new URL(volPage.url()).pathname === '/', volPage.url());
+  check('volunteer typing /money lands on Today', /\/field\/?$/.test(new URL(volPage.url()).pathname), volPage.url());
   await volPage.screenshot({ path: `${SHOTS}/12-volunteer-today.png` });
 }
 await vctx.close();

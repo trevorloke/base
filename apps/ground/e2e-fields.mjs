@@ -24,7 +24,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-fields';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -106,7 +107,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `riley+${tag}@fields.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const P = {};
 const mk = async (key, data) => { P[key] = (await D.api('/actions/person.create', data)).json.person; };
 await mk('harjit', { name: 'Harjit Example', phone: '604-555-0141', email: 'harjit@example.org', address: '13450 104 Ave', city: 'Surrey' });
@@ -117,7 +118,7 @@ check('seeded 3 people', Object.values(P).every((p) => p?.id));
 // ── 2. People → More → Profile fields ──
 await D.go('/people');
 await page.click('.pp-menu button:has-text("More")');
-const link = await page.$('.pp-menu__panel a[href="/admin/people/fields"]');
+const link = await page.$('.pp-menu__panel a[href="/ground/people/fields"]');
 check('People → More lists "Profile fields" (managers)', !!link && /Profile fields/i.test(await link.innerText()));
 await link.click();
 await page.waitForURL(`${ADMIN}/people/fields`);
@@ -189,7 +190,7 @@ const sj = await S.api('/auth/join', { token: staffInvite.joinUrl.split('/').pop
 check('staff joined', sj.status === 200 && sj.json.role === 'staff', sj.status);
 await S.go('/people');
 await spage.click('.pp-menu button:has-text("More")');
-check('staff: no "Profile fields" in More (a manager’s screen)', !(await spage.$('.pp-menu__panel a[href="/admin/people/fields"]')));
+check('staff: no "Profile fields" in More (a manager’s screen)', !(await spage.$('.pp-menu__panel a[href="/ground/people/fields"]')));
 await spage.keyboard.press('Escape');
 await S.go(`/people/${P.harjit.id}`);
 await spage.waitForSelector('.pf-sec__btn:has-text("More details")', { timeout: 8000 }).catch(() => {});
@@ -421,7 +422,7 @@ await vpage.waitForSelector('.pf-rate', { timeout: 8000 }).catch(() => {});
 await sleep(400);
 check('nothing filled in for them: no "More details" at all', !(await vpage.$('.pf-sec__btn:has-text("More details")')));
 await V.go('/people/fields');
-check('volunteer typing /people/fields lands on Today', new URL(vpage.url()).pathname === '/', vpage.url());
+check('volunteer typing /people/fields lands on Today', /\/field\/?$/.test(new URL(vpage.url()).pathname), vpage.url());
 
 // ── 10. Fix round: what the audit found, checked as each role sees it ──
 const openSec = async (pg, title) => {
@@ -431,7 +432,7 @@ const openSec = async (pg, title) => {
   return b;
 };
 const secBody = (title) => `.pf-sec:has(.pf-sec__btn:has-text("${title}")) .pf-sec__body`;
-const navIn = (pg, path0) => { const path = pg === vpage ? path0 : `/admin${path0}`; return (pg.evaluate((u) => { history.pushState({}, '', u); dispatchEvent(new PopStateEvent('popstate')); }, path)); };
+const navIn = (pg, path0) => { const path = pg === vpage ? path0 : `/ground${path0}`; return (pg.evaluate((u) => { history.pushState({}, '', u); dispatchEvent(new PopStateEvent('popstate')); }, path)); };
 const swReady = (pg) => pg.evaluate(() => navigator.serviceWorker.ready.then(() => Boolean(navigator.serviceWorker.controller))).catch(() => false);
 const simple = async (pg, name, sel = null) => {
   const mm = await measure(pg, sel);
@@ -443,7 +444,7 @@ const simple = async (pg, name, sel = null) => {
 const mkAt = async (name, phone) => (await D.api('/actions/person.create', { name, phone, address: '12345 72 Ave', city: 'Surrey' })).json.person;
 P.alpha = await mkAt('Alpha Example', '604-555-0161');
 P.bravo = await mkAt('Bravo Example', '604-555-0162');
-const follow = async (pg, id) => { await openSec(pg, 'Details'); await pg.click(`${secBody('Details')} a[href="${pg === vpage ? '' : '/admin'}/people/${id}"]`); await sleep(1300); };
+const follow = async (pg, id) => { await openSec(pg, 'Details'); await pg.click(`${secBody('Details')} a[href="${pg === vpage ? '' : '/ground'}/people/${id}"]`); await sleep(1300); };
 const unionIn = `${q} .sv-q:has-text("Union local #") input`;
 const saveOff = (pg) => pg.$eval(`${q} .fd-save`, (b) => b.disabled).catch(() => null);
 const saidOn = async (pg) => ((await pg.innerText(`${q} .fd-said`).catch(() => '')) || '').trim();
@@ -562,7 +563,7 @@ const sReady = await swReady(spage);
 await spage.evaluate((id) => { for (let i = sessionStorage.length - 1; i >= 0; i -= 1) { const k = sessionStorage.key(i); if (k && k.includes(`person:${id}:fields`)) sessionStorage.removeItem(k); } }, P.tom.id);
 await S.go('/people');
 await sctx.setOffline(true);
-await spage.click(`a[href="/admin/people/${P.harjit.id}"]`);
+await spage.click(`a[href="/ground/people/${P.harjit.id}"]`);
 await sleep(1500);
 await openSec(spage, 'More details');
 const offBody = secBody('More details');

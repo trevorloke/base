@@ -41,7 +41,7 @@ mkdirSync(SHOTS, { recursive: true });
 
 let server = null;
 let BASE = process.env.BASE;
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 if (!BASE) {
   server = spawn(process.execPath, ['server/index.js'], {
     env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off' },
@@ -52,7 +52,7 @@ if (!BASE) {
     server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
-  BASE = `http://127.0.0.1:${PORT}`;
+  BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix
 }
 
 const results = [];
@@ -93,7 +93,7 @@ const helpers = (page, ctx, desk = false) => ({
       : await ctx.request.post(`${BASE}/api${path}`, { data: body });
     return { status: r.status(), json: await r.json().catch(() => null) };
   },
-  go: async (path) => { await page.goto(`${desk ? ADMIN : BASE}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(1300); },
+  go: async (path) => { await page.goto(`${desk ? ADMIN : FIELD}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(1300); },
   shot: (n) => page.screenshot({ path: `${SHOTS}/${n}.png` }),
   kept: () => page.$eval('.offline-strip__kept', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => ''),
   chip: () => page.$eval('.offline-strip__chip', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => ''),
@@ -136,10 +136,10 @@ const signupAs = async (page, D, name, email) => {
   await page.fill('#su-email', email);
   await page.fill('#su-password', 'surrey-forward-2026');
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+  await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 };
 const join = async (page, url, name) => {
-  await page.goto(url.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+  await page.goto(url.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#join-name', { timeout: 8000 });
   await page.fill('#join-name', name);
   await page.fill('#join-password', 'knock-knock-2026');
@@ -219,7 +219,7 @@ const tagEventsBefore = (await D.api('/events?since=0&limit=5000')).json.events.
 // ════════════════════════════════════════════════════════════════════════════
 await ctx.setOffline(true);
 // In the app, no reload: a screen not opened since this page loaded starts from its copy.
-await page.click('nav.links a[href="/admin/signs"]');
+await page.click('nav.links a[href="/ground/signs"]');
 await page.waitForSelector('.ops-rows li', { timeout: 6000 }).catch(() => {});
 check('no signal, in the app: Signs opens from its copy at once', (await page.locator('.ops-rows li').count()) > 0 && KEPT.test(await D.kept()), await D.kept());
 await D.go('/');
@@ -461,7 +461,7 @@ await page.waitForSelector('.pp-table tbody tr', { timeout: 8000 }).catch(() => 
 t = await D.main();
 check('server down (502): People shows the kept list, "No answer · from <time>" — not "No people yet", not "request failed"',
   (await countOf(page)) === countOnline && /No answer · from/i.test(await D.kept()) && !/No people yet|Import a list|request failed/i.test(t), `${await D.kept()} · ${t.slice(0, 160)}`);
-await page.evaluate((id) => { history.pushState({}, '', `/admin/people/${id}`); window.dispatchEvent(new PopStateEvent('popstate')); }, dev.id); // the desk lives in the admin
+await page.evaluate((id) => { history.pushState({}, '', `/ground/people/${id}`); window.dispatchEvent(new PopStateEvent('popstate')); }, dev.id); // the desk lives in the admin
 await sleep(2500);
 t = await D.main();
 check('…a profile never opened: "No answer — check your signal", never "No one here — they may have been removed"',
@@ -476,7 +476,7 @@ await page.unroute('**/api/**');
   await D3.go('/');
   await p3.waitForSelector('.today-nums', { timeout: 8000 }).catch(() => {});
   await p3.route('**/api/**', (route) => route.fulfill({ status: 502, contentType: 'text/html', body: '<html><body>502 Bad Gateway</body></html>' }));
-  await p3.click('nav.links a[href="/admin/people"]');
+  await p3.click('nav.links a[href="/ground/people"]');
   await until(async () => /No answer — check your signal/.test(await D3.main()), 8000);
   let t3 = await D3.main();
   check('server down (502), no list kept in this tab: "No answer — check your signal" — no "0 people", no empty table, no "No people yet"',
@@ -501,7 +501,7 @@ await D.go(`/people/${harjit.id}`);
 await page.waitForSelector('.pf-rate', { timeout: 8000 });
 await page.click('.pf-rate button:has-text("+ Add a note")');
 await page.fill('#contact-note', leftNote);
-await page.click('nav.links a[href="/admin/people"]');
+await page.click('nav.links a[href="/ground/people"]');
 await sleep(1500);
 const harjitNow = (await D.api(`/persons/${harjit.id}`)).json.contacts;
 check('a note typed on a profile, then People tapped: the note is saved, once', harjitNow.length === harjitBefore + 1
@@ -675,7 +675,7 @@ check('back online: the volunteer’s knock once', vAfter.contacts.length === vB
 const volUser = (await V.api('/auth/me')).json.user;
 await V.go('/map');
 check('manager makes the volunteer a treasurer', (await M.api('/actions/member.setRole', { user_id: volUser.id, role: 'treasurer' })).status === 200);
-await vp.click('.tabbar a[href="/"]').catch(() => vp.click('nav.links a[href="/"]'));
+await vp.click('.tabbar a[href="/field"]').catch(() => vp.click('nav.links a[href="/field"]'));
 await sleep(2000);
 let vs = await V.stored();
 const moneyLocal = Object.entries(vs.local).filter(([, v]) => /totalCents|amount_cents/.test(v)).map(([k2]) => k2.split(':').slice(5).join(':'));
@@ -728,7 +728,7 @@ await sleep(1200);
 const before401 = Object.keys((await V.stored()).local).length;
 await vctx.clearCookies();
 await V.go('/');
-await vp.waitForURL(`${BASE}/login`, { timeout: 8000 }).catch(() => {});
+await vp.waitForURL(`${FIELD}/login`, { timeout: 8000 }).catch(() => {});
 await sleep(600);
 vs = await V.stored();
 check('a sign-in the server says is over: on Sign in, and nothing kept is left', before401 > 0 && /\/login$/.test(vp.url())
@@ -752,15 +752,15 @@ await PH.go('/login');
 await pp.fill('#login-email', mgrEmail);
 await pp.fill('#login-password', 'surrey-forward-2026');
 await pp.click('button[type="submit"]');
-await pp.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
+await pp.waitForURL(`${FIELD}/`, { timeout: 15000 }).catch(() => {});
 await pp.waitForSelector('.today-nums', { timeout: 8000 }).catch(() => {});
-await pp.click('nav.links a[href="/admin/people"]').catch(() => {});
+await pp.click('nav.links a[href="/ground/people"]').catch(() => {});
 await pp.waitForSelector('.pp-table tbody tr', { timeout: 8000 }).catch(() => {});
 await sleep(1200);
 await PH.shot('08-storage-blocked-online');
 check('storage blocked: the desk still works with signal', (await pp.locator('.pp-table tbody tr').count()) > 20 && Number(await countOf(pp)) > 50, `${pp.url()} ${(await PH.text()).slice(0, 160)}`);
 await pctx.setOffline(true);
-await pp.click('nav.links a[href="/admin/signs"]');
+await pp.click('nav.links a[href="/ground/signs"]');
 await sleep(1500);
 t = await PH.text();
 check('storage blocked, no signal: a screen not loaded yet says No signal, as before', /No signal — this loads when you’re back online/.test(t), t.slice(0, 160));

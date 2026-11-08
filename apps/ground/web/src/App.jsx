@@ -1,9 +1,9 @@
 // Routes + auth gate, for two apps (mode.js):
-//   field  (/)        Today · Map · Calls · Shifts · ImagineU — a volunteer's
+//   field  (/field/…) Today · Map · Calls · Shifts · ImagineU — a volunteer's
 //                     screens, for every role (a manager sees them as a
 //                     volunteer would). A desk address typed here goes to
 //                     the admin.
-//   admin  (/admin/…) the desk: everything, for desk roles and volunteers
+//   admin  (/ground/…) the desk: everything, for desk roles and volunteers
 //                     given an area; a plain volunteer is told it's not theirs.
 // Real URLs are the point: every screen, form-open state, selected door, and
 // preselected donor lives in the address bar. Screens past Today load on
@@ -16,7 +16,7 @@ import { Routes, Route, Navigate, Outlet, useOutletContext, useLocation } from '
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, noAnswer } from './api.js';
 import Shell, { isDesk, hasArea } from './Shell.jsx';
-import { ADMIN_BASE, fieldView, mayAdmin } from './mode.js';
+import { adminHref, fieldHref, fieldView, mayAdmin } from './mode.js';
 import Login from './pages/Login.jsx';
 import Signup from './pages/Signup.jsx';
 import Today from './pages/Today.jsx';
@@ -87,7 +87,7 @@ function NotForYou({ me }) {
       <span className="brand-org">{me?.workspace?.name}</span>
       <h1>Not for your role</h1>
       <p className="muted">The admin is the campaign office’s. You are signed in as {me?.user?.name} (volunteer) — your app is the field app.</p>
-      <p><a className="btn btn-primary" href="/">Open the field app</a></p>
+      <p><a className="btn btn-primary" href={fieldHref('/')}>Open the field app</a></p>
     </div>
   );
 }
@@ -99,7 +99,7 @@ function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
   if (DESK_PATHS.test(pathname) && mayAdmin({ ...ctx?.me, role: ctx?.me?.admin_role || ctx?.me?.role, areas: ctx?.me?.admin_areas || ctx?.me?.areas })) {
-    window.location.replace(`${ADMIN_BASE}${pathname}${search}`);
+    window.location.replace(`${adminHref(pathname)}${search}`);
     return null;
   }
   return <Navigate to="/" replace />;

@@ -1,5 +1,7 @@
 // Thin fetch layer over the v2 API. Cookie session auth; money is always
-// integer cents on the wire and dollars on screen.
+// integer cents on the wire and dollars on screen. Every address is under
+// the client's prefix (paths.js).
+import { withBase } from './paths.js';
 
 export class ApiError extends Error {
   constructor(status, message, body = {}) {
@@ -38,10 +40,10 @@ export const noSignalWords = (write) => (offlineNow()
 const unreached = (write) => () => { throw new NoSignalError(noSignalWords(write)); };
 
 export const apiGet = (path) =>
-  fetch(`/api${path}`, { credentials: 'same-origin' }).catch(unreached(false)).then(handle);
+  fetch(withBase(`/api${path}`), { credentials: 'same-origin' }).catch(unreached(false)).then(handle);
 
 export const apiPost = (path, body) =>
-  fetch(`/api${path}`, {
+  fetch(withBase(`/api${path}`), {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },

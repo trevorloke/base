@@ -60,7 +60,8 @@ the candidates the code ships with (`shared/scale.js`).
 |---|---|---|
 | `BASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
 | `BASE_ORG_NAME`, `BASE_JURISDICTION`, `BASE_TZ`, `BASE_CITY`, `BASE_SLATES`, `BASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name on sign-in, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
-| `BASE_PUBLIC_URL` | `https://base.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts |
+| `BASE_PATH` | `/imaginesurrey` on base.win (SUITE.md); unset on a domain of its own | where the app lives under its address; the sign-in cookie is kept to it |
+| `BASE_PUBLIC_URL` | `https://base.win/imaginesurrey` (or `https://base.imaginesurrey.ca`; staging: its own address) — it must end in `BASE_PATH` | every link in an email: invites, unsubscribe, receipts |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on a domain verified there | email; without it invites are shown to copy and sends wait as *queued* |
 
 Then, as each one is ready:
@@ -71,7 +72,8 @@ Then, as each one is ready:
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
 | `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
-| `BASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
+| `BASE_TRUSTED_PROXIES` | `2` behind the base.win front door (Render's proxy, then the front door, each add to `X-Forwarded-For`); unset (one proxy) when Render is the only thing in front. Count every proxy in front, a CDN too | rate limits reading the right address |
+| `BASE_AIR_URL`, `BASE_AIR_SSO_SECRET`, `BASE_WEB_URL`, `BASE_WEB_SSO_SECRET` | base air's and base web's addresses, and long random secrets — each the same value as `BASE_SSO_SECRET` on that app (SUITE.md) | staff opening base air and base web's admin signed in with their base ground account |
 
 Twilio: set the number's incoming-message webhook to
 `https://base.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST). The
@@ -86,10 +88,12 @@ public address and the database.
 
 ## 4 · First sign-in
 
-The first sign-in lands in the **admin** (`/admin/`); the field app at `/` is
-what volunteers get, and what you see under *Field app ↗* in your account menu.
+The first sign-in lands in the **admin** (`/ground/`); the field app at
+`/field/` is what volunteers get, and what you see under *Field app ↗* in your
+account menu (and in the **base** switcher in the top bar). On base.win both
+are under the client's prefix: `https://base.win/imaginesurrey/ground/`.
 
-1. Open `https://base.imaginesurrey.ca/login` → **Set up base ground for
+1. Open `https://base.imaginesurrey.ca/field/login` → **Set up base ground for
    Imagine Surrey** (the name `BASE_ORG_NAME` gives; a deployment that
    gives none asks for it here). The first account is the manager; this
    creates the campaign's workspace (its jurisdiction's rules, the

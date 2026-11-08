@@ -11,7 +11,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = `${BASE}/admin`;
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = `${BASE}/ground`;
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-cuts';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -31,13 +32,13 @@ const api = async (path, body) => {
   const r = body === undefined ? await ctx.request.get(`${BASE}/api${path}`) : await ctx.request.post(`${BASE}/api${path}`, { data: body });
   return { status: r.status(), json: await r.json().catch(() => null) };
 };
-await page.goto(`${BASE}/signup`);
+await page.goto(`${FIELD}/signup`);
 await page.fill('#su-name', 'Riley Manager');
 if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', `riley+${tag}@cuts.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 const lat = 49.1327; const lng = -122.855;
 const P = {};

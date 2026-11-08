@@ -20,7 +20,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-relationships';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -122,7 +123,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `riley+${tag}@relationships.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 await page.click('button:has-text("Load sample data")');
 await until(async () => (await D.api('/brief')).json?.sampleLoaded);
 check('sample loaded', (await D.api('/brief')).json.sampleLoaded === true);
@@ -131,7 +132,7 @@ const byName = async (name) => (await D.api(`/persons?q=${encodeURIComponent(nam
 // ── 2. People → More → Most connected ──
 await D.go('/people');
 await page.click('.pp-menu button:has-text("More")');
-const mc = await page.$('.pp-menu__panel a[href="/admin/people/connected"]');
+const mc = await page.$('.pp-menu__panel a[href="/ground/people/connected"]');
 check('People → More lists "Most connected"', !!mc && /Most connected/.test(await mc.textContent()));
 await mc.click();
 await page.waitForURL(`${ADMIN}/people/connected`);
@@ -250,18 +251,18 @@ await V.go('/login');
 const joined = await V.api('/auth/join', { token: invite.joinUrl.split('/').pop(), name: 'Priya Nair', password: 'knock-knock-2026' });
 check('Priya joined', joined.status === 200 && joined.json.role === 'volunteer', joined.status);
 await V.go('/');
-await vpage.waitForSelector('a[href="/my-people"]', { timeout: 8000 }).catch(() => {});
+await vpage.waitForSelector('a[href="/field/my-people"]', { timeout: 8000 }).catch(() => {});
 let mine = (await V.api('/relationships/mine')).json;
 check('her own record is the sample’s Priya Nair: six people', mine.me?.id === priya.id && mine.people.length === 6, JSON.stringify(mine.me));
-const row = await tc(vpage, 'a[href="/my-people"]');
+const row = await tc(vpage, 'a[href="/field/my-people"]');
 check('Today: a quiet "My people · 6" row', /^My people · 6/.test(row), row);
 const yellows = await vpage.$$eval('.btn-primary', (els) => els.filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.textContent.replace(/\s+/g, ' ').trim()));
 check('Today keeps one yellow button: Start canvassing', yellows.length === 1 && /Start canvassing/.test(yellows[0]), yellows.join(' | '));
 m = await simple(vpage, 'volunteer Today (390)');
 await V.shot('03-today-phone');
 
-await vpage.click('a[href="/my-people"]');
-await vpage.waitForURL(`${BASE}/my-people`);
+await vpage.click('a[href="/field/my-people"]');
+await vpage.waitForURL(`${FIELD}/my-people`);
 await vpage.waitForSelector('.ops-row', { timeout: 8000 }).catch(() => {});
 const names = await vpage.$$eval('.ops-row .ops-row__name', (els) => els.map((e) => e.innerText));
 check('My people: her six, as the server has them', names.join('|') === mine.people.map((x) => x.person.name).join('|'), names.join('|'));
@@ -440,7 +441,7 @@ for (const path of ['/relationships/connected', `/persons/${jasmine.id}/knows`])
   check(`volunteer refused ${path.replace(/[0-9a-f-]{36}/, ':id')}`, (await V.api(path)).status === 403);
 }
 await V.go('/people/connected');
-check('typing /people/connected lands on Today', new URL(vpage.url()).pathname === '/', vpage.url());
+check('typing /people/connected lands on Today', /\/field\/?$/.test(new URL(vpage.url()).pathname), vpage.url());
 await V.go('/my-people');
 await vpage.click('.ops-row:has-text("Maya Chen")');
 await vpage.click('.ops-item[data-open] a:has-text("Profile")');
@@ -451,11 +452,11 @@ check('…and its back link returns to My people', (await tc(vpage, '.pf-back'))
 
 // Calls links to My people.
 await V.go('/calls');
-const callsLink = await until(async () => { const t = await tc(vpage, 'a[href="/my-people"]'); return t === 'My people · 7' ? t : null; }, 6000) || await tc(vpage, 'a[href="/my-people"]');
+const callsLink = await until(async () => { const t = await tc(vpage, 'a[href="/field/my-people"]'); return t === 'My people · 7' ? t : null; }, 6000) || await tc(vpage, 'a[href="/field/my-people"]');
 check('Calls: a quiet "My people · 7" link', callsLink === 'My people · 7', `${callsLink} · server ${(await V.api('/relationships/mine')).json.people.map((x) => x.person.name).join(',')}`);
 m = await simple(vpage, 'Calls with the My people link (volunteer 390)');
-await vpage.click('a[href="/my-people"]');
-await vpage.waitForURL(`${BASE}/my-people`);
+await vpage.click('a[href="/field/my-people"]');
+await vpage.waitForURL(`${FIELD}/my-people`);
 await vpage.waitForSelector('.ops-back', { timeout: 5000 }).catch(() => {});
 check('…whose back link says "← Calls"', (await tc(vpage, '.ops-back')) === '← Calls', await tc(vpage, '.ops-back'));
 
@@ -517,8 +518,8 @@ check('one Priya Nair, the one she signs in as', priyas.length === 1 && priyas[0
 const after7 = (await V.api('/relationships/mine')).json.people.map((x) => x.person.name).sort();
 check('…her people as before: the sample’s six and hers', after7.join('|') === before7.join('|') && after7.length === 7, after7.join(', '));
 await V.go('/');
-await vpage.waitForSelector('a[href="/my-people"]', { timeout: 8000 }).catch(() => {});
-check('Today: "My people · 7"', /^My people · 7/.test(await tc(vpage, 'a[href="/my-people"]')), await tc(vpage, 'a[href="/my-people"]'));
+await vpage.waitForSelector('a[href="/field/my-people"]', { timeout: 8000 }).catch(() => {});
+check('Today: "My people · 7"', /^My people · 7/.test(await tc(vpage, 'a[href="/field/my-people"]')), await tc(vpage, 'a[href="/field/my-people"]'));
 const conn7 = (await D.api('/relationships/connected')).json.people.filter((p) => p.name === 'Priya Nair');
 check('Most connected: one Priya Nair', conn7.length === 1 && conn7[0].knows === 7, JSON.stringify(conn7));
 check('hash chain still verifies', (await D.api('/audit/verify')).json.ok === true);

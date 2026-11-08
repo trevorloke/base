@@ -1,7 +1,7 @@
 // Voted E2E — one fresh in-memory campaign: a manager seeds four doors in a
 // turf and a volunteer joins on a phone; with Election day off no screen
 // offers "Voted ✓"; the manager switches it on at Today → More → Election
-// day (/admin/voted); the volunteer's open walk-list door shows a 48px
+// day (/ground/voted); the volunteer's open walk-list door shows a 48px
 // "Voted ✓" — a tap says "Voted · Harjit" with Change, the panel "✓ Voted",
 // the door's row "✓ Voted" (Change takes it back, the tap puts it back);
 // Today reads "Election day · 1 of 2 supporters voted"; the map's door card
@@ -19,7 +19,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-voted';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -109,7 +110,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `marco+${tag}@voted.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const P = {};
 const mk = async (key, data) => { P[key] = (await D.api('/actions/person.create', data)).json.person; };
 const lat = 49.1327; const lng = -122.855;
@@ -158,13 +159,13 @@ check('GET /voted/status for every role: off', (await V.api('/voted/status')).js
 await D.go('/');
 await page.click('.today-morebox__toggle');
 await sleep(300);
-const rowOff = await page.$('a.today-row[href="/admin/voted"]');
+const rowOff = await page.$('a.today-row[href="/ground/voted"]');
 const rowOffText = rowOff ? (await rowOff.$eval('.today-row__main', (el) => el.innerText)).replace(/\s+/g, ' ').trim() : '(no row)';
 check('Today → More lists "GOTV & voting days" (off: no count)', !!rowOff && rowOffText === 'GOTV & voting days', rowOffText);
 await rowOff.click();
 await page.waitForURL(`${ADMIN}/voted`, { timeout: 8000 });
 await sleep(700);
-check('/admin/voted: "Get out the vote", Off, the switch off, what GOTV mode does', (await page.innerText('h1')) === 'Get out the vote'
+check('/ground/voted: "Get out the vote", Off, the switch off, what GOTV mode does', (await page.innerText('h1')) === 'Get out the vote'
   && (await page.getAttribute('.vt-page .sv-switch', 'aria-checked')) === 'false'
   && /Off\./.test(await page.innerText('.vt-now'))
   && /everyone can mark people as voted/.test(await D.text()) && /GOTV scripts/.test(await D.text()));
@@ -226,12 +227,12 @@ check('a volunteer’s own marks carry no names', JSON.stringify((await V.api(`/
 await D.go('/');
 await page.click('.today-morebox__toggle');
 await sleep(300);
-const rowOn = ((await page.innerText('a.today-row[href="/admin/voted"] .today-row__main').catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+const rowOn = ((await page.innerText('a.today-row[href="/ground/voted"] .today-row__main').catch(() => '')) || '').replace(/\s+/g, ' ').trim();
 const brief = (await D.api('/brief')).json.voted;
 check('Today → More: "GOTV · 1 of 2 supporters voted" — the brief agrees', rowOn === 'GOTV · 1 of 2 supporters voted' && brief.supporters_voted === 1 && brief.supporters === 2 && brief.on === true, `${rowOn} · ${JSON.stringify(brief)}`);
 const card = ((await page.innerText('.today-gotv').catch(() => '')) || '').replace(/\s+/g, ' ');
 check('Today’s GOTV card: "Election day · 1 of 2 supporters have voted · 1 to go", Call who hasn’t voted', /Election day/i.test(card) && /1 of 2 supporters have voted · 1 to go/.test(card)
-  && (await page.getAttribute('.today-gotv a:has-text("Call who hasn")', 'href')) === '/admin/calls?rating=1,2&voted=no', card);
+  && (await page.getAttribute('.today-gotv a:has-text("Call who hasn")', 'href')) === '/ground/calls?rating=1,2&voted=no', card);
 await V.go('/');
 check('the volunteer’s Today has the GOTV card too', /supporters have voted/.test(((await vpage.innerText('.today-gotv').catch(() => '')) || '')));
 await D.shot('05-today-row');
@@ -335,7 +336,7 @@ check('"2 of 2 supporters voted" — by band: Support 2 · Undecided 1 · Unrate
   && sum.supporters_voted === 2 && sum.by_band.support === 2 && sum.by_band.undecided === 1 && sum.by_band.unrated === 1, t.slice(0, 300));
 const turfRow = await page.$eval('.vt-table tbody tr', (tr) => [...tr.querySelectorAll('td')].map((td) => td.innerText.replace(/\s+/g, ' ').trim()));
 check('by turf: Newton block · 2 supporters · 2 voted · 4 people, with a Walk list link', turfRow[0].startsWith('Newton block') && turfRow.slice(1).join('|') === '2|2|4'
-  && (await page.getAttribute('.vt-table a.vt-walk', 'href')) === `/admin/turfs/${turf.id}`, turfRow.join(' | '));
+  && (await page.getAttribute('.vt-table a.vt-walk', 'href')) === `/ground/turfs/${turf.id}`, turfRow.join(' | '));
 check(`"${sum.total} people voted in all · ${sum.today} today" (people, not marks: Harjit's take-back and second mark are one voter)`, sum.total === 4 && sum.today === 4
   && new RegExp(`${sum.total} people voted in all · ${sum.today} today`).test(t), t.slice(0, 300));
 check('the summary is the desk’s: a volunteer is refused', (await V.api('/voted/summary')).status === 403);

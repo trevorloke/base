@@ -19,7 +19,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-passes';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -102,7 +103,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `priya+${tag}@passes.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const lat = 49.1327; const lng = -122.855;
 const P = {};
 const mk = async (key, name, phone, address, dLng) => { P[key] = (await D.api('/actions/person.create', { name, phone, address, city: 'Surrey', lat, lng: lng + dLng })).json.person; };
@@ -198,7 +199,7 @@ await V.shot('04-today-phone');
 
 // ── 4. The walk list: No answer → Try again · 1 of 2; Show; the second No answer; a talk ──
 await vpage.click('.today-start');
-await vpage.waitForURL(`${BASE}/turfs/${turf.id}`, { timeout: 8000 });
+await vpage.waitForURL(`${FIELD}/turfs/${turf.id}`, { timeout: 8000 });
 await vpage.waitForSelector('.walk-door', { timeout: 8000 });
 await sleep(700);
 const progress = () => vpage.innerText('.walk-progress__text').then((s) => s.replace(/\s+/g, ' ').trim()).catch(() => '');
@@ -329,7 +330,7 @@ check('Today: the yellow button reads "Get out the vote →"; "Newton block · G
   startBtn === 'Get out the vote →' && /GOTV · test/.test(meta) && /2 doors left/.test(meta), `${startBtn} · ${meta}`);
 await V.shot('10-today-gotv');
 await vpage.click('.today-start');
-await vpage.waitForURL(`${BASE}/turfs/${turf.id}`, { timeout: 8000 });
+await vpage.waitForURL(`${FIELD}/turfs/${turf.id}`, { timeout: 8000 });
 await vpage.waitForSelector('.walk-door', { timeout: 8000 });
 await sleep(700);
 const gotvRows = await vpage.$$eval('.walk-door', (els) => els.map((e) => e.querySelector('.walk-door__addr').innerText.trim()));
@@ -383,7 +384,7 @@ await mpage.waitForSelector(form, { timeout: 5000 });
 m = await measure(mpage, `${form} .sv-kind, ${form} .input, ${form} .btn`);
 check('the form at 390: one yellow, no sideways scroll, targets ≥ 48px', m.yellow === 1 && m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
 await MP.full('12-passes-phone');
-check('a volunteer typing /passes lands on Today', await (async () => { await V.go('/passes'); return new URL(vpage.url()).pathname === '/'; })(), vpage.url());
+check('a volunteer typing /passes lands on Today', await (async () => { await V.go('/passes'); return /\/field\/?$/.test(new URL(vpage.url()).pathname); })(), vpage.url());
 const exp = (await D.api('/export')).json;
 check('the export carries the passes, and the knocks their pass', exp.canvass_passes?.length === 2 && exp.contacts.filter((c) => c.pass_id).length === 3, `${exp.canvass_passes?.length} · ${exp.contacts.filter((c) => c.pass_id).length}`);
 const v = (await D.api('/audit/verify')).json;

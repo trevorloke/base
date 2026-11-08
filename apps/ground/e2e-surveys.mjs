@@ -12,7 +12,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-surveys';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -94,7 +95,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `riley+${tag}@surveys.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const P = {};
 const mk = async (key, data) => { P[key] = (await D.api('/actions/person.create', data)).json.person; };
 await mk('harjit', { name: 'Harjit Example', phone: '604-555-0121', email: 'harjit@example.org', address: '12345 72 Ave', city: 'Surrey', lat: 49.1330, lng: -122.8510 });
@@ -113,7 +114,7 @@ check('two turfs drawn', turf?.id && farTurf?.id);
 // ── 2. People → More → Surveys; the list ──
 await D.go('/people');
 await page.click('.pp-menu button:has-text("More")');
-const link = await page.$('.pp-menu__panel a[href="/admin/surveys"]');
+const link = await page.$('.pp-menu__panel a[href="/ground/surveys"]');
 check('People → More lists Surveys', !!link);
 await link.click();
 await page.waitForURL(`${ADMIN}/surveys`);
@@ -251,7 +252,7 @@ for (const path of ['/surveys', `/surveys/${surveyId}`, `/surveys/${surveyId}/re
 const vprof = await V.api(`/persons/${P.harjit.id}`);
 check("volunteer's profile JSON carries no answers or email", !vprof.raw.includes('Housing') && vprof.json.person.email === null);
 await V.go('/surveys');
-check('volunteer typing /surveys lands on Today', new URL(vpage.url()).pathname === '/', vpage.url());
+check('volunteer typing /surveys lands on Today', /\/field\/?$/.test(new URL(vpage.url()).pathname), vpage.url());
 
 // Walk list: answers only → "Save answers".
 await V.go(`/turfs/${turf.id}`);

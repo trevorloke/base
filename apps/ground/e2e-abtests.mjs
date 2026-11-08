@@ -24,8 +24,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const PORT = Number(process.env.PORT) || 4104;
 const CONTROL = PORT + 10000;
-const BASE = `http://127.0.0.1:${PORT}`;
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-abtests';
 mkdirSync(SHOTS, { recursive: true });
 const MAILBOX = `${SHOTS}/mailbox.jsonl`;
@@ -116,7 +117,7 @@ const apiOn = (p) => (path, body) => p.evaluate(async ([pp, b]) => {
 }, [path, body]);
 const api = apiOn(page);
 const act = (name, input) => api(`/actions/${name}`, input);
-const go = async (p, path) => { await p.goto(`${p === page ? ADMIN : BASE}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(900); };
+const go = async (p, path) => { await p.goto(`${p === page ? ADMIN : FIELD}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(900); };
 const pct = (n, of) => (of > 0 ? Math.round((100 * n) / of) : 0);
 const statOf = async (id) => (await api('/blasts/stats')).json.stats.find((s) => s.id === id);
 
@@ -139,7 +140,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', 'avery@abtests.example');
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 for (let i = 0; i < 60; i += 1) await act('subscription.add', { email: `reader${i}@example.org`, name: `Reader ${i}` });
 await act('person.create', { name: 'Lin Reporter', email: 'lin@surreynow.example', tags: ['media'] });
 const subs = (await api('/subscriptions')).json.subscribed;
@@ -437,15 +438,15 @@ const vctx = await browser.newContext({ viewport: { width: 390, height: 844 }, i
 await tiles(vctx);
 const vp = await vctx.newPage();
 vp.on('pageerror', (e) => errors.push('[vol] ' + e.message));
-await vp.goto(inv.json.joinUrl.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await vp.goto(inv.json.joinUrl.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('#join-name', { timeout: 8000 });
 await vp.fill('#join-name', 'Jas Volunteer');
 await vp.fill('#join-password', 'knock-knock-2026');
 await vp.click('button[type="submit"]');
-await vp.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
-check('volunteer joins on a phone', new URL(vp.url()).pathname === '/', vp.url());
+await vp.waitForURL(`${FIELD}/`, { timeout: 15000 }).catch(() => {});
+check('volunteer joins on a phone', /\/field\/?$/.test(new URL(vp.url()).pathname), vp.url());
 await go(vp, '/outreach/newsletter');
-check('volunteer typing /outreach lands on Today', new URL(vp.url()).pathname === '/', vp.url());
+check('volunteer typing /outreach lands on Today', /\/field\/?$/.test(new URL(vp.url()).pathname), vp.url());
 const vapi = apiOn(vp);
 const vStats = await vapi('/blasts/stats');
 const vBlasts = await vapi('/blasts');

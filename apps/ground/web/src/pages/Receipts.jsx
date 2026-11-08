@@ -24,6 +24,7 @@ import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSign
 import { StatusChip, fmtBig, shortDate, methodWord, sendWord, onItsWay } from '../components/ReceiptsBits.jsx';
 import './shifts.css';
 import './receipts.css';
+import { withBase } from '../paths.js';
 
 const LATEST = 12;
 const AGENT_ROLES = ['manager', 'treasurer'];
@@ -333,14 +334,14 @@ export default function Receipts() {
                     <option key={p.key} value={p.key}>{p.from ? periodWord(p) : p.label}</option>
                   ))}
                 </select>
-                <a className="btn btn-quiet ops-tap" href={`/api/receipts/disclosure.csv?period=${encodeURIComponent(period)}`} download
+                <a className="btn btn-quiet ops-tap" href={withBase(`/api/receipts/disclosure.csv?period=${encodeURIComponent(period)}`)} download
                   aria-label="Download the disclosure for a spreadsheet">
                   Download for a spreadsheet
                 </a>
               </div>
               <div className="rc-dl" role="group" aria-label="All receipts">
                 <span className="ops-donate__label">All receipts</span>
-                <a className="btn btn-quiet ops-tap" href="/api/receipts/register.csv" download
+                <a className="btn btn-quiet ops-tap" href={withBase('/api/receipts/register.csv')} download
                   aria-label="Download all receipts for a spreadsheet">
                   Download for a spreadsheet
                 </a>

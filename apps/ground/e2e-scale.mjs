@@ -18,7 +18,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = { toString() { return `${BASE}/ground`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-scale';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -102,7 +103,7 @@ if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine S
 await page.fill('#su-email', `riley+${tag}@scale.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 const P = {};
 const mk = async (key, data) => { P[key] = (await D.api('/actions/person.create', data)).json.person; };
@@ -131,12 +132,12 @@ const vctx = await browser.newContext({ viewport: { width: 390, height: 844 }, i
 await tiles(vctx);
 const vp = await vctx.newPage();
 const V = helpers(vp, vctx, 'vol');
-await vp.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+await vp.goto(inv.joinUrl.replace(/^https?:\/\/[^/]+/, new URL(BASE).origin), { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('#join-name', { timeout: 8000 });
 await vp.fill('#join-name', 'Jas Volunteer');
 await vp.fill('#join-password', 'knock-knock-2026');
 await vp.click('button[type="submit"]');
-await vp.waitForURL(`${BASE}/`, { timeout: 15000 }).catch(() => {});
+await vp.waitForURL(`${FIELD}/`, { timeout: 15000 }).catch(() => {});
 const volId = (await V.api('/auth/me')).json.user.id;
 check('volunteer joined and walks Newton A', (await D.api('/actions/turf.assign', { turf_id: turf.id, user_id: volId })).status === 200);
 check('volunteers read the scale (their phone needs it)', (await V.api('/scale')).status === 200);
@@ -154,10 +155,10 @@ const kept0 = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.
 check('the phone keeps the scale with this sign-in’s copies', kept0.length === 1 && kept0[0].includes(`:${volId}:`), kept0.join(' | '));
 // The Rating scale screen isn't theirs.
 await vp.click('.acct-btn');
-check('volunteer’s account menu: no Rating scale', !(await vp.$('.acct-panel a[href="/rating-scale"]')));
+check('volunteer’s account menu: no Rating scale', !(await vp.$('.acct-panel a[href="/field/rating-scale"]')));
 await vp.click('.acct-btn');
 await V.go('/rating-scale');
-check('volunteer typing /rating-scale lands on Today', new URL(vp.url()).pathname === '/', vp.url());
+check('volunteer typing /rating-scale lands on Today', /\/field\/?$/.test(new URL(vp.url()).pathname), vp.url());
 
 // No signal: Maya says she's voting Locke. Saved on the phone.
 await V.go(`/map?person=${P.maya.id}`);
@@ -174,8 +175,8 @@ check('offline: "Rated 4 · Locke · Saved offline"', /Rated 4 · Locke · Saved
 // ════════════════════════════════════════════════════════════════════════════
 await D.go('/');
 await page.click('.acct-btn');
-const link = await page.$('.acct-panel a[href="/admin/rating-scale"]');
-check('manager’s account menu: Rating scale, beside Team', !!link && !!(await page.$('.acct-panel a[href="/admin/settings"]')));
+const link = await page.$('.acct-panel a[href="/ground/rating-scale"]');
+check('manager’s account menu: Rating scale, beside Team', !!link && !!(await page.$('.acct-panel a[href="/ground/settings"]')));
 await link.click();
 await page.waitForURL(`${ADMIN}/rating-scale`);
 await page.waitForSelector('.sc-page .rb-btn', { timeout: 8000 }).catch(() => {});
@@ -336,7 +337,7 @@ await page.click('.pp-sheet__head button:has-text("Done")');
 await sleep(500);
 const UUID_LINK = /^\/people\/[0-9a-f-]{36}$/;
 // The desk's links carry the admin's base; read them without it.
-const listed = () => page.$$eval('main.page a[href^="/admin/people/"]', (els) => els.map((e) => e.getAttribute('href').replace(/^\/admin/, ''))).then((h) => [...new Set(h.filter((x) => UUID_LINK.test(x)))]);
+const listed = () => page.$$eval('main.page a[href^="/ground/people/"]', (els) => els.map((e) => e.getAttribute('href').replace(/^\/ground/, ''))).then((h) => [...new Set(h.filter((x) => UUID_LINK.test(x)))]);
 const rows = await listed();
 check('…finds the two people who backed Locke', rows.length === 2 && rows.includes(`/people/${P.lena.id}`) && rows.includes(`/people/${P.maya.id}`), rows.join(' '));
 await page.click('.pp-filterbtn');
@@ -394,7 +395,7 @@ check('Today: opposed by candidate still counts Locke', variants.some((v) => /^L
 await V.go('/');
 await vp.click('.acct-btn');
 await vp.click('.acct-panel button:has-text("Sign out")');
-await vp.waitForURL(`${BASE}/login`, { timeout: 8000 }).catch(() => {});
+await vp.waitForURL(`${FIELD}/login`, { timeout: 8000 }).catch(() => {});
 await sleep(500);
 const left = await vp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('base:copy:') || k.startsWith('base:me:')));
 check('signed out: the scale copy (and the rest) are gone from the phone', left.length === 0, left.join(' | '));
@@ -464,7 +465,7 @@ check('saved: Bains kept their code, Sidhu is new', sidhu && !opposedBefore.incl
 await V2.go('/shifts');
 await sleep(1500);
 await v2ctx.setOffline(true);
-await v2.goto(`${BASE}/map?person=${P.ana.id}`, { waitUntil: 'domcontentloaded' }).catch(() => {});
+await v2.goto(`${FIELD}/map?person=${P.ana.id}`, { waitUntil: 'domcontentloaded' }).catch(() => {});
 await v2.waitForSelector('aside.door-card .rb-btn', { timeout: 15000 }).catch(() => {});
 await sleep(800);
 await v2.tap('aside.door-card button[aria-label^="4: Opposed"]').catch(() => v2.click('aside.door-card button[aria-label^="4: Opposed"]').catch(() => {}));
@@ -556,7 +557,7 @@ await D.go('/people');
 await page.waitForSelector('.pp-table, .pp-list', { timeout: 8000 }).catch(() => {});
 await sleep(1500); // kept a moment after it loads
 await dctx.setOffline(true);
-const inApp = (url) => page.evaluate((u) => { history.pushState({}, '', u); dispatchEvent(new PopStateEvent('popstate')); }, `/admin${url}`); // the desk lives in the admin
+const inApp = (url) => page.evaluate((u) => { history.pushState({}, '', u); dispatchEvent(new PopStateEvent('popstate')); }, `/ground${url}`); // the desk lives in the admin
 await inApp(`/people?field=${encodeURIComponent(`${fld.id}:yes`)}`);
 await sleep(2500);
 t = await D.text();

@@ -21,17 +21,31 @@
  *               pictures in messages (/media),
  *               or any non-GET.
  *
+ * Under a prefix (BASE_PATH, SUITE.md): this worker is registered at
+ * <prefix>/sw.js with the prefix as its scope, and every path above is under
+ * it (<prefix>/api, <prefix>/assets …). Caches are one store per site, so on
+ * base.win each client's base ground names its own caches after its prefix
+ * and never touches another's. Navigations outside the two faces (base air
+ * at <prefix>/air, say) go straight to the network.
+ *
  * Bump VERSION to throw every cache away on the next activate.
  */
+// '/imaginesurrey', or '' when registered at the root.
+const BASE = new URL(self.registration.scope).pathname.replace(/\/+$/, '');
+const at = (path) => `${BASE}${path}`;
+// '' at the root (the names caches had before prefixes); else 'imaginesurrey-'.
+const NS = BASE ? `${BASE.slice(1).replace(/[^A-Za-z0-9_-]+/g, '-')}-` : '';
 const VERSION = 'v2';
-const SHELL = `base-shell-${VERSION}`;
-const ASSETS = `base-assets-${VERSION}`;
-const TILES = `base-tiles-${VERSION}`;
-const META = `base-meta-${VERSION}`; // the map's tile provider
+const SHELL = `base-${NS}shell-${VERSION}`;
+const ASSETS = `base-${NS}assets-${VERSION}`;
+const TILES = `base-${NS}tiles-${VERSION}`;
+const META = `base-${NS}meta-${VERSION}`; // the map's tile provider
 const KEEP = [SHELL, ASSETS, TILES, META];
+// This worker's own caches, any version — the only ones it may drop.
+const MINE = new RegExp(`^base-${NS.replace(/[.*+?^$()|[\]\\{}-]/g, '\\$&')}(?:shell|assets|tiles|meta)-v\\d+$`);
 
-const INDEX = '/index.html';
-const SHELL_EXTRAS = ['/manifest.webmanifest', '/icon.svg'];
+const INDEX = at('/index.html');
+const SHELL_EXTRAS = [at('/manifest.webmanifest'), at('/icon.svg')];
 const NAV_TIMEOUT_MS = 4000;  // then show the cached app, let the network finish in the background
 const TILE_TIMEOUT_MS = 5000;
 const TILE_MAX = 1500;
@@ -40,13 +54,20 @@ const TILE_AT = 'x-base-cached-at';
 
 // The server's own pages (unsubscribe, receipts, public lessons, tracking,
 // pictures): straight to the network, never the app shell.
-const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files)(?:\/|$)/;
+// (Tested against the path with the prefix taken off.)
+const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files|in|web)(?:\/|$)/;
+// The app's own screens: the field app and the desk. Only these get the app
+// shell for a navigation.
+const FACE = /^\/(?:field|ground)(?:\/|$)/;
+// The path under this worker's prefix, or null for one outside it.
+const inScope = (pathname) => (!BASE ? pathname
+  : pathname === BASE ? '/' : pathname.startsWith(`${BASE}/`) ? pathname.slice(BASE.length) : null);
 const isTileHost = (host) => host === 'tile.openstreetmap.org' || host.endsWith('.tile.openstreetmap.org');
 
 // The configured provider, from a template like
 // https://{s}.tiles.example/streets/{z}/{x}/{y}.png?key=… → its host ({s} any
 // subdomain) and the path before the first {…}.
-const TILE_CONFIG_KEY = '/__base/tiles';
+const TILE_CONFIG_KEY = at('/__base/tiles');
 const matcherFor = (template) => {
   const m = /^https?:\/\/([^/]+)(\/[^{]*)/i.exec(String(template || ''));
   if (!m) return null;
@@ -115,7 +136,7 @@ self.addEventListener('activate', (event) => {
       } catch { /* quota: the map refills with signal */ }
     }
     await Promise.all(names
-      .filter((n) => (n.startsWith('base-') && !KEEP.includes(n)) || n.startsWith('starbase-'))
+      .filter((n) => (MINE.test(n) && !KEEP.includes(n)) || n.startsWith('starbase-'))
       .map((n) => caches.delete(n)));
     await self.clients.claim();
   })());
@@ -134,7 +155,8 @@ self.addEventListener('fetch', (event) => {
   }
   // base ground's own tiles (Google Maps through the server): the same cache,
   // fetched with the sign-in cookie.
-  if (url.origin === self.location.origin && url.pathname.startsWith('/tiles/')) {
+  const path = url.origin === self.location.origin ? inScope(url.pathname) : null;
+  if (path !== null && path.startsWith('/tiles/')) {
     event.respondWith(tile(event, url, true));
     return;
   }
@@ -148,13 +170,17 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(loadMatcher().then((m) => (isConfiguredTile(url, m) ? tile(event, url) : fetch(req))));
     return;
   }
-  if (NEVER.test(url.pathname)) return; // straight to the network, untouched
+  // Another app on this site (another client, base air): not this worker's.
+  if (path === null || NEVER.test(path)) return; // straight to the network, untouched
 
   if (req.mode === 'navigate') {
-    event.respondWith(navigate(event));
+    // At the root the worker has the whole site, as it always did (an old
+    // home-screen icon opens /map, offline too). Under a prefix, only the
+    // app's own screens: base air and the rest share the prefix.
+    if (!BASE || FACE.test(path) || path === '/') event.respondWith(navigate(event));
     return;
   }
-  if (url.pathname.startsWith('/assets/')) {
+  if (path.startsWith('/assets/')) {
     event.respondWith(asset(req));
     return;
   }
@@ -221,13 +247,15 @@ async function adoptIndex(res, previous) {
   await syncAssets(html);
 }
 
-// Two ways a build file names another: "assets/Map-x1.js" (index.html, CSS,
-// Vite's preload map) and "./Map-x1.js" (a chunk importing its neighbour).
-const ASSET_REF = /\/?assets\/[A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf)\b/g;
+// Two ways a build file names another: "./assets/Map-x1.js" (index.html,
+// built with Vite's base './') or "assets/…" (CSS), and "./Map-x1.js" (a chunk
+// importing its neighbour, Vite's preload map). Each becomes its address
+// under the prefix: <prefix>/assets/Map-x1.js.
+const ASSET_REF = /assets\/([A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf))\b/g;
 const SIBLING_REF = /["'`]\.\/([A-Za-z0-9._-]+\.(?:js|css))["'`]/g;
 const refsIn = (text, inAssets = false) => {
-  const out = new Set((text.match(ASSET_REF) || []).map((p) => (p.startsWith('/') ? p : `/${p}`)));
-  if (inAssets) for (const m of text.matchAll(SIBLING_REF)) out.add(`/assets/${m[1]}`);
+  const out = new Set([...text.matchAll(ASSET_REF)].map((m) => at(`/assets/${m[1]}`)));
+  if (inAssets) for (const m of text.matchAll(SIBLING_REF)) out.add(at(`/assets/${m[1]}`));
   return [...out];
 };
 

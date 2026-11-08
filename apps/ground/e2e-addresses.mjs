@@ -46,7 +46,8 @@ const FAKE = `http://127.0.0.1:${fake.address().port}`;
 
 let server = null;
 let BASE = process.env.BASE;
-const ADMIN = { toString() { return `${BASE}/admin`; } };
+const ADMIN = { toString() { return `${BASE}/ground`; } };
+const FIELD = { toString() { return `${BASE}/field`; } }; // the field app (web/src/mode.js)
 if (!BASE) {
   server = spawn(process.execPath, ['server/index.js'], {
     env: { ...process.env, BASE_OPEN_SIGNUP: '1', BASE_DATA: 'memory', PORT: String(PORT), BASE_JOBS: 'off',
@@ -58,7 +59,7 @@ if (!BASE) {
     server.stdout.on('data', (b) => { if (/base ground on :/.test(String(b))) { clearTimeout(t); resolve(); } });
     server.on('exit', (code) => reject(new Error(`server exited ${code}`)));
   });
-  BASE = `http://127.0.0.1:${PORT}`;
+  BASE = `http://127.0.0.1:${PORT}${process.env.BASE_PATH || ''}`; // BASE_PATH=/x: the same run under a prefix
 }
 // However it ends, the server and the stand-in go with it.
 process.on('exit', () => { server?.kill(); });
@@ -98,13 +99,13 @@ const api = async (path, body) => {
   const r = body === undefined ? await ctx.request.get(`${BASE}/api${path}`) : await ctx.request.post(`${BASE}/api${path}`, { data: body });
   return { status: r.status(), json: await r.json().catch(() => null) };
 };
-await page.goto(`${BASE}/signup`);
+await page.goto(`${FIELD}/signup`);
 await page.fill('#su-name', 'Marco Manager');
 if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', `marco+${tag}@addresses.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 const findPerson = async (name) => (await api(`/persons?q=${encodeURIComponent(name)}`)).json.persons.find((p) => p.name === name);
 const full = async (id) => (await api(`/persons/${id}`)).json.person;
 

@@ -13,7 +13,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
-const ADMIN = `${BASE}/admin`;
+const FIELD = `${BASE}/field`; // the field app (web/src/mode.js); the desk is ADMIN, at /ground
+const ADMIN = `${BASE}/ground`;
 const SHOTS = process.env.SHOTS || '/tmp/base-ground-imagineu';
 mkdirSync(SHOTS, { recursive: true });
 const results = [];
@@ -35,13 +36,13 @@ const api = async (path, body) => {
   const r = body === undefined ? await dctx.request.get(`${BASE}/api${path}`) : await dctx.request.post(`${BASE}/api${path}`, { data: body });
   return { status: r.status(), json: await r.json().catch(() => null) };
 };
-await page.goto(`${BASE}/signup`);
+await page.goto(`${FIELD}/signup`);
 await page.fill('#su-name', 'Marco Manager');
 if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', `marco+${tag}@learn.example`);
 await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
-await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await page.waitForURL(/\/ground\/?$/, { timeout: 15000 });
 
 // ── The desk: a course, then a module with materials ──
 await page.goto(`${ADMIN}/imagineu`, { waitUntil: 'domcontentloaded' });
@@ -75,12 +76,12 @@ const inv = (await api('/actions/member.invite', { email: `vic+${tag}@learn.exam
 const pctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
 const vp = await pctx.newPage();
 vp.on('pageerror', (e) => errors.push(`vol: ${e.message}`));
-await vp.goto(`${BASE}/join/${inv.joinUrl.split('/join/')[1]}`);
+await vp.goto(`${FIELD}/join/${inv.joinUrl.split('/join/')[1]}`);
 await vp.fill('input[autocomplete="name"], #jn-name', 'Vic Volunteer').catch(() => {});
 await vp.fill('input[type="password"]', 'vic-pass-2026');
 await vp.click('button[type="submit"]');
 await vp.waitForURL((u) => !/\/join\//.test(String(u)), { timeout: 15000 }).catch(() => {});
-await vp.goto(`${BASE}/imagineu`, { waitUntil: 'domcontentloaded' });
+await vp.goto(`${FIELD}/imagineu`, { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('.lu-row', { timeout: 10000 }).catch(() => {});
 check('the course reads "0 of 1 module done"', /0 of 1 module done/.test(await vp.innerText('.lu-course').catch(() => '')));
 await vp.tap('.lu-row:has-text("At the door")');
@@ -94,7 +95,7 @@ await vp.screenshot({ path: `${SHOTS}/02-module-phone.png`, fullPage: true });
 await vp.tap('button:has-text("Mark this module done")');
 await sleep(700);
 check('done: "✓ Module done — undo"', /Module done/.test(await vp.innerText('.lu-done').catch(() => '')));
-await vp.goto(`${BASE}/imagineu`, { waitUntil: 'domcontentloaded' });
+await vp.goto(`${FIELD}/imagineu`, { waitUntil: 'domcontentloaded' });
 await vp.waitForSelector('.lu-course', { timeout: 8000 }).catch(() => {});
 check('the course now reads "1 of 1 module done"', /1 of 1 module done/.test(await vp.innerText('.lu-course').catch(() => '')));
 await vp.screenshot({ path: `${SHOTS}/03-course-done.png` });
