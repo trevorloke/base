@@ -388,7 +388,7 @@ export const makeSiteApp = (at) => {
     const code = parseJ(person.attrs, {})?.ref_code || null;
     return sendPlain(c, site, settings, {
       title: 'Your email and texts',
-      body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org) }),
+      body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org, settings.seo) }),
     });
   };
   app.get(route('/preferences'), (c) => preferences(c));
@@ -401,7 +401,7 @@ export const makeSiteApp = (at) => {
     if (!person) return badLink(c, site, settings);
     const before = await choicesOf(site.db, site.ws.id, person);
     const want = { email: form.email === 'on' && Boolean(person.email), sms: form.sms === 'on' && Boolean(person.phone) };
-    const wording = consentWording(settings.org);
+    const wording = consentWording(settings.org, settings.seo);
     await runAction(site.db, { workspaceId: site.ws.id, actorId: null, action: 'site.preferences' }, async (tx, emit) => {
       const ws = site.ws.id;
       // On: when it isn't. Off: unless it's off already — a save that only
@@ -426,7 +426,7 @@ export const makeSiteApp = (at) => {
     const code = parseJ((await site.db.query('select attrs from persons where id = $1', [person.id])).rows[0]?.attrs, {})?.ref_code || null;
     return sendPlain(c, site, settings, {
       title: 'Your email and texts',
-      body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org) }),
+      body: choicesBody(site, person, choices, { t, saved, code, wording: consentWording(settings.org, settings.seo) }),
     });
   };
 

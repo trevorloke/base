@@ -1,14 +1,16 @@
 // Online payments (ext/payments) against a stand-in Stripe (fake-stripe.js):
-// the website's forms open a checkout for someone already recorded
-// (checkoutFor, run here as the site's form handler would run it); the
+// the website's forms keep a checkout for someone already recorded
+// (prepareCheckout, in the form's write) and ask Stripe for its page once
+// that write is done (openCheckout), as the site's form handler does; the
 // donor pays on Stripe's page; Stripe's signed webhook lands the gift
 // through the normal gift path — card, online, the declaration kept, the
 // limit checked, the receipt issued — or the membership, or each month of a
-// monthly gift (a pledge kept, stopped when the subscription is). Over the
-// limit before checkout is refused in plain words; over the limit when the
-// payment lands is refunded through Stripe, flagged for the treasurer and
-// the donor emailed. Refunds and disputes from Stripe void or flag the gift.
-// Each event once; a bad signature never gets in. The desk sees it all on
+// monthly gift (a pledge kept, stopped when the subscription is). Before
+// checkout a visitor is refused only what no one may give (what this person
+// gave before is the desk's to check); over the limit when the payment
+// lands is refunded through Stripe, flagged for the treasurer and the donor
+// emailed. Refunds and disputes from Stripe void or flag the gift. Each
+// event once; a bad signature never gets in. The desk sees it all on
 // Donations; Settings → Services shows Stripe and its webhook.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +19,7 @@ import { app } from '../index.js';
 import { runAction } from '../lib/events.js';
 import { runDueJobs } from '../lib/jobs.js';
 import { campaignDay } from '../lib/gifts.js';
-import { checkoutFor, paymentsData, paymentsReady, STRIPE_EVENTS, DECLARATION } from '../ext/payments/index.js';
+import { prepareCheckout, openCheckout, paymentsData, paymentsReady, STRIPE_EVENTS, DECLARATION } from '../ext/payments/index.js';
 import { signPayload } from '../ext/payments/stripe.js';
 import { startFakeStripe } from './fake-stripe.js';
 
@@ -31,7 +33,7 @@ const today = campaignDay(new Date(), 'America/Vancouver');
 const SUCCESS = 'https://site.example.org/donate?sent=donate&session={CHECKOUT_SESSION_ID}';
 const CANCEL = 'https://site.example.org/donate';
 
-let db, fake, mgr, staff, vol, wsId;
+let db, fake, mgr, mgrUser, staff, vol, wsId;
 
 // The webhook, in-process: what Stripe would POST.
 const deliver = async (raw, headers) => {
@@ -48,14 +50,18 @@ const member = async (ws, role, who) => {
 };
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };
 
-// The site's form handler: the person is recorded, then the checkout opens
-// inside the same write.
-const open = (personId, opts = {}) => runAction(db, { workspaceId: wsId, actorId: null, action: 'site.form.donate' }, (tx, emit) => checkoutFor(tx, { workspaceId: wsId }, {
-  personId, kind: 'donation', amountCents: 5000, cadence: 'once', slate: null, declaration: true,
-  successUrl: SUCCESS, cancelUrl: CANCEL, metadata: { source: 'share-whatsapp', module_id: 'm-donate' }, ...opts,
-}, emit)).then((r) => r.result);
-const refused = async (personId, opts) => {
-  try { await open(personId, opts); } catch (e) { return e; }
+// The site's form handler: the person is recorded and the checkout kept in
+// the form's write; Stripe is asked once that write is done. ctx: a
+// visitor's (no one signed in), unless a test says otherwise.
+const open = async (personId, opts = {}, ctx = { workspaceId: wsId }) => {
+  const { result: co } = await runAction(db, { workspaceId: wsId, actorId: null, action: 'site.form.donate' }, (tx, emit) => prepareCheckout(tx, ctx, {
+    personId, kind: 'donation', amountCents: 5000, cadence: 'once', slate: null, declaration: true,
+    successUrl: SUCCESS, cancelUrl: CANCEL, metadata: { source: 'share-whatsapp', module_id: 'm-donate' }, ...opts,
+  }, emit));
+  return openCheckout(db, ctx, co.id, { action: 'site.form.donate' });
+};
+const refused = async (personId, opts, ctx) => {
+  try { await open(personId, opts, ctx); } catch (e) { return e; }
   assert.fail('expected the checkout to be refused');
   return null;
 };
@@ -93,6 +99,7 @@ before(async () => {
   mgr = new Client();
   const r = await mgr.signup({ workspaceName: `North Shore ${tag}`, email: mail('mgr'), jurisdiction: 'bc-municipal' });
   wsId = r.json.workspace.id;
+  mgrUser = r.json.user;
   staff = await member(wsId, 'staff', 'staff');
   vol = await member(wsId, 'volunteer', 'vol');
 });
@@ -130,11 +137,14 @@ test('a checkout needs the declaration; a gift once opens Stripe’s page with t
   assert.equal((await refused('00000000-0000-4000-8000-000000000000', {})).field, 'person');
   assert.equal((await db.query('select count(*)::int as n from stripe_checkouts where workspace_id = $1', [wsId])).rows[0].n, 0, 'a refusal keeps nothing');
 
-  const r = await open(p.id);
+  const r = await open(p.id, { email: mail('mina') });
   assert.match(r.url, new RegExp(`^${fake.url}/pay/cs_test_`));
   const call = fake.calls.find((c) => c.path === '/v1/checkout/sessions' && c.method === 'POST' && c.idem === `base-checkout-${r.id}`);
   assert.ok(call, 'one idempotency key per checkout');
   const prm = call.params;
+  // Stripe's page starts with the email the visitor typed — never the one on file.
+  const untyped = await open(p.id);
+  assert.equal(fake.calls.find((c) => c.idem === `base-checkout-${untyped.id}`).params.customer_email, undefined);
   assert.equal(prm.mode, 'payment');
   assert.equal(prm.submit_type, 'donate');
   assert.deepEqual(prm.line_items['0'].price_data, { currency: 'cad', unit_amount: '5000', product_data: { name: `Contribution to North Shore ${tag}` } });
@@ -149,9 +159,10 @@ test('a checkout needs the declaration; a gift once opens Stripe’s page with t
   assert.equal(co.declaration.text, DECLARATION);
   assert.equal(co.declaration.source, 'website');
   assert.deepEqual(co.metadata, { source: 'share-whatsapp', module_id: 'm-donate' });
-  const ev = (await db.query(`select action, payload from events where workspace_id = $1 and entity_type = 'payment_checkout' and entity_id = $2`, [wsId, r.id])).rows[0];
-  assert.equal(ev.action, 'site.form.donate', 'on the event log with the form that opened it');
-  assert.equal(ev.payload.declaration.text, DECLARATION);
+  const evs = (await db.query(`select action, op, payload from events where workspace_id = $1 and entity_type = 'payment_checkout' and entity_id = $2 order by seq`, [wsId, r.id])).rows;
+  assert.deepEqual(evs.map((e) => [e.action, e.op]), [['site.form.donate', 'create'], ['site.form.donate', 'update']], 'on the event log with the form that opened it: kept, then its page');
+  assert.equal(evs[0].payload.declaration.text, DECLARATION);
+  assert.equal(evs[1].payload.session_id, r.session_id);
 });
 
 test('a gift once: the webhook logs it through the gift path — card, online, the declaration kept — with its receipt', async () => {
@@ -321,29 +332,45 @@ test('membership dues: the gift, and the membership the way the membership form 
   await verified();
 });
 
-test('over the limit before checkout: refused in plain words (never their own giving), nothing sent, nothing kept', async () => {
+test('before checkout, a visitor is refused only what no one may give: what this person gave is never the answer', async () => {
+  const p = await donor('Una');
+  await deskGift(p, 140000);
+  // Over what she has left, under the year's limit: off to pay, as anyone
+  // would be — the payment is checked when it lands (and refunded if over).
+  assert.ok((await open(p.id, { amountCents: 5000 })).url);
+  const before = fake.calls.length;
+  const e = await refused(p.id, { amountCents: 150000 });
+  assert.deepEqual([e.status, e.field], [400, 'amount_cents']);
+  assert.equal(e.message, 'That’s more than this year’s $1,429.70 limit for contributions to the city council slate. Try a smaller amount.');
+  assert.equal((await refused(p.id, { cadence: 'monthly', amountCents: 20000 })).message, 'The most a monthly gift can be this year is $119.00.');
+  assert.equal(fake.calls.length, before, 'Stripe never asked');
+  assert.equal((await db.query('select count(*)::int as n from stripe_checkouts where person_id = $1 and amount_cents > 5000', [p.id])).rows[0].n, 0, 'nothing kept');
+});
+
+test('over the limit before checkout, for someone signed in: refused in plain words (never their own giving), nothing sent, nothing kept', async () => {
+  const desk = { workspaceId: wsId, user: mgrUser };
   const p = await donor('Uma');
   await deskGift(p, 140000);
   const before = fake.calls.length;
-  const e = await refused(p.id, { amountCents: 5000 });
+  const e = await refused(p.id, { amountCents: 5000 }, desk);
   assert.deepEqual([e.status, e.field], [400, 'amount_cents']);
   assert.equal(e.message, 'That would take you over this year’s $1,429.70 limit for contributions to the city council slate. Try a smaller amount.');
   assert.ok(!/1,400/.test(e.message));
   assert.equal(fake.calls.length, before, 'Stripe never asked');
   assert.equal((await db.query('select count(*)::int as n from stripe_checkouts where person_id = $1', [p.id])).rows[0].n, 0);
   // What's left fits; the other slate is its own limit.
-  assert.ok((await open(p.id, { amountCents: 2970 })).url);
-  assert.ok((await open(p.id, { amountCents: 50000, slate: 'school_board' })).url);
+  assert.ok((await open(p.id, { amountCents: 2970 }, desk)).url);
+  assert.ok((await open(p.id, { amountCents: 50000, slate: 'school_board' }, desk)).url);
   // Monthly: each payment left this year counts, and a whole year must fit.
   const q = await donor('Vik');
-  assert.match((await refused(q.id, { cadence: 'monthly', amountCents: 20000 })).message, /The most a monthly gift can be this year is \$119\.00/);
+  assert.match((await refused(q.id, { cadence: 'monthly', amountCents: 20000 }, desk)).message, /The most a monthly gift can be this year is \$119\.00/);
   await deskGift(q, 135000);
-  const monthly = await refused(q.id, { cadence: 'monthly', amountCents: 6000 });
+  const monthly = await refused(q.id, { cadence: 'monthly', amountCents: 6000 }, desk);
   assert.match(monthly.message, /^A monthly gift of \$60\.00 would take you over this year’s \$1,429\.70 limit/);
   // A monthly gift already running counts against a new one.
   const w = await donor('Wren');
-  await open(w.id, { cadence: 'monthly', amountCents: 6000 }).then((x) => fake.pay(x.session_id));
-  assert.match((await refused(w.id, { cadence: 'monthly', amountCents: 6000 })).message, /would take you over/);
+  await open(w.id, { cadence: 'monthly', amountCents: 6000 }, desk).then((x) => fake.pay(x.session_id));
+  assert.match((await refused(w.id, { cadence: 'monthly', amountCents: 6000 }, desk)).message, /would take you over/);
 });
 
 test('over the limit when it lands: no gift, refunded through Stripe, flagged for the treasurer, the donor emailed once', async () => {

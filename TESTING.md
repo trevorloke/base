@@ -641,8 +641,11 @@ one tap away under **More**.
   on the website with Stripe's test card `4242 4242 4242 4242`. The gift
   shows on **Donations** marked *online* with its receipt, under *Online
   giving · test mode* as *Paid*; a monthly gift puts the donor under
-  *Monthly donors*. Log a big gift at the desk for someone, then try to give
-  online as them: the form refuses it in plain words. Refund a payment from
+  *Monthly donors*. Try to give more than the year's limit at once: the form
+  refuses it in plain words. Log a big gift at the desk for someone, then
+  give online as them: the form still goes to Stripe (it never tells a
+  stranger what someone gave), and when the payment lands it is refunded
+  and *Needs you* says so. Refund a payment from
   Stripe's dashboard: **Needs you** says the gift is void (*Got it* clears
   it). `node e2e-payments.mjs` (PORT, SHOTS) runs all of it in a browser
   against a stand-in Stripe.

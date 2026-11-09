@@ -3,6 +3,7 @@
 // site lives, and the helpers that turn a typed link into a safe one. See
 // SITE.md "Rendering" for the shapes accepted.
 import { checkTheme } from '../theme.js';
+import { consentName, consentWords } from '../wording.js';
 import { renderMarkdown } from '../../markdown.js';
 import { arr, obj, str, DEFAULT_TIME_ZONE } from './util.js';
 import { absolute, imageFor, linkFor, locFrom, safeUrl } from './links.js';
@@ -27,8 +28,15 @@ export function normalizeSite(site) {
   const seoImage = obj(seo0.image || seo0.shareImage || seo0.share_image);
   const social = Array.isArray(s.social) ? s.social : arr(obj(s.social).accounts);
   const footer = obj(s.footer);
+  // The words beside the consent boxes and the newsletter's button: the
+  // server's (site.consent — what it keeps with each yes), else the same
+  // words made the same way (shared/site/wording.js).
+  const given = obj(s.consent);
+  const made = consentWords(consentName(org0, seo0));
+  const consent = Object.fromEntries(Object.keys(made).map((k) => [k, str(given[k]).trim() || made[k]]));
   return {
     theme,
+    consent,
     org: {
       name,
       shortName: str(org0.short_name || org0.shortName).trim() || name,

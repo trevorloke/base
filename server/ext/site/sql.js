@@ -16,7 +16,10 @@
 //                   payload: what they typed), where (page, module, source),
 //                   who sent them (referrer_id); client_key makes a retry the
 //                   same action, never a second; answer is what they were told
-//                   (a checkout address) so a retry gets it again
+//                   (a checkout address) so a retry gets it again; join and
+//                   donate: checkout_id, their checkout (ext/payments) —
+//                   answer stays empty until Stripe has made its page, so a
+//                   retry after a failure asks again for the same checkout
 //   consent_events  every yes or no to email or texts, with the words they
 //                   saw and the address it was about — from the site's forms
 //                   and pages, and from base.win's own (an unsubscribe link,
@@ -110,6 +113,7 @@ create table if not exists site_actions (
   answer jsonb,
   created_at timestamptz not null default now()
 );
+alter table site_actions add column if not exists checkout_id uuid;
 create unique index if not exists site_actions_key_idx on site_actions (workspace_id, client_key) where client_key is not null;
 create index if not exists site_actions_campaign_idx on site_actions (workspace_id, campaign_id, person_id) where campaign_id is not null;
 create index if not exists site_actions_person_idx on site_actions (workspace_id, person_id);

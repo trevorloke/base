@@ -2,10 +2,11 @@
 // against a stand-in Stripe (server/test/fake-stripe.js: its own checkout
 // page, its signed webhooks) and a stand-in for the campaign website's
 // donate form, which does what SITE.md's donate form does: the person
-// recorded (matched by email), then checkoutFor in the same write, then
-// the browser sent to Stripe. The base.win server runs in this process
-// (in memory) so the stand-in can call checkoutFor as the site's own code
-// will.
+// recorded (matched by email) and the checkout kept in one write
+// (prepareCheckout), then — that write done — Stripe asked for its page
+// (openCheckout), then the browser sent to Stripe. The base.win server runs
+// in this process (in memory) so the stand-in can call them as the site's
+// own code does.
 //
 //   1. A manager signs up. Settings → Services: Online payments (Stripe) says
 //      Test mode, shows the webhook address to paste into Stripe and the ten
@@ -16,12 +17,14 @@
 //   3. Donations: the gift is in the ledger, marked online; opened, its
 //      receipt ("Receipt 2026-000N"); Online giving · test mode lists it Paid.
 //   4. A monthly gift: the donor is under Monthly donors.
-//   5. Over the limit before checkout: a donor the desk logged $1,400 for is
-//      refused on the form in plain words, and Stripe is never asked. Over
-//      the limit when it lands (the desk logged a gift while the donor was
-//      on Stripe's page): no gift, refunded through Stripe by the job
-//      runner, and Needs you says so — with "let them know" while email
-//      isn't connected.
+//   5. Before checkout the form refuses only what no one may give: more than
+//      the year's limit at once is refused in plain words, and Stripe is
+//      never asked; a donor the desk logged $1,400 for still goes to pay
+//      (the form never tells a stranger what someone gave). Over the limit
+//      when it lands (the desk logged a gift while the donor was on
+//      Stripe's page): no gift, refunded through Stripe by the job runner,
+//      and Needs you says so — with "let them know" while email isn't
+//      connected.
 //   6. A refund made in Stripe: Needs you says the gift is void; Got it.
 //   7. Measured on a phone and a desktop: no sideways scroll, one yellow
 //      button, targets ≥48px; no page errors.
@@ -62,7 +65,7 @@ const { app } = await import('./server/index.js');
 const { getDb } = await import('./server/db/client.js');
 const { runAction } = await import('./server/lib/events.js');
 const { ACTIONS } = await import('./server/actions/index.js');
-const { checkoutFor, DECLARATION, STRIPE_EVENTS } = await import('./server/ext/payments/index.js');
+const { prepareCheckout, openCheckout, DECLARATION, STRIPE_EVENTS } = await import('./server/ext/payments/index.js');
 const { startJobRunner, stopJobRunner } = await import('./server/lib/jobs.js');
 const server = serve({ fetch: app.fetch, port: PORT, hostname: '127.0.0.1' });
 startJobRunner(await getDb(), { everyMs: 1000 }); // refunds run after the webhook, as on a real server
@@ -82,7 +85,7 @@ const donateForm = (error) => sitePage('Donate', `<h1>Donate</h1>
 ${error ? `<p class="err" role="alert">${esc(error)}</p>` : ''}
 <form method="post" action="/donate">
 <fieldset><legend>Amount</legend><div class="opts">
-${[25, 50, 100].map((d) => `<label><input type="radio" name="amount" value="${d}"${d === 50 ? ' checked' : ''}> $${d}</label>`).join('')}
+${[25, 50, 100, 1500].map((d) => `<label><input type="radio" name="amount" value="${d}"${d === 50 ? ' checked' : ''}> $${d}</label>`).join('')}
 </div></fieldset>
 <fieldset><legend>How often</legend><div class="opts">
 <label><input type="radio" name="cadence" value="once" checked> Once</label><label><input type="radio" name="cadence" value="monthly"> Monthly</label>
@@ -110,7 +113,7 @@ const site = http.createServer(async (req, res) => {
       const wsId = (await db.query('select id from workspaces order by created_at limit 1')).rows[0].id;
       const email = String(f.get('email') || '').trim().toLowerCase();
       try {
-        const { result } = await runAction(db, { workspaceId: wsId, actorId: null, action: 'site.form.donate' }, async (tx, emit) => {
+        const { result: kept } = await runAction(db, { workspaceId: wsId, actorId: null, action: 'site.form.donate' }, async (tx, emit) => {
           // The person: the same email on file, or a new one (SITE.md's forms).
           let personId = (await tx.query('select id from persons where workspace_id = $1 and lower(email) = $2 and deleted_at is null limit 1', [wsId, email])).rows[0]?.id;
           if (!personId) {
@@ -119,13 +122,15 @@ const site = http.createServer(async (req, res) => {
               address: f.get('address'), city: 'Surrey', postal: String(f.get('postal_code') || '').toUpperCase(),
             }, emit)).person.id;
           }
-          return checkoutFor(tx, { workspaceId: wsId }, {
-            personId, kind: 'donation', amountCents: Number(f.get('amount')) * 100, cadence: f.get('cadence'),
+          return prepareCheckout(tx, { workspaceId: wsId }, {
+            personId, kind: 'donation', amountCents: Number(f.get('amount')) * 100, cadence: f.get('cadence'), email,
             declaration: f.get('declaration') === 'true', successUrl: `${SITE}/thanks?session={CHECKOUT_SESSION_ID}`, cancelUrl: `${SITE}/donate`,
             metadata: { source: 'e2e' },
           }, emit);
         });
-        return send(303, '', { location: result.url });
+        // The form's write is done: now Stripe is asked for its page.
+        const { url: page } = await openCheckout(db, { workspaceId: wsId }, kept.id, { action: 'site.form.donate' });
+        return send(303, '', { location: page });
       } catch (e) {
         if (e.status === 400) return send(303, '', { location: `/donate?error=${encodeURIComponent(e.message)}` });
         return send(503, sitePage('Not now', `<h1>${esc(e.message)}</h1>`));
@@ -276,17 +281,21 @@ check('Donations: Monthly donors · 1 · $25 a month', /^Monthly donors · 1 · 
 const benRow = (await desk.locator('#pay-monthly-list .ops-row', { hasText: 'Ben Example' }).innerText().catch(() => '')).replace(/\s+/g, ' ');
 check('Donations: Ben, online, $25.00 a month, since this month', /online/.test(benRow) && /\$25\.00/.test(benRow) && /a month/.test(benRow) && /since/.test(benRow), benRow);
 
-// ── 5. Over the limit before checkout: refused on the form ──
+// ── 5. Before checkout: only what no one may give is refused on the form ──
 const cy = { first: 'Cy', last: 'Example', email: `cy.${tag}@example.org` };
 const cyRec = (await api('/actions/person.create', { name: 'Cy Example', email: cy.email, address: '9 Fraser Hwy', city: 'Surrey' })).json.person;
 const today = await desk.evaluate(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }));
 await api('/actions/gift.log', { person_id: cyRec.id, amount_cents: 140000, date: today, method: 'cheque' });
 const sessionsBefore = fake.sessions.size;
-await donate({ ...cy, amount: 50, shots: null });
+await donate({ ...cy, amount: 1500, shots: null });
 const refusal = (await phone.locator('.err').innerText({ timeout: 8000 }).catch(() => '')).trim();
-check('over the limit: refused on the form, in plain words', refusal === `That would take you over this year’s $1,429.70 limit for contributions to the city council slate. Try a smaller amount.`, refusal);
+check('over the year’s limit at once: refused on the form, in plain words', refusal === `That’s more than this year’s $1,429.70 limit for contributions to the city council slate. Try a smaller amount.`, refusal);
 check('over the limit: never their own giving, and Stripe never asked', !/1,400/.test(refusal) && fake.sessions.size === sessionsBefore, `${fake.sessions.size} vs ${sessionsBefore}`);
 await phone.screenshot({ path: `${SHOTS}/6-over-limit-refused-phone.png`, fullPage: false });
+// Cy, $1,400 given, giving $50: off to pay as anyone would be — the form
+// never tells a stranger what someone gave (the payment is checked when it lands).
+await donate({ ...cy, amount: 50 });
+check('a donor near their limit is never refused on the form: off to Stripe’s page', phone.url().startsWith(`${fake.url}/pay/`), phone.url());
 // No declaration: refused too.
 await donate({ first: 'Di', last: 'Example', email: `di.${tag}@example.org`, declare: false });
 const noDecl = (await phone.locator('.err').innerText({ timeout: 8000 }).catch(() => '')).trim();

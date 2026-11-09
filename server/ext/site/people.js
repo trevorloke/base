@@ -10,6 +10,12 @@
 // and an email typed there is kept beside the record (attrs.typed_email) for
 // the desk. Nothing on file is ever overwritten, and the answer never says
 // whether someone was on file.
+//
+// Money (join, donate: { strong: true }) is only ever the same email's, or
+// someone new's: a name and phone, or a name and postal code, is no proof
+// of who is paying — the gift, its receipt and the year's limit would land
+// on a voter who never gave (and two people with one name at one address
+// are common).
 import { randomInt } from 'node:crypto';
 import { newId } from '../../lib/events.js';
 import { civic } from '../../lib/address.js';
@@ -49,8 +55,9 @@ const byNameAndPostal = async (tx, ws, name, postal) => {
 };
 
 // who: { first_name, last_name, email, phone, postal, address, city }
+// strong: only the same email matches (money); else someone new
 // → { id, name, created, by: 'email' | 'phone' | 'postal' | null }
-export const takePerson = async (tx, ws, who, { tags = [], source = 'website' }, emit) => {
+export const takePerson = async (tx, ws, who, { tags = [], source = 'website', strong = false }, emit) => {
   const email = lower(who.email);
   const phone = norm(who.phone);
   const cut = splitFirst(norm(who.first_name));
@@ -63,8 +70,8 @@ export const takePerson = async (tx, ws, who, { tags = [], source = 'website' },
   const city = norm(who.city);
 
   let found = email ? await matchWebsitePerson(tx, ws, { email }) : null;
-  if (!found && phone && typedName) found = await matchWebsitePerson(tx, ws, { phone, name: typedName });
-  if (!found && typedName && postal) {
+  if (!found && !strong && phone && typedName) found = await matchWebsitePerson(tx, ws, { phone, name: typedName });
+  if (!found && !strong && typedName && postal) {
     const r = await byNameAndPostal(tx, ws, typedName, postal);
     if (r) found = { person: r, by: 'postal' };
   }
@@ -133,13 +140,16 @@ export const takePerson = async (tx, ws, who, { tags = [], source = 'website' },
 };
 
 // ── Referral codes: one per person, for /r/:code ──
+// Looked up through persons_ref_code_idx (sql.js), a partial index: a query
+// uses it only when it says the index's own condition (attrs ? 'ref_code'),
+// so every lookup here does — without it each one reads the whole voter file.
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 export const CODE_RE = /^[a-z0-9]{6,16}$/;
 const makeCode = () => Array.from({ length: 8 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
 const freshCode = async (tx, ws) => {
   for (let i = 0; i < 8; i += 1) {
     const code = makeCode();
-    const taken = (await tx.query("select 1 from persons where workspace_id = $1 and attrs->>'ref_code' = $2 limit 1", [ws, code])).rows[0];
+    const taken = (await tx.query("select 1 from persons where workspace_id = $1 and attrs ? 'ref_code' and attrs->>'ref_code' = $2 limit 1", [ws, code])).rows[0];
     if (!taken) return code;
   }
   throw new Error('no free referral code');
@@ -164,7 +174,7 @@ export const personOfCode = async (q, ws, code) => {
   if (!CODE_RE.test(String(code || ''))) return null;
   const r = (await q.query(
     `select id, deleted_at, attrs->>'merged_into' as merged_into from persons
-      where workspace_id = $1 and attrs->>'ref_code' = $2 order by deleted_at nulls first, created_at limit 1`,
+      where workspace_id = $1 and attrs ? 'ref_code' and attrs->>'ref_code' = $2 order by deleted_at nulls first, created_at limit 1`,
     [ws, code],
   )).rows[0];
   if (!r) return null;

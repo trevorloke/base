@@ -19,6 +19,7 @@
 // Every href is the site's own path (/donate, /#m-join) or http(s), mailto:
 // or tel:; the renderer puts ctx.root in front of the site's own.
 import { z } from 'zod';
+import { consentName, consentWords } from '../../../shared/site/wording.js';
 
 export const KINDS = ['newsletter', 'petition', 'pledge', 'volunteer', 'rsvp', 'contact', 'join', 'donate'];
 
@@ -103,16 +104,11 @@ export const hostOf = (raw) => {
   return HOST_RE.test(s) ? s : null;
 };
 
-// The words next to the consent boxes, stored with every consent event.
-// The renderer shows exactly these (site.consent), so what a person saw is
-// what the record says.
-export const consentWording = (org) => {
-  const name = String(org?.shortName || org?.name || '').trim() || 'We';
-  return {
-    email: `Yes, ${name} can email me news and ways to help. I can unsubscribe at any time.`,
-    sms: `Yes, ${name} can text me about events and volunteering. Reply STOP at any time. Message and data rates may apply.`,
-  };
-};
+// The words next to the consent boxes (and the newsletter's button), stored
+// with every consent event. The renderer shows exactly these (site.consent;
+// shared/site/wording.js makes them for both), so what a person saw is what
+// the record says.
+export const consentWording = (org, seo) => consentWords(consentName(org, seo));
 
 // Tags are at most 40 characters (person.update's rule): a long campaign
 // title is cut at a word, the same way every time.

@@ -116,6 +116,12 @@ export function SiteForm(props) {
       const q = new URLSearchParams(window.location.search);
       setTrack((t) => ({ ref: t.ref || str(q.get('ref')).slice(0, 64), source: t.source || str(q.get('source')).slice(0, 80) }));
     } catch { /* no address to read */ }
+    // Back from the payment page, the browser may show this page as it was
+    // left (the back/forward cache): what is sent from it now is a new form,
+    // not a retry of the one that went to pay.
+    const back = (e) => { if (e.persisted) { key.current = newKey(); setPending(false); } };
+    window.addEventListener('pageshow', back);
+    return () => window.removeEventListener('pageshow', back);
   }, []);
   useEffect(() => {
     if (done && justSent.current) thanksRef.current?.focus();
@@ -224,6 +230,9 @@ export function SiteForm(props) {
       const json = await res.json().catch(() => ({}));
       if (res.ok && json?.ok) {
         rememberMe(body);
+        // Answered: this key is spent. A form sent from here again (back
+        // from the payment page with another amount, say) is a new one.
+        key.current = newKey();
         const url = str(json.checkout_url);
         if (url) {
           let target = null;
@@ -233,7 +242,6 @@ export function SiteForm(props) {
           } catch { /* not a link */ }
           if (target) { window.location.assign(target); return; }
         }
-        key.current = newKey();
         justSent.current = true;
         setDone(true);
         return;
