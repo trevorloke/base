@@ -205,7 +205,7 @@ test('a mistyped STARBASE_TILE_* is shown to desk roles, not only logged', async
   // A volunteer's browser never gets it.
   const v = (await vol.get('/api/map/config')).json;
   assert.equal(v.setup, undefined);
-  assert.deepEqual(Object.keys(v), ['tiles']);
+  assert.deepEqual(Object.keys(v), ['tiles', 'views'], 'a volunteer: the tiles and the looks, never the setup');
 
   setEnv({ STARBASE_TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', STARBASE_TILE_MAX_ZOOM: null });
   setup = (await c.get('/api/map/config')).json.setup;

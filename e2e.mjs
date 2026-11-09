@@ -190,7 +190,7 @@ await sleep(300);
 await page.click('.map-filter-btn');
 await page.click('.map-fsheet .map-vchip:has-text("Muted")');
 await sleep(300);
-const look = async () => page.$eval('.map-canvas', (el) => [el.className, getComputedStyle(el.querySelector('.leaflet-tile-pane')).filter]);
+const look = async () => page.$eval('.map-canvas', (el) => [el.closest('.map-page').className, getComputedStyle(el.querySelector('.leaflet-tile-pane')).filter]);
 let lk = await look();
 check('Show → Map → Muted: the tiles go grey', /map-view--muted/.test(lk[0]) && /grayscale/.test(lk[1]), lk.join(' · '));
 await page.screenshot({ path: `${SHOTS}/map-view-muted.png` });

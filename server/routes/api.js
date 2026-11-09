@@ -165,21 +165,24 @@ const turfsOnly = (ctx) => ctx.role === 'volunteer'
   && ctx.workspace?.settings?.permissions?.volunteerDoors === 'turfs'
   && decide(ctx.perms, 'map') !== true;
 
+// Up to MAP_ALL located people the map loads them all at once (and keeps a
+// copy on the phone). A bigger list — a city's voter file — is loaded by the
+// part of the map in view (?bbox=south,west,north,east, at most MAP_VIEW
+// people), and from further out as a count per patch (/map/density).
+const MAP_ALL = () => Number(process.env.STARBASE_MAP_ALL) || 5000;
+const MAP_VIEW = 8000;
+const bboxParam = (v) => {
+  const b = String(v || '').split(',').map(Number);
+  return b.length === 4 && b.every(Number.isFinite) && b[0] <= b[2] && b[1] <= b[3] && b[0] >= -90 && b[2] <= 90 ? b : null;
+};
+const DOOR_COLS = 'id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags';
+
 app.get('/map/doors', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
-  let persons = (await db.query(
-    `select id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags
-     from persons where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
-     order by lower(address), lower(name) limit 5000`,
-    [ctx.workspaceId],
-  )).rows.map(personRow);
-  let signs = (await db.query(
-    `select id, person_id, address, lat, lng, kind, status from signs
-     where workspace_id = $1 and status <> 'removed'`,
-    [ctx.workspaceId],
-  )).rows;
   if (turfsOnly(ctx)) {
+    // Only the turfs they walk (and their own record): read by the turfs'
+    // corners, then kept to the outlines.
     const rings = (await db.query(
       `select t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
        where t.workspace_id = $1 and t.deleted_at is null`,
@@ -187,15 +190,98 @@ app.get('/map/doors', async (c) => {
     )).rows.map((t) => parseJson(t.polygon, []).map(([lat, lng]) => [Number(lat), Number(lng)])).filter((r) => r.length >= 3);
     const inTurf = (lat, lng) => lat != null && rings.some((r) => pointInPolygon(Number(lat), Number(lng), r));
     const mine = loginEmail(ctx);
-    persons = persons.filter((p) => inTurf(p.lat, p.lng) || (mine && String(p.email || '').trim().toLowerCase() === mine));
-    signs = signs.filter((s) => inTurf(s.lat, s.lng));
+    const boxes = rings.map(boxOf).filter(Boolean);
+    const params = [ctx.workspaceId, mine || ''];
+    const near = boxes.map((b) => {
+      params.push(...b);
+      const k = params.length;
+      return `(lat between $${k - 3} and $${k - 1} and lng between $${k - 2} and $${k})`;
+    });
+    const persons = (await db.query(
+      `select ${DOOR_COLS} from persons
+       where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
+         and (${[...near, `($2 <> '' and lower(email) = $2)`].join(' or ')})
+       order by lower(address), lower(name) limit 20000`,
+      params,
+    )).rows.map(personRow).filter((p) => inTurf(p.lat, p.lng) || (mine && String(p.email || '').trim().toLowerCase() === mine));
+    const signs = (await db.query(
+      `select id, person_id, address, lat, lng, kind, status from signs where workspace_id = $1 and status <> 'removed'`,
+      [ctx.workspaceId],
+    )).rows.filter((s) => inTurf(s.lat, s.lng));
     return c.json({ persons: persons.map(forViewer(ctx)), signs, unlocated: 0, scope: 'turfs', turfs: rings.length });
   }
   const unlocated = (await db.query(
     `select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and address is not null and lat is null`,
     [ctx.workspaceId],
   )).rows[0].n;
-  return c.json({ persons: persons.map(forViewer(ctx)), signs, unlocated });
+  const bbox = bboxParam(c.req.query('bbox'));
+  if (bbox) {
+    const rows = (await db.query(
+      `select ${DOOR_COLS} from persons
+       where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5
+       limit ${MAP_VIEW + 1}`,
+      [ctx.workspaceId, ...bbox],
+    )).rows;
+    const signs = (await db.query(
+      `select id, person_id, address, lat, lng, kind, status from signs
+       where workspace_id = $1 and status <> 'removed' and lat between $2 and $4 and lng between $3 and $5`,
+      [ctx.workspaceId, ...bbox],
+    )).rows;
+    return c.json({ persons: rows.slice(0, MAP_VIEW).map(personRow).map(forViewer(ctx)), signs, unlocated, scope: 'view', truncated: rows.length > MAP_VIEW });
+  }
+  const total = (await db.query(
+    'select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null',
+    [ctx.workspaceId],
+  )).rows[0].n;
+  // Too many for one load: the map asks by the part in view instead.
+  if (total > MAP_ALL()) {
+    // Where they live, so the map opens on them: the middle 98% (a few
+    // stray places far away don't zoom the whole map out).
+    const b = (await db.query(
+      `select percentile_disc(0.01) within group (order by lat) as s, percentile_disc(0.01) within group (order by lng) as w,
+              percentile_disc(0.99) within group (order by lat) as n, percentile_disc(0.99) within group (order by lng) as e
+       from persons where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null`,
+      [ctx.workspaceId],
+    )).rows[0];
+    const bounds = [b.s, b.w, b.n, b.e].map(Number);
+    return c.json({ persons: [], signs: [], unlocated, big: true, total, bounds: bounds.every(Number.isFinite) ? bounds : null });
+  }
+  const persons = (await db.query(
+    `select ${DOOR_COLS} from persons
+     where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
+     order by lower(address), lower(name)`,
+    [ctx.workspaceId],
+  )).rows.map(personRow);
+  const signs = (await db.query(
+    `select id, person_id, address, lat, lng, kind, status from signs
+     where workspace_id = $1 and status <> 'removed'`,
+    [ctx.workspaceId],
+  )).rows;
+  return c.json({ persons: persons.map(forViewer(ctx)), signs, unlocated, total });
+});
+
+// From further out, a big list as a count per patch of the map, by rating:
+// ?bbox=south,west,north,east&cell=dlat,dlng → cells [[row, col, rating, n]]
+// (the patch is row*dlat…, col*dlng…). Not for a map kept to its turfs.
+app.get('/map/density', async (c) => {
+  const ctx = c.get('ctx');
+  const db = c.get('db');
+  if (turfsOnly(ctx)) return c.json({ error: 'your map shows your turfs' }, 403);
+  const bbox = bboxParam(c.req.query('bbox'));
+  const cell = String(c.req.query('cell') || '').split(',').map(Number);
+  if (!bbox || cell.length !== 2 || !cell.every((x) => Number.isFinite(x) && x > 0)) return c.json({ error: 'bbox and cell, please' }, 400);
+  // A sane grid: about a big screen's worth of patches (only those with
+  // people in them come back).
+  const span = ((bbox[2] - bbox[0]) / cell[0]) * ((bbox[3] - bbox[1]) / cell[1]);
+  if (span > 150000) return c.json({ error: 'cells too small for that area' }, 400);
+  const rows = (await db.query(
+    `select floor(lat / $6)::int as y, floor(lng / $7)::int as x, coalesce(rating, '') as r, count(*)::int as n
+     from persons
+     where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5
+     group by 1, 2, 3`,
+    [ctx.workspaceId, ...bbox, cell[0], cell[1]],
+  )).rows;
+  return c.json({ cell, cells: rows.map((r) => [r.y, r.x, r.r, r.n]) });
 });
 
 app.get('/persons/:id', async (c) => {
@@ -271,16 +357,23 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // pass_tries / pass_last_outcome: this person's door contacts in the open
 // pass (passId; ext/passes) — how many tries (every door contact; a lit drop is a not-home too)
 // and the latest outcome. 0 / null with no pass open.
-const loadLocated = async (db, ws, passId = null) => (await db.query(
+const loadLocated = async (db, ws, passId = null, box = null) => (await db.query(
   `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags, p.voted_at,
           (select max(c.created_at) from contacts c where c.person_id = p.id) as last_contact_at,
           (select c.outcome from contacts c where c.person_id = p.id order by c.created_at desc limit 1) as last_outcome,
           exists (select 1 from contacts c where c.person_id = p.id and c.channel = 'door') as door_knocked,
           (select count(*)::int from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid) as pass_tries,
           (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid order by c.created_at desc limit 1) as pass_last_outcome
-   from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.lng is not null`,
-  [ws, passId],
+   from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.lng is not null
+     ${box ? 'and p.lat between $3 and $5 and p.lng between $4 and $6' : ''}`,
+  box ? [ws, passId, ...box] : [ws, passId],
 )).rows.map((p) => ({ ...p, tags: parseJ(p.tags, []), door_knocked: !!p.door_knocked }));
+// A polygon's corners, [south, west, north, east] (null for no polygon).
+const boxOf = (polygon) => {
+  const pts = (polygon || []).map(([lat, lng]) => [Number(lat), Number(lng)]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b));
+  if (pts.length < 3) return null;
+  return [Math.min(...pts.map((x) => x[0])), Math.min(...pts.map((x) => x[1])), Math.max(...pts.map((x) => x[0])), Math.max(...pts.map((x) => x[1]))];
+};
 
 // Without a pass a door is done once someone there has been knocked (a
 // 'door' contact, any outcome). A call or a text alone never finishes a door:
@@ -319,18 +412,20 @@ app.get('/turfs', async (c) => {
     [ctx.workspaceId],
   )).rows;
   const pass = await openPass(db, ctx.workspaceId);
-  const located = await loadLocated(db, ctx.workspaceId, pass?.id);
-  return c.json({
-    turfs: turfs.map((t) => {
-      const polygon = parseJ(t.polygon, []);
-      return {
-        id: t.id, name: t.name, color: t.color, notes: t.notes, polygon, created_at: t.created_at,
-        members: members.filter((m) => m.turf_id === t.id).map(({ id, name }) => ({ id, name })),
-        ...turfStats(polygon, located, pass),
-      };
-    }),
-    pass,
-  });
+  // Each turf reads only the people inside its own corners (an index finds
+  // them), never the whole list: a city-wide voter file stays quick.
+  const out = [];
+  for (const t of turfs) {
+    const polygon = parseJ(t.polygon, []);
+    const box = boxOf(polygon);
+    const located = box ? await loadLocated(db, ctx.workspaceId, pass?.id, box) : [];
+    out.push({
+      id: t.id, name: t.name, color: t.color, notes: t.notes, polygon, created_at: t.created_at,
+      members: members.filter((m) => m.turf_id === t.id).map(({ id, name }) => ({ id, name })),
+      ...turfStats(polygon, located, pass),
+    });
+  }
+  return c.json({ turfs: out, pass });
 });
 
 app.get('/turfs/:id/walk', async (c) => {
@@ -346,7 +441,8 @@ app.get('/turfs/:id/walk', async (c) => {
   }
   const polygon = parseJ(t.polygon, []);
   const pass = await openPass(db, ctx.workspaceId);
-  const located = await loadLocated(db, ctx.workspaceId, pass?.id);
+  const box = boxOf(polygon);
+  const located = box ? await loadLocated(db, ctx.workspaceId, pass?.id, box) : [];
   const doors = walkOrder(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))).filter((d) => inPass(d, pass)));
   const view = forViewer(ctx);
   // Each door's signs (requested or up), matched the way the map matches

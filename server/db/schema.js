@@ -83,6 +83,7 @@ alter table persons add column if not exists house_number text;
 create index if not exists persons_ws_name_idx on persons (workspace_id, lower(name)) where deleted_at is null;
 create index if not exists persons_ws_email_idx on persons (workspace_id, lower(email)) where deleted_at is null;
 create index if not exists persons_ws_addr_idx on persons (workspace_id, lower(address)) where deleted_at is null;
+create index if not exists persons_ws_geo_idx on persons (workspace_id, lat, lng) where deleted_at is null and lat is not null;
 -- The import's candidate lookups (routes/data.js), one per way a row matches:
 -- name + phone digits, name + street, and a name with nothing else on file.
 -- Names and streets with case, spaces and punctuation stripped — looser than

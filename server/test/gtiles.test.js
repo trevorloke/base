@@ -114,5 +114,10 @@ test('other looks: Satellite and Terrain offered with Google on; each its own se
   assert.deepEqual(made, ['satellite', 'roadmap'], 'one satellite session reused; bogus → the standard look');
   delete process.env.GOOGLE_MAPS_TILES;
   const off = await (await get('/api/map/config', mgr.cookie)).json();
-  assert.equal(off.views, undefined, 'OpenStreetMap: no provider looks (Muted and Dark are the phone’s own)');
+  assert.deepEqual(off.views.map((v) => [v.key, v.label]), [['clean', 'Clean']], 'OpenStreetMap: Clean, a quiet map of the same streets (Muted and Dark are the phone’s own)');
+  assert.match(off.views[0].url, /^https:\/\/\{s\}\.basemaps\.cartocdn\.com\/light_all\//);
+  assert.match(off.views[0].attribution, /OpenStreetMap/);
+  process.env.STARBASE_TILE_CLEAN = 'off';
+  assert.equal((await (await get('/api/map/config', mgr.cookie)).json()).views, undefined, 'STARBASE_TILE_CLEAN=off leaves it out');
+  delete process.env.STARBASE_TILE_CLEAN;
 });

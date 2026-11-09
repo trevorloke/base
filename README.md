@@ -486,10 +486,26 @@ tiles took on the map's filter sheet (*Map tiles: OpenStreetMap — custom
 address ignored*).
 
 **The map's look** is each person's own (Show → *Map*, kept on that
-browser): *Standard*; *Muted* (grey streets, so the pins stand out) and
+browser): *Clean* (the default on the standard tiles: CARTO's light map of
+the same OpenStreetMap streets, without shop icons, parking lots or house
+numbers — `STARBASE_TILE_CLEAN=off` leaves it out; check CARTO's terms for
+your volume); *Standard*; *Muted* (grey streets, so the doors stand out) and
 *Dark* (for night), drawn over any tiles; and with Google Maps on, its
 other looks too — *Satellite*, *Terrain* (or *Streets*), each through the
 same key.
+
+**Doors on the map.** From street zoom (18) every door is a pin, with its
+household and sign flags. Further out every door is a small dot in its
+band's colour (support, undecided, opposed; slate grey for not asked yet),
+drawn on canvas tiles so a whole voter file pans smoothly; at 16 a door
+with a sign flies a little flag, at 17 a household's size is on its dot. A
+tap near a dot opens that door (or zooms in, further out). Up to
+`STARBASE_MAP_ALL` (5,000) located people the map loads them all at once
+(and keeps a copy on the phone); a bigger list loads by the part of the map
+in view (up to 8,000 at a time), and from further out as patches of people:
+a grey disc for the people there, a coloured disc inside it for the share
+rated. It opens fitted to where your voters live. Turfs and walk lists read
+only the people inside each turf.
 
 **Google Maps** instead: `GOOGLE_MAPS_TILES=1` with a `GOOGLE_MAPS_SERVER_KEY`
 that has the **Map Tiles API** enabled (`GOOGLE_MAPS_TILE_TYPE` roadmap |

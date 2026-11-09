@@ -42,6 +42,7 @@ import DoorCard, { AddDoorForm, SIGN_LABEL, doorTitle, patchDoors } from '../com
 import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
+import { DotLayer, DensityLayer, cellsFrom, cellOf, nearest, CELL_PX } from './mapDots.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
@@ -95,16 +96,20 @@ const writeSignsPref = (v) => { try { localStorage.setItem(SIGNS_PREF, JSON.stri
 // (Satellite, Terrain) from /api/map/config views.
 const VIEW_PREF = `${NS}map:view`;
 const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: 'Muted' }, { key: 'dark', label: 'Dark' }];
-// Muted by default: the base map's own colours stay quiet, so the pins'
-// colours (support, undecided, opposed) are what you see. Standard and
-// Dark are a tap away (Show → Map), and a choice made is kept.
-const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'muted'; } catch { return 'muted'; } };
+// Clean by default (a light, quiet base map from the server's views — no
+// shop icons, parking lots or house numbers), else Muted: the base map stays
+// in the background, so the doors' colours (support, undecided, opposed)
+// are what you see. Standard and Dark are a tap away (Show → Map), and a
+// choice made is kept.
+const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'clean'; } catch { return 'clean'; } };
 const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch { /* storage blocked */ } };
 
 const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const norm = (s) => String(s || '').trim().toLowerCase();
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+// 300049 → "300,049" (a whole voter list's counts).
+const num = (n) => (n == null ? '' : Number(n).toLocaleString('en-CA'));
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Leaflet hands back unwrapped longitudes after panning round the world; the
 // server's zod schema wants lat ∈ [-90, 90], lng ∈ [-180, 180].
@@ -235,12 +240,24 @@ const CLUSTER_PX = 36;
 // edge pins (half a 48px hit box), so neighbours land far enough apart.
 const PIN_INSET = 20;
 const CLUSTER_OFF_ZOOM = 19; // everything apart (or the tiles' max zoom, if lower)
-// How near two doors may be before they share a bubble, by zoom: a whole
-// city reads as a handful of bubbles, a neighbourhood as dots, a street as
-// pins. (Below PIN_ZOOM a lone door is a small dot in its band's colour;
-// from PIN_ZOOM it is the full pin, with its household and sign flags.)
-const clusterRadius = (zoom) => (zoom <= 12 ? 90 : zoom <= 14 ? 72 : zoom <= 16 ? 56 : CLUSTER_PX);
-const PIN_ZOOM = 17;
+// From street zoom (PIN_ZOOM) every door is a full pin, with its household
+// and sign flags; pins that would overlap (an apartment block) share a
+// bubble until they come apart. Further out, every door is a small dot in
+// its band's colour, drawn on canvas tiles (mapDots.js) — no numbers, no
+// piles. A list too big to load at once (the server says big) is loaded by
+// the part of the map in view from DETAIL_ZOOM, and further out still is
+// drawn as patches of people (GET /api/map/density).
+const clusterRadius = () => CLUSTER_PX;
+// 18: where neighbouring houses on a suburban street come apart as pins
+// (about 38px apart; at 17 they'd sit on each other).
+const PIN_ZOOM = 18;
+const DETAIL_ZOOM = 15;
+// The part of the map to ask for, snapped outward to a grid so a short pan
+// asks again only when it leaves the box.
+const snapBox = (b, step) => [
+  Math.floor(b.getSouth() / step) * step, Math.floor(b.getWest() / step) * step,
+  Math.ceil(b.getNorth() / step) * step, Math.ceil(b.getEast() / step) * step,
+].map((v) => Number(v.toFixed(4)));
 
 // The service worker keeps tiles from this provider once they've been seen
 // (never fetched ahead — tile servers' rules).
@@ -277,18 +294,6 @@ function pinIcon(door, selected, signOk = () => true) {
     html: `<div class="${cls}">${door.band === 'unrated' ? '' : '<span class="map-pin__dot"></span>'}${household}</div>${flags}`,
     iconSize: [48, 48],
     iconAnchor: [24 - door.offset[0], 42 - door.offset[1]],
-  });
-}
-
-// A lone door below street zoom: a dot in its band's colour (household and
-// flags show on the full pin, closer in), in the same 48px hit box.
-function dotIcon(door, selected) {
-  const cls = ['map-dot', `map-dot--${door.band}`, door.persons.length > 1 ? 'map-dot--multi' : '', selected ? 'map-dot--selected' : ''].filter(Boolean).join(' ');
-  return L.divIcon({
-    className: 'map-pin-wrap map-dot-wrap',
-    html: `<div class="${cls}"></div>`,
-    iconSize: [48, 48],
-    iconAnchor: [24 - door.offset[0], 24 - door.offset[1]],
   });
 }
 
@@ -848,7 +853,7 @@ function FilterOpt({ f, filter, onFilter, counts, autoFocus }) {
     >
       <span className="map-fopt__dot" aria-hidden="true" />
       <span className="map-fopt__label">{f.short || f.label}</span>
-      <span className="map-fopt__n mono">{counts[f.key] ?? 0}</span>
+      <span className="map-fopt__n mono">{counts[f.key] === null ? '' : counts[f.key] ?? 0}</span>
     </button>
   );
 }
@@ -882,7 +887,7 @@ function SignChips({ signShow, onSigns, signCounts }) {
 }
 
 function FilterSheet({
-  filters, filter, onFilter, counts, showTurfs, onTurfs, turfCount, desk, onDraw, unlocated, onPlace, onClose, tilesNote = null,
+  filters, filter, onFilter, counts, showTurfs, onTurfs, turfCount, desk, onDraw, unlocated, onPlace, onClose, tilesNote = null, countsNote = null,
   sharing = false, onShare = null, signShow = null, onSigns = null, signCounts = {},
   views = [], view = 'standard', onView = null,
 }) {
@@ -966,6 +971,7 @@ function FilterSheet({
             )}
           </div>
         )}
+        {countsNote && <p className="map-fsheet__tiles">{countsNote}</p>}
         {desk && tilesNote && <p className="map-fsheet__tiles">{tilesNote}</p>}
       </div>
     </>
@@ -995,6 +1001,9 @@ export default function MapPage() {
   const onLongPressRef = useRef(null);
   const onPinClickRef = useRef(null);
   const onClusterClickRef = useRef(null);
+  const onDotTapRef = useRef(null);    // a tap near a dot or patch (canvas: the map asks)
+  const dotItemsRef = useRef({ doors: [], cells: [] });
+  const jumpedToRef = useRef(null);    // big list: the person we flew to, to load their door
   const onSignClickRef = useRef(null);
   const setParamsRef = useRef(null);
   const onTurfClickRef = useRef(null);
@@ -1058,10 +1067,35 @@ export default function MapPage() {
     queryKey: ['doors'], queryFn: () => apiGet('/map/doors'), placeholderData: keepPreviousData, ...phoneCopy(me, 'doors'),
   });
   useKeepCopy(me, 'doors', doorsQ);
+  // A list too big for one load: the doors in view (close in), or patches
+  // of people (further out), asked for as the map moves.
+  const big = Boolean(doorsQ.data?.big);
+  const detail = !big || (zoom != null && zoom >= DETAIL_ZOOM);
+  const viewBox = useMemo(
+    () => (big && viewBounds && zoom != null ? snapBox(viewBounds, zoom >= DETAIL_ZOOM ? 0.005 : 0.02) : null),
+    [big, viewBounds, zoom],
+  );
+  const viewQ = useQuery({
+    queryKey: ['doors', 'view', viewBox?.join(',')],
+    queryFn: () => apiGet(`/map/doors?bbox=${viewBox.join(',')}`),
+    enabled: Boolean(big && detail && viewBox),
+    placeholderData: keepPreviousData,
+    staleTime: 20_000,
+  });
+  const zInt = zoom == null ? null : Math.floor(zoom);
+  const cell = zInt == null ? null : cellOf(zInt, Math.round(viewBounds ? viewBounds.getCenter().lat : 49));
+  const densQ = useQuery({
+    queryKey: ['doors', 'density', zInt, viewBox?.join(',')],
+    queryFn: () => apiGet(`/map/density?bbox=${viewBox.join(',')}&cell=${cell.join(',')}`),
+    enabled: Boolean(big && !detail && viewBox && cell),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
   const outbox = useOutbox();
-  const doorsData = useMemo(() => applyOutbox(doorsQ.data, outbox.items), [doorsQ.data, outbox.items]);
+  const baseDoors = big ? (detail ? viewQ.data : null) : doorsQ.data;
+  const doorsData = useMemo(() => applyOutbox(baseDoors, outbox.items), [baseDoors, outbox.items]);
   const { doors, byPerson, orphanSigns } = useMemo(() => (doorsData ? buildDoors(doorsData) : EMPTY_MODEL), [doorsData]);
-  const unlocated = doorsData?.unlocated ?? 0;
+  const unlocated = (big ? doorsQ.data?.unlocated : doorsData?.unlocated) ?? 0;
   const doorsCopy = showingCopy(doorsQ);
 
   // Which tiles to draw (kept on the phone too, so offline asks for the same
@@ -1076,7 +1110,9 @@ export default function MapPage() {
   const setView = (v) => { setViewPick(v); writeViewPref(v); };
   // A provider look this server no longer offers falls back to Standard.
   const providerView = views.find((v) => v.key === viewPick) || null;
-  const view = providerView || SHADES.some((s) => s.key === viewPick) ? viewPick : 'standard';
+  // Clean comes from the server; where it isn't offered (Google tiles, the
+  // campaign's own provider), Muted.
+  const view = providerView || SHADES.some((s) => s.key === viewPick) ? viewPick : viewPick === 'clean' ? 'muted' : 'standard';
   const tiles = providerView ? { url: providerView.url, attribution: providerView.attribution, maxZoom: providerView.maxZoom } : baseTiles;
   const offZoom = Math.min(CLUSTER_OFF_ZOOM, tiles?.maxZoom || CLUSTER_OFF_ZOOM);
   const offZoomRef = useRef(offZoom);
@@ -1156,8 +1192,31 @@ export default function MapPage() {
       if (d.persons.some((p) => bandOf(p.rating) === 'support' && !hasVoted(p))) c.gotv += 1;
     }
     for (const [code, n] of Object.entries(byCode)) c[`r:${code}`] = n;
+    if (big && !detail) {
+      // People in view, by rating (signs, voted and the rest need a closer look).
+      const p = { all: 0, mine: null, support: 0, undecided: 0, opposed: 0, unrated: 0, signs: null, voted: null, gotv: null };
+      for (const [, , r, n] of densQ.data?.cells || EMPTY_LIST) {
+        p.all += n;
+        p[r ? bandOf(r) : 'unrated'] += n;
+        if (r) p[`r:${r}`] = (p[`r:${r}`] || 0) + n;
+      }
+      return p;
+    }
     return c;
-  }, [doors, mineKeys, hasVoted, signOk, byCode]);
+  }, [doors, mineKeys, hasVoted, signOk, byCode, big, detail, densQ.data]);
+  // A big list from far out: the patches the filter keeps (by rating only).
+  const densityKeep = useMemo(() => {
+    if (filter === 'all') return () => true;
+    if (filter === 'unrated') return (r) => !r;
+    if (filter === 'support' || filter === 'undecided' || filter === 'opposed') return (r) => Boolean(r) && bandOf(r) === filter;
+    if (filter.startsWith('r:')) return (r) => r === filter.slice(2);
+    return null; // mine, signs, voted, gotv: only doors close in can say
+  }, [filter]);
+  const densityCells = useMemo(
+    () => (big && !detail ? cellsFrom(densQ.data, bandOf, densityKeep || (() => true)) : EMPTY_LIST),
+    [big, detail, densQ.data, densityKeep],
+  );
+  const zoomInFor = big && !detail && !densityKeep ? labelOf(filter) : null;
   // Every sign on the map, by status and by kind (for the Signs chips).
   const signCounts = useMemo(() => {
     const c = {};
@@ -1169,13 +1228,22 @@ export default function MapPage() {
   }, [doors, orphanSigns]);
 
   // Deep link to someone who has no pin yet → offer to place them.
-  const wantsMissing = Boolean(personParam && doorsQ.data && !selectedDoor && !doorsQ.isFetching);
+  const wantsMissing = Boolean(personParam && doorsQ.data && !selectedDoor && !doorsQ.isFetching && !(big && detail && (viewQ.isFetching || !viewQ.data)));
   const missingQ = useQuery({
     queryKey: ['person', personParam],
     queryFn: () => apiGet(`/persons/${personParam}`),
     enabled: wantsMissing,
   });
-  const missingPerson = wantsMissing ? missingQ.data?.person || null : null;
+  const missingFetched = wantsMissing ? missingQ.data?.person || null : null;
+  // On a big list they may simply be outside the part loaded: go to them.
+  const missingPerson = missingFetched && !(big && missingFetched.lat != null) ? missingFetched : null;
+  useEffect(() => {
+    const map = mapRef.current;
+    const p = missingFetched;
+    if (!big || !map || !p || p.lat == null || jumpedToRef.current === p.id) return;
+    jumpedToRef.current = p.id;
+    map.setView([Number(p.lat), Number(p.lng)], PIN_ZOOM, { animate: false });
+  }, [big, missingFetched]);
   const missingGone = wantsMissing && missingQ.isError;
 
   const turfById = useMemo(() => new Map(turfs.map((t) => [t.id, t])), [turfs]);
@@ -1397,6 +1465,28 @@ export default function MapPage() {
       const z = Math.min(offZoomRef.current, Math.max(map.getZoom() + 2, map.getBoundsZoom(b.pad(0.5))));
       map.setView(b.getCenter(), z, { animate: !reducedMotion() });
     };
+    // A tap near a dot or a patch (they're drawn on canvas): true if it was
+    // one. In a mode (drawing, placing, adding) the tap is the map's.
+    onDotTapRef.current = (latlng) => {
+      const map = mapRef.current;
+      if (!map || mode) return false;
+      const z = map.getZoom();
+      if (z >= Math.min(PIN_ZOOM, offZoomRef.current)) return false; // pins take their own taps
+      const { doors: ds, cells } = dotItemsRef.current;
+      if (cells.length) {
+        const c = nearest(map, cells, latlng, CELL_PX);
+        if (!c) return false;
+        if (personParam || turfParam || signSel) select(null);
+        map.setView([c.lat, c.lng], Math.min(DETAIL_ZOOM + 1, z + 2), { animate: !reducedMotion() });
+        return true;
+      }
+      const d = nearest(map, ds, latlng, isPhone() ? 16 : 10);
+      if (!d) return false;
+      if (z >= DETAIL_ZOOM) { onPinClickRef.current?.(d); return true; }
+      if (personParam || turfParam || signSel) select(null);
+      map.setView([d.lat, d.lng], Math.min(PIN_ZOOM, z + 2), { animate: !reducedMotion() });
+      return true;
+    };
     onSignClickRef.current = (sign) => {
       if (mode) { onMapClickRef.current?.(L.latLng(Number(sign.lat), Number(sign.lng))); return; }
       if (personParam || turfParam) select(null);
@@ -1408,6 +1498,7 @@ export default function MapPage() {
     // mode the tap is a map tap; an open door card closes like on empty map.
     onTurfClickRef.current = (turf, latlng) => {
       if (mode) { onMapClickRef.current?.(latlng); return; }
+      if (onDotTapRef.current?.(latlng)) return; // a dot inside the turf
       if (personParam) { select(null); return; }
       if (pickerOpen || addAt || turfParam === turf.id) return;
       focusedTurfRef.current = turf.id; // they're looking right at it — no refit
@@ -1468,6 +1559,10 @@ export default function MapPage() {
     // Turf polygons sit under everything else; a turf being drawn sits over
     // the other vectors (pins and its corner dots are in the marker pane).
     map.createPane('turfs').style.zIndex = 350;
+    // Dots and patches above turf fills, under pins and the turf being drawn;
+    // they never take a tap themselves (the map asks onDotTapRef).
+    map.createPane('dots').style.zIndex = 380;
+    map.getPane('dots').style.pointerEvents = 'none';
     map.createPane('turfDraft').style.zIndex = 450;
     const layers = {
       turfs: L.layerGroup().addTo(map),
@@ -1476,12 +1571,31 @@ export default function MapPage() {
       doors: L.layerGroup().addTo(map),
       me: L.layerGroup().addTo(map),
       adding: L.layerGroup().addTo(map), // the new door's pin, while its form is open
+      dots: new DotLayer().addTo(map),
+      density: new DensityLayer().addTo(map),
+      chosen: L.layerGroup().addTo(map), // the open door's pin while the rest are dots
     };
-    map.on('click', (e) => onMapClickRef.current?.(e.latlng));
+    map.on('click', (e) => { if (!onDotTapRef.current?.(e.latlng)) onMapClickRef.current?.(e.latlng); });
+    // A pointer over a dot shows it's a tap (desktop).
+    let hoverFrame = 0;
+    map.on('mousemove', (e) => {
+      if (hoverFrame) return;
+      hoverFrame = requestAnimationFrame(() => {
+        hoverFrame = 0;
+        const z = map.getZoom();
+        const { doors: ds, cells } = dotItemsRef.current;
+        const hit = z < PIN_ZOOM && (cells.length ? nearest(map, cells, e.latlng, CELL_PX) : nearest(map, ds, e.latlng, 10));
+        map.getContainer().classList.toggle('is-over-dot', Boolean(hit));
+      });
+    });
     map.on('zoomend', () => setZoom(map.getZoom()));
     setZoom(map.getZoom());
     // What's on screen, with a margin: only those doors are drawn.
-    const seeBounds = () => setViewBounds(map.getBounds().pad(0.35));
+    const seeBounds = () => {
+      const b = map.getBounds();
+      map.getContainer().dataset.bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map((v) => v.toFixed(6)).join(',');
+      setViewBounds(b.pad(0.35));
+    };
     map.on('moveend', seeBounds);
     seeBounds();
     map.on('contextmenu', (e) => { e.originalEvent?.preventDefault?.(); onLongPressRef.current?.(e.latlng); });
@@ -1599,7 +1713,32 @@ export default function MapPage() {
 
   // Pins (or count bubbles) for the filtered doors, at this zoom. A selected
   // door inside a bubble is pulled out so its pin always shows.
-  const groups = useMemo(() => clusterDoors(visible, zoom, offZoom, viewBounds), [visible, zoom, offZoom, viewBounds]);
+  const pinsOn = zoom != null && zoom >= Math.min(PIN_ZOOM, offZoom);
+  const groups = useMemo(() => (pinsOn ? clusterDoors(visible, zoom, offZoom, viewBounds) : EMPTY_LIST), [pinsOn, visible, zoom, offZoom, viewBounds]);
+  // Below street zoom: every door a dot (the open one keeps its pin), or a
+  // big list's patches further out.
+  const dotDoors = useMemo(
+    () => (pinsOn || !detail ? EMPTY_LIST : visible.filter((d) => d.key !== selectedKey)),
+    [pinsOn, detail, visible, selectedKey],
+  );
+  useEffect(() => {
+    const layers = layersRef.current;
+    if (!layers) return;
+    dotItemsRef.current = { doors: dotDoors, cells: densityCells };
+    layers.dots.setItems(dotDoors, { dark: view === 'dark', flagged: (d) => d.signs.some(signOk) });
+    layers.density.setItems(densityCells, { dark: view === 'dark' });
+  }, [dotDoors, densityCells, view, signOk]);
+  useEffect(() => {
+    const layers = layersRef.current;
+    if (!layers) return;
+    layers.chosen.clearLayers();
+    if (pinsOn || !selectedDoor) return;
+    L.marker([selectedDoor.lat, selectedDoor.lng], {
+      icon: pinIcon(selectedDoor, true, signOk),
+      title: `${doorTitle(selectedDoor)} — ${selectedDoor.persons.map((p) => personTitle(scale, p)).join(', ')}`,
+      zIndexOffset: 1000,
+    }).on('click', () => onPinClickRef.current?.(selectedDoor)).addTo(layers.chosen);
+  }, [pinsOn, selectedDoor, signOk, scale]);
   const pulledKey = useMemo(
     () => (selectedKey && groups.some((g) => g.length > 1 && g.some((d) => d.key === selectedKey)) ? selectedKey : null),
     [groups, selectedKey],
@@ -1613,7 +1752,7 @@ export default function MapPage() {
     const addPin = (door) => {
       const selected = door.key === selectedKeyRef.current;
       const marker = L.marker([door.lat, door.lng], {
-        icon: (zoom ?? PIN_ZOOM) >= Math.min(PIN_ZOOM, offZoom) || selected ? pinIcon(door, selected, signOk) : dotIcon(door, selected),
+        icon: pinIcon(door, selected, signOk),
         title: `${doorTitle(door)} — ${door.persons.map((p) => personTitle(scale, p)).join(', ')}`,
         riseOnHover: true,
         zIndexOffset: selected ? 1000 : 0,
@@ -1670,7 +1809,7 @@ export default function MapPage() {
   const turfSheetOpen = Boolean(selectedTurf && !mode && !pickerOpen && !addAt && !selectedDoor);
   const signSheetOpen = Boolean(signSel && !mode && !pickerOpen && !addAt && !selectedDoor && !turfSheetOpen);
   const hasSheet = Boolean(pickerOpen || addAt || mode === 'add' || naming || (selectedDoor && !mode) || turfSheetOpen || signSheetOpen);
-  const showEmpty = doorsQ.data && doors.length === 0 && !hasSheet && !mode;
+  const showEmpty = doorsQ.data && !big && doors.length === 0 && !hasSheet && !mode;
   // First visit (volunteers): "Tap a house to start" under the pill, only on
   // the plain map with houses to tap — never over a card, sheet or mode bar.
   // Opening any door counts as having started.
@@ -1720,6 +1859,9 @@ export default function MapPage() {
       fitTurf(map, pts, pageRef.current, { maxZoom: 18, inset: inside.length ? PIN_INSET : 0 });
     } else if (doors.length) {
       map.fitBounds(L.latLngBounds(doors.map((d) => [d.lat, d.lng])).pad(0.15), { maxZoom: 16, animate: false });
+    } else if (big && doorsQ.data.bounds) {
+      const [s0, w0, n0, e0] = doorsQ.data.bounds;
+      map.fitBounds([[s0, w0], [n0, e0]], { maxZoom: 16, animate: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doorsQ.data, doorsQ.fetchStatus, doors, selectedDoor, personParam, turfParam, turfsQ.isPending, turfsQ.fetchStatus, selectedTurf, ownTurf, turfs]);
@@ -1763,11 +1905,13 @@ export default function MapPage() {
   }, [turfParam, queryClient]);
 
   const drawCount = draft.points.length;
-  const pageCls = ['map-page', hasSheet && 'has-sheet', mode && 'is-moded', mode === 'draw' && 'is-drawing'].filter(Boolean).join(' ');
+  // The look's class sits on the page, never on Leaflet's own element: React
+  // rewriting that element's classes would wipe the ones Leaflet added.
+  const pageCls = ['map-page', `map-view--${view}`, hasSheet && 'has-sheet', mode && 'is-moded', mode === 'draw' && 'is-drawing'].filter(Boolean).join(' ');
 
   return (
     <div className={pageCls} ref={pageRef}>
-      <div className={`map-canvas map-view--${view}`} ref={canvasRef} role="application" aria-label="Canvass map" />
+      <div className="map-canvas" ref={canvasRef} role="application" aria-label="Canvass map" data-doors={visible.length} data-zoom={zoom ?? ''} />
 
       <div className="map-top">
         {mode === 'draw' ? (
@@ -1827,13 +1971,13 @@ export default function MapPage() {
                 data-band={filters.find((f) => f.key === filter)?.band || filter}
                 aria-haspopup="dialog"
                 aria-expanded={filterOpen}
-                aria-label={`Show: ${labelOf(filter)}, ${plural(counts[filter] ?? 0, 'door', 'doors')}`}
+                aria-label={`Show: ${labelOf(filter)}, ${big && !detail ? `${num(counts[filter] ?? 0)} people in view` : plural(counts[filter] ?? 0, 'door', 'doors')}`}
                 onClick={() => { setFilterOpen((o) => !o); setUnlocOpen(false); }}
               >
                 <FilterGlyph />
                 <span className="map-filter-btn__label"><span className="map-filter-btn__show">Show:</span> {labelOf(filter)}</span>
                 <span className="map-filter-btn__n mono" aria-live="polite">
-                  {doorsQ.isPending ? '…' : counts[filter] ?? 0}
+                  {doorsQ.isPending ? '…' : num(counts[filter] ?? 0)}
                 </span>
               </button>
             )}
@@ -1884,6 +2028,7 @@ export default function MapPage() {
           filter={filter}
           onFilter={(key) => { setFilter(key); closeFilter(); }}
           counts={counts}
+          countsNote={big && !detail ? `People in view, by how they're rated — zoom in to see doors${zoomInFor ? `, and ${zoomInFor.toLowerCase()}` : ''}.` : big ? 'Doors in view.' : null}
           showTurfs={showTurfs}
           onTurfs={setTurfsShown}
           turfCount={turfs.length}
@@ -1934,6 +2079,9 @@ export default function MapPage() {
       ) : turfsQ.isError && !turfsQ.data ? (
         <p className="error map-error">Turfs didn’t load</p>
       ) : null}
+      {zoomInFor && !hasSheet && !mode && (
+        <p className="map-zoomnote" role="status">Zoom in to see {zoomInFor.toLowerCase()}</p>
+      )}
       {showEmpty && (
         <div className="card map-empty">
           {doorsData?.scope === 'turfs' && !doorsData.turfs ? (

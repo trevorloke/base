@@ -431,9 +431,19 @@ one tap away under **More**.
   **Signs**: *Up* and *Requested* both on shows every flag (a request is a
   pale flag); turn *Requested* off and only signs up stay; turn a kind off
   (*Billboard*) and its flags go. The choice stays on that browser.
-- **Map → filter button → Map** — *Muted* greys the streets (the pins keep
-  their colours), *Dark* is for night; it stays on that browser. With Google
-  Maps on (`GOOGLE_MAPS_TILES=1`), *Satellite* and *Terrain* are there too.
+- **Map → filter button → Map** — the map opens on *Clean* (quiet streets,
+  no shop icons or house numbers); *Muted* greys the standard streets (the
+  doors keep their colours), *Dark* is for night; it stays on that browser.
+  With Google Maps on (`GOOGLE_MAPS_TILES=1`), *Satellite* and *Terrain* are
+  there too.
+- **Map, zooming in** — from the whole city to a street: every door is a
+  dot in its rating's colour (grey: not asked yet), no number bubbles; a
+  door with a sign gets a little flag, and close in a household's size is
+  on its dot; at street zoom the dots become pins. Tap a dot to open that
+  door. With your whole voter file loaded (more than 5,000 people placed),
+  the city view shows patches of people instead — grey for how many live
+  there, colour for the share rated — and **Show** counts people in view
+  (*300,049*); zoom in and it loads the doors where you're looking.
 - **Map → filter button → Draw turf** — tap the corners, name it, assign a
   canvasser.
 - **A profile → More details** — tap Yes/No or a choice, type the rest,

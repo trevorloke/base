@@ -54,6 +54,10 @@ const check = (name, ok, extra = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  — ' + String(extra).slice(0, 200) : ''}`);
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Doors on the map: pins close in, canvas dots further out — the map says
+// how many it shows (data-doors) and where it is looking (data-bounds).
+const doorsOnMap = (pg) => pg.$eval('.map-canvas', (el) => Number(el.dataset.doors || 0)).catch(() => 0);
+const waitDoors = (pg, n = 1) => pg.waitForFunction((k) => Number(document.querySelector('.map-canvas')?.dataset.doors || 0) >= k, n, { timeout: 10000 }).catch(() => {});
 const tag = Math.random().toString(36).slice(2, 8);
 
 // The test provider's tiles: a street grid with a marker, CORS-open (the
@@ -159,10 +163,10 @@ check('GET /api/map/config names the configured provider', cfg?.tiles?.url === T
 
 // Map online: tiles from the configured provider, never OpenStreetMap.
 await D.go('/map');
-await page.waitForSelector('.map-pin-wrap', { timeout: 10000 }).catch(() => {});
+await waitDoors(page);
 check('service worker controls the page', await D.swReady().catch(() => false) || (await (async () => { await D.go('/map'); return D.swReady(); })()));
 await D.go('/map');
-await page.waitForSelector('.map-pin-wrap', { timeout: 10000 }).catch(() => {});
+await waitDoors(page);
 await sleep(1500);
 check('map tiles come from STARBASE_TILE_URL (not OpenStreetMap)', hits.tiles > 0 && hits.osm === 0, JSON.stringify(hits));
 const credit = await page.$eval('.leaflet-control-attribution', (el) => ({ text: el.innerText, html: el.innerHTML })).catch(() => ({ text: '', html: '' }));
@@ -174,14 +178,16 @@ const kept = await page.evaluate(async () => {
   return { n: keys.length, marked: body.includes('e2e-tile') };
 });
 check('the service worker keeps tiles already looked at', kept.n > 0 && kept.marked, JSON.stringify(kept));
-const pinsOnline = (await page.$$('.map-pin-wrap')).length;
+const pinsOnline = await doorsOnMap(page);
 check('map shows the 4 located doors', pinsOnline === 4, pinsOnline);
+// Where they are, for finding an empty spot later (offline, no API then).
+const doorPts = (await D.api('/map/doors')).json.persons.map((x) => [Number(x.lat), Number(x.lng)]);
 await sleep(1200); // the phone copy is written a moment after the doors load
 // The walk list, opened once with signal (it keeps its own copy).
 await D.go(`/turfs/${turf.id}`);
 await page.waitForSelector('.walk-door', { timeout: 8000 }).catch(() => {});
 await D.go('/map');
-await page.waitForSelector('.map-pin-wrap', { timeout: 10000 }).catch(() => {});
+await waitDoors(page);
 await sleep(1200);
 const deskCopies = await D.copies();
 const deskId = (await D.api('/auth/me')).json.user.id;
@@ -210,9 +216,9 @@ check('crew marks it up meanwhile', (await D.api('/actions/sign.update', { id: t
 
 // ── Offline: reload, the map opens from the phone ──
 await D.go('/map');
-await page.waitForSelector('.map-pin-wrap', { timeout: 10000 }).catch(() => {});
+await waitDoors(page);
 let t = await D.text();
-const pinsOffline = (await page.$$('.map-pin-wrap')).length;
+const pinsOffline = await doorsOnMap(page);
 check('offline reload: the map opens with the doors kept on this phone', pinsOffline === 4 && /Offline copy/i.test(t) && !/Turfs didn’t load/.test(t), `pins=${pinsOffline}`);
 const tilesDrawn = await page.$$eval('.leaflet-tile-loaded', (els) => els.filter((i) => i.complete && i.naturalWidth > 0).length).catch(() => 0);
 check('offline: tiles seen before still draw', tilesDrawn > 0, tilesDrawn);
@@ -220,8 +226,13 @@ check('strip on a laptop: offline and "1 saved on this device" (never "this phon
 
 // Add a door with no signal, at an empty spot inside the turf.
 await page.click('button[aria-label="Add a door"]');
-const spot = await page.evaluate(() => {
-  const pins = [...document.querySelectorAll('.map-pin-wrap')].map((el) => { const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
+const spot = await page.evaluate((pts) => {
+  // Each door's place on screen, from the map's bounds (Web Mercator).
+  const el = document.querySelector('.map-canvas');
+  const r = el.getBoundingClientRect();
+  const [s0, w0, n0, e0] = el.dataset.bounds.split(',').map(Number);
+  const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const pins = pts.map(([lat, lng]) => [r.left + ((lng - w0) / (e0 - w0)) * r.width, r.top + ((merc(n0) - merc(lat)) / (merc(n0) - merc(s0))) * r.height]);
   const xs = pins.map((p) => p[0]); const ys = pins.map((p) => p[1]);
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   let best = null;
@@ -230,7 +241,7 @@ const spot = await page.evaluate(() => {
     if (d >= 70 && (!best || d > best.d)) best = { x, y, d };
   }
   return best;
-});
+}, doorPts);
 await page.mouse.click(spot.x, spot.y);
 await page.waitForSelector('form[aria-label="New door"]', { timeout: 5000 }).catch(() => {});
 await page.fill('#nd-first', 'Ana'); await page.fill('#nd-last', 'Souza');
@@ -265,7 +276,7 @@ await sleep(400);
 t = await D.text();
 check('lawn sign offline: "Lawn sign saved offline" with Undo', /Lawn sign saved offline/.test(t) && !!(await page.$('.map-toast button:has-text("Undo")')));
 check('the door shows it, "Not sent yet"', /Lawn sign · Not sent yet/i.test(await page.$eval('aside.door-card', (el) => el.innerText.replace(/\s+/g, ' '))));
-check('the map pin for Ana is on the map', (await page.$$('.map-pin-wrap')).length === 5);
+check('Ana’s door is on the map', (await doorsOnMap(page)) === 5, await doorsOnMap(page));
 const chip1 = await D.chip();
 check('chip: 4 saved on this device', /^4 saved on this device$/i.test(chip1), chip1);
 await page.click('.offline-strip__chip');
@@ -450,7 +461,7 @@ await V.go(`/shifts/${roomy.id}`);
 await V.go(`/shifts/${tight.id}`);
 await V.go('/shifts');
 await V.go('/map');
-await vp.waitForSelector('.map-pin-wrap', { timeout: 10000 }).catch(() => {});
+await waitDoors(vp);
 await V.swReady().catch(() => {});
 await V.go('/calls');
 await vp.waitForSelector('section.cl-card', { timeout: 8000 }).catch(() => {});
@@ -508,8 +519,8 @@ const other = (await D.api('/actions/person.create', { name: 'Took The Spot', ph
 check('desk fills the phone bank meanwhile', (await D.api('/actions/shift.assign', { shift_id: tight.id, person_id: other.id })).status === 200);
 
 await V.go('/map');
-await vp.waitForSelector('.map-pin-wrap', { timeout: 10000 }).catch(() => {});
-const vPins = (await vp.$$('.map-pin-wrap, .map-cluster-wrap')).length;
+await waitDoors(vp);
+const vPins = await doorsOnMap(vp);
 const vFilter = await vp.$eval('.map-filter-btn', (el) => el.getAttribute('aria-label')).catch(() => '');
 check('offline map on the phone: their turf’s doors, from the phone', vPins >= 1 && /Offline copy/i.test(await V.text()) && /My turf/.test(vFilter) && !/Turfs didn’t load/.test(await V.text()), `markers=${vPins} ${vFilter}`);
 check('volunteer chip: 3 saved on this phone', /^3 saved on this phone$/i.test(await V.chip()), await V.chip());

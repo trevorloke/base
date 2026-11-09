@@ -100,6 +100,14 @@ export const tileSource = (url) => {
 
 const DESK = ['manager', 'treasurer', 'staff'];
 export const api = new Hono();
+const CLEAN_VIEW = {
+  key: 'clean',
+  label: 'Clean',
+  url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  maxZoom: 20,
+};
+
 api.get('/map/config', (c) => {
   const t = tileConfig();
   // Ground's own tiles (Google through the server) are under the client's
@@ -114,6 +122,12 @@ api.get('/map/config', (c) => {
     out.views = MAP_TYPES.filter((k) => k !== mapType()).map((k) => ({
       key: k, label: words[k], url: own(`${GOOGLE_PATH}?t=${k}`), attribution: t.attribution, maxZoom: t.maxZoom,
     }));
+  } else if (t.url === TILE_DEFAULTS.url && process.env.STARBASE_TILE_CLEAN !== 'off') {
+    // On the standard OpenStreetMap tiles: Clean, a light, quiet map of the
+    // same streets (CARTO's Positron) — no shop icons, parking lots or house
+    // numbers, so the doors are what you see. The map opens on it.
+    // STARBASE_TILE_CLEAN=off leaves it out.
+    out.views = [CLEAN_VIEW];
   }
   // Desk roles: what took, so a mistyped setting shows on the map's sheet.
   if (DESK.includes(c.get('ctx')?.role)) {
