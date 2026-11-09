@@ -33,6 +33,7 @@ const rate1 = (n) => (n == null ? '—' : (Math.round(n * 10) / 10).toLocaleStri
 const dayWords = (ymd, opts = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) => (ymd
   ? new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-CA', { ...opts, timeZone: 'UTC' }) : '');
 const shortDay = (ymd) => dayWords(ymd, { month: 'short', day: 'numeric' });
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clock = (iso) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
 
 // The priority bands, darkest first: one blue, light to dark (never a
@@ -320,10 +321,10 @@ function Trend({ points, races, last4, perWeek }) {
         </div>
       ) : (
         <div className="ptw-chart" ref={boxRef}>
-          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img"
+          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="group"
             aria-label={`New supporters each week for 12 weeks${lines.length ? `, against the pace needed (${lines.map((l) => `${l.label} ${num(l.v)} a week`).join(', ')})` : ''}; the table has the numbers`}>
             {ticks.map((t) => (
-              <g key={t}>
+              <g key={t} aria-hidden="true">
                 <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} className={t === 0 ? 'ptw-base' : 'ptw-grid'} />
                 <text x={padL - 6} y={y(t) + 4} textAnchor="end" className="ptw-axis">{num(t)}</text>
               </g>
@@ -342,9 +343,9 @@ function Trend({ points, races, last4, perWeek }) {
               const show = i % every === (points.length - 1) % every;
               return (
                 <g key={p.end}>
-                  {path && <path d={path} className={`ptw-bar${up ? '' : ' is-down'}${hover === i ? ' is-on' : ''}`} />}
-                  {show && <text x={x0 + slot / 2} y={H - 6} textAnchor="middle" className="ptw-axis">{shortDay(p.end)}</text>}
-                  <rect x={x0} y={padT} width={slot} height={innerH} className="ptw-hit" tabIndex={0}
+                  {path && <path d={path} className={`ptw-bar${up ? '' : ' is-down'}${hover === i ? ' is-on' : ''}`} aria-hidden="true" />}
+                  {show && <text x={x0 + slot / 2} y={H - 6} textAnchor="middle" className="ptw-axis" aria-hidden="true">{shortDay(p.end)}</text>}
+                  <rect x={x0} y={padT} width={slot} height={innerH} className="ptw-hit" tabIndex={0} role="img"
                     aria-label={`${shortDay(p.start)} to ${shortDay(p.end)}: ${signed(v)} supporters, ${num(p.supporters)} in all`}
                     aria-describedby={hover === i ? tipId : undefined}
                     onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)} />
@@ -426,7 +427,8 @@ function TurfMap({ turfs, tiles, onOpen }) {
         color: p.color, weight: t.priority === 'next' ? 3 : 2, fillColor: p.color,
         fillOpacity: t.priority === 'done' ? 0.15 : 0.45, className: `ptw-turf ptw-turf--${t.priority}`,
       }).addTo(group);
-      poly.bindTooltip(`${t.rank} · ${t.name} · ${t.score} points · ${p.label}`, { sticky: true, className: 'ptw-tt' });
+      // A tooltip is HTML: the turf's name (typed by someone) is escaped.
+      poly.bindTooltip(esc(`${t.rank} · ${t.name} · ${t.score} points · ${p.label}`), { sticky: true, className: 'ptw-tt' });
       poly.on('click', () => openRef.current(t.id));
       bounds.push(...ring);
       if (t.rank <= 5 && t.priority !== 'done') {

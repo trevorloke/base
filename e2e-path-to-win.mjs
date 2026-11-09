@@ -326,6 +326,19 @@ check('volunteer: the admin is not theirs', /Not for your role/.test(await textO
 await staff.c.close();
 await vol.c.close();
 
+// A turf's name is shown as words, never run as code (the map's tooltip is HTML).
+await page.setViewportSize({ width: 1360, height: 900 });
+const odd = await api('/actions/turf.create', { name: '<img src=x onerror="window.__ptwXss=1"> block', polygon: rect(49.10, -122.70, 0.002, 0.003) });
+await page.goto(`${BASE}/admin/path-to-win`, { waitUntil: 'domcontentloaded' });
+await page.locator('.ptw-map path.ptw-turf--done').waitFor({ timeout: 20000 });
+await page.locator('.ptw-map').scrollIntoViewIfNeeded();
+await sleep(500);
+const oddBox = await page.locator('.ptw-map path.ptw-turf--done').boundingBox();
+await page.mouse.move(oddBox.x + oddBox.width / 2, oddBox.y + oddBox.height / 2);
+await sleep(400);
+const tip = await page.locator('.leaflet-tooltip').innerText().catch(() => '');
+check('a turf named like code shows as words on the map, nothing runs', odd.status === 200 && tip.includes('<img src=x') && !(await page.evaluate(() => window.__ptwXss)), tip);
+
 const books = (await api('/audit/verify')).json;
 check('the books verify', books?.ok === true, JSON.stringify(books));
 check('no page errors', errors.length === 0, errors.join(' | '));

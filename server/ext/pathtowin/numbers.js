@@ -1,12 +1,15 @@
 // Path to win — the counting, in SQL (a city-wide voter file is 300,000
 // people: nothing here reads them into the server one by one).
 //
+//   statsReady(db)              one ANALYZE for a table never analyzed
+//   todayOf(db, tz)             the campaign's today, by the database's clock
 //   standing(db, ws)            everyone on file by rating band, now
 //   trendRows(db, ws, today, tz) when each rating began and ended, by band
 //                               and by how many weeks ago (rules.trendFrom)
-//   turfRows(db, ws)            per live turf: doors, doors knocked, people,
+//   turfRows(db, ws, tz)        per live turf: doors, doors knocked, people,
 //                               supporters, persuadables, opposed, the
 //                               supporters at doors knocked, the last knock
+//                               (and its day)
 //
 // A rating's history is its contacts: each contact that gave a rating
 // starts it, the person's next rated contact ends it. A rating that came in
