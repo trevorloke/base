@@ -2,8 +2,8 @@
 // base.win/imaginesurrey/… The path comes off on the way in and goes back on
 // redirects, the sign-in cookie, and the pages and stylesheets the server
 // sends; the client's path alone and an old /admin link go where they
-// should; another path on the domain isn't answered; and at a site's root
-// (no BASE_PATH) nothing changes.
+// should, on the address the browser used; another path on the domain isn't
+// answered; and at a site's root (no BASE_PATH) nothing changes.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb } from './helpers.js';
@@ -38,17 +38,24 @@ test('the API answers under the client’s path — and at the server’s own ad
   assert.notEqual(longer.headers.get('location') || '', `${B}x/api/health`, 'a longer name is not this client’s path');
 });
 
-test('the client’s path alone opens the field app; /admin goes to /desk; an old /login to the field app’s', async () => {
-  const root = await call(B);
-  assert.equal(root.status, 302);
-  assert.equal(new URL(root.headers.get('location')).pathname, `${B}/field/`);
-  const admin = await call(`${B}/admin/people?tag=vip`);
-  assert.equal(admin.status, 302);
-  const to = new URL(admin.headers.get('location'));
-  assert.equal(`${to.pathname}${to.search}`, `${B}/desk/people?tag=vip`);
-  const login = await call(`${B}/login?next=x`);
-  assert.equal(login.status, 302);
-  assert.equal(login.headers.get('location'), `${B}/field/login?next=x`);
+test('the client’s path alone opens the field app; /admin goes to /desk; an old /login to the field app’s — on the address the browser used', async () => {
+  // As the base.win door sends it on: to the server's own host, in plain
+  // http behind the host's proxy. The way on is a path (and its query), so
+  // the browser stays on base.win, never sent to this server's own address.
+  const sent = (path) => door(new Request(`http://imagine-surrey.onrender.example${path}`, { headers: { 'x-forwarded-host': 'base.win', 'x-forwarded-proto': 'https' } }));
+  for (const [path, want] of [
+    [B, `${B}/field/`], [`${B}/?from=poster`, `${B}/field/?from=poster`],
+    [`${B}/admin`, `${B}/desk/`], [`${B}/admin/`, `${B}/desk/`], [`${B}/admin/people/import`, `${B}/desk/people/import`],
+    [`${B}/admin/people?tag=vip`, `${B}/desk/people?tag=vip`], [`${B}/admin//evil.example/`, `${B}/desk//evil.example/`],
+    [`${B}/login?next=x`, `${B}/field/login?next=x`],
+  ]) {
+    const r = await sent(path);
+    assert.equal(r.status, 302, path);
+    const to = r.headers.get('location');
+    assert.equal(to, want, `${path} → ${to}`);
+    assert.doesNotMatch(to, /^[a-z][a-z\d+.-]*:|^[/\\]{2}/i, `${path} → ${to}: no scheme, no host`);
+  }
+  for (const path of [B, `${B}/admin/people`]) assert.equal((await sent(path)).headers.get('cache-control'), 'no-store', path);
 });
 
 test('signing in: the cookie is kept to the client’s path, and works there', async () => {

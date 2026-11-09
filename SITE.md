@@ -21,6 +21,9 @@ The contract the website work is built against. Read with ROADMAP.md.
 
 - On the campaign's own domain(s): `SITE_HOSTS=imaginesurrey.ca,www.imaginesurrey.ca`
   (comma list; also `site_settings.domains`). On those hosts the site is at `/`.
+  A host with a final dot is the same host (`imaginesurrey.ca.` is
+  `imaginesurrey.ca`): in a request, in these lists, and where the app's
+  own addresses are noted (`store.js hostOfRequest`).
 - Everywhere else (the app's own address, base.win/<client>), the site is at
   `/site/…` (so `base.win/imaginesurrey/site/` works before DNS moves).
   The front door (`apps/door`) sends `base.win/<client>` itself to

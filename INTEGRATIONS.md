@@ -403,5 +403,7 @@ paid online through Stripe ([Online payments](#online-payments--stripe)).
 
 Also, without a key: **files in** — People → Import takes a CSV or
 spreadsheet (a dry run first; a `voted` column marks who voted and never
-un-marks anyone); **pages out** — the website can link to base.win's public
+un-marks anyone; Settings → Services gives its address:
+`…/desk/people/import` on base.win, `…/admin/people/import` at the server's
+own address); **pages out** — the website can link to base.win's public
 lessons (`/learn/…`); every email carries its own unsubscribe page.

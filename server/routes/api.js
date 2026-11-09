@@ -29,7 +29,7 @@ import { attachmentsOf } from '../ext/abtests/attach.js';
 import { openPass } from '../ext/passes/rule.js';
 import { doorState, inPass } from '@starbase/shared/passes';
 // Where people use the app: never a website domain (ext/site).
-import { noteAppHost } from '../ext/site/store.js';
+import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
 
 // A date column as YYYY-MM-DD (both backends hand back a Date at UTC midnight).
 const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
@@ -59,8 +59,9 @@ app.use('*', async (c, next) => {
   // Public base URL for links in outbound mail (unsubscribe).
   ctx.publicUrl = (process.env.STARBASE_PUBLIC_URL || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
   // The host this request came in on (the app answers there: never a website
-  // domain), noted for the saves to come (ext/site/store.js noteAppHost).
-  ctx.host = new URL(c.req.url).hostname.toLowerCase();
+  // domain), as the site gate reads it, noted for the saves to come
+  // (ext/site/store.js hostOfRequest, noteAppHost).
+  ctx.host = hostOfRequest(c);
   await noteAppHost(db, ctx.host);
   c.set('db', db);
   c.set('ctx', ctx);

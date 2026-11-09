@@ -4,13 +4,15 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
+import { app } from '../index.js';
+import { mountAt } from '../lib/mount.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
 const saved = { ...process.env };
 const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL',
   'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL',
-  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'];
+  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'BASE_PATH'];
 let mgr, staff;
 let resendDomains = [];
 let twilioNumbers = [];
@@ -122,4 +124,20 @@ test('the public address, the address service, the database and Google tiles ans
   assert.equal(byKey(await list()).geocoder.state, 'missing');
   assert.equal((await check('geocoder')).ok, false);
   delete process.env.GEOCODER;
+});
+
+test('files in: the desk’s own address — /desk under the client’s path on base.win, /admin at a server’s root', async () => {
+  const lists = (l) => l.inbound.find((i) => i.name === 'Lists and voted files').url;
+  process.env.STARBASE_PUBLIC_URL = 'https://starbase.example.org';
+  assert.equal(lists(await list()), 'https://starbase.example.org/admin/people/import');
+  // On base.win the desk is /desk (/admin there is only an old address, sent on).
+  process.env.BASE_PATH = '/imaginesurrey';
+  process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey/';
+  assert.equal(lists(await list()), 'https://base.win/imaginesurrey/desk/people/import');
+  // No public address: the one the page was opened at, under the client's path or at the server's own root.
+  delete process.env.STARBASE_PUBLIC_URL;
+  const under = await mountAt(app, '/imaginesurrey')(new Request('http://base.test/imaginesurrey/api/connections', { headers: { cookie: mgr.cookie } }));
+  assert.equal(lists(await under.json()), 'http://base.test/imaginesurrey/desk/people/import');
+  assert.equal(lists(await list()), 'http://localhost/admin/people/import');
+  delete process.env.BASE_PATH;
 });
