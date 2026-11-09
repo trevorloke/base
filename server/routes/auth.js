@@ -21,6 +21,7 @@ import {
   recoveryHashFor, startPending, takeTry, twoStepOut, twoStepRow,
 } from '../lib/twostep.js';
 import { LOCKED_SIGN_IN, tellLocked } from '../ext/twostep/locked.js';
+import { noteAppHost } from '../ext/site/store.js';
 
 const app = new Hono();
 
@@ -371,6 +372,8 @@ app.get('/me', async (c) => {
   const db = await getDb();
   const ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
+  // The app opened here, signed in: never a website domain (as in routes/api.js).
+  await noteAppHost(db, new URL(c.req.url).hostname);
   return c.json(meOut(ctx));
 });
 

@@ -266,7 +266,8 @@ const pagePath = async (db, ws, root, f, k, c) => {
   try {
     const ref = new URL(c.req.header('referer') || '');
     const self = new URL(c.req.url);
-    if (ref.host === self.host && (ref.pathname === root || ref.pathname.startsWith(`${root}/`))) return ref.pathname;
+    // Back to that page, always on this site: '//other.host' is a path here.
+    if (ref.host === self.host && (ref.pathname === root || ref.pathname.startsWith(`${root}/`))) return ref.pathname.replace(/^\/+/, '/');
   } catch { /* no usable referer */ }
   return `${root}/`;
 };

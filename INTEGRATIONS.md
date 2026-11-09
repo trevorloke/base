@@ -103,7 +103,8 @@ phone's own dialer and messages, a ladder's text waits, and nothing is lost.
 
 base.win tells Twilio where to call back with each text and call, all built
 from `STARBASE_PUBLIC_URL`, and checks Twilio's signature
-(`X-Twilio-Signature`, with the auth token) on every one:
+(`X-Twilio-Signature`, with the auth token) on every one. Each answers at
+every address of the server, the campaign's website domain included:
 
 | Address | When |
 |---|---|

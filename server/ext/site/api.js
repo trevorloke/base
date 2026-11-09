@@ -62,8 +62,9 @@ api.get('/site', async (c) => {
       domains: (settings.domains || []).map((d) => `https://${d}/`),
       hosts: hosts.filter((h) => !(settings.domains || []).includes(h)).map((h) => `https://${h}/`),
       // Where the app itself answers (this request's host, the server's
-      // public address, base.win): never a website domain — the screen
-      // refuses them, and marks one saved before (the site ignores it).
+      // public address and its other addresses, base.win): never a website
+      // domain — the screen refuses them, and marks one saved before (the
+      // site ignores it).
       app_hosts: [...new Set([c.get('ctx').host, ...appHosts()].filter(Boolean))],
     },
     // Online giving (donate and join): set up or not (ext/payments).

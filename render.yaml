@@ -20,6 +20,7 @@
 #   STARBASE_TILE_URL, _ATTRIBUTION, _MAX_ZOOM          another tile provider
 #   TWILIO_VOICE=off                                    texting without calls
 #   STARBASE_CANDIDATES, STARBASE_PROVINCE, STARBASE_GEO_BOUNDS   the campaign
+#   APP_HOSTS                                           the app's other addresses, never the website's
 # Once set: Settings → Services in the admin checks each one.
 
 services:

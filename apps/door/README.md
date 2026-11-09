@@ -34,6 +34,11 @@ use up everyone's.
      While moving to a new key the server takes both, comma-separated
      (`new,old`): set that, then the door's to the new one, then the
      server's to the new one alone.
+   - `APP_HOSTS=starbase.imaginesurrey.ca` — the app's other addresses on
+     this server, comma-separated: here the one people used before
+     base.win. None of them can be made the website's domain (Website →
+     Settings → Your own domain), so the app keeps answering there. Never
+     list the website's own domain here.
 
    It then answers under `/imaginesurrey` **and** at its own address as
    before, so nothing breaks while people move over (old bookmarks, invites

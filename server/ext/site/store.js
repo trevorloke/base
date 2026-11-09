@@ -21,15 +21,18 @@ export const parseJ = (v, d) => {
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 
 // ── Hosts ──
-// SITE_HOSTS is the operator's: any host name or address (127.0.0.1 for a test).
-export const envHosts = () => String(process.env.SITE_HOSTS || '').split(',')
+// SITE_HOSTS and APP_HOSTS are the operator's: host names or addresses,
+// comma-separated (127.0.0.1 for a test).
+const hostList = (raw) => String(raw || '').split(',')
   .map((h) => h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, ''))
   .filter((h) => /^[a-z0-9.-]{1,253}$/.test(h));
+export const envHosts = () => hostList(process.env.SITE_HOSTS);
 
 // Where the app itself answers — never a website domain (on one of those
 // only the site answers: no sign-in, no app): base.win and its subdomains
-// (the front door), this server's public address (STARBASE_PUBLIC_URL) and
-// its host's own name (RENDER_EXTERNAL_HOSTNAME). site.settings.save
+// (the front door), this server's public address (STARBASE_PUBLIC_URL), its
+// host's own name (RENDER_EXTERNAL_HOSTNAME) and its other addresses
+// (APP_HOSTS: one people used before base.win, say). site.settings.save
 // refuses these and the host the save came in on; a domain saved as one
 // before is ignored below, so the app can't be locked out of its address.
 const DOOR = 'base.win';
@@ -41,12 +44,37 @@ export const appHosts = () => {
   } catch { /* not set */ }
   const r = hostOf(process.env.RENDER_EXTERNAL_HOSTNAME);
   if (r && !out.includes(r)) out.push(r);
+  for (const h of hostList(process.env.APP_HOSTS)) if (!out.includes(h)) out.push(h);
   return out;
 };
 export const isAppHost = (host, also = []) => {
   const h = String(host || '').toLowerCase().replace(/\.$/, '');
   return Boolean(h) && (h === DOOR || h.endsWith(`.${DOOR}`) || appHosts().includes(h) || also.includes(h));
 };
+
+// Every address people use the app at, as the API sees them signed in
+// (routes/api.js, and /api/auth/me as the app opens), kept in app_hosts:
+// the operator may not have listed them all, and site.settings.save refuses
+// those too. Written before the answer, at most once an hour per address by
+// this server; a write that fails is logged once and never fails the request.
+const HOUR = 3600_000;
+const noted = new Map(); // host → when this server last wrote it
+let noteFailed = false;
+export const noteAppHost = async (db, host) => {
+  const h = hostOf(host);
+  if (!h || Date.now() - (noted.get(h) || 0) < HOUR) return;
+  if (noted.size > 1000) noted.clear();
+  noted.set(h, Date.now());
+  try {
+    await db.query('insert into app_hosts (host) values ($1) on conflict (host) do update set last_seen = now()', [h]);
+  } catch (e) {
+    if (!noteFailed) console.error(`site: couldn’t note where the app answers (${h}): ${e.message}`);
+    noteFailed = true;
+  }
+};
+// When people last used the app at a host (null: never, since it was noted).
+export const appHostSeen = async (q, host) => (await q.query('select last_seen from app_hosts where host = $1', [host])).rows[0]?.last_seen || null;
+
 const DOMAINS_MS = 30_000;
 let domainMap = null; // host → workspace id (from site_settings.domains)
 let domainsAt = 0;

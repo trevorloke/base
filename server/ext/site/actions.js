@@ -43,8 +43,9 @@ import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { brandKey } from '../../lib/brand.js';
 import { SECTIONS, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
-import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost } from './store.js';
+import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost, envHosts, appHostSeen } from './store.js';
 import { cacheClear } from './cache.js';
+import { DEFAULT_TZ } from '../../lib/org.js';
 
 const MANAGER = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -148,6 +149,8 @@ const refsProblem = async (tx, ws, modules) => {
 };
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
+// A day as people say it, in the campaign's time zone: November 9, 2026.
+const dayOf = (d, ctx) => new Date(d).toLocaleDateString('en-CA', { timeZone: ctx.workspace?.settings?.tz || DEFAULT_TZ, month: 'long', day: 'numeric', year: 'numeric' });
 
 // A page's share picture: { url, alt } in its draft (and, once published,
 // in what went live) — only when it has one, so a page without stays
@@ -206,13 +209,23 @@ export const actions = {
         const h = hostOf(d);
         if (!h) throw httpError(400, `“${d}” isn't a web address (like imaginesurrey.ca)`);
         // On a domain only the site answers: never where the app itself is
-        // (this request's host, the server's public address, base.win).
+        // (this request's host, the server's public address and its other
+        // addresses, base.win).
         if (isAppHost(h, ctx.host ? [ctx.host] : [])) {
           throw httpError(400, `${h} is where base.win itself answers — on a website domain only the site does, so the app would stop working there. Add your campaign’s own domain (like yourcampaign.ca).`);
         }
         if (!hosts.includes(h)) hosts.push(h);
       }
+      const saved = parseJ((await tx.query('select domains from site_settings where workspace_id = $1', [ws])).rows[0]?.domains, []);
+      const already = Array.isArray(saved) ? saved : [];
       for (const h of hosts) {
+        // Nor an address people use the app at (app_hosts), unless the site
+        // has it already (saved before, or the operator's SITE_HOSTS): the
+        // app doesn't answer there then.
+        const seen = already.includes(h) || envHosts().includes(h) ? null : await appHostSeen(tx, h);
+        if (seen) {
+          throw httpError(400, `People used base.win at ${h} (last on ${dayOf(seen, ctx)}), so the app still answers there. If it should now be only the website, ask whoever runs the server to add it to SITE_HOSTS.`);
+        }
         const other = (await tx.query(
           'select 1 from site_settings where workspace_id <> $1 and domains @> $2::jsonb', [ws, JSON.stringify([h])],
         )).rows[0];
