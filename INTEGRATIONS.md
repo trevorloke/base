@@ -234,8 +234,12 @@ What happens:
   last name, and the same postal code, phone or street address): the gift
   is logged and flagged under Needs you — "Maybe $… over the … limit", the
   other record under *Why?* — never refunded, since it may be someone
-  else. The treasurer merges the two (People → Duplicates) and refunds, or
-  marks them *Not the same*.
+  else. A cheque logged at the desk after the gift online is added up the
+  same way, and a postal code is its letters and digits (V3T-2C3 is V3T
+  2C3). The treasurer merges the two (People → Duplicates) and refunds, or
+  taps *Not the same person* on the flagged gift (or *Not the same* in
+  Duplicates): the records are kept apart and the gift is added up again
+  without the other, so the flag goes or names what is left.
 - **A refund or a dispute in Stripe**: a full refund voids the gift and its
   receipt (refunded dues void the membership); a partial refund and an open
   dispute are flagged under Needs you; a lost dispute voids the gift.

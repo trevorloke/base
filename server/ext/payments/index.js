@@ -9,7 +9,8 @@
 //                (after it: Stripe, then a short write) — the site's join
 //                and donate forms; retryCheckout for a retry; paymentsData()
 //                for its loaders
-//   limits.js    what a person may still give this year on a slate
+//   limits.js    what a person may still give this year on a slate; a gift
+//                added up with the records that may be the same donor
 //   webhook.js   POST /stripe/webhook (public, signed, each event once)
 //   apply.js     what an event does to the books: gifts through the normal
 //                gift path (limit, flags, receipt), monthly pledges,
@@ -26,6 +27,7 @@
 import { REFUND_JOB } from './apply.js';
 import { runRefundJob } from './refunds.js';
 import { briefOverLimit } from './api.js';
+import { underLimit } from './limits.js';
 
 export { sql } from './sql.js';
 export { publicRoutes } from './webhook.js';
@@ -36,6 +38,8 @@ export { paymentsReady, stripeMode, STRIPE_EVENTS } from './stripe.js';
 
 export const jobs = { [REFUND_JOB]: runRefundJob };
 // Today: a payment over the limit rides with the gifts over the limit.
-export const hooks = { brief: briefOverLimit };
+// Every gift under the limit: added up with the records that may be the
+// same donor (limits.js).
+export const hooks = { brief: briefOverLimit, underLimit };
 // In the full export: every checkout (the declaration as made) and payment.
 export const exportTables = ['stripe_checkouts', 'stripe_payments'];

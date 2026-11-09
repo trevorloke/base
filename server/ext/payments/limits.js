@@ -14,10 +14,11 @@
 //
 // Money lands only on the same email's record or someone new's, so one
 // donor can be two records (another email, or a cheque at the desk on
-// their voter record). When a payment lands under the limit, the records
-// that may be the same donor are added in (overTogether): over together,
-// the gift is flagged for the treasurer, never refunded — the other record
-// may be someone else.
+// their voter record). Whenever a gift is logged under the limit — a
+// payment landing, or a cheque at the desk after it — the records that may
+// be the same donor are added in (overTogether): over together, the gift
+// is flagged for the treasurer, never refunded — the other record may be
+// someone else, and the desk can say so (Not the same).
 import { capFor, donorYearTotal } from '../../lib/cap.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
@@ -141,15 +142,29 @@ export const likelySameDonors = async (q, ws, personId, { year, slate }) => (awa
 const listed = (words) => (words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0]);
 const sharedBy = (o) => listed([o.by_phone && 'phone', o.by_address && 'address', o.by_postal && 'postal code'].filter(Boolean));
 
-// A payment under the limit for its own donor (check: overWhenLanding's),
-// with what the records that may be the same donor gave: over together?
-// → the reason its gift is flagged, or null. It names the other records
-// and says the two together in the words of lib/gifts.js flagIfOver, so
-// the desk reads the numbers out of it the same way (Money: parseOver).
+// A gift under the limit for its own donor (check: lib/cap.js checkCap's,
+// this gift in it), with what the records that may be the same donor gave:
+// over together? → { reason, ids } — the reason its gift is flagged and the
+// records it names — or null. It says the two together in the words of
+// lib/gifts.js flagIfOver, so the desk reads the numbers out of it the same
+// way (Money: parseOver).
 export const overTogether = async (q, ws, personId, check, slate) => {
   const others = await likelySameDonors(q, ws, personId, { year: check.year, slate });
-  const totalCents = others.reduce((n, o) => n + Number(o.given_cents), check.totalCents);
-  if (!others.length || totalCents <= check.capCents) return null;
+  const totalCents = others.reduce((n, o) => n + Number(o.given_cents), Number(check.totalCents));
+  if (!others.length || totalCents <= Number(check.capCents)) return null;
   const who = listed(others.map((o) => `${o.name} (same ${sharedBy(o)})`));
-  return `Possibly the same donor as ${who}: together they are at ${money(totalCents)} for ${check.year} — over the ${money(check.capCents)} limit on the ${slateLabel(slate).toLowerCase()} slate (${check.source})`;
+  return {
+    reason: `Possibly the same donor as ${who}: together they are at ${money(totalCents)} for ${check.year} — over the ${money(check.capCents)} limit on the ${slateLabel(slate).toLowerCase()} slate (${check.source})`,
+    ids: others.map((o) => o.id),
+  };
+};
+
+// lib/hooks.js underLimit: every gift whose donor is under the limit on
+// their own record — logged at the desk (a gift, or dues on the membership
+// form), a payment landing, a restore — is added up with the records that
+// may be the same donor. Over together, it is flagged naming them: never
+// refused or refunded.
+export const underLimit = async (tx, ws, { personId, slate, cap }, out) => {
+  const r = await overTogether(tx, ws, personId, cap, slate);
+  if (r) Object.assign(out, { flagReason: r.reason, sameAs: r.ids });
 };

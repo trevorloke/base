@@ -22,7 +22,16 @@
 //                                   use) or out.status + out.detail
 //                                   ('opted_out', 'quiet', 'failed') to hold
 //                                   it back — nothing is sent then.
-const registry = { events: [], contactLogged: [], brief: [], textOut: [] };
+//   underLimit(tx, workspace, { personId, slate, cap }, out)
+//                                   a gift's donor is under the year's
+//                                   limit on its own (cap: lib/cap.js
+//                                   checkCap's answer, this gift in it): a
+//                                   feature may set out.flagReason (and
+//                                   out.sameAs, the other records it names)
+//                                   to flag the gift all the same — other
+//                                   records that may be the same donor,
+//                                   over together (ext/payments).
+const registry = { events: [], contactLogged: [], brief: [], textOut: [], underLimit: [] };
 
 // People lists, imports and the sample campaign (ext/fields fills these):
 //   personsWhere(db, ctx, query, w) GET /persons: a feature may narrow the

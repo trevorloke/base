@@ -542,8 +542,16 @@ phone or street address (another email, a cheque at the desk on their
 voter record), never a pair the desk marked Not the same: over together,
 the gift is logged and flagged for the treasurer ("Possibly the same donor
 as …", Donations → Needs you), never refunded — the other record may be
-someone else. People → Duplicates lists a donor and the same first and
-last name in one postal code as a pair too, to merge or keep apart.
+someone else. Every gift logged under the limit is added up the same way
+(lib/gifts.js, the `underLimit` hook), so a cheque at the desk on the voter
+record after the gift online is flagged too. A postal code is compared by
+its letters and digits (V3T-2C3 is V3T 2C3), and one typed with a hyphen
+is kept as V3T 2C3. People → Duplicates lists a donor and the same first
+and last name in one postal code as a pair too, to merge or keep apart.
+*Not the same person* on the flagged gift (or *Not the same* there) keeps
+the two apart and adds the gift up again without the other: the flag
+goes, or names what is left (over on its own record, the plain
+over-limit reason).
 
 ## Admin API
 

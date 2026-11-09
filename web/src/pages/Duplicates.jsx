@@ -3,7 +3,8 @@
 // one door, or a donor and the same first and last name in one postal code
 // — side by side. "Keep this one" merges the other into it (person.merge:
 // everything that pointed at the other moves; blanks are filled; it asks
-// once). "Not the same" keeps the pair away.
+// once). "Not the same" keeps the pair away (and a gift flagged as maybe
+// one donor on the two is added up again without the other).
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -68,7 +69,8 @@ function Pair({ pair, onDone }) {
       ) : (
         <div className="ops-actions">
           <button type="button" className="btn btn-quiet ops-tap" disabled={busy || !online}
-            onClick={() => run('person.notDuplicate', { a: pair.a.id, b: pair.b.id }, () => `Kept apart: ${pair.a.name} and ${pair.b.name}`)}>
+            onClick={() => run('person.notDuplicate', { a: pair.a.id, b: pair.b.id }, (r) => (
+              `Kept apart: ${pair.a.name} and ${pair.b.name}${r.rechecked?.some((g) => !g.flagged) ? ' — the donation flag on them is cleared' : ''}`))}>
             Not the same
           </button>
         </div>
@@ -89,6 +91,9 @@ export default function Duplicates() {
     qc.invalidateQueries({ queryKey: ['persons'] });
     qc.invalidateQueries({ queryKey: ['person'] });
     qc.invalidateQueries({ queryKey: ['doors'] });
+    // A merge or Not the same can change a gift's over-limit flag.
+    qc.invalidateQueries({ queryKey: ['brief'] });
+    qc.invalidateQueries({ queryKey: ['records', 'gift'] });
   };
   return (
     <div className="ops-page dup-page">

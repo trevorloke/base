@@ -780,14 +780,16 @@ app.get('/brief', async (c) => {
      from gifts where workspace_id = $1 and deleted_at is null`, [ws],
   )).rows[0];
   const flagged = (await db.query(
-    `select g.id, g.person_id, g.amount_cents, g.date, g.flag_reason, p.name as donor
+    `select g.id, g.person_id, g.amount_cents, g.date, g.slate, g.flag_reason, g.attrs->'maybe_same_donor' as maybe_same_donor, p.name as donor
      from gifts g join persons p on p.id = g.person_id
      where g.workspace_id = $1 and g.deleted_at is null and g.flagged order by g.date desc limit 10`, [ws],
   )).rows;
-  // Each flagged gift carries the donor's total for that gift's year (as it
-  // stands now, voids excluded) and the cap — from the same engine that
-  // flagged it — so the desk shows "$150 over the $1,250 limit" without
-  // parsing flag_reason. Null when no cap rule is known for that year.
+  // Each flagged gift carries the donor's total for that gift's year and
+  // slate (as it stands now, voids excluded) and the cap — from the same
+  // engine that flagged it — so the desk shows "$150 over the $1,250 limit"
+  // without parsing flag_reason. Null when no cap rule is known for that
+  // year. A maybe (lib/gifts.js) also carries the other records it names
+  // (maybe_same_donor), for the desk's Not the same person.
   if (ctx.role !== 'volunteer') {
     for (const g of flagged) {
       const cap = await checkCap(db, {

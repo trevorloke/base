@@ -434,8 +434,8 @@ test('one donor under two emails, the same name and postal code: over together, 
   assert.deepEqual([pay.status, pay.over_limit], ['paid', false], 'no refund');
   const flagged = ok(await mgr.get('/api/brief')).flagged.find((f) => f.id === gifts[1].id);
   assert.ok(flagged, 'on the desk’s Needs you');
-  const ev = (await db.query("select payload from events where workspace_id = $1 and entity_type = 'gift' and entity_id = $2 and op = 'update'", [ws, gifts[1].id])).rows[0];
-  assert.deepEqual([ev?.payload.flagged, ev?.payload.flag_reason], [true, gifts[1].flag_reason], 'the flag on the event log');
+  const ev = (await db.query("select payload from events where workspace_id = $1 and entity_type = 'gift' and entity_id = $2 and op = 'create'", [ws, gifts[1].id])).rows[0];
+  assert.deepEqual([ev?.payload.flagged, ev?.payload.flag_reason, ev?.payload.maybe_same_donor], [true, gifts[1].flag_reason, [gifts[0].person_id]], 'the flag on the event log');
 });
 
 test('a cheque at the desk on a voter’s record with no email, then a gift online at the same postal code: flagged', async () => {
@@ -469,6 +469,119 @@ test('a pair the desk said are two people is never added up', async () => {
   ok(await mgr.action('person.notDuplicate', { a: kim.id, b: other.id }));
   assert.equal((await paid(ok(await send('donate', { ...body, amount_cents: 30_000 })).checkout_url)).body.result, 'gift recorded');
   assert.deepEqual((await giftsNamed('Twice')).map((g) => g.flagged), [false, false, false]);
+});
+
+test('a postal code typed with a hyphen is the same postal code: added up, and kept as V3T 2C3', async () => {
+  const voter = ok(await mgr.action('person.create', { first_name: 'Hana', last_name: 'Hyphen', address: '4321 100 Ave', city: 'Surrey', postal: 'V3T 2C3' })).person;
+  ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  // The address typed another way: the postal code is all they share.
+  const r = ok(await send('donate', { first_name: 'Hana', last_name: 'Hyphen', email: `hana.${tag}@example.org`, address: '4321 100 Avenue', city: 'Surrey', postal_code: 'V3T-2C3', amount_cents: 50_000, cadence: 'once', declaration: true }));
+  assert.equal((await paid(r.checkout_url)).body.result, 'gift recorded');
+  const online = (await giftsNamed('Hyphen')).find((g) => g.person_id !== voter.id);
+  assert.equal(online.flagged, true, 'V3T-2C3 is V3T 2C3');
+  assert.match(online.flag_reason, /^Possibly the same donor as Hana Hyphen \(same postal code\): together they are at \$1,500\.00 for/);
+  const rec = (await db.query('select postal from persons where id = $1', [online.person_id])).rows[0];
+  assert.equal(rec.postal, 'V3T 2C3', 'kept the way the post office writes it');
+});
+
+// A maybe is a guess: two people with one name at one door are common. The
+// desk saying they are two people (Not the same) takes the flag away, and a
+// cheque logged at the desk after the money online is added up too.
+test('two people with one name at one door: Not the same takes the flag away', async () => {
+  const dad = ok(await mgr.action('person.create', { first_name: 'John', last_name: 'Senior', address: '12 Family Rd', city: 'Surrey', postal: 'V3S 9K9', email: `john.sr.${tag}@example.org` })).person;
+  ok(await mgr.action('gift.log', { person_id: dad.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  const r = ok(await send('donate', { first_name: 'John', last_name: 'Senior', email: `john.jr.${tag}@example.org`, address: '12 Family Rd', city: 'Surrey', postal_code: 'V3S 9K9', amount_cents: 100_000, cadence: 'once', declaration: true }));
+  await paid(r.checkout_url);
+  const son = (await giftsNamed('Senior')).find((g) => g.person_id !== dad.id);
+  assert.equal(son.flagged, true, 'maybe one donor');
+  const done = ok(await mgr.action('person.notDuplicate', { a: dad.id, b: son.person_id }));
+  const now = (await giftsNamed('Senior')).find((g) => g.id === son.id);
+  assert.deepEqual([now.flagged, now.flag_reason], [false, null], 'the desk knows they are two people');
+  assert.ok(!ok(await mgr.get('/api/brief')).flagged.some((f) => f.id === son.id), 'off Needs you');
+  assert.deepEqual(done.rechecked, [{ id: son.id, flagged: false, flag_reason: null }], 'the answer says so');
+  const ev = (await db.query("select payload from events where workspace_id = $1 and entity_type = 'gift' and entity_id = $2 order by seq desc limit 1", [ws, son.id])).rows[0];
+  assert.equal(ev.payload.flagged, false, 'on the event log');
+});
+
+test('Needs you’s row for a maybe carries the records it may be, so Not the same person works from there', async () => {
+  const mae = ok(await mgr.action('person.create', { first_name: 'Mae', last_name: 'Twin', address: '3 Twin Rd', city: 'Surrey', postal: 'V3S 7T7' })).person;
+  ok(await mgr.action('gift.log', { person_id: mae.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  const r = ok(await send('donate', { first_name: 'Mae', last_name: 'Twin', email: `mae.${tag}@example.org`, address: '3 Twin Rd', city: 'Surrey', postal_code: 'V3S 7T7', amount_cents: 100_000, cadence: 'once', declaration: true }));
+  await paid(r.checkout_url);
+  const row = ok(await mgr.get('/api/brief')).flagged.find((f) => f.donor === 'Mae Twin');
+  assert.deepEqual(row.maybe_same_donor, [mae.id], 'the record it may be');
+  for (const other of row.maybe_same_donor) ok(await mgr.action('person.notDuplicate', { a: row.person_id, b: other }));
+  assert.ok(!ok(await mgr.get('/api/brief')).flagged.some((f) => f.id === row.id), 'off Needs you');
+});
+
+test('Not the same with one of two other records: still over with the other, the reason names only it', async () => {
+  const body = { first_name: 'Ora', last_name: 'Third', address: '8 Tri St', city: 'Surrey', postal_code: 'V3T 7H8', cadence: 'once', declaration: true };
+  const voter = ok(await mgr.action('person.create', { first_name: 'Ora', last_name: 'Third', address: '8 Tri St', city: 'Surrey', postal: 'V3T 7H8' })).person;
+  ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 60_000, date: today(), method: 'cheque' }));
+  await paid(ok(await send('donate', { ...body, email: `ora.one.${tag}@example.org`, amount_cents: 70_000 })).checkout_url);
+  await paid(ok(await send('donate', { ...body, email: `ora.two.${tag}@example.org`, amount_cents: 80_000 })).checkout_url);
+  const [, second, third] = await giftsNamed('Third');
+  assert.deepEqual([second.flagged, third.flagged], [false, true], '$1,300 under; $2,100 over');
+  assert.match(third.flag_reason, /^Possibly the same donor as Ora Third \(same address and postal code\) and Ora Third \(same address and postal code\): together they are at \$2,100\.00/);
+  ok(await mgr.action('person.notDuplicate', { a: third.person_id, b: voter.id }));
+  const now = (await giftsNamed('Third')).find((g) => g.id === third.id);
+  assert.equal(now.flagged, true, 'with the first online record alone, still over');
+  assert.match(now.flag_reason, /^Possibly the same donor as Ora Third \(same address and postal code\): together they are at \$1,500\.00 for/);
+  assert.deepEqual(now.attrs.maybe_same_donor, [second.person_id]);
+});
+
+test('Not the same while the record is over on its own: its gifts keep the plain over-limit flag, never none', async () => {
+  const voter = ok(await mgr.action('person.create', { first_name: 'Ida', last_name: 'Overby', address: '4 Over St', city: 'Surrey', postal: 'V3T 5L5' })).person;
+  ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  const r = ok(await send('donate', { first_name: 'Ida', last_name: 'Overby', email: `ida.${tag}@example.org`, address: '4 Over St', city: 'Surrey', postal_code: 'V3T 5L5', amount_cents: 100_000, cadence: 'once', declaration: true }));
+  await paid(r.checkout_url);
+  const online = (await giftsNamed('Overby')).find((g) => g.person_id !== voter.id);
+  // Voided (still flagged as a maybe), a cheque on the same record, then
+  // restored: $1,500 on that record alone, and only maybes on it.
+  ok(await mgr.action('gift.void', { id: online.id }));
+  ok(await mgr.action('gift.log', { person_id: online.person_id, amount_cents: 50_000, date: today(), method: 'cheque' }));
+  ok(await mgr.action('gift.restore', { id: online.id }));
+  ok(await mgr.action('person.notDuplicate', { a: voter.id, b: online.person_id }));
+  const theirs = (await giftsNamed('Overby')).filter((g) => g.person_id === online.person_id);
+  assert.deepEqual(theirs.map((g) => g.flagged), [true, true], 'over on their own record');
+  for (const g of theirs) assert.match(g.flag_reason, /^Ida Overby is at \$1500\.00 for \d{4} — over the \$1429\.70 limit/);
+});
+
+test('a gift online first, then a cheque at the desk on the voter’s record: the cheque is flagged', async () => {
+  const voter = ok(await mgr.action('person.create', { first_name: 'Rev', last_name: 'Ersed', address: '10 Back St', city: 'Surrey', postal: 'V3T 8J9' })).person;
+  const r = ok(await send('donate', { first_name: 'Rev', last_name: 'Ersed', email: `rev.${tag}@example.org`, address: '10 Back St', city: 'Surrey', postal_code: 'V3T 8J9', amount_cents: 100_000, cadence: 'once', declaration: true }));
+  assert.equal((await paid(r.checkout_url)).body.result, 'gift recorded');
+  const logged = ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  assert.equal(logged.gift.flagged, true, 'the desk is told as it logs it');
+  assert.match(logged.gift.flag_reason, /^Possibly the same donor as Rev Ersed \(same address and postal code\): together they are at \$2,000\.00 for/);
+  assert.ok(ok(await mgr.get('/api/brief')).flagged.some((f) => f.id === logged.gift.id), 'on Needs you');
+  const ev = (await db.query("select payload from events where workspace_id = $1 and entity_type = 'gift' and entity_id = $2 and op = 'create'", [ws, logged.gift.id])).rows[0];
+  assert.equal(ev.payload.flagged, true, 'on the event log');
+});
+
+test('a cheque voided, a gift online, then the cheque restored: the restored cheque is flagged', async () => {
+  const voter = ok(await mgr.action('person.create', { first_name: 'Ros', last_name: 'Tored', address: '11 Back St', city: 'Surrey', postal: 'V3T 8K1' })).person;
+  const cheque = ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 100_000, date: today(), method: 'cheque' })).gift;
+  ok(await mgr.action('gift.void', { id: cheque.id }));
+  const r = ok(await send('donate', { first_name: 'Ros', last_name: 'Tored', email: `ros.${tag}@example.org`, address: '11 Back St', city: 'Surrey', postal_code: 'V3T 8K1', amount_cents: 100_000, cadence: 'once', declaration: true }));
+  await paid(r.checkout_url);
+  const back = ok(await mgr.action('gift.restore', { id: cheque.id }));
+  assert.equal(back.flagged, true, 'back in the books, added up');
+  assert.match(back.flag_reason, /^Possibly the same donor as Ros Tored/);
+});
+
+test('the two records made one: the maybe becomes the year over the limit', async () => {
+  const voter = ok(await mgr.action('person.create', { first_name: 'Una', last_name: 'Merged', address: '7 One Way', city: 'Surrey', postal: 'V3T 4K4' })).person;
+  ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  const r = ok(await send('donate', { first_name: 'Una', last_name: 'Merged', email: `una.${tag}@example.org`, address: '7 One Way', city: 'Surrey', postal_code: 'V3T 4K4', amount_cents: 100_000, cadence: 'once', declaration: true }));
+  await paid(r.checkout_url);
+  const online = (await giftsNamed('Merged')).find((g) => g.person_id !== voter.id);
+  assert.match(online.flag_reason, /^Possibly the same donor/);
+  ok(await mgr.action('person.merge', { keep: voter.id, drop: online.person_id }));
+  const now = (await db.query('select flagged, flag_reason, attrs from gifts where id = $1', [online.id])).rows[0];
+  assert.equal(now.flagged, true);
+  assert.match(now.flag_reason, /^Una Merged is at \$2000\.00 for \d{4} — over the \$1429\.70 limit/, 'one donor now: over, no maybe');
+  assert.equal(now.attrs.maybe_same_donor, undefined, 'no other record to mark apart');
 });
 
 test('the records that may be one donor are found through an index, never by reading the whole list', async () => {

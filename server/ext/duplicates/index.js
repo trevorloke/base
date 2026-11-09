@@ -19,13 +19,17 @@
 //       address, pin…), tags are joined, and drop leaves the list (deleted,
 //       with merged_into, so an old link finds its way). Gifts moved onto
 //       one donor are checked against the limit again: a year that is now
-//       over is flagged like any crossing gift.
+//       over is flagged like any crossing gift (and a "Possibly the same
+//       donor" flag on the two gives way to it).
 //   person.notDuplicate  { a, b }   desk. "Not the same": the pair is not
-//       shown again.
+//       shown again, and never added up for the year's limit; a gift
+//       flagged as possibly one donor on them is added up again without
+//       the other — the flag goes, or names what is left. → { a, b,
+//       rechecked: [{ id, flagged, flag_reason }] }
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
-import { flagIfOver } from '../../lib/gifts.js';
+import { flagIfOver, recheckMaybes } from '../../lib/gifts.js';
 import { DEFAULT_SLATE } from '@starbase/shared/canvass';
 import { sameText, samePhone, samePostal } from './same.js';
 
@@ -191,6 +195,10 @@ export const actions = {
         [drop.id, ws, keep.id],
       );
 
+      // A maybe one donor on these two records is one donor now: checked
+      // again (over on keep alone, the gift that crosses is flagged next).
+      await recheckMaybes(tx, ctx.workspace, [keep.id, drop.id], emit);
+
       // One donor now: each year and slate of their gifts against the limit.
       const flagged = [];
       if (moved.gifts?.moved) {
@@ -236,7 +244,10 @@ export const actions = {
         [ctx.workspaceId, a, b, ctx.user.id],
       );
       emit('person', a, 'update', { not_duplicate_of: b });
-      return { a, b };
+      // Two people: a gift flagged as maybe one donor on these records is
+      // added up again without the other.
+      const rechecked = await recheckMaybes(tx, ctx.workspace, [a, b], emit);
+      return { a, b, rechecked };
     },
   },
 };

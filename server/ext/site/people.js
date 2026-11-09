@@ -22,6 +22,7 @@ import { civic } from '../../lib/address.js';
 import { splitFirst, joinName } from '@starbase/shared/names';
 import { matchWebsitePerson } from '../intake/index.js';
 import { parseJ } from './store.js';
+import { samePostal } from '../duplicates/same.js';
 
 const norm = (s) => String(s ?? '').trim().replace(/\s+/g, ' ');
 const lower = (s) => norm(s).toLowerCase();
@@ -36,19 +37,22 @@ const addTags = (had, add) => {
   return out;
 };
 
-// "v3t1v8" → "V3T 1V8"; anything else as typed, upper-cased.
+// "v3t1v8", "V3T-1V8" → "V3T 1V8"; anything else as typed, upper-cased.
 export const postalOf = (raw) => {
   const s = String(raw ?? '').toUpperCase().replace(/\s+/g, '');
-  return /^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(s) ? `${s.slice(0, 3)} ${s.slice(3)}` : s;
+  const code = s.replace(/-/g, '');
+  return /^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(code) ? `${code.slice(0, 3)} ${code.slice(3)}` : s;
 };
 
+// The same postal code as ext/duplicates reads it (same.js): letters and
+// digits only, so one typed with a hyphen on file still matches.
 const byNameAndPostal = async (tx, ws, name, postal) => {
-  const p = String(postal || '').replace(/\s+/g, '');
+  const p = String(postal || '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
   if (!name || p.length < 3) return null;
   return (await tx.query(
     `select id, name, email, phone, address, house_number, unit, city, postal, lat, tags, attrs from persons
       where workspace_id = $1 and deleted_at is null and lower(name) = lower($2)
-        and upper(regexp_replace(coalesce(postal, ''), '\\s+', '', 'g')) = $3
+        and ${samePostal('postal')} = $3
       order by created_at limit 1`,
     [ws, name, p],
   )).rows[0] || null;

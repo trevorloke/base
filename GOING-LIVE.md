@@ -196,6 +196,7 @@ shared, and the code names no client.
 - Online payments: checked against the limit before Stripe's page opens and
   again when the payment lands — one that would go over is refunded through
   Stripe by itself, the donor is told, and the treasurer sees it; one over
-  only with another record that may be the same donor is flagged for the
-  treasurer to decide. Stripe's webhook is refused without its signature,
-  and each event is done once.
+  only with another record that may be the same donor (or a cheque logged
+  after it) is flagged for the treasurer to decide — *Not the same person*
+  clears it when they are two people. Stripe's webhook is refused without
+  its signature, and each event is done once.

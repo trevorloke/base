@@ -103,7 +103,8 @@ receipts, shifts, signs, lists, answers, relationships, texts and requests
 move over (where both had the same — one shift, one list — the kept one's
 stays), its blanks are filled and tags joined, and an old link to it says
 *Merged — open their record*. A donor made one is checked against the limit
-again. *Not the same* keeps a pair away.
+again. *Not the same* keeps a pair away, and a gift flagged as possibly one
+donor on the two is added up again without the other.
 
 ### Two-step sign-in
 
@@ -431,7 +432,9 @@ one may give is refused before the page opens, and the donor's own limit is
 checked when the payment lands (over it, refunded through Stripe and
 flagged for the treasurer; over only with another record that may be the
 same donor — the same name, and postal code, phone or address — logged and
-flagged for the treasurer to decide); each
+flagged for the treasurer to decide, as is a cheque logged at the desk
+after it; *Not the same person* on the flag keeps the records apart and
+checks again); each
 payment becomes a gift through the same path as the desk's, marked online,
 with its receipt; a monthly gift is a pledge, each month its own gift.
 

@@ -55,6 +55,13 @@ test('found: a donor and the same first and last name in one postal code (an add
   assert.ok(!(await pairsOf()).some(([n]) => /Rhea/.test(n)), 'Not the same: away');
 });
 
+test('found: a postal code typed with a hyphen is the same postal code', async () => {
+  const p = await mgr.createPerson('Hana Hyphen', { email: 'hana@example.org', address: '4321 100 Avenue', postal: 'V3T-2C3' });
+  ok(await mgr.action('gift.log', { person_id: p.id, amount_cents: 5000, date: '2026-05-01', method: 'cheque' }));
+  await mgr.createPerson('Hana Hyphen', { address: '4321 100 Ave', postal: 'V3T 2C3' });
+  assert.deepEqual((await pairsOf()).filter(([n]) => /Hana/.test(n)), [['Hana Hyphen + Hana Hyphen', 'postal']]);
+});
+
 test('Not the same: the pair stays away', async () => {
   const p = ok(await mgr.get('/api/duplicates')).pairs.find((x) => x.why.includes('address'));
   ok(await mgr.action('person.notDuplicate', { a: p.b.id, b: p.a.id }));
