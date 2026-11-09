@@ -246,7 +246,10 @@ button. The donate form always sends `cadence` (`once` when monthly is off).
 Nothing per visitor is in the HTML except `ref`/`source` from `ctx`: there is
 **no `client_key` in the HTML** (pages may be cached) — the browser makes one
 per form and reuses it for retries; a plain post has none. With JavaScript,
-`?ref=` and `?source=` in the address are carried when the page didn't, a
+`?ref=` and `?source=` in the address are carried when the page didn't —
+only as the server takes them (a code of 6–16 letters and numbers; a tag
+cut to 60 of a–z, 0–9 and `:_.-`; anything else left out, `util.js
+trackFrom`), so a long tracking link never stops a form — a
 `checkout_url` is followed only when it is https (or this site), and a 400's
 `{ field, error }` is shown on that field. Volunteer openings and events post
 `rsvp` with `first_name`, `email` or `phone`, and `shift_id`, one small form

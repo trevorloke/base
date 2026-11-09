@@ -4,7 +4,7 @@
 // SITE.md "Rendering" for the shapes accepted.
 import { checkTheme } from '../theme.js';
 import { renderMarkdown } from '../../markdown.js';
-import { arr, obj, str, DEFAULT_TIME_ZONE } from './util.js';
+import { arr, obj, str, cleanRef, cleanSource, DEFAULT_TIME_ZONE } from './util.js';
 import { absolute, imageFor, linkFor, locFrom, safeUrl } from './links.js';
 
 const links = (list) => arr(list)
@@ -129,15 +129,16 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
     data: d,
     timeZone: tz,
     preview: Boolean(c.preview),
-    referral: str(c.referral).trim().slice(0, 64),
-    source: str(c.source).trim().slice(0, 80),
+    // The forms' tracking, only as the server takes it (util.js).
+    referral: cleanRef(c.referral),
+    source: cleanSource(c.source),
     pageId: kind === 'page' ? str(obj(page).id) : '',
     modules: mods,
     link: (u) => linkFor(loc, u),
     img: (u) => imageFor(loc, u),
     abs: (p) => absolute(loc, p),
     action: (formKind) => `${loc.root}api/forms/${formKind}`,
-    hidden: (moduleId, extra = {}) => ({ page_id: kind === 'page' ? str(obj(page).id) : '', module_id: moduleId, ref: str(c.referral).trim().slice(0, 64), source: str(c.source).trim().slice(0, 80), ...extra }),
+    hidden: (moduleId, extra = {}) => ({ page_id: kind === 'page' ? str(obj(page).id) : '', module_id: moduleId, ref: cleanRef(c.referral), source: cleanSource(c.source), ...extra }),
     sentFor: (formKind, moduleId) => Boolean(sent && sent.kind === formKind && (!sent.module || sent.module === moduleId)),
     errorFor: (formKind, moduleId, fieldNames) => {
       if (!error || !error.field) return null;

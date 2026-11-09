@@ -139,6 +139,28 @@ await v.waitForURL(/\?sent=newsletter#m-newsletter$/, { timeout: 10000 });
 check('a plain post comes back to the page with ?sent=newsletter#m-newsletter', /\/\?sent=newsletter#m-newsletter$/.test(v.url()), v.url());
 await shot(v, '4-site-after-plain-post');
 
+// ── a long campaign link (?source=… and an odd ?ref=…) never stops a form ──
+// The island carries the address's tracking only as the server takes it.
+const LONG_SOURCE = 'newsletter-2026-11-skytrain-petition-call-to-action-button-row-2';
+const sent = [];
+const onReq = (r) => { if (r.method() === 'POST' && /\/api\/forms\/petition$/.test(r.url())) sent.push(r.postDataJSON()); };
+v.on('request', onReq);
+await v.goto(`${SITE}/?source=${LONG_SOURCE}&ref=${'r'.repeat(70)}#m-skytrain`, { waitUntil: 'domcontentloaded' });
+await v.waitForFunction(() => window.__siteIslands && document.documentElement.classList.contains('js'), null, { timeout: 15000 }).catch(() => {});
+await v.waitForFunction(() => [...document.querySelectorAll('#m-skytrain form.site-form')].every((x) => x.noValidate), null, { timeout: 15000 }).catch(() => {});
+const pet = v.locator('#m-skytrain form.site-form');
+await pet.getByLabel('First name', { exact: true }).fill('Lou');
+await pet.getByLabel('Last name', { exact: true }).fill('Example');
+await pet.getByLabel('Email', { exact: true }).fill(`lou.${tag}@example.org`);
+await pet.getByLabel('Postal code', { exact: true }).fill('V3T 1V8');
+await pet.getByRole('button', { name: 'Add my name' }).click();
+const thanks = v.locator('#m-skytrain .success-card');
+await thanks.waitFor({ timeout: 10000 }).catch(() => {});
+const alertText = await v.locator('#m-skytrain .form-alert').innerText().catch(() => '');
+check('a long ?source= in the link: the petition still signs (the thank-you, no alert)', await thanks.isVisible().catch(() => false) && !alertText, alertText);
+check('…sending the tag cut to what the server takes, and no made-up referral code', sent.length === 1 && sent[0].source === LONG_SOURCE.slice(0, 60) && !('ref' in sent[0]), JSON.stringify(sent.map((b) => [b.source, b.ref])));
+v.off('request', onReq);
+
 // ── the public shift: booked through the app's own booking ──
 const rsvp =await form('rsvp', { first_name: 'Cy', last_name: 'Example', email: `cy.${tag}@example.org`, shift_id: shift.id });
 check('rsvp: ok', rsvp.status === 200 && rsvp.json.ok === true, JSON.stringify(rsvp));
