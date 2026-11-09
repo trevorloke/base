@@ -24,7 +24,7 @@ import { app } from '../index.js';
 import { runAction } from '../lib/events.js';
 import { runDueJobs } from '../lib/jobs.js';
 import { campaignDay } from '../lib/gifts.js';
-import { checkoutFor } from '../ext/payments/index.js';
+import { prepareCheckout, openCheckout } from '../ext/payments/index.js';
 import { startFakeStripe } from './fake-stripe.js';
 
 const SECRET = 'whsec_payments_order_secret';
@@ -44,11 +44,16 @@ const deliver = async (raw, headers) => {
 };
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };
 
-// The site's donate form: the checkout opens inside the form's write.
-const open = (personId, opts = {}) => runAction(db, { workspaceId: wsId, actorId: null, action: 'site.form.donate' }, (tx, emit) => checkoutFor(tx, { workspaceId: wsId }, {
-  personId, kind: 'donation', amountCents: 5000, cadence: 'once', slate: null, declaration: true,
-  successUrl: 'https://site.example.org/donate?sent=donate', cancelUrl: 'https://site.example.org/donate', ...opts,
-}, emit)).then((r) => r.result);
+// The site's donate form: the checkout is kept in the form's write, and
+// Stripe is asked once that write is done (as the form handler does).
+const open = async (personId, opts = {}) => {
+  const ctx = { workspaceId: wsId };
+  const { result: co } = await runAction(db, { workspaceId: wsId, actorId: null, action: 'site.form.donate' }, (tx, emit) => prepareCheckout(tx, ctx, {
+    personId, kind: 'donation', amountCents: 5000, cadence: 'once', slate: null, declaration: true,
+    successUrl: 'https://site.example.org/donate?sent=donate', cancelUrl: 'https://site.example.org/donate', ...opts,
+  }, emit));
+  return openCheckout(db, ctx, co.id, { action: 'site.form.donate' });
+};
 const donor = (first) => mgr.createPerson(`${first} Example`, { email: mail(first.toLowerCase()), address: '13450 104 Ave', city: 'Surrey', postal: 'V3T 1V8' });
 const deskGift = async (person, cents) => ok(await mgr.action('gift.log', { person_id: person.id, amount_cents: cents, date: today, method: 'cheque' })).gift;
 const payment = async (where, v) => (await db.query(`select * from stripe_payments where workspace_id = $1 and ${where} = $2`, [wsId, v])).rows[0];

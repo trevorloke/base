@@ -197,7 +197,7 @@ test('what someone gave before never changes the answer; a refusal is a 400 in p
     const r = await send('donate', { first_name: 'Ana', email: `ana.${tag}@example.org`, amount_cents: 2500, declaration: true });
     assert.deepEqual([r.status, r.json?.field, r.json?.error], [400, 'amount_cents', 'That amount can’t be taken online.'], r.text);
     const plain = await hit('/site/api/forms/donate', { form: { email: `ana2.${tag}@example.org`, amount_cents: '2500', declaration: 'on', module_id: 'donate' } });
-    assert.deepEqual([plain.status, plain.location], [303, '/site/?error=amount_cents#m-donate']);
+    assert.deepEqual([plain.status, plain.location], [303, '/site/?error=amount_cents&module=donate#m-donate']);
   } finally {
     _setPaymentsForTest(null);
   }
