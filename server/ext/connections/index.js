@@ -16,6 +16,9 @@ import { Hono } from 'hono';
 import { suggestAddresses } from '../../lib/geocode.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { KEY_ENV, KEY_MIN, keyStatus } from '../../lib/twostep.js';
+// Online payments (ext/payments): its row carries the webhook address and
+// the events to tick in Stripe, and state 'test' in test mode.
+import { stripeService, checkStripe, webhookUrl } from '../payments/service.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -31,7 +34,7 @@ const row = (key, name, purpose, launch, needs, extra = {}) => {
   return { key, name, for: purpose, launch, missing, set: needs.filter(has), state: missing.length ? 'missing' : 'ready', checkable: true, ...extra };
 };
 
-export const services = () => {
+export const services = (base = publicUrl()) => {
   const pub = publicUrl();
   const geo = provider();
   const list = [
@@ -72,6 +75,7 @@ export const services = () => {
       state: jobRunnerOn() ? 'ready' : 'missing',
       checkable: false,
     }),
+    stripeService(base),
     // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
     // one in the database — it works, but a copy of the database would
     // give the authenticator keys away.
@@ -94,12 +98,17 @@ const inbound = (base) => [
   { name: 'Twilio — delivery reports, calls', url: `${base}/api/public/twilio/…`, how: 'Sent by base.win with each text and call (from the public address); nothing to set' },
   { name: 'The website — people in', url: `${base}/in/v1/people`, how: 'From the website’s server with a website key (below): sign-ups, petitions, volunteers, the newsletter' },
   { name: 'Lists and voted files', url: `${base}/admin/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
+  { name: 'Stripe — payments, refunds, disputes', url: webhookUrl(base), how: 'Set by hand: Stripe → Developers → Webhooks → Add endpoint, with the events under Online payments (above)' },
 ];
+// This Base's own address as the outside world reaches it: the public
+// address, else the one this page was opened at (with the client's path).
+const baseOf = (c) => publicUrl() || `${new URL(c.req.url).origin}${c.env?.base || ''}`;
 
 const within = (p) => Promise.race([p, new Promise((_, rej) => { setTimeout(() => rej(new Error('no answer in 8 s')), TIMEOUT_MS); })]);
 
 // One real call per service; never a send, never a write.
 const CHECKS = {
+  stripe: (db, ws, base) => checkStripe(base),
   database: async (db, ws) => {
     await db.query('select 1');
     const n = (await db.query('select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
@@ -179,8 +188,8 @@ const managerOnly = (c) => (c.get('ctx').role === MANAGER ? null : c.json({ erro
 api.get('/connections', (c) => {
   const denied = managerOnly(c);
   if (denied) return denied;
-  const base = publicUrl() || new URL(c.req.url).origin;
-  return c.json({ services: services(), inbound: inbound(base), publicUrl: publicUrl() || null });
+  const base = baseOf(c);
+  return c.json({ services: services(base), inbound: inbound(base), publicUrl: publicUrl() || null });
 });
 
 api.post('/connections/check', async (c) => {
@@ -190,7 +199,7 @@ api.post('/connections/check', async (c) => {
   const fn = CHECKS[key];
   if (!fn) return c.json({ error: 'no such service' }, 404);
   try {
-    return c.json({ key, ...(await within(fn(c.get('db'), c.get('ctx').workspaceId))) });
+    return c.json({ key, ...(await within(fn(c.get('db'), c.get('ctx').workspaceId, baseOf(c)))) });
   } catch (e) {
     // Never a key in the words: a failed URL carries its query string.
     return c.json({ key, ok: false, said: `No answer: ${String(e.message).replace(/([?&](key|token|apikey)=)[^&\s]+/gi, '$1…').slice(0, 160)}` });

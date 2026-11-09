@@ -603,6 +603,15 @@ one tap away under **More**.
   the first ends, and *Check:* says what to look at. Pick *Credit card*: a
   note to black out the card number — there’s no box for it. **Data →
   Take data out → Members** lists every member, paper and website.
+- **Online giving** (staging, Stripe in test mode — INTEGRATIONS.md): give
+  on the website with Stripe's test card `4242 4242 4242 4242`. The gift
+  shows on **Donations** marked *online* with its receipt, under *Online
+  giving · test mode* as *Paid*; a monthly gift puts the donor under
+  *Monthly donors*. Log a big gift at the desk for someone, then try to give
+  online as them: the form refuses it in plain words. Refund a payment from
+  Stripe's dashboard: **Needs you** says the gift is void (*Got it* clears
+  it). `node e2e-payments.mjs` (PORT, SHOTS) runs all of it in a browser
+  against a stand-in Stripe.
 - **Today → More → Verify the records** replays the tamper-evident log;
   **Export all data** downloads everything.
 - **Donations and People with no signal** read only in the same browser tab

@@ -77,11 +77,20 @@ Then, as each one is ready:
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
 | `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | from Stripe: **test** keys on staging first; **live** keys on production only once a test gift has gone all the way through | gifts and membership dues paid online on the website (INTEGRATIONS.md, *Online payments — Stripe*) |
 
 Twilio: set the number's incoming-message webhook to
 `https://starbase.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST). The
 other addresses Twilio calls back (delivery reports, calls) are sent with
 each text and call, built from `STARBASE_PUBLIC_URL`; nothing else to set.
+
+Stripe: Developers → **Webhooks** → add an endpoint at
+`https://starbase.imaginesurrey.ca/stripe/webhook` (Settings → Services
+shows the exact address and the ten events to tick) and put its signing
+secret in `STRIPE_WEBHOOK_SECRET`. The keys go in the host's environment
+only — never in the repo, a chat or an email. Test mode first: on staging,
+test keys and Stripe's test card; the desk says *Test mode* until live keys
+are in.
 
 **Check them.** After the first sign-in (below): **Settings → Services** in
 the admin lists every service, says which settings are missing, and
@@ -156,6 +165,10 @@ shared, and the code names no client.
 - `https://starbase.imaginesurrey.ca/` loads over https and signs in.
 - A test newsletter reaches a real inbox with a working unsubscribe link.
 - A test gift logged under **Donations** gets its receipt emailed.
+- Online giving, on staging in test mode: a gift once, a monthly gift and a
+  membership go through Stripe's page and show under **Donations** marked
+  *online*, each with its receipt; a refund from Stripe's dashboard voids its
+  gift. Then live keys on production, one small real gift, and refund it.
 - Backups: Render's managed Postgres keeps daily backups; **Today → Export
   all data** (managers) downloads everything (message pictures are not in it).
 - Two-step sign-in: on for you (**Your profile**, from the account menu)
@@ -175,3 +188,7 @@ shared, and the code names no client.
   address cannot be added back by the desk.
 - Donations: contributions are checked against the Elections BC limit per
   contributor (confirm the seeded figure with Elections BC before filing).
+- Online payments: checked against the limit before Stripe's page opens and
+  again when the payment lands — one that would go over is refunded through
+  Stripe by itself, the donor is told, and the treasurer sees it. Stripe's
+  webhook is refused without its signature, and each event is done once.

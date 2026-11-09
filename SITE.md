@@ -252,6 +252,43 @@ a completed payment logs the gift through the normal gift path (limit
 checked, receipt issued) or the membership; over the limit → refunded
 through Stripe and flagged for the treasurer.
 
+What the payments branch adds to this (additive; INTEGRATIONS.md has the
+Stripe setup):
+
+- `checkoutFor(tx, ctx, opts, emit?)`: `ctx` needs only `workspaceId` (or
+  `workspace.id`). Pass the form's `emit` and the checkout is on the event
+  log too (`payment_checkout`). Call it inside the form's `runAction`: a
+  refusal or a Stripe failure then leaves nothing behind. It calls Stripe
+  once (10 s at most). Answers `{ url, id, session_id, mode }`.
+- `declaration`: `true` (kept with the website's own words:
+  `DECLARATION` — a Canadian citizen or permanent resident, living in BC,
+  their own money) or the exact words the visitor ticked (a string).
+- Membership also takes `term` (1 | 4), `birthDate` (YYYY-MM-DD) and
+  `citizenship` (`citizen` | `pr`): dues are at least $10 a year ($5 for
+  ages 14 to 30, from the birth date — the paper form's rule, `DUES`);
+  members are 14 or older. When paid: the membership as the membership form
+  makes one (source `website`, a renewal starting when the current term
+  ends, the `member` tag) and the dues logged as a gift.
+- `successUrl` may hold `{CHECKOUT_SESSION_ID}`; both URLs are absolute.
+  `metadata` (flat, small) is kept with the checkout for the record.
+- A refusal throws an Error with `.status` (400, or 503 when payments
+  aren't set up or Stripe didn't answer), `.field` (`declaration`,
+  `amount_cents`, `cadence`, `slate`, `term`, `birth_date`, `citizenship`,
+  `person`) and a sentence a visitor reads. Over the limit it names the
+  year's limit and the slate — never what the person has given.
+- `paymentsReady()` → boolean (both keys set). `paymentsData(db, workspace)`
+  → `{ ready, mode, year, limit_cents, monthly_max_cents }`: the loaders'
+  `data.payments`.
+- The webhook's events: `checkout.session.completed`,
+  `checkout.session.async_payment_succeeded`,
+  `checkout.session.async_payment_failed`, `checkout.session.expired`,
+  `invoice.paid`, `customer.subscription.updated`,
+  `customer.subscription.deleted`, `charge.refunded`,
+  `charge.dispute.created`, `charge.dispute.closed`.
+- Tables `stripe_checkouts`, `stripe_payments`, `stripe_events`; the desk
+  reads `GET /api/payments` (money roles) and writes `payment.ack`
+  (area *money*).
+
 ## Settings (`site_settings`, `server/ext/site/shape.js`)
 
 What each section holds (the renderer gets them as `site.*`; every `href`

@@ -40,6 +40,7 @@ const ACTION_AREA = {
   turf: 'map',
   shift: 'shifts',
   gift: 'money', receipt: 'money', donor: 'money', membership: 'money',
+  payment: 'money', // online payments (ext/payments)
   sign: 'signs',
   blast: 'outreach', survey: 'outreach',
   ladder: 'outreach', text: 'outreach', texting: 'outreach', subscription: 'outreach', script: 'outreach',
@@ -64,6 +65,7 @@ const PATH_AREA = [
   [/^\/api\/(records|export|events|audit|reports)(\/|$)/, 'data'],
   [/^\/api\/data\/(import|export)/, 'data'],
   [/^\/api\/(gifts|receipts|money|cap|stewardship|membership)(\/|$)/, 'money'],
+  [/^\/api\/payments(\/|$)/, 'money'],
   [/^\/api\/persons\/[^/]+\/membership$/, 'money'],
   [/^\/api\/(blasts|surveys|ladders|subscriptions|texting|inbox)(\/|$)/, 'outreach'],
   [/^\/api\/shifts(\/|$)/, 'shifts'],
