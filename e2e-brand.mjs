@@ -6,8 +6,9 @@
 // brand's icon, colours and mark; Base's says nothing of Imagine Surrey
 // anywhere a person can see (sign-in, Today, the menu, training, Settings);
 // Imagine Surrey's is as it always was. A manager renames the campaign in
-// Settings → Campaign. Screenshots of sign-in and Today, desktop and phone,
-// light and dark, for each.
+// Settings → Campaign, and the sign-in page then says the new name.
+// Screenshots of sign-in and Today, desktop and phone, light and dark, for
+// each.
 //
 //   PORT=4180 SHOTS=/tmp/brand node e2e-brand.mjs     (uses PORT and PORT+1)
 import { chromium } from 'playwright-core';
@@ -72,7 +73,8 @@ const shoot = async (base, who, scheme) => {
 };
 
 // ── Base's own look (staging) ──
-const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Demo Campaign' });
+// Sign-up closes once the campaign is set up, as on staging itself.
+const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Demo Campaign', STARBASE_OPEN_SIGNUP: '' });
 {
   const html = await (await fetch(`${BASE}/`)).text();
   check('base: the page leaves marked data-brand="base", with the Base icon and slate bar colour',
@@ -127,6 +129,17 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   await sleep(500);
   check('renamed: the sidebar shows the new name at once', /Riverside Demo/.test(await page.innerText('.brand-org')), await page.innerText('.brand-org'));
   await page.screenshot({ path: `${SHOTS}/base-settings-campaign.png` });
+  // Signed out, the sign-in page says it too — not "Demo Campaign", the
+  // name the deployment gave before setup.
+  const out = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+  const op = await out.newPage();
+  op.on('pageerror', (e) => errors.push(`[base signed out] ${e.message}`));
+  await op.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
+  await op.waitForSelector('.auth-page .brand-org', { timeout: 8000 });
+  const signinNow = await visibleText(op);
+  check('renamed: the sign-in page shows the new name', (await op.innerText('.auth-page .brand-org')) === 'Riverside Demo' && !/Demo Campaign/.test(signinNow), signinNow.slice(0, 200));
+  await op.screenshot({ path: `${SHOTS}/base-signin-renamed.png` });
+  await out.close();
 
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await phone.addCookies(await ctx.cookies());

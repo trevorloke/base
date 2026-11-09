@@ -73,7 +73,8 @@ the first person to open `/signup` sets it up (name, email, password; the
 campaign's name too, when the deployment left it blank) and becomes its
 manager. After that sign-up is closed (`POST /api/auth/signup` → 403) and
 Sign in hides the link; `GET /api/auth/setup` says which (`{ open,
-organization, org }`). `STARBASE_OPEN_SIGNUP=1` keeps it open — the test
+organization, org }` — `organization` is the campaign's own name once it's
+set up). `STARBASE_OPEN_SIGNUP=1` keeps it open — the test
 suite sets it, since tests make several workspaces to check they stay
 apart. `STARBASE_ENV=staging` puts a *Staging* badge on every screen and
 in `/api/health`, so a test environment is never mistaken for the real one.
@@ -622,7 +623,7 @@ environment (`server/lib/org.js`); the code names no client.
 
 | Variable | What it sets | Default |
 |---|---|---|
-| `STARBASE_ORG_NAME` | the campaign's name, shown on sign-in and used by the first sign-up | blank: the first sign-up names it |
+| `STARBASE_ORG_NAME` | the campaign's name until it's set up: shown on sign-in and taken by the first sign-up (after that, sign-in shows the campaign's own name, which a manager can change in Settings → Campaign) | blank: the first sign-up names it |
 | `STARBASE_JURISDICTION` | `bc-municipal`, `bc-provincial` or `federal` — which contribution-limit rules apply (`cap_rules`) | `bc-municipal` |
 | `STARBASE_TZ` | the campaign's time zone (shifts, receipts, quiet hours, the campaign's day) | `America/Vancouver` |
 | `STARBASE_CITY` | the city new addresses default to | `Surrey` |

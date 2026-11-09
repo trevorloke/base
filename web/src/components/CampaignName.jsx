@@ -1,7 +1,10 @@
 // Settings → Campaign (managers): what the campaign is called — the name on
-// top of every screen, on sign-in, on public pages and in emails
-// (workspace.update). A campaign set up under one name (a staging copy, a
-// renamed party) is renamed here in one step.
+// top of every screen, on sign-in and sign-up (GET /api/auth/setup gives the
+// campaign's own name once it's set up, not STARBASE_ORG_NAME), on public
+// pages and in emails (workspace.update). Not the sender emails come from:
+// that's MAIL_FROM on the server, shown under Services. A campaign set up
+// under one name (a staging copy, a renamed party) is renamed here in one
+// step.
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
@@ -29,7 +32,7 @@ export default function CampaignName({ me }) {
   return (
     <>
       <h2 className="ot-sec-h">Campaign name</h2>
-      <p className="muted">On top of every screen, on the sign-in page, on public pages and in emails.</p>
+      <p className="muted">On top of every screen, on the sign-in page, on public pages and in emails. Emails still come from the sender shown under Services.</p>
       <form className="ot-invite" onSubmit={save}>
         <label htmlFor="ws-name" className="ot-sr">Campaign name</label>
         <input id="ws-name" className="input ot-invite__email" maxLength={200} value={name}

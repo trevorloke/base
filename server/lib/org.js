@@ -3,7 +3,9 @@
 // and place come from the environment, never from code:
 //
 //   STARBASE_ORG_NAME      the campaign ("Imagine Surrey"). Unset: the first
-//                          sign-up names it.
+//                          sign-up names it. Once it's set up, screens say
+//                          the campaign's own name, which a manager can
+//                          change (Settings → Campaign; routes/auth.js)
 //   STARBASE_JURISDICTION  bc-municipal (default) | bc-provincial | federal —
 //                          which contribution-limit rules apply
 //   STARBASE_TZ            the campaign's time zone (default America/Vancouver)
@@ -49,7 +51,9 @@ export const envName = () => (['production', 'staging'].includes(str('STARBASE_E
 // Sign-up past first run: only when this is set (tests, local dev).
 export const openSignupForced = () => process.env.STARBASE_OPEN_SIGNUP === '1';
 
-export const setupClosedMessage = () => `Base is already set up for ${orgName() || 'this campaign'} — ask a manager to invite you.`;
+// Sign-up once the campaign is set up: name is the campaign's own, as it is
+// called now (routes/auth.js reads it), not necessarily STARBASE_ORG_NAME.
+export const setupClosedMessage = (name) => `Base is already set up for ${name || orgName() || 'this campaign'} — ask a manager to invite you.`;
 
 // What the app is told about this deployment (GET /api/auth/setup and /me).
 // Base Web, where it runs (an https address, or null).
