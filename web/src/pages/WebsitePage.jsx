@@ -543,7 +543,11 @@ function Builder({ id }) {
                         return { ...d, modules: setProps(d.modules, at2, { ...cur, [key]: typeof v === 'function' ? v(cur[key]) : v }) };
                       })} />
                     <div className="wb-sec__foot">
-                      <button type="button" className="btn btn-quiet wb-tap" onClick={() => setOpenId(null)}>Done</button>
+                      <button type="button" className="btn btn-quiet wb-tap" onClick={() => {
+                        setOpenId(null);
+                        // Back to the section's own row (the button pressed is gone).
+                        setTimeout(() => document.querySelector(`#wb-sec-${m.id} .wb-sec__toggle`)?.focus(), 0);
+                      }}>Done</button>
                     </div>
                   </div>
                 )}

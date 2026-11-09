@@ -114,6 +114,11 @@ export default function WebsiteSettings() {
     if (s && window.location.hash) document.getElementById(window.location.hash.slice(1))?.scrollIntoView();
   }, [s]);
   const changed = useMemo(() => (s && saved ? SECTIONS.filter((k) => !same(s[k], saved[k])) : []), [s, saved]);
+  useEffect(() => {
+    const warn = (e) => { if (changed.length) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [changed.length]);
   // v: a value, or current => value (a list's Undo, applied to the list as it is then).
   const set = (sec, key, v) => setS((x) => ({ ...x, [sec]: { ...x[sec], [key]: typeof v === 'function' ? v(x[sec][key]) : v } }));
   const ctx = { pages: q.data?.pages || [], toast: (text, undo) => say(text, { undo }) };

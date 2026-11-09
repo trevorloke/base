@@ -108,6 +108,11 @@ export default function WebsiteTheme() {
   const pairs = useMemo(() => (t ? pairsOf(t.colors) : []), [t]);
   const failing = pairs.filter((p) => !p.ok);
   const dirty = t && saved && !same(t, saved);
+  useEffect(() => {
+    const warn = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
 
   const setColor = (k, v) => setT((x) => ({ ...x, colors: { ...x.colors, [k]: v } }));
   const pickSkin = (key) => {

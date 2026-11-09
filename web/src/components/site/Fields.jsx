@@ -34,16 +34,18 @@ export function TextField({ id, label, value, onChange, max, error, hint, multil
   const errId = error ? `${id}-err` : null;
   const hintId = hint ? `${id}-hint` : null;
   const v = value ?? '';
+  // Near the limit: "212 of 240" under the box (read with it, not on every key).
   const near = max && v.length > max * 0.8;
+  const countId = near ? `${id}-count` : null;
   const Tag = multiline ? 'textarea' : 'input';
   return (
     <div className="field wb-field">
       <label htmlFor={id}>{label}{required && <span className="wb-req"> (needed to publish)</span>}</label>
       <Tag id={id} className="input" value={v} maxLength={max || undefined} rows={multiline ? rows : undefined}
         type={multiline ? undefined : 'text'} placeholder={placeholder} aria-invalid={error ? 'true' : undefined}
-        aria-describedby={describe(hintId, errId)} onChange={(e) => onChange(e.target.value)} />
+        aria-describedby={describe(hintId, countId, errId)} onChange={(e) => onChange(e.target.value)} />
       {hint && <p className="wb-field__hint" id={hintId}>{hint}</p>}
-      {near && <p className="wb-field__count" aria-live="polite">{v.length} of {max}</p>}
+      {near && <p className="wb-field__count" id={countId}>{v.length} of {max}</p>}
       <Problem id={errId} text={error} />
     </div>
   );
