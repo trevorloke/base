@@ -13,3 +13,6 @@ web/dist/
 # OS / editor noise
 .DS_Store
 *.log
+
+# Helper agents' working copies (git worktrees); never part of the product
+.claude/worktrees/
