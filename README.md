@@ -122,6 +122,9 @@ anything else (the server answers nothing else meanwhile). Volunteers sign
 in as before unless they turn it on. Someone who lost their phone: the
 manager taps **Reset two-step** on their row — they're signed out everywhere
 and sign in with their password (setting it up again where it's required).
+The campaign's only manager, with neither phone nor recovery codes: on the
+server's shell (Render → the service → Shell),
+`node scripts/reset-two-step.mjs their@email` does the same.
 Turning it on or off, new recovery codes, a recovery code spent at sign-in,
 a reset and the requirement are on the event log (nothing secret in it).
 Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
