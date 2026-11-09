@@ -230,6 +230,18 @@ function spreadStacked(doors) {
 }
 
 const EMPTY_MODEL = { doors: [], byPerson: new Map(), orphanSigns: [] };
+// Two loads of /map/doors as one (each person and sign once).
+function mergeDoorData(whole, view) {
+  if (!view) return whole;
+  if (!whole) return view;
+  const ids = new Set(whole.persons.map((p) => p.id));
+  const signIds = new Set(whole.signs.map((x) => x.id));
+  return {
+    ...whole,
+    persons: [...whole.persons, ...view.persons.filter((p) => !ids.has(p.id))],
+    signs: [...whole.signs, ...view.signs.filter((x) => !signIds.has(x.id))],
+  };
+}
 
 // ── Pins, count bubbles, sign flags ──
 // Every marker is a 48x48 transparent hit box (field rule) around the
@@ -1092,7 +1104,9 @@ export default function MapPage() {
     staleTime: 60_000,
   });
   const outbox = useOutbox();
-  const baseDoors = big ? (detail ? viewQ.data : null) : doorsQ.data;
+  // A big list: what came whole (a volunteer's own turfs, kept on the
+  // phone) and, close in, the doors in view — each person once.
+  const baseDoors = useMemo(() => (big ? mergeDoorData(doorsQ.data, detail ? viewQ.data : null) : doorsQ.data), [big, detail, doorsQ.data, viewQ.data]);
   const doorsData = useMemo(() => applyOutbox(baseDoors, outbox.items), [baseDoors, outbox.items]);
   const { doors, byPerson, orphanSigns } = useMemo(() => (doorsData ? buildDoors(doorsData) : EMPTY_MODEL), [doorsData]);
   const unlocated = (big ? doorsQ.data?.unlocated : doorsData?.unlocated) ?? 0;
@@ -1194,7 +1208,7 @@ export default function MapPage() {
     for (const [code, n] of Object.entries(byCode)) c[`r:${code}`] = n;
     if (big && !detail) {
       // People in view, by rating (signs, voted and the rest need a closer look).
-      const p = { all: 0, mine: null, support: 0, undecided: 0, opposed: 0, unrated: 0, signs: null, voted: null, gotv: null };
+      const p = { all: 0, mine: mineKeys?.size ?? null, support: 0, undecided: 0, opposed: 0, unrated: 0, signs: null, voted: null, gotv: null };
       for (const [, , r, n] of densQ.data?.cells || EMPTY_LIST) {
         p.all += n;
         p[r ? bandOf(r) : 'unrated'] += n;
@@ -1213,10 +1227,10 @@ export default function MapPage() {
     return null; // mine, signs, voted, gotv: only doors close in can say
   }, [filter]);
   const densityCells = useMemo(
-    () => (big && !detail ? cellsFrom(densQ.data, bandOf, densityKeep || (() => true)) : EMPTY_LIST),
-    [big, detail, densQ.data, densityKeep],
+    () => (big && !detail && filter !== 'mine' ? cellsFrom(densQ.data, bandOf, densityKeep || (() => true)) : EMPTY_LIST),
+    [big, detail, densQ.data, densityKeep, filter],
   );
-  const zoomInFor = big && !detail && !densityKeep ? labelOf(filter) : null;
+  const zoomInFor = big && !detail && !densityKeep && filter !== 'mine' ? labelOf(filter) : null;
   // Every sign on the map, by status and by kind (for the Signs chips).
   const signCounts = useMemo(() => {
     const c = {};
@@ -1718,8 +1732,8 @@ export default function MapPage() {
   // Below street zoom: every door a dot (the open one keeps its pin), or a
   // big list's patches further out.
   const dotDoors = useMemo(
-    () => (pinsOn || !detail ? EMPTY_LIST : visible.filter((d) => d.key !== selectedKey)),
-    [pinsOn, detail, visible, selectedKey],
+    () => (pinsOn ? EMPTY_LIST : visible.filter((d) => d.key !== selectedKey)),
+    [pinsOn, visible, selectedKey],
   );
   useEffect(() => {
     const layers = layersRef.current;

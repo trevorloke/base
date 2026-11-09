@@ -88,6 +88,9 @@ test('a volunteer kept to their turfs gets those doors, however big the list; no
   assert.equal(j.persons.length, 12);
   assert.equal((await vol.get('/api/map/density?bbox=49.09,-122.86,49.12,-122.84&cell=0.005,0.005')).status, 403);
   ok(await mgr.action('permission.doors.set', { scope: 'all' }));
-  assert.equal(ok(await vol.get('/api/map/doors')).big, true, 'every door again: asked by view, like the desk');
+  const all = ok(await vol.get('/api/map/doors'));
+  assert.equal(all.big, true, 'every door again: the rest asked by view, like the desk');
+  assert.equal(all.persons.length, 12, 'their own turf comes whole (kept on the phone for no signal)');
+  assert.equal(ok(await mgr.get('/api/map/doors')).persons.length, 0, 'the desk: all by view');
   delete process.env.STARBASE_MAP_ALL;
 });

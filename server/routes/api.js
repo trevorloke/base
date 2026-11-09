@@ -177,37 +177,43 @@ const bboxParam = (v) => {
 };
 const DOOR_COLS = 'id, name, phone, email, address, house_number, unit, lat, lng, rating, rated_at, voted_at, tags';
 
+// The doors inside the turfs someone walks (and their own record): read by
+// the turfs' corners, then kept to the outlines.
+const turfDoors = async (db, ctx) => {
+  const rings = (await db.query(
+    `select t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
+     where t.workspace_id = $1 and t.deleted_at is null`,
+    [ctx.workspaceId, ctx.user.id],
+  )).rows.map((t) => parseJson(t.polygon, []).map(([lat, lng]) => [Number(lat), Number(lng)])).filter((r) => r.length >= 3);
+  const inTurf = (lat, lng) => lat != null && rings.some((r) => pointInPolygon(Number(lat), Number(lng), r));
+  const mine = loginEmail(ctx);
+  const boxes = rings.map(boxOf).filter(Boolean);
+  const params = [ctx.workspaceId, mine || ''];
+  const near = boxes.map((b) => {
+    params.push(...b);
+    const k = params.length;
+    return `(lat between $${k - 3} and $${k - 1} and lng between $${k - 2} and $${k})`;
+  });
+  const persons = (await db.query(
+    `select ${DOOR_COLS} from persons
+     where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
+       and (${[...near, `($2 <> '' and lower(email) = $2)`].join(' or ')})
+     order by lower(address), lower(name) limit 20000`,
+    params,
+  )).rows.map(personRow).filter((p) => inTurf(p.lat, p.lng) || (mine && String(p.email || '').trim().toLowerCase() === mine));
+  const signs = (await db.query(
+    `select id, person_id, address, lat, lng, kind, status from signs where workspace_id = $1 and status <> 'removed'`,
+    [ctx.workspaceId],
+  )).rows.filter((s) => inTurf(s.lat, s.lng));
+  return { rings, persons, signs };
+};
+
 app.get('/map/doors', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   if (turfsOnly(ctx)) {
-    // Only the turfs they walk (and their own record): read by the turfs'
-    // corners, then kept to the outlines.
-    const rings = (await db.query(
-      `select t.polygon from turfs t join turf_members m on m.turf_id = t.id and m.user_id = $2
-       where t.workspace_id = $1 and t.deleted_at is null`,
-      [ctx.workspaceId, ctx.user.id],
-    )).rows.map((t) => parseJson(t.polygon, []).map(([lat, lng]) => [Number(lat), Number(lng)])).filter((r) => r.length >= 3);
-    const inTurf = (lat, lng) => lat != null && rings.some((r) => pointInPolygon(Number(lat), Number(lng), r));
-    const mine = loginEmail(ctx);
-    const boxes = rings.map(boxOf).filter(Boolean);
-    const params = [ctx.workspaceId, mine || ''];
-    const near = boxes.map((b) => {
-      params.push(...b);
-      const k = params.length;
-      return `(lat between $${k - 3} and $${k - 1} and lng between $${k - 2} and $${k})`;
-    });
-    const persons = (await db.query(
-      `select ${DOOR_COLS} from persons
-       where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
-         and (${[...near, `($2 <> '' and lower(email) = $2)`].join(' or ')})
-       order by lower(address), lower(name) limit 20000`,
-      params,
-    )).rows.map(personRow).filter((p) => inTurf(p.lat, p.lng) || (mine && String(p.email || '').trim().toLowerCase() === mine));
-    const signs = (await db.query(
-      `select id, person_id, address, lat, lng, kind, status from signs where workspace_id = $1 and status <> 'removed'`,
-      [ctx.workspaceId],
-    )).rows.filter((s) => inTurf(s.lat, s.lng));
+    // Only the turfs they walk (and their own record).
+    const { rings, persons, signs } = await turfDoors(db, ctx);
     return c.json({ persons: persons.map(forViewer(ctx)), signs, unlocated: 0, scope: 'turfs', turfs: rings.length });
   }
   const unlocated = (await db.query(
@@ -244,7 +250,13 @@ app.get('/map/doors', async (c) => {
       [ctx.workspaceId],
     )).rows[0];
     const bounds = [b.s, b.w, b.n, b.e].map(Number);
-    return c.json({ persons: [], signs: [], unlocated, big: true, total, bounds: bounds.every(Number.isFinite) ? bounds : null });
+    // A volunteer's own turfs come whole (and stay on their phone for a
+    // canvass with no signal); the rest loads by view like the desk's.
+    const own = ctx.role === 'volunteer' ? await turfDoors(db, ctx) : null;
+    return c.json({
+      persons: own ? own.persons.map(forViewer(ctx)) : [], signs: own ? own.signs : [], unlocated, big: true, total,
+      bounds: bounds.every(Number.isFinite) ? bounds : null, ...(own ? { turfs: own.rings.length } : {}),
+    });
   }
   const persons = (await db.query(
     `select ${DOOR_COLS} from persons
