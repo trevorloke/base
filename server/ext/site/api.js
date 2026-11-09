@@ -3,8 +3,9 @@
 import { Hono } from 'hono';
 import { areasFor } from '../../lib/perms.js';
 import { here } from '../../lib/mount.js';
-import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL } from './store.js';
+import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace } from './store.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
+import { paymentsReady } from './payments.js';
 
 export const api = new Hono();
 
@@ -39,17 +40,30 @@ api.get('/site', async (c) => {
   const posts = await count(`select count(*)::int as n, count(*) filter (where status = 'published')::int as live from site_posts where workspace_id = $1 and deleted_at is null`);
   const campaigns = await count(`select count(*)::int as n, count(*) filter (where status = 'open')::int as open from site_campaigns where workspace_id = $1 and deleted_at is null`);
   const actions = await count(`select count(*)::int as n, count(*) filter (where created_at > now() - interval '7 days')::int as week from site_actions where workspace_id = $1`);
+  // The week's website actions by kind ({ petition: 12, newsletter: 3 }).
+  const byKind = Object.fromEntries((await db.query(
+    `select kind, count(*)::int as n from site_actions where workspace_id = $1 and created_at > now() - interval '7 days' group by kind order by kind`, [ws],
+  )).rows.map((r) => [r.kind, r.n]));
+  // SITE_HOSTS answer for the campaign the site is by default (store.js).
+  const hosts = envHosts().length && (await siteWorkspace(db))?.id === ws ? envHosts() : [];
   return c.json({
     settings,
     pages,
     counts: {
       pages: pages.length, published: pages.filter((p) => p.status === 'published').length,
       posts: posts.n, posts_published: posts.live, campaigns: campaigns.n, campaigns_open: campaigns.open,
-      actions: actions.n, actions_week: actions.week,
+      actions: actions.n, actions_week: actions.week, actions_week_by_kind: byKind,
     },
     // Where it can be seen: the app's own address (/site/) until the
-    // campaign's domain points here, then that domain too.
-    urls: { site: here(c, '/site/'), domains: (settings.domains || []).map((d) => `https://${d}/`) },
+    // campaign's domain points here, then that domain too (saved under
+    // Website: domains; or the server's SITE_HOSTS: hosts).
+    urls: {
+      site: here(c, '/site/'),
+      domains: (settings.domains || []).map((d) => `https://${d}/`),
+      hosts: hosts.filter((h) => !(settings.domains || []).includes(h)).map((h) => `https://${h}/`),
+    },
+    // Online giving (donate and join): set up or not (ext/payments).
+    payments: { ready: await paymentsReady() },
   });
 });
 

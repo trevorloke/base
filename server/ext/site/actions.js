@@ -7,22 +7,28 @@
 //                        each section given replaces that section (shape.js);
 //                        a theme with a colour pair under 4.5:1 is refused
 //   site.page.create     { title, slug?, description?, modules?, show_in_nav? } → { page }   a draft
-//   site.page.save       { id, title?, slug?, description?, modules?, show_in_nav?, nav_order?, updated_at? }
+//   site.page.save       { id, title?, slug?, description?, image?, modules?, show_in_nav?, nav_order?, updated_at? }
 //                        the draft (modules checked loosely: a draft may be
-//                        unfinished); updated_at: the page as it was opened —
-//                        someone else's save since is refused (409)
+//                        unfinished); image: the page's share picture
+//                        { url, alt } (null or no url: none); updated_at: the
+//                        page as it was opened — someone else's save since is
+//                        refused (409)
 //   site.page.publish    { id }  the draft goes live: every module complete
 //                        (checkModules strict), the petitions it shows still there
 //   site.page.unpublish  { id }  off the site (not home)
 //   site.page.duplicate  { id } → { page }  a draft copy
 //   site.page.delete     { id }  (not home)
+//   site.page.restore    { id } → { page }  a deleted page back as it was (the
+//                        Website screen's Undo); its address taken since: a free one like it
 //   site.page.reorder    { ids }  the menu order of those pages
 //   site.post.save       { id?, title, slug?, excerpt?, body?, image? } → { post }
 //   site.post.publish    { id, published? = true }
 //   site.post.delete     { id }
+//   site.post.restore    { id } → { post }  (Undo)
 //   site.campaign.save   { id?, kind, title, slug?, excerpt?, body?, statement?, goal? } → { campaign }
 //   site.campaign.close  { id, open? }  closed (or open again)
 //   site.campaign.delete { id }
+//   site.campaign.restore { id } → { campaign }  (Undo)
 //   site.picture         { data (base64 or a data: URL), name?, width?, height? } → { media: { id, url } }
 //                        JPG, PNG or WebP, at most 2 MB, served at /media/:id
 //                        (the same store as Outreach's pictures)
@@ -143,6 +149,25 @@ const refsProblem = async (tx, ws, modules) => {
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 
+// A page's share picture: { url, alt } in its draft (and, once published,
+// in what went live) — only when it has one, so a page without stays
+// { title, description, modules }.
+const shareImage = z.object({ url: z.string().trim().max(500).default(''), alt: text(300).default('') }).nullish();
+const withImage = (content, image) => {
+  const { image: _drop, ...rest } = content;
+  return image?.url ? { ...rest, image: { url: image.url, alt: image.alt || '' } } : rest;
+};
+
+// A deleted page, post or petition back as it was (Undo). Its address may
+// have gone to another since: then a free one like it (-2, -3…).
+const restoreRow = async (tx, ws, table, id, gone) => {
+  const cur = (await tx.query(`select * from ${table} where id = $1 and workspace_id = $2 and deleted_at is not null for update`, [id, ws])).rows[0];
+  if (!cur) throw httpError(404, gone);
+  const taken = (await tx.query(`select 1 from ${table} where workspace_id = $1 and slug = $2 and deleted_at is null`, [ws, cur.slug])).rows[0];
+  const slug = taken ? await freeSlug(tx, ws, table, null, cur.slug, null, { pages: table === 'site_pages' }) : cur.slug;
+  return { cur, slug };
+};
+
 export const actions = {
   'site.settings.save': siteAction(z.object({
     theme: z.record(z.string(), z.any()).optional(),
@@ -226,6 +251,7 @@ export const actions = {
     title: text(120).min(1, 'Give the page a title').optional(),
     slug: z.string().max(80).optional(),
     description: text(300).nullish(),
+    image: shareImage,
     modules: z.array(z.any()).max(60).optional(),
     show_in_nav: z.boolean().optional(),
     nav_order: z.number().int().min(0).max(10000).optional(),
@@ -236,6 +262,7 @@ export const actions = {
     if (input.updated_at && new Date(input.updated_at).getTime() !== new Date(cur.updated_at).getTime()) {
       throw httpError(409, 'Someone else saved this page since you opened it — reload to see their changes');
     }
+    if (input.image?.url && !/^(\/(?!\/)|https:\/\/)/.test(input.image.url)) throw httpError(400, 'image: a picture from Website (/media/…)');
     const draft = parseJ(cur.draft, {});
     let slug = cur.slug;
     if (input.slug !== undefined && input.slug.trim().toLowerCase() !== cur.slug) {
@@ -245,7 +272,7 @@ export const actions = {
     const title = input.title ?? cur.title;
     const description = input.description === undefined ? (cur.description || '') : (input.description || '');
     const modules = input.modules === undefined ? (draft.modules || []) : checked(input.modules);
-    const next = { title, description, modules };
+    const next = withImage({ title, description, modules }, input.image === undefined ? draft.image : input.image);
     const showInNav = input.show_in_nav ?? cur.show_in_nav;
     const navOrder = input.nav_order ?? cur.nav_order;
     const row = (await tx.query(
@@ -257,6 +284,7 @@ export const actions = {
     if (slug !== cur.slug) changes.slug = slug;
     if (title !== cur.title) changes.title = title;
     if (description !== (cur.description || '')) changes.description = description;
+    if ((next.image?.url || '') !== (draft.image?.url || '')) changes.image = next.image?.url || '';
     if (showInNav !== cur.show_in_nav) changes.show_in_nav = showInNav;
     if (navOrder !== cur.nav_order) changes.nav_order = navOrder;
     emit('site_page', cur.id, 'update', { ...changes, modules: shapeOf(modules), content_hash: hash(next) });
@@ -270,7 +298,7 @@ export const actions = {
     const modules = checked(draft.modules || [], { strict: true });
     const problem = await refsProblem(tx, ws, modules);
     if (problem) throw httpError(400, problem);
-    const live = { title: cur.title, description: cur.description || '', modules };
+    const live = withImage({ title: cur.title, description: cur.description || '', modules }, draft.image);
     const row = (await tx.query(
       `update site_pages set published = $3, draft = $3, version = version + 1, status = 'published', published_at = now(), updated_at = now()
        where id = $1 and workspace_id = $2 returning *`,
@@ -318,6 +346,16 @@ export const actions = {
     await tx.query('update site_pages set deleted_at = now(), updated_at = now() where id = $1 and workspace_id = $2', [cur.id, ws]);
     emit('site_page', cur.id, 'void', { slug: cur.slug });
     return { id: cur.id };
+  }),
+
+  'site.page.restore': siteAction(z.object({ id: uuid() }), async (tx, ctx, input, emit) => {
+    const ws = ctx.workspaceId;
+    const { cur, slug } = await restoreRow(tx, ws, 'site_pages', input.id, 'That page can’t be brought back — reload the list');
+    const row = (await tx.query(
+      'update site_pages set deleted_at = null, slug = $3, updated_at = now() where id = $1 and workspace_id = $2 returning *', [cur.id, ws, slug],
+    )).rows[0];
+    emit('site_page', cur.id, 'restore', { slug, ...(slug !== cur.slug ? { was: cur.slug } : {}) });
+    return { page: pageOut(row) };
   }),
 
   'site.page.reorder': siteAction(z.object({ ids: z.array(uuid()).min(1).max(200) }), async (tx, ctx, input, emit) => {
@@ -390,6 +428,16 @@ export const actions = {
     return { id: input.id };
   }),
 
+  'site.post.restore': siteAction(z.object({ id: uuid() }), async (tx, ctx, input, emit) => {
+    const ws = ctx.workspaceId;
+    const { cur, slug } = await restoreRow(tx, ws, 'site_posts', input.id, 'That post can’t be brought back — reload the list');
+    const row = (await tx.query(
+      'update site_posts set deleted_at = null, slug = $3, updated_at = now() where id = $1 and workspace_id = $2 returning *', [cur.id, ws, slug],
+    )).rows[0];
+    emit('site_post', cur.id, 'restore', { slug, ...(slug !== cur.slug ? { was: cur.slug } : {}) });
+    return { post: postOut(row) };
+  }),
+
   'site.campaign.save': siteAction(z.object({
     id: uuid().nullish(),
     kind: z.enum(['petition', 'pledge']).optional(),
@@ -448,6 +496,17 @@ export const actions = {
     if (!n.affectedRows) throw httpError(404, 'That petition is gone — reload the list');
     emit('site_campaign', input.id, 'void', {});
     return { id: input.id };
+  }),
+
+  'site.campaign.restore': siteAction(z.object({ id: uuid() }), async (tx, ctx, input, emit) => {
+    const ws = ctx.workspaceId;
+    const { cur, slug } = await restoreRow(tx, ws, 'site_campaigns', input.id, 'That petition can’t be brought back — reload the list');
+    const row = (await tx.query(
+      `update site_campaigns set deleted_at = null, slug = $3, updated_at = now() where id = $1 and workspace_id = $2
+       returning *, ${SIG.replace(/c\./g, 'site_campaigns.')} as signatures`, [cur.id, ws, slug],
+    )).rows[0];
+    emit('site_campaign', cur.id, 'restore', { slug, ...(slug !== cur.slug ? { was: cur.slug } : {}) });
+    return { campaign: campaignOut(row) };
   }),
 
   'site.picture': siteAction(z.object({

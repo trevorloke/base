@@ -5,7 +5,8 @@
 //   GET  /api/site                 { settings, pages: [page, without draft and
 //                                  published], counts: { pages, published, posts,
 //                                  posts_published, campaigns, campaigns_open,
-//                                  actions, actions_week }, urls: { site, domains } }
+//                                  actions, actions_week, actions_week_by_kind },
+//                                  urls: { site, domains, hosts }, payments: { ready } }
 //                                  — the first look makes the campaign's site
 //                                  from its brand's seed (seeds/)
 //   GET  /api/site/pages/:id       { page: { id, slug, title, description, status,
@@ -16,15 +17,16 @@
 //   GET  /api/site/posts           { posts: [{ id, slug, title, excerpt, image, status, published_at, … }] }
 //   GET  /api/site/posts/:id       { post: { …, body } }
 //   GET  /api/site/campaigns       { campaigns: [{ id, slug, kind, title, excerpt, statement,
-//                                  goal, status, signatures, … }] }
+//                                  goal, status, signatures, signers_tag, … }] }
 //   GET  /api/site/campaigns/:id   { campaign: { …, body } }
 //   GET  /api/site/pictures        { pictures: [{ id, url, name, width, height, bytes, … }] }
 //   POST /api/site/preview-token   { pageId } → { url, expires_at }  a link to the
 //                                  page's draft for 30 minutes (frameable by the app)
 // Writes are actions (POST /api/actions/:name, actions.js has the inputs):
 //   site.settings.save · site.page.create | save | publish | unpublish |
-//   duplicate | delete | reorder · site.post.save | publish | delete ·
-//   site.campaign.save | close | delete · site.picture (a picture for the
+//   duplicate | delete | restore | reorder · site.post.save | publish |
+//   delete | restore · site.campaign.save | close | delete | restore
+//   (restore: the Website screens' Undo) · site.picture (a picture for the
 //   site, served at /media/:id like Outreach's) · shift.public (the desk:
 //   a shift on the site's events).
 //

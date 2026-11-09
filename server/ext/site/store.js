@@ -10,7 +10,7 @@ import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { brandKey } from '../../lib/brand.js';
 import { checkTheme } from '@starbase/shared/site/theme';
-import { SECTION_KEYS, sectionOf, hostOf, consentWording } from './shape.js';
+import { SECTION_KEYS, sectionOf, hostOf, consentWording, tagOf } from './shape.js';
 import { seedSite } from './seeds/index.js';
 
 export const parseJ = (v, d) => {
@@ -22,7 +22,7 @@ const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOS
 
 // ── Hosts ──
 // SITE_HOSTS is the operator's: any host name or address (127.0.0.1 for a test).
-const envHosts = () => String(process.env.SITE_HOSTS || '').split(',')
+export const envHosts = () => String(process.env.SITE_HOSTS || '').split(',')
   .map((h) => h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, ''))
   .filter((h) => /^[a-z0-9.-]{1,253}$/.test(h));
 const DOMAINS_MS = 30_000;
@@ -165,10 +165,12 @@ export const postOut = (r, { full = true } = {}) => ({
   status: r.status, published_at: iso(r.published_at), created_at: iso(r.created_at), updated_at: iso(r.updated_at),
   ...(full ? { body: r.body || '' } : {}),
 });
+// signers_tag: the tag a signature puts on the person (forms.js) — People
+// lists who signed with ?tag= (the Website screen links there).
 export const campaignOut = (r, { full = true } = {}) => ({
   id: r.id, slug: r.slug, kind: r.kind, title: r.title, excerpt: r.excerpt || '', statement: r.statement || '',
   goal: r.goal == null ? null : Number(r.goal), status: r.status, signatures: Number(r.signatures) || 0,
-  created_at: iso(r.created_at), updated_at: iso(r.updated_at),
+  created_at: iso(r.created_at), updated_at: iso(r.updated_at), signers_tag: tagOf('Signed: ', r.title),
   ...(full ? { body: r.body || '' } : {}),
 });
 

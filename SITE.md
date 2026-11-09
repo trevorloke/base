@@ -259,7 +259,7 @@ Writes are actions (`POST /api/actions/:name`):
 |---|---|
 | `site.settings.save` | `{ theme?, nav?, footer?, announcement?, seo?, org?, social?, domains? }` — each section sent replaces it → `{ saved, updated_at }` |
 | `site.page.create` | `{ title, slug?, description?, modules?, show_in_nav? }` → `{ page }` (a draft; slug from the title when not given) |
-| `site.page.save` | `{ id, title?, slug?, description?, modules?, show_in_nav?, nav_order?, updated_at? }` → `{ page }` (the draft, `checkModules` loose; `updated_at` as opened: someone else's save since → 409) |
+| `site.page.save` | `{ id, title?, slug?, description?, image?, modules?, show_in_nav?, nav_order?, updated_at? }` → `{ page }` (the draft, `checkModules` loose; `image`: the share picture, below; `updated_at` as opened: someone else's save since → 409) |
 | `site.page.publish` | `{ id }` → `{ page }` (`checkModules` strict, and the petitions it shows must exist; the error names the module) |
 | `site.page.unpublish` · `delete` · `duplicate` | `{ id }` (home stays) · → `{ page }` for duplicate |
 | `site.page.reorder` | `{ ids }` — the menu order |
@@ -278,3 +278,42 @@ Environment: `SITE_HOSTS` (the campaign's own domains), `SITE_WORKSPACE`
 `SITE_SECRET` (signs preview and preference links; unset, one is made and
 kept in the database), `SITE_CACHE_SECONDS` (60; 0 turns the page cache
 off), `SITE_FORMS_PER_MINUTE` (20 per address).
+
+### Additions for the Website screens (additive)
+
+- `GET /api/site` also answers `payments: { ready }` (online giving set up:
+  `paymentsReady()`), `counts.actions_week_by_kind` (`{ petition: 12,
+  newsletter: 3 }`, the last 7 days) and `urls.hosts` (`SITE_HOSTS` as
+  `https://<host>/`, when this campaign is the site's — none already in
+  `urls.domains`).
+- Every campaign the API answers carries `signers_tag`: the tag a signature
+  puts on the person (`tagOf('Signed: ', title)`, forms.js) — People lists
+  them with `/people?tag=<signers_tag>`.
+- `site.page.save` takes `image: { url, alt }` (or `null`): the page's own
+  share picture. It lives in the draft and, once published, in what went
+  live — `{ title, description, image?, modules }`, the key only when there
+  is a picture. The renderer gets it as `page.image` (`{ url, alt }` or
+  null) on a live page and a preview, and uses it for the page's share
+  picture (og:image) before `seo.shareImage` and the hero's picture.
+- Undo: `site.page.restore` · `site.post.restore` · `site.campaign.restore`
+  `{ id }` → `{ page }` · `{ post }` · `{ campaign }` — a deleted one back as
+  it was (live if it was live). If its address went to another meanwhile, it
+  comes back at a free one like it (`-2`, `-3`…; the event's payload says
+  `was`). The 'restore' op on the event log.
+
+## The Website screens (`web/src/pages/Website*.jsx`)
+
+The `site` area; the desk's menu has **Website** (App.jsx guards
+`/website…` by the area; a volunteer without it is told the admin isn't
+theirs, and the server refuses its data anyway).
+
+| Address | Screen |
+|---|---|
+| `/website` | Overview: live or not, where it lives, "View site", this week's sign-ups by kind, pages, news, petitions, online giving |
+| `/website/pages` | Pages in the menu's order: New page, In the menu, ⋯ Move up/down · Duplicate · Delete (Undo); drag by the handle or tap it and "Move here" |
+| `/website/pages/:id` | The builder: sections (drag, tap or ⋯ to move; hide/show, duplicate, add below, delete with Undo), each a form made from its catalogue fields (`components/site/Fields.jsx`); page details (title, address, description, share picture, in the menu); the draft saves itself; Preview (a new tab, and beside the editor on a wide screen); Publish names the section and box that needs a look (`components/site/builder.js problemsOf`, the catalogue's own check) |
+| `/website/theme` | A skin, the colours (every `PAIRS` pair's contrast as it changes; under 4.5:1 blocks saving; "Fix it" picks the nearest readable text colour), fonts, corners, logo, a live sample |
+| `/website/settings` | Menu and title bar, announcement bar, footer, organization, social accounts, search and sharing, your own domain |
+| `/website/news` · `/:id` | Posts: list, editor (picture, excerpt, Markdown), publish/unpublish, delete (Undo) |
+| `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
+

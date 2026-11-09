@@ -206,12 +206,15 @@ const livePage = async (site, slug) => (await site.db.query(
   "select id, slug, version, published from site_pages where workspace_id = $1 and slug = $2 and deleted_at is null and status = 'published'",
   [site.ws.id, slug],
 )).rows[0] || null;
+// A page's share picture ({ url, alt }), or null: the renderer's og:image
+// for the page, before the site's own (seo.shareImage) and the hero's.
+const shareOf = (content) => (content?.image?.url ? { url: String(content.image.url), alt: String(content.image.alt || '') } : null);
 // A live page as the renderer gets it: a hidden module's words never reach
 // the public page at all.
 const pageFor = (row) => {
   const p = parseJ(row.published, {}) || {};
   const modules = (Array.isArray(p.modules) ? p.modules : []).filter((m) => m && !m.hidden);
-  return { id: row.id, slug: row.slug, title: p.title || '', description: p.description || '', modules };
+  return { id: row.id, slug: row.slug, title: p.title || '', description: p.description || '', image: shareOf(p), modules };
 };
 
 // /news with no news page: the posts, newest first.
@@ -482,7 +485,7 @@ export const makeSiteApp = (at) => {
       }, { preview: true });
     }
     const d = parseJ(row.draft, {}) || {};
-    const page = { id: row.id, slug: row.slug, title: d.title || row.title, description: d.description || '', modules: Array.isArray(d.modules) ? d.modules : [] };
+    const page = { id: row.id, slug: row.slug, title: d.title || row.title, description: d.description || '', image: shareOf(d), modules: Array.isArray(d.modules) ? d.modules : [] };
     return draw(c, site, { kind: 'page', page, key: null, ctx: { preview: true } });
   });
 
