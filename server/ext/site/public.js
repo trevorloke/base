@@ -183,7 +183,10 @@ const siteFor = async (c, at) => {
 const ctxOf = (c, site, extra = {}) => {
   const q = (k) => c.req.query(k);
   const sent = KINDS.includes(q('sent')) ? q('sent') : null;
-  const error = /^[a-z_]{1,40}$/.test(q('error') || '') ? q('error') : null;
+  // ?error=<field>&module=<id>: the form a plain post came back to (forms.js).
+  const field = /^[a-z_]{1,40}$/.test(q('error') || '') ? q('error') : null;
+  const module = /^[A-Za-z0-9_-]{1,64}$/.test(q('module') || '') ? q('module') : '';
+  const error = field && module ? { field, module_id: module } : field;
   const cancelled = KINDS.includes(q('cancelled')) ? q('cancelled') : null;
   const code = getCookie(c, REF_COOKIE);
   return {

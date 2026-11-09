@@ -111,7 +111,13 @@ export const ERROR_WORDS = {
   shift_id: 'That opening isn’t available any more',
   consent_email: 'Tick the box to get email from us',
   roles: 'Pick at least one',
+  busy: 'Too many tries from here — wait a minute and try again.',
+  payments: 'Online payments aren’t working right now — please try again in a few minutes, or get in touch to give another way.',
 };
+// Errors about a whole form rather than one of its boxes, and the kinds of
+// form each is about (null: every form — too many tries from one address
+// stops them all). With no module named, they show on every such form.
+const FORM_ERRORS = { busy: null, payments: ['join', 'donate'], campaign: ['petition', 'pledge'], shift_id: ['rsvp'] };
 
 export function renderContext({ kind = 'page', site, page, post, campaign, data, ctx } = {}) {
   const c = obj(ctx);
@@ -122,6 +128,9 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
   const sent = pickSent(c.sent);
   const error = pickError(c.error);
   const mods = kind === 'page' ? arr(obj(page).modules) : [];
+  // Is this module (an error's, from the address) on this page? A
+  // petition's own page has one form, 'campaign'.
+  const onPage = (id) => (kind === 'campaign' ? id === 'campaign' : mods.some((m) => m && m.id === id));
   const rc = {
     kind,
     loc,
@@ -140,11 +149,19 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
     action: (formKind) => `${loc.root}api/forms/${formKind}`,
     hidden: (moduleId, extra = {}) => ({ page_id: kind === 'page' ? str(obj(page).id) : '', module_id: moduleId, ref: cleanRef(c.referral), source: cleanSource(c.source), ...extra }),
     sentFor: (formKind, moduleId) => Boolean(sent && sent.kind === formKind && (!sent.module || sent.module === moduleId)),
+    // After a plain post: the error on the form that was sent (its module,
+    // when it is on this page), else on every form it is about — a box of
+    // that name, or the kinds FORM_ERRORS names.
     errorFor: (formKind, moduleId, fieldNames) => {
       if (!error || !error.field) return null;
-      if (error.module && error.module !== moduleId) return null;
+      const mod = error.module && onPage(error.module) ? error.module : '';
+      if (mod && mod !== moduleId) return null;
       if (error.kind && error.kind !== formKind) return null;
-      if (!error.module && !error.kind && !fieldNames.includes(error.field)) return null;
+      if (!mod && !error.kind) {
+        if (Object.hasOwn(FORM_ERRORS, error.field)) {
+          if (FORM_ERRORS[error.field] && !FORM_ERRORS[error.field].includes(formKind)) return null;
+        } else if (!fieldNames.includes(error.field)) return null;
+      }
       const message = error.message || ERROR_WORDS[error.field] || 'Please check the form and try again.';
       return fieldNames.includes(error.field) ? { field: error.field, message } : { field: '', message };
     },

@@ -17,6 +17,8 @@ const TONES = new Set(['paper', 'surface', 'brand', 'accent', 'ink']);
 const DARK = new Set(['brand', 'ink', 'action']);
 const toneOf = (t, fallback = 'paper') => (TONES.has(t) ? t : fallback);
 const titleId = (m) => `m-${m.id}-title`;
+// An opening's sign-up asks only these (openings.js).
+const RSVP_FIELDS = ['first_name', 'email', 'phone'];
 
 // The module's props, checked like a save (types, limits, defaults). A
 // module that doesn't pass (an old draft, a hand-made page) is drawn from
@@ -529,7 +531,7 @@ function Shifts({ m, p, rc, level }) {
         <${Paras} text=${p.intro} className="lede" />
       </div>
       ${items.length
-        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-openings`, variant: 'shifts', action: rc.action('rsvp'), hidden: rc.hidden(m.id), items, sent: rc.sentFor('rsvp', m.id) }} />`
+        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-openings`, variant: 'shifts', action: rc.action('rsvp'), hidden: rc.hidden(m.id), items, sent: rc.sentFor('rsvp', m.id), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />`
         : html`<p className="empty-state">No openings right now. ${volunteer ? html`<a href=${volunteer}>Tell us how you’d like to help</a>` : 'New ones are added every week.'}</p>`}
       ${p.showMap && items.some((it) => it.map) ? html`<p className="small">Tap a place to see it on a map.</p>` : null}
     </div>
@@ -634,7 +636,7 @@ function Events({ m, p, rc, level }) {
         </div>
       </div>
       ${items.length
-        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-events`, variant: 'events', action: rc.action('rsvp'), hidden: rc.hidden(m.id), items, sent: rc.sentFor('rsvp', m.id) }} />`
+        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-events`, variant: 'events', action: rc.action('rsvp'), hidden: rc.hidden(m.id), items, sent: rc.sentFor('rsvp', m.id), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />`
         : html`<div className="event-feature">
           <div className="info">
             <h3>New events are on the way</h3>

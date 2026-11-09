@@ -141,8 +141,8 @@ Answers: `200 { ok: true }` · `200 { ok: true, checkout_url }` (join, donate) �
 `400 { error, field }` · `429 { error }` · `503 { error }` when online
 payments aren't set up. Never a person id or anything about who was on file.
 A plain form post (no JavaScript) gets a `303` back to the page with
-`?sent=<kind>#m-<module_id>` (or `?error=<field>#m-<module_id>`), or to the
-checkout.
+`?sent=<kind>#m-<module_id>` (or `?error=<field>&module=<module_id>#m-<module_id>`,
+so the page says it on the form that was sent), or to the checkout.
 
 ### What the loaders give the renderer (`data`)
 
@@ -222,9 +222,13 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
 - `sent` — the `?sent=<kind>` value (or `{ kind, module_id }`): that kind's
   form shows its thank-you instead.
 - `error` — the `?error=<field>` value (or `{ field, module_id, kind, message }`):
-  the message on that field (with `module_id`, only in that module's form;
-  a bare field marks every form on the page that has it — the posted
-  `module_id` can come back in the address for this, e.g. `&module=<id>`).
+  the message on that field (with `module_id`, only in that module's form,
+  when it is on the page; a bare field marks every form on the page that has
+  it — the server sends the posted `module_id` back as `&module=<id>`).
+  `busy`, `payments`, `campaign` and `shift_id` are about the whole form:
+  they show as its alert (bare: `busy` on every form, `payments` on join and
+  donate, `campaign` on petitions and pledges, `shift_id` on the openings and
+  events).
 - `referral` — the code for the `ref` field. Leave it out of a page that is
   cached for everyone (the server reads the cookie when `ref` is missing).
 - `source` *(added)* — the `?source=` tag, carried in the forms.
@@ -350,7 +354,8 @@ Additions to the renderer's input (additive to "Rendering" above):
 `site.consent` = `{ email, sms }` — the exact words next to the consent
 boxes (the server stores them with each consent event; show them as they
 are). `ctx.error` (after a plain post: the field to fix, or `busy` — too
-many from one address — or `payments` — online payments aren't set up)
+many from one address — or `payments` — online payments aren't set up or
+didn't answer; with `&module=` from the address, `{ field, module_id }`)
 and `ctx.cancelled` (`join`/`donate`, back from the checkout without
 paying). `ctx.root` ('' on the campaign's own domain, '/site' elsewhere)
 and `ctx.assets` ('/site-assets') already carry a client's path
