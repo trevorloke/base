@@ -57,6 +57,13 @@ const signupInput = z.object({
 const setupOpen = async (db) => openSignupForced()
   || !(await db.query('select 1 from workspaces limit 1')).rows[0];
 
+// The campaign's own name once it is set up: its workspace's, as a manager
+// last named it (Settings → Campaign) — not STARBASE_ORG_NAME, which only
+// names it until then (the first sign-up takes it). One campaign per
+// deployment: the first one made.
+const campaignName = async (db) =>
+  (await db.query('select name from workspaces order by created_at limit 1')).rows[0]?.name || orgName();
+
 class SetupClosed extends Error {}
 
 // What the browser gets about the workspace: settings minus the sample
@@ -77,15 +84,18 @@ const uniqueSlug = async (tx, base) => {
   return `${base}-${Math.random().toString(36).slice(2, 6)}`;
 };
 
-// What the sign-in screens need before anyone is signed in.
+// What the sign-in screens need before anyone is signed in. The name they
+// show: while setup is open, the deployment's (what the first sign-up will
+// set up); once it's done, the campaign's own, renames included.
 app.get('/setup', async (c) => {
   const db = await getDb();
-  return c.json({ open: await setupOpen(db), organization: orgName(), org: orgOut() });
+  const open = await setupOpen(db);
+  return c.json({ open, organization: open ? orgName() : await campaignName(db), org: orgOut() });
 });
 
 app.post('/signup', async (c) => {
   const db = await getDb();
-  if (!(await setupOpen(db))) return c.json({ error: setupClosedMessage() }, 403);
+  if (!(await setupOpen(db))) return c.json({ error: setupClosedMessage(await campaignName(db)) }, 403);
   const parsed = signupInput.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0].message }, 400);
   const input = { ...parsed.data, workspaceName: parsed.data.workspaceName || orgName(), jurisdiction: parsed.data.jurisdiction || jurisdiction() };
@@ -116,7 +126,7 @@ app.post('/signup', async (c) => {
       );
     });
   } catch (e) {
-    if (e instanceof SetupClosed) return c.json({ error: setupClosedMessage() }, 403);
+    if (e instanceof SetupClosed) return c.json({ error: setupClosedMessage(await campaignName(db)) }, 403);
     if (String(e.message).includes('users_email_key')) {
       return c.json({ error: 'an account with that email already exists' }, 409);
     }

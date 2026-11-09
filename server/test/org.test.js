@@ -41,9 +41,10 @@ test('a deployment that names no campaign: the first sign-up must, and gets the 
   assert.equal(r.json.org.env, 'staging');
   const closed = await new Client().get('/api/auth/setup');
   assert.equal(closed.json.open, false);
+  assert.equal(closed.json.organization, 'River City Together', 'once set up, sign-in names the campaign the first sign-up named');
   const again = await new Client().post('/api/auth/signup', { name: 'Late', email: 'late@example.org', password: 'late-pass-2026', workspaceName: 'X' });
   assert.equal(again.status, 403);
-  assert.match(again.json.error, /already set up for this campaign/);
+  assert.match(again.json.error, /already set up for River City Together/);
 });
 
 test('/api/health says which environment this is', async () => {
