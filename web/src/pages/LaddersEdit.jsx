@@ -21,6 +21,7 @@
 //     Finished people fold away.
 //   More: rename, "Let people go through again", Delete.
 import { useEffect, useId, useRef, useState } from 'react';
+import { useCaret } from '../components/useCaret.js';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
@@ -80,6 +81,7 @@ function EmailFields({ s, set, idp }) {
   const subject = useRef(null);
   const body = useRef(null);
   const last = useRef('body');
+  const putCaret = useCaret();
   const insert = (word) => {
     const key = last.current;
     const el = (key === 'subject' ? subject : body).current;
@@ -88,7 +90,7 @@ function EmailFields({ s, set, idp }) {
     const end = typeof el?.selectionEnd === 'number' ? el.selectionEnd : at;
     set({ ...s, [key]: toCodes(val.slice(0, at) + word + val.slice(end)) });
     const caret = at + word.length;
-    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange?.(caret, caret); });
+    putCaret(el, caret);
   };
   return (
     <>
@@ -118,6 +120,7 @@ function EmailFields({ s, set, idp }) {
 // A text: the words, the two fill-ins, and what the texting rules add.
 function TextFields({ s, set, idp }) {
   const box = useRef(null);
+  const putCaret = useCaret();
   const insert = (word) => {
     const el = box.current;
     const val = toWords(s.body);
@@ -127,7 +130,7 @@ function TextFields({ s, set, idp }) {
     const put = at > 0 && !/\s/.test(val[at - 1]) ? ` ${word}` : word;
     set({ ...s, body: toCodes(val.slice(0, at) + put + val.slice(end)) });
     const caret = at + put.length;
-    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange?.(caret, caret); });
+    putCaret(el, caret);
   };
   const n = toWords(s.body).length;
   return (

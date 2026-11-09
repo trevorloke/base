@@ -4,6 +4,7 @@
 // made-up voter; Save. Empty takes the script away. Canvassers see it as
 // "Script" above the rating buttons (components/ScriptLine.jsx).
 import { useEffect, useRef, useState } from 'react';
+import { useCaret } from '../components/useCaret.js';
 import { Link, useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
@@ -24,13 +25,14 @@ function ScriptBox({ context, title, help, current, me }) {
   const [said, setSaid] = useState(null);
   const ref = useRef(null);
   useEffect(() => { setBody(current || ''); }, [current]);
+  const putCaret = useCaret();
   const insert = (t) => {
     const el = ref.current;
     const at = el ? el.selectionStart : body.length;
     const end = el ? el.selectionEnd : body.length;
     const next = `${body.slice(0, at)}${t}${body.slice(end)}`;
     setBody(next);
-    requestAnimationFrame(() => { if (el) { el.focus(); el.setSelectionRange(at + t.length, at + t.length); } });
+    putCaret(el, at + t.length);
   };
   const save = async (e) => {
     e.preventDefault();

@@ -10,6 +10,7 @@
 // + Your name / + Campaign" buttons; the codes are stored underneath
 // (TextingWords.js), and a {…} that wouldn't fill in is flagged.
 import { useEffect, useId, useRef, useState } from 'react';
+import { useCaret } from '../components/useCaret.js';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action } from '../api.js';
@@ -69,6 +70,7 @@ export default function TextingSettings() {
   const [error, setError] = useState(null);
   const tplId = useId();
   const tplRef = useRef(null);
+  const putCaret = useCaret(); // before any early return: hooks keep their order
   const fromId = useId();
   const untilId = useId();
   const wkFromId = useId();
@@ -99,7 +101,7 @@ export default function TextingSettings() {
     const end = typeof el?.selectionEnd === 'number' ? el.selectionEnd : at;
     setTemplate(toCodes(val.slice(0, at) + word + val.slice(end)));
     const caret = at + word.length;
-    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange?.(caret, caret); });
+    putCaret(el, caret);
   };
   const save = async () => {
     setBusy(true);
