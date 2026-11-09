@@ -13,6 +13,9 @@
 //   closed          a checkout expired, or its bank payment failed
 //   refunded        a refund in Stripe (ours, or the dashboard's)
 //   disputed        a dispute opened or closed
+//   beforeItsPayment  a refund or a dispute whose payment isn't recorded yet
+//                   (Stripe sends events in no set order): kept, and done in
+//                   the same write that records the payment (doHeld)
 //
 // When a payment lands, the desk's own rule decides first: if logging it
 // would take the donor over this year's limit on its slate (gifts logged
@@ -183,15 +186,17 @@ export const paidOnce = async (tx, emit, ws, plan) => {
   // differ from what was asked); only money received is recorded.
   const amount = plan.amount != null && Number.isFinite(Number(plan.amount)) ? Number(plan.amount) : Number(co.amount_cents);
   let out = { status: 'nothing collected' };
+  let later = [];
   if (amount > 0) {
     out = await land(tx, emit, ws, co, {
       amount, paidAt: plan.paidAt, cadence: 'once',
       refs: { session_id: co.session_id || plan.sessionId, payment_intent: plan.paymentIntent, email: plan.email },
     });
+    later = await doHeld(tx, emit, ws, out.paymentId, { checkoutId: co.id, once: true, paymentIntent: plan.paymentIntent });
   }
   await tx.query(`update stripe_checkouts set status = 'paid', completed_at = now(), updated_at = now() where id = $1`, [co.id]);
   emit('payment_checkout', co.id, 'update', { status: 'paid' });
-  return { result: out.status === 'paid' ? (co.kind === 'membership' ? 'membership and gift recorded' : 'gift recorded') : out.status, ...out };
+  return thenHeld(out.status === 'paid' ? (co.kind === 'membership' ? 'membership and gift recorded' : 'gift recorded') : out.status, out, later);
 };
 
 // ── Monthly: the pledge it keeps (ext/membership's gift_pledges) ──
@@ -247,7 +252,8 @@ export const invoicePaid = async (tx, emit, ws, plan) => {
     amount, paidAt: plan.paidAt, cadence: 'monthly',
     refs: { invoice_id: plan.invoiceId, subscription_id: plan.subscriptionId, payment_intent: plan.paymentIntent, charge_id: plan.charge, email: plan.email },
   });
-  return { result: out.status === 'paid' ? 'month’s gift recorded' : out.status, ...out };
+  const later = await doHeld(tx, emit, ws, out.paymentId, { paymentIntent: plan.paymentIntent, charge: plan.charge, invoiceId: plan.invoiceId });
+  return thenHeld(out.status === 'paid' ? 'month’s gift recorded' : out.status, out, later);
 };
 
 export const stopped = async (tx, emit, ws, plan) => {
@@ -320,7 +326,23 @@ export const refunded = async (tx, emit, ws, plan) => {
   return { result: full ? 'refunded: the gift is void' : 'partly refunded: flagged for the treasurer', refund: full && p.over_limit && !p.donor_emailed_at };
 };
 
+// What a payment is again when a dispute ends with the money kept — what it
+// was before, from what its row knows: refunded in full; over the limit and
+// not all given back (so it's still to be refunded); no gift, the donor's
+// record gone; partly refunded; or paid.
+const afterDispute = (p) => {
+  const back = Number(p.refunded_cents) || 0;
+  if (back >= Number(p.amount_cents)) return 'refunded';
+  if (p.over_limit) return 'over_limit';
+  if (!p.gift_id) return 'no_donor';
+  return back > 0 ? 'partly_refunded' : 'paid';
+};
+
 // ── charge.dispute.*: the card holder asked their bank for it back ──
+// Its events can come the wrong way round: a close that comes first is
+// noted (the dispute's id), so its opening, when it comes, changes nothing.
+// While a payment is disputed its row names that dispute, so a row naming
+// it and not disputed means it has closed.
 export const disputed = async (tx, emit, ws, plan) => {
   const p = await lockPayment(tx, ws.id, plan.paymentId);
   if (!p) return { result: 'not a base.win payment' };
@@ -335,20 +357,95 @@ export const disputed = async (tx, emit, ws, plan) => {
       emit('payment', p.id, 'update', { status: 'dispute_lost', dispute: d.status });
       return { result: 'dispute lost: the gift is void' };
     }
-    // Won (or a warning closed): the money stays and so does the gift.
-    const back = Number(p.refunded_cents) > 0 ? 'partly_refunded' : 'paid';
-    if (p.status === 'disputed') {
-      await tx.query(`update stripe_payments set status = $3, updated_at = now() where id = $1 and workspace_id = $2`, [p.id, ws.id, back]);
-      emit('payment', p.id, 'update', { status: back, dispute: d.status });
+    // Won (or an inquiry closed): the money stays. Its opening not here yet:
+    // noted, and nothing else changes.
+    if (p.status !== 'disputed') {
+      if (d.id && p.dispute_id !== d.id) {
+        await tx.query('update stripe_payments set dispute_id = $3, updated_at = now() where id = $1 and workspace_id = $2', [p.id, ws.id, d.id]);
+        emit('payment', p.id, 'update', { dispute: d.status });
+      }
+      return { result: `dispute ${d.status}` };
     }
-    return { result: `dispute ${d.status}` };
+    // The payment is what it was before. Over the limit, that money still
+    // goes back: its refund is tried again — a job of its own (the landing's
+    // has run, and a refund refused during the dispute may go through now) —
+    // and the donor is told once it has.
+    const back = afterDispute(p);
+    const again = back === 'over_limit' || (back === 'refunded' && p.over_limit && !p.donor_emailed_at);
+    await tx.query(`update stripe_payments set status = $3, updated_at = now() where id = $1 and workspace_id = $2`, [p.id, ws.id, back]);
+    emit('payment', p.id, 'update', {
+      status: back, dispute: d.status,
+      ...(back === 'over_limit' ? { reason: 'over this year’s contribution limit: refunding' } : {}),
+    });
+    if (again) {
+      await enqueueJob(tx, { workspaceId: ws.id, kind: REFUND_JOB, payload: { payment_id: p.id }, key: d.id ? `${REFUND_JOB}:${p.id}:${d.id}` : null });
+    }
+    return { result: `dispute ${d.status}`, refund: again };
   }
   if (['refunded', 'dispute_lost'].includes(p.status)) return { result: 'already settled' };
+  if (d.id && p.dispute_id === d.id && p.status !== 'disputed') return { result: 'already settled' }; // its close came first
   await tx.query(
     `update stripe_payments set status = 'disputed', dispute_id = $3, dispute_reason = $4, dispute_due_by = $5, updated_at = now()
      where id = $1 and workspace_id = $2`,
-    [p.id, ws.id, d.id, d.reason || null, d.dueBy ? d.dueBy.toISOString() : null],
+    [p.id, ws.id, d.id, d.reason || null, d.dueBy ? new Date(d.dueBy).toISOString() : null],
   );
   emit('payment', p.id, 'update', { status: 'disputed', dispute_reason: d.reason || null });
   return { result: 'disputed: flagged for the treasurer' };
 };
+
+// ── A refund or a dispute that came before its payment ──
+// Stripe sends events in no set order: a refund made in the dashboard can
+// come while the payment's own event is still being retried. Under the
+// campaign's lock, if the payment is recorded by now it's done now;
+// otherwise it's kept (stripe_held) and done the moment the payment lands,
+// in that same write (doHeld) — so there's never a live gift and receipt for
+// money already given back, nor a dispute the treasurer doesn't see.
+const forCharge = (kind) => (kind === 'refund' ? refunded : disputed);
+
+// Our payment for a charge, as far as its row knows it: the payment intent,
+// the charge or the invoice — or a gift once's one payment, by its checkout.
+const paymentFor = async (tx, wsId, { refs = {}, checkoutId = null, once = false }) => (await tx.query(
+  `select id from stripe_payments where workspace_id = $1
+     and (payment_intent = $2 or charge_id = $3 or invoice_id = $4 or ($5::boolean and checkout_id = $6::uuid and invoice_id is null))
+   order by created_at limit 1`,
+  [wsId, refs.paymentIntent || null, refs.charge || null, refs.invoiceId || null, !!once, checkoutId || null],
+)).rows[0] || null;
+
+export const beforeItsPayment = async (tx, emit, ws, plan) => {
+  const { kind, checkoutId, once, refs = {}, event, ...what } = plan;
+  const p = await paymentFor(tx, ws.id, plan);
+  if (p) return forCharge(kind)(tx, emit, ws, { ...what, paymentId: p.id });
+  await tx.query(
+    `insert into stripe_held (event_id, workspace_id, checkout_id, kind, payment_intent, charge_id, invoice_id, plan, happened_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [event.id, ws.id, checkoutId, kind, refs.paymentIntent || null, refs.charge || null, refs.invoiceId || null, JSON.stringify(what), event.at],
+  );
+  emit('payment_checkout', checkoutId, 'update', {
+    waiting: kind, stripe_event: event.type,
+    ...(kind === 'refund' ? { refunded_cents: Number(what.amountRefunded) || 0 } : { dispute: what.dispute?.status || null }),
+  });
+  return { result: `${kind} kept until its payment is recorded` };
+};
+
+// When a payment lands: what came before it, done now — in the order Stripe
+// says it happened — and gone from stripe_held. → [{ result, refund? }]
+const doHeld = async (tx, emit, ws, paymentId, { checkoutId = null, once = false, paymentIntent = null, charge = null, invoiceId = null }) => {
+  const rows = (await tx.query(
+    `delete from stripe_held where workspace_id = $1
+       and (payment_intent = $2 or charge_id = $3 or invoice_id = $4 or ($5::boolean and checkout_id = $6::uuid))
+     returning kind, plan, happened_at, created_at`,
+    [ws.id, paymentIntent || null, charge || null, invoiceId || null, !!once, checkoutId || null],
+  )).rows;
+  const t = (v) => new Date(v).getTime();
+  rows.sort((a, b) => (t(a.happened_at) - t(b.happened_at)) || (t(a.created_at) - t(b.created_at)));
+  const done = [];
+  for (const h of rows) done.push(await forCharge(h.kind)(tx, emit, ws, { ...parseJson(h.plan, {}), paymentId }));
+  return done;
+};
+
+// A landing's answer, with what it did of what came first.
+const thenHeld = (said, out, later) => ({
+  ...out,
+  result: [said, ...later.map((r) => r.result)].join(' — then '),
+  refund: !!out.refund || later.some((r) => r.refund),
+});

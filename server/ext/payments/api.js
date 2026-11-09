@@ -41,7 +41,10 @@ const WORD = {
 export const wordOf = (r) => (r.status === 'refunded' && r.over_limit ? 'Returned — over the limit' : r.status === 'over_limit' ? 'Over the limit — refunding' : WORD[r.status] || r.status);
 
 // What the treasurer is told, and whether "Got it" is all it needs. Never
-// the donor's own giving: the payment's amount and what happened to it.
+// the donor's own giving: the payment's amount and what happened to it —
+// and never "the gift" of a payment that has none (over the limit, or its
+// donor's record deleted).
+const NO_DONOR_GIFT = 'No gift was logged online for it (the donor’s record was deleted).';
 const needOf = (r, tz) => {
   const amt = money(r.amount_cents);
   const acked = !!r.acknowledged_at;
@@ -52,7 +55,10 @@ const needOf = (r, tz) => {
       return { line: `Over this year’s limit, and the refund didn’t go through${r.refund_error ? ` (${r.refund_error})` : ''}. Refund ${amt} in Stripe.`, can_ack: false };
     case 'disputed': {
       const due = r.dispute_due_by ? new Date(r.dispute_due_by).toLocaleDateString('en-CA', { timeZone: tz, month: 'long', day: 'numeric' }) : null;
-      return { line: `The card holder disputed this payment with their bank. Answer in Stripe${due ? ` by ${due}` : ''} — the gift counts until it’s settled.`, can_ack: false };
+      const ask = `The card holder disputed this payment with their bank. Answer in Stripe${due ? ` by ${due}` : ''}`;
+      if (r.over_limit) return { line: `${ask}. It was over this year’s limit, so no gift was logged — if the bank doesn’t give the money back, it’s refunded once the dispute is settled.`, can_ack: false };
+      if (!r.gift_id) return { line: `${ask}. ${NO_DONOR_GIFT}`, can_ack: false };
+      return { line: `${ask} — the gift counts until it’s settled.`, can_ack: false };
     }
     case 'refunded': {
       if (acked) return null;
@@ -66,9 +72,13 @@ const needOf = (r, tz) => {
     case 'partly_refunded':
       if (acked) return null;
       return { line: `${money(r.refunded_cents)} of ${amt} was refunded in Stripe. The gift still says ${amt}: void it and log ${money(Number(r.amount_cents) - Number(r.refunded_cents))}.`, can_ack: true };
-    case 'dispute_lost':
+    case 'dispute_lost': {
       if (acked) return null;
-      return { line: 'The bank gave the money back to the card holder (dispute lost) — the gift is void.', can_ack: true };
+      const lost = 'The bank gave the money back to the card holder (dispute lost)';
+      if (r.over_limit) return { line: `${lost}. It was over this year’s limit, so no gift was logged.`, can_ack: true };
+      if (!r.gift_id) return { line: `${lost}. ${NO_DONOR_GIFT}`, can_ack: true };
+      return { line: `${lost} — the gift is void.`, can_ack: true };
+    }
     case 'no_donor':
       if (acked) return null;
       return { line: `Paid online, but the donor’s record was deleted — log the gift by hand${r.email ? ` (${r.email})` : ''}.`, can_ack: true };
@@ -152,15 +162,16 @@ export const deskOnlyReads = ['/payments'];
 // Today's Needs you (the brief hook): a payment that landed over the limit
 // rides with the gifts over the limit — the same words, "Over limit", and a
 // tap to Donations, where Needs you says what happened — until it's
-// refunded and a treasurer has said Got it. Desk roles only.
+// refunded (a dispute on it doesn't take it off) and a treasurer has said
+// Got it. Desk roles only.
 export const briefOverLimit = async (db, ctx, body) => {
   if (!MONEY_ROLES.includes(ctx.role) || !Array.isArray(body.flagged) || body.money == null) return;
   const rows = (await db.query(
-    `select sp.id, sp.person_id, sp.amount_cents, sp.paid_on, sp.status, sp.over_limit, sp.refund_error, sp.donor_emailed_at,
-            sp.donor_email_note, sp.acknowledged_at, pe.name
+    `select sp.id, sp.person_id, sp.gift_id, sp.amount_cents, sp.paid_on, sp.status, sp.over_limit, sp.refund_error, sp.donor_emailed_at,
+            sp.donor_email_note, sp.acknowledged_at, sp.dispute_due_by, pe.name
        from stripe_payments sp left join persons pe on pe.id = sp.person_id
       where sp.workspace_id = $1 and sp.over_limit
-        and (sp.status in ('over_limit', 'refund_failed')
+        and (sp.status in ('over_limit', 'refund_failed', 'disputed')
           or (sp.status = 'refunded' and sp.acknowledged_at is null and sp.updated_at > now() - interval '90 days'))
       order by sp.paid_at desc limit 10`, [ctx.workspaceId],
   )).rows;

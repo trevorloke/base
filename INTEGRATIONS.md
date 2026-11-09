@@ -235,9 +235,9 @@ What happens:
 1. Stripe → the campaign's account (its business details are the financial
    agent's to give). Developers → **API keys**, in **test mode**: the secret
    key (`sk_test_…`) — or better a **restricted key** with write access to
-   Checkout Sessions and Refunds and read access to Subscriptions, Invoices
-   and Webhook Endpoints (if a test gift is refused for a missing
-   permission, add the one Stripe names).
+   Checkout Sessions and Refunds and read access to Payment Intents,
+   Subscriptions, Invoices and Webhook Endpoints (if a test gift is refused
+   for a missing permission, add the one Stripe names).
 2. Developers → **Webhooks** → **Add endpoint**: the address **Settings →
    Services → Online payments (Stripe)** shows
    (`https://<public address>/stripe/webhook`; on the campaign's own
@@ -280,7 +280,11 @@ Stripe's signature over its exact bytes (compared in constant time, five
 minutes' tolerance either way) or it is refused with 400 and nothing is
 read. Each event is done once (`stripe_events`). Anything not from a
 base.win checkout — another app on the same Stripe account — is answered
-200 and left alone. A failure answers 500, so Stripe tries again.
+200 and left alone. A failure answers 500, so Stripe tries again. Stripe
+sends events in no set order: a refund or a dispute that comes before its
+payment is recorded (the payment's own event still being retried, say) is
+looked up in Stripe and, when it's the campaign's, kept and done in the
+same write that records the payment.
 
 **Check:** Services → Online payments reads the webhook endpoints back from
 Stripe: the key works, and one of them sends every event above to this
