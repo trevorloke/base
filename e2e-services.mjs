@@ -2,8 +2,10 @@
 // set up. A manager opens Settings → Services: every service is listed with
 // what it's for and which settings it's missing, the lead says what's
 // needed to launch, Check on the database answers, Check on email says the
-// key isn't set (no call goes out without one), and Twilio's address is
-// listed under "Coming in"; at 390 nothing scrolls sideways and the Check
+// key isn't set (no call goes out without one), Online payments (Stripe)
+// names its two keys and the webhook address and events to give Stripe,
+// and Twilio's address is listed under "Coming in"; at 390 nothing scrolls
+// sideways and the Check
 // buttons are 48px. A website key: made, shown once, used to send a person
 // in (a volunteer lands under Requests), listed with when it was last used,
 // revoked. Staff are kept out, on screen and on the server.
@@ -21,7 +23,7 @@ let BASE = process.env.BASE;
 const ADMIN = { toString() { return `${BASE}/admin`; } };
 if (!BASE) {
   const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off' };
-  for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GEOCODER']) delete env[k];
+  for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GEOCODER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET']) delete env[k];
   server = spawn(process.execPath, ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'inherit'] });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
@@ -57,7 +59,11 @@ await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.sv2-row', { timeout: 10000 }).catch(() => {});
 const names = await page.$$eval('.sv2-list:not(.sv2-in) .sv2-name', (els) => els.map((e) => e.innerText.trim()));
-check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Address lookup (BC Address Geocoder) | Map background (OpenStreetMap) | Background work', names.join(' | '));
+check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Address lookup (BC Address Geocoder) | Map background (OpenStreetMap) | Background work | Online payments (Stripe)', names.join(' | '));
+// Online payments (ext/payments): not set up, its two keys, and the webhook to give Stripe.
+const stripeRow = (await text(page, '.sv2-row:has(.sv2-name:text-is("Online payments (Stripe)"))')) || '';
+check('Stripe: not set up, both keys named, the webhook address and its events', /Not set up/.test(stripeRow) && /STRIPE_SECRET_KEY · STRIPE_WEBHOOK_SECRET/.test(stripeRow)
+  && stripeRow.includes(`${BASE}/stripe/webhook`) && /Events to send \(10\)/.test(stripeRow), stripeRow.slice(0, 300));
 const lead = (await page.innerText('.sv2-lead')).trim();
 check('the lead names what launch still needs (this test server runs no background jobs)', /^3 to set up before launch: Public address, Email, Background work\./.test(lead), lead);
 const emailRow = '.sv2-row:has(.sv2-name:text-is("Email (Resend)"))';

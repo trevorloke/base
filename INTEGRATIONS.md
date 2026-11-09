@@ -19,6 +19,7 @@ is written) and says exactly what is wrong if anything is.
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
+| [Online payments — Stripe](#online-payments--stripe) | gifts once or monthly and membership dues on the website, by card, Apple Pay or Google Pay | when the website takes money (test mode first) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
 
 The campaign's website sends people in with a key; the API is
 [below](#the-campaigns-website).
@@ -170,6 +171,95 @@ then, either:
 **Check:** Services → Map background opens a Google tiles session when
 Google is on.
 
+## Online payments — Stripe
+
+[stripe.com](https://stripe.com). Gifts once or monthly and membership dues
+on the campaign's website (its donate and join forms), paid on Stripe's own
+checkout page — by card, and by Apple Pay or Google Pay where the donor's
+phone has them — so a card number never touches base.win. base.win calls
+Stripe with plain HTTPS (no SDK, `server/ext/payments`) and hears back on
+one webhook.
+
+What happens:
+
+- **Before Stripe's page opens**, the website's form has recorded the
+  person; base.win checks the eligibility declaration was ticked and that
+  the amount fits what this person may still give this year on that slate —
+  the desk's own limit rule, plus their monthly gifts already running (a new
+  monthly gift counts each payment left this year, and must fit a whole year
+  beside the others). Over it, the form says so in plain words — never what
+  they have given — and Stripe is never asked.
+- **When the payment lands** (Stripe's webhook), it becomes a gift exactly
+  as the desk logs one: method card, marked *online*, the declaration kept
+  with it, the limit checked, the receipt issued and emailed by itself.
+  Nothing is retyped. Each month of a monthly gift is that month's gift; the
+  donor is a monthly donor (a pledge) until the subscription ends. Membership
+  dues make the membership (source *website*) and log the dues as a gift.
+- **Over the limit when it lands** (gifts logged at the desk while they were
+  on Stripe's page): no gift is logged; the payment is refunded through
+  Stripe (tried again if Stripe doesn't answer), the donor is emailed
+  plainly, and **Donations → Needs you** shows it until the treasurer taps
+  *Got it*.
+- **A refund or a dispute in Stripe**: a full refund voids the gift and its
+  receipt (refunded dues void the membership); a partial refund and an open
+  dispute are flagged under Needs you; a lost dispute voids the gift.
+
+**Set it up — test mode first, on staging:**
+
+1. Stripe → the campaign's account (its business details are the financial
+   agent's to give). Developers → **API keys**, in **test mode**: the secret
+   key (`sk_test_…`) — or better a **restricted key** with write access to
+   Checkout Sessions and Refunds and read access to Subscriptions, Invoices
+   and Webhook Endpoints (if a test gift is refused for a missing
+   permission, add the one Stripe names).
+2. Developers → **Webhooks** → **Add endpoint**: the address **Settings →
+   Services → Online payments (Stripe)** shows
+   (`https://<public address>/stripe/webhook`; on the campaign's own
+   website domain, `https://<site domain>/stripe/webhook` answers too), with
+   these events: `checkout.session.completed`,
+   `checkout.session.async_payment_succeeded`,
+   `checkout.session.async_payment_failed`, `checkout.session.expired`,
+   `invoice.paid`, `customer.subscription.updated`,
+   `customer.subscription.deleted`, `charge.refunded`,
+   `charge.dispute.created`, `charge.dispute.closed`. Copy its **signing
+   secret** (`whsec_…`).
+3. Both go in the host's environment only (Render → the service →
+   **Environment**): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — never in
+   the repo, a chat or an email.
+4. **Settings → Services** says *Test mode*; **Check** reads the webhook
+   back from Stripe.
+5. Give on the staging website with Stripe's test card (`4242 4242 4242
+   4242`, any future date, any CVC): Donations shows the gift marked
+   *online*, with its receipt. Try a monthly gift and a membership, and a
+   refund from Stripe's dashboard (the gift goes void).
+6. Production: the same with **live** keys and a live webhook endpoint
+   (Stripe gives it its own signing secret). Apple Pay and Google Pay are
+   switched on in Stripe → Settings → Payment methods (Apple Pay wants the
+   website's domain added there).
+7. Stripe → Settings → **Customer emails**: leave Stripe's own payment
+   receipts off — base.win emails the contribution receipt (Donations →
+   More → Receipts), and two receipts for one gift confuse donors.
+
+| Setting | | Notes |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | `sk_live_…`, `sk_test_…` or a restricted `rk_…` | a test key is test mode: no real money moves, and the desk says *Test mode* |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_…` | the endpoint's signing secret; a comma list while Stripe rolls it to a new one |
+| `STRIPE_API_BASE` | — | tests only: a stand-in for `api.stripe.com` |
+
+Without both, the website's donate and join forms say online payments aren't
+set up, and the webhook answers 503.
+
+**The webhook** (`POST /stripe/webhook`, no sign-in): a delivery must carry
+Stripe's signature over its exact bytes (compared in constant time, five
+minutes' tolerance either way) or it is refused with 400 and nothing is
+read. Each event is done once (`stripe_events`). Anything not from a
+base.win checkout — another app on the same Stripe account — is answered
+200 and left alone. A failure answers 500, so Stripe tries again.
+
+**Check:** Services → Online payments reads the webhook endpoints back from
+Stripe: the key works, and one of them sends every event above to this
+address.
+
 ## Hosting — Render
 
 `render.yaml` is a Render Blueprint: `starbase-staging` (deploys every push to
@@ -257,7 +347,8 @@ curl https://starbase.imaginesurrey.ca/in/v1/people \
 ```
 
 Donations and RSVPs are not taken this way: a gift is logged at the desk
-(Donations → Log a gift), where the contribution limits are checked.
+(Donations → Log a gift), where the contribution limits are checked, or
+paid online through Stripe ([Online payments](#online-payments--stripe)).
 
 Also, without a key: **files in** — People → Import takes a CSV or
 spreadsheet (a dry run first; a `voted` column marks who voted and never

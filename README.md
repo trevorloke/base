@@ -369,6 +369,8 @@ no login:
   address is marked do-not-email everywhere)
 - `/lu/:runId` — unsubscribe from a ladder's emails
 - `/r/:token` — a donation receipt
+- `POST /stripe/webhook` — Stripe's payment events, signed (INTEGRATIONS.md,
+  *Online payments — Stripe*)
 - `/learn/:slug` (and `/learn-files/:id`) — ImagineU's public lessons
 - `/media/:id`, `/o/…`, `/c/…` — pictures in emails, and the open and click
   counts
@@ -377,6 +379,13 @@ no login:
 A gift is logged at the desk (Donations → Log a gift) to one slate — city
 council or school board (`shared/canvass.js` SLATES) — and the annual limit
 is checked per contributor per slate.
+
+Gifts and membership dues paid online come through the website's donate and
+join forms and Stripe's own checkout page (`server/ext/payments`): the
+limit is checked before the page opens and again when the payment lands
+(over it, refunded through Stripe and flagged for the treasurer); each
+payment becomes a gift through the same path as the desk's, marked online,
+with its receipt; a monthly gift is a pledge, each month its own gift.
 
 
 ## Placing people on the map (geocoding)

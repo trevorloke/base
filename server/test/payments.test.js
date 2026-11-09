@@ -477,6 +477,26 @@ test('refunds and disputes from Stripe: a full refund voids the gift and its rec
   await verified();
 });
 
+test('a donor merged into another record while paying: the gift lands on the one kept; a deleted one is the treasurer’s to log', async () => {
+  const p = await donor('Bea');
+  const keep = await donor('Beatrice', { email: mail('beatrice') });
+  const r = await open(p.id, { amountCents: 3000 });
+  // ext/duplicates' merge: the record goes, pointing at the one kept.
+  await db.query(`update persons set deleted_at = now(), attrs = jsonb_set(coalesce(attrs, '{}'::jsonb), '{merged_into}', to_jsonb($2::text)) where id = $1`, [p.id, keep.id]);
+  const [paid] = await fake.pay(r.session_id);
+  assert.equal(paid.body.result, 'gift recorded');
+  assert.equal((await giftsOf(keep.id)).length, 1, 'on the record kept');
+  const gone = await donor('Cal');
+  const r2 = await open(gone.id, { amountCents: 2000 });
+  await db.query('update persons set deleted_at = now() where id = $1', [gone.id]);
+  const [landed] = await fake.pay(r2.session_id);
+  assert.equal(landed.body.result, 'no_donor');
+  const need = (await desk()).needs.find((x) => x.person_id === gone.id);
+  assert.match(need.line, /^Paid online, but the donor’s record was deleted — log the gift by hand/);
+  assert.equal(need.can_ack, true);
+  await verified();
+});
+
 test('an expired checkout is closed; nobody paid, nothing is logged', async () => {
   const p = await donor('Ava');
   const r = await open(p.id);
