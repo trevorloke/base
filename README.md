@@ -119,10 +119,12 @@ counted as it comes in, so codes sent all at once don't get more).
 Turning it on signs that person out on their other devices.
 
 A manager can **require it for desk roles** (Settings → Members — their own
-must be on first): every manager, treasurer and staffer then sets it up at
+must be on first): every manager, treasurer and staffer — and every
+volunteer given an area under Admin → Permissions (their own or their
+role's), since the area opens the desk to them — then sets it up at
 their next sign-in — or on their next tap, if already signed in — before
-anything else (the server answers nothing else meanwhile). Volunteers sign
-in as before unless they turn it on. Someone who lost their phone: the
+anything else (the server answers nothing else meanwhile). Other volunteers
+sign in as before unless they turn it on. Someone who lost their phone: the
 manager taps **Reset two-step** on their row — they're signed out everywhere
 and sign in with their password (setting it up again where it's required).
 The campaign's only manager, with neither phone nor recovery codes — or

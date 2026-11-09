@@ -223,8 +223,9 @@ one tap away under **More**.
   password it asks for the code; a wrong one is said, the right one opens
   the desk, and a recovery code works once (*9 recovery codes left*).
   **Settings → Members → Require two-step sign-in for desk roles**: a
-  staffer's next tap shows the set-up and nothing else until it's on; a
-  volunteer still signs in with a password. *Reset two-step* on someone's
+  staffer's next tap shows the set-up and nothing else until it's on — so
+  does a volunteer's once given an area under Permissions; a volunteer with
+  no area still signs in with a password. *Reset two-step* on someone's
   row signs them out and clears theirs.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift

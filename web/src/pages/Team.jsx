@@ -256,8 +256,9 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
   );
 }
 
-// Settings → Members: require two-step sign-in for managers, treasurers and
-// staff. A manager's own must be on first (the server says so too).
+// Settings → Members: require two-step sign-in for managers, treasurers,
+// staff and anyone given an area (Permissions). A manager's own must be on
+// first (the server says so too).
 function TwoStepRequirement({ data, online, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -281,7 +282,7 @@ function TwoStepRequirement({ data, online, onChanged }) {
       <p className="muted tm-2step-hint" id={hintId}>
         {!required && !data.you
           ? <>Turn yours on first, in <Link to="/profile">Your profile</Link>.</>
-          : 'Managers, treasurers and staff set it up at their next sign-in, before anything else.'}
+          : 'Managers, treasurers, staff and anyone given an area set it up at their next sign-in, before anything else.'}
       </p>
       {error && <p className="error" role="alert">{error}</p>}
     </section>

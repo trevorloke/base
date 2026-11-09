@@ -173,7 +173,8 @@ shared, and the code names no client.
   all data** (managers) downloads everything (message pictures are not in it).
 - Two-step sign-in: on for you (**Your profile**, from the account menu)
   and **Require two-step sign-in for desk roles** ticked under **Settings →
-  Members**; **Settings → Services** shows the two-step key set up.
+  Members** (it covers volunteers given an area under Permissions too);
+  **Settings → Services** shows the two-step key set up.
 - Keys: every key above is in Render only, never in the repo or a chat.
   Anyone who leaves the campaign is removed under **Admin → Members**, which ends their
   sign-in everywhere at once.

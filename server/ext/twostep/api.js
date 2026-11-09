@@ -1,6 +1,7 @@
 // Reads for two-step sign-in (lib/twostep.js):
 //   GET /two-step        your own: on or not, since when, recovery codes
-//                        left, whether your role needs it here; while you're
+//                        left, whether you need it here (your role, or an
+//                        area you were given); while you're
 //                        setting it up, the key and its QR code again (a
 //                        reload doesn't lose a key already scanned)
 //   GET /two-step/team   managers: whether it's required for desk roles, and
@@ -25,7 +26,7 @@ api.get('/two-step', async (c) => {
     setup: !on && open ? setupFor(open.plain, { account: ctx.user.email, issuer: issuerFor(ctx) }) : null,
     // On, but its key can't be opened here any more (the key setting changed).
     unreadable: on && !open,
-    required: requiredFor(ctx.role, ctx.workspace?.settings),
+    required: requiredFor(ctx.role, ctx.workspace?.settings, ctx.perms),
     must_set_up: Boolean(ctx.twoStep?.mustSetUp),
   });
 });

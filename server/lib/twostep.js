@@ -18,14 +18,16 @@
 // works once: the step it matched is kept, and that step or any earlier one
 // is refused after.
 //
-// Who must use it: a manager can require it for desk roles (manager,
-// treasurer, staff — workspace settings.twoStepRequired). Volunteers' sign-in
-// is unchanged unless they turn it on themselves.
+// Who must use it: a manager can require it for everyone the desk opens for
+// (workspace settings.twoStepRequired) — the desk roles (manager, treasurer,
+// staff) and a volunteer given an area under Admin → Permissions. Other
+// volunteers' sign-in is unchanged unless they turn it on themselves.
 import {
   createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, randomInt, scrypt, timingSafeEqual,
 } from 'node:crypto';
 import { promisify } from 'node:util';
 import { makeLimiter } from './guard.js';
+import { AREA_KEYS, decide } from './perms.js';
 import { qrSvgPath } from './qr.js';
 
 const scryptAsync = promisify(scrypt);
@@ -218,8 +220,14 @@ export const hashRecoveryCode = async (code, salt) =>
   (await scryptAsync(normalizeRecoveryCode(code), Buffer.from(salt, 'base64'), 32, { N: 16384, r: 8, p: 1 })).toString('hex');
 
 // ── Who must use it ──
+// Once required: the desk roles, and anyone given an area (their own grant
+// or their role's, and not denied — lib/perms.js), since an area opens the
+// desk to a volunteer: a Data grant is the whole export, an Admin grant the
+// team's roles and this very requirement. perms: the person's (ctx.perms).
 export const DESK_ROLES = ['manager', 'treasurer', 'staff'];
-export const requiredFor = (role, settings) => settings?.twoStepRequired === true && DESK_ROLES.includes(role);
+export const givenAnArea = (perms) => AREA_KEYS.some((k) => decide(perms, k) === true);
+export const requiredFor = (role, settings, perms = null) => settings?.twoStepRequired === true
+  && (DESK_ROLES.includes(role) || givenAnArea(perms));
 
 // What the app is told about the signed-in person (GET /api/auth/me).
 export const twoStepOut = (ctx) => ({
