@@ -620,7 +620,8 @@ refuses them as they're typed). One saved before this check is ignored where
 the site looks domains up, so the app is never locked out of its own address
 — the screen marks it, to be taken off. It also refuses any address people
 used the app at, signed in (`app_hosts`, noted by the API at most once an
-hour per address), unless it is the site's already (saved before, or in
-`SITE_HOSTS`): to make such an address only the website, whoever runs the
-server adds it to `SITE_HOSTS`.
+hour per address; a write that fails is tried again by the next request
+there, never left for the hour), unless it is the site's already (saved
+before, or in `SITE_HOSTS`): to make such an address only the website,
+whoever runs the server adds it to `SITE_HOSTS`.
 

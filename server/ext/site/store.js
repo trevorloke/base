@@ -56,7 +56,8 @@ export const isAppHost = (host, also = []) => {
 // (routes/api.js, and /api/auth/me as the app opens), kept in app_hosts:
 // the operator may not have listed them all, and site.settings.save refuses
 // those too. Written before the answer, at most once an hour per address by
-// this server; a write that fails is logged once and never fails the request.
+// this server; a write that fails is logged once, never fails the request,
+// and is tried again by the next request there.
 const HOUR = 3600_000;
 const noted = new Map(); // host → when this server last wrote it
 let noteFailed = false;
@@ -68,6 +69,9 @@ export const noteAppHost = async (db, host) => {
   try {
     await db.query('insert into app_hosts (host) values ($1) on conflict (host) do update set last_seen = now()', [h]);
   } catch (e) {
+    // Not written: no hour's wait for the next try, or a save in that hour
+    // could make an address people use the app at the website.
+    noted.delete(h);
     if (!noteFailed) console.error(`site: couldn’t note where the app answers (${h}): ${e.message}`);
     noteFailed = true;
   }

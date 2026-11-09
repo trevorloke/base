@@ -215,6 +215,39 @@ test('where the app answers is noted before the answer, once an hour; a note tha
   assert.equal(logged.filter((l) => /where the app answers/.test(l)).length, 1, logged.join('\n'));
 });
 
+test('a note that fails is written by the next request there, not an hour on: the site can’t take the address meanwhile', async () => {
+  const OLD2 = 'starbase.old-verify.example';
+  const noted = async () => (await db.query('select 1 from app_hosts where host = $1', [OLD2])).rows.length > 0;
+  const was = { STARBASE_PUBLIC_URL: process.env.STARBASE_PUBLIC_URL, RENDER_EXTERNAL_HOSTNAME: process.env.RENDER_EXTERNAL_HOSTNAME };
+  process.env.STARBASE_PUBLIC_URL = 'https://base.win/imaginesurrey';
+  process.env.RENDER_EXTERNAL_HOSTNAME = UPSTREAM;
+  const real = console.error;
+  try {
+    // The one write fails (the database, for a moment)…
+    console.error = () => {};
+    await db.query('alter table app_hosts rename to app_hosts_away');
+    try {
+      ok(await mgr.get(at(OLD2, '/api/site')));
+    } finally {
+      console.error = real;
+      await db.query('alter table app_hosts_away rename to app_hosts');
+    }
+    assert.equal(await noted(), false);
+    // …the database is back, and people keep using the app there.
+    ok(await mgr.get(at(OLD2, '/api/site')));
+    assert.equal(await noted(), true, 'noted by the next request');
+    const r = await mgr.post(at(UPSTREAM, '/api/actions/site.settings.save'), { domains: [OLD2] });
+    assert.equal(r.status, 400, JSON.stringify(r.json));
+    assert.match(r.json.error, /^People used base\.win at starbase\.old-verify\.example \(last on /);
+    forgetDomains();
+    assert.equal((await mgr.get(at(OLD2, '/api/auth/me'))).status, 200, 'the app still answers there');
+  } finally {
+    console.error = real;
+    for (const [k, v] of Object.entries(was)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    await noDomains();
+  }
+});
+
 test('on a website domain Twilio still reaches base.win: a STOP is never lost', async () => {
   const before = process.env.TWILIO_AUTH_TOKEN;
   process.env.TWILIO_AUTH_TOKEN = 'site-hosts-twilio-token';
