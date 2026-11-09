@@ -134,9 +134,12 @@ function Builder({ id }) {
   useEffect(() => () => { qc.invalidateQueries({ queryKey: ['site-page', id] }); }, [qc, id]);
 
   // ── Saving the draft ──
+  // One write to the page at a time: a save waits for whatever is out (a
+  // save, a publish, a new address) and goes with the page as that left
+  // it, so it never carries an old updated_at (a false "someone else saved").
   const flush = useCallback(async () => {
     clearTimeout(timer.current);
-    if (inflight.current) await inflight.current;
+    while (inflight.current) await inflight.current;
     if (!dirty.current || stopped.current || !draftRef.current) return !stopped.current;
     const d = draftRef.current;
     if (!d.title.trim()) { setSave({ state: 'blocked', text: 'give the page a title' }); return false; }
@@ -170,9 +173,30 @@ function Builder({ id }) {
     })();
     inflight.current = run;
     const ok = await run;
-    inflight.current = null;
+    if (inflight.current === run) inflight.current = null;
     if (ok && dirty.current) return flush();
     return ok;
+  }, [id, qc]);
+
+  // Publish, take off the site, a new address: in turn with the autosave
+  // (above). The page that comes back is the one the next save goes with.
+  const inTurn = useCallback(async (send) => {
+    while (inflight.current) await inflight.current;
+    const run = send().then((res) => {
+      if (res?.page) {
+        baseRef.current = res.page;
+        setBase(res.page);
+        qc.setQueryData(['site-page', id], { page: res.page });
+      }
+      return res;
+    });
+    const done = run.then(() => true, () => true);
+    inflight.current = done;
+    try {
+      return await run;
+    } finally {
+      if (inflight.current === done) inflight.current = null;
+    }
   }, [id, qc]);
 
   const change = useCallback((fn) => {
@@ -320,9 +344,7 @@ function Builder({ id }) {
       return;
     }
     try {
-      const res = await action('site.page.publish', { id });
-      baseRef.current = res.page;
-      setBase(res.page);
+      await inTurn(() => action('site.page.publish', { id }));
       setStrict(false);
       say('Published — it’s on the site now');
       refresh(['site']);
@@ -343,9 +365,7 @@ function Builder({ id }) {
   const unpublish = async () => {
     await flush();
     try {
-      const res = await action('site.page.unpublish', { id });
-      baseRef.current = res.page;
-      setBase(res.page);
+      await inTurn(() => action('site.page.unpublish', { id }));
       say('Taken off the site — it’s a draft now');
       refresh(['site']);
     } catch (e) { say(e.message); }
@@ -364,9 +384,8 @@ function Builder({ id }) {
     if (!slug || slug === base.slug) return;
     await flush();
     try {
-      const res = await action('site.page.save', { id, slug, updated_at: baseRef.current?.updated_at });
-      baseRef.current = res.page;
-      setBase(res.page);
+      // updated_at read when it goes, after anything still out.
+      const res = await inTurn(() => action('site.page.save', { id, slug, updated_at: baseRef.current?.updated_at }));
       setSlug(res.page.slug);
       say(`The address is now ${addressOf(res.page)}`);
       refresh(['site']);

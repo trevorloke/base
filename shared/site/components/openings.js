@@ -114,7 +114,9 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
   </details>`;
 }
 
-export function Openings({ uid, variant = 'shifts', action, hidden = {}, items = [], sent = false }) {
+// error: after a plain post (no JavaScript) that was refused, what to say
+// ({ field, message }, context.js errorFor) — above the openings.
+export function Openings({ uid, variant = 'shifts', action, hidden = {}, items = [], sent = false, error = null }) {
   const [me, setMe] = useState(undefined);
   const [states, setStates] = useState({});
   // Who signed up before in this visit, read once the page is live
@@ -136,6 +138,7 @@ export function Openings({ uid, variant = 'shifts', action, hidden = {}, items =
 
   return html`<div className=${cx('openings', `openings--${variant}`)}>
     ${sent ? html`<p className="rsvp-done rsvp-done--page" role="status"><${Icon} name="check" size=${18} stroke=${3} /><span>You’re signed up. See you there!</span></p>` : null}
+    ${!sent && str(error?.message) ? html`<p className="form-alert" role="alert">${error.message}</p>` : null}
     ${me ? html`<p className="rsvp-me">Signing up as <strong>${me.first_name}</strong>. <button type="button" className="link-button" onClick=${forget}>Not you?</button></p>` : null}
     ${variant === 'events' && items[0] ? html`<article className="event-feature">
       <${DateBadge} day=${items[0].day} mon=${items[0].mon} />

@@ -301,6 +301,8 @@
   background: var(--paper-1); border: 1px solid var(--rule-2); font-size: 14px; font-weight: 600;
 }
 .wb-chip > span { overflow-wrap: anywhere; }
+.wb-chip[data-app] { border-color: var(--danger); }
+.wb-chip__note { font-weight: 500; color: var(--danger); }
 .wb-chip__x {
   width: 40px; height: 40px; flex: none; border: 0; border-radius: 50%; background: none; color: var(--text-2); cursor: pointer; font-size: 14px;
 }

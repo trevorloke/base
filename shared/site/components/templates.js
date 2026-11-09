@@ -122,8 +122,11 @@ export function headFor(rc, { kind, page, post, campaign }) {
     const isHome = str(p.slug) === 'home' || loc.path === '/';
     title = isHome || !str(p.title).trim() ? siteTitle : `${str(p.title).trim()} · ${siteTitle}`;
     description = str(p.description).trim() || description;
+    // The page's own share picture (Page details), else the site's
+    // (seo.shareImage), else its hero's.
     const hero = visibleModules(p).find((m) => m.kind === 'hero');
-    if (!image.url && hero && obj(obj(hero.props).image).url) image = obj(hero.props).image;
+    if (obj(p.image).url) image = obj(p.image);
+    else if (!image.url && hero && obj(obj(hero.props).image).url) image = obj(hero.props).image;
   } else if (kind === 'post') {
     const p = obj(post);
     title = `${str(p.title)} · ${siteTitle}`;

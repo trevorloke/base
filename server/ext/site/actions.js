@@ -43,7 +43,7 @@ import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { brandKey } from '../../lib/brand.js';
 import { SECTIONS, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
-import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains } from './store.js';
+import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost } from './store.js';
 import { cacheClear } from './cache.js';
 
 const MANAGER = ['manager'];
@@ -205,6 +205,11 @@ export const actions = {
       for (const d of input.domains) {
         const h = hostOf(d);
         if (!h) throw httpError(400, `“${d}” isn't a web address (like imaginesurrey.ca)`);
+        // On a domain only the site answers: never where the app itself is
+        // (this request's host, the server's public address, base.win).
+        if (isAppHost(h, ctx.host ? [ctx.host] : [])) {
+          throw httpError(400, `${h} is where base.win itself answers — on a website domain only the site does, so the app would stop working there. Add your campaign’s own domain (like yourcampaign.ca).`);
+        }
         if (!hosts.includes(h)) hosts.push(h);
       }
       for (const h of hosts) {

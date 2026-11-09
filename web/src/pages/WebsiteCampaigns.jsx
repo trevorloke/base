@@ -9,7 +9,7 @@
 //   button; Close (no more signatures) or Open again beside it; ⋯ → View
 //   on the site, Delete (Undo brings it back). A section on a page shows
 //   one of these (Pages → a page → Add a section → Petition or pledge).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
@@ -18,7 +18,7 @@ import { MarkdownField } from '../components/MarkdownField.jsx';
 import { MoreMenu, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
 import { TextField, uploadSitePicture } from '../components/site/Fields.jsx';
 import { useSite, useSiteCampaign, useSiteCampaigns, useSiteRefresh } from '../components/site/useSite.js';
-import { slugInput, slugify } from '../components/site/builder.js';
+import { rebaseForm, slugInput, slugify } from '../components/site/builder.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
@@ -113,6 +113,7 @@ function CampaignList({ say }) {
 function CampaignEditor({ id, say }) {
   const isNew = id === 'new';
   const navigate = useNavigate();
+  const location = useLocation();
   const qc = useQueryClient();
   const refresh = useSiteRefresh();
   const online = useOnline();
@@ -122,12 +123,18 @@ function CampaignEditor({ id, say }) {
   const [camp, setCamp] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // The words on screen, as they are now (a slow answer is merged into them).
+  const formRef = useRef(form);
+  formRef.current = form;
   useEffect(() => {
     const c = q.data?.campaign;
     if (!c || q.isFetching || camp?.id === c.id) return;
     setCamp(c);
-    setForm(formOf(c));
-  }, [q.data, q.isFetching, camp?.id]);
+    // Just made, with words typed while it was being made: those.
+    const carried = location.state?.form;
+    setForm(carried && typeof carried === 'object' ? { ...formOf(c), ...carried } : formOf(c));
+    if (carried) navigate('.', { replace: true, state: null });
+  }, [q.data, q.isFetching, camp?.id, location.state, navigate]);
   useEffect(() => () => { if (!isNew) qc.invalidateQueries({ queryKey: ['site-campaign', id] }); }, [qc, id, isNew]);
   const dirty = useMemo(() => (form && (isNew ? Boolean(form.title.trim()) : camp && !same(form, formOf(camp)))), [form, camp, isNew]);
   useEffect(() => {
@@ -139,13 +146,16 @@ function CampaignEditor({ id, say }) {
   const signed = camp?.signatures || 0;
   const siteRoot = (siteQ.data?.urls?.site || '/site/').replace(/\/$/, '');
 
-  const done = (c, words) => {
+  // The server's copy back. sent: the words as they were when the request
+  // went — whatever was typed since stays (and stays "Not saved yet").
+  const done = (c, words, sent) => {
     setCamp(c);
-    setForm(formOf(c));
+    const next = rebaseForm(formRef.current, sent, formOf(c));
+    setForm(next);
     qc.setQueryData(['site-campaign', c.id], { campaign: c });
     refresh(['site-campaigns'], ['site']);
     if (words) say(words);
-    if (isNew) navigate(`/website/petitions/${c.id}`, { replace: true });
+    if (isNew) navigate(`/website/petitions/${c.id}`, { replace: true, state: same(next, formOf(c)) ? null : { form: next } });
   };
   const save = async () => {
     if (!form.title.trim()) { setError('Give it a title'); return; }
@@ -153,20 +163,24 @@ function CampaignEditor({ id, say }) {
     if (goal !== null && !(goal >= 1)) { setError('The goal: a whole number, 1 or more — or leave it empty'); return; }
     setBusy(true);
     setError(null);
+    const sent = form;
     try {
       const res = await action('site.campaign.save', {
-        ...(isNew ? {} : { id }), kind: form.kind, title: form.title.trim(), slug: form.slug.trim() || undefined,
-        excerpt: form.excerpt, statement: form.statement, body: form.body, goal,
+        ...(isNew ? {} : { id }), kind: sent.kind, title: sent.title.trim(), slug: sent.slug.trim() || undefined,
+        excerpt: sent.excerpt, statement: sent.statement, body: sent.body, goal,
       });
-      done(res.campaign, isNew ? `Made — it’s open to sign at /act/${res.campaign.slug}` : 'Saved — the site has the change');
+      done(res.campaign, isNew ? `Made — it’s open to sign at /act/${res.campaign.slug}` : 'Saved — the site has the change', sent);
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   };
+  // Close or open again: only that changes — words not saved yet stay as
+  // they are, still to be saved.
   const openClose = async (open) => {
     setBusy(true);
     setError(null);
+    const sent = formOf(camp);
     try {
       const res = await action('site.campaign.close', { id, open });
-      done(res.campaign, open ? 'Open again — people can sign it' : 'Closed — no more signatures; its page says so');
+      done(res.campaign, open ? 'Open again — people can sign it' : 'Closed — no more signatures; its page says so', sent);
     } catch (e) { setError(e.message); } finally { setBusy(false); }
   };
   const remove = async () => {

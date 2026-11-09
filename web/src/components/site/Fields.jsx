@@ -99,6 +99,11 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
   const [busy, setBusy] = useState(false);
   const [upErr, setUpErr] = useState(null);
   const [picking, setPicking] = useState(false);
+  // An upload takes a while (seconds, on a phone): when it lands, the
+  // picture goes in with the description and the handler as they are then,
+  // not as they were when the file was chosen.
+  const latest = useRef({ v, onChange });
+  latest.current = { v, onChange };
   const pick = async (e) => {
     const f = e.target.files?.[0];
     e.target.value = '';
@@ -107,7 +112,8 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
     setUpErr(null);
     try {
       const media = await uploadSitePicture(f);
-      onChange({ url: media.url || `/media/${media.id}`, alt: v.alt || '' });
+      const now = latest.current;
+      now.onChange({ url: media.url || `/media/${media.id}`, alt: now.v.alt || '' });
     } catch (err) {
       setUpErr(err.message);
     } finally {
@@ -266,6 +272,32 @@ const blankOf = (f) => Object.fromEntries(f.of.map((s) => [s.key, s.type === 'im
 export function ListField({ id, f, value, onChange, errors, path, ctx }) {
   const items = Array.isArray(value) ? value : [];
   const [open, setOpen] = useState(() => new Set());
+  // Which item is which, across edits and moves (an edited item is a new
+  // object; it keeps its key): a change that lands later (a photo upload)
+  // goes to its own item in the list as it is then — nothing typed or
+  // moved meanwhile is undone.
+  const keys = useRef(new WeakMap());
+  const nextKey = useRef(0);
+  const keyOf = (x) => {
+    if (!x || typeof x !== 'object') return null;
+    if (!keys.current.has(x)) { nextKey.current += 1; keys.current.set(x, nextKey.current); }
+    return keys.current.get(x);
+  };
+  const setSub = (item, i, subKey, v) => {
+    const k = keyOf(item);
+    onChange((cur) => {
+      const list = Array.isArray(cur) ? cur : items;
+      let at = k == null ? -1 : list.findIndex((x) => keyOf(x) === k);
+      if (at < 0) at = list[i] === item || k == null ? i : -1; // gone since: nothing to change
+      if (at < 0 || at >= list.length) return list;
+      return list.map((x, j) => {
+        if (j !== at) return x;
+        const next = { ...x, [subKey]: typeof v === 'function' ? v(x?.[subKey]) : v };
+        if (k != null) keys.current.set(next, k);
+        return next;
+      });
+    });
+  };
   const one = ONE[f.label] || 'item';
   const full = f.max && items.length >= f.max;
   // An item with a problem opens by itself.
@@ -326,7 +358,7 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
                     {f.of.map((sub) => (
                       <Field key={sub.key} f={sub} id={`${id}-${i}-${sub.key}`} path={`${path}[${i}].${sub.key}`}
                         value={item?.[sub.key]} errors={errors} ctx={ctx}
-                        onChange={(v) => onChange(items.map((x, k) => (k === i ? { ...x, [sub.key]: typeof v === 'function' ? v(x?.[sub.key]) : v } : x)))} />
+                        onChange={(v) => setSub(item, i, sub.key, v)} />
                     ))}
                   </div>
                 )}

@@ -396,6 +396,85 @@ await page.locator('.wb-toast', { hasText: 'Saved' }).waitFor({ timeout: 10000 }
 const ann = (await api('/site')).json.settings.announcement;
 check('Settings: the announcement bar is saved', ann.enabled === true && ann.text === 'Town hall Thursday', JSON.stringify(ann));
 
+// ── Nothing typed is lost to a slow answer (a phone on a slow connection) ──
+// Each answer below comes back 2.5 s after the server has done the work.
+const slow = (glob) => page.route(glob, async (route) => {
+  const response = await route.fetch();
+  await sleep(2500);
+  await route.fulfill({ response });
+});
+const raceId = (await api('/actions/site.page.create', {
+  title: 'Sample: slow answers',
+  modules: [
+    { id: 'race-text', kind: 'text', props: { title: 'First words', body: '', cta: { label: '', href: '' }, tone: 'paper' } },
+    { id: 'race-team', kind: 'people', props: { title: 'Our team', intro: '', seats: [{ role: 'Chair', name: 'Ada Example', photo: { url: '', alt: '' }, bio: '' }, { role: 'Treasurer', name: 'Sam Example', photo: { url: '', alt: '' }, bio: '' }] } },
+  ],
+})).json.page.id;
+await page.goto(`${BASE}/admin/website/pages/${raceId}`, { waitUntil: 'domcontentloaded' });
+await sections().first().waitFor();
+// Typing while Publish is out: the autosave waits for it, then saves.
+await sections().nth(0).locator('.wb-sec__toggle').click();
+await slow('**/api/actions/site.page.publish');
+await page.getByRole('button', { name: /^Publish$/ }).click();
+await sleep(300);
+await sections().nth(0).getByRole('textbox', { name: 'Heading', exact: true }).fill('Typed while it publishes');
+await page.locator('.wb-toast', { hasText: 'Published' }).waitFor({ timeout: 15000 }).catch(() => {});
+const afterPublish = await saved();
+const raceDraft = (await api(`/site/pages/${raceId}`)).json.page.draft;
+check('typing while Publish is out: no "someone else saved", and what was typed is saved', afterPublish === 'saved' && !(await page.locator('.wb-alert', { hasText: 'Someone else saved' }).count())
+  && raceDraft.modules[0].props.title === 'Typed while it publishes', `${afterPublish} ${raceDraft.modules[0].props.title}`);
+await page.unroute('**/api/actions/site.page.publish');
+// A seat's photo uploading while its name and another seat are edited.
+const team = sections().nth(1);
+await team.locator('.wb-sec__toggle').click();
+await team.locator('.wb-list__toggle').nth(0).click();
+await team.locator('.wb-list__toggle').nth(1).click();
+await slow('**/api/actions/site.picture');
+const seatPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+await team.locator('.wb-list__item').nth(0).locator('input[type="file"]').setInputFiles({ name: 'seat.png', mimeType: 'image/png', buffer: seatPng });
+await sleep(300);
+await team.locator('.wb-list__item').nth(0).getByRole('textbox', { name: 'Name', exact: true }).fill('Ada Example-Typed');
+await team.locator('.wb-list__item').nth(1).getByRole('textbox', { name: 'Role', exact: true }).fill('Treasurer and secretary');
+await team.locator('.wb-list__item').nth(0).locator('.wb-image__thumb img').waitFor({ timeout: 15000 }).catch(() => {});
+await sleep(1200);
+await saved();
+const seats = (await api(`/site/pages/${raceId}`)).json.page.draft.modules[1].props.seats;
+check('a seat’s photo uploading while names are typed: the photo, the typed name and the other seat’s edit all kept', /^\/media\//.test(seats[0]?.photo?.url || '')
+  && seats[0].name === 'Ada Example-Typed' && seats[1].role === 'Treasurer and secretary', JSON.stringify(seats).slice(0, 300));
+await page.unroute('**/api/actions/site.picture');
+// A petition: Close it with words not saved yet; Save with more typed while it's out.
+await page.goto(`${BASE}/admin/website/petitions/${camp.id}`, { waitUntil: 'domcontentloaded' });
+await page.locator('#wb-c-statement').waitFor();
+await page.fill('#wb-c-statement', 'A changed statement, not saved yet.');
+await page.getByRole('button', { name: 'Close it' }).click();
+await page.locator('.wb-toast', { hasText: 'Closed' }).waitFor({ timeout: 10000 }).catch(() => {});
+check('"Close it" with words not saved yet: closed, and the words still there, still "Not saved yet"', (await page.inputValue('#wb-c-statement')) === 'A changed statement, not saved yet.'
+  && await page.locator('.wb-saved', { hasText: 'Not saved yet' }).isVisible() && (await api(`/site/campaigns/${camp.id}`)).json.campaign.status === 'closed');
+if ((await page.inputValue('#wb-c-statement')) !== 'A changed statement, not saved yet.') await page.fill('#wb-c-statement', 'A changed statement, not saved yet.');
+await slow('**/api/actions/site.campaign.save');
+await page.getByRole('button', { name: 'Save', exact: true }).click();
+await sleep(300);
+await page.fill('#wb-c-excerpt', 'Typed while it saved.');
+await page.locator('.wb-toast', { hasText: 'Saved' }).waitFor({ timeout: 15000 }).catch(() => {});
+const savedCamp = (await api(`/site/campaigns/${camp.id}`)).json.campaign;
+check('typed while Save is out: kept on screen and still "Not saved yet"; what was sent is saved', (await page.inputValue('#wb-c-excerpt')) === 'Typed while it saved.'
+  && await page.locator('.wb-saved', { hasText: 'Not saved yet' }).isVisible() && savedCamp.statement === 'A changed statement, not saved yet.', `${await page.inputValue('#wb-c-excerpt')} | ${savedCamp.statement}`);
+await page.unroute('**/api/actions/site.campaign.save');
+await page.getByRole('button', { name: 'Open it again' }).click();
+await page.locator('.wb-toast', { hasText: 'Open again' }).waitFor({ timeout: 10000 }).catch(() => {});
+// A post: the same for Save changes.
+await page.goto(`${BASE}/admin/website/news/${post.id}`, { waitUntil: 'domcontentloaded' });
+await page.locator('#wb-p-excerpt').waitFor();
+await page.fill('#wb-p-excerpt', 'A new excerpt.');
+await slow('**/api/actions/site.post.save');
+await page.getByRole('button', { name: 'Save changes' }).click();
+await sleep(300);
+await page.fill('#wb-p-title', 'Sample post: the town hall, typed while it saved');
+await page.locator('.wb-toast', { hasText: 'Saved' }).waitFor({ timeout: 15000 }).catch(() => {});
+check('a post typed while Save is out: kept on screen and still "Not saved yet"', (await page.inputValue('#wb-p-title')) === 'Sample post: the town hall, typed while it saved'
+  && await page.locator('.wb-saved', { hasText: 'Not saved yet' }).isVisible() && (await api(`/site/posts/${post.id}`)).json.post.excerpt === 'A new excerpt.');
+await page.unroute('**/api/actions/site.post.save');
+
 // ── a volunteer can't open Website ──
 const inv = (await api('/actions/member.invite', { email: `vic.${tag}@example.org`, role: 'volunteer' })).json;
 const vctx = await browser.newContext({ viewport: { width: 390, height: 844 } });

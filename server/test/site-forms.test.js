@@ -185,7 +185,7 @@ test('one address may send 20 a minute; the 21st waits', async () => {
   assert.equal(r.status, 429);
   assert.match(r.json.error, /wait a minute/);
   const plain = await hit('/site/api/forms/contact', { ip, form: { email: 'x@example.org', message: 'hi', module_id: 'contact-form' } });
-  assert.deepEqual([plain.status, plain.location], [303, '/site/?error=busy#m-contact-form']);
+  assert.deepEqual([plain.status, plain.location], [303, '/site/?error=busy&module=contact-form#m-contact-form']);
   assert.equal((await send('contact', { email: 'elsewhere@example.org', message: 'hi' })).status, 200, 'another address is fine');
 });
 
@@ -212,7 +212,7 @@ test('a plain form post (no JavaScript) goes back to its page: ?sent=, or ?error
   const req = (await db.query("select note from door_requests where workspace_id = $1 and person_id = $2 and kind = 'volunteer'", [ws, p.id])).rows[0];
   assert.match(req.note, /Doorknocking, Phoning/, 'every ticked role arrives');
   const err = await hit('/site/api/forms/contact', { form: { email: 'plain@example.org', page_id: donatePage.id, module_id: 'contact' } });
-  assert.deepEqual([err.status, err.location], [303, '/site/volunteer?error=message#m-contact']);
+  assert.deepEqual([err.status, err.location], [303, '/site/volunteer?error=message&module=contact#m-contact']);
   const back = await hit('/site/api/forms/petition', { form: { email: 'plain2@example.org', campaign: petition.id, module_id: 'sky' } });
   assert.equal(back.location, `/site/act/${petition.slug}?sent=petition#m-sky`, 'with no page, the petition’s own page');
   const ref = await hit('/site/api/forms/contact', { form: { email: 'plain3@example.org', message: 'hi' }, headers: { referer: 'http://localhost/site/events' } });
@@ -296,7 +296,7 @@ test('join and donate: plain words when online payments aren’t set up; otherwi
   assert.equal(off.status, 503);
   assert.match(off.json.error, /Online payments aren’t set up/);
   const plainOff = await hit('/site/api/forms/join', { form: { email: 'giver@example.org', declaration: 'on', module_id: 'join' } });
-  assert.deepEqual([plainOff.status, plainOff.location], [303, '/site/?error=payments#m-join']);
+  assert.deepEqual([plainOff.status, plainOff.location], [303, '/site/?error=payments&module=join#m-join']);
 
   const fake = fakePayments();
   const { calls } = fake;

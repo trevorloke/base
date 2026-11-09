@@ -25,6 +25,28 @@ const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOS
 export const envHosts = () => String(process.env.SITE_HOSTS || '').split(',')
   .map((h) => h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, ''))
   .filter((h) => /^[a-z0-9.-]{1,253}$/.test(h));
+
+// Where the app itself answers — never a website domain (on one of those
+// only the site answers: no sign-in, no app): base.win and its subdomains
+// (the front door), this server's public address (STARBASE_PUBLIC_URL) and
+// its host's own name (RENDER_EXTERNAL_HOSTNAME). site.settings.save
+// refuses these and the host the save came in on; a domain saved as one
+// before is ignored below, so the app can't be locked out of its address.
+const DOOR = 'base.win';
+export const appHosts = () => {
+  const out = [DOOR];
+  try {
+    const h = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim()).hostname.toLowerCase();
+    if (h && !out.includes(h)) out.push(h);
+  } catch { /* not set */ }
+  const r = hostOf(process.env.RENDER_EXTERNAL_HOSTNAME);
+  if (r && !out.includes(r)) out.push(r);
+  return out;
+};
+export const isAppHost = (host, also = []) => {
+  const h = String(host || '').toLowerCase().replace(/\.$/, '');
+  return Boolean(h) && (h === DOOR || h.endsWith(`.${DOOR}`) || appHosts().includes(h) || also.includes(h));
+};
 const DOMAINS_MS = 30_000;
 let domainMap = null; // host → workspace id (from site_settings.domains)
 let domainsAt = 0;
@@ -39,7 +61,7 @@ const loadDomains = async () => {
   for (const r of rows) {
     for (const d of parseJ(r.domains, [])) {
       const h = hostOf(d);
-      if (h && !map.has(h)) map.set(h, r.workspace_id);
+      if (h && !isAppHost(h) && !map.has(h)) map.set(h, r.workspace_id);
     }
   }
   domainMap = map;
@@ -126,7 +148,9 @@ export const menuPages = async (q, workspaceId) => (await q.query(
 )).rows;
 
 // What the renderer gets as `site` (SITE.md): the theme checked, the menu
-// with the pages that ask to be in it, and the consent boxes' words.
+// with the pages that ask to be in it, and the consent boxes' words. The
+// nav in the renderer's own words (SITE.md "Rendering": items, bar, cta):
+// Settings' menu is the Menu's items, its links the title bar's.
 export const siteOf = (settings, pages = []) => {
   const { theme } = checkTheme(settings.theme, brandKey());
   const listed = new Set(settings.nav.menu.map((l) => l.href));
@@ -135,7 +159,7 @@ export const siteOf = (settings, pages = []) => {
     .filter((l) => !listed.has(l.href));
   return {
     theme,
-    nav: { ...settings.nav, menu: [...settings.nav.menu, ...extra] },
+    nav: { items: [...settings.nav.menu, ...extra], bar: settings.nav.links, cta: settings.nav.cta },
     footer: settings.footer,
     announcement: settings.announcement,
     seo: settings.seo,

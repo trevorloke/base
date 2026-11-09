@@ -281,7 +281,10 @@ test('the menu: the settings’ links, then the published pages marked "show in 
   assert.ok(!(await menuPages(db, ws)).some((p) => p.slug === made.slug), 'a draft isn’t in the menu');
   ok(await mgr.action('site.page.publish', { id: made.id }));
   ok(await mgr.action('site.page.save', { id: made.id, title: 'Draft title, not live yet' }));
-  const menu = siteOf(await readSettings(db, ws), await menuPages(db, ws)).nav.menu;
+  // The renderer's shape (SITE.md "Rendering"): the Menu's items, the title bar's links.
+  const { nav } = siteOf(await readSettings(db, ws), await menuPages(db, ws));
+  const menu = nav.items;
+  assert.deepEqual(nav.bar, [], 'Settings → the title bar’s links (none seeded)');
   assert.deepEqual(menu.at(-1), { label: 'Meet the team', href: '/meet-the-team' }, 'the published title');
   assert.ok(menu.filter((l) => l.href === '/tracker').length === 1, 'a page already in the settings’ menu isn’t doubled');
   ok(await mgr.action('site.page.delete', { id: made.id }));

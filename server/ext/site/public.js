@@ -148,10 +148,24 @@ const pageHeaders = (c, site, { csp, preview = false, store = false }) => {
 
 const isHttps = (c) => (c.req.header('x-forwarded-proto') || '').split(',')[0].trim() === 'https' || c.req.url.startsWith('https:');
 
+// The address people see in front of the site's root (canonical, og:url,
+// og:image, share links, the sitemap): the request's own — except under a
+// client's path, where the front door forwards base.win/<client> from
+// base.win and STARBASE_PUBLIC_URL (https://base.win/<client>) names it.
+const publicOrigin = (base, origin) => {
+  if (!base) return origin;
+  try {
+    const u = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim());
+    if (/^https?:$/.test(u.protocol) && u.pathname.replace(/\/+$/, '') === base) return u.origin;
+  } catch { /* not set: the request's own */ }
+  return origin;
+};
+
 // ── One request's site: the campaign, the root, the absolute origin ──
 // root: '' on the campaign's own domain, '/site' elsewhere — with the
 // client's path (BASE_PATH) in front, so links in pages and in island
-// props alike are right as they are.
+// props alike are right as they are. origin: the request's; address: the
+// public one (publicOrigin) — neither repeats the client's path.
 const siteFor = async (c, at) => {
   const db = await getDb();
   const ws = await siteWorkspace(db, at.workspaceId || null);
@@ -159,21 +173,27 @@ const siteFor = async (c, at) => {
   const base = c.env?.base || '';
   const url = new URL(c.req.url);
   const proto = isHttps(c) ? 'https' : url.protocol.replace(':', '');
+  const origin = `${proto}://${url.host}`;
   return {
     db, ws, inner: at.root, root: `${base}${at.root}`, base,
-    origin: `${proto}://${url.host}`, https: proto === 'https', assets: `${base}/site-assets`,
+    origin, address: publicOrigin(base, origin), https: proto === 'https', assets: `${base}/site-assets`,
   };
 };
 
 const ctxOf = (c, site, extra = {}) => {
   const q = (k) => c.req.query(k);
   const sent = KINDS.includes(q('sent')) ? q('sent') : null;
-  const error = /^[a-z_]{1,40}$/.test(q('error') || '') ? q('error') : null;
+  // ?error=<field>&module=<id>: the form a plain post came back to (forms.js).
+  const field = /^[a-z_]{1,40}$/.test(q('error') || '') ? q('error') : null;
+  const module = /^[A-Za-z0-9_-]{1,64}$/.test(q('module') || '') ? q('module') : '';
+  const error = field && module ? { field, module_id: module } : field;
   const cancelled = KINDS.includes(q('cancelled')) ? q('cancelled') : null;
   const code = getCookie(c, REF_COOKIE);
   return {
     root: site.root,
     assets: site.assets,
+    media: `${site.base}/media`,
+    origin: site.address,
     islands: islandsBuilt() ? `${site.assets}/site-islands.js` : null,
     preview: false,
     path: c.req.path.slice(site.inner.length) || '/',
@@ -184,11 +204,13 @@ const ctxOf = (c, site, extra = {}) => {
 };
 
 // Draw (or reuse) a page. key: null for a page never kept (a thank-you, a preview).
+// A kept page is kept per address: its canonical and share links name the
+// host it was asked for (www or not), so it is only ever that host's.
 const draw = async (c, site, { kind, page = null, post = null, campaign = null, key, status, ctx: extra = {} }) => {
   const settings = await readSettings(site.db, site.ws.id);
   const ctx = ctxOf(c, site, extra);
   const keep = key && !ctx.sent && !ctx.error && !ctx.cancelled && !ctx.preview;
-  const fullKey = keep ? cacheKey(site.ws.id, [site.root, kind, ...key, settings.updated_at, ctx.referral || '']) : null;
+  const fullKey = keep ? cacheKey(site.ws.id, [site.address, site.root, kind, ...key, settings.updated_at, ctx.referral || '']) : null;
   let hit = fullKey ? cacheGet(fullKey) : null;
   if (!hit) {
     const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24 });
@@ -302,7 +324,7 @@ ${box('email', choices.email, 'Email', person.email ? wording.email : 'We don’
 ${box('sms', choices.sms, 'Texts', person.phone ? wording.sms : 'We don’t have a mobile number for you.', !person.phone)}
 <button type="submit">Save my choices</button>
 </form>
-${code ? `<div class="card"><p><b>Your link to share</b></p><p>When someone signs up through it, we know you brought them in:</p><p class="share">${esc(site.origin)}${esc(site.root)}/r/${esc(code)}</p></div>` : ''}`;
+${code ? `<div class="card"><p><b>Your link to share</b></p><p>When someone signs up through it, we know you brought them in:</p><p class="share">${esc(site.address)}${esc(site.root)}/r/${esc(code)}</p></div>` : ''}`;
 };
 
 // ── The site's routes, at a root ('' on its own domain, '/site' elsewhere) ──
@@ -315,11 +337,13 @@ export const makeSiteApp = (at) => {
     const site = await siteFor(c, at);
     if (!site) return c.text('This site isn’t set up yet.', 503);
     await ensureSite(site.db, site.ws);
-    // One address per page: /donate/ → /donate.
+    // One address per page: /donate/ → /donate. Always on this site: the
+    // slashes (or backslashes) in front collapse to one, so '//other.host/'
+    // is a path here and never a link to another site.
     const p = c.req.path;
     if ((c.req.method === 'GET' || c.req.method === 'HEAD') && p.length > 1 && p.endsWith('/') && p !== `${R}/`) {
       const url = new URL(c.req.url);
-      return c.redirect(`${site.base}${p.replace(/\/+$/, '')}${url.search}`, 301);
+      return c.redirect(`${site.base}/${p.replace(/^[/\\]+/, '').replace(/\/+$/, '')}${url.search}`, 301);
     }
     // The app's own copy of a site that has a domain of its own isn't indexed.
     if (R) {
@@ -336,13 +360,13 @@ export const makeSiteApp = (at) => {
     const site = c.get('site');
     const body = staging()
       ? 'User-agent: *\nDisallow: /\n'
-      : `User-agent: *\nDisallow: ${site.root}/__preview/\nDisallow: ${site.root}/api/\nDisallow: ${site.root}/preferences\nDisallow: ${site.root}/unsubscribe\nDisallow: ${site.root}/r/\n\nSitemap: ${site.origin}${site.root}/sitemap.xml\n`;
+      : `User-agent: *\nDisallow: ${site.root}/__preview/\nDisallow: ${site.root}/api/\nDisallow: ${site.root}/preferences\nDisallow: ${site.root}/unsubscribe\nDisallow: ${site.root}/r/\n\nSitemap: ${site.address}${site.root}/sitemap.xml\n`;
     return c.text(body, 200, { 'Cache-Control': 'public, max-age=3600' });
   });
 
   app.get(route('/sitemap.xml'), async (c) => {
     const site = c.get('site');
-    const at2 = `${site.origin}${site.root}`;
+    const at2 = `${site.address}${site.root}`;
     const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
     const rows = [];
     for (const p of (await site.db.query(

@@ -134,3 +134,19 @@ test('the theme: every pair theme.js names is checked; "Fix it" keeps the hue an
   assert.equal(C.colorWords('brandInk'), 'Text on the brand colour');
   assert.equal(C.colorWords('somethingNew'), 'Something New');
 });
+
+test('a slow answer never throws away words: what was typed since it went stays, the rest is the server’s', () => {
+  const sent = { title: 'Library hours ', slug: '', statement: 'Open late', excerpt: '' };
+  const server = { title: 'Library hours', slug: 'library-hours', statement: 'Open late', excerpt: '' };
+  // Nothing typed meanwhile: the server's copy (its tidied title, the address it made).
+  assert.deepEqual(B.rebaseForm(sent, sent, server), server);
+  // The excerpt typed while it was out: kept; the rest the server's.
+  assert.deepEqual(B.rebaseForm({ ...sent, excerpt: 'Typed while it saved' }, sent, server), { ...server, excerpt: 'Typed while it saved' });
+  // A close comes back with the words as saved: every edit not saved yet stays.
+  const saved = { title: 'Library hours', slug: 'library-hours', statement: 'Open late', excerpt: '' };
+  const edited = { ...saved, statement: 'Open late, and on Sundays' };
+  assert.deepEqual(B.rebaseForm(edited, saved, saved), edited);
+  // Pictures (objects) compare by what they hold.
+  const pic = { url: '/media/a', alt: 'x' };
+  assert.deepEqual(B.rebaseForm({ image: { ...pic, alt: 'typed' } }, { image: pic }, { image: { ...pic } }), { image: { ...pic, alt: 'typed' } });
+});

@@ -66,6 +66,23 @@ export function initials(name) {
   return (words[0][0] + (words.length > 1 ? words[words.length - 1][0] : '')).toUpperCase();
 }
 
+// ── A form's tracking: the referral code and the share tag ──
+// Only ever in the shape the server takes (server/ext/site/forms.js: a code
+// of 6–16 letters and digits; a tag of up to 60 of a–z, 0–9 and : _ . -),
+// so an odd or long one in a link never stops anyone signing: a tag is cut
+// to 60, anything else is left out (a real referral is credited from its
+// cookie anyway).
+const REF_RE = /^[a-z0-9]{6,16}$/i;
+const SOURCE_RE = /^[a-z0-9][a-z0-9:_.-]{0,59}$/i;
+export const cleanRef = (v) => { const s = str(v).trim(); return REF_RE.test(s) ? s : ''; };
+export const cleanSource = (v) => { const s = str(v).trim().slice(0, 60); return SOURCE_RE.test(s) ? s : ''; };
+// What a page's address adds: ?ref= and ?source=, cleaned.
+export function trackFrom(search) {
+  let q;
+  try { q = new URLSearchParams(str(search)); } catch { return { ref: '', source: '' }; }
+  return { ref: cleanRef(q.get('ref')), source: cleanSource(q.get('source')) };
+}
+
 // ── Sharing ──
 // Each channel's link carries ?source=share-<channel>, so a sign-up that
 // comes from it is credited to where it was shared. WhatsApp first: it is

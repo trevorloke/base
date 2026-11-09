@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { html, cx } from './h.js';
 import { Check, Choices, FieldError, Hidden, Honeypot, SelectField, TextField } from './fields.js';
 import { ShareSheet } from './share.js';
-import { money, parseDollars, str } from './util.js';
+import { money, parseDollars, str, trackFrom } from './util.js';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
@@ -111,10 +111,12 @@ export function SiteForm(props) {
   useEffect(() => {
     setLive(true);
     key.current = newKey();
-    // A referral code or a share tag in the address the page didn't carry.
+    // A referral code or a share tag in the address the page didn't carry —
+    // only as the server takes them (util.js trackFrom): a long tracking
+    // link never stops the form.
     try {
-      const q = new URLSearchParams(window.location.search);
-      setTrack((t) => ({ ref: t.ref || str(q.get('ref')).slice(0, 64), source: t.source || str(q.get('source')).slice(0, 80) }));
+      const addr = trackFrom(window.location.search);
+      setTrack((t) => ({ ref: t.ref || addr.ref, source: t.source || addr.source }));
     } catch { /* no address to read */ }
     // Back from the payment page, the browser may show this page as it was
     // left (the back/forward cache): what is sent from it now is a new form,

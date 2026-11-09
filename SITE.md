@@ -157,8 +157,8 @@ Answers: `200 { ok: true }` · `200 { ok: true, checkout_url }` (join, donate) �
 (the same `client_key` sent again finishes it). Never a person id or
 anything about who was on file.
 A plain form post (no JavaScript) gets a `303` back to the page with
-`?sent=<kind>#m-<module_id>` (or `?error=<field>#m-<module_id>`), or to the
-checkout.
+`?sent=<kind>#m-<module_id>` (or `?error=<field>&module=<module_id>#m-<module_id>`,
+so the page says it on the form that was sent), or to the checkout.
 
 ### What the loaders give the renderer (`data`)
 
@@ -200,11 +200,13 @@ write; the others are accepted too:
 site.nav          { items: [{ label, href }], bar?: [{ label, href }] (≤3, in the title
                   bar on wide screens), cta?: { label, href } | null }  — a bare array is
                   items; cta left out → "Donate" → /donate; null → no button
-site.footer       { acknowledgement (Markdown), links: [{ label, href }], text? (Markdown) }
+site.footer       { acknowledgement (Markdown), links: [{ label, href }], text? (Markdown),
+                  logo?: { url, alt } (drawn in place of the name) }
 site.announcement { enabled, text, link: { label, href } }   (or linkLabel / linkHref)
 site.seo          { title, description, image: { url, alt }, noindex? }   (or shareImage)
 site.org          { name, short_name?, email, phone, address, authorization (the
-                  "Authorized by …" line), privacy_url, time_zone? }
+                  "Authorized by …" line), privacy_url, time_zone?, platformUrl?,
+                  platformLabel? (a link after the footer's links) }
 site.social       [{ name, handle, url, cta? }]   (or { accounts: [...] })
 page              { id, slug, title, description, modules }  — the published (or draft)
                   content with the row's id and slug; a site_pages row as it is
@@ -236,9 +238,13 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
 - `sent` — the `?sent=<kind>` value (or `{ kind, module_id }`): that kind's
   form shows its thank-you instead.
 - `error` — the `?error=<field>` value (or `{ field, module_id, kind, message }`):
-  the message on that field (with `module_id`, only in that module's form;
-  a bare field marks every form on the page that has it — the posted
-  `module_id` can come back in the address for this, e.g. `&module=<id>`).
+  the message on that field (with `module_id`, only in that module's form,
+  when it is on the page; a bare field marks every form on the page that has
+  it — the server sends the posted `module_id` back as `&module=<id>`).
+  `busy`, `payments`, `campaign` and `shift_id` are about the whole form:
+  they show as its alert (bare: `busy` on every form, `payments` on join and
+  donate, `campaign` on petitions and pledges, `shift_id` on the openings and
+  events).
 - `referral` — the code for the `ref` field. Leave it out of a page that is
   cached for everyone (the server reads the cookie when `ref` is missing).
 - `source` *(added)* — the `?source=` tag, carried in the forms.
@@ -247,6 +253,9 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
   `BASE_PATH`: absolute canonical, `og:url`, `og:image` and share links
   (without it the browser completes share links from the page's address,
   keeping the client's path).
+- `media` *(added)* — where uploaded pictures (`/media/…`) are, default
+  `/media/`; the server gives it the client's path under `BASE_PATH`, so an
+  absolute `og:image` of an upload is right past `lib/mount.js` too.
 - `timeZone` *(added)* — for dates; default `site.org.time_zone`, else
   `America/Vancouver`.
 
@@ -257,7 +266,10 @@ button. The donate form always sends `cadence` (`once` when monthly is off).
 Nothing per visitor is in the HTML except `ref`/`source` from `ctx`: there is
 **no `client_key` in the HTML** (pages may be cached) — the browser makes one
 per form and reuses it for retries; a plain post has none. With JavaScript,
-`?ref=` and `?source=` in the address are carried when the page didn't, a
+`?ref=` and `?source=` in the address are carried when the page didn't —
+only as the server takes them (a code of 6–16 letters and numbers; a tag
+cut to 60 of a–z, 0–9 and `:_.-`; anything else left out, `util.js
+trackFrom`), so a long tracking link never stops a form — a
 `checkout_url` is followed only when it is https (or this site), and a 400's
 `{ field, error }` is shown on that field. Volunteer openings and events post
 `rsvp` with `first_name`, `email` or `phone`, and `shift_id`, one small form
@@ -276,7 +288,19 @@ changed), `pop` (the layered heading shadow; on for Imagine Surrey),
 each kept readable) and `mix`. `themeCss` also writes `--action`,
 `--action-ink`, `--muted`, `--brand-soft`, `--field-line`, `--brand-deep`,
 `--danger`, `--accent-on-brand`, `--accent-on-deep`, `--heading-on-accent`,
-`--pop` and `--pop-alt`. The catalogue exports `isSafeUrl`.
+`--ink-soft`, `--accent-on-ink`, `--action-row`, `--pop` and `--pop-alt`.
+The catalogue exports `isSafeUrl`.
+
+Every colour pair the site draws text in is covered: what an admin picks
+is a checked pair (`PAIRS` — links and headings on soft panels among them),
+and every other text colour is worked out from those and kept readable on
+what it is drawn on (soft text on the brand, the deep brand and the Dark
+background; the highlight on each; the events' rows; "Broken" on the error
+colour). A box with its own background (a petition's) has its own text
+colours; nothing tints the background under text (an alert, "signed up",
+a hover). `e2e-site-render.mjs` sweeps themes at the check's edge — every
+module in every background, form errors, thank-yous, the campaign page —
+and reads every piece of text.
 
 A page's `<head>` has an inline `<style>` (the theme's variables) and a
 `<script type="application/ld+json">` (data, never run). A Content Security
@@ -377,6 +401,8 @@ nav           { menu: [{ label, href }],      // the Menu, in order; the rendere
                                               // published page marked show_in_nav that isn't in it already, after it
                 links: [{ label, href }],     // up to 3 in the title bar
                 cta: { label, href } }        // the title bar's button (Donate)
+                // store.js siteOf hands the renderer nav in its own words ("Rendering"):
+                // { items: menu + those pages, bar: links, cta }
 footer        { acknowledgement, links: [{ label, href }], logo: { url, alt } }
 announcement  { enabled, text, linkLabel, linkHref }
 seo           { title, description, shareImage: { url, alt } }
@@ -393,7 +419,8 @@ to email); the server stores them with each consent event, and the
 renderer shows them as they are (without them it makes the same words the
 same way, `shared/site/wording.js`). `ctx.error` (after a plain post: the
 field to fix, or `busy` — too many from one address — or `payments` —
-online payments aren't set up)
+online payments aren't set up or didn't answer; with `&module=` from the
+address, `{ field, module_id }`)
 and `ctx.cancelled` (`join`/`donate`, back from the checkout without
 paying). `ctx.root` ('' on the campaign's own domain, '/site' elsewhere)
 and `ctx.assets` ('/site-assets') already carry a client's path
@@ -401,6 +428,11 @@ and `ctx.assets` ('/site-assets') already carry a client's path
 is the islands script's address (`{assets}/site-islands.js`), or null when
 the web build hasn't made it; `ctx.referral` is the code a referral link
 remembered (the server reads it again on a form post — forms needn't send it).
+`ctx.origin` is then the public address *without* the client's path (root
+has it): the request's own (`https://imaginesurrey.ca`), or under a client's
+path the origin of `STARBASE_PUBLIC_URL` (`https://base.win`) — the sitemap,
+robots.txt and a supporter's own share link use the same. A page is cached
+per address, so www and the bare domain never get each other's canonical.
 Module anchors are `#m-<module id>`: the seeds link `/#m-join`.
 
 Routes added to "Where the site is served": `/act` (every open petition and
@@ -568,7 +600,11 @@ theirs, and the server refuses its data anyway).
 | `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
 
 Careful with "your own domain": on a host in `domains` only the site answers
-(no sign-in, no app). The screen refuses the address it is opened at and
-base.win; `site.settings.save` itself can't tell which host is the app's,
-so a domain saved straight through the API could still take the app's own.
+(no sign-in, no app). So `site.settings.save` refuses (400, in plain words)
+every host the app itself answers at: the host the save came in on,
+`STARBASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`, and base.win and its
+subdomains (`store.js appHosts`; `GET /api/site` lists them as
+`urls.app_hosts`, and the screen refuses them as they're typed). One saved
+before this check is ignored where the site looks domains up, so the app is
+never locked out of its own address — the screen marks it, to be taken off.
 

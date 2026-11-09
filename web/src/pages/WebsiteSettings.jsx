@@ -52,16 +52,19 @@ const linksIn = (s) => [
   ...s.social.accounts.map((a, i) => [`Social account ${i + 1}`, a.url]),
 ];
 
-function Domains({ value, onChange }) {
+// appHosts: where the app itself answers (the server says: this address,
+// its public one, base.win) — the server refuses them too.
+function Domains({ value, onChange, appHosts = [] }) {
   const [typed, setTyped] = useState('');
   const [err, setErr] = useState(null);
   const here = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
+  const isApp = (h) => h === here || h === 'base.win' || h.endsWith('.base.win') || appHosts.includes(h);
   const add = () => {
     const h = hostOf(typed);
     setErr(null);
     if (!HOST.test(h)) { setErr('A web address, like yourcampaign.ca'); return; }
     // Only the site answers on these: never the address the app itself is at.
-    if (h === here || h === 'base.win' || h.endsWith('.base.win')) { setErr('That’s where base.win itself is — the app would stop answering there. Use your campaign’s own domain.'); return; }
+    if (isApp(h)) { setErr('That’s where base.win itself is — the app would stop answering there. Use your campaign’s own domain.'); return; }
     if (!value.includes(h)) onChange([...value, h].slice(0, 10));
     setTyped('');
   };
@@ -70,8 +73,9 @@ function Domains({ value, onChange }) {
       {value.length > 0 && (
         <ul className="wb-chips">
           {value.map((d) => (
-            <li key={d} className="wb-chip">
-              <span>{d}</span>
+            <li key={d} className="wb-chip" data-app={isApp(d) ? '' : undefined}>
+              {/* One saved before the server checked: the site ignores it; take it off. */}
+              <span>{d}{isApp(d) && <span className="wb-chip__note"> — base.win itself, not the site: remove it</span>}</span>
               <button type="button" className="wb-chip__x" aria-label={`Remove ${d}`} onClick={() => onChange(value.filter((x) => x !== d))}>✕</button>
             </li>
           ))}
@@ -218,7 +222,7 @@ export default function WebsiteSettings() {
 
           <section className="card" id="domains" aria-labelledby="wb-s-dom">
             <h2 id="wb-s-dom" className="wb-card-h">Your own domain</h2>
-            <Domains value={s.domains} onChange={(v) => setS((x) => ({ ...x, domains: v }))} />
+            <Domains value={s.domains} appHosts={q.data?.urls?.app_hosts || []} onChange={(v) => setS((x) => ({ ...x, domains: v }))} />
           </section>
 
           <div className="wb-savebar">

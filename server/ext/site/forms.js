@@ -286,7 +286,8 @@ export const formRoute = async (c, site) => {
   const { ws, root } = site;
   const db = site.db;
   const hash = (f) => (f?.module_id ? `#m-${f.module_id}` : '');
-  const go = async (f, k, q) => c.redirect(`${await pagePath(db, ws, root, f || {}, k || {}, c)}?${q}${hash(f)}`, 303);
+  // An error names the form it is for (&module=), so the page says it there.
+  const go = async (f, k, q) => c.redirect(`${await pagePath(db, ws, root, f || {}, k || {}, c)}?${q}${q.startsWith('error=') && f?.module_id ? `&module=${f.module_id}` : ''}${hash(f)}`, 303);
   const moduleOf = () => {
     const m = String(one(body.module_id) || '');
     return { module_id: /^[A-Za-z0-9_-]{1,64}$/.test(m) ? m : null, page_id: UUID.test(String(one(body.page_id) || '')) ? String(one(body.page_id)).toLowerCase() : null };

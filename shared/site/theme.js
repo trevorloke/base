@@ -29,12 +29,18 @@ export const COLOR_LABELS = {
   ink: 'Text', paper: 'Page background', surface: 'Soft panels', line: 'Lines and borders', link: 'Links',
   action: 'Action buttons (Donate, Sign)', actionInk: 'Text on action buttons',
 };
+// Every pair of colours an admin picks that the site draws text in. The
+// rest of the site's text is in colours worked out from these, each kept
+// readable where it is used (themeColors) — e2e-site-render.mjs sweeps
+// themes at this check's edge and reads every piece of text on every
+// module, background and form state.
 export const PAIRS = [
   { fg: 'ink', bg: 'paper', label: 'Text on the page' },
   { fg: 'ink', bg: 'surface', label: 'Text on soft panels' },
   { fg: 'brandInk', bg: 'brand', label: 'Text on brand colour (buttons, bands)' },
   { fg: 'accentInk', bg: 'accent', label: 'Text on accent colour' },
   { fg: 'link', bg: 'paper', label: 'Links on the page' },
+  { fg: 'link', bg: 'surface', label: 'Links and headings on soft panels' },
   { fg: 'actionInk', bg: 'action', label: 'Text on action buttons (Donate, Sign)' },
 ];
 
@@ -129,21 +135,32 @@ const readable = (a, b, steps, bgs, min) => {
 };
 
 // The derived colours, each kept readable where the site uses it: muted
-// text on the page and soft panels (4.5:1), soft text on the brand colour,
-// form-field borders (3:1, WCAG 1.4.11), a deep brand for the footer and
-// dark panels, and the error colour.
+// text on the page and soft panels (4.5:1), soft text on the brand colour
+// and the deep brand (the footer, dark panels), soft text and the highlight
+// on the Dark background (ink), form-field borders (3:1, WCAG 1.4.11), a
+// deep brand for the footer and dark panels, the error colour (and the page
+// colour reads on it: a "Broken" badge), and the event rows on the action
+// colour.
 export function themeColors(theme) {
   const { theme: t } = checkTheme(theme);
   const c = t.colors;
   const light = contrast(c.paper, '#000000') > contrast(c.paper, '#ffffff');
   const deep = mix(c.brand, '#000000', 0.28);
+  const brandDeep = contrast(c.brandInk, deep) >= 4.5 ? deep : c.brand;
+  // The events' rows: a little of the deep brand on the action colour,
+  // unless that takes the text on them under 4.5:1.
+  const row = mix(c.action, brandDeep, 0.35);
   return {
     ...c,
     muted: readable(c.ink, c.paper, [0.3, 0.24, 0.18, 0.12, 0.06, 0], [c.paper, c.surface], 4.6),
-    brandSoft: readable(c.brandInk, c.brand, [0.18, 0.12, 0.06, 0], [c.brand], 4.6),
+    brandSoft: readable(c.brandInk, c.brand, [0.18, 0.12, 0.06, 0], [c.brand, brandDeep], 4.6),
+    inkSoft: readable(c.paper, c.ink, [0.2, 0.14, 0.08, 0], [c.ink], 4.6),
     fieldLine: readable(c.ink, c.paper, [0.5, 0.42, 0.34, 0.26, 0.18, 0], [c.paper], 3.1),
-    brandDeep: contrast(c.brandInk, deep) >= 4.5 ? deep : c.brand,
+    brandDeep,
+    actionRow: contrast(c.actionInk, row) >= 4.5 ? row : c.action,
     danger: readable(light ? '#b42318' : '#ff8a80', c.ink, [0, 0.2, 0.4, 0.6, 0.8, 1], [c.paper, c.surface], 4.6),
+    // The accent as a highlight on the Dark background, else plain text.
+    accentOnInk: contrast(c.accent, c.ink) >= 4.5 ? c.accent : c.paper,
     // The accent as a highlight on the brand colour and on the deep brand
     // (the hero's rotating word, the footer's headings), else plain text.
     accentOnBrand: contrast(c.accent, c.brand) >= 4.5 ? c.accent : c.brandInk,
@@ -151,9 +168,9 @@ export function themeColors(theme) {
     // when it reads there, as on imaginesurrey.ca's yellow band; else the
     // text-on-accent colour.
     headingOnAccent: contrast(c.link, c.accent) >= 4.5 ? c.link : c.accentInk,
-    accentOnDeep: contrast(c.accent, contrast(c.brandInk, deep) >= 4.5 ? deep : c.brand) >= 4.5 ? c.accent : c.brandInk,
+    accentOnDeep: contrast(c.accent, brandDeep) >= 4.5 ? c.accent : c.brandInk,
     pop: t.pop ? c.action : 'transparent',
-    popAlt: t.pop ? (contrast(c.brandInk, deep) >= 4.5 ? deep : c.ink) : 'transparent',
+    popAlt: t.pop ? (brandDeep === deep ? deep : c.ink) : 'transparent',
   };
 }
 
@@ -163,5 +180,6 @@ export function themeCss(theme) {
   const c = themeColors(t);
   const r = RADII.find((x) => x.value === t.radius)?.px ?? 10;
   return `:root{--brand:${c.brand};--brand-ink:${c.brandInk};--accent:${c.accent};--accent-ink:${c.accentInk};--ink:${c.ink};--paper:${c.paper};--surface:${c.surface};--line:${c.line};--link:${c.link};--radius:${r}px;--font-heading:${FONT_BY_VALUE[t.fonts.heading].stack};--font-body:${FONT_BY_VALUE[t.fonts.body].stack};`
-    + `--action:${c.action};--action-ink:${c.actionInk};--muted:${c.muted};--brand-soft:${c.brandSoft};--field-line:${c.fieldLine};--brand-deep:${c.brandDeep};--danger:${c.danger};--accent-on-brand:${c.accentOnBrand};--accent-on-deep:${c.accentOnDeep};--heading-on-accent:${c.headingOnAccent};--pop:${c.pop};--pop-alt:${c.popAlt}}`;
+    + `--action:${c.action};--action-ink:${c.actionInk};--muted:${c.muted};--brand-soft:${c.brandSoft};--field-line:${c.fieldLine};--brand-deep:${c.brandDeep};--danger:${c.danger};--accent-on-brand:${c.accentOnBrand};--accent-on-deep:${c.accentOnDeep};--heading-on-accent:${c.headingOnAccent};--pop:${c.pop};--pop-alt:${c.popAlt};`
+    + `--ink-soft:${c.inkSoft};--accent-on-ink:${c.accentOnInk};--action-row:${c.actionRow}}`;
 }
