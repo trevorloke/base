@@ -250,6 +250,14 @@ for (const key of ['is', 'base']) {
     check(`${key} ${label}: tap targets at least 48px`, a.small.length === 0, a.small.slice(0, 6).join(' | '));
     check(`${key} ${label}: text contrast at least AA`, a.contrast.length === 0, a.contrast.slice(0, 6).join(' | '));
     await shot(page, `${key}-home-${label}`);
+    if (label === 'phone') {
+      // The Menu open on a phone: the title-bar links move into it.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.locator('.menu > summary').click();
+      const a2 = await audit(page);
+      check(`${key} phone: the open Menu fits and every link is a 48px target`, a2.overflow <= 0 && a2.small.length === 0, `${a2.overflow} ${a2.small.slice(0, 3)}`);
+      await page.screenshot({ path: `${SHOTS}/${key}-menu-open-phone.png` });
+    }
     await page.context().close();
   }
 }
@@ -296,6 +304,7 @@ for (const key of ['is', 'base']) {
   const summary = page.locator('.menu > summary');
   await summary.click();
   check('menu: opens and lists the pages', await page.locator('.menu-panel').isVisible() && (await page.locator('.menu-panel a').count()) === 6);
+  await page.screenshot({ path: `${SHOTS}/is-menu-open-desktop.png`, clip: { x: 0, y: 0, width: 1360, height: 560 } });
   await page.keyboard.press('Escape');
   await sleep(150);
   check('menu: Escape closes it, focus back on Menu', !(await page.locator('.menu-panel').isVisible()) && (await page.evaluate(() => document.activeElement?.matches('.menu > summary'))));
@@ -321,6 +330,7 @@ for (const key of ['is', 'base']) {
   const thanks = page.locator('[data-module="petition"] .success-card');
   await thanks.waitFor({ timeout: 8000 });
   check('petition: thank-you in place of the form, focused', /Your name is on the petition/.test(await thanks.innerText()) && (await page.evaluate(() => document.activeElement?.classList.contains('success-card'))));
+  await thanks.screenshot({ path: `${SHOTS}/is-petition-thanks.png` });
   const sent = (await (await fetch(`${ORIGIN}/__posted`)).json()).filter((p) => p.kind === 'petition' && p.json);
   const last = sent[sent.length - 1]?.body || {};
   const keys = Object.keys(last).sort().join(',');
@@ -342,6 +352,7 @@ for (const key of ['is', 'base']) {
   await don.locator('.toggle-option', { hasText: 'Monthly' }).click();
   check('donate: monthly drops $250 (over a twelfth of the limit) and shows the monthly note', (await amounts()).join(' ') === '$25 $50 $100' && /Imagine Victory Fund/.test(await don.innerText()));
   check('donate: monthly button reads “a month”', /Donate \$50 a month$/.test((await don.locator('button[type=submit]').innerText()).trim()));
+  await don.screenshot({ path: `${SHOTS}/is-donate-monthly.png` });
   await don.getByLabel('Other amount', { exact: true }).fill('500');
   await don.getByRole('button', { name: /Donate/ }).click();
   check('donate: an amount over the monthly limit is refused with the limit', /The most you can give is \$119 a month/.test(await don.locator('#donate-form-amount-error').innerText().catch(() => '')));
@@ -410,6 +421,7 @@ for (const key of ['is', 'base']) {
   const rsvps = (await (await fetch(`${ORIGIN}/__posted`)).json()).filter((p) => p.kind === 'rsvp').map((p) => p.body);
   check('openings: two RSVPs, each with its shift_id, the second with the same person', rsvps.length === 2 && rsvps[0].shift_id === 'shift-1' && rsvps[1].shift_id === 'shift-2' && rsvps[1].email === 'sam@example.org' && rsvps[1].first_name === 'Sam', JSON.stringify(rsvps).slice(0, 300));
   check('openings: a full shift says so, with no sign-up', /This one is full/.test(await list.locator('.opening-card', { hasText: 'doorknocking' }).innerText()));
+  await list.screenshot({ path: `${SHOTS}/base-openings-signed-up.png` });
   await page.context().close();
 }
 

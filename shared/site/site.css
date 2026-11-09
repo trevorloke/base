@@ -179,6 +179,14 @@ textarea {
   outline-color: var(--accent);
   box-shadow: 0 0 0 6px var(--ink);
 }
+/* Light cards on a dark section take the light-page ring again. */
+.on-dark .form-card :focus-visible,
+.on-dark .success-card :focus-visible,
+.on-dark .rsvp-form :focus-visible,
+.on-dark .notice :focus-visible {
+  outline-color: var(--link);
+  box-shadow: 0 0 0 6px var(--accent);
+}
 #main:focus {
   outline: none;
   box-shadow: none;
