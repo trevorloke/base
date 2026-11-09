@@ -21,7 +21,10 @@ const createPg = async (url) => {
     : undefined;
   const pool = new pg.Pool({
     connectionString: url, ssl, max: Number(process.env.PG_POOL_MAX) || 10,
-    connectionTimeoutMillis: 10_000, keepAlive: true,
+    // A connection that can't be made in 30 s (PG_CONNECT_TIMEOUT_MS) is an
+    // error, not a request left hanging; long enough for a database that is
+    // restarting, or busy handing over a connection.
+    connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS) || 30_000, keepAlive: true,
   });
   // An idle connection the database drops (a restart, a plan change, its
   // maintenance) is an error on the pool; unheard it would stop the whole

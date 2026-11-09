@@ -35,6 +35,7 @@ built-in database on the server's disk (`STARBASE_DATA`, default
 | `DATABASE_URL` | — | `postgres://…`; `sslmode=require` in it turns TLS on |
 | `PGSSL` / `PGSSL_STRICT` | off | `1` to force TLS / to verify the certificate |
 | `PG_POOL_MAX` | `10` | connections per server |
+| `PG_CONNECT_TIMEOUT_MS` | `30000` | how long to wait for a database connection before giving an error (a dropped connection reconnects on the next query; `/api/health` says `"database": "not reachable"` while it's down) |
 
 **Check:** Services → Database answers with how many people are on file.
 
