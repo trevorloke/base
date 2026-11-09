@@ -216,7 +216,8 @@ What happens:
   it — in plain words, and Stripe is never asked. What this person gave
   before is never asked here (the form would tell anyone who typed their
   name): it is checked when the payment lands. Stripe's page starts with
-  the email the visitor typed, never the one on file.
+  the email the visitor typed, never the one on file (an email is needed;
+  one Stripe refuses is said on the form's email field).
 - **When the payment lands** (Stripe's webhook), it becomes a gift exactly
   as the desk logs one: method card, marked *online*, the declaration kept
   with it, the limit checked, the receipt issued and emailed by itself.
@@ -228,6 +229,13 @@ What happens:
   Stripe (tried again if Stripe doesn't answer), the donor is emailed
   plainly, and **Donations → Needs you** shows it until the treasurer taps
   *Got it*.
+- **Over only with another record that may be the same donor** (another
+  email, or a cheque at the desk on their voter record: the same first and
+  last name, and the same postal code, phone or street address): the gift
+  is logged and flagged under Needs you — "Maybe $… over the … limit", the
+  other record under *Why?* — never refunded, since it may be someone
+  else. The treasurer merges the two (People → Duplicates) and refunds, or
+  marks them *Not the same*.
 - **A refund or a dispute in Stripe**: a full refund voids the gift and its
   receipt (refunded dues void the membership); a partial refund and an open
   dispute are flagged under Needs you; a lost dispute voids the gift.

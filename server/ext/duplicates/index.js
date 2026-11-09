@@ -1,11 +1,16 @@
 // Duplicates: two records for one person, found and made one.
 //
 //   GET /api/duplicates      the desk (the People area). Pairs that look like
-//       one person: the same email; the same phone and name; or the same
-//       name at the same door. → { pairs: [{ a, b, why: ['email' | 'phone' |
-//       'address'] }], more } — each side with what the desk needs to choose
-//       (contacts, gifts, shifts, when it was added). Pairs marked "not the
-//       same" stay away.
+//       one person: the same email; the same phone and name; the same name
+//       at the same door; or a donor and a record with the same first and
+//       last name in the same postal code (an address typed another way:
+//       the money forms match only by email, so a donor can be a second
+//       record — the rule the payments add up the year's limit by, ext/
+//       payments limits.js; read from the donors, through its index
+//       persons_same_donor_idx). → { pairs: [{ a, b, why: ['email' |
+//       'phone' | 'address' | 'postal'] }], more } — each side with what the
+//       desk needs to choose (contacts, gifts, shifts, when it was added).
+//       Pairs marked "not the same" stay away.
 //   person.merge  { keep, drop }    desk. Everything that points at `drop`
 //       — contacts, gifts and receipts, shifts, signs, lists, answers,
 //       relationships, texts, requests, ladders… — moves to `keep`; where
@@ -22,6 +27,7 @@ import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { flagIfOver } from '../../lib/gifts.js';
 import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { sameText, samePhone, samePostal } from './same.js';
 
 export const sql = `
 create table if not exists person_not_dupes (
@@ -247,9 +253,9 @@ api.get('/duplicates', async (c) => {
     `with p as (
        select id,
               nullif(lower(trim(coalesce(email, ''))), '') as em,
-              nullif(right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 10), '') as ph,
-              lower(regexp_replace(trim(name), '\\s+', ' ', 'g')) as nm,
-              nullif(lower(regexp_replace(trim(coalesce(address, '')), '\\s+', ' ', 'g')), '') as ad,
+              nullif(${samePhone('phone')}, '') as ph,
+              ${sameText('name')} as nm,
+              nullif(${sameText('address')}, '') as ad,
               lower(coalesce(unit, '')) as un
          from persons where workspace_id = $1 and deleted_at is null and kind = 'person'
      ), hits as (
@@ -258,6 +264,15 @@ api.get('/duplicates', async (c) => {
        select a.id, b.id, 'phone' from p a join p b on a.ph = b.ph and a.nm = b.nm and a.id < b.id where length(a.ph) >= 7
        union all
        select a.id, b.id, 'address' from p a join p b on a.nm = b.nm and a.ad = b.ad and a.un = b.un and a.id < b.id
+       union all
+       select distinct least(a.id, b.id), greatest(a.id, b.id), 'postal'
+         from persons a
+         join persons b on b.workspace_id = a.workspace_id and b.deleted_at is null and b.kind = 'person' and b.id <> a.id
+          and ${sameText('b.last_name')} = ${sameText('a.last_name')} and ${sameText('b.first_name')} = ${sameText('a.first_name')}
+          and ${samePostal('b.postal')} = ${samePostal('a.postal')}
+        where a.workspace_id = $1 and a.deleted_at is null and a.kind = 'person'
+          and a.id in (select person_id from gifts where workspace_id = $1 and deleted_at is null)
+          and ${sameText('a.first_name')} <> '' and ${sameText('a.last_name')} <> '' and length(${samePostal('a.postal')}) >= 6
      )
      select h.a, h.b, array_agg(distinct h.why) as why from hits h
       where not exists (select 1 from person_not_dupes n where n.workspace_id = $1 and n.a = h.a and n.b = h.b)

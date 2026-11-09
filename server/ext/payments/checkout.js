@@ -18,7 +18,7 @@
 //     session id and runs also(tx, emit, { url, session_id }) in that same
 //     write (the site keeps what the visitor is told there; its answer is
 //     `result`). Stripe saying no marks the checkout failed; no or no
-//     answer, a 503.
+//     answer, a 503 — but a no to the email typed is a 400 on 'email'.
 //   retryCheckout(tx, ctx, id, emit?) → { id } | null
 //     a checkout kept but not opened, made ready to be asked again: as it
 //     was while Stripe may still answer with its page; after Stripe said no,
@@ -311,6 +311,8 @@ export const openCheckout = async (db, ctx, id, { action = 'payment.checkout', a
         if (r) emit('payment_checkout', id, 'update', { status: 'failed', stripe: e.httpStatus });
       });
     }
+    // The email they typed is one Stripe won't take: theirs to fix.
+    if (e.httpStatus === 400 && e.param === 'customer_email') throw payError(400, 'That email address doesn’t look right. Check it and try again.', 'email');
     throw unanswered();
   }
   const { result } = await runAction(db, { workspaceId: wsId, actorId: null, action }, async (tx, emit) => {

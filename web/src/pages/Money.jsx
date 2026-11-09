@@ -2,7 +2,9 @@
 //   Top: one big "Raised this year" number, then "Needs you": gifts over
 //   the contribution limit ("Over limit":
 //   "$150 over the $1,250 limit", the legal wording under "Why?", Donor ·
-//   Void right there) — and receipts with no home address ("Needs address":
+//   Void right there; a gift online that may be the same donor as another
+//   record: "Maybe $570.30 over the $1,429.70 limit", the other record
+//   under "Why?") — and receipts with no home address ("Needs address":
 //   Street address · Save address right there; the receipt's email waits).
 //   One yellow "Log a gift" (?new=1; ?person=<id> preselects the donor):
 //   donor, amount, date — paid by, cadence and note under "More details"
@@ -62,8 +64,10 @@ const fmtBig = (cents) => fmtMoney(cents).replace(/\.00$/, '');
 // Over the contribution limit, in one line: "$150 over the $1,250 limit".
 // The server's flag_reason reads "<donor> is at $1400.00 for 2026 — over the
 // $1250.00 limit (<legal source>)"; a fresh gift.log also returns the numbers.
+// The last such phrase: a name before it (the donor's, or another record's)
+// can never stand in for the numbers.
 const parseOver = (reason) => {
-  const m = /at \$([\d,]+(?:\.\d+)?) for (\d{4}) — over the \$([\d,]+(?:\.\d+)?) limit/.exec(String(reason || ''));
+  const m = [...String(reason || '').matchAll(/at \$([\d,]+(?:\.\d+)?) for (\d{4}) — over the \$([\d,]+(?:\.\d+)?) limit/g)].at(-1);
   if (!m) return null;
   const cents = (v) => Math.round(Number(v.replace(/,/g, '')) * 100);
   return { totalCents: cents(m[1]), capCents: cents(m[3]) };
@@ -71,14 +75,23 @@ const parseOver = (reason) => {
 // The brief's flagged rows carry the numbers (total_cents: the donor's total
 // for that year as it stands; cap_cents: the limit); a ledger row, or a brief
 // without them, falls back to reading flag_reason.
+// A gift flagged as maybe one donor on two records reads "Possibly the same
+// donor as <name> (same …): together they are at $2,000.00 for 2026 — over
+// the $1,429.70 limit …" (server/ext/payments/limits.js): its own record is
+// under, so until the two are made one, the line is the two together, as a
+// maybe.
 const centsOrNull = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+const MAYBE_SAME = /^Possibly the same donor as /;
 const overOf = (g) => {
   const totalCents = centsOrNull(g?.total_cents);
   const capCents = centsOrNull(g?.cap_cents);
-  return totalCents != null && capCents != null ? { totalCents, capCents } : parseOver(g?.flag_reason);
+  const own = totalCents != null && capCents != null ? { totalCents, capCents } : null;
+  const together = MAYBE_SAME.test(g?.flag_reason || '') && !(own && own.totalCents > own.capCents) ? parseOver(g.flag_reason) : null;
+  if (together) return { ...together, maybe: true };
+  return own || parseOver(g?.flag_reason);
 };
 const overLine = (c) => (c && Number.isFinite(c.totalCents) && Number.isFinite(c.capCents) && c.totalCents > c.capCents
-  ? `${fmtBig(c.totalCents - c.capCents)} over the ${fmtBig(c.capCents)} limit`
+  ? `${c.maybe ? 'Maybe ' : ''}${fmtBig(c.totalCents - c.capCents)} over the ${fmtBig(c.capCents)} limit`
   : 'Over limit');
 // "Aug 2" (this year) or "Aug 2, 2025"
 const shortDate = (value) => {

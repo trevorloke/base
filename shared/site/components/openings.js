@@ -9,9 +9,8 @@ import { html, cx } from './h.js';
 import { Icon } from './icons.js';
 import { Hidden, Honeypot, TextField } from './fields.js';
 import { ME_KEY, rememberMe } from './form.js';
-import { str } from './util.js';
+import { EMAIL_RE, str } from './util.js';
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const newKey = () => {
   try { if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID(); } catch { /* fall through */ }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
@@ -86,7 +85,7 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
     };
     const errors = {};
     if (!body.first_name) errors.first_name = 'Enter your first name';
-    if (body.email && !EMAIL.test(body.email)) errors.email = 'Enter an email address like name@example.org';
+    if (body.email && !EMAIL_RE.test(body.email)) errors.email = 'Enter an email address like name@example.org';
     if (!body.email && !body.phone) errors.email = 'Enter your email or a phone number';
     if (Object.keys(errors).length) {
       set({ errors, open: true });

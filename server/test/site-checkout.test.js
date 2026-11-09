@@ -8,7 +8,13 @@
 //     record the same email matched, or on someone new;
 //   · Stripe is never asked while the campaign's write is open, a retry with
 //     the same client_key is one action and one checkout, and a Stripe
-//     failure leaves the retry able to succeed;
+//     failure leaves the retry able to succeed — but the same key with
+//     other details (a typo put right, the next person at a shared tablet)
+//     is a new action with its own person and checkout, and Stripe refusing
+//     the email typed is a 400 on the email;
+//   · one donor on two records (another email, a cheque at the desk) is
+//     added up for the year's limit when the money lands: over together,
+//     the gift is flagged for the treasurer, never refunded;
 //   · what someone gave before never changes the answer (no per-person room
 //     check before checkout), and a refusal is a 400 in plain words, never a
 //     500;
@@ -36,10 +42,15 @@ const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 let fake, db, mgr, ws;
 
 // Stripe with a hand on the tap: hold() parks the next checkout request
-// until it is let go; failNext makes the next ones fail as an outage would.
+// until it is let go; failNext makes the next ones fail as an outage would;
+// loseNext lets Stripe make the page and loses its answer on the way back;
+// an address in refuseEmails is one Stripe calls invalid (a 400 on
+// customer_email, as Stripe answers an email it won't take).
 const realFetch = globalThis.fetch;
 let held = null;
 let failNext = 0;
+let loseNext = 0;
+const refuseEmails = new Set();
 const hold = () => {
   let reached;
   let release;
@@ -87,6 +98,15 @@ before(async () => {
         failNext -= 1;
         return new Response(JSON.stringify({ error: { type: 'api_error', message: 'Simulated outage' } }), { status: 500, headers: { 'content-type': 'application/json' } });
       }
+      const email = new URLSearchParams(String(init.body || '')).get('customer_email');
+      if (email && refuseEmails.has(email)) {
+        return new Response(JSON.stringify({ error: { type: 'invalid_request_error', param: 'customer_email', message: `Invalid email address: ${email}` } }), { status: 400, headers: { 'content-type': 'application/json' } });
+      }
+      if (loseNext > 0) {
+        loseNext -= 1;
+        await realFetch(url, init);
+        throw new TypeError('fetch failed');
+      }
     }
     return realFetch(url, init);
   };
@@ -103,10 +123,10 @@ after(async () => {
 test('a name and postal code (or phone) matching a voter never reach their email, and the money is never theirs', async () => {
   const voter = ok(await mgr.action('person.create', { name: 'Victoria Target', email: `victoria.private.${tag}@example.org`, postal: 'V3T 1V8', phone: '604-555-0199' })).person;
   const tries = [
-    ['donate', { first_name: 'Victoria', last_name: 'Target', phone: '778-000-1234', postal_code: 'v3t1v8', amount_cents: 500, cadence: 'once', declaration: true }],
+    ['donate', { first_name: 'Victoria', last_name: 'Target', email: `stranger.${tag}@example.net`, phone: '778-000-1234', postal_code: 'v3t1v8', amount_cents: 500, cadence: 'once', declaration: true }],
     ['donate', { first_name: 'Victoria', last_name: 'Target', email: `attacker.${tag}@example.net`, postal_code: 'V3T 1V8', amount_cents: 500, cadence: 'once', declaration: true }],
-    ['donate', { first_name: 'Victoria', last_name: 'Target', phone: '604-555-0199', amount_cents: 500, cadence: 'once', declaration: true }],
-    ['join', { first_name: 'Victoria', last_name: 'Target', phone: '778-000-4321', postal_code: 'V3T 1V8', declaration: true, birth_date: '1980-01-01', citizenship: 'citizen' }],
+    ['donate', { first_name: 'Victoria', last_name: 'Target', email: `caller.${tag}@example.net`, phone: '604-555-0199', amount_cents: 500, cadence: 'once', declaration: true }],
+    ['join', { first_name: 'Victoria', last_name: 'Target', email: `joiner.${tag}@example.net`, phone: '778-000-4321', postal_code: 'V3T 1V8', declaration: true, birth_date: '1980-01-01', citizenship: 'citizen' }],
   ];
   const keys = [];
   for (const [kind, body] of tries) {
@@ -170,12 +190,70 @@ test('a retry with the same client_key is one action and one checkout; a Stripe 
   assert.equal((await actionsKeyed(`twin-${tag}`)).length, 1);
 });
 
+test('an identical resend after a lost answer finishes the same checkout', async () => {
+  const body = { first_name: 'Lou', last_name: 'Lost', email: `lou.${tag}@example.org`, amount_cents: 2500, cadence: 'once', declaration: true, client_key: `lost-${tag}` };
+  const before = fake.sessions.size;
+  loseNext = 1;
+  const lost = await send('donate', body);
+  assert.equal(lost.status, 503, lost.text);
+  assert.equal(fake.sessions.size, before + 1, 'Stripe made the page; its answer was lost');
+  const made = [...fake.sessions.values()].at(-1);
+  const again = ok(await send('donate', body), 'the resend');
+  assert.equal(again.checkout_url, made.url, 'the page Stripe made, not a second one');
+  assert.equal(fake.sessions.size, before + 1);
+  assert.equal((await actionsKeyed(`lost-${tag}`)).length, 1, 'one action');
+});
+
+test('after a Stripe outage, the next person sending from the same page gets their own record and checkout', async () => {
+  const key = `kiosk-${tag}`;
+  const alice = { first_name: 'Alice', last_name: 'First', email: `alice.${tag}@example.org`, phone: '604-555-0101', amount_cents: 5000, cadence: 'once', declaration: true, client_key: key };
+  const bob = { first_name: 'Bob', last_name: 'Second', email: `bob.${tag}@example.org`, amount_cents: 5000, cadence: 'once', declaration: true, client_key: key };
+  failNext = 1;
+  const down = await send('donate', alice);
+  assert.equal(down.status, 503, down.text);
+  const his = ok(await send('donate', bob), 'Bob, the same amount, the same page');
+  assert.equal(sessionsPosted().at(-1).params.customer_email, bob.email, 'Stripe’s page starts with Bob’s email');
+  const co = await checkoutOfSession(sessionOf(his.checkout_url));
+  const who = (await db.query('select name, email from persons where id = $1', [co.person_id])).rows[0];
+  assert.deepEqual([who.name, who.email], ['Bob Second', bob.email], 'the money would be Bob’s');
+  // Alice, sending hers again as it was, still finishes her own.
+  const hers = ok(await send('donate', alice), 'Alice again');
+  assert.notEqual(hers.checkout_url, his.checkout_url);
+  assert.equal(sessionsPosted().at(-1).params.customer_email, alice.email);
+  assert.equal((await actionsKeyed(key)).length, 2, 'two forms, two actions');
+});
+
+test('Stripe refusing the typed email is a 400 on the email, in plain words', async () => {
+  const typo = `tia.${tag}@exmaple.org`;
+  refuseEmails.add(typo);
+  const r = await send('donate', { first_name: 'Tia', last_name: 'Typo', email: typo, amount_cents: 2500, cadence: 'once', declaration: true, client_key: `refused-${tag}` });
+  assert.deepEqual([r.status, r.json?.field], [400, 'email'], r.text);
+  assert.equal(r.json.error, 'That email address doesn’t look right. Check it and try again.');
+  const plain = await hit('/site/api/forms/donate', { form: { first_name: 'Tia', last_name: 'Typo', email: typo, amount_cents: '2500', declaration: 'on', module_id: 'donate' } });
+  assert.deepEqual([plain.status, plain.location], [303, '/site/?error=email&module=donate#m-donate']);
+});
+
+test('after Stripe refused the typed email, the corrected send is a new checkout with the corrected email', async () => {
+  const typo = `tim.${tag}@exmaple.org`;
+  const fixed = `tim.${tag}@example.org`;
+  refuseEmails.add(typo);
+  const body = { first_name: 'Tim', last_name: 'Typo', amount_cents: 2500, cadence: 'once', declaration: true, client_key: `typo-${tag}` };
+  const first = await send('donate', { ...body, email: typo });
+  assert.notEqual(first.status, 200, first.text);
+  const again = await send('donate', { ...body, email: fixed });
+  assert.equal(again.status, 200, again.text);
+  assert.equal(sessionsPosted().at(-1).params.customer_email, fixed, 'Stripe’s page starts with the corrected email');
+  const co = await checkoutOfSession(sessionOf(again.json.checkout_url));
+  const who = (await db.query('select email from persons where id = $1', [co.person_id])).rows[0];
+  assert.equal(who.email, fixed, 'the money would be the corrected email’s');
+});
+
 test('what someone gave before never changes the answer; a refusal is a 400 in plain words, never a 500', async () => {
   const donor = ok(await mgr.action('person.create', { name: 'Dana Donor', email: `dana.${tag}@example.org`, postal: 'V3S 2A1' })).person;
   ok(await mgr.action('gift.log', { person_id: donor.id, amount_cents: 73_400, date: today(), method: 'cheque' }));
   // Over what she has left this year, under the year's limit: off to pay,
   // as anyone would be (the payment is checked when it lands).
-  for (const who of [{ phone: '250-000-0000', postal_code: 'V3S2A1' }, { email: donor.email }]) {
+  for (const who of [{ email: `not.dana.${tag}@example.org`, postal_code: 'V3S2A1' }, { email: donor.email }]) {
     const r = await send('donate', { first_name: 'Dana', last_name: 'Donor', ...who, amount_cents: 100_000, cadence: 'once', declaration: true });
     assert.equal(r.status, 200, `${JSON.stringify(who)} ${r.text.slice(0, 200)}`);
     assert.ok(r.json.checkout_url);
@@ -209,7 +287,7 @@ test('join never overwrites a birth date or citizenship on file; it fills what i
   const elder = ok(await mgr.action('person.create', { name: 'Bert Elder', email: `bert.${tag}@example.org`, postal: 'V4A 9Z9' })).person;
   ok(await set(elder.id, '1950-03-04', 'Canadian citizen'));
   const kept = { 'birth date': '1950-03-04', citizenship: 'Canadian citizen' };
-  ok(await send('join', { first_name: 'Bert', last_name: 'Elder', phone: '604-111-2222', postal_code: 'V4A 9Z9', birth_date: '2008-01-01', citizenship: 'pr', declaration: true }));
+  ok(await send('join', { first_name: 'Bert', last_name: 'Elder', email: `not.bert.${tag}@example.org`, phone: '604-111-2222', postal_code: 'V4A 9Z9', birth_date: '2008-01-01', citizenship: 'pr', declaration: true }));
   assert.deepEqual(await fieldValues(elder.id), kept, 'a name and postal code change nothing on file');
   ok(await send('join', { first_name: 'Bert', last_name: 'Elder', email: elder.email, birth_date: '2008-01-01', citizenship: 'pr', declaration: true }));
   assert.deepEqual(await fieldValues(elder.id), kept, 'the same email fills only what is empty');
@@ -318,5 +396,95 @@ test('the consent words kept are the words shown — beside a box and beside the
     assert.equal(await kept(`nell.${tag}@example.org`), unescape(small));
   } finally {
     ok(await mgr.action('site.settings.save', { org: was.org, seo: was.seo }));
+  }
+});
+
+// ── One donor on two records: the year's limit counts them together ──
+// Money lands only on the same email's record or someone new's, so a donor
+// who types another email (or gave a cheque at the desk) is two records.
+// When a payment lands under the limit for its own record, the records that
+// may be the same donor — the same first and last name, and the same postal
+// code, phone or street address — are added in; over together, the gift is
+// logged as usual and flagged for the treasurer, naming the other record.
+const paid = async (url) => (await fake.pay(sessionOf(url)))[0];
+const giftsNamed = async (last) => (await db.query(
+  `select g.*, p.email from gifts g join persons p on p.id = g.person_id
+    where g.workspace_id = $1 and p.last_name = $2 and g.deleted_at is null order by g.created_at`, [ws, last],
+)).rows;
+// Money's parseOver: the desk reads the numbers out of the reason (the last
+// such phrase in it).
+const overOf = (reason) => {
+  const m = [...String(reason || '').matchAll(/at \$([\d,]+(?:\.\d+)?) for (\d{4}) — over the \$([\d,]+(?:\.\d+)?) limit/g)].at(-1);
+  return m ? [m[1], m[3]] : null;
+};
+
+test('one donor under two emails, the same name and postal code: over together, the second gift is flagged naming the first', async () => {
+  const who = { first_name: 'Jane', last_name: 'Repeat', address: '12345 67 Ave', city: 'Surrey', postal_code: 'V3T 1V8', cadence: 'once', declaration: true };
+  const a = ok(await send('donate', { ...who, email: `jane.work.${tag}@example.org`, amount_cents: 100_000 }));
+  assert.equal((await paid(a.checkout_url)).body.result, 'gift recorded');
+  const b = ok(await send('donate', { ...who, email: `jane.home.${tag}@example.org`, postal_code: 'v3t1v8', amount_cents: 100_000 }));
+  const landed = await paid(b.checkout_url);
+  assert.equal(landed.body.result, 'gift recorded', 'logged as usual: the other record may be someone else');
+  const gifts = await giftsNamed('Repeat');
+  assert.equal(new Set(gifts.map((g) => g.person_id)).size, 2, 'two records');
+  assert.deepEqual(gifts.map((g) => g.flagged), [false, true]);
+  assert.match(gifts[1].flag_reason, /^Possibly the same donor as Jane Repeat \(same address and postal code\): together they are at \$2,000\.00 for \d{4} — over the \$1,429\.70 limit on the city council slate \(/);
+  assert.deepEqual(overOf(gifts[1].flag_reason), ['2,000.00', '1,429.70'], 'the desk reads the two together');
+  const pay = (await db.query('select status, over_limit from stripe_payments where gift_id = $1', [gifts[1].id])).rows[0];
+  assert.deepEqual([pay.status, pay.over_limit], ['paid', false], 'no refund');
+  const flagged = ok(await mgr.get('/api/brief')).flagged.find((f) => f.id === gifts[1].id);
+  assert.ok(flagged, 'on the desk’s Needs you');
+  const ev = (await db.query("select payload from events where workspace_id = $1 and entity_type = 'gift' and entity_id = $2 and op = 'update'", [ws, gifts[1].id])).rows[0];
+  assert.deepEqual([ev?.payload.flagged, ev?.payload.flag_reason], [true, gifts[1].flag_reason], 'the flag on the event log');
+});
+
+test('a cheque at the desk on a voter’s record with no email, then a gift online at the same postal code: flagged', async () => {
+  const voter = ok(await mgr.action('person.create', { first_name: 'Rhea', last_name: 'Voter', address: '9876 54 St', city: 'Surrey', postal: 'V3S 2A1' })).person;
+  ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  // The address typed another way: the postal code is enough.
+  const r = ok(await send('donate', { first_name: 'Rhea', last_name: 'Voter', email: `rhea.${tag}@example.org`, address: '9876 54 Street', city: 'Surrey', postal_code: 'V3S 2A1', amount_cents: 100_000, cadence: 'once', declaration: true }));
+  assert.equal((await paid(r.checkout_url)).body.result, 'gift recorded');
+  const gifts = await giftsNamed('Voter');
+  const online = gifts.find((g) => g.person_id !== voter.id);
+  assert.ok(online, 'a record of its own');
+  assert.equal(online.flagged, true);
+  assert.match(online.flag_reason, /^Possibly the same donor as Rhea Voter \(same postal code\): together they are at \$2,000\.00 for/);
+  assert.equal(gifts.find((g) => g.person_id === voter.id).flagged, false, 'the cheque stays as it was');
+});
+
+test('the same name at another postal code, with no phone or address in common: not flagged', async () => {
+  const theo = ok(await mgr.action('person.create', { first_name: 'Theo', last_name: 'Apart', address: '1 Elm St', city: 'Surrey', postal: 'V4A 1A1', phone: '604-555-0111' })).person;
+  ok(await mgr.action('gift.log', { person_id: theo.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  const r = ok(await send('donate', { first_name: 'Theo', last_name: 'Apart', email: `theo.${tag}@example.org`, phone: '778-555-0222', address: '2 Oak St', city: 'Surrey', postal_code: 'V3W 9Z9', amount_cents: 100_000, cadence: 'once', declaration: true }));
+  assert.equal((await paid(r.checkout_url)).body.result, 'gift recorded');
+  assert.deepEqual((await giftsNamed('Apart')).map((g) => g.flagged), [false, false]);
+});
+
+test('a pair the desk said are two people is never added up', async () => {
+  const kim = ok(await mgr.action('person.create', { first_name: 'Kim', last_name: 'Twice', address: '5 Pine St', city: 'Surrey', postal: 'V3R 1B2' })).person;
+  ok(await mgr.action('gift.log', { person_id: kim.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  const body = { first_name: 'Kim', last_name: 'Twice', email: `kim.${tag}@example.org`, address: '5 Pine St', city: 'Surrey', postal_code: 'V3R 1B2', cadence: 'once', declaration: true };
+  assert.equal((await paid(ok(await send('donate', { ...body, amount_cents: 20_000 })).checkout_url)).body.result, 'gift recorded');
+  const other = (await db.query('select id from persons where workspace_id = $1 and lower(email) = $2', [ws, body.email])).rows[0];
+  ok(await mgr.action('person.notDuplicate', { a: kim.id, b: other.id }));
+  assert.equal((await paid(ok(await send('donate', { ...body, amount_cents: 30_000 })).checkout_url)).body.result, 'gift recorded');
+  assert.deepEqual((await giftsNamed('Twice')).map((g) => g.flagged), [false, false, false]);
+});
+
+test('the records that may be one donor are found through an index, never by reading the whole list', async () => {
+  const { likelySameDonors } = await import('../ext/payments/limits.js');
+  assert.equal(typeof likelySameDonors, 'function', 'limits.js finds them');
+  const [jane] = (await db.query("select id from persons where workspace_id = $1 and last_name = 'Repeat' order by created_at limit 1", [ws])).rows;
+  const seen = [];
+  const recording = { query: (sql, params) => { seen.push({ sql, params }); return db.query(sql, params); } };
+  const found = await likelySameDonors(recording, { id: ws }, jane.id, { year: Number(today().slice(0, 4)), slate: 'council' });
+  assert.deepEqual(found.map((f) => [f.name, Number(f.given_cents)]), [['Jane Repeat', 100_000]]);
+  assert.ok(seen.length >= 1);
+  for (const s of seen) {
+    const plan = await db.transaction(async (tx) => {
+      await tx.query('set local enable_seqscan = off');
+      return (await tx.query(`explain ${s.sql}`, s.params)).rows.map((r) => Object.values(r)[0]).join('\n');
+    });
+    assert.match(plan, /persons_same_donor_idx/, `${s.sql.replace(/\s+/g, ' ')}\n${plan}`);
   }
 });

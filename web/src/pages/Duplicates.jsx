@@ -1,8 +1,9 @@
 // /people/duplicates (the desk, the People area): two records that look like
-// one person — the same email, the same phone and name, or the same name at
-// one door — side by side. "Keep this one" merges the other into it
-// (person.merge: everything that pointed at the other moves; blanks are
-// filled; it asks once). "Not the same" keeps the pair away.
+// one person — the same email, the same phone and name, the same name at
+// one door, or a donor and the same first and last name in one postal code
+// — side by side. "Keep this one" merges the other into it (person.merge:
+// everything that pointed at the other moves; blanks are filled; it asks
+// once). "Not the same" keeps the pair away.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -10,7 +11,7 @@ import { apiGet, action } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import './duplicates.css';
 
-const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door' };
+const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door', postal: 'Same name and postal code' };
 const when = (iso) => new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 

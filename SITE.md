@@ -129,7 +129,12 @@ Every kind: `first_name`, `last_name`, `email`, `phone`, `postal_code`,
 `consent_email` (bool), `consent_sms` (bool), `website` (honeypot, must be
 empty), `client_key` (idempotency, ≤64), `ref` (referral code, else the
 cookie), `page_id`, `module_id`, `source` (e.g. `share-whatsapp`). An email
-or a phone is required for every kind.
+or a phone is required for every kind; the newsletter, `join` and `donate`
+need an email (money is only ever the same email's record, or someone
+new's). An email is checked as Stripe's page checks it — no `..`, no dot
+at either end of the name or the domain, no hyphen at either end of a
+part of the domain — by one pattern for the browser and the server
+(`EMAIL_RE`, `shared/site/components/util.js`).
 
 | kind | also |
 |---|---|
@@ -153,10 +158,11 @@ A `contact` message is a request for the desk (`door_requests`, kind
 keeps it in its payload — never written into the person's note.
 
 Answers: `200 { ok: true }` · `200 { ok: true, checkout_url }` (join, donate) ·
-`400 { error, field }` (every refusal, the payments' own too) · `429 { error }` ·
+`400 { error, field }` (every refusal, the payments' own too — Stripe
+refusing the email typed is a 400 on `email`) · `429 { error }` ·
 `503 { error }` when online payments aren't set up or Stripe didn't answer
-(the same `client_key` sent again finishes it). Never a person id or
-anything about who was on file.
+(the same form sent again with its `client_key` finishes it). Never a
+person id or anything about who was on file.
 A plain form post (no JavaScript) gets a `303` back to the page with
 `?sent=<kind>#m-<module_id>` (or `?error=<field>&module=<module_id>#m-<module_id>`,
 so the page says it on the form that was sent), or to the checkout.
@@ -455,11 +461,18 @@ no was about); `site_actions.answer` (what the visitor was told — a retry
 gets it again; for `join` and `donate` empty until Stripe has made the
 page); `site_actions.checkout_id` (`join`, `donate`: their checkout);
 `site_actions.client_key` is stored as `<kind>:<key>` — for `join` and
-`donate` with what is being paid after it (`<kind>:<key>:<amount>-<cadence>-<slate>`,
-`<kind>:<key>:<amount>-<term>`), so the same key with another amount (back
-from Stripe's page, a new choice) is a fresh checkout, never the old one.
-The browser also makes a new key once a form is answered, and when a page
-comes back from the back/forward cache.
+`donate` with what is being paid and who after it
+(`<kind>:<key>:<amount>-<cadence>-<slate>:<who>`,
+`<kind>:<key>:<amount>-<term>:<who>`; `<who>` a short hash of the details
+typed — email, phone digits, first and last name, postal code, address,
+city, and for a join the birth date and citizenship — case and spaces
+aside), so the same key with another amount (back from Stripe's page, a
+new choice), or with other details (a typo put right after a failed send,
+the next person at a shared tablet), is a fresh action and checkout, never
+the old one; sent again as it was (a double tap, a lost answer), it is the
+same. The browser also makes a new key once a form is answered, when a
+field changes after a send that didn't get through (no answer, or a 5xx),
+and when a page comes back from the back/forward cache.
 
 ## Who a form is (matching)
 
@@ -474,8 +487,9 @@ file is overwritten; the answer never says whether they were on file.
 Money (`join`, `donate`) is only ever the same email's, or someone new's: a
 name and phone, or a name and postal code, is no proof of who is paying —
 the gift, its receipt and the year's limit would land on a voter who never
-gave. A join keeps its birth date and citizenship only where the profile
-has none.
+gave. So one donor can be two records; the year's limit still adds them up
+when the money lands ("Payments readiness" below). A join keeps its birth
+date and citizenship only where the profile has none.
 
 Consent: a ticked box joins base.win's newsletter list and records the
 consent with its words — but never puts back an address that left the list
@@ -509,17 +523,27 @@ then goes in three steps — no write ever waits on Stripe:
 
 Stripe failing or silent: the visitor hears 503 "We couldn't reach the
 payment service"; the person and the action stay (they did ask), with no
-answer. A retry with the same `client_key` finds that action, makes its
-checkout ready again (`retryCheckout`: the same request and key while
-Stripe may have made the page, else a fresh expiry under a new key) and
-does steps 2 and 3 for it — one action, one checkout, never a second; two
-at once (a double tap) get the same page. Once answered, a retry hears the
-answer kept.
+answer. Stripe refusing the email they typed: a 400 on `email`, in plain
+words. A retry — the same `client_key`, amount and details — finds that
+action, makes its checkout ready again (`retryCheckout`: the same request
+and key while Stripe may have made the page, else a fresh expiry under a
+new key) and does steps 2 and 3 for it — one action, one checkout, never a
+second; two at once (a double tap) get the same page. Once answered, a
+retry hears the answer kept. The same key with other details is a new
+form: its own person, action and checkout.
 
 Before checkout the site refuses only what no one may give (over the
 year's limit once, or over the monthly maximum): a person's own total is
 checked when the money lands (and refunded if over), so the form never
-says what someone gave before.
+says what someone gave before. Under the limit on its own, the payment is
+also added to what the records that may be the same donor gave this year
+on that slate — the same first and last name, and the same postal code,
+phone or street address (another email, a cheque at the desk on their
+voter record), never a pair the desk marked Not the same: over together,
+the gift is logged and flagged for the treasurer ("Possibly the same donor
+as …", Donations → Needs you), never refunded — the other record may be
+someone else. People → Duplicates lists a donor and the same first and
+last name in one postal code as a pair too, to merge or keep apart.
 
 ## Admin API
 

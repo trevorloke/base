@@ -38,6 +38,23 @@ test('found: the same email; the same phone and name; the same name at one door 
   assert.equal((await vol.get('/api/duplicates')).status, 403, 'the desk’s');
 });
 
+test('found: a donor and the same first and last name in one postal code (an address typed another way), never a postal code apart', async () => {
+  const gave = async (p) => ok(await mgr.action('gift.log', { person_id: p.id, amount_cents: 5000, date: '2026-05-01', method: 'cheque' }));
+  await mgr.createPerson('Rhea Voter', { address: '9876 54 St', city: 'Surrey', postal: 'V3S 2A1' });
+  await gave(await mgr.createPerson('Rhea Voter', { email: 'rhea@example.org', address: '9876 54 Street', postal: 'v3s2a1' }));
+  await gave(await mgr.createPerson('Theo Apart', { postal: 'V4A 1A1' }));
+  await mgr.createPerson('Theo Apart', { postal: 'V3W 9Z9' });
+  await gave(await mgr.createPerson('Fay Partial', { postal: 'V3S' }));
+  await mgr.createPerson('Fay Partial', { postal: 'V3S' });
+  await mgr.createPerson('Nell Nogift', { postal: 'V3R 1B2' });
+  await mgr.createPerson('Nell Nogift', { postal: 'V3R 1B2' });
+  const found = (await pairsOf()).filter(([n]) => /Rhea|Theo|Fay|Nell/.test(n));
+  assert.deepEqual(found, [['Rhea Voter + Rhea Voter', 'postal']]);
+  const pair = ok(await mgr.get('/api/duplicates')).pairs.find((p) => p.why.includes('postal'));
+  ok(await mgr.action('person.notDuplicate', { a: pair.a.id, b: pair.b.id }));
+  assert.ok(!(await pairsOf()).some(([n]) => /Rhea/.test(n)), 'Not the same: away');
+});
+
 test('Not the same: the pair stays away', async () => {
   const p = ok(await mgr.get('/api/duplicates')).pairs.find((x) => x.why.includes('address'));
   ok(await mgr.action('person.notDuplicate', { a: p.b.id, b: p.a.id }));

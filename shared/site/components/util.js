@@ -54,6 +54,15 @@ export function dateOnly(iso, timeZone = DEFAULT_TIME_ZONE) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: validZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE, year: 'numeric', month: 'long', day: 'numeric' }).format(d);
 }
 
+// ── An email address ──
+// One @ and no spaces; the name and the domain are parts joined by single
+// dots (never two in a row, never one at either end); a part of the domain
+// never starts or ends with a hyphen, and the last part is two characters
+// or more. Stripe's payment page refuses an address with two dots in a row
+// and the like, so the forms ask for one like this — in the browser
+// (form.js, openings.js) and on the server (ext/site/forms.js), the same way.
+export const EMAIL_RE = /^[^\s@.]+(?:\.[^\s@.]+)*@(?:[^\s@.-](?:[^\s@.]*[^\s@.-])?\.)+[^\s@.-][^\s@.]*[^\s@.-]$/;
+
 // ── Text ──
 // A paragraph field ("textarea"): blank lines make paragraphs.
 export const paragraphs = (text) => str(text).replace(/\r\n?/g, '\n').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);

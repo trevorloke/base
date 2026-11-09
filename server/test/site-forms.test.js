@@ -120,6 +120,34 @@ test('every kind needs an email or a phone, and checks what it is sent', async (
   assert.equal((await hit('/site/api/forms/contact', { method: 'POST', body: 'x', headers: { 'content-type': 'text/plain' } })).status, 415);
 });
 
+test('join and donate need an email: a phone alone is refused', async () => {
+  _setPaymentsForTest(fakePayments());
+  try {
+    for (const kind of ['join', 'donate']) {
+      const r = await send(kind, { first_name: 'Pho', last_name: 'Only', phone: '604-555-0142', postal_code: 'V3T 1V8', amount_cents: 2500, declaration: true });
+      assert.deepEqual([r.status, r.json?.field], [400, 'email'], `${kind}: ${r.text}`);
+      assert.equal(r.json.error, kind === 'join' ? 'Add your email to join' : 'Add your email to give');
+    }
+    assert.equal((await personBy(db, ws, "last_name = 'Only'")).length, 0, 'nothing kept');
+  } finally {
+    _setPaymentsForTest(null);
+  }
+});
+
+test('an email Stripe would refuse is refused on the form, and the browser checks it the same way', async () => {
+  const good = ['jane@gmail.com', 'Jane.Doe@Example.org', 'first.last+tag@sub.example.co.uk', "o'brien@example.ie", 'a-b@my-domain.ca', 'ana@xn--80ak6aa92e.com'];
+  const bad = ['jane@gmail..com', 'jane..doe@gmail.com', '.jane@gmail.com', 'jane.@gmail.com', 'jane@.gmail.com', 'jane@gmail.com.', 'jane@-gmail.com', 'jane@gmail-.com', 'jane@gmail.c', 'jane@localhost'];
+  for (const email of bad) {
+    const r = await send('newsletter', { email, consent_email: true });
+    assert.deepEqual([r.status, r.json?.field], [400, 'email'], email);
+  }
+  for (const email of good) assert.equal((await send('newsletter', { email, consent_email: true })).status, 200, email);
+  const { EMAIL_RE } = await import('../../shared/site/components/util.js');
+  assert.ok(EMAIL_RE instanceof RegExp, 'one pattern for the server and the browser (shared/site/components/util.js)');
+  for (const email of bad) assert.equal(EMAIL_RE.test(email), false, email);
+  for (const email of good) assert.equal(EMAIL_RE.test(email.toLowerCase()), true, email);
+});
+
 test('petition and pledge: the signature, the tags, a person signing twice counts once', async () => {
   const r = await send('petition', { first_name: 'Ravi', last_name: 'Example', email: 'ravi@example.org', postal_code: 'v3t1v8', campaign: petition.id, comment: 'All the way!' });
   assert.deepEqual(r.json, { ok: true });
@@ -303,10 +331,11 @@ test('join and donate: plain words when online payments aren’t set up; otherwi
   _setPaymentsForTest(fake);
   const site = ok(await mgr.get('/api/site'));
   const donatePage = site.pages.find((p) => p.slug === 'donate');
-  const gift = ok(await send('donate', {
+  const giftForm = {
     first_name: 'Gia', last_name: 'Example', email: 'gia@example.org', address: '13450 104 Ave', city: 'Surrey', postal_code: 'V3T 1V8',
     amount_cents: 5000, cadence: 'monthly', declaration: true, page_id: donatePage.id, module_id: 'donate', client_key: 'gift-1',
-  }));
+  };
+  const gift = ok(await send('donate', giftForm));
   assert.equal(gift.checkout_url, 'https://checkout.stripe.com/c/pay/cs_test_1');
   const [g] = await personBy(db, ws, "lower(email) = 'gia@example.org'");
   assert.deepEqual(calls[0], {
@@ -316,7 +345,7 @@ test('join and donate: plain words when online payments aren’t set up; otherwi
     metadata: { site_action_id: (await actionsOf(g.id, 'donate'))[0].id, kind: 'donate' },
   });
   assert.deepEqual(tags(g), [], 'the money forms leave no tag');
-  assert.deepEqual(ok(await send('donate', { email: 'gia@example.org', amount_cents: 5000, cadence: 'monthly', declaration: true, client_key: 'gift-1' })), gift, 'a retry gets the same checkout');
+  assert.deepEqual(ok(await send('donate', giftForm)), gift, 'a retry gets the same checkout');
   assert.equal(calls.length, 1, 'and makes no second one');
   assert.equal(g.address, '13450 104 Ave');
 

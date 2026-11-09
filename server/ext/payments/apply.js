@@ -21,12 +21,14 @@
 // would take the donor over this year's limit on its slate (gifts logged
 // since the checkout opened), no gift is logged — the payment is kept as
 // over_limit, its refund is queued, and the treasurer sees it under
-// Donations → Needs you until they say Got it.
+// Donations → Needs you until they say Got it. Under the limit on its own
+// but over with the records that may be the same donor (limits.js
+// overTogether), the gift is logged and flagged: the treasurer decides.
 import { newId } from '../../lib/events.js';
 import { logGift, voidGift, campaignDay } from '../../lib/gifts.js';
 import { enqueueJob } from '../../lib/jobs.js';
 import { DEFAULT_SLATE } from '@starbase/shared/canvass';
-import { overWhenLanding, tzOf } from './limits.js';
+import { overWhenLanding, overTogether, tzOf } from './limits.js';
 
 export const REFUND_JOB = 'payments.refund';
 
@@ -102,6 +104,16 @@ const giftFor = async (tx, emit, ws, { donor, co, paymentId, amount, date, caden
   return gift;
 };
 
+// The donor's own year is under the limit; with the records that may be
+// theirs too, over? Then the gift is flagged — never refunded: the other
+// record may be someone else.
+const flagIfTogether = async (tx, emit, ws, { giftId, donorId, check, slate }) => {
+  const reason = check.checked ? await overTogether(tx, ws, donorId, check, slate) : null;
+  if (!reason) return;
+  await tx.query('update gifts set flagged = true, flag_reason = $3 where id = $1 and workspace_id = $2', [giftId, ws.id, reason]);
+  emit('gift', giftId, 'update', { flagged: true, flag_reason: reason });
+};
+
 // Membership dues paid: the membership, as the membership form makes one —
 // a renewal starts when the current term ends; youth when they were 14 to
 // 30 the day they joined; citizen or permanent resident as declared — with
@@ -162,6 +174,7 @@ const land = async (tx, emit, ws, co, { amount, paidAt, cadence, refs }) => {
       const gift = await giftFor(tx, emit, ws, { donor, co, paymentId: out.paymentId, amount, date, cadence });
       out.giftId = gift.id;
       await tx.query('update stripe_payments set gift_id = $2 where id = $1', [out.paymentId, gift.id]);
+      await flagIfTogether(tx, emit, ws, { giftId: gift.id, donorId: donor.id, check, slate: base.slate });
       if (co.kind === 'membership') out.membership = await joinOnline(tx, emit, ws, { donor, co, day: date });
       out.status = 'paid';
     }
