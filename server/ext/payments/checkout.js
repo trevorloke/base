@@ -28,12 +28,13 @@
 import { newId } from '../../lib/events.js';
 import { capFor } from '../../lib/cap.js';
 import { SLATE_CODES, DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { DONATE_DECLARATION, JOIN_DECLARATION } from '../../../shared/site/wording.js';
 import { stripeRequest, stripeMode, paymentsReady, StripeError } from './stripe.js';
 import { roomFor, fits, campaignNow, monthlyMax, money } from './limits.js';
 
-// The declaration a contributor makes (BC's Local Elections Campaign
-// Financing Act), in the website's own words (apps/web DonateForm).
-export const DECLARATION = 'I’m a Canadian citizen or permanent resident. I live in British Columbia. This contribution is my own money, and no one will pay me back for it.';
+// The declaration a contributor makes, in the website's own words (the
+// donate form's, shared/site/wording.js; membership dues: JOIN_DECLARATION).
+export const DECLARATION = DONATE_DECLARATION;
 // Membership dues, as on the paper form (ext/membership): at least $10 a
 // year, $5 for members aged 14 to 30 on the day they join; members are 14
 // or older.
@@ -73,11 +74,12 @@ export const workspaceOf = async (q, ctx) => {
 
 // The declaration as it was made: the words ticked (the form may send its
 // own), when, and that it came from the website.
-const declarationOf = (d) => {
-  if (d === true || d === 'true' || d === 'on' || d === '1') return { text: DECLARATION };
+const declarationOf = (d, kind) => {
+  const ours = kind === 'membership' ? JOIN_DECLARATION : DONATE_DECLARATION;
+  if (d === true || d === 'true' || d === 'on' || d === '1') return { text: ours };
   if (typeof d === 'string' && d.trim().length >= 10) return { text: d.trim().slice(0, 1000) };
   if (d && typeof d === 'object' && d.agreed !== false) {
-    const text = typeof d.text === 'string' && d.text.trim().length >= 10 ? d.text.trim().slice(0, 1000) : DECLARATION;
+    const text = typeof d.text === 'string' && d.text.trim().length >= 10 ? d.text.trim().slice(0, 1000) : ours;
     return { text };
   }
   return null;
@@ -111,7 +113,7 @@ export const checkoutFor = async (tx, ctx, opts = {}, emit = null) => {
   if (amountCents > MAX_CENTS) throw payError(400, 'That amount is too large.', 'amount_cents');
   const slate = opts.slate == null || opts.slate === '' ? DEFAULT_SLATE : String(opts.slate);
   if (!SLATE_CODES.includes(slate)) throw payError(400, 'Choose who the gift is for.', 'slate');
-  const declaration = declarationOf(opts.declaration);
+  const declaration = declarationOf(opts.declaration, kind);
   if (!declaration) throw payError(400, 'Please confirm you can give: tick the declaration.', 'declaration');
   if (!absolute(opts.successUrl) || !absolute(opts.cancelUrl)) throw payError(400, 'successUrl and cancelUrl: full https addresses');
   const metadata = metadataOf(opts.metadata);

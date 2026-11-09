@@ -84,7 +84,10 @@ lookup. One `runAction('site.form.<kind>')` records: the person (created or
 updated), a `site_actions` row (emits entity `site_action`, op `create`,
 payload `{ kind, person_id, campaign_id, page_id, module_id, source,
 referrer_id }`), consent events, a tag (`Website: <kind>` and, for a
-petition, `Signed: <campaign title>`), and "Brought in by" for a referral.
+petition, `Signed: <campaign title>`; `join` and `donate` leave no tag —
+who gave or joined is the desk's to see, never a volunteer's: People's
+"did on the website" filter finds them), and "Brought in by" for a
+referral.
 `join` and `donate` return `{ checkout_url }` from `server/ext/payments`
 (or say online payments aren't set up).
 
@@ -135,7 +138,18 @@ or a phone is required for every kind.
 | `rsvp` | `shift_id` (required) |
 | `contact` | `topic` (≤60), `message` (required, ≤4000) |
 | `join` | `address`, `city`, `birth_date` (YYYY-MM-DD), `citizenship` (`citizen`\|`pr`), `declaration` (true, required), `term` (1\|4), `amount_cents` |
-| `donate` | `address`, `city`, `amount_cents` (required), `cadence` (`once`\|`monthly`), `slate` (optional), `declaration` (true, required: a Canadian citizen or permanent resident living in BC, giving their own money) |
+| `donate` | `address`, `city`, `amount_cents` (required), `cadence` (`once`\|`monthly`), `slate` (optional), `declaration` (true, required) |
+
+The declarations' words — what the join and donate boxes say, and what is
+kept with the checkout and its gift — are `JOIN_DECLARATION` and
+`DONATE_DECLARATION` in `shared/site/wording.js`, one place for both: a
+Canadian citizen or permanent resident, living in BC, giving their own
+money that no one pays back (membership dues count as a contribution; the
+join box also says what they wrote is true and they're eligible).
+
+A `contact` message is a request for the desk (`door_requests`, kind
+`other`: "From the website (<topic>): <message>"), beside the action that
+keeps it in its payload — never written into the person's note.
 
 Answers: `200 { ok: true }` · `200 { ok: true, checkout_url }` (join, donate) ·
 `400 { error, field }` · `429 { error }` · `503 { error }` when online
@@ -287,9 +301,10 @@ Stripe setup):
   log too (`payment_checkout`). Call it inside the form's `runAction`: a
   refusal or a Stripe failure then leaves nothing behind. It calls Stripe
   once (10 s at most). Answers `{ url, id, session_id, mode }`.
-- `declaration`: `true` (kept with the website's own words:
-  `DECLARATION` — a Canadian citizen or permanent resident, living in BC,
-  their own money) or the exact words the visitor ticked (a string).
+- `declaration`: `true` (kept with the website's own words for the kind,
+  `shared/site/wording.js`: `DONATE_DECLARATION` — exported here as
+  `DECLARATION` — or, for membership, `JOIN_DECLARATION`) or the exact
+  words the visitor ticked (a string).
 - Membership also takes `term` (1 | 4), `birthDate` (YYYY-MM-DD) and
   `citizenship` (`citizen` | `pr`): dues are at least $10 a year ($5 for
   ages 14 to 30, from the birth date — the paper form's rule, `DUES`);
@@ -337,9 +352,11 @@ domains       ['imaginesurrey.ca', …]       // the site answers at / on these 
 ```
 
 Additions to the renderer's input (additive to "Rendering" above):
-`site.consent` = `{ email, sms }` — the exact words next to the consent
-boxes (the server stores them with each consent event; show them as they
-are). `ctx.error` (after a plain post: the field to fix, or `busy` — too
+`site.consent` = `{ email, sms, newsletter }` — the exact words next to the
+consent boxes, and beside the newsletter's button (sending it is the yes
+to email); the server stores them with each consent event, and the
+renderer shows them as they are (without them it makes the same words the
+same way, `shared/site/wording.js`). `ctx.error` (after a plain post: the field to fix, or `busy` — too
 many from one address — or `payments` — online payments aren't set up)
 and `ctx.cancelled` (`join`/`donate`, back from the checkout without
 paying). `ctx.root` ('' on the campaign's own domain, '/site' elsewhere)
@@ -375,7 +392,8 @@ name for a record that only had its email's first part). Else the same
 name and phone, else the same name and postal code: those matches get the
 action, the tags and the consent and nothing else (an email typed there is
 kept beside the record, `attrs.typed_email`). Else someone new. Nothing on
-file is overwritten; the answer never says whether they were on file.
+file is overwritten (a join keeps its birth date and citizenship only where
+the profile has none); the answer never says whether they were on file.
 
 Consent: a ticked box joins base.win's newsletter list and records the
 consent with its words — but never puts back an address that left the list

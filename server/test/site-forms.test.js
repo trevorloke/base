@@ -19,6 +19,9 @@ const lastEvent = async (action) => (await db.query(
 )).rows;
 const tags = (p) => (Array.isArray(p.tags) ? p.tags : JSON.parse(p.tags || '[]'));
 const future = (h) => new Date(Date.now() + h * 3600_000).toISOString();
+const requestsOf = async (personId, kind) => (await db.query(
+  'select * from door_requests where workspace_id = $1 and person_id = $2 and kind = $3 order by created_at', [ws, personId, kind],
+)).rows;
 
 before(async () => {
   ({ db, mgr, ws } = await campaign());
@@ -113,7 +116,8 @@ test('someone on file is matched, not doubled: by email (blanks filled, nothing 
   assert.equal(m.id, onFile.id);
   assert.deepEqual([m.name, m.phone, m.postal, m.city], ['Mina Example', '604-555-0123', 'V4A 1A1', 'Surrey'], 'blanks filled, the name kept');
   assert.deepEqual(tags(m).sort(), ['VIP', 'Website: contact'].sort());
-  assert.match(m.attrs.note, /^\d{4}-\d{2}-\d{2}, website — Signs: Can I get a lawn sign\?$/, 'the message on their record');
+  assert.equal(m.attrs.note, undefined, 'their note is theirs: a website message is never written there');
+  assert.deepEqual((await requestsOf(m.id, 'other')).map((r) => r.note), ['From the website (Signs): Can I get a lawn sign?'], 'the message, a request for the desk');
 
   const byPhone = (await mgr.action('person.create', { first_name: 'Omar', last_name: 'Example', phone: '(604) 555-0144' })).json.person;
   ok(await send('volunteer', { first_name: 'Omar', last_name: 'Example', phone: '604 555 0144', email: 'omar.new@example.org', roles: ['Doorknocking'] }));
@@ -165,7 +169,7 @@ test('a retry with the same client_key is the same action, never a second', asyn
   assert.deepEqual(a, b);
   const [p] = await personBy(db, ws, "lower(email) = 'rita@example.org'");
   assert.equal((await actionsOf(p.id, 'contact')).length, 1);
-  assert.equal(p.attrs.note.split('\n\n').length, 1, 'the note once');
+  assert.equal((await requestsOf(p.id, 'other')).length, 1, 'the message once');
   ok(await send('contact', { ...body, client_key: 'k-other' }));
   assert.equal((await actionsOf(p.id, 'contact')).length, 2, 'a new key is a new message');
   const tooLong = await send('contact', { ...body, client_key: 'x'.repeat(65) });
@@ -281,10 +285,12 @@ test('join and donate: plain words when online payments aren’t set up; otherwi
   assert.equal(gift.checkout_url, 'https://checkout.stripe.com/c/pay/cs_test_1');
   const [g] = await personBy(db, ws, "lower(email) = 'gia@example.org'");
   assert.deepEqual(calls[0], {
-    ws, personId: g.id, kind: 'donation', amountCents: 5000, cadence: 'monthly', slate: null, declaration: true,
+    ws, personId: g.id, kind: 'donation', amountCents: 5000, cadence: 'monthly', slate: null,
+    declaration: 'I’m a Canadian citizen or permanent resident. I live in British Columbia. This contribution is my own money, and no one will pay me back for it.',
     successUrl: 'http://localhost/site/donate?sent=donate#m-donate', cancelUrl: 'http://localhost/site/donate?cancelled=donate#m-donate',
     metadata: { site_action_id: (await actionsOf(g.id, 'donate'))[0].id, kind: 'donate' },
   });
+  assert.deepEqual(tags(g), [], 'the money forms leave no tag');
   assert.deepEqual(ok(await send('donate', { email: 'gia@example.org', amount_cents: 5000, cadence: 'monthly', declaration: true, client_key: 'gift-1' })), gift, 'a retry gets the same checkout');
   assert.equal(calls.length, 1, 'and makes no second one');
   assert.equal(g.address, '13450 104 Ave');
@@ -344,7 +350,8 @@ test('every kind: the honeypot keeps nothing, and a retry with the same key is o
     assert.deepEqual(again, first, `${kind}: the same answer`);
     const [p] = await personBy(db, ws, 'lower(email) = $2', [email]);
     assert.equal((await actionsOf(p.id, kind)).length, 1, `${kind}: one action`);
-    assert.ok(tags(p).includes(`Website: ${kind}`), kind);
+    // The money forms leave no tag: who gave or joined is never a volunteer's to see.
+    assert.equal(tags(p).includes(`Website: ${kind}`), !['join', 'donate'].includes(kind), kind);
   }
   _setPaymentsForTest(null);
 });

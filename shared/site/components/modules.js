@@ -12,6 +12,7 @@ import { Icon, ICON_NAMES } from './icons.js';
 import { Island } from './islands.js';
 import { arr, dateOnly, initials, money, obj, paragraphs, str, thousands, when } from './util.js';
 import { pagePath } from './links.js';
+import { DONATE_DECLARATION, JOIN_DECLARATION } from '../wording.js';
 
 const TONES = new Set(['paper', 'surface', 'brand', 'accent', 'ink']);
 const DARK = new Set(['brand', 'ink', 'action']);
@@ -84,10 +85,9 @@ export function Img({ rc, image, className, width, height, eager, alt }) {
 }
 
 // ── The forms' wording ──
-const consentWords = (org) => ({
-  email: `Yes, ${org} can email me news and ways to help. I can unsubscribe at any time.`,
-  sms: `Yes, ${org} can text me about events and volunteering. Reply STOP at any time. Message and data rates may apply.`,
-});
+// The words a visitor ticks are the words the server keeps: the consent
+// boxes' from site.consent (context.js), the declarations from
+// shared/site/wording.js — never written here.
 const F = {
   first: (o) => ({ name: 'first_name', label: 'First name', autoComplete: 'given-name', required: true, msg: 'Enter your first name', half: true, max: 80, ...o }),
   last: (o) => ({ name: 'last_name', label: 'Last name', autoComplete: 'family-name', required: true, msg: 'Enter your last name', half: true, max: 80, ...o }),
@@ -96,8 +96,9 @@ const F = {
   postal: (o) => ({ name: 'postal_code', label: 'Postal code', autoComplete: 'postal-code', required: true, msg: 'Enter your postal code', half: true, max: 7, ...o }),
   address: (o) => ({ name: 'address', label: 'Street address', autoComplete: 'street-address', required: true, msg: 'Enter your street address', max: 200, ...o }),
   city: (o) => ({ name: 'city', label: 'City', autoComplete: 'address-level2', required: true, msg: 'Enter your city', half: true, max: 80, ...o }),
-  consentEmail: (org) => ({ name: 'consent_email', type: 'check', label: consentWords(org).email }),
-  consentSms: (org) => ({ name: 'consent_sms', type: 'check', label: consentWords(org).sms }),
+  consentEmail: (rc) => ({ name: 'consent_email', type: 'check', label: rc.site.consent.email }),
+  consentSms: (rc) => ({ name: 'consent_sms', type: 'check', label: rc.site.consent.sms }),
+  declaration: (label) => ({ name: 'declaration', type: 'check', required: true, msg: 'Tick the box to confirm', label }),
 };
 const orgName = (rc) => rc.site.org.shortName || rc.site.org.name || 'the campaign';
 const privacyHref = (rc) => (rc.site.org.privacy ? rc.link(rc.site.org.privacy) : null);
@@ -276,11 +277,10 @@ function Quote({ m, p, rc }) {
 
 function Newsletter({ m, p, rc, level }) {
   const tone = toneOf(p.tone, 'surface');
-  const org = orgName(rc);
   const fields = [
     F.first({ required: false, optional: true, msg: undefined }),
     F.email(),
-    ...(p.askPhone ? [F.phone(), F.consentSms(org)] : []),
+    ...(p.askPhone ? [F.phone(), F.consentSms(rc)] : []),
   ];
   return html`<${Section} m=${m} tone=${tone} className="newsletter">
     <div className="container">
@@ -295,7 +295,8 @@ function Newsletter({ m, p, rc, level }) {
           impliedConsent: 'consent_email',
           submit: str(p.buttonLabel).trim() || 'Sign up',
           submitClass: 'btn--brand',
-          small: `By signing up you agree to get email from ${org}. Unsubscribe at any time.`,
+          // Sending this form is the yes to email: these words, as the server keeps them.
+          small: rc.site.consent.newsletter,
           thanks: { title: 'You’re on the list', body: 'Thanks for signing up. Watch your inbox for the next one.' },
         })} />
       </div>
@@ -312,7 +313,6 @@ function membershipAmounts(rc) {
 }
 
 function Join({ m, p, rc, level }) {
-  const org = orgName(rc);
   const pay = rc.data.payments;
   const presets = membershipAmounts(rc);
   const form = pay.ready
@@ -325,8 +325,8 @@ function Join({ m, p, rc, level }) {
         { name: 'citizenship', label: 'Citizenship', type: 'radios', required: true, msg: 'Choose one', options: [{ value: 'citizen', label: 'Canadian citizen' }, { value: 'pr', label: 'Permanent resident' }] },
         { name: 'term', label: 'How long', type: 'radios', number: true, required: true, msg: 'Choose how long', value: 1, options: [{ value: 1, label: '1 year' }, { value: 4, label: '4 years' }] },
         { type: 'amount' },
-        { name: 'declaration', type: 'check', required: true, msg: 'Tick the box to confirm', label: 'I declare that what I’ve written here is true and that I’m eligible to be a member.' },
-        F.consentEmail(org), F.consentSms(org),
+        F.declaration(JOIN_DECLARATION),
+        F.consentEmail(rc), F.consentSms(rc),
       ],
       amount: { presets, monthly: false, cadence: false, limit: pay.limit_cents, defaultCents: presets[0] || null, min: pay.membership_min_cents || 100, legend: str(p.amountTitle).trim() || 'Your membership contribution', note: str(p.amountNote).trim() },
       submit: 'Join and pay',
@@ -359,7 +359,6 @@ function Join({ m, p, rc, level }) {
 }
 
 function Donate({ m, p, rc, level }) {
-  const org = orgName(rc);
   const pay = rc.data.payments;
   const limit = pay.limit_cents;
   const presets = arr(p.amounts).map((a) => Math.round(Number(str(a).replace(/[$,\s]/g, '')) * 100))
@@ -372,8 +371,8 @@ function Donate({ m, p, rc, level }) {
         { type: 'section', label: 'Your details' },
         F.first(), F.last(), F.email(), F.phone(),
         F.address(), F.city(), F.postal(),
-        { name: 'declaration', type: 'check', required: true, msg: 'Tick the box to confirm', label: 'I’m a Canadian citizen or permanent resident living in BC, and this is my own money.' },
-        F.consentEmail(org), F.consentSms(org),
+        F.declaration(DONATE_DECLARATION),
+        F.consentEmail(rc), F.consentSms(rc),
       ],
       amount: { presets: unique, monthly: p.allowMonthly === true, cadence: true, limit, monthlyMax: pay.monthly_max_cents || Math.floor(limit / 12 / 100) * 100, defaultCents: unique[Math.min(1, unique.length - 1)] ?? null, monthlyNote: str(p.monthlyNote).trim() },
       submit: 'Donate',
@@ -419,7 +418,7 @@ export function campaignForm(rc, m, c, { idPrefix } = {}) {
     fields: [
       F.first(), F.last(), F.email(), F.postal(), F.phone(),
       { name: 'comment', label: pledge ? 'Why you’re signing' : 'Add a comment', type: 'textarea', optional: true, max: 1000, rows: 3 },
-      F.consentEmail(org), F.consentSms(org),
+      F.consentEmail(rc), F.consentSms(rc),
     ],
     submit: pledge ? 'Sign the pledge' : 'Add my name',
     privacy: privacyHref(rc),
@@ -465,7 +464,6 @@ function Petition({ m, p, rc, level }) {
 }
 
 function Volunteer({ m, p, rc, level }) {
-  const org = orgName(rc);
   const tone = toneOf(p.tone);
   const roles = arr(p.roles).map(str).filter(Boolean);
   const list = roles.length ? roles : rc.data.roles;
@@ -482,7 +480,7 @@ function Volunteer({ m, p, rc, level }) {
             ...(list.length ? [{ name: 'roles', label: 'What would you like to do?', type: 'checks', optional: true, columns: true, options: list.map((r) => ({ value: r, label: r })) }] : []),
             ...(p.askAvailability ? [{ name: 'availability', label: 'When are you free?', type: 'textarea', optional: true, max: 300, rows: 2, hint: 'For example: weekday evenings, Saturday mornings' }] : []),
             { name: 'note', label: 'Anything else we should know?', type: 'textarea', optional: true, max: 1000, rows: 3 },
-            F.consentEmail(org), F.consentSms(org),
+            F.consentEmail(rc), F.consentSms(rc),
           ],
           submit: 'Sign me up',
           privacy: privacyHref(rc),
@@ -537,7 +535,6 @@ function Shifts({ m, p, rc, level }) {
 }
 
 function Contact({ m, p, rc, level }) {
-  const org = orgName(rc);
   const topics = arr(p.topics).map(str).filter(Boolean);
   const { email, phone } = rc.site.org;
   return html`<${Section} m=${m} tone="paper" className="contact">
@@ -556,7 +553,7 @@ function Contact({ m, p, rc, level }) {
             F.first(), F.last({ required: false, optional: true, msg: undefined }), F.email(), F.phone(),
             ...(topics.length ? [{ name: 'topic', label: 'What it’s about', type: 'select', optional: true, options: topics.map((t) => ({ value: t.slice(0, 60), label: t })) }] : []),
             { name: 'message', label: 'Your message', type: 'textarea', required: true, msg: 'Write your message', max: 4000, rows: 5 },
-            F.consentEmail(org),
+            F.consentEmail(rc),
           ],
           submit: 'Send',
           privacy: privacyHref(rc),

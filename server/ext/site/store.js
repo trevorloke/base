@@ -141,7 +141,7 @@ export const siteOf = (settings, pages = []) => {
     seo: settings.seo,
     org: settings.org,
     social: settings.social,
-    consent: consentWording(settings.org),
+    consent: consentWording(settings.org, settings.seo),
   };
 };
 

@@ -17,22 +17,28 @@
 // One runAction('site.form.<kind>') records it all: the person (matched or
 // added, people.js), a site_actions row (event site_action/create, the hook
 // for the rest of base.win), the consent (consent.js), the tags ("Website:
-// <kind>"; "Signed: <title>" for a petition or pledge), "Brought in by" for
-// someone new who came through a referral link, and what the kind asks for:
+// <kind>"; "Signed: <title>" for a petition or pledge — the money forms
+// leave none: who gave or joined is the desk's to see, never a volunteer's),
+// "Brought in by" for someone new who came through a referral link, and what
+// the kind asks for:
 //   petition, pledge   the signature (a person counts once)
 //   volunteer          a "Wants to volunteer" request for the desk, with the
 //                      roles, when they're free and their note
 //   rsvp               a spot on the public shift, through the app's own
 //                      booking (room is checked; someone who couldn't make it
 //                      before is booked again)
-//   contact            the message on their record ("Their note", newest first)
+//   contact            a request for the desk with what they wrote (the
+//                      intake API's rule) — never their note: a visitor's
+//                      words are not the person's own
 //   join, donate       the checkout (server/ext/payments); join also keeps
 //                      their birth date and citizenship on the profile
+//                      where it has none
 // The answer never says whether someone was on file.
 import { getCookie } from 'hono/cookie';
 import { newId, runAction } from '../../lib/events.js';
 import { clientIp, makeLimiter } from '../../lib/guard.js';
 import { SLATE_CODES } from '@starbase/shared/canvass';
+import { DONATE_DECLARATION, JOIN_DECLARATION } from '../../../shared/site/wording.js';
 import { actions as fieldActions } from '../fields/actions.js';
 import { KINDS, consentWording, tagOf } from './shape.js';
 import { ensureSite, readSettings, parseJ } from './store.js';
@@ -221,7 +227,8 @@ const limited = (ip) => {
   return limiter(ip);
 };
 
-// The opt-in fields a join keeps (when the campaign has them).
+// The opt-in fields a join keeps (when the campaign has them) — only where
+// the profile has none: what is on file is never overwritten.
 const setFields = async (tx, ws, personId, pairs, emit) => {
   const values = [];
   for (const [name, value] of pairs) {
@@ -229,7 +236,11 @@ const setFields = async (tx, ws, personId, pairs, emit) => {
     const f = (await tx.query(
       'select id from person_fields where workspace_id = $1 and lower(name) = $2 and retired_at is null limit 1', [ws, name],
     )).rows[0];
-    if (f) values.push({ field_id: f.id, value });
+    if (!f) continue;
+    const had = (await tx.query(
+      'select 1 from person_field_values where workspace_id = $1 and person_id = $2 and field_id = $3', [ws, personId, f.id],
+    )).rows[0];
+    if (!had) values.push({ field_id: f.id, value });
   }
   if (values.length) await fieldActions['field.values.set'].handler(tx, { workspaceId: ws, user: null }, { person_id: personId, values }, emit);
 };
@@ -346,9 +357,9 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
   const page = f.page_id
     ? (await tx.query('select id from site_pages where id = $1 and workspace_id = $2', [f.page_id, ws.id])).rows[0] : null;
 
-  // The person, and who sent them.
+  // The person, and who sent them. The money forms leave no tag.
   const referrerId = f.ref ? await personOfCode(tx, ws.id, f.ref) : null;
-  const tags = [`Website: ${kind}`, ...(campaign ? [tagOf('Signed: ', campaign.title)] : [])];
+  const tags = kind === 'join' || kind === 'donate' ? [] : [`Website: ${kind}`, ...(campaign ? [tagOf('Signed: ', campaign.title)] : [])];
   const person = await takePerson(tx, ws.id, {
     first_name: f.first_name, last_name: f.last_name, email: f.email, phone: f.phone, postal: f.postal_code,
     address: k.address, city: k.city,
@@ -388,18 +399,19 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
     }
   }
   if (kind === 'contact') {
-    const day = new Date().toISOString().slice(0, 10);
-    const line = `${day}, website${k.topic ? ` — ${k.topic}` : ''}: ${k.message}`;
-    const row = (await tx.query(
-      `update persons set attrs = jsonb_set(coalesce(attrs, '{}'::jsonb), '{note}',
-         to_jsonb(left(case when coalesce(attrs->>'note', '') = '' then $3::text else $3::text || chr(10) || chr(10) || (attrs->>'note') end, 4000))),
-         updated_at = now()
-       where id = $1 and workspace_id = $2 returning attrs->>'note' as note`,
-      [person.id, ws.id, line],
-    )).rows[0];
-    if (row) emit('person', person.id, 'update', { note: row.note, added_note: line, source });
+    // A request for the desk ("Something else", with what they wrote): the
+    // office answers it, and a talk with them closes it (ext/followups).
+    // Never written onto their note — volunteers read that as the person's
+    // own words, and a visitor may be anyone.
+    const id = newId();
+    const note = `From the website${k.topic ? ` (${k.topic})` : ''}: ${k.message}`;
+    await tx.query(
+      `insert into door_requests (id, workspace_id, person_id, kind, note, asked_by) values ($1, $2, $3, 'other', $4, null)`,
+      [id, ws.id, person.id, note],
+    );
+    emit('door_request', id, 'create', { id, person_id: person.id, kind: 'other', note, from: 'website' });
   }
-  if (kind === 'join') {
+  if (kind === 'join' && (person.created || person.by === 'email')) {
     await setFields(tx, ws.id, person.id, [
       ['birth date', k.birth_date],
       ['citizenship', k.citizenship === 'citizen' ? 'Canadian citizen' : k.citizenship === 'pr' ? 'Permanent resident' : null],
@@ -421,9 +433,13 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
     if (limit && k.amount_cents > limit) throw new FormError('amount_cents', `One person may give at most ${money(limit)} in a year`);
   }
 
+  // The words beside the boxes, as the page showed them (the newsletter's
+  // yes to email is the words beside its button).
+  const words = consentWording(settings?.org, settings?.seo);
   await consentFromForm(tx, ws.id, {
     personId: person.id, name: person.name, email: f.email, phone: f.phone,
-    wantsEmail: f.consent_email, wantsSms: f.consent_sms, source, wording: consentWording(settings?.org),
+    wantsEmail: f.consent_email, wantsSms: f.consent_sms, source,
+    wording: kind === 'newsletter' ? { ...words, email: words.newsletter } : words,
   }, emit);
   if (referrer && person.created) await broughtInBy(tx, ws.id, person.id, referrer, emit);
 
@@ -456,7 +472,8 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
       amountCents: k.amount_cents,
       cadence: kind === 'join' ? 'once' : k.cadence,
       slate: k.slate || null,
-      declaration: true,
+      // The words beside the box they ticked, exactly.
+      declaration: kind === 'join' ? JOIN_DECLARATION : DONATE_DECLARATION,
       // Membership: payments works out the minimum (the youth rate from the
       // birth date), the age and the citizenship from these — not from the
       // metadata, which is only kept for the record.

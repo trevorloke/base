@@ -133,13 +133,16 @@ export const takePerson = async (tx, ws, who, { tags = [], source = 'website' },
 };
 
 // ── Referral codes: one per person, for /r/:code ──
+// Looked up through persons_ref_code_idx (sql.js), a partial index: a query
+// uses it only when it says the index's own condition (attrs ? 'ref_code'),
+// so every lookup here does — without it each one reads the whole voter file.
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 export const CODE_RE = /^[a-z0-9]{6,16}$/;
 const makeCode = () => Array.from({ length: 8 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
 const freshCode = async (tx, ws) => {
   for (let i = 0; i < 8; i += 1) {
     const code = makeCode();
-    const taken = (await tx.query("select 1 from persons where workspace_id = $1 and attrs->>'ref_code' = $2 limit 1", [ws, code])).rows[0];
+    const taken = (await tx.query("select 1 from persons where workspace_id = $1 and attrs ? 'ref_code' and attrs->>'ref_code' = $2 limit 1", [ws, code])).rows[0];
     if (!taken) return code;
   }
   throw new Error('no free referral code');
@@ -164,7 +167,7 @@ export const personOfCode = async (q, ws, code) => {
   if (!CODE_RE.test(String(code || ''))) return null;
   const r = (await q.query(
     `select id, deleted_at, attrs->>'merged_into' as merged_into from persons
-      where workspace_id = $1 and attrs->>'ref_code' = $2 order by deleted_at nulls first, created_at limit 1`,
+      where workspace_id = $1 and attrs ? 'ref_code' and attrs->>'ref_code' = $2 order by deleted_at nulls first, created_at limit 1`,
     [ws, code],
   )).rows[0];
   if (!r) return null;
