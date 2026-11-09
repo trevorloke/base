@@ -170,7 +170,9 @@ const turfsOnly = (ctx) => ctx.role === 'volunteer'
 // part of the map in view (?bbox=south,west,north,east, at most MAP_VIEW
 // people), and from further out as a count per patch (/map/density).
 const MAP_ALL = () => Number(process.env.STARBASE_MAP_ALL) || 5000;
-const MAP_VIEW = 8000;
+// At most this many people in one view load (STARBASE_MAP_VIEW, for tests).
+const mapView = () => Number(process.env.STARBASE_MAP_VIEW) || MAP_VIEW_DEFAULT;
+const MAP_VIEW_DEFAULT = 8000;
 const bboxParam = (v) => {
   const b = String(v || '').split(',').map(Number);
   return b.length === 4 && b.every(Number.isFinite) && b[0] <= b[2] && b[1] <= b[3] && b[0] >= -90 && b[2] <= 90 ? b : null;
@@ -194,17 +196,24 @@ const turfDoors = async (db, ctx) => {
     const k = params.length;
     return `(lat between $${k - 3} and $${k - 1} and lng between $${k - 2} and $${k})`;
   });
+  // The boxes bound the read; the outlines decide who's in (never a cut by
+  // address first, which could drop doors inside a long turf's box).
+  const byAddress = (a, b) => String(a.address || '').toLowerCase().localeCompare(String(b.address || '').toLowerCase())
+    || String(a.name || '').toLowerCase().localeCompare(String(b.name || '').toLowerCase());
   const persons = (await db.query(
     `select ${DOOR_COLS} from persons
      where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null
-       and (${[...near, `($2 <> '' and lower(email) = $2)`].join(' or ')})
-     order by lower(address), lower(name) limit 20000`,
+       and (${[...near, `($2 <> '' and lower(email) = $2)`].join(' or ')})`,
     params,
-  )).rows.map(personRow).filter((p) => inTurf(p.lat, p.lng) || (mine && String(p.email || '').trim().toLowerCase() === mine));
+  )).rows.map(personRow).filter((p) => inTurf(p.lat, p.lng) || (mine && String(p.email || '').trim().toLowerCase() === mine))
+    .sort(byAddress).slice(0, 20000);
+  // A sign is theirs if it stands in a turf, or belongs to someone who
+  // lives there (a sign asked for before its person had a pin has none).
+  const ids = new Set(persons.map((p) => p.id));
   const signs = (await db.query(
     `select id, person_id, address, lat, lng, kind, status from signs where workspace_id = $1 and status <> 'removed'`,
     [ctx.workspaceId],
-  )).rows.filter((s) => inTurf(s.lat, s.lng));
+  )).rows.filter((s) => inTurf(s.lat, s.lng) || (s.person_id && ids.has(s.person_id)));
   return { rings, persons, signs };
 };
 
@@ -222,18 +231,25 @@ app.get('/map/doors', async (c) => {
   )).rows[0].n;
   const bbox = bboxParam(c.req.query('bbox'));
   if (bbox) {
+    // Over the cap, the ones nearest the middle of the box (what's on
+    // screen) are kept and the margin is dropped — and the map is told.
     const rows = (await db.query(
       `select ${DOOR_COLS} from persons
        where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5
-       limit ${MAP_VIEW + 1}`,
+       order by abs(lat - ($2 + $4) / 2) + abs(lng - ($3 + $5) / 2)
+       limit ${mapView() + 1}`,
       [ctx.workspaceId, ...bbox],
     )).rows;
+    // A sign stands where it was put, or (asked for before its person had a
+    // pin) at its person's door.
     const signs = (await db.query(
-      `select id, person_id, address, lat, lng, kind, status from signs
-       where workspace_id = $1 and status <> 'removed' and lat between $2 and $4 and lng between $3 and $5`,
+      `select s.id, s.person_id, s.address, s.lat, s.lng, s.kind, s.status from signs s
+       left join persons p on p.id = s.person_id and p.workspace_id = s.workspace_id
+       where s.workspace_id = $1 and s.status <> 'removed'
+         and coalesce(s.lat, p.lat) between $2 and $4 and coalesce(s.lng, p.lng) between $3 and $5`,
       [ctx.workspaceId, ...bbox],
     )).rows;
-    return c.json({ persons: rows.slice(0, MAP_VIEW).map(personRow).map(forViewer(ctx)), signs, unlocated, scope: 'view', truncated: rows.length > MAP_VIEW });
+    return c.json({ persons: rows.slice(0, mapView()).map(personRow).map(forViewer(ctx)), signs, unlocated, scope: 'view', truncated: rows.length > mapView() });
   }
   const total = (await db.query(
     'select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and lat is not null and lng is not null',
@@ -283,9 +299,10 @@ app.get('/map/density', async (c) => {
   const cell = String(c.req.query('cell') || '').split(',').map(Number);
   if (!bbox || cell.length !== 2 || !cell.every((x) => Number.isFinite(x) && x > 0)) return c.json({ error: 'bbox and cell, please' }, 400);
   // A sane grid: about a big screen's worth of patches (only those with
-  // people in them come back).
-  const span = ((bbox[2] - bbox[0]) / cell[0]) * ((bbox[3] - bbox[1]) / cell[1]);
-  if (span > 150000) return c.json({ error: 'cells too small for that area' }, 400);
+  // people in them come back). Asked for finer than that (a very wide
+  // screen), the patches double until they fit; the answer says which.
+  const span = () => ((bbox[2] - bbox[0]) / cell[0]) * ((bbox[3] - bbox[1]) / cell[1]);
+  while (span() > 150000) { cell[0] *= 2; cell[1] *= 2; }
   const rows = (await db.query(
     `select floor(lat / $6)::int as y, floor(lng / $7)::int as x, coalesce(rating, '') as r, count(*)::int as n
      from persons
@@ -371,9 +388,9 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // and the latest outcome. 0 / null with no pass open.
 const loadLocated = async (db, ws, passId = null, box = null) => (await db.query(
   `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags, p.voted_at,
-          (select max(c.created_at) from contacts c where c.person_id = p.id) as last_contact_at,
-          (select c.outcome from contacts c where c.person_id = p.id order by c.created_at desc limit 1) as last_outcome,
-          exists (select 1 from contacts c where c.person_id = p.id and c.channel = 'door') as door_knocked,
+          (select max(c.created_at) from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id) as last_contact_at,
+          (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id order by c.created_at desc limit 1) as last_outcome,
+          exists (select 1 from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door') as door_knocked,
           (select count(*)::int from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid) as pass_tries,
           (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid order by c.created_at desc limit 1) as pass_last_outcome
    from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.lng is not null

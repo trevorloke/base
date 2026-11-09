@@ -1082,7 +1082,7 @@ export default function MapPage() {
   // A list too big for one load: the doors in view (close in), or patches
   // of people (further out), asked for as the map moves.
   const big = Boolean(doorsQ.data?.big);
-  const detail = !big || (zoom != null && zoom >= DETAIL_ZOOM);
+  const detailWanted = !big || (zoom != null && zoom >= DETAIL_ZOOM);
   const viewBox = useMemo(
     () => (big && viewBounds && zoom != null ? snapBox(viewBounds, zoom >= DETAIL_ZOOM ? 0.005 : 0.02) : null),
     [big, viewBounds, zoom],
@@ -1090,10 +1090,14 @@ export default function MapPage() {
   const viewQ = useQuery({
     queryKey: ['doors', 'view', viewBox?.join(',')],
     queryFn: () => apiGet(`/map/doors?bbox=${viewBox.join(',')}`),
-    enabled: Boolean(big && detail && viewBox),
+    enabled: Boolean(big && detailWanted && viewBox),
     placeholderData: keepPreviousData,
     staleTime: 20_000,
   });
+  // Too many people even here (a dense part of the city on a big screen):
+  // patches, and "zoom in" — never part of the doors drawn as if all.
+  const viewCut = Boolean(big && detailWanted && viewQ.data?.truncated);
+  const detail = detailWanted && !viewCut;
   const zInt = zoom == null ? null : Math.floor(zoom);
   const cell = zInt == null ? null : cellOf(zInt, Math.round(viewBounds ? viewBounds.getCenter().lat : 49));
   const densQ = useQuery({
@@ -1132,7 +1136,13 @@ export default function MapPage() {
   const offZoomRef = useRef(offZoom);
   offZoomRef.current = offZoom;
 
-  const selectedDoor = personParam ? byPerson.get(personParam) || null : null;
+  // On a big list, zooming out of what's loaded keeps the open door's card
+  // (and its pin) — the door it was found at, until another is chosen.
+  const lastDoorRef = useRef(null);
+  const foundDoor = personParam ? byPerson.get(personParam) || null : null;
+  if (foundDoor) lastDoorRef.current = foundDoor;
+  const selectedDoor = foundDoor
+    || (big && personParam && lastDoorRef.current?.persons.some((p) => p.id === personParam) ? lastDoorRef.current : null);
   const selectedKey = selectedDoor?.key || null;
   // Declared before the marker effects so Leaflet handlers see the current key.
   useEffect(() => { selectedKeyRef.current = selectedKey; }, [selectedKey]);
@@ -1231,6 +1241,7 @@ export default function MapPage() {
     [big, detail, densQ.data, densityKeep, filter],
   );
   const zoomInFor = big && !detail && !densityKeep && filter !== 'mine' ? labelOf(filter) : null;
+  const zoomNote = viewCut ? 'Zoom in to see each door' : zoomInFor ? `Zoom in to see ${zoomInFor.toLowerCase()}` : null;
   // Every sign on the map, by status and by kind (for the Signs chips).
   const signCounts = useMemo(() => {
     const c = {};
@@ -1251,13 +1262,6 @@ export default function MapPage() {
   const missingFetched = wantsMissing ? missingQ.data?.person || null : null;
   // On a big list they may simply be outside the part loaded: go to them.
   const missingPerson = missingFetched && !(big && missingFetched.lat != null) ? missingFetched : null;
-  useEffect(() => {
-    const map = mapRef.current;
-    const p = missingFetched;
-    if (!big || !map || !p || p.lat == null || jumpedToRef.current === p.id) return;
-    jumpedToRef.current = p.id;
-    map.setView([Number(p.lat), Number(p.lng)], PIN_ZOOM, { animate: false });
-  }, [big, missingFetched]);
   const missingGone = wantsMissing && missingQ.isError;
 
   const turfById = useMemo(() => new Map(turfs.map((t) => [t.id, t])), [turfs]);
@@ -1270,6 +1274,9 @@ export default function MapPage() {
   // every marker on the map.
   useLayoutEffect(() => { setParamsRef.current = setParams; });
   const select = useCallback((personId) => {
+    // Chosen on the map: their door is loaded; only a link from elsewhere
+    // (a profile's "On the map") flies to someone.
+    if (personId) jumpedToRef.current = personId;
     setSignSel(null);
     setParamsRef.current(personId ? { person: personId } : {}, { replace: true });
   }, []);
@@ -1880,6 +1887,17 @@ export default function MapPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doorsQ.data, doorsQ.fetchStatus, doors, selectedDoor, personParam, turfParam, turfsQ.isPending, turfsQ.fetchStatus, selectedTurf, ownTurf, turfs]);
 
+  // A big list, someone linked from elsewhere who is on the map but outside
+  // what's loaded: go to them (after the first fit, so it isn't undone).
+  useEffect(() => {
+    const map = mapRef.current;
+    const p = missingFetched;
+    if (!big || !map || !p || p.lat == null || jumpedToRef.current === p.id) return;
+    jumpedToRef.current = p.id;
+    fittedRef.current = true;
+    map.setView([Number(p.lat), Number(p.lng)], PIN_ZOOM, { animate: false });
+  }, [big, missingFetched, doorsQ.data]);
+
   // A new selection that is off-screen or under the drawer → bring it into view.
   useEffect(() => {
     const map = mapRef.current;
@@ -1985,13 +2003,13 @@ export default function MapPage() {
                 data-band={filters.find((f) => f.key === filter)?.band || filter}
                 aria-haspopup="dialog"
                 aria-expanded={filterOpen}
-                aria-label={`Show: ${labelOf(filter)}, ${big && !detail ? `${num(counts[filter] ?? 0)} people in view` : plural(counts[filter] ?? 0, 'door', 'doors')}`}
+                aria-label={`Show: ${labelOf(filter)}, ${counts[filter] === null ? 'zoom in to count' : big && !detail ? `${num(counts[filter] ?? 0)} people in view` : plural(counts[filter] ?? 0, 'door', 'doors')}`}
                 onClick={() => { setFilterOpen((o) => !o); setUnlocOpen(false); }}
               >
                 <FilterGlyph />
                 <span className="map-filter-btn__label"><span className="map-filter-btn__show">Show:</span> {labelOf(filter)}</span>
                 <span className="map-filter-btn__n mono" aria-live="polite">
-                  {doorsQ.isPending ? '…' : num(counts[filter] ?? 0)}
+                  {doorsQ.isPending ? '…' : counts[filter] === null ? '' : num(counts[filter] ?? 0)}
                 </span>
               </button>
             )}
@@ -2093,8 +2111,8 @@ export default function MapPage() {
       ) : turfsQ.isError && !turfsQ.data ? (
         <p className="error map-error">Turfs didn’t load</p>
       ) : null}
-      {zoomInFor && !hasSheet && !mode && (
-        <p className="map-zoomnote" role="status">Zoom in to see {zoomInFor.toLowerCase()}</p>
+      {zoomNote && !hasSheet && !mode && (
+        <p className="map-zoomnote" role="status">{zoomNote}</p>
       )}
       {showEmpty && (
         <div className="card map-empty">
