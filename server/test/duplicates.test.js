@@ -198,6 +198,15 @@ test('a maybe kept from before (the record ids alone) still offers Not the same 
   const told = apartChoices({ flagged: true, date: '2026-05-01', maybe_same_donor: ['a', 'b'],
     maybe_same_as: [{ id: 'a', ...both, given_cents: 60000 }, { id: 'b', ...both, given_cents: 90000 }] });
   assert.deepEqual(told.choices.map((c) => c.label), ['Not Raj Senior (same address and postal code) · $600 in 2026', 'Not Raj Senior (same address and postal code) · $900 in 2026']);
+  // Two that still read the same after all that (the same gifts, added the
+  // same day): no button can say which is which, so People → Duplicates;
+  // one beside them that reads apart keeps its own.
+  const same = { ...both, given_cents: 60000, created_at: '2026-11-09T19:00:00Z' };
+  assert.deepEqual(apartChoices({ flagged: true, date: '2026-05-01', maybe_same_donor: ['a', 'b'], maybe_same_as: [{ id: 'a', ...same }, { id: 'b', ...same }] }),
+    { choices: [], duplicates: true });
+  const three = apartChoices({ flagged: true, date: '2026-05-01', maybe_same_donor: ['c', 'a', 'b'],
+    maybe_same_as: [{ id: 'c', name: 'Raj Senior', shares: 'phone', given_cents: 10000 }, { id: 'a', ...same }, { id: 'b', ...same }] });
+  assert.deepEqual([three.choices.map((c) => [c.id, c.label]), three.duplicates], [[['c', 'Not Raj Senior (same phone)']], true]);
   // Stored as before (ids only), the server still names them.
   const one = await mgr.createPerson('Old Maybe', { postal: 'V3V 9P9' });
   const two = await mgr.createPerson('Old Maybe', { email: 'old.maybe@example.org', postal: 'V3V 9P9' });
@@ -206,6 +215,24 @@ test('a maybe kept from before (the record ids alone) still offers Not the same 
   assert.deepEqual(g.maybe_same_donor, [one.id]);
   assert.deepEqual((await giftNow(g.id)).attrs.maybe_same_donor, [one.id], 'the ids are all the gift keeps');
   assert.deepEqual((await briefRow(g.id)).maybe_same_as?.map((n) => [n.id, n.name, n.shares]), [[one.id, 'Old Maybe', 'postal code']]);
+});
+
+test('two records a maybe names that read the same on Needs you: no button for either, Compare in Duplicates instead', async () => {
+  const { apartChoices } = await import('../../web/src/components/MoneyWords.js');
+  const at = { address: '3 Same Rd', postal: 'V3T 7S7' };
+  const r1 = await mgr.createPerson('Raj Same', at);
+  const r2 = await mgr.createPerson('Raj Same', at);
+  await cheque(r1, 60000, '2026-05-01');
+  await cheque(r2, 60000, '2026-05-02');
+  const n = await mgr.createPerson('Raj Same', { email: 'raj.same@example.org', ...at });
+  const g = await cheque(n, 40000, '2026-06-01');
+  assert.deepEqual(g.maybe_same_donor, [r1.id, r2.id]);
+  assert.deepEqual(apartChoices(await briefRow(g.id)), { choices: [], duplicates: true }, 'a tap must never rule out one of them at random');
+  // Compare in Duplicates opens the pairs with the gift's donor alone, so
+  // a voter file's other pairs never push them off the page.
+  const mine = ok(await mgr.get(`/api/duplicates?with=${n.id}`)).pairs.map((p) => [p.a.id, p.b.id].sort().join('|'));
+  assert.deepEqual(mine.sort(), [[n.id, r1.id].sort().join('|'), [n.id, r2.id].sort().join('|')].sort());
+  assert.equal((await mgr.get('/api/duplicates?with=not-an-id')).status, 400);
 });
 
 test('two records the desk said are two people are never added up as one donor’s, beside a third either', async () => {
@@ -272,8 +299,12 @@ test('merge: a maybe the merge clears (the record merged in matched a third one 
   assert.deepEqual(m.maybe_same_donor, [v.id, t.id]);
   const r = ok(await mgr.action('person.merge', { keep: v.id, drop: e.id }));
   assert.equal((await giftNow(m.id)).flagged, false, 'V keeps its own phone: T no longer matches');
-  assert.deepEqual(r.cleared, [{ gift_id: m.id, person_id: t.id, name: 'Ph One', shares: 'phone' }], 'the answer says which');
-  assert.equal(mergedSaid('Ph One', r), '✓ Ph One: one record — no longer flagged as possibly the same donor as Ph One (same phone): check that record');
+  assert.deepEqual(r.cleared, [{ gift_id: m.id, person_id: t.id, name: 'Ph One', shares: 'phone', shared: ['604-555-2222'] }], 'the answer says which, and by what');
+  // The kept record no longer shows that phone, and T has the donor's
+  // name: the line says the phone, and on the screen T is a link.
+  assert.equal(mergedSaid('Ph One', r), '✓ Ph One: one record — no longer flagged as possibly the same donor as Ph One (same phone: 604-555-2222): check that record');
+  const { mergedParts } = await import('../../web/src/components/DuplicatesWords.js');
+  assert.deepEqual(mergedParts('Ph One', r).filter((p) => typeof p !== 'string'), [{ id: t.id, text: 'Ph One (same phone: 604-555-2222)' }]);
 });
 
 test('a gift voided: the maybes that added it up are added up again without it — re-totalled, then cleared', async () => {
@@ -298,6 +329,47 @@ test('a gift voided: the maybes that added it up are added up again without it �
   // Back in the books: the restored gift is the one that crosses.
   const back = ok(await mgr.action('gift.restore', { id: g3.id }));
   assert.match(back.flag_reason ?? '', /^Possibly the same donor as Moe Twice \(same postal code\): together they are at \$1,500\.00/);
+});
+
+test('a gift voided, then Undo: the maybes that added it up add it up again — and one made while it was out', async () => {
+  const { overLine, overOf } = await import('../../web/src/components/MoneyWords.js');
+  const at = { address: '4 Moe Rd', postal: 'V3V 4M4' };
+  const r1 = await mgr.createPerson('Moe Thrice', at);
+  const r3 = await mgr.createPerson('Moe Thrice', at);
+  const r2 = await mgr.createPerson('Moe Thrice', { email: 'moe.thrice@example.org', postal: 'V3V 4M4' });
+  const g1 = await cheque(r1, 40000, '2026-11-04');
+  await cheque(r3, 100000, '2026-11-04');
+  const g2 = await cheque(r2, 50000, '2026-11-05');
+  assert.match(g2.flag_reason, /together they are at \$1,900\.00/);
+  ok(await mgr.action('gift.void', { id: g1.id }));
+  assert.deepEqual((await briefRow(g2.id)).maybe_same_donor, [r3.id], 'without R1’s gift: R3 alone');
+  ok(await mgr.action('gift.restore', { id: g1.id }));
+  const row = await briefRow(g2.id);
+  assert.match(row?.flag_reason ?? '', /^Possibly the same donor as Moe Thrice \(same postal code\) and Moe Thrice \(same postal code\): together they are at \$1,900\.00 for 2026/, 'R1’s gift counts again');
+  assert.deepEqual(row.maybe_same_donor, [r1.id, r3.id]);
+  assert.equal(overLine(overOf(row)), 'Maybe $470.30 over the $1,429.70 limit', 'what Needs you says');
+  // A maybe made while the gift was out of the books counts it once it is back.
+  ok(await mgr.action('gift.void', { id: g1.id }));
+  const g4 = await cheque(r2, 10000, '2026-11-08');
+  assert.match(g4.flag_reason, /together they are at \$1,600\.00/, 'R2 and R3');
+  ok(await mgr.action('gift.restore', { id: g1.id }));
+  assert.match((await briefRow(g4.id))?.flag_reason ?? '', /together they are at \$2,000\.00 for 2026/, 'R1 too');
+});
+
+test('a gift over on its own voided, then Undo: the maybe its void cleared beside it is back', async () => {
+  const p1 = await mgr.createPerson('Pat Over', { postal: 'V3V 5P5' });
+  const p2 = await mgr.createPerson('Pat Over', { email: 'pat.over@example.org', postal: 'V3V 5P5' });
+  const big = await cheque(p1, 150000, '2026-11-06');
+  assert.match(big.flag_reason, /^Pat Over is at \$1500\.00 for 2026/);
+  const m = await cheque(p2, 50000, '2026-11-07');
+  assert.match(m.flag_reason, /together they are at \$2,000\.00/);
+  const voided = ok(await mgr.action('gift.void', { id: big.id }));
+  assert.deepEqual(voided.rechecked.map((x) => [x.id, x.flagged]), [[m.id, false]], 'P2 alone is under: cleared');
+  ok(await mgr.action('gift.restore', { id: big.id }));
+  const again = await briefRow(m.id);
+  assert.match(again?.flag_reason ?? '', /^Possibly the same donor as Pat Over \(same postal code\): together they are at \$2,000\.00 for 2026/, 'the maybe its void cleared is back');
+  assert.deepEqual(again.maybe_same_donor, [p1.id]);
+  assert.match((await briefRow(big.id))?.flag_reason ?? '', /^Pat Over is at \$1500\.00/, 'and its own flag as it was');
 });
 
 test('refusals: the same record twice, one already gone, a volunteer; the books verify', async () => {

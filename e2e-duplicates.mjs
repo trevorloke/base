@@ -4,9 +4,10 @@
 // one record with both histories; the old record's link says where it went;
 // "Not the same" keeps a pair away. On Donations, a gift that may be the
 // same donor as two records offers one "Not the same person" choice for
-// each, and ruling one out leaves the other a pair. A merge that clears a
-// maybe with a record only the merged one matched names it. Measured at
-// 1360 and 390.
+// each, and ruling one out leaves the other a pair; two that read the same
+// get no choice, Compare in Duplicates (that donor's pairs) instead. A
+// merge that clears a maybe with a record only the merged one matched
+// names it by what it shared, and links to it. Measured at 1360 and 390.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4133 node server/index.js &
 //   BASE=http://127.0.0.1:4133 SHOTS=/tmp/dupes node e2e-duplicates.mjs
@@ -112,6 +113,24 @@ check('"✓ Kept apart. The flag is cleared." (W with V alone is under)', /Kept 
 const gills = ((await api('/duplicates')).json?.pairs ?? []).filter((p) => p.a.name === 'Aman Gill');
 check('W and V are still a pair to merge', gills.length === 1 && [gills[0].a.id, gills[0].b.id].sort().join() === [gw.id, gv.id].sort().join(), JSON.stringify(gills.map((p) => p.why)));
 
+// Two records a maybe names that read the same (one name at one door, the
+// same gifts, added the same day): no button could say which is which.
+const raj = async (extra) => (await api('/actions/person.create', { name: 'Raj Same', address: '3 Same Rd', postal: 'V3T 7S7', ...extra })).json.person;
+await gave(await raj(), 60000);
+await gave(await raj(), 60000);
+await gave(await raj({ email: `raj+${tag}@dupes.example` }), 40000);
+await page.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.ops-needs .ops-row:has-text("Raj Same")', { timeout: 10000 }).catch(() => {});
+await page.click('.ops-needs .ops-row:has-text("Raj Same")').catch(() => {});
+const rajSays = await page.locator('.ops-needs .ops-item:has-text("Raj Same") .ops-actions').innerText().catch(() => '');
+check('two that read the same: no "Not Raj Same" choice, Compare in Duplicates', !/Not Raj Same|Not the same person/.test(rajSays) && /Compare in Duplicates/.test(rajSays), rajSays);
+await page.click('.ops-needs .ops-item:has-text("Raj Same") a:has-text("Compare in Duplicates")').catch(() => {});
+await page.waitForSelector('.dup-pair', { timeout: 8000 }).catch(() => {});
+const rajPairs = await page.locator('.dup-pair').count();
+check('… which opens the pairs with that donor alone', /\/people\/duplicates\?with=/.test(page.url()) && rajPairs === 2
+  && /Only the pairs with the donor’s record/.test(await page.innerText('body')), `${page.url()} · ${rajPairs} pairs`);
+await page.screenshot({ path: `${SHOTS}/04-duplicates-with-donor.png` });
+
 // A merge that clears a maybe with a record only the merged one matched
 // (T shared E's phone; V keeps its own) names that record.
 const one = async (extra) => (await api('/actions/person.create', { name: 'Ph One', ...extra })).json.person;
@@ -128,7 +147,9 @@ await phPair.locator('.dup-side:has-text("604-555-3333") button:has-text("Keep t
 await phPair.locator('button:has-text("Merge")').click().catch(() => {});
 await page.waitForSelector('.ops-done', { timeout: 8000 }).catch(() => {});
 const phSaid = await page.innerText('.ops-done').catch(() => '');
-check('the line names the record the cleared maybe was with', phSaid === '✓ Ph One: one record — no longer flagged as possibly the same donor as Ph One (same phone): check that record', phSaid);
+check('the line names the record the cleared maybe was with, by its phone', phSaid === '✓ Ph One: one record — no longer flagged as possibly the same donor as Ph One (same phone: 604-555-4444): check that record', phSaid);
+const phLink = await page.getAttribute('.ops-done a', 'href').catch(() => '');
+check('… and links to that record', String(phLink).endsWith(`/people/${pt.id}`), phLink);
 
 // At 390.
 await page.setViewportSize({ width: 390, height: 844 });

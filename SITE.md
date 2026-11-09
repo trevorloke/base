@@ -559,13 +559,17 @@ its letters and digits (V3T-2C3 is V3T 2C3), and one typed with a hyphen
 is kept as V3T 2C3. People → Duplicates lists a donor and the same first
 and last name in one postal code as a pair too, to merge or keep apart.
 *Not the same person* on the flagged gift — one choice for each record it
-names ("Not Aman Gill (same phone)") — or *Not the same* there keeps that
-one pair apart and adds the gift up again without it: the flag goes, or
-names what is left (over on its own record, the plain over-limit reason).
+names ("Not Aman Gill (same phone)"; two that still read the same get
+*Compare in Duplicates* instead, which opens the pairs with that donor's
+record alone) — or *Not the same* there keeps that one pair apart and adds
+the gift up again without it: the flag goes, or names what is left (over
+on its own record, the plain over-limit reason).
 A gift that leaves the books (voided, refunded, a dispute lost) is taken
-out of every maybe that added it up the same way. A merge keeps the
-dropped record's Not the same rulings, and says so when it clears a maybe
-with a record only the dropped one matched.
+out of every maybe that added it up the same way, and one restored (the
+desk's Undo) counts in them again — a maybe its void cleared comes back.
+A merge keeps the dropped record's Not the same rulings, and says so when
+it clears a maybe with a record only the dropped one matched, naming it by
+what it shared (its phone, address or postal code) with a link to it.
 
 ## Admin API
 

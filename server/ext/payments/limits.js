@@ -242,3 +242,10 @@ export const underLimit = async (tx, ws, { personId, slate, cap }, out) => {
   const r = await overTogether(tx, ws, personId, cap, slate);
   if (r) Object.assign(out, { flagReason: r.reason, sameAs: r.ids });
 };
+
+// lib/hooks.js sameDonors: a gift back in the books (a void undone) — the
+// records that may be its donor, so lib/gifts.js adds up their maybes
+// again with it.
+export const sameDonors = async (tx, ws, { personId, year, slate }, ids) => {
+  for (const o of await likelySameDonors(tx, ws, personId, { year, slate })) ids.push(o.id);
+};

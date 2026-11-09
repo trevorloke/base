@@ -31,7 +31,14 @@
 //                                   to flag the gift all the same — other
 //                                   records that may be the same donor,
 //                                   over together (ext/payments).
-const registry = { events: [], contactLogged: [], brief: [], textOut: [], underLimit: [] };
+//   sameDonors(tx, workspace, { personId, year, slate }, ids)
+//                                   a gift is back in the books (a void
+//                                   undone): a feature pushes onto ids the
+//                                   other records that may be its donor,
+//                                   that gave that year on that slate, so
+//                                   their maybes count it again
+//                                   (ext/payments).
+const registry = { events: [], contactLogged: [], brief: [], textOut: [], underLimit: [], sameDonors: [] };
 
 // People lists, imports and the sample campaign (ext/fields fills these):
 //   personsWhere(db, ctx, query, w) GET /persons: a feature may narrow the

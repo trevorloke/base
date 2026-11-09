@@ -10,7 +10,9 @@
 //       persons_same_donor_idx). → { pairs: [{ a, b, why: ['email' |
 //       'phone' | 'address' | 'postal'] }], more } — each side with what the
 //       desk needs to choose (contacts, gifts, shifts, when it was added).
-//       Pairs marked "not the same" stay away.
+//       Pairs marked "not the same" stay away. ?with=<person id>: only the
+//       pairs with that record (Donations' Compare in Duplicates, for a
+//       gift's donor), so a voter file's other pairs never crowd them out.
 //   person.merge  { keep, drop }    desk. Everything that points at `drop`
 //       — contacts, gifts and receipts, shifts, signs, lists, answers,
 //       relationships, texts, requests, ladders… — moves to `keep`; where
@@ -27,9 +29,10 @@
 //       stand) is cleared, and said, so the desk can check that record.
 //       → { keep, drop, filled, moved, flagged: [{ gift_id, year, reason,
 //       maybe_same_donor? }], cleared: [{ gift_id, person_id, name,
-//       shares }] } — flagged: each such year and slate once, so
+//       shares, shared }] } — flagged: each such year and slate once, so
 //       Duplicates can say over the limit now, or maybe; cleared: the third
-//       record, and what it shared with drop.
+//       record, what it shared with drop and those values (its phone,
+//       address or postal code), so Duplicates names it and links to it.
 //   person.notDuplicate  { a, b }   desk. "Not the same": the pair is not
 //       shown again, and never added up for the year's limit; a gift
 //       flagged as possibly one donor on them is added up again without
@@ -172,7 +175,9 @@ const moveRulings = async (tx, ws, keep, drop) => {
 // on its own record now (said as over), nor a record the desk ruled apart
 // from keep (moveRulings). before: maybesAbout, read before the recheck;
 // rechecked: what recheckMaybes changed. → [{ gift_id, person_id, name,
-// shares }]: the third record by name, and what it shared with drop.
+// shares, shared }]: the third record by name, what it shared with drop
+// and those values as it has them (shared: ['604-555-2222']) — keep may
+// not show them, and the name is the donor's too.
 const clearedBy = async (tx, ws, { keep, drop }, before, rechecked) => {
   const ours = new Set([keep, drop]);
   const lost = [];
@@ -194,11 +199,13 @@ const clearedBy = async (tx, ws, { keep, drop }, before, rechecked) => {
     [ws, keep, ids],
   )).rows.map((r) => (r.a === keep ? r.b : r.a)));
   const who = new Map((await tx.query(
-    `select o.id, o.name, ${sharesOf('d', 'o')}
+    `select o.id, o.name, o.phone, o.address, o.postal, ${sharesOf('d', 'o')}
        from persons d join persons o on o.workspace_id = d.workspace_id and o.id = any($3::uuid[])
       where d.workspace_id = $1 and d.id = $2`,
     [ws, drop, ids],
-  )).rows.map((r) => [r.id, { name: r.name, shares: sharedWords(r) }]));
+  )).rows.map((r) => [r.id, {
+    name: r.name, shares: sharedWords(r), shared: [r.by_phone && r.phone, r.by_address && r.address, r.by_postal && r.postal].filter(Boolean),
+  }]));
   return lost.filter((l) => !apart.has(l.person_id) && who.has(l.person_id))
     .map((l) => ({ ...l, ...who.get(l.person_id) }));
 };
@@ -346,6 +353,8 @@ api.get('/duplicates', async (c) => {
   if (!DESK.includes(ctx.role)) return c.json({ error: 'the desk only' }, 403);
   const db = c.get('db');
   const ws = ctx.workspaceId;
+  const only = c.req.query('with');
+  if (only != null && !z.string().uuid().safeParse(only).success) return c.json({ error: 'with: a person id' }, 400);
   const pairs = (await db.query(
     `with p as (
        select id,
@@ -372,11 +381,12 @@ api.get('/duplicates', async (c) => {
           and ${sameText('a.first_name')} <> '' and ${sameText('a.last_name')} <> '' and length(${samePostal('a.postal')}) >= 6
      )
      select h.a, h.b, array_agg(distinct h.why) as why from hits h
-      where not exists (select 1 from person_not_dupes n where n.workspace_id = $1 and n.a = h.a and n.b = h.b)
+      where not exists (select 1 from person_not_dupes n where n.workspace_id = $1 and n.a = h.a and n.b = h.b)${only ? `
+        and $2::uuid in (h.a, h.b)` : ''}
       group by h.a, h.b
       order by count(*) desc, h.a, h.b
       limit ${LIMIT + 1}`,
-    [ws],
+    only ? [ws, only] : [ws],
   )).rows;
   const more = pairs.length > LIMIT;
   const shown = pairs.slice(0, LIMIT);

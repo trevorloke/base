@@ -325,8 +325,8 @@ const shownNote = (n) => (n && n.trim().toLowerCase() !== 'sample' ? n : null);
 
 // Donor · Void — and, on a maybe, Not the same person: one choice for each
 // record it names (apart: MoneyWords.js apartChoices), each asking about
-// that record alone (onApart(its id)); or, when a kept copy can't name
-// them, People → Duplicates.
+// that record alone (onApart(its id)); or, for records it can't tell
+// apart, People → Duplicates with the donor's pairs alone.
 function GiftActions({ personId, onVoid, apart, onApart }) {
   const [confirm, setConfirm] = useState(null); // 'void' | one of apart.choices
   if (confirm === 'void') {
@@ -353,7 +353,9 @@ function GiftActions({ personId, onVoid, apart, onApart }) {
       {(apart?.choices ?? []).map((c) => (
         <button key={c.id} type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm(c)}>{c.label}</button>
       ))}
-      {apart?.duplicates && <Link className="btn btn-quiet ops-tap ops-link" to="/people/duplicates">Compare in Duplicates</Link>}
+      {apart?.duplicates && (
+        <Link className="btn btn-quiet ops-tap ops-link" to={personId ? `/people/duplicates?with=${personId}` : '/people/duplicates'}>Compare in Duplicates</Link>
+      )}
       <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm('void')}>Void</button>
     </div>
   );

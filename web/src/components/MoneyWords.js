@@ -59,10 +59,12 @@ const added = (iso) => {
 // out someone else never rules out the record that may really be the donor.
 // The brief and the ledger send each record's name and what it shares
 // (maybe_same_as: "Not Aman Gill (same phone)"); two that would read the
-// same also say what each gave that year, then when it was added. With one
-// record, one "Not the same person" that names it when it asks. A copy kept
-// from before has the ids alone: one record is the one its reason names;
-// more can't be told apart here, so People → Duplicates (duplicates: true).
+// same also say what each gave that year, then when it was added. Two that
+// still read the same get no choice: a tap would rule out one of them at
+// random, so People → Duplicates shows them side by side (duplicates:
+// true). With one record, one "Not the same person" that names it when it
+// asks. A copy kept from before has the ids alone: one record is the one
+// its reason names; more can't be told apart here, so People → Duplicates.
 // → { choices: [{ id, label, ask }], duplicates }
 export const apartChoices = (g) => {
   const ids = sameAsOf(g);
@@ -76,16 +78,18 @@ export const apartChoices = (g) => {
       (n) => (added(n.created_at) ? ` · added ${added(n.created_at)}` : ''),
     ];
     let who = known.map(tells[0]);
+    const twice = () => who.map((w) => who.filter((x) => x === w).length > 1);
     for (const tell of tells.slice(1)) {
-      const twice = who.map((w) => who.filter((x) => x === w).length > 1);
-      if (!twice.some(Boolean)) break;
-      who = who.map((w, i) => (twice[i] ? w + tell(known[i]) : w));
+      const again = twice();
+      if (!again.some(Boolean)) break;
+      who = who.map((w, i) => (again[i] ? w + tell(known[i]) : w));
     }
+    const alike = twice();
     return {
       choices: known.map((n, i) => ({
         id: n.id, label: ids.length === 1 ? 'Not the same person' : `Not ${who[i]}`, ask: `Not the same person as ${who[i]}? ${ASK}`,
-      })),
-      duplicates: false,
+      })).filter((_, i) => !alike[i]),
+      duplicates: alike.some(Boolean),
     };
   }
   if (ids.length === 1) {
