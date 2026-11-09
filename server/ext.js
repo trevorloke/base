@@ -2,8 +2,11 @@
 // order, and may export any of:
 //
 //   sql            idempotent DDL run at boot after the core schema
-//   actions        { 'name.verb': { roles, input, handler, after? } } — merged into
-//                  the action registry (a name clash is a boot error)
+//   actions        { 'name.verb': { roles, input, handler, before?, after? } } —
+//                  merged into the action registry (a name clash is a boot
+//                  error). before(db, ctx, input) runs ahead of the write's
+//                  transaction (slow work that must not hold the campaign's
+//                  lock); what it returns is the handler's fifth argument
 //   api            a Hono app mounted under /api (signed-in; c.get('ctx'))
 //   publicRoutes   a Hono app mounted at / before /api (no sign-in)
 //   jobs           { kind: async (db, job) => {} } — see lib/jobs.js

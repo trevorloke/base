@@ -110,7 +110,7 @@ const CLEAN_VIEW = {
 
 api.get('/map/config', (c) => {
   const t = tileConfig();
-  // Ground's own tiles (Google through the server) are under the client's
+  // The server's own tiles (Google through the server) are under the client's
   // path on base.win (lib/mount.js).
   const own = (u) => (u.startsWith('/') ? here(c, u) : u);
   const out = { tiles: { url: own(t.url), attribution: t.attribution, maxZoom: t.maxZoom } };

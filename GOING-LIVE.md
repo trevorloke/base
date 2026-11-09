@@ -42,7 +42,7 @@ promote the code — the production database is the campaign's alone.
 
 Add the DNS records Render shows; it issues the certificates. The
 campaign's website (`imaginesurrey.ca`) is its own thing, hosted apart; it
-links to Starbase's public pages, and its server sends sign-ups in with a
+links to base.win's public pages, and its server sends sign-ups in with a
 website key from Settings → Services (INTEGRATIONS.md, *The campaign's
 website*: the fields, the answers, an example).
 
@@ -66,6 +66,7 @@ the candidates the code ships with (`shared/scale.js`).
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name the first sign-up sets up, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
 | `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts |
 | `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on a domain verified there | email; without it invites are shown to copy and sends wait as *queued* |
+| `STARBASE_TWO_STEP_KEY` | 32 or more random characters (`openssl rand -base64 32`), a different one per environment | two-step sign-in's keys sealed with a key the database doesn't hold (INTEGRATIONS.md) |
 
 Then, as each one is ready:
 
@@ -93,7 +94,7 @@ public address and the database.
 The first sign-in lands in the **admin** (`/admin/`); the field app at `/` is
 what volunteers get, and what you see under *Field app ↗* in your account menu.
 
-1. Open `https://starbase.imaginesurrey.ca/login` → **Set up Starbase for
+1. Open `https://starbase.imaginesurrey.ca/login` → **Set up base.win for
    Imagine Surrey** (the name `STARBASE_ORG_NAME` gives; a deployment that
    gives none asks for it here). The first account is the manager; this
    creates the campaign's workspace (its jurisdiction's rules, the
@@ -138,7 +139,7 @@ shared, and the code names no client.
    names (`starbase-<client>-staging`, `starbase-<client>`, and their
    databases — names are unique per Render account), and set their
    `STARBASE_*` values: the campaign's name, jurisdiction, time zone, city,
-   slates and first candidates, and `STARBASE_BRAND=base` on both (Base's
+   slates and first candidates, and `STARBASE_BRAND=base` on both (base.win's
    generic look: `imagine-surrey` is Imagine Surrey's alone). Commit that
    on `main`.
 2. Render → **New → Blueprint** → this repo: Render makes the new pair.
@@ -157,11 +158,14 @@ shared, and the code names no client.
 - A test gift logged under **Donations** gets its receipt emailed.
 - Backups: Render's managed Postgres keeps daily backups; **Today → Export
   all data** (managers) downloads everything (message pictures are not in it).
+- Two-step sign-in: on for you (**Your profile**, from the account menu)
+  and **Require two-step sign-in for desk roles** ticked under **Settings →
+  Members**; **Settings → Services** shows the two-step key set up.
 - Keys: every key above is in Render only, never in the repo or a chat.
   Anyone who leaves the campaign is removed under **Admin → Members**, which ends their
   sign-in everywhere at once.
 
-## What Starbase does on its own
+## What base.win does on its own
 
 - Sign-in: 30 tries per address and 10 failures per email in 15 minutes,
   then a wait. Sessions last 30 days and end at sign-out or removal.

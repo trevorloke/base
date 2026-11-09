@@ -74,7 +74,7 @@ const nominatim = async (q) => {
   url.searchParams.set('q', q);
   url.searchParams.set('countrycodes', 'ca');
   url.searchParams.set('limit', '1');
-  const res = await fetch(url, { headers: { 'User-Agent': 'Base campaign app (geocoding voter addresses)' } });
+  const res = await fetch(url, { headers: { 'User-Agent': 'base.win campaign app (geocoding voter addresses)' } });
   if (!res.ok) return { error: `geocoder ${res.status}` };
   const [hit] = await res.json();
   if (!hit) return null;
@@ -196,7 +196,7 @@ const nominatimSuggest = async (q, limit) => {
   url.searchParams.set('addressdetails', '1');
   url.searchParams.set('limit', String(limit));
   url.searchParams.set('viewbox', `${box.w},${box.n},${box.e},${box.s}`);
-  const res = await fetch(url, { headers: { 'User-Agent': 'Base campaign app (address suggestions)' } });
+  const res = await fetch(url, { headers: { 'User-Agent': 'base.win campaign app (address suggestions)' } });
   if (!res.ok) return { error: `geocoder ${res.status}` };
   return (await res.json())
     .filter((hit) => hit.address?.house_number && hit.address?.road)

@@ -1,0 +1,71 @@
+/* Two-step sign-in (components/TwoStep.jsx) and Your profile (pages/Profile.jsx). */
+.me-page { max-width: 560px; }
+.me-page h1 { margin-bottom: var(--s-4); }
+.me-who { margin: 0 0 var(--s-5); padding: 0; display: grid; gap: var(--s-2); }
+.me-who > div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: var(--s-3); align-items: baseline; }
+.me-who dt { font-size: 13px; font-weight: 600; color: var(--text-3); }
+.me-who dd { margin: 0; overflow-wrap: anywhere; }
+
+.ts-card {
+  background: var(--paper-0); border: var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-1);
+  padding: var(--s-4); margin-bottom: var(--s-4);
+}
+.auth-page .ts-card { border: 0; box-shadow: none; padding: 0; background: none; margin: var(--s-4) 0 0; }
+.ts-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-2); }
+.ts-h { font-size: 21px; margin: 0; }
+.ts-h:focus { outline: none; }
+.ts-h:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+.ts-h3 { font-family: var(--font-sans); font-size: 15px; font-weight: 700; margin: var(--s-4) 0 var(--s-2); }
+.ts-line { margin: 0 0 var(--s-3); }
+.ts-strong { font-weight: 700; }
+.ts-note { color: var(--ok); font-weight: 600; }
+.ts-main { width: 100%; min-height: 48px; font-size: 15px; margin-top: var(--s-2); }
+.ts-btn { min-height: 48px; }
+.ts-quiet { min-height: 48px; margin-top: var(--s-2); }
+.ts-row { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0 var(--s-2); }
+
+.ts-steps { margin: 0 0 var(--s-3); padding-left: 22px; display: grid; gap: var(--s-3); }
+.ts-steps li { padding-left: 2px; }
+.ts-steps li > span { display: block; }
+/* Always black on white, whatever the theme: that's what a camera reads. */
+.ts-qr { display: block; width: 200px; max-width: 100%; height: auto; margin: var(--s-3) 0 0; background: #fff; border: 1px solid var(--rule); border-radius: 6px; }
+.ts-key { display: block; margin: var(--s-2) 0; font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 16px; letter-spacing: 0.04em; word-spacing: 0.15em; overflow-wrap: anywhere; user-select: all; }
+/* "Add it to an app on this phone" (an otpauth:// link): phones only. */
+.ts-onphone { display: none; }
+@media (max-width: 720px), (pointer: coarse) {
+  .ts-onphone { display: inline-flex; align-items: center; justify-content: center; margin-top: var(--s-2); text-decoration: none; }
+}
+
+.ts-form { margin-top: var(--s-2); }
+.ts-field { margin-bottom: var(--s-2); }
+.ts-code { font-size: 20px; letter-spacing: 0.12em; min-height: 48px; max-width: 260px; font-variant-numeric: tabular-nums; }
+.ts-more-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s-2) var(--s-3); }
+.ts-more-form .ts-field { flex: 1 1 200px; margin: 0; }
+.ts-more-form .error { flex: 1 1 100%; margin: 0; }
+.ts-disclose { margin-top: var(--s-3); }
+.ts-more { padding-bottom: var(--s-1); }
+.btn.ts-danger { color: var(--danger); border-color: var(--danger); }
+@media (hover: hover) { .btn.ts-danger:hover { background: var(--danger); color: #fff; } }
+
+.ts-codes .ts-h { margin-bottom: var(--s-3); }
+.ts-codelist {
+  list-style: none; margin: 0; padding: var(--s-3); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2) var(--s-4);
+  background: var(--paper-1); border-radius: var(--r-ctrl);
+}
+.ts-codelist code { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 16px; letter-spacing: 0.04em; }
+@media (max-width: 340px) { .ts-codelist { grid-template-columns: 1fr; } }
+
+.ts-gate h1 { margin-bottom: var(--s-3); }
+.ts-signout { margin: var(--s-4) 0 0; text-align: center; }
+.ts-signout .btn-link { min-height: 48px; padding: 0 var(--s-3); color: var(--text-3); }
+
+/* Settings → Members (pages/Team.jsx): who has it on, and the requirement. */
+.tm-2step { margin-left: var(--s-2); vertical-align: 1px; }
+.tm-2step-sec { margin: var(--s-5) 0 var(--s-4); }
+.tm-2step-sec .ot-check { margin-bottom: 0; }
+.tm-2step-hint { margin: 0 0 var(--s-2) 34px; font-size: 14px; }
+
+/* The sign-in's second step (pages/Login.jsx). */
+.ts-hint { font-size: 14px; color: var(--text-3); margin: 0 0 var(--s-2); }
+.ts-again { margin: var(--s-4) 0 0; }
+.ts-again .btn-link { min-height: 44px; }

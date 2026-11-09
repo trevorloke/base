@@ -10,9 +10,17 @@ export class ApiError extends Error {
   }
 }
 
+// The campaign now requires two-step sign-in for this role and it isn't
+// set up (the server says so on any read or write): main.jsx asks
+// /auth/me again, and the app shows the set-up before anything else.
+export const TWO_STEP_EVENT = 'basewin:two-step-set-up';
+
 async function handle(res) {
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, body.error || `request failed (${res.status})`, body);
+  if (!res.ok) {
+    if (res.status === 401 && body.two_step === 'set_up' && typeof window !== 'undefined') window.dispatchEvent(new Event(TWO_STEP_EVENT));
+    throw new ApiError(res.status, body.error || `request failed (${res.status})`, body);
+  }
   return body;
 }
 

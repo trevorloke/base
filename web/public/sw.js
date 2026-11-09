@@ -25,7 +25,7 @@
  *
  * Under a client's path on a shared domain (base.win/imaginesurrey — the
  * worker's scope), every address below is under that path and the caches
- * carry its name: another campaign's Base on the same domain has its own,
+ * carry its name: another campaign's base.win on the same domain has its own,
  * and this worker never touches them. At a site's root, BASE is '' and the
  * names are what they always were.
  */
@@ -42,7 +42,7 @@ const MINE = BASE ? new RegExp(`^${NAME}-(?:shell|assets|tiles|meta)-`) : /^star
 
 const INDEX = `${BASE}/index.html`;
 const SHELL_EXTRAS = [`${BASE}/manifest.webmanifest`, `${BASE}/icon.svg`];
-// A path inside Ground: the address with the client's path taken off.
+// A path inside base.win: the address with the client's path taken off.
 const inside = (pathname) => (BASE && (pathname === BASE || pathname.startsWith(`${BASE}/`)) ? pathname.slice(BASE.length) || '/' : pathname);
 const NAV_TIMEOUT_MS = 4000;  // then show the cached app, let the network finish in the background
 const TILE_TIMEOUT_MS = 5000;
@@ -142,7 +142,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(loadMatcher().then((m) => (isConfiguredTile(url, m) ? tile(event, url) : fetch(req))));
     return;
   }
-  // Another client's Base on the same domain: not this worker's business.
+  // Another client's base.win on the same domain: not this worker's business.
   if (BASE && !(url.pathname === BASE || url.pathname.startsWith(`${BASE}/`))) return;
   if (NEVER.test(inside(url.pathname))) return; // straight to the network, untouched
 
@@ -263,15 +263,15 @@ async function syncAssets(html) {
 
 function offlinePage() {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>Base — offline</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>base.win — offline</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5fa;color:#161a2e;
 font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding:24px;box-sizing:border-box}main{max-width:340px}
 p.e{font:600 12px system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#5d6481}
 button{font:600 15px system-ui,sans-serif;background:#6d4aff;
 color:#fff;border:0;border-radius:10px;padding:12px 18px;min-height:44px;cursor:pointer}
 @media (prefers-color-scheme:dark){body{background:#0d1226;color:#e8eaf6}p.e{color:#9aa1c2}}</style></head>
-<body><main><p class="e">Base · offline</p><h1>No signal yet</h1>
-<p>Open Base once with signal and it will work offline after that.</p>
+<body><main><p class="e">base.win · offline</p><h1>No signal yet</h1>
+<p>Open base.win once with signal and it will work offline after that.</p>
 <button type="button" onclick="location.reload()">Try again</button></main></body></html>`;
   return new Response(html, { status: 503, headers: { 'content-type': 'text/html; charset=utf-8' } });
 }

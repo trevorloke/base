@@ -4,13 +4,16 @@
 // per email: a new invite (or "New link") makes the old link stop working,
 // and Cancel stops it at once. What each role can do sits under "Roles".
 // With email not connected the button says "Get invite link": the link it
-// shows is the way in.
+// shows is the way in. Two-step sign-in (ext/twostep): who has it on (a
+// chip), a manager's reset for someone who lost their phone, and whether
+// it's required for desk roles.
 import { useEffect, useId, useRef, useState } from 'react';
-import { Navigate, useOutletContext } from 'react-router-dom';
+import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action, fmtDate } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import './outreach.css';
+import '../components/two-step.css';
 
 const ROLES = [
   { code: 'volunteer', label: 'Volunteer', hint: 'Map, doors, calls, texts, signs' },
@@ -164,10 +167,27 @@ function InvitedRow({ inv, ids, canCancel, onChanged, onLinkGone, online = true 
 
 // A member: role picker, and Remove (never for yourself). Removing someone
 // signs them out everywhere at once; a new invite lets them back in.
-function MemberRow({ m, isMe, online, onRole, onChanged }) {
+function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoStep }) {
   const [confirming, setConfirming] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [said, setSaid] = useState(null);
+  // Lost their phone: their two-step sign-in is cleared and they're signed
+  // out; they sign in with their password (and set it up again if required).
+  const reset = async () => {
+    setBusy(true); setError(null);
+    try {
+      await action('twostep.reset', { user_id: m.id });
+      setResetting(false);
+      setSaid(`Two-step sign-in reset — ${m.name} is signed out.`);
+      onTwoStep?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const remove = async () => {
     setBusy(true); setError(null);
     try {
@@ -185,7 +205,7 @@ function MemberRow({ m, isMe, online, onRole, onChanged }) {
           <span className="ot-row__name">{m.name}{isMe ? <span className="muted"> (you)</span> : null}</span>
           <span className="ot-row__sub ot-row__sub--stack">
             <span className="ot-email"><Email value={m.email} /></span>
-            <span>since {fmtDay(m.created_at)}</span>
+            <span>since {fmtDay(m.created_at)}{twoStep?.on && <span className="chip chip-ok tm-2step">Two-step on</span>}</span>
           </span>
         </span>
         <span className="ot-actions ot-row__acts">
@@ -193,12 +213,31 @@ function MemberRow({ m, isMe, online, onRole, onChanged }) {
             disabled={isMe || !online || busy} onChange={(e) => onRole(m.id, e.target.value)}>
             {ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
           </select>
-          {!isMe && !confirming && (
+          {/* In another campaign here too: that's reset from the server's shell. */}
+          {!isMe && twoStep?.on && !twoStep.elsewhere && !confirming && !resetting && (
+            <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
+              onClick={() => { setResetting(true); setSaid(null); }}>Reset two-step</button>
+          )}
+          {!isMe && !confirming && !resetting && (
             <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
               onClick={() => setConfirming(true)}>Remove</button>
           )}
         </span>
       </div>
+      {(resetting || said) && (
+        <div className="ot-body">
+          {resetting && (
+            <div className="ot-confirm ot-confirm-danger" role="group" aria-label={`Reset two-step sign-in for ${m.name}`}>
+              <span>Reset {m.name}’s two-step sign-in? They’re signed out and sign in with their password.</span>
+              <button type="button" className="btn ot-btn-tap ot-btn-danger" disabled={busy} onClick={reset}>
+                {busy ? 'Resetting…' : 'Yes, reset'}
+              </button>
+              <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy} onClick={() => { setResetting(false); setError(null); }}>No</button>
+            </div>
+          )}
+          {said && <p className="muted" role="status">{said}</p>}
+        </div>
+      )}
       {(confirming || error) && (
         <div className="ot-body">
           {confirming && (
@@ -214,6 +253,38 @@ function MemberRow({ m, isMe, online, onRole, onChanged }) {
         </div>
       )}
     </li>
+  );
+}
+
+// Settings → Members: require two-step sign-in for managers, treasurers and
+// staff. A manager's own must be on first (the server says so too).
+function TwoStepRequirement({ data, online, onChanged }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  // The box shows the choice at once; the server's answer settles it.
+  const [want, setWant] = useState(null);
+  const hintId = useId();
+  if (!data) return null;
+  const required = want ?? data.required;
+  const toggle = async (on) => {
+    setBusy(true); setError(null); setWant(on);
+    try { await action('twostep.require', { on }); await onChanged(); } catch (err) { setError(err.message); } finally { setWant(null); setBusy(false); }
+  };
+  return (
+    <section className="tm-2step-sec" aria-labelledby="tm-2step-h">
+      <h2 className="ot-sec-h" id="tm-2step-h">Two-step sign-in</h2>
+      <label className="ot-check">
+        <input type="checkbox" checked={required} disabled={busy || !online || (!required && !data.you)}
+          aria-describedby={hintId} onChange={(e) => toggle(e.target.checked)} />
+        <span>Require two-step sign-in for desk roles</span>
+      </label>
+      <p className="muted tm-2step-hint" id={hintId}>
+        {!required && !data.you
+          ? <>Turn yours on first, in <Link to="/profile">Your profile</Link>.</>
+          : 'Managers, treasurers and staff set it up at their next sign-in, before anything else.'}
+      </p>
+      {error && <p className="error" role="alert">{error}</p>}
+    </section>
   );
 }
 
@@ -239,6 +310,10 @@ export default function Team({ embedded = false }) {
   const queryClient = useQueryClient();
   const isManager = me.role === 'manager';
   const team = useQuery({ queryKey: ['team'], queryFn: () => apiGet('/team'), enabled: isManager });
+  // Who has two-step sign-in on, and whether desk roles must (ext/twostep).
+  const twoStep = useQuery({ queryKey: ['two-step-team'], queryFn: () => apiGet('/two-step/team'), enabled: isManager });
+  const twoStepOf = new Map((twoStep.data?.members || []).map((x) => [x.id, x]));
+  const twoStepChanged = () => queryClient.invalidateQueries({ queryKey: ['two-step-team'] });
   // Is email connected? (Same read Today and Shifts use; only that, so the
   // strip never says this screen is from Today's kept copy.)
   const brief = useQuery({ queryKey: ['brief'], queryFn: () => apiGet('/brief'), enabled: isManager, staleTime: Infinity, meta: { side: true } });
@@ -327,7 +402,8 @@ export default function Team({ embedded = false }) {
       <h2 className="ot-sec-h">Members <span className="ot-count">{members.length}</span></h2>
       <ul className="ot-list">
         {members.map((m) => (
-          <MemberRow key={m.id} m={m} isMe={m.id === me.user.id} online={online} onRole={setMemberRole} onChanged={refresh} />
+          <MemberRow key={m.id} m={m} isMe={m.id === me.user.id} online={online} onRole={setMemberRole} onChanged={refresh}
+            twoStep={twoStepOf.get(m.id) || null} onTwoStep={twoStepChanged} />
         ))}
       </ul>
 
@@ -345,6 +421,7 @@ export default function Team({ embedded = false }) {
       </>
       )}
 
+      <TwoStepRequirement data={twoStep.data} online={online} onChanged={twoStepChanged} />
       <RolesHelp />
     </div>
   );

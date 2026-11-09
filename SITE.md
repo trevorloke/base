@@ -22,6 +22,9 @@ The contract the website work is built against. Read with ROADMAP.md.
   (comma list; also `site_settings.domains`). On those hosts the site is at `/`.
 - Everywhere else (the app's own address, base.win/<client>), the site is at
   `/site/…` (so `base.win/imaginesurrey/site/` works before DNS moves).
+  The front door (`apps/door`) sends `base.win/<client>` itself to
+  `/<client>/site/`, and an old `base.win/<client>/web…` link to
+  `/<client>/desk/website` — the admin's Website area is at `/website`.
 - App routes (`/api`, `/field`, `/desk`, `/admin`, `/media`, `/u`, `/r/…` receipts …) are
   never shadowed on the app host. On a site host, only the site's routes and
   `/media/:id`, `/stripe/webhook`, `/site-assets/*` are answered.

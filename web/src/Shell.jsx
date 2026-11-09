@@ -3,8 +3,10 @@
 //   volunteer:                        Today · Map · Calls · Shifts
 // A navy sidebar on desktop, a top bar plus a big-label tab bar on phones
 // (field mode lives on /map): every label whole at 360px, never cut off.
-// One account menu (the avatar) holds the name, the campaign, Team (managers)
-// and Sign out. Keyboard: 'n' anywhere → log a gift (desk roles).
+// One account menu (the avatar) holds the name, the campaign, Your profile
+// (two-step sign-in), Settings (managers) and Sign out. Keyboard: 'n'
+// anywhere → log a gift (desk roles); Ctrl+K / ⌘K → the command bar (the
+// desk: any screen, anyone, a common job — components/CommandBar.jsx).
 // Calls carries a small count of new replies to your texts (volunteers; the
 // desk's Today has a "new texts" row).
 // Under the nav, a slim strip says when the phone is offline or field work
@@ -29,7 +31,7 @@ import { useTextingStatus } from './components/TextingStatus.js';
 import { useShareLocation } from './components/ShareLocation.js';
 import { adminHref, fieldHref, fieldView, mayAdmin } from './mode.js';
 import './pages/offline.css';
-import AppSwitcher from './components/AppSwitcher.jsx';
+import CommandBar from './components/CommandBar.jsx';
 import { at } from './base.js';
 import { BRAND } from './brand.js';
 
@@ -188,7 +190,7 @@ function WaitingForSignal() {
   );
 }
 
-// ── Account menu: avatar → name, campaign, Team (managers), Sign out ──
+// ── Account menu: avatar → name, campaign, Your profile, Settings (managers), Sign out ──
 // A disclosure (button + panel), not a full ARIA menu: Tab moves through it,
 // Escape or a tap outside closes it, and a new screen closes it too.
 function AccountMenu({ me, mode, signingOut, confirmLeft, onSignOut, onCancelSignOut }) {
@@ -236,11 +238,12 @@ function AccountMenu({ me, mode, signingOut, confirmLeft, onSignOut, onCancelSig
           <span className="acct-name">{me.user.name}</span>
           <span className="acct-ws">{me.workspace.name}</span>
         </div>
+        <NavLink to="/profile" ref={firstRef} className="acct-item">Your profile</NavLink>
         {mode === 'field' && mayAdmin({ ...me, role: me.admin_role || me.role, areas: me.admin_areas || me.areas }) && (
-          <a href={adminHref('/')} ref={firstRef} className="acct-item">Admin ↗</a>
+          <a href={adminHref('/')} className="acct-item">Admin ↗</a>
         )}
         {mode === 'admin' && <a href={fieldHref('/')} className="acct-item">Field app ↗</a>}
-        {mode === 'admin' && me.role === 'manager' && <NavLink to="/settings" ref={firstRef} className="acct-item">Settings</NavLink>}
+        {mode === 'admin' && me.role === 'manager' && <NavLink to="/settings" className="acct-item">Settings</NavLink>}
         {mode === 'admin' && me.role === 'manager' && <NavLink to="/rating-scale" className="acct-item">Rating scale</NavLink>}
         {confirmLeft > 0 ? (
           <div className="acct-confirm" role="group" aria-label="Sign out">
@@ -253,7 +256,7 @@ function AccountMenu({ me, mode, signingOut, confirmLeft, onSignOut, onCancelSig
             </div>
           </div>
         ) : (
-          <button type="button" ref={(mode === 'admin' && me.role === 'manager') || (mode === 'field' && mayAdmin({ ...me, role: me.admin_role || me.role, areas: me.admin_areas || me.areas })) ? undefined : firstRef} className="acct-item"
+          <button type="button" className="acct-item"
             onClick={() => onSignOut(false)} disabled={signingOut}>
             {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
@@ -447,14 +450,14 @@ function SignedInShell({ who, mode }) {
     <>
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
-          <NavLink to="/" className="brand" aria-label={`${mode === 'admin' ? 'Base Ground Admin' : 'Base Ground'} — ${me.workspace.name}`}>
+          <NavLink to="/" className="brand" aria-label={`base.win — ${me.workspace.name}`}>
             <img className="brand-mark" src={at(BRAND.mark)} alt="" height="32" />
             <span className="brand-text">
-              <span className="brand-name">Base <span className="brand-app">Ground</span>{mode === 'admin' && <span className="brand-admin"> Admin</span>}</span>
+              <span className="brand-name">base.win</span>
               <span className="brand-org">{me.workspace.name}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
             </span>
           </NavLink>
-          <AppSwitcher me={me} />
+          {mode === 'admin' && <CommandBar me={me} nav={nav} />}
           <nav className="links" aria-label="Main">
             {nav.map((n) => <NavLink key={n.to} to={n.to} end={n.end}><Icon name={n.icon} />{n.label}{badge(n)}</NavLink>)}
           </nav>

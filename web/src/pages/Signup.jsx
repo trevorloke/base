@@ -1,4 +1,4 @@
-// First-run setup: Starbase runs for one campaign. The first person sets it
+// First-run setup: base.win runs for one campaign. The first person sets it
 // up (name, email, password — and the campaign's name, unless the deployment
 // already says it) and becomes its manager; once that's
 // done this page says so and points to Sign in — everyone else joins by invite.
@@ -68,7 +68,7 @@ export default function Signup({ mode = 'field' }) {
   const org = setup.data?.organization || null;
   const brand = (
     <>
-      <span className="brand">Base</span>
+      <span className="brand">base.win</span>
       {org && <span className="brand-org">{org}</span>}
       {setup.data?.org?.env === 'staging' && <span className="env-badge">Staging</span>}
     </>
@@ -82,7 +82,7 @@ export default function Signup({ mode = 'field' }) {
       <div className="auth-page">
         {brand}
         <h1>Already set up</h1>
-        <p className="muted">Base is set up{org ? ` for ${org}` : ''}. Ask a manager for an invite.</p>
+        <p className="muted">base.win is set up{org ? ` for ${org}` : ''}. Ask a manager for an invite.</p>
         <hr className="hairline" />
         <p className="muted"><Link to="/login">Sign in</Link></p>
       </div>
@@ -92,7 +92,7 @@ export default function Signup({ mode = 'field' }) {
   return (
     <div className="auth-page">
       {brand}
-      <h1>Set up Base{org ? ` for ${org}` : ''}</h1>
+      <h1>Set up base.win{org ? ` for ${org}` : ''}</h1>
       <form onSubmit={submit} onInvalidCapture={onInvalid}>
         {!org && (
           <div className="field">
@@ -120,7 +120,7 @@ export default function Signup({ mode = 'field' }) {
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" className="btn btn-primary" style={AUTH_BUTTON} disabled={busy}
           onClick={() => { saidMissing.current = false; }}>
-          {busy ? 'Setting up…' : 'Set up Base'}
+          {busy ? 'Setting up…' : 'Set up base.win'}
         </button>
       </form>
       <hr className="hairline" />

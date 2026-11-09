@@ -1,30 +1,23 @@
-# Base
+# base.win
 
-**Base** — a broad application for social engagement — is two apps in one,
-built for **Imagine Surrey**:
+**base.win** is one product for a campaign: its people, map, field, money,
+outreach and website in one place — built first for **Imagine Surrey**
+([ROADMAP.md](ROADMAP.md)). `server/`, `web/` and `shared/` are base.win (this
+README); the website is one of the desk's areas, like People or Donations
+([SITE.md](SITE.md)).
 
-| App | Where | What |
-|---|---|---|
-| **Base Ground** (the default) | `server/`, `web/`, `shared/` — this README | The campaign: a map with every door on it, a one-tap rating scale at the door, phone, and by text — with signs, volunteers, shifts, money, compliance, and outreach around it. |
-| **Base Web** | `apps/web` ([its README](apps/web/README.md)) | The Imagine Surrey website and its back office (Next.js). |
+Each client runs on its own server and database, behind one front door at
+base.win (`apps/door`; [setting it up](apps/door/README.md)):
+`base.win/<client>` opens the campaign's public website (`/<client>/site/`),
+`/<client>/field` is the volunteers' app and `/<client>/desk` the office's.
+The server goes under a client's path with `BASE_PATH=/<client>` (and keeps
+answering at its own address); unset, it runs at a site's root as it always
+has. Internal names — the `STARBASE_*` settings, package names, the
+database — are unchanged, so nothing deployed moves.
 
-Base opens on Ground. The app switcher beside the name (the four squares)
-goes to Web: set `BASE_WEB_URL` on Ground's server to where it runs (else
-the campaign's website, from Settings, + `/admin`). Each app keeps its own
-deploy, tests and CI (`.github/workflows/base-web.yml` for Web; `ci.yml` is
-Ground's).
-Internal names — the `STARBASE_*` settings, package names, the database —
-are unchanged, so nothing deployed moves.
-
-**base.win** is where Base runs for clients: `base.win/<client>/field` is the
-volunteers' app, `/desk` the office's, `/web` the website's back office —
-each client on its own servers and database, behind one front door
-(`apps/door`; [setting it up](apps/door/README.md)). Ground goes under a
-client's path with `BASE_PATH=/<client>` (and keeps answering at its own
-address); unset, it runs at a site's root as it always has.
-
-Web came in with `git subtree` from its own repository; work done there
-comes in with:
+`apps/web` is Imagine Surrey's website as it runs today (Next.js, [its
+README](apps/web/README.md)), until its pages move into base.win. It came in
+with `git subtree` from its own repository; work done there comes in with:
 
 ```sh
 git subtree pull --prefix=apps/web https://github.com/trevorloke/ImagineSurreyWebsite main --squash
@@ -55,7 +48,7 @@ button, no paragraphs, everything else one tap away.
 | **Scripts** | What to say at the door and on the phone (`/scripts`, desk): shown as *Script* above the rating buttons on the walk list, the door card and Calls, the voter's and the canvasser's first names filled in, kept on the phone |
 | **People** | Everyone, filterable by rating / tag / role / the campaign's own fields, and by the field's cuts (never knocked or not in 7–30 days, the last outcome, a turf, a postal code, without a tag — saved lists, blasts and Calls keep them); profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time; **My people** is each volunteer's own circle |
 | **Shifts** | Schedule volunteers, assign by role, notify by email + text with instructions and a link; volunteers tap *Count me in*; a shift can carry turfs; *Count me in* puts the walk list on your phone; the desk can *Edit* a shift (moved in time or place → *Let them know*) or *Call off* one, which takes back the walk lists it gave. Each shift has a **crew board**: drag volunteers on from a tray (free or busy then, asked to volunteer, new), onto its turfs — each person gets only their turf's walk list — or *No walk list*; team lead and driver; *Here* / *No-show* on the day; *Split the rest evenly*. **Shifts → Volunteers** is the roster: asked to volunteer, new, active, lapsed, by role; call, text and *Put on a shift* in a tap |
-| **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers — the only money Starbase tracks |
+| **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers — the only money base.win tracks |
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
 | **Lists** | Saved filters (a tag, a rating band, a role, has an email…) and hand-picked lists of people: an audience for an email or text blast, a CSV, a report; People's *Save as a list* starts one |
 | **Reports** | The campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export; Field, by turf (coverage, talks, support found, not-homes; by canvasser; CSV) |
@@ -109,6 +102,49 @@ move over (where both had the same — one shift, one list — the kept one's
 stays), its blanks are filled and tags joined, and an old link to it says
 *Merged — open their record*. A donor made one is checked against the limit
 again. *Not the same* keeps a pair away.
+
+### Two-step sign-in
+
+Anyone can turn it on for themselves in **Your profile** (the account menu's
+first item, in either app): scan the QR code with an authenticator app (or
+type the key, or on the phone itself *Add it to an app on this phone*), type
+the code it shows, and keep the ten **recovery codes** shown once (copy or
+download) — each signs in once if the phone is lost. Sign-in then asks for
+the code after the password; a code works once, five tries send you back
+to the password, and ten tries in 15 minutes make the person wait (each try
+counted as it comes in, so codes sent all at once don't get more).
+*More* makes new recovery codes or turns it off (each with a code).
+Turning it on signs that person out on their other devices.
+
+A manager can **require it for desk roles** (Settings → Members — their own
+must be on first): every manager, treasurer and staffer then sets it up at
+their next sign-in — or on their next tap, if already signed in — before
+anything else (the server answers nothing else meanwhile). Volunteers sign
+in as before unless they turn it on. Someone who lost their phone: the
+manager taps **Reset two-step** on their row — they're signed out everywhere
+and sign in with their password (setting it up again where it's required).
+The campaign's only manager, with neither phone nor recovery codes — or
+someone who belongs to another campaign on the same server too, which one
+campaign's manager can't clear — on the server's shell (Render → the service
+→ Shell), `node scripts/reset-two-step.mjs their@email` does the same.
+Turning it on or off, new recovery codes, a recovery code spent at sign-in,
+a reset and the requirement are on the event log (nothing secret in it).
+Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
+(`server/ext/twostep`) are never in the export. The how: `server/lib/twostep.js`.
+
+### The command bar
+
+On the desk, **Ctrl+K** (⌘K on a Mac) or **Search** in the header opens one
+box: type to jump to any screen you may open, find someone by name, email or
+phone (typed any way: *604 555 0142* finds 604-555-0142), or start a common
+job — *Add person, Log a gift, Enter a membership form, Draw a turf, New
+shift, Write an email, Write a text*. ↑ ↓ and Enter, Esc to close; it offers
+only what your areas allow (`web/src/components/commands.js`). People come
+from a quick search on the start of a name or last name, a whole email or a
+phone's digits (`server/ext/search`, indexed: a few milliseconds on a
+300,000-person file, against about a second for People's search of every
+row), then People's own search when that finds nobody. People's search box
+now matches a phone's digits however it was typed, too.
 
 ### The rating scale (door, phone, text)
 
@@ -169,7 +205,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   list). It says what to check (below the minimum, over the limit, nothing
   ticked for citizenship) and who entered it, for the form's *Office use*
   box. Card numbers and bank details are never typed — black them out on
-  the paper. A website membership (Base Web tags it *Member (joined
+  the paper. A website membership (the website tags it *Member (joined
   online)*) is a membership too, and **Data → Take data out → Members** lists
   both, current or lapsed.
 - **Mainstreeting** (Today → *Mainstreeting*, everyone on the field
@@ -344,7 +380,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
 
 ## Coverage vs. the tools it replaces
 
-| | Starbase today | Next |
+| | base.win today | Next |
 |---|---|---|
 | **Ecanvasser** | map canvass, door cards, household grouping, ratings, no-answer outcomes, signs at the door, place-on-map, call/text lists, turf cutting & assignment, walk lists, survey builder (door and calls), custom person fields, offline field mode, offline desk (each sign-in's last copy of every screen, money and donor lists in the tab only; ratings, notes and tags queued; one outbox across tabs) | — |
 | **Action Builder** | assessments (= the rating scale, its words and Voting-for list edited per campaign), tags, roles, relational notes, relationship graph (My people, Knows with a nudge, Most connected, brought in by), event-logged every touch | — |
@@ -360,7 +396,7 @@ INTEGRATIONS.md, *The campaign's website*): matched only by the same
 email (a visitor's typing never lands on someone else's record), never back
 on the newsletter for someone who left it, a volunteer or a message filed
 as a request under *Needs you*; the answer is only the person's id. Donations and RSVPs aren't
-taken that way. Starbase's own public pages are the ones every email needs,
+taken that way. base.win's own public pages are the ones every email needs,
 no login:
 
 - `/u/:subscriptionId` — unsubscribe from the newsletter (the link asks; one
@@ -509,7 +545,7 @@ only the people inside each turf.
 **Google Maps** instead: `GOOGLE_MAPS_TILES=1` with a `GOOGLE_MAPS_SERVER_KEY`
 that has the **Map Tiles API** enabled (`GOOGLE_MAPS_TILE_TYPE` roadmap |
 satellite | terrain). Google hands tiles out against a session, so the map
-draws `/tiles/{z}/{x}/{y}.png` from Starbase (signed in), which fetches
+draws `/tiles/{z}/{x}/{y}.png` from base.win (signed in), which fetches
 each tile from Google with a session it keeps for everyone and renews
 (`server/lib/gtiles.js`, served by `server/ext/offline`), credited to
 Google, up to zoom 22; the service worker keeps the ones a phone has drawn
@@ -551,8 +587,8 @@ when you're back online.*
 
 Each deployment wears one of two looks, set by `STARBASE_BRAND`
 (`server/lib/brand.js`): **`imagine-surrey`** — Imagine Surrey's own,
-below — or **`base`**, Base's generic one (slate and indigo, Inter
-throughout, the Base mark; training is called *Training*, not *ImagineU*;
+below — or **`base`**, base.win's generic one (slate and indigo, Inter
+throughout, the base.win mark; training is called *Training*, not *ImagineU*;
 nothing names Imagine Surrey), for staging and any other campaign. The
 server marks the app's page `<html data-brand="…">` before it paints, with
 the brand's icons and browser colours, and the install manifest too;
@@ -607,7 +643,7 @@ a request is from is the entry `STARBASE_TRUSTED_PROXIES` hops from the
 right of `X-Forwarded-For` (default 1 — one proxy, as on Render), never
 what the sender wrote; public writes are limited to 30 per 10 minutes per
 address and sign-in to 30 tries per address and 10 failures per email per
-15 minutes; a cookie-carrying write must be the app's own (JSON, same
+15 minutes (two-step codes: 5 tries per sign-in, 10 per person); a cookie-carrying write must be the app's own (JSON, same
 origin — a form on another host, even under the campaign's domain, can't
 post with it; the session cookie is `SameSite=Strict`); and every answer carries
 `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and a

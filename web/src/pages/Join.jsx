@@ -1,11 +1,13 @@
 // Join a campaign from an invite link. New people set a name and password;
-// people who already use Starbase confirm with their existing password.
+// people who already use base.win confirm with their existing password (and
+// the code from their authenticator app, when two-step sign-in is on).
 // Everyone lands on Today, whose one big button is "Start canvassing".
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost } from '../api.js';
 import { landing } from '../mode.js';
+import { CodeField } from '../components/TwoStep.jsx';
 
 const ROLE_LABEL = { manager: 'a manager', treasurer: 'the treasurer', staff: 'staff', volunteer: 'a volunteer' };
 
@@ -19,6 +21,8 @@ export default function Join({ mode = 'field' }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  // Two-step sign-in on for this account: the server asks for its code too.
+  const [code, setCode] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   // An invite works once: after joining it 404s, so never refetch it.
@@ -32,7 +36,9 @@ export default function Join({ mode = 'field' }) {
     setBusy(true);
     setError(null);
     try {
-      const me = await apiPost('/auth/join', inv.data.hasAccount ? { token, password } : { token, name, password });
+      const me = await apiPost('/auth/join', inv.data.hasAccount
+        ? { token, password, ...(code !== null ? { code } : {}) }
+        : { token, name, password });
       // Drop whatever an earlier login cached — except this (now used)
       // invite, which this screen still shows until Today takes over.
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'invite' });
@@ -40,17 +46,19 @@ export default function Join({ mode = 'field' }) {
       const go = landing(me, mode);
       if (go.href) window.location.assign(go.href); else navigate(go.to);
     } catch (err) {
+      // The password was right; now the code (or it didn't match).
+      if (err.body?.two_step === 'code' && code === null) { setCode(''); setError(null); return; }
       setError(err.message);
     } finally {
       setBusy(false);
     }
   };
 
-  if (inv.isPending) return <div className="auth-page"><span className="brand">Base</span></div>;
+  if (inv.isPending) return <div className="auth-page"><span className="brand">base.win</span></div>;
   if (inv.isError) {
     return (
       <div className="auth-page">
-        <span className="brand">Base</span>
+        <span className="brand">base.win</span>
         <h1>{inv.error.status === 404 ? 'Invite not found' : 'Can’t open this invite'}</h1>
         <p className="muted">{inv.error.status === 404 ? 'Ask a manager for a new link.' : inv.error.message}</p>
       </div>
@@ -60,7 +68,7 @@ export default function Join({ mode = 'field' }) {
   const { email, role, workspaceName, hasAccount } = inv.data;
   return (
     <div className="auth-page">
-      <span className="brand">Base</span>
+      <span className="brand">base.win</span>
       <h1>Join {workspaceName}</h1>
       <p className="muted">As {ROLE_LABEL[role] || role} · <strong>{email}</strong></p>
       <form onSubmit={submit}>
@@ -72,14 +80,17 @@ export default function Join({ mode = 'field' }) {
           </div>
         )}
         <div className="field">
-          <label htmlFor="join-password">{hasAccount ? 'Your Base password' : 'Choose a password'}</label>
+          <label htmlFor="join-password">{hasAccount ? 'Your base.win password' : 'Choose a password'}</label>
           <input id="join-password" className="input" type="password" required minLength={8} maxLength={200} style={AUTH_INPUT}
             autoFocus={hasAccount} autoComplete={hasAccount ? 'current-password' : 'new-password'}
             placeholder={hasAccount ? undefined : '8 or more characters'}
             value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
-        {error && <p className="error">{error}</p>}
-        <button type="submit" className="btn btn-primary" style={AUTH_BUTTON} disabled={busy}>
+        {code !== null && (
+          <CodeField id="join-code" label="Code from your authenticator app (or a recovery code)" value={code} onChange={setCode} recovery autoFocus />
+        )}
+        {error && <p className="error" role="alert">{error}</p>}
+        <button type="submit" className="btn btn-primary" style={AUTH_BUTTON} disabled={busy || (code !== null && !code.trim())}>
           {busy ? 'Joining…' : 'Join'}
         </button>
       </form>

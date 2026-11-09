@@ -1,8 +1,8 @@
-/* Base's own look — STARBASE_BRAND=base: staging, and any campaign but
+/* base.win's own look — STARBASE_BRAND=base: staging, and any campaign but
    Imagine Surrey (server/lib/brand.js marks the page <html data-brand="base">
    before it paints). Nothing here names or borrows from Imagine Surrey:
    slate grounds, one indigo accent, Inter for headlines as well as text,
-   the Base mark. Only tokens change (app.css draws everything from them),
+   the base.win mark. Only tokens change (app.css draws everything from them),
    plus the sign-in page's backdrop and mark. Imagine Surrey's look is
    app.css as it stands. */
 
@@ -73,7 +73,7 @@
 :root[data-brand="base"] h3 { letter-spacing: -0.015em; }
 
 /* Sign in / set up: the white card on a quiet slate-to-indigo wash (no
-   rise — that is Imagine Surrey's), the Base mark, an indigo bar. */
+   rise — that is Imagine Surrey's), the base.win mark, an indigo bar. */
 html[data-brand="base"]:has(.auth-page) { background: linear-gradient(160deg, #1e293b 0%, #0f172a 58%, #1e1b4b 100%) fixed; }
 :root[data-brand="base"] .auth-page .brand::before { width: 36px; height: 36px; border-radius: 9px; background-image: url('/base-mark.svg'); }
 :root[data-brand="base"] .auth-page h1::after { width: 36px; height: 4px; border-radius: 2px; background: var(--mark); }

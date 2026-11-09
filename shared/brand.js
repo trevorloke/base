@@ -1,25 +1,18 @@
-// The product's name, in one place. Base — a broad application for social
-// engagement — is two apps in one:
-//   Ground  the campaign itself: people, doors, calls, shifts, money (this
-//           app — server/ and web/ — and where Base opens)
-//   Web     the campaign's website and its back office (apps/web)
-// Web runs on its own; Ground links to it (BASE_WEB_URL — server/lib/org.js).
-// Internal names (STARBASE_* settings, package names, the database) are
-// unchanged, so nothing deployed moves.
-export const APP_NAME = 'Base';
-export const APPS = [
-  { key: 'ground', name: 'Ground', full: 'Base Ground', what: 'The campaign — people, doors, calls, shifts, money' },
-  { key: 'web', name: 'Web', full: 'Base Web', what: 'The website and its back office' },
-];
-export const DEFAULT_APP = 'ground';
+// The product's name, in one place: base.win — one product for the
+// campaign's people, map, field, money, outreach and website (the website is
+// one of the desk's areas, like People or Donations). The campaign's own
+// name is the workspace's, shown beside it. Internal names (STARBASE_*
+// settings, package names, the database) are unchanged, so nothing deployed
+// moves.
+export const APP_NAME = 'base.win';
 
 // The look one deployment wears (STARBASE_BRAND — server/lib/brand.js picks;
 // the server marks the app's page <html data-brand="…">; web/src/brand.js
 // reads it; web/src/brand-base.css re-colours the tokens).
 //   imagine-surrey  Imagine Surrey's own: Surrey Navy and Marigold, the
 //                   star, Barlow Condensed headlines. Training is "ImagineU".
-//   base            Base's own, for staging and any other campaign: slate
-//                   and indigo, Inter throughout, the Base mark. Training
+//   base            base.win's own, for staging and any other campaign: slate
+//                   and indigo, Inter throughout, the base.win mark. Training
 //                   is "Training". Nothing in it names Imagine Surrey.
 // theme / themeDark colour the browser's bar; link is a link in an email;
 // mapInk draws a turf with no colour of its own.

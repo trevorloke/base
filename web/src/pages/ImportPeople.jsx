@@ -499,11 +499,11 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, v
 
 // fetch/ApiError → one plain sentence that says what to do.
 function errText(e) {
-  if (!e?.status) return 'Couldn’t reach Base. Check your connection and try again.';
+  if (!e?.status) return 'Couldn’t reach base.win. Check your connection and try again.';
   if (e.status === 401) return 'You’ve been signed out. Sign in again in another tab, then try again.';
   if (e.status === 403) return 'Only campaign staff can import people.';
   const m = String(e.message || '').trim();
-  return m ? `Base said: ${m}.` : `Something went wrong (${e.status}). Try again.`;
+  return m ? `base.win said: ${m}.` : `Something went wrong (${e.status}). Try again.`;
 }
 
 const displayName = (r) => r.name || [r.first, r.middle, r.last].filter(Boolean).join(' ');

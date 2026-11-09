@@ -1,5 +1,5 @@
 // The look a deployment wears (lib/brand.js): Imagine Surrey's own in
-// production, Base's generic one on staging and for any other campaign.
+// production, base.win's generic one on staging and for any other campaign.
 // Unset, production keeps today's look; the app's page and manifest leave
 // marked with the brand (before any paint) and its icons and colours;
 // training is "ImagineU" or "Training" on every screen that names it; an
@@ -60,7 +60,7 @@ test('the app’s page: marked on <html>, the brand’s icons and the browser’
   assert.match(brandHtml(is, BRANDS.base), /<html lang="en" data-brand="base">/, 'marked once, never twice');
   assert.equal((brandHtml(is, BRANDS.base).match(/data-brand=/g) || []).length, 1);
   const m = brandManifest(MANIFEST, BRANDS.base);
-  assert.deepEqual([m.name, m.theme_color, m.background_color, m.start_url], ['Base', '#1e293b', '#1e293b', MANIFEST.start_url]);
+  assert.deepEqual([m.name, m.theme_color, m.background_color, m.start_url], ['base.win', '#1e293b', '#1e293b', MANIFEST.start_url]);
   assert.ok(m.icons.every((i) => i.src.startsWith('/base-')) && m.icons.some((i) => i.purpose === 'maskable'));
   assert.deepEqual(brandManifest(MANIFEST, BRANDS['imagine-surrey']), MANIFEST, 'Imagine Surrey’s manifest as it is');
 });

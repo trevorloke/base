@@ -37,7 +37,7 @@ const page = (campaign, title, inner) => `<!doctype html><html lang="en"><head><
 </style></head><body><main>
 ${campaign ? `<div class="camp">${esc(campaign)}</div>` : ''}
 ${inner}
-<footer>Powered by Base</footer>
+<footer>Powered by base.win</footer>
 </main></body></html>`;
 
 const bad = (c) => c.html(page(null, 'Unsubscribe',

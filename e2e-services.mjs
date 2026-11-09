@@ -57,7 +57,7 @@ await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.sv2-row', { timeout: 10000 }).catch(() => {});
 const names = await page.$$eval('.sv2-list:not(.sv2-in) .sv2-name', (els) => els.map((e) => e.innerText.trim()));
-check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Address lookup (BC Address Geocoder) | Map background (OpenStreetMap) | Background work', names.join(' | '));
+check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Address lookup (BC Address Geocoder) | Map background (OpenStreetMap) | Background work | Two-step sign-in key', names.join(' | '));
 const lead = (await page.innerText('.sv2-lead')).trim();
 check('the lead names what launch still needs (this test server runs no background jobs)', /^3 to set up before launch: Public address, Email, Background work\./.test(lead), lead);
 const emailRow = '.sv2-row:has(.sv2-name:text-is("Email (Resend)"))';

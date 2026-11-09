@@ -1,0 +1,101 @@
+/* The command bar (components/CommandBar.jsx): the Search button in the
+   desk's header, and the box it opens. */
+.cmd-btn {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  min-height: 44px; padding: 0 12px; border-radius: 10px;
+  font: inherit; font-size: 14.5px; font-weight: 500; color: var(--navy-text);
+  background: color-mix(in srgb, var(--navy-2) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--navy-text) 28%, transparent);
+  cursor: pointer; text-align: left;
+}
+@media (hover: hover) { .cmd-btn:hover { color: #fff; background: var(--navy-2); border-color: color-mix(in srgb, var(--navy-text) 50%, transparent); } }
+.cmd-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.cmd-btn .cmd-icon { flex: none; }
+.cmd-btn__label { flex: 1; }
+.cmd-btn__kbd {
+  font-family: var(--font-sans); font-size: 11.5px; font-weight: 600; letter-spacing: 0.02em;
+  padding: 1px 6px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--navy-text) 35%, transparent); color: var(--navy-text);
+}
+/* In the desktop sidebar: a full-width box under the brand. */
+@media (min-width: 721px) {
+  .nav .cmd-btn { width: 100%; margin: 0 0 var(--s-3); }
+}
+/* On a phone: an icon in the top bar (its name stays for screen readers). */
+@media (max-width: 720px) {
+  .nav .cmd-btn { order: 1; width: 44px; height: 44px; padding: 0; justify-content: center; background: none; border-color: transparent; }
+  .nav .cmd-btn ~ .acct { order: 2; }
+  .cmd-btn__label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .cmd-btn__kbd { display: none; }
+}
+
+.cmd-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(10, 18, 34, 0.5);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 11vh var(--s-4) var(--s-4);
+}
+.cmd {
+  width: min(640px, 100%); max-height: min(72vh, 640px);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--paper-0); color: var(--text-1);
+  border: var(--border); border-radius: 16px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+}
+.cmd-bar { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-2) 0 var(--s-4); border-bottom: 1px solid var(--rule); color: var(--text-3); }
+.cmd-input {
+  flex: 1; min-width: 0; min-height: 56px; padding: 0 var(--s-2);
+  border: 0; background: transparent; color: var(--text-1);
+  font-family: var(--font-sans); font-size: 18px;
+}
+.cmd-input:focus { outline: none; }
+.cmd-input::placeholder { color: var(--text-4); }
+.cmd-close {
+  flex: none; min-width: 48px; min-height: 48px; padding: 0 10px; border-radius: 10px;
+  border: 0; background: none; color: var(--text-3); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.cmd-close:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+@media (hover: hover) { .cmd-close:hover { background: var(--paper-1); color: var(--text-1); } }
+.cmd-close__word { display: none; }
+
+.cmd-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: var(--s-1) 0 var(--s-2); }
+.cmd-group__h {
+  padding: var(--s-3) var(--s-4) var(--s-1);
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3);
+}
+.cmd-opt {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'label enter' 'hint enter';
+  align-items: center; column-gap: var(--s-3);
+  min-height: 48px; padding: 7px var(--s-4); cursor: pointer;
+}
+.cmd-opt__label { grid-area: label; font-weight: 600; font-size: 15px; overflow-wrap: anywhere; }
+.cmd-opt__hint { grid-area: hint; font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What Enter does: shown on the highlighted row only. */
+.cmd-opt__enter {
+  grid-area: enter; font-size: 13px; font-weight: 700; color: var(--text-2);
+  min-width: 26px; text-align: center; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--rule-2); background: var(--paper-0);
+}
+.cmd-opt.is-active { background: var(--mark-soft); box-shadow: inset 3px 0 0 var(--mark); }
+.cmd-empty { margin: 0; padding: var(--s-4); color: var(--text-3); }
+
+.cmd-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap;
+  padding: var(--s-2) var(--s-4); border-top: 1px solid var(--rule); background: var(--paper);
+  font-size: 12.5px; color: var(--text-3);
+}
+.cmd-status { min-height: 1.4em; }
+.cmd-keys kbd {
+  font-family: var(--font-sans); font-size: 11.5px; font-weight: 600; padding: 0 5px; margin: 0 1px;
+  border: 1px solid var(--rule-2); border-radius: 5px; background: var(--paper-0); color: var(--text-2);
+}
+
+/* A phone: the whole screen. */
+@media (max-width: 720px) {
+  .cmd-backdrop { padding: 0; }
+  .cmd { width: 100%; max-height: none; height: 100%; height: 100dvh; border-radius: 0; border: 0; }
+  .cmd-keys { display: none; }
+  .cmd-opt__enter { display: none; }
+  .cmd-close__esc { display: none; }
+  .cmd-close__word { display: inline; font-size: 14px; }
+}
+@media (forced-colors: active) {
+  .cmd-opt.is-active { outline: 2px solid Highlight; outline-offset: -2px; }
+}

@@ -1,4 +1,4 @@
-// Ground under a client's path on a shared domain (lib/mount.js):
+// base.win under a client's path on a shared domain (lib/mount.js):
 // base.win/imaginesurrey/… The path comes off on the way in and goes back on
 // redirects, the sign-in cookie, and the pages and stylesheets the server
 // sends; the client's path alone and an old /admin link go where they

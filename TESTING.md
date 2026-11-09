@@ -1,4 +1,4 @@
-# Testing Starbase
+# Testing base.win
 
 Everything below works from a fresh install. Start with **Run it on your
 computer** — five minutes, no accounts needed — then deploy when you want your
@@ -18,7 +18,7 @@ npm run build
 npm start                 # → http://localhost:3200
 ```
 
-1. Open **http://localhost:3200/signup** and set up Starbase for Imagine
+1. Open **http://localhost:3200/signup** and set up base.win for Imagine
    Surrey: your name, email and password. You become its manager (the
    workspace is *Imagine Surrey*, **BC — Municipal**). Setup works once:
    after that `/signup` says it's already set up, and everyone else joins
@@ -58,6 +58,7 @@ INTEGRATIONS.md.
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
 | `GOOGLE_MAPS_SERVER_KEY` | Google geocoding (`GEOCODER=google` or `GEOCODER_FALLBACK=google`) and Google Maps tiles (`GOOGLE_MAPS_TILES=1`) | optional — the free BC geocoder and OpenStreetMap tiles work without it |
+| `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
 
 The whole order of things, from deploy to the public link, is in
 [GOING-LIVE.md](GOING-LIVE.md).
@@ -83,7 +84,7 @@ one tap away under **More**.
 
 ### Manager (you)
 - **Two apps.** Sign in at `/login` and you land in the **admin** at
-  `/admin/` (the brand reads *Starbase Admin*): every screen below. Your
+  `/admin/` (the header reads *base.win*, your campaign under it): every screen below. Your
   account menu has *Field app ↗* — open it and you see exactly what a
   volunteer sees (Today · Map · Calls · Shifts · ImagineU), with *Admin ↗*
   to come back. A volunteer who opens `/admin/` is told it isn't theirs.
@@ -182,6 +183,20 @@ one tap away under **More**.
   as the team works; **End this pass** (asks in place) puts every knocked
   door back to done, and starting another pass ends the open one.
 - **Settings → Permissions** — untick Donations for Staff and watch a staffer's Donations tab go; tick Outreach for one volunteer and watch them get it. Under **Volunteers' map** pick *Only their turfs*: a volunteer's map now shows just the doors inside the turfs they walk (no turf: *No turf yet*), and *Every door* brings the rest back.
+- **Two-step sign-in** — account menu → **Your profile** → *Turn on
+  two-step sign-in*: scan the QR code with an authenticator app (Google
+  Authenticator, 1Password, Authy…), type its code, keep the ten recovery
+  codes (*Copy the codes* or *Download*). Sign out and in: after the
+  password it asks for the code; a wrong one is said, the right one opens
+  the desk, and a recovery code works once (*9 recovery codes left*).
+  **Settings → Members → Require two-step sign-in for desk roles**: a
+  staffer's next tap shows the set-up and nothing else until it's on; a
+  volunteer still signs in with a password. *Reset two-step* on someone's
+  row signs them out and clears theirs.
+- **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
+  under the name: *don* + Enter opens Donations, *gift* opens Log a gift
+  with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓
+  move, Esc closes. A staffer without Donations isn't offered it.
 - **Rating scale** (your initials → *Rating scale*) — change the words on 1
   (e.g. *Definitely*; up to 30 letters, a long one wraps on the buttons),
   rename a candidate, **Add** one, move it with ↑ ↓,
@@ -631,7 +646,7 @@ the same file never creates duplicates.
 
 ---
 
-**Time-zone rules.** B.C. stays on UTC-7 all year from March 2026. Starbase
+**Time-zone rules.** B.C. stays on UTC-7 all year from March 2026. base.win
 needs a Node 22 new enough to know that, or every time after Nov 1, 2026
 shows an hour off. It checks at startup: an out-of-date server logs a
 warning, shows a banner on the manager's Today, and reports

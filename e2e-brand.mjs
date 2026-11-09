@@ -1,9 +1,9 @@
-// Two looks: Imagine Surrey's own (production) and Base's generic one
+// Two looks: Imagine Surrey's own (production) and base.win's generic one
 // (staging, any other campaign) — server/lib/brand.js. This script starts
 // two fresh in-memory servers: one STARBASE_BRAND=base named "Demo Campaign"
 // (as staging is), one Imagine Surrey (as production is, nothing set but
 // the name). On each: the page arrives marked before it paints, with that
-// brand's icon, colours and mark; Base's says nothing of Imagine Surrey
+// brand's icon, colours and mark; the generic one says nothing of Imagine Surrey
 // anywhere a person can see (sign-in, Today, the menu, training, Settings);
 // Imagine Surrey's is as it always was. A manager renames the campaign in
 // Settings → Campaign, and the sign-in page then says the new name.
@@ -72,7 +72,7 @@ const shoot = async (base, who, scheme) => {
   }
 };
 
-// ── Base's own look (staging) ──
+// ── base.win's own look (staging) ──
 // Sign-up closes once the campaign is set up, as on staging itself.
 const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Demo Campaign', STARBASE_OPEN_SIGNUP: '' });
 {
@@ -80,7 +80,7 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   check('base: the page leaves marked data-brand="base", with the Base icon and slate bar colour',
     /<html lang="en" data-brand="base">/.test(html) && /href="\/base-mark.svg"/.test(html) && /content="#1e293b"/.test(html) && !/star\.png/.test(html));
   const manifest = await (await fetch(`${BASE}/manifest.webmanifest`)).json();
-  check('base: installed, it is Base in slate, with Base’s icons', manifest.name === 'Base' && manifest.theme_color === '#1e293b' && manifest.icons.every((i) => i.src.includes('base-')), JSON.stringify(manifest).slice(0, 200));
+  check('base: installed, it is base.win in slate, with the generic look’s icons', manifest.name === 'base.win' && manifest.theme_color === '#1e293b' && manifest.icons.every((i) => i.src.includes('base-')), JSON.stringify(manifest).slice(0, 200));
   for (const icon of ['/base-mark.svg', '/base-icon-192.png', '/base-icon-512.png', '/base-icon-maskable-512.png', '/base-touch-icon.png']) {
     check(`base: ${icon} is there`, (await fetch(`${BASE}${icon}`)).status === 200);
   }

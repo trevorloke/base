@@ -3,6 +3,7 @@
 // session to { user, workspace, role } via the memberships table. Tenancy is
 // the membership row — a user's workspace is never a mutable column.
 import { permsOf } from './perms.js';
+import { requiredFor } from './twostep.js';
 import { randomBytes, scrypt, timingSafeEqual, createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 
@@ -54,11 +55,13 @@ export const loadContext = async (db, token) => {
   if (!token) return null;
   const { rows } = await db.query(
     `select u.id as user_id, u.email, u.name as user_name, m.role, m.permissions,
-            w.id as workspace_id, w.name as ws_name, w.slug as ws_slug, w.candidate, w.jurisdiction, w.settings
+            w.id as workspace_id, w.name as ws_name, w.slug as ws_slug, w.candidate, w.jurisdiction, w.settings,
+            t.on_since is not null as two_step_on
      from sessions s
      join users u on u.id = s.user_id
      join memberships m on m.user_id = s.user_id and m.workspace_id = s.workspace_id
      join workspaces w on w.id = s.workspace_id
+     left join two_step t on t.user_id = s.user_id
      where s.token_hash = $1 and s.expires_at > now()`,
     [hashToken(token)],
   );
@@ -66,9 +69,15 @@ export const loadContext = async (db, token) => {
   if (!r) return null;
   const settings = typeof r.settings === 'string' ? JSON.parse(r.settings) : (r.settings || {});
   const own = typeof r.permissions === 'string' ? JSON.parse(r.permissions) : (r.permissions || {});
+  // Two-step sign-in (lib/twostep.js): on for this account, required for
+  // its role here, and so still to set up before anything else.
+  const required = requiredFor(r.role, settings);
   return {
     user: { id: r.user_id, email: r.email, name: r.user_name },
     role: r.role,
+    // This sign-in (its hash), so an action can keep it and end the others.
+    session: hashToken(token),
+    twoStep: { on: Boolean(r.two_step_on), required, mustSetUp: required && !r.two_step_on },
     // Grants and denies on top of the role (lib/perms.js).
     perms: permsOf(r.role, settings, own),
     workspaceId: r.workspace_id,

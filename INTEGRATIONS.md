@@ -1,6 +1,6 @@
 # Integrations
 
-Every outside service Starbase talks to, what it is for, the settings it
+Every outside service base.win talks to, what it is for, the settings it
 reads, where each key comes from, and how to check it works. Keys and tokens
 go in the hosting's environment (Render → the service → **Environment**),
 never in the code, the repo or a chat. Once they are set, a manager opens
@@ -16,6 +16,7 @@ is written) and says exactly what is wrong if anything is.
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
+| [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
 | [Hosting — Render](#hosting--render) | the two environments | yes | `render.yaml` |
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
@@ -26,7 +27,7 @@ The campaign's website sends people in with a key; the API is
 ## Database
 
 Postgres. On Render, `render.yaml` creates one per environment and fills
-`DATABASE_URL` from it. Without `DATABASE_URL` Starbase keeps everything in a
+`DATABASE_URL` from it. Without `DATABASE_URL` base.win keeps everything in a
 built-in database on the server's disk (`STARBASE_DATA`, default
 `./data/starbase`) — fine on a laptop, not for the team.
 
@@ -49,7 +50,7 @@ it, links use whatever address the page was opened at, background sends
 (receipts) carry no link, and calls through the campaign's number are off.
 
 **Check:** Services → Public address fetches `<address>/api/health` and
-makes sure it's this Starbase.
+makes sure it's this base.win.
 
 ## Email — Resend
 
@@ -71,8 +72,8 @@ retry is never a second copy.
 | `MAIL_FROM` | `onboarding@resend.dev` | Resend's test sender reaches only the account's owner — set it |
 | `STARBASE_EMAIL_TIMEOUT_MS` | `15000` | one email's time limit |
 
-There is nothing to point back at Starbase: opens and clicks are counted by
-Starbase itself (`/o`, `/c`), and unsubscribes are Starbase's own pages.
+There is nothing to point back at base.win: opens and clicks are counted by
+base.win itself (`/o`, `/c`), and unsubscribes are base.win's own pages.
 
 **Check:** Services → Email asks Resend for the account's domains: the key
 works, and `MAIL_FROM`'s domain is there and verified (a sending-only key
@@ -94,7 +95,7 @@ the phone's own dialer and messages, and nothing is lost.
    in*: **Webhook**, `https://<public address>/api/public/twilio/sms`,
    **HTTP POST**. That is the only one set by hand.
 
-Starbase tells Twilio where to call back with each text and call, all built
+base.win tells Twilio where to call back with each text and call, all built
 from `STARBASE_PUBLIC_URL`, and checks Twilio's signature
 (`X-Twilio-Signature`, with the auth token) on every one:
 
@@ -118,7 +119,7 @@ first (TESTING.md, *Texting and calls — confirm with counsel*).
 
 **Check:** Services → Texting asks Twilio for the number on this account:
 the SID and token work, the number is on the account, and its incoming
-messages come to this Starbase (if they go elsewhere, it names both).
+messages come to this base.win (if they go elsewhere, it names both).
 
 ## Address lookup
 
@@ -161,7 +162,7 @@ then, either:
 - **Google Maps:** `GOOGLE_MAPS_TILES=1` with `GOOGLE_MAPS_SERVER_KEY` (Map
   Tiles API enabled, above); `GOOGLE_MAPS_TILE_TYPE` roadmap | satellite |
   terrain (the standard look; each person can switch to the others under
-  Show → Map). Starbase fetches them for signed-in phones (`/tiles/…`), so
+  Show → Map). base.win fetches them for signed-in phones (`/tiles/…`), so
   the key stays on the server.
 - **Another provider:** `STARBASE_TILE_URL` (`https://…/{z}/{x}/{y}.png`, a
   key may ride in the query string — the phones see it),
@@ -169,6 +170,25 @@ then, either:
 
 **Check:** Services → Map background opens a Google tiles session when
 Google is on.
+
+## Two-step sign-in key
+
+Two-step sign-in (a code from an authenticator app after the password —
+anyone can turn it on in **Your profile**; a manager can require it for desk
+roles under **Settings → Members**) keeps each person's authenticator key
+sealed (AES-256-GCM) with a key from the environment. Recovery codes are kept
+only as slow hashes, which need no key.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `STARBASE_TWO_STEP_KEY` | — | 32 or more random characters, e.g. `openssl rand -base64 32`; a different one on staging and production. Unset (or shorter), base.win makes a key of its own and keeps it in the database — it works, but anyone with a copy of the database could read the keys, so **Settings → Services** says *Not set up* until it's there |
+
+Setting it later is safe: a key sealed with the database's moves to the new
+one the next time its owner signs in. To change it, put the new key first
+and the old one after, separated by a comma (`new,old`); drop the old one
+once everyone has signed in. A key that's lost can't be got back: people
+sign in with a recovery code (and set it up again), or a manager resets
+theirs under **Settings → Members**.
 
 ## Hosting — Render
 
@@ -198,7 +218,7 @@ browser: the key would be visible to anyone.
 
 **A key:** Settings → Services → *Website keys* → name it (*Website*) →
 **Make a key**. It is shown once — copy it into the website's own secret
-settings. Starbase keeps only a hash of it, lists it by its first characters
+settings. base.win keeps only a hash of it, lists it by its first characters
 with when it was last used, and **Revoke** stops it at once. Use one key per
 website or form service.
 
@@ -261,5 +281,5 @@ Donations and RSVPs are not taken this way: a gift is logged at the desk
 
 Also, without a key: **files in** — People → Import takes a CSV or
 spreadsheet (a dry run first; a `voted` column marks who voted and never
-un-marks anyone); **pages out** — the website can link to Starbase's public
+un-marks anyone); **pages out** — the website can link to base.win's public
 lessons (`/learn/…`); every email carries its own unsubscribe page.

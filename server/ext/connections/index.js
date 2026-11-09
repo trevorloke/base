@@ -1,4 +1,4 @@
-// Services — every outside service Starbase talks to, whether it's set up,
+// Services — every outside service base.win talks to, whether it's set up,
 // and a live check of each (managers; Settings → Services). INTEGRATIONS.md
 // is the long version: where each key comes from and what to point where.
 //
@@ -15,6 +15,7 @@
 import { Hono } from 'hono';
 import { suggestAddresses } from '../../lib/geocode.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
+import { KEY_ENV, KEY_MIN, keyStatus } from '../../lib/twostep.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -71,6 +72,17 @@ export const services = () => {
       state: jobRunnerOn() ? 'ready' : 'missing',
       checkable: false,
     }),
+    // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
+    // one in the database — it works, but a copy of the database would
+    // give the authenticator keys away.
+    ((k) => row('twostep', 'Two-step sign-in key', 'Seals everyone’s authenticator key (two-step sign-in)', false, [KEY_ENV], {
+      detail: k.source === 'env' ? 'Set: authenticator keys are sealed with it'
+        : k.problem === 'short' ? `Too short (${KEY_MIN} characters or more): base.win keeps a key in its database meanwhile`
+          : `Not set: base.win keeps a key in its database, so a copy of the database could open them — ${KEY_MIN}+ random characters`,
+      state: k.source === 'env' ? 'ready' : 'missing',
+      missing: k.source === 'env' ? [] : [KEY_ENV],
+      checkable: false,
+    }))(keyStatus()),
   ];
   return list;
 };
@@ -79,7 +91,7 @@ export const services = () => {
 // TWILIO_AUTH_TOKEN), and the ways in for the campaign's own files.
 const inbound = (base) => [
   { name: 'Twilio — a message comes in', url: `${base}/api/public/twilio/sms`, how: 'Set by hand: Twilio → the number → Messaging → “A message comes in”, HTTP POST' },
-  { name: 'Twilio — delivery reports, calls', url: `${base}/api/public/twilio/…`, how: 'Sent by Base with each text and call (from the public address); nothing to set' },
+  { name: 'Twilio — delivery reports, calls', url: `${base}/api/public/twilio/…`, how: 'Sent by base.win with each text and call (from the public address); nothing to set' },
   { name: 'The website — people in', url: `${base}/in/v1/people`, how: 'From the website’s server with a website key (below): sign-ups, petitions, volunteers, the newsletter' },
   { name: 'Lists and voted files', url: `${base}/admin/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
 ];
@@ -98,8 +110,8 @@ const CHECKS = {
     if (!pub) return { ok: false, said: 'STARBASE_PUBLIC_URL isn’t set' };
     const res = await fetch(`${pub}/api/health`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
     const body = await res.json().catch(() => null);
-    if (!res.ok || body?.service !== 'starbase') return { ok: false, said: `${pub} answered ${res.status}, not this Base` };
-    return { ok: true, said: `${pub} reaches this Base (${body.env})` };
+    if (!res.ok || body?.service !== 'starbase') return { ok: false, said: `${pub} answered ${res.status}, not this base.win` };
+    return { ok: true, said: `${pub} reaches this base.win (${body.env})` };
   },
   email: async () => {
     if (!has('RESEND_API_KEY')) return { ok: false, said: 'RESEND_API_KEY isn’t set' };
@@ -132,7 +144,7 @@ const CHECKS = {
     const n = (await res.json()).incoming_phone_numbers?.[0];
     if (!n) return { ok: false, said: `${env('TWILIO_FROM')} isn’t a number on this Twilio account` };
     const want = publicUrl() ? `${publicUrl()}/api/public/twilio/sms` : null;
-    if (!want) return { ok: false, said: 'The number is on the account; set STARBASE_PUBLIC_URL so replies and delivery reports reach Base' };
+    if (!want) return { ok: false, said: 'The number is on the account; set STARBASE_PUBLIC_URL so replies and delivery reports reach base.win' };
     if (String(n.sms_url || '').replace(/\/$/, '') !== want) {
       return { ok: false, said: `The number is on the account, but its incoming messages go to ${n.sms_url || 'nowhere'} — set it to ${want}` };
     }

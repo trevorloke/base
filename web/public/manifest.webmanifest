@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Base",
-  "short_name": "Base",
+  "name": "base.win",
+  "short_name": "base.win",
   "description": "Walk lists, door knocks and signs for the campaign — keeps working when you lose signal.",
   "start_url": "/map",
   "scope": "/",

@@ -204,7 +204,7 @@ const STYLE = {
   img: 'max-width:100%;height:auto;display:block;margin:0 0 16px;border:0',
 };
 // Links in this deployment's colour (lib/brand.js): Surrey Navy for Imagine
-// Surrey, Base's indigo otherwise.
+// Surrey, base.win's indigo otherwise.
 const linkStyle = () => `color:${brand().link}`;
 
 // The message laid out for a mail app: the website's own renderer (every
