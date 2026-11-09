@@ -57,6 +57,7 @@ const siteAction = (input, handler) => ({
   },
   after: async (db, ctx, result) => {
     cacheClear(ctx.workspaceId);
+    forgetDomains(); // a domain saved: answered there from the next request
     return { result };
   },
 });
@@ -194,7 +195,6 @@ export const actions = {
     if (!sets.length) throw httpError(400, 'Nothing to save');
     await tx.query(`update site_settings set ${sets.join(', ')}, updated_at = now() where workspace_id = $1`, params);
     emit('site_settings', ws, 'update', changed);
-    if (changed.domains) forgetDomains();
     const row = (await tx.query('select updated_at from site_settings where workspace_id = $1', [ws])).rows[0];
     return { saved: Object.keys(changed), updated_at: iso(row.updated_at) };
   }),

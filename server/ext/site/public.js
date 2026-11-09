@@ -206,9 +206,12 @@ const livePage = async (site, slug) => (await site.db.query(
   "select id, slug, version, published from site_pages where workspace_id = $1 and slug = $2 and deleted_at is null and status = 'published'",
   [site.ws.id, slug],
 )).rows[0] || null;
+// A live page as the renderer gets it: a hidden module's words never reach
+// the public page at all.
 const pageFor = (row) => {
   const p = parseJ(row.published, {}) || {};
-  return { id: row.id, slug: row.slug, title: p.title || '', description: p.description || '', modules: Array.isArray(p.modules) ? p.modules : [] };
+  const modules = (Array.isArray(p.modules) ? p.modules : []).filter((m) => m && !m.hidden);
+  return { id: row.id, slug: row.slug, title: p.title || '', description: p.description || '', modules };
 };
 
 // /news with no news page: the posts, newest first.
