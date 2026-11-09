@@ -31,6 +31,9 @@ const cleanBase = (v, fallback) => {
 export function locFrom(ctx = {}) {
   const root = cleanBase(ctx.root, '/');
   const assets = cleanBase(ctx.assets, `${root}site-assets/`);
+  // Uploaded pictures (/media/…): as they are, or under the client's path
+  // when the server says so (its og:image is absolute, past mount.js).
+  const media = cleanBase(ctx.media, '/media/');
   // The public address in front of root: https://imaginesurrey.ca, or with
   // the client's path under BASE_PATH (https://base.win/imaginesurrey).
   const o = str(ctx.origin).trim().replace(/\/+$/, '');
@@ -41,18 +44,18 @@ export function locFrom(ctx = {}) {
   if (root !== '/' && (path === root.slice(0, -1) || path.startsWith(root))) path = `/${path.slice(root.length)}`;
   if (!path.startsWith('/')) path = `/${path}`;
   if (!/^\/[A-Za-z0-9/_.~%-]*$/.test(path)) path = '/';
-  return { root, assets, origin, path };
+  return { root, assets, media, origin, path };
 }
 
 // A site link as the visitor's browser needs it: site paths under the site's
 // root ('/donate' → '/site/donate' on the app's address), pictures at
-// /media as they are, /site-assets/… under the assets path, and everything
+// /media (ctx.media), /site-assets/… under the assets path, and everything
 // else (https, mailto, tel, #anchor) as typed. null when unsafe.
 export function linkFor(loc, raw) {
   const url = safeUrl(raw);
   if (!url) return null;
   if (url.startsWith('#') || !url.startsWith('/')) return url;
-  if (url === '/media' || url.startsWith('/media/')) return url;
+  if (url === '/media' || url.startsWith('/media/')) return (loc.media || '/media/') + url.slice('/media/'.length);
   if (url === '/site-assets' || url.startsWith('/site-assets/')) return loc.assets + url.slice('/site-assets/'.length);
   return loc.root + url.slice(1);
 }

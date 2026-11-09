@@ -233,6 +233,9 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
   `BASE_PATH`: absolute canonical, `og:url`, `og:image` and share links
   (without it the browser completes share links from the page's address,
   keeping the client's path).
+- `media` *(added)* — where uploaded pictures (`/media/…`) are, default
+  `/media/`; the server gives it the client's path under `BASE_PATH`, so an
+  absolute `og:image` of an upload is right past `lib/mount.js` too.
 - `timeZone` *(added)* — for dates; default `site.org.time_zone`, else
   `America/Vancouver`.
 
@@ -352,6 +355,11 @@ and `ctx.assets` ('/site-assets') already carry a client's path
 is the islands script's address (`{assets}/site-islands.js`), or null when
 the web build hasn't made it; `ctx.referral` is the code a referral link
 remembered (the server reads it again on a form post — forms needn't send it).
+`ctx.origin` is then the public address *without* the client's path (root
+has it): the request's own (`https://imaginesurrey.ca`), or under a client's
+path the origin of `STARBASE_PUBLIC_URL` (`https://base.win`) — the sitemap,
+robots.txt and a supporter's own share link use the same. A page is cached
+per address, so www and the bare domain never get each other's canonical.
 Module anchors are `#m-<module id>`: the seeds link `/#m-join`.
 
 Routes added to "Where the site is served": `/act` (every open petition and

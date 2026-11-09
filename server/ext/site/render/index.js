@@ -42,7 +42,7 @@ function pageOf(page, preview) {
   if (!page || typeof page !== 'object' || Array.isArray(page.modules)) return page;
   const content = preview ? page.draft || page.published : page.published || page.draft;
   if (!content || typeof content !== 'object') return page;
-  return { ...page, title: content.title ?? page.title, description: content.description ?? page.description, modules: content.modules };
+  return { ...page, title: content.title ?? page.title, description: content.description ?? page.description, image: content.image ?? page.image, modules: content.modules };
 }
 
 export function renderSite({ kind = 'page', site, page: rawPage, post, campaign, data, ctx = {} } = {}) {

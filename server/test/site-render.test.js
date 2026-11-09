@@ -182,7 +182,10 @@ test('links: the catalogue’s safe-url rule, stricter, and under the site root'
   assert.equal(imageFor(loc, 'http://insecure.example/a.jpg'), null, 'pictures only over https');
   assert.equal(imageFor(loc, 'mailto:a@example.org'), null);
   assert.equal(linkFor(locFrom({}), '/donate'), '/donate', 'on the campaign’s domain the root is /');
-  assert.deepEqual(locFrom({ root: '/site/', path: '/site/news/a' }), { root: '/site/', assets: '/site/site-assets/', origin: '', path: '/news/a' });
+  assert.deepEqual(locFrom({ root: '/site/', path: '/site/news/a' }), { root: '/site/', assets: '/site/site-assets/', media: '/media/', origin: '', path: '/news/a' });
+  // Uploaded pictures under the client's path when the server says so (an absolute og:image needs it).
+  assert.equal(linkFor(locFrom({ root: '/imaginesurrey/site/', media: '/imaginesurrey/media' }), '/media/abc'), '/imaginesurrey/media/abc');
+  assert.equal(linkFor(locFrom({ media: '//evil.example/' }), '/media/abc'), '/media/abc', 'never another site');
   assert.equal(locFrom({ origin: 'javascript:alert(1)' }).origin, '');
   // Under BASE_PATH the address in front of the root has the client's path.
   assert.equal(locFrom({ origin: 'https://base.win/imaginesurrey/' }).origin, 'https://base.win/imaginesurrey');
