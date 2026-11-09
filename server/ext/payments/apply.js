@@ -326,6 +326,18 @@ export const refunded = async (tx, emit, ws, plan) => {
   return { result: full ? 'refunded: the gift is void' : 'partly refunded: flagged for the treasurer', refund: full && p.over_limit && !p.donor_emailed_at };
 };
 
+// What a payment is again when a dispute ends with the money kept — what it
+// was before, from what its row knows: refunded in full; over the limit and
+// not all given back (so it's still to be refunded); no gift, the donor's
+// record gone; partly refunded; or paid.
+const afterDispute = (p) => {
+  const back = Number(p.refunded_cents) || 0;
+  if (back >= Number(p.amount_cents)) return 'refunded';
+  if (p.over_limit) return 'over_limit';
+  if (!p.gift_id) return 'no_donor';
+  return back > 0 ? 'partly_refunded' : 'paid';
+};
+
 // ── charge.dispute.*: the card holder asked their bank for it back ──
 export const disputed = async (tx, emit, ws, plan) => {
   const p = await lockPayment(tx, ws.id, plan.paymentId);
@@ -341,13 +353,23 @@ export const disputed = async (tx, emit, ws, plan) => {
       emit('payment', p.id, 'update', { status: 'dispute_lost', dispute: d.status });
       return { result: 'dispute lost: the gift is void' };
     }
-    // Won (or a warning closed): the money stays and so does the gift.
-    const back = Number(p.refunded_cents) > 0 ? 'partly_refunded' : 'paid';
-    if (p.status === 'disputed') {
-      await tx.query(`update stripe_payments set status = $3, updated_at = now() where id = $1 and workspace_id = $2`, [p.id, ws.id, back]);
-      emit('payment', p.id, 'update', { status: back, dispute: d.status });
+    // Won (or an inquiry closed): the money stays, and the payment is what it
+    // was before. Over the limit, that money still goes back: its refund is
+    // tried again — a job of its own (the landing's has run, and a refund
+    // refused during the dispute may go through now) — and the donor is
+    // told once it has.
+    if (p.status !== 'disputed') return { result: `dispute ${d.status}` };
+    const back = afterDispute(p);
+    const again = back === 'over_limit' || (back === 'refunded' && p.over_limit && !p.donor_emailed_at);
+    await tx.query(`update stripe_payments set status = $3, updated_at = now() where id = $1 and workspace_id = $2`, [p.id, ws.id, back]);
+    emit('payment', p.id, 'update', {
+      status: back, dispute: d.status,
+      ...(back === 'over_limit' ? { reason: 'over this year’s contribution limit: refunding' } : {}),
+    });
+    if (again) {
+      await enqueueJob(tx, { workspaceId: ws.id, kind: REFUND_JOB, payload: { payment_id: p.id }, key: d.id ? `${REFUND_JOB}:${p.id}:${d.id}` : null });
     }
-    return { result: `dispute ${d.status}` };
+    return { result: `dispute ${d.status}`, refund: again };
   }
   if (['refunded', 'dispute_lost'].includes(p.status)) return { result: 'already settled' };
   await tx.query(

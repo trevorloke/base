@@ -7,6 +7,11 @@
 //     our ids ride on the payment, or on the subscription its invoice
 //     names), in either API version's shape; someone else's charge on the
 //     same Stripe account is still left alone
+//   - a dispute that ends with the money kept puts the payment back as it
+//     was: over the limit (its refund refused, or still waiting) is refunded
+//     after all and stays in front of the treasurer until it is; refunded
+//     in full stays refunded; a deleted donor's is still theirs to log —
+//     and Needs you never says "the gift counts" when there is no gift
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
@@ -175,4 +180,97 @@ test('someone else’s charge on the same Stripe account is still left alone', a
   const old = await fake.send('charge.refunded', { id: 'ch_old_style', object: 'charge', payment_intent: null, amount: 500, amount_refunded: 500, refunded: true });
   assert.deepEqual([old.status, old.body.ignored], [200, 'not a base.win payment'], 'no payment intent: not from a checkout');
   assert.equal(await held(), before, 'nothing kept for them');
+});
+
+test('a won dispute on a payment over the limit whose refund was refused: refunded after all, and in front of the treasurer until it is', async () => {
+  const p = await donor('Olga');
+  const r = await open(p.id, { amountCents: 40000 });
+  await deskGift(p, 110000); // while she was on Stripe's page: $1,100 + $400 is over $1,429.70
+  fake.failRefunds('charge_disputed');
+  try {
+    assert.equal((await fake.pay(r.session_id))[0].body.result, 'over_limit');
+    await jobs();
+  } finally {
+    fake.failRefunds(false);
+  }
+  let pay = await payment('session_id', r.session_id);
+  assert.deepEqual([pay.status, pay.gift_id], ['refund_failed', null]);
+  const pi = intentOf(r);
+  const opened = await fake.dispute(pi, 'created');
+  assert.equal(opened.body.result, 'disputed: flagged for the treasurer');
+  let need = await needOf(pay.id);
+  assert.doesNotMatch(need.line, /the gift counts/, 'there is no gift');
+  assert.match(need.line, /^The card holder disputed this payment with their bank\. Answer in Stripe by [A-Z][a-z]+ \d+\. It was over this year’s limit, so no gift was logged — if the bank doesn’t give the money back, it’s refunded once the dispute is settled\.$/);
+  const today = await onToday(pay.id);
+  assert.ok(today, 'still on Today: over-limit money not yet given back');
+  assert.equal(today.flag_reason, need.line, 'in the same words, with the date to answer by');
+
+  assert.equal((await fake.dispute(pi, 'won', { id: opened.event.data.object.id })).body.result, 'dispute won');
+  pay = await payment('id', pay.id);
+  assert.deepEqual([pay.status, pay.over_limit, pay.gift_id], ['over_limit', true, null], 'refunding again — not "paid"');
+  assert.match((await needOf(pay.id)).line, /is being refunded to their card/);
+  assert.ok(await onToday(pay.id));
+  await jobs();
+  pay = await payment('id', pay.id);
+  assert.deepEqual([pay.status, pay.refunded_cents], ['refunded', 40000]);
+  assert.equal(fake.refunds.filter((x) => x.payment_intent === pi).reduce((n, x) => n + x.amount, 0), 40000, 'the money went back, once');
+  need = await needOf(pay.id);
+  assert.match(need.line, /^Over this year’s limit when it came in — refunded in full; no gift was logged\./);
+  await verified();
+});
+
+test('an inquiry opened before the over-limit refund ran: when it closes, the refund goes ahead', async () => {
+  const p = await donor('Ines');
+  const r = await open(p.id, { amountCents: 40000 });
+  await deskGift(p, 110000);
+  await fake.pay(r.session_id); // over the limit; its refund is queued
+  const pi = intentOf(r);
+  const inquiry = await fake.dispute(pi, 'warning_needs_response');
+  assert.equal(inquiry.body.result, 'disputed: flagged for the treasurer');
+  await jobs(); // the refund waits while the payment is disputed
+  let pay = await payment('session_id', r.session_id);
+  assert.equal(pay.status, 'disputed');
+  assert.equal(fake.refunds.filter((x) => x.payment_intent === pi).length, 0);
+  assert.equal((await fake.dispute(pi, 'warning_closed', { id: inquiry.event.data.object.id })).body.result, 'dispute warning_closed');
+  pay = await payment('id', pay.id);
+  assert.equal(pay.status, 'over_limit');
+  await jobs();
+  pay = await payment('id', pay.id);
+  assert.deepEqual([pay.status, pay.refunded_cents], ['refunded', 40000]);
+  await verified();
+});
+
+test('refunded in full during an inquiry, then the inquiry closes: refunded, not partly refunded', async () => {
+  const p = await donor('Fay');
+  const r = await open(p.id, { amountCents: 5000 });
+  await fake.pay(r.session_id);
+  const pi = intentOf(r);
+  const inquiry = await fake.dispute(pi, 'warning_needs_response');
+  assert.equal((await fake.refund(pi)).body.result, 'refunded: the gift is void');
+  let pay = await payment('session_id', r.session_id);
+  assert.deepEqual([pay.status, pay.refunded_cents], ['disputed', 5000]);
+  await fake.dispute(pi, 'warning_closed', { id: inquiry.event.data.object.id });
+  pay = await payment('id', pay.id);
+  assert.deepEqual([pay.status, pay.refunded_cents], ['refunded', 5000]);
+  const need = await needOf(pay.id);
+  assert.deepEqual([need.word, need.line], ['Refunded', 'Refunded in Stripe — the gift is void.']);
+  await verified();
+});
+
+test('a won dispute on a payment whose donor was deleted: still the treasurer’s to log', async () => {
+  const p = await donor('Cyd');
+  const r = await open(p.id, { amountCents: 2000 });
+  await db.query('update persons set deleted_at = now() where id = $1', [p.id]);
+  assert.equal((await fake.pay(r.session_id))[0].body.result, 'no_donor');
+  const pi = intentOf(r);
+  const opened = await fake.dispute(pi, 'created');
+  let pay = await payment('session_id', r.session_id);
+  const line = (await needOf(pay.id)).line;
+  assert.doesNotMatch(line, /the gift counts/, 'there is no gift');
+  assert.match(line, /\. No gift was logged online for it \(the donor’s record was deleted\)\.$/);
+  await fake.dispute(pi, 'won', { id: opened.event.data.object.id });
+  pay = await payment('id', pay.id);
+  assert.equal(pay.status, 'no_donor', 'not "paid": no gift was ever logged');
+  assert.match((await needOf(pay.id)).line, /^Paid online, but the donor’s record was deleted — log the gift by hand/);
+  await verified();
 });
