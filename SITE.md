@@ -88,6 +88,45 @@ The `site_action` event is the hook for the rest of base.win
 (`lib/hooks.js` `events`): follow-ups (speed to lead), ladders, People and
 Map filters ("did on the website: …").
 
+### Form fields (the renderer's forms send exactly these; the server reads exactly these)
+
+Every kind: `first_name`, `last_name`, `email`, `phone`, `postal_code`,
+`consent_email` (bool), `consent_sms` (bool), `website` (honeypot, must be
+empty), `client_key` (idempotency, ≤64), `ref` (referral code, else the
+cookie), `page_id`, `module_id`, `source` (e.g. `share-whatsapp`). An email
+or a phone is required for every kind.
+
+| kind | also |
+|---|---|
+| `newsletter` | — (`consent_email` must be true) |
+| `petition`, `pledge` | `campaign` (id, required), `comment` (≤1000) |
+| `volunteer` | `roles` (list of strings), `availability` (≤300), `note` (≤1000) |
+| `rsvp` | `shift_id` (required) |
+| `contact` | `topic` (≤60), `message` (required, ≤4000) |
+| `join` | `address`, `city`, `birth_date` (YYYY-MM-DD), `citizenship` (`citizen`\|`pr`), `declaration` (true, required), `term` (1\|4), `amount_cents` |
+| `donate` | `address`, `city`, `amount_cents` (required), `cadence` (`once`\|`monthly`), `slate` (optional), `declaration` (true, required: a Canadian citizen or permanent resident living in BC, giving their own money) |
+
+Answers: `200 { ok: true }` · `200 { ok: true, checkout_url }` (join, donate) ·
+`400 { error, field }` · `429 { error }` · `503 { error }` when online
+payments aren't set up. Never a person id or anything about who was on file.
+A plain form post (no JavaScript) gets a `303` back to the page with
+`?sent=<kind>#m-<module_id>` (or `?error=<field>#m-<module_id>`), or to the
+checkout.
+
+### What the loaders give the renderer (`data`)
+
+```
+{
+  posts:     [{ slug, title, excerpt, image, published_at }],          // newest first, published only
+  events:    [{ id, title, starts_at, ends_at, location, spots_left, lat, lng }],  // upcoming public shifts/events
+  counts:    { members, signatures: { [campaignId]: n } },
+  campaigns: { [id]: { id, slug, kind, title, excerpt, statement, goal, count, status } },
+  payments:  { ready, limit_cents, monthly_max_cents },               // limit from server/lib/cap.js for this year
+  roles:     [string],                                                  // the volunteer roles base.win offers
+}
+```
+`site` = `{ theme (checked), nav, footer, announcement, seo, org, social }`.
+
 ## Rendering
 
 `renderSite({ kind: 'page'|'post'|'campaign'|'notFound', site, page, post,
