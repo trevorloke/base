@@ -38,13 +38,27 @@ promote the code — the production database is the campaign's alone.
 
 | Host | What it serves | Where |
 |---|---|---|
-| `starbase.imaginesurrey.ca` | the staff and volunteer app, and the public forms | Render → Settings → Custom Domains |
+| `starbase.imaginesurrey.ca` (and `base.win/imaginesurrey` through the door, apps/door/README.md) | the staff and volunteer app, and the public forms | Render → Settings → Custom Domains |
+| `imaginesurrey.ca`, `www.imaginesurrey.ca`, once the campaign moves its website onto base.win | the website made under **Website** in the admin, at `/`; nothing of the app answers there | Render → Settings → Custom Domains, then `SITE_HOSTS` (below) |
 
-Add the DNS records Render shows; it issues the certificates. The
-campaign's website (`imaginesurrey.ca`) is its own thing, hosted apart; it
-links to base.win's public pages, and its server sends sign-ups in with a
-website key from Settings → Services (INTEGRATIONS.md, *The campaign's
-website*: the fields, the answers, an example).
+Add the DNS records Render shows; it issues the certificates.
+
+The website made under **Website** is live from the first deploy at the
+app's own address, under `/site/` (`base.win/imaginesurrey/site/` through
+the door), so it can be checked before any DNS moves (SITE.md). To put it
+on the campaign's own domain, in this order:
+
+1. Add the domain, and its `www.` name, to the service in Render.
+2. Set `SITE_HOSTS=imaginesurrey.ca,www.imaginesurrey.ca` (or a manager
+   adds both under Website → Settings → *Your own domain*).
+3. Only then point their DNS at Render. Done the other way round, the app
+   answers there until step 2, and an address someone signed in at can't
+   be made the website's from the screen (SITE.md).
+
+Until then the campaign's present site keeps `imaginesurrey.ca`; its
+server can send sign-ups in with a website key from Settings → Services
+(INTEGRATIONS.md, *The campaign's website*: the fields, the answers, an
+example).
 
 ## 3 · Settings (Render → the service → Environment)
 
@@ -78,6 +92,7 @@ Then, as each one is ready:
 | `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
 | `BASE_DOOR_KEY` | behind the base.win door only: the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
+| `SITE_HOSTS` | the campaign's own domains, once the website moves onto base.win (`imaginesurrey.ca,www.imaginesurrey.ca`; §2) | the website at `/` there, nothing of the app (SITE.md) |
 | `APP_HOSTS` | the app's other addresses on this server, comma-separated: once `STARBASE_PUBLIC_URL` is base.win, the one people used before (`starbase.imaginesurrey.ca`); never the website's own domain | the app keeps answering there: none of them can be made the website's domain |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | from Stripe: **test** keys on staging first; **live** keys on production only once a test gift has gone all the way through | gifts and membership dues paid online on the website (INTEGRATIONS.md, *Online payments — Stripe*) |
 
