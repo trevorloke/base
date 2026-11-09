@@ -14,7 +14,8 @@
 //                memberships, refunds and disputes
 //   refunds.js   the refund of a payment that landed over the limit, and
 //                the donor's email (a job: after the commit, with retries)
-//   api.js       GET /api/payments — Donations' online side
+//   api.js       GET /api/payments — Donations' online side; Today's
+//                Needs you gets a payment that landed over the limit
 //   actions.js   payment.ack — a treasurer's "Got it"
 //   service.js   Stripe on Settings → Services (ext/connections)
 //
@@ -22,6 +23,7 @@
 // STRIPE_WEBHOOK_SECRET (STRIPE_API_BASE for tests).
 import { REFUND_JOB } from './apply.js';
 import { runRefundJob } from './refunds.js';
+import { briefOverLimit } from './api.js';
 
 export { sql } from './sql.js';
 export { publicRoutes } from './webhook.js';
@@ -31,5 +33,7 @@ export { checkoutFor, paymentsData, DECLARATION, DUES } from './checkout.js';
 export { paymentsReady, stripeMode, STRIPE_EVENTS } from './stripe.js';
 
 export const jobs = { [REFUND_JOB]: runRefundJob };
+// Today: a payment over the limit rides with the gifts over the limit.
+export const hooks = { brief: briefOverLimit };
 // In the full export: every checkout (the declaration as made) and payment.
 export const exportTables = ['stripe_checkouts', 'stripe_payments'];

@@ -168,7 +168,7 @@ const land = async (tx, emit, ws, co, { amount, paidAt, cadence, refs }) => {
     amount_cents: amount, paid_on: date, status: out.status,
     ...(out.status === 'over_limit' ? { reason: 'over this year’s contribution limit: refunding' } : {}),
     ...(out.membership ? { membership_id: out.membership.id } : {}),
-    stripe: refs,
+    stripe: { session_id: refs.session_id || null, invoice_id: refs.invoice_id || null, payment_intent: refs.payment_intent || null },
   });
   return out;
 };
@@ -179,7 +179,9 @@ export const paidOnce = async (tx, emit, ws, plan) => {
   if (!co) return { result: 'not a base.win checkout' };
   const had = (await tx.query('select id from stripe_payments where workspace_id = $1 and session_id = $2 and invoice_id is null', [ws.id, co.session_id || plan.sessionId])).rows[0];
   if (had || co.status === 'paid') return { result: 'already recorded' };
-  const amount = Number.isFinite(Number(plan.amount)) ? Number(plan.amount) : Number(co.amount_cents);
+  // What Stripe collected (a coupon or a price change in Stripe can make it
+  // differ from what was asked); only money received is recorded.
+  const amount = plan.amount != null && Number.isFinite(Number(plan.amount)) ? Number(plan.amount) : Number(co.amount_cents);
   let out = { status: 'nothing collected' };
   if (amount > 0) {
     out = await land(tx, emit, ws, co, {

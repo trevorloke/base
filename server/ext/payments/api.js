@@ -16,7 +16,6 @@ import { Hono } from 'hono';
 import { DEFAULT_SLATE } from '@starbase/shared/canvass';
 import { paymentsReady, stripeMode } from './stripe.js';
 import { money, tzOf } from './limits.js';
-import { campaignDay } from '../../lib/gifts.js';
 
 export const MONEY_ROLES = ['manager', 'treasurer', 'staff'];
 const RECENT = 100;
@@ -140,7 +139,6 @@ api.get('/payments', async (c) => {
   for (const r of recent) if (r.gift_id) gifts[r.gift_id] = { status: r.status, word: wordOf(r) };
   return c.json({
     stripe: { ready: paymentsReady(), mode: stripeMode() },
-    today: campaignDay(new Date(), tz),
     needs: open.map((r) => shape(r, tz)).filter((r) => r.line),
     recent: recent.map((r) => shape(r, tz)),
     gifts,
@@ -150,3 +148,27 @@ api.get('/payments', async (c) => {
 });
 
 export const deskOnlyReads = ['/payments'];
+
+// Today's Needs you (the brief hook): a payment that landed over the limit
+// rides with the gifts over the limit — the same words, "Over limit", and a
+// tap to Donations, where Needs you says what happened — until it's
+// refunded and a treasurer has said Got it. Desk roles only.
+export const briefOverLimit = async (db, ctx, body) => {
+  if (!MONEY_ROLES.includes(ctx.role) || !Array.isArray(body.flagged) || body.money == null) return;
+  const rows = (await db.query(
+    `select sp.id, sp.person_id, sp.amount_cents, sp.paid_on, sp.status, sp.over_limit, sp.refund_error, sp.donor_emailed_at,
+            sp.donor_email_note, sp.acknowledged_at, pe.name
+       from stripe_payments sp left join persons pe on pe.id = sp.person_id
+      where sp.workspace_id = $1 and sp.over_limit
+        and (sp.status in ('over_limit', 'refund_failed')
+          or (sp.status = 'refunded' and sp.acknowledged_at is null and sp.updated_at > now() - interval '90 days'))
+      order by sp.paid_at desc limit 10`, [ctx.workspaceId],
+  )).rows;
+  for (const r of rows) {
+    body.flagged.push({
+      id: r.id, payment_id: r.id, online: true, person_id: r.person_id, donor: r.name || 'Donor',
+      amount_cents: Number(r.amount_cents), date: iso(r.paid_on), flag_reason: needOf(r, tzOf(ctx.workspace))?.line || null,
+      total_cents: null, cap_cents: null,
+    });
+  }
+};

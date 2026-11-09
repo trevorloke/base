@@ -471,7 +471,8 @@ export default function Money() {
   // Newest gift date first (the ledger itself pages in entry order).
   const rows = (gifts.data?.pages ?? []).flatMap((p) => p?.records ?? []).filter((g) => !voided.has(g.id))
     .sort((a, b) => fmtDate(b.date).localeCompare(fmtDate(a.date)));
-  const flagged = (brief.data?.flagged ?? []).filter((f) => !voided.has(f.id));
+  // A payment over the limit (ext/payments) rides on the brief for Today; here it is under Needs you as a payment.
+  const flagged = (brief.data?.flagged ?? []).filter((f) => !voided.has(f.id) && !f.payment_id);
   const noAddress = (receiptNeeds.data?.receipts ?? []).filter((r) => !voided.has(r.gift_id));
   const payNeeds = payments.data?.needs ?? [];
   // The latest few skip gifts already listed under "Needs you"; "All gifts" shows every one.

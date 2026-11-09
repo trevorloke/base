@@ -387,10 +387,16 @@ test('over the limit when it lands: no gift, refunded through Stripe, flagged fo
     await fake.send('charge.refunded', { id: 'ch_x', object: 'charge', payment_intent: sessionOf(r).payment_intent, amount: 50000, amount_refunded: 50000, refunded: true });
     assert.equal(fake.calls.filter((c) => c.method === 'POST' && c.path === '/v1/refunds' && c.params.metadata?.base_payment === pay.id).length, 1);
     assert.equal(sent.length, 1);
+    // Today: it rides with the gifts over the limit, for the desk only.
+    const brief = ok(await mgr.get('/api/brief'));
+    const onToday = brief.flagged.find((f) => f.payment_id === pay.id);
+    assert.deepEqual([onToday?.donor, onToday?.amount_cents, onToday?.online], ['Xena Example', 50000, true]);
+    assert.equal(ok(await vol.get('/api/brief')).flagged.length, 0, 'never a volunteer’s');
     // Got it.
     assert.equal((await vol.action('payment.ack', { id: pay.id })).status, 403);
     ok(await mgr.action('payment.ack', { id: pay.id }));
     assert.ok(!(await desk()).needs.some((x) => x.id === pay.id), 'off Needs you');
+    assert.ok(!ok(await mgr.get('/api/brief')).flagged.some((f) => f.payment_id === pay.id), 'and off Today');
   });
   await verified();
 });
