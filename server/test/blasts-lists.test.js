@@ -137,6 +137,28 @@ test('a text blast: the rules, then one text each through the campaign number, f
   assert.equal((await mgr.get('/api/blasts')).json.textConfigured, true);
 });
 
+test('a text blast leaves out a number that asked to stop in words, until it texts START', async () => {
+  // Bob replied "Please stop texting me" to the last one (flagged asks_stop).
+  const conv = (await db.query(`select conversation_id from texting_messages where workspace_id = $1 and phone = '+16045550102' limit 1`, [ws])).rows[0].conversation_id;
+  const reply = (keyword, body) => db.query(
+    `insert into texting_messages (id, workspace_id, conversation_id, direction, phone, body, status, keyword) values ($1, $2, $3, 'in', '+16045550102', $4, 'received', $5)`,
+    [crypto.randomUUID(), ws, conv, body, keyword],
+  );
+  await reply('asks_stop', 'Please stop texting me');
+  const before = texts.length;
+  const r = await mgr.action('blast.send', { kind: 'text', body: 'Imagine Surrey here: canvass Sunday.', audience: { list_id: list.id } });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.deepEqual(texts.slice(before).map((t) => t.To), ['+16045550101'], 'Anne only — Bob asked to stop');
+  const bob = (await db.query(`select status from blast_recipients where blast_id = $1 and phone = '+16045550102'`, [r.json.blast.id])).rows[0];
+  assert.equal(bob?.status, 'failed', 'Bob is left out, not texted');
+  // START takes it back.
+  await reply('start', 'START');
+  const after = texts.length;
+  const r2 = await mgr.action('blast.send', { kind: 'text', body: 'Imagine Surrey here: thanks for coming.', audience: { list_id: list.id } });
+  assert.equal(r2.status, 200, JSON.stringify(r2.json));
+  assert.deepEqual(texts.slice(after).map((t) => t.To).sort(), ['+16045550101', '+16045550102']);
+});
+
 test('quiet hours: a text blast waits, and the send job sends it when texting opens', async () => {
   at('2026-10-23T06:30:00Z'); // 11:30 pm the night before, in Surrey
   const before = texts.length;
