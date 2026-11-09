@@ -416,6 +416,23 @@ one tap away under **More**.
   booked is refused. **Call off** asks once (and says who booked won't be
   told); the shift leaves every list, and the walk lists it put on phones
   come back off — never a turf given by hand.
+- **Shifts → a shift → Crew** (the crew board) — make a shift that carries
+  two turfs. *Add people* on the left lists your volunteers who aren't on it
+  (someone on an overlapping shift says *Busy then: …*; someone who asked to
+  volunteer at a door says so). Drag a name onto a turf: they're booked and
+  that turf is the one walk list on their phone; drag them onto another
+  turf, *No walk list* (a driver) or *Not placed yet* (every walk list, as
+  before). No mouse? Tap a name, then *Add here* / *Move here* on a column
+  (Enter and Escape work too). ⋯ on a card: *Team lead*, *Driver*, and on
+  the day *Here* / *No-show*. *Split the rest evenly* places everyone not
+  placed yet. Drag a card back to the left to take them off the shift —
+  *Undo* puts them back where they were.
+- **Shifts → Volunteers** — everyone who volunteers: *Asked to volunteer*
+  (still waiting), *New*, *Active*, *Lapsed* (nothing for 30 days), by role
+  or name. Open one: *Call*, *Text*, how many shifts they've done, and
+  **Put on a shift** — the next weeks' shifts with their spots (*Busy then*
+  when it clashes); a tap books them and their *Wants to volunteer* request
+  is marked done.
 - **People → More → Duplicates** — add two people with the same email (or
   the same name and phone): they show side by side with why. *Keep this
   one* asks once; *Merge* leaves one record with both histories (open the

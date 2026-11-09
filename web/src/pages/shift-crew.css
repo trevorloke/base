@@ -1,0 +1,210 @@
+/* The crew board on a shift (ShiftCrew.jsx). Classes are cb-*; every
+   colour, radius, space and font is a token from app.css, as on the week
+   board (shifts-board.css). */
+
+/* The board wants room: a shift with it goes wider than a list screen. */
+.page:has(.cb) { max-width: 1400px; }
+.ops-page:has(.cb) { max-width: 1240px; }
+
+.cb { margin: var(--s-5) 0 var(--s-4); }
+.cb-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s-1) var(--s-3); }
+.cb-title { margin: 0; font-size: 20px; }
+.cb-count { color: var(--text-3); font-size: 14px; }
+.btn.cb-split { margin-left: auto; }
+.cb-help { margin: var(--s-1) 0 var(--s-3); color: var(--text-3); font-size: 14px; }
+.cb-loading { margin: var(--s-4) 0; }
+
+/* Tray left, columns right; on a phone the tray sits on top. */
+.cb-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
+
+.cb-tray {
+  position: sticky;
+  top: var(--s-3);
+  max-height: calc(100vh - 2 * var(--s-4));
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  background: var(--paper-0);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  min-width: 0;
+}
+.cb-tray[data-over] { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger); }
+.cb-tray__title { margin: 0; font-size: 15px; }
+.cb-find { min-height: 44px; }
+.cb-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.cb-role { flex: 1 1 140px; min-height: 44px; }
+.cb-free { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; color: var(--text-2); cursor: pointer; }
+.cb-free input { width: 18px; height: 18px; margin: 0; }
+.cb-tray__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); overflow-y: auto; min-height: 0; }
+.cb-empty, .cb-more { margin: 0; font-size: 13px; color: var(--text-3); }
+
+/* A volunteer in the tray, and a card on a column: what you pick up. */
+.cb-person, .cb-card__main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 48px;
+  padding: var(--s-1) var(--s-3);
+  font: inherit;
+  text-align: left;
+  color: var(--text-1);
+  background: var(--paper-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-ctrl);
+  cursor: grab;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.cb-person:hover, .cb-card__main:hover { border-color: var(--rule-2); }
+.cb-person[aria-pressed='true'], .cb-card__main[aria-pressed='true'] { background: var(--mark-soft); border-color: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
+.cb-person:focus-visible, .cb-card__main:focus-visible, .cb-card__more:focus-visible, .cb-here:focus-visible {
+  outline: 2px solid var(--focus, var(--mark));
+  outline-offset: 2px;
+}
+.cb-person[data-dragging], .cb-card__main[data-dragging] { opacity: 0.4; }
+.cb-person:disabled, .cb-card__main:disabled { cursor: default; opacity: 0.6; }
+.cb-person[data-busy] { background: var(--paper-0); border-color: var(--rule); border-style: dashed; }
+.cb-person[data-asked] { border-left: 3px solid var(--amber); }
+.cb-person__name, .cb-card__name { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.cb-person__line { font-size: 12px; color: var(--text-3); line-height: 1.3; }
+.cb-person[data-busy] .cb-person__line { color: var(--warn); }
+.cb-person__roles { font-size: 12px; color: var(--text-2); }
+
+/* The columns: one per turf, "Not placed yet", "No walk list". */
+.cb-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--s-3); align-items: start; }
+.cb-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-height: 140px;
+  padding: var(--s-3);
+  background: var(--paper-0);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  min-width: 0;
+}
+.cb-col[data-turf] { border-top: 4px solid var(--turf, var(--mark)); }
+.cb-col[data-over] { border-color: var(--mark); box-shadow: 0 0 0 2px var(--mark); background: var(--mark-soft); }
+.cb-col__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px var(--s-2); }
+.cb-col__title { font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
+.cb-col__n {
+  min-width: 26px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-2);
+  background: var(--paper-1);
+  border-radius: 999px;
+}
+.cb-col__sub { grid-column: 1 / -1; font-size: 12px; color: var(--text-3); }
+.cb-cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.cb-drop {
+  margin: 0;
+  padding: var(--s-3);
+  font-size: 13px;
+  color: var(--text-4);
+  text-align: center;
+  border: 1px dashed var(--rule);
+  border-radius: var(--r-ctrl);
+}
+
+.cb-card { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 2px; align-items: stretch; }
+.cb-card__more {
+  min-height: 48px;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-ctrl);
+  cursor: pointer;
+}
+.cb-card__more:hover, .cb-card__more[aria-expanded='true'] { background: var(--paper-1); color: var(--text-1); }
+.cb-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.cb-tags .chip { font-size: 11px; padding: 1px 7px; }
+.chip.cb-job--lead { background: var(--mark); color: var(--mark-ink); border-color: transparent; }
+.chip.cb-job--driver { background: var(--paper-2); border-color: transparent; }
+.chip.cb-nosign { color: var(--text-3); border-style: dashed; }
+.cb-card[data-job='lead'] .cb-card__main { border-left: 3px solid var(--mark); }
+
+.cb-menu {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: var(--s-1);
+  background: var(--paper-1);
+  border-radius: var(--r-ctrl);
+}
+.cb-menu .btn { min-height: 44px; font-size: 13px; padding: 0 var(--s-3); display: inline-flex; align-items: center; text-decoration: none; }
+.cb-menu .btn.cb-menu__off { color: var(--danger); }
+
+/* The tap path: "Move here" on each column that can take what's picked. */
+.btn.cb-here {
+  width: 100%;
+  min-height: 48px;
+  border: 2px dashed var(--mark);
+  background: var(--mark-soft);
+  color: var(--text-1);
+  font-weight: 600;
+}
+.btn.cb-here--off { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--paper-0)); }
+
+.cb-hand {
+  position: sticky;
+  bottom: var(--s-2);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  flex-wrap: wrap;
+  margin: var(--s-3) 0 0;
+  padding: var(--s-2) var(--s-3);
+  background: var(--mark-soft);
+  border: 1px solid var(--mark);
+  border-radius: var(--r-ctrl);
+  font-size: 14px;
+  color: var(--text-1);
+}
+.cb-hand > span { flex: 1 1 auto; min-width: 0; }
+.btn.cb-hand__btn { min-height: 44px; }
+
+.cb-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1000;
+  pointer-events: none;
+  padding: var(--s-1) var(--s-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mark-ink);
+  background: var(--mark);
+  border-radius: 999px;
+  box-shadow: var(--shadow-2);
+  white-space: nowrap;
+}
+.cb-ghost[hidden] { display: none; }
+
+/* Read out, not shown (the toast shows it). */
+.cb-live { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.toast.ops-toast.cb-toast { display: flex; align-items: center; gap: var(--s-2); max-width: calc(100vw - 32px); min-height: 48px; }
+.toast.ops-toast.cb-toast .btn { min-height: 40px; }
+
+@media (max-width: 860px) {
+  .cb-layout { grid-template-columns: minmax(0, 1fr); }
+  .cb-tray { position: static; max-height: none; }
+  .cb-tray__list { max-height: 40vh; }
+}
+@media (max-width: 720px) {
+  .cb-cols { grid-template-columns: minmax(0, 1fr); }
+  .btn.cb-split { margin-left: 0; width: 100%; }
+}

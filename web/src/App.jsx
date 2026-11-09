@@ -31,6 +31,7 @@ const TextingSettings = lazy(() => import('./pages/TextingSettings.jsx'));
 const People = lazy(() => import('./pages/People.jsx'));
 const Person = lazy(() => import('./pages/Person.jsx'));
 const Shifts = lazy(() => import('./pages/Shifts.jsx'));
+const Volunteers = lazy(() => import('./pages/Volunteers.jsx'));
 const Money = lazy(() => import('./pages/Money.jsx'));
 const Signs = lazy(() => import('./pages/Signs.jsx'));
 const Outreach = lazy(() => import('./pages/Outreach.jsx'));
@@ -95,7 +96,7 @@ function NotForYou({ me }) {
 
 // A desk address typed into the field app (an old bookmark, a link in an
 // email): the admin has it. Volunteers go home, as before.
-const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates|membership-form))?|money|lists|reports|data|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
+const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates|membership-form))?|shifts\/volunteers|money|lists|reports|data|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
 function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
@@ -145,6 +146,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/people/connected" element={<FieldFallback />} />
           <Route path="/people/duplicates" element={<FieldFallback />} />
           <Route path="/people/membership-form" element={<FieldFallback />} />
+          <Route path="/shifts/volunteers" element={<FieldFallback />} />
           <Route path="/data" element={<FieldFallback />} />
           <Route path="/inbox/settings" element={<FieldFallback />} />
           <Route path="/banks/new" element={<FieldFallback />} />
@@ -193,6 +195,7 @@ export default function App({ mode = 'field' }) {
         <Route path="/banks" element={<Banks />} />
         <Route path="/banks/:id" element={<Banks />} />
         <Route element={<DeskOnly />}>
+          <Route path="/shifts/volunteers" element={<Volunteers />} />
           <Route path="/people/import" element={<ImportPeople />} />
           <Route path="/people/fields" element={<Fields />} />
           <Route path="/people/connected" element={<PeopleConnected />} />

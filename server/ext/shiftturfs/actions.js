@@ -1,4 +1,6 @@
 // shift.turfs.set { shift_id, turf_ids }   the shift's turfs, all of them (desk)
+// shift.place { id, to?, job? }            the crew board: where one person on
+//                                          the shift walks, and their job (desk)
 //
 // Area: shifts (the first segment, lib/perms.js) — and Map & turfs too, since
 // putting a turf on a shift hands out its walk list (as turf.assign does): a
@@ -9,7 +11,7 @@
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { areasFor } from '../../lib/perms.js';
-import { ACTIVE, putOn, takeOff, userForPerson } from './walkers.js';
+import { ACTIVE, placeAssignment, putOn, setJob, takeOff, unplaceFrom, userForPerson } from './walkers.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 
@@ -72,7 +74,62 @@ export const actions = {
           if (userId) await putOn(tx, ws, { assignmentId: a.id, shiftId: shift.id, userId, turfIds: added }, emit);
         }
       }
+      // Whoever the crew board had put on a turf taken off: not placed now,
+      // so every turf the shift still carries.
+      if (removed.length) await unplaceFrom(tx, ws, { turfIds: removed, shiftId: shift.id }, emit);
       return { shift_id: shift.id, turf_ids: turfIds };
+    },
+  },
+
+  // The crew board: where someone on the shift walks, and their job.
+  //   to   'every' — not placed: every turf the shift carries (the default)
+  //        'none'  — no walk list from this shift (a driver, the office)
+  //        a turf id — only that one of the shift's turfs
+  //   job  'lead' (team lead), 'driver', or null for neither
+  // Moving walk lists needs Map & turfs, as shift.turfs.set does; a job alone
+  // doesn't. Phones follow at once (walkers.js placeAssignment).
+  'shift.place': {
+    roles: DESK,
+    input: z.object({
+      id: z.uuid(),
+      to: z.union([z.enum(['every', 'none']), z.uuid()]).optional(),
+      job: z.enum(['lead', 'driver']).nullable().optional(),
+    }).refine((v) => v.to !== undefined || v.job !== undefined, 'where to put them, or their job'),
+    handler: async (tx, ctx, input, emit) => {
+      const ws = ctx.workspaceId;
+      const assignment = (await tx.query(
+        `select a.id, a.shift_id, a.person_id, a.status from shift_assignments a
+         join shifts s on s.id = a.shift_id and s.deleted_at is null
+         where a.id = $1 and a.workspace_id = $2 for update of a`,
+        [input.id, ws],
+      )).rows[0];
+      if (!assignment) throw httpError(404, 'not on this shift any more');
+      const out = { id: assignment.id, shift_id: assignment.shift_id };
+      if (input.to !== undefined) {
+        if (!areasFor(ctx).includes('map')) throw httpError(403, 'giving out walk lists needs Map & turfs');
+        if (input.to !== 'every' && input.to !== 'none') {
+          const carried = (await tx.query(
+            'select 1 from shift_turfs where workspace_id = $1 and shift_id = $2 and turf_id = $3',
+            [ws, assignment.shift_id, input.to],
+          )).rows[0];
+          if (!carried) throw httpError(400, 'that turf isn’t on this shift');
+        }
+        const moved = await placeAssignment(tx, ws, { assignment, to: input.to }, emit);
+        out.to = input.to;
+        out.added = moved.added;
+        out.removed = moved.removed;
+      }
+      if (input.job !== undefined) {
+        await setJob(tx, ws, { assignment, job: input.job });
+        out.job = input.job;
+      }
+      // No status in it: the assignment hook leaves it be (the walk lists
+      // moved above).
+      emit('shift_assignment', assignment.id, 'update', {
+        ...(input.to !== undefined ? { placed: input.to } : {}),
+        ...(input.job !== undefined ? { job: input.job } : {}),
+      });
+      return out;
     },
   },
 };

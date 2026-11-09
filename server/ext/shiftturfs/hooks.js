@@ -12,8 +12,11 @@
 //                             → assigned / confirmed: on; declined / no_show: off
 //   shift_assignment void     shift.unassign (the row is already deleted;
 //                             payload {}, entityId = the assignment id), the
-//                             sample clearing → off
-//   turf void                 turf.delete → the turf leaves every shift
+//                             sample clearing → off (and off the crew board)
+//   shift_assignment update   shift.place { placed, job } (no status): the
+//                             action itself moved the walk lists
+//   turf void                 turf.delete → the turf leaves every shift (the
+//                             crew placed on it: not placed again)
 //   turf update               turf.assign { assigned } / turf.unassign
 //                             { unassigned } by hand → that membership is the
 //                             desk's from now on (handOver)
@@ -24,7 +27,7 @@
 // "self" means the signed-in person acted for themselves (meta.actorId);
 // otherwise the shift's person is matched to an app sign-in by login email.
 import { loginEmail } from '../../lib/viewer.js';
-import { ACTIVE, GONE, handOver, putOn, takeOff, userForPerson } from './walkers.js';
+import { ACTIVE, GONE, handOver, putOn, takeOff, unplaceFrom, userForPerson } from './walkers.js';
 
 const hasTurfs = async (tx, ws, shiftId) => Boolean((await tx.query(
   'select 1 from shift_turfs where workspace_id = $1 and shift_id = $2 limit 1', [ws, shiftId],
@@ -35,6 +38,7 @@ const onAssignment = async (tx, meta, e) => {
   const p = e.payload || {};
   if (e.op === 'void') {
     await takeOff(tx, ws, { assignmentId: e.entityId }, meta.emit);
+    await tx.query('delete from shift_crew where workspace_id = $1 and assignment_id = $2', [ws, e.entityId]);
     return;
   }
   if (e.op === 'create') {
@@ -70,6 +74,9 @@ const onTurf = async (tx, meta, e) => {
   if (e.op === 'void') {
     await tx.query('delete from shift_turf_walkers where workspace_id = $1 and turf_id = $2', [ws, e.entityId]);
     await tx.query('delete from shift_turfs where workspace_id = $1 and turf_id = $2', [ws, e.entityId]);
+    // Whoever the crew board put on it is back to "not placed": every turf
+    // their shift still carries.
+    await unplaceFrom(tx, ws, { turfIds: [e.entityId] }, meta.emit);
     return;
   }
   if (e.op !== 'update') return;
@@ -107,6 +114,7 @@ const onShift = async (tx, meta, e) => {
     'select distinct assignment_id from shift_turf_walkers where workspace_id = $1 and shift_id = $2', [ws, e.entityId],
   )).rows;
   for (const h of held) await takeOff(tx, ws, { assignmentId: h.assignment_id }, meta.emit);
+  await tx.query('delete from shift_crew where workspace_id = $1 and shift_id = $2', [ws, e.entityId]);
 };
 
 export const onShiftEvents = async (tx, meta, events) => {

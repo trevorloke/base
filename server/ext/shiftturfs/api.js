@@ -2,7 +2,8 @@
 // GET /shiftturfs/:shiftId   one shift's: { turfs: [{ id, name, color }] }; the desk
 //                            also gets no_sign_in: the assignment ids of people on
 //                            it (assigned or confirmed) with no app sign-in, who
-//                            can't get its walk lists on a phone
+//                            can't get its walk lists on a phone (not counting
+//                            anyone the crew board put on "No walk list")
 // Any role (area shifts, lib/perms.js): turf names and colours only — no
 // doors, no people. Under /shiftturfs, not /shifts/…: routes/api.js answers
 // /shifts/:id (and 404s anything under it) before feature routes mount.
@@ -38,6 +39,7 @@ api.get('/shiftturfs/:shiftId', async (c) => {
   const noSignIn = (await db.query(
     `select a.id from shift_assignments a join persons p on p.id = a.person_id
      where a.workspace_id = $1 and a.shift_id = $2 and a.status in ('assigned', 'confirmed')
+       and not exists (select 1 from shift_crew c where c.assignment_id = a.id and c.placed = 'none')
        and not exists (
          select 1 from users u join memberships m on m.user_id = u.id and m.workspace_id = $1
          where p.email is not null and lower(u.email) = lower(p.email))`,

@@ -22,10 +22,16 @@
 // gave: a turf given by hand stays, and so does one another of their shifts
 // still holds (walkers.js).
 //
-//   sql.js      shift_turfs, shift_turf_walkers
-//   walkers.js  userForPerson, putOn, takeOff, handOver
+// The crew board (web/src/pages/ShiftCrew.jsx) narrows that per person:
+// placed on one of the shift's turfs, they walk only it; on "No walk list",
+// none; not placed (the default), every turf the shift carries — so a
+// shift nobody has split works exactly as it always did.
+//
+//   sql.js      shift_turfs, shift_turf_walkers, shift_crew
+//   walkers.js  userForPerson, putOn (honours shift_crew), takeOff, handOver,
+//               placeAssignment, unplaceFrom, setJob
 //   hooks.js    the events hook (above) and Today's brief (shiftTurfs)
-//   actions.js  shift.turfs.set (desk)
+//   actions.js  shift.turfs.set · shift.place (desk)
 //   api.js      GET /shiftturfs, /shiftturfs/:shiftId (any role; names and colours)
 import { onShiftEvents, briefShiftTurfs } from './hooks.js';
 
@@ -35,8 +41,8 @@ export { api } from './api.js';
 
 export const hooks = { events: onShiftEvents, brief: briefShiftTurfs };
 
-// In the full export: both tables.
-export const exportTables = ['shift_turfs', 'shift_turf_walkers'];
+// In the full export: its tables.
+export const exportTables = ['shift_turfs', 'shift_turf_walkers', 'shift_crew'];
 
 // Volunteers read the turf names of shifts (the Shifts screen, Today).
 export const deskOnlyReads = [];

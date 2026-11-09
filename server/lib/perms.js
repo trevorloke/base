@@ -78,6 +78,7 @@ const PATH_AREA = [
   [/^\/api\/requests(\/|$)/, 'people'],
   [/^\/api\/field-report/, 'data'],
   [/^\/api\/shiftturfs(\/|$)/, 'shifts'],
+  [/^\/api\/(crew|volunteers)(\/|$)/, 'shifts'],
   [/^\/api\/connections(\/|$)/, 'admin'],
   [/^\/api\/intake(\/|$)/, 'admin'],
 ];
