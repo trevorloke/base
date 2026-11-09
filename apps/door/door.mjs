@@ -9,9 +9,21 @@
 //   base.win/<client>/web…     → /<client>/desk/website — the website's back
 //                                office is the desk's Website area now
 //
-// The path goes through as it came (the server knows it lives under it), so
-// the door holds no secrets and decides nothing about who may see what:
-// signing in, and who may open the desk, are the server's own.
+// The path goes through as it came (the server knows it lives under it), and
+// the door decides nothing about who may see what: signing in, and who may
+// open the desk, are the server's own.
+//
+// Who is asking: every request reaches a client's server from the door's
+// own address, so the door says whose it is — x-base-client-ip, the
+// visitor's address as the proxy in front of the door wrote it (the entry
+// BASE_TRUSTED_PROXIES from the right of X-Forwarded-For, default 1: Render's;
+// never what the visitor wrote further left), else whoever connected — and
+// proves it is the door with x-base-door: BASE_DOOR_KEY, the one secret it
+// holds, which each client's server holds too (server/lib/guard.js). That
+// is how the server's limits per address (sign-in tries, the website's
+// forms) tell visitors apart. Whatever a visitor sent in those two headers
+// is dropped. Without the key the door sends neither, and everyone behind
+// it is one address to the server.
 //
 // BASE_CLIENTS (JSON): { "imaginesurrey": { "name": "Imagine Surrey",
 //   "server": "https://…" } } — the client's server, an origin (no path).
@@ -56,6 +68,18 @@ export const route = (clients, pathname) => {
 
 // Hop-by-hop headers stay on this side of the door.
 const HOP = new Set(['connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade', 'host', 'content-length']);
+// Only the door says these (above): a visitor's own never go through.
+const DOOR_SAYS = new Set(['x-base-client-ip', 'x-base-door']);
+
+// The visitor's address: the entry the proxy in front of the door appended
+// to X-Forwarded-For (`hops` from the right), else who connected.
+export const visitorIp = (req, hops = Math.max(1, Number(process.env.BASE_TRUSTED_PROXIES) || 1)) => {
+  const raw = req.headers['x-forwarded-for'];
+  const parts = String(Array.isArray(raw) ? raw.join(',') : raw || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const ip = parts.length ? parts[Math.max(0, parts.length - hops)] : req.socket?.remoteAddress;
+  return String(ip || '').slice(0, 64);
+};
+export const doorKeyOf = (raw = process.env.BASE_DOOR_KEY) => String(raw || '').trim();
 
 const page = (status, title, body) => ({
   status,
@@ -65,7 +89,7 @@ const page = (status, title, body) => ({
 <body><main>${body}</main></body></html>`,
 });
 
-export const handler = (clients, { fetchImpl = fetch } = {}) => async (req, res) => {
+export const handler = (clients, { fetchImpl = fetch, doorKey = doorKeyOf() } = {}) => async (req, res) => {
   const url = new URL(req.url, 'http://door');
   const send = ({ status, headers, body }) => { res.writeHead(status, headers); res.end(body); };
   if (url.pathname === '/healthz') return send({ status: 200, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ok: true, service: 'base-door', clients: clients.size }) });
@@ -78,8 +102,13 @@ export const handler = (clients, { fetchImpl = fetch } = {}) => async (req, res)
 
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
-    if (HOP.has(k) || v == null) continue;
+    if (HOP.has(k) || DOOR_SAYS.has(k) || v == null) continue;
     for (const one of Array.isArray(v) ? v : [v]) headers.append(k, one);
+  }
+  const visitor = visitorIp(req);
+  if (doorKey && visitor) {
+    headers.set('x-base-client-ip', visitor);
+    headers.set('x-base-door', doorKey);
   }
   const host = req.headers.host || '';
   headers.set('x-forwarded-host', host);
@@ -115,5 +144,8 @@ if (isMain) {
   const port = Number(process.env.PORT) || 8080;
   createServer(handler(clients)).listen(port, () => {
     console.log(`base.win door on :${port} — ${clients.size} client${clients.size === 1 ? '' : 's'}: ${[...clients.keys()].join(', ') || 'none yet'}`);
+    if (doorKeyOf().length < 32) {
+      console.warn('base.win door: BASE_DOOR_KEY is not set (32 or more random characters, the same on each client’s server) — the servers see everyone who comes through the door as one address, so one visitor’s sign-in tries count against all');
+    }
   });
 }

@@ -3,9 +3,11 @@
 // open-checkout caps, odd ids, and the headers every answer carries.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { Readable, PassThrough } from 'node:stream';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { clientIp, makeLimiter } from '../lib/guard.js';
+import { handler as doorHandler } from '../../apps/door/door.mjs';
 
 let mgr, slug, wsId;
 const env = { ...process.env };
@@ -19,7 +21,7 @@ before(async () => {
   wsId = r.json.workspace.id;
 });
 after(() => {
-  for (const k of ['STARBASE_TRUSTED_PROXIES', 'STRIPE_SECRET_KEY']) {
+  for (const k of ['STARBASE_TRUSTED_PROXIES', 'STRIPE_SECRET_KEY', 'BASE_DOOR_KEY']) {
     if (env[k] === undefined) delete process.env[k]; else process.env[k] = env[k];
   }
 });
@@ -39,6 +41,81 @@ test('clientIp: the proxy’s own entry wins; what the sender wrote further left
   process.env.STARBASE_TRUSTED_PROXIES = '2';
   assert.equal(clientIp(c('1.2.3.4, 203.0.113.9, 10.0.0.1')), '203.0.113.9', 'two proxies: the entry two from the right');
   delete process.env.STARBASE_TRUSTED_PROXIES;
+});
+
+// The base.win door (apps/door) in front: every request reaches this server
+// from the door's own address, so the door says whose it is, with a key
+// only the door and this server hold (BASE_DOOR_KEY).
+const DOOR_KEY = 'a-long-random-door-key-0123456789abcdef';
+const DOOR_OUT = '216.24.57.253'; // the door's address, as this server's own proxy sees it
+
+test('clientIp: the door’s word for whose request it is — believed only with the door’s key', () => {
+  const c = (h) => ({ req: { header: (k) => h[k] } });
+  const fromDoor = { 'x-forwarded-for': `198.51.100.9, ${DOOR_OUT}`, 'x-base-client-ip': '198.51.100.9', 'x-base-door': DOOR_KEY };
+  delete process.env.BASE_DOOR_KEY;
+  assert.equal(clientIp(c(fromDoor)), DOOR_OUT, 'no key set here: the proxy’s entry, as before');
+  process.env.BASE_DOOR_KEY = DOOR_KEY;
+  assert.equal(clientIp(c(fromDoor)), '198.51.100.9');
+  assert.equal(clientIp(c({ ...fromDoor, 'x-base-client-ip': '2001:db8::7' })), '2001:db8::7');
+  assert.equal(clientIp(c({ ...fromDoor, 'x-base-door': 'a-guess' })), DOOR_OUT, 'a wrong key: not believed');
+  assert.equal(clientIp(c({ ...fromDoor, 'x-base-door': undefined })), DOOR_OUT, 'no key: not believed');
+  assert.equal(clientIp(c({ ...fromDoor, 'x-base-client-ip': '198.51.100.9, 1.2.3.4' })), DOOR_OUT, 'not one address: not believed');
+  // Moving to a new key: the server takes either while the door changes.
+  process.env.BASE_DOOR_KEY = `the-next-long-random-door-key-0123456789, ${DOOR_KEY}`;
+  assert.equal(clientIp(c(fromDoor)), '198.51.100.9');
+  // Too short to be a key: never believed, whatever is sent.
+  process.env.BASE_DOOR_KEY = 'short';
+  assert.equal(clientIp(c({ ...fromDoor, 'x-base-door': 'short' })), DOOR_OUT);
+  delete process.env.BASE_DOOR_KEY;
+});
+
+// One sign-in try through the real door: the visitor's address as the
+// proxy in front of the door wrote it; the door's own request, as this
+// server's proxy passes it on. → the server's answer.
+const doorClients = new Map([['imaginesurrey', { name: 'Imagine Surrey', origin: 'https://starbase-is.onrender.com' }]]);
+const throughDoor = async (visitor, body, { doorKey = DOOR_KEY } = {}) => {
+  let status = 0;
+  const fetchImpl = async (url, init) => {
+    const u = new URL(url);
+    const headers = new Headers(init.headers);
+    headers.set('x-forwarded-for', `${headers.get('x-forwarded-for')}, ${DOOR_OUT}`);
+    const res = await app.request(`${u.pathname.replace(/^\/imaginesurrey/, '')}${u.search}`, {
+      method: init.method, headers, body: init.body, duplex: 'half',
+    });
+    status = res.status;
+    return res;
+  };
+  const req = Object.assign(Readable.from([Buffer.from(JSON.stringify(body))]), {
+    url: '/imaginesurrey/api/auth/login', method: 'POST', socket: { remoteAddress: '10.204.1.7' },
+    headers: { host: 'base.win', 'content-type': 'application/json', 'x-forwarded-for': visitor, 'x-forwarded-proto': 'https' },
+  });
+  const res = Object.assign(new PassThrough(), { writeHead() {} });
+  res.resume();
+  await doorHandler(doorClients, { fetchImpl, doorKey })(req, res);
+  return status;
+};
+
+test('behind the base.win door each visitor keeps their own address for the sign-in limit; nobody else can say whose a request is', async () => {
+  process.env.BASE_DOOR_KEY = DOOR_KEY;
+  // 31 people sign in through the door: each a try of their own.
+  for (let i = 1; i <= 31; i++) {
+    assert.equal(await throughDoor(`198.51.100.${i}`, { email: `door${i}@example.org`, password: 'not-it' }), 401, `visitor ${i}`);
+  }
+  // One of them, 31 times: their 31st waits — and only theirs.
+  let last;
+  for (let i = 0; i < 31; i++) last = await throughDoor('198.51.100.200', { email: `again${i}@example.org`, password: 'not-it' });
+  assert.equal(last, 429);
+  assert.equal(await throughDoor('198.51.100.201', { email: 'next@example.org', password: 'not-it' }), 401);
+  // What a visitor writes in front of their address doesn't make them someone else.
+  assert.equal(await throughDoor('6.6.6.6, 198.51.100.200', { email: 'spoof@example.org', password: 'not-it' }), 429);
+  // Straight to this server, the door's header without its key is ignored:
+  // the proxy's own entry counts, so 31 made-up addresses are one.
+  for (let i = 0; i < 31; i++) {
+    last = await req('/api/auth/login', { method: 'POST', body: { email: `direct${i}@example.org`, password: 'x' },
+      headers: { 'x-forwarded-for': '203.0.113.88', 'x-base-client-ip': `192.0.2.${i}`, 'x-base-door': 'a-guess' } });
+  }
+  assert.equal(last.status, 429);
+  delete process.env.BASE_DOOR_KEY;
 });
 
 test('a limiter sweeps old entries and never keeps more than its cap of keys', () => {

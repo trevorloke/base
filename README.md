@@ -654,7 +654,9 @@ signature, and blast lists.
 capped (256 KB; 16 MB for a CSV import, 4 MB for a picture); the address
 a request is from is the entry `STARBASE_TRUSTED_PROXIES` hops from the
 right of `X-Forwarded-For` (default 1 — one proxy, as on Render), never
-what the sender wrote; public writes are limited to 30 per 10 minutes per
+what the sender wrote — behind the base.win door, the visitor's address
+as the door says it, believed only with the key the door and the server
+share (`BASE_DOOR_KEY`, apps/door/README.md); public writes are limited to 30 per 10 minutes per
 address and sign-in to 30 tries per address and 10 failures per email per
 15 minutes (two-step codes: 5 tries per sign-in, 10 per person); a cookie-carrying write must be the app's own (JSON, same
 origin — a form on another host, even under the campaign's domain, can't

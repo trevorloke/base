@@ -2,7 +2,8 @@
 // came; the client's name alone opens their public website; an old /web
 // link opens the desk's Website area; an unknown client and a server that
 // isn't answering each get a plain page; cookies, bodies and redirects pass
-// through untouched.
+// through untouched; the visitor's address goes up with the door's key
+// (BASE_DOOR_KEY), so the server can tell visitors apart.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -13,7 +14,10 @@ const upstream = (name) => createServer((req, res) => {
   let body = '';
   req.on('data', (d) => { body += d; });
   req.on('end', () => {
-    seen.push({ name, method: req.method, url: req.url, body, fwdHost: req.headers['x-forwarded-host'], cookie: req.headers.cookie || '' });
+    seen.push({
+      name, method: req.method, url: req.url, body, fwdHost: req.headers['x-forwarded-host'], cookie: req.headers.cookie || '',
+      clientIp: req.headers['x-base-client-ip'], doorKey: req.headers['x-base-door'],
+    });
     if (req.url.endsWith('/login-now')) {
       res.writeHead(302, { location: '/imaginesurrey/desk/', 'set-cookie': ['sid=abc; Path=/imaginesurrey; HttpOnly', 'pref=1; Path=/imaginesurrey'] });
       return res.end();
@@ -22,18 +26,18 @@ const upstream = (name) => createServer((req, res) => {
     res.end(JSON.stringify({ name, url: req.url }));
   });
 });
-let server, door, base;
+let server, door, base, clients;
 const listen = (s) => new Promise((r) => s.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${s.address().port}`)));
 
 before(async () => {
   server = upstream('server');
   const s = await listen(server);
-  const clients = readClients(JSON.stringify({
+  clients = readClients(JSON.stringify({
     imaginesurrey: { name: 'Imagine Surrey', server: s },
     gone: { name: 'Gone Campaign', server: 'http://127.0.0.1:9' },
     older: { name: 'Older Config', ground: s, web: { redirect: 'https://site.example.org/admin' } },
   }));
-  door = createServer(handler(clients));
+  door = createServer(handler(clients, { doorKey: '' }));
   base = await listen(door);
 });
 after(() => { for (const s of [server, door]) s.close(); });
@@ -94,6 +98,33 @@ test('a sign-in: the body goes up, the cookies and the redirect come back untouc
   assert.deepEqual(r.headers.getSetCookie(), ['sid=abc; Path=/imaginesurrey; HttpOnly', 'pref=1; Path=/imaginesurrey']);
   const s = seen.at(-1);
   assert.deepEqual([s.method, s.body, s.cookie], ['POST', '{"email":"a@example.org"}', 'old=1']);
+});
+
+test('the visitor’s address goes up with the door’s key; what a visitor wrote in those headers never does', async () => {
+  const KEY = 'a-long-random-door-key-0123456789abcdef';
+  const keyed = createServer(handler(clients, { doorKey: KEY }));
+  const kbase = await listen(keyed);
+  try {
+    // The edge in front of the door appended the visitor's address (the
+    // last entry); what the visitor wrote further left, and their own
+    // x-base-* headers, are not theirs to say.
+    await fetch(`${kbase}/imaginesurrey/api/auth/login`, {
+      method: 'POST', body: '{}',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '6.6.6.6, 198.51.100.7', 'x-base-client-ip': '6.6.6.6', 'x-base-door': 'a-guess' },
+    });
+    let s = seen.at(-1);
+    assert.deepEqual([s.url, s.clientIp, s.doorKey], ['/imaginesurrey/api/auth/login', '198.51.100.7', KEY]);
+    // Nothing in front of the door: whoever connected.
+    await fetch(`${kbase}/imaginesurrey/field/`);
+    s = seen.at(-1);
+    assert.deepEqual([s.clientIp, s.doorKey], ['127.0.0.1', KEY]);
+  } finally {
+    keyed.close();
+  }
+  // A door with no key says nothing — and passes on nothing a visitor wrote.
+  await get('/imaginesurrey/field/', { headers: { 'x-base-client-ip': '6.6.6.6', 'x-base-door': 'a-guess' } });
+  const s = seen.at(-1);
+  assert.deepEqual([s.url, s.clientIp, s.doorKey], ['/imaginesurrey/field/', undefined, undefined]);
 });
 
 test('nobody at that name, a server not answering: a plain page each, saying base.win', async () => {
