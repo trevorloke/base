@@ -298,16 +298,31 @@ const unbook = async (tx, emit, ws, p) => {
   }
 };
 
+// What a lost dispute takes back: the dispute's amount (Stripe's can be less
+// than the payment, when only part of it was disputed), never more than the
+// payment; all of it when the dispute doesn't say, or says it in another
+// currency.
+const lostCents = (p, d) => {
+  const asked = Math.round(Number(d.amount));
+  const same = !d.currency || String(d.currency).toLowerCase() === String(p.currency || 'cad').toLowerCase();
+  return asked > 0 && same ? Math.min(asked, Number(p.amount_cents)) : Number(p.amount_cents);
+};
+
+// What a payment's lost dispute took back, as its row says (all of it on a
+// row from before dispute_cents was kept); nothing when none was lost.
+const lostOf = (p) => (p.status !== 'dispute_lost' ? 0 : p.dispute_cents == null ? Number(p.amount_cents) : Number(p.dispute_cents));
+
 // ── charge.refunded: what Stripe says has gone back on the payment ──
 export const refunded = async (tx, emit, ws, plan) => {
   const p = await lockPayment(tx, ws.id, plan.paymentId);
   if (!p) return { result: 'not a base.win payment' };
   const total = Math.min(Number(plan.amountRefunded) || 0, Number(p.amount_cents));
   if (total <= Number(p.refunded_cents)) return { result: 'already recorded' };
-  const full = total >= Number(p.amount_cents);
+  // With what a lost dispute took back, this can be all of it.
+  const full = total + lostOf(p) >= Number(p.amount_cents);
   let status = p.status;
   if (full) {
-    if (p.status !== 'disputed') status = 'refunded';
+    if (!['disputed', 'dispute_lost'].includes(p.status)) status = 'refunded';
     await unbook(tx, emit, ws, p);
   } else if (p.status === 'paid') {
     status = 'partly_refunded';
@@ -349,13 +364,21 @@ export const disputed = async (tx, emit, ws, plan) => {
   const d = plan.dispute;
   if (plan.closed) {
     if (d.status === 'lost') {
-      await unbook(tx, emit, ws, p);
+      // The bank takes back what was disputed. When that's only part of it,
+      // the rest is still with the campaign: the gift stays for the
+      // treasurer to void and log what was kept (as with a partial refund),
+      // and money over the limit is theirs to return by hand — Stripe won't
+      // refund a payment with a lost dispute, so no refund is queued.
+      const back = lostCents(p, d);
+      const kept = Number(p.amount_cents) - Number(p.refunded_cents) - back;
+      if (kept <= 0) await unbook(tx, emit, ws, p);
       await tx.query(
-        `update stripe_payments set status = 'dispute_lost', dispute_id = $3, acknowledged_at = null, updated_at = now() where id = $1 and workspace_id = $2`,
-        [p.id, ws.id, d.id],
+        `update stripe_payments set status = 'dispute_lost', dispute_id = $3, dispute_cents = $4, acknowledged_at = null, updated_at = now()
+         where id = $1 and workspace_id = $2`,
+        [p.id, ws.id, d.id, back],
       );
-      emit('payment', p.id, 'update', { status: 'dispute_lost', dispute: d.status });
-      return { result: 'dispute lost: the gift is void' };
+      emit('payment', p.id, 'update', { status: 'dispute_lost', dispute: d.status, dispute_cents: back, ...(kept > 0 ? { kept_cents: kept } : {}) });
+      return { result: kept > 0 ? 'dispute lost in part: flagged for the treasurer' : 'dispute lost: the gift is void' };
     }
     // Won (or an inquiry closed): the money stays. Its opening not here yet:
     // noted, and nothing else changes.

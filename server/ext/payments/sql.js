@@ -20,6 +20,9 @@
 //                     · refunded · partly_refunded · refund_failed ·
 //                     disputed · dispute_lost · no_donor. acknowledged_at:
 //                     a treasurer's "Got it" on one that needed them.
+//                     dispute_cents: what a lost dispute took back (Stripe's
+//                     dispute can be for part of the payment; null on a row
+//                     from before it was kept: all of it).
 //   stripe_events     each Stripe event id, recorded in the same transaction
 //                     as what it did — a delivery Stripe repeats does nothing.
 //   stripe_held       a refund or a dispute that came before its payment was
@@ -96,6 +99,7 @@ create table if not exists stripe_payments (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table stripe_payments add column if not exists dispute_cents int;
 create unique index if not exists stripe_payments_session_idx on stripe_payments (workspace_id, session_id) where session_id is not null and invoice_id is null;
 create unique index if not exists stripe_payments_invoice_idx on stripe_payments (workspace_id, invoice_id) where invoice_id is not null;
 create index if not exists stripe_payments_ws_idx on stripe_payments (workspace_id, paid_at desc);

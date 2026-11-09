@@ -279,7 +279,7 @@ test('a won dispute on a payment over the limit whose refund was refused: refund
   assert.equal(opened.body.result, 'disputed: flagged for the treasurer');
   let need = await needOf(pay.id);
   assert.doesNotMatch(need.line, /the gift counts/, 'there is no gift');
-  assert.match(need.line, /^The card holder disputed this payment with their bank\. Answer in Stripe by [A-Z][a-z]+ \d+\. It was over this year’s limit, so no gift was logged — if the bank doesn’t give the money back, it’s refunded once the dispute is settled\.$/);
+  assert.match(need.line, /^The card holder disputed this payment with their bank\. Answer in Stripe by [A-Z][a-z]+ \d+\. It was over this year’s limit, so no gift was logged\. If the dispute is won, it’s refunded to their card\.$/);
   const today = await onToday(pay.id);
   assert.ok(today, 'still on Today: over-limit money not yet given back');
   assert.equal(today.flag_reason, need.line, 'in the same words, with the date to answer by');

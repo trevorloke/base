@@ -187,12 +187,15 @@ export const prepare = async (db, event) => {
     case 'charge.dispute.created':
     case 'charge.dispute.closed': {
       const due = Number(obj.evidence_details?.due_by);
+      // A dispute's amount can be less than the payment (only part of it
+      // disputed): a lost one takes back only that much.
       const step = event.type === 'charge.refunded'
         ? { action: 'stripe.refund', run: refunded, kind: 'refund',
             plan: { amountRefunded: obj.amount_refunded, refundId: idOf(obj.refunds?.data?.[0]) } }
         : { action: 'stripe.dispute', run: disputed, kind: 'dispute',
             plan: { closed: event.type.endsWith('closed'),
-              dispute: { id: obj.id, status: obj.status, reason: obj.reason || null, dueBy: due > 0 ? new Date(due * 1000).toISOString() : null } } };
+              dispute: { id: obj.id, status: obj.status, reason: obj.reason || null, dueBy: due > 0 ? new Date(due * 1000).toISOString() : null,
+                amount: Number(obj.amount) || null, currency: obj.currency || null } } };
       const refs = chargeRefs(obj);
       const p = await paymentBy(db, refs);
       if (p) return { action: step.action, workspaceId: p.workspace_id, run: step.run, plan: { ...step.plan, paymentId: p.id } };
