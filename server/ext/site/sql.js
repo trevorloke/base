@@ -26,6 +26,9 @@
 //                   a STOP text, the desk's Remove), so the record is whole
 //   site_keys       the server's signing secret when SITE_SECRET isn't set
 //                   (tokens.js) — one row, never exported
+//   app_hosts       every address people used the app at, signed in (the
+//                   API notes it, at most once an hour): never a website
+//                   domain (store.js noteAppHost) — the server's, never exported
 //
 // shifts.public: a shift the public may see and sign up for on the site's
 // events (the desk ticks "Show on the website"). persons.attrs.ref_code is a
@@ -138,6 +141,12 @@ create table if not exists site_keys (
   name text primary key,
   secret text not null,
   created_at timestamptz not null default now()
+);
+
+create table if not exists app_hosts (
+  host text primary key,
+  first_seen timestamptz not null default now(),
+  last_seen timestamptz not null default now()
 );
 
 alter table shifts add column if not exists public boolean not null default false;

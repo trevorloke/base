@@ -421,6 +421,9 @@ no login:
   counts
 - `/api/public/twilio/…` — Twilio's webhooks, signed (INTEGRATIONS.md)
 
+The pictures, the three unsubscribe links and the Stripe and Twilio webhooks
+also answer on the campaign's website domain (SITE.md); the others don't.
+
 A gift is logged at the desk (Donations → Log a gift) to one slate — city
 council or school board (`shared/canvass.js` SLATES) — and the annual limit
 is checked per contributor per slate.
@@ -691,6 +694,7 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
 | `STARBASE_BRAND` | `imagine-surrey` or `base` — the look (*The brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app (SITE.md) | blank: the website is at `/site/` only |
+| `APP_HOSTS` | the app's other addresses on this server (`starbase.imaginesurrey.ca` once base.win is the public one): never made a website domain, so the app keeps answering there (SITE.md) | blank |
 | `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters) | blank: one is made and kept in the database |
 
 Two environments per client: **staging** deploys every push to `main`,

@@ -28,7 +28,12 @@ The contract the website work is built against. Read with ROADMAP.md.
   `/<client>/desk/website` — the admin's Website area is at `/website`.
 - App routes (`/api`, `/field`, `/desk`, `/admin`, `/media`, `/u`, `/r/…` receipts …) are
   never shadowed on the app host. On a site host, only the site's routes and
-  `/media/:id`, `/stripe/webhook`, `/site-assets/*` are answered.
+  `/media/:id`, `/site-assets/*` are answered, and what services and emails
+  already sent call back, each only in its own shape, case and method: `POST
+  /stripe/webhook`, Twilio's `POST /api/public/twilio/…` and the unsubscribe
+  links `/u/<id>`, `/bu/<id>`, `/lu/<id>` (the id in either case; `/U/…` is
+  the site's) — so no domain setting can drop a payment, a STOP or an
+  unsubscribe. (`/r/…` there is the referral link.)
 
 Site routes (relative to the site root):
 `/` (the page with slug `home`) · `/:slug` (any published page) ·
@@ -61,6 +66,9 @@ site_actions   (id, workspace_id, person_id, kind, campaign_id, page_id,
                 unique per workspace, created_at)
 consent_events (id, workspace_id, person_id, channel 'email'|'sms',
                 granted bool, source, wording, created_at)
+app_hosts      (host pk, first_seen, last_seen)
+                -- the server's, not a campaign's: every address people used
+                -- the app at, signed in; never a website domain
 ```
 
 Every write goes through `runAction` (hash-chained event log). Admin actions:
@@ -557,7 +565,9 @@ Slugs: lowercase a–z, 0–9 and dashes; never `news`, `act`, `r`,
 `sitemap.xml`, `robots.txt`, `media`, `stripe`, `site` (and `home` is the
 home page's). Every Website write clears the campaign's cached pages.
 
-Environment: `SITE_HOSTS` (the campaign's own domains), `SITE_WORKSPACE`
+Environment: `SITE_HOSTS` (the campaign's own domains), `APP_HOSTS` (the
+app's other addresses on this server, never a website domain: one people
+used before base.win, say), `SITE_WORKSPACE`
 (which campaign the site is, by slug; default the first set up),
 `SITE_SECRET` (signs preview and preference links; unset, one is made and
 kept in the database), `SITE_CACHE_SECONDS` (60; 0 turns the page cache
@@ -604,9 +614,20 @@ theirs, and the server refuses its data anyway).
 Careful with "your own domain": on a host in `domains` only the site answers
 (no sign-in, no app). So `site.settings.save` refuses (400, in plain words)
 every host the app itself answers at: the host the save came in on,
-`STARBASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`, and base.win and its
-subdomains (`store.js appHosts`; `GET /api/site` lists them as
-`urls.app_hosts`, and the screen refuses them as they're typed). One saved
-before this check is ignored where the site looks domains up, so the app is
-never locked out of its own address — the screen marks it, to be taken off.
+`STARBASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`, the app's other
+addresses in `APP_HOSTS`, and base.win and its subdomains (`store.js
+appHosts`; `GET /api/site` lists them as `urls.app_hosts`, and the screen
+refuses them as they're typed). One saved before this check is ignored where
+the site looks domains up, so the app is never locked out of its own address
+— the screen marks it, to be taken off. It also refuses any address people
+used the app at, signed in (`app_hosts`, noted by the API at most once an
+hour per address; a write that fails is tried again by the next request
+there, never left for the hour), unless it is the site's already (saved
+before, or in `SITE_HOSTS`): to make such an address only the website,
+whoever runs the server adds it to `SITE_HOSTS`. `GET /api/site` lists
+those as `urls.used_hosts` (`{ host, why }`, the newest 200; none if the
+read fails), and the screen refuses them as they're typed, in the save's
+own words. So the screen says to add the domain first, then point its
+DNS here: the site answers there from the first request, and nobody signs
+in there before it does.
 

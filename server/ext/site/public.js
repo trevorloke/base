@@ -3,10 +3,11 @@
 //   the campaign's own domain(s)   SITE_HOSTS=imaginesurrey.ca,www.imaginesurrey.ca
 //                                  and site_settings.domains: the site at /.
 //                                  Only the site answers there — and
-//                                  /media/:id, /stripe/webhook,
-//                                  /site-assets/*: no app route, no sign-in
-//                                  cookie is ever read or set (siteGate,
-//                                  first in server/index.js)
+//                                  /media/:id, /site-assets/*, Stripe's and
+//                                  Twilio's webhooks, the emails'
+//                                  unsubscribe links (/u, /bu, /lu): no app
+//                                  route, no sign-in cookie is ever read or
+//                                  set (siteGate, first in server/index.js)
 //   anywhere else (the app's own address, base.win/<client>)
 //                                  the site at /site/… (and /site-assets/*);
 //                                  every app route stays the app's
@@ -338,12 +339,16 @@ export const makeSiteApp = (at) => {
     if (!site) return c.text('This site isn’t set up yet.', 503);
     await ensureSite(site.db, site.ws);
     // One address per page: /donate/ → /donate. Always on this site: the
-    // slashes (or backslashes) in front collapse to one, so '//other.host/'
-    // is a path here and never a link to another site.
+    // slashes in front collapse to one, so '//other.host/' is a path here
+    // and never a link to another site; and the path goes back as it came,
+    // still encoded. A tab, a line break or a backslash in it (%09, %0A,
+    // %5C), which a browser drops or reads as '/', is no page: the 404.
     const p = c.req.path;
     if ((c.req.method === 'GET' || c.req.method === 'HEAD') && p.length > 1 && p.endsWith('/') && p !== `${R}/`) {
+      // eslint-disable-next-line no-control-regex
+      if (/[\u0000-\u001f\u007f\\]/.test(p)) return notFound(c, site);
       const url = new URL(c.req.url);
-      return c.redirect(`${site.base}/${p.replace(/^[/\\]+/, '').replace(/\/+$/, '')}${url.search}`, 301);
+      return c.redirect(`${site.base}/${url.pathname.replace(/^\/+/, '').replace(/\/+$/, '')}${url.search}`, 301);
     }
     // The app's own copy of a site that has a domain of its own isn't indexed.
     if (R) {
@@ -594,17 +599,31 @@ publicRoutes.get('/site-assets/*', serveAsset);
 publicRoutes.all('/site', (c) => atSite.fetch(c.req.raw, c.env));
 publicRoutes.all('/site/*', (c) => atSite.fetch(c.req.raw, c.env));
 
-// The campaign's own domain: only the site (and the three it shares) answers.
+// The campaign's own domain: only the site (and what it shares) answers.
 const sites = new Map(); // workspace id ('' for the default) → app at /
 const atRootFor = (workspaceId) => {
   const k = workspaceId || '';
   if (!sites.has(k)) sites.set(k, makeSiteApp({ root: '', workspaceId }));
   return sites.get(k);
 };
-const SHARED = /^\/(?:media\/[^/]+|stripe\/webhook)$/;
+// Shared: pictures, and what services and emails already sent call back
+// (Stripe's and Twilio's webhooks, the unsubscribe links /u, /bu and /lu),
+// so no domain setting ever drops a payment, a STOP or an unsubscribe. Each
+// only in the shape, the case and with the method it comes in, as its route
+// takes it (an unsubscribe link's id in either case): nothing else of the
+// app answers there. (/r/… there is the site's referral link, never a receipt.)
+const TWILIO = /^\/api\/public\/twilio\/(?:sms|(?:sms-status|voice-dial|voice-status)\/[^/]+|voice\/[^/]+(?:\/connect)?)$/;
+const UNSUBSCRIBE = /^\/(?:u|bu|lu)\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const SHARED = [
+  [['GET', 'HEAD'], /^\/media\/[^/]+$/],
+  [['POST'], /^\/stripe\/webhook$/],
+  [['POST'], TWILIO],
+  [['GET', 'HEAD', 'POST'], UNSUBSCRIBE],
+];
+const shared = (c) => SHARED.some(([methods, path]) => methods.includes(c.req.method) && path.test(c.req.path));
 export const siteGate = async (c, next) => {
   const at = await siteHost(c);
   if (!at) return next();
-  if (SHARED.test(c.req.path)) return next();
+  if (shared(c)) return next();
   return atRootFor(at.workspaceId).fetch(c.req.raw, c.env);
 };

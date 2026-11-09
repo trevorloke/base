@@ -9,6 +9,7 @@
 import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { brandKey } from '../../lib/brand.js';
+import { DEFAULT_TZ } from '../../lib/org.js';
 import { checkTheme } from '@starbase/shared/site/theme';
 import { SECTION_KEYS, sectionOf, hostOf, consentWording, tagOf } from './shape.js';
 import { seedSite } from './seeds/index.js';
@@ -21,15 +22,18 @@ export const parseJ = (v, d) => {
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 
 // ── Hosts ──
-// SITE_HOSTS is the operator's: any host name or address (127.0.0.1 for a test).
-export const envHosts = () => String(process.env.SITE_HOSTS || '').split(',')
+// SITE_HOSTS and APP_HOSTS are the operator's: host names or addresses,
+// comma-separated (127.0.0.1 for a test).
+const hostList = (raw) => String(raw || '').split(',')
   .map((h) => h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, ''))
   .filter((h) => /^[a-z0-9.-]{1,253}$/.test(h));
+export const envHosts = () => hostList(process.env.SITE_HOSTS);
 
 // Where the app itself answers — never a website domain (on one of those
 // only the site answers: no sign-in, no app): base.win and its subdomains
-// (the front door), this server's public address (STARBASE_PUBLIC_URL) and
-// its host's own name (RENDER_EXTERNAL_HOSTNAME). site.settings.save
+// (the front door), this server's public address (STARBASE_PUBLIC_URL), its
+// host's own name (RENDER_EXTERNAL_HOSTNAME) and its other addresses
+// (APP_HOSTS: one people used before base.win, say). site.settings.save
 // refuses these and the host the save came in on; a domain saved as one
 // before is ignored below, so the app can't be locked out of its address.
 const DOOR = 'base.win';
@@ -41,12 +45,57 @@ export const appHosts = () => {
   } catch { /* not set */ }
   const r = hostOf(process.env.RENDER_EXTERNAL_HOSTNAME);
   if (r && !out.includes(r)) out.push(r);
+  for (const h of hostList(process.env.APP_HOSTS)) if (!out.includes(h)) out.push(h);
   return out;
 };
 export const isAppHost = (host, also = []) => {
   const h = String(host || '').toLowerCase().replace(/\.$/, '');
   return Boolean(h) && (h === DOOR || h.endsWith(`.${DOOR}`) || appHosts().includes(h) || also.includes(h));
 };
+
+// Every address people use the app at, as the API sees them signed in
+// (routes/api.js, and /api/auth/me as the app opens), kept in app_hosts:
+// the operator may not have listed them all, and site.settings.save refuses
+// those too. Written before the answer, at most once an hour per address by
+// this server; a write that fails is logged once, never fails the request,
+// and is tried again by the next request there.
+const HOUR = 3600_000;
+const noted = new Map(); // host → when this server last wrote it
+let noteFailed = false;
+export const noteAppHost = async (db, host) => {
+  const h = hostOf(host);
+  if (!h || Date.now() - (noted.get(h) || 0) < HOUR) return;
+  if (noted.size > 1000) noted.clear();
+  noted.set(h, Date.now());
+  try {
+    await db.query('insert into app_hosts (host) values ($1) on conflict (host) do update set last_seen = now()', [h]);
+  } catch (e) {
+    // Not written: no hour's wait for the next try, or a save in that hour
+    // could make an address people use the app at the website.
+    noted.delete(h);
+    if (!noteFailed) console.error(`site: couldn’t note where the app answers (${h}): ${e.message}`);
+    noteFailed = true;
+  }
+};
+// When people last used the app at a host (null: never, since it was noted).
+export const appHostSeen = async (q, host) => (await q.query('select last_seen from app_hosts where host = $1', [host])).rows[0]?.last_seen || null;
+// A day as people say it, in the campaign's time zone: November 9, 2026.
+const dayOf = (d, ctx) => new Date(d).toLocaleDateString('en-CA', { timeZone: ctx.workspace?.settings?.tz || DEFAULT_TZ, month: 'long', day: 'numeric', year: 'numeric' });
+// Why such an address is no website domain: the save's refusal (actions.js)
+// and the Website screen's as it's typed (usedHosts) — the same words.
+export const usedWhy = (host, seen, ctx) => `People used base.win at ${host} (last on ${dayOf(seen, ctx)}), so the app still answers there. If it should now be only the website, ask whoever runs the server to add it to SITE_HOSTS.`;
+// The addresses a save refuses for that, and why ({ host, why }), so the
+// Website screen refuses them as they're typed: every one noted but where
+// the app itself answers (refused in words of its own) and the site's own
+// already (saved, or SITE_HOSTS). The newest 200, and none when the read
+// fails (never failing the screen): the save checks them all.
+export const usedHosts = async (q, ctx, saved = []) => {
+  const site = [...saved, ...envHosts()];
+  const rows = await q.query('select host, last_seen from app_hosts order by last_seen desc limit 200').then((r) => r.rows, () => []);
+  return rows.filter((r) => !site.includes(r.host) && !isAppHost(r.host, ctx.host ? [ctx.host] : []))
+    .map((r) => ({ host: r.host, why: usedWhy(r.host, r.last_seen, ctx) }));
+};
+
 const DOMAINS_MS = 30_000;
 let domainMap = null; // host → workspace id (from site_settings.domains)
 let domainsAt = 0;
