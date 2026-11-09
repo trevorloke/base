@@ -23,8 +23,8 @@
 //       donor" flag on the two gives way to it); under on keep alone but
 //       over with another record that may be them, a maybe naming it.
 //       → { keep, drop, filled, moved, flagged: [{ gift_id, year, reason,
-//       maybe_same_donor? }] } — each such year once, so Duplicates can say
-//       over the limit now, or maybe.
+//       maybe_same_donor? }] } — each such year and slate once, so
+//       Duplicates can say over the limit now, or maybe.
 //   person.notDuplicate  { a, b }   desk. "Not the same": the pair is not
 //       shown again, and never added up for the year's limit; a gift
 //       flagged as possibly one donor on them is added up again without

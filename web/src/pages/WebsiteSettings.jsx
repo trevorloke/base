@@ -96,9 +96,9 @@ function Domains({ value, onChange, appHosts = [], usedHosts = [] }) {
       </div>
       {err && <p className="wb-field__err" id="wb-domain-err">{err}</p>}
       <p className="wb-field__hint" id="wb-domain-hint">
-        On these, only the website answers (at /) — no sign-in, nothing of the app. Add the domain here first, then point
-        its DNS at this server (your host or IT person does this), so the website answers there from the very first visit.
-        The app stays at {here || 'its own address'}.
+        On these, only the website answers (at /) — no sign-in, nothing of the app. Add the domain here first — and its
+        www. name too, if that will point here as well — then point its DNS at this server (your host or IT person does
+        this), so the website answers there from the very first visit. The app stays at {here || 'its own address'}.
       </p>
     </>
   );

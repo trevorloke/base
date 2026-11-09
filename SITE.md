@@ -659,7 +659,8 @@ before, or in `SITE_HOSTS`): to make such an address only the website,
 whoever runs the server adds it to `SITE_HOSTS`. `GET /api/site` lists
 those as `urls.used_hosts` (`{ host, why }`, the newest 200; none if the
 read fails), and the screen refuses them as they're typed, in the save's
-own words. So the screen says to add the domain first, then point its
-DNS here: the site answers there from the first request, and nobody signs
-in there before it does.
+own words. So the screen says to add the domain first (and its `www.`
+name, if that will point here too), then point its DNS here: the site
+answers there from the first request, and nobody signs in there before it
+does.
 
