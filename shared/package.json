@@ -11,6 +11,12 @@
     "./markdown": "./markdown.js",
     "./passes": "./passes.js",
     "./names": "./names.js",
-    "./brand": "./brand.js"
+    "./brand": "./brand.js",
+    "./site/*": "./site/*.js"
+  },
+  "dependencies": {
+    "htm": "^3.1.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }
