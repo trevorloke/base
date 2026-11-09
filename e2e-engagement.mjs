@@ -183,6 +183,14 @@ let dt = await D.text();
 check('the manager’s Today: "Follow up · 1" — Omar, from the office', /Follow up · 1/i.test(dt) && /Omar Example/.test(dt), dt.slice(0, 240));
 check('Needs you: "1 follow-up"', /1 follow-up/.test(dt));
 await D.shot('desk-1-today');
+const tphone = await desk.newPage();
+await tphone.setViewportSize({ width: 390, height: 844 });
+await tphone.goto(`${ADMIN}/`, { waitUntil: 'domcontentloaded' });
+await tphone.locator('section.fu .fu-row').first().waitFor({ timeout: 10000 }).catch(() => {});
+await sleep(400);
+await tphone.screenshot({ path: `${SHOTS}/phone-9-desk-today.png`, fullPage: false });
+await simple(tphone, 'the desk’s Today on a phone', 'main.page section.fu button, main.page .today-rows a');
+await tphone.close();
 await page.goto(`${ADMIN}/follow-ups`, { waitUntil: 'domcontentloaded' });
 await page.locator('.lad-by').waitFor({ timeout: 8000 }).catch(() => {});
 await sleep(400);
@@ -203,6 +211,24 @@ check('Who has them → Rae: only hers', (await page.locator('.lad-fu').count())
 await rae.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
 await rae.locator('section.fu .fu-row', { hasText: 'Omar Example' }).waitFor({ timeout: 10000 }).catch(() => {});
 check('Omar is on Rae’s Today now', (await rae.locator('section.fu .fu-row', { hasText: 'Omar Example' }).count()) === 1);
+// A day later (the answer's due time moved back a day: the clock counts
+// from the server's time, whatever the phone's says): overdue, in red.
+await rae.route('**/api/followups/mine', async (route) => {
+  const res = await route.fetch();
+  const body = await res.json();
+  for (const f of body.followups) f.due_at = new Date(new Date(body.now).getTime() - 3 * 3600_000 - 60_000).toISOString();
+  await route.fulfill({ response: res, json: body });
+});
+await rae.reload({ waitUntil: 'domcontentloaded' });
+await rae.locator('section.fu .fu-row', { hasText: 'Omar Example' }).waitFor({ timeout: 10000 }).catch(() => {});
+const late = rae.locator('section.fu .fu-row', { hasText: 'Omar Example' });
+const lateText = ((await late.innerText().catch(() => '')) || '').replace(/\s+/g, ' ');
+const lateColor = await late.locator('.fu-clock').evaluate((el) => getComputedStyle(el).color).catch(() => '');
+check('overdue: "Overdue · 3 h", in red, and the heading says so', /Overdue · 3 h/.test(lateText) && /Overdue by 3 hours/.test(lateText)
+  && /^rgb\((1[5-9]\d|2\d\d), \d{1,2}, \d{1,2}\)$/.test(lateColor) && /1 overdue/i.test(await R.text()), `${lateText} ${lateColor}`);
+check('…and not by colour alone: a red edge on the row', (await rae.locator('.fu-item[data-late]').count()) === 1);
+await R.shot('phone-8-overdue');
+await rae.unroute('**/api/followups/mine');
 await rae.goto(`${BASE}/follow-ups`, { waitUntil: 'domcontentloaded' });
 await sleep(500);
 check('Rae can’t open the desk’s Follow-ups', new URL(rae.url()).pathname === '/', rae.url());
