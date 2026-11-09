@@ -139,7 +139,7 @@ await page.waitForURL(`${ADMIN}/ladders`, { timeout: 8000 }).catch(() => {});
 await sleep(600);
 let t = await D.text();
 check('Ladders opens empty: one line + one button', /No ladders yet\./.test(t) && (await page.locator('.btn-primary:visible').count()) === 1, t.slice(0, 160));
-check('Ladders says what it is under the title', /^Ladders Automatic emails & follow-ups/.test(t), t.slice(0, 60));
+check('Ladders says what it is under the title', /^Ladders Automatic emails, texts & follow-ups/.test(t), t.slice(0, 60));
 await D.shot('1-ladders-empty');
 
 // ── 3. New ladder: name + Starts when (a tag) ──

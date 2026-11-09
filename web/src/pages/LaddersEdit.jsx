@@ -1,17 +1,24 @@
-// One ladder: what starts it, its steps as cards, and who's on it.
+// One ladder: what starts it, its goal, its steps as cards, and who's on it.
 //   Header: the name and the one yellow "Turn on" (while it's off). On, a
 //     quiet "Turn off" — everyone holds their place until it's back on.
-//   Starts when: one line; Change opens the picker in place.
-//   Steps: numbered cards (Wait · Email · Tag · Follow-up; Remove a tag and
-//     Stop under "Other steps"). A card opens in place to edit, move or
-//     remove it. An email card says who it goes to: only people who said yes
-//     to email ("· 67 people said yes"). "+ First name" / "+ Campaign" put
-//     in [first name] / [campaign] — the fields and lines show those words,
-//     {{first_name}} / {{campaign}} are stored underneath (LaddersWords.js);
-//     a {…} that wouldn't fill in is flagged before saving.
+//   Starts when: one line; Change opens the picker in place (what was done
+//     on the website, a shift booked, came, missed, any gift, a membership,
+//     a survey, a tag…).
+//   Goal: one line ("Until they come to a shift" — they come off as soon as
+//     they do it); Change picks one, or none.
+//   Steps: numbered cards (Wait · Email · Text · Tag · Follow-up; Remove a
+//     tag and Stop under "Other steps"). A card opens in place to edit, move
+//     or remove it. An email card says who it goes to: only people who said
+//     yes to email ("· 67 people said yes"); a text card, the texting rules
+//     it keeps (its hours, never after STOP, the opt-out line added). "+ First
+//     name" / "+ Campaign" put in [first name] / [campaign] — the fields and
+//     lines show those words, {{first_name}} / {{campaign}} are stored
+//     underneath (LaddersWords.js); a {…} that wouldn't fill in is flagged
+//     before saving, and so is a text that doesn't say who it's from.
 //   People: each person and where they are ("Waiting until Fri, Oct 24",
-//     "Waiting — email isn't connected"); a row opens on what each step did,
-//     with Take off. Finished people fold away.
+//     "Waiting — email isn't connected", "Waiting for texting hours",
+//     "Reached the goal"); a row opens on what each step did, with Take off.
+//     Finished people fold away.
 //   More: rename, "Let people go through again", Delete.
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -19,24 +26,28 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import {
-  CONNECT_TO, LadBack, OTHER_STEPS, STEP_KINDS, TriggerPicker, countsLine, fmtWhen, logLine, stepLine, triggerLine, whereLine,
+  CONNECT_TO, GOAL_HINT, GoalPicker, LadBack, OTHER_STEPS, STEP_KINDS, TriggerPicker, countsLine, fmtWhen, goalOf, logLine,
+  stepLine, triggerLine, triggerMissing, whereLine,
 } from '../components/LaddersBits.jsx';
-import { FILLS, emailWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
+import { FILLS, emailWho, textNamesCampaign, textWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
 import './shifts.css';
 import './ladders.css';
 
 const BLANK = {
   wait: { kind: 'wait', n: 1, unit: 'days' },
   email: { kind: 'email', subject: '', body: '' },
+  text: { kind: 'text', body: '' },
   tag: { kind: 'tag', tag: '' },
   untag: { kind: 'untag', tag: '' },
   followup: { kind: 'followup', text: '' },
   stop: { kind: 'stop' },
 };
 const doesSomething = (steps) => steps.some((s) => s.kind !== 'wait' && s.kind !== 'stop');
+const TEXT_MAX = 900;
 
-// What a step needs before it can be saved.
-const missing = (s) => {
+// What a step needs before it can be saved. campaign: its name, which a
+// text must say (or carry [campaign]).
+const missing = (s, campaign) => {
   if (s.kind === 'wait' && !(Number(s.n) >= 1)) return 'How long?';
   if (s.kind === 'email' && !s.subject.trim()) return 'Add a subject';
   if (s.kind === 'email' && !s.body.trim()) return 'Add a message';
@@ -44,6 +55,10 @@ const missing = (s) => {
   // The codes stored are a little longer than the words in the field.
   if (s.kind === 'email' && s.subject.trim().length > 200) return 'Shorten the subject';
   if (s.kind === 'email' && s.body.trim().length > 20000) return 'Shorten the message';
+  if (s.kind === 'text' && !s.body.trim()) return 'Write the text';
+  if (s.kind === 'text') { const u = unfilled(s.body); if (u) return u; }
+  if (s.kind === 'text' && s.body.trim().length > TEXT_MAX) return 'Shorten the text';
+  if (s.kind === 'text' && !textNamesCampaign(s.body, campaign)) return `Say it’s ${campaign || 'the campaign'} — + Campaign puts the name in`;
   if ((s.kind === 'tag' || s.kind === 'untag') && !s.tag.trim()) return 'Add a tag';
   if (s.kind === 'followup' && !s.text.trim()) return 'Say what to do';
   if (s.kind === 'followup' && s.text.trim().length > 300) return 'Shorten the follow-up';
@@ -52,6 +67,7 @@ const missing = (s) => {
 const clean = (s) => {
   if (s.kind === 'wait') return { kind: 'wait', n: Math.max(1, Math.round(Number(s.n))), unit: s.unit };
   if (s.kind === 'email') return { kind: 'email', subject: s.subject.trim(), body: s.body.trim() };
+  if (s.kind === 'text') return { kind: 'text', body: s.body.trim() };
   if (s.kind === 'tag' || s.kind === 'untag') return { kind: s.kind, tag: s.tag.trim() };
   if (s.kind === 'followup') return { kind: 'followup', text: s.text.trim() };
   return { kind: 'stop' };
@@ -99,6 +115,40 @@ function EmailFields({ s, set, idp }) {
   );
 }
 
+// A text: the words, the two fill-ins, and what the texting rules add.
+function TextFields({ s, set, idp }) {
+  const box = useRef(null);
+  const insert = (word) => {
+    const el = box.current;
+    const val = toWords(s.body);
+    const at = typeof el?.selectionStart === 'number' ? el.selectionStart : val.length;
+    const end = typeof el?.selectionEnd === 'number' ? el.selectionEnd : at;
+    // "…shift!" + [campaign] reads "…shift! [campaign]", never glued on.
+    const put = at > 0 && !/\s/.test(val[at - 1]) ? ` ${word}` : word;
+    set({ ...s, body: toCodes(val.slice(0, at) + put + val.slice(end)) });
+    const caret = at + put.length;
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange?.(caret, caret); });
+  };
+  const n = toWords(s.body).length;
+  return (
+    <>
+      <div className="field">
+        <label htmlFor={`${idp}-text`}>Text</label>
+        <textarea id={`${idp}-text`} ref={box} className="input lad-input lad-body lad-text" rows={4} maxLength={TEXT_MAX}
+          aria-describedby={`${idp}-text-hint`} placeholder="Hi [first name], thanks for signing up! — [campaign]"
+          value={toWords(s.body)} onChange={(e) => set({ ...s, body: toCodes(e.target.value) })} />
+      </div>
+      <div className="lad-tokens" role="group" aria-label="Fill in">
+        {FILLS.map((f) => (
+          <button key={f.code} type="button" className="btn btn-quiet ops-tap lad-token"
+            onMouseDown={(e) => e.preventDefault()} onClick={() => insert(f.word)}>{f.button}</button>
+        ))}
+      </div>
+      <p className="lad-hint" id={`${idp}-text-hint`}>Say who it’s from. “Reply STOP to opt out” is added. <span className="mono">{n}/{TEXT_MAX}</span></p>
+    </>
+  );
+}
+
 function StepFields({ s, set, idp, tags }) {
   if (s.kind === 'wait') {
     return (
@@ -117,6 +167,7 @@ function StepFields({ s, set, idp, tags }) {
     );
   }
   if (s.kind === 'email') return <EmailFields s={s} set={set} idp={idp} />;
+  if (s.kind === 'text') return <TextFields s={s} set={set} idp={idp} />;
   if (s.kind === 'tag' || s.kind === 'untag') {
     return (
       <div className="field">
@@ -140,13 +191,13 @@ function StepFields({ s, set, idp, tags }) {
   return <p className="lad-hint">The ladder ends here for them.</p>;
 }
 
-function StepEditor({ initial, saveLabel, onSave, onCancel, busy, tags, extra }) {
+function StepEditor({ initial, saveLabel, onSave, onCancel, busy, tags, extra, campaign }) {
   const [s, setS] = useState(initial);
   const [error, setError] = useState(null);
   const idp = useId();
   const submit = async (e) => {
     e.preventDefault();
-    const why = missing(s);
+    const why = missing(s, campaign);
     if (why) { setError(why); return; }
     setError(null);
     await onSave(clean(s));
@@ -164,7 +215,7 @@ function StepEditor({ initial, saveLabel, onSave, onCancel, busy, tags, extra })
   );
 }
 
-function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove, busy, tags, emailYes }) {
+function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove, busy, tags, emailYes, campaign }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <li className="ops-item lad-step" data-open={open || undefined}>
@@ -175,11 +226,14 @@ function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove
           {step.kind === 'email' && (
             <span className="ops-row__sub lad-step__who">{emailWho(emailYes)}</span>
           )}
+          {step.kind === 'text' && (
+            <span className="ops-row__sub lad-step__who">{textWho}</span>
+          )}
         </span>
       </button>
       {open && (
         <div className="ops-body">
-          <StepEditor initial={step} saveLabel="Save step" onSave={onSave} onCancel={onToggle} busy={busy} tags={tags}
+          <StepEditor initial={step} saveLabel="Save step" onSave={onSave} onCancel={onToggle} busy={busy} tags={tags} campaign={campaign}
             extra={<>
               {index > 0 && <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => onMove(-1)} aria-label="Move up">↑</button>}
               {index < count - 1 && <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => onMove(1)} aria-label="Move down">↓</button>}
@@ -199,14 +253,14 @@ function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove
   );
 }
 
-function AddStep({ onAdd, busy, tags }) {
+function AddStep({ onAdd, busy, tags, campaign }) {
   const [kind, setKind] = useState(null);
   const [more, setMore] = useState(false);
   if (kind) {
     return (
       <div className="card lad-new-step">
         <span className="eyebrow">New step · {STEP_KINDS.find((k) => k.kind === kind).label}</span>
-        <StepEditor initial={BLANK[kind]} saveLabel="Add step" busy={busy} tags={tags}
+        <StepEditor initial={BLANK[kind]} saveLabel="Add step" busy={busy} tags={tags} campaign={campaign}
           onSave={async (s) => { if (await onAdd(s)) setKind(null); }} onCancel={() => setKind(null)} />
       </div>
     );
@@ -242,8 +296,9 @@ function TriggerLine({ ladder, options, onSave, busy }) {
   }
   const submit = async (e) => {
     e.preventDefault();
-    if (t.kind === 'tag' && !t.ref.trim()) { setError('Pick a tag'); return; }
-    const ok = await onSave({ kind: t.kind, ref: t.ref.trim() || null });
+    const why = triggerMissing(t);
+    if (why) { setError(why); return; }
+    const ok = await onSave({ kind: t.kind, ref: String(t.ref || '').trim() || null });
     if (ok) setEditing(false);
   };
   return (
@@ -258,14 +313,47 @@ function TriggerLine({ ladder, options, onSave, busy }) {
   );
 }
 
-function PersonRow({ r, open, onToggle, emailConfigured, onTakeOff, busy }) {
+// The goal: one line ("Until they give"); Change picks one, or none.
+function GoalLine({ ladder, onSave, busy }) {
+  const [editing, setEditing] = useState(false);
+  const [g, setG] = useState(ladder.goal?.kind || null);
+  useEffect(() => { if (!editing) setG(ladder.goal?.kind || null); }, [editing, ladder.goal?.kind]);
+  if (!editing) {
+    const goal = goalOf(ladder.goal?.kind);
+    return (
+      <div className="lad-trigger lad-goal">
+        <span className="ops-row__main">
+          <span className="lad-label">Goal</span>
+          <span className="lad-trigger__line">{goal ? goal.until : 'No goal — they go through every step'}</span>
+          {goal && <span className="lad-hint">{GOAL_HINT}</span>}
+        </span>
+        <button type="button" className="btn btn-quiet ops-tap" onClick={() => setEditing(true)}>{goal ? 'Change' : 'Add a goal'}</button>
+      </div>
+    );
+  }
+  const submit = async (e) => {
+    e.preventDefault();
+    if (await onSave(g || null)) setEditing(false);
+  };
+  return (
+    <form className="card lad-form" onSubmit={submit} aria-label="Goal">
+      <GoalPicker value={g} onChange={setG} idp="lad-goal" disabled={busy} />
+      <div className="ops-actions">
+        <button type="submit" className="btn ops-solid ops-tap" disabled={busy}>Save</button>
+        <button type="button" className="btn btn-quiet ops-tap" onClick={() => setEditing(false)}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+function PersonRow({ r, open, onToggle, emailConfigured, textConfigured, onTakeOff, busy }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <li className="ops-item" data-open={open || undefined}>
       <button type="button" className="ops-row" aria-expanded={open} onClick={onToggle}>
         <span className="ops-row__main">
           <span className="ops-row__name">{r.person.name}</span>
-          <span className="ops-row__sub">{whereLine(r, emailConfigured)}</span>
+          <span className="ops-row__sub">{whereLine(r, emailConfigured, textConfigured)}</span>
         </span>
       </button>
       {open && (
@@ -295,14 +383,14 @@ function PersonRow({ r, open, onToggle, emailConfigured, onTakeOff, busy }) {
   );
 }
 
-function People({ people, emailConfigured, onTakeOff, busy }) {
+function People({ people, emailConfigured, textConfigured, onTakeOff, busy }) {
   const [openId, setOpenId] = useState(null);
   const [showDone, setShowDone] = useState(false);
   const live = people.filter((p) => p.status !== 'done');
   const done = people.filter((p) => p.status === 'done');
   const row = (r) => (
     <PersonRow key={r.id} r={r} open={openId === r.id} onToggle={() => setOpenId(openId === r.id ? null : r.id)}
-      emailConfigured={emailConfigured} onTakeOff={onTakeOff} busy={busy} />
+      emailConfigured={emailConfigured} textConfigured={textConfigured} onTakeOff={onTakeOff} busy={busy} />
   );
   return (
     <section className="lad-sec" aria-labelledby="lad-people-h">
@@ -415,10 +503,11 @@ export default function LaddersEdit() {
       </div>
     );
   }
-  const { ladder: l, people, emailConfigured, emailYes, options } = q.data;
+  const { ladder: l, people, emailConfigured, textConfigured, emailYes, options, campaign } = q.data;
   const steps = l.steps;
   const saveSteps = (next) => run('ladder.update', { id: l.id, steps: next });
   const hasEmail = steps.some((s) => s.kind === 'email');
+  const hasText = steps.some((s) => s.kind === 'text');
   const ready = doesSomething(steps);
 
   // The chip says On / Off; a line only when people were picked up or paused.
@@ -447,10 +536,14 @@ export default function LaddersEdit() {
       {hasEmail && !emailConfigured && (
         <p className="lad-note" role="status">Email isn’t connected — email steps wait. <Link to={CONNECT_TO}>Connect</Link></p>
       )}
+      {hasText && !textConfigured && (
+        <p className="lad-note" role="status">Texting isn’t connected — text steps wait. <Link to={CONNECT_TO}>Connect</Link></p>
+      )}
       {error && <p className="error" role="alert">{error}</p>}
 
       <TriggerLine ladder={l} options={options} busy={busy}
         onSave={(trigger) => run('ladder.update', { id: l.id, trigger })} />
+      <GoalLine ladder={l} busy={busy} onSave={(goal) => run('ladder.update', { id: l.id, goal })} />
 
       <section className="lad-sec" aria-labelledby="lad-steps-h">
         <h2 className="lad-h" id="lad-steps-h">Steps</h2>
@@ -459,7 +552,7 @@ export default function LaddersEdit() {
           <ol className="ops-rows lad-steps">
             {steps.map((s, i) => (
               <StepCard key={`${i}-${s.kind}-${stepLine(s)}`} step={s} index={i} count={steps.length} busy={busy} tags={options.tags}
-                emailYes={emailYes}
+                emailYes={emailYes} campaign={campaign}
                 open={openStep === i} onToggle={() => setOpenStep(openStep === i ? null : i)}
                 onSave={async (next) => { if (await saveSteps(steps.map((x, j) => (j === i ? next : x)))) setOpenStep(null); }}
                 onRemove={async () => { if (await saveSteps(steps.filter((_, j) => j !== i))) setOpenStep(null); }}
@@ -471,10 +564,10 @@ export default function LaddersEdit() {
             ))}
           </ol>
         )}
-        <AddStep busy={busy} tags={options.tags} onAdd={(s) => saveSteps([...steps, s])} />
+        <AddStep busy={busy} tags={options.tags} campaign={campaign} onAdd={(s) => saveSteps([...steps, s])} />
       </section>
 
-      <People people={people} emailConfigured={emailConfigured} busy={busy}
+      <People people={people} emailConfigured={emailConfigured} textConfigured={textConfigured} busy={busy}
         onTakeOff={(r) => run('ladder.stopRun', { id: r.id }, () => `${r.person.name} taken off`)} />
 
       <LadderMore ladder={l} run={run} busy={busy} />

@@ -1,17 +1,22 @@
 // Ladders of engagement — Action Network / Action Builder style.
 //
-// A ladder is a trigger (joined the newsletter, first donation, got a tag,
-// rated 1 or 2) and a list
-// of steps (Wait · Email · Tag · Remove a tag · Follow-up for staff · Stop).
-// Email steps go only to people who said yes to email (subscribed).
+// A ladder is a trigger (joined the newsletter, first donation or any gift,
+// got a tag, rated 1 or 2, did something on the website — by kind, or one
+// petition or pledge —, booked a shift, came to one or didn't show up,
+// became a member, answered a survey), a list of steps (Wait · Email ·
+// Text · Tag · Remove a tag · Follow-up for staff · Stop) and, if it has
+// one, a goal (came to a shift, gave, became a member, voted) that takes
+// the person off as soon as they do it. Email steps go only to people who
+// said yes to email (subscribed); text steps follow the texting rules
+// (quiet hours, STOP, the campaign named, one conversation per number).
 // When someone does the trigger they are put on every ladder that is on,
 // once, and the steps run one job at a time. Each person also has an
 // engagement level (Contact → Supporter → Signer → Donor or volunteer →
 // Leader), computed from what they did.
 //
 //   sql.js      tables + the persons trigger that notes tags just got
-//   shape.js    triggers, steps, contracts, {{first_name}} / {{campaign}}
-//   engine.js   the events hook (enrolling) and the 'ladder.step' job
+//   shape.js    triggers, goals, steps, contracts, {{first_name}} / {{campaign}}
+//   engine.js   the events hook (enrolling, goals) and the 'ladder.step' job
 //   actions.js  ladder.* actions (desk roles)
 //   levels.js   engagement levels
 //   api.js      desk-only reads

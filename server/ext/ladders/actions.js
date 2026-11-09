@@ -1,19 +1,26 @@
 // ladder.* actions — desk roles only (manager, treasurer, staff). Same
 // contract as every action: zod input, a transactional handler, events.
 //
-//   ladder.create       name + trigger (+ steps); a new ladder starts Off
-//   ladder.update       name, trigger, steps, "let people go through again"
+//   ladder.create       name + trigger (+ steps, goal); a new ladder starts Off
+//   ladder.update       name, trigger, steps, goal (null: none), "let people
+//                       go through again". Every text step must name the
+//                       campaign (shape.js textProblem).
 //   ladder.setActive    On: people who start it from now on are put on it,
 //                       and paused runs pick up at the same step. Off: every
 //                       run holds its place and pending steps are cancelled.
 //   ladder.delete       gone from the lists; runs end, follow-ups stay
 //   ladder.stopRun      take one person off a ladder
 //   ladder.followupDone a follow-up done (or, with done: false, not yet)
+//   ladder.followupAssign  hand a follow-up to a named organizer (the desk
+//                       re-routing speed to lead, ext/followups). A ladder's
+//                       own follow-ups ("Thank Ana for her gift") go to the
+//                       desk only: a volunteer never sees money.
 import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
-import { triggerSchema, stepsSchema, runnable, parseJson } from './shape.js';
+import { triggerSchema, stepsSchema, goalSchema, runnable, parseJson, textProblem } from './shape.js';
 import { pauseLadder, resumeLadder, endRun, appendLog } from './engine.js';
+import { campaignOf, hasTable } from '../webdid/words.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 const uuid = () => z.uuid();
@@ -28,12 +35,42 @@ const loadLadder = async (tx, ws, id) => {
   return l;
 };
 
-// The detail a trigger keeps: the tag, for "Got a tag"; nothing otherwise.
-const checkRef = async (tx, ws, trigger) => (trigger.kind === 'tag' && trigger.ref ? trigger.ref : null);
+// The detail a trigger keeps: the tag, for "Got a tag"; what was done on
+// the website (a kind, or one of this campaign's petitions and pledges);
+// the survey, for "Answered a survey" (none: any survey). Nothing otherwise.
+const checkRef = async (tx, ws, trigger) => {
+  const ref = trigger.ref ? String(trigger.ref).trim() : '';
+  if (trigger.kind === 'tag') return ref || null;
+  if (trigger.kind === 'web') {
+    const id = campaignOf(ref);
+    if (!id) return ref;
+    // The website's petitions are the site server's; checked when it's there.
+    if (await hasTable(tx, 'site_campaigns')) {
+      const c = (await tx.query('select id from site_campaigns where id = $1 and workspace_id = $2', [id, ws])).rows[0];
+      if (!c) throw httpError(404, 'that petition or pledge isn’t here');
+    }
+    return `campaign:${id}`;
+  }
+  if (trigger.kind === 'survey' && ref) {
+    const s = (await tx.query('select id from surveys where id = $1 and workspace_id = $2', [ref.toLowerCase(), ws])).rows[0];
+    if (!s) throw httpError(404, 'survey not found');
+    return s.id;
+  }
+  return null;
+};
+
+// Every text step names the campaign and fills in only what fills in.
+const checkTexts = (ctx, steps) => {
+  for (const s of steps || []) {
+    if (s.kind !== 'text') continue;
+    const why = textProblem(s.body, ctx.workspace?.name);
+    if (why) throw httpError(400, why.charAt(0).toUpperCase() + why.slice(1));
+  }
+};
 
 const out = (l) => ({
   id: l.id, name: l.name, trigger: { kind: l.trigger_kind, ref: l.trigger_ref || null },
-  steps: parseJson(l.steps, []), active: l.active, reentry: l.reentry,
+  steps: parseJson(l.steps, []), active: l.active, reentry: l.reentry, goal: l.goal || null,
 });
 
 export const actions = {
@@ -44,17 +81,20 @@ export const actions = {
       trigger: triggerSchema,
       steps: stepsSchema.default([]),
       reentry: z.boolean().default(false),
+      goal: goalSchema.nullish(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const ref = await checkRef(tx, ctx.workspaceId, input.trigger);
+      checkTexts(ctx, input.steps);
       const id = newId();
+      const goal = input.goal || null;
       await tx.query(
-        `insert into ladders (id, workspace_id, name, trigger_kind, trigger_ref, steps, reentry, public_url, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `insert into ladders (id, workspace_id, name, trigger_kind, trigger_ref, steps, reentry, public_url, created_by, goal)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [id, ctx.workspaceId, input.name, input.trigger.kind, ref, JSON.stringify(input.steps),
-         input.reentry, ctx.publicUrl || null, ctx.user.id],
+         input.reentry, ctx.publicUrl || null, ctx.user.id, goal],
       );
-      const ladder = { id, name: input.name, trigger: { kind: input.trigger.kind, ref }, steps: input.steps, active: false, reentry: input.reentry };
+      const ladder = { id, name: input.name, trigger: { kind: input.trigger.kind, ref }, steps: input.steps, active: false, reentry: input.reentry, goal };
       emit('ladder', id, 'create', ladder);
       return { ladder };
     },
@@ -68,6 +108,8 @@ export const actions = {
       trigger: triggerSchema.nullish(),
       steps: stepsSchema.nullish(),
       reentry: z.boolean().nullish(),
+      // A goal, or null to have none; left out, it stays as it is.
+      goal: goalSchema.nullable().optional(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const cur = await loadLadder(tx, ctx.workspaceId, input.id);
@@ -81,16 +123,18 @@ export const actions = {
       }
       if (input.steps) {
         if (cur.active && !runnable(input.steps)) throw httpError(400, 'a ladder that is on needs a step that does something');
+        checkTexts(ctx, input.steps);
         next.steps = input.steps;
         patch.steps = input.steps;
       }
       if (input.reentry != null) { next.reentry = input.reentry; patch.reentry = input.reentry; }
+      if (input.goal !== undefined) { next.goal = input.goal || null; patch.goal = next.goal; }
       await tx.query(
         `update ladders set name = $3, trigger_kind = $4, trigger_ref = $5, steps = $6, reentry = $7,
-           public_url = coalesce($8, public_url), updated_at = now()
+           public_url = coalesce($8, public_url), goal = $9, updated_at = now()
          where id = $1 and workspace_id = $2`,
         [cur.id, ctx.workspaceId, next.name, next.trigger_kind, next.trigger_ref || null,
-         JSON.stringify(parseJson(next.steps, [])), next.reentry, ctx.publicUrl || null],
+         JSON.stringify(parseJson(next.steps, [])), next.reentry, ctx.publicUrl || null, next.goal || null],
       );
       emit('ladder', cur.id, 'update', patch);
       return { ladder: out(next) };
@@ -175,6 +219,36 @@ export const actions = {
       }
       emit('ladder_followup', row.id, 'update', { status: row.status });
       return { id: row.id, status: row.status };
+    },
+  },
+
+  'ladder.followupAssign': {
+    roles: DESK,
+    input: z.object({ id: uuid(), user_id: uuid() }),
+    handler: async (tx, ctx, input, emit) => {
+      const f = (await tx.query(
+        'select id, status, kind, assigned_to, due_at from ladder_followups where id = $1 and workspace_id = $2 for update',
+        [input.id, ctx.workspaceId],
+      )).rows[0];
+      if (!f) throw httpError(404, 'follow-up not found');
+      if (f.status !== 'open') throw httpError(409, 'that follow-up is done');
+      const who = (await tx.query(
+        `select u.id, u.name, m.role from memberships m join users u on u.id = m.user_id
+         where m.workspace_id = $1 and m.user_id = $2`,
+        [ctx.workspaceId, input.user_id],
+      )).rows[0];
+      if (!who) throw httpError(404, 'not on the team');
+      if (!f.kind && who.role === 'volunteer') throw httpError(400, 'A ladder’s follow-ups stay with the desk');
+      if (f.assigned_to === who.id) return { id: f.id, assigned_to: { id: who.id, name: who.name } };
+      // The clock is the person's wait, so a hand-over keeps it; a ladder's
+      // follow-up gets one when it first has a name on it.
+      await tx.query(
+        `update ladder_followups set assigned_to = $3, routed = 'desk', due_at = coalesce(due_at, now() + interval '24 hours')
+         where id = $1 and workspace_id = $2`,
+        [f.id, ctx.workspaceId, who.id],
+      );
+      emit('ladder_followup', f.id, 'update', { assigned_to: who.id, routed: 'desk', from: f.assigned_to || null });
+      return { id: f.id, assigned_to: { id: who.id, name: who.name } };
     },
   },
 };
