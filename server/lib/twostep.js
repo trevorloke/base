@@ -257,6 +257,18 @@ const parseList = (v) => (typeof v === 'string' ? JSON.parse(v) : (v || []));
 
 const isAppCode = (code) => /^\d{6}$/.test(String(code ?? '').trim().replace(/\s/g, ''));
 
+// Would this code from the app be taken now? Read only — nothing is used up
+// (checkCode does that, under the row's lock). For the slow work that
+// follows only a right code (new recovery codes), done before the write.
+// pending: the key being set up (not on yet) rather than the one in use.
+export async function peekCode(db, userId, code, { pending = false } = {}) {
+  const row = await twoStepRow(db, userId);
+  if (!row?.secret || Boolean(row.on_since) === pending || !isAppCode(code)) return false;
+  const open = await openSecret(db, row.secret);
+  if (!open) return false;
+  return verifyTotp(base32Decode(open.plain), code, { afterStep: row.last_step == null ? null : Number(row.last_step) }) !== null;
+}
+
 // A recovery code's hash is slow to make (on purpose): made before any lock
 // is taken (checkCode's `hash`), from the salt as it is now. Null for
 // anything that isn't shaped like a recovery code.

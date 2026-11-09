@@ -167,7 +167,7 @@ function InvitedRow({ inv, ids, canCancel, onChanged, onLinkGone, online = true 
 
 // A member: role picker, and Remove (never for yourself). Removing someone
 // signs them out everywhere at once; a new invite lets them back in.
-function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = false, onTwoStep }) {
+function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoStep }) {
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -205,7 +205,7 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = false, onTwoS
           <span className="ot-row__name">{m.name}{isMe ? <span className="muted"> (you)</span> : null}</span>
           <span className="ot-row__sub ot-row__sub--stack">
             <span className="ot-email"><Email value={m.email} /></span>
-            <span>since {fmtDay(m.created_at)}{twoStep && <span className="chip chip-ok tm-2step">Two-step on</span>}</span>
+            <span>since {fmtDay(m.created_at)}{twoStep?.on && <span className="chip chip-ok tm-2step">Two-step on</span>}</span>
           </span>
         </span>
         <span className="ot-actions ot-row__acts">
@@ -213,7 +213,8 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = false, onTwoS
             disabled={isMe || !online || busy} onChange={(e) => onRole(m.id, e.target.value)}>
             {ROLES.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
           </select>
-          {!isMe && twoStep && !confirming && !resetting && (
+          {/* In another campaign here too: that's reset from the server's shell. */}
+          {!isMe && twoStep?.on && !twoStep.elsewhere && !confirming && !resetting && (
             <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy || !online}
               onClick={() => { setResetting(true); setSaid(null); }}>Reset two-step</button>
           )}
@@ -231,7 +232,7 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = false, onTwoS
               <button type="button" className="btn ot-btn-tap ot-btn-danger" disabled={busy} onClick={reset}>
                 {busy ? 'Resetting…' : 'Yes, reset'}
               </button>
-              <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy} onClick={() => setResetting(false)}>No</button>
+              <button type="button" className="btn btn-quiet ot-btn-tap" disabled={busy} onClick={() => { setResetting(false); setError(null); }}>No</button>
             </div>
           )}
           {said && <p className="muted" role="status">{said}</p>}
@@ -311,7 +312,7 @@ export default function Team({ embedded = false }) {
   const team = useQuery({ queryKey: ['team'], queryFn: () => apiGet('/team'), enabled: isManager });
   // Who has two-step sign-in on, and whether desk roles must (ext/twostep).
   const twoStep = useQuery({ queryKey: ['two-step-team'], queryFn: () => apiGet('/two-step/team'), enabled: isManager });
-  const twoStepOn = new Set((twoStep.data?.members || []).map((x) => x.id));
+  const twoStepOf = new Map((twoStep.data?.members || []).map((x) => [x.id, x]));
   const twoStepChanged = () => queryClient.invalidateQueries({ queryKey: ['two-step-team'] });
   // Is email connected? (Same read Today and Shifts use; only that, so the
   // strip never says this screen is from Today's kept copy.)
@@ -402,7 +403,7 @@ export default function Team({ embedded = false }) {
       <ul className="ot-list">
         {members.map((m) => (
           <MemberRow key={m.id} m={m} isMe={m.id === me.user.id} online={online} onRole={setMemberRole} onChanged={refresh}
-            twoStep={twoStepOn.has(m.id)} onTwoStep={twoStepChanged} />
+            twoStep={twoStepOf.get(m.id) || null} onTwoStep={twoStepChanged} />
         ))}
       </ul>
 

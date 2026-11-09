@@ -27,8 +27,11 @@ export const personsWhere = async (db, ctx, query = {}) => {
   const handleLike = `$${params.length}`;
   // A phone number typed any way — 604 555 0142, (604) 555-0142, +1 604… —
   // finds it however it was saved: digits against digits.
+  // A leading 1 is the country code (no North American area code starts with
+  // 1): dropped while four digits or more are left — part of a number then
+  // matches everything the whole of it would, and 1234 still finds 123-4567.
   let digits = /^[\d\s().+-]+$/.test(q) ? q.replace(/\D/g, '') : '';
-  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+  if (digits.startsWith('1') && digits.length > 4) digits = digits.slice(1);
   let phoneDigits = '';
   if (digits.length >= 4) {
     params.push(`%${digits}%`);

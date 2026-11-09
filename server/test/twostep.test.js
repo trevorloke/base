@@ -536,6 +536,9 @@ test('joining another campaign with an account that has it on: the code too', as
   const reset = await mgr.action('twostep.reset', { user_id: people.tess.id });
   assert.equal(reset.status, 409);
   assert.match(reset.json.error, /another campaign/);
+  const team = (await mgr.get('/api/two-step/team')).json.members;
+  assert.equal(team.find((x) => x.id === people.tess.id)?.elsewhere, true, 'Settings → Members offers no reset for her');
+  assert.equal(team.find((x) => x.id === mgrId)?.elsewhere, false);
 });
 
 test('nothing secret leaves: not in the export, not in any answer about others', async () => {

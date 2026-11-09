@@ -18,13 +18,18 @@
 import { Hono } from 'hono';
 import { decide } from '../../lib/perms.js';
 import { forViewer } from '../../lib/viewer.js';
+// The very expression texting uses (no database, no network in that file),
+// so the two can't drift apart and both read this index.
+import { PHONE_DIGITS_SQL } from '../texting/rules.js';
 
-const PHONE10 = `right(regexp_replace(regexp_replace(coalesce(phone, ''), '\\s*(ext\\.?|x|#).*$', '', 'i'), '\\D', '', 'g'), 10)`;
+const PHONE10 = PHONE_DIGITS_SQL('phone');
 
 export const sql = `
 create index if not exists persons_ws_name_prefix_idx on persons (workspace_id, lower(name) text_pattern_ops) where deleted_at is null;
 create index if not exists persons_ws_last_prefix_idx on persons (workspace_id, lower(last_name) text_pattern_ops) where deleted_at is null;
 create index if not exists persons_ws_phone10_idx on persons (workspace_id, (${PHONE10}) text_pattern_ops) where deleted_at is null;
+-- An earlier draft of this index (all digits); never kept.
+drop index if exists persons_ws_phone_digits_idx;
 `;
 
 const LIMIT = 6;
@@ -46,9 +51,10 @@ api.get('/search/people', async (c) => {
   const among = (cond) => `(select id from persons where workspace_id = $1 and deleted_at is null and ${cond} limit ${CANDIDATES})`;
   const ways = [among('lower(name) like $2'), among('lower(last_name) like $2')];
   // A phone: 604 555 0142, (604) 555-0142, +1 604… — its last ten digits
-  // against the start of what's typed (a country code typed is dropped).
+  // against the start of what's typed. A leading 1 is the country code (no
+  // North American area code starts with 1), so it's dropped.
   let digits = /^[\d\s().+-]+$/.test(q) ? q.replace(/\D/g, '') : '';
-  if (/^\+?1[\s().-]/.test(q) || (digits.length === 11 && digits.startsWith('1'))) digits = digits.slice(1);
+  if (digits.startsWith('1')) digits = digits.slice(1);
   if (digits.length > 10) digits = digits.slice(-10);
   if (digits.length >= 4) {
     params.push(likeStart(digits));

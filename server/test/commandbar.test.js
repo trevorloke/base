@@ -74,6 +74,7 @@ test('the quick search: the start of a name or a last name, a phone typed any wa
   assert.deepEqual(await find('+1 778 555 0199'), ['Omar Example']);
   assert.deepEqual(await find('604 555 0177'), ['Pat Example'], 'saved with a country code and an extension');
   assert.deepEqual(await find('1-604-555-0177'), ['Pat Example']);
+  assert.deepEqual(await find('+1604555'), ['Lena Example', 'Pat Example'], 'the start of an E.164 number');
   assert.deepEqual(await find('604 555 01'), ['Lena Example', 'Pat Example'], 'the start of a number');
   assert.deepEqual(await find('lena@example.org'), ['Lena Example']);
   assert.deepEqual(await find('ena'), [], 'the middle of a name is People’s own search (the command bar asks it next)');
@@ -105,6 +106,7 @@ test('people: a phone typed any way finds them, digits against digits', async ()
   assert.deepEqual(await find('778-555-0199'), ['Omar Example']);
   assert.deepEqual(await find('7785550199'), ['Omar Example']);
   assert.deepEqual(await find('555-01'), ['Lena Example', 'Omar Example', 'Pat Example'], 'part of a number, however it was saved');
+  assert.deepEqual(await find('1604'), ['Pat Example'], 'four digits starting with 1: searched as typed');
   assert.deepEqual(await find('6045550199'), [], 'no one has that number');
   assert.deepEqual(await find('lena@'), ['Lena Example'], 'email');
   assert.deepEqual(await find('omar'), ['Omar Example'], 'name');

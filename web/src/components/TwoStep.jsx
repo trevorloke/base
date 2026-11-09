@@ -182,7 +182,7 @@ export default function TwoStepCard({ me, forced = false, onOn, onCodes }) {
       <section className="ts-card" aria-label="Two-step sign-in">
         <RecoveryCodes codes={codes.list} me={me} heading={codes.heading}
           doneLabel={forced ? 'I’ve saved them — open base.win' : 'I’ve saved them'}
-          onDone={async () => { setCodes(null); await refresh(); onOn?.(); }} />
+          onDone={async () => { await refresh(); onOn?.(); setCodes(null); }} />
         {codes.elsewhere > 0 && <p className="ts-line muted">Your other devices will ask you to sign in again.</p>}
       </section>
     );

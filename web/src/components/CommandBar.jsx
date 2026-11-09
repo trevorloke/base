@@ -18,6 +18,9 @@ import { allowed, commandsFor, fold, rank, scoreItem } from './commands.js';
 import './command-bar.css';
 
 
+// People's own search reads every row: asked only after this much more quiet.
+const FALLBACK_PAUSE_MS = 350;
+
 const isMac = () => typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '');
 export const shortcutLabel = () => (isMac() ? '⌘K' : 'Ctrl K');
 
@@ -29,10 +32,12 @@ const SearchIcon = () => (
 // "Sam Example · 604-555-0142 · Whalley" — what tells two people apart.
 const personHint = (p) => [p.phone, p.email, p.address].filter(Boolean).slice(0, 2).join(' · ');
 // Someone found for what was typed a moment ago who still fits what's typed
-// now (every word in their name, email or phone; or the phone's digits).
+// now: every word in their name, email, phone or address; or the phone's
+// digits (a leading 1, the country code, aside — as lib/audience.js does).
 const stillFits = (p, q) => {
-  const hay = fold(`${p.name} ${p.email || ''} ${p.phone || ''}`);
-  const digits = q.replace(/\D/g, '');
+  const hay = fold([p.name, p.email, p.phone, p.address].filter(Boolean).join(' '));
+  let digits = /^[\d\s().+-]+$/.test(q) ? q.replace(/\D/g, '') : '';
+  if (digits.startsWith('1') && digits.length > 4) digits = digits.slice(1);
   return fold(q).split(' ').every((w) => hay.includes(w))
     || (digits.length >= 4 && String(p.phone || '').replace(/\D/g, '').includes(digits));
 };
@@ -51,7 +56,8 @@ function Dialog({ me, nav, onClose }) {
   // People, from the server: after a short pause, the last search only. The
   // quick search first (the start of a name, a phone, an email — indexed,
   // ext/search); finding nobody, People's own (any part of a name or an
-  // address), which reads the whole file.
+  // address), which reads the whole file — so only once typing has paused
+  // a while longer.
   const q = query.trim();
   useEffect(() => {
     if (!canPeople || q.length < 2) { setPeople({ q: '', list: [], busy: false, error: null }); return undefined; }
@@ -62,6 +68,8 @@ function Dialog({ me, nav, onClose }) {
         let list = (await apiGet(`/search/people?q=${encodeURIComponent(q)}`)).persons || [];
         if (live && !list.length && q.length >= 3) {
           setPeople((p) => ({ ...p, q, list: [], busy: true }));
+          await new Promise((r) => { setTimeout(r, FALLBACK_PAUSE_MS); });
+          if (!live) return;
           list = (await apiGet(`/persons?q=${encodeURIComponent(q)}&limit=6`)).persons || [];
         }
         if (live) setPeople({ q, list, busy: false, error: null });

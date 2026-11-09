@@ -21,15 +21,17 @@
 //                              first
 //
 // Tries at a code count (lib/twostep.js codeFails) as they come in: ten in
-// 15 minutes, then a pause; a right code clears them. The slow hashes (new
-// recovery codes, a recovery code typed) are made in before(), never while
-// the campaign's write lock is held. Nothing secret goes on the event log —
-// only that it was turned on, off, reset, or its recovery codes made again.
+// 15 minutes, then a pause; a right code clears them once its write has
+// committed (after()). The slow hashes (new recovery codes — made only for
+// a code that's right — and a recovery code typed) are made in before(),
+// never while the campaign's write lock is held. Nothing secret goes on the
+// event log — only that it was turned on, off, reset, or its recovery codes
+// made again.
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import {
-  base32Decode, checkCode, codeFails, hashRecoveryCode, newRecoveryCodes, newRecoverySalt,
-  newTotpSecret, openSecret, recoveryHashFor, requiredFor, sealSecret, setupFor, twoStepRow, verifyTotp,
+  base32Decode, checkCode, codeFails, hashRecoveryCode, newRecoveryCodes, newRecoverySalt, newTotpSecret,
+  openSecret, peekCode, recoveryHashFor, requiredFor, sealSecret, setupFor, twoStepRow, verifyTotp,
 } from '../../lib/twostep.js';
 
 const EVERYONE = ['manager', 'treasurer', 'staff', 'volunteer'];
@@ -48,8 +50,11 @@ export const issuerFor = (ctx) => `${String(ctx.workspace?.name || 'Campaign').s
 const guard = (ctx) => {
   if (codeFails(`user:${ctx.user.id}`)) throw httpError(429, TOO_MANY_CODES);
 };
-const passed = (ctx) => codeFails.clear(`user:${ctx.user.id}`);
+// Committed: the right code clears the person's count.
+const passed = async (db, ctx, result) => { codeFails.clear(`user:${ctx.user.id}`); return { result }; };
 const missed = (message = NO_MATCH) => httpError(400, message);
+const SETUP_NO_MATCH = 'that code doesn’t match — check the app has the key on this screen, then type the newest code it shows';
+const APP_NO_MATCH = 'that code doesn’t match — type the newest code from your app';
 
 // Ten new recovery codes, and what's kept of them (hashes, one salt).
 const freshCodes = async () => {
@@ -79,16 +84,19 @@ export const actions = {
   'twostep.confirm': {
     roles: EVERYONE,
     input: code(),
-    // The ten codes' slow hashes, before the write.
-    before: async (db, ctx) => { guard(ctx); return freshCodes(); },
+    // A code that's right gets its ten recovery codes' slow hashes made
+    // here, before the write; a wrong one costs nothing.
+    before: async (db, ctx, input) => {
+      guard(ctx);
+      return (await peekCode(db, ctx.user.id, input.code, { pending: true })) ? freshCodes() : null;
+    },
     handler: async (tx, ctx, input, emit, fresh) => {
       const row = await twoStepRow(tx, ctx.user.id, { lock: true });
       if (row?.on_since) throw httpError(409, 'two-step sign-in is already on');
       const open = row?.secret ? await openSecret(tx, row.secret) : null;
       if (!open) throw httpError(409, 'start setting it up again — the key on your screen has expired');
       const step = verifyTotp(base32Decode(open.plain), input.code, { afterStep: row.last_step == null ? null : Number(row.last_step) });
-      if (step === null) throw missed('that code doesn’t match — check the app has the key on this screen, then type the newest code it shows');
-      passed(ctx);
+      if (step === null || !fresh) throw missed(SETUP_NO_MATCH);
       const { codes, salt, hashes } = fresh;
       await tx.query(
         `update two_step set on_since = now(), last_step = $2, recovery = $3, recovery_salt = $4, updated_at = now()
@@ -101,6 +109,7 @@ export const actions = {
       emit('two_step', ctx.user.id, 'create', { on: true });
       return { on: true, recovery_codes: codes, signed_out_elsewhere: ended.affectedRows };
     },
+    after: passed,
   },
 
   'twostep.off': {
@@ -117,29 +126,37 @@ export const actions = {
           ? 'your app’s codes can’t be checked on this server any more — use one of your recovery codes'
           : 'that code doesn’t match — use the newest code from your app, or one of your recovery codes');
       }
-      passed(ctx);
       await tx.query('delete from two_step where user_id = $1', [ctx.user.id]);
       // A sign-in elsewhere waiting for a code: there's no code to wait for now.
       await tx.query('delete from two_step_pending where user_id = $1', [ctx.user.id]);
       emit('two_step', ctx.user.id, 'void', { turned_off: true, with: r.used === 'recovery' ? 'recovery code' : 'app' });
       return { on: false, must_set_up: requiredFor(ctx.role, ctx.workspace?.settings) };
     },
+    after: passed,
   },
 
   'twostep.codes': {
     roles: EVERYONE,
     input: code(),
-    before: async (db, ctx) => { guard(ctx); return freshCodes(); },
+    // New codes' slow hashes only for an app code that's right.
+    before: async (db, ctx, input) => {
+      guard(ctx);
+      return (await peekCode(db, ctx.user.id, input.code)) ? freshCodes() : null;
+    },
     handler: async (tx, ctx, input, emit, fresh) => {
+      if (!fresh) {
+        const row = await twoStepRow(tx, ctx.user.id);
+        throw missed(row?.on_since && !(await openSecret(tx, row.secret)) ? 'your app’s codes can’t be checked on this server any more' : APP_NO_MATCH);
+      }
       const r = await checkCode(tx, ctx.user.id, input.code, { allowRecovery: false });
-      if (!r.used) throw missed(r.unreadable ? 'your app’s codes can’t be checked on this server any more' : 'that code doesn’t match — type the newest code from your app');
-      passed(ctx);
+      if (!r.used) throw missed(r.unreadable ? 'your app’s codes can’t be checked on this server any more' : APP_NO_MATCH);
       const { codes, salt, hashes } = fresh;
       await tx.query('update two_step set recovery = $2, recovery_salt = $3, updated_at = now() where user_id = $1',
         [ctx.user.id, JSON.stringify(hashes), salt]);
       emit('two_step', ctx.user.id, 'update', { recovery_codes: 'made again' });
       return { recovery_codes: codes };
     },
+    after: passed,
   },
 
   'twostep.reset': {

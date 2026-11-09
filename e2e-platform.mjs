@@ -193,7 +193,7 @@ await sleep(150);
 check('closed from the button: focus goes back to it', await page.evaluate(() => document.activeElement?.classList.contains('cmd-btn')));
 await page.keyboard.press('Control+k');
 await combo.fill('zzqx');
-await sleep(400);
+await page.locator('.cmd-empty').waitFor({ timeout: 8000 }).catch(() => {});
 check('nothing found says so', /Nothing for “zzqx”/.test(await text(page, '.cmd')));
 await page.keyboard.press('Escape');
 

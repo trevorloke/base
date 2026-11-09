@@ -33,8 +33,12 @@ api.get('/two-step', async (c) => {
 api.get('/two-step/team', async (c) => {
   const ctx = c.get('ctx');
   if (ctx.role !== 'manager') return c.json({ error: 'managers only' }, 403);
+  // elsewhere: also in another campaign on this server — reset from the
+  // server's shell, not from here (actions.js twostep.reset).
   const rows = (await c.get('db').query(
-    `select m.user_id as id, t.on_since from memberships m join two_step t on t.user_id = m.user_id and t.on_since is not null
+    `select m.user_id as id, t.on_since,
+            exists (select 1 from memberships o where o.user_id = m.user_id and o.workspace_id <> $1) as elsewhere
+     from memberships m join two_step t on t.user_id = m.user_id and t.on_since is not null
      where m.workspace_id = $1`,
     [ctx.workspaceId],
   )).rows;
@@ -42,7 +46,7 @@ api.get('/two-step/team', async (c) => {
   return c.json({
     required: parseJ(ws?.settings, {}).twoStepRequired === true,
     you: Boolean(ctx.twoStep?.on),
-    members: rows.map((r) => ({ id: r.id, on: true, since: r.on_since })),
+    members: rows.map((r) => ({ id: r.id, on: true, since: r.on_since, elsewhere: Boolean(r.elsewhere) })),
     key: keyStatus().source,
   });
 });
