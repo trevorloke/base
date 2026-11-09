@@ -11,6 +11,7 @@ import { html, cx } from './h.js';
 import { Icon, ICON_NAMES } from './icons.js';
 import { Island } from './islands.js';
 import { arr, dateOnly, initials, money, obj, paragraphs, str, thousands, when } from './util.js';
+import { pagePath } from './links.js';
 
 const TONES = new Set(['paper', 'surface', 'brand', 'accent', 'ink']);
 const DARK = new Set(['brand', 'ink', 'action']);
@@ -19,14 +20,27 @@ const titleId = (m) => `m-${m.id}-title`;
 
 // The module's props, checked like a save (types, limits, defaults). A
 // module that doesn't pass (an old draft, a hand-made page) is drawn from
-// its defaults and whatever of its own props there are — every link and
-// picture is still checked as it is drawn.
+// its defaults and whatever of its own props there are, each put in the
+// shape its field has (text as text, lists as lists), so nothing odd can
+// stop the page — and every link and picture is still checked as it is drawn.
+const loose = (f, v) => {
+  switch (f.type) {
+    case 'link': { const o = obj(v); return { label: str(o.label), href: str(o.href) }; }
+    case 'image': { const o = obj(v); return { url: str(o.url), alt: str(o.alt) }; }
+    case 'toggle': return v === true || v === 'true';
+    case 'number': return Number.isFinite(Number(v)) && v !== null && v !== '' ? Number(v) : f.min ?? 0;
+    case 'words': return arr(v).map(str).filter(Boolean);
+    case 'list': return arr(v).map((item) => Object.fromEntries(f.of.map((s) => [s.key, loose(s, obj(item)[s.key])])));
+    default: return str(v);
+  }
+};
 export function propsFor(m) {
   const def = MODULE_BY_KIND[m.kind];
   try {
     return checkProps(m.kind, m.props);
   } catch {
-    return { ...JSON.parse(JSON.stringify(def?.defaults || {})), ...obj(m.props) };
+    const src = { ...JSON.parse(JSON.stringify(def?.defaults || {})), ...obj(m.props) };
+    return Object.fromEntries((def?.fields || []).map((f) => [f.key, loose(f, src[f.key])]));
   }
 }
 
@@ -410,7 +424,7 @@ export function campaignForm(rc, m, c, { idPrefix } = {}) {
     thanks: {
       title: pledge ? 'You’ve signed the pledge' : 'Your name is on the petition',
       body: 'Thank you. It counts for more when friends sign too — share it with a neighbour:',
-      share: { url: shareUrl, text: `I signed “${str(c.title)}”. Add your name:`, subject: str(c.title), label: 'Share it' },
+      share: { url: shareUrl, here: pagePath(rc.loc), text: `I signed “${str(c.title)}”. Add your name:`, subject: str(c.title), label: 'Share it' },
     },
   });
 }
@@ -556,7 +570,7 @@ function ActNow({ m, p, rc, level }) {
   const next = openingItems(rc, rc.data.events, 2);
   const post = rc.data.posts[0];
   const { members, signatures } = rc.data.counts;
-  const open = Object.values(rc.data.campaigns).filter((c) => c && c.status !== 'closed' && c.title);
+  const open = Object.values(rc.data.campaigns).filter((c) => c && typeof c === 'object' && c.status !== 'closed' && str(c.title) && str(c.slug));
   const signed = Object.values(obj(signatures)).reduce((a, n) => a + (Number(n) || 0), 0);
   const volunteer = rc.anchorFor('shifts') || rc.anchorFor('volunteer') || rc.link('/volunteer');
   const showCounts = p.showCounts !== false && (members != null || signed > 0);
@@ -593,7 +607,7 @@ function ActNow({ m, p, rc, level }) {
           </ul>` : null}
           ${open.slice(0, 2).map((c) => html`<div key=${c.id} className="rail-post">
             <p className="eyebrow">${c.kind === 'pledge' ? 'Pledge' : 'Petition'}${p.showCounts !== false && Number(c.count) > 0 ? ` · ${thousands(c.count)} signed` : ''}</p>
-            <a className="next-title" href=${rc.link(`/act/${c.slug}`)}>${c.title}</a>
+            <a className="next-title" href=${rc.link(`/act/${str(c.slug)}`)}>${str(c.title)}</a>
           </div>`)}
           ${post ? html`<div className="rail-post">
             <p className="eyebrow">${dateOnly(post.published_at, rc.timeZone) || 'News'}</p>

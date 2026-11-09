@@ -184,6 +184,13 @@ test('links: the catalogue’s safe-url rule, stricter, and under the site root'
   assert.equal(linkFor(locFrom({}), '/donate'), '/donate', 'on the campaign’s domain the root is /');
   assert.deepEqual(locFrom({ root: '/site/', path: '/site/news/a' }), { root: '/site/', assets: '/site/site-assets/', origin: '', path: '/news/a' });
   assert.equal(locFrom({ origin: 'javascript:alert(1)' }).origin, '');
+  // Under BASE_PATH the address in front of the root has the client's path.
+  assert.equal(locFrom({ origin: 'https://base.win/imaginesurrey/' }).origin, 'https://base.win/imaginesurrey');
+  const based = renderSite({ kind: 'post', site: baseSample.site, post: samplePost, data, ctx: { root: '/site/', path: '/news/sample-post-one', origin: 'https://base.win/imaginesurrey' } });
+  assert.match(based.html, /<link rel="canonical" href="https:\/\/base\.win\/imaginesurrey\/site\/news\/sample-post-one">/);
+  const share = Object.values(islands(based.html)).find((i) => i.name === 'share').props;
+  assert.equal(share.url, 'https://base.win/imaginesurrey/site/news/sample-post-one');
+  assert.equal(share.here, '/site/news/sample-post-one');
 });
 
 test('the head: title, description, canonical, Open Graph, theme, fonts, stylesheet', () => {
@@ -504,6 +511,18 @@ test('the site’s own files: site.css, the fonts, the island script; nothing el
   assert.match(siteAssetFile('site-islands.js'), /web\/dist\/site-islands\.js$/);
   // Every face the stylesheet names is there.
   for (const m of String(css.body).matchAll(/url\("fonts\/([^"]+)"\)/g)) assert.ok(readSiteAsset(`fonts/${m[1]}`), m[1]);
+});
+
+test('odd shapes never stop a page: objects for text, strings for lists, junk data and settings', () => {
+  const odd = MODULES.map((m) => ({ id: `odd-${m.kind}`, kind: m.kind, props: Object.fromEntries(m.fields.map((f) => [f.key, f.type === 'list' || f.type === 'words' ? 'not a list' : { not: 'text' }])) }));
+  const junkData = { posts: [{ slug: {}, title: [] }, 'x'], events: 'x', shifts: [{ id: 1, title: { a: 1 } }], counts: 'x', campaigns: { a: 'x', b: { title: { x: 1 }, slug: 2 } }, payments: 'x', roles: [1, {}, 'Driver'] };
+  const junkSite = { theme: 'x', nav: 'x', footer: [], announcement: 5, seo: 5, org: [], social: 'x' };
+  for (const kind of ['page', 'post', 'campaign', 'notFound']) {
+    const r = renderSite({ kind, site: junkSite, page: { id: {}, slug: [], title: {}, description: 5, modules: odd }, post: { title: {}, body: [], image: 'x' }, campaign: { title: [], kind: 'x', statement: {}, goal: 'x' }, data: junkData, ctx: { root: 5, path: {}, sent: 7, error: [] } });
+    assert.ok(r.status === 200 || r.status === 404, kind);
+    assert.match(r.html, /<\/html>$/);
+    if (kind === 'page') for (const m of odd) assert.ok(r.html.includes(`data-module="${m.kind}" id="m-odd-${m.kind}"`), m.kind);
+  }
 });
 
 test('the sample data helper gives upcoming events', () => {

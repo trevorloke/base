@@ -31,8 +31,10 @@ const cleanBase = (v, fallback) => {
 export function locFrom(ctx = {}) {
   const root = cleanBase(ctx.root, '/');
   const assets = cleanBase(ctx.assets, `${root}site-assets/`);
+  // The public address in front of root: https://imaginesurrey.ca, or with
+  // the client's path under BASE_PATH (https://base.win/imaginesurrey).
   const o = str(ctx.origin).trim().replace(/\/+$/, '');
-  const origin = /^https?:\/\/[A-Za-z0-9.-]+(:\d+)?$/i.test(o) ? o : '';
+  const origin = /^https?:\/\/[A-Za-z0-9.-]+(:\d+)?(\/[A-Za-z0-9._~-]+)*$/i.test(o) ? o : '';
   // ctx.path: this page, relative to the site's root ('/', '/about',
   // '/news/a-post'); a path that still has the root in front is taken off.
   let path = str(ctx.path).split(/[?#]/)[0] || '/';

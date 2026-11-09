@@ -1648,8 +1648,17 @@ html[data-heading="system"] .campaign-title {
   background: var(--accent);
 }
 @media (max-width: 520px) {
+  /* On a phone the box runs edge to edge, so the form inside keeps its width. */
   .campaign-box {
-    padding: 22px;
+    margin: 0 calc(-1 * var(--gutter));
+    padding: 28px var(--gutter);
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .campaign-box .form-card,
+  .campaign-box .success-card {
+    padding: 20px 16px;
   }
 }
 .act-split {

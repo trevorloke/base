@@ -11,13 +11,20 @@ import { SHARE_CHANNELS, shareLinks, str } from './util.js';
 
 const OUTSIDE = new Set(['whatsapp', 'facebook', 'x']);
 
-export function ShareSheet({ uid, url, text, subject, label = 'Share', tone }) {
+// url: the link to share — absolute when the server knew the site's address,
+// else a path, completed here from the page's own address. here: this page's
+// path as the server drew it, so a path in front of it that the browser sees
+// (the client's, under BASE_PATH) is kept.
+export function ShareSheet({ uid, url, here, text, subject, label = 'Share', tone }) {
   const [full, setFull] = useState(str(url));
   const [status, setStatus] = useState('');
   const input = useRef(null);
   useEffect(() => {
-    if (str(url).startsWith('/')) setFull(window.location.origin + url);
-  }, [url]);
+    if (!str(url).startsWith('/')) return;
+    const path = window.location.pathname;
+    const prefix = here && path.endsWith(here) ? path.slice(0, path.length - here.length) : '';
+    setFull(window.location.origin + prefix + url);
+  }, [url, here]);
   const links = shareLinks({ url: full, text, subject });
 
   async function copy() {

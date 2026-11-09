@@ -187,12 +187,17 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
 - `sent` — the `?sent=<kind>` value (or `{ kind, module_id }`): that kind's
   form shows its thank-you instead.
 - `error` — the `?error=<field>` value (or `{ field, module_id, kind, message }`):
-  the message on that field (with `module_id`, only in that module's form).
+  the message on that field (with `module_id`, only in that module's form;
+  a bare field marks every form on the page that has it — the posted
+  `module_id` can come back in the address for this, e.g. `&module=<id>`).
 - `referral` — the code for the `ref` field. Leave it out of a page that is
   cached for everyone (the server reads the cookie when `ref` is missing).
 - `source` *(added)* — the `?source=` tag, carried in the forms.
-- `origin` *(added)* — e.g. `https://imaginesurrey.ca`: absolute canonical,
-  `og:url`, `og:image` and share links (without it the browser completes them).
+- `origin` *(added)* — the public address in front of `root`, e.g.
+  `https://imaginesurrey.ca`, or `https://base.win/imaginesurrey` under
+  `BASE_PATH`: absolute canonical, `og:url`, `og:image` and share links
+  (without it the browser completes share links from the page's address,
+  keeping the client's path).
 - `timeZone` *(added)* — for dates; default `site.org.time_zone`, else
   `America/Vancouver`.
 

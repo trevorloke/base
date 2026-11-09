@@ -33,7 +33,7 @@ function PostView({ rc, post }) {
       <div className="container narrow stack stack--lg">
         <${Img} rc=${rc} image=${p.image} className="news-image" width=${1200} height=${675} eager />
         <${Md} rc=${rc} text=${p.body} className="prose" />
-        <${Island} name="share" props=${{ uid: 'post-share', url: rc.abs(pagePath(rc.loc)), text: str(p.title), subject: str(p.title), label: 'Share this' }} />
+        <${Island} name="share" props=${{ uid: 'post-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: str(p.title), subject: str(p.title), label: 'Share this' }} />
         <p><a className="text-link" href=${rc.link('/news')}>← All news</a></p>
       </div>
     </article>
@@ -47,7 +47,7 @@ function CampaignView({ rc, campaign }) {
   const live = obj(rc.data.campaigns[str(c.id)]);
   const count = c.count ?? live.count ?? obj(rc.data.counts.signatures)[str(c.id)];
   const m = { kind: 'campaign', id: 'campaign' };
-  const share = { uid: 'campaign-share', url: rc.abs(pagePath(rc.loc)), text: `I signed “${str(c.title)}”. Add your name:`, subject: str(c.title), label: `Share this ${what}` };
+  const share = { uid: 'campaign-share', url: rc.abs(pagePath(rc.loc)), here: pagePath(rc.loc), text: `I signed “${str(c.title)}”. Add your name:`, subject: str(c.title), label: `Share this ${what}` };
   return html`<${Fragment}>
     <${PageHead} title=${str(c.title)} eyebrow=${pledge ? 'Pledge' : 'Petition'} lede=${c.excerpt} />
     <section className="section tone-paper campaign" id="m-campaign" data-template="campaign" aria-label=${str(c.title)}>

@@ -32,11 +32,14 @@ function DateBadge({ day, mon, small }) {
 function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }) {
   const st = state || { status: 'idle', errors: {} };
   const set = (patch) => setState(item.id, { ...st, ...patch });
+  // The form's own action, as the page has it (with any path the server put
+  // in front, under BASE_PATH) — also for a one-tap sign-up.
+  const formRef = useRef(null);
 
   async function send(body, form) {
     set({ status: 'pending', errors: {}, alert: '' });
     try {
-      const res = await fetch(form ? form.action : action, {
+      const res = await fetch((form || formRef.current)?.action || action, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify({ ...body, ...hidden, shift_id: item.id, client_key: newKey() }),
@@ -99,7 +102,7 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
     <summary className=${cx('btn rsvp-toggle', primary ? 'btn--primary' : 'btn--outline')} onClick=${onSummary} aria-busy=${st.status === 'pending' ? 'true' : undefined}>
       ${st.status === 'pending' ? 'Signing you up…' : me ? 'Sign me up' : 'Sign up'}<span className="visually-hidden">: ${item.title}</span>
     </summary>
-    <form className="rsvp-form" method="post" action=${action} noValidate=${me !== undefined || undefined} onSubmit=${onSubmit}>
+    <form ref=${formRef} className="rsvp-form" method="post" action=${action} noValidate=${me !== undefined || undefined} onSubmit=${onSubmit}>
       <${Honeypot} id=${id} />
       <${Hidden} values=${{ ...hidden, shift_id: item.id }} />
       <${TextField} id=${`${id}-first`} name="first_name" label="First name" required autoComplete="given-name" error=${st.errors?.first_name} />
@@ -114,9 +117,9 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
 export function Openings({ uid, variant = 'shifts', action, hidden = {}, items = [], sent = false }) {
   const [me, setMe] = useState(undefined);
   const [states, setStates] = useState({});
-  const mounted = useRef(false);
+  // Who signed up before in this visit, read once the page is live
+  // (undefined until then: the server's first draw and the browser's agree).
   useEffect(() => {
-    mounted.current = true;
     setMe(readMe());
   }, []);
   const setState = (id, s) => setStates((all) => ({ ...all, [id]: s }));

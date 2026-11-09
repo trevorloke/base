@@ -27,6 +27,7 @@ import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { renderSite, readSiteAsset, islandsBuilt } from './server/ext/site/render/index.js';
+import { rewriters } from './server/lib/mount.js';
 import { imagineSurrey, baseSample, samplePost } from './server/test/site-samples.js';
 
 const PORT = Number(process.env.PORT) || 5150;
@@ -72,9 +73,26 @@ function answerForm(kind, body) {
   return { ok: true };
 }
 
+// Under a client's path on a shared domain (BASE_PATH, server/lib/mount.js):
+// /imaginesurrey/base/… is the Base sample with the client's path taken off
+// on the way in and put back in front of href, src, action and redirects on
+// the way out — as the real server does.
+const BASE = '/imaginesurrey';
+const rw = rewriters(BASE);
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, ORIGIN);
-  const send = (status, type, body, headers = {}) => { res.writeHead(status, { 'content-type': type, ...headers }); res.end(body); };
+  const based = url.pathname.startsWith(`${BASE}/`);
+  if (based) url.pathname = url.pathname.slice(BASE.length);
+  const send = (status, type, body, headers = {}) => {
+    let out = body;
+    let h = headers;
+    if (based && h.location) h = { ...h, location: rw.location(h.location) };
+    if (based && /text\/html/.test(type)) out = rw.html(String(body));
+    if (based && /text\/css/.test(type)) out = rw.css(String(body));
+    res.writeHead(status, { 'content-type': type, ...h });
+    res.end(out);
+  };
   if (url.pathname === '/__posted') return send(200, 'application/json', JSON.stringify(posted));
   if (url.pathname === '/checkout-stub') return send(200, 'text/html; charset=utf-8', `<!doctype html><title>Checkout</title><h1>Checkout (stub) ${url.searchParams.get('kind')} ${url.searchParams.get('amount')}</h1>`);
   const media = /^\/media\/([a-z-]+)$/.exec(url.pathname);
@@ -103,7 +121,7 @@ const server = createServer(async (req, res) => {
       body = {};
       for (const k of new Set(p.keys())) { const all = p.getAll(k); body[k] = all.length > 1 ? all : all[0]; }
     }
-    posted.push({ site: key, kind: form[1], json, body });
+    posted.push({ site: key, kind: form[1], json, body, path: req.url });
     const a = answerForm(form[1], body);
     if (json) return send(a.ok ? 200 : 400, 'application/json', JSON.stringify(a));
     // A plain form post: back to the page, or on to the checkout.
@@ -112,7 +130,9 @@ const server = createServer(async (req, res) => {
     const q = a.ok ? `sent=${form[1]}` : `error=${a.field}`;
     return send(303, 'text/plain', '', { location: `${back.pathname}?${q}#m-${body.module_id || ''}` });
   }
-  const ctx = { root, path: rest, origin: ORIGIN, islands: true, sent: url.searchParams.get('sent') || undefined, error: url.searchParams.get('error') || undefined };
+  // Under the client's path the server here doesn't say its address: the
+  // browser works out share links from the page's own.
+  const ctx = { root, path: rest, origin: based ? undefined : ORIGIN, islands: true, sent: url.searchParams.get('sent') || undefined, error: url.searchParams.get('error') || undefined };
   let r;
   if (rest === '/' || rest === '/__preview') r = renderSite({ kind: 'page', site: sample.site, page: sample.page, data: sample.data, ctx: { ...ctx, preview: rest === '/__preview', path: '/' } });
   else if (rest === `/act/${sample.campaign.slug}`) r = renderSite({ kind: 'campaign', site: sample.site, campaign: sample.campaign, data: sample.data, ctx });
@@ -437,6 +457,45 @@ for (const key of ['is', 'base']) {
   check(`${key}: not found — 404, noindex, links home`, res.status() === 404 && (await page.locator('meta[name=robots][content=noindex]').count()) === 1 && (await page.locator('.not-found a', { hasText: 'Home page' }).getAttribute('href')) === `/${key}/`);
   await page.goto(`${ORIGIN}/${key}/__preview`, { waitUntil: 'networkidle' });
   check(`${key}: preview — banner and noindex`, (await page.locator('.preview-banner').isVisible()) && (await page.locator('meta[name=robots][content=noindex]').count()) === 1);
+  await page.context().close();
+}
+
+// ── Under a client's path (base.win/imaginesurrey/…): every link, post and
+// share keeps the client's path ──
+{
+  const page = await newPage();
+  await page.goto(`${ORIGIN}${BASE}/base/`, { waitUntil: 'networkidle' });
+  await hydrated(page);
+  await live(page);
+  const paths = await page.evaluate(() => ({
+    donate: document.querySelector('.nav-cta')?.getAttribute('href'),
+    action: document.querySelector('[data-module="newsletter"] form')?.getAttribute('action'),
+    css: [...document.styleSheets].map((s) => s.href || '').find((h) => h.includes('site.css')),
+    script: document.querySelector('script[type=module]')?.getAttribute('src'),
+  }));
+  check('client path: links, form actions, the stylesheet and the script carry it', paths.donate === `${BASE}/base/donate` && paths.action === `${BASE}/base/api/forms/newsletter` && paths.css?.includes(`${BASE}/base/site-assets/site.css`) && paths.script?.startsWith(`${BASE}/base/site-assets/site-islands.js`), JSON.stringify(paths));
+  const list = page.locator('[data-module="shifts"]');
+  const card1 = list.locator('.opening-card', { hasText: 'volunteer orientation' });
+  await card1.locator('summary').click();
+  await card1.getByLabel('First name', { exact: true }).fill('Lena');
+  await card1.getByLabel('Email', { exact: true }).fill('lena@example.org');
+  await card1.getByRole('button', { name: 'I’ll be there' }).click();
+  await card1.locator('.rsvp-done').waitFor({ timeout: 8000 });
+  const card2 = list.locator('.opening-card', { hasText: 'phone bank' });
+  await card2.locator('summary').click();
+  await card2.locator('.rsvp-done').waitFor({ timeout: 8000 });
+  const rsvpPaths = (await (await fetch(`${ORIGIN}/__posted`)).json()).filter((p) => p.kind === 'rsvp').slice(-2).map((p) => p.path);
+  check('client path: the sign-up and the one-tap sign-up post under it', rsvpPaths.length === 2 && rsvpPaths.every((p) => p === `${BASE}/base/api/forms/rsvp`), rsvpPaths.join(' '));
+  const pledge = page.locator('[data-module="petition"] form');
+  await pledge.getByLabel('First name', { exact: true }).fill('Lena');
+  await pledge.getByLabel('Last name', { exact: true }).fill('Example');
+  await pledge.getByLabel('Email', { exact: true }).fill('lena@example.org');
+  await pledge.getByLabel('Postal code', { exact: true }).fill('V3T 1A1');
+  await pledge.getByRole('button', { name: 'Sign the pledge' }).click();
+  const thanks = page.locator('[data-module="petition"] .success-card');
+  await thanks.waitFor({ timeout: 8000 });
+  const wa = await thanks.locator('.share-sheet__link--whatsapp').getAttribute('href');
+  check('client path: share links point at the pledge’s page under it', decodeURIComponent(wa).includes(`${ORIGIN}${BASE}/base/act/keep-the-pool-open?source=share-whatsapp`), decodeURIComponent(wa));
   await page.context().close();
 }
 
