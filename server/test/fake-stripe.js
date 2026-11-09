@@ -296,8 +296,10 @@ a{display:inline-block;margin-top:16px;min-height:48px;line-height:48px;color:#6
         m = url.pathname.match(/^\/v1\/payment_intents\/([^/]+)$/);
         if (m) return paymentIntents.has(m[1]) ? json(paymentIntents.get(m[1])) : notFound('payment_intent');
         if (req.method === 'GET' && url.pathname === '/v1/invoice_payments') {
-          // By the invoice, or by the payment intent that paid one.
+          // By the invoice, or by the payment intent that paid one (not in
+          // the older API shape: there a payment intent names its invoice).
           const byPi = url.searchParams.get('payment[payment_intent]');
+          if (byPi && legacy) return json({ error: { type: 'invalid_request_error', message: 'Received unknown parameter: payment' } }, 400);
           const inv = byPi ? invoiceOfIntent(byPi) : invoices.get(url.searchParams.get('invoice'));
           return json({ object: 'list', has_more: false, data: inv ? [{ id: next('inpay'), object: 'invoice_payment', invoice: inv.id, status: 'paid', payment: { type: 'payment_intent', payment_intent: inv._pi } }] : [] });
         }

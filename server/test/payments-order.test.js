@@ -200,6 +200,19 @@ test('someone else’s charge on the same Stripe account is still left alone', a
   assert.deepEqual([dispute.status, dispute.body.ignored], [200, 'not a base.win payment']);
   const old = await fake.send('charge.refunded', { id: 'ch_old_style', object: 'charge', payment_intent: null, amount: 500, amount_refunded: 500, refunded: true });
   assert.deepEqual([old.status, old.body.ignored], [200, 'not a base.win payment'], 'no payment intent: not from a checkout');
+  // A payment of theirs that Stripe has — in either API version's shape
+  // (the older can't list an invoice's payments by payment intent).
+  for (const f of [fake, older]) {
+    const pi = `pi_their_shop_${f === fake ? 'new' : 'old'}`;
+    f.paymentIntents.set(pi, { id: pi, object: 'payment_intent', amount: 4200, currency: 'cad', status: 'succeeded', metadata: { order: 'A-17' } });
+    process.env.STRIPE_API_BASE = f.url;
+    try {
+      const shop = await f.send('charge.refunded', { id: `ch_${pi}`, object: 'charge', payment_intent: pi, amount: 4200, amount_refunded: 4200, refunded: true, metadata: { order: 'A-17' } });
+      assert.deepEqual([shop.status, shop.body?.ignored], [200, 'not a base.win payment'], JSON.stringify(shop.body));
+    } finally {
+      process.env.STRIPE_API_BASE = fake.url;
+    }
+  }
   assert.equal(await held(), before, 'nothing kept for them');
 });
 

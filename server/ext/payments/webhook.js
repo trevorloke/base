@@ -107,8 +107,13 @@ const chargeOwner = async (db, obj, { paymentIntent }) => {
     if (co) return { co, invoiceId: null };
     invoiceId = idOf(pi.invoice);
     if (!invoiceId) {
-      // Newer API versions: the invoice this payment paid.
-      const list = await retrieve('/invoice_payments', { payment: { type: 'payment_intent', payment_intent: paymentIntent }, limit: 1 });
+      // Newer API versions: the invoice this payment paid. (An older one
+      // can't list by payment — and there the payment names its invoice.)
+      const list = await stripeRequest('GET', '/invoice_payments', { query: { payment: { type: 'payment_intent', payment_intent: paymentIntent }, limit: 1 } })
+        .catch((e) => {
+          if (e instanceof StripeError && (e.httpStatus === 400 || e.httpStatus === 404)) return null;
+          throw e;
+        });
       invoiceId = idOf(list?.data?.[0]?.invoice);
     }
     if (!invoiceId) return null;
