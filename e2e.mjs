@@ -67,7 +67,7 @@ await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 const me = (await api('/auth/me')).json;
 check('workspace created with slug', me.workspace.slug === 'imagine-surrey', me.workspace.slug);
 check('setup is BC municipal', me.workspace.jurisdiction === 'bc-municipal', me.workspace.jurisdiction);
-check('brand reads Starbase', /starbase/i.test(await text()));
+check('brand reads base.win, never Starbase', /base\.win/i.test(await text()) && !/starbase/i.test(await text()));
 
 // ── 2. Seed Surrey doors (Newton) ──
 const P = {};
@@ -88,11 +88,15 @@ await act('volunteer.assign', { person_id: P.sam.id, role: 'doorknocking' });
 await act('volunteer.assign', { person_id: P.sam.id, role: 'translation', detail: 'Punjabi' });
 check('seeded 9 people', Object.keys(P).length === 9 && Object.values(P).every((p) => p?.id));
 
-// ── 3. Map: pins, door card, rating, outcome, sign ──
+// ── 3. Map: doors, door card, rating, outcome, sign ──
+// Further out every door is a canvas dot, so the map says how many doors it
+// shows (data-doors) instead of drawing a page element per door.
+const doorsShown = () => page.$eval('.map-canvas', (el) => Number(el.dataset.doors || 0)).catch(() => 0);
+const waitDoors = () => page.waitForFunction(() => Number(document.querySelector('.map-canvas')?.dataset.doors || 0) > 0, null, { timeout: 10000 }).catch(() => {});
 await go('/map');
-await page.waitForSelector('.map-pin-wrap', { timeout: 10000 }).catch(() => {});
-const pins = await page.$$('.map-pin-wrap');
-check('map shows one pin per door (5 located doors)', pins.length === 5, `pins=${pins.length}`);
+await waitDoors();
+const pins = await doorsShown();
+check('map shows one door per address (5 located doors)', pins === 5, `doors=${pins}`);
 let t = await text();
 const filterLabel = await page.$eval('.map-filter-btn', (el) => el.getAttribute('aria-label')).catch(() => '');
 const unlocLabel = await page.$eval('.map-unloc__chip', (el) => el.getAttribute('aria-label')).catch(() => '');
@@ -130,18 +134,18 @@ check('4 → Voting for? → Locke saves 4B', prof.person.rating === '4B', prof.
 check('toast names the candidate', /Locke/.test(await text()));
 
 await go('/map');
-await page.waitForSelector('.map-pin-wrap', { timeout: 8000 }).catch(() => {});
+await waitDoors();
 await page.click('.map-filter-btn');
 await page.click('.map-fsheet .map-fopt:has-text("Opposed")');
 await sleep(500);
-const opposedPins = (await page.$$('.map-pin-wrap')).length;
-check('Opposed filter narrows pins', opposedPins === 2, `pins=${opposedPins}`); // Tom 4D, Dev 4B
+const opposedPins = await doorsShown();
+check('Opposed filter narrows the doors', opposedPins === 2, `doors=${opposedPins}`); // Tom 4D, Dev 4B
 // Each opponent on its own; 1s apart from 2s.
 const pick = async (label) => {
   await page.click('.map-filter-btn');
   await page.click(`.map-fsheet .map-fopt:has-text("${label}")`);
   await sleep(500);
-  return { pins: (await page.$$('.map-pin-wrap')).length, btn: (await page.innerText('.map-filter-btn')).replace(/\s+/g, ' ') };
+  return { pins: await doorsShown(), btn: (await page.innerText('.map-filter-btn')).replace(/\s+/g, ' ') };
 };
 let f = await pick("Locke");
 check('Voting Locke: just Dev’s door, and the button says so', f.pins === 1 && /Voting Locke 1/.test(f.btn), JSON.stringify(f));
@@ -159,27 +163,41 @@ await page.click('.map-fsheet .mapsheet-close');
 await act('sign.place', { kind: 'lawn', status: 'requested', person_id: P.harjit.id, address: '12345 72 Ave', lat: 49.133, lng: -122.851 });
 await act('sign.place', { kind: 'billboard', status: 'installed', person_id: P.dev.id, address: '12410 70A Ave', lat: 49.1295, lng: -122.848 });
 await go('/map');
-await page.waitForSelector('.map-pin-wrap', { timeout: 8000 }).catch(() => {});
+await waitDoors();
 f = await pick('Has a sign');
 const signDoors = f.pins;
-const flags = async () => page.$$eval('.map-pin-wrap .map-flag', (els) => els.map((e) => e.className));
-let fl = await flags();
-check('Has a sign: a requested flag and an up flag, the billboard’s bigger', fl.some((c) => /requested/.test(c)) && fl.some((c) => /installed/.test(c) && /k-billboard/.test(c)), fl.join(' | '));
+const flagsAt = async (personId) => {
+  await go(`/map?person=${personId}`);
+  await page.waitForSelector('aside.door-card', { timeout: 8000 }).catch(() => {});
+  await sleep(400);
+  return page.$$eval('.map-pin-wrap .map-flag', (els) => els.map((e) => e.className));
+};
+let fl = [...await flagsAt(P.harjit.id), ...await flagsAt(P.dev.id)];
+check('Has a sign: two doors; a requested flag and an up flag, the billboard’s bigger', signDoors === 2
+  && fl.some((c) => /requested/.test(c)) && fl.some((c) => /installed/.test(c) && /k-billboard/.test(c)), `${signDoors} · ${fl.join(' | ')}`);
+await go('/map');
+await waitDoors();
+f = await pick('Has a sign');
 await page.click('.map-filter-btn');
 await page.click('.map-fsheet .map-schip:has-text("Requested")');
 await sleep(400);
 check('Requested off: the chip says so', await page.getAttribute('.map-fsheet .map-schip:has-text("Requested")', 'aria-pressed') === 'false');
 await page.click('.map-fsheet .mapsheet-close');
 await sleep(300);
-fl = await flags();
-check('…and no requested flag on the map; fewer sign doors', !fl.some((c) => /requested/.test(c)) && (await page.$$('.map-pin-wrap')).length < signDoors, `${fl.join(' | ')} · ${signDoors}`);
+const fewer = await doorsShown();
+fl = await flagsAt(P.harjit.id);
+check('…and no requested flag on the map; fewer sign doors', !fl.some((c) => /requested/.test(c)) && fewer < signDoors, `${fl.join(' | ')} · ${fewer} of ${signDoors}`);
+await go('/map');
+await waitDoors();
 await page.click('.map-filter-btn');
 await page.click('.map-fsheet .map-schip:has-text("Billboard")');
 await sleep(400);
 await page.screenshot({ path: `${SHOTS}/map-filter-signs.png` });
 await page.click('.map-fsheet .mapsheet-close');
 await sleep(300);
-check('Billboard off too: no billboard flag', !(await flags()).some((c) => /k-billboard/.test(c)));
+check('Billboard off too: no billboard flag', !(await flagsAt(P.dev.id)).some((c) => /k-billboard/.test(c)));
+await go('/map');
+await waitDoors();
 // Back as it was (the choice is kept on this browser).
 await page.click('.map-filter-btn');
 await page.click('.map-fsheet .map-schip:has-text("Requested")');
@@ -200,7 +218,7 @@ await page.waitForSelector('.map-canvas .leaflet-tile-pane', { timeout: 8000 }).
 lk = await look();
 check('…and stays Muted after a reload (this browser)', /map-view--muted/.test(lk[0]), lk[0]);
 await page.click('.map-filter-btn');
-check('the looks offered here: Standard, Muted, Dark (no Google key: no Satellite)', (await page.$$eval('.map-vchip', (els) => els.map((e) => e.innerText.trim()))).join('|') === 'Standard|Muted|Dark');
+check('the looks offered here: Standard, Muted, Dark and Clean (no Google key: no Satellite)', (await page.$$eval('.map-vchip', (els) => els.map((e) => e.innerText.trim()))).join('|') === 'Standard|Muted|Dark|Clean');
 await page.click('.map-fsheet .map-vchip:has-text("Standard")');
 await page.click('.map-fsheet .mapsheet-close').catch(() => {});
 await sleep(300);
@@ -249,7 +267,9 @@ check('profile: social handle linked', (await page.$('a[href*="x.com/linreports"
 // ── 6. Shifts: create, assign, notify (nothing sent without providers) ──
 const shift = (await act('shift.create', {
   title: 'Saturday canvass — Newton', role: 'doorknocking', location: 'Newton Rec Centre, 13730 72 Ave',
-  starts_at: '2026-11-07T10:00:00-08:00', ends_at: '2026-11-07T13:00:00-08:00',
+  // A week from today (a fixed date would fall into the past).
+  starts_at: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10) + 'T17:00:00Z',
+  ends_at: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10) + 'T20:00:00Z',
   instructions: 'Meet at the north entrance. Comfortable shoes.', link: 'https://imaginesurrey.ca/canvass', capacity: 6,
 })).json.shift;
 await act('shift.assign', { shift_id: shift.id, person_id: P.sam.id });
@@ -298,7 +318,7 @@ await shot('8-newsletter');
 // Outreach is two modules: Email (newsletter + lists) and Texting; old addresses land in them.
 await go('/outreach/press');
 const tabsNow = await page.$$eval('.ot-tabs .ot-tab-label', (els) => els.map((e) => e.innerText.trim()));
-check('Outreach: three modules, Email, Texting and Mail; /outreach/press lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting|mail' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
+check('Outreach: two modules, Email and Texting; /outreach/press lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
 await go('/outreach/texts');
 check('/outreach/texts lands on Texting, with the Inbox and phone banks', /\/outreach\/texting/.test(page.url()) && /Inbox/.test(await text()) && /Phone banks/.test(await text()), page.url());
 
