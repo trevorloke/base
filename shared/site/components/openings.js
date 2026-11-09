@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { html, cx } from './h.js';
 import { Icon } from './icons.js';
-import { FieldError, Hidden, Honeypot, TextField } from './fields.js';
+import { Hidden, Honeypot, TextField } from './fields.js';
 import { ME_KEY, rememberMe } from './form.js';
 import { str } from './util.js';
 

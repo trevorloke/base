@@ -4,7 +4,6 @@
 // (server/ext/site/render) turns these into the HTML document.
 import { Fragment } from 'react';
 import { markdownText } from '../../markdown.js';
-import { FONT_BY_VALUE } from '../theme.js';
 import { html } from './h.js';
 import { Island } from './islands.js';
 import { GoalBar, Img, Md, Module, MODULE_COMPONENTS, Paras, campaignForm } from './modules.js';
@@ -145,13 +144,13 @@ export function headFor(rc, { kind, page, post, campaign }) {
     description: description.slice(0, 300),
     canonical: kind === 'notFound' || rc.preview || !loc.origin ? '' : loc.origin + pagePath(loc),
     type,
-    image: imageUrl ? { url: rc.abs(imageUrl), alt: str(obj(image).alt) } : null,
+    // Open Graph wants an absolute address: a picture only when there is one.
+    image: imageUrl && /^https?:\/\//.test(rc.abs(imageUrl)) ? { url: rc.abs(imageUrl), alt: str(obj(image).alt) } : null,
     siteName: site.org.name || siteTitle,
     noindex: kind === 'notFound' || rc.preview || site.seo.noindex,
     themeColor: site.theme.colors.brand,
     published: kind === 'post' ? str(obj(post).published_at) : '',
     fonts: fonts.map((f) => loc.assets + f),
-    fontStacks: [FONT_BY_VALUE[site.theme.fonts.heading]?.stack, FONT_BY_VALUE[site.theme.fonts.body]?.stack],
     organization: {
       '@context': 'https://schema.org',
       '@type': 'Organization',

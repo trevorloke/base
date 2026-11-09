@@ -27,7 +27,7 @@
 //   PORT=5150 SHOTS=/tmp/site-render node e2e-site-render.mjs
 import { chromium } from 'playwright-core';
 import { createServer } from 'node:http';
-import { mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { renderSite, readSiteAsset, islandsBuilt } from './server/ext/site/render/index.js';
 import { rewriters } from './server/lib/mount.js';
 import { imagineSurrey, baseSample, samplePost } from './server/test/site-samples.js';
