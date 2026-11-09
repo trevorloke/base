@@ -1,8 +1,9 @@
-// Base: the name, and the app switcher (Ground here; Web and Air linked).
-// A fresh in-memory campaign; BASE_AIR_URL set, BASE_WEB_URL not, and the
-// campaign's website set in Settings — so Web falls back to it + /admin.
+// Base: the name, and the app switcher (Ground here; Web linked — and
+// nothing else: Base has no Air). A fresh in-memory campaign; BASE_WEB_URL
+// unset and the campaign's website set in Settings — so Web falls back to
+// it + /admin.
 //
-//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory BASE_AIR_URL=https://air.example.org PORT=4140 node server/index.js &
+//   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4140 node server/index.js &
 //   BASE=http://127.0.0.1:4140 SHOTS=/tmp/base node e2e-base.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
@@ -38,9 +39,9 @@ await page.waitForSelector('.brand-name', { timeout: 10000 });
 check('the field app: Base Ground', /Base\s+Ground/.test(await page.innerText('.brand-name')), await page.innerText('.brand-name'));
 await page.click('.apps-btn');
 const items = await page.$$eval('.apps-item', (els) => els.map((e) => ({ text: e.innerText.replace(/\s+/g, ' ').trim(), href: e.getAttribute('href'), here: e.getAttribute('aria-current') })));
-check('the switcher: Ground (here), Web, Air', items.length === 3 && /Base Ground · here/.test(items[0].text) && items[0].here === 'page'
-  && /Base Web/.test(items[1].text) && /Base Air/.test(items[2].text), JSON.stringify(items));
-check('Air links to BASE_AIR_URL', items[2].href === 'https://air.example.org', items[2].href);
+check('the switcher: Ground (here) and Web — nothing else', items.length === 2 && /Base Ground · here/.test(items[0].text) && items[0].here === 'page'
+  && /Base Web/.test(items[1].text), JSON.stringify(items));
+check('no Air anywhere in it', !/\bAir\b|Starsign/i.test(await page.innerText('.apps-panel')) && !/Air/.test(await page.getAttribute('.apps-btn', 'aria-label')));
 const web = items[1];
 check('Web: the campaign’s website + /admin (BASE_WEB_URL unset), or not linked yet', web.href === 'https://imaginesurrey.example.org/admin' || (/Not linked yet/.test(web.text) && !web.href), JSON.stringify(web));
 await page.screenshot({ path: `${SHOTS}/01-switcher-desktop.png` });

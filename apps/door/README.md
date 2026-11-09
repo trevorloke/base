@@ -9,12 +9,11 @@ databases.
 | `base.win/imaginesurrey/field` | Imagine Surrey's **Base Ground** — the volunteers' app | everyone the campaign invites |
 | `base.win/imaginesurrey/desk` | the same Ground — the office | managers, staff, treasurers (and anyone given an area); a volunteer is turned away |
 | `base.win/imaginesurrey/web` | **Base Web** — the website's back office | its staff, with their own sign-in |
-| `base.win/imaginesurrey/air` | **Base Air** — Starsign | its team, with their own sign-in |
 
-The door passes Ground's requests through with the path as it came; Web and
-Air are sent on to where they already run (they serve at their own
-addresses today). It holds no secrets and checks no one: signing in, and who
-may open the desk, Web and Air, are each app's own.
+The door passes Ground's requests through with the path as it came; Web is
+sent on to where it already runs (it serves at its own address today). It
+holds no secrets and checks no one: signing in, and who may open the desk or
+Web, are each app's own.
 
 ## Setting up base.win
 
@@ -37,17 +36,16 @@ may open the desk, Web and Air, are each app's own.
      "imaginesurrey": {
        "name": "Imagine Surrey",
        "ground": "https://<imagine-surrey-ground>.onrender.com",
-       "web": { "redirect": "https://imaginesurrey.ca/admin" },
-       "air": { "redirect": "https://<starsign-address>" }
+       "web": { "redirect": "https://imaginesurrey.ca/admin" }
      }
    }
    ```
 
-   `ground` is an origin (no path). `web` and `air` are either
+   `ground` is an origin (no path). `web` is either
    `{ "redirect": "https://…" }` (sent on, the rest of the path after it) or
-   an origin to pass through to, once that app can live under
-   `/imaginesurrey/web` or `/imaginesurrey/air` itself. Leave one out and
-   that address says "not set up".
+   an origin to pass through to, once Web can live under
+   `/imaginesurrey/web` itself. Leave it out and that address says "not set
+   up".
 3. **The domain.** Point `base.win` at the door service (Render: Settings →
    Custom Domains → add `base.win`, then the DNS records it shows at your
    registrar). Render issues the HTTPS certificate.

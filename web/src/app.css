@@ -661,7 +661,7 @@ html:has(.auth-page) body { background: transparent; }
 .btn-link:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
 .name-note { margin: calc(-1 * var(--s-2, 8px)) 0 var(--s-3, 12px); font-size: 14px; }
 
-/* Base's apps (AppSwitcher): Ground here, Web and Air a tap away. */
+/* Base's apps (AppSwitcher): Ground here, Web a tap away. */
 .brand-app { font-weight: 500; opacity: 0.85; }
 .apps { position: relative; flex: none; }
 .apps-btn {

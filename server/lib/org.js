@@ -18,7 +18,6 @@
 //   BASE_WEB_URL           where Base Web (apps/web) runs, e.g.
 //                          https://imaginesurrey.ca/admin — the app switcher
 //                          links there (unset: the campaign's website + /admin)
-//   BASE_AIR_URL           where Base Air (apps/air) runs — unset: not linked
 //   STARBASE_ENV           production | staging — said on screen and at
 //                          /api/health, so nobody mistakes one for the other
 //
@@ -50,9 +49,9 @@ export const openSignupForced = () => process.env.STARBASE_OPEN_SIGNUP === '1';
 export const setupClosedMessage = () => `Base is already set up for ${orgName() || 'this campaign'} — ask a manager to invite you.`;
 
 // What the app is told about this deployment (GET /api/auth/setup and /me).
-// Base's other apps, where they run (an https address, or null).
+// Base Web, where it runs (an https address, or null).
 const appUrl = (k) => (/^https?:\/\/[^\s]+$/i.test(str(k)) ? str(k).replace(/\/+$/, '') : null);
-export const appsOut = () => ({ web: appUrl('BASE_WEB_URL'), air: appUrl('BASE_AIR_URL') });
+export const appsOut = () => ({ web: appUrl('BASE_WEB_URL') });
 export const orgOut = () => ({
   name: orgName(), jurisdiction: jurisdiction(), tz: timeZone(), city: city(), province: province(),
   slates: SLATES, env: envName(), apps: appsOut(),

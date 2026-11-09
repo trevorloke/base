@@ -1,8 +1,8 @@
-// Base's three apps — Ground (here), Web, Air (shared/brand.js). Web and Air
-// run on their own; this links to them: BASE_WEB_URL / BASE_AIR_URL on the
-// server (me.org.apps); else, on base.win, /<client>/web and /<client>/air
-// (the front door, apps/door); else Web is the campaign's website + /admin.
-// One not set up yet shows as such (a manager is told what to set).
+// Base's apps — Ground (here) and Web (shared/brand.js). Web runs on its
+// own; this links to it: BASE_WEB_URL on the server (me.org.apps); else, on
+// base.win, /<client>/web (the front door, apps/door); else the campaign's
+// website + /admin. Not set up yet shows as such (a manager is told what to
+// set).
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { APPS } from '@starbase/shared/brand';
 import { fieldHref } from '../mode.js';
@@ -12,10 +12,9 @@ export const appLinks = (me) => {
   const site = String(me?.workspace?.settings?.website || '').trim().replace(/\/+$/, '');
   return {
     ground: fieldHref('/'),
-    // On base.win (a client's path) the front door knows where Web and Air
-    // are: /<client>/web and /<client>/air.
+    // On base.win (a client's path) the front door knows where Web is:
+    // /<client>/web.
     web: me?.org?.apps?.web || (BASE ? `${BASE}/web` : /^https?:\/\//i.test(site) ? `${site}/admin` : null),
-    air: me?.org?.apps?.air || (BASE ? `${BASE}/air` : null),
   };
 };
 
@@ -40,7 +39,7 @@ export default function AppSwitcher({ me }) {
   return (
     <div className="apps" ref={wrapRef} onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.stopPropagation(); close(true); } }}>
       <button type="button" ref={btnRef} className="apps-btn" aria-expanded={open} aria-controls={panelId}
-        aria-label="Base apps — Ground, Web, Air" onClick={() => (open ? close(false) : setOpen(true))}>
+        aria-label="Base apps — Ground, Web" onClick={() => (open ? close(false) : setOpen(true))}>
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">{GRID}</svg>
       </button>
       <div className="apps-panel" id={panelId} hidden={!open}>
@@ -52,7 +51,7 @@ export default function AppSwitcher({ me }) {
             const body = (
               <>
                 <span className="apps-name">{a.full}{here && <span className="apps-here"> · here</span>}</span>
-                <span className="apps-what">{href || here ? a.what : manager ? `Not linked yet — set ${a.key === 'web' ? 'BASE_WEB_URL (or the website in Settings)' : 'BASE_AIR_URL'} on the server` : 'Not linked yet'}</span>
+                <span className="apps-what">{href || here ? a.what : manager ? 'Not linked yet — set BASE_WEB_URL (or the website in Settings) on the server' : 'Not linked yet'}</span>
               </>
             );
             return (

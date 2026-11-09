@@ -1,35 +1,33 @@
 # Base
 
-**Base** — a broad application for social engagement — is three apps in one,
+**Base** — a broad application for social engagement — is two apps in one,
 built for **Imagine Surrey**:
 
 | App | Where | What |
 |---|---|---|
 | **Base Ground** (the default) | `server/`, `web/`, `shared/` — this README | The campaign: a map with every door on it, a one-tap rating scale at the door, phone, and by text — with signs, volunteers, shifts, money, compliance, and outreach around it. |
 | **Base Web** | `apps/web` ([its README](apps/web/README.md)) | The Imagine Surrey website and its back office (Next.js). |
-| **Base Air** | `apps/air` ([its README](apps/air/README.md)) | Starsign: social listening and posting — radar, queue, feed, brief. |
 
 Base opens on Ground. The app switcher beside the name (the four squares)
-goes to the other two: set `BASE_WEB_URL` and `BASE_AIR_URL` on Ground's
-server to where they run (Web falls back to the campaign's website, from
-Settings, + `/admin`). Each app keeps its own deploy, tests and CI
-(`.github/workflows/base-web.yml`, `base-air.yml`; `ci.yml` is Ground's).
+goes to Web: set `BASE_WEB_URL` on Ground's server to where it runs (else
+the campaign's website, from Settings, + `/admin`). Each app keeps its own
+deploy, tests and CI (`.github/workflows/base-web.yml` for Web; `ci.yml` is
+Ground's).
 Internal names — the `STARBASE_*` settings, package names, the database —
 are unchanged, so nothing deployed moves.
 
 **base.win** is where Base runs for clients: `base.win/<client>/field` is the
-volunteers' app, `/desk` the office's, `/web` and `/air` the other two —
+volunteers' app, `/desk` the office's, `/web` the website's back office —
 each client on its own servers and database, behind one front door
 (`apps/door`; [setting it up](apps/door/README.md)). Ground goes under a
 client's path with `BASE_PATH=/<client>` (and keeps answering at its own
 address); unset, it runs at a site's root as it always has.
 
-Web and Air came in with `git subtree` from their own repositories; work done
-there comes in with:
+Web came in with `git subtree` from its own repository; work done there
+comes in with:
 
 ```sh
 git subtree pull --prefix=apps/web https://github.com/trevorloke/ImagineSurreyWebsite main --squash
-git subtree pull --prefix=apps/air https://github.com/trevorloke/starsign main --squash
 ```
 
 ## Two apps: the field app and the admin

@@ -5,24 +5,22 @@
 //   base.win/<client>/desk    the office's         ├─ that client's Base Ground
 //   base.win/<client>/api…    (and everything else)┘   (BASE_PATH=/<client>)
 //   base.win/<client>/web     that client's Base Web   (its base path /<client>/web)
-//   base.win/<client>/air     that client's Base Air   (its base path /<client>/air)
 //   base.win/<client>         → /<client>/field/
 //
 // The path goes through as it came (each app knows it lives under it), so
 // the door holds no secrets and decides nothing about who may see what:
-// signing in, and who may open the desk, Web and Air, are each app's own.
+// signing in, and who may open the desk or Web, are each app's own.
 //
 // BASE_CLIENTS (JSON): { "imaginesurrey": { "name": "Imagine Surrey",
 //   "ground": "https://…",
-//   "web": { "redirect": "https://imaginesurrey.ca/admin" },
-//   "air": "https://…" } }
+//   "web": { "redirect": "https://imaginesurrey.ca/admin" } } }
 // Each app is either an origin — the door passes requests through, and the
 // app lives under /<client>/<app> (Ground, with BASE_PATH) — or
 // { "redirect": "https://…" } — the door sends people on to where the app
-// already runs, the rest of the path after it (Web and Air today: they run
-// at their own addresses, with their own sign-in). A client without web or
-// air simply has none (a plain "not set up" page). Ground is always passed
-// through.
+// already runs, the rest of the path after it (Web today: it runs at its
+// own address, with its own sign-in). A client without web simply has none
+// (a plain "not set up" page). Ground is always passed through. (An "air"
+// entry left from before is ignored: Base has no Air any more.)
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 
@@ -53,12 +51,12 @@ export const readClients = (raw = process.env.BASE_CLIENTS) => {
     };
     const ground = url(c?.ground, 'ground');
     if (!ground) throw new Error(`BASE_CLIENTS: ${name} needs a ground address`);
-    out.set(name, { name: String(c?.name || name), ground: { origin: ground }, web: app(c?.web, 'web'), air: app(c?.air, 'air') });
+    out.set(name, { name: String(c?.name || name), ground: { origin: ground }, web: app(c?.web, 'web') });
   }
   return out;
 };
 
-// → { client, app: 'ground'|'web'|'air', upstream } | { redirect } | null
+// → { client, app: 'ground'|'web', upstream } | { redirect } | null
 export const route = (clients, pathname) => {
   const m = /^\/([^/]+)(\/.*)?$/.exec(pathname);
   if (!m) return null;
@@ -67,7 +65,7 @@ export const route = (clients, pathname) => {
   const rest = m[2] || '';
   if (rest === '' || rest === '/') return { redirect: `/${m[1].toLowerCase()}/field/` };
   if (m[1] !== m[1].toLowerCase()) return { redirect: `/${m[1].toLowerCase()}${rest}` };
-  const app = /^\/web(?:\/|$)/.test(rest) ? 'web' : /^\/air(?:\/|$)/.test(rest) ? 'air' : 'ground';
+  const app = /^\/web(?:\/|$)/.test(rest) ? 'web' : 'ground';
   const target = client[app];
   if (!target) return { client, app, upstream: null };
   // Sent on: what came after /<client>/<app>, after the app's own address.
@@ -96,7 +94,7 @@ export const handler = (clients, { fetchImpl = fetch } = {}) => async (req, res)
   const r = route(clients, url.pathname);
   if (!r) return send(page(404, 'Not found — Base', '<h1>Not here</h1><p>There’s no Base at this address. Check the link your campaign sent you.</p>'));
   if (r.redirect) return send({ status: 302, headers: { location: `${r.redirect}${url.search}`, 'cache-control': 'no-store', ...(r.away ? { 'referrer-policy': 'no-referrer' } : {}) }, body: '' });
-  if (!r.upstream) return send(page(404, 'Not set up — Base', `<h1>Not set up</h1><p>${r.client.name} doesn’t have Base ${r.app === 'web' ? 'Web' : 'Air'} yet.</p>`));
+  if (!r.upstream) return send(page(404, 'Not set up — Base', `<h1>Not set up</h1><p>${r.client.name} doesn’t have Base Web yet.</p>`));
 
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
