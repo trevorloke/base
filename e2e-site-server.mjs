@@ -51,7 +51,7 @@ const overflow = (p) => p.evaluate(() => document.documentElement.scrollWidth - 
 
 // ── the desk: sign up on the app's own address; Website's first look ──
 await page.goto(`${APP}/signup`, { waitUntil: 'domcontentloaded' });
-await page.fill('#su-name', 'Rae Desk');
+await page.fill('#su-name', 'Rae Example');
 if (await page.locator('#su-org').count()) await page.fill('#su-org', 'Imagine Surrey');
 await page.fill('#su-email', `desk.${tag}@example.org`);
 await page.fill('#su-password', 'surrey-forward-2026');

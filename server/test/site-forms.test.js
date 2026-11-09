@@ -108,7 +108,7 @@ test('petition and pledge: the signature, the tags, a person signing twice count
 
 test('someone on file is matched, not doubled: by email (blanks filled, nothing overwritten), by name and phone, by name and postal code', async () => {
   const onFile = (await mgr.action('person.create', { name: 'Mina Example', email: 'mina@example.org', city: 'Surrey', tags: ['VIP'] })).json.person;
-  ok(await send('contact', { first_name: 'M.', last_name: 'Typed', email: 'MINA@example.org', phone: '604-555-0123', postal_code: 'v4a 1a1', message: 'Can I get a lawn sign?', topic: 'Signs' }));
+  ok(await send('contact', { first_name: 'Minnie', last_name: 'Example', email: 'MINA@example.org', phone: '604-555-0123', postal_code: 'v4a 1a1', message: 'Can I get a lawn sign?', topic: 'Signs' }));
   const [m] = await personBy(db, ws, "lower(email) = 'mina@example.org'");
   assert.equal(m.id, onFile.id);
   assert.deepEqual([m.name, m.phone, m.postal, m.city], ['Mina Example', '604-555-0123', 'V4A 1A1', 'Surrey'], 'blanks filled, the name kept');
