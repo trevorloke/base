@@ -317,3 +317,8 @@ theirs, and the server refuses its data anyway).
 | `/website/news` · `/:id` | Posts: list, editor (picture, excerpt, Markdown), publish/unpublish, delete (Undo) |
 | `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
 
+Careful with "your own domain": on a host in `domains` only the site answers
+(no sign-in, no app). The screen refuses the address it is opened at and
+base.win; `site.settings.save` itself can't tell which host is the app's,
+so a domain saved straight through the API could still take the app's own.
+
