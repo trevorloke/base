@@ -457,13 +457,17 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
       cadence: kind === 'join' ? 'once' : k.cadence,
       slate: k.slate || null,
       declaration: true,
+      // Membership: payments works out the minimum (the youth rate from the
+      // birth date), the age and the citizenship from these — not from the
+      // metadata, which is only kept for the record.
+      ...(kind === 'join' ? { term: k.term, birthDate: k.birth_date || null, citizenship: k.citizenship || null } : {}),
       successUrl: `${here}?sent=${kind}${anchor}`,
       cancelUrl: `${here}?cancelled=${kind}${anchor}`,
       metadata: {
         site_action_id: id, kind,
         ...(kind === 'join' ? { term: String(k.term), youth: k.youth ? 'yes' : 'no', ...(k.birth_date ? { birth_date: k.birth_date } : {}), ...(k.citizenship ? { citizenship: k.citizenship } : {}) } : {}),
       },
-    });
+    }, emit);
     if (!url) throw Object.assign(new Error('no checkout'), { status: 503 });
     answer = { ok: true, checkout_url: url };
   }

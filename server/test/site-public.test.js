@@ -36,7 +36,8 @@ test('on the campaign’s own domain: the site at /, its pages, its 404', async 
   assert.equal((await hit('/donate', { host: `www.${SITE}` })).status, 200, 'every SITE_HOSTS host');
   const missing = await hit('/no-such-page', { host: SITE });
   assert.equal(missing.status, 404);
-  assert.match(missing.text, /<title>Not found<\/title>/, 'the site’s own 404 page');
+  assert.match(missing.text, /<title>Page not found · [^<]+<\/title>/, 'the site’s own 404 page');
+  assert.match(missing.text, /<meta name="robots" content="noindex">/, '…never indexed');
   const trailing = await hit('/donate/?x=1', { host: SITE });
   assert.deepEqual([trailing.status, trailing.location], [301, '/donate?x=1'], 'one address per page');
 });

@@ -31,10 +31,11 @@ export const paymentsReady = async () => {
   return Boolean(String(process.env.STRIPE_SECRET_KEY || '').trim());
 };
 
-export const checkout = async (tx, ctx, args) => {
+// emit: the form's, so the checkout is on the event log beside its action.
+export const checkout = async (tx, ctx, args, emit) => {
   const p = await load();
   if (!p || typeof p.checkoutFor !== 'function') throw Object.assign(new Error('online payments aren’t set up'), { status: 503 });
-  return p.checkoutFor(tx, ctx, args);
+  return p.checkoutFor(tx, ctx, args, emit);
 };
 
 // Tests: stand in for ext/payments (null: back to the real one).
