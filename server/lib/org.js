@@ -20,6 +20,9 @@
 //                          links there (unset: the campaign's website + /admin)
 //   STARBASE_ENV           production | staging — said on screen and at
 //                          /api/health, so nobody mistakes one for the other
+//   STARBASE_BRAND         imagine-surrey | base — the look (lib/brand.js);
+//                          unset: base on staging or for any other campaign,
+//                          Imagine Surrey's otherwise
 //
 // The first sign-up sets up the one workspace; everyone after joins by
 // invite. (Workspaces are still scoped by id underneath — tests and dev can

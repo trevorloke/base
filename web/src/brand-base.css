@@ -1,0 +1,80 @@
+/* Base's own look — STARBASE_BRAND=base: staging, and any campaign but
+   Imagine Surrey (server/lib/brand.js marks the page <html data-brand="base">
+   before it paints). Nothing here names or borrows from Imagine Surrey:
+   slate grounds, one indigo accent, Inter for headlines as well as text,
+   the Base mark. Only tokens change (app.css draws everything from them),
+   plus the sign-in page's backdrop and mark. Imagine Surrey's look is
+   app.css as it stands. */
+
+:root[data-brand="base"] {
+  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Slate leads (the sidebar, the tab bar); indigo is the one accent. */
+  --navy: #1e293b;        /* Slate: the sidebar and tab bar */
+  --navy-2: #0f172a;      /* Deep Slate: the active item, depth */
+  --navy-text: #cbd5e1;   /* quiet text on slate */
+  --gold: #a5b4fc;        /* Soft Indigo: the spark on slate — active bar, badges, focus */
+  --red: #e5484d;
+  --red-text: #c62a2f;
+  --cream: #f1f5f9;
+  --brand-ink: #4f46e5;
+  --brand-ink-2: #1e1b4b;
+  --brand-spark: #a5b4fc;
+
+  --ink: #0f172a;
+  --paper-0: #ffffff;
+  --paper: #f8fafc;
+  --paper-1: #eef2ff;
+  --paper-2: #e0e7ff;
+  --rule: #e2e8f0;
+  --rule-2: #cbd5e1;
+  --text-2: #334155;
+  --text-3: #64748b;
+  --text-4: #94a3b8;
+
+  /* The one primary button, the active item, focus: indigo. */
+  --mark: #4f46e5;
+  --mark-ink: #ffffff;
+  --mark-soft: #eef2ff;
+  --mark-deep: #4338ca;
+
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 1px rgba(15, 23, 42, 0.03);
+  --shadow-2: 0 8px 28px rgba(15, 23, 42, 0.14);
+}
+
+/* Dark: deep slate ground, light indigo accents. (Everything the light
+   block sets is set again: it outranks app.css's own dark tokens.) */
+@media (prefers-color-scheme: dark) {
+  :root[data-brand="base"] {
+    --ink: #f1f5f9;
+    --paper-0: #1e293b;
+    --paper: #0f172a;
+    --paper-1: #27324a;
+    --paper-2: #334155;
+    --rule: #334155;
+    --rule-2: #475569;
+    --text-2: #cbd5e1;
+    --text-3: #94a3b8;
+    --text-4: #7c8aa3;
+    --navy: #0b1220;
+    --navy-2: #1e293b;
+    --mark: #818cf8;
+    --mark-ink: #0f172a;
+    --mark-soft: #312e81;
+    --mark-deep: #a5b4fc;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Inter headlines sit a touch tighter than Barlow's. */
+:root[data-brand="base"] h1,
+:root[data-brand="base"] h2,
+:root[data-brand="base"] h3 { letter-spacing: -0.015em; }
+
+/* Sign in / set up: the white card on a quiet slate-to-indigo wash (no
+   rise — that is Imagine Surrey's), the Base mark, an indigo bar. */
+html[data-brand="base"]:has(.auth-page) { background: linear-gradient(160deg, #1e293b 0%, #0f172a 58%, #1e1b4b 100%) fixed; }
+:root[data-brand="base"] .auth-page .brand::before { width: 36px; height: 36px; border-radius: 9px; background-image: url('/base-mark.svg'); }
+:root[data-brand="base"] .auth-page h1::after { width: 36px; height: 4px; border-radius: 2px; background: var(--mark); }
+:root[data-brand="base"] .brand-mark { border-radius: 8px; }

@@ -15,6 +15,7 @@ import { staleTimeZoneData } from './lib/tzcheck.js';
 import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
 import { appRedirect, basePath, mountAt } from './lib/mount.js';
+import { brandPages } from './lib/brand.js';
 
 export const app = new Hono();
 
@@ -55,6 +56,7 @@ app.route('/api', apiRoutes);
 // Static web build (SPA fallback to index.html for URL routing). Resolved
 // from this file, not the working directory, so any launch location works.
 const WEB_ROOT = relative(process.cwd(), fileURLToPath(new URL('../web/dist', import.meta.url))) || '.';
+app.use('*', brandPages); // the app's page and manifest wear this deployment's look (lib/brand.js)
 app.use('*', serveStatic({ root: WEB_ROOT }));
 // Under a client's path (BASE_PATH, lib/mount.js) an address that isn't the
 // app's — /join/…, an old /login — goes to the volunteers' app at /field.

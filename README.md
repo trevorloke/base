@@ -532,6 +532,18 @@ when you're back online.*
 
 ## The brand
 
+Each deployment wears one of two looks, set by `STARBASE_BRAND`
+(`server/lib/brand.js`): **`imagine-surrey`** — Imagine Surrey's own,
+below — or **`base`**, Base's generic one (slate and indigo, Inter
+throughout, the Base mark; training is called *Training*, not *ImagineU*;
+nothing names Imagine Surrey), for staging and any other campaign. The
+server marks the app's page `<html data-brand="…">` before it paints, with
+the brand's icons and browser colours, and the install manifest too;
+`web/src/brand-base.css` re-colours the tokens. Unset, it's worked out so
+nothing changes by accident: `base` on staging (`STARBASE_ENV=staging`) or
+for a campaign named anything but Imagine Surrey, Imagine Surrey's
+otherwise.
+
 Imagine Surrey's brand guidelines (2.1) are applied in one place and nowhere
 else: `web/src/app.css` (the staff app's tokens: Surrey Navy `#003979`,
 Deep Navy `#00224d`, Marigold `#ffc72c`, the text-safe red `#c8151b`, Sky,
@@ -603,6 +615,7 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
 | `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
+| `STARBASE_BRAND` | `imagine-surrey` or `base` — the look (*The brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
 
 Two environments per client: **staging** deploys every push to `main`,
 **production** deploys the `production` branch, which the *Promote to

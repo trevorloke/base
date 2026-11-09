@@ -43,6 +43,7 @@ import { turfNames } from '../components/ShiftTurfs.jsx';
 import './today.css';
 import { at } from '../base.js';
 import { NS } from '../base.js';
+import { BRAND } from '../brand.js';
 
 // The managers' dashboard (its map and chart load with it, not with Today).
 const Dashboard = lazy(() => import('./Dashboard.jsx'));
@@ -134,7 +135,7 @@ function SampleCard({ onToast }) {
 
   return (
     <section className="card today-sample" aria-label="Sample data">
-      <p className="today-sample-lede">Try it with 52 made-up Surrey voters.</p>
+      <p className="today-sample-lede">{BRAND.sampleLede}</p>
       <div className="today-actions">
         <button type="button" className="btn btn-primary today-tap" onClick={load} disabled={busy || !online}>
           {busy ? 'Loading…' : 'Load sample data'}

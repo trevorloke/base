@@ -31,6 +31,7 @@ import { adminHref, fieldHref, fieldView, mayAdmin } from './mode.js';
 import './pages/offline.css';
 import AppSwitcher from './components/AppSwitcher.jsx';
 import { at } from './base.js';
+import { BRAND } from './brand.js';
 
 // Staff, treasurers and managers. App.jsx guards the desk-only routes with it.
 export const isDesk = (me) => Boolean(me?.role) && me.role !== 'volunteer';
@@ -67,7 +68,7 @@ const NAV_DESK = [
   { to: '/money',    label: 'Donations', icon: 'money', area: 'money' },
   { to: '/signs',    label: 'Signs',    icon: 'signs', area: 'signs' },
   { to: '/outreach', label: 'Outreach', icon: 'outreach', area: 'outreach' },
-  { to: '/imagineu', label: 'ImagineU', icon: 'learn', area: 'learn' },
+  { to: '/imagineu', label: BRAND.learn, icon: 'learn', area: 'learn' },
 ];
 // The areas a person has: what the server said, else their role's usual ones.
 export const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data'] : []));
@@ -78,7 +79,7 @@ const NAV_VOLUNTEER = [
   { to: '/map',    label: 'Map',    icon: 'map' },
   { to: '/calls',  label: 'Calls',  icon: 'calls' },
   { to: '/shifts', label: 'Shifts', icon: 'shifts' },
-  { to: '/imagineu', label: 'ImagineU', icon: 'learn' },
+  { to: '/imagineu', label: BRAND.learn, icon: 'learn' },
 ];
 
 // Everything sent field work can change (ratings, doors left, new people,
@@ -447,7 +448,7 @@ function SignedInShell({ who, mode }) {
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
           <NavLink to="/" className="brand" aria-label={`${mode === 'admin' ? 'Base Ground Admin' : 'Base Ground'} — ${me.workspace.name}`}>
-            <img className="brand-mark" src={at('/star.png')} alt="" height="32" />
+            <img className="brand-mark" src={at(BRAND.mark)} alt="" height="32" />
             <span className="brand-text">
               <span className="brand-name">Base <span className="brand-app">Ground</span>{mode === 'admin' && <span className="brand-admin"> Admin</span>}</span>
               <span className="brand-org">{me.workspace.name}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
