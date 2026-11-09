@@ -2585,6 +2585,18 @@ html[data-heading="inter"] .rail-title {
   line-height: 1.1;
   color: var(--brand-ink);
 }
+.footer-logo {
+  display: block;
+  height: 88px;
+  width: auto;
+  max-width: 100%;
+  margin-bottom: 10px;
+}
+@media (max-width: 640px) {
+  .footer-logo {
+    height: 64px;
+  }
+}
 .footer-address {
   line-height: 1.5;
 }

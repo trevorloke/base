@@ -37,6 +37,8 @@ export function normalizeSite(site) {
       address: str(org0.address).trim(),
       authorization: str(org0.authorization || org0.authorized_by || org0.authorizationLine).trim(),
       privacy: str(org0.privacy_url || org0.privacyUrl || org0.privacy).trim(),
+      platformUrl: str(org0.platform_url || org0.platformUrl).trim(),
+      platformLabel: str(org0.platform_label || org0.platformLabel).trim(),
       timeZone: str(org0.time_zone || org0.timeZone).trim(),
     },
     nav: {
@@ -48,6 +50,7 @@ export function normalizeSite(site) {
       acknowledgement: str(footer.acknowledgement || footer.land).trim(),
       links: links(footer.links),
       text: str(footer.text || footer.note).trim(),
+      logo: { url: str(obj(footer.logo).url).trim(), alt: str(obj(footer.logo).alt).trim() },
     },
     announcement: {
       on: ann.enabled !== false && Boolean(str(ann.text).trim()),

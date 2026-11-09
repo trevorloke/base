@@ -184,11 +184,13 @@ write; the others are accepted too:
 site.nav          { items: [{ label, href }], bar?: [{ label, href }] (≤3, in the title
                   bar on wide screens), cta?: { label, href } | null }  — a bare array is
                   items; cta left out → "Donate" → /donate; null → no button
-site.footer       { acknowledgement (Markdown), links: [{ label, href }], text? (Markdown) }
+site.footer       { acknowledgement (Markdown), links: [{ label, href }], text? (Markdown),
+                  logo?: { url, alt } (drawn in place of the name) }
 site.announcement { enabled, text, link: { label, href } }   (or linkLabel / linkHref)
 site.seo          { title, description, image: { url, alt }, noindex? }   (or shareImage)
 site.org          { name, short_name?, email, phone, address, authorization (the
-                  "Authorized by …" line), privacy_url, time_zone? }
+                  "Authorized by …" line), privacy_url, time_zone?, platformUrl?,
+                  platformLabel? (a link after the footer's links) }
 site.social       [{ name, handle, url, cta? }]   (or { accounts: [...] })
 page              { id, slug, title, description, modules }  — the published (or draft)
                   content with the row's id and slug; a site_pages row as it is
@@ -327,6 +329,8 @@ nav           { menu: [{ label, href }],      // the Menu, in order; the rendere
                                               // published page marked show_in_nav that isn't in it already, after it
                 links: [{ label, href }],     // up to 3 in the title bar
                 cta: { label, href } }        // the title bar's button (Donate)
+                // store.js siteOf hands the renderer nav in its own words ("Rendering"):
+                // { items: menu + those pages, bar: links, cta }
 footer        { acknowledgement, links: [{ label, href }], logo: { url, alt } }
 announcement  { enabled, text, linkLabel, linkHref }
 seo           { title, description, shareImage: { url, alt } }

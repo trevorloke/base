@@ -58,14 +58,23 @@ export function Header({ rc }) {
 
 export function Footer({ rc }) {
   const { org, footer, social } = rc.site;
-  const links = footer.links.map((l) => ({ label: l.label, href: rc.link(l.href) })).filter((l) => l.href);
+  // The footer's links, then the platform (Settings → Organization).
+  const platform = org.platformUrl ? rc.link(org.platformUrl) : null;
+  const links = [
+    ...footer.links.map((l) => ({ label: l.label, href: rc.link(l.href) })),
+    ...(platform ? [{ label: org.platformLabel || 'Read the platform', href: platform }] : []),
+  ].filter((l) => l.href);
   const privacy = org.privacy ? rc.link(org.privacy) : null;
+  // The footer's own logo (a light one, for the dark footer), else the name.
+  const logo = rc.img(footer.logo.url);
   const year = new Date().getFullYear();
   return html`<footer className="site-footer">
     <div className="container stack stack--lg">
       <div className="footer-top">
         <div className="footer-brand">
-          ${org.name ? html`<p className="footer-name">${org.name}</p>` : null}
+          ${logo
+            ? html`<img className="footer-logo" src=${logo} alt=${footer.logo.alt || org.name || ''} height="88" decoding="async" loading="lazy" />`
+            : org.name ? html`<p className="footer-name">${org.name}</p>` : null}
           ${org.address ? html`<p className="footer-address">${org.address}</p>` : null}
           ${org.email ? html`<a className="footer-contact" href=${`mailto:${org.email}`}>${org.email}</a>` : null}
           ${org.phone ? html`<a className="footer-contact" href=${`tel:${org.phone.replace(/[^\d+]/g, '')}`}>${org.phone}</a>` : null}

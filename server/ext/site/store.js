@@ -126,7 +126,9 @@ export const menuPages = async (q, workspaceId) => (await q.query(
 )).rows;
 
 // What the renderer gets as `site` (SITE.md): the theme checked, the menu
-// with the pages that ask to be in it, and the consent boxes' words.
+// with the pages that ask to be in it, and the consent boxes' words. The
+// nav in the renderer's own words (SITE.md "Rendering": items, bar, cta):
+// Settings' menu is the Menu's items, its links the title bar's.
 export const siteOf = (settings, pages = []) => {
   const { theme } = checkTheme(settings.theme, brandKey());
   const listed = new Set(settings.nav.menu.map((l) => l.href));
@@ -135,7 +137,7 @@ export const siteOf = (settings, pages = []) => {
     .filter((l) => !listed.has(l.href));
   return {
     theme,
-    nav: { ...settings.nav, menu: [...settings.nav.menu, ...extra] },
+    nav: { items: [...settings.nav.menu, ...extra], bar: settings.nav.links, cta: settings.nav.cta },
     footer: settings.footer,
     announcement: settings.announcement,
     seo: settings.seo,
