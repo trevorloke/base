@@ -334,11 +334,13 @@ export const makeSiteApp = (at) => {
     const site = await siteFor(c, at);
     if (!site) return c.text('This site isn’t set up yet.', 503);
     await ensureSite(site.db, site.ws);
-    // One address per page: /donate/ → /donate.
+    // One address per page: /donate/ → /donate. Always on this site: the
+    // slashes (or backslashes) in front collapse to one, so '//other.host/'
+    // is a path here and never a link to another site.
     const p = c.req.path;
     if ((c.req.method === 'GET' || c.req.method === 'HEAD') && p.length > 1 && p.endsWith('/') && p !== `${R}/`) {
       const url = new URL(c.req.url);
-      return c.redirect(`${site.base}${p.replace(/\/+$/, '')}${url.search}`, 301);
+      return c.redirect(`${site.base}/${p.replace(/^[/\\]+/, '').replace(/\/+$/, '')}${url.search}`, 301);
     }
     // The app's own copy of a site that has a domain of its own isn't indexed.
     if (R) {

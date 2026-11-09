@@ -56,6 +56,8 @@ app.use('*', async (c, next) => {
   }
   // Public base URL for links in outbound mail (unsubscribe).
   ctx.publicUrl = (process.env.STARBASE_PUBLIC_URL || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
+  // The host this request came in on (the app answers there: never a website domain).
+  ctx.host = new URL(c.req.url).hostname.toLowerCase();
   c.set('db', db);
   c.set('ctx', ctx);
   await next();

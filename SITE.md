@@ -493,7 +493,11 @@ theirs, and the server refuses its data anyway).
 | `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
 
 Careful with "your own domain": on a host in `domains` only the site answers
-(no sign-in, no app). The screen refuses the address it is opened at and
-base.win; `site.settings.save` itself can't tell which host is the app's,
-so a domain saved straight through the API could still take the app's own.
+(no sign-in, no app). So `site.settings.save` refuses (400, in plain words)
+every host the app itself answers at: the host the save came in on,
+`STARBASE_PUBLIC_URL`'s, `RENDER_EXTERNAL_HOSTNAME`, and base.win and its
+subdomains (`store.js appHosts`; `GET /api/site` lists them as
+`urls.app_hosts`, and the screen refuses them as they're typed). One saved
+before this check is ignored where the site looks domains up, so the app is
+never locked out of its own address — the screen marks it, to be taken off.
 

@@ -3,7 +3,7 @@
 import { Hono } from 'hono';
 import { areasFor } from '../../lib/perms.js';
 import { here } from '../../lib/mount.js';
-import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace } from './store.js';
+import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace, appHosts } from './store.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
 
@@ -61,6 +61,10 @@ api.get('/site', async (c) => {
       site: here(c, '/site/'),
       domains: (settings.domains || []).map((d) => `https://${d}/`),
       hosts: hosts.filter((h) => !(settings.domains || []).includes(h)).map((h) => `https://${h}/`),
+      // Where the app itself answers (this request's host, the server's
+      // public address, base.win): never a website domain — the screen
+      // refuses them, and marks one saved before (the site ignores it).
+      app_hosts: [...new Set([c.get('ctx').host, ...appHosts()].filter(Boolean))],
     },
     // Online giving (donate and join): set up or not (ext/payments).
     payments: { ready: await paymentsReady() },
