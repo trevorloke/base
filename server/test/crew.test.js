@@ -7,11 +7,13 @@
 // job — and closes their "Wants to volunteer" request. GET /crew/:id and
 // GET /volunteers: who's on, where, first shifts, the tray (free or busy
 // then), the roster's stages. Volunteers can't read or do any of it; moving
-// walk lists needs Map & turfs.
+// walk lists needs Map & turfs. "Here" (checked in) keeps the spot: room is
+// never given away twice.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
+import { app } from '../index.js';
 
 let mgr, walker, walkerUser, ws, shift, t1, t2, t3;
 const P = {};
@@ -170,6 +172,59 @@ test('the tray says who is busy then; the roster’s stages and counts', async (
   assert.equal(roster.counts.all, roster.volunteers.length);
   assert.equal(roster.counts.active + roster.counts.new + roster.counts.lapsed, roster.counts.all);
   assert.equal(by['Driver Example'].phone, '604-555-0172');
+});
+
+test('"Here" keeps the spot: a full shift stays full after a check-in, and nobody is booked past it', async () => {
+  // Tonight, room for one; Ana counts herself in, so Ben can't.
+  const tonight = ok(await mgr.action('shift.create', { title: 'Lit drop tonight', starts_at: inDays(2 / 24), ends_at: inDays(4 / 24), capacity: 1 })).shift;
+  const { c: ana } = await join('here.ana@example.org', 'Ana Here');
+  const { c: ben } = await join('here.ben@example.org', 'Ben Late');
+  const mine = ok(await ana.action('shift.join', { shift_id: tonight.id })).assignment;
+  assert.equal((await ben.action('shift.join', { shift_id: tonight.id })).status, 409, 'full');
+
+  // The desk taps Here on Ana: she still holds her spot.
+  ok(await mgr.action('shift.setStatus', { id: mine.id, status: 'completed' }));
+  const late = await ben.action('shift.join', { shift_id: tonight.id });
+  assert.equal(late.status, 409, 'still full after the check-in');
+  assert.match(late.json.error, /full/);
+  const extra = await mgr.createPerson('Extra Late', { phone: '604-555-0178' });
+  assert.equal((await mgr.action('shift.add', { shift_id: tonight.id, person_id: extra.id })).status, 409, 'the board can’t book past it');
+  assert.equal((await mgr.action('shift.assign', { shift_id: tonight.id, person_id: extra.id })).status, 409, 'nor can the shift screen');
+  // Ana is on it: "Count me in" or the board again is "already on" — never back to booked.
+  const again = await ana.action('shift.join', { shift_id: tonight.id });
+  assert.equal(again.status, 409);
+  assert.match(again.json.error, /already on this shift/);
+  const twice = await mgr.action('shift.add', { shift_id: tonight.id, person_id: mine.person_id });
+  assert.equal(twice.status, 409);
+  assert.match(twice.json.error, /already on this shift/);
+  const board = await crew(tonight.id);
+  assert.deepEqual(board.crew.map((x) => [x.name, x.status]), [['Ana Here', 'completed']]);
+
+  // Everyone holding a spot hears about the shift, and the export counts them.
+  const told = ok(await mgr.action('shift.notify', { shift_id: tonight.id })).notified;
+  assert.deepEqual(told.map((r) => r.name), ['Ana Here']);
+  const csv = await (await app.request('/api/export/shifts.csv', { headers: { cookie: mgr.cookie } })).text();
+  assert.match(csv, /\r\nLit drop tonight,[^\r\n]*,1,1\r\n/, 'capacity 1, booked 1');
+
+  // Undoing a check-in isn't a new booking: fine on a full shift.
+  ok(await mgr.action('shift.setStatus', { id: mine.id, status: 'assigned' }));
+  ok(await mgr.action('shift.setStatus', { id: mine.id, status: 'completed' }));
+
+  // Room for fewer than hold a spot is refused — Here counts.
+  ok(await mgr.action('shift.update', { id: tonight.id, capacity: 2 }));
+  ok(await ben.action('shift.join', { shift_id: tonight.id }));
+  const shrink = await mgr.action('shift.update', { id: tonight.id, capacity: 1 });
+  assert.equal(shrink.status, 409);
+  assert.match(shrink.json.error, /^2 are booked/);
+
+  // "Can't make it" gives the spot back; Here after that is a new booking, so room is checked.
+  ok(await ben.action('shift.leave', { shift_id: tonight.id }));
+  ok(await mgr.action('shift.update', { id: tonight.id, capacity: 1 }));
+  const benRow = (await crew(tonight.id)).out.find((x) => x.name === 'Ben Late');
+  const back = await mgr.action('shift.setStatus', { id: benRow.assignment_id, status: 'completed' });
+  assert.equal(back.status, 409, 'declined → Here takes a spot, and there is none');
+  assert.match(back.json.error, /capacity/);
+  assert.deepEqual((await crew(tonight.id)).crew.map((x) => [x.name, x.status]), [['Ana Here', 'completed']]);
 });
 
 test('volunteers can’t read the roster or the board, or move anyone; walk lists need Map & turfs', async () => {

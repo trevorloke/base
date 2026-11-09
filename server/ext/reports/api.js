@@ -138,7 +138,7 @@ const DATASETS = {
   signs: { sql: `select s.address, s.kind, s.status, p.name as supporter, p.phone, s.note, s.lat, s.lng, s.created_at
     from signs s left join persons p on p.id = s.person_id where s.workspace_id = $1 order by s.status, s.address` },
   shifts: { sql: `select s.title, s.starts_at, s.ends_at, s.location, s.role, s.capacity,
-      (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed')) as booked
+      (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as booked
     from shifts s where s.workspace_id = $1 and s.deleted_at is null order by s.starts_at` },
   gifts: { sql: `select p.name as donor, p.email, g.amount_cents / 100.0 as amount, g.date, g.method, g.cadence, coalesce(g.slate, 'council') as slate, g.note, g.flagged, g.flag_reason, g.created_at
     from gifts g join persons p on p.id = g.person_id where g.workspace_id = $1 and g.deleted_at is null order by g.date desc` },
