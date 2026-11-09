@@ -352,6 +352,10 @@ await sam.fill('#ts-confirm', await codeFor('sam', samKey));
 await sam.getByRole('button', { name: 'Turn on' }).click();
 await sam.locator('.ts-codelist').waitFor({ timeout: 8000 });
 await shot(sam, '12-required-codes-desktop');
+// Who they are is asked again meanwhile (signal back, another tab): the codes stay until saved.
+await sam.evaluate(() => window.dispatchEvent(new Event('basewin:two-step-set-up')));
+await sleep(900);
+check('the recovery codes stay on screen until “I’ve saved them”, whatever is asked meanwhile', await sam.locator('.ts-codelist').isVisible());
 await sam.getByRole('button', { name: 'I’ve saved them — open base.win' }).click();
 await sam.locator('.nav .links').waitFor({ timeout: 10000 });
 check('set up: the desk opens for the staffer', (await api(sam, '/persons')).status === 200);

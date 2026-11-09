@@ -11,7 +11,7 @@
 // shouldn't pay for it until they open it.
 // Desk-only screens sit under one area guard: someone without the area lands
 // back on Today (the server refuses their data anyway).
-import { lazy } from 'react';
+import { lazy, useState } from 'react';
 import { Routes, Route, Navigate, Outlet, useOutletContext, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, noAnswer } from './api.js';
@@ -70,6 +70,8 @@ const Profile = lazy(() => import('./pages/Profile.jsx'));
 const askAgain = (q) => ((q.state.data !== undefined && q.state.dataUpdatedAt === 0)
   || (q.state.status === 'error' && noAnswer(q.state.error)) ? 15_000 : false);
 function RequireAuth({ mode }) {
+  // The two-step set-up's recovery codes on screen: it stays until they're saved.
+  const [twoStepHeld, setTwoStepHeld] = useState(false);
   const me = useQuery({
     queryKey: ['me'],
     queryFn: () => apiGet('/auth/me'),
@@ -81,7 +83,7 @@ function RequireAuth({ mode }) {
   if (me.isError && !(noAnswer(me.error) && me.data)) return <Navigate to="/login" replace />;
   // The campaign requires two-step sign-in for this role and it isn't on
   // yet: its set-up stands before everything else (components/TwoStep.jsx).
-  if (me.data?.two_step?.must_set_up) return <TwoStepRequired me={me.data} />;
+  if (me.data?.two_step?.must_set_up || twoStepHeld) return <TwoStepRequired me={me.data} onHold={setTwoStepHeld} />;
   if (mode === 'admin' && me.data?.user && !mayAdmin(me.data)) return <NotForYou me={me.data} />;
   return <Shell me={me.data} mode={mode} />;
 }

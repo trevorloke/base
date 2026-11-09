@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiGet } from '../api.js';
-import { allowed, commandsFor, rank, scoreItem } from './commands.js';
+import { allowed, commandsFor, fold, rank, scoreItem } from './commands.js';
 import './command-bar.css';
 
 
@@ -28,6 +28,14 @@ const SearchIcon = () => (
 
 // "Sam Example · 604-555-0142 · Whalley" — what tells two people apart.
 const personHint = (p) => [p.phone, p.email, p.address].filter(Boolean).slice(0, 2).join(' · ');
+// Someone found for what was typed a moment ago who still fits what's typed
+// now (every word in their name, email or phone; or the phone's digits).
+const stillFits = (p, q) => {
+  const hay = fold(`${p.name} ${p.email || ''} ${p.phone || ''}`);
+  const digits = q.replace(/\D/g, '');
+  return fold(q).split(' ').every((w) => hay.includes(w))
+    || (digits.length >= 4 && String(p.phone || '').replace(/\D/g, '').includes(digits));
+};
 
 function Dialog({ me, nav, onClose }) {
   const navigate = useNavigate();
@@ -68,8 +76,10 @@ function Dialog({ me, nav, onClose }) {
     const out = [];
     const doThese = rank(actions, q);
     const goTo = rank(screens, q);
-    // Typing on from a search keeps its people until the new answer comes.
-    const found = people.q && (people.q === q || q.startsWith(people.q)) ? people.list : [];
+    // Typing on from a search keeps those of its people who still fit, until
+    // the new answer comes — never one who doesn't (Enter would open them).
+    const found = people.q === q ? people.list
+      : people.q && q.startsWith(people.q) ? people.list.filter((p) => stillFits(p, q)) : [];
     const peopleGroup = found.length ? {
       id: 'people', label: 'People',
       items: found.map((p) => ({ kind: 'person', key: `person:${p.id}`, label: p.name, hint: personHint(p), to: `/people/${p.id}` })),

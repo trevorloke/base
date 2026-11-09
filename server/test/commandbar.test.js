@@ -61,16 +61,20 @@ before(async () => {
   await mgr.signup({ workspaceName: 'Imagine Surrey', email: 'cmd.manager@example.org' });
   await mgr.createPerson('Lena Example', { phone: '604-555-0142', email: 'lena@example.org' });
   await mgr.createPerson('Omar Example', { phone: '(778) 555-0199' });
+  await mgr.createPerson('Pat Example', { phone: '+1 604 555 0177 ext. 22' });
 });
 
 test('the quick search: the start of a name or a last name, a phone typed any way, a whole email', async () => {
   const find = async (q, who = mgr) => (await who.get(`/api/search/people?q=${encodeURIComponent(q)}`)).json.persons.map((p) => p.name);
   assert.deepEqual(await find('lena'), ['Lena Example']);
   assert.deepEqual(await find('LENA EX'), ['Lena Example']);
-  assert.deepEqual(await find('exam'), ['Lena Example', 'Omar Example'], 'the last name’s start, in name order');
+  assert.deepEqual(await find('exam'), ['Lena Example', 'Omar Example', 'Pat Example'], 'the last name’s start, in name order');
   assert.deepEqual(await find('604 555 0142'), ['Lena Example']);
   assert.deepEqual(await find('(778) 555'), ['Omar Example']);
   assert.deepEqual(await find('+1 778 555 0199'), ['Omar Example']);
+  assert.deepEqual(await find('604 555 0177'), ['Pat Example'], 'saved with a country code and an extension');
+  assert.deepEqual(await find('1-604-555-0177'), ['Pat Example']);
+  assert.deepEqual(await find('604 555 01'), ['Lena Example', 'Pat Example'], 'the start of a number');
   assert.deepEqual(await find('lena@example.org'), ['Lena Example']);
   assert.deepEqual(await find('ena'), [], 'the middle of a name is People’s own search (the command bar asks it next)');
   assert.deepEqual(await find('l'), [], 'two letters at least');
@@ -100,7 +104,7 @@ test('people: a phone typed any way finds them, digits against digits', async ()
   assert.deepEqual(await find('+1 604 555 0142'), ['Lena Example']);
   assert.deepEqual(await find('778-555-0199'), ['Omar Example']);
   assert.deepEqual(await find('7785550199'), ['Omar Example']);
-  assert.deepEqual(await find('555-01'), ['Lena Example', 'Omar Example'], 'part of a number, as typed');
+  assert.deepEqual(await find('555-01'), ['Lena Example', 'Omar Example', 'Pat Example'], 'part of a number, however it was saved');
   assert.deepEqual(await find('6045550199'), [], 'no one has that number');
   assert.deepEqual(await find('lena@'), ['Lena Example'], 'email');
   assert.deepEqual(await find('omar'), ['Omar Example'], 'name');

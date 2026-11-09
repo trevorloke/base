@@ -12,15 +12,19 @@
 //                            an email.
 //
 // Its indexes are named for it; it runs after ext/names (the name columns).
+// The phone's is on its last ten digits, extension dropped — the same
+// expression texting matches replies with (ext/texting/rules.js
+// PHONE_DIGITS_SQL), so those lookups use it too.
 import { Hono } from 'hono';
 import { decide } from '../../lib/perms.js';
 import { forViewer } from '../../lib/viewer.js';
 
+const PHONE10 = `right(regexp_replace(regexp_replace(coalesce(phone, ''), '\\s*(ext\\.?|x|#).*$', '', 'i'), '\\D', '', 'g'), 10)`;
+
 export const sql = `
 create index if not exists persons_ws_name_prefix_idx on persons (workspace_id, lower(name) text_pattern_ops) where deleted_at is null;
 create index if not exists persons_ws_last_prefix_idx on persons (workspace_id, lower(last_name) text_pattern_ops) where deleted_at is null;
-create index if not exists persons_ws_phone_digits_idx on persons (workspace_id, (regexp_replace(phone, '[^0-9]', '', 'g')) text_pattern_ops)
-  where deleted_at is null;
+create index if not exists persons_ws_phone10_idx on persons (workspace_id, (${PHONE10}) text_pattern_ops) where deleted_at is null;
 `;
 
 const LIMIT = 6;
@@ -41,12 +45,14 @@ api.get('/search/people', async (c) => {
   // whole file when nobody matches).
   const among = (cond) => `(select id from persons where workspace_id = $1 and deleted_at is null and ${cond} limit ${CANDIDATES})`;
   const ways = [among('lower(name) like $2'), among('lower(last_name) like $2')];
-  // A phone: 604 555 0142, (604) 555-0142, +1 604… — digits against digits.
+  // A phone: 604 555 0142, (604) 555-0142, +1 604… — its last ten digits
+  // against the start of what's typed (a country code typed is dropped).
   let digits = /^[\d\s().+-]+$/.test(q) ? q.replace(/\D/g, '') : '';
-  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+  if (/^\+?1[\s().-]/.test(q) || (digits.length === 11 && digits.startsWith('1'))) digits = digits.slice(1);
+  if (digits.length > 10) digits = digits.slice(-10);
   if (digits.length >= 4) {
     params.push(likeStart(digits));
-    ways.push(among(`regexp_replace(phone, '[^0-9]', '', 'g') like $${params.length}`));
+    ways.push(among(`${PHONE10} like $${params.length}`));
   }
   // A whole email — the desk's only (a volunteer is never matched on one).
   if (ctx.role !== 'volunteer' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q)) {

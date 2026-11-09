@@ -112,10 +112,13 @@ app.post('/actions/:name', async (c) => {
     return c.json({ error: `${i.path.join('.') || 'input'}: ${i.message}` }, 400);
   }
   try {
+    // Slow work that must never hold the campaign's write lock (a slow
+    // hash): done first, and handed to the handler.
+    const ready = action.before ? await action.before(c.get('db'), ctx, parsed.data) : undefined;
     const { result, lastSeq } = await runAction(
       c.get('db'),
       { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: name },
-      (tx, emit) => action.handler(tx, ctx, parsed.data, emit),
+      (tx, emit) => action.handler(tx, ctx, parsed.data, emit, ready),
     );
     if (!action.after) return c.json({ ...result, seq: lastSeq });
     // Committed: now the work that must never hold the campaign lock (an

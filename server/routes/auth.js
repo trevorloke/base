@@ -17,8 +17,8 @@ import {
 import { JURISDICTIONS, orgName, jurisdiction, timeZone, openSignupForced, setupClosedMessage, orgOut } from '../lib/org.js';
 import { clientIp, makeLimiter, crossSiteWrite } from '../lib/guard.js';
 import {
-  checkCode, codeFails, CODE_FAILS_MAX, endPending, findPending, missPending, PENDING_COOKIE, PENDING_MINUTES,
-  recoveryHashFor, startPending, twoStepOut, twoStepRow,
+  checkCode, codeFails, endPending, PENDING_COOKIE, PENDING_MINUTES, PENDING_TRIES,
+  recoveryHashFor, startPending, takeTry, twoStepOut, twoStepRow,
 } from '../lib/twostep.js';
 
 const app = new Hono();
@@ -69,6 +69,7 @@ const campaignName = async (db) =>
   (await db.query('select name from workspaces order by created_at limit 1')).rows[0]?.name || orgName();
 
 class SetupClosed extends Error {}
+class WrongCode extends Error {}
 
 // What the browser gets about the workspace: settings minus the sample
 // bookkeeping (the ids of every sample row), which only the server needs.
@@ -216,25 +217,27 @@ app.post('/login', async (c) => {
 });
 
 // The second step: a code from the app, or one of the recovery codes. Five
-// wrong codes and the password is asked again; ten for one person in 15
-// minutes and they wait (sign-in's own limit from one address counts too).
+// tries and the password is asked again; ten for one person in 15 minutes
+// and they wait (sign-in's own limit from one address counts too). Each try
+// is counted before its code is checked, so codes sent at once can't all
+// get in under a limit.
 app.post('/login/code', async (c) => {
   const db = await getDb();
   if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
-  const pending = await findPending(db, getCookie(c, PENDING_COOKIE));
+  const pending = await takeTry(db, getCookie(c, PENDING_COOKIE));
   if (!pending) {
     deleteCookie(c, PENDING_COOKIE, { path: '/' });
     return c.json({ error: 'That took too long — sign in again.', two_step: 'again' }, 401);
   }
   const who = `user:${pending.user_id}`;
-  if (codeFails.count(who) >= CODE_FAILS_MAX) return c.json({ error: TOO_MANY_CODES }, 429);
+  if (codeFails(who)) return c.json({ error: TOO_MANY_CODES }, 429);
   const { code } = await c.req.json().catch(() => ({}));
   const typed = String(code ?? '').slice(0, 40);
   const r = typed.trim() ? await signInCode(db, { userId: pending.user_id, workspaceId: pending.workspace_id }, typed) : { used: null };
   if (!r.used) {
-    codeFails(who);
-    const left = await missPending(db, pending.token_hash);
+    const left = Math.max(0, PENDING_TRIES - Number(pending.tries));
     if (!left) {
+      await endPending(db, pending.token_hash);
       deleteCookie(c, PENDING_COOKIE, { path: '/' });
       return c.json({ error: 'Too many wrong codes — sign in again.', two_step: 'again' }, 401);
     }
@@ -294,39 +297,46 @@ app.post('/join', async (c) => {
     return c.json({ error: 'that password does not match your existing base.win account' }, 401);
   }
   // An account with two-step sign-in on joins with its code as well — the
-  // password alone never opens it (the invite isn't used up meanwhile).
-  if (user && (await twoStepRow(db, user.id))?.on_since) {
-    const who = `user:${user.id}`;
-    if (codeFails.count(who) >= CODE_FAILS_MAX) return c.json({ error: TOO_MANY_CODES }, 429);
+  // password alone never opens it. The code is checked in the join's own
+  // write (below), so a join that fails never spends it; its slow hash, if
+  // it's a recovery code, is made first.
+  const twoStep = Boolean(user && (await twoStepRow(db, user.id))?.on_since);
+  let codeHash = null;
+  if (twoStep) {
     if (!parsed.data.code) return c.json({ error: 'Type the code from your authenticator app.', two_step: 'code' }, 401);
-    const r = await signInCode(db, { userId: user.id, workspaceId: (await db.query(
-      'select workspace_id from memberships where user_id = $1 order by created_at limit 1', [user.id],
-    )).rows[0]?.workspace_id || inv.workspace_id }, parsed.data.code);
-    if (!r.used) {
-      codeFails(who);
-      return c.json({ error: NO_MATCH, two_step: 'code' }, 401);
-    }
-    codeFails.clear(who);
+    if (codeFails(`user:${user.id}`)) return c.json({ error: TOO_MANY_CODES }, 429);
+    codeHash = await recoveryHashFor(db, user.id, parsed.data.code);
   }
   if (!user && !name) return c.json({ error: 'name required' }, 400);
   const userId = user?.id || newId();
   const passwordHash = user ? null : await hashPassword(password);
   // On the hash chain: who now has access to the campaign, and in what role.
-  await runAction(db, { workspaceId: inv.workspace_id, actorId: userId, action: 'member.join' }, async (tx, emit) => {
-    if (!user) {
-      await tx.query('insert into users (id, email, name, password_hash) values ($1, $2, $3, $4)',
-        [userId, inv.email, name, passwordHash]);
-    }
-    const m = await tx.query(
-      `insert into memberships (user_id, workspace_id, role) values ($1, $2, $3)
-       on conflict (user_id, workspace_id) do nothing`,
-      [userId, inv.workspace_id, inv.role],
-    );
-    const n = await tx.query('update invites set accepted_at = now() where id = $1 and accepted_at is null', [inv.id]);
-    if (n.affectedRows === 0) throw new Error('invite already used');
-    emit('invite', inv.id, 'update', { accepted: true });
-    if (m.affectedRows > 0) emit('membership', userId, 'create', { email: inv.email, role: inv.role, user_id: userId });
-  });
+  try {
+    await runAction(db, { workspaceId: inv.workspace_id, actorId: userId, action: 'member.join' }, async (tx, emit) => {
+      if (twoStep) {
+        const r = await checkCode(tx, user.id, parsed.data.code, { hash: codeHash });
+        if (!r.used) throw new WrongCode();
+        if (r.used === 'recovery') emit('two_step', user.id, 'update', { recovery_code_used: true, recovery_left: r.left });
+      }
+      if (!user) {
+        await tx.query('insert into users (id, email, name, password_hash) values ($1, $2, $3, $4)',
+          [userId, inv.email, name, passwordHash]);
+      }
+      const m = await tx.query(
+        `insert into memberships (user_id, workspace_id, role) values ($1, $2, $3)
+         on conflict (user_id, workspace_id) do nothing`,
+        [userId, inv.workspace_id, inv.role],
+      );
+      const n = await tx.query('update invites set accepted_at = now() where id = $1 and accepted_at is null', [inv.id]);
+      if (n.affectedRows === 0) throw new Error('invite already used');
+      emit('invite', inv.id, 'update', { accepted: true });
+      if (m.affectedRows > 0) emit('membership', userId, 'create', { email: inv.email, role: inv.role, user_id: userId });
+    });
+  } catch (e) {
+    if (e instanceof WrongCode) return c.json({ error: NO_MATCH, two_step: 'code' }, 401);
+    throw e;
+  }
+  if (twoStep) codeFails.clear(`user:${user.id}`);
   const sessionToken = await createSession(db, userId, inv.workspace_id);
   setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
   const ctx = await loadContext(db, sessionToken);

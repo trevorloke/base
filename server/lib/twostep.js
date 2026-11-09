@@ -235,9 +235,11 @@ export const openWhileSettingUp = (method, path) => OPEN_WHILE_SETTING_UP.some((
 export const SETUP_FIRST = 'set up two-step sign-in first — your campaign asks everyone at the desk to use it';
 
 // ── Wrong codes ──
-// Per person: 10 wrong codes in 15 minutes, then a pause (sign-in, set-up,
-// turning it off and new recovery codes all count). Per sign-in: 5 wrong
-// codes and the password is asked again.
+// Per person: 10 tries at a code in 15 minutes, then a pause (sign-in,
+// joining, set-up, turning it off and new recovery codes all count). Each
+// try is counted as it comes in — codeFails(key) counts and says whether
+// that's one too many, before the code is checked — and a right code clears
+// the count. Per sign-in: 5 tries, then the password is asked again.
 export const codeFails = makeLimiter({ windowMs: 15 * 60_000, max: 10 });
 export const CODE_FAILS_MAX = 10;
 export const PENDING_TRIES = 5;
@@ -314,25 +316,22 @@ export async function startPending(db, userId, workspaceId) {
   );
   return token;
 }
-export const findPending = async (db, token) => (token ? (await db.query(
-  `select token_hash, user_id, workspace_id, tries from two_step_pending
-   where token_hash = $1 and expires_at > now() and tries < $2`,
+// A try on a waiting sign-in, taken before its code is checked — one row
+// update, so codes sent all at once can't each slip in under the limit. →
+// the ticket (tries counting this one), or null: gone, stale or used up.
+export const takeTry = async (db, token) => (token ? (await db.query(
+  `update two_step_pending set tries = tries + 1
+   where token_hash = $1 and expires_at > now() and tries < $2
+   returning token_hash, user_id, workspace_id, tries`,
   [sha256(String(token)), PENDING_TRIES],
 )).rows[0] || null : null);
-// One more wrong code → how many are left (0: the ticket is gone).
-export async function missPending(db, tokenHash) {
-  const row = (await db.query('update two_step_pending set tries = tries + 1 where token_hash = $1 returning tries', [tokenHash])).rows[0];
-  const left = Math.max(0, PENDING_TRIES - Number(row?.tries ?? PENDING_TRIES));
-  if (!left) await db.query('delete from two_step_pending where token_hash = $1', [tokenHash]);
-  return left;
-}
 export const endPending = (db, tokenHash) => db.query('delete from two_step_pending where token_hash = $1', [tokenHash]);
 
-// From the server's own shell (scripts/reset-two-step.mjs), for the one
-// case a manager can't fix from the app: the only manager lost their phone
-// and their recovery codes. Clears it, ends their sign-ins, and puts it on
-// each of their campaigns' event logs. → the campaigns' ids, or null when
-// there's no such account.
+// From the server's own shell (scripts/reset-two-step.mjs), for what a
+// manager can't do from the app: the only manager lost their phone and their
+// recovery codes, or the person belongs to more than one campaign here.
+// Clears it, ends their sign-ins, and puts it on each of their campaigns'
+// event logs. → the campaigns' ids, or null when there's no such account.
 export async function resetFromServer(db, email, runAction) {
   const user = (await db.query('select id from users where email = $1', [String(email || '').trim().toLowerCase()])).rows[0];
   if (!user) return null;

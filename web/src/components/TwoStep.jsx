@@ -143,8 +143,9 @@ function WithCode({ id, label, button, recovery, onSubmit, danger }) {
 }
 
 // The card. forced: the campaign requires it and it isn't on yet (no "off"
-// state to linger in, and "I've saved them" opens the app).
-export default function TwoStepCard({ me, forced = false, onOn }) {
+// state to linger in, and "I've saved them" opens the app). onCodes: the
+// recovery codes are on screen (the set-up screen stays until they're saved).
+export default function TwoStepCard({ me, forced = false, onOn, onCodes }) {
   const qc = useQueryClient();
   const online = useOnline();
   const q = useQuery({ queryKey: ['two-step'], queryFn: () => apiGet('/two-step') });
@@ -171,6 +172,7 @@ export default function TwoStepCard({ me, forced = false, onOn }) {
     try {
       const r = await action('twostep.confirm', { code });
       setSetup(null);
+      onCodes?.();
       setCodes({ list: r.recovery_codes, heading: '✓ Two-step sign-in is on', elsewhere: r.signed_out_elsewhere });
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   };
@@ -256,8 +258,10 @@ export default function TwoStepCard({ me, forced = false, onOn }) {
 }
 
 // Before anything else: the campaign requires two-step sign-in for this
-// role and it isn't on yet (App.jsx, from /api/auth/me). Sign out stays a tap away.
-export function TwoStepRequired({ me }) {
+// role and it isn't on yet (App.jsx, from /api/auth/me). Sign out stays a tap
+// away. onHold(true): the recovery codes are showing — App.jsx keeps this
+// screen up, whatever /auth/me now says, until "I've saved them".
+export function TwoStepRequired({ me, onHold }) {
   const qc = useQueryClient();
   const [leaving, setLeaving] = useState(false);
   const signOut = async () => {
@@ -272,7 +276,8 @@ export function TwoStepRequired({ me }) {
       <span className="brand-org">{me?.workspace?.name}</span>
       <h1>Set up two-step sign-in</h1>
       <p className="ts-line">{me?.workspace?.name || 'Your campaign'} asks everyone at the desk to use it.</p>
-      <TwoStepCard me={me} forced onOn={() => qc.invalidateQueries({ queryKey: ['me'] })} />
+      <TwoStepCard me={me} forced onCodes={() => onHold?.(true)}
+        onOn={() => { onHold?.(false); qc.invalidateQueries({ queryKey: ['me'] }); }} />
       <p className="ts-signout">
         <button type="button" className="btn-link" disabled={leaving} onClick={signOut}>{leaving ? 'Signing out…' : 'Sign out'}</button>
       </p>

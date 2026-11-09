@@ -333,6 +333,17 @@ test('five wrong codes and the password is asked again; a stale ticket too', asy
   codeFails.clear(`user:${mgrId}`);
 });
 
+test('codes sent all at once on one sign-in: still five tries, then the password again', async () => {
+  const b = new Browser();
+  await b.signIn('rae.manager@example.org');
+  const answers = await Promise.all(Array.from({ length: 8 }, (_, i) => b.post('/api/auth/login/code', { code: `99999${i}` })));
+  const said = answers.map((a) => a.json.two_step);
+  assert.equal(said.filter((w) => w === 'code').length, 4, JSON.stringify(said));
+  assert.equal(said.filter((w) => w === 'again').length, 4, JSON.stringify(said));
+  assert.equal(codeFails.count(`user:${mgrId}`), 5, 'five tries reached the code, no more');
+  codeFails.clear(`user:${mgrId}`);
+});
+
 test('a recovery code signs in once; then it’s spent (and the log says one was used)', async () => {
   const code = mgr.codes[0];
   const b = new Browser();
@@ -458,9 +469,15 @@ test('turning it off: an app code or a recovery code; when it’s required, set-
   // Vic (a volunteer, not required) turns theirs off with a recovery code… after making some.
   const vic = people.vic;
   const codes = (await vic.b.action('twostep.codes', { code: await nextCode(vic.key, vic.id) })).json.recovery_codes;
+  // Meanwhile a sign-in on a laptop waits for a code.
+  const laptop = new Browser();
+  assert.deepEqual((await laptop.signIn('vic@example.org')).json, { two_step: 'code' });
   const voff = await vic.b.action('twostep.off', { code: codes[3] });
   assert.equal(voff.status, 200);
   assert.deepEqual([voff.json.on, voff.json.must_set_up], [false, false]);
+  const waiting = await laptop.post('/api/auth/login/code', { code: '123456' });
+  assert.deepEqual([waiting.status, waiting.json.two_step], [401, 'again'], 'no code to wait for now: the password again');
+  assert.equal((await laptop.signIn('vic@example.org')).json.role, 'volunteer');
   const v = new Browser();
   const r = await v.signIn('vic@example.org');
   assert.equal(r.json.role, 'volunteer', 'the password alone again');
@@ -515,6 +532,10 @@ test('joining another campaign with an account that has it on: the code too', as
   assert.equal(ok.status, 200, JSON.stringify(ok.json));
   assert.equal(ok.json.workspace.name, 'Third Campaign');
   codeFails.clear(`user:${people.tess.id}`);
+  // In two campaigns now: one campaign's manager can't clear what guards the other.
+  const reset = await mgr.action('twostep.reset', { user_id: people.tess.id });
+  assert.equal(reset.status, 409);
+  assert.match(reset.json.error, /another campaign/);
 });
 
 test('nothing secret leaves: not in the export, not in any answer about others', async () => {
