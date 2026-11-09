@@ -424,9 +424,12 @@ one tap away under **More**.
   turf, *No walk list* (a driver) or *Not placed yet* (every walk list, as
   before). No mouse? Tap a name, then *Add here* / *Move here* on a column
   (Enter and Escape work too). ⋯ on a card: *Team lead*, *Driver*, and on
-  the day *Here* / *No-show*. *Split the rest evenly* places everyone not
-  placed yet. Drag a card back to the left to take them off the shift —
-  *Undo* puts them back where they were.
+  the day *Here* / *No-show* — someone *Here* keeps their spot, so a full
+  shift stays full. *Split the rest evenly* places everyone not placed yet.
+  Drag a card back to the left to take them off the shift — *Undo* puts
+  them back as they were: where, their job, *Confirmed* or *Here*. Without
+  Map & turfs, *Undo* is there only for someone not placed on a turf or on
+  *No walk list*.
 - **Shifts → Volunteers** — everyone who volunteers: *Asked to volunteer*
   (still waiting), *New*, *Active*, *Lapsed* (nothing for 30 days), by role
   or name. Open one: *Call*, *Text*, how many shifts they've done, and

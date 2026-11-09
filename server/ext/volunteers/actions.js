@@ -15,7 +15,9 @@ import { httpError } from '../../actions/util.js';
 import { areasFor } from '../../lib/perms.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
-const ACTIVE = ['assigned', 'confirmed'];
+// On the shift, holding a spot: booked, confirmed, or checked in ("Here") —
+// the core's rule for room (actions/field.js).
+const HOLD = ['assigned', 'confirmed', 'completed'];
 
 const dayWords = (iso, tz) => {
   try {
@@ -57,7 +59,7 @@ export const actions = {
         'select id, status from shift_assignments where workspace_id = $1 and shift_id = $2 and person_id = $3',
         [ws, shift.id, input.person_id],
       )).rows[0];
-      if (had && ACTIVE.includes(had.status)) throw httpError(409, 'already on this shift');
+      if (had && HOLD.includes(had.status)) throw httpError(409, 'already on this shift');
       let assignmentId;
       if (had) {
         assignmentId = had.id;

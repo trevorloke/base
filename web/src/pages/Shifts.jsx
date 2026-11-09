@@ -130,6 +130,10 @@ const fmtStamp = (iso) => (iso
   ? new Date(iso).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
   : '');
 
+// On the shift, holding a spot: booked, confirmed, or checked in ("Here").
+// The server counts room over the same three (actions/field.js).
+const HOLDS_SPOT = ['assigned', 'confirmed', 'completed'];
+
 // "5 spots left", "1 spot left", "Full", or "3 going" when there's no cap.
 const spotsLeft = (filled, capacity) => Math.max(0, capacity - (Number(filled) || 0));
 const spotsText = (filled, capacity) => {
@@ -1028,7 +1032,7 @@ function ShiftDetail({ id, canDesk, me }) {
   }
 
   const { shift, assignees } = shiftQ.data;
-  const active = assignees.filter((a) => a.status === 'assigned' || a.status === 'confirmed');
+  const active = assignees.filter((a) => HOLDS_SPOT.includes(a.status));
   const full = !!shift.capacity && active.length >= shift.capacity;
   const href = safeHref(shift.link);
   const myEmail = String(me?.user?.email || '').toLowerCase();
@@ -1038,6 +1042,8 @@ function ShiftDetail({ id, canDesk, me }) {
     ? a.is_me
     : !!myEmail && String(a.email || '').toLowerCase() === myEmail);
   const onIt = !canDesk && active.some(isMine);
+  // Checked in ("Here"): on the shift, past "Can't make it".
+  const checkedIn = onIt && active.some((a) => isMine(a) && a.status === 'completed');
   const over = new Date(shift.ends_at || shift.starts_at) < new Date();
   const offered = allowed.data?.actions ?? [];
   const canJoin = offered.includes('shift.join');
@@ -1383,7 +1389,7 @@ function ShiftDetail({ id, canDesk, me }) {
               <span className="ops-onit" role="status"><span aria-hidden="true">✓</span> You’re on this shift</span>
               {waiting?.name === 'shift.leave' ? (
                 <p className="ops-pending" role="status">Can’t make it <span className="chip obx-chip">Not sent yet</span></p>
-              ) : canLeave && !over && (!leaving ? (
+              ) : canLeave && !over && !checkedIn && (!leaving ? (
                 <button type="button" className="btn btn-quiet ops-tap" disabled={joining}
                   onClick={() => { setLeaving(true); setJoinError(null); }}>
                   Can’t make it

@@ -79,11 +79,15 @@ const blastOut = (b) => ({
   ...(b.ab_status ? { ab: abOf(b) } : {}),
 });
 
-const ACTIVE_SHIFT_STATUSES = ['assigned', 'confirmed'];
+// A booking holds its spot on the shift while it is booked (assigned),
+// confirmed, or checked in on the day ("Here" — completed): room is counted
+// over these, as every count of a shift's spots is (filled, booked). "Can't
+// make it" (declined) and a no-show give the spot back.
+const HOLD_SHIFT_STATUSES = ['assigned', 'confirmed', 'completed'];
 const activeOnShift = async (tx, workspaceId, shiftId) => (await tx.query(
   `select count(*)::int as n from shift_assignments
-   where shift_id = $1 and workspace_id = $2 and status in ('assigned', 'confirmed')`,
-  [shiftId, workspaceId],
+   where shift_id = $1 and workspace_id = $2 and status = any($3::text[])`,
+  [shiftId, workspaceId, HOLD_SHIFT_STATUSES],
 )).rows[0].n;
 
 export const FIELD_ACTIONS = {
@@ -487,7 +491,8 @@ export const FIELD_ACTIONS = {
         'select id, status from shift_assignments where shift_id = $1 and person_id = $2 and workspace_id = $3',
         [shift.id, me.id, ctx.workspaceId],
       )).rows[0];
-      if (cur && ACTIVE_SHIFT_STATUSES.includes(cur.status)) throw httpError(409, "you're already on this shift");
+      // Checked in already ("Here") is on it too: never back to confirmed.
+      if (cur && HOLD_SHIFT_STATUSES.includes(cur.status)) throw httpError(409, "you're already on this shift");
       if (shift.capacity && await activeOnShift(tx, ctx.workspaceId, shift.id) >= shift.capacity) {
         throw httpError(409, 'shift is full');
       }
@@ -536,8 +541,11 @@ export const FIELD_ACTIONS = {
         [input.id, ctx.workspaceId],
       )).rows[0];
       if (!cur) throw httpError(404, 'assignment not found');
-      const ACTIVE = ACTIVE_SHIFT_STATUSES;
-      if (cur.capacity && ACTIVE.includes(input.status) && !ACTIVE.includes(cur.status)
+      // Room is checked only when this takes a spot it didn't hold: from
+      // declined or a no-show back to booked, confirmed or Here. Checking in
+      // from a booking, or undoing a check-in, keeps the spot it had.
+      const HOLD = HOLD_SHIFT_STATUSES;
+      if (cur.capacity && HOLD.includes(input.status) && !HOLD.includes(cur.status)
           && await activeOnShift(tx, ctx.workspaceId, cur.shift_id) >= cur.capacity) {
         throw httpError(409, 'shift is at capacity');
       }
@@ -574,11 +582,13 @@ export const FIELD_ACTIONS = {
         [input.shift_id, ctx.workspaceId],
       )).rows[0];
       if (!shift) throw httpError(404, 'shift not found');
+      // Everyone holding a spot — checked in too: a shift moved after they
+      // arrived still reaches them.
       const assignees = (await tx.query(
         `select a.id as assignment_id, p.id, p.name, p.email, p.phone
          from shift_assignments a join persons p on p.id = a.person_id
-         where a.shift_id = $1 and a.workspace_id = $2 and a.status in ('assigned', 'confirmed')`,
-        [input.shift_id, ctx.workspaceId],
+         where a.shift_id = $1 and a.workspace_id = $2 and a.status = any($3::text[])`,
+        [input.shift_id, ctx.workspaceId, HOLD_SHIFT_STATUSES],
       )).rows;
 
       // Read under the campaign lock runAction holds: two taps can't share a round.

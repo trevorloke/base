@@ -17,7 +17,14 @@
 // Enter picks a card up and Escape puts it down. The ⋯ menu makes Walker
 // team lead. "Split the rest evenly" places everyone not placed. A card
 // dragged back to the tray leaves the shift, and Undo brings it back where
-// it was. Every move is read out (aria-live) and matches the API.
+// it was — a Confirmed card comes back confirmed, on its turf, with its job
+// and walk list. Every move is read out (aria-live) and matches the API.
+//
+// A shift tonight with room for one: the ⋯ menu's Here checks someone in,
+// the shift still says Full and nobody can be booked past it; taken off,
+// Undo brings them back as Here. Staff kept out of Map & turfs: taking
+// someone off a turf offers no Undo (putting them back there isn't theirs
+// to do); someone not placed comes back with Undo, still Here.
 //
 // Shifts → Volunteers: counts by stage; "Asked to volunteer" lists a new
 // asker; "Put on a shift" books them on Saturday canvass and their request
@@ -210,6 +217,87 @@ check('Driver dragged back to the tray: off the shift', !(await placed(P.driver.
 await page.locator('.cb-toast').getByRole('button', { name: 'Undo' }).click();
 await until(async () => (await placed(P.driver.id))?.to === 'none');
 check('Undo: back on, on "No walk list"', (await placed(P.driver.id))?.to === 'none');
+
+// Undo brings a card back as it was: Confirmed, on its turf, team lead.
+await D.api('/actions/shift.setStatus', { id: (await placed(P.walker.id)).assignment_id, status: 'confirmed' });
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.locator('.cb-col').first().waitFor();
+await sleep(500);
+const cardOf = (pg, name) => pg.locator('.cb-card', { hasText: name });
+const chipOn = async (pg, name, words) => cardOf(pg, name).locator('.chip', { hasText: words }).count();
+check('Walker’s card says Confirmed', await chipOn(page, 'Walker Example', 'Confirmed') === 1);
+const takeOff = async (pg, name) => {
+  await cardOf(pg, name).getByRole('button', { name: `More for ${name}` }).click();
+  await pg.locator('.cb-menu').getByRole('button', { name: 'Take off the shift' }).click();
+  await pg.locator('.cb-toast', { hasText: `${name} is off the shift` }).waitFor({ timeout: 8000 }).catch(() => {});
+};
+await takeOff(page, 'Walker Example');
+await until(async () => !(await placed(P.walker.id)));
+check('⋯ → Take off the shift: Walker is off it, walk list and all', !(await placed(P.walker.id)) && (await walkerTurfs()).length === 0, (await walkerTurfs()).join(', '));
+await page.locator('.cb-toast').getByRole('button', { name: 'Undo' }).click();
+await until(async () => (await placed(P.walker.id))?.status === 'confirmed');
+const wBack = await placed(P.walker.id);
+check('Undo: Walker back confirmed — on 72 Ave east, team lead', wBack?.status === 'confirmed' && wBack.to === east.id && wBack.job === 'lead', JSON.stringify(wBack));
+await until(async () => (await chipOn(page, 'Walker Example', 'Confirmed')) === 1, 5000);
+check('…the card says Confirmed again, and the walk list is back', await chipOn(page, 'Walker Example', 'Confirmed') === 1
+  && JSON.stringify(await walkerTurfs()) === JSON.stringify(['72 Ave east']), (await walkerTurfs()).join(', '));
+
+// ── 6b. On the day: Here keeps the spot; Undo brings them back as Here ──
+const night = await person('Night Example', { phone: '604-555-0189' });
+const tonight = (await D.api('/actions/shift.create', { title: 'Lit drop tonight', starts_at: inDays(2 / 24), ends_at: inDays(4 / 24), capacity: 1 })).json.shift;
+await D.api('/actions/shift.add', { shift_id: tonight.id, person_id: night.id });
+const nightOn = async () => (await D.api(`/crew/${tonight.id}`)).json.crew.find((c) => c.person_id === night.id);
+await page.goto(`${BASE}/admin/shifts/${tonight.id}`, { waitUntil: 'domcontentloaded' });
+await page.locator('.cb-col').first().waitFor({ timeout: 10000 });
+await sleep(500);
+const spots = () => page.locator('.ops-spots').innerText().catch(() => '');
+check('tonight, room for one: Full', /Full/.test(await spots()), await spots());
+await cardOf(page, 'Night Example').getByRole('button', { name: 'More for Night Example' }).click();
+await page.locator('.cb-menu').getByRole('button', { name: 'Here', exact: true }).click();
+await until(async () => (await nightOn())?.status === 'completed');
+check('the ⋯ menu on the day: Here', (await nightOn())?.status === 'completed'
+  && await until(async () => (await chipOn(page, 'Night Example', 'Here')) === 1, 5000));
+// The shift's own roster says Done once the page has the check-in.
+await page.locator('.st-roster-toggle').click();
+await until(async () => /Done/.test(await page.locator('#shift-roster').innerText().catch(() => '')), 5000);
+check('Here keeps the spot: still Full', /Full/.test(await spots()), await spots());
+const past1 = await D.api('/actions/shift.add', { shift_id: tonight.id, person_id: P.extra2.id });
+check('…and nobody is booked past it', past1.status === 409, JSON.stringify(past1.json));
+await takeOff(page, 'Night Example');
+await until(async () => !(await nightOn()));
+await page.locator('.cb-toast').getByRole('button', { name: 'Undo' }).click();
+await until(async () => (await nightOn())?.status === 'completed');
+check('Undo: Night back on the shift as Here', (await nightOn())?.status === 'completed'
+  && await until(async () => (await chipOn(page, 'Night Example', 'Here')) === 1, 5000), JSON.stringify(await nightOn()));
+
+// ── 6c. Staff kept out of Map & turfs: Undo only where they may put someone ──
+const sInv = (await D.api('/actions/member.invite', { email: `staff.${tag}@example.org`, role: 'staff' })).json;
+const staffCtx = await browser.newContext({ viewport: { width: 1400, height: 950 }, timezoneId: 'America/Vancouver' });
+const sj = await staffCtx.request.post(`${BASE}/api/auth/join`, { data: { token: sInv.joinUrl.split('/join/')[1], name: 'Staff Example', password: 'staff-pass-123' } });
+const staffUser = (await sj.json().catch(() => ({})))?.user?.id;
+check('a staff member joined, kept out of Map & turfs', sj.status() === 200
+  && (await D.api('/actions/permission.member.set', { user_id: staffUser, grant: [], deny: ['map'] })).status === 200, sj.status());
+const sp = await staffCtx.newPage();
+wire(sp, 'staff');
+await sp.goto(`${BASE}/admin/shifts/${shift.id}`, { waitUntil: 'domcontentloaded' });
+await sp.locator('.cb-col').first().waitFor({ timeout: 10000 });
+await sleep(500);
+check('their board says moving walk lists needs Map & turfs', /Moving walk lists needs Map & turfs/.test(await sp.locator('.cb-help').innerText()));
+const extraWas = (await placed(P.extra1.id))?.to;
+await takeOff(sp, 'Extra Example');
+await until(async () => !(await placed(P.extra1.id)));
+const offToast = await sp.locator('.cb-toast').innerText().catch(() => '');
+check('Extra taken off a turf: said, with no Undo it couldn’t keep', [newton.id, east.id].includes(extraWas) && !(await placed(P.extra1.id))
+  && /Extra Example is off the shift/.test(offToast) && await sp.locator('.cb-toast').getByRole('button', { name: 'Undo' }).count() === 0, `${extraWas} · ${offToast}`);
+await sp.goto(`${BASE}/admin/shifts/${tonight.id}`, { waitUntil: 'domcontentloaded' });
+await sp.locator('.cb-col').first().waitFor({ timeout: 10000 });
+await sleep(500);
+await takeOff(sp, 'Night Example');
+await until(async () => !(await nightOn()));
+await sp.locator('.cb-toast').getByRole('button', { name: 'Undo' }).click();
+await until(async () => (await nightOn())?.status === 'completed');
+check('Night (not placed) taken off and back with Undo — still Here', (await nightOn())?.status === 'completed', JSON.stringify(await nightOn()));
+await staffCtx.close();
 
 // ── 7. Shifts → Volunteers ──
 const newbie = await person('Newbie Example', { phone: '604-555-0188' });

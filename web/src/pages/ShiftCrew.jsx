@@ -19,7 +19,8 @@
 // down). From the tray, a drop books them (shift.add — and their "Wants to
 // volunteer" request is done); between columns it places them
 // (shift.place); back on the tray takes them off the shift (Undo brings
-// them back where they were). "Split the rest evenly" places everyone not
+// them back as they were: where, their job, confirmed or Here — when this
+// desk may place them there). "Split the rest evenly" places everyone not
 // placed yet, one turf at a time, fewest people first.
 //
 // Each card: team lead or driver, first shift, no app sign-in (a walk list
@@ -151,19 +152,22 @@ export default function ShiftCrew({ shiftId, canMap = true, onChanged }) {
     }
   };
 
-  const add = (v, to, job = null) => run(
+  // status: Undo's — back as they were (confirmed, or checked in "Here");
+  // shift.add books everyone as assigned.
+  const add = (v, to, job = null, status = null) => run(
     (cur) => ({
       ...cur,
       tray: cur.tray.filter((x) => x.id !== v.id),
       crew: [...cur.crew, {
         assignment_id: `new-${v.id}`, person_id: v.id, name: v.name, phone: v.phone, email: v.email,
-        status: 'assigned', to, job, signed_in: v.signed_in, first_shift: v.done === 0,
+        status: status || 'assigned', to, job, signed_in: v.signed_in, first_shift: v.done === 0,
       }].sort((a, b) => a.name.localeCompare(b.name)),
     }),
     async () => {
       const r = await action('shift.add', { shift_id: shiftId, person_id: v.id, to, ...(job ? { job } : {}) });
       // The card's real id at once, so its ⋯ works before the board reloads.
       patch((cur) => ({ ...cur, crew: cur.crew.map((x) => (x.assignment_id === `new-${v.id}` ? { ...x, assignment_id: r.assignment.id } : x)) }));
+      if (status && status !== 'assigned') await action('shift.setStatus', { id: r.assignment.id, status });
       return r;
     },
     (r) => ({ text: `${v.name} is on the shift — ${where(to)}${r.requests_done ? '. Their “Wants to volunteer” is done.' : ''}` }),
@@ -173,10 +177,18 @@ export default function ShiftCrew({ shiftId, canMap = true, onChanged }) {
     () => action('shift.place', { id: c.assignment_id, to }),
     () => ({ text: `${c.name} — ${where(to)}` }),
   );
+  // Undo books them back where they were, with their job and status — only
+  // when this desk could put them there: a turf or "No walk list" needs Map &
+  // turfs.
   const remove = (c) => run(
     (cur) => ({ ...cur, crew: cur.crew.filter((x) => x.assignment_id !== c.assignment_id) }),
     () => action('shift.unassign', { id: c.assignment_id }),
-    () => ({ text: `${c.name} is off the shift`, undo: () => add({ ...c, id: c.person_id, roles: [], done: c.first_shift ? 0 : 1 }, c.to, c.job) }),
+    () => ({
+      text: `${c.name} is off the shift`,
+      undo: canMap || c.to === 'every'
+        ? () => add({ ...c, id: c.person_id, roles: [], done: c.first_shift ? 0 : 1 }, c.to, c.job, c.status)
+        : undefined,
+    }),
   );
   const setJob = (c, job) => run(
     (cur) => ({ ...cur, crew: cur.crew.map((x) => (x.assignment_id === c.assignment_id ? { ...x, job } : x)) }),
