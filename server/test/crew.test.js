@@ -199,6 +199,13 @@ test('"Here" keeps the spot: a full shift stays full after a check-in, and nobod
   assert.match(twice.json.error, /already on this shift/);
   const board = await crew(tonight.id);
   assert.deepEqual(board.crew.map((x) => [x.name, x.status]), [['Ana Here', 'completed']]);
+  // Every count of its spots says so: the shift list, the week board, Today.
+  assert.equal(ok(await mgr.get('/api/shifts')).shifts.find((s) => s.id === tonight.id).filled, 1, 'Shifts: 1 of 1');
+  const span = `from=${encodeURIComponent(inDays(-1))}&to=${encodeURIComponent(inDays(2))}`;
+  const week = ok(await mgr.get(`/api/shifts/board?${span}`));
+  assert.equal(week.shifts.find((s) => s.id === tonight.id).filled, 1, 'the week board: 1 / 1');
+  assert.deepEqual(week.assignments.filter((x) => x.shift_id === tonight.id).map((x) => x.name), ['Ana Here'], '…with her chip on it');
+  assert.equal(ok(await mgr.get('/api/brief')).shifts.find((s) => s.id === tonight.id).filled, 1, 'Today: no spot left');
 
   // Everyone holding a spot hears about the shift, and the export counts them.
   const told = ok(await mgr.action('shift.notify', { shift_id: tonight.id })).notified;

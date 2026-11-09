@@ -567,7 +567,7 @@ app.get('/shifts', async (c) => {
   const ctx = c.get('ctx');
   const { rows } = await c.get('db').query(
     `select s.*,
-            (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed')) as filled,
+            (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,
             ${MINE_ON_SHIFT} as mine
      from shifts s where s.workspace_id = $1 and s.deleted_at is null
      order by s.starts_at limit 500`,
@@ -576,8 +576,9 @@ app.get('/shifts', async (c) => {
   return c.json({ shifts: rows.map((s) => ({ ...s, mine: !!s.mine })) });
 });
 
-// The desk's week board: every shift starting in [from, to) with who's on
-// it (assigned or confirmed — names only), and the people to drag in:
+// The desk's week board: every shift starting in [from, to) with who holds
+// a spot on it (booked, confirmed or checked in — names only, as many as
+// "filled" counts), and the people to drag in:
 // anyone holding a volunteer role or signed in as a volunteer (matched by
 // email). The client sorts shifts into Morning / Afternoon / Evening
 // (shared/dayparts.js). At most 15 days per read.
@@ -591,7 +592,7 @@ app.get('/shifts/board', async (c) => {
   }
   const shifts = (await db.query(
     `select s.id, s.title, s.role, s.location, s.starts_at, s.ends_at, s.capacity,
-            (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed')) as filled
+            (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled
      from shifts s where s.workspace_id = $1 and s.deleted_at is null and s.starts_at >= $2 and s.starts_at < $3
      order by s.starts_at, s.title limit 500`,
     [ctx.workspaceId, from.toISOString(), to.toISOString()],
@@ -600,7 +601,7 @@ app.get('/shifts/board', async (c) => {
   const assignments = ids.length ? (await db.query(
     `select a.id, a.shift_id, a.person_id, a.status, p.name
      from shift_assignments a join persons p on p.id = a.person_id
-     where a.workspace_id = $1 and a.shift_id = any($2::uuid[]) and a.status in ('assigned', 'confirmed')
+     where a.workspace_id = $1 and a.shift_id = any($2::uuid[]) and a.status in ('assigned', 'confirmed', 'completed')
      order by lower(p.name)`,
     [ctx.workspaceId, ids],
   )).rows : [];
@@ -816,7 +817,7 @@ app.get('/brief', async (c) => {
   )).rows;
   const shifts = (await db.query(
     `select s.id, s.title, s.starts_at, s.location, s.capacity,
-            (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed')) as filled,
+            (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,
             ${MINE_ON_SHIFT} as mine
      from shifts s where s.workspace_id = $1 and s.deleted_at is null and s.starts_at >= now()
      order by s.starts_at limit 5`, [ws, loginEmail(ctx)],
