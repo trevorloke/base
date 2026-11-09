@@ -227,12 +227,7 @@ section[id],
 .island {
   display: contents;
 }
-.js-only {
-  display: none !important;
-}
-html.js .js-only {
-  display: revert !important;
-}
+html:not(.js) .js-only,
 html.js .no-js-only {
   display: none !important;
 }

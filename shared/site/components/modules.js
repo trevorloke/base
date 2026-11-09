@@ -49,7 +49,10 @@ export function Section({ m, tone = 'paper', className, labelled = true, childre
     aria-labelledby=${labelled ? titleId(m) : undefined}>${children}</section>`;
 }
 
+// A heading, or nothing when its words were left empty (no empty headings).
+const blank = (c) => c == null || c === false || (typeof c === 'string' && !c.trim()) || (Array.isArray(c) && c.every(blank));
 export function Heading({ level = 2, id, className = 'display', children }) {
+  if (blank(children)) return null;
   return createElement(`h${Math.min(6, Math.max(1, level))}`, { id, className }, children);
 }
 
