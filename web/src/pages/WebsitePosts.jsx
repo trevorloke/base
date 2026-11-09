@@ -8,7 +8,7 @@
 //   button is "Publish" (with "Save draft" beside it) and a published one's
 //   is "Save changes" (with "Unpublish"). ⋯ → View on the site, Delete
 //   (Undo brings it back).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { action } from '../api.js';
@@ -18,7 +18,7 @@ import { MarkdownField } from '../components/MarkdownField.jsx';
 import { MoreMenu, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
 import { ImageField, TextField, uploadSitePicture } from '../components/site/Fields.jsx';
 import { day, useSite, useSitePost, useSitePosts, useSiteRefresh } from '../components/site/useSite.js';
-import { slugInput, slugify } from '../components/site/builder.js';
+import { rebaseForm, slugInput, slugify } from '../components/site/builder.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
@@ -85,6 +85,7 @@ function PostList({ say }) {
 function PostEditor({ id, say }) {
   const isNew = id === 'new';
   const navigate = useNavigate();
+  const location = useLocation();
   const qc = useQueryClient();
   const refresh = useSiteRefresh();
   const online = useOnline();
@@ -94,12 +95,18 @@ function PostEditor({ id, say }) {
   const [post, setPost] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // The words on screen, as they are now (a slow answer is merged into them).
+  const formRef = useRef(form);
+  formRef.current = form;
   useEffect(() => {
     const p = q.data?.post;
     if (!p || q.isFetching || post?.id === p.id) return;
     setPost(p);
-    setForm(formOf(p));
-  }, [q.data, q.isFetching, post?.id]);
+    // Just made, with words typed while it was being made: those.
+    const carried = location.state?.form;
+    setForm(carried && typeof carried === 'object' ? { ...formOf(p), ...carried } : formOf(p));
+    if (carried) navigate('.', { replace: true, state: null });
+  }, [q.data, q.isFetching, post?.id, location.state, navigate]);
   useEffect(() => () => { if (!isNew) qc.invalidateQueries({ queryKey: ['site-post', id] }); }, [qc, id, isNew]);
   const dirty = useMemo(() => (form && (isNew ? Boolean(form.title.trim() || form.body.trim()) : post && !same(form, formOf(post)))), [form, post, isNew]);
   useEffect(() => {
@@ -116,19 +123,22 @@ function PostEditor({ id, say }) {
     if (!form.title.trim()) { setError('Give the post a title'); return null; }
     setBusy(true);
     setError(null);
+    // What goes; whatever is typed while it's out stays (and stays "Not saved yet").
+    const sent = form;
     try {
       const res = await action('site.post.save', {
-        ...(isNew ? {} : { id }), title: form.title.trim(), slug: form.slug.trim() || undefined,
-        excerpt: form.excerpt, body: form.body, image: form.image?.url ? form.image : { url: '', alt: '' },
+        ...(isNew ? {} : { id }), title: sent.title.trim(), slug: sent.slug.trim() || undefined,
+        excerpt: sent.excerpt, body: sent.body, image: sent.image?.url ? sent.image : { url: '', alt: '' },
       });
       let p = res.post;
       if (publish !== null) p = (await action('site.post.publish', { id: p.id, published: publish })).post;
       setPost(p);
-      setForm(formOf(p));
+      const next = rebaseForm(formRef.current, sent, formOf(p));
+      setForm(next);
       qc.setQueryData(['site-post', p.id], { post: p });
       refresh(['site-posts'], ['site']);
       say(publish === true ? 'Published — it’s on the site' : publish === false ? 'Unpublished — it’s a draft now' : live ? 'Saved — the site has the change' : 'Saved as a draft');
-      if (isNew) navigate(`/website/news/${p.id}`, { replace: true });
+      if (isNew) navigate(`/website/news/${p.id}`, { replace: true, state: same(next, formOf(p)) ? null : { form: next } });
       return p;
     } catch (e) {
       setError(e.message);

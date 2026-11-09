@@ -241,3 +241,11 @@ export const slugify = (s) => String(s ?? '').toLowerCase().normalize('NFKD').re
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/g, '');
 // While typing an address: lowercase letters, digits and single dashes.
 export const slugInput = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+/, '').slice(0, 60);
+
+// After a save (or a close) comes back while someone kept typing: each box
+// typed in since the request went (`sent`) keeps what was typed; the others
+// take the server's copy (its tidied words, an address it made). An editor
+// never throws away words for a slow answer.
+export const rebaseForm = (cur, sent, server) => Object.fromEntries(Object.keys(server || {}).map((k) => [
+  k, JSON.stringify(cur?.[k]) === JSON.stringify(sent?.[k]) ? server[k] : cur?.[k],
+]));
