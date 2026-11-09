@@ -6,10 +6,13 @@
 //   200 { ok: true }                     done (also for a retry with the same
 //                                        client_key, and for the honeypot)
 //   200 { ok: true, checkout_url }       join, donate: off to pay
-//   400 { error, field }                 what to fix, in plain words
+//   400 { error, field }                 what to fix, in plain words (every
+//                                        refusal, the payments' too)
 //   403 { error }                        posted from another site
 //   429 { error }                        too many from one address
-//   503 { error }                        online payments aren't set up
+//   503 { error }                        online payments aren't set up, or
+//                                        Stripe didn't answer (a retry with
+//                                        the same client_key finishes it)
 // A plain post gets 303 to the page with ?sent=<kind>#m-<module_id>, or
 // ?error=<field>#m-<module_id> (field 'busy' for too many, 'payments' when
 // payments aren't set up), or to the checkout.
@@ -30,13 +33,19 @@
 //   contact            a request for the desk with what they wrote (the
 //                      intake API's rule) — never their note: a visitor's
 //                      words are not the person's own
-//   join, donate       the checkout (server/ext/payments); join also keeps
-//                      their birth date and citizenship on the profile
+//   join, donate       the checkout kept (server/ext/payments); join also
+//                      keeps their birth date and citizenship on the profile
 //                      where it has none
+// For join and donate, Stripe is asked for its page only after that write
+// has committed (no write ever waits on Stripe), and a second short write
+// keeps the page and the answer; until then the action has no answer, so a
+// retry with the same client_key asks again for the same checkout.
+// Money only ever lands on the same email's record, or on someone new's.
 // The answer never says whether someone was on file.
 import { getCookie } from 'hono/cookie';
 import { newId, runAction } from '../../lib/events.js';
 import { clientIp, makeLimiter } from '../../lib/guard.js';
+import { campaignDay } from '../../lib/gifts.js';
 import { SLATE_CODES } from '@starbase/shared/canvass';
 import { DONATE_DECLARATION, JOIN_DECLARATION } from '../../../shared/site/wording.js';
 import { actions as fieldActions } from '../fields/actions.js';
@@ -44,7 +53,7 @@ import { KINDS, consentWording, tagOf } from './shape.js';
 import { ensureSite, readSettings, parseJ } from './store.js';
 import { takePerson, refCodeFor, personOfCode, broughtInBy, CODE_RE } from './people.js';
 import { consentFromForm } from './consent.js';
-import { paymentsReady, checkout } from './payments.js';
+import { paymentsReady, prepareCheckout, retryCheckout, openCheckout } from './payments.js';
 import { limitsFor } from './loaders.js';
 
 export class FormError extends Error {
@@ -102,7 +111,7 @@ const common = (b) => {
 };
 
 // What each kind adds (SITE.md's table).
-const ofKind = (kind, b, f) => {
+const ofKind = (kind, b, f, day) => {
   const k = {};
   if (kind === 'newsletter') {
     if (!f.email) throw new FormError('email', 'Add your email to get the newsletter');
@@ -153,7 +162,7 @@ const ofKind = (kind, b, f) => {
       if (!DAY.test(birth) || Number.isNaN(Date.parse(`${birth}T00:00:00Z`)) || new Date(`${birth}T00:00:00Z`).toISOString().slice(0, 10) !== birth) {
         throw new FormError('birth_date', 'Your birth date, like 1990-04-21');
       }
-      const age = ageOn(birth, today());
+      const age = ageOn(birth, day);
       if (age < 14) throw new FormError('birth_date', 'Members are 14 or older');
       if (age > 120) throw new FormError('birth_date', 'Your birth date, like 1990-04-21');
     }
@@ -164,7 +173,7 @@ const ofKind = (kind, b, f) => {
     const term = int(b, 'term') ?? 1;
     if (term !== 1 && term !== 4) throw new FormError('term', 'One year or four');
     k.term = term;
-    const youth = k.birth_date ? (() => { const a = ageOn(k.birth_date, today()); return a >= 14 && a <= 30; })() : false;
+    const youth = k.birth_date ? (() => { const a = ageOn(k.birth_date, day); return a >= 14 && a <= 30; })() : false;
     const minimum = term * (youth ? 500 : 1000);
     const amount = int(b, 'amount_cents');
     if (Number.isNaN(amount)) throw new FormError('amount_cents', 'Pick an amount');
@@ -191,7 +200,6 @@ const ofKind = (kind, b, f) => {
   return k;
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
 const ageOn = (birth, day) => {
   const [by, bm, bd] = birth.split('-').map(Number);
   const [y, m, d] = day.split('-').map(Number);
@@ -264,6 +272,7 @@ const pagePath = async (db, ws, root, f, k, c) => {
 };
 
 const sysCtx = (ws) => ({ workspaceId: ws.id, workspace: ws, user: null, role: null, perms: null });
+const FIELD = /^[a-z_]{1,40}$/;
 
 // site: { ws, root (with the client path), origin }
 export const formRoute = async (c, site) => {
@@ -294,7 +303,8 @@ export const formRoute = async (c, site) => {
   let k;
   try {
     f = common(body);
-    k = ofKind(kind, body, f);
+    // Ages on the campaign's own day, as the payments count them.
+    k = ofKind(kind, body, f, campaignDay(new Date(), ws.settings?.tz));
     // The referral: the code sent with the form, else the one /r/:code remembered.
     if (!f.ref) {
       const remembered = String(getCookie(c, 'site_ref') || '').toLowerCase();
@@ -315,25 +325,72 @@ export const formRoute = async (c, site) => {
 
   let answer;
   try {
-    ({ result: answer } = await runAction(db, { workspaceId: ws.id, actorId: null, action: `site.form.${kind}` }, (tx, emit) => record(tx, emit, {
+    const { result } = await runAction(db, { workspaceId: ws.id, actorId: null, action: `site.form.${kind}` }, (tx, emit) => record(tx, emit, {
       kind, ws, f, k, back, origin: site.origin,
-    })));
+    }));
+    // Join and donate: Stripe is asked now, the form's write done.
+    answer = result.checkout ? await payPage(db, ws, kind, result.checkout) : result.answer;
   } catch (e) {
     if (e instanceof FormError) return plain ? go(f, k, `error=${encodeURIComponent(e.field)}`) : c.json({ error: e.message, field: e.field }, e.status);
     if (e.status === 503) return plain ? go(f, k, 'error=payments') : c.json({ error: 'We couldn’t reach the payment service — please try again in a minute' }, 503);
+    // Every other refusal (the payments' own: an amount, an age, a term…)
+    // is a 400 in its own plain words, pointing at its field.
+    if (e.status >= 400 && e.status < 500) {
+      const field = FIELD.test(String(e.field || '')) ? e.field : null;
+      if (!field) console.error(`site: a ${kind} form was refused with nothing to point at: ${e.message}`);
+      return plain ? go(f, k, `error=${field || 'form'}`) : c.json({ error: field ? e.message : 'Please check the form and try again', field }, 400);
+    }
     throw e;
   }
   if (plain) return answer.checkout_url ? c.redirect(answer.checkout_url, 303) : go(f, k, `sent=${kind}`);
   return c.json(answer);
 };
 
+// After the form's write: Stripe makes the payment page, then a short write
+// keeps it with the checkout and keeps the answer — what a retry with the
+// same client_key is told from then on.
+const payPage = async (db, ws, kind, { actionId, checkoutId }) => {
+  const { result } = await openCheckout(db, sysCtx(ws), checkoutId, {
+    action: `site.form.${kind}`,
+    also: async (tx, emit, { url }) => {
+      const answer = { ok: true, checkout_url: url };
+      const kept = (await tx.query(
+        'update site_actions set answer = $3 where id = $1 and workspace_id = $2 and answer is null returning id', [actionId, ws.id, JSON.stringify(answer)],
+      )).rows[0];
+      if (kept) return answer;
+      // Another try with the same key got there first: what it was told.
+      const had = (await tx.query('select answer from site_actions where id = $1 and workspace_id = $2', [actionId, ws.id])).rows[0];
+      return parseJ(had?.answer, null) || answer;
+    },
+  });
+  return result;
+};
+
+// What a join or donate is for: its client_key carries it, so the same key
+// with another amount (back from Stripe, a new choice) is a fresh checkout,
+// never the old one again.
+const paidFor = (kind, k) => (kind === 'join' ? `${k.amount_cents}-${k.term}` : `${k.amount_cents}-${k.cadence}-${k.slate || ''}`);
+
 // Inside the one write. Throws FormError for what the database says no to
 // (a closed petition, a full event, an amount over the limit).
+// → { answer } done; { checkout: { actionId, checkoutId } } Stripe to be asked.
 const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
-  const key = f.client_key ? `${kind}:${f.client_key}` : null;
+  const pays = kind === 'join' || kind === 'donate';
+  const key = f.client_key ? `${kind}:${f.client_key}${pays ? `:${paidFor(kind, k)}` : ''}` : null;
   if (key) {
-    const prev = (await tx.query('select answer from site_actions where workspace_id = $1 and client_key = $2', [ws.id, key])).rows[0];
-    if (prev) return parseJ(prev.answer, null) || { ok: true };
+    const prev = (await tx.query('select id, answer, checkout_id from site_actions where workspace_id = $1 and client_key = $2', [ws.id, key])).rows[0];
+    if (prev) {
+      const answer = parseJ(prev.answer, null);
+      if (answer) return { answer };
+      // Sent before, and Stripe never made the page (it failed, or the
+      // answer was lost): the same checkout, asked again — never a second.
+      if (pays) {
+        const again = prev.checkout_id ? await retryCheckout(tx, sysCtx(ws), prev.checkout_id, emit) : null;
+        if (again) return { checkout: { actionId: prev.id, checkoutId: again.id } };
+        throw Object.assign(new Error('this checkout can’t be asked for again'), { status: 503 });
+      }
+      return { answer: { ok: true } };
+    }
   }
   const settings = await readSettings(tx, ws.id);
   const source = `website-${kind}`;
@@ -357,13 +414,14 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
   const page = f.page_id
     ? (await tx.query('select id from site_pages where id = $1 and workspace_id = $2', [f.page_id, ws.id])).rows[0] : null;
 
-  // The person, and who sent them. The money forms leave no tag.
+  // The person, and who sent them. Money is only ever the same email's, or
+  // someone new's (people.js, strong); the money forms leave no tag.
   const referrerId = f.ref ? await personOfCode(tx, ws.id, f.ref) : null;
-  const tags = kind === 'join' || kind === 'donate' ? [] : [`Website: ${kind}`, ...(campaign ? [tagOf('Signed: ', campaign.title)] : [])];
+  const tags = pays ? [] : [`Website: ${kind}`, ...(campaign ? [tagOf('Signed: ', campaign.title)] : [])];
   const person = await takePerson(tx, ws.id, {
     first_name: f.first_name, last_name: f.last_name, email: f.email, phone: f.phone, postal: f.postal_code,
     address: k.address, city: k.city,
-  }, { tags, source }, emit);
+  }, { tags, source, strong: pays }, emit);
   if (!person.created) await refCodeFor(tx, ws.id, person.id, emit);
   const referrer = referrerId && referrerId !== person.id ? referrerId : null;
   const sys = sysCtx(ws);
@@ -418,8 +476,10 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
     ], emit);
   }
   if (kind === 'donate') {
-    // The limit for one person in a year, before they go to pay (the
-    // payment is checked again, against all they gave, when it lands).
+    // What no one may give in a year, before they go to pay. What this
+    // person gave before is never asked here — the answer would tell
+    // whoever typed their name: the payment is checked against it when it
+    // lands, and refunded if it goes over (ext/payments).
     const { limit_cents: limit, monthly_max_cents: monthly } = await limitsFor(tx, ws);
     if (limit && k.cadence === 'once' && k.amount_cents > limit) {
       throw new FormError('amount_cents', `One person may give at most ${money(limit)} in a year`);
@@ -462,11 +522,11 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
     module_id: f.module_id, source: f.source, referrer_id: referrer,
   });
 
-  let answer = { ok: true };
-  if (kind === 'join' || kind === 'donate') {
+  if (pays) {
+    // The checkout, kept with this write; Stripe is asked once it's done.
     const here = `${origin}${back}`;
     const anchor = f.module_id ? `#m-${f.module_id}` : '';
-    const { url } = await checkout(tx, sysCtx(ws), {
+    const { id: checkoutId } = await prepareCheckout(tx, sys, {
       personId: person.id,
       kind: kind === 'join' ? 'membership' : 'donation',
       amountCents: k.amount_cents,
@@ -474,6 +534,8 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
       slate: k.slate || null,
       // The words beside the box they ticked, exactly.
       declaration: kind === 'join' ? JOIN_DECLARATION : DONATE_DECLARATION,
+      // Stripe's page starts with the email they typed — never one on file.
+      email: f.email || null,
       // Membership: payments works out the minimum (the youth rate from the
       // birth date), the age and the citizenship from these — not from the
       // metadata, which is only kept for the record.
@@ -485,9 +547,10 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
         ...(kind === 'join' ? { term: String(k.term), youth: k.youth ? 'yes' : 'no', ...(k.birth_date ? { birth_date: k.birth_date } : {}), ...(k.citizenship ? { citizenship: k.citizenship } : {}) } : {}),
       },
     }, emit);
-    if (!url) throw Object.assign(new Error('no checkout'), { status: 503 });
-    answer = { ok: true, checkout_url: url };
+    await tx.query('update site_actions set checkout_id = $3 where id = $1 and workspace_id = $2', [id, ws.id, checkoutId]);
+    return { checkout: { actionId: id, checkoutId } };
   }
+  const answer = { ok: true };
   await tx.query('update site_actions set answer = $3 where id = $1 and workspace_id = $2', [id, ws.id, JSON.stringify(answer)]);
-  return answer;
+  return { answer };
 };

@@ -87,9 +87,9 @@ referrer_id }`), consent events, a tag (`Website: <kind>` and, for a
 petition, `Signed: <campaign title>`; `join` and `donate` leave no tag —
 who gave or joined is the desk's to see, never a volunteer's: People's
 "did on the website" filter finds them), and "Brought in by" for a
-referral.
-`join` and `donate` return `{ checkout_url }` from `server/ext/payments`
-(or say online payments aren't set up).
+referral. `join` and `donate` return `{ checkout_url }` from
+`server/ext/payments` (or say online payments aren't set up) — Stripe is
+asked only after that write has committed ("Payments readiness" below).
 
 The `site_action` event is the hook for the rest of base.win
 (`lib/hooks.js` `events`): follow-ups (speed to lead), ladders, People and
@@ -152,8 +152,10 @@ A `contact` message is a request for the desk (`door_requests`, kind
 keeps it in its payload — never written into the person's note.
 
 Answers: `200 { ok: true }` · `200 { ok: true, checkout_url }` (join, donate) ·
-`400 { error, field }` · `429 { error }` · `503 { error }` when online
-payments aren't set up. Never a person id or anything about who was on file.
+`400 { error, field }` (every refusal, the payments' own too) · `429 { error }` ·
+`503 { error }` when online payments aren't set up or Stripe didn't answer
+(the same `client_key` sent again finishes it). Never a person id or
+anything about who was on file.
 A plain form post (no JavaScript) gets a `303` back to the page with
 `?sent=<kind>#m-<module_id>` (or `?error=<field>#m-<module_id>`), or to the
 checkout.
@@ -285,22 +287,49 @@ video module, `frame-src https://www.youtube-nocookie.com https://player.vimeo.c
 
 Keys only in the host's environment: `STRIPE_SECRET_KEY`,
 `STRIPE_WEBHOOK_SECRET` (`STRIPE_API_BASE` for tests). Stripe over plain
-`fetch` (no SDK). `checkoutFor(tx, ctx, { personId, kind: 'donation' |
-'membership', amountCents, cadence: 'once' | 'monthly', slate,
-declaration, successUrl, cancelUrl, metadata })` → `{ url }`. Webhook
-`POST /stripe/webhook` (signature checked; each event id handled once):
-a completed payment logs the gift through the normal gift path (limit
-checked, receipt issued) or the membership; over the limit → refunded
-through Stripe and flagged for the treasurer.
+`fetch` (no SDK). A checkout is two steps, so no write ever waits on
+Stripe (a write holds the campaign's lock from start to commit: a slow
+Stripe inside one would hold up every door knock, desk edit and form
+behind it):
+
+- `prepareCheckout(tx, ctx, { personId, kind: 'donation' | 'membership',
+  amountCents, cadence: 'once' | 'monthly', slate, declaration, successUrl,
+  cancelUrl, metadata, email }, emit?)` → `{ id, mode }` — inside the
+  form's own write: the checks, then the checkout kept (`stripe_checkouts`,
+  status `open`, no session yet, with the request Stripe will be sent) and
+  on the event log (`payment_checkout` create). Database only; a refusal
+  leaves nothing behind.
+- `openCheckout(db, ctx, id, { action, also })` → `{ url, id, session_id,
+  mode, result }` — after that write has committed, outside any
+  transaction: Stripe is asked for its page once (10 s at most) under the
+  idempotency key `base-checkout-<id>` with the request as kept, so asked
+  again it answers with the same page; then a short write (`action` on the
+  event log) keeps the session id (`payment_checkout` update) and runs
+  `also(tx, emit, { url, session_id })` in that same write — the site
+  keeps its answer there (`result`). Stripe saying no marks the checkout
+  `failed`; no, or no answer: a 503.
+- `retryCheckout(tx, ctx, id, emit?)` → `{ id }` | `null` — a checkout kept
+  but never opened, ready to be asked again: as it was while Stripe may
+  still answer with its page; after Stripe said no, or once it waited too
+  long to be sent (Stripe wants the expiry 30 minutes ahead), with a fresh
+  expiry under a new key (`base-checkout-<id>-<try>`, `tries` on the row).
+  One checkout per form sent, however many tries.
+
+Webhook `POST /stripe/webhook` (signature checked; each event id handled
+once): a completed payment logs the gift through the normal gift path
+(limit checked, receipt issued) or the membership; over the limit →
+refunded through Stripe and flagged for the treasurer. It finds the
+checkout by our id on the session's metadata, whether or not the session
+id was kept yet.
 
 What the payments branch adds to this (additive; INTEGRATIONS.md has the
 Stripe setup):
 
-- `checkoutFor(tx, ctx, opts, emit?)`: `ctx` needs only `workspaceId` (or
-  `workspace.id`). Pass the form's `emit` and the checkout is on the event
-  log too (`payment_checkout`). Call it inside the form's `runAction`: a
-  refusal or a Stripe failure then leaves nothing behind. It calls Stripe
-  once (10 s at most). Answers `{ url, id, session_id, mode }`.
+- `ctx` needs only `workspaceId` (or `workspace.id`). Pass the form's
+  `emit` and the checkout is on the event log beside the form's action.
+- `email`: the address Stripe's page starts with — the one the visitor
+  typed, never one on file (a record a form matched is not the visitor's
+  to read).
 - `declaration`: `true` (kept with the website's own words for the kind,
   `shared/site/wording.js`: `DONATE_DECLARATION` — exported here as
   `DECLARATION` — or, for membership, `JOIN_DECLARATION`) or the exact
@@ -317,7 +346,13 @@ Stripe setup):
   aren't set up or Stripe didn't answer), `.field` (`declaration`,
   `amount_cents`, `cadence`, `slate`, `term`, `birth_date`, `citizenship`,
   `person`) and a sentence a visitor reads. Over the limit it names the
-  year's limit and the slate — never what the person has given.
+  year's limit and the slate — never what the person has given. A visitor
+  (no `ctx.user`) is refused only what no one may give: more than the
+  year's limit at once, or a monthly gift over a twelfth of it. What this
+  person may still give (their gifts this year and monthly gifts running)
+  is checked before checkout only for someone signed in; for a visitor it
+  is checked when the money lands, and refunded if over — so the answer
+  never depends on what someone gave before.
 - `paymentsReady()` → boolean (both keys set). `paymentsData(db, workspace)`
   → `{ ready, mode, year, limit_cents, monthly_max_cents }`: the loaders'
   `data.payments`.
@@ -382,7 +417,14 @@ the islands' pieces belong under `site-assets/`. Pages carry a CSP with no
 
 Tables, additive: `consent_events.address` (the email or number the yes or
 no was about); `site_actions.answer` (what the visitor was told — a retry
-gets it again); `site_actions.client_key` is stored as `<kind>:<key>`.
+gets it again; for `join` and `donate` empty until Stripe has made the
+page); `site_actions.checkout_id` (`join`, `donate`: their checkout);
+`site_actions.client_key` is stored as `<kind>:<key>` — for `join` and
+`donate` with what is being paid after it (`<kind>:<key>:<amount>-<cadence>-<slate>`,
+`<kind>:<key>:<amount>-<term>`), so the same key with another amount (back
+from Stripe's page, a new choice) is a fresh checkout, never the old one.
+The browser also makes a new key once a form is answered, and when a page
+comes back from the back/forward cache.
 
 ## Who a form is (matching)
 
@@ -392,8 +434,13 @@ name for a record that only had its email's first part). Else the same
 name and phone, else the same name and postal code: those matches get the
 action, the tags and the consent and nothing else (an email typed there is
 kept beside the record, `attrs.typed_email`). Else someone new. Nothing on
-file is overwritten (a join keeps its birth date and citizenship only where
-the profile has none); the answer never says whether they were on file.
+file is overwritten; the answer never says whether they were on file.
+
+Money (`join`, `donate`) is only ever the same email's, or someone new's: a
+name and phone, or a name and postal code, is no proof of who is paying —
+the gift, its receipt and the year's limit would land on a voter who never
+gave. A join keeps its birth date and citizenship only where the profile
+has none.
 
 Consent: a ticked box joins base.win's newsletter list and records the
 consent with its words — but never puts back an address that left the list
@@ -408,15 +455,36 @@ for 400 days; their own page also shows their link to share, `/r/<code>`).
 
 The site asks `server/ext/payments` (imported lazily) for `paymentsReady()`
 → boolean (it also takes `ready`, `isReady` or `stripeReady`, a function or
-a boolean; with none, `STRIPE_SECRET_KEY` decides), and calls
-`checkoutFor(tx, ctx, args)` inside the form's own write with
-`ctx = { workspaceId, workspace, user: null }`, `successUrl` = the page
-`?sent=<kind>#m-<module>` and `cancelUrl` = the page
-`?cancelled=<kind>#m-<module>`, `metadata = { site_action_id, kind }` (and
-`term`, `youth`, `birth_date`, `citizenship` for a join). Before checkout
-the site refuses only what no one may give (over the year's limit once, or
-over the monthly maximum): a person's own total is checked when the money
-lands, so the form never says what someone gave before.
+a boolean; with none, `STRIPE_SECRET_KEY` decides). A `join` or `donate`
+then goes in three steps — no write ever waits on Stripe:
+
+1. **The form's write** (`runAction('site.form.<kind>')`): the person, the
+   consent, the action, and `prepareCheckout(tx, ctx, args, emit)` — the
+   checkout kept — with `ctx = { workspaceId, workspace, user: null }`,
+   `email` = the email they typed (or none), `declaration` = the words of
+   the box they ticked, `successUrl` = the page `?sent=<kind>#m-<module>`,
+   `cancelUrl` = the page `?cancelled=<kind>#m-<module>`, `metadata = {
+   site_action_id, kind }` (and `term`, `youth`, `birth_date`,
+   `citizenship` for a join). The action keeps `checkout_id`, and no
+   answer yet. A refusal here leaves nothing behind. Committed.
+2. **Stripe**, outside any transaction: `openCheckout` asks for the page
+   (one call, 10 s at most, idempotency key `base-checkout-<id>`).
+3. **A short second write** (the same action name) keeps the session on
+   the checkout and the answer on the action, `{ ok: true, checkout_url }`.
+
+Stripe failing or silent: the visitor hears 503 "We couldn't reach the
+payment service"; the person and the action stay (they did ask), with no
+answer. A retry with the same `client_key` finds that action, makes its
+checkout ready again (`retryCheckout`: the same request and key while
+Stripe may have made the page, else a fresh expiry under a new key) and
+does steps 2 and 3 for it — one action, one checkout, never a second; two
+at once (a double tap) get the same page. Once answered, a retry hears the
+answer kept.
+
+Before checkout the site refuses only what no one may give (over the
+year's limit once, or over the monthly maximum): a person's own total is
+checked when the money lands (and refunded if over), so the form never
+says what someone gave before.
 
 ## Admin API
 

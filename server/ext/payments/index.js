@@ -5,8 +5,10 @@
 //
 //   stripe.js    settings, Stripe over plain fetch, the webhook signature,
 //                readers for both API-version shapes
-//   checkout.js  checkoutFor(tx, ctx, {...}, emit?) → { url } — the site's
-//                join and donate forms call it; paymentsData() for its loaders
+//   checkout.js  prepareCheckout (inside the form's write) and openCheckout
+//                (after it: Stripe, then a short write) — the site's join
+//                and donate forms; retryCheckout for a retry; paymentsData()
+//                for its loaders
 //   limits.js    what a person may still give this year on a slate
 //   webhook.js   POST /stripe/webhook (public, signed, each event once)
 //   apply.js     what an event does to the books: gifts through the normal
@@ -29,7 +31,7 @@ export { sql } from './sql.js';
 export { publicRoutes } from './webhook.js';
 export { api, deskOnlyReads } from './api.js';
 export { actions } from './actions.js';
-export { checkoutFor, paymentsData, DECLARATION, DUES } from './checkout.js';
+export { prepareCheckout, openCheckout, retryCheckout, paymentsData, DECLARATION, DUES } from './checkout.js';
 export { paymentsReady, stripeMode, STRIPE_EVENTS } from './stripe.js';
 
 export const jobs = { [REFUND_JOB]: runRefundJob };

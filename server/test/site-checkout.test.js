@@ -1,11 +1,22 @@
-// What the website's forms may never do (review A1) — the contact form, a
-// join's profile fields, the referral link, the money forms' tags, and the
-// consent and declaration words:
+// What the website's forms may never do (review A1) — join and donate
+// through to Stripe (a stand-in, fake-stripe.js), the contact form, the
+// referral link, the consent and declaration words:
 //
+//   · a name and a postal code (or a phone) that match a voter never put
+//     their email on Stripe's page, and never hang money on their record:
+//     only the email the visitor typed goes to Stripe; money lands on a
+//     record the same email matched, or on someone new;
+//   · Stripe is never asked while the campaign's write is open, a retry with
+//     the same client_key is one action and one checkout, and a Stripe
+//     failure leaves the retry able to succeed;
+//   · what someone gave before never changes the answer (no per-person room
+//     check before checkout), and a refusal is a 400 in plain words, never a
+//     500;
 //   · join never overwrites a birth date or citizenship on file;
 //   · a referral code is found through its index;
 //   · a website message never pushes a note off a record;
 //   · the declaration and consent words kept are the words shown;
+//   · the same key with another amount is a fresh checkout;
 //   · volunteers can't see or sort who used the money forms.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -89,6 +100,109 @@ after(async () => {
   for (const k of ENV) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
 });
 
+test('a name and postal code (or phone) matching a voter never reach their email, and the money is never theirs', async () => {
+  const voter = ok(await mgr.action('person.create', { name: 'Victoria Target', email: `victoria.private.${tag}@example.org`, postal: 'V3T 1V8', phone: '604-555-0199' })).person;
+  const tries = [
+    ['donate', { first_name: 'Victoria', last_name: 'Target', phone: '778-000-1234', postal_code: 'v3t1v8', amount_cents: 500, cadence: 'once', declaration: true }],
+    ['donate', { first_name: 'Victoria', last_name: 'Target', email: `attacker.${tag}@example.net`, postal_code: 'V3T 1V8', amount_cents: 500, cadence: 'once', declaration: true }],
+    ['donate', { first_name: 'Victoria', last_name: 'Target', phone: '604-555-0199', amount_cents: 500, cadence: 'once', declaration: true }],
+    ['join', { first_name: 'Victoria', last_name: 'Target', phone: '778-000-4321', postal_code: 'V3T 1V8', declaration: true, birth_date: '1980-01-01', citizenship: 'citizen' }],
+  ];
+  const keys = [];
+  for (const [kind, body] of tries) {
+    const before = sessionsPosted().length;
+    const r = ok(await send(kind, body), `${kind} ${JSON.stringify(body).slice(0, 60)}`);
+    keys.push(Object.keys(r).sort().join(','));
+    const call = sessionsPosted().slice(before).at(-1);
+    assert.ok(call, 'Stripe was asked for a checkout');
+    assert.notEqual(call.params.customer_email, voter.email, 'the voter’s email never goes to Stripe');
+    assert.equal(call.params.customer_email, body.email, 'only the email the visitor typed (or none)');
+    const co = await checkoutOfSession(sessionOf(r.checkout_url));
+    assert.ok(co, 'the checkout is kept');
+    assert.notEqual(co.person_id, voter.id, 'the money never lands on a record matched by name alone');
+  }
+  assert.equal(new Set(keys).size, 1, 'every answer has the same shape');
+  // The same email is the same person: their own email, typed, is theirs to see.
+  const own = ok(await send('donate', { first_name: 'Vicky', last_name: 'Target', email: voter.email, amount_cents: 500, cadence: 'once', declaration: true }));
+  const co = await checkoutOfSession(sessionOf(own.checkout_url));
+  assert.equal(co.person_id, voter.id, 'an email match carries the money');
+  assert.equal(sessionsPosted().at(-1).params.customer_email, voter.email);
+});
+
+test('Stripe is never asked while the campaign’s write is open', async () => {
+  const tap = hold();
+  const form = send('donate', { first_name: 'Sol', last_name: 'Example', email: `sol.${tag}@example.org`, amount_cents: 2500, cadence: 'once', declaration: true });
+  await tap.at; // the form is inside its Stripe call now
+  const probe = runAction(db, { workspaceId: ws, actorId: null, action: 'test.probe' }, async (tx, emit) => { emit('probe', ws, 'update', {}); return true; });
+  const seen = await withinTwo(probe);
+  tap.release();
+  await probe;
+  const r = await form;
+  assert.equal(seen, 'done', 'another write to the campaign went ahead while Stripe was asked');
+  assert.equal(r.status, 200, r.text);
+  assert.ok(r.json.checkout_url);
+});
+
+test('a retry with the same client_key is one action and one checkout; a Stripe failure leaves the retry able to succeed', async () => {
+  const email = `rita.${tag}@example.org`;
+  const body = { first_name: 'Rita', last_name: 'Example', email, amount_cents: 3000, cadence: 'once', declaration: true, client_key: `retry-${tag}` };
+  failNext = 1;
+  const down = await send('donate', body);
+  assert.equal(down.status, 503, down.text);
+  assert.match(down.json.error, /payment service/);
+  assert.equal(down.json.checkout_url, undefined);
+  const again = ok(await send('donate', body), 'the retry');
+  assert.ok(sessionOf(again.checkout_url), again.checkout_url);
+  const third = ok(await send('donate', body), 'once more');
+  assert.equal(third.checkout_url, again.checkout_url, 'the same checkout, again');
+  const actions = await actionsKeyed(`retry-${tag}`);
+  assert.equal(actions.length, 1, 'one action');
+  const cos = await checkoutsOf(actions[0].person_id);
+  assert.equal(cos.filter((c) => c.session_id).length, 1, 'one checkout with a Stripe page');
+  assert.ok(cos.every((c) => c.amount_cents === 3000));
+  // Two at once with one key (a double tap): one action, one checkout, one page.
+  const twin = { ...body, client_key: `twin-${tag}`, email: `twin.${tag}@example.org` };
+  const before = fake.sessions.size;
+  const [a, b] = await Promise.all([send('donate', twin), send('donate', twin)]);
+  assert.deepEqual([a.status, b.status], [200, 200], `${a.text} ${b.text}`);
+  assert.equal(a.json.checkout_url, b.json.checkout_url);
+  assert.equal(fake.sessions.size, before + 1, 'Stripe made one page');
+  assert.equal((await actionsKeyed(`twin-${tag}`)).length, 1);
+});
+
+test('what someone gave before never changes the answer; a refusal is a 400 in plain words, never a 500', async () => {
+  const donor = ok(await mgr.action('person.create', { name: 'Dana Donor', email: `dana.${tag}@example.org`, postal: 'V3S 2A1' })).person;
+  ok(await mgr.action('gift.log', { person_id: donor.id, amount_cents: 73_400, date: today(), method: 'cheque' }));
+  // Over what she has left this year, under the year's limit: off to pay,
+  // as anyone would be (the payment is checked when it lands).
+  for (const who of [{ phone: '250-000-0000', postal_code: 'V3S2A1' }, { email: donor.email }]) {
+    const r = await send('donate', { first_name: 'Dana', last_name: 'Donor', ...who, amount_cents: 100_000, cadence: 'once', declaration: true });
+    assert.equal(r.status, 200, `${JSON.stringify(who)} ${r.text.slice(0, 200)}`);
+    assert.ok(r.json.checkout_url);
+  }
+  // What no one may give is refused, naming only the limit.
+  const over = await send('donate', { first_name: 'Dana', last_name: 'Donor', email: donor.email, amount_cents: 150_000, cadence: 'once', declaration: true });
+  assert.deepEqual([over.status, over.json.field], [400, 'amount_cents']);
+  assert.match(over.json.error, /\$1,429\.70/);
+  assert.doesNotMatch(over.json.error, /734|695/);
+  // A refusal from the payments side: a 400 with its field (and, without
+  // JavaScript, back to the form with ?error=), never a 500.
+  const refusal = Object.assign(new Error('That amount can’t be taken online.'), { status: 400, field: 'amount_cents' });
+  _setPaymentsForTest({
+    paymentsReady: () => true,
+    checkoutFor: async () => { throw refusal; },
+    prepareCheckout: async () => { throw refusal; },
+  });
+  try {
+    const r = await send('donate', { first_name: 'Ana', email: `ana.${tag}@example.org`, amount_cents: 2500, declaration: true });
+    assert.deepEqual([r.status, r.json?.field, r.json?.error], [400, 'amount_cents', 'That amount can’t be taken online.'], r.text);
+    const plain = await hit('/site/api/forms/donate', { form: { email: `ana2.${tag}@example.org`, amount_cents: '2500', declaration: 'on', module_id: 'donate' } });
+    assert.deepEqual([plain.status, plain.location], [303, '/site/?error=amount_cents#m-donate']);
+  } finally {
+    _setPaymentsForTest(null);
+  }
+});
+
 test('join never overwrites a birth date or citizenship on file; it fills what is empty for the same email', async () => {
   const f = await fieldIds();
   const set = (personId, birth, cz) => mgr.action('field.values.set', { person_id: personId, values: [{ field_id: f['birth date'], value: birth }, { field_id: f.citizenship, value: cz }] });
@@ -156,6 +270,16 @@ test('the declaration kept with a gift or a membership is the one the visitor ti
   assert.ok(shownJoin && shownJoin.length > 20, `the join form shows a declaration: ${shownJoin}`);
   const joined = ok(await send('join', { first_name: 'Jo', last_name: 'Clare', email: `jo.${tag}@example.org`, birth_date: '1985-06-01', citizenship: 'citizen', declaration: true }));
   assert.equal((await checkoutOfSession(sessionOf(joined.checkout_url))).declaration.text, shownJoin);
+});
+
+test('the same key with another amount (back from Stripe, a new choice) opens a fresh checkout', async () => {
+  const body = { first_name: 'Cam', last_name: 'Back', email: `cam.${tag}@example.org`, amount_cents: 5000, cadence: 'monthly', declaration: true, client_key: `back-${tag}` };
+  const first = ok(await send('donate', body));
+  const second = ok(await send('donate', { ...body, amount_cents: 10000, cadence: 'once' }));
+  assert.notEqual(second.checkout_url, first.checkout_url);
+  const s = fake.sessions.get(sessionOf(second.checkout_url));
+  assert.deepEqual([s.amount_total, s.mode], [10000, 'payment']);
+  assert.equal(ok(await send('donate', body)).checkout_url, first.checkout_url, 'the first choice, again, is the first checkout');
 });
 
 test('volunteers can’t see or sort who used the money forms', async () => {

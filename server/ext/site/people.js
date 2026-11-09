@@ -10,6 +10,12 @@
 // and an email typed there is kept beside the record (attrs.typed_email) for
 // the desk. Nothing on file is ever overwritten, and the answer never says
 // whether someone was on file.
+//
+// Money (join, donate: { strong: true }) is only ever the same email's, or
+// someone new's: a name and phone, or a name and postal code, is no proof
+// of who is paying — the gift, its receipt and the year's limit would land
+// on a voter who never gave (and two people with one name at one address
+// are common).
 import { randomInt } from 'node:crypto';
 import { newId } from '../../lib/events.js';
 import { civic } from '../../lib/address.js';
@@ -49,8 +55,9 @@ const byNameAndPostal = async (tx, ws, name, postal) => {
 };
 
 // who: { first_name, last_name, email, phone, postal, address, city }
+// strong: only the same email matches (money); else someone new
 // → { id, name, created, by: 'email' | 'phone' | 'postal' | null }
-export const takePerson = async (tx, ws, who, { tags = [], source = 'website' }, emit) => {
+export const takePerson = async (tx, ws, who, { tags = [], source = 'website', strong = false }, emit) => {
   const email = lower(who.email);
   const phone = norm(who.phone);
   const cut = splitFirst(norm(who.first_name));
@@ -63,8 +70,8 @@ export const takePerson = async (tx, ws, who, { tags = [], source = 'website' },
   const city = norm(who.city);
 
   let found = email ? await matchWebsitePerson(tx, ws, { email }) : null;
-  if (!found && phone && typedName) found = await matchWebsitePerson(tx, ws, { phone, name: typedName });
-  if (!found && typedName && postal) {
+  if (!found && !strong && phone && typedName) found = await matchWebsitePerson(tx, ws, { phone, name: typedName });
+  if (!found && !strong && typedName && postal) {
     const r = await byNameAndPostal(tx, ws, typedName, postal);
     if (r) found = { person: r, by: 'postal' };
   }

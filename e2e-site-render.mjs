@@ -71,6 +71,9 @@ function answerForm(kind, body) {
   if (kind === 'contact' && !String(body.message || '').trim()) return { error: 'Write your message', field: 'message' };
   if ((kind === 'donate' || kind === 'join') && !(body.declaration === true || body.declaration === 'true')) return { error: 'Tick the box to confirm', field: 'declaration' };
   if (kind === 'donate' && !(Number(body.amount_cents) > 0)) return { error: 'Choose an amount', field: 'amount_cents' };
+  // A payment page on the very page the form is on: the form stays just as
+  // it was left, as a browser's back/forward cache shows it after Back.
+  if (kind === 'donate' && /^stay@/.test(email)) return { ok: true, checkout_url: `${ORIGIN}/is/#paying` };
   if (kind === 'donate' || kind === 'join') return { ok: true, checkout_url: `${ORIGIN}/checkout-stub?kind=${kind}&amount=${Number(body.amount_cents) || 0}` };
   return { ok: true };
 }
@@ -380,6 +383,33 @@ for (const key of ['is', 'base']) {
   check('donate: goes to the checkout with the amount', /kind=donate&amount=10000/.test(page.url()), page.url());
   const gift = (await (await fetch(`${ORIGIN}/__posted`)).json()).filter((p) => p.kind === 'donate').pop()?.body || {};
   check('donate: amount_cents, cadence and the declaration sent', gift.amount_cents === 10000 && gift.cadence === 'once' && gift.declaration === true && gift.address === '10250 140 St', JSON.stringify(gift).slice(0, 200));
+
+  // Back from the payment page with another amount: the form as it was left
+  // (the back/forward cache) sends a new key, so the server opens a fresh
+  // checkout — never the first one again.
+  await page.goto(`${ORIGIN}/is/`, { waitUntil: 'networkidle' });
+  await hydrated(page);
+  const again = page.locator('[data-module="donate"] form');
+  await again.locator('.amount', { hasText: '$50' }).click();
+  await again.getByLabel('First name', { exact: true }).fill('Bea');
+  await again.getByLabel('Last name', { exact: true }).fill('Example');
+  await again.getByLabel('Email', { exact: true }).fill('stay@example.org');
+  await again.getByLabel('Street address', { exact: true }).fill('10250 140 St');
+  await again.getByLabel('City', { exact: true }).fill('Surrey');
+  await again.getByLabel('Postal code', { exact: true }).fill('V3T 4B2');
+  await again.locator('label.check', { hasText: 'Canadian citizen' }).locator('input').check();
+  await again.getByRole('button', { name: /Donate \$50/ }).click();
+  for (let i = 0; i < 40 && !page.url().endsWith('#paying'); i += 1) await sleep(100);
+  await again.locator('.amount', { hasText: '$100' }).click();
+  await again.getByRole('button', { name: /Donate \$100/ }).click();
+  let tries = [];
+  for (let i = 0; i < 40 && tries.length < 2; i += 1) {
+    tries = (await (await fetch(`${ORIGIN}/__posted`)).json()).filter((p) => p.kind === 'donate' && p.body.email === 'stay@example.org').map((p) => p.body);
+    if (tries.length < 2) await sleep(100);
+  }
+  check('donate: back with another amount, the form sends a new key (a fresh checkout, not the first)',
+    tries.length === 2 && tries[0].client_key && tries[1].client_key !== tries[0].client_key && tries[1].amount_cents === 10000,
+    JSON.stringify(tries.map((t) => [t.amount_cents, t.client_key])));
   await page.context().close();
 }
 

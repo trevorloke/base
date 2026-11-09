@@ -1,13 +1,18 @@
 // Online payments' tables. Idempotent; run at boot after the core schema
 // (and after ext/membership, whose gift_pledges a monthly gift keeps).
 //
-//   stripe_checkouts  one per Checkout opened (checkoutFor): who, what (a
-//                     gift once or monthly, or membership dues), how much,
-//                     which slate, the declaration as made, and — once
-//                     Stripe answers — its session; a monthly one also its
+//   stripe_checkouts  one per checkout a form asked for (checkout.js
+//                     prepareCheckout): who, what (a gift once or monthly,
+//                     or membership dues), how much, which slate, the
+//                     declaration as made, the request Stripe is sent
+//                     (request; the same again on a retry, so Stripe answers
+//                     with the same page; tries: how many times it was made
+//                     afresh after Stripe said no), and — once Stripe
+//                     answers — its session; a monthly one also its
 //                     subscription and the pledge it keeps. status: open ·
 //                     paid · active (a monthly gift running) · cancelled ·
-//                     expired · failed.
+//                     expired · failed (Stripe said no; a retry opens it
+//                     again).
 //   stripe_payments   one per payment that landed (a one-time checkout, or
 //                     one month's invoice) and the gift it became. status:
 //                     paid · over_limit (it would have gone over the
@@ -45,6 +50,8 @@ create table if not exists stripe_checkouts (
   updated_at timestamptz not null default now(),
   completed_at timestamptz
 );
+alter table stripe_checkouts add column if not exists request jsonb;
+alter table stripe_checkouts add column if not exists tries int not null default 0;
 create index if not exists stripe_checkouts_ws_idx on stripe_checkouts (workspace_id, created_at desc);
 create index if not exists stripe_checkouts_sub_idx on stripe_checkouts (subscription_id) where subscription_id is not null;
 create index if not exists stripe_checkouts_pledge_idx on stripe_checkouts (workspace_id, pledge_id) where pledge_id is not null;

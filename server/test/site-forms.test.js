@@ -6,8 +6,10 @@
 // aren't set up), and an answer that never says who was on file.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { hit, send, ok, campaign, member, personBy } from './site-helpers.js';
 import { _setPaymentsForTest } from '../ext/site/payments.js';
+import { runAction } from '../lib/events.js';
 
 let db, mgr, ws, vol;
 let petition, pledge;
@@ -22,6 +24,31 @@ const future = (h) => new Date(Date.now() + h * 3600_000).toISOString();
 const requestsOf = async (personId, kind) => (await db.query(
   'select * from door_requests where workspace_id = $1 and person_id = $2 and kind = $3 order by created_at', [ws, personId, kind],
 )).rows;
+
+// A stand-in for ext/payments, the way the site uses it: the checkout kept
+// in the form's write (prepareCheckout), then Stripe's page after it
+// (openCheckout, whose `also` runs in its own short write).
+const fakePayments = ({ url = (n) => `https://checkout.stripe.com/c/pay/cs_test_${n}`, down = null } = {}) => {
+  const calls = [];
+  const ids = new Map();
+  return {
+    calls,
+    paymentsReady: () => true,
+    prepareCheckout: async (tx, ctx, args) => {
+      calls.push({ ws: ctx.workspaceId, ...args });
+      const id = randomUUID();
+      ids.set(id, calls.length);
+      return { id };
+    },
+    retryCheckout: async (tx, ctx, id) => ({ id }),
+    openCheckout: async (dbx, ctx, id, { action, also }) => {
+      if (down) throw down;
+      const page = url(ids.get(id));
+      const { result } = await runAction(dbx, { workspaceId: ctx.workspaceId, actorId: null, action }, (tx, emit) => also(tx, emit, { url: page, session_id: `cs_${id}` }));
+      return { url: page, id, result };
+    },
+  };
+};
 
 before(async () => {
   ({ db, mgr, ws } = await campaign());
@@ -271,11 +298,9 @@ test('join and donate: plain words when online payments aren’t set up; otherwi
   const plainOff = await hit('/site/api/forms/join', { form: { email: 'giver@example.org', declaration: 'on', module_id: 'join' } });
   assert.deepEqual([plainOff.status, plainOff.location], [303, '/site/?error=payments#m-join']);
 
-  const calls = [];
-  _setPaymentsForTest({
-    paymentsReady: () => true,
-    checkoutFor: async (tx, ctx, args) => { calls.push({ ws: ctx.workspaceId, ...args }); return { url: `https://checkout.stripe.com/c/pay/cs_test_${calls.length}` }; },
-  });
+  const fake = fakePayments();
+  const { calls } = fake;
+  _setPaymentsForTest(fake);
   const site = ok(await mgr.get('/api/site'));
   const donatePage = site.pages.find((p) => p.slug === 'donate');
   const gift = ok(await send('donate', {
@@ -285,7 +310,7 @@ test('join and donate: plain words when online payments aren’t set up; otherwi
   assert.equal(gift.checkout_url, 'https://checkout.stripe.com/c/pay/cs_test_1');
   const [g] = await personBy(db, ws, "lower(email) = 'gia@example.org'");
   assert.deepEqual(calls[0], {
-    ws, personId: g.id, kind: 'donation', amountCents: 5000, cadence: 'monthly', slate: null,
+    ws, personId: g.id, kind: 'donation', amountCents: 5000, cadence: 'monthly', slate: null, email: 'gia@example.org',
     declaration: 'I’m a Canadian citizen or permanent resident. I live in British Columbia. This contribution is my own money, and no one will pay me back for it.',
     successUrl: 'http://localhost/site/donate?sent=donate#m-donate', cancelUrl: 'http://localhost/site/donate?cancelled=donate#m-donate',
     metadata: { site_action_id: (await actionsOf(g.id, 'donate'))[0].id, kind: 'donate' },
@@ -310,12 +335,21 @@ test('join and donate: plain words when online payments aren’t set up; otherwi
   assert.deepEqual([fields['Birth date'], fields.Citizenship], [youth, 'Permanent resident'], 'kept on their profile');
   const plain = await hit('/site/api/forms/join', { form: { email: 'jo2@example.org', declaration: 'on', amount_cents: '2500', module_id: 'join' } });
   assert.deepEqual([plain.status, plain.location], [303, 'https://checkout.stripe.com/c/pay/cs_test_3']);
-  const failing = await (async () => {
-    _setPaymentsForTest({ paymentsReady: () => true, checkoutFor: async () => { throw Object.assign(new Error('stripe down'), { status: 503 }); } });
-    return send('donate', { email: 'down@example.org', amount_cents: 5000, declaration: true });
-  })();
+  // Stripe not answering: the person and what they did are kept (the form's
+  // write is done before Stripe is asked), with no answer yet — so the same
+  // key, sent again, finishes it as one action.
+  const down = fakePayments({ down: Object.assign(new Error('stripe down'), { status: 503 }) });
+  _setPaymentsForTest(down);
+  const body = { email: 'down@example.org', amount_cents: 5000, declaration: true, client_key: 'down-1' };
+  const failing = await send('donate', body);
   assert.equal(failing.status, 503);
-  assert.equal((await personBy(db, ws, "lower(email) = 'down@example.org'")).length, 0, 'nothing half-kept');
+  assert.match(failing.json.error, /payment service/);
+  const [d] = await personBy(db, ws, "lower(email) = 'down@example.org'");
+  const [kept] = await actionsOf(d.id, 'donate');
+  assert.equal(kept.answer, null, 'nothing told yet');
+  _setPaymentsForTest(fakePayments({ url: () => 'https://checkout.stripe.com/c/pay/cs_test_back' }));
+  assert.equal(ok(await send('donate', body)).checkout_url, 'https://checkout.stripe.com/c/pay/cs_test_back', 'the retry gets its checkout');
+  assert.equal((await actionsOf(d.id, 'donate')).length, 1, 'one action');
   _setPaymentsForTest(null);
 });
 
@@ -331,7 +365,7 @@ test('a form from another site is refused; the answer never carries a person id'
 });
 
 test('every kind: the honeypot keeps nothing, and a retry with the same key is one action', async () => {
-  _setPaymentsForTest({ paymentsReady: () => true, checkoutFor: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_test_every' }) });
+  _setPaymentsForTest(fakePayments({ url: () => 'https://checkout.stripe.com/c/pay/cs_test_every' }));
   const shift = (await mgr.action('shift.create', { title: 'Every kind', starts_at: future(30), capacity: 20 })).json.shift;
   ok(await mgr.action('shift.public', { id: shift.id, public: true }));
   const extra = {
@@ -359,7 +393,7 @@ test('every kind: the honeypot keeps nothing, and a retry with the same key is o
 test('an address placed on the map by the app’s own lookup (here, a neighbour already on the map)', async () => {
   const was = process.env.GEOCODE_ON_SAVE;
   process.env.GEOCODE_ON_SAVE = 'on';
-  _setPaymentsForTest({ paymentsReady: () => true, checkoutFor: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_test_map' }) });
+  _setPaymentsForTest(fakePayments({ url: () => 'https://checkout.stripe.com/c/pay/cs_test_map' }));
   try {
     ok(await mgr.action('person.create', { name: 'Neighbour Example', address: '7700 128 St', city: 'Surrey', lat: 49.14, lng: -122.87 }));
     ok(await send('donate', { first_name: 'Pia', last_name: 'Example', email: 'pia@example.org', address: '7700 128 St', city: 'Surrey', amount_cents: 2500, declaration: true }));
