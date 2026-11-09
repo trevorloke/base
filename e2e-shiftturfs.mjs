@@ -172,6 +172,8 @@ check('desk shift: "Change turfs"', await page.locator('.st-walk button:has-text
 const pat = (await D.api('/actions/person.create', { name: 'Pat Example', phone: '604-555-0131' })).json.person;
 check('desk assigns Pat (no sign-in)', (await D.api('/actions/shift.assign', { shift_id: shiftId, person_id: pat.id })).status === 200);
 await D.go(`/shifts/${shiftId}`);
+// Under the crew board, the roster folds away: open it.
+await page.locator('.st-roster-toggle').click({ timeout: 8000 }).catch(() => {});
 await page.waitForSelector('.st-signin', { timeout: 8000 }).catch(() => {});
 const note = await page.innerText('.ops-item:has-text("Pat Example") .st-signin').catch(() => '');
 check('Pat’s row: "No app sign-in — add them to the turf on the map"', note === 'No app sign-in — add them to the turf on the map', note);

@@ -41,9 +41,13 @@
 // shift gave). An assignee with no app sign-in can't get them on a phone:
 // their row says so.
 //
-// Desk: "Week · List" under the title. Week (the default) is the slot board
-// (ShiftsBoard.jsx) — drag people into each day's morning, afternoon or
-// evening. The choice is remembered on this device.
+// Desk: "Week · List · Volunteers" under the title. Week (the default) is
+// the slot board (ShiftsBoard.jsx) — drag people into each day's morning,
+// afternoon or evening. The choice is remembered on this device.
+// Volunteers is the roster (/shifts/volunteers, Volunteers.jsx).
+//
+// A shift (desk) also has its crew board (ShiftCrew.jsx) under the spots:
+// drag volunteers on, onto its turfs, "No walk list", or back off.
 //
 // Also exports two small building blocks:
 //   <PersonPicker onPick={(person) => …} />   type-ahead over /api/persons?q= (Signs uses it)
@@ -57,6 +61,7 @@ import { queueAction, undoQueued, useOutbox } from '../offline.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { NeedsSignal, NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import ShiftsBoard from './ShiftsBoard.jsx';
+import ShiftCrew from './ShiftCrew.jsx';
 import { TurfPicker, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import './shifts.css';
 import { NS } from '../base.js';
@@ -717,6 +722,7 @@ function ShiftRow({ s, now, past = false, mine = false, waiting = false, turfs }
 
 function ShiftList({ canDesk, me }) {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const showNew = canDesk && params.get('new') === '1';
   // A link with ?week= opens the week board.
   const [view, setView] = useState(() => (!canDesk ? 'list' : params.get('week') ? 'week' : savedView()));
@@ -768,6 +774,8 @@ function ShiftList({ canDesk, me }) {
           <button type="button" aria-pressed={week} onClick={() => pickView('week')} disabled={!online}
             title={online ? undefined : 'The week board needs signal'}>Week</button>
           <button type="button" aria-pressed={!week} onClick={() => pickView('list')}>List</button>
+          <button type="button" aria-pressed={false} onClick={() => navigate('/shifts/volunteers')} disabled={!online}
+            title={online ? undefined : 'The volunteer list needs signal'}>Volunteers</button>
         </div>
       )}
       {week ? <ShiftsBoard me={me} /> : (
@@ -913,6 +921,9 @@ function ShiftDetail({ id, canDesk, me }) {
   useKeepCopy(me, 'actions', allowed);
 
   const [openId, setOpenId] = useState(null);
+  // With the crew board on screen, the roster below it (status, contact,
+  // notices) folds away under one toggle.
+  const [rosterOpen, setRosterOpen] = useState(false);
   const [rowBusy, setRowBusy] = useState(null);
   const [error, setError] = useState(null);
   const [adding, setAdding] = useState(false);
@@ -963,6 +974,8 @@ function ShiftDetail({ id, canDesk, me }) {
     // Who's on it decides who has its walk lists.
     queryClient.invalidateQueries({ queryKey: ['shiftturfs'] });
     queryClient.invalidateQueries({ queryKey: ['turfs'] });
+    queryClient.invalidateQueries({ queryKey: ['crew', id] });
+    queryClient.invalidateQueries({ queryKey: ['volunteers'] });
   };
   // Volunteer books or drops their own spot (shift.join / shift.leave),
   // through the outbox: no signal, it waits on the phone ("Not sent yet").
@@ -1404,16 +1417,28 @@ function ShiftDetail({ id, canDesk, me }) {
       {canDesk && primary === 'add' && addBlock(true)}
       {canDesk && primary === 'notify' && notifyBlock(true)}
 
-      <span className="eyebrow ops-label">On this shift · {canDesk ? assignees.length : active.length}</span>
+      {/* The crew board: drag people on, and onto its turfs (ShiftCrew.jsx). */}
+      {canDesk && (online
+        ? <ShiftCrew shiftId={shift.id} canMap={(me?.areas ?? []).includes('map')} onChanged={refresh} />
+        : <NeedsSignalLine>The crew board needs signal</NeedsSignalLine>)}
+
+      {canDesk && online && assignees.length > 0 ? (
+        <button type="button" className="ops-more disclose st-roster-toggle" aria-expanded={rosterOpen} aria-controls="shift-roster"
+          onClick={() => setRosterOpen((v) => !v)}>
+          Status and contact · {assignees.length}
+        </button>
+      ) : (
+        <span className="eyebrow ops-label">On this shift · {canDesk ? assignees.length : active.length}</span>
+      )}
       {error && <p className="error">{error}</p>}
-      {(canDesk ? assignees : active).length === 0 ? (
+      {canDesk && online && assignees.length > 0 && !rosterOpen ? null : (canDesk ? assignees : active).length === 0 ? (
         <p className="ops-empty">Nobody yet.</p>
       ) : !canDesk ? (
         <ul className="ops-plain-list">
           {active.map((a) => <NameRow key={a.assignment_id} a={a} isMe={isMine(a)} />)}
         </ul>
       ) : (
-        <ul className="ops-rows">
+        <ul className="ops-rows" id="shift-roster">
           {assignees.map((a) => (
             <AssigneeRow
               key={a.assignment_id}

@@ -39,10 +39,30 @@ const addWalker = (tx, ws, { assignmentId, shiftId, turfId, userId }) => tx.quer
   [ws, assignmentId, shiftId, turfId, userId],
 );
 
+// Where the crew board put this assignment (shift_crew): null when it
+// hasn't — they walk every turf the shift carries.
+export const pickOf = async (tx, ws, assignmentId) => {
+  const row = (await tx.query(
+    'select placed, turf_id from shift_crew where workspace_id = $1 and assignment_id = $2', [ws, assignmentId],
+  )).rows[0];
+  return row?.placed ? { placed: row.placed, turfId: row.turf_id || null } : null;
+};
+
+// The turfs this assignment may walk, narrowing turfIds (null = all the
+// shift's): placed on one turf, only that one; placed on none, nothing.
+const allowedBy = (pick, turfIds) => {
+  if (!pick) return turfIds;
+  if (pick.placed === 'none' || !pick.turfId) return [];
+  return turfIds ? turfIds.filter((t) => t === pick.turfId) : [pick.turfId];
+};
+
 // Put userId on the shift's turfs (or only turfIds of them) for this
-// assignment. Answers the turf ids newly on their phone.
-export const putOn = async (tx, ws, { assignmentId, shiftId, userId, turfIds = null }, emit) => {
+// assignment — never past where the crew board placed them (pickOf).
+// Answers the turf ids newly on their phone.
+export const putOn = async (tx, ws, { assignmentId, shiftId, userId, turfIds: asked = null }, emit) => {
   if (!assignmentId || !shiftId || !userId) return [];
+  const turfIds = allowedBy(await pickOf(tx, ws, assignmentId), asked);
+  if (turfIds && !turfIds.length) return [];
   const turfs = (await tx.query(
     `select st.turf_id from shift_turfs st
      join shifts s on s.id = st.shift_id and s.deleted_at is null and coalesce(s.ends_at, s.starts_at) >= now()
@@ -107,6 +127,67 @@ export const takeOff = async (tx, ws, { assignmentId, turfIds = null }, emit) =>
   }
   return removed;
 };
+
+// The crew board puts an assignment somewhere: 'every' (not placed — every
+// turf the shift carries, the rule before the board), 'none' (no walk list
+// from this shift: a driver, the office) or one of the shift's turf ids.
+// Phones follow at once for someone active with an app sign-in: what this
+// shift gave on turfs they no longer walk comes back off (never a turf
+// given by hand, never one another of their shifts holds — takeOff), and
+// the turf they walk now goes on. Answers the turf ids added and removed.
+export const placeAssignment = async (tx, ws, { assignment, to }, emit) => {
+  const placed = to === 'every' ? null : to === 'none' ? 'none' : 'turf';
+  const turfId = placed === 'turf' ? to : null;
+  await tx.query(
+    `insert into shift_crew (assignment_id, workspace_id, shift_id, placed, turf_id, updated_at)
+     values ($1, $2, $3, $4, $5, now())
+     on conflict (assignment_id) do update set placed = excluded.placed, turf_id = excluded.turf_id, updated_at = now()`,
+    [assignment.id, ws, assignment.shift_id, placed, turfId],
+  );
+  if (!ACTIVE.includes(assignment.status)) return { added: [], removed: [] };
+  const shiftTurfs = (await tx.query(
+    'select turf_id from shift_turfs where workspace_id = $1 and shift_id = $2', [ws, assignment.shift_id],
+  )).rows.map((r) => r.turf_id);
+  const walk = placed === null ? shiftTurfs : placed === 'none' ? [] : [turfId];
+  const drop = shiftTurfs.filter((t) => !walk.includes(t));
+  const removed = drop.length ? await takeOff(tx, ws, { assignmentId: assignment.id, turfIds: drop }, emit) : [];
+  const userId = walk.length ? await userForPerson(tx, ws, assignment.person_id) : null;
+  const added = userId
+    ? await putOn(tx, ws, { assignmentId: assignment.id, shiftId: assignment.shift_id, userId, turfIds: walk }, emit)
+    : [];
+  return { added, removed };
+};
+
+// A turf left a shift (or was deleted): whoever the crew board had put on it
+// is not placed any more — they walk every turf their shift still carries.
+// shiftId narrows it to one shift's crew. Run after shift_turfs is updated.
+export const unplaceFrom = async (tx, ws, { turfIds, shiftId = null }, emit) => {
+  if (!turfIds?.length) return;
+  const rows = (await tx.query(
+    `update shift_crew set placed = null, turf_id = null, updated_at = now()
+     where workspace_id = $1 and placed = 'turf' and turf_id = any($2::uuid[]) ${shiftId ? 'and shift_id = $3' : ''}
+     returning assignment_id`,
+    shiftId ? [ws, turfIds, shiftId] : [ws, turfIds],
+  )).rows;
+  for (const { assignment_id: id } of rows) {
+    const a = (await tx.query(
+      `select a.id, a.shift_id, a.person_id from shift_assignments a
+       where a.id = $1 and a.workspace_id = $2 and a.status = any($3::text[])`,
+      [id, ws, ACTIVE],
+    )).rows[0];
+    if (!a) continue;
+    const userId = await userForPerson(tx, ws, a.person_id);
+    if (userId) await putOn(tx, ws, { assignmentId: a.id, shiftId: a.shift_id, userId }, emit);
+  }
+};
+
+// A job on the crew: 'lead' (team lead), 'driver', or null.
+export const setJob = (tx, ws, { assignment, job }) => tx.query(
+  `insert into shift_crew (assignment_id, workspace_id, shift_id, job, updated_at)
+   values ($1, $2, $3, $4, now())
+   on conflict (assignment_id) do update set job = excluded.job, updated_at = now()`,
+  [assignment.id, ws, assignment.shift_id, job],
+);
 
 // A membership the desk gave or took by hand is the desk's from now on: no
 // shift takes it back, and none holds a membership that's gone.

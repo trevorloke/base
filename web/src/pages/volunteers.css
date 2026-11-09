@@ -1,0 +1,48 @@
+/* Shifts → Volunteers (Volunteers.jsx). vl-*; rows are the Shifts screen's
+   ops-* (shifts.css); every colour and space is a token from app.css. */
+.ops-page.vl-page { max-width: 820px; }
+.vl-sum { margin: 0 0 var(--s-3); color: var(--text-2); font-size: 15px; }
+.ops-seg.vl-shows { flex-wrap: wrap; max-width: none; }
+.vl-n { margin-left: 4px; font-weight: 400; color: var(--text-3); }
+.vl-shows button[aria-pressed='true'] .vl-n { color: inherit; }
+.vl-find { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0; }
+.vl-find .input { min-height: 48px; }
+.vl-find input { flex: 2 1 220px; }
+.vl-find select { flex: 1 1 160px; }
+.vl-status[data-asked] { color: var(--amber-deep); font-weight: 600; }
+.vl-roles { font-size: 12px; color: var(--text-3); }
+.vl-contact { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.vl-contact .btn { min-width: 72px; justify-content: center; text-decoration: none; display: inline-flex; align-items: center; }
+.vl-numbers { font-size: 13px; color: var(--text-3); overflow-wrap: anywhere; }
+.vl-facts { margin: var(--s-2) 0; font-size: 14px; color: var(--text-2); }
+.vl-next { margin: 0 0 var(--s-2); padding-left: 1.1em; font-size: 14px; }
+.vl-pick { margin: var(--s-1) 0 var(--s-2); }
+.vl-shifts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.vl-shift {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--s-3);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--s-2) var(--s-3);
+  font: inherit;
+  text-align: left;
+  color: var(--text-1);
+  background: var(--paper-0);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctrl);
+  cursor: pointer;
+}
+.vl-shift:hover:not(:disabled) { border-color: var(--mark); background: var(--mark-soft); }
+.vl-shift:focus-visible { outline: 2px solid var(--focus, var(--mark)); outline-offset: 2px; }
+.vl-shift:disabled { cursor: default; opacity: 0.55; }
+.vl-shift[data-clash] { border-style: dashed; }
+.vl-shift__what { font-weight: 600; }
+.vl-shift__when { grid-column: 1; font-size: 13px; color: var(--text-3); }
+.vl-shift__note { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-size: 13px; color: var(--text-2); text-align: right; }
+.vl-shift[data-clash] .vl-shift__note { color: var(--warn); }
+.btn.vl-more { margin-top: var(--s-3); width: 100%; }
+@media (max-width: 720px) {
+  .vl-shift { grid-template-columns: minmax(0, 1fr); }
+  .vl-shift__note { grid-column: 1; grid-row: auto; text-align: left; }
+}
