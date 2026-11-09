@@ -137,7 +137,7 @@ function derivePersons(me, plan, qs) {
   // field (?field=) or a field cut (?knocked= ?outcome= ?turf= ?postal=
   // ?notag=), which a row doesn't carry: those say No signal rather than
   // show everyone under the filter's chip.
-  const notOnARow = ['role', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag'];
+  const notOnARow = ['role', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'web'];
   if (!notOnARow.some((k) => p.get(k))) tries.push({ s: new URLSearchParams({ q: '', limit: String(limit) }).toString(), rest: true });
   for (const t of tries) {
     if (t.s === qs) continue;

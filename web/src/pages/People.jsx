@@ -31,7 +31,7 @@ import {
 import { MyPeopleLink } from '../components/RelationshipsBits.jsx';
 import { VotedRow } from '../components/Voted.jsx';
 import AddressField, { lookupAddress } from '../components/AddressField.jsx';
-import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs } from '../components/FieldCuts.jsx';
+import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../components/FieldCuts.jsx';
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 import NameFields from '../components/NameFields.jsx';
 
@@ -414,6 +414,7 @@ const carry = (f, extra = {}) => {
 function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra = null }) {
   const scale = useScale();
   const turfs = useTurfs();
+  const web = useWebDid();
   const roleLabel = VOLUNTEER_ROLES.find((r) => r.code === f.role)?.label || f.role;
   const chips = [
     keys.includes('rating') && f.rating && {
@@ -425,7 +426,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
     keys.includes('role') && f.role && { key: 'role', label: roleLabel, name: roleLabel },
     keys.includes('has') && f.has && HAS_LABEL[f.has] && { key: 'has', label: HAS_LABEL[f.has], name: HAS_LABEL[f.has] },
     keys.includes('q') && f.q && { key: 'q', label: `“${f.q}”`, name: `search ${f.q}` },
-    ...cutChips(f, turfs).map((c) => ({ ...c, name: c.label })),
+    ...cutChips(f, turfs, web).map((c) => ({ ...c, name: c.label })),
   ].filter(Boolean);
   if (!chips.length && !extra) return null;
   return (
