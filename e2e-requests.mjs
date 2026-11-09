@@ -221,7 +221,8 @@ for (let i = 0; i < 20; i++) {
 }
 await sleep(1500); // a second flush, if one were coming, would land by now
 anaReqs = (await D.api('/requests')).json.requests.filter((r) => r.person.id === P.ana.id);
-const anaEvents = (await D.api('/events?since=0&limit=1000')).json.events.filter((e) => e.action === 'request.ask' && e.payload?.person_id === P.ana.id);
+// The request's own events (the same write also hands her to an organizer: a follow-up).
+const anaEvents = (await D.api('/events?since=0&limit=1000')).json.events.filter((e) => e.action === 'request.ask' && e.entity_type === 'door_request' && e.payload?.person_id === P.ana.id);
 check('back online: sent once — one request, one event', anaReqs.length === 1 && anaEvents.length === 1 && anaReqs[0].note === 'can do Sundays'
   && !(await vpage.$('.offline-strip__chip')), `${anaReqs.length} rows, ${anaEvents.length} events`);
 

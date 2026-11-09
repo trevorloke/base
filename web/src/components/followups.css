@@ -1,0 +1,119 @@
+/* Follow up (Today) — the organizer's own people to reach, each with the
+   24-hour clock. fu-* only; the opened card borrows the Calls card's
+   controls (people.css cl-*, relationships.css rel-*). Every tap target is
+   at least 48px; nothing scrolls sideways at 390px. */
+
+.fu { margin-top: var(--s-4); }
+.fu-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; }
+.fu-h__n { color: var(--text-3); }
+.fu-h__late { color: var(--danger); }
+
+.fu-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--paper-0);
+  border: var(--border);
+  border-radius: var(--r-card);
+}
+.fu-rows > li + li { border-top: 1px solid var(--rule); }
+/* An overdue one: a red edge as well as the red words, so it isn't colour alone. */
+.fu-item[data-late] { box-shadow: inset 4px 0 0 var(--danger); }
+.fu-item[data-open] { background: var(--paper-1); }
+
+.fu-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--s-2) var(--s-3) var(--s-2) var(--s-4);
+  font: inherit;
+  text-align: left;
+  color: var(--text-1);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+@media (hover: hover) { .fu-row:hover { background: var(--paper-1); } }
+.fu-row:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.fu-row__main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.fu-row__name { font-weight: 600; font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
+.fu-row__did { font-size: 14px; color: var(--text-2); line-height: 1.3; overflow-wrap: anywhere; }
+/* The clock: mono, plain while there's time, red words once it's past. */
+.fu-clock {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  color: var(--text-2);
+  padding: 3px 8px;
+  border: 1px solid var(--rule-2);
+  border-radius: 999px;
+}
+.fu-clock.is-late {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--paper-0));
+  font-weight: 600;
+}
+.fu-row::after {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin: 0 4px 4px 0;
+  border-right: 2px solid var(--text-3);
+  border-bottom: 2px solid var(--text-3);
+  transform: rotate(45deg);
+}
+.fu-row[aria-expanded='true']::after { transform: rotate(-135deg); margin-top: 6px; margin-bottom: 0; }
+.fu-sr {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Opened: what they did, their number, call / text, how it went. */
+.fu-body { display: flex; flex-direction: column; gap: var(--s-3); padding: 0 var(--s-4) var(--s-4); }
+.fu-wait { margin: 0; padding: 0 var(--s-4) var(--s-3); color: var(--text-3); }
+.fu-dids { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.fu-did { display: flex; flex-direction: column; gap: 2px; padding-left: var(--s-3); border-left: 3px solid var(--mark); }
+.fu-did__what { font-weight: 600; font-size: 15px; }
+.fu-did__bits { font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
+.fu-did__said { font-size: 15px; color: var(--text-1); overflow-wrap: anywhere; white-space: pre-line; }
+.fu-phone { margin: 0; font-size: 16px; }
+.fu-went { display: flex; flex-direction: column; gap: var(--s-2); }
+.fu-went .rel-label { margin-bottom: 0; }
+.fu-hint { margin-top: calc(-1 * var(--s-2)); font-size: 13px; color: var(--text-3); }
+.fu-outcomes { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.fu-foot { display: flex; gap: var(--s-2); padding-top: var(--s-2); border-top: 1px solid var(--rule); }
+.btn.fu-tap { min-height: 48px; display: inline-flex; align-items: center; padding: 0 18px; }
+.fu-all {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  margin-top: var(--s-1);
+  padding: 0 var(--s-1);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.fu-all:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.fu-said {
+  margin: 0 0 var(--s-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ok);
+  overflow-wrap: anywhere;
+}
+
+@media (forced-colors: active) {
+  .fu-item[data-late] { border-left: 4px solid CanvasText; box-shadow: none; }
+  .fu-row::after { border-color: CanvasText; }
+}

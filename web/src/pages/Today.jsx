@@ -25,6 +25,11 @@
 //     and only while the campaign is new. Walk lists, team (managers),
 //     providers, "Verify the records", the export and "Clear sample data" sit
 //     under a quiet "More" at the bottom.
+//   Both: "Follow up" at the top when someone's been handed to them — a new
+//     volunteer, a website message, an RSVP from someone new — with what
+//     they did and the 24-hour clock, opening in place to call or text and
+//     log how it went (components/FollowupsToday.jsx). The desk's "Needs
+//     you" counts every open follow-up and how many are overdue.
 // A nearly empty campaign gets a one-click sample dataset (managers); a quiet
 // "Sample data is loaded" line stays at the top while it's there. Volunteers
 // never see money.
@@ -35,6 +40,7 @@ import { allCodes, bandOf, ratingByCode } from '@starbase/shared/scale';
 import { ApiError, apiGet, apiPost, fmtMoney } from '../api.js';
 import { ratingWho, useScale } from '../components/RatingButtons.jsx';
 import { useFollowupCount } from '../components/LaddersCount.js';
+import FollowupsToday from '../components/FollowupsToday.jsx';
 import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { useRequestsCount } from '../components/RequestsCount.js';
@@ -442,7 +448,8 @@ function NeedsYou({ b, me }) {
             <LinkRow to="/signs" main={<><strong className="mono">{signs}</strong> {plural(signs, 'sign')} to put up</>} />
           )}
           {followups.n > 0 && (
-            <LinkRow to="/follow-ups" state={FROM_TODAY} main={<><strong className="mono">{followups.n}</strong> {plural(followups.n, 'follow-up')}</>} />
+            <LinkRow to="/follow-ups" state={FROM_TODAY} main={<><strong className="mono">{followups.n}</strong> {plural(followups.n, 'follow-up')}</>}
+              chip={followups.overdue > 0 ? `${followups.overdue} overdue` : null} chipCls="chip chip-danger" />
           )}
           {requests.n > 0 && (
             <LinkRow to="/requests" state={FROM_TODAY} main={<><strong className="mono">{requests.n}</strong> {plural(requests.n, 'request')} from the doors</>} />
@@ -698,6 +705,8 @@ function VolunteerToday({ b, me }) {
       <h1>{me.workspace.name}</h1>
       {b.sampleLoaded && <SampleLine />}
       {b.voted?.on && <GotvCard v={b.voted} />}
+      {/* The people they're to reach within the day (speed to lead). */}
+      <FollowupsToday me={me} />
 
       {done ? (
         <section className="today-go" aria-label="Calls">
@@ -802,6 +811,8 @@ function DeskToday({ b, me, toast }) {
       {b.sampleLoaded && <SampleLine desk />}
       {b.voted?.on && <GotvCard v={b.voted} />}
       {showSteps && <GettingStarted steps={stepsLeft} role={me?.role} navigate={navigate} />}
+      {/* Their own people to reach within the day, before the dashboard. */}
+      <FollowupsToday me={me} />
 
       {isManager && (
         <Suspense fallback={<p className="muted">Loading the dashboard…</p>}>
