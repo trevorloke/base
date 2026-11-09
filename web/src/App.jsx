@@ -60,6 +60,7 @@ const Passes = lazy(() => import('./pages/Passes.jsx'));
 const Voted = lazy(() => import('./pages/Voted.jsx'));
 const Requests = lazy(() => import('./pages/Requests.jsx'));
 const FieldReport = lazy(() => import('./pages/FieldReport.jsx'));
+const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
 import Join from './pages/Join.jsx';
 
 // No answer from the server (wifi with no internet, a restart) is not a
@@ -119,6 +120,7 @@ const ROUTE_AREA = [
   [/^\/voted/, 'people'],
   [/^\/requests/, 'people'],
   [/^\/field-report/, 'data'],
+  [/^\/path-to-win/, 'data'],
 ];
 function DeskOnly() {
   const ctx = useOutletContext();
@@ -230,6 +232,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/voted" element={<Voted />} />
           <Route path="/requests" element={<Requests />} />
           <Route path="/field-report" element={<FieldReport />} />
+          <Route path="/path-to-win" element={<PathToWin />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
