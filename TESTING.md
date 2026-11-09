@@ -226,7 +226,10 @@ one tap away under **More**.
   staffer's next tap shows the set-up and nothing else until it's on — so
   does a volunteer's once given an area under Permissions; a volunteer with
   no area still signs in with a password. *Reset two-step* on someone's
-  row signs them out and clears theirs.
+  row signs them out and clears theirs. Twenty wrong codes in a row (over
+  as many sign-ins as it takes) lock the codes from that person's app: the
+  sign-in says so, managers get an email and a line on Today, their row
+  says *Two-step locked*, and a recovery code signs in and unlocks it.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓
