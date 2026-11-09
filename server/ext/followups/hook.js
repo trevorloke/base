@@ -28,6 +28,8 @@
 //              organizer takes it, while nobody has reached them yet.
 //   4. leave   a teammate removed from the campaign: their open follow-ups
 //              go to whoever the rules pick now (a ladder's, to a manager).
+//              A teammate made a volunteer: a ladder's they had goes to a
+//              manager (a volunteer never holds one); the rest stay theirs.
 //
 // What the follow-ups write joins the chain with the write (as
 // 'ladder_followup' / 'door_request' events). A fault here never costs the
@@ -283,24 +285,34 @@ const rerouteOnPin = async (tx, meta, events, emits) => {
   }
 };
 
-// ── 4. someone leaves the team ──
+// ── 4. someone leaves the team, or is made a volunteer ──
 
-// Their open follow-ups go to whoever the rules pick now (they can no
-// longer see them); a ladder's own, to a manager.
+// Someone removed: their open follow-ups go to whoever the rules pick now
+// (they can no longer see them); a ladder's own, to a manager. Someone made
+// a volunteer (member.setRole): a ladder's own goes to a manager — a
+// volunteer never holds one (it can say they gave) — and their speed-to-lead
+// follow-ups stay theirs.
+const madeVolunteer = (e) => e.entityType === 'membership' && e.op === 'update' && e.payload?.role === 'volunteer';
 const handBack = async (tx, meta, events, emits) => {
   const ws = meta.workspaceId;
   const gone = events.filter((e) => e.entityType === 'membership' && e.op === 'void').map((e) => e.entityId);
-  if (!gone.length) return;
+  const volunteers = events.filter(madeVolunteer).map((e) => e.entityId).filter((id) => UUID.test(String(id || '')));
+  if (!gone.length && !volunteers.length) return;
   const rows = (await tx.query(
     `select id, person_id, kind, assigned_to from ladder_followups
-     where workspace_id = $1 and status = 'open' and assigned_to = any($2::uuid[]) for update`,
-    [ws, gone],
+     where workspace_id = $1 and status = 'open'
+       and (assigned_to = any($2::uuid[]) or (kind is null and assigned_to = any($3::uuid[])))
+     for update`,
+    [ws, gone, volunteers],
   )).rows;
   for (const f of rows) {
+    const left = gone.includes(f.assigned_to);
     const to = f.kind ? await routeFollowup(tx, ws, f.person_id) : await officeOf(tx, ws);
     await tx.query('update ladder_followups set assigned_to = $3, routed = $4 where id = $1 and workspace_id = $2',
       [f.id, ws, to?.userId || null, to?.userId ? to.routed : null]);
-    emits.push(['ladder_followup', f.id, 'update', { assigned_to: to?.userId || null, routed: to?.routed || null, from: f.assigned_to, reason: 'left' }]);
+    emits.push(['ladder_followup', f.id, 'update', {
+      assigned_to: to?.userId || null, routed: to?.routed || null, from: f.assigned_to, reason: left ? 'left' : 'role',
+    }]);
   }
 };
 
@@ -308,7 +320,8 @@ const handBack = async (tx, meta, events, emits) => {
 const touches = (e) => (e.op === 'create' && (e.entityType === 'site_action' || e.entityType === 'door_request'))
   || (e.entityType === 'contact' && (e.op === 'create' || e.op === 'update'))
   || (e.entityType === 'person' && e.op === 'update' && e.payload?.lat != null)
-  || (e.entityType === 'membership' && e.op === 'void');
+  || (e.entityType === 'membership' && e.op === 'void')
+  || madeVolunteer(e);
 
 export const onEvents = async (tx, meta, events) => {
   if (QUIET.has(meta.action) || !events.some(touches)) return;
