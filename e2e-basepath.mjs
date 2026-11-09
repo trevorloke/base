@@ -1,4 +1,4 @@
-// Ground under a client's path, as on base.win: BASE_PATH=/imaginesurrey.
+// base.win under a client's path: BASE_PATH=/imaginesurrey.
 // The field app at /imaginesurrey/field, the desk at /imaginesurrey/desk;
 // lazy screens load; the service worker's scope, the caches and every key
 // kept on the phone are the client's own; the sign-in cookie is kept to the

@@ -1,4 +1,4 @@
-// What this Base runs for: one organization per deployment. Each
+// What this base.win runs for: one organization per deployment. Each
 // client gets its own services and database; the campaign's name, rules
 // and place come from the environment, never from code:
 //
@@ -17,9 +17,6 @@
 //   STARBASE_CANDIDATES    "4D:McCallum:Opposed — Doug McCallum supporter;…"
 //                          — the opposed candidates a new rating scale starts
 //                          with (shared/scale.js); the desk edits them after
-//   BASE_WEB_URL           where Base Web (apps/web) runs, e.g.
-//                          https://imaginesurrey.ca/admin — the app switcher
-//                          links there (unset: the campaign's website + /admin)
 //   STARBASE_ENV           production | staging — said on screen and at
 //                          /api/health, so nobody mistakes one for the other
 //   STARBASE_BRAND         imagine-surrey | base — the look (lib/brand.js);
@@ -53,13 +50,10 @@ export const openSignupForced = () => process.env.STARBASE_OPEN_SIGNUP === '1';
 
 // Sign-up once the campaign is set up: name is the campaign's own, as it is
 // called now (routes/auth.js reads it), not necessarily STARBASE_ORG_NAME.
-export const setupClosedMessage = (name) => `Base is already set up for ${name || orgName() || 'this campaign'} — ask a manager to invite you.`;
+export const setupClosedMessage = (name) => `base.win is already set up for ${name || orgName() || 'this campaign'} — ask a manager to invite you.`;
 
 // What the app is told about this deployment (GET /api/auth/setup and /me).
-// Base Web, where it runs (an https address, or null).
-const appUrl = (k) => (/^https?:\/\/[^\s]+$/i.test(str(k)) ? str(k).replace(/\/+$/, '') : null);
-export const appsOut = () => ({ web: appUrl('BASE_WEB_URL') });
 export const orgOut = () => ({
   name: orgName(), jurisdiction: jurisdiction(), tz: timeZone(), city: city(), province: province(),
-  slates: SLATES, env: envName(), apps: appsOut(),
+  slates: SLATES, env: envName(),
 });

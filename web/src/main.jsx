@@ -4,12 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // app.css first: page stylesheets (imported by App's pages) must load after
 // the shared primitives so single-class page rules can override them.
 import './app.css';
-// Base's own look over the tokens, only where the page is marked
+// base.win's own look over the tokens, only where the page is marked
 // data-brand="base" (server/lib/brand.js); Imagine Surrey's is app.css as is.
 import './brand-base.css';
 import App from './App.jsx';
 import { ADMIN_BASE, FIELD_BASE, fieldHref, appMode } from './mode.js';
-import { ME_KEY, NoSignalError, noAnswer, savedSignIn } from './api.js';
+import { ME_KEY, NoSignalError, TWO_STEP_EVENT, noAnswer, savedSignIn } from './api.js';
 import { keptPersister, watchKeptCopies } from './components/KeptCopies.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { closeOutbox } from './offline.js';
@@ -109,6 +109,12 @@ if (typeof window !== 'undefined') {
       window.location.assign(appMode() === 'admin' ? (next ? `${ADMIN_BASE}/` : `${ADMIN_BASE}/login`) : fieldHref(next ? '/' : '/login'));
     }, 60);
   });
+}
+
+// Two-step sign-in became required for this person while the app was open
+// (api.js): who they are is asked again, and the set-up takes over (App.jsx).
+if (typeof window !== 'undefined') {
+  window.addEventListener(TWO_STEP_EVENT, () => { queryClient.invalidateQueries({ queryKey: ['me'] }); });
 }
 
 // /admin/… is the admin (the desk), everything else the field app (mode.js).

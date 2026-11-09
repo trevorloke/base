@@ -1,4 +1,4 @@
-// Where this Ground runs: '' at a site's root, or the client's path on a
+// Where this base.win runs: '' at a site's root, or the client's path on a
 // shared domain — '/imaginesurrey' on base.win (BASE_PATH on the server,
 // which writes window.__BASE__ into the page; server/lib/mount.js).
 //   at(path)     a path the server knows ('/api/…', '/learn/…') → where the

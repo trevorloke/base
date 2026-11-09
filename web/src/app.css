@@ -24,7 +24,7 @@
   --red-text: #c8151b;    /* red that reads as text on white */
   --cream: #f3ebda;
   /* The brand's own ink, the same in light and dark (map markers, a popup's
-     link): brand-base.css swaps them for Base's. */
+     link): brand-base.css swaps them for base.win's own. */
   --brand-ink: #003979;
   --brand-ink-2: #00224d;
   --brand-spark: #ffc72c;
@@ -321,7 +321,6 @@ h2 { font-size: 21px; }
 /* The star device at its natural width: 32px tall, the guidelines' minimum. */
 .brand-mark { width: auto; height: 32px; flex: none; display: block; }
 .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-admin { color: var(--gold); font-weight: 600; }
 .brand-name { font-family: var(--font-display); font-size: 19px; font-weight: 700; letter-spacing: 0.01em; }
 .brand-org { font-size: 12px; font-weight: 600; color: var(--gold); }
 /* Staging, said on every screen so nobody mistakes it for production. */
@@ -665,45 +664,3 @@ html:has(.auth-page) body { background: transparent; }
 .btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--link, var(--text-1)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .btn-link:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
 .name-note { margin: calc(-1 * var(--s-2, 8px)) 0 var(--s-3, 12px); font-size: 14px; }
-
-/* Base's apps (AppSwitcher): Ground here, Web a tap away. */
-.brand-app { font-weight: 500; opacity: 0.85; }
-.apps { position: relative; flex: none; }
-.apps-btn {
-  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
-  background: none; border: 0; border-radius: 10px; color: inherit; cursor: pointer;
-}
-@media (hover: hover) { .apps-btn:hover { background: var(--navy-2); } }
-.apps-btn:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
-.apps-panel {
-  position: absolute; left: 0; top: calc(100% + 6px); z-index: 960;
-  width: 300px; max-width: calc(100vw - 2 * var(--s-4));
-  background: var(--paper-0); color: var(--text-1);
-  border: var(--border); border-radius: 12px; box-shadow: var(--shadow-2);
-  padding: var(--s-1) 0; overflow: hidden;
-}
-.apps-panel[hidden] { display: none; }
-.apps-head { margin: 0; padding: var(--s-2) var(--s-4); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
-.apps-list { list-style: none; margin: 0; padding: 0; }
-.apps-item {
-  display: flex; flex-direction: column; gap: 2px; min-height: 52px; padding: var(--s-2) var(--s-4);
-  color: var(--text-1); text-decoration: none; border-top: 1px solid var(--rule);
-}
-.apps-item.is-here { box-shadow: inset 3px 0 0 var(--mark); }
-.apps-item.is-off { opacity: 0.6; }
-@media (hover: hover) { a.apps-item:hover { background: var(--paper-1); } }
-.apps-item:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
-.apps-name { font-weight: 700; font-size: 15px; }
-.apps-here { font-weight: 500; color: var(--text-3); }
-.apps-what { font-size: 13px; color: var(--text-3); }
-/* On a phone the panel spans the top bar (never past the screen's edge). */
-@media (max-width: 720px) {
-  .nav-inner { position: relative; }
-  .apps { position: static; }
-  .apps-panel { left: var(--s-3); right: var(--s-3); width: auto; max-width: none; }
-}
-/* In the desktop sidebar the panel is the sidebar's width (the sidebar clips). */
-@media (min-width: 721px) {
-  .apps { align-self: stretch; }
-  .apps-panel { left: 0; right: 0; width: auto; max-width: none; }
-}

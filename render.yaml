@@ -42,7 +42,7 @@ services:
         fromDatabase:
           name: starbase-staging-db
           property: connectionString
-      # Staging wears Base's own look and a made-up campaign name, so it can
+      # Staging wears base.win's own look and a made-up campaign name, so it can
       # be shown to anyone (server/lib/brand.js). The rules below — limits,
       # time zone, city, slates — are the client's, so staging tests what
       # production does.

@@ -4,5 +4,5 @@ web/dist
 data
 *.log
 e2e.mjs
-# Base Web deploys on its own (apps/web); the front door too (apps/door)
+# The website as it runs today deploys on its own (apps/web); the front door too (apps/door)
 apps

@@ -1,7 +1,8 @@
-// The front door: each client's paths go to that client's servers, as they
-// came; the client's name alone opens the field app; an unknown client, an
-// app a client doesn't have, and a server that isn't answering each get a
-// plain page; cookies, bodies and redirects pass through untouched.
+// The front door: each client's paths go to that client's server, as they
+// came; the client's name alone opens their public website; an old /web
+// link opens the desk's Website area; an unknown client and a server that
+// isn't answering each get a plain page; cookies, bodies and redirects pass
+// through untouched.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -21,66 +22,69 @@ const upstream = (name) => createServer((req, res) => {
     res.end(JSON.stringify({ name, url: req.url }));
   });
 });
-let ground, web, door, base;
+let server, door, base;
 const listen = (s) => new Promise((r) => s.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${s.address().port}`)));
 
 before(async () => {
-  ground = upstream('ground'); web = upstream('web');
-  const g = await listen(ground); const w = await listen(web);
+  server = upstream('server');
+  const s = await listen(server);
   const clients = readClients(JSON.stringify({
-    imaginesurrey: { name: 'Imagine Surrey', ground: g, web: w },
-    gone: { name: 'Gone Campaign', ground: 'http://127.0.0.1:9', web: { redirect: 'https://site.example.org/admin' } },
-    nosite: { name: 'No Site Campaign', ground: g },
+    imaginesurrey: { name: 'Imagine Surrey', server: s },
+    gone: { name: 'Gone Campaign', server: 'http://127.0.0.1:9' },
+    older: { name: 'Older Config', ground: s, web: { redirect: 'https://site.example.org/admin' } },
   }));
   door = createServer(handler(clients));
   base = await listen(door);
 });
-after(() => { for (const s of [ground, web, door]) s.close(); });
+after(() => { for (const s of [server, door]) s.close(); });
 
 const get = (path, init = {}) => fetch(`${base}${path}`, { redirect: 'manual', ...init });
 
-test('the client list: names and origins checked, ground required', () => {
-  assert.throws(() => readClients('{"Bad Name!": {"ground": "https://x.example"}}'), /usable name/);
-  assert.throws(() => readClients('{"a": {"ground": "https://x.example/path"}}'), /origin/);
-  assert.throws(() => readClients('{"a": {"web": "https://x.example"}}'), /needs a ground/);
+test('the client list: names and origins checked, a server required; older entries still read', () => {
+  assert.throws(() => readClients('{"Bad Name!": {"server": "https://x.example"}}'), /usable name/);
+  assert.throws(() => readClients('{"a": {"server": "https://x.example/path"}}'), /origin/);
+  assert.throws(() => readClients('{"a": {"name": "No Server"}}'), /needs a server/);
   assert.throws(() => readClients('not json'), /not JSON/);
-  const c = readClients('{"a": {"ground": "https://g.example/"}}');
-  assert.deepEqual(c.get('a'), { name: 'a', ground: { origin: 'https://g.example' }, web: null });
-  // An "air" entry left from before Base dropped Air is ignored, not an error.
-  assert.deepEqual(readClients('{"a": {"ground": "https://g.example", "air": "https://a.example"}}').get('a'), { name: 'a', ground: { origin: 'https://g.example' }, web: null });
-  assert.throws(() => readClients('{"a": {"ground": "https://g.example", "web": {"redirect": "javascript:alert(1)"}}}'), /https address/);
+  assert.deepEqual(readClients('{"a": {"server": "https://g.example/"}}').get('a'), { name: 'a', origin: 'https://g.example' });
+  // A config from before: "ground" is the server; "web" and "air" are ignored.
+  assert.deepEqual(readClients('{"a": {"ground": "https://g.example", "web": "https://w.example", "air": "https://a.example"}}').get('a'),
+    { name: 'a', origin: 'https://g.example' });
 });
 
-test('routes: field, desk, api and the rest to Ground; /web to Web', () => {
-  const c = readClients('{"x": {"ground": "https://g.example", "web": "https://w.example"}}');
-  assert.equal(route(c, '/x/field/map').upstream, 'https://g.example');
-  const r = readClients('{"x": {"ground": "https://g.example", "web": {"redirect": "https://site.example/admin"}}}');
-  assert.deepEqual(route(r, '/x/web'), { redirect: 'https://site.example/admin', away: true });
-  assert.deepEqual(route(r, '/x/web/people/1'), { redirect: 'https://site.example/admin/people/1', away: true });
-  assert.equal(route(c, '/x/desk/people').upstream, 'https://g.example');
-  assert.equal(route(c, '/x/api/health').upstream, 'https://g.example');
-  assert.equal(route(c, '/x/web').upstream, 'https://w.example');
-  assert.equal(route(c, '/x/web/admin').upstream, 'https://w.example');
-  assert.equal(route(c, '/x/webinar').app, 'ground', 'only /web itself is Web');
-  assert.equal(route(c, '/x/air/queue').app, 'ground', 'no Air any more: an old /air link is Ground’s (it opens the field app)');
-  assert.deepEqual(route(c, '/x'), { redirect: '/x/field/' });
+test('routes: the name alone is the website; site, field, desk, api and the rest go to the server', () => {
+  const c = readClients('{"x": {"server": "https://g.example"}}');
+  assert.deepEqual(route(c, '/x'), { redirect: '/x/site/' });
+  assert.deepEqual(route(c, '/x/'), { redirect: '/x/site/' });
+  assert.deepEqual(route(c, '/X'), { redirect: '/x/site/' });
+  for (const p of ['/x/site/', '/x/site/news/hello', '/x/field/map', '/x/desk/people', '/x/api/health', '/x/webinar']) {
+    assert.equal(route(c, p).upstream, 'https://g.example', p);
+  }
   assert.deepEqual(route(c, '/X/desk'), { redirect: '/x/desk' });
+  // No more Web: its back office is the desk's Website area.
+  assert.deepEqual(route(c, '/x/web'), { redirect: '/x/desk/website' });
+  assert.deepEqual(route(c, '/x/web/admin/pages'), { redirect: '/x/desk/website' });
+  assert.equal(route(c, '/x/air/queue').upstream, 'https://g.example', 'an old /air link is the server’s (it opens the app)');
   assert.equal(route(c, '/nobody/field'), null);
 });
 
-test('a request goes to the client’s Ground with its path as it came', async () => {
+test('a request goes to the client’s server with its path as it came', async () => {
   const r = await get('/imaginesurrey/field/map?turf=1');
   assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { name: 'ground', url: '/imaginesurrey/field/map?turf=1' });
-  const w = await get('/imaginesurrey/web/admin');
-  assert.deepEqual(await w.json(), { name: 'web', url: '/imaginesurrey/web/admin' });
-  assert.equal(seen.at(-1).fwdHost, new URL(base).host, 'the app is told the address people used');
+  assert.deepEqual(await r.json(), { name: 'server', url: '/imaginesurrey/field/map?turf=1' });
+  const site = await get('/imaginesurrey/site/news');
+  assert.deepEqual(await site.json(), { name: 'server', url: '/imaginesurrey/site/news' });
+  assert.equal(seen.at(-1).fwdHost, new URL(base).host, 'the server is told the address people used');
+  const older = await get('/older/desk/');
+  assert.deepEqual(await older.json(), { name: 'server', url: '/older/desk/' });
 });
 
-test('the client’s name alone opens the field app', async () => {
+test('the client’s name alone opens their public website', async () => {
   const r = await get('/imaginesurrey?from=poster');
   assert.equal(r.status, 302);
-  assert.equal(r.headers.get('location'), '/imaginesurrey/field/?from=poster');
+  assert.equal(r.headers.get('location'), '/imaginesurrey/site/?from=poster');
+  const w = await get('/older/web/people?x=1');
+  assert.equal(w.status, 302);
+  assert.equal(w.headers.get('location'), '/older/desk/website?x=1', 'an old Web link: the desk’s Website area');
 });
 
 test('a sign-in: the body goes up, the cookies and the redirect come back untouched', async () => {
@@ -92,21 +96,19 @@ test('a sign-in: the body goes up, the cookies and the redirect come back untouc
   assert.deepEqual([s.method, s.body, s.cookie], ['POST', '{"email":"a@example.org"}', 'old=1']);
 });
 
-test('nobody at that name, an app the client doesn’t have, a server not answering: a plain page each', async () => {
+test('nobody at that name, a server not answering: a plain page each, saying base.win', async () => {
   const none = await get('/nobody/field/');
   assert.equal(none.status, 404);
-  assert.match(await none.text(), /no Base at this address/);
-  const noWeb = await get('/nosite/web/');
-  assert.equal(noWeb.status, 404);
-  assert.match(await noWeb.text(), /No Site Campaign doesn’t have Base Web yet/);
-  const away = await get('/gone/web/people?x=1');
-  assert.equal(away.status, 302);
-  assert.equal(away.headers.get('location'), 'https://site.example.org/admin/people?x=1', 'Web where it runs, the rest of the path after it');
+  const noneText = await none.text();
+  assert.match(noneText, /no campaign at this address on base\.win/);
   const down = await get('/gone/field/');
   assert.equal(down.status, 502);
-  assert.match(await down.text(), /Gone Campaign’s Base isn’t answering/);
+  assert.match(await down.text(), /Gone Campaign isn’t answering on base\.win/);
   const home = await get('/');
   assert.equal(home.status, 200);
-  assert.doesNotMatch(await home.text(), /imaginesurrey/i, 'the home page lists no campaigns');
+  const homeText = await home.text();
+  assert.match(homeText, /<title>base\.win<\/title>/);
+  assert.doesNotMatch(homeText, /imaginesurrey/i, 'the home page lists no campaigns');
+  for (const t of [noneText, homeText]) assert.doesNotMatch(t, /\bGround\b|\bAir\b|Base Web/, 'one name: base.win');
   assert.equal((await (await get('/healthz')).json()).ok, true);
 });

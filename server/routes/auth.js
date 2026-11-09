@@ -16,6 +16,10 @@ import {
 } from '../lib/auth.js';
 import { JURISDICTIONS, orgName, jurisdiction, timeZone, openSignupForced, setupClosedMessage, orgOut } from '../lib/org.js';
 import { clientIp, makeLimiter, crossSiteWrite } from '../lib/guard.js';
+import {
+  checkCode, codeFails, CODE_FAILS_MAX, endPending, findPending, missPending, PENDING_COOKIE, PENDING_MINUTES,
+  recoveryHashFor, startPending, twoStepOut, twoStepRow,
+} from '../lib/twostep.js';
 
 const app = new Hono();
 
@@ -71,6 +75,34 @@ class SetupClosed extends Error {}
 const clientWorkspace = (ws) => {
   const { sample, ...settings } = ws.settings || {};
   return { ...ws, settings: sample ? { ...settings, sample: { loaded: true } } : settings };
+};
+
+// Who is signed in, as every sign-in answer and /me says it: the person,
+// the campaign, the role and areas, the deployment, and two-step sign-in
+// (on; required for their role; still to set up — lib/twostep.js).
+const meOut = (ctx) => ({
+  user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut(),
+  two_step: twoStepOut(ctx),
+});
+
+// Two-step sign-in: the code after the password. The ticket for it is a
+// cookie of its own, alive for ten minutes; the session comes only with
+// the right code.
+const pendingCookie = { ...cookieOpts, maxAge: PENDING_MINUTES * 60 };
+const NO_MATCH = 'That code doesn’t match. Codes change every 30 seconds and each works once: type the newest one, or one of your recovery codes.';
+const TOO_MANY_CODES = 'Too many wrong codes — wait 15 minutes, then try again.';
+
+// The code, checked under the campaign's write lock (lib/events.js) so a
+// recovery code spent at sign-in is on the record. The slow hash of a
+// recovery code is made first, outside any lock.
+const signInCode = async (db, { userId, workspaceId }, code) => {
+  const hash = await recoveryHashFor(db, userId, code);
+  const { result } = await runAction(db, { workspaceId, actorId: userId, action: 'twostep.signin' }, async (tx, emit) => {
+    const r = await checkCode(tx, userId, code, { hash });
+    if (r.used === 'recovery') emit('two_step', userId, 'update', { recovery_code_used: true, recovery_left: r.left });
+    return r;
+  });
+  return result;
 };
 
 // URL slug for the workspace's public pages (/p/:slug/…, /n/:slug, /v/:slug).
@@ -142,7 +174,7 @@ app.post('/signup', async (c) => {
   const token = await createSession(db, userId, workspaceId);
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
   const ctx = await loadContext(db, token);
-  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() }, 201);
+  return c.json(meOut(ctx), 201);
 });
 
 app.post('/login', async (c) => {
@@ -172,10 +204,56 @@ app.post('/login', async (c) => {
     [user.id],
   )).rows[0];
   if (!membership) return c.json({ error: 'no workspace membership' }, 403);
+  // Two-step sign-in on: the code next (POST /login/code), no session yet.
+  if ((await twoStepRow(db, user.id))?.on_since) {
+    setCookie(c, PENDING_COOKIE, await startPending(db, user.id, membership.workspace_id), pendingCookie);
+    return c.json({ two_step: 'code' });
+  }
   const token = await createSession(db, user.id, membership.workspace_id);
   setCookie(c, SESSION_COOKIE, token, cookieOpts);
   const ctx = await loadContext(db, token);
-  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() });
+  return c.json(meOut(ctx));
+});
+
+// The second step: a code from the app, or one of the recovery codes. Five
+// wrong codes and the password is asked again; ten for one person in 15
+// minutes and they wait (sign-in's own limit from one address counts too).
+app.post('/login/code', async (c) => {
+  const db = await getDb();
+  if (triesFrom(clientIp(c))) return c.json({ error: TOO_MANY }, 429);
+  const pending = await findPending(db, getCookie(c, PENDING_COOKIE));
+  if (!pending) {
+    deleteCookie(c, PENDING_COOKIE, { path: '/' });
+    return c.json({ error: 'That took too long — sign in again.', two_step: 'again' }, 401);
+  }
+  const who = `user:${pending.user_id}`;
+  if (codeFails.count(who) >= CODE_FAILS_MAX) return c.json({ error: TOO_MANY_CODES }, 429);
+  const { code } = await c.req.json().catch(() => ({}));
+  const typed = String(code ?? '').slice(0, 40);
+  const r = typed.trim() ? await signInCode(db, { userId: pending.user_id, workspaceId: pending.workspace_id }, typed) : { used: null };
+  if (!r.used) {
+    codeFails(who);
+    const left = await missPending(db, pending.token_hash);
+    if (!left) {
+      deleteCookie(c, PENDING_COOKIE, { path: '/' });
+      return c.json({ error: 'Too many wrong codes — sign in again.', two_step: 'again' }, 401);
+    }
+    return c.json({
+      error: r.unreadable
+        ? 'Codes from your app can’t be checked on this server any more. Type one of your recovery codes, or ask a manager to reset your two-step sign-in.'
+        : NO_MATCH,
+      two_step: 'code', tries_left: left,
+    }, 401);
+  }
+  codeFails.clear(who);
+  await endPending(db, pending.token_hash);
+  deleteCookie(c, PENDING_COOKIE, { path: '/' });
+  const token = await createSession(db, pending.user_id, pending.workspace_id);
+  const ctx = await loadContext(db, token);
+  // Removed from the campaign between the password and the code.
+  if (!ctx) { await destroySession(db, token); return c.json({ error: 'no workspace membership' }, 403); }
+  setCookie(c, SESSION_COOKIE, token, cookieOpts);
+  return c.json({ ...meOut(ctx), ...(r.used === 'recovery' ? { recovery_left: r.left } : {}) });
 });
 
 // ── Invites: look up, then join (new account, or an existing one by password) ──
@@ -198,6 +276,8 @@ const joinInput = z.object({
   token: z.string().min(10).max(200),
   name: z.string().trim().min(1).max(200).optional(),
   password: z.string().min(8).max(200),
+  // An existing account with two-step sign-in on: its code too.
+  code: z.string().trim().max(40).optional(),
 });
 
 app.post('/join', async (c) => {
@@ -211,7 +291,22 @@ app.post('/join', async (c) => {
 
   let user = (await db.query('select id, password_hash from users where email = $1', [inv.email])).rows[0];
   if (user && !(await verifyPassword(password, user.password_hash))) {
-    return c.json({ error: 'that password does not match your existing Base account' }, 401);
+    return c.json({ error: 'that password does not match your existing base.win account' }, 401);
+  }
+  // An account with two-step sign-in on joins with its code as well — the
+  // password alone never opens it (the invite isn't used up meanwhile).
+  if (user && (await twoStepRow(db, user.id))?.on_since) {
+    const who = `user:${user.id}`;
+    if (codeFails.count(who) >= CODE_FAILS_MAX) return c.json({ error: TOO_MANY_CODES }, 429);
+    if (!parsed.data.code) return c.json({ error: 'Type the code from your authenticator app.', two_step: 'code' }, 401);
+    const r = await signInCode(db, { userId: user.id, workspaceId: (await db.query(
+      'select workspace_id from memberships where user_id = $1 order by created_at limit 1', [user.id],
+    )).rows[0]?.workspace_id || inv.workspace_id }, parsed.data.code);
+    if (!r.used) {
+      codeFails(who);
+      return c.json({ error: NO_MATCH, two_step: 'code' }, 401);
+    }
+    codeFails.clear(who);
   }
   if (!user && !name) return c.json({ error: 'name required' }, 400);
   const userId = user?.id || newId();
@@ -235,7 +330,7 @@ app.post('/join', async (c) => {
   const sessionToken = await createSession(db, userId, inv.workspace_id);
   setCookie(c, SESSION_COOKIE, sessionToken, cookieOpts);
   const ctx = await loadContext(db, sessionToken);
-  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() });
+  return c.json(meOut(ctx));
 });
 
 app.post('/logout', async (c) => {
@@ -249,7 +344,7 @@ app.get('/me', async (c) => {
   const db = await getDb();
   const ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
-  return c.json({ user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut() });
+  return c.json(meOut(ctx));
 });
 
 export default app;

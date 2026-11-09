@@ -1,0 +1,166 @@
+// Two-step sign-in, your own and the campaign's (lib/twostep.js).
+//
+//   twostep.start              set it up (or start over): a new key, not on
+//                              yet → { setup: { key, grouped, uri, qr } }
+//   twostep.confirm { code }   the app's first code turns it on → the ten
+//                              recovery codes, shown this once; your other
+//                              devices sign in again (with a code)
+//   twostep.off { code }       turn it off: a code from the app, or a
+//                              recovery code
+//   twostep.codes { code }     new recovery codes (a code from the app); the
+//                              old ones stop working
+//   twostep.reset { user_id }  managers: someone lost their phone — theirs
+//                              is cleared and they're signed out everywhere;
+//                              they sign in with their password (and set it
+//                              up again, when it's required for their role)
+//   twostep.require { on }     managers: require it for desk roles (manager,
+//                              treasurer, staff); a manager's own must be on
+//                              first
+//
+// Wrong codes count (lib/twostep.js codeFails): ten in 15 minutes, then a
+// pause. Nothing secret goes on the event log — only that it was turned on,
+// off, reset, or its recovery codes made again.
+import { z } from 'zod';
+import { httpError } from '../../actions/util.js';
+import {
+  base32Decode, checkCode, codeFails, CODE_FAILS_MAX, hashRecoveryCode, newRecoveryCodes, newRecoverySalt,
+  newTotpSecret, openSecret, recoveryHashFor, requiredFor, sealSecret, setupFor, twoStepRow, verifyTotp,
+} from '../../lib/twostep.js';
+
+const EVERYONE = ['manager', 'treasurer', 'staff', 'volunteer'];
+const MANAGER = ['manager'];
+const code = () => z.object({ code: z.string().trim().min(1).max(40) });
+const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
+
+export const TOO_MANY_CODES = 'too many wrong codes — wait 15 minutes, then try again';
+const NO_MATCH = 'that code doesn’t match — type the newest code your app shows';
+
+// How the app names this account in the authenticator: the campaign, on base.win.
+export const issuerFor = (ctx) => `${String(ctx.workspace?.name || 'Campaign').slice(0, 40)} (base.win)`;
+
+// A wrong code counts against the person (whatever they were doing).
+const guard = (ctx) => {
+  if (codeFails.count(`user:${ctx.user.id}`) >= CODE_FAILS_MAX) throw httpError(429, TOO_MANY_CODES);
+};
+const missed = (ctx, message = NO_MATCH) => {
+  codeFails(`user:${ctx.user.id}`);
+  return httpError(400, message);
+};
+
+// Ten new recovery codes, and what's kept of them (hashes, one salt).
+const freshCodes = async () => {
+  const codes = newRecoveryCodes();
+  const salt = newRecoverySalt();
+  return { codes, salt, hashes: await Promise.all(codes.map((c) => hashRecoveryCode(c, salt))) };
+};
+
+export const actions = {
+  'twostep.start': {
+    roles: EVERYONE,
+    input: z.object({}).passthrough(),
+    handler: async (tx, ctx) => {
+      const row = await twoStepRow(tx, ctx.user.id, { lock: true });
+      if (row?.on_since) throw httpError(409, 'two-step sign-in is already on');
+      const secret = newTotpSecret();
+      await tx.query(
+        `insert into two_step (user_id, secret) values ($1, $2)
+         on conflict (user_id) do update set secret = excluded.secret, on_since = null, recovery = '[]',
+           recovery_salt = null, last_step = null, updated_at = now()`,
+        [ctx.user.id, await sealSecret(tx, secret)],
+      );
+      return { setup: setupFor(secret, { account: ctx.user.email, issuer: issuerFor(ctx) }) };
+    },
+  },
+
+  'twostep.confirm': {
+    roles: EVERYONE,
+    input: code(),
+    handler: async (tx, ctx, input, emit) => {
+      guard(ctx);
+      const row = await twoStepRow(tx, ctx.user.id, { lock: true });
+      if (row?.on_since) throw httpError(409, 'two-step sign-in is already on');
+      const open = row?.secret ? await openSecret(tx, row.secret) : null;
+      if (!open) throw httpError(409, 'start setting it up again — the key on your screen has expired');
+      const step = verifyTotp(base32Decode(open.plain), input.code, { afterStep: row.last_step == null ? null : Number(row.last_step) });
+      if (step === null) throw missed(ctx, 'that code doesn’t match — check the app has the key on this screen, then type the newest code it shows');
+      const { codes, salt, hashes } = await freshCodes();
+      await tx.query(
+        `update two_step set on_since = now(), last_step = $2, recovery = $3, recovery_salt = $4, updated_at = now()
+         where user_id = $1`,
+        [ctx.user.id, step, JSON.stringify(hashes), salt],
+      );
+      // Signed in elsewhere with a password alone: those devices sign in
+      // again, with a code. This one stays signed in.
+      const ended = await tx.query('delete from sessions where user_id = $1 and token_hash <> $2', [ctx.user.id, ctx.session || '']);
+      emit('two_step', ctx.user.id, 'create', { on: true });
+      return { on: true, recovery_codes: codes, signed_out_elsewhere: ended.affectedRows };
+    },
+  },
+
+  'twostep.off': {
+    roles: EVERYONE,
+    input: code(),
+    handler: async (tx, ctx, input, emit) => {
+      guard(ctx);
+      const row = await twoStepRow(tx, ctx.user.id);
+      if (!row?.on_since) throw httpError(409, 'two-step sign-in isn’t on');
+      const r = await checkCode(tx, ctx.user.id, input.code, { hash: await recoveryHashFor(tx, ctx.user.id, input.code) });
+      if (!r.used) {
+        throw missed(ctx, r.unreadable
+          ? 'your app’s codes can’t be checked on this server any more — use one of your recovery codes'
+          : 'that code doesn’t match — use the newest code from your app, or one of your recovery codes');
+      }
+      await tx.query('delete from two_step where user_id = $1', [ctx.user.id]);
+      emit('two_step', ctx.user.id, 'void', { turned_off: true, with: r.used === 'recovery' ? 'recovery code' : 'app' });
+      return { on: false, must_set_up: requiredFor(ctx.role, ctx.workspace?.settings) };
+    },
+  },
+
+  'twostep.codes': {
+    roles: EVERYONE,
+    input: code(),
+    handler: async (tx, ctx, input, emit) => {
+      guard(ctx);
+      const r = await checkCode(tx, ctx.user.id, input.code, { allowRecovery: false });
+      if (!r.used) throw missed(ctx, r.unreadable ? 'your app’s codes can’t be checked on this server any more' : 'that code doesn’t match — type the newest code from your app');
+      const { codes, salt, hashes } = await freshCodes();
+      await tx.query('update two_step set recovery = $2, recovery_salt = $3, updated_at = now() where user_id = $1',
+        [ctx.user.id, JSON.stringify(hashes), salt]);
+      emit('two_step', ctx.user.id, 'update', { recovery_codes: 'made again' });
+      return { recovery_codes: codes };
+    },
+  },
+
+  'twostep.reset': {
+    roles: MANAGER,
+    input: z.object({ user_id: z.uuid() }),
+    handler: async (tx, ctx, input, emit) => {
+      if (input.user_id === ctx.user.id) throw httpError(400, 'to turn off your own, use Your profile');
+      const member = (await tx.query('select 1 from memberships where user_id = $1 and workspace_id = $2', [input.user_id, ctx.workspaceId])).rows[0];
+      if (!member) throw httpError(404, 'member not found');
+      const n = await tx.query('delete from two_step where user_id = $1', [input.user_id]);
+      if (n.affectedRows === 0) throw httpError(404, 'they don’t use two-step sign-in');
+      // A lost phone: signed out everywhere, and a sign-in waiting for a code ends.
+      await tx.query('delete from sessions where user_id = $1 and workspace_id = $2', [input.user_id, ctx.workspaceId]);
+      await tx.query('delete from two_step_pending where user_id = $1', [input.user_id]);
+      emit('two_step', input.user_id, 'void', { reset: true });
+      return { user_id: input.user_id };
+    },
+  },
+
+  'twostep.require': {
+    roles: MANAGER,
+    input: z.object({ on: z.boolean() }),
+    handler: async (tx, ctx, input, emit) => {
+      if (input.on && !(await twoStepRow(tx, ctx.user.id))?.on_since) {
+        throw httpError(409, 'turn on two-step sign-in for yourself first (Your profile)');
+      }
+      const cur = (await tx.query('select settings from workspaces where id = $1', [ctx.workspaceId])).rows[0];
+      const settings = parseJ(cur.settings, {});
+      if (input.on) settings.twoStepRequired = true; else delete settings.twoStepRequired;
+      await tx.query('update workspaces set settings = $2 where id = $1', [ctx.workspaceId, JSON.stringify(settings)]);
+      emit('workspace', ctx.workspaceId, 'update', { two_step_required: input.on });
+      return { required: input.on };
+    },
+  },
+};

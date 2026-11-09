@@ -61,6 +61,8 @@ const Voted = lazy(() => import('./pages/Voted.jsx'));
 const Requests = lazy(() => import('./pages/Requests.jsx'));
 const FieldReport = lazy(() => import('./pages/FieldReport.jsx'));
 import Join from './pages/Join.jsx';
+import { TwoStepRequired } from './components/TwoStep.jsx';
+const Profile = lazy(() => import('./pages/Profile.jsx'));
 
 // No answer from the server (wifi with no internet, a restart) is not a
 // sign-out: the app opens as who signed in here (main.jsx), on the copies
@@ -77,6 +79,9 @@ function RequireAuth({ mode }) {
   });
   if (me.isLoading) return null;
   if (me.isError && !(noAnswer(me.error) && me.data)) return <Navigate to="/login" replace />;
+  // The campaign requires two-step sign-in for this role and it isn't on
+  // yet: its set-up stands before everything else (components/TwoStep.jsx).
+  if (me.data?.two_step?.must_set_up) return <TwoStepRequired me={me.data} />;
   if (mode === 'admin' && me.data?.user && !mayAdmin(me.data)) return <NotForYou me={me.data} />;
   return <Shell me={me.data} mode={mode} />;
 }
@@ -85,7 +90,7 @@ function RequireAuth({ mode }) {
 function NotForYou({ me }) {
   return (
     <div className="auth-page">
-      <span className="brand">Base Ground Admin</span>
+      <span className="brand">base.win</span>
       <span className="brand-org">{me?.workspace?.name}</span>
       <h1>Not for your role</h1>
       <p className="muted">The admin is the campaign office’s. You are signed in as {me?.user?.name} (volunteer) — your app is the field app.</p>
@@ -159,6 +164,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/inbox" element={<TextingInbox />} />
           <Route path="/inbox/:id" element={<TextingThread />} />
           <Route path="/my-people" element={<MyPeople />} />
+          <Route path="/profile" element={<Profile />} />
         <Route path="/mainstreet" element={<Mainstreet />} />
           <Route path="/mainstreet" element={<Mainstreet />} />
           <Route path="/imagineu" element={<ImagineU />} />
@@ -190,6 +196,7 @@ export default function App({ mode = 'field' }) {
         <Route path="/inbox" element={<TextingInbox />} />
         <Route path="/inbox/:id" element={<TextingThread />} />
         <Route path="/my-people" element={<MyPeople />} />
+        <Route path="/profile" element={<Profile />} />
         <Route path="/imagineu" element={<ImagineU />} />
         <Route path="/imagineu/:id" element={<ImagineU />} />
         <Route path="/banks" element={<Banks />} />

@@ -1,6 +1,6 @@
 // Which look this deployment wears (shared/brand.js BRANDS): Imagine
-// Surrey's own, or Base's generic one. Production for Imagine Surrey wears
-// theirs; staging, and any other campaign, wears Base's.
+// Surrey's own, or base.win's generic one. Production for Imagine Surrey wears
+// theirs; staging, and any other campaign, wears base.win's.
 //
 //   STARBASE_BRAND   imagine-surrey | base. Unset, it is worked out, so a
 //                    deployment that never heard of this setting looks as it

@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { getDb } from '../db/client.js';
 import { loadContext, SESSION_COOKIE } from '../lib/auth.js';
+import { openWhileSettingUp, SETUP_FIRST } from '../lib/twostep.js';
 import { runAction, verifyChain } from '../lib/events.js';
 import { ACTIONS, httpError } from '../actions/index.js';
 import { tierFor } from '../lib/tiers.js';
@@ -47,6 +48,12 @@ app.use('*', async (c, next) => {
   const db = await getDb();
   const ctx = await loadContext(db, getCookie(c, SESSION_COOKIE));
   if (!ctx) return c.json({ error: 'not signed in' }, 401);
+  // Two-step sign-in the campaign requires for this role and not set up yet
+  // (lib/twostep.js): the set-up answers, nothing else does. 401, so the
+  // phone keeps anything still to send until it's done.
+  if (ctx.twoStep?.mustSetUp && !openWhileSettingUp(c.req.method, c.req.path)) {
+    return c.json({ error: SETUP_FIRST, two_step: 'set_up' }, 401);
+  }
   // Public base URL for links in outbound mail (unsubscribe).
   ctx.publicUrl = (process.env.STARBASE_PUBLIC_URL || `${new URL(c.req.url).origin}${c.env?.base || ''}`).replace(/\/$/, '');
   c.set('db', db);

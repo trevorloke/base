@@ -25,10 +25,19 @@ export const personsWhere = async (db, ctx, query = {}) => {
   const ownEmail = `($5::text <> '' and lower(p.email) = $5::text)`;
   params.push(`%${q.replace(/^@|^\/?u\//i, '').replace(/[%_\\]/g, (m) => '\\' + m)}%`);
   const handleLike = `$${params.length}`;
+  // A phone number typed any way — 604 555 0142, (604) 555-0142, +1 604… —
+  // finds it however it was saved: digits against digits.
+  let digits = /^[\d\s().+-]+$/.test(q) ? q.replace(/\D/g, '') : '';
+  if (digits.length === 11 && digits.startsWith('1')) digits = digits.slice(1);
+  let phoneDigits = '';
+  if (digits.length >= 4) {
+    params.push(`%${digits}%`);
+    phoneDigits = ` or regexp_replace(coalesce(p.phone, ''), '[^0-9]', '', 'g') like $${params.length}`;
+  }
   // $5 is typed here even when nothing else reads it (a desk query), or
   // the database can't tell what it is.
   let where = `p.workspace_id = $1 and p.deleted_at is null and $4::int is not null and $5::text is not null
-       and ($2 = '' or p.name ilike $3 or p.address ilike $3 or p.phone ilike $3
+       and ($2 = '' or p.name ilike $3 or p.address ilike $3 or p.phone ilike $3${phoneDigits}
             or (p.email ilike $3${vol ? ` and ${ownEmail}` : ''})
             or exists (select 1 from jsonb_each_text(p.socials) s
                        where regexp_replace(s.value, '^@|^/?u/', '', 'i') ilike ${handleLike}))`;
