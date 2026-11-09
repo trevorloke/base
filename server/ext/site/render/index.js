@@ -36,7 +36,17 @@ function islandScript(ctx, loc) {
   return null;
 }
 
-export function renderSite({ kind = 'page', site, page, post, campaign, data, ctx = {} } = {}) {
+// A page is { id, slug, title, description, modules }; a site_pages row as
+// it is ({ …, draft, published }) works too — the draft in a preview.
+function pageOf(page, preview) {
+  if (!page || typeof page !== 'object' || Array.isArray(page.modules)) return page;
+  const content = preview ? page.draft || page.published : page.published || page.draft;
+  if (!content || typeof content !== 'object') return page;
+  return { ...page, title: content.title ?? page.title, description: content.description ?? page.description, modules: content.modules };
+}
+
+export function renderSite({ kind = 'page', site, page: rawPage, post, campaign, data, ctx = {} } = {}) {
+  const page = pageOf(rawPage, Boolean(ctx?.preview));
   let k = KINDS.has(kind) ? kind : 'notFound';
   if ((k === 'page' && !page) || (k === 'post' && !post) || (k === 'campaign' && !campaign)) k = 'notFound';
   const rc = renderContext({ kind: k, site, page, post, campaign, data, ctx });

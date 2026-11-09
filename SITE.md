@@ -161,7 +161,8 @@ site.org          { name, short_name?, email, phone, address, authorization (the
                   "Authorized by …" line), privacy_url, time_zone? }
 site.social       [{ name, handle, url, cta? }]   (or { accounts: [...] })
 page              { id, slug, title, description, modules }  — the published (or draft)
-                  content with the row's id and slug
+                  content with the row's id and slug; a site_pages row as it is
+                  ({ …, draft, published }) works too, the draft when ctx.preview
 post              { slug, title, excerpt, body (Markdown), image: { url, alt }, published_at }
 campaign          { id, slug, kind, title, excerpt, body (Markdown), statement, goal,
                   count?, status }  — count, else data.campaigns[id].count, else

@@ -253,6 +253,19 @@ test('templates: post, campaign, not found, preview', () => {
   assert.ok(!preview.html.includes('rel="canonical"'), 'a draft has no canonical');
 });
 
+test('a site_pages row as it is: published, or the draft in a preview', () => {
+  const row = { id: 'row1', slug: 'about', status: 'published',
+    published: { title: 'Published title', description: 'Live.', modules: [mod('text', 'live01', { title: 'Live words', body: '', cta: {}, tone: 'paper' })] },
+    draft: { title: 'Draft title', description: 'Not yet.', modules: [mod('text', 'draft1', { title: 'Draft words', body: '', cta: {}, tone: 'paper' })] } };
+  const live = renderSite({ kind: 'page', site: site(), page: row, data, ctx: {} });
+  assert.match(live.html, /<h1 class="display">Published title<\/h1>/);
+  assert.ok(live.html.includes('id="m-live01"') && !live.html.includes('m-draft1'));
+  assert.match(live.html, /<input type="hidden" name="page_id"|data-module="text" id="m-live01"/);
+  const preview = renderSite({ kind: 'page', site: site(), page: row, data, ctx: { preview: true } });
+  assert.match(preview.html, /<h1 class="display">Draft title<\/h1>/);
+  assert.ok(preview.html.includes('id="m-draft1"') && !preview.html.includes('m-live01'));
+});
+
 test('a page whose first module isn’t a hero gets the page head (one h1)', () => {
   const { html } = render({ modules: [mod('text', 'txt001', { title: 'Hello', body: 'Body', cta: {}, tone: 'paper' })] });
   assert.match(html, /<section class="section tone-brand on-dark page-head">[\s\S]*?<h1 class="display">About<\/h1>[\s\S]*?<p class="lede">About us\.<\/p>/);
