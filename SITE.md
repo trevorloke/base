@@ -391,8 +391,9 @@ Additions to the renderer's input (additive to "Rendering" above):
 consent boxes, and beside the newsletter's button (sending it is the yes
 to email); the server stores them with each consent event, and the
 renderer shows them as they are (without them it makes the same words the
-same way, `shared/site/wording.js`). `ctx.error` (after a plain post: the field to fix, or `busy` — too
-many from one address — or `payments` — online payments aren't set up)
+same way, `shared/site/wording.js`). `ctx.error` (after a plain post: the
+field to fix, or `busy` — too many from one address — or `payments` —
+online payments aren't set up)
 and `ctx.cancelled` (`join`/`donate`, back from the checkout without
 paying). `ctx.root` ('' on the campaign's own domain, '/site' elsewhere)
 and `ctx.assets` ('/site-assets') already carry a client's path

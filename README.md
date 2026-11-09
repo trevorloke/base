@@ -419,9 +419,10 @@ council or school board (`shared/canvass.js` SLATES) — and the annual limit
 is checked per contributor per slate.
 
 Gifts and membership dues paid online come through the website's donate and
-join forms and Stripe's own checkout page (`server/ext/payments`): the
-limit is checked before the page opens and again when the payment lands
-(over it, refunded through Stripe and flagged for the treasurer); each
+join forms and Stripe's own checkout page (`server/ext/payments`): what no
+one may give is refused before the page opens, and the donor's own limit is
+checked when the payment lands (over it, refunded through Stripe and
+flagged for the treasurer); each
 payment becomes a gift through the same path as the desk's, marked online,
 with its receipt; a monthly gift is a pledge, each month its own gift.
 

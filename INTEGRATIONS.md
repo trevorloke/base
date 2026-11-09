@@ -206,12 +206,15 @@ one webhook.
 What happens:
 
 - **Before Stripe's page opens**, the website's form has recorded the
-  person; base.win checks the eligibility declaration was ticked and that
-  the amount fits what this person may still give this year on that slate —
-  the desk's own limit rule, plus their monthly gifts already running (a new
-  monthly gift counts each payment left this year, and must fit a whole year
-  beside the others). Over it, the form says so in plain words — never what
-  they have given — and Stripe is never asked.
+  person (money only ever lands on the same email's record, or on someone
+  new's) and the checkout, in one write; Stripe is asked only after it, so
+  no other write in the campaign ever waits on Stripe. base.win checks the
+  eligibility declaration was ticked and refuses what no one may give —
+  more than this year's limit at once, or a monthly gift over a twelfth of
+  it — in plain words, and Stripe is never asked. What this person gave
+  before is never asked here (the form would tell anyone who typed their
+  name): it is checked when the payment lands. Stripe's page starts with
+  the email the visitor typed, never the one on file.
 - **When the payment lands** (Stripe's webhook), it becomes a gift exactly
   as the desk logs one: method card, marked *online*, the declaration kept
   with it, the limit checked, the receipt issued and emailed by itself.
