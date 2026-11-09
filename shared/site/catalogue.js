@@ -273,7 +273,8 @@ export function newModule(kind, id) {
 // limits, unknown keys dropped and missing ones filled from the defaults; or
 // throws an Error naming the field. Pure: the server runs it on save and the
 // admin runs it before sending.
-const isSafeUrl = (s) => s === '' || /^(\/(?!\/)|#|https?:\/\/|mailto:|tel:)/i.test(s);
+// Exported: the renderer links only what passes this rule.
+export const isSafeUrl = (s) => s === '' || /^(\/(?!\/)|#|https?:\/\/|mailto:|tel:)/i.test(s);
 
 function checkField(f, v, path, strict = false) {
   const where = path ? `${path}.${f.key}` : f.key;
