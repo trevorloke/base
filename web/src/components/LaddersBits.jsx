@@ -71,7 +71,8 @@ const REASON = {
   do_not_email: 'do not email', no_consent: 'didn’t ask for email',
   // A text step's (ext/ladders engine textSkip).
   no_phone: 'no mobile number', bad_number: 'a number that can’t be texted', do_not_text: 'do not text',
-  opted_out: 'replied STOP', no_text_consent: 'said no to texts', in_conversation: 'a teammate is texting them',
+  opted_out: 'replied STOP', asked_to_stop: 'asked to stop in a reply', no_text_consent: 'said no to texts',
+  in_conversation: 'a teammate is texting them',
 };
 const END = { finished: 'Finished', stopped: 'Stopped', taken_off: 'Taken off', person_removed: 'Finished', goal: 'Reached the goal' };
 

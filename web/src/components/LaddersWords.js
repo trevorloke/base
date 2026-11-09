@@ -34,7 +34,7 @@ export const emailWho = (n) => `Goes only to people who said yes to email · ${
   Number.isFinite(n) ? `${plural(n, 'person', 'people')} said yes` : '…'}`;
 
 // Under a text card: the texting rules it follows (ext/texting).
-export const textWho = 'Inside your texting hours · never to anyone who replied STOP · “Reply STOP to opt out” is added';
+export const textWho = 'Inside your texting hours · never to anyone who replied STOP or asked to stop · “Reply STOP to opt out” is added';
 
 // A text must say who it's from: [campaign] or the campaign's name (the
 // server checks the same: ladders/shape.js textProblem).

@@ -3,8 +3,9 @@
 // gift, a membership, a survey answered — each puts the person on; a text
 // step goes through the campaign's texting (Twilio stubbed here): it waits
 // for texting hours and for texting to be connected, never texts who
-// replied STOP, is do-not-text, said no to texts on the website, or is in a
-// teammate's conversation; it names the campaign (or can't be saved), ends
+// replied STOP or asked to stop in words (until START), is do-not-text,
+// said no to texts on the website, or is in a teammate's conversation; it
+// names the campaign (or can't be saved), ends
 // "Reply STOP to opt out" and is filed in the Inbox. A goal (came to a
 // shift, gave, became a member, voted) takes someone off as soon as they
 // do it — paused or not — and someone who already voted is never put on a
@@ -13,8 +14,10 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
+import { app } from '../index.js';
 import { runDueJobs } from '../lib/jobs.js';
 import { _setClockForTest } from '../ext/texting/rules.js';
+import { twilioSignature } from '../ext/texting/twilio.js';
 import { ensureSiteTables, siteAction, siteCampaign } from './siteactions.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
@@ -264,6 +267,69 @@ test('a text step never texts who replied STOP, is do-not-text, said no on the w
   });
   assert.deepEqual(sms.map((m) => m.To).filter((to) => to === '+16045550198'), ['+16045550198']);
   assert.ok(!sms.some((m) => ['+16045550194', '+16045550195', '+16045550196', '+16045550197'].includes(m.To)));
+  await off(l);
+  disconnect();
+});
+
+// A reply through Twilio's signed webhook (ext/texting public.js).
+let replies = 0;
+const reply = async (from, body) => {
+  replies += 1;
+  const params = new URLSearchParams({ From: from, To: '+16045550100', Body: body, MessageSid: `SMin${tag}${replies}`, AccountSid: `ACtest${tag}` });
+  const res = await app.request('/api/public/twilio/sms', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      'x-twilio-signature': twilioSignature(`token-${tag}`, 'https://base.example/api/public/twilio/sms', params),
+    },
+    body: params.toString(),
+  });
+  assert.equal(res.status, 200);
+};
+
+test('a text step never texts who asked to stop in words — a reply since doesn’t undo it; START does', async () => {
+  connect();
+  clockAt(NOON);
+  const l = await on({ name: 'Two texts', trigger: { kind: 'tag', ref: 'two-texts' }, steps: [
+    { kind: 'text', body: 'Thanks for signing, {{first_name}} — {{campaign}}' },
+    { kind: 'wait', n: 1, unit: 'days' },
+    { kind: 'text', body: 'Can you help this weekend? — {{campaign}}' },
+  ] });
+  const nums = { jo: '+16045550120', bo: '+16045550121', cy: '+16045550122', di: '+16045550123' };
+  const who = {};
+  for (const [k, n] of Object.entries(nums)) {
+    who[k] = await mgr.createPerson(`${k[0].toUpperCase()}${k.slice(1)} Example`, { phone: n.slice(2), tags: ['two-texts'] });
+  }
+  await runJobs();
+  const texts = () => Object.fromEntries(Object.entries(nums).map(([k, n]) => [k, sms.filter((m) => m.To === n).length]));
+  assert.deepEqual(texts(), { jo: 1, bo: 1, cy: 1, di: 1 });
+  await reply(nums.jo, 'Please stop texting me, thanks');
+  await reply(nums.bo, 'No thanks, stop.');
+  await reply(nums.bo, 'I mean it');
+  await reply(nums.cy, 'Remove me from your list');
+  await reply(nums.cy, 'START');
+  await reply(nums.di, 'Who is this?');
+  // In the Inbox they're flagged for a person to decide; nothing opted out.
+  const flagged = (await db.query(
+    "select phone, keyword from texting_messages where workspace_id = $1 and direction = 'in' and keyword = 'asks_stop' order by phone",
+    [ws],
+  )).rows.map((r) => r.phone);
+  assert.deepEqual(flagged, [nums.jo, nums.bo, nums.cy]);
+  assert.equal((await db.query(
+    'select count(*)::int as n from texting_optouts where workspace_id = $1 and opted_out and phone = any($2::text[])', [ws, Object.values(nums)],
+  )).rows[0].n, 0);
+  // A day later: the ladder's second text.
+  await fastForward();
+  await runJobs();
+  assert.deepEqual(texts(), { jo: 1, bo: 1, cy: 2, di: 2 }, 'never again to Jo or Bo');
+  const last = async (k) => {
+    const t = logOf(await runOf(l.id, who[k].id)).filter((e) => e.kind === 'text').pop();
+    return t.result === 'skipped' ? `skipped:${t.reason}` : t.result;
+  };
+  assert.deepEqual(
+    { jo: await last('jo'), bo: await last('bo'), cy: await last('cy'), di: await last('di') },
+    { jo: 'skipped:asked_to_stop', bo: 'skipped:asked_to_stop', cy: 'sent', di: 'sent' },
+  );
   await off(l);
   disconnect();
 });

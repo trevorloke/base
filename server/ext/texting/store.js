@@ -6,7 +6,7 @@ import { textConfigured } from '../../lib/notify.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import {
   DEFAULT_TEMPLATE, DEFAULT_FROM, DEFAULT_UNTIL, DEFAULT_WEEKEND_FROM, DEFAULT_WEEKEND_UNTIL,
-  NO_TEXT_TAG, NO_CONTACT_TAG, PHONE_DIGITS_SQL, last10, RECENT_DAYS, quietNow, windowWord, now, e164,
+  NO_TEXT_TAG, NO_CONTACT_TAG, PHONE_DIGITS_SQL, last10, RECENT_DAYS, quietNow, windowWord, now, e164, ASKS_STOP_KEYWORD,
 } from './rules.js';
 
 const parseJ = (v, fb) => (typeof v === 'string' ? JSON.parse(v) : (v ?? fb));
@@ -37,6 +37,22 @@ export const quietState = (settings, workspace) => ({
 
 export const isOptedOut = async (q, workspaceId, phone) => !!(await q.query(
   'select 1 from texting_optouts where workspace_id = $1 and phone = $2 and opted_out', [workspaceId, phone],
+)).rows[0];
+
+// This number asked the campaign to stop in words ("No thanks, stop",
+// "Remove me from your list" — flagged asks_stop, rules.js) since it last
+// texted START. Such a reply only flags the thread, for a person to opt the
+// number out with one tap ("Stop by the office?" has the word too); what
+// sends with nobody reading the thread (a ladder's text step) treats it as
+// a STOP. A reply after it doesn't take it back — START does.
+export const askedToStop = async (q, workspaceId, phone) => !!(await q.query(
+  `select 1 from texting_messages m
+   where m.workspace_id = $1 and m.phone = $2 and m.direction = 'in' and m.keyword = $3
+     and not exists (select 1 from texting_messages s
+                     where s.workspace_id = $1 and s.phone = $2 and s.direction = 'in' and s.keyword = 'start'
+                       and s.created_at > m.created_at)
+   limit 1`,
+  [workspaceId, phone, ASKS_STOP_KEYWORD],
 )).rows[0];
 
 // STOP (out = true) or START (out = false) for one number in one workspace:

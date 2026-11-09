@@ -170,8 +170,10 @@ one tap away under **More**.
   member*, *Voted*): book someone on a "Booked a shift" ladder, check them in
   on the shift — they're off it at once, *Reached the goal*. *+ Text*: it
   must name the campaign (*+ Campaign*), goes only inside the texting hours
-  (*Waiting for texting hours*), never to anyone who replied STOP, and
-  "Reply STOP to opt out" is added; replies land in the Inbox.
+  (*Waiting for texting hours*), never to anyone who replied STOP or asked
+  to stop in a reply (*No thanks, stop* — skipped, *asked to stop in a
+  reply*, until they text START), and "Reply STOP to opt out" is added;
+  replies land in the Inbox.
 - **Follow-ups (speed to lead)** — every new volunteer (the website's form,
   the door's or Mainstreeting's *Wants to volunteer*, the membership form's
   *I'd like to volunteer*), every website message and every RSVP from
