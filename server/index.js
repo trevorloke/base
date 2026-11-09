@@ -16,6 +16,7 @@ import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
 import { appRedirect, basePath, mountAt } from './lib/mount.js';
 import { brandPages } from './lib/brand.js';
+import { siteGate } from './ext/site/public.js';
 
 export const app = new Hono();
 
@@ -23,7 +24,7 @@ export const app = new Hono();
 // uploads (a CSV import's 2,000 rows; a picture, as base64). Hono buffers a
 // body before parsing, so without this a few big requests could take all
 // the memory — no sign-in needed.
-const BODY_MAX = { '/api/data/import': 16 * 1024 * 1024, '/api/actions/learn.asset.upload': 17 * 1024 * 1024, '/api/actions/blast.attach': 7 * 1024 * 1024, '/api/actions/blast.picture': 4 * 1024 * 1024 };
+const BODY_MAX = { '/api/data/import': 16 * 1024 * 1024, '/api/actions/learn.asset.upload': 17 * 1024 * 1024, '/api/actions/blast.attach': 7 * 1024 * 1024, '/api/actions/blast.picture': 4 * 1024 * 1024, '/api/actions/site.picture': 4 * 1024 * 1024 };
 app.use('*', (c, next) => bodyLimit({
   maxSize: BODY_MAX[c.req.path] || 256 * 1024,
   onError: (cc) => cc.json({ error: 'request too large' }, 413),
@@ -38,6 +39,10 @@ app.use('*', async (c, next) => {
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 });
+// The campaign's own domain (SITE_HOSTS, or a domain set under Website):
+// only the public website answers there — never an app route, never the
+// sign-in cookie (ext/site/public.js). Everywhere else, the site is /site/.
+app.use('*', siteGate);
 // commit: which build is live (Render sets RENDER_GIT_COMMIT), so anyone can
 // check a deploy landed — open /api/health and compare with GitHub.
 const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null;

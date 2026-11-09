@@ -155,3 +155,173 @@ declaration, successUrl, cancelUrl, metadata })` → `{ url }`. Webhook
 a completed payment logs the gift through the normal gift path (limit
 checked, receipt issued) or the membership; over the limit → refunded
 through Stripe and flagged for the treasurer.
+
+## Settings (`site_settings`, `server/ext/site/shape.js`)
+
+What each section holds (the renderer gets them as `site.*`; every `href`
+is the site's own path — `/donate`, `/#m-join` — or http(s), mailto:, tel:;
+the renderer puts `ctx.root` in front of the site's own):
+
+```
+nav           { menu: [{ label, href }],      // the Menu, in order; the renderer gets it with every
+                                              // published page marked show_in_nav that isn't in it already, after it
+                links: [{ label, href }],     // up to 3 in the title bar
+                cta: { label, href } }        // the title bar's button (Donate)
+footer        { acknowledgement, links: [{ label, href }], logo: { url, alt } }
+announcement  { enabled, text, linkLabel, linkHref }
+seo           { title, description, shareImage: { url, alt } }
+org           { name, shortName, email, phone, address, platformUrl, platformLabel, privacyUrl, authorizationLine }
+social        { accounts: [{ name, short, handle, url }] }
+theme         shared/site/theme.js (checkTheme: a pair under 4.5:1 is refused)
+domains       ['imaginesurrey.ca', …]       // the site answers at / on these too
+```
+
+Additions to the renderer's input (additive to "Rendering" above):
+`site.consent` = `{ email, sms }` — the exact words next to the consent
+boxes (the server stores them with each consent event; show them as they
+are). `ctx.error` (after a plain post: the field to fix, or `busy` — too
+many from one address — or `payments` — online payments aren't set up)
+and `ctx.cancelled` (`join`/`donate`, back from the checkout without
+paying). `ctx.root` ('' on the campaign's own domain, '/site' elsewhere)
+and `ctx.assets` ('/site-assets') already carry a client's path
+(BASE_PATH), so links in island props are right as they are; `ctx.islands`
+is the islands script's address (`{assets}/site-islands.js`), or null when
+the web build hasn't made it; `ctx.referral` is the code a referral link
+remembered (the server reads it again on a form post — forms needn't send it).
+Module anchors are `#m-<module id>`: the seeds link `/#m-join`.
+
+Routes added to "Where the site is served": `/act` (every open petition and
+pledge, each a `petition` module, as a page); `/news` is the page with slug
+`news` when there is one (else the posts). `news` and `home` are the
+site's own pages: their addresses never change. `/site-assets/*` serves
+`shared/site/assets/*` (pictures — Imagine Surrey's under
+`imagine-surrey/`), `shared/site/*.css` and fonts, and the islands' build —
+`web/dist/site-assets/*`, then `web/dist/*` (`site-islands.js`) — by file
+type; on the app's own address it is at `/site-assets/*` too. On the
+campaign's own domain nothing else of `web/dist` answers (not `/assets/*`):
+the islands' pieces belong under `site-assets/`. Pages carry a CSP with no
+`'unsafe-inline'` for scripts: an inline `<script>` is allowed by its hash
+(computed when the page is drawn), inline event handlers never are.
+
+Tables, additive: `consent_events.address` (the email or number the yes or
+no was about); `site_actions.answer` (what the visitor was told — a retry
+gets it again); `site_actions.client_key` is stored as `<kind>:<key>`.
+
+## Who a form is (matching)
+
+The same email (the intake API's matcher, `ext/intake matchWebsitePerson`)
+fills what the record is missing (phone, address, city, postal code; a
+name for a record that only had its email's first part). Else the same
+name and phone, else the same name and postal code: those matches get the
+action, the tags and the consent and nothing else (an email typed there is
+kept beside the record, `attrs.typed_email`). Else someone new. Nothing on
+file is overwritten; the answer never says whether they were on file.
+
+Consent: a ticked box joins base.win's newsletter list and records the
+consent with its words — but never puts back an address that left the list
+or a person who is do-not-email / do-not-text / do-not-contact (the
+person's own signed link does). An unticked box changes nothing.
+`await personToken(workspaceId, personId)` (ext/site; outside a write —
+it may read the server's secret) makes the token for
+`{site}/preferences?t=…` and `{site}/unsubscribe?t=…` in an email (good
+for 400 days; their own page also shows their link to share, `/r/<code>`).
+
+## Payments readiness
+
+The site asks `server/ext/payments` (imported lazily) for `paymentsReady()`
+→ boolean (it also takes `ready`, `isReady` or `stripeReady`, a function or
+a boolean; with none, `STRIPE_SECRET_KEY` decides), and calls
+`checkoutFor(tx, ctx, args)` inside the form's own write with
+`ctx = { workspaceId, workspace, user: null }`, `successUrl` = the page
+`?sent=<kind>#m-<module>` and `cancelUrl` = the page
+`?cancelled=<kind>#m-<module>`, `metadata = { site_action_id, kind }` (and
+`term`, `youth`, `birth_date`, `citizenship` for a join). Before checkout
+the site refuses only what no one may give (over the year's limit once, or
+over the monthly maximum): a person's own total is checked when the money
+lands, so the form never says what someone gave before.
+
+## Admin API
+
+Signed in, the `site` area ("Website": managers by default; a manager may
+grant it under Admin → Permissions); everyone else gets 403 on every read
+and write. Reads (the first one makes the campaign's site from its brand's
+seed):
+
+| | |
+|---|---|
+| `GET /api/site` | `{ settings, pages: [page without draft/published], counts: { pages, published, posts, posts_published, campaigns, campaigns_open, actions, actions_week }, urls: { site, domains } }` |
+| `GET /api/site/pages/:id` | `{ page: { id, slug, title, description, status, version, show_in_nav, nav_order, published_at, created_at, updated_at, changed, modules (count), draft, published } }` |
+| `GET /api/site/posts` · `/:id` | `{ posts: [{ id, slug, title, excerpt, image, status, published_at, … }] }` · `{ post: { …, body } }` |
+| `GET /api/site/campaigns` · `/:id` | `{ campaigns: [{ id, slug, kind, title, excerpt, statement, goal, status, signatures, … }] }` · `{ campaign: { …, body } }` |
+| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at }] }` (Outreach's store too) |
+| `POST /api/site/preview-token` | `{ pageId }` → `{ url, expires_at }`: the draft for 30 minutes, `noindex`, frameable by the app only |
+
+Writes are actions (`POST /api/actions/:name`):
+
+| action | input → answer |
+|---|---|
+| `site.settings.save` | `{ theme?, nav?, footer?, announcement?, seo?, org?, social?, domains? }` — each section sent replaces it → `{ saved, updated_at }` |
+| `site.page.create` | `{ title, slug?, description?, modules?, show_in_nav? }` → `{ page }` (a draft; slug from the title when not given) |
+| `site.page.save` | `{ id, title?, slug?, description?, image?, modules?, show_in_nav?, nav_order?, updated_at? }` → `{ page }` (the draft, `checkModules` loose; `image`: the share picture, below; `updated_at` as opened: someone else's save since → 409) |
+| `site.page.publish` | `{ id }` → `{ page }` (`checkModules` strict, and the petitions it shows must exist; the error names the module) |
+| `site.page.unpublish` · `delete` · `duplicate` | `{ id }` (home stays) · → `{ page }` for duplicate |
+| `site.page.reorder` | `{ ids }` — the menu order |
+| `site.post.save` · `publish` · `delete` | `{ id?, title, slug?, excerpt?, body?, image? }` → `{ post }` · `{ id, published? = true }` · `{ id }` |
+| `site.campaign.save` · `close` · `delete` | `{ id?, kind, title, slug?, excerpt?, body?, statement?, goal? }` → `{ campaign }` · `{ id, open? }` · `{ id }` |
+| `site.picture` | `{ data (base64 or data: URL), name?, width?, height? }` → `{ media: { id, url: '/media/:id' } }` (JPG/PNG/WebP, 2 MB) |
+| `shift.public` | `{ id, public }` — the desk (Shifts area): the shift on the site's events |
+
+Slugs: lowercase a–z, 0–9 and dashes; never `news`, `act`, `r`,
+`preferences`, `unsubscribe`, `api`, `site-assets`, `__preview`,
+`sitemap.xml`, `robots.txt`, `media`, `stripe`, `site` (and `home` is the
+home page's). Every Website write clears the campaign's cached pages.
+
+Environment: `SITE_HOSTS` (the campaign's own domains), `SITE_WORKSPACE`
+(which campaign the site is, by slug; default the first set up),
+`SITE_SECRET` (signs preview and preference links; unset, one is made and
+kept in the database), `SITE_CACHE_SECONDS` (60; 0 turns the page cache
+off), `SITE_FORMS_PER_MINUTE` (20 per address).
+
+### Additions for the Website screens (additive)
+
+- `GET /api/site` also answers `payments: { ready }` (online giving set up:
+  `paymentsReady()`), `counts.actions_week_by_kind` (`{ petition: 12,
+  newsletter: 3 }`, the last 7 days) and `urls.hosts` (`SITE_HOSTS` as
+  `https://<host>/`, when this campaign is the site's — none already in
+  `urls.domains`).
+- Every campaign the API answers carries `signers_tag`: the tag a signature
+  puts on the person (`tagOf('Signed: ', title)`, forms.js) — People lists
+  them with `/people?tag=<signers_tag>`.
+- `site.page.save` takes `image: { url, alt }` (or `null`): the page's own
+  share picture. It lives in the draft and, once published, in what went
+  live — `{ title, description, image?, modules }`, the key only when there
+  is a picture. The renderer gets it as `page.image` (`{ url, alt }` or
+  null) on a live page and a preview, and uses it for the page's share
+  picture (og:image) before `seo.shareImage` and the hero's picture.
+- Undo: `site.page.restore` · `site.post.restore` · `site.campaign.restore`
+  `{ id }` → `{ page }` · `{ post }` · `{ campaign }` — a deleted one back as
+  it was (live if it was live). If its address went to another meanwhile, it
+  comes back at a free one like it (`-2`, `-3`…; the event's payload says
+  `was`). The 'restore' op on the event log.
+
+## The Website screens (`web/src/pages/Website*.jsx`)
+
+The `site` area; the desk's menu has **Website** (App.jsx guards
+`/website…` by the area; a volunteer without it is told the admin isn't
+theirs, and the server refuses its data anyway).
+
+| Address | Screen |
+|---|---|
+| `/website` | Overview: live or not, where it lives, "View site", this week's sign-ups by kind, pages, news, petitions, online giving |
+| `/website/pages` | Pages in the menu's order: New page, In the menu, ⋯ Move up/down · Duplicate · Delete (Undo); drag by the handle or tap it and "Move here" |
+| `/website/pages/:id` | The builder: sections (drag, tap or ⋯ to move; hide/show, duplicate, add below, delete with Undo), each a form made from its catalogue fields (`components/site/Fields.jsx`); page details (title, address, description, share picture, in the menu); the draft saves itself; Preview (a new tab, and beside the editor on a wide screen); Publish names the section and box that needs a look (`components/site/builder.js problemsOf`, the catalogue's own check) |
+| `/website/theme` | A skin, the colours (every `PAIRS` pair's contrast as it changes; under 4.5:1 blocks saving; "Fix it" picks the nearest readable text colour), fonts, corners, logo, a live sample |
+| `/website/settings` | Menu and title bar, announcement bar, footer, organization, social accounts, search and sharing, your own domain |
+| `/website/news` · `/:id` | Posts: list, editor (picture, excerpt, Markdown), publish/unpublish, delete (Undo) |
+| `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
+
+Careful with "your own domain": on a host in `domains` only the site answers
+(no sign-in, no app). The screen refuses the address it is opened at and
+base.win; `site.settings.save` itself can't tell which host is the app's,
+so a domain saved straight through the API could still take the app's own.
+

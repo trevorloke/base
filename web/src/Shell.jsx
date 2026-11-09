@@ -52,6 +52,7 @@ const ICONS = {
   signs: <><rect x="4" y="4" width="16" height="10" rx="1" /><path d="M12 14v7M9 21h6" /></>,
   outreach: <><path d="M4 10v4h3l7 4.5v-13L7 10H4z" /><path d="M17 9.5a3.5 3.5 0 0 1 0 5M19.2 7a7 7 0 0 1 0 10" /></>,
   learn: <><path d="M3 9.5 12 5l9 4.5-9 4.5-9-4.5z" /><path d="M6.5 11.5v4.2c0 1.3 2.5 2.8 5.5 2.8s5.5-1.5 5.5-2.8v-4.2" /><path d="M21 9.5v5" /></>,
+  website: <><rect x="3" y="4.5" width="18" height="15" rx="1.5" /><path d="M3 8.5h18" /><path d="M6 6.5h.01M8.5 6.5h.01" /><path d="M7 12.5h6M7 15.5h10" /></>,
 };
 const Icon = ({ name }) => (
   <svg className="tab-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
@@ -71,6 +72,7 @@ const NAV_DESK = [
   { to: '/signs',    label: 'Signs',    icon: 'signs', area: 'signs' },
   { to: '/outreach', label: 'Outreach', icon: 'outreach', area: 'outreach' },
   { to: '/imagineu', label: BRAND.learn, icon: 'learn', area: 'learn' },
+  { to: '/website',  label: 'Website',  icon: 'website', area: 'site' },
 ];
 // The areas a person has: what the server said, else their role's usual ones.
 export const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data'] : []));

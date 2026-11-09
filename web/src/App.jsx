@@ -60,6 +60,13 @@ const Passes = lazy(() => import('./pages/Passes.jsx'));
 const Voted = lazy(() => import('./pages/Voted.jsx'));
 const Requests = lazy(() => import('./pages/Requests.jsx'));
 const FieldReport = lazy(() => import('./pages/FieldReport.jsx'));
+const WebsiteHome = lazy(() => import('./pages/WebsiteHome.jsx'));
+const WebsitePages = lazy(() => import('./pages/WebsitePages.jsx'));
+const WebsitePage = lazy(() => import('./pages/WebsitePage.jsx'));
+const WebsiteTheme = lazy(() => import('./pages/WebsiteTheme.jsx'));
+const WebsiteSettings = lazy(() => import('./pages/WebsiteSettings.jsx'));
+const WebsitePosts = lazy(() => import('./pages/WebsitePosts.jsx'));
+const WebsiteCampaigns = lazy(() => import('./pages/WebsiteCampaigns.jsx'));
 import Join from './pages/Join.jsx';
 import { TwoStepRequired } from './components/TwoStep.jsx';
 const Profile = lazy(() => import('./pages/Profile.jsx'));
@@ -103,7 +110,7 @@ function NotForYou({ me }) {
 
 // A desk address typed into the field app (an old bookmark, a link in an
 // email): the admin has it. Volunteers go home, as before.
-const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates|membership-form))?|shifts\/volunteers|money|lists|reports|data|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new)(\/|$)/;
+const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates|membership-form))?|shifts\/volunteers|money|lists|reports|data|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new|website)(\/|$)/;
 function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
@@ -126,6 +133,7 @@ const ROUTE_AREA = [
   [/^\/voted/, 'people'],
   [/^\/requests/, 'people'],
   [/^\/field-report/, 'data'],
+  [/^\/website/, 'site'],
 ];
 function DeskOnly() {
   const ctx = useOutletContext();
@@ -239,6 +247,16 @@ export default function App({ mode = 'field' }) {
           <Route path="/voted" element={<Voted />} />
           <Route path="/requests" element={<Requests />} />
           <Route path="/field-report" element={<FieldReport />} />
+          {/* Website (the 'site' area): the campaign's public site. */}
+          <Route path="/website" element={<WebsiteHome />} />
+          <Route path="/website/pages" element={<WebsitePages />} />
+          <Route path="/website/pages/:id" element={<WebsitePage />} />
+          <Route path="/website/theme" element={<WebsiteTheme />} />
+          <Route path="/website/settings" element={<WebsiteSettings />} />
+          <Route path="/website/news" element={<WebsitePosts />} />
+          <Route path="/website/news/:id" element={<WebsitePosts />} />
+          <Route path="/website/petitions" element={<WebsiteCampaigns />} />
+          <Route path="/website/petitions/:id" element={<WebsiteCampaigns />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

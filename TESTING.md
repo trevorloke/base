@@ -291,6 +291,36 @@ one tap away under **More**.
   **Call back…** → *In an hour · This evening · Tomorrow morning* does the
   same at that time. The bank's page shows *call back Thu 6:00 p.m. · 1 try*.
 
+- **The website** — open **/site/** (the campaign's own domain once
+  `SITE_HOSTS` points there): the first look makes the site from the
+  brand's seed (Imagine Surrey's pages as imaginesurrey.ca has them).
+  Sign the SkyTrain petition or the newsletter there: the person is in
+  People with *Website: petition* and *Signed: …*, matched to whoever is
+  already on file by email (or name and phone, or name and postal code),
+  and a ticked box puts them on the newsletter list with the words they
+  saw. A shift's **Edit** → **Show on the website** lists it on the site's
+  events, where anyone can sign up (room is checked). Their
+  `/preferences` link turns email and texts off or on in base.win itself.
+  Server tests: `server/test/site-*.test.js`; in a browser:
+  `e2e-site-server.mjs`.
+
+- **Website (the admin)** — **Website** in the desk's menu (managers, or
+  whoever a manager grants the Website area). **Overview**: live or not,
+  where it is (**View site**), this week's sign-ups. **Pages → New page**:
+  in its builder **+ Add a section** (Hero, Text block, Newsletter…), type
+  in each one's boxes (it says *Saved* by itself), drag a section by its
+  handle (or tap the handle, then *Move here*; or ⋯ → *Move up*), ⋯ →
+  *Hide from the page*, ⋯ → *Delete* then **Undo**. **Preview** opens the
+  draft in a new tab (and beside the editor on a wide screen). Add a
+  *Petition or pledge* without picking one and **Publish**: it says which
+  section and which box; pick one and publish — the page is at
+  `/site/<its address>`. **Theme**: make the brand colour light (white text
+  on it gets too hard to read) — *Save the look* is blocked until **Fix it**.
+  **Petitions and pledges**: signatures against the goal, *See who signed*.
+  A volunteer opening `/admin/website` is told it isn't theirs. Tests:
+  `server/test/site-builder.test.js`, `server/test/site-website.test.js`;
+  in a browser: `e2e-site-admin.mjs`.
+
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
   **Today · Map · Calls · Shifts**.

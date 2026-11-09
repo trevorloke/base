@@ -52,6 +52,7 @@ button, no paragraphs, everything else one tap away.
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
 | **Lists** | Saved filters (a tag, a rating band, a role, has an email…) and hand-picked lists of people: an audience for an email or text blast, a CSV, a report; People's *Save as a list* starts one |
 | **Reports** | The campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export; Field, by turf (coverage, talks, support found, not-homes; by canvasser; CSV) |
+| **Website** | The campaign's public site (managers, and whoever is granted the Website area): pages built from sections (hero, text, petition, donate, events, news…) that are added from a catalogue, dragged into order, hidden, edited in plain forms and published — the draft saves itself, *Preview* shows it, *Publish* says exactly which section needs a look; the theme (colours checked for contrast as they're picked, fonts, corners, logo); the menu, footer, announcement bar, search and sharing; news posts; petitions and pledges with their signatures. SITE.md has how it fits together |
 | **Outreach** | Two modules. **Email** (like Mailchimp): *Write an email* to the newsletter's subscribers or to any list, in Markdown (headings, bold, lists, links, pictures; files attached; *Send me a test*; two subject lines to test), then what went out — opens, clicks, past sends — the subscribers, and ladders (automatic emails). **Texting** (like CallHub): *Write a text* to any list, with the one-to-one rules (quiet hours, STOP, do-not-contact); the Inbox of replies; phone banks; texting one by one; texting settings |
 | **ImagineU** | Training for every role: courses of modules, each module a mix of materials — notes, documents, videos, audio, pictures, links — and the marker of progress: ticked *Done*, counted per course (*2 of 5 modules done*); the desk edits in place and sees who has done what; a module marked public has a page anyone can open at `/learn/<slug>` |
 
@@ -669,6 +670,8 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
 | `STARBASE_BRAND` | `imagine-surrey` or `base` — the look (*The brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
+| `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app (SITE.md) | blank: the website is at `/site/` only |
+| `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters) | blank: one is made and kept in the database |
 
 Two environments per client: **staging** deploys every push to `main`,
 **production** deploys the `production` branch, which the *Promote to

@@ -586,6 +586,7 @@ function EditShiftForm({ shift, booked, onClose, onSaved }) {
     title: shift.title || '', role: shift.role || '', location: shift.location || '',
     starts: isoToLocal(shift.starts_at), ends: isoToLocal(shift.ends_at),
     capacity: shift.capacity ? String(shift.capacity) : '', link: shift.link || '', instructions: shift.instructions || '',
+    public: Boolean(shift.public),
   });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -613,10 +614,13 @@ function EditShiftForm({ shift, booked, onClose, onSaved }) {
     if (capacity !== (shift.capacity ?? null)) patch.capacity = capacity;
     if ((normalizeLink(f.link) ?? null) !== (shift.link || null)) patch.link = normalizeLink(f.link) ?? null;
     if ((f.instructions.trim() || null) !== (shift.instructions || null)) patch.instructions = f.instructions.trim() || null;
-    if (!Object.keys(patch).length) { onClose(); return; }
+    // On the website or not is its own switch (ext/site: shift.public).
+    const onSite = f.public !== Boolean(shift.public);
+    if (!Object.keys(patch).length && !onSite) { onClose(); return; }
     setBusy(true);
     try {
-      await action('shift.update', { id: shift.id, ...patch });
+      if (Object.keys(patch).length) await action('shift.update', { id: shift.id, ...patch });
+      if (onSite) await action('shift.public', { id: shift.id, public: f.public });
       const moved = ['starts_at', 'ends_at', 'location'].some((k) => k in patch);
       onSaved({ moved: moved && booked > 0 });
     } catch (err) {
@@ -666,6 +670,10 @@ function EditShiftForm({ shift, booked, onClose, onSaved }) {
         <input id="edit-shift-link" className="input" type="text" inputMode="url" autoCapitalize="none"
           autoCorrect="off" spellCheck={false} value={f.link} onChange={set('link')} />
       </div>
+      <label className="ops-check">
+        <input type="checkbox" checked={f.public} onChange={(e) => setF((cur) => ({ ...cur, public: e.target.checked }))} />
+        <span><b>Show on the website</b><span className="ops-meta">Anyone can see it on the site’s events and sign up for it</span></span>
+      </label>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="ops-actions">
         <button type="submit" className="btn btn-primary ops-tap" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
@@ -1320,8 +1328,11 @@ function ShiftDetail({ id, canDesk, me }) {
         </div>
       )}
       <div className="ops-lines">
-        {shift.role && (
-          <span className="ops-chips"><span className="chip">{roleLabel(shift.role)}</span></span>
+        {(shift.role || (canDesk && shift.public)) && (
+          <span className="ops-chips">
+            {shift.role && <span className="chip">{roleLabel(shift.role)}</span>}
+            {canDesk && shift.public && <span className="chip">On the website</span>}
+          </span>
         )}
         <span className="when">{longDay(shift.starts_at)} · {timeRange(shift.starts_at, shift.ends_at)}</span>
         {shift.location && <span>{shift.location}</span>}

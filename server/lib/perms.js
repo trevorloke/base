@@ -24,6 +24,7 @@ export const AREAS = [
   { key: 'data', label: 'Data', what: 'the full export, the event log, records' },
   { key: 'admin', label: 'Admin', what: 'members, teams, permissions, the rating scale' },
   { key: 'learn', label: 'ImagineU', what: 'training: the lessons, their files, who has done what' },
+  { key: 'site', label: 'Website', what: 'the public website: its pages, news, petitions and look' },
 ];
 export const AREA_KEYS = AREAS.map((a) => a.key);
 // What each role has with nothing granted or denied — the app's tabs.
@@ -49,6 +50,7 @@ const ACTION_AREA = {
   request: 'people',
   mainstreet: 'people',
   learn: 'learn',
+  site: 'site',
 };
 // field.values.set is a person's record; field.ping ("I'm here", from the
 // map) is nobody's area — anyone who canvasses may say where they are.
@@ -81,6 +83,7 @@ const PATH_AREA = [
   [/^\/api\/(crew|volunteers)(\/|$)/, 'shifts'],
   [/^\/api\/connections(\/|$)/, 'admin'],
   [/^\/api\/intake(\/|$)/, 'admin'],
+  [/^\/api\/site(\/|$)/, 'site'],
 ];
 export const areaOfPath = (path) => PATH_AREA.find(([re]) => re.test(path))?.[1] || null;
 
@@ -105,9 +108,11 @@ export const decide = (perms, area) => {
 // A manager-only action (a campaign-wide switch such as Election day or the
 // texting hours) is the Admin area's, whatever its name says: granting
 // People or Outreach lets someone work in that area, not change its settings.
-const managerOnly = (action) => action.roles.length === 1 && action.roles[0] === 'manager';
+// An action that names its area (action.area, e.g. the Website's) is that
+// area's, manager-only or not: granting the area lets someone run it.
+const managerOnly = (action) => !action.area && action.roles.length === 1 && action.roles[0] === 'manager';
 export const mayRun = (ctx, name, action) => {
-  const d = decide(ctx.perms, managerOnly(action) ? 'admin' : areaOfAction(name));
+  const d = decide(ctx.perms, action.area || (managerOnly(action) ? 'admin' : areaOfAction(name)));
   if (d === false) return false;
   if (action.roles.includes(ctx.role)) return true;
   return d === true;
