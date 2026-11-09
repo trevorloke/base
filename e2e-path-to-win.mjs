@@ -196,6 +196,11 @@ check('"How the score works" opens in place, in plain words', /Up to 60 for supp
 const m1 = await measure(page);
 check('desktop: one primary, no sideways scroll, no small targets', m1.yellow === 1 && m1.overflow <= 0 && m1.small.length === 0, JSON.stringify(m1));
 await page.screenshot({ path: `${SHOTS}/1-desktop-new.png`, fullPage: false });
+await page.locator('.ptw-map').scrollIntoViewIfNeeded();
+const tilesIn = await page.waitForFunction(() => document.querySelectorAll('.ptw-map img.leaflet-tile-loaded').length > 0, null, { timeout: 15000 })
+  .then(() => page.evaluate(() => document.querySelectorAll('.ptw-map img.leaflet-tile-loaded').length)).catch(() => 0);
+check('the small map draws the campaign’s base map', tilesIn > 0, `${tilesIn} tiles`);
+await sleep(300);
 await page.locator('section[aria-labelledby="ptw-turfs-h"]').screenshot({ path: `${SHOTS}/1-desktop-turfs.png` });
 
 // ── 3. The manager sets the numbers ──
