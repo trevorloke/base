@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { codesInBand } from '@starbase/shared/scale';
 import { ApiError, action, apiGet } from '../api.js';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
+import { useWebDid, webChoices } from '../components/FieldCuts.jsx';
 import './dashboard.css';
 import './banks.css';
 import '../editor.css';
@@ -141,13 +142,16 @@ function NewBank() {
   const [name, setName] = useState('');
   const [script, setScript] = useState('');
   const [retry, setRetry] = useState({ retry_hours: 4, max_tries: 3 });
-  const [f, setF] = useState({ q: '', band: '', tag: '' });
+  const [f, setF] = useState({ q: '', band: '', tag: '', web: '' });
   const id = useId();
   const { run, busy, error } = useSaver();
+  // What they did on the website (ext/webdid): offered once it has people.
+  const web = webChoices(useWebDid());
   const qs = useMemo(() => {
     const p = new URLSearchParams({ has: 'phone', limit: '2000' });
     if (f.q.trim()) p.set('q', f.q.trim());
     if (f.tag.trim()) p.set('tag', f.tag.trim());
+    if (f.web) p.set('web', f.web);
     if (f.band === 'unrated') p.set('rating', 'unrated');
     else if (f.band) p.set('rating', codesInBand(scale, f.band).join(','));
     return p.toString();
@@ -173,6 +177,13 @@ function NewBank() {
               <select id={`${id}-b`} className="input" value={f.band} onChange={(e) => setF({ ...f, band: e.target.value })}>{BANDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
             <div><label htmlFor={`${id}-t`} className="ws-label">Tag</label>
               <input id={`${id}-t`} className="input" value={f.tag} placeholder="volunteer, newton…" onChange={(e) => setF({ ...f, tag: e.target.value })} /></div>
+            {web.length > 0 && (
+              <div><label htmlFor={`${id}-w`} className="ws-label">Did on the website</label>
+                <select id={`${id}-w`} className="input" value={f.web} onChange={(e) => setF({ ...f, web: e.target.value })}>
+                  <option value="">Anyone</option>
+                  {web.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select></div>
+            )}
             <div className="bk-who__grow"><label htmlFor={`${id}-q`} className="ws-label">Search (name, street, phone)</label>
               <input id={`${id}-q`} className="input" value={f.q} placeholder="104 Ave" onChange={(e) => setF({ ...f, q: e.target.value })} /></div>
           </div>

@@ -7,7 +7,7 @@ export default function LaddersLink() {
   return (
     <Link to="/ladders" className="lad-link">
       <span className="lad-link__main">Ladders</span>
-      <span className="lad-link__sub">Automatic emails &amp; follow-ups</span>
+      <span className="lad-link__sub">Automatic emails, texts &amp; follow-ups</span>
       <span className="lad-link__chev" aria-hidden="true">›</span>
     </Link>
   );

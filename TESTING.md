@@ -146,12 +146,32 @@ one tap away under **More**.
   12, winner to 36 after 1 hour*). A tie sends A and
   says *Tie — sent A*. Opens run high (Apple Mail opens by itself); clicks
   from mail scanners aren't counted.
-- **Outreach → Ladders** (automatic emails & follow-ups) — email steps go
+- **Outreach → Ladders** (automatic emails, texts & follow-ups) — email steps go
   only to people who said yes to email (the newsletter); everyone else shows
   *Email skipped — didn't ask for email*.
   *+ First name* / *+ Campaign* fill in. The email's unsubscribe link asks
   first; once someone unsubscribes, **Email → More → Subscribers** can't
   add them back — only they can, by signing up again.
+  *Starts when* now also takes what someone did on the website (a kind —
+  *Signed a petition* — or one petition), *Booked a shift*, *Came to a
+  shift*, *Didn't show up for a shift*, *Gave (any gift)*, *Became a member*
+  and *Answered a survey*. *Add a goal* (*Came to a shift*, *Gave*, *Became a
+  member*, *Voted*): book someone on a "Booked a shift" ladder, check them in
+  on the shift — they're off it at once, *Reached the goal*. *+ Text*: it
+  must name the campaign (*+ Campaign*), goes only inside the texting hours
+  (*Waiting for texting hours*), never to anyone who replied STOP, and
+  "Reply STOP to opt out" is added; replies land in the Inbox.
+- **Follow-ups (speed to lead)** — every new volunteer (the website's form,
+  the door's or Mainstreeting's *Wants to volunteer*, the membership form's
+  *I'd like to volunteer*), every website message and every RSVP from
+  someone new goes to one named organizer: whoever brought them in or knows
+  them (My people), else someone on the turf their pin is in (a captain
+  first), else a manager. It's at the top of that organizer's Today —
+  *Follow up · 1*, what they did, *23 h left* (red once it's overdue). Tap
+  it: what they said, *Call* / *Text*, and how it went — *Talked*, a rating,
+  *Left a message*, *No answer*. Logging it closes it. Ladders → Follow-ups
+  shows every open one by organizer (*Who has them*), the time to first
+  contact over 30 days, and *Hand to…* someone else.
 - **Email & texting** (the *Connect* links on Shifts, Receipts and Ladders,
   or Today → More) — whether email and texting are connected, and the
   Imagine Surrey website address the public pages link back to.
@@ -275,7 +295,10 @@ one tap away under **More**.
   (Never · not in 7, 14 or 30 days), *Last outcome* (No answer, Left lit,
   Refused…), a *Turf*, *Postal code starts with*. Each narrows the list and
   shows as a chip you can take off; **Save as a list** carries them, and the
-  saved list (and a blast or Calls from it) keeps them.
+  saved list (and a blast or Calls from it) keeps them. Once the website
+  has people, *Did on the website* is there too (*Signed a petition*, one
+  petition by name, *Offered to volunteer*, *Anything*…) — a volunteer's
+  Calls never offers the money forms.
 
 - **Scripts** — Today → More → **Scripts**: write what to say at the door
   and on the phone; **+ First name**, **+ Your name**, **+ Campaign** fill in

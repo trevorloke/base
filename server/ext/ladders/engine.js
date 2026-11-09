@@ -2,8 +2,9 @@
 //
 // Enrolling: the events hook sees every write's events before they are
 // chained. From them it reads what just happened to whom — the newsletter
-// joined, a first gift, a tag got,
-// a 1 or 2 at the door / phone / text — and puts the person on every ladder
+// joined, a first gift or any gift, a tag got, a 1 or 2 at the door / phone /
+// text, something done on the website (a site_action: SITE.md), a shift
+// booked, checked in or missed, a membership, a survey answered — and puts the person on every ladder
 // that is on and starts that way: once per ladder (again only when the ladder
 // allows it and their last run is over). Step 1 is scheduled in the same
 // transaction, so enrolling commits with the write that caused it or not at
@@ -31,11 +32,33 @@
 // write records what the provider said and moves the run on. A job retried
 // after (1) finds 'sending' and never sends again by itself: the log says
 // "not sure it went" and the run moves on.
+//
+// Text steps go through the campaign's texting (ext/texting), by its rules:
+// never to a number that replied STOP, someone tagged do-not-text or
+// do-not-contact, someone who said no to texts on the website, or someone
+// a teammate is texting right now (one campaign conversation per number) —
+// skipped, with the reason in the log. Outside the hours texts may go the
+// run waits for them ("Waiting for texting hours"); with texting not
+// connected it waits and looks again hourly. Each text names the campaign
+// (checked when the ladder is saved), ends "Reply STOP to opt out", and is
+// filed in the Inbox as the campaign's own conversation, so a reply (or a
+// STOP) lands where the desk reads it. Sent in the same two writes as an
+// email; a text is never tried twice by itself (texts carry no key the
+// provider could use to send one once).
+//
+// Goals: a ladder may have one (came to a shift, gave, became a member,
+// voted). The events hook takes anyone who does it off every ladder with
+// that goal at once, whatever step they are on — on or off — and each step
+// looks again before it runs.
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
-import { emailConfigured, sendEmail, unsubscribeHeaders } from '../../lib/notify.js';
+import { emailConfigured, sendEmail, textConfigured, unsubscribeHeaders } from '../../lib/notify.js';
+import { e164, withFooter, localMinutes, now as textClock } from '../texting/rules.js';
+import { settingsFor, quietState, isOptedOut, applyOptOut, inTouch, isFirstOut, tzOf } from '../texting/store.js';
+import { sendSms, publicBase } from '../texting/twilio.js';
+import { hasTable } from '../webdid/words.js';
 import {
-  parseJson, tagsOf, sameTag, isDnc, noEmail, fillIn, waitMs,
+  parseJson, tagsOf, sameTag, isDnc, noEmail, noText, fillIn, waitMs,
 } from './shape.js';
 
 export const JOB = 'ladder.step';
@@ -150,6 +173,29 @@ const takeTagChanges = async (tx, ws) => (await tx.query(
   [ws],
 )).rows.filter((r) => r.mine).map((r) => ({ personId: r.person_id, added: parseJson(r.added, []) }));
 
+// A shift booking's move, from its event (the core's shift.assign / join /
+// leave / setStatus, ext/volunteers' shift.add): 'booked' (a new booking, or
+// booked again after "Can't make it" or a no-show — never booked → confirmed),
+// 'attended' (checked in: "Here") or 'no_show'; null for anything else.
+const BOOKED = new Set(['assigned', 'confirmed']);
+const shiftMove = (e) => {
+  const p = e.payload || {};
+  if (e.op === 'create') return BOOKED.has(p.status ?? 'assigned') ? 'booked' : null;
+  if (e.op !== 'update' || typeof p.status !== 'string' || p.status === p.from) return null;
+  if (p.status === 'completed') return 'attended';
+  if (p.status === 'no_show') return 'no_show';
+  // A self-booking again ("Count me in" after "Can't make it") carries self, no from.
+  if (BOOKED.has(p.status) && (['declined', 'no_show'].includes(p.from) || (p.self && p.from == null && p.status === 'confirmed'))) return 'booked';
+  return null;
+};
+const SHIFT_TRIGGER = { booked: 'shift_booked', attended: 'shift_attended', no_show: 'shift_no_show' };
+
+// The person and shift of bookings named only by id (an update's payload
+// carries the status, not who).
+const bookingsOf = async (tx, ws, ids) => (ids.length ? new Map((await tx.query(
+  'select id, person_id, shift_id from shift_assignments where workspace_id = $1 and id = any($2::uuid[])', [ws, ids],
+)).rows.map((r) => [r.id, r])) : new Map());
+
 // What just happened, as { personId, kind, ref } facts.
 const factsOf = async (tx, meta, events, kinds) => {
   const ws = meta.workspaceId;
@@ -157,6 +203,7 @@ const factsOf = async (tx, meta, events, kinds) => {
   const add = (personId, kind, ref = null) => {
     if (personId && kinds.has(kind)) out.push({ personId, kind, ref: ref == null ? null : String(ref) });
   };
+  const shiftEvents = [];
   for (const e of events) {
     const p = e.payload || {};
     if (p.sample) continue;
@@ -168,15 +215,110 @@ const factsOf = async (tx, meta, events, kinds) => {
       for (const t of tags) add(e.entityId, 'tag', t);
     } else if (e.entityType === 'gift' && e.op === 'create' && p.person_id) {
       if (kinds.has('donation') && await firstGift(tx, ws, p.person_id, e.entityId)) add(p.person_id, 'donation');
+      add(p.person_id, 'gift');
     } else if (e.entityType === 'contact' && (e.op === 'create' || e.op === 'update') && YES_RATINGS.has(String(p.rating))) {
       // update: a rating that finished the visit's "Save answers" contact.
       add(p.person_id, 'rating');
+    } else if (e.entityType === 'site_action' && e.op === 'create' && p.person_id) {
+      // SITE.md: { kind, person_id, campaign_id, … } — a ladder on the kind
+      // ("signed a petition") or on the one petition or pledge.
+      add(p.person_id, 'web', p.kind);
+      if (p.campaign_id) add(p.person_id, 'web', `campaign:${String(p.campaign_id).toLowerCase()}`);
+    } else if (e.entityType === 'membership' && e.op === 'create' && p.person_id) {
+      // A membership term (ext/membership). A teammate joining the campaign
+      // is a 'membership' too, with no person_id.
+      add(p.person_id, 'member');
+    } else if (e.entityType === 'survey_response' && e.op === 'create' && p.person_id) {
+      add(p.person_id, 'survey', p.survey_id);
+    } else if (e.entityType === 'shift_assignment' && SHIFT_TRIGGER[shiftMove(e)] && kinds.has(SHIFT_TRIGGER[shiftMove(e)])) {
+      shiftEvents.push(e);
+    }
+  }
+  if (shiftEvents.length) {
+    const rows = await bookingsOf(tx, ws, shiftEvents.filter((e) => e.op === 'update').map((e) => e.entityId));
+    for (const e of shiftEvents) {
+      const row = e.op === 'create' ? e.payload : rows.get(e.entityId);
+      if (row?.person_id) add(row.person_id, SHIFT_TRIGGER[shiftMove(e)], row.shift_id);
     }
   }
   if (kinds.has('tag') && events.some((e) => e.entityType === 'person' && e.op === 'update')) {
     for (const r of await takeTagChanges(tx, ws)) for (const t of r.added) add(r.personId, 'tag', t);
   }
   return out;
+};
+
+// ── Goals ──
+
+// Whether a run's person has done its ladder's goal. since: when they were
+// put on it (a run's started_at), or null when they are about to be — then
+// only "voted" can already be true. Gifts, memberships and shifts count
+// from strictly after the run started, so the gift that started a "gave"
+// ladder never ends it in the same breath.
+export const goalMet = async (tx, ws, personId, goal, since = null) => {
+  if (goal === 'voted') {
+    return Boolean((await tx.query(
+      'select voted_at from persons where id = $1 and workspace_id = $2', [personId, ws],
+    )).rows[0]?.voted_at);
+  }
+  if (!since) return false;
+  const one = async (sql) => Boolean((await tx.query(sql, [ws, personId, since])).rows[0]);
+  if (goal === 'gift') {
+    return one('select 1 from gifts where workspace_id = $1 and person_id = $2 and deleted_at is null and created_at > $3 limit 1');
+  }
+  if (goal === 'member') {
+    if (!(await hasTable(tx, 'member_terms'))) return false;
+    return one('select 1 from member_terms where workspace_id = $1 and person_id = $2 and voided_at is null and created_at > $3 limit 1');
+  }
+  if (goal === 'shift_attended') {
+    // Checked in on a shift that ended after they were put on the ladder.
+    return one(`select 1 from shift_assignments a join shifts s on s.id = a.shift_id
+      where a.workspace_id = $1 and a.person_id = $2 and a.status = 'completed' and coalesce(s.ends_at, s.starts_at) > $3 limit 1`);
+  }
+  return false;
+};
+
+// Who in this write did a goal: { goal → Set(person ids) }.
+const goalFactsOf = async (tx, ws, events, goals) => {
+  const who = Object.fromEntries([...goals].map((g) => [g, new Set()]));
+  const add = (goal, personId) => { if (personId && who[goal]) who[goal].add(personId); };
+  const attended = [];
+  for (const e of events) {
+    const p = e.payload || {};
+    if (p.sample) continue;
+    if (e.entityType === 'gift' && e.op === 'create') add('gift', p.person_id);
+    else if (e.entityType === 'membership' && e.op === 'create') add('member', p.person_id);
+    else if (e.entityType === 'voted_mark' && e.op === 'create' && p.voted === true) add('voted', p.person_id);
+    else if (e.entityType === 'person' && (e.op === 'create' || e.op === 'update') && p.voted_at) add('voted', e.entityId);
+    else if (e.entityType === 'shift_assignment' && who.shift_attended && shiftMove(e) === 'attended') attended.push(e.entityId);
+  }
+  if (attended.length) for (const r of (await bookingsOf(tx, ws, attended)).values()) add('shift_attended', r.person_id);
+  return who;
+};
+
+// Off every ladder whose goal they just did — paused runs too: they did the
+// thing, so the ladder won't pick them up again when it's back on.
+const reachGoals = async (tx, meta, events, goals) => {
+  const ws = meta.workspaceId;
+  const emits = [];
+  const who = await goalFactsOf(tx, ws, events, goals);
+  for (const [goal, people] of Object.entries(who)) {
+    if (!people.size) continue;
+    const runs = (await tx.query(
+      `select r.id, r.workspace_id, r.ladder_id, r.person_id, r.step, r.log from ladder_runs r
+       join ladders l on l.id = r.ladder_id and l.workspace_id = r.workspace_id and l.deleted_at is null and l.goal = $2
+       where r.workspace_id = $1 and r.status <> 'done' and r.person_id = any($3::uuid[])
+       for update of r`,
+      [ws, goal, [...people]],
+    )).rows;
+    for (const run of runs) {
+      await endRun(tx, run);
+      await appendLog(tx, run, { step: Number(run.step), kind: 'end', result: 'goal', goal });
+      emits.push(['ladder_run', run.id, 'update', {
+        ladder_id: run.ladder_id, person_id: run.person_id, status: 'done', reason: 'goal', goal,
+      }]);
+    }
+  }
+  return emits;
 };
 
 const matches = (ladder, fact) => {
@@ -199,6 +341,8 @@ const enroll = async (tx, meta, ladder, fact, emits) => {
     [fact.personId, meta.workspaceId],
   )).rows[0];
   if (!person) return;
+  // Already there (they voted): a ladder that ends at its goal has nothing for them.
+  if (ladder.goal && await goalMet(tx, meta.workspaceId, fact.personId, ladder.goal)) return;
   const id = newId();
   const token = newId();
   await tx.query(
@@ -230,22 +374,28 @@ const enrollAll = async (tx, meta, events, ladders) => {
   return emits;
 };
 
-// Every write passes through here, so a campaign with no ladder on costs one
-// small read. A fault past that must never cost anyone their door knock or
-// signature: enrolling runs under a savepoint, and its events join the chain
-// only if it all went through. (Tags noted by an import or the sample load
-// are never read as "got a tag"; the next read sweeps them after an hour.)
+// Every write passes through here, so a campaign with no ladder on (and no
+// ladder with a goal) costs one small read. A fault past that must never
+// cost anyone their door knock or signature: enrolling runs under a
+// savepoint, and its events join the chain only if it all went through.
+// (Tags noted by an import or the sample load are never read as "got a
+// tag"; the next read sweeps them after an hour.) Goals are reached first —
+// an import of who voted takes them off too — then the write's facts put
+// people on.
 export const onEvents = async (tx, meta, events) => {
-  if (QUIET_ACTIONS.has(meta.action)) return;
   const ladders = (await tx.query(
-    `select id, trigger_kind, trigger_ref, reentry from ladders
-     where workspace_id = $1 and active and deleted_at is null order by created_at`,
+    `select id, trigger_kind, trigger_ref, reentry, active, goal from ladders
+     where workspace_id = $1 and deleted_at is null and (active or goal is not null) order by created_at`,
     [meta.workspaceId],
   )).rows;
   if (ladders.length === 0) return;
+  const goals = new Set(ladders.map((l) => l.goal).filter(Boolean));
+  const on = QUIET_ACTIONS.has(meta.action) ? [] : ladders.filter((l) => l.active);
+  if (!goals.size && !on.length) return;
   await tx.query('savepoint ladders_enroll');
   try {
-    const emits = await enrollAll(tx, meta, events, ladders);
+    const emits = goals.size ? await reachGoals(tx, meta, events, goals) : [];
+    if (on.length) emits.push(...await enrollAll(tx, meta, events, on));
     await tx.query('release savepoint ladders_enroll');
     for (const e of emits) meta.emit(...e);
   } catch (err) {
@@ -265,16 +415,18 @@ const loadStepContext = async (tx, job) => {
   )).rows[0];
   if (!run || run.status !== 'active' || Number(run.step) !== Number(step) || String(run.token) !== String(token)) return null;
   const ladder = (await tx.query(
-    `select l.*, w.name as campaign from ladders l join workspaces w on w.id = l.workspace_id
+    `select l.*, w.name as campaign, w.settings as campaign_settings from ladders l join workspaces w on w.id = l.workspace_id
      where l.id = $1 and l.workspace_id = $2`,
     [run.ladder_id, job.workspace_id],
   )).rows[0];
   if (!ladder || ladder.deleted_at || !ladder.active) return null;
   const person = (await tx.query(
-    'select id, name, email, tags from persons where id = $1 and workspace_id = $2 and deleted_at is null',
+    'select id, name, email, phone, tags from persons where id = $1 and workspace_id = $2 and deleted_at is null',
     [run.person_id, job.workspace_id],
   )).rows[0];
-  return { run, ladder, person, steps: parseJson(ladder.steps, []), step: Number(step) };
+  // The campaign as the texting rules read it (its time zone, for the hours).
+  const workspace = { id: job.workspace_id, name: ladder.campaign, settings: parseJson(ladder.campaign_settings, {}) };
+  return { run, ladder, person, workspace, steps: parseJson(ladder.steps, []), step: Number(step) };
 };
 
 const record = async (c, entry) => {
@@ -320,6 +472,45 @@ const again = (c, ms, extra = {}) => enqueueJob(c.tx, {
   workspaceId: c.run.workspace_id, kind: JOB, runAt: iso(Date.now() + ms),
   payload: { run_id: c.run.id, ladder_id: c.run.ladder_id, step: c.step, token: c.run.token, ...extra },
 });
+
+// Said no to texts on a website form: their latest text consent (SITE.md
+// consent_events, the site server's) is a no. No table, no answer.
+const saidNoToTexts = async (tx, ws, personId) => {
+  if (!(await hasTable(tx, 'consent_events'))) return false;
+  const last = (await tx.query(
+    `select granted from consent_events where workspace_id = $1 and person_id = $2 and channel = 'sms'
+     order by created_at desc limit 1`,
+    [ws, personId],
+  )).rows[0];
+  return last ? last.granted === false : false;
+};
+
+// Why a text step won't text this person, or null — the texting module's
+// rules (ext/texting): do-not-contact, do-not-text, a number that can be
+// texted and hasn't replied STOP, and one campaign conversation per number
+// (a teammate texting them lately). Plus: never someone who said no to
+// texts on the website.
+const textSkip = async (tx, ws, person) => {
+  if (isDnc(person)) return 'do_not_contact';
+  if (noText(person)) return 'do_not_text';
+  if (!String(person.phone || '').trim()) return 'no_phone';
+  const to = e164(person.phone);
+  if (!to) return 'bad_number';
+  if (await isOptedOut(tx, ws, to)) return 'opted_out';
+  if (await saidNoToTexts(tx, ws, person.id)) return 'no_text_consent';
+  if (await inTouch(tx, ws, to, null)) return 'in_conversation';
+  return null;
+};
+
+// When the hours texts may go open next, from now in the campaign's time
+// (the text blast's rule): later today, or tomorrow at the day's start. A
+// weekday's start used for a Saturday is caught when the step looks again.
+const opensAt = (quiet, workspace) => {
+  const t = textClock();
+  const nowMin = localMinutes(t, tzOf(workspace));
+  const wait = nowMin < quiet.from * 60 ? quiet.from * 60 - nowMin : 24 * 60 - nowMin + quiet.from * 60;
+  return new Date(t.getTime() + Math.max(wait, 1) * 60_000);
+};
 
 const STEPS = {
   wait: async (c, s) => {
@@ -369,6 +560,52 @@ const STEPS = {
         // as the mail app's own Unsubscribe button.
         text: `${fillIn(s.body, fill)}\n\n—\nSent by ${c.ladder.campaign}.\nUnsubscribe: ${unsubscribe}`,
         headers: unsubscribeHeaders(unsubscribe),
+      },
+    };
+  },
+
+  text: async (c, s) => {
+    const { tx, run, person } = c;
+    const ws = run.workspace_id;
+    // Handed to the provider by an earlier try that never recorded the
+    // answer: it may have gone. Never again by itself.
+    if (run.wait === 'sending') {
+      await tx.query('update ladder_runs set wait = null where id = $1', [run.id]);
+      await record(c, { kind: 'text', result: 'unsure' });
+      return next(c);
+    }
+    const skip = await textSkip(tx, ws, person);
+    if (skip) {
+      await record(c, { kind: 'text', result: 'skipped', reason: skip });
+      return next(c);
+    }
+    if (!textConfigured()) {
+      // Logged once, when the run starts waiting; the hourly looks write nothing.
+      if (run.wait !== 'text') {
+        await tx.query("update ladder_runs set wait = 'text', next_at = null where id = $1", [run.id]);
+        await record(c, { kind: 'text', result: 'waiting', reason: 'text_not_connected' });
+      }
+      await again(c, HOUR);
+      return { waiting: 'text' };
+    }
+    const quiet = quietState(await settingsFor(tx, ws), c.workspace);
+    if (quiet.now) {
+      // Held until the hours open, said once ("Waiting for texting hours").
+      const at = opensAt(quiet, c.workspace);
+      if (run.wait !== 'quiet') await record(c, { kind: 'text', result: 'waiting', reason: 'quiet_hours', until: iso(at) });
+      await schedule(tx, run, { step: c.step, at: at.getTime(), wait: 'quiet' });
+      return { waiting: 'quiet', until: iso(at) };
+    }
+    // 1. Claim the send: 'sending', committed before the provider is called.
+    await tx.query("update ladder_runs set wait = 'sending', next_at = null, updated_at = now() where id = $1", [run.id]);
+    run.wait = 'sending';
+    await record(c, { kind: 'text', result: 'sending' });
+    return {
+      sendText: {
+        run_id: run.id, step: c.step, person_id: person.id, ladder_id: run.ladder_id,
+        to: e164(person.phone),
+        // Who it's from is in the words (checked on save); the opt-out line on each.
+        body: withFooter(fillIn(s.body, { person, campaign: c.ladder.campaign })),
       },
     };
   },
@@ -467,6 +704,71 @@ const deliver = async (db, ws, send) => {
   });
 };
 
+// 2 + 3 for a text: it goes now, outside any transaction (the texting
+// module's Twilio client); then the second write files it in the Inbox —
+// the campaign's own conversation with them, so a reply or a STOP lands
+// where the desk reads it — and moves the run on. A text is tried once:
+// whatever Twilio answered is what the log says.
+const deliverText = async (db, ws, send) => {
+  const msgId = newId();
+  const base = publicBase();
+  const res = await sendSms({
+    to: send.to, body: send.body, statusCallback: base ? `${base}/api/public/twilio/sms-status/${msgId}` : undefined,
+  });
+  await act(db, ws, async (tx, emit) => {
+    let conv = (await tx.query(
+      `select id from texting_conversations
+       where workspace_id = $1 and person_id = $2 and started_by is null and phone = $3 order by created_at limit 1`,
+      [ws, send.person_id, send.to],
+    )).rows[0];
+    if (!conv) {
+      conv = { id: newId() };
+      await tx.query(
+        'insert into texting_conversations (id, workspace_id, person_id, phone, started_by) values ($1, $2, $3, $4, null)',
+        [conv.id, ws, send.person_id, send.to],
+      );
+      emit('texting_conversation', conv.id, 'create', { person_id: send.person_id, phone: send.to, started_by: null, ladder_id: send.ladder_id });
+    }
+    const first = await isFirstOut(tx, conv.id);
+    const status = res.ok ? 'sent' : 'failed';
+    const detail = res.ok ? null : String(res.detail || 'not sent').slice(0, 200);
+    await tx.query(
+      `insert into texting_messages (id, workspace_id, conversation_id, direction, phone, body, status, first, provider_sid, error, sent_by)
+       values ($1, $2, $3, 'out', $4, $5, $6, $7, $8, $9, null)`,
+      [msgId, ws, conv.id, send.to, send.body, status, first, res.sid || null, detail],
+    );
+    await tx.query('update texting_conversations set last_at = now() where id = $1 and workspace_id = $2', [conv.id, ws]);
+    emit('texting_message', msgId, 'create', {
+      conversation_id: conv.id, direction: 'out', status, first, ladder_id: send.ladder_id, run_id: send.run_id, error: detail,
+    });
+    // Twilio 21610: the carrier has this number opted out — recorded here too.
+    if (!res.ok && res.code === 21610) await applyOptOut(tx, emit, ws, send.to, { out: true, keyword: 'carrier' });
+
+    const run = (await tx.query(
+      'select * from ladder_runs where id = $1 and workspace_id = $2 for update', [send.run_id, ws],
+    )).rows[0];
+    if (!run) return { gone: true };
+    const ladder = (await tx.query('select steps from ladders where id = $1 and workspace_id = $2', [run.ladder_id, ws])).rows[0];
+    const c = { tx, emit, run, steps: parseJson(ladder?.steps, []), step: send.step };
+    const entry = { kind: 'text', ...(res.ok ? { result: 'sent' } : { result: 'failed', reason: 'gave_up', detail }) };
+    // The run moved on meanwhile (taken off, deleted, a goal reached): say
+    // what happened, change nothing else.
+    if (run.wait !== 'sending' || Number(run.step) !== send.step) {
+      await record(c, entry);
+      return { late: true };
+    }
+    await tx.query('update ladder_runs set wait = null, updated_at = now() where id = $1', [run.id]);
+    await record(c, entry);
+    if (run.status === 'paused') {
+      // Turned off mid-send: it holds its place after this step.
+      await tx.query('update ladder_runs set step = $2 where id = $1', [run.id, send.step + 1]);
+      return { paused: true };
+    }
+    if (run.status !== 'active') return { done: true };
+    return next(c);
+  });
+};
+
 export const runStepJob = async (db, job) => {
   const ws = job.workspace_id;
   const { result } = await act(db, ws, async (tx, emit) => {
@@ -474,6 +776,9 @@ export const runStepJob = async (db, job) => {
     if (!loaded) return { stale: true };
     const c = { tx, emit, ...loaded };
     if (!c.person) return finish(c, 'person_removed');
+    // Did the thing the ladder is for (a path the events hook didn't see —
+    // a goal added while they were on it): off now, before the next step.
+    if (c.ladder.goal && await goalMet(tx, ws, c.person.id, c.ladder.goal, c.run.started_at)) return finish(c, 'goal');
     if (c.step >= c.steps.length) return finish(c, 'finished');
     const s = c.steps[c.step];
     const fn = STEPS[s?.kind];
@@ -481,4 +786,5 @@ export const runStepJob = async (db, job) => {
     return fn(c, s, Number(job.payload?.attempt) || 0);
   });
   if (result?.send) await deliver(db, ws, result.send);
+  if (result?.sendText) await deliverText(db, ws, result.sendText);
 };

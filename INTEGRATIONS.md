@@ -13,7 +13,7 @@ is written) and says exactly what is wrong if anything is.
 | [Database](#database) | everything the campaign records | yes | `DATABASE_URL` |
 | [Public address](#public-address) | links in email, texting's callbacks | yes | `STARBASE_PUBLIC_URL` |
 | [Email — Resend](#email--resend) | invites, newsletters, press, ladders, shift alerts, receipts | yes | `RESEND_API_KEY`, `MAIL_FROM` |
-| [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
+| [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, ladder texts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
 | [Two-step sign-in key](#two-step-sign-in-key) | seals everyone's authenticator key | before the public link goes out (works without, with a warning) | `STARBASE_TWO_STEP_KEY` |
@@ -85,8 +85,11 @@ can't list domains; the check says so and the key is fine).
 [twilio.com](https://www.twilio.com). One-to-one texts from the Inbox, the
 Calls card and the door card; text blasts to a list; STOP/START; calls
 placed through the campaign's number (Twilio rings the caller, they press 1,
-then it dials the person); SMS shift alerts. Without it, Call and Text open
-the phone's own dialer and messages, and nothing is lost.
+then it dials the person); SMS shift alerts; a ladder's *Text* step (by the
+same rules — inside the texting hours, never to a number that replied STOP,
+the campaign named, "Reply STOP to opt out" added — filed in the Inbox as
+the campaign's own conversation). Without it, Call and Text open the
+phone's own dialer and messages, a ladder's text waits, and nothing is lost.
 
 1. Twilio → buy a Canadian number with SMS and voice. Register it for
    messaging as Twilio requires (A2P/10DLC or toll-free verification).

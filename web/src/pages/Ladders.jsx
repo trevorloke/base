@@ -1,5 +1,6 @@
 // Ladders — the desk's list (Outreach → Ladders). One row per ladder: its
-// name, what starts it, "N in progress · N finished", On / Off. One yellow
+// name, what starts it (and its goal: "Until they give"), "N in progress ·
+// N finished", On / Off. One yellow
 // "New ladder" (a name and what starts it, then straight to its steps).
 // Open follow-ups sit on top as one row; how far people have come
 // (Contact → … → Leader) folds away under "How involved people are". Under
@@ -13,7 +14,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
-import { CONNECT_TO, LEVEL_HINT, TriggerPicker, countsLine, plural, triggerLine } from '../components/LaddersBits.jsx';
+import { CONNECT_TO, LEVEL_HINT, TriggerPicker, countsLine, goalOf, plural, triggerLine, triggerMissing } from '../components/LaddersBits.jsx';
 import './shifts.css';
 import './ladders.css';
 
@@ -27,12 +28,13 @@ function NewLadder({ options, onClose }) {
   const submit = async (e) => {
     e.preventDefault();
     if (!name.trim()) { setError('Add a name'); return; }
-    if (trigger.kind === 'tag' && !trigger.ref.trim()) { setError('Pick a tag'); return; }
+    const why = triggerMissing(trigger);
+    if (why) { setError(why); return; }
     setBusy(true);
     setError(null);
     try {
       const res = await action('ladder.create', {
-        name: name.trim(), trigger: { kind: trigger.kind, ref: trigger.ref.trim() || null },
+        name: name.trim(), trigger: { kind: trigger.kind, ref: String(trigger.ref || '').trim() || null },
       });
       queryClient.invalidateQueries({ queryKey: ['ladders'] });
       navigate(`/ladders/${res.ladder.id}`);
@@ -64,7 +66,7 @@ function LadderRow({ l }) {
       <Link className="ops-row" to={`/ladders/${l.id}`}>
         <span className="ops-row__main">
           <span className="ops-row__name">{l.name}</span>
-          <span className="ops-row__sub">{triggerLine(l.trigger)}</span>
+          <span className="ops-row__sub">{triggerLine(l.trigger)}{l.goal && goalOf(l.goal.kind) ? ` · ${goalOf(l.goal.kind).until.toLowerCase()}` : ''}</span>
           <span className="ops-row__sub">{countsLine(l)}</span>
         </span>
         <span className="ops-row__end">
@@ -102,13 +104,14 @@ export default function Ladders() {
   const ladders = d?.ladders ?? [];
   const followups = Number(d?.followups) || 0;
   const emailWaits = d && !d.emailConfigured && ladders.some((l) => l.active && l.steps.some((s) => s.kind === 'email'));
+  const textWaits = d && !d.textConfigured && ladders.some((l) => l.active && l.steps.some((s) => s.kind === 'text'));
 
   return (
     <div className="ops-page lad-page">
       <div className="ops-head">
         <div className="lad-title">
           <h1>Ladders</h1>
-          <p className="lad-sub">Automatic emails &amp; follow-ups</p>
+          <p className="lad-sub">Automatic emails, texts &amp; follow-ups</p>
         </div>
         {!showNew && online && (
           <button type="button" className="btn btn-primary ops-tap" onClick={() => setParams({ new: '1' })}>New ladder</button>
@@ -122,6 +125,9 @@ export default function Ladders() {
       {q.isError && !offline && <p className="error" role="alert">{q.error.message}</p>}
       {emailWaits && (
         <p className="lad-note" role="status">Email isn’t connected — email steps wait. <Link to={CONNECT_TO}>Connect</Link></p>
+      )}
+      {textWaits && (
+        <p className="lad-note" role="status">Texting isn’t connected — text steps wait. <Link to={CONNECT_TO}>Connect</Link></p>
       )}
       {followups > 0 && (
         <Link className="lad-fu-link" to="/follow-ups">

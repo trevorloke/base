@@ -92,6 +92,33 @@ The `site_action` event is the hook for the rest of base.win
 (`lib/hooks.js` `events`): follow-ups (speed to lead), ladders, People and
 Map filters ("did on the website: …").
 
+### What reacts to a site action (added with speed to lead and ladders)
+
+Each reads the site server's tables only when they exist (`to_regclass`),
+so nothing breaks before they are in.
+
+- `site_actions.payload` holds the form's own fields under their form
+  names (the table above: `roles`, `availability`, `note`; `topic`,
+  `message`; `shift_id`; `comment`; …), as checked — the follow-up's card
+  reads them from there by the event's `entity_id`.
+- **Follow-ups** (`server/ext/followups`): `volunteer` → a follow-up,
+  `contact` → one, `rsvp` → one when the person is new (made by the same
+  write, or never contacted and on no other shift). One organizer each:
+  the `referrer_id`'s teammate, else who knows them (My people), else the
+  turf their pin is in, else a manager. Due 24 hours later; a logged
+  contact closes it.
+- **Ladders** (`server/ext/ladders`): trigger `web`, ref a kind
+  (`petition`) or one campaign (`campaign:<campaign_id>`).
+- **People filter** (`server/ext/webdid`, `lib/audience.js` FILTER_KEYS):
+  `web=<kind>` · `web=campaign:<id>` · `web=any`, on `site_actions
+  (workspace_id, person_id, kind, campaign_id)` — an index on `(workspace_id,
+  person_id)` keeps it quick on the full voter file. `webWhere(ctx, value,
+  w)` is exported for the Map's filter. A volunteer never sorts by `join` or
+  `donate`. Words for each kind: `server/ext/webdid/words.js` (and
+  `web/src/components/WebDid.js`).
+- **Texts**: a ladder's text step skips anyone whose latest `consent_events`
+  row for `sms` has `granted = false`.
+
 ### Form fields (the renderer's forms send exactly these; the server reads exactly these)
 
 Every kind: `first_name`, `last_name`, `email`, `phone`, `postal_code`,

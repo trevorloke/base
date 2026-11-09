@@ -508,7 +508,8 @@ test('request.ask queued with no signal sends once and a replay is a duplicate',
   assert.equal(again.status, 200);
   assert.equal(again.json.duplicate, true);
   assert.equal(again.json.request.id, rows[0].id);
-  const evs = (await c.get('/api/events?since=0&limit=5000')).json.events.filter((e) => e.action === 'request.ask' && e.payload.person_id === p.id);
+  // The request's own event (the same write also hands them to an organizer: a follow-up).
+  const evs = (await c.get('/api/events?since=0&limit=5000')).json.events.filter((e) => e.action === 'request.ask' && e.entity_type === 'door_request' && e.payload.person_id === p.id);
   assert.equal(evs.length, 1, 'one event');
   assert.equal((await c.get('/api/audit/verify')).json.ok, true);
   ob.setOutboxOwner(null);
