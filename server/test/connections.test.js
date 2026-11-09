@@ -9,7 +9,8 @@ const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
 const saved = { ...process.env };
 const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL',
-  'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL'];
+  'GEOCODER', 'GOOGLE_MAPS_TILES', 'GOOGLE_MAPS_SERVER_KEY', 'DATABASE_URL', 'TWILIO_VOICE', 'STARBASE_TILE_URL',
+  'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'];
 let mgr, staff;
 let resendDomains = [];
 let twilioNumbers = [];
@@ -56,7 +57,7 @@ const check = async (key) => ok(await mgr.post('/api/connections/check', { key }
 
 test('nothing set: what each service is for and which settings are missing — managers only', async () => {
   const s = byKey(await list());
-  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs']);
+  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'stripe']);
   assert.deepEqual(s.email.missing, ['RESEND_API_KEY', 'MAIL_FROM']);
   assert.equal(s.email.state, 'missing');
   assert.deepEqual(s.texting.missing, ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']);
