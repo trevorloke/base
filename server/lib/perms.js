@@ -77,6 +77,7 @@ const PATH_AREA = [
   [/^\/api\/voted(\/|$)/, 'people'],
   [/^\/api\/requests(\/|$)/, 'people'],
   [/^\/api\/field-report/, 'data'],
+  [/^\/api\/pathtowin(\/|$)/, 'data'],
   [/^\/api\/shiftturfs(\/|$)/, 'shifts'],
   [/^\/api\/(crew|volunteers)(\/|$)/, 'shifts'],
   [/^\/api\/connections(\/|$)/, 'admin'],
