@@ -147,6 +147,159 @@ test('merge: one donor now, over only with a third record that may be them — t
   assert.equal(mergedSaid('Ida Thrice', r), '✓ Ida Thrice: one record — maybe over the donation limit together with another record, flagged in Donations');
 });
 
+// ── One donor on many records: what the desk rules stays ruled ──
+// A maybe (ext/payments limits.js) can name more than one record. The desk
+// rules them out one by one (Donations: one choice per record), a pair it
+// ruled apart is never added up — beside a third record either — and a
+// merge keeps the rulings of the record merged in.
+const briefRow = async (id) => ok(await mgr.get('/api/brief')).flagged.find((f) => f.id === id);
+const ledgerRow = async (id) => ok(await mgr.get('/api/records/gift?limit=200')).records.find((g) => g.id === id);
+const giftNow = async (id) => (await db.query('select flagged, flag_reason, attrs from gifts where id = $1', [id])).rows[0];
+
+test('a maybe naming two records: one choice each, and ruling one out keeps the other added up', async () => {
+  const v = await mgr.createPerson('Aman Gill', { phone: '604-555-1111', address: '1 Alpha St', postal: 'V3S 1A1' });
+  const z = await mgr.createPerson('Aman Gill', { phone: '778-555-2222', address: '99 Zed St', postal: 'V3W 5B5' });
+  await cheque(v, 40000, '2026-09-01');
+  await cheque(z, 30000, '2026-09-02');
+  // The donor gives again with a new email: V's phone, Z's postal code.
+  const w = await mgr.createPerson('Aman Gill', { email: 'aman.new@example.org', phone: '604-555-1111', address: '5 Whisky Ave', postal: 'V3W 5B5' });
+  const g = await cheque(w, 90000, '2026-12-01');
+  assert.match(g.flag_reason, /^Possibly the same donor as Aman Gill \(same phone\) and Aman Gill \(same postal code\): together they are at \$1,600\.00/);
+  const row = await briefRow(g.id);
+  assert.deepEqual(row.maybe_same_as?.map((n) => [n.id, n.name, n.shares]), [[v.id, 'Aman Gill', 'phone'], [z.id, 'Aman Gill', 'postal code']],
+    'Needs you names each record and what it shares');
+  assert.deepEqual((await ledgerRow(g.id)).maybe_same_as, row.maybe_same_as, 'so does the ledger');
+  const { apartChoices } = await import('../../web/src/components/MoneyWords.js');
+  const { choices, duplicates } = apartChoices(row);
+  assert.deepEqual([choices.map((c) => c.label), duplicates], [['Not Aman Gill (same phone)', 'Not Aman Gill (same postal code)'], false]);
+  const notZ = choices.find((c) => c.id === z.id);
+  assert.equal(notZ.ask, 'Not the same person as Aman Gill (same postal code)? The two records are kept apart, and the limit is checked again.');
+  // Z is someone else: that pair alone.
+  const r = ok(await mgr.action('person.notDuplicate', { a: w.id, b: notZ.id }));
+  assert.deepEqual(r.rechecked.map((x) => [x.id, x.flagged]), [[g.id, false]], 'W with V is $1,300: under');
+  assert.ok((await pairsOf()).some(([n, why]) => n === 'Aman Gill + Aman Gill' && why === 'phone'), 'W and V still a pair in Duplicates');
+  const later = await cheque(v, 50000, '2026-12-02');
+  assert.match(later.flag_reason ?? '', /^Possibly the same donor as Aman Gill \(same phone\): together they are at \$1,800\.00 for 2026/, 'V and W still added up');
+  assert.deepEqual(later.maybe_same_donor, [w.id]);
+});
+
+test('a maybe kept from before (the record ids alone) still offers Not the same person', async () => {
+  const { apartChoices } = await import('../../web/src/components/MoneyWords.js');
+  const reason = 'Possibly the same donor as Mae Twin (same address and postal code): together they are at $2,000.00 for 2026 — over the $1,429.70 limit on the city council slate (LEOA)';
+  assert.deepEqual(apartChoices({ flagged: true, maybe_same_donor: ['a'], flag_reason: reason }), {
+    choices: [{ id: 'a', label: 'Not the same person', ask: 'Not the same person as Mae Twin (same address and postal code)? The two records are kept apart, and the limit is checked again.' }],
+    duplicates: false,
+  }, 'one record: the one the reason names');
+  assert.deepEqual(apartChoices({ flagged: true, attrs: { maybe_same_donor: ['a', 'b'] }, flag_reason: reason }), { choices: [], duplicates: true },
+    'two it can’t tell apart: People → Duplicates shows them side by side');
+  assert.deepEqual(apartChoices({ flagged: false, attrs: { maybe_same_donor: ['a'] } }), { choices: [], duplicates: false }, 'not flagged: nothing to rule');
+  // Two that would read the same (one name at one door) say what each gave.
+  const both = { name: 'Raj Senior', shares: 'address and postal code' };
+  const told = apartChoices({ flagged: true, date: '2026-05-01', maybe_same_donor: ['a', 'b'],
+    maybe_same_as: [{ id: 'a', ...both, given_cents: 60000 }, { id: 'b', ...both, given_cents: 90000 }] });
+  assert.deepEqual(told.choices.map((c) => c.label), ['Not Raj Senior (same address and postal code) · $600 in 2026', 'Not Raj Senior (same address and postal code) · $900 in 2026']);
+  // Stored as before (ids only), the server still names them.
+  const one = await mgr.createPerson('Old Maybe', { postal: 'V3V 9P9' });
+  const two = await mgr.createPerson('Old Maybe', { email: 'old.maybe@example.org', postal: 'V3V 9P9' });
+  await cheque(one, 100000, '2026-12-03');
+  const g = await cheque(two, 50000, '2026-12-03');
+  assert.deepEqual(g.maybe_same_donor, [one.id]);
+  assert.deepEqual((await giftNow(g.id)).attrs.maybe_same_donor, [one.id], 'the ids are all the gift keeps');
+  assert.deepEqual((await briefRow(g.id)).maybe_same_as?.map((n) => [n.id, n.name, n.shares]), [[one.id, 'Old Maybe', 'postal code']]);
+});
+
+test('two records the desk said are two people are never added up as one donor’s, beside a third either', async () => {
+  const at = { address: '1 Sand Rd', postal: 'V3Y 2B2' };
+  const x = await mgr.createPerson('Lou Sand', at);
+  const y = await mgr.createPerson('Lou Sand', at);
+  ok(await mgr.action('person.notDuplicate', { a: x.id, b: y.id }));
+  await cheque(x, 70000, '2026-06-01');
+  await cheque(y, 70000, '2026-06-02');
+  const n = await mgr.createPerson('Lou Sand', { email: 'lou.sand@example.org', postal: 'V3Y2B2' });
+  assert.equal((await cheque(n, 10000, '2026-06-03')).flagged, false, 'N is X or Y, never both: $800 at most');
+  const q3 = await mgr.createPerson('Lou Sand', at);
+  assert.equal((await cheque(q3, 30000, '2026-06-04')).flagged, false, 'with X (or Y) and N: $1,100 at most');
+  const over = await cheque(n, 40000, '2026-06-05');
+  assert.match(over.flag_reason ?? '', /^Possibly the same donor as Lou Sand \(same postal code\) and Lou Sand \(same postal code\): together they are at \$1,500\.00 for 2026/);
+  assert.deepEqual(over.maybe_same_donor, [x.id, q3.id], 'the most they can be together, named: X and the third, never Y beside X');
+  // Ruled apart after the flag (People → Duplicates): added up again the same way.
+  const x2 = await mgr.createPerson('Ana Sand', { address: '3 Sand Rd', postal: 'V3Y 2B3' });
+  const y2 = await mgr.createPerson('Ana Sand', { address: '3 Sand Rd', postal: 'V3Y 2B3' });
+  await cheque(x2, 70000, '2026-06-06');
+  await cheque(y2, 70000, '2026-06-07');
+  const n2 = await mgr.createPerson('Ana Sand', { email: 'ana.sand@example.org', postal: 'V3Y 2B3' });
+  const g2 = await cheque(n2, 10000, '2026-06-08');
+  assert.deepEqual(g2.maybe_same_donor, [x2.id, y2.id], '$1,500 while they may be one');
+  const r = ok(await mgr.action('person.notDuplicate', { a: x2.id, b: y2.id }));
+  assert.deepEqual(r.rechecked.map((g) => [g.id, g.flagged]), [[g2.id, false]], 'two people: N is $800 with either');
+});
+
+test('the most records can be together: a ruling says nothing of a third record, and past a dozen the search is bounded', async () => {
+  const { mostTogether } = await import('../ext/payments/limits.js');
+  const r = (id, cents) => ({ id, given_cents: cents });
+  const apart = (...pairs) => new Set(pairs.flatMap(([a, b]) => [`${a}|${b}`, `${b}|${a}`]));
+  // X ≠ Y and Y ≠ Z: X and Z may still be one donor.
+  assert.deepEqual(mostTogether([r('x', 500), r('y', 800), r('z', 400), r('f', 100)], apart(['x', 'y'], ['y', 'z'])).map((o) => o.id), ['x', 'z', 'f']);
+  // Twenty records, each ruled apart from the next: never two of a pair.
+  const many = Array.from({ length: 20 }, (_, i) => r(`p${i}`, 1000 + i));
+  const chain = apart(...many.slice(1).map((o, i) => [many[i].id, o.id]));
+  const got = mostTogether(many, chain).map((o) => o.id);
+  assert.ok(got.length >= 10 && got.every((id, i) => !got.slice(i + 1).some((o) => chain.has(`${id}|${o}`))), got.join(' '));
+});
+
+test('merge: a Not the same ruling on the record merged in stays with the record kept', async () => {
+  const k = await mgr.createPerson('Kim Lee', { email: 'kim.lee@example.org', phone: '604-555-2222' });
+  const d = await mgr.createPerson('Kim Lee', { phone: '604-555-2222', postal: 'V3X 1A1' });
+  const c = await mgr.createPerson('Kim Lee', { postal: 'V3X 1A1' });
+  await cheque(c, 100000, '2026-07-01');
+  ok(await mgr.action('person.notDuplicate', { a: d.id, b: c.id }));
+  assert.equal((await cheque(k, 30000, '2026-07-02')).flagged, false);
+  assert.equal((await cheque(d, 20000, '2026-07-03')).flagged, false, 'C is someone else');
+  const r = ok(await mgr.action('person.merge', { keep: k.id, drop: d.id }));
+  assert.ok(r.filled.includes('postal'), 'K takes D’s postal code, which C has too');
+  assert.deepEqual(r.flagged, [], 'C is still someone else: no maybe comes back');
+  assert.ok(!(await pairsOf()).some(([nm]) => nm === 'Kim Lee + Kim Lee'), 'and Duplicates doesn’t list K with C');
+  assert.equal((await cheque(k, 1000, '2026-07-04')).flagged, false, 'nor is a later gift flagged');
+});
+
+test('merge: a maybe the merge clears (the record merged in matched a third one the kept one doesn’t) is said, naming it', async () => {
+  const v = await mgr.createPerson('Ph One', { phone: '604-555-1111', postal: 'V3T 6P6' });
+  const e = await mgr.createPerson('Ph One', { email: 'ph.one@example.org', phone: '604-555-2222', postal: 'V3T 6P6' });
+  const t = await mgr.createPerson('Ph One', { phone: '604-555-2222' });
+  await cheque(v, 40000, '2026-03-01');
+  await cheque(t, 60000, '2026-03-15');
+  const m = await cheque(e, 50000, '2026-04-01');
+  assert.deepEqual(m.maybe_same_donor, [v.id, t.id]);
+  const r = ok(await mgr.action('person.merge', { keep: v.id, drop: e.id }));
+  assert.equal((await giftNow(m.id)).flagged, false, 'V keeps its own phone: T no longer matches');
+  assert.deepEqual(r.cleared, [{ gift_id: m.id, person_id: t.id, name: 'Ph One', shares: 'phone' }], 'the answer says which');
+  assert.equal(mergedSaid('Ph One', r), '✓ Ph One: one record — no longer flagged as possibly the same donor as Ph One (same phone): check that record');
+});
+
+test('a gift voided: the maybes that added it up are added up again without it — re-totalled, then cleared', async () => {
+  const at = { address: '2 Moe Rd', postal: 'V3V 2M2' };
+  const r1 = await mgr.createPerson('Moe Twice', at);
+  const r3 = await mgr.createPerson('Moe Twice', at);
+  const r2 = await mgr.createPerson('Moe Twice', { email: 'moe.twice@example.org', postal: 'V3V 2M2' });
+  const g1 = await cheque(r1, 40000, '2026-12-04');
+  const g3 = await cheque(r3, 100000, '2026-12-04');
+  assert.equal(g3.flagged, false, '$1,400 with R1: under');
+  const g2 = await cheque(r2, 50000, '2026-12-05');
+  assert.match(g2.flag_reason, /together they are at \$1,900\.00/);
+  const voided = ok(await mgr.action('gift.void', { id: g1.id }));
+  const row = await briefRow(g2.id);
+  assert.match(row?.flag_reason ?? '', /^Possibly the same donor as Moe Twice \(same postal code\): together they are at \$1,500\.00 for 2026/, 'without R1’s gift');
+  assert.deepEqual(row.maybe_same_donor, [r3.id]);
+  assert.deepEqual(voided.rechecked?.map((x) => x.id), [g2.id], 'the void’s answer says so');
+  const { overLine, overOf } = await import('../../web/src/components/MoneyWords.js');
+  assert.equal(overLine(overOf(row)), 'Maybe $70.30 over the $1,429.70 limit', 'what Needs you says');
+  ok(await mgr.action('gift.void', { id: g3.id }));
+  assert.deepEqual([(await giftNow(g2.id)).flagged, await briefRow(g2.id)], [false, undefined], 'nothing left to add up: cleared, off Needs you');
+  // Back in the books: the restored gift is the one that crosses.
+  const back = ok(await mgr.action('gift.restore', { id: g3.id }));
+  assert.match(back.flag_reason ?? '', /^Possibly the same donor as Moe Twice \(same postal code\): together they are at \$1,500\.00/);
+});
+
 test('refusals: the same record twice, one already gone, a volunteer; the books verify', async () => {
   const ben = (await db.query("select id from persons where name = 'Ben Example' and deleted_at is null order by created_at")).rows.map((x) => x.id);
   assert.equal((await mgr.action('person.merge', { keep: ben[0], drop: ben[0] })).status, 400);

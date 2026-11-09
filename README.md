@@ -105,9 +105,12 @@ stays), its blanks are filled and tags joined, and an old link to it says
 *Merged — open their record*. A donor made one is checked against the limit
 again, and the line after *Merge* says when they are now over it — even when
 a gift on the two was already flagged as possibly one donor — or only maybe
-over, together with another record that may be them. *Not the same* keeps a
-pair away, and a gift flagged as possibly one donor on the two is added up
-again without the other.
+over, together with another record that may be them. The record kept takes
+on the other's *Not the same* rulings, and when the merge clears a maybe
+with a third record only the other one matched (a phone or address the kept
+record doesn't have), the line names that record to check. *Not the same*
+keeps a pair away, and a gift flagged as possibly one donor on the two is
+added up again without the other.
 
 ### Two-step sign-in
 
@@ -439,8 +442,9 @@ checked when the payment lands (over it, refunded through Stripe and
 flagged for the treasurer; over only with another record that may be the
 same donor — the same name, and postal code, phone or address — logged and
 flagged for the treasurer to decide, as is a cheque logged at the desk
-after it; *Not the same person* on the flag keeps the records apart and
-checks again); each
+after it; *Not the same person* on the flag keeps the records it names
+apart one at a time, and the flag is checked again then and whenever a gift
+on the other record leaves the books); each
 payment becomes a gift through the same path as the desk's, marked online,
 with its receipt; a monthly gift is a pledge, each month its own gift.
 

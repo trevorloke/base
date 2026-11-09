@@ -129,12 +129,13 @@ export const ACTIONS = {
   },
 
   // A void is an event, never a delete: the gift leaves every total but stays
-  // in the books, and restore brings it back (lib/gifts.js). Answers { id };
-  // restore adds flagged/flag_reason.
+  // in the books, and restore brings it back (lib/gifts.js). Answers { id,
+  // rechecked } (the maybes added up again without it); restore answers
+  // { id, flagged, flag_reason }.
   'gift.void': {
     roles: MONEY_ROLES,
     input: z.object({ id: z.uuid() }),
-    handler: (tx, ctx, input, emit) => voidGift(tx, ctx.workspaceId, input.id, emit),
+    handler: (tx, ctx, input, emit) => voidGift(tx, ctx.workspace, input.id, emit),
   },
 
   'gift.restore': {

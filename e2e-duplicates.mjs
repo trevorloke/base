@@ -2,7 +2,11 @@
 // one with a phone and a talk, the other with an address. People → More →
 // Duplicates shows them side by side; "Keep this one" asks once, Merge makes
 // one record with both histories; the old record's link says where it went;
-// "Not the same" keeps a pair away. Measured at 1360 and 390.
+// "Not the same" keeps a pair away. On Donations, a gift that may be the
+// same donor as two records offers one "Not the same person" choice for
+// each, and ruling one out leaves the other a pair. A merge that clears a
+// maybe with a record only the merged one matched names it. Measured at
+// 1360 and 390.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4133 node server/index.js &
 //   BASE=http://127.0.0.1:4133 SHOTS=/tmp/dupes node e2e-duplicates.mjs
@@ -81,6 +85,50 @@ await page.waitForSelector('.dup-pair', { timeout: 8000 });
 await page.click('.dup-pair button:has-text("Not the same")');
 await page.waitForSelector('.ops-empty', { timeout: 8000 }).catch(() => {});
 check('Not the same: "No duplicates found."', /No duplicates found/.test(await page.innerText('body')));
+
+// Donations: a gift that may be the same donor as two records — V by phone,
+// Z by postal code. Z is someone else: only that pair is kept apart.
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' });
+const gave = (p, cents) => api('/actions/gift.log', { person_id: p.id, amount_cents: cents, date: today, method: 'cheque' });
+const gill = async (extra) => (await api('/actions/person.create', { name: 'Aman Gill', ...extra })).json.person;
+const gv = await gill({ phone: '604-555-1111', address: '1 Alpha St', postal: 'V3S 1A1' });
+const gz = await gill({ phone: '778-555-2222', address: '99 Zed St', postal: 'V3W 5B5' });
+await gave(gv, 40000);
+await gave(gz, 30000);
+const gw = await gill({ email: `aman+${tag}@dupes.example`, phone: '604-555-1111', address: '5 Whisky Ave', postal: 'V3W 5B5' });
+await gave(gw, 90000);
+await page.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.ops-needs .ops-row', { timeout: 10000 }).catch(() => {});
+await page.click('.ops-needs .ops-row:has-text("Aman Gill")').catch(() => {});
+const choices = await page.locator('.ops-needs .ops-actions button:has-text("Not Aman Gill")').allInnerTexts().catch(() => []);
+check('Needs you: one choice for each record the maybe names', JSON.stringify(choices) === JSON.stringify(['Not Aman Gill (same phone)', 'Not Aman Gill (same postal code)']), JSON.stringify(choices));
+await page.click('.ops-needs button:has-text("Not Aman Gill (same postal code)")').catch(() => {});
+const askZ = await page.locator('.ops-needs .ops-confirm').innerText().catch(() => '');
+check('it asks about that record alone', /^Not the same person as Aman Gill \(same postal code\)\?/.test(askZ), askZ);
+await page.screenshot({ path: `${SHOTS}/03-donations-not-the-same.png` });
+await page.click('.ops-needs .ops-confirm button:has-text("Yes")').catch(() => {});
+await page.waitForSelector('.ops-toast', { timeout: 8000 }).catch(() => {});
+check('"✓ Kept apart. The flag is cleared." (W with V alone is under)', /Kept apart\. The flag is cleared\./.test(await page.innerText('.ops-toast').catch(() => '')));
+const gills = ((await api('/duplicates')).json?.pairs ?? []).filter((p) => p.a.name === 'Aman Gill');
+check('W and V are still a pair to merge', gills.length === 1 && [gills[0].a.id, gills[0].b.id].sort().join() === [gw.id, gv.id].sort().join(), JSON.stringify(gills.map((p) => p.why)));
+
+// A merge that clears a maybe with a record only the merged one matched
+// (T shared E's phone; V keeps its own) names that record.
+const one = async (extra) => (await api('/actions/person.create', { name: 'Ph One', ...extra })).json.person;
+const pv = await one({ phone: '604-555-3333', postal: 'V3T 6P6' });
+const pe = await one({ email: `ph+${tag}@dupes.example`, phone: '604-555-4444', postal: 'V3T 6P6' });
+const pt = await one({ phone: '604-555-4444' });
+await gave(pv, 40000);
+await gave(pt, 60000);
+await gave(pe, 50000);
+await page.goto(`${ADMIN}/people/duplicates`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.dup-pair', { timeout: 8000 }).catch(() => {});
+const phPair = page.locator('.dup-pair:has-text("Ph One"):has-text("Same name and postal code")');
+await phPair.locator('.dup-side:has-text("604-555-3333") button:has-text("Keep this one")').click().catch(() => {});
+await phPair.locator('button:has-text("Merge")').click().catch(() => {});
+await page.waitForSelector('.ops-done', { timeout: 8000 }).catch(() => {});
+const phSaid = await page.innerText('.ops-done').catch(() => '');
+check('the line names the record the cleared maybe was with', phSaid === '✓ Ph One: one record — no longer flagged as possibly the same donor as Ph One (same phone): check that record', phSaid);
 
 // At 390.
 await page.setViewportSize({ width: 390, height: 844 });

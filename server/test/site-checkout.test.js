@@ -588,6 +588,33 @@ test('the two records made one: the maybe becomes the year over the limit', asyn
   assert.equal(mergedSaid('Una Merged', merged), '✓ Una Merged: one record — over the donation limit now, flagged in Donations');
 });
 
+// The other record's gift leaves the books in Stripe (refunded, or a
+// dispute lost): the maybe that added it up is added up again without it.
+test('the other record’s gift refunded in Stripe, or lost in a dispute: the maybe that added it up is cleared', async () => {
+  const intentOf = (url) => fake.sessions.get(sessionOf(url)).payment_intent;
+  const pair = async (first, postal) => {
+    const body = { first_name: first, last_name: 'Gone', address: `6 ${first} Rd`, city: 'Surrey', postal_code: postal, cadence: 'once', declaration: true };
+    const online = ok(await send('donate', { ...body, email: `${first.toLowerCase()}.gone.${tag}@example.org`, amount_cents: 100_000 }));
+    assert.equal((await paid(online.checkout_url)).body.result, 'gift recorded');
+    const voter = ok(await mgr.action('person.create', { first_name: first, last_name: 'Gone', address: `6 ${first} Rd`, city: 'Surrey', postal })).person;
+    const desk = ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 50_000, date: today(), method: 'cheque' })).gift;
+    assert.match(desk.flag_reason, /^Possibly the same donor as [A-Za-z]+ Gone \(same address and postal code\): together they are at \$1,500\.00/);
+    return { pi: intentOf(online.checkout_url), desk };
+  };
+  const cleared = async (gift) => {
+    const now = (await db.query('select flagged, flag_reason, attrs from gifts where id = $1', [gift.id])).rows[0];
+    assert.deepEqual([now.flagged, now.flag_reason, now.attrs.maybe_same_donor], [false, null, undefined], 'nothing left to add up');
+    assert.ok(!ok(await mgr.get('/api/brief')).flagged.some((f) => f.id === gift.id), 'off Needs you');
+  };
+  const refunded = await pair('Rhoda', 'V3T 6R6');
+  assert.equal((await fake.refund(refunded.pi)).body.result, 'refunded: the gift is void');
+  await cleared(refunded.desk);
+  const lost = await pair('Dora', 'V3T 6D6');
+  const opened = await fake.dispute(lost.pi, 'created');
+  assert.equal((await fake.dispute(lost.pi, 'lost', { id: opened.event.data.object.id })).body.result, 'dispute lost: the gift is void');
+  await cleared(lost.desk);
+});
+
 test('the records that may be one donor are found through an index, never by reading the whole list', async () => {
   const { likelySameDonors } = await import('../ext/payments/limits.js');
   assert.equal(typeof likelySameDonors, 'function', 'limits.js finds them');

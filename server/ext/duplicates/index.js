@@ -17,14 +17,19 @@
 //       `keep` already has the same thing (both on one shift, one list),
 //       keep's stays. Keep's blanks are filled from drop (email, phone,
 //       address, pin…), tags are joined, and drop leaves the list (deleted,
-//       with merged_into, so an old link finds its way). Gifts moved onto
-//       one donor are checked against the limit again: a year that is now
-//       over is flagged like any crossing gift (and a "Possibly the same
-//       donor" flag on the two gives way to it); under on keep alone but
-//       over with another record that may be them, a maybe naming it.
+//       with merged_into, so an old link finds its way). Drop's "Not the
+//       same" rulings become keep's. Gifts moved onto one donor are checked
+//       against the limit again: a year that is now over is flagged like
+//       any crossing gift (and a "Possibly the same donor" flag on the two
+//       gives way to it); under on keep alone but over with another record
+//       that may be them, a maybe naming it. A maybe with a third record
+//       that only drop matched (keep's own phone, address and postal code
+//       stand) is cleared, and said, so the desk can check that record.
 //       → { keep, drop, filled, moved, flagged: [{ gift_id, year, reason,
-//       maybe_same_donor? }] } — each such year and slate once, so
-//       Duplicates can say over the limit now, or maybe.
+//       maybe_same_donor? }], cleared: [{ gift_id, person_id, name,
+//       shares }] } — flagged: each such year and slate once, so
+//       Duplicates can say over the limit now, or maybe; cleared: the third
+//       record, and what it shared with drop.
 //   person.notDuplicate  { a, b }   desk. "Not the same": the pair is not
 //       shown again, and never added up for the year's limit; a gift
 //       flagged as possibly one donor on them is added up again without
@@ -33,9 +38,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
-import { flagIfOver, recheckMaybes } from '../../lib/gifts.js';
+import { flagIfOver, maybesAbout, recheckMaybes } from '../../lib/gifts.js';
 import { DEFAULT_SLATE } from '@starbase/shared/canvass';
-import { sameText, samePhone, samePostal } from './same.js';
+import { sameText, samePhone, samePostal, sharesOf, sharedWords } from './same.js';
 
 export const sql = `
 create table if not exists person_not_dupes (
@@ -145,6 +150,59 @@ const isLoginEmail = async (tx, ws, email) => {
 
 const FILL = ['email', 'phone', 'address', 'house_number', 'unit', 'city', 'postal', 'rating', 'rated_at', 'voted_at'];
 
+// Drop's "Not the same" rulings become keep's: whoever the desk said isn't
+// drop isn't keep either (never keep and keep). Then drop's go.
+const moveRulings = async (tx, ws, keep, drop) => {
+  await tx.query(
+    `insert into person_not_dupes (workspace_id, a, b, created_by, created_at)
+     select workspace_id, least($2::uuid, other), greatest($2::uuid, other), created_by, created_at
+       from (select workspace_id, case when a = $3 then b else a end as other, created_by, created_at
+               from person_not_dupes where workspace_id = $1 and (a = $3 or b = $3)) x
+      where other <> $2::uuid
+     on conflict do nothing`,
+    [ws, keep, drop],
+  );
+  await tx.query('delete from person_not_dupes where workspace_id = $1 and (a = $2 or b = $2)', [ws, drop]);
+};
+
+// The maybes a merge cleared that the desk should hear of: drop matched a
+// third record (its phone, address or postal code) that keep doesn't —
+// keep's own values stand — so a maybe that named that record, or one on
+// that record that named drop, is gone or names others now. Not one over
+// on its own record now (said as over), nor a record the desk ruled apart
+// from keep (moveRulings). before: maybesAbout, read before the recheck;
+// rechecked: what recheckMaybes changed. → [{ gift_id, person_id, name,
+// shares }]: the third record by name, and what it shared with drop.
+const clearedBy = async (tx, ws, { keep, drop }, before, rechecked) => {
+  const ours = new Set([keep, drop]);
+  const lost = [];
+  for (const g of before) {
+    const now = rechecked.find((x) => x.id === g.id);
+    if (!now || (now.flagged && !now.maybe_same_donor)) continue;
+    const names = now.maybe_same_donor || [];
+    const had = Array.isArray(g.same_as) ? g.same_as : [];
+    if (ours.has(g.person_id)) {
+      for (const id of had) if (!ours.has(id) && !names.includes(id)) lost.push({ gift_id: g.id, person_id: id });
+    } else if (had.some((id) => ours.has(id)) && !names.includes(keep)) {
+      lost.push({ gift_id: g.id, person_id: g.person_id });
+    }
+  }
+  if (!lost.length) return [];
+  const ids = [...new Set(lost.map((l) => l.person_id))];
+  const apart = new Set((await tx.query(
+    'select a, b from person_not_dupes where workspace_id = $1 and (a = $2 or b = $2) and (a = any($3::uuid[]) or b = any($3::uuid[]))',
+    [ws, keep, ids],
+  )).rows.map((r) => (r.a === keep ? r.b : r.a)));
+  const who = new Map((await tx.query(
+    `select o.id, o.name, ${sharesOf('d', 'o')}
+       from persons d join persons o on o.workspace_id = d.workspace_id and o.id = any($3::uuid[])
+      where d.workspace_id = $1 and d.id = $2`,
+    [ws, drop, ids],
+  )).rows.map((r) => [r.id, { name: r.name, shares: sharedWords(r) }]));
+  return lost.filter((l) => !apart.has(l.person_id) && who.has(l.person_id))
+    .map((l) => ({ ...l, ...who.get(l.person_id) }));
+};
+
 export const actions = {
   'person.merge': {
     roles: DESK,
@@ -190,7 +248,7 @@ export const actions = {
         if (r.moved || r.dropped) moved[c.t] = r;
       }
       await moveRelationships(tx, ws, keep.id, drop.id);
-      await tx.query('delete from person_not_dupes where workspace_id = $1 and (a = $2 or b = $2)', [ws, drop.id]);
+      await moveRulings(tx, ws, keep.id, drop.id);
 
       // Drop leaves every list; an old link to it finds keep.
       await tx.query(
@@ -202,7 +260,10 @@ export const actions = {
       // A maybe one donor on these two records is one donor now: checked
       // again. Over on keep alone, it gives way to the plain over-limit
       // reason, and that year is over now: said once, like a crossing gift.
+      // One that named a third record only drop matched is said too.
+      const before = await maybesAbout(tx, ws, [keep.id, drop.id]);
       const rechecked = await recheckMaybes(tx, ctx.workspace, [keep.id, drop.id], emit);
+      const cleared = await clearedBy(tx, ws, { keep: keep.id, drop: drop.id }, before, rechecked);
       const flagged = [];
       const said = new Set();
       const plain = rechecked.filter((g) => g.flagged && !g.maybe_same_donor);
@@ -250,7 +311,7 @@ export const actions = {
 
       emit('person', keep.id, 'update', { merged: drop.id, ...filled, tags });
       emit('person', drop.id, 'void', { merged_into: keep.id });
-      return { keep: keep.id, drop: drop.id, filled: Object.keys(filled), moved, flagged };
+      return { keep: keep.id, drop: drop.id, filled: Object.keys(filled), moved, flagged, cleared };
     },
   },
 

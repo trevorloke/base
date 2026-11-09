@@ -285,11 +285,12 @@ export const closed = async (tx, emit, ws, plan) => {
   return { result: r ? `checkout ${plan.status}` : 'nothing to change' };
 };
 
-// A refunded payment takes its gift — and membership — out of the books.
+// A refunded payment takes its gift — and membership — out of the books
+// (the maybes it was added up in are added up again without it: voidGift).
 const unbook = async (tx, emit, ws, p) => {
   if (p.gift_id) {
     const live = (await tx.query('select 1 from gifts where id = $1 and workspace_id = $2 and deleted_at is null', [p.gift_id, ws.id])).rows[0];
-    if (live) await voidGift(tx, ws.id, p.gift_id, emit);
+    if (live) await voidGift(tx, ws, p.gift_id, emit);
   }
   const co = p.checkout_id ? (await tx.query('select membership_id from stripe_checkouts where id = $1', [p.checkout_id])).rows[0] : null;
   if (co?.membership_id && p.kind === 'membership') {
