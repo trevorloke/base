@@ -6,11 +6,13 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
+import { mergedSaid } from '../../web/src/components/DuplicatesWords.js';
 
 let mgr, vol, db;
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${r.status} ${JSON.stringify(r.json)}`); return r.json; };
 const pairsOf = async () => ok(await mgr.get('/api/duplicates')).pairs
   .map((p) => [[p.a.name, p.b.name].sort().join(' + '), p.why.sort().join(',')]);
+const cheque = async (p, cents, date) => ok(await mgr.action('gift.log', { person_id: p.id, amount_cents: cents, date, method: 'cheque' })).gift;
 
 before(async () => {
   db = await freshDb();
@@ -109,6 +111,40 @@ test('merge: history moves, blanks fill, tags join, clashes keep the kept one’
   assert.ok(gone.deleted_at);
   assert.equal(gone.into, keep.id);
   assert.ok(!(await pairsOf()).some(([n]) => /Ana/.test(n)), 'no longer a pair');
+});
+
+test('merge: maybes one donor on the two become the plain over-limit flag, and the answer says the year is over, once', async () => {
+  const voter = await mgr.createPerson('Una Twice', { address: '7 One Way', city: 'Surrey', postal: 'V3T 4K4' });
+  const other = await mgr.createPerson('Una Twice', { email: 'una.twice@example.org', postal: 'V3T 4K4' });
+  await cheque(voter, 100000, '2026-03-01');
+  const maybes = [await cheque(other, 50000, '2026-04-01'), await cheque(other, 10000, '2026-05-01')];
+  for (const g of maybes) {
+    assert.match(g.flag_reason, /^Possibly the same donor as Una Twice \(same postal code\)/);
+    assert.deepEqual(g.maybe_same_donor, [voter.id]);
+  }
+  assert.ok((await pairsOf()).some(([n, why]) => n === 'Una Twice + Una Twice' && why === 'postal'), 'Duplicates lists the two');
+  const r = ok(await mgr.action('person.merge', { keep: voter.id, drop: other.id }));
+  const now = (await db.query('select id, flagged, flag_reason from gifts where id = any($1::uuid[]) order by date', [maybes.map((g) => g.id)])).rows;
+  for (const g of now) assert.match(g.flag_reason, /^Una Twice is at \$1600\.00 for 2026 — over the \$1429\.70 limit/);
+  assert.deepEqual(r.flagged, [{ gift_id: maybes[0].id, year: 2026, reason: now[0].flag_reason }], 'over now: 2026, said once');
+  assert.equal(mergedSaid('Una Twice', r), '✓ Una Twice: one record — over the donation limit now, flagged in Donations');
+});
+
+test('merge: one donor now, over only with a third record that may be them — the flag, the answer and the line say maybe', async () => {
+  const keep = await mgr.createPerson('Ida Thrice', { email: 'ida.thrice@example.org', postal: 'V3W 1A1' });
+  const drop = await mgr.createPerson('Ida Thrice', { email: 'IDA.thrice@example.org' });
+  const third = await mgr.createPerson('Ida Thrice', { postal: 'V3W 1A1' });
+  await cheque(keep, 40000, '2026-03-01');
+  const moved = await cheque(drop, 40000, '2026-04-01');
+  assert.equal((await cheque(third, 70000, '2026-05-01')).flagged, false, '$1,100 with the first: under');
+  const r = ok(await mgr.action('person.merge', { keep: keep.id, drop: drop.id }));
+  // $800 on the one record; $1,500 with the third.
+  const [f] = r.flagged;
+  assert.match(f?.reason ?? '', /^Possibly the same donor as Ida Thrice \(same postal code\): together they are at \$1,500\.00 for 2026/);
+  assert.deepEqual(r.flagged, [{ gift_id: moved.id, year: 2026, reason: f.reason, maybe_same_donor: [third.id] }], 'a maybe, naming the third record');
+  const ev = (await db.query("select payload from events where action = 'person.merge' and entity_type = 'gift' and entity_id = $1", [moved.id])).rows[0];
+  assert.deepEqual(ev?.payload.maybe_same_donor, [third.id], 'on the event log too');
+  assert.equal(mergedSaid('Ida Thrice', r), '✓ Ida Thrice: one record — maybe over the donation limit together with another record, flagged in Donations');
 });
 
 test('refusals: the same record twice, one already gone, a volunteer; the books verify', async () => {

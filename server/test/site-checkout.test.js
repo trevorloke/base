@@ -32,6 +32,7 @@ import { campaign, send, hit, ok, member } from './site-helpers.js';
 import { startFakeStripe } from './fake-stripe.js';
 import { personOfCode, refCodeFor } from '../ext/site/people.js';
 import { _setPaymentsForTest } from '../ext/site/payments.js';
+import { mergedSaid } from '../../web/src/components/DuplicatesWords.js';
 
 const SECRET = 'whsec_site_checkout_test';
 const KEY = 'sk_test_site_checkout';
@@ -577,11 +578,14 @@ test('the two records made one: the maybe becomes the year over the limit', asyn
   await paid(r.checkout_url);
   const online = (await giftsNamed('Merged')).find((g) => g.person_id !== voter.id);
   assert.match(online.flag_reason, /^Possibly the same donor/);
-  ok(await mgr.action('person.merge', { keep: voter.id, drop: online.person_id }));
-  const now = (await db.query('select flagged, flag_reason, attrs from gifts where id = $1', [online.id])).rows[0];
+  const merged = ok(await mgr.action('person.merge', { keep: voter.id, drop: online.person_id }));
+  const now = (await db.query('select flagged, flag_reason, attrs, extract(year from date)::int as year from gifts where id = $1', [online.id])).rows[0];
   assert.equal(now.flagged, true);
   assert.match(now.flag_reason, /^Una Merged is at \$2000\.00 for \d{4} — over the \$1429\.70 limit/, 'one donor now: over, no maybe');
   assert.equal(now.attrs.maybe_same_donor, undefined, 'no other record to mark apart');
+  // People → Duplicates says so, as it does for two records with no maybe first.
+  assert.deepEqual(merged.flagged, [{ gift_id: online.id, year: now.year, reason: now.flag_reason }], 'the answer: that year is over now');
+  assert.equal(mergedSaid('Una Merged', merged), '✓ Una Merged: one record — over the donation limit now, flagged in Donations');
 });
 
 test('the records that may be one donor are found through an index, never by reading the whole list', async () => {

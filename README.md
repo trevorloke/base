@@ -103,8 +103,11 @@ receipts, shifts, signs, lists, answers, relationships, texts and requests
 move over (where both had the same — one shift, one list — the kept one's
 stays), its blanks are filled and tags joined, and an old link to it says
 *Merged — open their record*. A donor made one is checked against the limit
-again. *Not the same* keeps a pair away, and a gift flagged as possibly one
-donor on the two is added up again without the other.
+again, and the line after *Merge* says when they are now over it — even when
+a gift on the two was already flagged as possibly one donor — or only maybe
+over, together with another record that may be them. *Not the same* keeps a
+pair away, and a gift flagged as possibly one donor on the two is added up
+again without the other.
 
 ### Two-step sign-in
 

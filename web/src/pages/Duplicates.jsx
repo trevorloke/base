@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
+import { mergedSaid } from '../components/DuplicatesWords.js';
 import './duplicates.css';
 
 const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door', postal: 'Same name and postal code' };
@@ -60,8 +61,7 @@ function Pair({ pair, onDone }) {
             history moves over and fills its blanks.
           </span>
           <button type="button" className="btn btn-primary ops-tap" disabled={busy || !online}
-            onClick={() => run('person.merge', { keep: asking.keep.id, drop: asking.drop.id }, (r) => (
-              `✓ ${asking.keep.name}: one record${r.flagged?.length ? ' — over the donation limit now, flagged in Donations' : ''}`))}>
+            onClick={() => run('person.merge', { keep: asking.keep.id, drop: asking.drop.id }, (r) => mergedSaid(asking.keep.name, r))}>
             {busy ? 'Merging…' : 'Merge'}
           </button>
           <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => setAsking(null)}>Cancel</button>
