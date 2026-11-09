@@ -45,13 +45,13 @@ export { sql } from './sql.js';
 export { actions } from './actions.js';
 export { api } from './api.js';
 export { publicRoutes, siteGate, personToken } from './public.js';
-import { consentFromEvents } from './consent.js';
+import { consentFromEvents, consentEventsToRead } from './consent.js';
 
 // A record merged into another (ext/duplicates moves every person_id column;
 // a referrer is site_actions.referrer_id): the referrals follow it.
+const merges = (events) => events.filter((e) => e.entityType === 'person' && e.op === 'void' && e.payload?.merged_into);
 const referralsFollowMerge = async (tx, meta, events) => {
-  for (const e of events) {
-    if (e.entityType !== 'person' || e.op !== 'void' || !e.payload?.merged_into) continue;
+  for (const e of merges(events)) {
     await tx.query(
       'update site_actions set referrer_id = $3 where workspace_id = $1 and referrer_id = $2',
       [meta.workspaceId, e.entityId, e.payload.merged_into],
@@ -59,10 +59,21 @@ const referralsFollowMerge = async (tx, meta, events) => {
   }
 };
 
+// Every write in base.win passes here. Most have nothing for the website
+// (no query at all); what does is done inside a savepoint, so a problem
+// here never costs the write it rides on — it is logged, and the write goes on.
 export const hooks = {
   events: async (tx, meta, events) => {
-    await consentFromEvents(tx, meta, events);
-    await referralsFollowMerge(tx, meta, events);
+    if (!consentEventsToRead(meta, events).length && !merges(events).length) return;
+    await tx.query('savepoint site_hook');
+    try {
+      await consentFromEvents(tx, meta, events);
+      await referralsFollowMerge(tx, meta, events);
+      await tx.query('release savepoint site_hook');
+    } catch (e) {
+      await tx.query('rollback to savepoint site_hook');
+      console.error(`site: the consent record missed ${meta.action}: ${e.message}`);
+    }
   },
 };
 

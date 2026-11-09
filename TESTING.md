@@ -276,6 +276,19 @@ one tap away under **More**.
   **Call back…** → *In an hour · This evening · Tomorrow morning* does the
   same at that time. The bank's page shows *call back Thu 6:00 p.m. · 1 try*.
 
+- **The website** — open **/site/** (the campaign's own domain once
+  `SITE_HOSTS` points there): the first look makes the site from the
+  brand's seed (Imagine Surrey's pages as imaginesurrey.ca has them).
+  Sign the SkyTrain petition or the newsletter there: the person is in
+  People with *Website: petition* and *Signed: …*, matched to whoever is
+  already on file by email (or name and phone, or name and postal code),
+  and a ticked box puts them on the newsletter list with the words they
+  saw. A shift's **Edit** → **Show on the website** lists it on the site's
+  events, where anyone can sign up (room is checked). Their
+  `/preferences` link turns email and texts off or on in base.win itself.
+  Server tests: `server/test/site-*.test.js`; in a browser:
+  `e2e-site-server.mjs`.
+
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
   **Today · Map · Calls · Shifts**.

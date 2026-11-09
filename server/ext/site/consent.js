@@ -255,12 +255,23 @@ const peopleWithPhone = async (tx, ws, phone) => (await tx.query(
   `select id from persons where workspace_id = $1 and deleted_at is null and ${PHONE_DIGITS_SQL('phone')} = $2 order by created_at limit 20`, [ws, last10(phone)],
 )).rows.map((r) => r.id);
 
-export const consentFromEvents = async (tx, meta, events) => {
+// Which of a write's events this hook reads (the rest pass untouched,
+// with no query at all).
+const speaks = (e) => e.entityType === 'subscription'
+  || (e.entityType === 'texting_optout' && typeof e.payload?.opted_out === 'boolean')
+  || (e.entityType === 'person' && e.op === 'update' && Array.isArray(e.payload?.tags)
+    && (e.payload.tags.includes(NO_EMAIL) || e.payload.tags.includes(NO_TEXT)));
+export const consentEventsToRead = (meta, events) => {
   const action = String(meta.action || '');
   // The site's own writes record their consent themselves, with the words.
-  if (action.startsWith('site.') || QUIET.has(action)) return;
+  if (action.startsWith('site.') || QUIET.has(action)) return [];
+  return events.filter(speaks);
+};
+
+export const consentFromEvents = async (tx, meta, events) => {
+  const action = String(meta.action || '');
   const ws = meta.workspaceId;
-  for (const e of events) {
+  for (const e of consentEventsToRead(meta, events)) {
     const p = e.payload || {};
     if (e.entityType === 'subscription') {
       let granted = null;

@@ -274,6 +274,18 @@ test('a shift on the website: the desk switches it; a volunteer cannot', async (
   assert.equal((await mgr.action('shift.public', { id: '00000000-0000-4000-8000-000000000000', public: true })).status, 404);
 });
 
+test('the menu: the settings’ links, then the published pages marked "show in menu" by their published title', async () => {
+  const { menuPages, siteOf, readSettings } = await import('../ext/site/store.js');
+  const made = ok(await mgr.action('site.page.create', { title: 'Meet the team', show_in_nav: true })).page;
+  assert.ok(!(await menuPages(db, ws)).some((p) => p.slug === made.slug), 'a draft isn’t in the menu');
+  ok(await mgr.action('site.page.publish', { id: made.id }));
+  ok(await mgr.action('site.page.save', { id: made.id, title: 'Draft title, not live yet' }));
+  const menu = siteOf(await readSettings(db, ws), await menuPages(db, ws)).nav.menu;
+  assert.deepEqual(menu.at(-1), { label: 'Meet the team', href: '/meet-the-team' }, 'the published title');
+  assert.ok(menu.filter((l) => l.href === '/tracker').length === 1, 'a page already in the settings’ menu isn’t doubled');
+  ok(await mgr.action('site.page.delete', { id: made.id }));
+});
+
 test('every seeded page passes the publish check as it stands', async () => {
   const seeded = ['home', 'tracker', 'volunteer', 'events', 'news', 'donate', 'privacy', 'accessibility'];
   for (const p of (await mgr.get('/api/site')).json.pages.filter((x) => seeded.includes(x.slug))) {

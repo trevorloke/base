@@ -632,6 +632,8 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
 | `STARBASE_BRAND` | `imagine-surrey` or `base` — the look (*The brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
+| `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app (SITE.md) | blank: the website is at `/site/` only |
+| `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters) | blank: one is made and kept in the database |
 
 Two environments per client: **staging** deploys every push to `main`,
 **production** deploys the `production` branch, which the *Promote to

@@ -21,7 +21,10 @@ export const parseJ = (v, d) => {
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
 
 // ── Hosts ──
-const envHosts = () => String(process.env.SITE_HOSTS || '').split(',').map(hostOf).filter(Boolean);
+// SITE_HOSTS is the operator's: any host name or address (127.0.0.1 for a test).
+const envHosts = () => String(process.env.SITE_HOSTS || '').split(',')
+  .map((h) => h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, ''))
+  .filter((h) => /^[a-z0-9.-]{1,253}$/.test(h));
 const DOMAINS_MS = 30_000;
 let domainMap = null; // host → workspace id (from site_settings.domains)
 let domainsAt = 0;
@@ -114,10 +117,12 @@ export const readSettings = async (q, workspaceId) => {
   return out;
 };
 
-// The published pages marked "show in menu", in their order.
+// The published pages marked "show in menu", in their order — by their
+// published title (a draft's new title isn't on the site yet).
 export const menuPages = async (q, workspaceId) => (await q.query(
-  `select slug, title from site_pages where workspace_id = $1 and deleted_at is null and status = 'published' and show_in_nav
-   order by nav_order, created_at`, [workspaceId],
+  `select slug, coalesce(nullif(published->>'title', ''), title) as title from site_pages
+    where workspace_id = $1 and deleted_at is null and status = 'published' and show_in_nav
+    order by nav_order, created_at`, [workspaceId],
 )).rows;
 
 // What the renderer gets as `site` (SITE.md): the theme checked, the menu

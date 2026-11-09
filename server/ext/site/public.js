@@ -56,6 +56,10 @@ const fromHere = (p) => fileURLToPath(new URL(p, import.meta.url));
 const ROOTS = [
   { dir: fromHere('../../../shared/site/assets/'), exts: ['.jpg', '.jpeg', '.png', '.webp', '.svg', '.gif', '.ico', '.woff2', '.woff', '.css'] },
   { dir: fromHere('../../../shared/site/'), exts: ['.css', '.woff2', '.woff', '.ttf', '.otf'] },
+  // The islands' build: web/dist/site-assets/* (where a build may put the
+  // islands' pieces, so they load at /site-assets/… on the site's own
+  // domain too), then web/dist/* (site-islands.js itself).
+  { dir: fromHere('../../../web/dist/site-assets/'), exts: ['.js', '.mjs', '.css', '.woff2', '.woff', '.png', '.jpg', '.jpeg', '.webp', '.svg'] },
   { dir: fromHere('../../../web/dist/'), exts: ['.js', '.mjs', '.css', '.woff2', '.woff', '.png', '.jpg', '.jpeg', '.webp', '.svg'] },
 ];
 const TYPES = {
@@ -231,14 +235,17 @@ p{margin:0 0 14px}
 .check+.check{border-top:1px solid var(--line)}
 .check input{width:26px;height:26px;flex:none;margin:1px 0 0;accent-color:var(--brand)}
 .check b{display:block}
+.check:has(input:disabled){cursor:default}
+.check input:disabled{opacity:.55}
 .hint{display:block;font-size:15px;opacity:.8;margin-top:2px}
 button{display:block;width:100%;min-height:52px;margin-top:20px;border:0;border-radius:var(--radius);background:var(--brand);color:var(--brand-ink);font:700 17px/1.2 var(--font-body);cursor:pointer;padding:14px 20px}
 button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--link);outline-offset:3px}
 .done{border-left:5px solid var(--brand)}
 .share{word-break:break-all;font-weight:700}
 a{color:var(--link)}
-footer{margin-top:36px;font-size:15px}
-footer a{display:inline-flex;align-items:center;min-height:48px}
+.more{margin-top:16px}
+.more a,footer a{display:inline-flex;align-items:center;min-height:48px}
+footer{margin-top:28px;font-size:15px}
 </style></head><body>
 <header class="top"><a href="${esc(site.root)}/">${esc(org)}</a></header>
 <main id="main">${body}
@@ -401,8 +408,11 @@ export const makeSiteApp = (at) => {
       }
       await refCodeFor(tx, ws, person.id, emit);
     });
-    const words = [want.email ? 'You’ll get our emails' : 'No emails', want.sms ? 'texts are on' : 'no texts'];
-    return preferencesAfter(c, site, settings, t, `${words[0]}, ${words[1]}.`);
+    const words = [
+      ...(person.email ? [want.email ? 'You’ll get our emails' : 'No emails'] : []),
+      ...(person.phone ? [want.sms ? 'texts are on' : 'no texts'] : []),
+    ].join(', ');
+    return preferencesAfter(c, site, settings, t, words ? `${words[0].toUpperCase()}${words.slice(1)}.` : 'Nothing to change.');
   });
   const preferencesAfter = async (c, site, settings, t, saved) => {
     const person = await personOfToken(site, t);
@@ -428,7 +438,7 @@ export const makeSiteApp = (at) => {
       title: 'Unsubscribe',
       body: `<h1>Stop emails from ${esc(org)}?</h1><p>${esc(person.email)} won’t get our newsletters or other emails.</p>
 <form method="post" action="${esc(site.root)}/unsubscribe?t=${esc(encodeURIComponent(t))}"><input type="hidden" name="t" value="${esc(t)}"><button type="submit">Unsubscribe</button></form>
-<p><a href="${esc(site.root)}/preferences?t=${esc(encodeURIComponent(t))}">Choose what you get instead</a></p>`,
+<p class="more"><a href="${esc(site.root)}/preferences?t=${esc(encodeURIComponent(t))}">Choose what you get instead</a></p>`,
     });
   });
   app.post(route('/unsubscribe'), async (c) => {
@@ -448,7 +458,7 @@ export const makeSiteApp = (at) => {
     return sendPlain(c, site, settings, {
       title: 'Unsubscribed',
       body: `<h1>You’re unsubscribed</h1><div class="card done" role="status"><p>${esc(person.email)} won’t get emails from ${esc(org)} any more.</p></div>
-<p><a href="${esc(site.root)}/preferences?t=${esc(encodeURIComponent(t))}">Change your mind, or your texts</a></p>`,
+<p class="more"><a href="${esc(site.root)}/preferences?t=${esc(encodeURIComponent(t))}">Change your mind, or your texts</a></p>`,
     });
   });
 

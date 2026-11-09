@@ -323,3 +323,62 @@ test('a form from another site is refused; the answer never carries a person id'
   assert.deepEqual(withCookie.json, { ok: true });
   assert.equal(withCookie.headers.get('set-cookie'), null);
 });
+
+test('every kind: the honeypot keeps nothing, and a retry with the same key is one action', async () => {
+  _setPaymentsForTest({ paymentsReady: () => true, checkoutFor: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_test_every' }) });
+  const shift = (await mgr.action('shift.create', { title: 'Every kind', starts_at: future(30), capacity: 20 })).json.shift;
+  ok(await mgr.action('shift.public', { id: shift.id, public: true }));
+  const extra = {
+    newsletter: { consent_email: true }, petition: { campaign: petition.id }, pledge: { campaign: pledge.id },
+    volunteer: { roles: ['Phoning'] }, rsvp: { shift_id: shift.id }, contact: { message: 'Hello' },
+    join: { declaration: true }, donate: { declaration: true, amount_cents: 2500 },
+  };
+  for (const [kind, more] of Object.entries(extra)) {
+    const email = `every.${kind}@example.org`;
+    const trap = await send(kind, { email, website: 'http://bot.example', ...more });
+    assert.deepEqual([trap.status, trap.json], [200, { ok: true }], `${kind}: the honeypot hears ok`);
+    assert.equal((await personBy(db, ws, 'lower(email) = $2', [email])).length, 0, `${kind}: and nothing is kept`);
+    const body = { first_name: 'Every', last_name: 'Example', email, client_key: `every-${kind}`, ...more };
+    const first = ok(await send(kind, body), kind);
+    const again = ok(await send(kind, body), kind);
+    assert.deepEqual(again, first, `${kind}: the same answer`);
+    const [p] = await personBy(db, ws, 'lower(email) = $2', [email]);
+    assert.equal((await actionsOf(p.id, kind)).length, 1, `${kind}: one action`);
+    assert.ok(tags(p).includes(`Website: ${kind}`), kind);
+  }
+  _setPaymentsForTest(null);
+});
+
+test('an address placed on the map by the app’s own lookup (here, a neighbour already on the map)', async () => {
+  const was = process.env.GEOCODE_ON_SAVE;
+  process.env.GEOCODE_ON_SAVE = 'on';
+  _setPaymentsForTest({ paymentsReady: () => true, checkoutFor: async () => ({ url: 'https://checkout.stripe.com/c/pay/cs_test_map' }) });
+  try {
+    ok(await mgr.action('person.create', { name: 'Neighbour Example', address: '7700 128 St', city: 'Surrey', lat: 49.14, lng: -122.87 }));
+    ok(await send('donate', { first_name: 'Pia', last_name: 'Example', email: 'pia@example.org', address: '7700 128 St', city: 'Surrey', amount_cents: 2500, declaration: true }));
+    let p;
+    for (let i = 0; i < 40; i += 1) {
+      [p] = await personBy(db, ws, "lower(email) = 'pia@example.org'");
+      if (p?.lat != null) break;
+      await new Promise((r) => { setTimeout(r, 100); });
+    }
+    assert.deepEqual([p.lat, p.lng], [49.14, -122.87], 'on the map');
+    const placed = (await db.query("select count(*)::int as n from events where workspace_id = $1 and action = 'person.geocode' and entity_id = $2", [ws, p.id])).rows[0].n;
+    assert.equal(placed, 1, 'by the app’s own lookup (person.geocode)');
+  } finally {
+    if (was === undefined) delete process.env.GEOCODE_ON_SAVE; else process.env.GEOCODE_ON_SAVE = was;
+    _setPaymentsForTest(null);
+  }
+});
+
+test('two records made one: the referrals follow the one that stays', async () => {
+  const [referrer] = await personBy(db, ws, "lower(email) = 'asha@example.org'");
+  const twin = (await mgr.action('person.create', { name: 'Asha Example', phone: '604-555-0199' })).json.person;
+  ok(await mgr.action('person.merge', { keep: twin.id, drop: referrer.id }));
+  const credited = (await db.query('select count(*)::int as n from site_actions where workspace_id = $1 and referrer_id = $2', [ws, twin.id])).rows[0].n;
+  assert.ok(credited >= 2, 'the merged record’s referrals are the kept one’s');
+  // Their old link still works: it finds the record they were made one with.
+  ok(await send('contact', { email: 'late.friend@example.org', message: 'Sent by Asha', ref: referrer.attrs.ref_code }));
+  const [friend] = await personBy(db, ws, "lower(email) = 'late.friend@example.org'");
+  assert.equal((await actionsOf(friend.id, 'contact'))[0].referrer_id, twin.id);
+});
