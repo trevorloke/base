@@ -339,6 +339,10 @@ const afterDispute = (p) => {
 };
 
 // ── charge.dispute.*: the card holder asked their bank for it back ──
+// Its events can come the wrong way round: a close that comes first is
+// noted (the dispute's id), so its opening, when it comes, changes nothing.
+// While a payment is disputed its row names that dispute, so a row naming
+// it and not disputed means it has closed.
 export const disputed = async (tx, emit, ws, plan) => {
   const p = await lockPayment(tx, ws.id, plan.paymentId);
   if (!p) return { result: 'not a base.win payment' };
@@ -353,12 +357,19 @@ export const disputed = async (tx, emit, ws, plan) => {
       emit('payment', p.id, 'update', { status: 'dispute_lost', dispute: d.status });
       return { result: 'dispute lost: the gift is void' };
     }
-    // Won (or an inquiry closed): the money stays, and the payment is what it
-    // was before. Over the limit, that money still goes back: its refund is
-    // tried again — a job of its own (the landing's has run, and a refund
-    // refused during the dispute may go through now) — and the donor is
-    // told once it has.
-    if (p.status !== 'disputed') return { result: `dispute ${d.status}` };
+    // Won (or an inquiry closed): the money stays. Its opening not here yet:
+    // noted, and nothing else changes.
+    if (p.status !== 'disputed') {
+      if (d.id && p.dispute_id !== d.id) {
+        await tx.query('update stripe_payments set dispute_id = $3, updated_at = now() where id = $1 and workspace_id = $2', [p.id, ws.id, d.id]);
+        emit('payment', p.id, 'update', { dispute: d.status });
+      }
+      return { result: `dispute ${d.status}` };
+    }
+    // The payment is what it was before. Over the limit, that money still
+    // goes back: its refund is tried again — a job of its own (the landing's
+    // has run, and a refund refused during the dispute may go through now) —
+    // and the donor is told once it has.
     const back = afterDispute(p);
     const again = back === 'over_limit' || (back === 'refunded' && p.over_limit && !p.donor_emailed_at);
     await tx.query(`update stripe_payments set status = $3, updated_at = now() where id = $1 and workspace_id = $2`, [p.id, ws.id, back]);
@@ -372,6 +383,7 @@ export const disputed = async (tx, emit, ws, plan) => {
     return { result: `dispute ${d.status}`, refund: again };
   }
   if (['refunded', 'dispute_lost'].includes(p.status)) return { result: 'already settled' };
+  if (d.id && p.dispute_id === d.id && p.status !== 'disputed') return { result: 'already settled' }; // its close came first
   await tx.query(
     `update stripe_payments set status = 'disputed', dispute_id = $3, dispute_reason = $4, dispute_due_by = $5, updated_at = now()
      where id = $1 and workspace_id = $2`,

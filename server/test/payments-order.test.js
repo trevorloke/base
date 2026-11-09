@@ -7,6 +7,9 @@
 //     our ids ride on the payment, or on the subscription its invoice
 //     names), in either API version's shape; someone else's charge on the
 //     same Stripe account is still left alone
+//   - a dispute's close that comes before its opening leaves it closed (on
+//     a payment over the limit, its refund still goes ahead); two refunds
+//     whose events come the wrong way round leave the larger total
 //   - a dispute that ends with the money kept puts the payment back as it
 //     was: over the limit (its refund refused, or still waiting) is refunded
 //     after all and stays in front of the treasurer until it is; refunded
@@ -180,6 +183,46 @@ test('someone else’s charge on the same Stripe account is still left alone', a
   const old = await fake.send('charge.refunded', { id: 'ch_old_style', object: 'charge', payment_intent: null, amount: 500, amount_refunded: 500, refunded: true });
   assert.deepEqual([old.status, old.body.ignored], [200, 'not a base.win payment'], 'no payment intent: not from a checkout');
   assert.equal(await held(), before, 'nothing kept for them');
+});
+
+test('a dispute’s close that comes before its opening: it stays closed', async () => {
+  const p = await donor('Wes');
+  const r = await open(p.id, { amountCents: 3000 });
+  await fake.pay(r.session_id);
+  const pi = intentOf(r);
+  const opening = await fake.dispute(pi, 'created', { send: false });
+  const won = await fake.dispute(pi, 'won', { id: opening.object.id, send: false });
+  assert.equal((await now(won)).body.result, 'dispute won');
+  assert.equal((await now(opening)).body.result, 'already settled');
+  const pay = await payment('session_id', r.session_id);
+  assert.equal(pay.status, 'paid', 'not disputed again');
+  assert.equal((await giftOf(pay.gift_id)).deleted_at, null);
+  assert.equal(await needOf(pay.id), undefined, 'nothing for the treasurer');
+  // Two refunds, the second's event first: the larger total stands.
+  const second = await fake.refund(pi, 1000, { send: false });
+  const third = await fake.refund(pi, 500, { send: false });
+  assert.equal((await now(third)).body.result, 'partly refunded: flagged for the treasurer');
+  assert.equal((await now(second)).body.result, 'already recorded');
+  assert.equal((await payment('id', pay.id)).refunded_cents, 1500);
+  await verified();
+});
+
+test('over the limit, an inquiry’s close before its opening: the refund still goes ahead', async () => {
+  const p = await donor('Ivo');
+  const r = await open(p.id, { amountCents: 40000 });
+  await deskGift(p, 110000);
+  await fake.pay(r.session_id); // over the limit; its refund is queued
+  const pi = intentOf(r);
+  const opening = await fake.dispute(pi, 'warning_needs_response', { send: false });
+  const closed = await fake.dispute(pi, 'warning_closed', { id: opening.object.id, send: false });
+  assert.equal((await now(closed)).body.result, 'dispute warning_closed');
+  assert.equal((await now(opening)).body.result, 'already settled');
+  let pay = await payment('session_id', r.session_id);
+  assert.equal(pay.status, 'over_limit', 'not left disputed, where its refund would wait for ever');
+  await jobs();
+  pay = await payment('id', pay.id);
+  assert.deepEqual([pay.status, pay.refunded_cents], ['refunded', 40000]);
+  await verified();
 });
 
 test('a won dispute on a payment over the limit whose refund was refused: refunded after all, and in front of the treasurer until it is', async () => {
