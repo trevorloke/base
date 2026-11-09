@@ -5,8 +5,10 @@
 //     kept, and done in the same write that records the payment — a gift
 //     once, or one month of a monthly gift (whose it is, asked of Stripe:
 //     our ids ride on the payment, or on the subscription its invoice
-//     names), in either API version's shape; someone else's charge on the
-//     same Stripe account is still left alone
+//     names), in either API version's shape — and one on a month recorded
+//     before Stripe said which payment paid it is found through its
+//     invoice; someone else's charge on the same Stripe account is still
+//     left alone
 //   - a dispute's close that comes before its opening leaves it closed (on
 //     a payment over the limit, its refund still goes ahead); two refunds
 //     whose events come the wrong way round leave the larger total
@@ -138,6 +140,22 @@ test('a month’s refund before that month is recorded: found through the invoic
     }
   }
   await verified();
+});
+
+test('a month recorded before Stripe said which payment paid it: a refund on it is still found, through its invoice', async () => {
+  const p = await donor('Nell');
+  const r = await open(p.id, { cadence: 'monthly', amountCents: 1800 });
+  await fake.pay(r.session_id);
+  const sub = fake.sessions.get(r.session_id).subscription;
+  const { invoice, paymentIntent } = await fake.invoice(sub);
+  // As when the invoice's payments couldn't be read as it landed.
+  await db.query('update stripe_payments set payment_intent = null, charge_id = null where workspace_id = $1 and invoice_id = $2', [wsId, invoice.id]);
+  const refund = await fake.refund(paymentIntent);
+  assert.equal(refund.body.result, 'refunded: the gift is void', JSON.stringify(refund.body));
+  const pay = await payment('invoice_id', invoice.id);
+  assert.deepEqual([pay.status, pay.refunded_cents], ['refunded', 1800]);
+  assert.ok((await giftOf(pay.gift_id)).deleted_at);
+  assert.equal(await held(), 0, 'done at once, not kept');
 });
 
 test('a dispute that comes before its payment is recorded: kept, and done in order when it lands', async () => {
