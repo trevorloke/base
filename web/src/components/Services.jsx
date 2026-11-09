@@ -13,7 +13,7 @@ import { action, apiGet, apiPost } from '../api.js';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import './services.css';
 
-const STATE_WORD = { ready: 'Set up', missing: 'Not set up', default: 'Using the free default' };
+const STATE_WORD = { ready: 'Set up', missing: 'Not set up', default: 'Using the free default', test: 'Test mode' };
 
 function Row({ s, online }) {
   const [busy, setBusy] = useState(false);
@@ -36,12 +36,33 @@ function Row({ s, online }) {
         {s.missing.length > 0 && (
           <p className="sv2-missing">Set in the hosting’s environment: {s.missing.map((k) => <code key={k}>{k}</code>).reduce((a, b) => [a, ' · ', b])}</p>
         )}
+        {s.webhook && <Webhook w={s.webhook} />}
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
       </div>
       {s.checkable && (
         <button type="button" className="btn ops-tap sv2-check" disabled={busy || !online} onClick={check}>{busy ? 'Checking…' : 'Check'}</button>
       )}
     </li>
+  );
+}
+
+// A service that calls back (Stripe): the address to paste into it and the
+// events to tick there.
+function Webhook({ w }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(w.url); setCopied(true); } catch { setCopied(false); }
+  };
+  return (
+    <div className="sv2-hook">
+      <p className="sv2-detail">Webhook address — in Stripe: Developers → Webhooks → Add endpoint:</p>
+      <div className="sv2-hook__url">
+        <code className="sv2-url sv2-key">{w.url}</code>
+        <button type="button" className="btn ops-tap sv2-copy" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}<span className="sv2-sr"> the webhook address</span></button>
+      </div>
+      <p className="sv2-detail">Events to send ({w.events.length}):</p>
+      <ul className="sv2-events">{w.events.map((e) => <li key={e}><code className="sv2-url">{e}</code></li>)}</ul>
+    </div>
   );
 }
 

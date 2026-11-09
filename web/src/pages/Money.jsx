@@ -16,6 +16,12 @@
 //   a row for how it was paid, note, the donor's profile and Void ("Void this
 //   gift? Yes · No", then a 7s Undo).
 //   Under "More": receipts.
+//   Online giving (ext/payments, components/PaymentsBits.jsx): a gift paid
+//   on the website wears "online" in the ledger (and "disputed" or "partly
+//   refunded" when it is); Needs you lists the online payments the desk
+//   must see (refunded over the limit, a refund that didn't go through, a
+//   dispute, a refund made in Stripe); then Monthly donors, and Online
+//   giving — live, test mode or not set up — with the latest payments.
 //   Dollars on screen, integer cents on the wire; cursor-paginated load more.
 import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
@@ -27,6 +33,7 @@ import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass'
 import ReceiptsGiftLine from '../components/ReceiptsGiftLine.jsx';
 import { AddressRow, VoidNoticeAsk, receiptOf, receiptNote } from '../components/ReceiptsNeeds.jsx';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
+import { usePayments, PaymentNeedRow, OnlineChips, MonthlyDonors, OnlinePayments } from '../components/PaymentsBits.jsx';
 import './shifts.css';
 
 // gift.log / gift.void / gift.restore and GET /records/* are desk-only
@@ -389,7 +396,7 @@ function FlaggedRow({ f, personId, onVoid }) {
 }
 
 // ── One ledger row; tap for method, note, donor and Void ──
-function GiftRow({ g, slates, open, onToggle, onVoid }) {
+function GiftRow({ g, slates, open, onToggle, onVoid, online }) {
   const bodyId = `gift-${g.id}`;
   return (
     <li className="ops-item" data-open={open ? '' : undefined}>
@@ -399,6 +406,7 @@ function GiftRow({ g, slates, open, onToggle, onVoid }) {
           <span className="ops-row__sub">
             {shortDate(g.date)}
             {g.cadence === 'monthly' && <MonthlyChip />}
+            <OnlineChips g={g} info={online} />
             <SlateChip slate={g.slate} slates={slates} />
             {g.flagged && <OverChip title={g.flag_reason} />}
           </span>
@@ -454,6 +462,8 @@ export default function Money() {
   const receiptNeeds = useQuery({ queryKey: ['receipts', 'needs'], queryFn: () => apiGet('/receipts/needs'), enabled: canMoney });
   // Gifts no one has thanked yet (ext/stewardship): the count beside Stewardship.
   const stewardship = useQuery({ queryKey: ['stewardship'], queryFn: () => apiGet('/stewardship'), enabled: canMoney, staleTime: 60_000, meta: { side: true } });
+  // Online giving (ext/payments): what needs the desk, monthly donors, the latest payments.
+  const payments = usePayments(canMoney);
   // No signal: this tab's last copy (components/KeptCopies.js), read only.
   const online = useOnline();
   const giftsOffline = noSignal(gifts);
@@ -463,6 +473,7 @@ export default function Money() {
     .sort((a, b) => fmtDate(b.date).localeCompare(fmtDate(a.date)));
   const flagged = (brief.data?.flagged ?? []).filter((f) => !voided.has(f.id));
   const noAddress = (receiptNeeds.data?.receipts ?? []).filter((r) => !voided.has(r.gift_id));
+  const payNeeds = payments.data?.needs ?? [];
   // The latest few skip gifts already listed under "Needs you"; "All gifts" shows every one.
   const flaggedIds = new Set(flagged.map((f) => f.id));
   const latest = rows.filter((g) => !flaggedIds.has(g.id)).slice(0, LATEST);
@@ -488,6 +499,7 @@ export default function Money() {
     queryClient.invalidateQueries({ queryKey: ['brief'] });
     queryClient.invalidateQueries({ queryKey: ['person'] });
     queryClient.invalidateQueries({ queryKey: ['receipts'] }); // a gift's receipt is made, voided and restored with it
+    queryClient.invalidateQueries({ queryKey: ['payments'] });
   };
 
   // toast({ text, undo? }) — one at a time, 7s.
@@ -562,7 +574,7 @@ export default function Money() {
     );
   }
 
-  const needs = flagged.length + noAddress.length;
+  const needs = flagged.length + noAddress.length + payNeeds.length;
 
   return (
     <div className="ops-page">
@@ -613,6 +625,9 @@ export default function Money() {
             {noAddress.map((r) => (
               <AddressRow key={r.id} r={r} onSaved={(text) => { invalidate(); showToast({ text }); }} />
             ))}
+            {payNeeds.map((n) => (
+              <PaymentNeedRow key={n.id} n={n} onDone={(text) => { invalidate(); showToast({ text }); }} />
+            ))}
           </ul>
         </section>
       )}
@@ -632,6 +647,7 @@ export default function Money() {
               open={openId === g.id}
               onToggle={() => setOpenId((cur) => (cur === g.id ? null : g.id))}
               onVoid={() => voidGift(g.id)}
+              online={payments.data?.gifts?.[g.id]}
             />
           ))}
         </ul>
@@ -650,6 +666,9 @@ export default function Money() {
           </button>
         </div>
       )}
+
+      <MonthlyDonors list={payments.data?.monthly} totalCents={payments.data?.monthly_cents ?? 0} />
+      <OnlinePayments data={payments.data} />
 
       <div className="ops-foot">
         <button type="button" className="ops-more disclose" aria-expanded={more} aria-controls="money-more"
