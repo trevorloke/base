@@ -35,7 +35,8 @@ export const webWhere = (ctx, value, w) => {
   }
   const campaign = campaignOf(v);
   if (campaign) {
-    w.where += ` and exists (${base} and a.campaign_id = ${next(campaign)}::uuid)`;
+    // As text: the same whether the site server keeps the id as a uuid or text.
+    w.where += ` and exists (${base} and a.campaign_id::text = ${next(campaign)})`;
     return true;
   }
   if (WEB_KINDS.includes(v) && !(vol && MONEY_KINDS.has(v))) {
@@ -68,9 +69,9 @@ api.get('/webdid', async (c) => {
     [ws],
   )).rows.map((r) => [r.kind, r.n]));
   const byCampaign = new Map((await db.query(
-    `select a.campaign_id as id, count(distinct a.person_id)::int as n
+    `select a.campaign_id::text as id, count(distinct a.person_id)::int as n
      from site_actions a join persons p on p.id = a.person_id and p.deleted_at is null
-     where a.workspace_id = $1 and a.campaign_id is not null group by a.campaign_id`,
+     where a.workspace_id = $1 and a.campaign_id is not null group by a.campaign_id::text`,
     [ws],
   )).rows.map((r) => [String(r.id), r.n]));
   const campaigns = (await campaignsOf(db, ws))

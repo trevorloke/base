@@ -94,6 +94,10 @@ function planFor(key, me) {
     case 'shiftturfs': return key.length === 1 ? { name: 'shiftturfs', tier: 'local', field: true } : null;
     // What to say at the door and on the phone (ext/scripts): it shows with no signal.
     case 'scripts': return key.length === 1 ? { name: 'scripts', tier: 'local', field: true } : null;
+    // Today's "Follow up" (ext/followups): who to call still shows with no
+    // signal (a call needs none; the log goes through the outbox). A desk's
+    // can hold a ladder's thank-you for a gift: this tab only.
+    case 'followups': return k1 === 'mine' && key.length === 2 ? q('followups:mine', money) : null;
     default: return null;
   }
 }

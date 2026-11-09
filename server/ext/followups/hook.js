@@ -56,6 +56,11 @@ const str = (v, n) => {
   const s = typeof v === 'string' ? v.trim().replace(/\s+/g, ' ') : '';
   return s ? s.slice(0, n) : null;
 };
+// What someone wrote, its lines kept (a message in paragraphs).
+const words = (v, n) => {
+  const s = typeof v === 'string' ? v.replace(/\r\n?/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim() : '';
+  return s ? s.slice(0, n) : null;
+};
 const nameOf = async (tx, userId) => (userId
   ? (await tx.query('select name from users where id = $1', [userId])).rows[0]?.name || null
   : null);
@@ -135,12 +140,12 @@ const fromSite = async (tx, ws, kind, e) => {
     if (Array.isArray(roles)) did.roles = roles.map((r) => str(r, 60)).filter(Boolean).slice(0, 10);
     const free = str(get('availability'), 300);
     if (free) did.availability = free;
-    const note = str(get('note'), 1000);
+    const note = words(get('note'), 1000);
     if (note) did.note = note;
   } else if (kind === 'message') {
     const topic = str(get('topic'), 60);
     if (topic) did.topic = topic;
-    const message = str(get('message'), 2000);
+    const message = words(get('message'), 2000);
     if (message) did.message = message;
   } else if (kind === 'rsvp') {
     const sid = String(get('shift_id') || '');

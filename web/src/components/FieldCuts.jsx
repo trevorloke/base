@@ -9,7 +9,8 @@
 //   <CutGroups chip f update turfs />   People's sheet: chip rows
 //   <CutFields value onChange turfs />  a saved list's form: selects
 //   useTurfs()               the campaign's turfs (the map's own query)
-//   useWebDid()              what the website filter can offer (and counts)
+//   useWebDid(), webChoices(web)  what the website filter can offer (a new
+//                            phone bank's "Who to call" uses them too)
 import { useQuery } from '@tanstack/react-query';
 import { OUTCOMES } from '@starbase/shared/canvass';
 import { apiGet } from '../api.js';
@@ -40,8 +41,9 @@ export const useWebDid = () => {
   const q = useQuery({ queryKey: ['webdid'], queryFn: () => apiGet('/webdid'), staleTime: 60_000, meta: { side: true } });
   return { kinds: q.data?.kinds ?? [], campaigns: q.data?.campaigns ?? [] };
 };
-// The website filter's choices: Anything, each kind, each petition or pledge.
-const webChoices = (web) => [
+// The website filter's choices: Anything, each kind, each petition or pledge
+// ([value, words]); none until the website has people.
+export const webChoices = (web) => [
   ...(web.kinds.length ? [['any', 'Anything']] : []),
   ...web.kinds.map((k) => [k.kind, k.label]),
   ...web.campaigns.map((c) => [`campaign:${c.id}`, c.label]),
