@@ -1,8 +1,37 @@
-import { defineConfig } from 'vite';
+import { defineConfig, build } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
+
+// The public website's islands (src/site-islands.js) are a second build:
+// one self-contained file with a stable name, dist/site-islands.js, that
+// the server serves at {site root}site-assets/site-islands.js (SITE.md). It
+// carries its own React, so the public site loads nothing of the app's.
+const siteIslands = () => ({
+  name: 'site-islands',
+  apply: 'build',
+  async closeBundle() {
+    await build({
+      configFile: false,
+      root: fileURLToPath(new URL('.', import.meta.url)),
+      logLevel: 'warn',
+      publicDir: false,
+      build: {
+        outDir: 'dist',
+        emptyOutDir: false,
+        copyPublicDir: false,
+        modulePreload: false,
+        target: 'es2020',
+        rollupOptions: {
+          input: fileURLToPath(new URL('./src/site-islands.js', import.meta.url)),
+          output: { format: 'es', entryFileNames: 'site-islands.js', inlineDynamicImports: true },
+        },
+      },
+    });
+  },
+});
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), siteIslands()],
   // One build for any client's path (base.win/imaginesurrey…, BASE_PATH on
   // the server). The page's own /assets links are put under it by the
   // server (server/lib/mount.js); files a script loads (lazy screens, their

@@ -662,6 +662,7 @@ server/lib/cap.js      entity-keyed contribution-cap engine
 server/lib/notify.js   email/SMS adapters (Resend/Twilio via fetch)
 server/actions/        the Action registry (index.js core, field.js field+outreach)
 server/routes/         auth · api (reads) · public (unsubscribe pages)
+server/ext/site/render the public website's pages (shared/site/components, site.css; SITE.md)
 web/                   Vite + React 19 + react-router + TanStack Query + Leaflet
 ```
 
