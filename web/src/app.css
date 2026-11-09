@@ -23,6 +23,11 @@
   --red: #ef2023;         /* Signal Red: buttons and large type only (19px bold up) */
   --red-text: #c8151b;    /* red that reads as text on white */
   --cream: #f3ebda;
+  /* The brand's own ink, the same in light and dark (map markers, a popup's
+     link): brand-base.css swaps them for Base's. */
+  --brand-ink: #003979;
+  --brand-ink-2: #00224d;
+  --brand-spark: #ffc72c;
 
   /* Surfaces: --paper is the page, --paper-0 a card, --paper-1 Sky panels */
   --ink: #141a26;
@@ -661,7 +666,7 @@ html:has(.auth-page) body { background: transparent; }
 .btn-link:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
 .name-note { margin: calc(-1 * var(--s-2, 8px)) 0 var(--s-3, 12px); font-size: 14px; }
 
-/* Base's apps (AppSwitcher): Ground here, Web and Air a tap away. */
+/* Base's apps (AppSwitcher): Ground here, Web a tap away. */
 .brand-app { font-weight: 500; opacity: 0.85; }
 .apps { position: relative; flex: none; }
 .apps-btn {

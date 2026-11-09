@@ -30,6 +30,7 @@ import { runAction } from '../../lib/events.js';
 import { markdownPlain, renderMarkdown } from '@starbase/shared/markdown';
 import { loadAttachments } from './attach.js';
 import { deliverTexts } from '../texting/blast.js';
+import { brand } from '../../lib/brand.js';
 
 export const AB_MIN = 50;
 export const AB_PCTS = [10, 20, 30];
@@ -201,8 +202,10 @@ const STYLE = {
   hr: 'border:0;border-top:1px solid #dde0ec;margin:24px 0',
   code: 'font:15px ui-monospace,Menlo,Consolas,monospace;background:#eef0f7;padding:1px 4px;border-radius:3px',
   img: 'max-width:100%;height:auto;display:block;margin:0 0 16px;border:0',
-  a: 'color:#003979',
 };
+// Links in this deployment's colour (lib/brand.js): Surrey Navy for Imagine
+// Surrey, Base's indigo otherwise.
+const linkStyle = () => `color:${brand().link}`;
 
 // The message laid out for a mail app: the website's own renderer (every
 // character escaped first; only its tags come out), then each tag given
@@ -216,6 +219,7 @@ export const emailBody = (body, { base = '', token = null, links = [] } = {}) =>
     return token && n > 0 ? `${base}/c/${token}/${n}` : u;
   };
   const html = renderMarkdown(body);
+  const A = linkStyle();
   let inA = false;
   let inCode = false;
   return html.split(/(<[^>]+>)/).map((part) => {
@@ -232,7 +236,7 @@ export const emailBody = (body, { base = '', token = null, links = [] } = {}) =>
         const href = /\shref="([^"]*)"/.exec(rest)?.[1] ?? '';
         const raw = unesc(href);
         const url = /^https?:/i.test(raw) ? tracked(tidyUrl(raw)) : raw.startsWith('/') ? `${base}${raw}` : raw;
-        return `<a href="${esc(url)}" style="${STYLE.a}">`;
+        return `<a href="${esc(url)}" style="${A}">`;
       }
       if (tag === 'img') {
         const src = unesc(/\ssrc="([^"]*)"/.exec(rest)?.[1] ?? '');
@@ -250,7 +254,7 @@ export const emailBody = (body, { base = '', token = null, links = [] } = {}) =>
     for (const m of raw.matchAll(URL_RE)) {
       const u = tidyUrl(m[0]);
       out += esc(raw.slice(last, m.index));
-      out += isWebUrl(u) ? `<a href="${esc(tracked(u))}" style="${STYLE.a}">${esc(u)}</a>` : esc(u);
+      out += isWebUrl(u) ? `<a href="${esc(tracked(u))}" style="${A}">${esc(u)}</a>` : esc(u);
       last = m.index + u.length;
     }
     return out + esc(raw.slice(last));

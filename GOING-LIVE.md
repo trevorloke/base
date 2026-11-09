@@ -52,7 +52,11 @@ Set these on both environments before the first sign-in; the rest can wait.
 Every outside service, its settings and where each key comes from is in
 [INTEGRATIONS.md](INTEGRATIONS.md). The campaign's own values
 (`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are in
-`render.yaml` already; change them there for another client.
+`render.yaml` already; change them there for another client. So is the
+look: staging is `STARBASE_BRAND=base` with the name *Demo Campaign*, so it
+can be shown to anyone; production is `imagine-surrey`. A campaign already
+set up keeps the name it was given: a manager renames it in **Settings →
+Campaign**.
 `STARBASE_CANDIDATES` is not: until it's set, a new rating scale starts with
 the candidates the code ships with (`shared/scale.js`).
 
@@ -134,7 +138,9 @@ shared, and the code names no client.
    names (`starbase-<client>-staging`, `starbase-<client>`, and their
    databases — names are unique per Render account), and set their
    `STARBASE_*` values: the campaign's name, jurisdiction, time zone, city,
-   slates and first candidates. Commit that on `main`.
+   slates and first candidates, and `STARBASE_BRAND=base` on both (Base's
+   generic look: `imagine-surrey` is Imagine Surrey's alone). Commit that
+   on `main`.
 2. Render → **New → Blueprint** → this repo: Render makes the new pair.
    Put the secrets in (section 3), the domains (section 2), and run the
    first sign-in on staging, then production (section 4).

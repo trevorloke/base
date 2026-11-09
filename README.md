@@ -1,35 +1,33 @@
 # Base
 
-**Base** — a broad application for social engagement — is three apps in one,
+**Base** — a broad application for social engagement — is two apps in one,
 built for **Imagine Surrey**:
 
 | App | Where | What |
 |---|---|---|
 | **Base Ground** (the default) | `server/`, `web/`, `shared/` — this README | The campaign: a map with every door on it, a one-tap rating scale at the door, phone, and by text — with signs, volunteers, shifts, money, compliance, and outreach around it. |
 | **Base Web** | `apps/web` ([its README](apps/web/README.md)) | The Imagine Surrey website and its back office (Next.js). |
-| **Base Air** | `apps/air` ([its README](apps/air/README.md)) | Starsign: social listening and posting — radar, queue, feed, brief. |
 
 Base opens on Ground. The app switcher beside the name (the four squares)
-goes to the other two: set `BASE_WEB_URL` and `BASE_AIR_URL` on Ground's
-server to where they run (Web falls back to the campaign's website, from
-Settings, + `/admin`). Each app keeps its own deploy, tests and CI
-(`.github/workflows/base-web.yml`, `base-air.yml`; `ci.yml` is Ground's).
+goes to Web: set `BASE_WEB_URL` on Ground's server to where it runs (else
+the campaign's website, from Settings, + `/admin`). Each app keeps its own
+deploy, tests and CI (`.github/workflows/base-web.yml` for Web; `ci.yml` is
+Ground's).
 Internal names — the `STARBASE_*` settings, package names, the database —
 are unchanged, so nothing deployed moves.
 
 **base.win** is where Base runs for clients: `base.win/<client>/field` is the
-volunteers' app, `/desk` the office's, `/web` and `/air` the other two —
+volunteers' app, `/desk` the office's, `/web` the website's back office —
 each client on its own servers and database, behind one front door
 (`apps/door`; [setting it up](apps/door/README.md)). Ground goes under a
 client's path with `BASE_PATH=/<client>` (and keeps answering at its own
 address); unset, it runs at a site's root as it always has.
 
-Web and Air came in with `git subtree` from their own repositories; work done
-there comes in with:
+Web came in with `git subtree` from its own repository; work done there
+comes in with:
 
 ```sh
 git subtree pull --prefix=apps/web https://github.com/trevorloke/ImagineSurreyWebsite main --squash
-git subtree pull --prefix=apps/air https://github.com/trevorloke/starsign main --squash
 ```
 
 ## Two apps: the field app and the admin
@@ -550,6 +548,18 @@ when you're back online.*
 
 ## The brand
 
+Each deployment wears one of two looks, set by `STARBASE_BRAND`
+(`server/lib/brand.js`): **`imagine-surrey`** — Imagine Surrey's own,
+below — or **`base`**, Base's generic one (slate and indigo, Inter
+throughout, the Base mark; training is called *Training*, not *ImagineU*;
+nothing names Imagine Surrey), for staging and any other campaign. The
+server marks the app's page `<html data-brand="…">` before it paints, with
+the brand's icons and browser colours, and the install manifest too;
+`web/src/brand-base.css` re-colours the tokens. Unset, it's worked out so
+nothing changes by accident: `base` on staging (`STARBASE_ENV=staging`) or
+for a campaign named anything but Imagine Surrey, Imagine Surrey's
+otherwise.
+
 Imagine Surrey's brand guidelines (2.1) are applied in one place and nowhere
 else: `web/src/app.css` (the staff app's tokens: Surrey Navy `#003979`,
 Deep Navy `#00224d`, Marigold `#ffc72c`, the text-safe red `#c8151b`, Sky,
@@ -621,6 +631,7 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
 | `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
+| `STARBASE_BRAND` | `imagine-surrey` or `base` — the look (*The brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
 
 Two environments per client: **staging** deploys every push to `main`,
 **production** deploys the `production` branch, which the *Promote to

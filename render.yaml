@@ -42,9 +42,14 @@ services:
         fromDatabase:
           name: starbase-staging-db
           property: connectionString
-      # The client. The same values on both environments (below).
+      # Staging wears Base's own look and a made-up campaign name, so it can
+      # be shown to anyone (server/lib/brand.js). The rules below — limits,
+      # time zone, city, slates — are the client's, so staging tests what
+      # production does.
+      - key: STARBASE_BRAND
+        value: base
       - key: STARBASE_ORG_NAME
-        value: Imagine Surrey
+        value: Demo Campaign
       - key: STARBASE_JURISDICTION
         value: bc-municipal
       - key: STARBASE_TZ
@@ -87,6 +92,9 @@ services:
         fromDatabase:
           name: starbase-db
           property: connectionString
+      # The client: Imagine Surrey's own look (Surrey Navy, Marigold, the star).
+      - key: STARBASE_BRAND
+        value: imagine-surrey
       - key: STARBASE_ORG_NAME
         value: Imagine Surrey
       - key: STARBASE_JURISDICTION

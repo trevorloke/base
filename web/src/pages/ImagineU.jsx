@@ -15,6 +15,7 @@ import { ApiError, action, apiGet } from '../api.js';
 import './imagineu.css';
 import '../editor.css';
 import { at } from '../base.js';
+import { BRAND } from '../brand.js'; // "ImagineU" for Imagine Surrey, "Training" otherwise
 
 const DESK = ['manager', 'staff', 'treasurer'];
 const KINDS = [
@@ -80,7 +81,7 @@ function Home({ desk }) {
   const [edit, setEdit] = useState(false);
   const [adding, setAdding] = useState(null); // 'section' | { section_id } for a lesson
   const headId = useId();
-  if (q.isError && !q.data) return <p className="error" role="alert">Couldn’t load ImagineU — {q.error.message}</p>;
+  if (q.isError && !q.data) return <p className="error" role="alert">Couldn’t load {BRAND.learn} — {q.error.message}</p>;
   if (!q.data) return <p className="muted">Loading…</p>;
   const d = q.data;
   const groups = [...d.sections, ...(d.unfiled.length ? [{ id: null, title: d.sections.length ? 'More' : '', lessons: d.unfiled }] : [])];
@@ -90,7 +91,7 @@ function Home({ desk }) {
       <div className="page-head lu-head">
         <div>
           <span className="eyebrow">Training</span>
-          <h1 id={headId}>ImagineU</h1>
+          <h1 id={headId}>{BRAND.learn}</h1>
         </div>
         {desk && (
           <div className="head-actions lu-tools">
@@ -439,7 +440,7 @@ function Lesson({ id, desk }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   useEffect(() => { setEditing(false); }, [id]);
-  if (q.isError && !q.data) return <div className="lu"><p className="error" role="alert">{q.error.status === 404 ? 'That module isn’t here.' : q.error.message}</p><Link className="btn" to="/imagineu">ImagineU</Link></div>;
+  if (q.isError && !q.data) return <div className="lu"><p className="error" role="alert">{q.error.status === 404 ? 'That module isn’t here.' : q.error.message}</p><Link className="btn" to="/imagineu">{BRAND.learn}</Link></div>;
   if (!q.data) return <p className="muted">Loading…</p>;
   const l = q.data.lesson;
   const section = home.data?.sections.find((s) => s.id === l.section_id);
@@ -454,7 +455,7 @@ function Lesson({ id, desk }) {
   const embed = embedOf(l.link);
   return (
     <div className="lu lu-lesson">
-      <p className="lu-back"><Link to="/imagineu">← ImagineU</Link>{section && <span className="muted"> · {section.title}</span>}</p>
+      <p className="lu-back"><Link to="/imagineu">← {BRAND.learn}</Link>{section && <span className="muted"> · {section.title}</span>}</p>
       {editing ? (
         <LessonForm lesson={l} sections={home.data?.sections || []}
           onDone={(saved) => { setEditing(false); if (saved) { queryClient.invalidateQueries({ queryKey: ['learn', 'lesson', id] }); } }}
@@ -528,8 +529,8 @@ function Progress() {
   const { members, lessons } = q.data;
   return (
     <div className="lu">
-      <p className="lu-back"><Link to="/imagineu">← ImagineU</Link></p>
-      <div className="page-head"><div><span className="eyebrow">ImagineU</span><h1>Progress</h1></div></div>
+      <p className="lu-back"><Link to="/imagineu">← {BRAND.learn}</Link></p>
+      <div className="page-head"><div><span className="eyebrow">{BRAND.learn}</span><h1>Progress</h1></div></div>
       {!lessons.length ? <p className="muted">No modules yet.</p> : (
         <ul className="lu-plist">
           {members.map((m) => {

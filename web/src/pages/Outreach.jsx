@@ -24,6 +24,7 @@ import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { MarkdownField, toDataUrl, uploadImage } from '../components/MarkdownField.jsx';
 import './outreach.css';
+import { BRAND } from '../brand.js';
 
 const TABS = [
   { key: 'email',   label: 'Email' },
@@ -1205,7 +1206,7 @@ function SiteSettings({ toast, current }) {
         <label htmlFor="ws-site">Campaign website</label>
         <input id="ws-site" className="input mono" type="text" inputMode="url" autoComplete="url"
           autoCapitalize="none" spellCheck={false} value={site} maxLength={500}
-          onChange={(e) => setSite(e.target.value)} placeholder="https://imaginesurrey.ca" />
+          onChange={(e) => setSite(e.target.value)} placeholder={BRAND.sitePlaceholder} />
       </div>
       <button type="submit" className="btn ot-solid ot-btn-tap" disabled={act.busy || normalized === current}>
         {act.busy ? 'Saving…' : 'Save'}

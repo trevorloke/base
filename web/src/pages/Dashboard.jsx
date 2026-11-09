@@ -31,6 +31,7 @@ import { OUTCOME_LABEL } from '../components/RatingButtons.jsx';
 import './dashboard.css';
 import { adminHref } from '../mode.js';
 import { NS } from '../base.js';
+import { BRAND } from '../brand.js';
 
 // The outcomes, in a fixed order with a fixed colour each (a filter never
 // repaints a survivor). The hues pass the colour-vision checks on both the
@@ -343,7 +344,7 @@ function Field({ d, tiles, sel, onSel, period }) {
     const nameOf = new Map(d.people.map((p) => [p.id, p.name]));
     for (const t of d.turfs) {
       if (!Array.isArray(t.polygon) || t.polygon.length < 3) continue;
-      const poly = L.polygon(t.polygon.map(([a, b]) => [Number(a), Number(b)]), { color: t.color || '#003979', weight: 1.5, fillOpacity: 0.05 }).addTo(ly.turfs);
+      const poly = L.polygon(t.polygon.map(([a, b]) => [Number(a), Number(b)]), { color: t.color || BRAND.mapInk, weight: 1.5, fillOpacity: 0.05 }).addTo(ly.turfs);
       poly.bindTooltip(t.name, { sticky: true, className: 'dash-tt' });
       poly.bindPopup(`<div class="dash-pop"><strong>${esc(t.name)}</strong><br><a href="${adminHref(`/map?turf=${esc(t.id)}`)}">Open on the map ›</a></div>`);
     }
@@ -360,7 +361,7 @@ function Field({ d, tiles, sel, onSel, period }) {
       </div>`);
     }
     if (selected?.trail?.length > 1) {
-      L.polyline(selected.trail.map(([a, b]) => [a, b]), { color: '#003979', weight: 3, opacity: 0.7, dashArray: '2 6', interactive: false }).addTo(ly.trail);
+      L.polyline(selected.trail.map(([a, b]) => [a, b]), { color: BRAND.mapInk, weight: 3, opacity: 0.7, dashArray: '2 6', interactive: false }).addTo(ly.trail);
     }
     for (const p of d.people) {
       if (!p.where) continue;

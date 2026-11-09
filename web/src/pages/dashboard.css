@@ -101,12 +101,12 @@
 .dash-who-wrap { background: transparent; border: 0; }
 .dash-who {
   display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%;
-  font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.02em; color: #fff; background: #003979;
+  font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.02em; color: #fff; background: var(--brand-ink);
   border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); box-sizing: border-box;
 }
 .dash-who.is-stale { background: #6b7384; }
 .dash-who.is-out { box-shadow: 0 0 0 3px #2a9d8f, 0 1px 4px rgba(0, 0, 0, 0.35); }
-.dash-who.is-sel { background: #ffc72c; color: #00224d; }
+.dash-who.is-sel { background: var(--brand-spark); color: var(--brand-ink-2); }
 .dash-prow__av { width: 36px; height: 36px; flex: none; box-shadow: none; border-color: var(--paper-0); }
 .dash-prow__av.is-out { box-shadow: 0 0 0 2px #2a9d8f; }
 .dash-acc { stroke: #2a9d8f; fill: #2a9d8f; fill-opacity: 0.1; stroke-width: 1; }
@@ -123,7 +123,7 @@
 .dash-sec__btn { min-height: 32px; padding: 0 10px; font-size: 13px; }
 .dash-tt { font-family: var(--font-sans); font-size: 12.5px; }
 .dash-pop { font-family: var(--font-sans); font-size: 13.5px; line-height: 1.5; color: #141a26; min-width: 160px; }
-.dash-pop a { color: #003979; }
+.dash-pop a { color: var(--brand-ink); }
 .dash-pop__sub { color: #5b6472; font-size: 12.5px; }
 .dash-pop__dot { display: inline-block; width: 9px; height: 9px; border-radius: 3px; vertical-align: -1px; }
 .dash-pop__live { color: #1f7a4d; font-weight: 600; }

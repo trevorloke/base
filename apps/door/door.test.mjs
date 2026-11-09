@@ -29,7 +29,8 @@ before(async () => {
   const g = await listen(ground); const w = await listen(web);
   const clients = readClients(JSON.stringify({
     imaginesurrey: { name: 'Imagine Surrey', ground: g, web: w },
-    gone: { name: 'Gone Campaign', ground: 'http://127.0.0.1:9', air: { redirect: 'https://air.example.org' } },
+    gone: { name: 'Gone Campaign', ground: 'http://127.0.0.1:9', web: { redirect: 'https://site.example.org/admin' } },
+    nosite: { name: 'No Site Campaign', ground: g },
   }));
   door = createServer(handler(clients));
   base = await listen(door);
@@ -44,12 +45,14 @@ test('the client list: names and origins checked, ground required', () => {
   assert.throws(() => readClients('{"a": {"web": "https://x.example"}}'), /needs a ground/);
   assert.throws(() => readClients('not json'), /not JSON/);
   const c = readClients('{"a": {"ground": "https://g.example/"}}');
-  assert.deepEqual(c.get('a'), { name: 'a', ground: { origin: 'https://g.example' }, web: null, air: null });
+  assert.deepEqual(c.get('a'), { name: 'a', ground: { origin: 'https://g.example' }, web: null });
+  // An "air" entry left from before Base dropped Air is ignored, not an error.
+  assert.deepEqual(readClients('{"a": {"ground": "https://g.example", "air": "https://a.example"}}').get('a'), { name: 'a', ground: { origin: 'https://g.example' }, web: null });
   assert.throws(() => readClients('{"a": {"ground": "https://g.example", "web": {"redirect": "javascript:alert(1)"}}}'), /https address/);
 });
 
-test('routes: field, desk, api and the rest to Ground; /web and /air to theirs', () => {
-  const c = readClients('{"x": {"ground": "https://g.example", "web": "https://w.example", "air": "https://a.example"}}');
+test('routes: field, desk, api and the rest to Ground; /web to Web', () => {
+  const c = readClients('{"x": {"ground": "https://g.example", "web": "https://w.example"}}');
   assert.equal(route(c, '/x/field/map').upstream, 'https://g.example');
   const r = readClients('{"x": {"ground": "https://g.example", "web": {"redirect": "https://site.example/admin"}}}');
   assert.deepEqual(route(r, '/x/web'), { redirect: 'https://site.example/admin', away: true });
@@ -59,7 +62,7 @@ test('routes: field, desk, api and the rest to Ground; /web and /air to theirs',
   assert.equal(route(c, '/x/web').upstream, 'https://w.example');
   assert.equal(route(c, '/x/web/admin').upstream, 'https://w.example');
   assert.equal(route(c, '/x/webinar').app, 'ground', 'only /web itself is Web');
-  assert.equal(route(c, '/x/air/queue').upstream, 'https://a.example');
+  assert.equal(route(c, '/x/air/queue').app, 'ground', 'no Air any more: an old /air link is Ground’s (it opens the field app)');
   assert.deepEqual(route(c, '/x'), { redirect: '/x/field/' });
   assert.deepEqual(route(c, '/X/desk'), { redirect: '/x/desk' });
   assert.equal(route(c, '/nobody/field'), null);
@@ -93,12 +96,12 @@ test('nobody at that name, an app the client doesn’t have, a server not answer
   const none = await get('/nobody/field/');
   assert.equal(none.status, 404);
   assert.match(await none.text(), /no Base at this address/);
-  const air = await get('/imaginesurrey/air/');
-  assert.equal(air.status, 404);
-  assert.match(await air.text(), /Imagine Surrey doesn’t have Base Air yet/);
-  const away = await get('/gone/air/queue?x=1');
+  const noWeb = await get('/nosite/web/');
+  assert.equal(noWeb.status, 404);
+  assert.match(await noWeb.text(), /No Site Campaign doesn’t have Base Web yet/);
+  const away = await get('/gone/web/people?x=1');
   assert.equal(away.status, 302);
-  assert.equal(away.headers.get('location'), 'https://air.example.org/queue?x=1', 'Air where it runs, the rest of the path after it');
+  assert.equal(away.headers.get('location'), 'https://site.example.org/admin/people?x=1', 'Web where it runs, the rest of the path after it');
   const down = await get('/gone/field/');
   assert.equal(down.status, 502);
   assert.match(await down.text(), /Gone Campaign’s Base isn’t answering/);

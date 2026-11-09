@@ -3,6 +3,7 @@
 // each member's grants and denies, and what each member ends up with).
 import { Hono } from 'hono';
 import { AREAS, BASE, permsOf, decide, AREA_KEYS } from '../../lib/perms.js';
+import { learnName } from '../../lib/brand.js';
 
 export const api = new Hono();
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
@@ -44,5 +45,7 @@ api.get('/admin/permissions', async (c) => {
     const areas = AREA_KEYS.filter((k) => { const d = decide(perms, k); return d === null ? BASE[m.role].includes(k) : d; });
     return { id: m.id, name: m.name, email: m.email, role: m.role, grant: own.grant || [], deny: own.deny || [], areas };
   });
-  return c.json({ areas: AREAS, base: BASE, roles, members, doors: settings.permissions?.volunteerDoors === 'turfs' ? 'turfs' : 'all' });
+  // Training is called what this deployment calls it (lib/brand.js).
+  const areas = AREAS.map((a) => (a.key === 'learn' ? { ...a, label: learnName() } : a));
+  return c.json({ areas, base: BASE, roles, members, doors: settings.permissions?.volunteerDoors === 'turfs' ? 'turfs' : 'all' });
 });
