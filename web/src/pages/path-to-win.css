@@ -1,0 +1,181 @@
+/* Path to win (PathToWin.jsx). Everything is ptw-*; the frame, back link,
+   buttons and one-line bits are shifts.css's ops-*. Cards and rows on
+   phones, a table from 900px; every tap at least 48px; nothing scrolls
+   sideways at 390px. Colours from app.css's tokens, except the turfs'
+   priority blues (the same on the map, the legend and the chips). */
+
+.ops-page.ptw-page { max-width: 1120px; min-width: 0; }
+.ptw-page .ops-head { margin-bottom: var(--s-2); }
+.ptw-when { margin: 0 0 var(--s-5); font-size: 16px; color: var(--text-2); }
+.ptw-when strong { color: var(--text-1); }
+.ptw-nowrap { white-space: nowrap; }
+
+.ptw-sec { margin: 0 0 var(--s-6); min-width: 0; }
+.ptw-h { font-size: 21px; margin: 0 0 var(--s-3); }
+
+/* ── Races ── */
+.card.ptw-empty { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.ptw-empty__line { margin: 0; font-size: 16px; }
+.ptw-races { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--s-3); }
+.card.ptw-race { margin: 0; display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.ptw-race.is-unset { justify-content: center; }
+.ptw-race__h { font-size: 19px; margin: 0; }
+.ptw-race__big { margin: 0; font-size: 16px; color: var(--text-2); }
+.ptw-race__n { font-size: 40px; line-height: 1.05; font-weight: 800; color: var(--text-1); font-variant-numeric: normal; margin-right: 4px; }
+.ptw-meter { display: block; height: 10px; border-radius: 999px; background: var(--paper-2); overflow: hidden; }
+.ptw-meter__fill { display: block; height: 100%; border-radius: 999px; background: var(--ok); }
+.ptw-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin: var(--s-1) 0 0; }
+.ptw-facts > div { min-width: 0; }
+.ptw-facts dt { font-size: 12.5px; color: var(--text-3); }
+.ptw-facts dd { margin: 0; font-size: 20px; font-weight: 700; color: var(--text-1); overflow-wrap: anywhere; }
+.ptw-facts dd.ptw-facts__sub { font-size: 12px; font-weight: 400; color: var(--text-3); }
+.ptw-verdict { margin: 0; font-size: 15px; font-weight: 700; }
+.ptw-verdict.is-ok { color: var(--ok); }
+.ptw-verdict.is-behind { color: var(--warn); }
+.ptw-race__proj { margin: 0; font-size: 14px; color: var(--text-2); }
+.ptw-race__how { margin: var(--s-1) 0 0; padding-top: var(--s-2); border-top: 1px solid var(--rule); font-size: 13px; color: var(--text-3); overflow-wrap: anywhere; }
+
+/* ── Where we stand ── */
+.ptw-stand { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: var(--s-2); }
+.ptw-stand__i { display: flex; flex-direction: column; gap: 2px; padding: var(--s-3) var(--s-4); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); min-width: 0; }
+.ptw-stand__n { font-size: 28px; font-weight: 800; line-height: 1.1; color: var(--text-1); overflow-wrap: anywhere; }
+.ptw-stand__label { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.ptw-stand__sub { font-size: 13px; color: var(--text-3); }
+.ptw-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.ptw-sw[data-band='supporters'] { background: var(--ok); }
+.ptw-sw[data-band='persuadables'] { background: var(--amber); border: 1px solid var(--amber-deep); }
+.ptw-sw[data-band='opposed'] { background: var(--danger); }
+.ptw-sw[data-band='unrated'] { background: var(--text-4); }
+
+/* ── Week by week ── */
+.ptw-trend { background: var(--paper-0); border: var(--border); border-radius: var(--r-card); padding: var(--s-3) var(--s-4) var(--s-2); min-width: 0; }
+.ptw-trend__top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2) var(--s-3); margin-bottom: var(--s-2); }
+.ptw-trend__line { margin: 0; font-size: 15px; }
+.ops-seg.ptw-seg { width: auto; min-width: 200px; }
+.ptw-chart { position: relative; width: 100%; min-width: 0; overflow: hidden; }
+.ptw-chart svg { display: block; max-width: 100%; }
+.ptw-grid { stroke: var(--rule); stroke-width: 1; }
+.ptw-base { stroke: var(--rule-2); stroke-width: 1; }
+.ptw-axis { fill: var(--text-3); font-size: 11px; font-family: var(--font-sans); }
+.ptw-bar { fill: var(--ok); }
+.ptw-bar.is-down { fill: var(--text-4); }
+.ptw-bar.is-on { opacity: 0.8; }
+.ptw-hit { fill: transparent; cursor: default; }
+.ptw-hit:focus { outline: none; }
+.ptw-hit:focus-visible { outline: none; stroke: var(--mark); stroke-width: 2; }
+.ptw-need line { stroke: var(--text-1); stroke-width: 2; }
+.ptw-need text { fill: var(--text-1); font-size: 12px; font-weight: 600; font-family: var(--font-sans); paint-order: stroke; stroke: var(--paper-0); stroke-width: 4px; stroke-linejoin: round; }
+.ptw-tip {
+  position: absolute; top: 4px; transform: translateX(-50%); z-index: 2; pointer-events: none;
+  display: flex; flex-direction: column; gap: 2px; min-width: 168px; padding: 8px 10px;
+  background: var(--paper-0); color: var(--text-1); border: var(--border-2); border-radius: 10px; box-shadow: var(--shadow-2);
+  font-size: 13px;
+}
+.ptw-trend__note { margin: var(--s-2) 0 0; }
+
+/* ── Tables (the trend's and the turfs') ── */
+.ptw-tablewrap { overflow-x: auto; max-width: 100%; border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
+.ptw-trend .ptw-tablewrap { border: 0; }
+.ptw-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.ptw-table th, .ptw-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.ptw-table thead th { font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); font-weight: 600; vertical-align: bottom; }
+.ptw-table tbody th { font-weight: 600; }
+.ptw-table tbody tr:last-child > * { border-bottom: 0; }
+.ptw-table .num { text-align: right; }
+
+/* ── Where to work next: the map ── */
+.ptw-map { height: 440px; border-radius: var(--r-card); border: var(--border); overflow: hidden; background: var(--paper-1); z-index: 0; }
+.ptw-tt { font: 600 13px/1.3 var(--font-sans); }
+/* Zoom buttons a finger can hit, as on the main map. */
+.ptw-page .ptw-map .leaflet-bar a { width: 48px; height: 48px; line-height: 48px; font-size: 20px; color: #161a2e; background: #ffffff; }
+@media (hover: hover) { .ptw-page .ptw-map .leaflet-bar a:hover { background: #eef0f7; } }
+.ptw-rank-wrap { background: none; border: 0; }
+.ptw-rank {
+  display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px;
+  border-radius: 50%; background: #ffffff; color: #0d1b2e; border: 2px solid #0d366b;
+  font: 800 13px/1 var(--font-sans); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.ptw-legend { list-style: none; display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-4); margin: var(--s-2) 0 var(--s-4); padding: 0; font-size: 14px; }
+.ptw-legend__i { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; }
+.ptw-sw--turf { width: 18px; height: 12px; border-radius: 3px; }
+
+/* ── The ranked list: rows on phones ── */
+.ptw-rows { list-style: none; margin: 0; padding: 0; border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
+.ptw-row + .ptw-row { border-top: 1px solid var(--rule); }
+.ptw-row__link { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: var(--s-3) var(--s-4); min-height: 48px; color: var(--text-1); text-decoration: none; }
+@media (hover: hover) { .ptw-row__link:hover { background: var(--paper-1); } }
+.ptw-row__link:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.ptw-row__top { display: flex; align-items: baseline; gap: var(--s-2); width: 100%; }
+.ptw-row__rank { flex: none; min-width: 24px; font-weight: 800; color: var(--text-3); }
+.ptw-row__name { flex: 1 1 auto; min-width: 0; font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+.ptw-row__score { flex: none; font-size: 22px; font-weight: 800; }
+.ptw-row__reasons { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--text-2); }
+.ptw-row__go { font-size: 14px; font-weight: 600; color: var(--link, var(--text-1)); text-decoration: underline; text-underline-offset: 2px; }
+.ptw-pts { font-size: 12.5px; font-weight: 700; color: var(--text-3); white-space: nowrap; margin-left: 6px; }
+.chip.ptw-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.ptw-sw--chip { width: 10px; height: 10px; border-radius: 50%; }
+.chip.ptw-chip--done { color: var(--text-3); }
+
+/* ── The ranked list: a table from 900px ── */
+.ptw-wide { display: none; }
+.ptw-turfs td, .ptw-turfs th { white-space: normal; }
+.ptw-turfs__name a { font-weight: 700; color: var(--text-1); text-underline-offset: 2px; display: inline-flex; align-items: center; min-height: 32px; }
+.ptw-cell__main { font-weight: 700; font-size: 15px; }
+.ptw-cell__sub { display: block; font-size: 12.5px; color: var(--text-3); font-weight: 400; }
+.ptw-th__pts { display: block; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.ptw-score { display: inline-flex; align-items: center; gap: var(--s-2); }
+.ptw-score__n { font-size: 20px; font-weight: 800; min-width: 2.2em; }
+.ptw-scorebar { display: block; height: 4px; margin-top: 6px; max-width: 160px; border-radius: 2px; background: var(--paper-2); overflow: hidden; }
+.ptw-scorebar > span { display: block; height: 100%; border-radius: 2px; }
+@media (min-width: 900px) {
+  .ptw-narrow { display: none; }
+  .ptw-wide { display: block; }
+}
+.ptw-avg { margin: var(--s-2) 0 0; }
+
+/* How the score works */
+.ptw-how { margin-top: var(--s-3); }
+.ptw-how__body { font-size: 15px; color: var(--text-2); max-width: 72ch; padding-bottom: var(--s-2); }
+.ptw-how__body p { margin: var(--s-2) 0; }
+.ptw-how__body ul { margin: 0; padding-left: 1.2em; }
+.ptw-how__body li { margin: 4px 0; }
+
+/* ── The numbers ── */
+.ptw-said { list-style: none; margin: 0 0 var(--s-3); padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.ptw-said li { overflow-wrap: anywhere; }
+.ptw-form { display: flex; flex-direction: column; gap: var(--s-3); max-width: 640px; }
+.ptw-form__line { margin: 0; }
+.ptw-field { margin-bottom: 0; }
+.ptw-field > label { font-size: 14px; color: var(--text-2); }
+.ptw-date, .ptw-num { min-height: 48px; font-size: 16px; }
+.ptw-date { max-width: 220px; }
+.ptw-inputrow { display: flex; align-items: center; gap: 8px; max-width: 260px; }
+.ptw-unit { font-weight: 700; color: var(--text-2); }
+.ptw-hint { font-size: 13px; color: var(--text-3); }
+.ptw-err { font-size: 13px; font-weight: 600; color: var(--danger); }
+.ptw-num[aria-invalid='true'] { border-color: var(--danger); }
+.ptw-race-fields { margin: 0; padding: var(--s-3) var(--s-4) var(--s-4); border: var(--border); border-radius: var(--r-card); background: var(--paper-0); display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
+.ptw-race-fields legend { font-family: var(--font-display); font-size: 19px; font-weight: 700; padding: 0 6px; }
+.ptw-how-pick { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.ptw-pick {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px;
+  border: var(--border-2); border-radius: 999px; background: var(--paper-0); cursor: pointer; font-weight: 600; font-size: 14px;
+}
+.ptw-pick.is-on { border-color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); }
+.ptw-pick input { width: 18px; height: 18px; margin: 0; accent-color: var(--mark); }
+.ptw-pick:focus-within { outline: 2px solid var(--mark); outline-offset: 2px; }
+.ptw-preview { margin: 0; font-size: 15px; }
+.ptw-form__actions { margin-top: var(--s-1); }
+
+.ptw-counted { margin: var(--s-4) 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.btn-link.ptw-again { min-height: 48px; padding: 0 4px; font-size: 13px; }
+.btn-link.ptw-again:disabled { opacity: 0.5; cursor: default; }
+
+@media (max-width: 720px) {
+  .ptw-map { height: 340px; }
+  .ptw-how-pick { flex-direction: column; }
+  .ptw-pick { width: 100%; }
+  .ptw-race__n { font-size: 34px; }
+  .ptw-facts dd { font-size: 18px; }
+  .ops-seg.ptw-seg { min-width: 0; width: 100%; }
+}

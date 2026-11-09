@@ -123,6 +123,17 @@ one tap away under **More**.
   texting opens; replies land in the Inbox.
 - **Reports** (Today → More → Reports) — the campaign in numbers, *CSV* on
   every table, and the exports: any table as a spreadsheet.
+- **Path to win** (Today → More → Path to win) — tap *Set the win number*:
+  election day (unless *GOTV & voting days* has one), then each race —
+  *I know the votes needed*, or *Work it out* from eligible voters, turnout %
+  and share needed % — and, if you like, how many of your supporters will
+  vote; the line under each race shows votes → supporters as you type. Save:
+  each race says found of needed, still to find, needed a week beside found
+  a week (the last 4 weeks) and *Behind: N more supporters a week*. *Week by
+  week* draws each race's line over the new supporters (*Table* for the
+  numbers). *Where to work next* ranks the turfs (map and list; *How the
+  score works* says why) — tap one and the map opens on it. Staff see it all
+  without *Change the numbers*; volunteers never see it.
 - **Outreach → Email → Write an email** (to the subscribers) — the message takes Markdown: tap **B**,
   **H**, **• List**, **Link**, **Picture** (a photo goes in from your phone)
   then

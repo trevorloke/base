@@ -850,6 +850,7 @@ function DeskToday({ b, me, toast }) {
         <ul className="today-rows">
           <LinkRow to="/banks" main="Phone banks" />
           <LinkRow to="/lists" main="Lists" />
+          <LinkRow to="/path-to-win" main="Path to win" />
           <LinkRow to="/reports" main="Reports" />
           <LinkRow to="/surveys" main="Surveys" />
           <LinkRow to="/scripts" main="Scripts" />

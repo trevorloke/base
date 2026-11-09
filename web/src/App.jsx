@@ -67,6 +67,7 @@ const WebsiteTheme = lazy(() => import('./pages/WebsiteTheme.jsx'));
 const WebsiteSettings = lazy(() => import('./pages/WebsiteSettings.jsx'));
 const WebsitePosts = lazy(() => import('./pages/WebsitePosts.jsx'));
 const WebsiteCampaigns = lazy(() => import('./pages/WebsiteCampaigns.jsx'));
+const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
 import Join from './pages/Join.jsx';
 import { TwoStepRequired } from './components/TwoStep.jsx';
 const Profile = lazy(() => import('./pages/Profile.jsx'));
@@ -134,6 +135,7 @@ const ROUTE_AREA = [
   [/^\/requests/, 'people'],
   [/^\/field-report/, 'data'],
   [/^\/website/, 'site'],
+  [/^\/path-to-win/, 'data'],
 ];
 function DeskOnly() {
   const ctx = useOutletContext();
@@ -257,6 +259,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/website/news/:id" element={<WebsitePosts />} />
           <Route path="/website/petitions" element={<WebsiteCampaigns />} />
           <Route path="/website/petitions/:id" element={<WebsiteCampaigns />} />
+          <Route path="/path-to-win" element={<PathToWin />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
