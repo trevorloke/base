@@ -11,10 +11,19 @@
 // Open checkouts nobody paid aren't counted: a second tab, or a stranger
 // typing someone's email, can't lock a donor out (the webhook refunds
 // anything that turns out over).
+//
+// Money lands only on the same email's record or someone new's, so one
+// donor can be two records (another email, or a cheque at the desk on
+// their voter record). Whenever a gift is logged under the limit — a
+// payment landing, or a cheque at the desk after it — the records that may
+// be the same donor are added in (overTogether): over together, the gift
+// is flagged for the treasurer, never refunded — the other record may be
+// someone else, and the desk can say so (Not the same).
 import { capFor, donorYearTotal } from '../../lib/cap.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
+import { sameText, samePhone, samePostal } from '../duplicates/same.js';
 
 export const money = (cents) => `$${(Number(cents || 0) / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const tzOf = (ws) => ws?.settings?.tz || DEFAULT_TZ;
@@ -93,4 +102,69 @@ export const overWhenLanding = async (q, ws, personId, { date, slate, amountCent
   if (!rule) return { over: false, checked: false };
   const totalCents = (await donorYearTotal(q, ws.id, personId, year, slate || DEFAULT_SLATE)) + Number(amountCents);
   return { over: totalCents > Number(rule.capCents), checked: true, year, totalCents, capCents: Number(rule.capCents), source: rule.source };
+};
+
+// The other live records that may be this donor: the same first and last
+// name, and the same whole postal code, phone or street address — compared
+// as ext/duplicates compares records — never a pair the desk has said are
+// two people (Duplicates: Not the same). Each with what it gave this year
+// on the slate (given_cents; only those that gave) and what it shares
+// (by_phone, by_address, by_postal). Read through persons_same_donor_idx
+// (sql.js), so a city's whole voter file answers at once.
+export const likelySameDonors = async (q, ws, personId, { year, slate }) => (await q.query(
+  `with d as (
+     select ${sameText('first_name')} as fn, ${sameText('last_name')} as ln, ${samePostal('postal')} as pc,
+            ${samePhone('phone')} as ph, ${sameText('address')} as ad
+       from persons where id = $2 and workspace_id = $1
+   ), p as (
+     select p.id, p.name, p.created_at,
+            length(d.ph) >= 7 and ${samePhone('p.phone')} = d.ph as by_phone,
+            d.ad <> '' and ${sameText('p.address')} = d.ad as by_address,
+            length(d.pc) >= 6 and ${samePostal('p.postal')} = d.pc as by_postal
+       from d join persons p
+         on p.workspace_id = $1 and p.deleted_at is null and p.id <> $2 and p.kind = 'person'
+        and ${sameText('p.last_name')} = d.ln and ${sameText('p.first_name')} = d.fn
+      where d.fn <> '' and d.ln <> ''
+        and not exists (select 1 from person_not_dupes n
+                         where n.workspace_id = $1 and n.a = least(p.id, $2::uuid) and n.b = greatest(p.id, $2::uuid))
+   )
+   select * from (
+     select p.id, p.name, p.by_phone, p.by_address, p.by_postal,
+            (select coalesce(sum(g.amount_cents), 0) from gifts g
+              where g.workspace_id = $1 and g.person_id = p.id and g.deleted_at is null and coalesce(g.slate, $4) = $5
+                and g.date >= make_date($3, 1, 1) and g.date < make_date($3 + 1, 1, 1))::bigint as given_cents
+       from p where p.by_phone or p.by_address or p.by_postal
+      order by p.created_at
+   ) x where given_cents > 0`,
+  [ws.id, personId, year, DEFAULT_SLATE, slate || DEFAULT_SLATE],
+)).rows;
+
+const listed = (words) => (words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0]);
+const sharedBy = (o) => listed([o.by_phone && 'phone', o.by_address && 'address', o.by_postal && 'postal code'].filter(Boolean));
+
+// A gift under the limit for its own donor (check: lib/cap.js checkCap's,
+// this gift in it), with what the records that may be the same donor gave:
+// over together? → { reason, ids } — the reason its gift is flagged and the
+// records it names — or null. It says the two together in the words of
+// lib/gifts.js flagIfOver, so the desk reads the numbers out of it the same
+// way (Money: parseOver).
+export const overTogether = async (q, ws, personId, check, slate) => {
+  const others = await likelySameDonors(q, ws, personId, { year: check.year, slate });
+  const totalCents = others.reduce((n, o) => n + Number(o.given_cents), Number(check.totalCents));
+  if (!others.length || totalCents <= Number(check.capCents)) return null;
+  const who = listed(others.map((o) => `${o.name} (same ${sharedBy(o)})`));
+  return {
+    reason: `Possibly the same donor as ${who}: together they are at ${money(totalCents)} for ${check.year} — over the ${money(check.capCents)} limit on the ${slateLabel(slate).toLowerCase()} slate (${check.source})`,
+    ids: others.map((o) => o.id),
+  };
+};
+
+// lib/hooks.js underLimit: every gift whose donor is under the limit on
+// their own record — logged at the desk (a gift, or dues on the membership
+// form), a payment landing, a restore — is added up with the records that
+// may be the same donor. Over together, it is flagged naming them: never
+// refused or refunded.
+export const underLimit = async (tx, ws, { personId, slate, cap }, out) => {
+  const r = await overTogether(tx, ws, personId, cap, slate);
+  if (r) Object.assign(out, { flagReason: r.reason, sameAs: r.ids });
 };

@@ -1,16 +1,19 @@
 // /people/duplicates (the desk, the People area): two records that look like
-// one person — the same email, the same phone and name, or the same name at
-// one door — side by side. "Keep this one" merges the other into it
-// (person.merge: everything that pointed at the other moves; blanks are
-// filled; it asks once). "Not the same" keeps the pair away.
+// one person — the same email, the same phone and name, the same name at
+// one door, or a donor and the same first and last name in one postal code
+// — side by side. "Keep this one" merges the other into it (person.merge:
+// everything that pointed at the other moves; blanks are filled; it asks
+// once). "Not the same" keeps the pair away (and a gift flagged as maybe
+// one donor on the two is added up again without the other).
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
+import { mergedSaid } from '../components/DuplicatesWords.js';
 import './duplicates.css';
 
-const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door' };
+const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door', postal: 'Same name and postal code' };
 const when = (iso) => new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
@@ -58,8 +61,7 @@ function Pair({ pair, onDone }) {
             history moves over and fills its blanks.
           </span>
           <button type="button" className="btn btn-primary ops-tap" disabled={busy || !online}
-            onClick={() => run('person.merge', { keep: asking.keep.id, drop: asking.drop.id }, (r) => (
-              `✓ ${asking.keep.name}: one record${r.flagged?.length ? ' — over the donation limit now, flagged in Donations' : ''}`))}>
+            onClick={() => run('person.merge', { keep: asking.keep.id, drop: asking.drop.id }, (r) => mergedSaid(asking.keep.name, r))}>
             {busy ? 'Merging…' : 'Merge'}
           </button>
           <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => setAsking(null)}>Cancel</button>
@@ -67,7 +69,8 @@ function Pair({ pair, onDone }) {
       ) : (
         <div className="ops-actions">
           <button type="button" className="btn btn-quiet ops-tap" disabled={busy || !online}
-            onClick={() => run('person.notDuplicate', { a: pair.a.id, b: pair.b.id }, () => `Kept apart: ${pair.a.name} and ${pair.b.name}`)}>
+            onClick={() => run('person.notDuplicate', { a: pair.a.id, b: pair.b.id }, (r) => (
+              `Kept apart: ${pair.a.name} and ${pair.b.name}${r.rechecked?.some((g) => !g.flagged) ? ' — the donation flag on them is cleared' : ''}`))}>
             Not the same
           </button>
         </div>
@@ -88,6 +91,9 @@ export default function Duplicates() {
     qc.invalidateQueries({ queryKey: ['persons'] });
     qc.invalidateQueries({ queryKey: ['person'] });
     qc.invalidateQueries({ queryKey: ['doors'] });
+    // A merge or Not the same can change a gift's over-limit flag.
+    qc.invalidateQueries({ queryKey: ['brief'] });
+    qc.invalidateQueries({ queryKey: ['records', 'gift'] });
   };
   return (
     <div className="ops-page dup-page">

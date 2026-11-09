@@ -12,9 +12,8 @@ import { useEffect, useRef, useState } from 'react';
 import { html, cx } from './h.js';
 import { Check, Choices, FieldError, Hidden, Honeypot, SelectField, TextField } from './fields.js';
 import { ShareSheet } from './share.js';
-import { money, parseDollars, str, trackFrom } from './util.js';
+import { EMAIL_RE, money, parseDollars, str, trackFrom } from './util.js';
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -105,6 +104,9 @@ export function SiteForm(props) {
   const [pick, setPick] = useState(amount ? amount.defaultCents : null);
   const [other, setOther] = useState('');
   const key = useRef('');
+  // The last send didn't get through (no answer, or the server couldn't
+  // finish it): the server may be keeping it, unanswered, under this key.
+  const unsure = useRef(false);
   const thanksRef = useRef(null);
   const justSent = useRef(false);
 
@@ -138,6 +140,15 @@ export function SiteForm(props) {
     }
   };
   const cents = !amount ? null : pick === 'other' ? parseDollars(other) : pick;
+  // After a send that didn't get through, any change makes this a new form
+  // with a new key: a typo put right, or the next person at a shared
+  // screen, is never taken for that send. Sent again unchanged, it keeps
+  // its key and finishes what was started.
+  const edited = () => {
+    if (!unsure.current) return;
+    unsure.current = false;
+    key.current = newKey();
+  };
 
   if (done) {
     const t = thanks || {};
@@ -182,7 +193,7 @@ export function SiteForm(props) {
       const empty = f.type === 'check' ? v !== true : f.type === 'checks' ? !v?.length : v == null || v === '';
       if (empty) errs[f.name] = f.msg || 'This is needed';
     }
-    if (body.email && !EMAIL.test(body.email)) errs.email = 'Enter an email address like name@example.org';
+    if (body.email && !EMAIL_RE.test(body.email)) errs.email = 'Enter an email address like name@example.org';
     if (body.phone && body.phone.replace(/\D/g, '').length < 10) errs.phone = 'Enter a phone number with its area code';
     if (body.postal_code && !POSTAL.test(body.postal_code)) errs.postal_code = 'Enter a postal code like V3T 1A1';
     if (body.birth_date && !DAY.test(body.birth_date)) errs.birth_date = 'Enter your date of birth';
@@ -248,6 +259,7 @@ export function SiteForm(props) {
         setDone(true);
         return;
       }
+      if (res.status >= 500) unsure.current = true;
       const field = str(json?.field);
       const message = str(json?.error) || STATUS_MESSAGES[res.status] || 'Something went wrong. Please try again.';
       if (res.status === 400 && field && (names.has(field) || field === 'amount_cents')) {
@@ -258,6 +270,7 @@ export function SiteForm(props) {
         setAlert(message);
       }
     } catch {
+      unsure.current = true;
       setAlert('We couldn’t send that. Check your connection and try again.');
     } finally {
       setPending(false);
@@ -286,7 +299,7 @@ export function SiteForm(props) {
 
   const total = cents ? ` ${money(cents)}${amount?.monthly && cadence === 'monthly' ? ' a month' : ''}` : '';
   return html`<form className=${cx('site-form', layout === 'inline' ? 'site-form--inline' : 'form-card')} method="post" action=${action}
-      noValidate=${live || undefined} onSubmit=${onSubmit} aria-busy=${pending ? 'true' : undefined} aria-labelledby=${title ? `${uid}-title` : undefined}>
+      noValidate=${live || undefined} onSubmit=${onSubmit} onChange=${edited} aria-busy=${pending ? 'true' : undefined} aria-labelledby=${title ? `${uid}-title` : undefined}>
     ${title ? html`<h3 className="form-title" id=${`${uid}-title`}>${title}</h3>` : null}
     <${Honeypot} id=${uid} />
     <${Hidden} values=${{ ...hidden, ...(impliedConsent ? { [impliedConsent]: 'true' } : {}), ...(amount && !amount.monthly && amount.cadence ? { cadence: 'once' } : {}) }} />

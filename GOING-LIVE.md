@@ -200,5 +200,8 @@ shared, and the code names no client.
   again when the payment lands — one that would go over is refunded through
   Stripe by itself, the donor is told, and the treasurer sees it (after a
   dispute lost for only part of it, Stripe won't refund the rest: Needs you
-  says how much to return by hand). Stripe's webhook is refused without its
-  signature, and each event is done once.
+  says how much to return by hand); one over only with another record that
+  may be the same donor (or a cheque logged after it) is flagged for the
+  treasurer to decide — *Not the same person* clears it when they are two
+  people. Stripe's webhook is refused without its signature, and each event
+  is done once.

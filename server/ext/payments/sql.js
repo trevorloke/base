@@ -34,6 +34,13 @@
 //
 // No card numbers, ever: Stripe's hosted page takes the card; we keep its
 // ids (session, payment intent, invoice, charge, subscription).
+//
+// persons_same_donor_idx: a donor's other records by first and last name
+// (and postal code), compared as ext/duplicates compares them — whenever a
+// gift is logged under the limit (limits.js likelySameDonors) and for People
+// → Duplicates' donors. Made here, after ext/names adds the name columns.
+import { sameText, samePostal } from '../duplicates/same.js';
+
 export const sql = `
 create table if not exists stripe_checkouts (
   id uuid primary key,
@@ -127,4 +134,16 @@ create table if not exists stripe_held (
   created_at timestamptz not null default now()
 );
 create index if not exists stripe_held_ws_idx on stripe_held (workspace_id);
+
+-- An earlier draft of this index read a postal code by its spaces only
+-- (never shipped): made again the way same.js reads it now.
+do $$
+begin
+  if exists (select 1 from pg_indexes where indexname = 'persons_same_donor_idx' and indexdef not like '%A-Za-z0-9%') then
+    drop index persons_same_donor_idx;
+  end if;
+end $$;
+create index if not exists persons_same_donor_idx
+  on persons (workspace_id, (${sameText('last_name')}), (${sameText('first_name')}), (${samePostal('postal')}))
+  where deleted_at is null;
 `;

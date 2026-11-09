@@ -6,11 +6,13 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
+import { mergedSaid } from '../../web/src/components/DuplicatesWords.js';
 
 let mgr, vol, db;
 const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${r.status} ${JSON.stringify(r.json)}`); return r.json; };
 const pairsOf = async () => ok(await mgr.get('/api/duplicates')).pairs
   .map((p) => [[p.a.name, p.b.name].sort().join(' + '), p.why.sort().join(',')]);
+const cheque = async (p, cents, date) => ok(await mgr.action('gift.log', { person_id: p.id, amount_cents: cents, date, method: 'cheque' })).gift;
 
 before(async () => {
   db = await freshDb();
@@ -36,6 +38,30 @@ test('found: the same email; the same phone and name; the same name at one door 
     ['Cy Example + cy  example', 'address'],
   ]);
   assert.equal((await vol.get('/api/duplicates')).status, 403, 'the desk’s');
+});
+
+test('found: a donor and the same first and last name in one postal code (an address typed another way), never a postal code apart', async () => {
+  const gave = async (p) => ok(await mgr.action('gift.log', { person_id: p.id, amount_cents: 5000, date: '2026-05-01', method: 'cheque' }));
+  await mgr.createPerson('Rhea Voter', { address: '9876 54 St', city: 'Surrey', postal: 'V3S 2A1' });
+  await gave(await mgr.createPerson('Rhea Voter', { email: 'rhea@example.org', address: '9876 54 Street', postal: 'v3s2a1' }));
+  await gave(await mgr.createPerson('Theo Apart', { postal: 'V4A 1A1' }));
+  await mgr.createPerson('Theo Apart', { postal: 'V3W 9Z9' });
+  await gave(await mgr.createPerson('Fay Partial', { postal: 'V3S' }));
+  await mgr.createPerson('Fay Partial', { postal: 'V3S' });
+  await mgr.createPerson('Nell Nogift', { postal: 'V3R 1B2' });
+  await mgr.createPerson('Nell Nogift', { postal: 'V3R 1B2' });
+  const found = (await pairsOf()).filter(([n]) => /Rhea|Theo|Fay|Nell/.test(n));
+  assert.deepEqual(found, [['Rhea Voter + Rhea Voter', 'postal']]);
+  const pair = ok(await mgr.get('/api/duplicates')).pairs.find((p) => p.why.includes('postal'));
+  ok(await mgr.action('person.notDuplicate', { a: pair.a.id, b: pair.b.id }));
+  assert.ok(!(await pairsOf()).some(([n]) => /Rhea/.test(n)), 'Not the same: away');
+});
+
+test('found: a postal code typed with a hyphen is the same postal code', async () => {
+  const p = await mgr.createPerson('Hana Hyphen', { email: 'hana@example.org', address: '4321 100 Avenue', postal: 'V3T-2C3' });
+  ok(await mgr.action('gift.log', { person_id: p.id, amount_cents: 5000, date: '2026-05-01', method: 'cheque' }));
+  await mgr.createPerson('Hana Hyphen', { address: '4321 100 Ave', postal: 'V3T 2C3' });
+  assert.deepEqual((await pairsOf()).filter(([n]) => /Hana/.test(n)), [['Hana Hyphen + Hana Hyphen', 'postal']]);
 });
 
 test('Not the same: the pair stays away', async () => {
@@ -85,6 +111,40 @@ test('merge: history moves, blanks fill, tags join, clashes keep the kept one’
   assert.ok(gone.deleted_at);
   assert.equal(gone.into, keep.id);
   assert.ok(!(await pairsOf()).some(([n]) => /Ana/.test(n)), 'no longer a pair');
+});
+
+test('merge: maybes one donor on the two become the plain over-limit flag, and the answer says the year is over, once', async () => {
+  const voter = await mgr.createPerson('Una Twice', { address: '7 One Way', city: 'Surrey', postal: 'V3T 4K4' });
+  const other = await mgr.createPerson('Una Twice', { email: 'una.twice@example.org', postal: 'V3T 4K4' });
+  await cheque(voter, 100000, '2026-03-01');
+  const maybes = [await cheque(other, 50000, '2026-04-01'), await cheque(other, 10000, '2026-05-01')];
+  for (const g of maybes) {
+    assert.match(g.flag_reason, /^Possibly the same donor as Una Twice \(same postal code\)/);
+    assert.deepEqual(g.maybe_same_donor, [voter.id]);
+  }
+  assert.ok((await pairsOf()).some(([n, why]) => n === 'Una Twice + Una Twice' && why === 'postal'), 'Duplicates lists the two');
+  const r = ok(await mgr.action('person.merge', { keep: voter.id, drop: other.id }));
+  const now = (await db.query('select id, flagged, flag_reason from gifts where id = any($1::uuid[]) order by date', [maybes.map((g) => g.id)])).rows;
+  for (const g of now) assert.match(g.flag_reason, /^Una Twice is at \$1600\.00 for 2026 — over the \$1429\.70 limit/);
+  assert.deepEqual(r.flagged, [{ gift_id: maybes[0].id, year: 2026, reason: now[0].flag_reason }], 'over now: 2026, said once');
+  assert.equal(mergedSaid('Una Twice', r), '✓ Una Twice: one record — over the donation limit now, flagged in Donations');
+});
+
+test('merge: one donor now, over only with a third record that may be them — the flag, the answer and the line say maybe', async () => {
+  const keep = await mgr.createPerson('Ida Thrice', { email: 'ida.thrice@example.org', postal: 'V3W 1A1' });
+  const drop = await mgr.createPerson('Ida Thrice', { email: 'IDA.thrice@example.org' });
+  const third = await mgr.createPerson('Ida Thrice', { postal: 'V3W 1A1' });
+  await cheque(keep, 40000, '2026-03-01');
+  const moved = await cheque(drop, 40000, '2026-04-01');
+  assert.equal((await cheque(third, 70000, '2026-05-01')).flagged, false, '$1,100 with the first: under');
+  const r = ok(await mgr.action('person.merge', { keep: keep.id, drop: drop.id }));
+  // $800 on the one record; $1,500 with the third.
+  const [f] = r.flagged;
+  assert.match(f?.reason ?? '', /^Possibly the same donor as Ida Thrice \(same postal code\): together they are at \$1,500\.00 for 2026/);
+  assert.deepEqual(r.flagged, [{ gift_id: moved.id, year: 2026, reason: f.reason, maybe_same_donor: [third.id] }], 'a maybe, naming the third record');
+  const ev = (await db.query("select payload from events where action = 'person.merge' and entity_type = 'gift' and entity_id = $1", [moved.id])).rows[0];
+  assert.deepEqual(ev?.payload.maybe_same_donor, [third.id], 'on the event log too');
+  assert.equal(mergedSaid('Ida Thrice', r), '✓ Ida Thrice: one record — maybe over the donation limit together with another record, flagged in Donations');
 });
 
 test('refusals: the same record twice, one already gone, a volunteer; the books verify', async () => {

@@ -1,11 +1,16 @@
 // Duplicates: two records for one person, found and made one.
 //
 //   GET /api/duplicates      the desk (the People area). Pairs that look like
-//       one person: the same email; the same phone and name; or the same
-//       name at the same door. → { pairs: [{ a, b, why: ['email' | 'phone' |
-//       'address'] }], more } — each side with what the desk needs to choose
-//       (contacts, gifts, shifts, when it was added). Pairs marked "not the
-//       same" stay away.
+//       one person: the same email; the same phone and name; the same name
+//       at the same door; or a donor and a record with the same first and
+//       last name in the same postal code (an address typed another way:
+//       the money forms match only by email, so a donor can be a second
+//       record — the rule the payments add up the year's limit by, ext/
+//       payments limits.js; read from the donors, through its index
+//       persons_same_donor_idx). → { pairs: [{ a, b, why: ['email' |
+//       'phone' | 'address' | 'postal'] }], more } — each side with what the
+//       desk needs to choose (contacts, gifts, shifts, when it was added).
+//       Pairs marked "not the same" stay away.
 //   person.merge  { keep, drop }    desk. Everything that points at `drop`
 //       — contacts, gifts and receipts, shifts, signs, lists, answers,
 //       relationships, texts, requests, ladders… — moves to `keep`; where
@@ -14,14 +19,23 @@
 //       address, pin…), tags are joined, and drop leaves the list (deleted,
 //       with merged_into, so an old link finds its way). Gifts moved onto
 //       one donor are checked against the limit again: a year that is now
-//       over is flagged like any crossing gift.
+//       over is flagged like any crossing gift (and a "Possibly the same
+//       donor" flag on the two gives way to it); under on keep alone but
+//       over with another record that may be them, a maybe naming it.
+//       → { keep, drop, filled, moved, flagged: [{ gift_id, year, reason,
+//       maybe_same_donor? }] } — each such year once, so Duplicates can say
+//       over the limit now, or maybe.
 //   person.notDuplicate  { a, b }   desk. "Not the same": the pair is not
-//       shown again.
+//       shown again, and never added up for the year's limit; a gift
+//       flagged as possibly one donor on them is added up again without
+//       the other — the flag goes, or names what is left. → { a, b,
+//       rechecked: [{ id, flagged, flag_reason }] }
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
-import { flagIfOver } from '../../lib/gifts.js';
+import { flagIfOver, recheckMaybes } from '../../lib/gifts.js';
 import { DEFAULT_SLATE } from '@starbase/shared/canvass';
+import { sameText, samePhone, samePostal } from './same.js';
 
 export const sql = `
 create table if not exists person_not_dupes (
@@ -185,8 +199,29 @@ export const actions = {
         [drop.id, ws, keep.id],
       );
 
-      // One donor now: each year and slate of their gifts against the limit.
+      // A maybe one donor on these two records is one donor now: checked
+      // again. Over on keep alone, it gives way to the plain over-limit
+      // reason, and that year is over now: said once, like a crossing gift.
+      const rechecked = await recheckMaybes(tx, ctx.workspace, [keep.id, drop.id], emit);
       const flagged = [];
+      const said = new Set();
+      const plain = rechecked.filter((g) => g.flagged && !g.maybe_same_donor);
+      if (plain.length) {
+        const at = (await tx.query(
+          `select id, extract(year from date)::int as y, coalesce(slate, $3) as slate from gifts
+            where workspace_id = $1 and person_id = $2 and id = any($4::uuid[])`,
+          [ws, keep.id, DEFAULT_SLATE, plain.map((g) => g.id)],
+        )).rows;
+        for (const g of plain) {
+          const a = at.find((x) => x.id === g.id);
+          if (!a || said.has(`${a.y}:${a.slate}`)) continue;
+          said.add(`${a.y}:${a.slate}`);
+          flagged.push({ gift_id: g.id, year: a.y, reason: g.flag_reason });
+        }
+      }
+
+      // One donor now: each year and slate of their gifts against the limit
+      // (a year said above is done).
       if (moved.gifts?.moved) {
         const years = (await tx.query(
           `select distinct extract(year from date)::int as y, coalesce(slate, $3) as slate from gifts
@@ -194,6 +229,7 @@ export const actions = {
           [ws, keep.id, DEFAULT_SLATE],
         )).rows;
         for (const { y, slate } of years) {
+          if (said.has(`${y}:${slate}`)) continue;
           const last = (await tx.query(
             `select id, date, flagged from gifts where workspace_id = $1 and person_id = $2 and deleted_at is null
                and coalesce(slate, $4) = $5 and date >= make_date($3, 1, 1) and date < make_date($3 + 1, 1, 1)
@@ -201,10 +237,13 @@ export const actions = {
             [ws, keep.id, y, DEFAULT_SLATE, slate],
           )).rows[0];
           if (!last || last.flagged) continue;
-          const { flagReason } = await flagIfOver(tx, ctx.workspace, { id: last.id, person_id: keep.id, date: last.date, donorName: keep.name, slate });
+          // Under on keep alone, a maybe: over together with another record
+          // that may be the same donor (sameAs) — the flag names it.
+          const { flagReason, sameAs } = await flagIfOver(tx, ctx.workspace, { id: last.id, person_id: keep.id, date: last.date, donorName: keep.name, slate });
           if (flagReason) {
-            flagged.push({ gift_id: last.id, year: y, reason: flagReason });
-            emit('gift', last.id, 'update', { flagged: true, flag_reason: flagReason });
+            const maybe = sameAs ? { maybe_same_donor: sameAs } : {};
+            flagged.push({ gift_id: last.id, year: y, reason: flagReason, ...maybe });
+            emit('gift', last.id, 'update', { flagged: true, flag_reason: flagReason, ...maybe });
           }
         }
       }
@@ -230,7 +269,10 @@ export const actions = {
         [ctx.workspaceId, a, b, ctx.user.id],
       );
       emit('person', a, 'update', { not_duplicate_of: b });
-      return { a, b };
+      // Two people: a gift flagged as maybe one donor on these records is
+      // added up again without the other.
+      const rechecked = await recheckMaybes(tx, ctx.workspace, [a, b], emit);
+      return { a, b, rechecked };
     },
   },
 };
@@ -247,9 +289,9 @@ api.get('/duplicates', async (c) => {
     `with p as (
        select id,
               nullif(lower(trim(coalesce(email, ''))), '') as em,
-              nullif(right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 10), '') as ph,
-              lower(regexp_replace(trim(name), '\\s+', ' ', 'g')) as nm,
-              nullif(lower(regexp_replace(trim(coalesce(address, '')), '\\s+', ' ', 'g')), '') as ad,
+              nullif(${samePhone('phone')}, '') as ph,
+              ${sameText('name')} as nm,
+              nullif(${sameText('address')}, '') as ad,
               lower(coalesce(unit, '')) as un
          from persons where workspace_id = $1 and deleted_at is null and kind = 'person'
      ), hits as (
@@ -258,6 +300,15 @@ api.get('/duplicates', async (c) => {
        select a.id, b.id, 'phone' from p a join p b on a.ph = b.ph and a.nm = b.nm and a.id < b.id where length(a.ph) >= 7
        union all
        select a.id, b.id, 'address' from p a join p b on a.nm = b.nm and a.ad = b.ad and a.un = b.un and a.id < b.id
+       union all
+       select distinct least(a.id, b.id), greatest(a.id, b.id), 'postal'
+         from persons a
+         join persons b on b.workspace_id = a.workspace_id and b.deleted_at is null and b.kind = 'person' and b.id <> a.id
+          and ${sameText('b.last_name')} = ${sameText('a.last_name')} and ${sameText('b.first_name')} = ${sameText('a.first_name')}
+          and ${samePostal('b.postal')} = ${samePostal('a.postal')}
+        where a.workspace_id = $1 and a.deleted_at is null and a.kind = 'person'
+          and a.id in (select person_id from gifts where workspace_id = $1 and deleted_at is null)
+          and ${sameText('a.first_name')} <> '' and ${sameText('a.last_name')} <> '' and length(${samePostal('a.postal')}) >= 6
      )
      select h.a, h.b, array_agg(distinct h.why) as why from hits h
       where not exists (select 1 from person_not_dupes n where n.workspace_id = $1 and n.a = h.a and n.b = h.b)

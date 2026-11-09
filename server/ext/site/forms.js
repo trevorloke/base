@@ -1,7 +1,8 @@
 // POST {site}/api/forms/:kind — every website form, the same way (SITE.md
 // "Public forms"): JSON from the islands, or a plain form post (no
 // JavaScript: a 303 back to the page). Each kind reads exactly the fields
-// SITE.md lists; an email or a phone is required for every kind.
+// SITE.md lists; an email or a phone is required for every kind, an email
+// for the newsletter, join and donate.
 //
 //   200 { ok: true }                     done (also for a retry with the same
 //                                        client_key, and for the honeypot)
@@ -39,15 +40,18 @@
 // For join and donate, Stripe is asked for its page only after that write
 // has committed (no write ever waits on Stripe), and a second short write
 // keeps the page and the answer; until then the action has no answer, so a
-// retry with the same client_key asks again for the same checkout.
+// retry — the same client_key, amount and typed details — asks again for
+// the same checkout. Stripe refusing the typed email is a 400 on the email.
 // Money only ever lands on the same email's record, or on someone new's.
 // The answer never says whether someone was on file.
+import { createHash } from 'node:crypto';
 import { getCookie } from 'hono/cookie';
 import { newId, runAction } from '../../lib/events.js';
 import { clientIp, makeLimiter } from '../../lib/guard.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { SLATE_CODES } from '@starbase/shared/canvass';
 import { DONATE_DECLARATION, JOIN_DECLARATION } from '../../../shared/site/wording.js';
+import { EMAIL_RE } from '../../../shared/site/components/util.js';
 import { actions as fieldActions } from '../fields/actions.js';
 import { KINDS, consentWording, tagOf } from './shape.js';
 import { ensureSite, readSettings, parseJ } from './store.js';
@@ -61,7 +65,6 @@ export class FormError extends Error {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const one = (v) => (Array.isArray(v) ? v[0] : v);
 const bool = (v) => [true, 1, 'true', 'on', '1', 'yes'].includes(typeof v === 'string' ? v.trim().toLowerCase() : v);
@@ -147,6 +150,9 @@ const ofKind = (kind, b, f, day) => {
     if (!k.message) throw new FormError('message', 'Write your message');
   }
   if (kind === 'join' || kind === 'donate') {
+    // Money is only ever the same email's record or someone new's: with a
+    // phone alone, every gift would be a new record, never added up.
+    if (!f.email) throw new FormError('email', kind === 'join' ? 'Add your email to join' : 'Add your email to give');
     k.address = str(b, 'address', 400, 'Your address');
     k.city = str(b, 'city', 120, 'Your city');
     if (!bool(one(b.declaration))) {
@@ -368,17 +374,25 @@ const payPage = async (db, ws, kind, { actionId, checkoutId }) => {
   return result;
 };
 
-// What a join or donate is for: its client_key carries it, so the same key
-// with another amount (back from Stripe, a new choice) is a fresh checkout,
-// never the old one again.
+// What a join or donate is for, and who: its client_key carries both, so
+// the same key with another amount (back from Stripe, a new choice) is a
+// fresh checkout, never the old one again — and so is the same key with
+// other details after a failed send (a typo put right, the next person at
+// a shared tablet): a new action, with its own person and checkout. Sent
+// again as it was (a double tap, a lost answer), it is the same one.
 const paidFor = (kind, k) => (kind === 'join' ? `${k.amount_cents}-${k.term}` : `${k.amount_cents}-${k.cadence}-${k.slate || ''}`);
+const norm = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const whoFor = (f, k) => createHash('sha256').update(JSON.stringify([
+  f.email, f.phone.replace(/\D/g, ''), norm(f.first_name), norm(f.last_name), f.postal_code.replace(/\s+/g, '').toUpperCase(),
+  norm(k.address), norm(k.city), k.birth_date || null, k.citizenship || null,
+])).digest('hex').slice(0, 16);
 
 // Inside the one write. Throws FormError for what the database says no to
 // (a closed petition, a full event, an amount over the limit).
 // → { answer } done; { checkout: { actionId, checkoutId } } Stripe to be asked.
 const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
   const pays = kind === 'join' || kind === 'donate';
-  const key = f.client_key ? `${kind}:${f.client_key}${pays ? `:${paidFor(kind, k)}` : ''}` : null;
+  const key = f.client_key ? `${kind}:${f.client_key}${pays ? `:${paidFor(kind, k)}:${whoFor(f, k)}` : ''}` : null;
   if (key) {
     const prev = (await tx.query('select id, answer, checkout_id from site_actions where workspace_id = $1 and client_key = $2', [ws.id, key])).rows[0];
     if (prev) {

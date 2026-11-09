@@ -2,16 +2,20 @@
 //   Top: one big "Raised this year" number, then "Needs you": gifts over
 //   the contribution limit ("Over limit":
 //   "$150 over the $1,250 limit", the legal wording under "Why?", Donor ·
-//   Void right there) — and receipts with no home address ("Needs address":
+//   Void right there; a gift that may be the same donor as another record
+//   (a second email online, a cheque after a gift online): "Maybe $570.30
+//   over the $1,429.70 limit", the other record under "Why?", and Not the
+//   same person, which keeps the records apart and checks the limit
+//   again) — and receipts with no home address ("Needs address":
 //   Street address · Save address right there; the receipt's email waits).
 //   One yellow "Log a gift" (?new=1; ?person=<id> preselects the donor):
 //   donor, amount, date — paid by, cadence and note under "More details"
 //   (and the donor's street address when none is on file).
 //   Type-ahead donor picker (never type IDs). Saving says "✓ $150 from Owen
 //   Patel · receipt emails in a minute" (Undo voids it, and the email never
-//   goes); a cap crossing also raises an "Over limit" banner. Voiding a gift
-//   whose receipt was already emailed asks "Receipt already emailed — send a
-//   void notice? Yes · No".
+//   goes); a cap crossing (or a maybe) also raises an "Over limit" banner.
+//   Voiding a gift whose receipt was already emailed asks "Receipt already
+//   emailed — send a void notice? Yes · No".
 //   The ledger: rows of donor, amount, date (+ monthly / over limit chips). Tap
 //   a row for how it was paid, note, the donor's profile and Void ("Void this
 //   gift? Yes · No", then a 7s Undo).
@@ -62,8 +66,10 @@ const fmtBig = (cents) => fmtMoney(cents).replace(/\.00$/, '');
 // Over the contribution limit, in one line: "$150 over the $1,250 limit".
 // The server's flag_reason reads "<donor> is at $1400.00 for 2026 — over the
 // $1250.00 limit (<legal source>)"; a fresh gift.log also returns the numbers.
+// The last such phrase: a name before it (the donor's, or another record's)
+// can never stand in for the numbers.
 const parseOver = (reason) => {
-  const m = /at \$([\d,]+(?:\.\d+)?) for (\d{4}) — over the \$([\d,]+(?:\.\d+)?) limit/.exec(String(reason || ''));
+  const m = [...String(reason || '').matchAll(/at \$([\d,]+(?:\.\d+)?) for (\d{4}) — over the \$([\d,]+(?:\.\d+)?) limit/g)].at(-1);
   if (!m) return null;
   const cents = (v) => Math.round(Number(v.replace(/,/g, '')) * 100);
   return { totalCents: cents(m[1]), capCents: cents(m[3]) };
@@ -71,14 +77,23 @@ const parseOver = (reason) => {
 // The brief's flagged rows carry the numbers (total_cents: the donor's total
 // for that year as it stands; cap_cents: the limit); a ledger row, or a brief
 // without them, falls back to reading flag_reason.
+// A gift flagged as maybe one donor on two records reads "Possibly the same
+// donor as <name> (same …): together they are at $2,000.00 for 2026 — over
+// the $1,429.70 limit …" (server/ext/payments/limits.js): its own record is
+// under, so until the two are made one, the line is the two together, as a
+// maybe.
 const centsOrNull = (v) => (v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+const MAYBE_SAME = /^Possibly the same donor as /;
 const overOf = (g) => {
   const totalCents = centsOrNull(g?.total_cents);
   const capCents = centsOrNull(g?.cap_cents);
-  return totalCents != null && capCents != null ? { totalCents, capCents } : parseOver(g?.flag_reason);
+  const own = totalCents != null && capCents != null ? { totalCents, capCents } : null;
+  const together = MAYBE_SAME.test(g?.flag_reason || '') && !(own && own.totalCents > own.capCents) ? parseOver(g.flag_reason) : null;
+  if (together) return { ...together, maybe: true };
+  return own || parseOver(g?.flag_reason);
 };
 const overLine = (c) => (c && Number.isFinite(c.totalCents) && Number.isFinite(c.capCents) && c.totalCents > c.capCents
-  ? `${fmtBig(c.totalCents - c.capCents)} over the ${fmtBig(c.capCents)} limit`
+  ? `${c.maybe ? 'Maybe ' : ''}${fmtBig(c.totalCents - c.capCents)} over the ${fmtBig(c.capCents)} limit`
   : 'Over limit');
 // "Aug 2" (this year) or "Aug 2, 2025"
 const shortDate = (value) => {
@@ -340,21 +355,39 @@ function GiftForm({ presetPersonId, slates, onSaved, onClose }) {
 const MonthlyChip = () => <span className="chip">monthly</span>;
 const shownNote = (n) => (n && n.trim().toLowerCase() !== 'sample' ? n : null);
 
-function GiftActions({ personId, onVoid }) {
-  const [confirm, setConfirm] = useState(false);
-  if (confirm) {
+// A maybe (server lib/gifts.js): the other records it names — on the
+// brief's row, or in a ledger row's attrs.
+const sameAsOf = (g) => {
+  const ids = g?.maybe_same_donor ?? g?.attrs?.maybe_same_donor;
+  return g?.flagged !== false && Array.isArray(ids) ? ids : [];
+};
+
+// Donor · Void — and, on a maybe, Not the same person (onApart).
+function GiftActions({ personId, onVoid, onApart }) {
+  const [confirm, setConfirm] = useState(null); // 'void' | 'apart'
+  if (confirm === 'void') {
     return (
       <div className="ops-confirm" role="group" aria-label="Void this gift">
         <span>Void this gift?</span>
-        <button type="button" className="btn ops-danger ops-tap" onClick={() => { setConfirm(false); onVoid(); }}>Yes</button>
-        <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm(false)}>No</button>
+        <button type="button" className="btn ops-danger ops-tap" onClick={() => { setConfirm(null); onVoid(); }}>Yes</button>
+        <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm(null)}>No</button>
+      </div>
+    );
+  }
+  if (confirm === 'apart') {
+    return (
+      <div className="ops-confirm" role="group" aria-label="Not the same person">
+        <span>Two different people? Their records are kept apart, and the limit is checked again.</span>
+        <button type="button" className="btn btn-primary ops-tap" onClick={() => { setConfirm(null); onApart(); }}>Yes</button>
+        <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm(null)}>No</button>
       </div>
     );
   }
   return (
     <div className="ops-actions">
       {personId && <Link className="btn btn-quiet ops-tap ops-link" to={`/people/${personId}`}>Donor</Link>}
-      <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm(true)}>Void</button>
+      {onApart && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm('apart')}>Not the same person</button>}
+      <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm('void')}>Void</button>
     </div>
   );
 }
@@ -363,7 +396,7 @@ function GiftActions({ personId, onVoid }) {
 const OverChip = ({ title }) => <span className="chip chip-warn" title={title || undefined}>over limit</span>;
 
 // ── A gift over the limit (from the brief); tap for how far over ──
-function FlaggedRow({ f, personId, onVoid }) {
+function FlaggedRow({ f, personId, onVoid, onApart }) {
   const [open, setOpen] = useState(false);
   const [why, setWhy] = useState(false);
   const bodyId = `fl-${f.id}`;
@@ -388,7 +421,7 @@ function FlaggedRow({ f, personId, onVoid }) {
               {why && <p id={`${bodyId}-why`} className="ops-meta">{f.flag_reason}</p>}
             </>
           )}
-          <GiftActions personId={personId} onVoid={onVoid} />
+          <GiftActions personId={personId} onVoid={onVoid} onApart={onApart} />
         </div>
       )}
     </li>
@@ -396,7 +429,7 @@ function FlaggedRow({ f, personId, onVoid }) {
 }
 
 // ── One ledger row; tap for method, note, donor and Void ──
-function GiftRow({ g, slates, open, onToggle, onVoid, online }) {
+function GiftRow({ g, slates, open, onToggle, onVoid, online, onApart }) {
   const bodyId = `gift-${g.id}`;
   return (
     <li className="ops-item" data-open={open ? '' : undefined}>
@@ -423,7 +456,7 @@ function GiftRow({ g, slates, open, onToggle, onVoid, online }) {
           )}
           {g.flagged && <p className="ops-over" title={g.flag_reason || undefined}>{overLine(overOf(g))}</p>}
           <ReceiptsGiftLine giftId={g.id} />
-          <GiftActions personId={g.person_id} onVoid={onVoid} />
+          <GiftActions personId={g.person_id} onVoid={onVoid} onApart={onApart} />
         </div>
       )}
     </li>
@@ -509,9 +542,10 @@ export default function Money() {
     setToast(t);
     toastTimer.current = setTimeout(() => setToast(null), 7000);
   };
-  // A cap crossing: one line, the legal wording kept as the tooltip.
-  const overBanner = (res, name) => (res.compliance?.over
-    ? { name, line: overLine(res.compliance), reason: res.gift?.flag_reason, giftId: res.gift?.id }
+  // A cap crossing, or a maybe (over together with a record that may be the
+  // same donor): one line, the legal wording kept as the tooltip.
+  const overBanner = (res, name) => (res.compliance?.over || res.gift?.flagged
+    ? { name, line: overLine(res.compliance?.over ? res.compliance : overOf(res.gift)), reason: res.gift?.flag_reason, giftId: res.gift?.id }
     : null);
 
   const onSaved = async (res, donor) => {
@@ -547,6 +581,30 @@ export default function Money() {
     } finally {
       // The donor's profile shows gifts, yearly totals and the donor tier.
       invalidate();
+    }
+  };
+
+  // A maybe the desk knows is two people: each pair of records kept apart
+  // (person.notDuplicate, as People → Duplicates does), and the server adds
+  // the gift up again without them.
+  const keepApart = async (g) => {
+    setError(null);
+    setOpenId(null);
+    try {
+      let now = null;
+      for (const other of sameAsOf(g)) {
+        const r = await action('person.notDuplicate', { a: g.person_id, b: other });
+        now = r?.rechecked?.find((x) => x.id === g.id) ?? now;
+      }
+      if (!now) showToast({ text: '✓ Kept apart' });
+      else if (now.flagged) showToast({ text: 'Kept apart. It’s still over the limit.' });
+      else showToast({ text: '✓ Kept apart. The flag is cleared.' });
+      if (now && !now.flagged) setBanner((b) => (b?.giftId === g.id ? null : b));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      invalidate();
+      queryClient.invalidateQueries({ queryKey: ['duplicates'] });
     }
   };
 
@@ -621,7 +679,8 @@ export default function Money() {
           <span className="eyebrow" id="needs-head">Needs you · {needs}</span>
           <ul className="ops-rows">
             {flagged.map((f) => (
-              <FlaggedRow key={f.id} f={f} personId={f.person_id ?? personOf[f.id]} onVoid={() => voidGift(f.id)} />
+              <FlaggedRow key={f.id} f={f} personId={f.person_id ?? personOf[f.id]} onVoid={() => voidGift(f.id)}
+                onApart={sameAsOf(f).length ? () => keepApart({ ...f, person_id: f.person_id ?? personOf[f.id] }) : null} />
             ))}
             {noAddress.map((r) => (
               <AddressRow key={r.id} r={r} onSaved={(text) => { invalidate(); showToast({ text }); }} />
@@ -648,6 +707,7 @@ export default function Money() {
               open={openId === g.id}
               onToggle={() => setOpenId((cur) => (cur === g.id ? null : g.id))}
               onVoid={() => voidGift(g.id)}
+              onApart={sameAsOf(g).length ? () => keepApart(g) : null}
               online={payments.data?.gifts?.[g.id]}
             />
           ))}

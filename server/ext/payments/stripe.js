@@ -54,13 +54,15 @@ export const formEncode = (obj, prefix = '', out = new URLSearchParams()) => {
   return out;
 };
 
+// param: the request field Stripe says no to (customer_email, …), when it says.
 export class StripeError extends Error {
-  constructor(message, { status = 0, code = null, type = null } = {}) {
+  constructor(message, { status = 0, code = null, type = null, param = null } = {}) {
     super(message);
     this.name = 'StripeError';
     this.httpStatus = status;
     this.code = code;
     this.type = type;
+    this.param = param;
   }
 }
 
@@ -89,7 +91,7 @@ export const stripeRequest = async (method, path, { params, query, idempotencyKe
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = body?.error || {};
-    throw new StripeError(String(err.message || `Stripe answered ${res.status}`).slice(0, 300), { status: res.status, code: err.code || null, type: err.type || null });
+    throw new StripeError(String(err.message || `Stripe answered ${res.status}`).slice(0, 300), { status: res.status, code: err.code || null, type: err.type || null, param: err.param || null });
   }
   return body;
 };

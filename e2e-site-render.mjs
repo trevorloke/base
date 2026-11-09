@@ -72,6 +72,8 @@ function answerForm(kind, body) {
   if (kind === 'contact' && !String(body.message || '').trim()) return { error: 'Write your message', field: 'message' };
   if ((kind === 'donate' || kind === 'join') && !(body.declaration === true || body.declaration === 'true')) return { error: 'Tick the box to confirm', field: 'declaration' };
   if (kind === 'donate' && !(Number(body.amount_cents) > 0)) return { error: 'Choose an amount', field: 'amount_cents' };
+  // The payment service down: the send doesn't get through.
+  if (kind === 'donate' && body.first_name === 'Down') return { status: 503, error: 'We couldn’t reach the payment service — please try again in a minute' };
   // A payment page on the very page the form is on: the form stays just as
   // it was left, as a browser's back/forward cache shows it after Back.
   if (kind === 'donate' && /^stay@/.test(email)) return { ok: true, checkout_url: `${ORIGIN}/is/#paying` };
@@ -213,7 +215,7 @@ const server = createServer(async (req, res) => {
     }
     posted.push({ site: key, kind: form[1], json, body, path: req.url });
     const a = answerForm(form[1], body);
-    if (json) return send(a.ok ? 200 : 400, 'application/json', JSON.stringify(a));
+    if (json) return send(a.status || (a.ok ? 200 : 400), 'application/json', JSON.stringify(a));
     // A plain form post: back to the page, or on to the checkout.
     if (a.checkout_url) return send(303, 'text/plain', '', { location: a.checkout_url });
     const back = new URL(req.headers.referer || `${ORIGIN}${root}`);
@@ -495,6 +497,39 @@ for (const key of ['is', 'base']) {
   check('donate: back with another amount, the form sends a new key (a fresh checkout, not the first)',
     tries.length === 2 && tries[0].client_key && tries[1].client_key !== tries[0].client_key && tries[1].amount_cents === 10000,
     JSON.stringify(tries.map((t) => [t.amount_cents, t.client_key])));
+  await page.context().close();
+}
+
+// A send that didn't get through (the payment service down: 503), sent again
+// as it was: the same key, so it finishes what was started. Then a change (a
+// typo put right, the next person at a shared tablet): a new key, never
+// taken for the first send.
+{
+  const page = await newPage();
+  await page.goto(`${ORIGIN}/is/`, { waitUntil: 'networkidle' });
+  await hydrated(page);
+  await live(page);
+  const don = page.locator('[data-module="donate"] form');
+  await don.locator('.amount', { hasText: '$50' }).click();
+  await don.getByLabel('First name', { exact: true }).fill('Down');
+  await don.getByLabel('Last name', { exact: true }).fill('Outage');
+  await don.getByLabel('Email', { exact: true }).fill('outage@example.org');
+  await don.getByLabel('Street address', { exact: true }).fill('10250 140 St');
+  await don.getByLabel('City', { exact: true }).fill('Surrey');
+  await don.getByLabel('Postal code', { exact: true }).fill('V3T 4B2');
+  await don.locator('label.check', { hasText: 'Canadian citizen' }).locator('input').check();
+  const sends = async () => (await (await fetch(`${ORIGIN}/__posted`)).json()).filter((p) => p.kind === 'donate' && p.body.last_name === 'Outage').map((p) => p.body);
+  for (const n of [1, 2]) {
+    // The button reads "Donate $50" again once the last answer is in.
+    await don.getByRole('button', { name: /Donate \$50/ }).click();
+    for (let i = 0; i < 40 && (await sends()).length < n; i += 1) await sleep(100);
+  }
+  await don.locator('.form-alert').waitFor({ timeout: 8000 });
+  await don.getByLabel('First name', { exact: true }).fill('Dot');
+  await Promise.all([page.waitForURL(/checkout-stub/, { timeout: 10000 }), don.getByRole('button', { name: /Donate \$50/ }).click()]);
+  const keys = (await sends()).map((b) => b.client_key);
+  check('donate: after a send that didn’t get through, sent again as it was it keeps its key; changed, a new one',
+    keys.length === 3 && !!keys[0] && keys[1] === keys[0] && keys[2] !== keys[0], JSON.stringify(keys));
   await page.context().close();
 }
 

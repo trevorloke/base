@@ -97,13 +97,17 @@ Managers reach **Admin** from the account menu (their initials):
 The same menu has **Rating scale** (below); People → More has **Profile
 fields** (managers), **Most connected** and **Duplicates** (desk).
 **Duplicates** lists two records that look like one person — the same
-email, the same phone and name, or the same name at one door — side by
-side. *Keep this one* merges the other into it: its contacts, gifts and
+email, the same phone and name, the same name at one door, or a donor and
+the same first and last name in one postal code — side by side. *Keep this one* merges the other into it: its contacts, gifts and
 receipts, shifts, signs, lists, answers, relationships, texts and requests
 move over (where both had the same — one shift, one list — the kept one's
 stays), its blanks are filled and tags joined, and an old link to it says
 *Merged — open their record*. A donor made one is checked against the limit
-again. *Not the same* keeps a pair away.
+again, and the line after *Merge* says when they are now over it — even when
+a gift on the two was already flagged as possibly one donor — or only maybe
+over, together with another record that may be them. *Not the same* keeps a
+pair away, and a gift flagged as possibly one donor on the two is added up
+again without the other.
 
 ### Two-step sign-in
 
@@ -432,7 +436,11 @@ Gifts and membership dues paid online come through the website's donate and
 join forms and Stripe's own checkout page (`server/ext/payments`): what no
 one may give is refused before the page opens, and the donor's own limit is
 checked when the payment lands (over it, refunded through Stripe and
-flagged for the treasurer); each
+flagged for the treasurer; over only with another record that may be the
+same donor — the same name, and postal code, phone or address — logged and
+flagged for the treasurer to decide, as is a cheque logged at the desk
+after it; *Not the same person* on the flag keeps the records apart and
+checks again); each
 payment becomes a gift through the same path as the desk's, marked online,
 with its receipt; a monthly gift is a pledge, each month its own gift.
 

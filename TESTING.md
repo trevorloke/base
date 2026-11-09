@@ -609,7 +609,10 @@ one tap away under **More**.
 ### Treasurer
 - **Donations** — **Log a gift**; log enough to one donor to cross the annual
   limit (sample: *Arjun Mehta* is already over). Donor tiers on profiles:
-  star ($1K+/yr or $100+/mo), superstar ($3K+/yr or $250+/mo).
+  star ($1K+/yr or $100+/mo), superstar ($3K+/yr or $250+/mo). Add two
+  people with one name and postal code and log $1,000 to each: the second
+  says *Maybe $570.30 over* under Needs you; *Not the same person* → *Yes*
+  clears it.
 - **Donations → More → Receipts** — every gift gets a numbered receipt
   (`2026-0001`, no gaps) the moment it's logged, marked paid, or paid by card;
   open a gift on Donations to see *Receipt 2026-0007 · Sent*. Without email

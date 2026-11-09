@@ -21,7 +21,10 @@
 // would take the donor over this year's limit on its slate (gifts logged
 // since the checkout opened), no gift is logged — the payment is kept as
 // over_limit, its refund is queued, and the treasurer sees it under
-// Donations → Needs you until they say Got it.
+// Donations → Needs you until they say Got it. Under the limit on its own
+// but over with the records that may be the same donor (limits.js
+// overTogether, run by logGift for every gift), the gift is logged and
+// flagged: the treasurer decides.
 import { newId } from '../../lib/events.js';
 import { logGift, voidGift, campaignDay } from '../../lib/gifts.js';
 import { enqueueJob } from '../../lib/jobs.js';
