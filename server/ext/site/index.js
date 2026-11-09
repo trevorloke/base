@@ -6,7 +6,8 @@
 //                                  published], counts: { pages, published, posts,
 //                                  posts_published, campaigns, campaigns_open,
 //                                  actions, actions_week, actions_week_by_kind },
-//                                  urls: { site, domains, hosts }, payments: { ready } }
+//                                  urls: { site, domains, hosts, app_hosts, used_hosts },
+//                                  payments: { ready } }
 //                                  — the first look makes the campaign's site
 //                                  from its brand's seed (seeds/)
 //   GET  /api/site/pages/:id       { page: { id, slug, title, description, status,

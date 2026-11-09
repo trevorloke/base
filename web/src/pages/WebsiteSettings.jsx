@@ -53,8 +53,10 @@ const linksIn = (s) => [
 ];
 
 // appHosts: where the app itself answers (the server says: this address,
-// its public one, base.win) — the server refuses them too.
-function Domains({ value, onChange, appHosts = [] }) {
+// its public one, base.win) — the server refuses them too. usedHosts: where
+// people used the app, signed in ({ host, why }) — the server refuses those
+// too, and why is in its own words.
+function Domains({ value, onChange, appHosts = [], usedHosts = [] }) {
   const [typed, setTyped] = useState('');
   const [err, setErr] = useState(null);
   const here = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
@@ -63,8 +65,11 @@ function Domains({ value, onChange, appHosts = [] }) {
     const h = hostOf(typed);
     setErr(null);
     if (!HOST.test(h)) { setErr('A web address, like yourcampaign.ca'); return; }
-    // Only the site answers on these: never the address the app itself is at.
+    // Only the site answers on these: never the address the app itself is at,
+    // nor one people use it at.
     if (isApp(h)) { setErr('That’s where base.win itself is — the app would stop answering there. Use your campaign’s own domain.'); return; }
+    const used = usedHosts.find((u) => u.host === h);
+    if (used) { setErr(used.why); return; }
     if (!value.includes(h)) onChange([...value, h].slice(0, 10));
     setTyped('');
   };
@@ -91,8 +96,9 @@ function Domains({ value, onChange, appHosts = [] }) {
       </div>
       {err && <p className="wb-field__err" id="wb-domain-err">{err}</p>}
       <p className="wb-field__hint" id="wb-domain-hint">
-        On these, only the website answers (at /) — no sign-in, nothing of the app. Point the domain’s DNS at this server
-        (your host or IT person does this), then add it here. The app stays at {here || 'its own address'}.
+        On these, only the website answers (at /) — no sign-in, nothing of the app. Add the domain here first, then point
+        its DNS at this server (your host or IT person does this), so the website answers there from the very first visit.
+        The app stays at {here || 'its own address'}.
       </p>
     </>
   );
@@ -222,7 +228,8 @@ export default function WebsiteSettings() {
 
           <section className="card" id="domains" aria-labelledby="wb-s-dom">
             <h2 id="wb-s-dom" className="wb-card-h">Your own domain</h2>
-            <Domains value={s.domains} appHosts={q.data?.urls?.app_hosts || []} onChange={(v) => setS((x) => ({ ...x, domains: v }))} />
+            <Domains value={s.domains} appHosts={q.data?.urls?.app_hosts || []} usedHosts={q.data?.urls?.used_hosts || []}
+              onChange={(v) => setS((x) => ({ ...x, domains: v }))} />
           </section>
 
           <div className="wb-savebar">

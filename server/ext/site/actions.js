@@ -43,9 +43,8 @@ import { httpError } from '../../actions/util.js';
 import { readUpload } from '../abtests/media.js';
 import { brandKey } from '../../lib/brand.js';
 import { SECTIONS, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
-import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost, envHosts, appHostSeen } from './store.js';
+import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost, envHosts, appHostSeen, usedWhy } from './store.js';
 import { cacheClear } from './cache.js';
-import { DEFAULT_TZ } from '../../lib/org.js';
 
 const MANAGER = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -149,8 +148,6 @@ const refsProblem = async (tx, ws, modules) => {
 };
 
 const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOString() : null);
-// A day as people say it, in the campaign's time zone: November 9, 2026.
-const dayOf = (d, ctx) => new Date(d).toLocaleDateString('en-CA', { timeZone: ctx.workspace?.settings?.tz || DEFAULT_TZ, month: 'long', day: 'numeric', year: 'numeric' });
 
 // A page's share picture: { url, alt } in its draft (and, once published,
 // in what went live) — only when it has one, so a page without stays
@@ -221,11 +218,10 @@ export const actions = {
       for (const h of hosts) {
         // Nor an address people use the app at (app_hosts), unless the site
         // has it already (saved before, or the operator's SITE_HOSTS): the
-        // app doesn't answer there then.
+        // app doesn't answer there then. The screen refuses the same ones as
+        // they're typed, in the same words (store.js usedHosts).
         const seen = already.includes(h) || envHosts().includes(h) ? null : await appHostSeen(tx, h);
-        if (seen) {
-          throw httpError(400, `People used base.win at ${h} (last on ${dayOf(seen, ctx)}), so the app still answers there. If it should now be only the website, ask whoever runs the server to add it to SITE_HOSTS.`);
-        }
+        if (seen) throw httpError(400, usedWhy(h, seen, ctx));
         const other = (await tx.query(
           'select 1 from site_settings where workspace_id <> $1 and domains @> $2::jsonb', [ws, JSON.stringify([h])],
         )).rows[0];

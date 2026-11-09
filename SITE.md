@@ -29,10 +29,11 @@ The contract the website work is built against. Read with ROADMAP.md.
 - App routes (`/api`, `/field`, `/desk`, `/admin`, `/media`, `/u`, `/r/…` receipts …) are
   never shadowed on the app host. On a site host, only the site's routes and
   `/media/:id`, `/site-assets/*` are answered, and what services and emails
-  already sent call back, each only in its own shape and method: `POST
+  already sent call back, each only in its own shape, case and method: `POST
   /stripe/webhook`, Twilio's `POST /api/public/twilio/…` and the unsubscribe
-  links `/u/<id>`, `/bu/<id>`, `/lu/<id>` — so no domain setting can drop a
-  payment, a STOP or an unsubscribe. (`/r/…` there is the referral link.)
+  links `/u/<id>`, `/bu/<id>`, `/lu/<id>` (the id in either case; `/U/…` is
+  the site's) — so no domain setting can drop a payment, a STOP or an
+  unsubscribe. (`/r/…` there is the referral link.)
 
 Site routes (relative to the site root):
 `/` (the page with slug `home`) · `/:slug` (any published page) ·
@@ -623,5 +624,10 @@ used the app at, signed in (`app_hosts`, noted by the API at most once an
 hour per address; a write that fails is tried again by the next request
 there, never left for the hour), unless it is the site's already (saved
 before, or in `SITE_HOSTS`): to make such an address only the website,
-whoever runs the server adds it to `SITE_HOSTS`.
+whoever runs the server adds it to `SITE_HOSTS`. `GET /api/site` lists
+those as `urls.used_hosts` (`{ host, why }`, the newest 200; none if the
+read fails), and the screen refuses them as they're typed, in the save's
+own words. So the screen says to add the domain first, then point its
+DNS here: the site answers there from the first request, and nobody signs
+in there before it does.
 

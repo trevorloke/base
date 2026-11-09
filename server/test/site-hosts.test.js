@@ -9,9 +9,11 @@
 // own address (and the save that undoes it still answers there). The
 // server's other addresses (APP_HOSTS) are the same; an address people used
 // the app at (app_hosts, noted by the API) is refused too, unless the site
-// has it already. On a website domain the webhooks and the unsubscribe
-// links in emails still answer; a tab, a line break or a backslash in the
-// address is the site's 404, never a redirect.
+// has it already, and the screen has those to refuse as they're typed, in
+// the save's words. On a website domain the webhooks and the unsubscribe
+// links in emails still answer, each only in its own shape and case; a tab,
+// a line break or a backslash in the address is the site's 404, never a
+// redirect.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { connect } from 'node:net';
@@ -187,6 +189,37 @@ test('an address already the site’s stays the site’s: saved before anyone wa
   }
 });
 
+test('the Website screen’s order: added here first, the site answers there from the first request; one people used the app at is refused as it’s typed, in the save’s words', async () => {
+  const noted = async (h) => (await db.query('select 1 from app_hosts where host = $1', [h])).rows.length > 0;
+  const FIRST = 'www.added-first.example';
+  const LATE = 'www.dns-first.example';
+  try {
+    // Added before its DNS points here: nobody can sign in there first.
+    ok(await mgr.action('site.settings.save', { domains: [FIRST] }));
+    assert.match((await hit('/', { host: FIRST })).text, /data-skin=/, 'the site');
+    assert.equal((await mgr.get(at(FIRST, '/api/auth/me'))).status, 404, 'no sign-in there');
+    assert.equal(await noted(FIRST), false);
+    // Its DNS pointed here first, and someone checked it worked by signing in there.
+    assert.equal((await mgr.get(at(LATE, '/api/auth/me'))).status, 200);
+    const used = ok(await mgr.get('/api/site')).urls.used_hosts?.find((u) => u.host === LATE);
+    assert.ok(used, 'the screen has it, to refuse it as it’s typed');
+    const r = await mgr.action('site.settings.save', { domains: [FIRST, LATE] });
+    assert.equal(r.status, 400);
+    assert.equal(used.why, r.json.error, 'in the save’s own words');
+    assert.match(used.why, /^People used base\.win at www\.dns-first\.example \(last on [A-Z][a-z]+ \d{1,2}, \d{4}\), so the app still answers there\. If it should now be only the website, ask whoever runs the server to add it to SITE_HOSTS\.$/);
+    // Never one the save takes (the site's already: saved, or SITE_HOSTS), nor the app's own (refused in its own words).
+    await db.query("insert into app_hosts (host) values ($1), ('campaign.example.org') on conflict (host) do nothing", [FIRST]);
+    const site = ok(await mgr.get(at(APP, '/api/site')));
+    const hosts = site.urls.used_hosts.map((u) => u.host);
+    assert.ok(hosts.includes(LATE));
+    for (const h of [FIRST, 'campaign.example.org', APP]) assert.ok(!hosts.includes(h), h);
+    assert.ok(site.urls.app_hosts.includes(APP));
+  } finally {
+    await db.query('delete from app_hosts where host in ($1, $2, $3)', [FIRST, LATE, 'campaign.example.org']);
+    await noDomains();
+  }
+});
+
 test('where the app answers is noted before the answer, once an hour; a note that fails never fails the request', async () => {
   const seen = async (h) => (await db.query('select last_seen from app_hosts where host = $1', [h])).rows[0]?.last_seen || null;
   ok(await mgr.get(at('desk.example.org', '/api/site')));
@@ -206,7 +239,8 @@ test('where the app answers is noted before the answer, once an hour; a note tha
   await db.query('alter table app_hosts rename to app_hosts_away');
   console.error = (...a) => { logged.push(a.join(' ')); };
   try {
-    ok(await mgr.get(at('one.example.org', '/api/site')));
+    // The read of where people used the app fails too: the screen gets none to refuse as they're typed (the save checks them all).
+    assert.deepEqual(ok(await mgr.get(at('one.example.org', '/api/site'))).urls.used_hosts, []);
     ok(await mgr.get(at('two.example.org', '/api/site')));
   } finally {
     console.error = real;
@@ -265,7 +299,8 @@ test('on a website domain Twilio still reaches base.win: a STOP is never lost', 
       assert.deepEqual([res.status, res.json], [403, { error: 'bad signature' }], p);
     }
     // Only those, and only as Twilio and Stripe send them: anything else there is the site's.
-    for (const [method, p] of [['GET', '/api/public/twilio/sms'], ['POST', '/api/public/twilio/other'], ['POST', '/api/public/twilio/voice/tok/x'], ['GET', '/stripe/webhook']]) {
+    for (const [method, p] of [['GET', '/api/public/twilio/sms'], ['POST', '/api/public/twilio/other'], ['POST', '/api/public/twilio/voice/tok/x'], ['GET', '/stripe/webhook'],
+      ['POST', '/API/public/twilio/sms'], ['POST', '/api/public/twilio/sms/'], ['POST', '/Stripe/webhook'], ['POST', '/stripe/webhook/']]) {
       const res = await hit(p, { host: SITE, method });
       assert.equal(res.status, 404, `${method} ${p}`);
       assert.match(res.headers.get('content-type'), /text\/html/, `${method} ${p}: the site’s 404 page`);
@@ -289,10 +324,18 @@ test('on a website domain the unsubscribe links in emails still work; /r/… the
     assert.equal(r.status, 404, p);
     assert.match(r.text, /This unsubscribe link isn't valid/, `${p}: base.win’s own page, not the site’s 404`);
   }
-  // Only a link's own shape: anything else there is the site's.
-  const other = await hit('/u/not-a-link', { host: SITE });
-  assert.equal(other.status, 404);
-  assert.match(other.text, /data-skin=/, 'the site’s 404 page');
+  // The id in capitals is still the link (as some mail apps send it)…
+  const upper = await hit(`/u/${id.toUpperCase()}`, { host: SITE });
+  assert.equal(upper.status, 200);
+  assert.match(upper.text, /Unsubscribed/);
+  // …but only a link's own shape: anything else there is the site's (the links' routes are lower-case).
+  const ID = '0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
+  for (const [method, p] of [['GET', '/u/not-a-link'], ['GET', `/U/${ID}`], ['HEAD', `/U/${ID}`], ['POST', `/U/${ID}`], ['GET', `/BU/${ID}`], ['GET', `/Lu/${ID}`], ['GET', `/%55/${ID}`]]) {
+    const other = await hit(p, { host: SITE, method });
+    assert.equal(other.status, 404, `${method} ${p}`);
+    assert.match(other.headers.get('content-type'), /text\/html/, `${method} ${p}`);
+    if (method !== 'HEAD') assert.match(other.text, /data-skin=/, `${method} ${p}: the site’s 404 page`);
+  }
   const ref = await hit('/r/abc123', { host: SITE });
   assert.deepEqual([ref.status, ref.location], [302, '/'], 'the site’s referral link, never a receipt');
 });

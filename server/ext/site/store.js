@@ -9,6 +9,7 @@
 import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { brandKey } from '../../lib/brand.js';
+import { DEFAULT_TZ } from '../../lib/org.js';
 import { checkTheme } from '@starbase/shared/site/theme';
 import { SECTION_KEYS, sectionOf, hostOf, consentWording, tagOf } from './shape.js';
 import { seedSite } from './seeds/index.js';
@@ -78,6 +79,22 @@ export const noteAppHost = async (db, host) => {
 };
 // When people last used the app at a host (null: never, since it was noted).
 export const appHostSeen = async (q, host) => (await q.query('select last_seen from app_hosts where host = $1', [host])).rows[0]?.last_seen || null;
+// A day as people say it, in the campaign's time zone: November 9, 2026.
+const dayOf = (d, ctx) => new Date(d).toLocaleDateString('en-CA', { timeZone: ctx.workspace?.settings?.tz || DEFAULT_TZ, month: 'long', day: 'numeric', year: 'numeric' });
+// Why such an address is no website domain: the save's refusal (actions.js)
+// and the Website screen's as it's typed (usedHosts) — the same words.
+export const usedWhy = (host, seen, ctx) => `People used base.win at ${host} (last on ${dayOf(seen, ctx)}), so the app still answers there. If it should now be only the website, ask whoever runs the server to add it to SITE_HOSTS.`;
+// The addresses a save refuses for that, and why ({ host, why }), so the
+// Website screen refuses them as they're typed: every one noted but where
+// the app itself answers (refused in words of its own) and the site's own
+// already (saved, or SITE_HOSTS). The newest 200, and none when the read
+// fails (never failing the screen): the save checks them all.
+export const usedHosts = async (q, ctx, saved = []) => {
+  const site = [...saved, ...envHosts()];
+  const rows = await q.query('select host, last_seen from app_hosts order by last_seen desc limit 200').then((r) => r.rows, () => []);
+  return rows.filter((r) => !site.includes(r.host) && !isAppHost(r.host, ctx.host ? [ctx.host] : []))
+    .map((r) => ({ host: r.host, why: usedWhy(r.host, r.last_seen, ctx) }));
+};
 
 const DOMAINS_MS = 30_000;
 let domainMap = null; // host → workspace id (from site_settings.domains)
