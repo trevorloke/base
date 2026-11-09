@@ -22,17 +22,20 @@
 //
 // Tries at a code count (lib/twostep.js codeFails) as they come in: ten in
 // 15 minutes, then a pause; a right code clears them once its write has
-// committed (after()). The slow hashes (new recovery codes — made only for
-// a code that's right — and a recovery code typed) are made in before(),
-// never while the campaign's write lock is held. Nothing secret goes on the
-// event log — only that it was turned on, off, reset, or its recovery codes
-// made again.
+// committed (after()). A wrong code to turn it off or make new recovery
+// codes also adds to the account's own count, kept in the database: twenty
+// in a row lock the app's codes (locked.js). The slow hashes (new recovery
+// codes — made only for a code that's right — and a recovery code typed)
+// are made in before(), never while the campaign's write lock is held.
+// Nothing secret goes on the event log — only that it was turned on, off,
+// reset, locked, or its recovery codes made again.
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import {
-  base32Decode, checkCode, codeFails, hashRecoveryCode, newRecoveryCodes, newRecoverySalt, newTotpSecret,
+  base32Decode, checkCode, codeFails, countMiss, hashRecoveryCode, newRecoveryCodes, newRecoverySalt, newTotpSecret,
   openSecret, peekCode, recoveryHashFor, requiredFor, sealSecret, setupFor, twoStepRow, verifyTotp,
 } from '../../lib/twostep.js';
+import { LOCKED_ACTION, tellLocked } from './locked.js';
 
 const EVERYONE = ['manager', 'treasurer', 'staff', 'volunteer'];
 const MANAGER = ['manager'];
@@ -52,6 +55,19 @@ const guard = (ctx) => {
 };
 // Committed: the right code clears the person's count.
 const passed = async (db, ctx, result) => { codeFails.clear(`user:${ctx.user.id}`); return { result }; };
+// A wrong code for an account with it on: one more in the account's count of
+// wrong codes in a row (lib/twostep.js countMiss), kept — so the handler
+// answers it rather than throwing, and the write commits with that alone.
+// settle() then refuses it, after the write, telling of the lock it made.
+const wrong = async (tx, ctx, r, message) => {
+  const tally = r.unreadable ? null : await countMiss(tx, ctx.user.id);
+  return { refused: r.locked || tally?.locked ? LOCKED_ACTION : message, justLocked: Boolean(tally?.justLocked) };
+};
+const settle = async (db, ctx, result) => {
+  if (!result?.refused) return passed(db, ctx, result);
+  if (result.justLocked) await tellLocked(db, ctx.user.id);
+  throw httpError(400, result.refused);
+};
 const missed = (message = NO_MATCH) => httpError(400, message);
 const SETUP_NO_MATCH = 'that code doesn’t match — check the app has the key on this screen, then type the newest code it shows';
 const APP_NO_MATCH = 'that code doesn’t match — type the newest code from your app';
@@ -122,7 +138,7 @@ export const actions = {
       if (!row?.on_since) throw httpError(409, 'two-step sign-in isn’t on');
       const r = await checkCode(tx, ctx.user.id, input.code, { hash: ready?.hash });
       if (!r.used) {
-        throw missed(r.unreadable
+        return wrong(tx, ctx, r, r.unreadable
           ? 'your app’s codes can’t be checked on this server any more — use one of your recovery codes'
           : 'that code doesn’t match — use the newest code from your app, or one of your recovery codes');
       }
@@ -132,7 +148,7 @@ export const actions = {
       emit('two_step', ctx.user.id, 'void', { turned_off: true, with: r.used === 'recovery' ? 'recovery code' : 'app' });
       return { on: false, must_set_up: requiredFor(ctx.role, ctx.workspace?.settings, ctx.perms) };
     },
-    after: passed,
+    after: settle,
   },
 
   'twostep.codes': {
@@ -144,19 +160,21 @@ export const actions = {
       return (await peekCode(db, ctx.user.id, input.code)) ? freshCodes() : null;
     },
     handler: async (tx, ctx, input, emit, fresh) => {
+      const UNREADABLE = 'your app’s codes can’t be checked on this server any more';
       if (!fresh) {
         const row = await twoStepRow(tx, ctx.user.id);
-        throw missed(row?.on_since && !(await openSecret(tx, row.secret)) ? 'your app’s codes can’t be checked on this server any more' : APP_NO_MATCH);
+        const unreadable = Boolean(row?.on_since) && !(await openSecret(tx, row.secret));
+        return wrong(tx, ctx, { unreadable, locked: Boolean(row?.on_since && row.locked_at) }, unreadable ? UNREADABLE : APP_NO_MATCH);
       }
       const r = await checkCode(tx, ctx.user.id, input.code, { allowRecovery: false });
-      if (!r.used) throw missed(r.unreadable ? 'your app’s codes can’t be checked on this server any more' : APP_NO_MATCH);
+      if (!r.used) return wrong(tx, ctx, r, r.unreadable ? UNREADABLE : APP_NO_MATCH);
       const { codes, salt, hashes } = fresh;
       await tx.query('update two_step set recovery = $2, recovery_salt = $3, updated_at = now() where user_id = $1',
         [ctx.user.id, JSON.stringify(hashes), salt]);
       emit('two_step', ctx.user.id, 'update', { recovery_codes: 'made again' });
       return { recovery_codes: codes };
     },
-    after: passed,
+    after: settle,
   },
 
   'twostep.reset': {

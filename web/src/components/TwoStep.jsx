@@ -208,6 +208,7 @@ export default function TwoStepCard({ me, forced = false, onOn, onCodes }) {
       <section className="ts-card" aria-label="Two-step sign-in">
         {title}
         {st.unreadable && <p className="error" role="alert">Codes from your app can’t be checked here any more. Turn it off with a recovery code, then set it up again.</p>}
+        {st.locked && !st.unreadable && <p className="error" role="alert">Too many wrong codes in a row: codes from your app are locked. Sign in again with one of your recovery codes to unlock them, or ask a manager to reset your two-step sign-in.</p>}
         <p className="ts-line">Since {day(st.since)} · <strong>{st.recovery_left}</strong> recovery {st.recovery_left === 1 ? 'code' : 'codes'} left</p>
         {note && <p className="ts-line ts-note" role="status">{note}</p>}
         <button type="button" className="disclose ts-disclose" aria-expanded={more} aria-controls={moreId} onClick={() => setMore((v) => !v)}>More</button>
@@ -220,7 +221,7 @@ export default function TwoStepCard({ me, forced = false, onOn, onCodes }) {
               setMore(false);
             }} />
           <h3 className="ts-h3">Turn it off</h3>
-          {st.required && <p className="ts-line muted">Your role needs it here: you’ll set it up again straight away.</p>}
+          {st.required && <p className="ts-line muted">Your campaign asks you to use it: you’ll set it up again straight away.</p>}
           <WithCode id="ts-off" label="Code from your app, or a recovery code" button="Turn off" recovery danger
             onSubmit={async (code) => {
               await action('twostep.off', { code });

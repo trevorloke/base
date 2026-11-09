@@ -205,7 +205,9 @@ function MemberRow({ m, isMe, online, onRole, onChanged, twoStep = null, onTwoSt
           <span className="ot-row__name">{m.name}{isMe ? <span className="muted"> (you)</span> : null}</span>
           <span className="ot-row__sub ot-row__sub--stack">
             <span className="ot-email"><Email value={m.email} /></span>
-            <span>since {fmtDay(m.created_at)}{twoStep?.on && <span className="chip chip-ok tm-2step">Two-step on</span>}</span>
+            <span>since {fmtDay(m.created_at)}{twoStep?.on && (twoStep.locked
+              ? <span className="chip chip-warn tm-2step" title="Too many wrong codes in a row: codes from their app are locked until they use a recovery code or you reset it">Two-step locked</span>
+              : <span className="chip chip-ok tm-2step">Two-step on</span>)}</span>
           </span>
         </span>
         <span className="ot-actions ot-row__acts">

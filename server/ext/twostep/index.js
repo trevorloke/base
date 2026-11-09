@@ -7,8 +7,13 @@
 //   actions.js  twostep.start · confirm · off · codes (anyone, for
 //               themselves) · reset · require (managers)
 //   api.js      GET /two-step (your own) · GET /two-step/team (managers)
+//   locked.js   too many wrong codes in a row: on the log, the person and
+//               the managers told, a manager's Today says so
 //
 // Its tables are sign-in secrets: never in the export, never on the log.
+import { briefLocked } from './locked.js';
+
 export { sql } from './sql.js';
 export { actions } from './actions.js';
 export { api } from './api.js';
+export const hooks = { brief: briefLocked };

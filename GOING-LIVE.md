@@ -184,6 +184,9 @@ shared, and the code names no client.
 
 - Sign-in: 30 tries per address and 10 failures per email in 15 minutes,
   then a wait. Sessions last 30 days and end at sign-out or removal.
+  Two-step codes: 20 wrong in a row (across sign-ins and restarts) lock the
+  account's app codes until a recovery code or a manager's reset; the
+  person and the managers are emailed and the managers' Today says so.
 - Public forms: rate-limited per address; a request's body is capped.
 - Email: every newsletter carries the reader's own unsubscribe link and the
   headers mail apps use for their Unsubscribe button; an unsubscribed
