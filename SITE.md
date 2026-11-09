@@ -138,9 +138,11 @@ the page (news, events, open shifts, counts, campaigns); `ctx` =
 Every module's outer element carries `data-module="<kind>"` and
 `id="m-<module id>"` (tests and anchors rely on it). Interactive parts are
 islands: SSR'd HTML plus `<script type="application/json">` props,
-hydrated by `web/src/site-islands.js` (built by Vite as a second input to
-`web/dist/site-islands.js`). Without that build (tests), pages still work:
-forms post normally.
+hydrated by `web/src/site-islands.js` (built by Vite — a second,
+self-contained bundle with its own React, so it shares no chunk with the
+app — to `web/dist/site-islands.js`, served at
+`{root}site-assets/site-islands.js`). Without that build (tests), pages
+still work: forms post normally.
 
 ### The renderer in detail (additive to the above)
 

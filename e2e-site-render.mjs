@@ -10,13 +10,15 @@
 //
 // Checked, on a 1360px desktop and a 390px phone, in both skins: nothing
 // scrolls sideways, buttons and fields are at least 48px tall, text reads
-// at WCAG AA contrast, and the islands hydrate without a mismatch. Then:
-// the rotating words (and none under reduced motion), the Menu (Escape),
-// the donate amounts (never above the limit; monthly), field errors tied to
-// their fields, a newsletter and a petition sent as JSON with SITE.md's
-// field names, the share sheet (WhatsApp first, ?source=share-<channel>,
-// copy), the donate checkout, a one-tap volunteer sign-up, the same forms
-// without JavaScript, the post, campaign, preview and not-found pages, and
+// at WCAG AA contrast, every id is used once and every field is labelled,
+// and the islands hydrate without a mismatch. Then: the rotating words (and
+// none under reduced motion), the Menu (Escape; on a phone), the donate
+// amounts (never above the limit; monthly), field errors tied to their
+// fields, a newsletter and a petition sent as JSON with SITE.md's field
+// names, the share sheet (WhatsApp first, ?source=share-<channel>, copy),
+// the donate checkout, a one-tap volunteer sign-up, the same forms without
+// JavaScript, the post, campaign, preview and not-found pages, everything
+// under a client's path (/imaginesurrey, through server/lib/mount.js), and
 // the Imagine Surrey home page against imaginesurrey.ca's design (navy hero,
 // red Donate, Montserrat, the red heading shadow, yellow band, deep-navy
 // footer). Screenshots of both skins, desktop and phone, go to SHOTS.
@@ -170,7 +172,14 @@ const shot = (page, name) => page.screenshot({ path: `${SHOTS}/${name}.png`, ful
 
 // The layout checks, run in the page.
 const audit = (page) => page.evaluate(() => {
-  const out = { overflow: document.documentElement.scrollWidth - window.innerWidth, small: [], contrast: [] };
+  const out = { overflow: document.documentElement.scrollWidth - window.innerWidth, small: [], contrast: [], dupes: [], unlabelled: [] };
+  // Every id once; every field with a label.
+  const seen = new Set();
+  for (const el of document.querySelectorAll('[id]')) { if (seen.has(el.id)) out.dupes.push(el.id); seen.add(el.id); }
+  for (const el of document.querySelectorAll('input:not([type=hidden]), select, textarea')) {
+    if (el.closest('.hp')) continue;
+    if (!(el.labels && el.labels.length) && !el.getAttribute('aria-label')) out.unlabelled.push(el.name || el.id);
+  }
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width < 1 || r.height < 1) return false;
@@ -249,6 +258,7 @@ for (const key of ['is', 'base']) {
     check(`${key} ${label}: nothing scrolls sideways`, a.overflow <= 0, a.overflow);
     check(`${key} ${label}: tap targets at least 48px`, a.small.length === 0, a.small.slice(0, 6).join(' | '));
     check(`${key} ${label}: text contrast at least AA`, a.contrast.length === 0, a.contrast.slice(0, 6).join(' | '));
+    check(`${key} ${label}: every id once, every field labelled`, a.dupes.length === 0 && a.unlabelled.length === 0, `${a.dupes.slice(0, 5)} ${a.unlabelled.slice(0, 5)}`);
     await shot(page, `${key}-home-${label}`);
     if (label === 'phone') {
       // The Menu open on a phone: the title-bar links move into it.
