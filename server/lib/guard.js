@@ -8,6 +8,12 @@
 //   right (default 1: one proxy, e.g. Render); anything further left was
 //   written by whoever sent the request and is ignored. With no proxy
 //   header, X-Real-IP, else 'local'.
+//   Behind the base.win door (apps/door) every request comes from the
+//   door's own address, so the door says whose it is: x-base-client-ip,
+//   believed only when x-base-door carries the key the door and this server
+//   share (BASE_DOOR_KEY, 32+ characters; several, comma-separated, while
+//   moving to a new one). Anyone else who sends those headers — straight to
+//   this server's own address — is read by the rule above.
 // makeLimiter({ windowMs, max })  → limited(key): true once `key` has done
 //   more than `max` things in the window. Old entries are swept, and the
 //   table never grows past LIMITER_MAX keys (each spoofed address would
@@ -16,9 +22,33 @@
 //   fetch: the browser says it came from another site, or the body isn't
 //   JSON (a plain <form> can post text/plain or form data with the cookie
 //   attached; the app never does). → the refusal to send, or null.
+import { createHash, timingSafeEqual } from 'node:crypto';
+
 const LIMITER_MAX = 20_000;
 
+export const DOOR_KEY_MIN = 32;
+const digest = (s) => createHash('sha256').update(String(s)).digest();
+const doorKeys = () => String(process.env.BASE_DOOR_KEY || '').split(',').map((k) => k.trim()).filter((k) => k.length >= DOOR_KEY_MIN);
+// One address (IPv4 or IPv6), nothing else.
+const ONE_ADDRESS = /^[0-9a-f.:]{2,64}$/i;
+// Whether this server holds the door's key (server/index.js warns when it's
+// behind the door without one).
+export const doorKeySet = () => doorKeys().length > 0;
+// The visitor's address, as the base.win door said it with its key; else null.
+export const doorClientIp = (c) => {
+  const keys = doorKeys();
+  const said = c.req.header('x-base-door');
+  if (!keys.length || !said) return null;
+  const mine = digest(said);
+  // Each key compared whole, in the same time, so a guess learns nothing.
+  if (!keys.map((k) => timingSafeEqual(digest(k), mine)).includes(true)) return null;
+  const ip = String(c.req.header('x-base-client-ip') || '').trim();
+  return ONE_ADDRESS.test(ip) ? ip : null;
+};
+
 export const clientIp = (c) => {
+  const door = doorClientIp(c);
+  if (door) return door;
   const xff = c.req.header('x-forwarded-for');
   if (xff) {
     const hops = Math.max(1, Number(process.env.STARBASE_TRUSTED_PROXIES) || 1);

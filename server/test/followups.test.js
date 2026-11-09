@@ -9,11 +9,14 @@
 // to the turf, and a contact closes it: the organizer's (any outcome) or
 // anyone's talk — which also marks the door request it came from done.
 // The desk sees every open one by organizer, what's overdue and the time
-// to first contact, and can hand one over. Never for someone marked do not
-// contact or a teammate. All on the hash chain.
+// to first contact, and can hand one over. A ladder's own follow-up is never
+// on a volunteer's list (someone made a volunteer gives theirs back to the
+// office). Never for someone marked do not contact or a teammate. All on
+// the hash chain.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
+import { runDueJobs } from '../lib/jobs.js';
 import { ensureSiteTables, siteAction } from './siteactions.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
@@ -334,6 +337,47 @@ test('a ladder’s own follow-up stays with the desk; the organizer it was hande
   // …Sid's own call closes it.
   ok(await clients.Sid.action('contact.log', { person_id: p.id, channel: 'phone', outcome: 'contacted' }));
   assert.equal((await db.query('select status from ladder_followups where id = $1', [id])).rows[0].status, 'done');
+});
+
+test('made a volunteer: a ladder’s follow-up they had goes back to the office and is never on their list; their new volunteer stays theirs', async () => {
+  const l = ok(await mgr.action('ladder.create', {
+    name: 'First gift thanks', trigger: { kind: 'donation' },
+    steps: [{ kind: 'followup', text: 'Call {{first_name}} to thank them for their first donation' }],
+  })).ladder;
+  ok(await mgr.action('ladder.setActive', { id: l.id, active: true }));
+  const ana = await mgr.createPerson('Ana Example', { phone: '604-555-0186' });
+  ok(await mgr.action('gift.log', { person_id: ana.id, amount_cents: 50000, date: new Date().toISOString().slice(0, 10) }));
+  for (let i = 0; i < 20; i++) if (!(await runDueJobs(db, { workspaceId: ws })).ran) break;
+  const f = (await rowsOf(ana.id)).find((r) => !r.kind);
+  assert.ok(f, 'the ladder made one');
+  ok(await mgr.action('ladder.followupAssign', { id: f.id, user_id: users.Sid }));
+  // And someone Sid brought in on the website: speed to lead, Sid's.
+  const { personId: lee } = await siteAction(db, ws, {
+    kind: 'volunteer', person: { name: 'Lee Example', email: mail('lee') }, referrerId: records.Sid,
+  });
+  const had = await mine('Sid');
+  assert.ok(had.some((x) => x.id === f.id && x.kind === 'ladder'), 'staff: theirs to do');
+  assert.ok(had.some((x) => x.person.id === lee && x.kind === 'volunteer'));
+
+  ok(await mgr.action('member.setRole', { user_id: users.Sid, role: 'volunteer' }));
+  const now = await mine('Sid');
+  assert.ok(!now.some((x) => x.kind === 'ladder' || x.id === f.id), JSON.stringify(now.map((x) => [x.kind, x.text])));
+  assert.ok(now.some((x) => x.person.id === lee && x.kind === 'volunteer'), 'the new volunteer they brought in stays theirs');
+  const moved = (await db.query('select assigned_to, routed, status from ladder_followups where id = $1', [f.id])).rows[0];
+  assert.ok([users.Mona, users.Max].includes(moved.assigned_to), 'a manager has it now');
+  assert.deepEqual([moved.routed, moved.status], ['office', 'open']);
+  const ev = (await db.query(
+    "select action, payload from events where workspace_id = $1 and entity_type = 'ladder_followup' and entity_id = $2 order by seq", [ws, f.id],
+  )).rows.at(-1);
+  assert.equal(ev.action, 'member.setRole');
+  assert.deepEqual([ev.payload.from, ev.payload.reason, ev.payload.assigned_to], [users.Sid, 'role', moved.assigned_to]);
+  // However one got there, a volunteer's list never carries a ladder's.
+  await db.query('update ladder_followups set assigned_to = $2 where id = $1', [f.id, users.Sid]);
+  assert.ok(!(await mine('Sid')).some((x) => x.id === f.id));
+  ok(await mgr.action('member.setRole', { user_id: users.Sid, role: 'staff' }));
+  assert.ok((await mine('Sid')).some((x) => x.id === f.id), 'staff again: it shows');
+  ok(await mgr.action('ladder.followupDone', { id: f.id }));
+  ok(await mgr.action('ladder.setActive', { id: l.id, active: false }));
 });
 
 test('someone leaves the team: their open follow-ups go to whoever the rules pick now', async () => {

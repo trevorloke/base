@@ -1,10 +1,12 @@
 // Reads for two-step sign-in (lib/twostep.js):
 //   GET /two-step        your own: on or not, since when, recovery codes
-//                        left, whether your role needs it here; while you're
+//                        left, whether you need it here (your role, or an
+//                        area you were given); while you're
 //                        setting it up, the key and its QR code again (a
 //                        reload doesn't lose a key already scanned)
 //   GET /two-step/team   managers: whether it's required for desk roles, and
-//                        who has it on (Settings → Members)
+//                        who has it on — and whose app codes too many wrong
+//                        ones have locked (Settings → Members)
 import { Hono } from 'hono';
 import { keyStatus, openSecret, requiredFor, setupFor, twoStepRow } from '../../lib/twostep.js';
 import { issuerFor } from './actions.js';
@@ -25,7 +27,9 @@ api.get('/two-step', async (c) => {
     setup: !on && open ? setupFor(open.plain, { account: ctx.user.email, issuer: issuerFor(ctx) }) : null,
     // On, but its key can't be opened here any more (the key setting changed).
     unreadable: on && !open,
-    required: requiredFor(ctx.role, ctx.workspace?.settings),
+    // Too many wrong codes in a row: the app's codes are locked (lib/twostep.js).
+    locked: on && Boolean(row.locked_at),
+    required: requiredFor(ctx.role, ctx.workspace?.settings, ctx.perms),
     must_set_up: Boolean(ctx.twoStep?.mustSetUp),
   });
 });
@@ -36,7 +40,7 @@ api.get('/two-step/team', async (c) => {
   // elsewhere: also in another campaign on this server — reset from the
   // server's shell, not from here (actions.js twostep.reset).
   const rows = (await c.get('db').query(
-    `select m.user_id as id, t.on_since,
+    `select m.user_id as id, t.on_since, t.locked_at,
             exists (select 1 from memberships o where o.user_id = m.user_id and o.workspace_id <> $1) as elsewhere
      from memberships m join two_step t on t.user_id = m.user_id and t.on_since is not null
      where m.workspace_id = $1`,
@@ -46,7 +50,7 @@ api.get('/two-step/team', async (c) => {
   return c.json({
     required: parseJ(ws?.settings, {}).twoStepRequired === true,
     you: Boolean(ctx.twoStep?.on),
-    members: rows.map((r) => ({ id: r.id, on: true, since: r.on_since, elsewhere: Boolean(r.elsewhere) })),
+    members: rows.map((r) => ({ id: r.id, on: true, since: r.on_since, elsewhere: Boolean(r.elsewhere), locked: Boolean(r.locked_at) })),
     key: keyStatus().source,
   });
 });

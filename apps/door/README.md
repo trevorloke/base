@@ -12,8 +12,15 @@ database.
 | `base.win/imaginesurrey/web…` | → `/imaginesurrey/desk/website` (the old back-office address) | |
 
 The door passes requests through to the client's server with the path as it
-came. It holds no secrets and checks no one: signing in, and who may open
-the desk, are the server's own.
+came. It checks no one: signing in, and who may open the desk, are the
+server's own. It holds one secret, `BASE_DOOR_KEY`: every request reaches
+the server from the door's own address, so the door says whose it is (the
+visitor's address, as Render's proxy in front of the door wrote it) with
+that key, which the server alone can check. That is how the server's limits
+per address — sign-in tries, the website's forms — tell visitors apart;
+anyone else who sends those headers is not believed. Without the key, everyone
+who comes through the door counts as one address, and one person's tries
+use up everyone's.
 
 ## Setting up base.win
 
@@ -22,6 +29,11 @@ the desk, are the server's own.
    - `BASE_PATH=/imaginesurrey`
    - `STARBASE_PUBLIC_URL=https://base.win/imaginesurrey` (links in emails —
      invites, unsubscribe, receipts — then use base.win)
+   - `BASE_DOOR_KEY` — the door's key (step 2), the same on every client's
+     server: 32 or more random characters (`openssl rand -base64 32`).
+     While moving to a new key the server takes both, comma-separated
+     (`new,old`): set that, then the door's to the new one, then the
+     server's to the new one alone.
 
    It then answers under `/imaginesurrey` **and** at its own address as
    before, so nothing breaks while people move over (old bookmarks, invites
@@ -43,6 +55,13 @@ the desk, are the server's own.
    `server` is an origin (no path). A config from before may say `ground`
    for it, and may still have `web` or `air` entries: `ground` is read as
    the server, the others are ignored.
+
+   And `BASE_DOOR_KEY`: the same key as the servers'. The door starts
+   without it but says so in its log — and every visitor then counts as
+   one address to the servers. With a proxy or CDN in front of the door as
+   well as Render's, set `BASE_TRUSTED_PROXIES` to how many there are (the
+   visitor's address is that many entries from the right of
+   `X-Forwarded-For`; default 1).
 3. **The domain.** Point `base.win` at the door service (Render: Settings →
    Custom Domains → add `base.win`, then the DNS records it shows at your
    registrar). Render issues the HTTPS certificate.

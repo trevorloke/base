@@ -77,6 +77,7 @@ Then, as each one is ready:
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
 | `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
+| `BASE_DOOR_KEY` | behind the base.win door only: the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | from Stripe: **test** keys on staging first; **live** keys on production only once a test gift has gone all the way through | gifts and membership dues paid online on the website (INTEGRATIONS.md, *Online payments — Stripe*) |
 
 Twilio: set the number's incoming-message webhook to
@@ -173,7 +174,8 @@ shared, and the code names no client.
   all data** (managers) downloads everything (message pictures are not in it).
 - Two-step sign-in: on for you (**Your profile**, from the account menu)
   and **Require two-step sign-in for desk roles** ticked under **Settings →
-  Members**; **Settings → Services** shows the two-step key set up.
+  Members** (it covers volunteers given an area under Permissions too);
+  **Settings → Services** shows the two-step key set up.
 - Keys: every key above is in Render only, never in the repo or a chat.
   Anyone who leaves the campaign is removed under **Admin → Members**, which ends their
   sign-in everywhere at once.
@@ -182,6 +184,9 @@ shared, and the code names no client.
 
 - Sign-in: 30 tries per address and 10 failures per email in 15 minutes,
   then a wait. Sessions last 30 days and end at sign-out or removal.
+  Two-step codes: 20 wrong in a row (across sign-ins and restarts) lock the
+  account's app codes until a recovery code or a manager's reset; the
+  person and the managers are emailed and the managers' Today says so.
 - Public forms: rate-limited per address; a request's body is capped.
 - Email: every newsletter carries the reader's own unsubscribe link and the
   headers mail apps use for their Unsubscribe button; an unsubscribed

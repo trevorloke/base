@@ -120,7 +120,8 @@ so nothing breaks before they are in.
   `donate`. Words for each kind: `server/ext/webdid/words.js` (and
   `web/src/components/WebDid.js`).
 - **Texts**: a ladder's text step skips anyone whose latest `consent_events`
-  row for `sms` has `granted = false`.
+  row for `sms` has `granted = false` — and, as for STOP, a number that
+  asked to stop in a reply (`asks_stop`) since it last texted START.
 
 ### Form fields (the renderer's forms send exactly these; the server reads exactly these)
 

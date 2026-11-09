@@ -9,7 +9,10 @@
 //       the 24 hours right. A volunteer's rows go through the volunteer rule
 //       (lib/viewer.js: no one else's email, no money tag), and nothing in
 //       them is about money (speed to lead is volunteers, messages and RSVPs;
-//       a ladder's own follow-up is never handed to a volunteer).
+//       a ladder's own follow-up — "thank them for their first donation" —
+//       is never on a volunteer's list: it is never handed to one, one they
+//       had when made a volunteer goes back to the office (hook.js), and
+//       this read leaves out any that got there some other way).
 import { Hono } from 'hono';
 import { forViewer } from '../../lib/viewer.js';
 
@@ -29,9 +32,10 @@ api.get('/followups/mine', async (c) => {
             p.id as pid, p.name, p.email, p.phone, p.address, p.unit, p.rating, p.tags
      from ladder_followups f join persons p on p.id = f.person_id and p.deleted_at is null
      where f.workspace_id = $1 and f.assigned_to = $2 and f.status = 'open'
+       and (f.kind is not null or $3::boolean)
      order by f.due_at nulls last, f.created_at
      limit 100`,
-    [ctx.workspaceId, ctx.user.id],
+    [ctx.workspaceId, ctx.user.id, ctx.role !== 'volunteer'],
   )).rows;
   const view = forViewer(ctx);
   return c.json({

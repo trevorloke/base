@@ -15,6 +15,7 @@ import { staleTimeZoneData } from './lib/tzcheck.js';
 import { envName, orgName } from './lib/org.js';
 import { bodyLimit } from 'hono/body-limit';
 import { appRedirect, basePath, mountAt } from './lib/mount.js';
+import { doorKeySet } from './lib/guard.js';
 import { brandPages } from './lib/brand.js';
 import { siteGate } from './ext/site/public.js';
 
@@ -79,6 +80,11 @@ if (isMain) {
   });
   const tz = staleTimeZoneData();
   if (tz) console.warn(`starbase: ${tz}`);
+  // Behind the base.win door without its key, everyone who comes through
+  // the door is the door's one address to the limits per address.
+  if (base && !doorKeySet()) {
+    console.warn('starbase: under base.win (BASE_PATH) but BASE_DOOR_KEY is not set (32+ characters, the same as the door’s) — everyone who comes through the door counts as one address for sign-in tries and the website’s forms');
+  }
   // Background jobs (ladder steps, A/B winners). STARBASE_JOBS=off disables.
   if (process.env.STARBASE_JOBS !== 'off') {
     // A database still starting (or restarting) is tried again, not a crash.

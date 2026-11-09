@@ -69,17 +69,19 @@ export const loadContext = async (db, token) => {
   if (!r) return null;
   const settings = typeof r.settings === 'string' ? JSON.parse(r.settings) : (r.settings || {});
   const own = typeof r.permissions === 'string' ? JSON.parse(r.permissions) : (r.permissions || {});
-  // Two-step sign-in (lib/twostep.js): on for this account, required for
-  // its role here, and so still to set up before anything else.
-  const required = requiredFor(r.role, settings);
+  // Grants and denies on top of the role (lib/perms.js).
+  const perms = permsOf(r.role, settings, own);
+  // Two-step sign-in (lib/twostep.js): on for this account, required here
+  // (its role, or an area it was given), and so still to set up before
+  // anything else.
+  const required = requiredFor(r.role, settings, perms);
   return {
     user: { id: r.user_id, email: r.email, name: r.user_name },
     role: r.role,
     // This sign-in (its hash), so an action can keep it and end the others.
     session: hashToken(token),
     twoStep: { on: Boolean(r.two_step_on), required, mustSetUp: required && !r.two_step_on },
-    // Grants and denies on top of the role (lib/perms.js).
-    perms: permsOf(r.role, settings, own),
+    perms,
     workspaceId: r.workspace_id,
     workspace: {
       id: r.workspace_id, name: r.ws_name, slug: r.ws_slug, candidate: r.candidate,

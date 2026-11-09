@@ -17,9 +17,10 @@ import {
 import { JURISDICTIONS, orgName, jurisdiction, timeZone, openSignupForced, setupClosedMessage, orgOut } from '../lib/org.js';
 import { clientIp, makeLimiter, crossSiteWrite } from '../lib/guard.js';
 import {
-  checkCode, codeFails, endPending, PENDING_COOKIE, PENDING_MINUTES, PENDING_TRIES,
+  checkCode, codeFails, countMiss, endPending, PENDING_COOKIE, PENDING_MINUTES, PENDING_TRIES,
   recoveryHashFor, startPending, takeTry, twoStepOut, twoStepRow,
 } from '../lib/twostep.js';
+import { LOCKED_SIGN_IN, tellLocked } from '../ext/twostep/locked.js';
 
 const app = new Hono();
 
@@ -69,7 +70,9 @@ const campaignName = async (db) =>
   (await db.query('select name from workspaces order by created_at limit 1')).rows[0]?.name || orgName();
 
 class SetupClosed extends Error {}
-class WrongCode extends Error {}
+class WrongCode extends Error {
+  constructor(check) { super('wrong code'); this.check = check; }
+}
 
 // What the browser gets about the workspace: settings minus the sample
 // bookkeeping (the ids of every sample row), which only the server needs.
@@ -95,14 +98,20 @@ const TOO_MANY_CODES = 'Too many wrong codes — wait 15 minutes, then try again
 
 // The code, checked under the campaign's write lock (lib/events.js) so a
 // recovery code spent at sign-in is on the record. The slow hash of a
-// recovery code is made first, outside any lock.
+// recovery code is made first, outside any lock. A wrong one is one more in
+// the account's count (lib/twostep.js countMiss) — this write commits with
+// it — and the one that locks the app's codes is told (tellLocked).
 const signInCode = async (db, { userId, workspaceId }, code) => {
   const hash = await recoveryHashFor(db, userId, code);
   const { result } = await runAction(db, { workspaceId, actorId: userId, action: 'twostep.signin' }, async (tx, emit) => {
     const r = await checkCode(tx, userId, code, { hash });
-    if (r.used === 'recovery') emit('two_step', userId, 'update', { recovery_code_used: true, recovery_left: r.left });
+    if (r.used === 'recovery') {
+      emit('two_step', userId, 'update', { recovery_code_used: true, recovery_left: r.left, ...(r.unlocked ? { unlocked: true } : {}) });
+    }
+    if (!r.used && !r.unreadable) r.tally = await countMiss(tx, userId);
     return r;
   });
+  if (result.tally?.justLocked) await tellLocked(db, userId);
   return result;
 };
 
@@ -236,11 +245,13 @@ app.post('/login/code', async (c) => {
   const r = typed.trim() ? await signInCode(db, { userId: pending.user_id, workspaceId: pending.workspace_id }, typed) : { used: null };
   if (!r.used) {
     const left = Math.max(0, PENDING_TRIES - Number(pending.tries));
+    const locked = Boolean(r.locked || r.tally?.locked);
     if (!left) {
       await endPending(db, pending.token_hash);
       deleteCookie(c, PENDING_COOKIE, { path: '/' });
-      return c.json({ error: 'Too many wrong codes — sign in again.', two_step: 'again' }, 401);
+      return c.json({ error: locked ? LOCKED_SIGN_IN : 'Too many wrong codes — sign in again.', two_step: 'again', ...(locked ? { locked } : {}) }, 401);
     }
+    if (locked) return c.json({ error: LOCKED_SIGN_IN, two_step: 'code', locked, tries_left: left }, 401);
     return c.json({
       error: r.unreadable
         ? 'Codes from your app can’t be checked on this server any more. Type one of your recovery codes, or ask a manager to reset your two-step sign-in.'
@@ -315,8 +326,10 @@ app.post('/join', async (c) => {
     await runAction(db, { workspaceId: inv.workspace_id, actorId: userId, action: 'member.join' }, async (tx, emit) => {
       if (twoStep) {
         const r = await checkCode(tx, user.id, parsed.data.code, { hash: codeHash });
-        if (!r.used) throw new WrongCode();
-        if (r.used === 'recovery') emit('two_step', user.id, 'update', { recovery_code_used: true, recovery_left: r.left });
+        if (!r.used) throw new WrongCode(r);
+        if (r.used === 'recovery') {
+          emit('two_step', user.id, 'update', { recovery_code_used: true, recovery_left: r.left, ...(r.unlocked ? { unlocked: true } : {}) });
+        }
       }
       if (!user) {
         await tx.query('insert into users (id, email, name, password_hash) values ($1, $2, $3, $4)',
@@ -333,8 +346,12 @@ app.post('/join', async (c) => {
       if (m.affectedRows > 0) emit('membership', userId, 'create', { email: inv.email, role: inv.role, user_id: userId });
     });
   } catch (e) {
-    if (e instanceof WrongCode) return c.json({ error: NO_MATCH, two_step: 'code' }, 401);
-    throw e;
+    if (!(e instanceof WrongCode)) throw e;
+    // The join was rolled back: the wrong code is counted on its own.
+    const tally = e.check.unreadable ? null : await countMiss(db, user.id);
+    if (tally?.justLocked) await tellLocked(db, user.id);
+    if (e.check.locked || tally?.locked) return c.json({ error: LOCKED_SIGN_IN, two_step: 'code', locked: true }, 401);
+    return c.json({ error: NO_MATCH, two_step: 'code' }, 401);
   }
   if (twoStep) codeFails.clear(`user:${user.id}`);
   const sessionToken = await createSession(db, userId, inv.workspace_id);

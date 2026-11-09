@@ -872,11 +872,13 @@ app.get('/brief', async (c) => {
     activation,
     generatedAt: new Date().toISOString(),
   };
-  // Features correct the counts they own (texts sent through the app).
+  // Features correct the counts they own (texts sent through the app), and
+  // may warn managers of what only they can fix (an account locked by wrong
+  // two-step codes: ext/twostep).
   await runHooks('brief', db, ctx, body);
   // Managers hear about a server problem only they can get fixed.
   const tz = ctx.role === 'manager' ? staleTimeZoneData() : null;
-  if (tz) body.serverWarnings = [tz];
+  if (tz) body.serverWarnings = [tz, ...(body.serverWarnings || [])];
   return c.json(body);
 });
 

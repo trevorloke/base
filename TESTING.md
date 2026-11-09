@@ -170,8 +170,10 @@ one tap away under **More**.
   member*, *Voted*): book someone on a "Booked a shift" ladder, check them in
   on the shift — they're off it at once, *Reached the goal*. *+ Text*: it
   must name the campaign (*+ Campaign*), goes only inside the texting hours
-  (*Waiting for texting hours*), never to anyone who replied STOP, and
-  "Reply STOP to opt out" is added; replies land in the Inbox.
+  (*Waiting for texting hours*), never to anyone who replied STOP or asked
+  to stop in a reply (*No thanks, stop* — skipped, *asked to stop in a
+  reply*, until they text START), and "Reply STOP to opt out" is added;
+  replies land in the Inbox.
 - **Follow-ups (speed to lead)** — every new volunteer (the website's form,
   the door's or Mainstreeting's *Wants to volunteer*, the membership form's
   *I'd like to volunteer*), every website message and every RSVP from
@@ -221,9 +223,13 @@ one tap away under **More**.
   password it asks for the code; a wrong one is said, the right one opens
   the desk, and a recovery code works once (*9 recovery codes left*).
   **Settings → Members → Require two-step sign-in for desk roles**: a
-  staffer's next tap shows the set-up and nothing else until it's on; a
-  volunteer still signs in with a password. *Reset two-step* on someone's
-  row signs them out and clears theirs.
+  staffer's next tap shows the set-up and nothing else until it's on — so
+  does a volunteer's once given an area under Permissions; a volunteer with
+  no area still signs in with a password. *Reset two-step* on someone's
+  row signs them out and clears theirs. Twenty wrong codes in a row (over
+  as many sign-ins as it takes) lock the codes from that person's app: the
+  sign-in says so, managers get an email and a line on Today, their row
+  says *Two-step locked*, and a recovery code signs in and unlocks it.
 - **Command bar** — on the desk press **Ctrl+K** (⌘K on a Mac), or *Search*
   under the name: *don* + Enter opens Donations, *gift* opens Log a gift
   with its form, a name or a phone (*604 555 0142*) finds the person; ↑ ↓

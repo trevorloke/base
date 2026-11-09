@@ -18,14 +18,16 @@
 // works once: the step it matched is kept, and that step or any earlier one
 // is refused after.
 //
-// Who must use it: a manager can require it for desk roles (manager,
-// treasurer, staff — workspace settings.twoStepRequired). Volunteers' sign-in
-// is unchanged unless they turn it on themselves.
+// Who must use it: a manager can require it for everyone the desk opens for
+// (workspace settings.twoStepRequired) — the desk roles (manager, treasurer,
+// staff) and a volunteer given an area under Admin → Permissions. Other
+// volunteers' sign-in is unchanged unless they turn it on themselves.
 import {
   createCipheriv, createDecipheriv, createHash, createHmac, hkdfSync, randomBytes, randomInt, scrypt, timingSafeEqual,
 } from 'node:crypto';
 import { promisify } from 'node:util';
 import { makeLimiter } from './guard.js';
+import { AREA_KEYS, decide } from './perms.js';
 import { qrSvgPath } from './qr.js';
 
 const scryptAsync = promisify(scrypt);
@@ -218,8 +220,14 @@ export const hashRecoveryCode = async (code, salt) =>
   (await scryptAsync(normalizeRecoveryCode(code), Buffer.from(salt, 'base64'), 32, { N: 16384, r: 8, p: 1 })).toString('hex');
 
 // ── Who must use it ──
+// Once required: the desk roles, and anyone given an area (their own grant
+// or their role's, and not denied — lib/perms.js), since an area opens the
+// desk to a volunteer: a Data grant is the whole export, an Admin grant the
+// team's roles and this very requirement. perms: the person's (ctx.perms).
 export const DESK_ROLES = ['manager', 'treasurer', 'staff'];
-export const requiredFor = (role, settings) => settings?.twoStepRequired === true && DESK_ROLES.includes(role);
+export const givenAnArea = (perms) => AREA_KEYS.some((k) => decide(perms, k) === true);
+export const requiredFor = (role, settings, perms = null) => settings?.twoStepRequired === true
+  && (DESK_ROLES.includes(role) || givenAnArea(perms));
 
 // What the app is told about the signed-in person (GET /api/auth/me).
 export const twoStepOut = (ctx) => ({
@@ -240,8 +248,18 @@ export const SETUP_FIRST = 'set up two-step sign-in first — your campaign asks
 // try is counted as it comes in — codeFails(key) counts and says whether
 // that's one too many, before the code is checked — and a right code clears
 // the count. Per sign-in: 5 tries, then the password is asked again.
+// That pause is this process's and forgets in 15 minutes (or at a restart);
+// what adds up is the account's own count of wrong codes in a row, in the
+// database (two_step.fails, countMiss below): sign-in, joining, turning it
+// off and new recovery codes all add to it, and a right code — from the app
+// or a recovery code — clears it. At LOCK_AFTER in a row the codes from the
+// app stop working for the account (two_step.locked_at): a recovery code
+// still signs in, and unlocks it, or a manager resets it. The lock is on
+// the log of each campaign the account is in, and the person and those
+// campaigns' managers are told (ext/twostep/locked.js).
 export const codeFails = makeLimiter({ windowMs: 15 * 60_000, max: 10 });
 export const CODE_FAILS_MAX = 10;
+export const LOCK_AFTER = 20;
 export const PENDING_TRIES = 5;
 export const PENDING_MINUTES = 10;
 export const PENDING_COOKIE = 'mv2_two_step';
@@ -250,9 +268,28 @@ const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 
 // ── The account's row (ext/twostep/sql.js two_step) ──
 export const twoStepRow = async (db, userId, { lock = false } = {}) => (await db.query(
-  `select user_id, secret, on_since, recovery, recovery_salt, last_step from two_step where user_id = $1${lock ? ' for update' : ''}`,
+  `select user_id, secret, on_since, recovery, recovery_salt, last_step, fails, locked_at
+   from two_step where user_id = $1${lock ? ' for update' : ''}`,
   [userId],
 )).rows[0] || null;
+
+// A wrong code for an account with it on (or one from the app while it's
+// locked): one more in a row. Its own write — or the write of an answer that
+// commits — since a refused action's own write is rolled back. →
+// { fails, locked, justLocked } (justLocked: this one locked it — tell
+// them), or null when the account doesn't have it on.
+export async function countMiss(q, userId) {
+  const r = (await q.query(
+    `update two_step set fails = fails + 1,
+       locked_at = coalesce(locked_at, case when fails + 1 >= $2 then now() end)
+     where user_id = $1 and on_since is not null
+     returning fails, locked_at`,
+    [userId, LOCK_AFTER],
+  )).rows[0];
+  if (!r) return null;
+  const fails = Number(r.fails);
+  return { fails, locked: Boolean(r.locked_at), justLocked: fails === LOCK_AFTER };
+}
 const parseList = (v) => (typeof v === 'string' ? JSON.parse(v) : (v || []));
 
 const isAppCode = (code) => /^\d{6}$/.test(String(code ?? '').trim().replace(/\s/g, ''));
@@ -263,7 +300,7 @@ const isAppCode = (code) => /^\d{6}$/.test(String(code ?? '').trim().replace(/\s
 // pending: the key being set up (not on yet) rather than the one in use.
 export async function peekCode(db, userId, code, { pending = false } = {}) {
   const row = await twoStepRow(db, userId);
-  if (!row?.secret || Boolean(row.on_since) === pending || !isAppCode(code)) return false;
+  if (!row?.secret || Boolean(row.on_since) === pending || row.locked_at || !isAppCode(code)) return false;
   const open = await openSecret(db, row.secret);
   if (!open) return false;
   return verifyTotp(base32Decode(open.plain), code, { afterStep: row.last_step == null ? null : Number(row.last_step) }) !== null;
@@ -279,15 +316,19 @@ export async function recoveryHashFor(db, userId, code) {
 }
 
 // Check a code for an account with two-step sign-in on: a code from the
-// app (never one already used) or, unless refused, a recovery code (then
-// used up). Run inside a transaction — it locks the account's row, so two
-// requests can't both spend one code. → { used: 'app' | 'recovery' | null,
-// left (recovery codes left), unreadable (the secret's key is gone) }.
+// app (never one already used, never while too many wrong ones have locked
+// them) or, unless refused, a recovery code (then used up). A right one
+// clears the count of wrong ones (and the lock). Run inside a transaction —
+// it locks the account's row, so two requests can't both spend one code.
+// → { used: 'app' | 'recovery' | null, left (recovery codes left),
+// unreadable (the secret's key is gone), locked (the app's codes are) }.
+// A wrong one isn't counted here: countMiss, by the caller.
 export async function checkCode(tx, userId, code, { allowRecovery = true, nowMs = Date.now(), hash } = {}) {
   const row = await twoStepRow(tx, userId, { lock: true });
   if (!row?.on_since) return { used: null };
   const typed = String(code ?? '').trim().slice(0, 40);
   if (isAppCode(typed)) {
+    if (row.locked_at) return { used: null, locked: true };
     const open = row.secret ? await openSecret(tx, row.secret) : null;
     if (!open) return { used: null, unreadable: true };
     const step = verifyTotp(base32Decode(open.plain), typed, { nowMs, afterStep: row.last_step == null ? null : Number(row.last_step) });
@@ -295,7 +336,10 @@ export async function checkCode(tx, userId, code, { allowRecovery = true, nowMs 
     // Sealed with an older key (or the database's, now that one is set):
     // moved to the current key while it's open.
     const secret = open.current ? row.secret : await sealSecret(tx, open.plain);
-    await tx.query('update two_step set last_step = $2, secret = $3, updated_at = now() where user_id = $1', [userId, step, secret]);
+    await tx.query(
+      'update two_step set last_step = $2, secret = $3, fails = 0, locked_at = null, updated_at = now() where user_id = $1',
+      [userId, step, secret],
+    );
     return { used: 'app' };
   }
   if (!allowRecovery || !looksLikeRecoveryCode(typed) || !row.recovery_salt) return { used: null };
@@ -303,8 +347,11 @@ export async function checkCode(tx, userId, code, { allowRecovery = true, nowMs 
   const list = parseList(row.recovery);
   const left = list.filter((h) => !safeEqual(h, mine));
   if (left.length === list.length) return { used: null };
-  await tx.query('update two_step set recovery = $2, updated_at = now() where user_id = $1', [userId, JSON.stringify(left)]);
-  return { used: 'recovery', left: left.length };
+  await tx.query(
+    'update two_step set recovery = $2, fails = 0, locked_at = null, updated_at = now() where user_id = $1',
+    [userId, JSON.stringify(left)],
+  );
+  return { used: 'recovery', left: left.length, ...(row.locked_at ? { unlocked: true } : {}) };
 }
 
 // ── The second step at sign-in ──

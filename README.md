@@ -114,15 +114,22 @@ the code it shows, and keep the ten **recovery codes** shown once (copy or
 download) — each signs in once if the phone is lost. Sign-in then asks for
 the code after the password; a code works once, five tries send you back
 to the password, and ten tries in 15 minutes make the person wait (each try
-counted as it comes in, so codes sent all at once don't get more).
+counted as it comes in, so codes sent all at once don't get more). Wrong
+codes also add up for the account, across sign-ins and restarts, until a
+right one: twenty in a row lock the codes from the app — the answer says
+so, the lock is on the event log, the person and the campaign's managers
+are emailed, and the managers' Today and Settings → Members show it until a
+recovery code (which still signs in) or a manager's reset unlocks it.
 *More* makes new recovery codes or turns it off (each with a code).
 Turning it on signs that person out on their other devices.
 
 A manager can **require it for desk roles** (Settings → Members — their own
-must be on first): every manager, treasurer and staffer then sets it up at
+must be on first): every manager, treasurer and staffer — and every
+volunteer given an area under Admin → Permissions (their own or their
+role's), since the area opens the desk to them — then sets it up at
 their next sign-in — or on their next tap, if already signed in — before
-anything else (the server answers nothing else meanwhile). Volunteers sign
-in as before unless they turn it on. Someone who lost their phone: the
+anything else (the server answers nothing else meanwhile). Other volunteers
+sign in as before unless they turn it on. Someone who lost their phone: the
 manager taps **Reset two-step** on their row — they're signed out everywhere
 and sign in with their password (setting it up again where it's required).
 The campaign's only manager, with neither phone nor recovery codes — or
@@ -130,7 +137,7 @@ someone who belongs to another campaign on the same server too, which one
 campaign's manager can't clear — on the server's shell (Render → the service
 → Shell), `node scripts/reset-two-step.mjs their@email` does the same.
 Turning it on or off, new recovery codes, a recovery code spent at sign-in,
-a reset and the requirement are on the event log (nothing secret in it).
+a lock, a reset and the requirement are on the event log (nothing secret in it).
 Keys are sealed with `STARBASE_TWO_STEP_KEY` (INTEGRATIONS.md); the tables
 (`server/ext/twostep`) are never in the export. The how: `server/lib/twostep.js`.
 
@@ -653,9 +660,11 @@ signature, and blast lists.
 capped (256 KB; 16 MB for a CSV import, 4 MB for a picture); the address
 a request is from is the entry `STARBASE_TRUSTED_PROXIES` hops from the
 right of `X-Forwarded-For` (default 1 — one proxy, as on Render), never
-what the sender wrote; public writes are limited to 30 per 10 minutes per
+what the sender wrote — behind the base.win door, the visitor's address
+as the door says it, believed only with the key the door and the server
+share (`BASE_DOOR_KEY`, apps/door/README.md); public writes are limited to 30 per 10 minutes per
 address and sign-in to 30 tries per address and 10 failures per email per
-15 minutes (two-step codes: 5 tries per sign-in, 10 per person); a cookie-carrying write must be the app's own (JSON, same
+15 minutes (two-step codes: 5 tries per sign-in, 10 per person in 15 minutes, and 20 wrong in a row lock the account's app codes); a cookie-carrying write must be the app's own (JSON, same
 origin — a form on another host, even under the campaign's domain, can't
 post with it; the session cookie is `SameSite=Strict`); and every answer carries
 `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and a

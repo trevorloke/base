@@ -86,8 +86,10 @@ can't list domains; the check says so and the key is fine).
 Calls card and the door card; text blasts to a list; STOP/START; calls
 placed through the campaign's number (Twilio rings the caller, they press 1,
 then it dials the person); SMS shift alerts; a ladder's *Text* step (by the
-same rules — inside the texting hours, never to a number that replied STOP,
-the campaign named, "Reply STOP to opt out" added — filed in the Inbox as
+same rules — inside the texting hours, never to a number that replied STOP
+or asked to stop in a reply (*No thanks, stop*: the Inbox only flags those
+for a person, but a ladder sends with nobody reading), the campaign named,
+"Reply STOP to opt out" added — filed in the Inbox as
 the campaign's own conversation). Without it, Call and Text open the
 phone's own dialer and messages, a ladder's text waits, and nothing is lost.
 

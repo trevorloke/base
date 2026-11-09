@@ -34,9 +34,12 @@
 // "not sure it went" and the run moves on.
 //
 // Text steps go through the campaign's texting (ext/texting), by its rules:
-// never to a number that replied STOP, someone tagged do-not-text or
-// do-not-contact, someone who said no to texts on the website, or someone
-// a teammate is texting right now (one campaign conversation per number) —
+// never to a number that replied STOP — or asked to stop in words ("No
+// thanks, stop"), which the Inbox only flags for a person to decide on, as
+// nobody reads the thread before a ladder sends — someone tagged
+// do-not-text or do-not-contact, someone who said no to texts on the
+// website, or someone a teammate is texting right now (one campaign
+// conversation per number) —
 // skipped, with the reason in the log. Outside the hours texts may go the
 // run waits for them ("Waiting for texting hours"); with texting not
 // connected it waits and looks again hourly. Each text names the campaign
@@ -54,7 +57,9 @@ import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, textConfigured, unsubscribeHeaders } from '../../lib/notify.js';
 import { e164, withFooter, localMinutes, now as textClock } from '../texting/rules.js';
-import { settingsFor, quietState, isOptedOut, applyOptOut, inTouch, isFirstOut, tzOf } from '../texting/store.js';
+import {
+  settingsFor, quietState, isOptedOut, askedToStop, applyOptOut, inTouch, isFirstOut, tzOf,
+} from '../texting/store.js';
 import { sendSms, publicBase } from '../texting/twilio.js';
 import { hasTable } from '../webdid/words.js';
 import {
@@ -488,8 +493,9 @@ const saidNoToTexts = async (tx, ws, personId) => {
 // Why a text step won't text this person, or null — the texting module's
 // rules (ext/texting): do-not-contact, do-not-text, a number that can be
 // texted and hasn't replied STOP, and one campaign conversation per number
-// (a teammate texting them lately). Plus: never someone who said no to
-// texts on the website.
+// (a teammate texting them lately). Plus: never a number that asked to stop
+// in words (a reply only flagged for the desk — nobody reads the thread
+// before a ladder sends), never someone who said no to texts on the website.
 const textSkip = async (tx, ws, person) => {
   if (isDnc(person)) return 'do_not_contact';
   if (noText(person)) return 'do_not_text';
@@ -497,6 +503,7 @@ const textSkip = async (tx, ws, person) => {
   const to = e164(person.phone);
   if (!to) return 'bad_number';
   if (await isOptedOut(tx, ws, to)) return 'opted_out';
+  if (await askedToStop(tx, ws, to)) return 'asked_to_stop';
   if (await saidNoToTexts(tx, ws, person.id)) return 'no_text_consent';
   if (await inTouch(tx, ws, to, null)) return 'in_conversation';
   return null;

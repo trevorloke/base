@@ -4,7 +4,8 @@
 //                     the authenticator key, sealed; when it was turned on
 //                     (null while setting up); the unused recovery codes'
 //                     hashes and their salt; the last code's time step (a
-//                     code works once)
+//                     code works once); wrong codes in a row (fails) and,
+//                     past LOCK_AFTER of them, when the app's codes locked
 //   two_step_pending  a sign-in whose password was right, waiting for the
 //                     code: the ticket's hash, wrong tries, ten minutes
 //   app_secrets       base.win's own keys, when the environment gives none
@@ -30,6 +31,8 @@ create table if not exists two_step_pending (
   created_at timestamptz not null default now()
 );
 create index if not exists two_step_pending_user_idx on two_step_pending (user_id);
+alter table two_step add column if not exists fails int not null default 0;
+alter table two_step add column if not exists locked_at timestamptz;
 
 create table if not exists app_secrets (
   name text primary key,
