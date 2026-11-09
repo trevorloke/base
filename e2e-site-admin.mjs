@@ -406,6 +406,7 @@ vp.on('pageerror', (e) => errors.push(e.message));
 await vp.goto(`${BASE}/admin/website`, { waitUntil: 'domcontentloaded' });
 await vp.getByText('Not for your role').waitFor({ timeout: 10000 }).catch(() => {});
 check('a volunteer opening Website is told it isn’t theirs', /Not for your role/.test(await vp.innerText('body')));
+await shot('9a-volunteer-not-theirs', false, vp);
 await vp.goto(`${BASE}/website`, { waitUntil: 'domcontentloaded' });
 await sleep(800);
 check('…and in the field app it isn’t there (back to Today)', !/\/website/.test(new URL(vp.url()).pathname) && !(await vp.locator('a', { hasText: 'Website' }).count()), vp.url());
