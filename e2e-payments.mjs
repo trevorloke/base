@@ -318,6 +318,7 @@ await desk.screenshot({ path: `${SHOTS}/6b-needs-over-limit-desktop.png`, fullPa
 await go('/');
 const todayRow = (await desk.locator('.today-need', { hasText: 'Dee Example' }).first().innerText({ timeout: 8000 }).catch(() => '')).replace(/\s+/g, ' ');
 check('Today: Needs you has it, "Over limit", $100.00', /Over limit/i.test(todayRow) && /\$100\.00/.test(todayRow), todayRow);
+await desk.locator('.today-need', { hasText: 'Dee Example' }).first().scrollIntoViewIfNeeded().catch(() => {});
 await desk.screenshot({ path: `${SHOTS}/6c-today-over-limit-desktop.png`, fullPage: false });
 await go('/money');
 await desk.locator('.ops-needs .ops-row', { hasText: 'Dee Example' }).click();
