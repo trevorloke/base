@@ -139,10 +139,16 @@ export default function WebsitePages() {
     },
   });
   const remove = async (p) => {
+    const i = pages.findIndex((x) => x.id === p.id);
     const res = await run('site.page.delete', { id: p.id });
     if (!res) return;
     await refresh(['site']);
     undoable(p);
+    // Its row is gone: the next page's name takes the focus.
+    setTimeout(() => {
+      const names = document.querySelectorAll('.wb-row__name');
+      (names[i] || names[i - 1])?.focus();
+    }, 30);
   };
   // Deleted from its builder: said here, with Undo.
   const navigate = useNavigate();

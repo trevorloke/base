@@ -2,14 +2,14 @@
 //
 // A manager signs up and finds Website in the desk's menu: the site is live
 // at the app's /site/ address; online giving isn't set up. Pages → New page
-// "Town hall 2030"; in its builder they add a Hero, a Text block and a
+// "Sample town hall"; in its builder they add a Hero, a Text block and a
 // Newsletter sign-up from the catalogue, drag the newsletter above the text
 // (and use Move up / Move down and the tap path), hide the text block, add
 // a Petition or pledge without picking one — Publish refuses and points at
 // that section's "Which one" box — pick one, delete it, Undo, delete it
 // again, and publish. The draft saves by itself ("Saved"). A draft-only
 // change shows in the preview (a new tab, and the frame beside) while the
-// public page at /site/town-hall-2030 keeps what was published; publishing
+// public page at /site/sample-town-hall keeps what was published; publishing
 // again puts it there. Theme: a light brand colour under white text is too
 // hard to read — saving is blocked — "Fix it" picks a readable text colour
 // and it saves; the public page has the new colours. A page duplicated and
@@ -24,6 +24,7 @@
 //   BASE=http://127.0.0.1:5210 SHOTS=/tmp/site-admin node e2e-site-admin.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
+import { MODULES } from './shared/site/catalogue.js';
 
 const BASE = (process.env.BASE || 'http://127.0.0.1:3200').replace(/\/$/, '');
 const SHOTS = process.env.SHOTS || '/tmp/starbase-site-admin';
@@ -100,8 +101,8 @@ await shot('1-overview');
 await page.locator('.wb-tabs').getByRole('link', { name: 'Pages' }).click();
 await page.waitForURL(/\/website\/pages$/);
 await page.getByRole('button', { name: 'New page' }).click();
-await page.fill('#wb-new-title', 'Town hall 2030');
-check('the address is made from the title', /\/town-hall-2030/.test(await page.locator('#wb-new-slug-hint').innerText()));
+await page.fill('#wb-new-title', 'Sample town hall');
+check('the address is made from the title', /\/sample-town-hall/.test(await page.locator('#wb-new-slug-hint').innerText()));
 await page.getByRole('button', { name: 'Make the page' }).click();
 await page.waitForURL(/\/website\/pages\/[0-9a-f-]{36}/, { timeout: 15000 });
 const pageId = page.url().match(/pages\/([0-9a-f-]{36})/)[1];
@@ -120,7 +121,7 @@ await shot('2-catalogue', false);
 await cat.locator('.wb-cat__item', { has: page.locator('.wb-cat__name', { hasText: /^Hero$/ }) }).click();
 await cat.waitFor({ state: 'hidden' });
 const heroHead = sections().nth(0).getByRole('textbox', { name: 'Headline', exact: true });
-await heroHead.fill('Town hall for Newton');
+await heroHead.fill('A sample headline');
 check('the draft saves by itself: "Saved"', (await saved()) === 'saved');
 
 await addSection('Text block');
@@ -195,33 +196,33 @@ check('published: on the site', /On the site/.test(await page.locator('.wb-build
 const live = (await api(`/site/pages/${pageId}`)).json.page;
 check('server: what went live — hero, newsletter, text (hidden)', JSON.stringify(live.published.modules.map((m) => [m.kind, m.hidden])) === '[["hero",false],["newsletter",false],["text",true]]',
   JSON.stringify(live.published.modules.map((m) => [m.kind, m.hidden])));
-let pub = await site('/site/town-hall-2030');
+let pub = await site('/site/sample-town-hall');
 const order = [...pub.html.matchAll(/data-module="([a-z]+)"/g)].map((m) => m[1]);
-check('the public page (/site/town-hall-2030): the hero, then the newsletter; the hidden text isn’t there',
-  pub.status === 200 && JSON.stringify(order) === '["hero","newsletter"]' && /Town hall for Newton/.test(pub.html), `${pub.status} ${JSON.stringify(order)}`);
+check('the public page (/site/sample-town-hall): the hero, then the newsletter; the hidden text isn’t there',
+  pub.status === 200 && JSON.stringify(order) === '["hero","newsletter"]' && /A sample headline/.test(pub.html), `${pub.status} ${JSON.stringify(order)}`);
 
 // ── a draft-only change: the preview has it, the site doesn't (yet) ──
 await sections().nth(0).locator('.wb-sec__toggle').click();
-await sections().nth(0).getByRole('textbox', { name: 'Headline', exact: true }).fill('Town hall for all of Newton');
+await sections().nth(0).getByRole('textbox', { name: 'Headline', exact: true }).fill('A sample headline, changed');
 await saved();
 check('a change since publishing: "Publish changes"', await page.getByRole('button', { name: 'Publish changes' }).isVisible());
 const frame = page.locator('.wb-frame iframe');
 check('a wide screen: the preview beside the editor', /\/site\/__preview\//.test(await frame.getAttribute('src').catch(() => '')));
-await page.waitForFunction(() => /all of Newton/.test(document.querySelector('.wb-frame iframe')?.contentDocument?.body?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
-check('…showing the draft, fresh after the save', /all of Newton/.test(await frame.evaluate((f) => f.contentDocument?.body?.innerText || '').catch(() => '')));
+await page.waitForFunction(() => /headline, changed/.test(document.querySelector('.wb-frame iframe')?.contentDocument?.body?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+check('…showing the draft, fresh after the save', /headline, changed/.test(await frame.evaluate((f) => f.contentDocument?.body?.innerText || '').catch(() => '')));
 const [tab] = await Promise.all([desk.waitForEvent('page'), page.getByRole('link', { name: /^Preview/ }).click()]);
 await tab.waitForLoadState('domcontentloaded');
 await tab.waitForURL(/\/site\/__preview\//, { timeout: 10000 }).catch(() => {});
 const prevHtml = await tab.content();
-check('Preview opens the draft in a new tab (not for search engines)', /\/site\/__preview\//.test(tab.url()) && /all of Newton/.test(prevHtml) && /noindex/.test(prevHtml), tab.url());
+check('Preview opens the draft in a new tab (not for search engines)', /\/site\/__preview\//.test(tab.url()) && /headline, changed/.test(prevHtml) && /noindex/.test(prevHtml), tab.url());
 await tab.close();
-pub = await site('/site/town-hall-2030');
-check('the public page still has the published words', /Town hall for Newton/.test(pub.html) && !/all of Newton/.test(pub.html));
+pub = await site('/site/sample-town-hall');
+check('the public page still has the published words', /A sample headline/.test(pub.html) && !/headline, changed/.test(pub.html));
 await shot('4-builder');
 await page.getByRole('button', { name: 'Publish changes' }).click();
 await page.locator('.wb-toast', { hasText: 'Published' }).waitFor({ timeout: 10000 });
-pub = await site('/site/town-hall-2030');
-check('published again: the site has it', /all of Newton/.test(pub.html));
+pub = await site('/site/sample-town-hall');
+check('published again: the site has it', /headline, changed/.test(pub.html));
 
 // The page details: show it in the menu.
 const details = page.getByRole('button', { name: /Page details/ });
@@ -233,10 +234,10 @@ check('In the menu (page details)', (await api('/site')).json.pages.find((p) => 
 // ── Pages: duplicate, delete, Undo ──
 await page.getByRole('link', { name: '← Pages' }).click();
 await page.waitForURL(/\/website\/pages$/);
-const row = page.locator('li.wb-row', { has: page.locator('.wb-row__name', { hasText: /^Town hall 2030$/ }) });
+const row = page.locator('li.wb-row', { has: page.locator('.wb-row__name', { hasText: /^Sample town hall$/ }) });
 await row.locator('.wb-more__btn').click();
 await row.getByRole('button', { name: 'Duplicate' }).click();
-const copyRow = page.locator('li.wb-row', { has: page.locator('.wb-row__name', { hasText: 'Town hall 2030 (copy)' }) });
+const copyRow = page.locator('li.wb-row', { has: page.locator('.wb-row__name', { hasText: 'Sample town hall (copy)' }) });
 await copyRow.waitFor({ timeout: 10000 });
 check('duplicated: a draft copy', /Draft/.test(await copyRow.innerText()));
 await copyRow.locator('.wb-more__btn').click();
@@ -246,6 +247,85 @@ await page.locator('.wb-toast').getByRole('button', { name: 'Undo' }).click();
 await copyRow.waitFor({ timeout: 10000 });
 check('deleted, then Undo: the copy is back', await copyRow.isVisible());
 await shot('5-pages');
+
+// ── Every kind of section: each one's form comes from its fields ──
+await page.getByRole('button', { name: 'New page' }).click();
+await page.fill('#wb-new-title', 'Sample: every section');
+await page.getByRole('button', { name: 'Make the page' }).click();
+await page.waitForURL(/\/website\/pages\/[0-9a-f-]{36}/, { timeout: 15000 });
+const allId = page.url().match(/pages\/([0-9a-f-]{36})/)[1];
+await page.locator('h2', { hasText: 'Sections' }).waitFor();
+const formless = [];
+for (const m of MODULES) {
+  await addSection(m.label);
+  const sec = sections().last();
+  await sec.locator('.wb-form').waitFor({ timeout: 5000 }).catch(() => {});
+  const shown = await sec.locator('.wb-form > *').count();
+  if (shown !== m.fields.length) formless.push(`${m.kind}: ${shown} of ${m.fields.length}`);
+  await sec.getByRole('button', { name: 'Done' }).click();
+}
+check(`all ${MODULES.length} kinds of section: each opens with a box for every field`, formless.length === 0, formless.join(', '));
+await saved();
+const allDraft = (await api(`/site/pages/${allId}`)).json.page.draft;
+check('…and the draft has them all, in order', JSON.stringify(allDraft.modules.map((m) => m.kind)) === JSON.stringify(MODULES.map((m) => m.kind)), allDraft.modules.length);
+const open = async (kind) => {
+  const sec = page.locator(`li.wb-sec[data-kind="${kind}"]`).first();
+  if (!(await sec.getAttribute('data-open') !== null)) await sec.locator('.wb-sec__toggle').click();
+  return sec;
+};
+// Words, as chips.
+const hero = await open('hero');
+await hero.getByRole('textbox', { name: /^Add to Rotating words/ }).fill('transit');
+await hero.getByRole('textbox', { name: /^Add to Rotating words/ }).press('Enter');
+check('words: typed and Enter makes a chip', await hero.locator('.wb-chip', { hasText: 'transit' }).isVisible());
+await hero.getByRole('button', { name: 'Remove “transit”' }).click();
+check('…and ✕ takes it off', !(await hero.locator('.wb-chip', { hasText: 'transit' }).count()));
+await hero.getByRole('button', { name: 'Done' }).click();
+// A list of groups: add, move, remove, Undo.
+const cols = await open('columns');
+await cols.getByRole('button', { name: 'Add a point' }).click();
+await cols.getByRole('textbox', { name: 'Title', exact: true }).last().fill('First sample point');
+await cols.getByRole('button', { name: 'Add a point' }).click();
+await cols.getByRole('textbox', { name: 'Title', exact: true }).last().fill('Second sample point');
+await cols.getByRole('button', { name: 'Move Second sample point up' }).click();
+const sums = async () => cols.locator('.wb-list__sum').allTextContents();
+check('a list: points added and moved', JSON.stringify(await sums()) === '["Second sample point","First sample point"]', JSON.stringify(await sums()));
+await cols.getByRole('button', { name: 'Remove First sample point' }).click();
+await page.locator('.wb-toast').getByRole('button', { name: 'Undo' }).click();
+check('…removed, and Undo puts it back', JSON.stringify(await sums()) === '["Second sample point","First sample point"]', JSON.stringify(await sums()));
+await cols.getByRole('button', { name: 'Done' }).click();
+// A picture: uploaded, then described.
+const pic = await open('image');
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+await pic.locator('input[type="file"]').setInputFiles({ name: 'sample.png', mimeType: 'image/png', buffer: png });
+await pic.locator('.wb-image__thumb img').waitFor({ timeout: 10000 }).catch(() => {});
+const src = await pic.locator('.wb-image__thumb img').getAttribute('src').catch(() => '');
+check('a picture: uploaded, shown, from the site’s own store (/media/…)', /\/media\/[0-9a-f-]{36}$/.test(src), src);
+await pic.getByRole('textbox', { name: /What the picture shows/ }).fill('A sample picture');
+await pic.getByRole('button', { name: 'Done' }).click();
+// A switch, a number, a choice.
+const nl = await open('newsletter');
+await nl.getByLabel('Ask for a mobile number (texts)').check();
+await nl.getByRole('button', { name: 'Done' }).click();
+const ev = await open('events');
+await ev.getByRole('spinbutton', { name: 'How many to show' }).fill('5');
+await ev.getByRole('button', { name: 'Done' }).click();
+const tx = await open('text');
+await tx.getByRole('combobox', { name: 'Background' }).selectOption('ink');
+await tx.getByRole('button', { name: 'Done' }).click();
+await saved();
+const got = Object.fromEntries((await api(`/site/pages/${allId}`)).json.page.draft.modules.map((m) => [m.kind, m.props]));
+check('saved: the chips, the points, the picture, the switch, the number, the choice', got.hero.words.length === 0
+  && JSON.stringify(got.columns.items.map((x) => x.title)) === '["Second sample point","First sample point"]'
+  && /^\/media\//.test(got.image.image.url) && got.image.image.alt === 'A sample picture'
+  && got.newsletter.askPhone === true && got.events.limit === 5 && got.text.tone === 'ink', JSON.stringify([got.columns.items, got.image.image, got.newsletter.askPhone, got.events.limit, got.text.tone]));
+await shot('5b-every-section');
+// Deleted from its builder: the Pages list says so, with Undo.
+await page.locator('.wb-build__actions .wb-more__btn').click();
+await page.getByRole('button', { name: 'Delete this page' }).click();
+await page.waitForURL(/\/website\/pages$/);
+check('deleted from its builder: back on Pages, with Undo', /Deleted “Sample: every section”/.test(await page.locator('.wb-toast').innerText().catch(() => ''))
+  && await page.locator('.wb-toast').getByRole('button', { name: 'Undo' }).isVisible());
 
 // ── Theme: an unreadable pair is blocked; "Fix it" ──
 await page.locator('.wb-tabs').getByRole('link', { name: 'Theme' }).click();
@@ -266,7 +346,7 @@ await page.getByRole('button', { name: 'Save the look' }).click();
 await page.locator('.wb-toast', { hasText: 'new look' }).waitFor({ timeout: 10000 });
 const theme = (await api('/site')).json.settings.theme;
 check('saved: the brand colour and its readable text', theme.colors.brand === '#7fb2ff' && theme.colors.brandInk === ink && ink !== '#ffffff', `${theme.colors.brand} ${theme.colors.brandInk}`);
-pub = await site('/site/town-hall-2030');
+pub = await site('/site/sample-town-hall');
 check('the public page has the new colours', pub.html.includes('--brand:#7fb2ff') && pub.html.includes(`--brand-ink:${ink}`));
 await shot('7-theme');
 

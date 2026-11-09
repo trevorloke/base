@@ -273,6 +273,12 @@ function Builder({ id }) {
     let gone = null;
     change((d) => { const r = removeModule(d.modules, i); gone = r.removed; return { ...d, modules: r.list }; });
     if (!gone) return;
+    // The section's gone, and with it the button that was focused: the next
+    // one takes the focus (or "Add a section").
+    setTimeout(() => {
+      const rows = document.querySelectorAll('.wb-sec__toggle');
+      (rows[i] || rows[i - 1] || document.querySelector('.wb-add'))?.focus();
+    }, 30);
     const label = MODULE_BY_KIND[gone.module.kind]?.label || 'the section';
     say(`Deleted section ${gone.index + 1} (${label})`, {
       undo: () => { change((d) => ({ ...d, modules: putBack(d.modules, gone) })); say(`${label} is back`); },
@@ -529,7 +535,13 @@ function Builder({ id }) {
                     {m.hidden && <p className="wb-note">Hidden: it stays in the draft but isn’t shown on the page.</p>}
                     {general && <p className="wb-field__err">{general.text}</p>}
                     <ModuleForm module={m} errors={errorsFor(m.id)} ctx={ctx}
-                      onChange={(props) => change((d) => ({ ...d, modules: setProps(d.modules, d.modules.findIndex((x) => x.id === m.id), props) }))} />
+                      onChange={(key, v) => change((d) => {
+                        // The section as it is now (by id: it may have moved), not as it was drawn.
+                        const at2 = d.modules.findIndex((x) => x.id === m.id);
+                        if (at2 < 0) return d;
+                        const cur = d.modules[at2].props || {};
+                        return { ...d, modules: setProps(d.modules, at2, { ...cur, [key]: typeof v === 'function' ? v(cur[key]) : v }) };
+                      })} />
                     <div className="wb-sec__foot">
                       <button type="button" className="btn btn-quiet wb-tap" onClick={() => setOpenId(null)}>Done</button>
                     </div>

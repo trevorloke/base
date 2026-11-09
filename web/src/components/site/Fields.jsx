@@ -135,7 +135,7 @@ export function ImageField({ id, label, value, onChange, error, altError, requir
       <Problem id={errId} text={errText} />
       {v.url && (
         <TextField id={`${id}-alt`} label="What the picture shows (for people who can’t see it)" max={300} value={v.alt}
-          error={altError} hint={noAlt ? 'Say it in a few words, like “Volunteers at the Newton bus loop”.' : null}
+          error={altError} hint={noAlt ? 'Say it in a few words, like “Volunteers knocking on doors on a sunny afternoon”.' : null}
           onChange={(alt) => onChange({ ...v, alt })} />
       )}
       {picking && <PicturePicker onClose={() => setPicking(false)} onPick={(p) => { setPicking(false); onChange({ url: p.url, alt: v.alt || '' }); }} />}
@@ -285,10 +285,14 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
   };
   const remove = (i) => {
     const gone = items[i];
-    const next = items.filter((_, k) => k !== i);
-    onChange(next);
+    onChange(items.filter((_, k) => k !== i));
     setOpen(new Set());
-    ctx?.toast?.(`Removed ${itemSummary(f, gone, i)}`, () => onChange([...next.slice(0, i), gone, ...next.slice(i)]));
+    // Undo, later: back at its place in the list as it is then (a function
+    // of the current list, so nothing typed since is lost).
+    ctx?.toast?.(`Removed ${itemSummary(f, gone, i)}`, () => onChange((cur) => {
+      const list = Array.isArray(cur) ? cur : [];
+      return [...list.slice(0, i), gone, ...list.slice(i)];
+    }));
   };
   const add = () => {
     onChange([...items, blankOf(f)]);
@@ -320,7 +324,7 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
                     {f.of.map((sub) => (
                       <Field key={sub.key} f={sub} id={`${id}-${i}-${sub.key}`} path={`${path}[${i}].${sub.key}`}
                         value={item?.[sub.key]} errors={errors} ctx={ctx}
-                        onChange={(v) => onChange(items.map((x, k) => (k === i ? { ...x, [sub.key]: v } : x)))} />
+                        onChange={(v) => onChange(items.map((x, k) => (k === i ? { ...x, [sub.key]: typeof v === 'function' ? v(x?.[sub.key]) : v } : x)))} />
                     ))}
                   </div>
                 )}
@@ -330,7 +334,7 @@ export function ListField({ id, f, value, onChange, errors, path, ctx }) {
         </ol>
       )}
       <button type="button" className="btn wb-tap wb-list__add" disabled={full} onClick={add}>
-        {full ? `That’s the most (${f.max})` : `Add a ${one}`}
+        {full ? `That’s the most (${f.max})` : `Add ${/^[aeiou]/i.test(one) ? 'an' : 'a'} ${one}`}
       </button>
     </fieldset>
   );
@@ -407,7 +411,8 @@ export function Field({ f, id, path, value, onChange, errors, ctx }) {
   }
 }
 
-// A whole section's form.
+// A whole section's form. onChange(key, value) — or (key, current => value)
+// for a change made later (an Undo), so it applies to the section as it is then.
 export function ModuleForm({ module, onChange, errors, ctx }) {
   const def = MODULE_BY_KIND[module.kind];
   const uid = useId();
@@ -417,7 +422,7 @@ export function ModuleForm({ module, onChange, errors, ctx }) {
     <div className="wb-form">
       {def.fields.map((f) => (
         <Field key={f.key} f={f} id={`${domId(uid)}-${domId(module.id)}-${f.key}`} path={f.key} value={props[f.key]}
-          errors={errors} ctx={ctx} onChange={(v) => onChange({ ...props, [f.key]: v })} />
+          errors={errors} ctx={ctx} onChange={(v) => onChange(f.key, v)} />
       ))}
     </div>
   );
