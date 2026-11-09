@@ -3,12 +3,22 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost } from '../api.js';
+import { apiGet, apiPost, ApiError, noAnswer } from '../api.js'; // no signal at all keeps its own words
 import { landing } from '../mode.js';
 
 // Big, thumb-sized controls (auth pages load before any page stylesheet).
 const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
 const AUTH_BUTTON = { width: '100%', minHeight: 52, fontSize: 13, marginTop: 'var(--s-2)' };
+
+// What went wrong, in words that say what to do: a wrong password, a pause
+// after too many tries, or a server that isn't answering (restarting, or its
+// database is) — the last is never the person's fault.
+export const signInTrouble = (err) => {
+  if (err instanceof ApiError && err.status === 401) return 'That email and password don’t match. Check both, or ask your campaign manager to reset your password.';
+  if (err instanceof ApiError && err.status === 429) return 'Too many tries — wait 15 minutes, then try again.';
+  if (err instanceof ApiError && noAnswer(err)) return 'Base isn’t answering right now — it may be restarting. Your password is fine; try again in a minute.';
+  return err.message;
+};
 
 export default function Login({ mode = 'field' }) {
   const navigate = useNavigate();
@@ -29,7 +39,7 @@ export default function Login({ mode = 'field' }) {
       const go = landing(me, mode);
       if (go.href) window.location.assign(go.href); else navigate(go.to);
     } catch (err) {
-      setError(err.message);
+      setError(signInTrouble(err));
     } finally {
       setBusy(false);
     }

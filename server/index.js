@@ -8,7 +8,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import authRoutes from './routes/auth.js';
 import apiRoutes from './routes/api.js';
 import publicRoutes from './routes/public.js';
-import { getDb } from './db/client.js';
+import { getDb, dbReachable } from './db/client.js';
 import { EXTENSIONS } from './ext.js';
 import { startJobRunner, stopJobRunner } from './lib/jobs.js';
 import { staleTimeZoneData } from './lib/tzcheck.js';
@@ -40,7 +40,13 @@ app.use('*', async (c, next) => {
 // commit: which build is live (Render sets RENDER_GIT_COMMIT), so anyone can
 // check a deploy landed — open /api/health and compare with GitHub.
 const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null;
-app.get('/api/health', (c) => c.json({ ok: true, service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, tzdataCurrent: !staleTimeZoneData() }));
+// It asks the database too: a server up with its database down can't sign
+// anyone in, so it says so (503, "database": "not reachable") and the host
+// keeps the old version or restarts it.
+app.get('/api/health', async (c) => {
+  const database = await dbReachable();
+  return c.json({ ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, tzdataCurrent: !staleTimeZoneData() }, database ? 200 : 503);
+});
 app.route('/api/auth', authRoutes);
 app.route('/', publicRoutes); // /u, /bu — no auth
 for (const e of EXTENSIONS) if (e.publicRoutes) app.route('/', e.publicRoutes);
@@ -68,7 +74,12 @@ if (isMain) {
   if (tz) console.warn(`starbase: ${tz}`);
   // Background jobs (ladder steps, A/B winners). STARBASE_JOBS=off disables.
   if (process.env.STARBASE_JOBS !== 'off') {
-    getDb().then((db) => startJobRunner(db, { everyMs: Number(process.env.STARBASE_JOBS_EVERY_MS) || 30_000 }));
+    // A database still starting (or restarting) is tried again, not a crash.
+    const startJobs = () => getDb().then(
+      (db) => startJobRunner(db, { everyMs: Number(process.env.STARBASE_JOBS_EVERY_MS) || 30_000 }),
+      (e) => { console.error(`database not reachable yet (${e.message}); trying again in 10 s`); setTimeout(startJobs, 10_000).unref?.(); },
+    );
+    startJobs();
   }
   // Deploys send SIGTERM: stop accepting requests, then close the database so
   // the embedded store flushes cleanly.

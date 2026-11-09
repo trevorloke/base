@@ -19,7 +19,14 @@ const createPg = async (url) => {
   const ssl = /sslmode=(require|verify)/.test(url) || process.env.PGSSL === '1'
     ? { rejectUnauthorized: process.env.PGSSL_STRICT === '1' }
     : undefined;
-  const pool = new pg.Pool({ connectionString: url, ssl, max: Number(process.env.PG_POOL_MAX) || 10 });
+  const pool = new pg.Pool({
+    connectionString: url, ssl, max: Number(process.env.PG_POOL_MAX) || 10,
+    connectionTimeoutMillis: 10_000, keepAlive: true,
+  });
+  // An idle connection the database drops (a restart, a plan change, its
+  // maintenance) is an error on the pool; unheard it would stop the whole
+  // server. The pool opens a fresh connection on the next query instead.
+  pool.on('error', (e) => console.error(`database: an idle connection dropped (${e.message}); the next query reconnects`));
   const wrap = (client) => ({
     query: async (sql, params = []) => {
       const r = await client.query(sql, params);
@@ -75,9 +82,24 @@ const create = async () => {
   return db;
 };
 
+// A database that couldn't be reached is asked again next time, never
+// remembered as down: it may be restarting and back in a minute.
 export const getDb = () => {
-  if (!dbPromise) dbPromise = create();
+  if (!dbPromise) {
+    const p = create();
+    dbPromise = p;
+    p.catch(() => { if (dbPromise === p) dbPromise = null; });
+  }
   return dbPromise;
+};
+
+// Is the database answering right now? (For /api/health.)
+export const dbReachable = async (ms = 3000) => {
+  try {
+    const db = await getDb();
+    await Promise.race([db.query('select 1'), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
+    return true;
+  } catch { return false; }
 };
 
 // Tests only: swap in a fresh database.
