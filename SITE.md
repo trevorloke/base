@@ -272,7 +272,19 @@ changed), `pop` (the layered heading shadow; on for Imagine Surrey),
 each kept readable) and `mix`. `themeCss` also writes `--action`,
 `--action-ink`, `--muted`, `--brand-soft`, `--field-line`, `--brand-deep`,
 `--danger`, `--accent-on-brand`, `--accent-on-deep`, `--heading-on-accent`,
-`--pop` and `--pop-alt`. The catalogue exports `isSafeUrl`.
+`--ink-soft`, `--accent-on-ink`, `--action-row`, `--pop` and `--pop-alt`.
+The catalogue exports `isSafeUrl`.
+
+Every colour pair the site draws text in is covered: what an admin picks
+is a checked pair (`PAIRS` — links and headings on soft panels among them),
+and every other text colour is worked out from those and kept readable on
+what it is drawn on (soft text on the brand, the deep brand and the Dark
+background; the highlight on each; the events' rows; "Broken" on the error
+colour). A box with its own background (a petition's) has its own text
+colours; nothing tints the background under text (an alert, "signed up",
+a hover). `e2e-site-render.mjs` sweeps themes at the check's edge — every
+module in every background, form errors, thank-yous, the campaign page —
+and reads every piece of text.
 
 A page's `<head>` has an inline `<style>` (the theme's variables) and a
 `<script type="application/ld+json">` (data, never run). A Content Security

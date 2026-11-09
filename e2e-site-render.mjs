@@ -30,7 +30,8 @@ import { createServer } from 'node:http';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { renderSite, readSiteAsset, islandsBuilt } from './server/ext/site/render/index.js';
 import { rewriters } from './server/lib/mount.js';
-import { imagineSurrey, baseSample, samplePost } from './server/test/site-samples.js';
+import { imagineSurrey, baseSample, samplePost, sampleData } from './server/test/site-samples.js';
+import { checkTheme, contrast, mix, PAIRS, SKINS } from './shared/site/theme.js';
 
 const PORT = Number(process.env.PORT) || 5150;
 const SHOTS = process.env.SHOTS || '/tmp/site-render';
@@ -75,6 +76,72 @@ function answerForm(kind, body) {
   return { ok: true };
 }
 
+// ── The theme sweep: every colour pair the site draws text in ──
+// Themes that pass the theme check (theme.js checkTheme — what Website →
+// Theme and site.settings.save let an admin save), made at its edge: each
+// text colour just reaches 4.5:1 on the backgrounds the check names for it
+// (PAIRS), from a random colour; light pages and dark ones. A page with
+// every kind of module, each that takes a background in every one, its
+// forms showing an error, a thank-you and the campaign page are drawn in
+// each, and every piece of text must read (the audit below). Seeded: the
+// same themes every run. Two from the review: a yellow brand under black
+// text (a Dark petition was 1.25:1), and a pale soft-panel colour (links
+// and headings on it were 4.02:1) — each swept only if the check lets it
+// be saved.
+let seed = 20261109;
+const rand = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+const randomColor = (lo = 0, hi = 255) => `#${[0, 1, 2].map(() => Math.round(lo + rand() * (hi - lo)).toString(16).padStart(2, '0')).join('')}`;
+const needs = (fg) => PAIRS.filter((p) => p.fg === fg).map((p) => p.bg);
+const barely = (colors, fg) => {
+  const bgs = needs(fg).map((k) => colors[k]);
+  for (let tries = 0; tries < 40; tries += 1) {
+    const start = randomColor();
+    for (const toward of rand() < 0.5 ? ['#000000', '#ffffff'] : ['#ffffff', '#000000']) {
+      for (let t = 0; t <= 1.0001; t += 0.02) {
+        const c = mix(start, toward, Math.min(1, t));
+        if (bgs.every((bg) => contrast(c, bg) >= 4.5)) return c;
+      }
+    }
+  }
+  return null;
+};
+const THEMES = [
+  { name: 'review: yellow brand, black text on it', theme: { skin: 'base', colors: { brand: '#ffcc00', brandInk: '#000000' } } },
+  { name: 'review: pale soft panels', theme: { skin: 'base', colors: { accent: '#3b3fd8', accentInk: '#ffffff', surface: '#a9b0bb' } } },
+  { name: 'Imagine Surrey', theme: { ...SKINS['imagine-surrey'], logo: { url: '', alt: '' } } },
+  { name: 'Base', theme: { ...SKINS.base } },
+];
+for (let n = 0; THEMES.length < 16 && n < 400; n += 1) {
+  const dark = rand() < 0.35;
+  const paper = dark ? randomColor(0, 60) : randomColor(200, 255);
+  const colors = {
+    paper, surface: mix(paper, dark ? '#ffffff' : '#000000', 0.03 + rand() * 0.14),
+    brand: randomColor(), accent: randomColor(), action: randomColor(), line: mix(paper, dark ? '#ffffff' : '#000000', 0.25),
+  };
+  for (const fg of ['ink', 'link', 'brandInk', 'accentInk', 'actionInk']) colors[fg] = barely(colors, fg);
+  if (Object.values(colors).some((c) => !c)) continue;
+  THEMES.push({ name: `random ${THEMES.length - 3} (${dark ? 'dark' : 'light'} page)`, theme: { skin: 'base', colors, pop: rand() < 0.5 } });
+}
+const TONE_NAMES = ['paper', 'surface', 'brand', 'accent', 'ink'];
+const CLOSED = { ...baseSample.campaign, id: 'c-closed', slug: 'closed-one', title: 'A closed sample pledge', status: 'closed' };
+const SWEEP_DATA = sampleData({ [baseSample.campaign.id]: baseSample.campaign, [CLOSED.id]: CLOSED });
+const SWEEP_PAGE = {
+  id: 'page-sweep', slug: 'home', title: 'Every module', description: '',
+  modules: [
+    ...baseSample.page.modules,
+    ...TONE_NAMES.flatMap((tone) => [
+      { id: `text-${tone}`, kind: 'text', props: { title: `Text on ${tone}`, body: 'Words with [a link](/plan), **bold** and `code`.\n\n> A quote in the text.\n\n## A heading in the text', cta: { label: 'A button', href: '/plan' }, tone } },
+      { id: `band-${tone}`, kind: 'band', props: { title: 'When we organize,', highlight: 'we win', cta: { label: 'Join us', href: '/#m-join' }, tone } },
+      { id: `quote-${tone}`, kind: 'quote', props: { quote: 'A sample quote on this background.', name: 'Sam Example', role: 'Volunteer', photo: { url: '', alt: '' }, tone } },
+      { id: `letter-${tone}`, kind: 'newsletter', props: { title: 'The newsletter', intro: 'News and events.', askPhone: true, buttonLabel: 'Sign up', tone } },
+      { id: `pledge-${tone}`, kind: 'petition', props: { campaign: baseSample.campaign.id, eyebrow: 'Pledge', tone } },
+      { id: `closed-${tone}`, kind: 'petition', props: { campaign: CLOSED.id, eyebrow: '', tone } },
+      { id: `gone-${tone}`, kind: 'petition', props: { campaign: 'c-gone', eyebrow: '', tone } },
+      { id: `help-${tone}`, kind: 'volunteer', props: { title: 'Volunteer', intro: 'Tell us how you would like to help.', roles: ['Doorknocking', 'Phoning'], askAvailability: true, tone } },
+    ]),
+  ],
+};
+
 // Under a client's path on a shared domain (BASE_PATH, server/lib/mount.js):
 // /imaginesurrey/base/… is the Base sample with the client's path taken off
 // on the way in and put back in front of href, src, action and redirects on
@@ -101,6 +168,24 @@ const server = createServer(async (req, res) => {
   if (media && IMAGES[media[1]]) {
     const file = new URL(`./apps/web/public/images/${IMAGES[media[1]]}`, import.meta.url);
     return send(200, media[1] === 'is-logo' ? 'image/webp' : 'image/jpeg', readFileSync(file), { 'cache-control': 'max-age=3600' });
+  }
+  // The sweep: /sweep/<n>/ (every module) and /sweep/<n>/act (the campaign page) in THEMES[n].
+  const sw = /^\/sweep\/(\d+)(\/.*)?$/.exec(url.pathname);
+  if (sw && THEMES[Number(sw[1])]) {
+    const root = `/sweep/${sw[1]}/`;
+    const rest = sw[2] || '/';
+    if (rest.startsWith('/site-assets/')) {
+      const a = readSiteAsset(rest.slice('/site-assets/'.length) + url.search);
+      return a ? send(200, a.type, a.body, { 'cache-control': a.cache }) : send(404, 'text/plain', 'no such file');
+    }
+    const site = { ...baseSample.site, theme: THEMES[Number(sw[1])].theme };
+    const sent = url.searchParams.get('sent') || undefined;
+    const error = url.searchParams.get('error') || undefined;
+    const ctx = { root, path: rest, origin: ORIGIN, islands: true, sent, error, preview: url.searchParams.has('preview') };
+    const r = rest === '/act'
+      ? renderSite({ kind: 'campaign', site, campaign: baseSample.campaign, data: SWEEP_DATA, ctx })
+      : renderSite({ kind: 'page', site, page: SWEEP_PAGE, data: SWEEP_DATA, ctx: { ...ctx, path: '/' } });
+    return send(r.status, 'text/html; charset=utf-8', r.html);
   }
   const m = /^\/(is|base)(\/.*)?$/.exec(url.pathname);
   if (!m) return send(404, 'text/plain', 'not found');
@@ -537,6 +622,28 @@ for (const key of ['is', 'base']) {
   check('keyboard: the first Tab is “Skip to content”', await page.evaluate(() => document.activeElement?.classList.contains('skip-link') && getComputedStyle(document.activeElement).top !== '-80px'));
   await page.keyboard.press('Enter');
   check('keyboard: skipping lands on the main content', await page.evaluate(() => location.hash === '#main'));
+  await page.context().close();
+}
+
+// ── The theme sweep (THEMES, above): whatever an admin can save reads ──
+{
+  const page = await newPage();
+  const swept = [];
+  const refused = [];
+  const failures = [];
+  for (const [i, t] of THEMES.entries()) {
+    if (checkTheme(t.theme).problems.length) { refused.push(t.name); continue; }
+    for (const path of ['/?error=email&preview', '/?sent=rsvp', '/act']) {
+      await page.goto(`${ORIGIN}/sweep/${i}${path}`, { waitUntil: 'domcontentloaded' });
+      await hydrated(page).catch(() => {});
+      const a = await audit(page);
+      if (a.contrast.length) failures.push(`${t.name} ${path}: ${a.contrast.slice(0, 5).join(' | ')}${a.contrast.length > 5 ? ` (+${a.contrast.length - 5} more)` : ''}`);
+    }
+    swept.push(t.name);
+  }
+  console.log(`      swept ${swept.length} themes; the check refused: ${refused.join(', ') || 'none'}`);
+  for (const f of failures) console.log(`      ${f}`);
+  check(`theme sweep: in ${swept.length} themes the check lets through, every piece of text on every module, tone, form state and the campaign page reads at AA`, swept.length >= 12 && failures.length === 0, failures.slice(0, 3).join(' || '));
   await page.context().close();
 }
 

@@ -507,8 +507,8 @@ test('theme: the action colour and the heading shadow are additive; derived colo
   assert.ok(contrast(dark.muted, '#111318') >= 4.5 && contrast(dark.danger, '#111318') >= 4.5);
   const css = themeCss({ skin: 'imagine-surrey' });
   assert.match(css, /--action:#d81b1e;--action-ink:#ffffff;/);
-  assert.match(css, /--pop:#d81b1e;--pop-alt:#002957\}/);
-  assert.match(themeCss({ skin: 'base' }), /--pop:transparent;--pop-alt:transparent\}/);
+  assert.match(css, /--pop:#d81b1e;--pop-alt:#002957[;}]/);
+  assert.match(themeCss({ skin: 'base' }), /--pop:transparent;--pop-alt:transparent[;}]/);
   assert.ok(checkTheme({ skin: 'base', colors: { action: '#ffff00', actionInk: '#ffffff' } }).problems.some((p) => p.pair.fg === 'actionInk'));
 });
 

@@ -6,8 +6,11 @@
    --action-ink, --ink, --paper, --surface, --line, --link, --radius,
    --font-heading, --font-body, and the colours worked out from them
    (--muted, --brand-soft, --brand-deep, --field-line, --danger,
-   --accent-on-brand, --accent-on-deep, --pop, --pop-alt). No colour, face or
-   corner is fixed here except the promise tracker's status colours. */
+   --accent-on-brand, --accent-on-deep, --ink-soft, --accent-on-ink,
+   --action-row, --pop, --pop-alt). No colour, face or corner is fixed here
+   except the promise tracker's status colours. Text is only ever drawn in a
+   pair the theme check names (theme.js PAIRS) or a derived colour kept
+   readable where it is used: no tints under text. */
 
 /* ── Faces (self-hosted, SIL Open Font License) ───────────────────────── */
 @font-face {
@@ -105,6 +108,9 @@
   --danger: #b42318;
   --accent-on-brand: #ffcf33;
   --accent-on-deep: #ffcf33;
+  --ink-soft: #d1d2d4;
+  --accent-on-ink: #ffcf33;
+  --action-row: #2a2d9c;
   --pop: transparent;
   --pop-alt: transparent;
   --btn-radius: calc(var(--radius) * 0.6);
@@ -277,12 +283,12 @@ html.js .no-js-only {
 }
 .tone-ink {
   --text: var(--paper);
-  --soft: color-mix(in srgb, var(--paper) 80%, var(--ink));
+  --soft: var(--ink-soft);
   --heading: var(--paper);
   --cta: var(--accent);
   --cta-ink: var(--accent-ink);
   --ghost: var(--paper);
-  --hl: var(--accent);
+  --hl: var(--accent-on-ink);
   --link-c: var(--paper);
   --pop-c: var(--pop);
   background: var(--ink);
@@ -593,7 +599,7 @@ html[data-heading="serif"] .display {
 .btn--ghost:hover,
 .btn--outline:hover {
   filter: none;
-  background: color-mix(in srgb, var(--ghost) 10%, transparent);
+  box-shadow: inset 0 0 0 2px var(--ghost);
 }
 .btn-row {
   display: flex;
@@ -1303,7 +1309,8 @@ select.input {
   padding: 14px 16px;
   border-radius: calc(var(--radius) * 0.8);
   border: 2px solid var(--danger);
-  background: color-mix(in srgb, var(--danger) 8%, var(--paper));
+  box-shadow: inset 6px 0 0 var(--danger);
+  background: var(--paper);
   color: var(--ink);
   font-size: 15px;
   font-weight: 600;
@@ -1526,6 +1533,8 @@ select.input {
 }
 
 /* ── Petitions and pledges ────────────────────────────────────────────── */
+/* The box has its own background, so its own text colours too — never the
+   section's (the accent's text on a soft panel, the brand's on the ink). */
 .campaign-box {
   display: flex;
   flex-wrap: wrap;
@@ -1534,6 +1543,13 @@ select.input {
   border-radius: calc(var(--radius) * 1.2);
   background: var(--surface);
   border: 2px solid var(--line);
+  --text: var(--ink);
+  --soft: var(--muted);
+  --heading: var(--link);
+  --hl: var(--link);
+  --link-c: var(--link);
+  --ghost: var(--link);
+  color: var(--ink);
 }
 .tone-surface .campaign-box {
   background: var(--paper);
@@ -1545,10 +1561,19 @@ select.input {
   --text: var(--brand-ink);
   --soft: var(--brand-soft);
   --hl: var(--accent-on-deep);
+  --link-c: var(--brand-ink);
+  --ghost: var(--brand-ink);
   color: var(--brand-ink);
 }
 .tone-ink.petition--dark .campaign-box {
   background: var(--ink);
+  --heading: var(--paper);
+  --text: var(--paper);
+  --soft: var(--ink-soft);
+  --hl: var(--accent-on-ink);
+  --link-c: var(--paper);
+  --ghost: var(--paper);
+  color: var(--paper);
 }
 .campaign-copy {
   flex: 1 1 360px;
@@ -1861,7 +1886,7 @@ html[data-heading="system"] .campaign-title {
   gap: 18px;
   padding: 20px 22px;
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--brand-deep) 35%, transparent);
+  background: var(--action-row);
   border: 1px solid color-mix(in srgb, var(--text) 30%, transparent);
 }
 .event-row .info,
@@ -1950,7 +1975,8 @@ html[data-heading="system"] .campaign-title {
   min-height: 48px;
   padding: 8px 14px;
   border-radius: var(--btn-radius);
-  background: color-mix(in srgb, var(--accent) 35%, var(--paper));
+  background: var(--paper);
+  border: 2px solid var(--accent);
   color: var(--ink);
   font-weight: 700;
 }
@@ -2176,7 +2202,7 @@ html[data-heading="inter"] .rail-title {
 .status-broken {
   --status: var(--danger);
   background: var(--danger);
-  color: #fff;
+  color: var(--paper);
 }
 .status-pending {
   --status: var(--line);
@@ -2519,7 +2545,7 @@ html[data-heading="inter"] .rail-title {
   cursor: pointer;
 }
 .share-sheet__link:hover {
-  background: color-mix(in srgb, var(--link) 10%, var(--paper));
+  box-shadow: inset 0 0 0 2px var(--link);
 }
 .share-sheet__link--whatsapp {
   background: var(--link);
@@ -2633,8 +2659,7 @@ html[data-heading="inter"] .rail-title {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--brand-ink) 10%, transparent);
-  border: 1px solid color-mix(in srgb, var(--brand-ink) 24%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-ink) 40%, transparent);
   font-size: 14px;
   font-weight: 800;
   letter-spacing: 0.02em;
