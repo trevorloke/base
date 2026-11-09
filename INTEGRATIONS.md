@@ -230,7 +230,13 @@ What happens:
   *Got it*.
 - **A refund or a dispute in Stripe**: a full refund voids the gift and its
   receipt (refunded dues void the membership); a partial refund and an open
-  dispute are flagged under Needs you; a lost dispute voids the gift.
+  dispute are flagged under Needs you; a lost dispute voids the gift. A
+  dispute can be for only part of a payment; when such a dispute is lost,
+  the gift is flagged (void it and log what was kept) rather than voided.
+  Over the limit, what the bank didn't take back is still with the
+  campaign: Needs you and Today show it until the treasurer returns it to
+  the donor by hand (Stripe won't refund a payment with a lost dispute) and
+  taps *Got it*.
 
 **Set it up — test mode first, on staging:**
 

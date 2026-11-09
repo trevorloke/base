@@ -4,9 +4,10 @@
 //   GET /payments  {
 //     stripe:  { ready, mode: 'live' | 'test' | null },
 //     needs:   [what a treasurer must see: refunding or refunded over the
-//               limit, a refund that didn't go through, a dispute, a refund
-//               made in Stripe — each with a plain line, and can_ack when
-//               "Got it" is all it needs],
+//               limit, a refund that didn't go through, a dispute (lost for
+//               part of it: what's still to log, or to return by hand), a
+//               refund made in Stripe — each with a plain line, and can_ack
+//               when "Got it" is all it needs],
 //     recent:  [the latest online payments and how each stands],
 //     gifts:   { [gift_id]: { status, word } }  — the ledger's chips,
 //     monthly: [every monthly gift running — online or pledged on a form —
@@ -45,6 +46,22 @@ export const wordOf = (r) => (r.status === 'refunded' && r.over_limit ? 'Returne
 // and never "the gift" of a payment that has none (over the limit, or its
 // donor's record deleted).
 const NO_DONOR_GIFT = 'No gift was logged online for it (the donor’s record was deleted).';
+
+// A lost dispute: what the bank took back (all of it on a row from before
+// dispute_cents was kept), what was refunded, and what the campaign kept.
+const afterLoss = (r) => {
+  const amount = Number(r.amount_cents);
+  const back = r.dispute_cents == null ? amount : Number(r.dispute_cents);
+  const refunded = Number(r.refunded_cents || 0);
+  return { amount, back, refunded, kept: amount - refunded - back };
+};
+
+// Over the limit, a dispute lost for only part of it: the rest is still with
+// the campaign, in front of the treasurer until they say Got it — however
+// long that takes.
+const STILL_HELD = `(sp.status = 'dispute_lost' and sp.over_limit and sp.acknowledged_at is null
+  and sp.amount_cents - sp.refunded_cents - coalesce(sp.dispute_cents, sp.amount_cents) > 0)`;
+
 const needOf = (r, tz) => {
   const amt = money(r.amount_cents);
   const acked = !!r.acknowledged_at;
@@ -56,7 +73,7 @@ const needOf = (r, tz) => {
     case 'disputed': {
       const due = r.dispute_due_by ? new Date(r.dispute_due_by).toLocaleDateString('en-CA', { timeZone: tz, month: 'long', day: 'numeric' }) : null;
       const ask = `The card holder disputed this payment with their bank. Answer in Stripe${due ? ` by ${due}` : ''}`;
-      if (r.over_limit) return { line: `${ask}. It was over this year’s limit, so no gift was logged — if the bank doesn’t give the money back, it’s refunded once the dispute is settled.`, can_ack: false };
+      if (r.over_limit) return { line: `${ask}. It was over this year’s limit, so no gift was logged. If the dispute is won, it’s refunded to their card.`, can_ack: false };
       if (!r.gift_id) return { line: `${ask}. ${NO_DONOR_GIFT}`, can_ack: false };
       return { line: `${ask} — the gift counts until it’s settled.`, can_ack: false };
     }
@@ -74,7 +91,15 @@ const needOf = (r, tz) => {
       return { line: `${money(r.refunded_cents)} of ${amt} was refunded in Stripe. The gift still says ${amt}: void it and log ${money(Number(r.amount_cents) - Number(r.refunded_cents))}.`, can_ack: true };
     case 'dispute_lost': {
       if (acked) return null;
-      const lost = 'The bank gave the money back to the card holder (dispute lost)';
+      const { amount, back, refunded, kept } = afterLoss(r);
+      const lost = back < amount
+        ? `The bank gave ${money(back)} of ${amt} back to the card holder (dispute lost)${refunded > 0 ? `, and ${money(refunded)} was refunded in Stripe` : ''}`
+        : 'The bank gave the money back to the card holder (dispute lost)';
+      if (kept > 0) {
+        if (r.over_limit) return { line: `${lost}. The other ${money(kept)} was over this year’s limit and is still with the campaign. Stripe won’t refund a payment with a lost dispute: return it to the donor by hand, then Got it.`, can_ack: true };
+        if (!r.gift_id) return { line: `${lost}. ${NO_DONOR_GIFT} Only ${money(kept)} of it was kept: log that by hand.`, can_ack: true };
+        return { line: `${lost}. The gift still says ${amt}: void it and log ${money(kept)}.`, can_ack: true };
+      }
       if (r.over_limit) return { line: `${lost}. It was over this year’s limit, so no gift was logged.`, can_ack: true };
       if (!r.gift_id) return { line: `${lost}. ${NO_DONOR_GIFT}`, can_ack: true };
       return { line: `${lost} — the gift is void.`, can_ack: true };
@@ -125,7 +150,7 @@ api.get('/payments', async (c) => {
   )).rows;
   const open = (await db.query(
     `select ${ROW} ${FROM} where sp.workspace_id = $1
-       and (sp.status in ('over_limit', 'refund_failed', 'disputed')
+       and (sp.status in ('over_limit', 'refund_failed', 'disputed') or ${STILL_HELD}
          or (sp.status in ('refunded', 'partly_refunded', 'dispute_lost', 'no_donor') and sp.acknowledged_at is null
              and sp.updated_at > now() - interval '90 days'))
      order by sp.updated_at desc limit 50`, [ws],
@@ -162,16 +187,17 @@ export const deskOnlyReads = ['/payments'];
 // Today's Needs you (the brief hook): a payment that landed over the limit
 // rides with the gifts over the limit — the same words, "Over limit", and a
 // tap to Donations, where Needs you says what happened — until it's
-// refunded (a dispute on it doesn't take it off) and a treasurer has said
+// refunded (a dispute on it doesn't take it off; one lost for only part of
+// it leaves the rest for the treasurer to return) and a treasurer has said
 // Got it. Desk roles only.
 export const briefOverLimit = async (db, ctx, body) => {
   if (!MONEY_ROLES.includes(ctx.role) || !Array.isArray(body.flagged) || body.money == null) return;
   const rows = (await db.query(
-    `select sp.id, sp.person_id, sp.gift_id, sp.amount_cents, sp.paid_on, sp.status, sp.over_limit, sp.refund_error, sp.donor_emailed_at,
-            sp.donor_email_note, sp.acknowledged_at, sp.dispute_due_by, pe.name
+    `select sp.id, sp.person_id, sp.gift_id, sp.amount_cents, sp.refunded_cents, sp.paid_on, sp.status, sp.over_limit, sp.refund_error,
+            sp.donor_emailed_at, sp.donor_email_note, sp.acknowledged_at, sp.dispute_due_by, sp.dispute_cents, pe.name
        from stripe_payments sp left join persons pe on pe.id = sp.person_id
       where sp.workspace_id = $1 and sp.over_limit
-        and (sp.status in ('over_limit', 'refund_failed', 'disputed')
+        and (sp.status in ('over_limit', 'refund_failed', 'disputed') or ${STILL_HELD}
           or (sp.status = 'refunded' and sp.acknowledged_at is null and sp.updated_at > now() - interval '90 days'))
       order by sp.paid_at desc limit 10`, [ctx.workspaceId],
   )).rows;

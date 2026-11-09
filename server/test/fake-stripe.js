@@ -31,7 +31,8 @@
 //   cancel(subscriptionId)                the subscription deleted
 //   refund(paymentIntent, amount?, { send })  a refund made in the dashboard
 //   dispute(paymentIntent, 'created' | 'won' | 'lost' | 'warning_needs_response'
-//           | 'warning_closed', { id, send })   an inquiry is a warning_ one
+//           | 'warning_closed', { id, send, amount })   an inquiry is a warning_ one;
+//           amount: a dispute for less than the payment (the whole by default)
 //   (send: false — the event, signed, to send later with send())
 //   expire(sessionId)                     the checkout left to expire
 //   send(type, object, { id })            any event (the same id twice = a repeat)
@@ -191,9 +192,10 @@ export const startFakeStripe = async ({ port = 0, secret = process.env.STRIPE_WE
       const refunded = already + amt;
       return sendOrKeep('charge.refunded', chargeFor(paymentIntent, { amount: total, amount_refunded: refunded, refunded: refunded >= total, refunds: { data: [refunds.at(-1)] } }), deliverNow);
     },
-    dispute: async (paymentIntent, status = 'created', { id, send: deliverNow = true } = {}) => {
+    dispute: async (paymentIntent, status = 'created', { id, send: deliverNow = true, amount = null } = {}) => {
       const opening = status === 'created' || status === 'warning_needs_response';
-      const d = { id: id || next('dp'), object: 'dispute', charge: chargeOf(paymentIntent), payment_intent: paymentIntent, amount: api.amountOf(paymentIntent), reason: 'fraudulent',
+      const d = { id: id || next('dp'), object: 'dispute', charge: chargeOf(paymentIntent), payment_intent: paymentIntent,
+        amount: amount ?? api.amountOf(paymentIntent), currency: 'cad', reason: 'fraudulent',
         status: status === 'created' ? 'needs_response' : status, evidence_details: { due_by: now() + 7 * 86400 } };
       return sendOrKeep(opening ? 'charge.dispute.created' : 'charge.dispute.closed', d, deliverNow);
     },
@@ -242,7 +244,7 @@ a{display:inline-block;margin-top:16px;min-height:48px;line-height:48px;color:#6
         if (req.method === 'POST' && url.pathname.startsWith('/__')) {
           const name = url.pathname.slice(3);
           const fn = { pay: () => api.pay(params.session), invoice: () => api.invoice(params.subscription, params), cancel: () => api.cancel(params.subscription),
-            refund: () => api.refund(params.payment_intent, params.amount ?? null), dispute: () => api.dispute(params.payment_intent, params.status),
+            refund: () => api.refund(params.payment_intent, params.amount ?? null), dispute: () => api.dispute(params.payment_intent, params.status, { amount: params.amount ?? null }),
             expire: () => api.expire(params.session), send: () => send(params.type, params.object, params), failRefunds: () => api.failRefunds(params.fail ?? false),
             endpoints: () => api.endpoints(params.list || []) }[name];
           if (!fn) return notFound('control');
