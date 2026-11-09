@@ -289,6 +289,23 @@ one tap away under **More**.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
 
+- **Website (the admin)** — **Website** in the desk's menu (managers, or
+  whoever a manager grants the Website area). **Overview**: live or not,
+  where it is (**View site**), this week's sign-ups. **Pages → New page**:
+  in its builder **+ Add a section** (Hero, Text block, Newsletter…), type
+  in each one's boxes (it says *Saved* by itself), drag a section by its
+  handle (or tap the handle, then *Move here*; or ⋯ → *Move up*), ⋯ →
+  *Hide from the page*, ⋯ → *Delete* then **Undo**. **Preview** opens the
+  draft in a new tab (and beside the editor on a wide screen). Add a
+  *Petition or pledge* without picking one and **Publish**: it says which
+  section and which box; pick one and publish — the page is at
+  `/site/<its address>`. **Theme**: make the brand colour light (white text
+  on it gets too hard to read) — *Save the look* is blocked until **Fix it**.
+  **Petitions and pledges**: signatures against the goal, *See who signed*.
+  A volunteer opening `/admin/website` is told it isn't theirs. Tests:
+  `server/test/site-builder.test.js`, `server/test/site-website.test.js`;
+  in a browser: `e2e-site-admin.mjs`.
+
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
   **Today · Map · Calls · Shifts**.

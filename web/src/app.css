@@ -577,6 +577,12 @@ html:has(.auth-page) body { background: transparent; }
   .tabbar[data-count='8'] { gap: 0; padding-left: var(--s-1); padding-right: var(--s-1); }
   .tabbar[data-count='8'] a { font-size: 10.5px; padding-left: 2px; padding-right: 2px; }
 }
+/* Nine desk tabs (a manager's, with Website): 10px labels, whole at 360px. */
+@media (max-width: 720px) {
+  .tabbar[data-count='9'] { gap: 0; padding-left: var(--s-1); padding-right: var(--s-1); }
+  .tabbar[data-count='9'] a { padding-left: 1px; padding-right: 1px; }
+  .tabbar[data-count='9'] .tab-label { font-size: 10px; }
+}
 /* Very narrow phones (≤ 359px): seven 10.5px labels still fit whole. */
 @media (max-width: 359px) {
   .tabbar { padding-left: var(--s-1); padding-right: var(--s-1); }
