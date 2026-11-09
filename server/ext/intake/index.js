@@ -167,6 +167,34 @@ publicRoutes.get('/in/v1/ping', (c) => {
   return c.json({ ok: true, campaign: k.workspace_name, key: k.name });
 });
 
+// Who a website person is on file as — here and for the site's own forms
+// (ext/site): the same email (the oldest record with it); with no email,
+// the same name and phone digits. → { person, by: 'email' | 'phone' } | null.
+// Each lookup is indexed (db/schema.js): a city's voter file is never read
+// whole for one sign-up. The name and phone key is looser than the rule
+// (computed in SQL on both sides, so it never misses); the rule runs here.
+const KEY_NAME_PHONE = (n, p) => `regexp_replace(lower(${n}), '[^[:alnum:]]+', '', 'g') || '|' || regexp_replace(${p}, '[^0-9]+', '', 'g')`;
+const MATCH_COLS = 'id, name, email, phone, address, house_number, unit, city, postal, lat, tags, attrs';
+export const matchWebsitePerson = async (tx, ws, { email, phone, name }) => {
+  if (lower(email)) {
+    const r = (await tx.query(
+      `select ${MATCH_COLS} from persons where workspace_id = $1 and deleted_at is null and lower(email) = $2 order by created_at limit 1`,
+      [ws, lower(email)],
+    )).rows[0];
+    return r ? { person: r, by: 'email' } : null;
+  }
+  if (!digits(phone) || !nameKey(name)) return null;
+  const nk = nameKey(name);
+  const rows = (await tx.query(
+    `select ${MATCH_COLS} from persons where workspace_id = $1 and deleted_at is null
+        and ${KEY_NAME_PHONE('name', 'phone')} = ${KEY_NAME_PHONE('$2::text', '$3::text')}
+      order by created_at limit 50`,
+    [ws, name, norm(phone)],
+  )).rows;
+  const r = rows.find((x) => nameKey(x.name) === nk && digits(x.phone) === digits(phone));
+  return r ? { person: r, by: 'phone' } : null;
+};
+
 // One person in: match or create, then the newsletter and the request.
 // The website forwards whatever a visitor typed, so nothing here trusts it
 // with someone else's record: only the same email fills blanks on a match;
@@ -177,17 +205,9 @@ const takeIn = async (tx, ws, p, emit) => {
   const source = slug(p.source || 'website') || 'website';
   const tags = [...new Set([source, ...(p.tags || []).map(tagAsSent).filter(Boolean), ...(p.newsletter ? ['newsletter'] : [])])];
   const addr = p.address ? civic({ address: norm(p.address) }) : null;
-  const cand = (await tx.query(
-    `select id, name, email, phone, address, house_number, unit, city, postal, lat, tags from persons
-      where workspace_id = $1 and deleted_at is null
-        and ((lower(email) = $2 and $2 <> '') or (regexp_replace(coalesce(phone, ''), '\\D', '', 'g') = $3 and $3 <> ''))
-      order by created_at limit 50`,
-    [ws, lower(p.email), digits(p.phone)],
-  )).rows;
-  const nk = nameKey(name);
-  const byEmail = p.email ? cand.find((r) => lower(r.email) === lower(p.email)) : null;
-  const byPhone = !p.email && p.phone ? cand.find((r) => nameKey(r.name) === nk && digits(r.phone) === digits(p.phone)) : null;
-  const match = byEmail || byPhone || null;
+  const found = await matchWebsitePerson(tx, ws, { email: p.email, phone: p.phone, name });
+  const byEmail = found?.by === 'email' ? found.person : null;
+  const match = found?.person || null;
   let personId;
   if (match) {
     personId = match.id;
