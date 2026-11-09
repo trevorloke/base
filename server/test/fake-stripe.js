@@ -15,7 +15,9 @@
 //   POST /v1/checkout/sessions            a session (one per idempotency key)
 //   GET  /v1/checkout/sessions[/:id]      list one, or read one
 //   GET  /v1/subscriptions/:id, /v1/invoices/:id
-//   GET  /v1/invoice_payments?invoice=…   the invoice's payment intent
+//   GET  /v1/payment_intents/:id          a payment (a gift's carries our ids)
+//   GET  /v1/invoice_payments?invoice=…   the invoice's payment intent — or
+//        ?payment[payment_intent]=…       the invoice a payment intent paid
 //   GET  /v1/refunds?payment_intent=…     refunds so far
 //   POST /v1/refunds                      a refund (one per idempotency key)
 //   GET  /v1/webhook_endpoints            what Settings → Services checks
@@ -24,10 +26,13 @@
 // success address (a monthly gift: the checkout, then the first invoice).
 // For tests, in code or over HTTP (POST /__name with JSON):
 //   pay(sessionId)                        as if paid on the hosted page
-//   invoice(subscriptionId, { amount })   next month's invoice, paid
+//   invoice(subscriptionId, { amount, send })  next month's invoice, paid
+//                                         (send: false — made, its event not sent)
 //   cancel(subscriptionId)                the subscription deleted
-//   refund(paymentIntent, amount?)        a refund made in the dashboard
-//   dispute(paymentIntent, 'created' | 'won' | 'lost')
+//   refund(paymentIntent, amount?, { send })  a refund made in the dashboard
+//   dispute(paymentIntent, 'created' | 'won' | 'lost' | 'warning_needs_response'
+//           | 'warning_closed', { id, send })   an inquiry is a warning_ one
+//   (send: false — the event, signed, to send later with send())
 //   expire(sessionId)                     the checkout left to expire
 //   send(type, object, { id })            any event (the same id twice = a repeat)
 //   failRefunds(code | false)             POST /v1/refunds fails (503, or a 4xx code)
@@ -60,6 +65,8 @@ export const startFakeStripe = async ({ port = 0, secret = process.env.STRIPE_WE
   const sessions = new Map();
   const subscriptions = new Map();
   const invoices = new Map();
+  const paymentIntents = new Map();
+  const charges = new Map(); // payment intent → its one charge
   const refunds = [];
   const delivered = [];
   const idem = new Map();
@@ -87,13 +94,23 @@ export const startFakeStripe = async ({ port = 0, secret = process.env.STRIPE_WE
     const pi = next('pi');
     const paidAt = now();
     const inv = legacy
-      ? { id, object: 'invoice', subscription: sub.id, subscription_details: { metadata: sub.metadata }, payment_intent: pi, charge: next('ch'),
+      ? { id, object: 'invoice', subscription: sub.id, subscription_details: { metadata: sub.metadata }, payment_intent: pi, charge: chargeOf(pi),
           amount_paid: amount, currency: 'cad', customer: sub.customer, customer_email: sub.email, status: 'paid', status_transitions: { paid_at: paidAt } }
       : { id, object: 'invoice', parent: { type: 'subscription_details', subscription_details: { subscription: sub.id, metadata: sub.metadata } },
           amount_paid: amount, currency: 'cad', customer: sub.customer, customer_email: sub.email, status: 'paid', status_transitions: { paid_at: paidAt } };
     invoices.set(id, { ...inv, _pi: pi });
+    // A month's payment carries none of our ids: the subscription does.
+    paymentIntents.set(pi, { id: pi, object: 'payment_intent', amount, currency: 'cad', status: 'succeeded', metadata: {},
+      latest_charge: chargeOf(pi), ...(legacy ? { invoice: id } : {}) });
     return { inv, pi };
   };
+
+  // A payment intent's one charge (what a refund and a dispute name).
+  const chargeOf = (pi) => {
+    if (!charges.has(pi)) charges.set(pi, next('ch'));
+    return charges.get(pi);
+  };
+  const invoiceOfIntent = (pi) => [...invoices.values()].find((i) => i._pi === pi || i.payment_intent === pi) || null;
 
   const complete = (s) => {
     s.status = 'complete';
@@ -107,6 +124,9 @@ export const startFakeStripe = async ({ port = 0, secret = process.env.STRIPE_WE
       s.customer = sub.customer;
     } else {
       s.payment_intent = next('pi');
+      // checkoutFor's payment_intent_data.metadata: our ids ride on the payment too.
+      paymentIntents.set(s.payment_intent, { id: s.payment_intent, object: 'payment_intent', amount: s.amount_total, currency: 'cad',
+        status: 'succeeded', metadata: s.params.payment_intent_data?.metadata || {}, latest_charge: chargeOf(s.payment_intent) });
     }
     return s;
   };
@@ -116,8 +136,16 @@ export const startFakeStripe = async ({ port = 0, secret = process.env.STRIPE_WE
     return rest;
   };
 
+  // A charge as a refund or dispute event carries it (older API versions name its invoice).
+  const chargeFor = (pi, extra) => {
+    const inv = invoiceOfIntent(pi);
+    return { id: chargeOf(pi), object: 'charge', payment_intent: pi, ...(legacy && inv ? { invoice: inv.id } : {}), ...extra };
+  };
+  // An event now, or (send: false) one to send later.
+  const sendOrKeep = (type, object, send) => (send ? api.send(type, object) : { type, object });
+
   const api = {
-    calls, sessions, refunds, delivered, subscriptions, invoices,
+    calls, sessions, refunds, delivered, subscriptions, invoices, paymentIntents,
     get url() { return base; },
     send,
     // Paid, but nothing sent yet (to deliver events out of order).
@@ -136,10 +164,11 @@ export const startFakeStripe = async ({ port = 0, secret = process.env.STRIPE_WE
       }
       return out;
     },
-    invoice: async (subscriptionId, { amount } = {}) => {
+    invoice: async (subscriptionId, { amount, send: deliverNow = true } = {}) => {
       const sub = subscriptions.get(subscriptionId);
       if (!sub) throw new Error(`no such subscription ${subscriptionId}`);
       const { inv, pi } = invoiceFor(sub, amount ?? sub.amount);
+      if (!deliverNow) return { invoice: inv, paymentIntent: pi };
       const r = await send('invoice.paid', inv);
       return { ...r, invoice: inv, paymentIntent: pi };
     },
@@ -154,19 +183,22 @@ export const startFakeStripe = async ({ port = 0, secret = process.env.STRIPE_WE
       return send('checkout.session.expired', sessionOut(s));
     },
     // A refund made in Stripe's dashboard (the whole payment unless an amount).
-    refund: async (paymentIntent, amount = null) => {
+    refund: async (paymentIntent, amount = null, { send: deliverNow = true } = {}) => {
       const total = api.amountOf(paymentIntent);
       const already = refunds.filter((r) => r.payment_intent === paymentIntent).reduce((x, r) => x + r.amount, 0);
       const amt = amount ?? total - already;
       refunds.push({ id: next('re'), object: 'refund', status: 'succeeded', amount: amt, payment_intent: paymentIntent, metadata: {} });
       const refunded = already + amt;
-      return send('charge.refunded', { id: next('ch'), object: 'charge', payment_intent: paymentIntent, amount: total, amount_refunded: refunded, refunded: refunded >= total, refunds: { data: [refunds.at(-1)] } });
+      return sendOrKeep('charge.refunded', chargeFor(paymentIntent, { amount: total, amount_refunded: refunded, refunded: refunded >= total, refunds: { data: [refunds.at(-1)] } }), deliverNow);
     },
-    dispute: async (paymentIntent, status = 'created', { id } = {}) => {
-      const d = { id: id || next('dp'), object: 'dispute', charge: next('ch'), payment_intent: paymentIntent, amount: api.amountOf(paymentIntent), reason: 'fraudulent',
+    dispute: async (paymentIntent, status = 'created', { id, send: deliverNow = true } = {}) => {
+      const opening = status === 'created' || status === 'warning_needs_response';
+      const d = { id: id || next('dp'), object: 'dispute', charge: chargeOf(paymentIntent), payment_intent: paymentIntent, amount: api.amountOf(paymentIntent), reason: 'fraudulent',
         status: status === 'created' ? 'needs_response' : status, evidence_details: { due_by: now() + 7 * 86400 } };
-      return send(status === 'created' ? 'charge.dispute.created' : 'charge.dispute.closed', d);
+      return sendOrKeep(opening ? 'charge.dispute.created' : 'charge.dispute.closed', d, deliverNow);
     },
+    // A payment intent's one charge id.
+    chargeOf,
     // How much a payment intent was for (a session's total, or an invoice's).
     amountOf: (pi) => {
       for (const s of sessions.values()) if (s.payment_intent === pi) return s.amount_total;
@@ -261,9 +293,13 @@ a{display:inline-block;margin-top:16px;min-height:48px;line-height:48px;color:#6
           const { _pi, ...out } = inv;
           return json(out);
         }
+        m = url.pathname.match(/^\/v1\/payment_intents\/([^/]+)$/);
+        if (m) return paymentIntents.has(m[1]) ? json(paymentIntents.get(m[1])) : notFound('payment_intent');
         if (req.method === 'GET' && url.pathname === '/v1/invoice_payments') {
-          const inv = invoices.get(url.searchParams.get('invoice'));
-          return json({ object: 'list', has_more: false, data: inv ? [{ id: next('inpay'), object: 'invoice_payment', status: 'paid', payment: { type: 'payment_intent', payment_intent: inv._pi } }] : [] });
+          // By the invoice, or by the payment intent that paid one.
+          const byPi = url.searchParams.get('payment[payment_intent]');
+          const inv = byPi ? invoiceOfIntent(byPi) : invoices.get(url.searchParams.get('invoice'));
+          return json({ object: 'list', has_more: false, data: inv ? [{ id: next('inpay'), object: 'invoice_payment', invoice: inv.id, status: 'paid', payment: { type: 'payment_intent', payment_intent: inv._pi } }] : [] });
         }
         if (req.method === 'GET' && url.pathname === '/v1/refunds') {
           const pi = url.searchParams.get('payment_intent');

@@ -17,6 +17,12 @@
 //                     a treasurer's "Got it" on one that needed them.
 //   stripe_events     each Stripe event id, recorded in the same transaction
 //                     as what it did — a delivery Stripe repeats does nothing.
+//   stripe_held       a refund or a dispute that came before its payment was
+//                     recorded (Stripe sends events in no set order): which
+//                     checkout, the payment intent / charge / invoice it
+//                     names, what to do, and when Stripe says it happened.
+//                     Done — and gone from here — in the same write that
+//                     records the payment.
 //
 // No card numbers, ever: Stripe's hosted page takes the card; we keep its
 // ids (session, payment intent, invoice, charge, subscription).
@@ -96,4 +102,18 @@ create table if not exists stripe_events (
   type text not null,
   received_at timestamptz not null default now()
 );
+
+create table if not exists stripe_held (
+  event_id text primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  checkout_id uuid not null references stripe_checkouts(id) on delete cascade,
+  kind text not null check (kind in ('refund', 'dispute')),
+  payment_intent text,
+  charge_id text,
+  invoice_id text,
+  plan jsonb not null,
+  happened_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists stripe_held_ws_idx on stripe_held (workspace_id);
 `;

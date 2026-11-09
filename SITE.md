@@ -312,7 +312,8 @@ Stripe setup):
   `invoice.paid`, `customer.subscription.updated`,
   `customer.subscription.deleted`, `charge.refunded`,
   `charge.dispute.created`, `charge.dispute.closed`.
-- Tables `stripe_checkouts`, `stripe_payments`, `stripe_events`; the desk
+- Tables `stripe_checkouts`, `stripe_payments`, `stripe_events`,
+  `stripe_held` (a refund or dispute that came before its payment); the desk
   reads `GET /api/payments` (money roles) and writes `payment.ack`
   (area *money*).
 
