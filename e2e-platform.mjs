@@ -301,6 +301,7 @@ const join = async (email, role, name) => {
 const samEmail = `sam.${tag}@example.org`;
 const { c2: samCtx, p2: sam } = await join(samEmail, 'staff', 'Sam Example');
 await sam.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+await sam.locator('.nav .links').waitFor({ timeout: 10000 }).catch(() => {});
 check('the staffer is at the desk', await sam.locator('.nav .links').isVisible());
 const valEmail = `val.${tag}@example.org`;
 const { c2: valCtx, p2: val } = await join(valEmail, 'volunteer', 'Val Example');
