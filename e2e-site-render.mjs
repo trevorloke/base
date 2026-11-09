@@ -602,9 +602,12 @@ for (const key of ['is', 'base']) {
   check('no JS: sent → the thank-you in place of the form', /You’re on the list/.test(await page.locator('[data-module="newsletter"]').innerText()));
   const plain = (await (await fetch(`${ORIGIN}/__posted`)).json()).filter((p) => p.kind === 'newsletter' && !p.json).pop()?.body || {};
   check('no JS: form-encoded with the same names (consent_email=true)', plain.consent_email === 'true' && plain.email === 'lena@example.org' && plain.module_id === 'newsletter' && plain.page_id === 'page-base-home' && plain.website === '', JSON.stringify(plain));
-  // Menu and the RSVP form open as <details>.
-  await page.locator('.menu > summary').click({ force: true });
-  check('no JS: the Menu still opens', await page.locator('.menu-panel').isVisible());
+  // Menu and the RSVP form open as <details>. Opened by key, not a forced
+  // click: the page has just jumped to #m-newsletter and the header resizes
+  // with the scroll, so a click can land where the summary was a moment
+  // before. The panel is waited for, not read in the same instant.
+  await page.locator('.menu > summary').press('Enter');
+  check('no JS: the Menu still opens', await page.locator('.menu-panel').waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false));
   await page.context().close();
 }
 
