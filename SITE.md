@@ -573,8 +573,10 @@ out of every maybe that added it up the same way, and one restored (the
 desk's Undo) counts in them again — a maybe its void cleared comes back,
 as things stand (over on its own record now, the plain reason, as every
 gift of a donor's year over the limit is flagged). A new gift adds up the
-maybes its donor is in again too (that year and slate's), so none keeps an
-old total. A maybe that reads over on its donor's own record keeps the
+maybes on its donor, or naming them, again too (that year and slate's); a
+maybe that names neither keeps its total until something it names changes
+(its row then may show less over than the new gift's, which is right). A
+maybe that reads over on its donor's own record keeps the
 records it named (`attrs.maybe_same_donor_was`): if the gift that took it
 over is undone, voided or refunded, it is a maybe again, never stuck over.
 A merge keeps the dropped record's Not the same rulings, and says so when
