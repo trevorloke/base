@@ -435,7 +435,8 @@ alone. In Zapier:
 Make's *HTTP → Make a request* takes the same three things.
 
 **Out — a ladder's *Send to a web address* step.** Outreach → Ladders → a
-ladder → *Other steps* → **+ Send to a web address**: the address the other
+ladder → *Other steps* → **+ Send to a web address** (Settings → Services →
+*Going out* leads there too): the address the other
 tool gave (Zapier's *Webhooks by Zapier → Catch Hook*, Make's *Custom
 webhook*, a Slack *incoming webhook*) and a short label (*Zapier*). Ladders
 already start on everything — joined the newsletter, gave, got a tag,
@@ -472,16 +473,32 @@ sent there, once, as one small JSON message:
   do-not-email); `phone` is `null` unless a ladder text could (a number
   that hasn't replied STOP or asked to stop, not do-not-text, no "no" to
   texts on the website). About someone marked do-not-contact nothing is
-  sent at all — their log says *Skipped — do not contact*.
+  sent at all — their log says *Skipped — do not contact*, and their row
+  on the ladder *not sent to Zapier (do not contact)*.
 - **Signed.** `Base-Signature: t=<seconds>,v1=<hex>` is the HMAC-SHA256 of
   `<t>.<the body's exact bytes>` with the campaign's signing secret — the
   scheme Stripe signs with. The secret is under the step's *More details →
   Show secret* (`sbw_…`; each look is on the event log). It is made from the
-  server's own secret (`SITE_SECRET`, or the one base.win keeps) and the
-  campaign, never stored, the same every time; changing `SITE_SECRET`
-  changes it. A receiver that checks should also refuse a `t` more than
+  server's own secret (`SITE_SECRET`, or the one base.win keeps), the
+  campaign and a number the campaign counts up — never stored, the same
+  every time. A receiver that checks should also refuse a `t` more than
   five minutes old. Zapier, Make and Slack don't check a signature by
   themselves: there the address itself is the key, so treat it as one.
+- **A new secret.** When someone who has seen it leaves, or it was pasted
+  somewhere: *Show secret → Make a new secret → Yes*. The one before stops
+  signing at once, for this campaign only (on the event log, by who and
+  when); every message from then on, a later try of an earlier one too, is
+  signed with the new one — give it to each tool that checks. Don't change
+  `SITE_SECRET` for this: that changes the secret too, but it also breaks
+  the unsubscribe and email-preference links in every email already sent.
+- **A test first.** *More details → Send a test* sends the address in the
+  step — as it is typed, saved or not — one message of the same shape,
+  signed the same way, about a made-up person (Sam Example,
+  `sam@example.org`), with `"test": true` and `text` starting *Test ·*, and
+  says what the address answered in place (*Sent · 200*, *Failed · 500*).
+  A Zapier *Catch Hook* asks for one request before its fields can be
+  used: this is it. Nobody is put on the ladder and nothing goes on
+  anyone's log; the event log notes that a test went, and to which site.
 - **Once.** `Idempotency-Key: ladder-<run>-<step>` (the body's `id`) is the
   same on every try for one person at one step.
 - **Tries.** The address has 5 seconds to answer 2xx. Anything else is
@@ -490,7 +507,9 @@ sent there, once, as one small JSON message:
   tries* and the ladder carries on: a failing address never holds anyone
   up. *Zapier: Sent · 200* is the address's own answer. If the server
   stopped between the send and noting the answer, it never sends again by
-  itself; the log says *Not sure it went*.
+  itself; the log says *Not sure it went*. Someone taken off the ladder
+  (or reaching its goal) while the address is being called stays *Taken
+  off*: its answer is noted after, and nothing is tried again.
 - **A redirect** (any 3xx) is never followed and never tried again — the
   same one would come back: *Zapier: Answered with a redirect (302) — not
   followed*. Give the step the address it points to. (A tool that takes
@@ -507,8 +526,9 @@ sent there, once, as one small JSON message:
   address): refused when the step is saved and again, after the name is
   looked up, at every send — the call goes to the very address that was
   checked.
-- **Who.** Only the desk adds the step, changes a ladder that has one, or
-  sees the secret — never a volunteer, even one given Outreach. The address
+- **Who.** Only the desk adds the step, changes a ladder that has one,
+  sends a test, or sees or changes the secret — never a volunteer, even
+  one given Outreach. The address
   is kept with the ladder (and so in the campaign's full export); the event
   log keeps only the site it goes to (`https://hooks.zapier.com/…`), and a
   person's log on the ladder only the label and the answer.
