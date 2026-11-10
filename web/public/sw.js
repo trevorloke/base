@@ -5,7 +5,10 @@
  *               the cached index.html; hashed assets are cache-first. On
  *               install, and whenever a newer index.html arrives, the whole
  *               build graph is fetched so lazy screens (Map, People…) open
- *               offline too, and files from older builds are dropped.
+ *               offline too. The files of the build before stay one more day
+ *               (a tab opened before a deploy can still open its screens),
+ *               then go. A kept page is only ever a stand-in for the
+ *               network's: the newest one kept, never an older one.
  *   Map tiles   Tiles you've already looked at, in their own capped cache
  *               (~1500 tiles, oldest out first), so a turf seen with signal
  *               still draws offline. OpenStreetMap by default; the map tells
@@ -49,6 +52,10 @@ const TILE_TIMEOUT_MS = 5000;
 const TILE_MAX = 1500;
 const TILE_FRESH_MS = 7 * 24 * 3600 * 1000; // re-check a cached tile after a week
 const TILE_AT = 'x-starbase-cached-at';
+// When each file stopped being part of the build (path → ms), and how long
+// it stays after that.
+const OLD_FILES_KEY = '/__starbase/old-files';
+const OLD_KEEP_MS = 24 * 3600 * 1000;
 
 // The server's own pages (unsubscribe, receipts, public lessons, tracking,
 // pictures): straight to the network, never the app shell.
@@ -177,9 +184,11 @@ async function navigate(event) {
   if (!cached) return network.catch(() => offlinePage());
   // Network first, but don't leave a volunteer on a blank screen in a dead
   // zone, and don't show a server error page when the app itself is cached.
+  // Out of time: the page kept by now — a newer one may have arrived for
+  // another tab (or an earlier try) while this one waited.
   return Promise.race([
     network.then((res) => (res.status >= 500 ? cached : res), () => cached),
-    delay(NAV_TIMEOUT_MS).then(() => cached),
+    delay(NAV_TIMEOUT_MS).then(() => shell.match(INDEX)).then((newest) => newest || cached, () => cached),
   ]);
 }
 
@@ -210,7 +219,8 @@ async function adoptIndex(res, previous) {
   const html = await res.clone().text();
   if (previous) {
     const old = await previous.clone().text().catch(() => '');
-    if (old === html) return; // same build — nothing to do
+    // Same build: nothing to fetch — only files whose extra day is up go.
+    if (old === html) { await retireOld(null); return; }
   }
   const shell = await caches.open(SHELL);
   await shell.put(INDEX, res);
@@ -252,13 +262,32 @@ async function syncAssets(html) {
       for (const ref of refsIn(text, true)) if (!want.has(ref)) queue.push(ref);
     }
   }
-  // Drop files from older builds — but only once the new build is fully in,
+  // Files from older builds go — but only once the new build is fully in,
   // so a failed sync never leaves the app with nothing.
-  if (!complete) return;
-  const keys = await cache.keys();
-  await Promise.all(keys
-    .filter((k) => !want.has(new URL(k.url).pathname))
-    .map((k) => cache.delete(k)));
+  if (complete) await retireOld(want);
+}
+
+// A file that is no longer part of the build stays one more day — a tab
+// opened before a deploy still finds the screens it has not opened yet —
+// and then goes. want: the build's own files (a new build has just come
+// in), or null to only let go of the ones whose day is up.
+async function retireOld(want) {
+  try {
+    const meta = await caches.open(META);
+    const since = await meta.match(OLD_FILES_KEY).then((r) => (r ? r.json() : {})).catch(() => ({}));
+    if (!want && !Object.keys(since).length) return;
+    const cache = await caches.open(ASSETS);
+    const now = Date.now();
+    const still = {};
+    for (const k of await cache.keys()) {
+      const path = new URL(k.url).pathname;
+      if (want ? want.has(path) : !(path in since)) continue;
+      const at = Number(since[path]) || now;
+      if (now - at > OLD_KEEP_MS) await cache.delete(k);
+      else still[path] = at;
+    }
+    await meta.put(OLD_FILES_KEY, new Response(JSON.stringify(still), { headers: { 'content-type': 'application/json' } }));
+  } catch { /* a closed cache or no room: tried again with the next page */ }
 }
 
 function offlinePage() {

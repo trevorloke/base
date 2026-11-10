@@ -32,6 +32,8 @@ import { useShareLocation } from './components/ShareLocation.js';
 import { adminHref, fieldHref, fieldView, mayAdmin } from './mode.js';
 import './pages/offline.css';
 import CommandBar from './components/CommandBar.jsx';
+import NewVersion from './components/NewVersion.jsx';
+import ScreenBoundary from './components/ScreenBoundary.jsx';
 import { at } from './base.js';
 import { BRAND } from './brand.js';
 
@@ -478,11 +480,16 @@ function SignedInShell({ who, mode }) {
           sent={sentNote}
           kept={kept}
         />
+        {/* The server has a newer build than this page: "A new version is ready · Reload". */}
+        <NewVersion />
       </header>
       <main className="page">
-        <Suspense fallback={<p className="muted">Loading…</p>}>
-          <Outlet context={{ me }} />
-        </Suspense>
+        {/* A screen that fails to load says so (with Reload); the nav stays. */}
+        <ScreenBoundary>
+          <Suspense fallback={<p className="muted">Loading…</p>}>
+            <Outlet context={{ me }} />
+          </Suspense>
+        </ScreenBoundary>
       </main>
       <nav className="tabbar" aria-label="Main (mobile)" data-count={nav.length}
         style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(min-content, 1fr))` }}>

@@ -14,6 +14,7 @@ import { keptPersister, watchKeptCopies } from './components/KeptCopies.js';
 import { forgetPhoneCopies, keepOnlyMine } from './components/OfflineCache.js';
 import { closeOutbox } from './offline.js';
 import { at } from './base.js';
+import { reloadOnce } from './build.js';
 
 // Once more after a second — except a 401 / 404, or no signal at all (the
 // browser says it's offline): then the screen says so straight away, and
@@ -115,6 +116,21 @@ if (typeof window !== 'undefined') {
 // (api.js): who they are is asked again, and the set-up takes over (App.jsx).
 if (typeof window !== 'undefined') {
   window.addEventListener(TWO_STEP_EVENT, () => { queryClient.invalidateQueries({ queryKey: ['me'] }); });
+}
+
+// A screen's file is gone: this page is from before a deploy, and the server
+// no longer has its build (a missing file is a 404 — server/index.js). Take
+// the new page, once (build.js). Not with no signal (the new page would not
+// come either), and not while someone is typing: then the screen says it
+// didn't load, with Reload (components/ScreenBoundary.jsx).
+if (typeof window !== 'undefined') {
+  const typing = () => {
+    const el = document.activeElement;
+    return Boolean(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable));
+  };
+  window.addEventListener('vite:preloadError', () => {
+    if (navigator.onLine !== false && !typing()) reloadOnce();
+  });
 }
 
 // /admin/… is the admin (the desk), everything else the field app (mode.js).

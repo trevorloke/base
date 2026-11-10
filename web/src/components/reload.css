@@ -1,0 +1,12 @@
+/* The two places the app asks for a reload: the strip under the nav when a
+   new version is ready (NewVersion.jsx — it wears the offline strip's
+   frame), and a screen that didn't load (ScreenBoundary.jsx). */
+.new-version__text { font-size: 13px; font-weight: 600; color: var(--text-1); }
+
+.card.screen-failed {
+  max-width: 360px;
+  margin: var(--s-6) auto;
+  text-align: center;
+}
+.screen-failed__text { margin: 0 0 var(--s-3); font-size: 16px; color: var(--text-1); }
+.btn.screen-failed__btn { min-height: 48px; padding: 0 var(--s-5); display: inline-flex; align-items: center; }
