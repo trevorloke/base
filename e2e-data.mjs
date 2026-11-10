@@ -5,6 +5,21 @@
 // import lands them on file and marks the voter. Then each export is a
 // spreadsheet, and the People one carries what came in.
 //
+// A list with a Voter ID column fills each person's voter number, and the
+// same number under another spelling is the same person (no second record);
+// the profile shows it under More details.
+//
+// Gifts made in another tool come in from its file (Import & export →
+// Import gifts, or Donations → More → Import a file): the columns of a file
+// base.win has never seen match themselves; the check saves nothing and
+// says the gifts, the donors found, the gifts to settle, what can't come in
+// and who the file takes over the year's limit; the import puts them on the
+// books without using a receipt number; Donations marks them Imported and
+// lists "2 imported gifts need a donor" under Needs you; the pile settles
+// one on a record it could be and one on a new person; the same file again
+// adds nothing; the import is taken back whole. The financial agent's
+// filing date is typed in and counted down on Donations and on Today.
+//
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4135 node server/index.js &
 //   BASE=http://127.0.0.1:4135 SHOTS=/tmp/data node e2e-data.mjs
 import { chromium } from 'playwright-core';
@@ -219,6 +234,238 @@ check('Pat: Strong support 2022, Lawn sign 2022, Voted 2022 — no rating, not v
   && !(await api(`/persons/${pat.id}/fields`)).json.fields.some((f) => f.name === 'Sign' && f.value != null)
   && (await api(`/persons/${pat.id}`)).json.signs.length === 0, JSON.stringify(pat && [pat.rating, pat.voted_at, pat.tags]));
 
+// ── A voter number: a column of the list, then the key that finds them again ──
+await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
+await page.click('button:has-text("Paste text")');
+await page.fill('#imp-paste', ['First Name\tSurname\tVoter ID\tStreet Address', 'Vera\tElector\tA12-3456\t7 Elm St'].join('\n'));
+await page.click('button:has-text("Use this text")');
+await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+const vmap = await page.$$eval('.imp-map__select', (els) => els.map((e) => e.options[e.selectedIndex].text));
+check('a Voter ID column matches itself to Voter number', vmap.join('|') === 'First name|Last name|Voter number|Street address', vmap.join('|'));
+await page.click('button:has-text("Check 1 row")');
+await sleep(1500);
+await page.getByRole('button', { name: /^Import \d+ (person|people)$/ }).click();
+await sleep(1800);
+// The same voter, written another way, with a phone: found by the number.
+await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
+await page.click('button:has-text("Paste text")');
+await page.fill('#imp-paste', ['Name\tVoter Number\tPhone', 'ELECTOR Vera\ta123456\t604-555-0143'].join('\n'));
+await page.click('button:has-text("Use this text")');
+await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+await page.click('button:has-text("Check 1 row")');
+await sleep(1500);
+const vcheck = (await page.innerText('.imp-result').catch(() => '')).replace(/\s+/g, ' ');
+check('the check finds her by the number: 0 new, 1 to update', /New 0/i.test(vcheck) && /Update 1/i.test(vcheck), vcheck.slice(0, 120));
+await page.getByRole('button', { name: /^Import \d+ (person|people)$/ }).click();
+await sleep(1800);
+const veras = (await api('/persons?q=Elector')).json.persons;
+const vnum = veras[0] ? (await api(`/persons/${veras[0].id}/voter-number`)).json : null;
+check('one Vera Elector, with the number (letters and digits) and the phone filled in', veras.length === 1 && vnum?.voter_number === 'A123456' && veras[0].phone === '604-555-0143',
+  JSON.stringify([veras.map((v) => [v.name, v.phone]), vnum]));
+await page.goto(`${ADMIN}/people/${veras[0]?.id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.pf-sec__btn:has-text("More details")', { timeout: 8000 }).catch(() => {});
+await page.click('.pf-sec__btn:has-text("More details")').catch(() => {});
+await page.waitForSelector('form[aria-label="Voter number"] input', { timeout: 8000 }).catch(() => {});
+check('her profile: the voter number under More details', (await page.inputValue('form[aria-label="Voter number"] input').catch(() => '')) === 'A123456');
+
+// ── Gifts made in another tool, from its file ──
+const act = (name, body) => page.evaluate(async ([n, b]) => {
+  const r = await fetch(`/api/actions/${n}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });
+  return { status: r.status, json: await r.json().catch(() => null) };
+}, [name, body]);
+const measure = (pg) => pg.evaluate(() => {
+  const main = document.querySelector('main.page') || document.body;
+  const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+  const taps = [...main.querySelectorAll('input:not([type=checkbox]):not([type=file]), select, textarea, button, a.btn')].filter(visible).map((el) => el.getBoundingClientRect().height);
+  return { yellow: [...document.querySelectorAll('.btn-primary')].filter(visible).length, overflow: document.documentElement.scrollWidth - window.innerWidth, minTap: taps.length ? Math.min(...taps) : null };
+});
+const simple = async (pg, name) => {
+  const m = await measure(pg);
+  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥48px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= 47.5), JSON.stringify(m));
+};
+const yr = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver', year: 'numeric' }).format(new Date()));
+const mk = async (b) => (await act('person.create', { kind: 'person', ...b })).json.person;
+const ana = await mk({ first_name: 'Ana', last_name: 'Example', email: `ana.${tag}@example.org`, phone: '604-555-0101', address: '13450 104 Ave', city: 'Surrey', postal: 'V3T 1V8' });
+const ben = await mk({ first_name: 'Ben', last_name: 'Example', phone: '(604) 555-0102', address: '9 Oak Ave', postal: 'V3T 2C3' });
+await mk({ first_name: 'Dee', last_name: 'Twin', postal: 'V3S 1A1', address: '1 Main St' });
+const dee2 = await mk({ first_name: 'Dee', last_name: 'Twin', postal: 'V3S 1A1', address: '2 Main St' });
+// One gift typed at the desk: it takes this year's first receipt number.
+const deskGift = (await act('gift.log', { person_id: ben.id, amount_cents: 2000, date: `${yr}-02-01`, method: 'cash' })).json.gift;
+const firstReceipt = (await api(`/receipts/gift/${deskGift.id}`)).json.receipt?.number;
+const giftFile = [
+  'Transaction ID,Donor,Donor Email,Phone,Billing Address,Postal Code,Amount,Date Received,Payment Method,Receipt #',
+  `GL-1002,Ana Example,ana.${tag}@example.org,604-555-0101,13450 104 Ave,V3T 1V8,$900.00,${yr}-04-02,Visa,R-0002`,
+  `GL-1001,Ana Example,ana.${tag}@example.org,604-555-0101,13450 104 Ave,V3T 1V8,$600.00,${yr}-03-01,Visa,R-0001`,
+  `GL-1003,"Example, Ben",,6045550102,9 Oak Ave,V3T 2C3,50,${yr}-04-15,Cheque,R-0003`,
+  `GL-1004,Nobody Known,nobody.${tag}@example.org,604-555-0177,,,75.00,${yr}-05-01,Interac e-Transfer,R-0004`,
+  `GL-1005,Dee Twin,,,,V3S 1A1,20.00,${yr}-05-03,Cash,`,
+  `GL-1006,No Amount,noamount.${tag}@example.org,,,,,${yr}-05-04,Cash,`,
+].join('\n');
+await page.goto(`${ADMIN}/data`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.dt-page h1', { timeout: 8000 });
+await page.click('a:has-text("Import gifts")');
+await page.waitForURL(`${ADMIN}/money/import`, { timeout: 8000 }).catch(() => {});
+await page.waitForSelector('#gi-file', { state: 'attached', timeout: 8000 });
+await simple(page, 'Import gifts, choose a file (1360)');
+await page.click('button:has-text("Paste text")');
+await page.fill('#gi-paste', giftFile);
+await page.click('button:has-text("Use this text")');
+await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+const gmap = await page.$$eval('.imp-map__select', (els) => els.map((e) => e.options[e.selectedIndex].text));
+check('a gift file’s columns match themselves, by what their headings mean',
+  gmap.join('|') === 'Their number for the gift|Donor’s full name|Email|Phone|Street address|Postal code|Amount|Date of the gift|Paid by|Their receipt number', gmap.join('|'));
+await simple(page, 'Import gifts, match columns (1360)');
+await page.screenshot({ path: `${SHOTS}/06-gifts-match-columns.png`, fullPage: true });
+await page.click('button:has-text("Check 6 rows")');
+await page.waitForSelector('.imp-result', { timeout: 15000 }).catch(() => {});
+await sleep(500);
+const gcheck = (await page.innerText('.imp-result').catch(() => '')).replace(/\s+/g, ' ');
+check('the check: 5 gifts ($1,645.00), 2 donors found, 2 to settle, 0 already here, 1 can’t import',
+  /Gifts 5 \$1,645\.00/i.test(gcheck) && /Donors found 2/i.test(gcheck) && /To settle 2/i.test(gcheck) && /Already here 0/i.test(gcheck) && /Can’t import 1/i.test(gcheck), gcheck.slice(0, 200));
+check('…who it takes over the year’s limit: Ana Example, $1,500.00', /1 donor would be over the year’s limit/.test(gcheck) && /Ana Example · \d{4}.*\$1,500\.00 of \$/.test(gcheck), gcheck.slice(200, 420));
+check('…and what can’t come in, by its row: "No amount."', /Row 7 No amount\./.test(gcheck), gcheck.slice(-200));
+const before = (await api('/records/gift?limit=50')).json.records;
+check('…and nothing is saved by a check', before.length === 1 && (await api('/gifts/imports')).json.imports.length === 0, before.length);
+await page.screenshot({ path: `${SHOTS}/07-gifts-check.png`, fullPage: true });
+await page.getByRole('button', { name: 'Import 5 gifts' }).click();
+await page.waitForSelector('.imp-done', { timeout: 15000 }).catch(() => {});
+await sleep(800);
+const gdone = (await page.innerText('.imp-running').catch(() => '')).replace(/\s+/g, ' ');
+check('imported: "✓ 3 gifts on the books · $1,550.00", 2 need a donor, 1 over the limit, no receipts made',
+  /✓ 3 gifts on the books · \$1,550\.00/.test(gdone) && /2 gifts need a donor · \$95\.00/.test(gdone) && /1 gift is over the year’s limit/.test(gdone) && /No receipts were made or emailed/.test(gdone), gdone.slice(0, 260));
+await page.screenshot({ path: `${SHOTS}/08-gifts-done.png`, fullPage: true });
+const ledger = (await api('/records/gift?limit=50')).json.records;
+const anaGifts = ledger.filter((g) => g.person_id === ana.id).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+check('on the books for Ana: March then April, each marked as brought in, with the other tool’s receipt number — and April’s is the one over the limit',
+  anaGifts.length === 2 && anaGifts.every((g) => g.attrs?.source === 'import') && anaGifts[0].attrs.import_receipt === 'R-0001' && anaGifts[0].flagged === false && anaGifts[1].flagged === true,
+  JSON.stringify(anaGifts.map((g) => [String(g.date).slice(0, 10), g.flagged, g.attrs?.import_receipt])));
+const benGift = ledger.find((g) => g.person_id === ben.id && g.attrs?.source === 'import');
+check('“Example, Ben” found Ben Example by his name and phone', !!benGift && Number(benGift.amount_cents) === 5000, JSON.stringify(benGift && [benGift.amount_cents, benGift.method]));
+const receiptsNow = (await api('/receipts')).json.receipts;
+const nextGift = (await act('gift.log', { person_id: ben.id, amount_cents: 1000, date: `${yr}-06-01`, method: 'cash' })).json.gift;
+const nextReceipt = (await api(`/receipts/gift/${nextGift.id}`)).json.receipt?.number;
+check('no receipt number was used: still one receipt, and the next gift typed at the desk takes the very next number',
+  receiptsNow.length === 1 && firstReceipt === `${yr}-0001` && nextReceipt === `${yr}-0002`, `${receiptsNow.length} ${firstReceipt} ${nextReceipt}`);
+
+// Donations: Imported in the ledger; the pile and the over-limit gift under Needs you.
+await page.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.ops-needs .ops-row', { timeout: 10000 }).catch(() => {});
+await sleep(600);
+const needsText = (await page.innerText('.ops-needs').catch(() => '')).replace(/\s+/g, ' ');
+check('Donations → Needs you: Ana’s gift over the limit, and "2 imported gifts need a donor" ($95.00)',
+  /Needs you · 2/i.test(needsText) && /Ana Example/.test(needsText) && /over limit/i.test(needsText) && /2 imported gifts need a donor/.test(needsText) && /\$95\.00/.test(needsText), needsText);
+check('the big number says what it is: "Raised this year"', /Raised this year/i.test(await page.innerText('.ops-hero')) && /\$1,580/.test(await page.innerText('.ops-hero .n')), await page.innerText('.ops-hero'));
+await page.click('button:has-text("All gifts")').catch(() => {});
+await sleep(300);
+const benRow = page.locator('#gift-list .ops-item', { hasText: '$50.00' });
+check('the ledger marks a gift from a file "Imported"', /Imported/.test(await benRow.innerText().catch(() => '')));
+await benRow.locator('.ops-row').click();
+await sleep(500);
+const benBody = (await benRow.innerText().catch(() => '')).replace(/\s+/g, ' ');
+check('…opened: "Imported — no receipt from base.win · their receipt R-0003"', /Imported — no receipt from base\.win · their receipt R-0003/.test(benBody), benBody);
+await simple(page, 'Donations after an import (1360)');
+await page.screenshot({ path: `${SHOTS}/09-donations-imported.png`, fullPage: true });
+
+// The pile: one of the records it could be; then a new person.
+await page.click('.ops-needs a:has-text("imported gifts need a donor")');
+await page.waitForURL(`${ADMIN}/money/import/waiting`, { timeout: 8000 }).catch(() => {});
+await page.waitForSelector('.ops-rows .ops-row', { timeout: 8000 }).catch(() => {});
+await page.click('.ops-row:has-text("Dee Twin")');
+await sleep(400);
+const cands = await page.$$eval('.gw-cand', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
+check('Dee Twin’s gift could be two records: each with its address and why', cands.length === 2 && cands.every((c) => /Dee Twin/.test(c) && /same name and postal code/.test(c)) && /1 Main St/.test(cands.join()) && /2 Main St/.test(cands.join()), cands.join(' | '));
+await simple(page, 'Gifts that need a donor (1360)');
+await page.screenshot({ path: `${SHOTS}/10-gifts-pile.png`, fullPage: true });
+await page.click('.gw-cand:has-text("2 Main St")');
+check('picking one asks first: "Put this gift on Dee Twin?"', /Put this gift on Dee Twin\?/.test(await page.innerText('.ops-confirm').catch(() => '')));
+await page.click('.ops-confirm button:has-text("Yes")');
+await page.waitForSelector('.ops-done', { timeout: 8000 }).catch(() => {});
+const deeGifts = (await api(`/persons/${dee2.id}`)).json.gifts;
+check('"✓ 1 gift on Dee Twin" — and it is on the record that was picked', /✓ 1 gift on Dee Twin/.test(await page.innerText('.ops-done').catch(() => '')) && deeGifts.length === 1 && deeGifts[0].source === 'import', JSON.stringify(deeGifts));
+await page.click('.ops-row:has-text("Nobody Known")');
+await sleep(300);
+await page.click('button:has-text("Add as a new person")');
+await page.click('.ops-confirm button:has-text("Yes")');
+await page.waitForSelector('.ops-empty', { timeout: 8000 }).catch(() => {});
+const nobody = (await api(`/persons?q=${encodeURIComponent(`nobody.${tag}@example.org`)}`)).json.persons;
+const nobodyGifts = nobody[0] ? (await api(`/persons/${nobody[0].id}`)).json.gifts : [];
+check('a new person from what the file says, the gift theirs — and the pile is empty',
+  nobody.length === 1 && nobody[0].name === 'Nobody Known' && nobodyGifts.length === 1 && Number(nobodyGifts[0].amount_cents) === 7500
+  && /Nothing waiting/.test(await page.innerText('.ops-empty').catch(() => '')) && (await api('/brief')).json.giftsWaiting.gifts === 0, JSON.stringify([nobody.map((n) => n.name), nobodyGifts.length]));
+check('…settled as quietly as they came in: still two receipts in all', (await api('/receipts')).json.receipts.length === 2);
+
+// The same file again adds nothing, and says so.
+await page.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await page.getByRole('button', { name: 'More', exact: true }).click();
+await page.getByRole('link', { name: 'Import a file' }).click();
+await page.waitForSelector('#gi-file', { state: 'attached', timeout: 8000 });
+await page.click('button:has-text("Paste text")');
+await page.fill('#gi-paste', giftFile);
+await page.click('button:has-text("Use this text")');
+await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+await page.click('button:has-text("Check 6 rows")');
+await page.waitForSelector('.imp-result', { timeout: 15000 }).catch(() => {});
+await sleep(500);
+const again = (await page.innerText('.imp-result').catch(() => '')).replace(/\s+/g, ' ');
+check('the same file again: 0 gifts, 5 already here, "Nothing new" — and no Import button',
+  /Gifts 0/i.test(again) && /Already here 5/i.test(again) && /Nothing new — every gift in this file is already here\./.test(again) && (await page.getByRole('button', { name: /^Import \d+ gifts?$/ }).count()) === 0, again.slice(0, 200));
+
+// A phone: the import and Donations fit.
+const gphone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver' });
+await gphone.addCookies(await dctx.cookies());
+const gp = await gphone.newPage();
+gp.on('pageerror', (e) => errors.push(`phone: ${e.message}`));
+await gp.goto(`${ADMIN}/money/import`, { waitUntil: 'domcontentloaded' });
+await gp.waitForSelector('#gi-file', { state: 'attached', timeout: 8000 });
+await gp.click('button:has-text("Paste text")');
+await gp.fill('#gi-paste', ['First Name,Last Name,E-mail,Gift Amount,Donation Date,Paid By', `Ana,Example,ana.${tag}@example.org,10.00,03/04/${yr},Cheque`].join('\n'));
+await gp.click('button:has-text("Use this text")');
+await gp.waitForSelector('.imp-map__row', { timeout: 8000 });
+const ask = (await gp.innerText('.gi-ask').catch(() => '')).replace(/\s+/g, ' ');
+check('a date that could be read two ways is asked about, with both readings', new RegExp(`03/04/${yr} in this file is`).test(ask) && /Mar 4/.test(ask) && /Apr 3/.test(ask), ask);
+await simple(gp, 'Import gifts, match columns (390)');
+await gp.screenshot({ path: `${SHOTS}/11-gifts-match-phone.png`, fullPage: true });
+await gp.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await gp.waitForSelector('.ops-hero .n', { timeout: 10000 }).catch(() => {});
+await sleep(500);
+await simple(gp, 'Donations (390)');
+await gphone.close();
+
+// Taken back, whole — within a day.
+await page.goto(`${ADMIN}/money/import`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.gi-file', { timeout: 8000 }).catch(() => {});
+const fileRow = (await page.innerText('.gi-file').catch(() => '')).replace(/\s+/g, ' ');
+check('Brought in before: the file, who and when, 5 gifts · $1,645.00, Take back', /Pasted text/.test(fileRow) && /Marco Manager/.test(fileRow) && /5 gifts · \$1,645\.00/.test(fileRow) && /Take back/.test(fileRow), fileRow);
+await page.click('.gi-file button:has-text("Take back")');
+check('Take back asks first', /Take back Pasted text\? Its gifts leave the books\./.test(await page.innerText('.gi-file .ops-confirm').catch(() => '')));
+await page.click('.gi-file .ops-confirm button:has-text("Yes")');
+await page.waitForSelector('.gi-file__said', { timeout: 10000 }).catch(() => {});
+const live = (await api('/records/gift?limit=50')).json.records.filter((g) => g.attrs?.source === 'import');
+check('"✓ Taken back — 5 gifts off the books": none of them is on the books, and nothing waits',
+  /✓ Taken back — 5 gifts off the books/.test(await page.innerText('.gi-file__said').catch(() => '')) && live.length === 0 && (await api('/brief')).json.flagged.length === 0, `${live.length}`);
+await page.screenshot({ path: `${SHOTS}/12-gifts-taken-back.png`, fullPage: true });
+
+// ── The financial agent's filing date: typed in, counted down ──
+const due = (() => { const [y, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }).split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + 12)).toISOString().slice(0, 10); })();
+await page.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.ops-hero .n', { timeout: 10000 }).catch(() => {});
+check('no filing date comes with the product', (await page.locator('.fl-count').count()) === 0 && (await api('/money/filing-dates')).json.dates.length === 0);
+await page.getByRole('button', { name: 'More', exact: true }).click();
+await page.getByRole('button', { name: 'Filing dates' }).click();
+await page.fill('#fl-name-0', 'Disclosure statement due');
+await page.fill('#fl-day-0', due);
+await simple(page, 'Donations → More → Filing dates (1360)');
+await page.click('form[aria-label="Filing dates"] button[type="submit"]');
+await page.waitForSelector('.fl-count__item', { timeout: 8000 }).catch(() => {});
+const count = (await page.innerText('.fl-count').catch(() => '')).replace(/\s+/g, ' ');
+check('Donations counts down to it: "12 days left · Disclosure statement due"', /12 days left Disclosure statement due/.test(count), count);
+await page.screenshot({ path: `${SHOTS}/13-filing-countdown.png`, fullPage: true });
+await page.goto(`${ADMIN}/`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('#today-next-h', { timeout: 10000 }).catch(() => {});
+await sleep(800);
+const coming = (await page.innerText('section[aria-labelledby="today-next-h"]').catch(() => '')).replace(/\s+/g, ' ');
+check('Today → Coming up: the date within 30 days, "in 12 days"', /Disclosure statement due/.test(coming) && /in 12 days/.test(coming), coming);
+
 // ── And out ──
 for (const k of ['people', 'contacts', 'gifts', 'volunteers', 'signs', 'shifts', 'subscribers', 'lists']) {
   const r = await api(`/export/${k}.csv`);
@@ -226,6 +473,7 @@ for (const k of ['people', 'contacts', 'gifts', 'volunteers', 'signs', 'shifts',
 }
 const csv = (await api('/export/people.csv')).text;
 check('every export is a spreadsheet; People has Priya, with the voted date', /Priya Example/.test(csv) && /,\d{4}-\d{2}-\d{2},/.test(csv));
+check('…and Vera’s voter number, in its own column', /voter_number/.test(csv.split('\n')[0]) && /Vera Elector,.*,A123456,/.test(csv), csv.split('\n')[0].slice(0, 200));
 await page.goto(`${ADMIN}/data`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('a:has-text("Download everything")', { timeout: 8000 });
 const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 15000 }), page.click('a:has-text("Download everything")')]);
