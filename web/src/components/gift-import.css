@@ -46,9 +46,10 @@
   background: var(--paper-0);
   min-width: 0;
 }
-.gi-ask legend { padding: 0 var(--s-1); font-size: 15px; font-weight: 600; }
-.gi-ask__opt { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; font-size: 15px; cursor: pointer; }
-.gi-ask__opt input { width: 20px; height: 20px; margin: 0; accent-color: var(--ink); }
+.gi-ask__q { margin: 0 0 var(--s-2); font-size: 15px; font-weight: 600; }
+.gi-ask .ops-seg { max-width: 420px; }
+.gi-ask .imp-map__note { margin-top: var(--s-2); }
+.gi-note { margin: var(--s-2) 0 0; }
 
 .gi-rmap-hint { margin: 0 0 var(--s-2); }
 

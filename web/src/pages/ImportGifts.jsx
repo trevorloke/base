@@ -430,23 +430,34 @@ function Flow({ me }) {
                         {mapping[i] === 'source_id' ? ' Those rows can’t come in.' : ' Those phone numbers are left out.'} Format this column as Text in the spreadsheet, save, and choose the file again.
                       </p>
                     )}
+                    {mapping[i] === 'source_id' && file.repeats > 0 && (
+                      <p className="imp-map__note is-warn">
+                        {plural(file.repeats, 'row repeats', 'rows repeat')} a number from earlier in the file, so {file.repeats === 1 ? 'it is' : 'they are'} left out as the same gift. Not each gift’s own number? Set this column to Don’t import.
+                      </p>
+                    )}
+                    {mapping[i] === 'email' && file.badEmails > 0 && (
+                      <p className="imp-map__note">
+                        {plural(file.badEmails, 'email here isn’t an address', 'emails here aren’t addresses')} — {file.badEmails === 1 ? 'that gift is' : 'those gifts are'} matched by the donor’s name instead.
+                      </p>
+                    )}
                   </li>
                 );
               })}
             </ul>
 
             {askOrder && (
-              <fieldset className="gi-ask">
-                <legend>{orderExample ? `${orderExample.value} in this file is` : 'In this file’s dates'}</legend>
-                {[['mdy', orderExample?.mdy || 'the month first'], ['dmy', orderExample?.dmy || 'the day first']].map(([code, label]) => (
-                  <label key={code} className="gi-ask__opt">
-                    <input type="radio" name="gi-order" checked={order === code} disabled={locked}
-                      onChange={() => { setOrderPick(code); setCheck(null); }} />
-                    {label}
-                  </label>
-                ))}
+              <div className="gi-ask" role="group" aria-labelledby="gi-order-h">
+                <p className="gi-ask__q" id="gi-order-h">{orderExample ? `${orderExample.value} in this file is` : 'This file’s dates have'}</p>
+                <div className="ops-seg">
+                  {[['mdy', orderExample?.mdy || 'The month first'], ['dmy', orderExample?.dmy || 'The day first']].map(([code, label]) => (
+                    <button key={code} type="button" aria-pressed={order === code} disabled={locked}
+                      onClick={() => { setOrderPick(code); setCheck(null); }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 {orderSeen === 'mixed' && <p className="imp-map__note is-warn">Some dates here can only be month first and others only day first: the ones that don’t fit your pick can’t be read.</p>}
-              </fieldset>
+              </div>
             )}
 
             {methodValues.length > 0 && (
@@ -546,7 +557,7 @@ function Flow({ me }) {
                   </div>
                 )}
                 {t.waiting > 0 && <p className="imp-hint imp-hint--sm">{plural(t.waiting, 'gift has', 'gifts have')} no sure donor on file. {t.waiting === 1 ? 'It waits' : 'They wait'} under Donations → Needs you for you to pick.</p>}
-                {file.repeats > 0 && <p className="imp-hint imp-hint--sm">{plural(file.repeats, 'row repeats', 'rows repeat')} a gift number from earlier in the file — left out.</p>}
+                {file.repeats > 0 && <p className="imp-map__note is-warn gi-note">{plural(file.repeats, 'row repeats', 'rows repeat')} a gift number from earlier in the file — left out as the same gift.</p>}
                 {file.alike > 0 && <p className="imp-hint imp-hint--sm">{plural(file.alike, 'row reads', 'rows read')} like an earlier one (same donor, amount and day) — each comes in as its own gift.</p>}
                 {t.matches.length > 0 && (
                   <Reveal label={t.differs ? `See whose each is · ${fmtN(t.differs)} under another name` : 'See whose each is'} defaultOpen={t.differs > 0}>

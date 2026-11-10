@@ -113,6 +113,10 @@ export const guessGiftMapping = (headers, records, { slates = [], noHeader = fal
   const claim = (i, key, loose) => {
     if (out[i] !== SKIP || taken.has(key)) return;
     if (key === 'slate' && slates.length < 2) return;
+    // A gift's own number is different on every row: a column whose values
+    // repeat (the donor's number, a batch) is not it — and taking it for
+    // one would leave every repeat out as "that gift again".
+    if (key === 'source_id' && new Set(values[i]).size < values[i].length) return;
     // A whole name beside first and last names is someone else's: a campaign's, a form's.
     if (key === 'name' && loose && (taken.has('first') || taken.has('last'))) return;
     const looks = LOOKS[key];
@@ -178,12 +182,17 @@ export const slateOf = (slateMap, slates, value) => {
 };
 
 // One record of the file → { row } as the server takes it, or { error }:
-// why this row can't be read, in plain words.
+// why this row can't be read, in plain words. badEmail: its email cell
+// isn't an address ("n/a", "none") and was left out — the gift still comes
+// in, matched by the donor's name.
 //   order: which number of 03/04/2026 is the month ('mdy' | 'dmy')
 export const giftRow = (cells, mapping, { order = 'mdy', timeZone, methodMap = null, slateMap = null, slates = [] } = {}) => {
   const cell = (key) => { const i = mapping.indexOf(key); return i < 0 ? '' : String(cells[i] ?? '').trim(); };
   const row = {};
-  for (const k of ['first', 'last', 'email', 'address', 'unit', 'city', 'postal', 'receipt']) { const v = cell(k); if (v) row[k] = v; }
+  for (const k of ['first', 'last', 'address', 'unit', 'city', 'postal', 'receipt']) { const v = cell(k); if (v) row[k] = v; }
+  const email = cell('email');
+  const badEmail = Boolean(email) && !EMAIL_RE.test(email);
+  if (email && !badEmail) row.email = email;
   const name = cell('name');
   if (name) row.name = flipName(name);
   const phone = cell('phone');
@@ -206,28 +215,34 @@ export const giftRow = (cells, mapping, { order = 'mdy', timeZone, methodMap = n
   const to = cell('slate');
   const slate = to ? slateOf(slateMap, slates, to) : null;
   if (slate) row.slate = slate;
-  return { row };
+  return badEmail ? { row, badEmail } : { row };
 };
 
 // The whole file as rows to send: each with its spreadsheet row number and
-// which of the rows that read alike it is (shared/giftfile.js keyRows).
-// → { rows, unread: [{ row, text }], repeats, alike }
-//   unread   rows this screen can't read (no amount, no date…)
-//   repeats  rows whose gift number an earlier row has: that gift again,
-//            left out
-//   alike    rows that read like an earlier one with no gift number to
-//            tell them apart: each comes in as its own gift
+// which of the rows that read alike it is (shared/giftfile.js keyRows) — in
+// the order the gifts were given, oldest first (a file may list the newest
+// first), so the gift flagged for a limit is the one that crossed it.
+// → { rows, unread: [{ row, text }], repeats, alike, badEmails }
+//   unread     rows this screen can't read (no amount, no date…)
+//   repeats    rows whose gift number an earlier row has: that gift again,
+//              left out
+//   alike      rows that read like an earlier one with no gift number to
+//              tell them apart: each comes in as its own gift
+//   badEmails  rows whose email cell isn't an address: it is left out
 export const fileRows = (records, mapping, opts) => {
   const read = [];
   const unread = [];
+  let badEmails = 0;
   for (const r of records) {
     const g = giftRow(r.cells, mapping, opts);
-    if (g.error) unread.push({ row: r.row, text: g.error });
-    else read.push({ ...g.row, row: r.row });
+    if (g.error) { unread.push({ row: r.row, text: g.error }); continue; }
+    if (g.badEmail) badEmails += 1;
+    read.push({ ...g.row, row: r.row });
   }
   const keyed = keyRows(read);
-  const rows = keyed.filter((r) => !r.repeat).map(({ key: _k, repeat: _r, alike: _a, nth, ...r }) => (nth > 1 ? { ...r, nth } : r));
-  return { rows, unread, repeats: keyed.filter((r) => r.repeat).length, alike: keyed.filter((r) => r.alike).length };
+  const rows = keyed.filter((r) => !r.repeat).map(({ key: _k, repeat: _r, alike: _a, nth, ...r }) => (nth > 1 ? { ...r, nth } : r))
+    .sort((a, b) => a.date.localeCompare(b.date)); // stable: rows of one day stay as the file has them
+  return { rows, unread, repeats: keyed.filter((r) => r.repeat).length, alike: keyed.filter((r) => r.alike).length, badEmails };
 };
 
 // Rows a call at a time: few enough, and small enough, for one request

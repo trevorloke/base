@@ -74,6 +74,7 @@ function Waiting({ group, index, onSettled, online }) {
   const [ask, setAsk] = useState(null); // { kind: 'person', person } | { kind: 'new' } | { kind: 'out' }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [made, setMade] = useState(null); // the new person, once made: a second try never makes another
   const bodyId = `gw-${index}`;
   const n = gifts.length;
   const ids = gifts.map((g) => g.id);
@@ -94,12 +95,15 @@ function Waiting({ group, index, onSettled, online }) {
       }
       let person = what.person;
       if (what.kind === 'new') {
-        const named = donor.first || donor.last ? { first_name: donor.first || undefined, last_name: donor.last || undefined } : { name: whoIs(donor) };
-        const made = await action('person.create', {
-          kind: 'person', ...named,
-          ...Object.fromEntries(['email', 'phone', 'address', 'unit', 'city', 'postal'].filter((k) => donor[k]).map((k) => [k, donor[k]])),
-        });
-        person = made.person;
+        person = made;
+        if (!person) {
+          const named = donor.first || donor.last ? { first_name: donor.first || undefined, last_name: donor.last || undefined } : { name: whoIs(donor) };
+          person = (await action('person.create', {
+            kind: 'person', ...named,
+            ...Object.fromEntries(['email', 'phone', 'address', 'unit', 'city', 'postal'].filter((k) => donor[k]).map((k) => [k, donor[k]])),
+          })).person;
+          setMade(person);
+        }
       }
       const res = await action('gift.importSettle', { ids, person_id: person.id });
       const flagged = (res.gifts || []).filter((g) => g.flagged).length;

@@ -149,7 +149,11 @@ export const actions = {
 
       const found = await findDonors(tx, ws.id, todo);
       if (!dry && todo.length) await startImport(tx, ctx, input, emit);
-      for (const r of todo) {
+      // On the books in the order they were given (a file may list the
+      // newest first): the gift flagged is the one that crossed the limit
+      // on its day, not whichever came last in the file.
+      const inOrder = [...todo].sort((a, b) => a.date.localeCompare(b.date) || a.i - b.i);
+      for (const r of inOrder) {
         const m = found.get(r.i);
         if (!m.person) {
           results[r.i] = { state: 'waiting', candidates: m.candidates.length };

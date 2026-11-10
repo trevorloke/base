@@ -163,6 +163,19 @@ test('columns are matched by what their headings mean; rows are read; the check 
   assert.deepEqual([f.rows.length, f.repeats, f.alike, f.unread.length], [3, 1, 1, 1]);
   assert.deepEqual(f.rows.map((r) => [r.row, r.nth]), [[2, undefined], [4, undefined], [5, 2]]);
   assert.deepEqual(f.unread, [{ row: 6, text: 'No amount.' }]);
+  // A file that lists the newest first is sent oldest first: the gift that crosses a limit is the later one.
+  const newestFirst = fileRows(recs([
+    ['3', 'Ana Example', '', '', '', '', '20', '2026-09-01'], ['2', 'Ana Example', '', '', '', '', '20', '2026-02-01'], ['1', 'Ben Example', '', '', '', '', '20', '2026-02-01'],
+  ]), mapping, {});
+  assert.deepEqual(newestFirst.rows.map((r) => [r.date, r.row]), [['2026-02-01', 3], ['2026-02-01', 4], ['2026-09-01', 2]]);
+  // A gift number that isn't one — the donor's own number, the same on each of their gifts — is not taken for it.
+  assert.deepEqual(guessGiftMapping(['ID', 'Donor', 'Amount', 'Date'], recs([['77', 'Ana Example', '$20.00', '2026-03-01'], ['77', 'Ana Example', '$30.00', '2026-04-01']]), {}),
+    ['', 'name', 'amount', 'date']);
+  assert.deepEqual(guessGiftMapping(['ID', 'Donor', 'Amount', 'Date'], recs([['77', 'Ana Example', '$20.00', '2026-03-01'], ['78', 'Ana Example', '$30.00', '2026-04-01']]), {}),
+    ['source_id', 'name', 'amount', 'date']);
+  // An email cell that isn't an address ("n/a") is left out, and counted: the gift still comes in.
+  const noMail = fileRows(recs([['', 'Ana Example', 'n/a', '', '', '', '20', '2026-03-01'], ['', 'Ben Example', 'ben@example.org', '', '', '', '20', '2026-03-01']]), mapping, {});
+  assert.deepEqual([noMail.rows.map((r) => r.email), noMail.badEmails], [[undefined, 'ben@example.org'], 1]);
 
   // Calls stay small: by rows, and by size.
   const many = Array.from({ length: 450 }, (_, i) => ({ row: i, name: 'Ana Example', amount_cents: 100 }));
@@ -333,6 +346,13 @@ test('an import: through the one gift path, quiet, once only', async () => {
   assert.equal(ok(await treas.get(`/api/persons/${P.cy.id}`)).gifts[0].source, null, 'a gift typed at the desk is not');
   assert.equal(Number(profile.totals.find((t) => t.year === yr).total_cents), 120000);
   assert.ok(stew.lapsed.some((d) => d.person_id === P.ana.id && d.last_year_cents === 120000), 'gave last year, not yet this one');
+  // The gifts spreadsheet says which came from a file, with the other tool's receipt number.
+  const sheet = (await raw(treas, '/api/export/gifts.csv')).text.replace(/^\uFEFF/, '').split('\r\n');
+  const head = sheet[0].split(',');
+  assert.ok(head.includes('imported') && head.includes('their_receipt'), sheet[0]);
+  const anaLine = sheet.find((l) => l.includes('GL-R-0001')).split(',');
+  assert.deepEqual([anaLine[head.indexOf('donor')], anaLine[head.indexOf('imported')], anaLine[head.indexOf('their_receipt')]], ['Ana Example', 'yes', 'GL-R-0001']);
+  assert.equal(sheet.find((l) => l.startsWith('Cy Example,')).split(',')[head.indexOf('imported')], '', 'a gift typed at the desk is not');
   const csv = (await raw(treas, `/api/receipts/disclosure.csv?period=${yr}`)).text;
   assert.match(csv, new RegExp(`Ana Example,.*,1200\\.00,Yes,${yr}-03-01,600\\.00,GL-R-0001`), csv);
   assert.match(csv, /Ana Example,.*,600\.00,GL-R-0002/);
@@ -415,6 +435,19 @@ test('the pile: imported gifts that need a donor, settled by a person', async ()
   ok(await treas.action('gift.importSettle', { ids: out.gifts.map((x) => x.id), leave_out: true }));
   assert.deepEqual(ok(await treas.get('/api/gifts/imports')).waiting, { gifts: 0, cents: 0 });
   assert.deepEqual(states(await check([row({ name: 'Left Out', amount_cents: 100, source_id: 'GL-22' })])), ['already']);
+});
+
+// The other tool's export may list the newest gift first. The gifts of one
+// call go on the books in the order they were given, so the one flagged is
+// the one that crossed the limit on its day — not whichever came last in the file.
+test('the gift that crosses the limit is the later one, whatever order the file lists them in', async () => {
+  const ivy = await person('Ivy', 'Order', { email: mail('ivy') });
+  const r = await bring([
+    row({ first: 'Ivy', last: 'Order', email: mail('ivy'), amount_cents: 60000, date: `${yr}-09-01`, source_id: 'GL-80' }),
+    row({ first: 'Ivy', last: 'Order', email: mail('ivy'), amount_cents: 60000, date: `${yr}-02-01`, source_id: 'GL-81' }),
+  ]);
+  assert.deepEqual(r.results.map((x) => [x.state, x.flagged]), [['new', true], ['new', false]], 'September’s crossed it, not February’s');
+  assert.deepEqual((await giftsOf(ivy.id)).map((g) => [Number(g.amount_cents), g.flagged]), [[60000, false], [60000, true]]);
 });
 
 // A ladder whose goal is "Gave" (ext/ladders): a gift brought in is on the
