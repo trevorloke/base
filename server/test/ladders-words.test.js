@@ -57,3 +57,30 @@ test('the email card\'s number says what it counts', () => {
   assert.equal(W.emailWho(0), 'Goes only to people who said yes to email · 0 people said yes');
   assert.equal(W.emailWho(undefined), 'Goes only to people who said yes to email · …');
 });
+
+test('"Send to a web address": the card names where it goes, never the whole address; the log says what the address answered', () => {
+  const step = { kind: 'webhook', url: 'https://hooks.zapier.com/hooks/catch/123/s3cret-key/', label: 'Zapier' };
+  assert.equal(W.stepLine(step), 'Send to a web address · Zapier');
+  assert.equal(W.hookWho(step), 'To hooks.zapier.com · email only if they said yes, mobile never after STOP · no ratings, notes or money');
+  assert.ok(!W.hookWho(step).includes('s3cret-key'), 'the rest of an address can be a key');
+  assert.equal(W.hookWho({ kind: 'webhook', url: '', label: '' }), 'email only if they said yes, mobile never after STOP · no ratings, notes or money');
+
+  assert.equal(W.hookMissing({ url: '', label: 'Zapier' }), 'Add the web address');
+  assert.equal(W.hookMissing({ url: 'http://hooks.example.org/x', label: 'Zapier' }), 'The address must start with https://');
+  assert.equal(W.hookMissing({ url: 'hooks.example.org/x', label: 'Zapier' }), 'The address must start with https://');
+  assert.equal(W.hookMissing({ url: 'https://', label: 'Zapier' }), 'That isn’t a web address');
+  assert.equal(W.hookMissing({ url: 'https://hooks.example.org/x', label: '  ' }), 'Add a label');
+  assert.equal(W.hookMissing(step), null);
+
+  const line = (e) => W.hookLogLine({ kind: 'webhook', label: 'Zapier', ...e });
+  assert.equal(line({ result: 'sent', status: 200 }), 'Zapier: Sent · 200');
+  assert.equal(line({ result: 'failed', reason: 'gave_up', status: 500, tries: 3 }), 'Zapier: Failed · 500 after 3 tries');
+  assert.equal(line({ result: 'failed', reason: 'will_retry', status: 503, tries: 1 }), 'Zapier: Didn’t go (503) — trying again');
+  assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'timeout', tries: 3 }), 'Zapier: Failed · no answer after 3 tries');
+  assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'not_found', tries: 3 }), 'Zapier: Failed · address not found after 3 tries');
+  assert.equal(line({ result: 'failed', reason: 'refused', why: 'private', tries: 1 }), 'Zapier: Not sent — the address points inside a private network');
+  assert.equal(line({ result: 'skipped', reason: 'do_not_contact' }), 'Zapier: Skipped — do not contact');
+  assert.equal(line({ result: 'unsure' }), 'Zapier: Not sure it went');
+  assert.equal(line({ result: 'sending' }), 'Zapier: Sending');
+  assert.equal(W.hookLogLine({ kind: 'webhook', result: 'sent', status: 204 }), 'Web address: Sent · 204');
+});

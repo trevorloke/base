@@ -1,0 +1,24 @@
+/* Ladders: the "Send to a web address" step. Its fields are the shared
+   ones (ladders.css, shifts.css), spaced the same in a new step and in an
+   open card; only the signing secret under More details is new. */
+.lad-hook { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-2); }
+.lad-step-form .lad-hook .field,
+.lad-step-form .lad-hook .lad-hint { margin: 0; }
+.lad-hook > .disclose { align-self: flex-start; }
+.lad-hook-secret { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); }
+.lad-hook-secret__name { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.lad-hook-secret .lad-hint { margin: 0; }
+.lad-hook-secret__code {
+  display: block;
+  max-width: 100%;
+  padding: var(--s-2) var(--s-3);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-1);
+  background: var(--paper-1);
+  border: var(--border);
+  border-radius: var(--r-ctrl);
+  user-select: all;
+  overflow-wrap: anywhere;
+}

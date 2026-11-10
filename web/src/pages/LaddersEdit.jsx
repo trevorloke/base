@@ -6,9 +6,14 @@
 //     a survey, a tag…).
 //   Goal: one line ("Until they come to a shift" — they come off as soon as
 //     they do it); Change picks one, or none.
-//   Steps: numbered cards (Wait · Email · Text · Tag · Follow-up; Remove a
-//     tag and Stop under "Other steps"). A card opens in place to edit, move
-//     or remove it. An email card says who it goes to: only people who said
+//   Steps: numbered cards (Wait · Email · Text · Tag · Follow-up; Send to
+//     a web address, Remove a tag and Stop under "Other steps"). A card
+//     opens in place to edit, move or remove it; what the server won't save
+//     (an address inside a private network) is said in the card. "Send to a
+//     web address": the address (https) and a short label; the card says
+//     where it goes (the site's name only) and what it never carries; its
+//     More details show the campaign's signing secret when asked. An email
+//     card says who it goes to: only people who said
 //     yes to email ("· 67 people said yes"); a text card, the texting rules
 //     it keeps (its hours, never after STOP, the opt-out line added). "+ First
 //     name" / "+ Campaign" put in [first name] / [campaign] — the fields and
@@ -30,9 +35,10 @@ import {
   CONNECT_TO, GOAL_HINT, GoalPicker, LadBack, OTHER_STEPS, STEP_KINDS, TriggerPicker, countsLine, fmtWhen, goalOf, logLine,
   stepLine, triggerLine, triggerMissing, whereLine,
 } from '../components/LaddersBits.jsx';
-import { FILLS, emailWho, textNamesCampaign, textWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
+import { FILLS, emailWho, hookMissing, hookWho, textNamesCampaign, textWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
 import './shifts.css';
 import './ladders.css';
+import './ladders-webhook.css';
 
 const BLANK = {
   wait: { kind: 'wait', n: 1, unit: 'days' },
@@ -42,6 +48,7 @@ const BLANK = {
   untag: { kind: 'untag', tag: '' },
   followup: { kind: 'followup', text: '' },
   stop: { kind: 'stop' },
+  webhook: { kind: 'webhook', url: '', label: '' },
 };
 const doesSomething = (steps) => steps.some((s) => s.kind !== 'wait' && s.kind !== 'stop');
 const TEXT_MAX = 900;
@@ -63,6 +70,7 @@ const missing = (s, campaign) => {
   if ((s.kind === 'tag' || s.kind === 'untag') && !s.tag.trim()) return 'Add a tag';
   if (s.kind === 'followup' && !s.text.trim()) return 'Say what to do';
   if (s.kind === 'followup' && s.text.trim().length > 300) return 'Shorten the follow-up';
+  if (s.kind === 'webhook') return hookMissing(s);
   return null;
 };
 const clean = (s) => {
@@ -71,6 +79,7 @@ const clean = (s) => {
   if (s.kind === 'text') return { kind: 'text', body: s.body.trim() };
   if (s.kind === 'tag' || s.kind === 'untag') return { kind: s.kind, tag: s.tag.trim() };
   if (s.kind === 'followup') return { kind: 'followup', text: s.text.trim() };
+  if (s.kind === 'webhook') return { kind: 'webhook', url: s.url.trim(), label: s.label.trim() };
   return { kind: 'stop' };
 };
 
@@ -152,6 +161,70 @@ function TextFields({ s, set, idp }) {
   );
 }
 
+// The campaign's signing secret, for whoever sets up the other end: asked
+// for with a tap (no screen loads it), shown to copy, hidden again.
+function SigningSecret() {
+  const [secret, setSecret] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const show = async () => {
+    setBusy(true);
+    setError(null);
+    try { setSecret((await action('ladder.signingSecret', {})).secret); } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(secret); setCopied(true); } catch { setCopied(false); }
+  };
+  const hide = () => { setSecret(null); setCopied(false); };
+  return (
+    <div className="lad-hook-secret">
+      <span className="lad-hook-secret__name">Signing secret</span>
+      <p className="lad-hint">For whoever runs the other tool: it proves a message came from base.win.</p>
+      {secret ? (
+        <>
+          <code className="lad-hook-secret__code">{secret}</code>
+          <div className="ops-actions">
+            <button type="button" className="btn ops-tap" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
+            <button type="button" className="btn btn-quiet ops-tap" onClick={hide}>Hide</button>
+          </div>
+        </>
+      ) : (
+        <button type="button" className="btn ops-tap" disabled={busy} onClick={show}>Show secret</button>
+      )}
+      {error && <p className="error" role="alert">{error}</p>}
+      <span className="lad-sr" role="status">{copied ? 'Copied' : secret ? 'Secret shown' : ''}</span>
+    </div>
+  );
+}
+
+// "Send to a web address": where, and a short label (the card's name, and
+// "step" in what is sent).
+function HookFields({ s, set, idp }) {
+  const [more, setMore] = useState(false);
+  return (
+    <div className="lad-hook">
+      <div className="field">
+        <label htmlFor={`${idp}-url`}>Web address</label>
+        <input id={`${idp}-url`} className="input lad-input" inputMode="url" maxLength={500} autoComplete="off"
+          autoCapitalize="none" autoCorrect="off" spellCheck={false} aria-describedby={`${idp}-url-hint`}
+          placeholder="https://hooks.zapier.com/…" value={s.url} onChange={(e) => set({ ...s, url: e.target.value })} />
+      </div>
+      <div className="field">
+        <label htmlFor={`${idp}-label`}>Label</label>
+        <input id={`${idp}-label`} className="input lad-input" maxLength={40} autoComplete="off"
+          placeholder="Zapier" value={s.label} onChange={(e) => set({ ...s, label: e.target.value })} />
+      </div>
+      <p className="lad-hint" id={`${idp}-url-hint`}>Sends their name, postal code and tags. Email only if they said yes; mobile never after STOP.</p>
+      <button type="button" className="ops-more disclose disclose--inline" aria-expanded={more} aria-controls={`${idp}-more`}
+        onClick={() => setMore((v) => !v)}>
+        More details
+      </button>
+      {more && <div id={`${idp}-more`} className="ops-more-body"><SigningSecret /></div>}
+    </div>
+  );
+}
+
 function StepFields({ s, set, idp, tags }) {
   if (s.kind === 'wait') {
     return (
@@ -181,6 +254,7 @@ function StepFields({ s, set, idp, tags }) {
       </div>
     );
   }
+  if (s.kind === 'webhook') return <HookFields s={s} set={set} idp={idp} />;
   if (s.kind === 'followup') {
     return (
       <div className="field">
@@ -194,9 +268,15 @@ function StepFields({ s, set, idp, tags }) {
   return <p className="lad-hint">The ladder ends here for them.</p>;
 }
 
-function StepEditor({ initial, saveLabel, onSave, onCancel, busy, tags, extra, campaign }) {
+// problem: why the server wouldn't save this step ({ message }: LaddersEdit's
+// stepError), said here, where the tap was — never one from before this
+// editor opened, and gone as soon as the step is changed.
+function StepEditor({ initial, saveLabel, onSave, onCancel, busy, tags, extra, campaign, problem }) {
   const [s, setS] = useState(initial);
   const [error, setError] = useState(null);
+  const [seen, setSeen] = useState(problem);
+  const refused = problem && problem !== seen ? problem.message : null;
+  const change = (next) => { setError(null); setSeen(problem); setS(next); };
   const idp = useId();
   const submit = async (e) => {
     e.preventDefault();
@@ -207,8 +287,8 @@ function StepEditor({ initial, saveLabel, onSave, onCancel, busy, tags, extra, c
   };
   return (
     <form className="lad-step-form" onSubmit={submit}>
-      <StepFields s={s} set={setS} idp={idp} tags={tags} />
-      {error && <p className="error" role="alert">{error}</p>}
+      <StepFields s={s} set={change} idp={idp} tags={tags} />
+      {(error || refused) && <p className="error" role="alert">{error || refused}</p>}
       <div className="ops-actions">
         <button type="submit" className="btn ops-solid ops-tap" disabled={busy}>{saveLabel}</button>
         <button type="button" className="btn btn-quiet ops-tap" onClick={onCancel}>Cancel</button>
@@ -218,7 +298,7 @@ function StepEditor({ initial, saveLabel, onSave, onCancel, busy, tags, extra, c
   );
 }
 
-function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove, busy, tags, emailYes, campaign }) {
+function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove, busy, tags, emailYes, campaign, problem }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <li className="ops-item lad-step" data-open={open || undefined}>
@@ -232,11 +312,14 @@ function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove
           {step.kind === 'text' && (
             <span className="ops-row__sub lad-step__who">{textWho}</span>
           )}
+          {step.kind === 'webhook' && (
+            <span className="ops-row__sub lad-step__who">{hookWho(step)}</span>
+          )}
         </span>
       </button>
       {open && (
         <div className="ops-body">
-          <StepEditor initial={step} saveLabel="Save step" onSave={onSave} onCancel={onToggle} busy={busy} tags={tags} campaign={campaign}
+          <StepEditor initial={step} saveLabel="Save step" onSave={onSave} onCancel={onToggle} busy={busy} tags={tags} campaign={campaign} problem={problem}
             extra={<>
               {index > 0 && <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => onMove(-1)} aria-label="Move up">↑</button>}
               {index < count - 1 && <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => onMove(1)} aria-label="Move down">↓</button>}
@@ -256,14 +339,14 @@ function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove
   );
 }
 
-function AddStep({ onAdd, busy, tags, campaign }) {
+function AddStep({ onAdd, busy, tags, campaign, problem }) {
   const [kind, setKind] = useState(null);
   const [more, setMore] = useState(false);
   if (kind) {
     return (
       <div className="card lad-new-step">
         <span className="eyebrow">New step · {STEP_KINDS.find((k) => k.kind === kind).label}</span>
-        <StepEditor initial={BLANK[kind]} saveLabel="Add step" busy={busy} tags={tags} campaign={campaign}
+        <StepEditor initial={BLANK[kind]} saveLabel="Add step" busy={busy} tags={tags} campaign={campaign} problem={problem}
           onSave={async (s) => { if (await onAdd(s)) setKind(null); }} onCancel={() => setKind(null)} />
       </div>
     );
@@ -467,11 +550,15 @@ export default function LaddersEdit() {
   const [openStep, setOpenStep] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Why the steps weren't saved, and which step was being saved ({ at: its
+  // place or 'add', message }): said in that step, not at the top.
+  const [stepError, setStepError] = useState(null);
   const [said, setSaid] = useState(null);
 
-  const run = async (name, input, words) => {
+  const run = async (name, input, words, onError = setError) => {
     setBusy(true);
     setError(null);
+    setStepError(null);
     setSaid(null);
     try {
       const res = await action(name, input);
@@ -482,7 +569,7 @@ export default function LaddersEdit() {
       if (words) setSaid(words(res));
       return res || true;
     } catch (e) {
-      setError(e.message);
+      onError(e.message);
       return null;
     } finally {
       setBusy(false);
@@ -508,7 +595,7 @@ export default function LaddersEdit() {
   }
   const { ladder: l, people, emailConfigured, textConfigured, emailYes, options, campaign } = q.data;
   const steps = l.steps;
-  const saveSteps = (next) => run('ladder.update', { id: l.id, steps: next });
+  const saveSteps = (next, at) => run('ladder.update', { id: l.id, steps: next }, null, (message) => setStepError({ at, message }));
   const hasEmail = steps.some((s) => s.kind === 'email');
   const hasText = steps.some((s) => s.kind === 'text');
   const ready = doesSomething(steps);
@@ -555,19 +642,20 @@ export default function LaddersEdit() {
           <ol className="ops-rows lad-steps">
             {steps.map((s, i) => (
               <StepCard key={`${i}-${s.kind}-${stepLine(s)}`} step={s} index={i} count={steps.length} busy={busy} tags={options.tags}
-                emailYes={emailYes} campaign={campaign}
+                emailYes={emailYes} campaign={campaign} problem={stepError?.at === i ? stepError : null}
                 open={openStep === i} onToggle={() => setOpenStep(openStep === i ? null : i)}
-                onSave={async (next) => { if (await saveSteps(steps.map((x, j) => (j === i ? next : x)))) setOpenStep(null); }}
-                onRemove={async () => { if (await saveSteps(steps.filter((_, j) => j !== i))) setOpenStep(null); }}
+                onSave={async (next) => { if (await saveSteps(steps.map((x, j) => (j === i ? next : x)), i)) setOpenStep(null); }}
+                onRemove={async () => { if (await saveSteps(steps.filter((_, j) => j !== i), i)) setOpenStep(null); }}
                 onMove={async (d) => {
                   const next = [...steps];
                   [next[i], next[i + d]] = [next[i + d], next[i]];
-                  if (await saveSteps(next)) setOpenStep(i + d);
+                  if (await saveSteps(next, i)) setOpenStep(i + d);
                 }} />
             ))}
           </ol>
         )}
-        <AddStep busy={busy} tags={options.tags} campaign={campaign} onAdd={(s) => saveSteps([...steps, s])} />
+        <AddStep busy={busy} tags={options.tags} campaign={campaign} problem={stepError?.at === 'add' ? stepError : null}
+          onAdd={(s) => saveSteps([...steps, s], 'add')} />
       </section>
 
       <People people={people} emailConfigured={emailConfigured} textConfigured={textConfigured} busy={busy}

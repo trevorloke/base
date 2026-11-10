@@ -18,13 +18,28 @@
 // say where they go ("← Today" from Today, "← Ladders", "← Ana Souza" from her
 // profile). The books still verify. New screens are measured (visible words,
 // yellow buttons, sideways scroll, 48px targets).
+// "Send to a web address" (under Other steps): the step asks for an https
+// address and a label; http is refused on the page and an address inside a
+// private network by the server, both said in the step; More details shows
+// the campaign's signing secret only when asked; measured at both sizes.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4103 STARBASE_JOBS_EVERY_MS=1000 node server/index.js &
 //   BASE=http://127.0.0.1:4103 SHOTS=/tmp/ladders node e2e-ladders.mjs
+//
+// To also watch the step deliver — one signed message each, an email only
+// for who said yes, "Zapier: Sent · 200" on the run's log, a failing address
+// tried again — run a stand-in receiver and point both at it:
+//
+//   PORT=4104 node server/test/fake-receiver.js &
+//   … LADDER_WEBHOOK_API_BASE=http://127.0.0.1:4104 node server/index.js &
+//   HOOKS=http://127.0.0.1:4104 BASE=http://127.0.0.1:4103 node e2e-ladders.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
+import { verifySignature } from './server/lib/signature.js';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
+// The stand-in receiver the server sends to (fake-receiver.js), if one is running.
+const HOOKS = (process.env.HOOKS || '').replace(/\/$/, '');
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
 const SHOTS = process.env.SHOTS || '/tmp/starbase-ladders';
 mkdirSync(SHOTS, { recursive: true });
@@ -466,6 +481,102 @@ await D.api('/actions/gift.log', { person_id: gil.id, amount_cents: 5000, date: 
 await D.go(`/people/${gil.id}`);
 const metaChips = (await page.locator('.pf-meta .chip').allInnerTexts()).map((x) => x.trim().toLowerCase());
 check('donor profile: one Donor chip, not two', metaChips.filter((x) => x === 'donor').length === 1 && !(await page.locator('.pf-meta .lad-level').count()), metaChips.join(' | '));
+
+// ── 12d. Send to a web address: the step, its refusals, the signing secret ──
+const PRIVATE = 'That address points inside a private network — it can’t be used';
+const told = (await D.api('/actions/ladder.create', { name: 'Tell the team', trigger: { kind: 'tag', ref: 'new-signer' }, steps: [{ kind: 'tag', tag: 'told' }] })).json.ladder;
+const hookSteps = async () => (await D.api(`/ladders/${told.id}`)).json.ladder.steps.filter((x) => x.kind === 'webhook');
+const stepAlert = async () => ((await page.locator('.lad-new-step .error').innerText().catch(() => '')) || '').trim();
+await D.go(`/ladders/${told.id}`);
+check('"Send to a web address" waits under Other steps', (await page.getByRole('button', { name: '+ Send to a web address' }).count()) === 0);
+await page.getByRole('button', { name: 'Other steps' }).click();
+await page.getByRole('button', { name: '+ Send to a web address' }).click();
+await sleep(300);
+check('the step asks for a web address and a label', (await page.getByLabel('Web address').count()) === 1 && (await page.getByLabel('Label').count()) === 1);
+await simple(page, 'builder, web address step open (desktop)');
+await page.getByLabel('Web address').fill('http://hooks.example.org/catch/e2e');
+await page.getByLabel('Label').fill('Zapier');
+await page.getByRole('button', { name: 'Add step' }).click();
+await sleep(300);
+check('http is refused on the page', (await stepAlert()) === 'The address must start with https://', await stepAlert());
+await page.getByLabel('Web address').fill('https://192.168.1.20/hook');
+await page.getByRole('button', { name: 'Add step' }).click();
+await sleep(800);
+check('an address inside a private network is refused by the server, said in the step', (await stepAlert()) === PRIVATE && (await hookSteps()).length === 0, await stepAlert());
+await page.getByLabel('Web address').fill('https://hooks.example.org/catch/e2e?from=base');
+check('the refusal goes once the address is changed', (await page.locator('.lad-new-step .error').count()) === 0);
+await page.getByRole('button', { name: 'More details' }).click();
+await sleep(200);
+check('the signing secret is not on the page until asked for', !/sbw_[0-9a-f]{8}/.test(await page.content()));
+await page.getByRole('button', { name: 'Show secret' }).click();
+await page.waitForSelector('.lad-hook-secret__code', { timeout: 8000 }).catch(() => {});
+const secret = ((await page.locator('.lad-hook-secret__code').innerText().catch(() => '')) || '').trim();
+check('Show secret: the campaign’s own (= server)', /^sbw_[0-9a-f]{64}$/.test(secret) && secret === (await D.api('/actions/ladder.signingSecret', {})).json.secret, secret.slice(0, 12));
+await simple(page, 'builder, signing secret shown (desktop)');
+await D.shot('13-web-address-step');
+await page.setViewportSize({ width: 390, height: 844 });
+await sleep(300);
+await simple(page, 'builder, signing secret shown (phone)');
+await page.locator('.lad-new-step').scrollIntoViewIfNeeded();
+await D.shot('13b-web-address-step-phone');
+await page.setViewportSize({ width: 1360, height: 900 });
+await page.getByRole('button', { name: 'Hide' }).click();
+check('Hide takes it off the page', !/sbw_[0-9a-f]{8}/.test(await page.content()));
+await page.getByRole('button', { name: 'Add step' }).click();
+await sleep(1200);
+if (!HOOKS) {
+  // No stand-in receiver: the server looks the name up, and hooks.example.org is no one's.
+  const said = await stepAlert();
+  const kept = await hookSteps();
+  check('with no stand-in the name is looked up: saved, or "We couldn’t find …" in the step',
+    (kept.length === 1 && !said) || (kept.length === 0 && said === 'We couldn’t find hooks.example.org — check the address'), `${kept.length} saved · ${said}`);
+} else {
+  const kept = await hookSteps();
+  check('saved: the address and its label', kept.length === 1 && kept[0].url === 'https://hooks.example.org/catch/e2e?from=base' && kept[0].label === 'Zapier', JSON.stringify(kept));
+  const card = page.locator('.lad-step', { hasText: 'Send to a web address' });
+  const who = ((await card.locator('.lad-step__who').innerText().catch(() => '')) || '').trim();
+  check('the card: "Send to a web address · Zapier", where it goes by the site’s name only',
+    (await card.locator('.lad-step__line').innerText()).trim() === 'Send to a web address · Zapier'
+    && who === 'To hooks.example.org · email only if they said yes, mobile never after STOP · no ratings, notes or money', who);
+  await page.getByRole('button', { name: 'Turn on' }).click();
+  await sleep(800);
+  // Hana said yes to email; Ivo never did.
+  await D.api('/actions/subscription.add', { email: `hana.${tag}@example.org`, name: 'Hana Example' });
+  const hana = (await D.api('/actions/person.create', { name: 'Hana Example', email: `hana.${tag}@example.org`, phone: '604-555-0171', postal: 'V3T 1V8', tags: ['new-signer'] })).json.person;
+  const ivo = (await D.api('/actions/person.create', { name: 'Ivo Example', email: `ivo.${tag}@example.org`, tags: ['new-signer'] })).json.person;
+  const received = async () => (await (await fetch(`${HOOKS}/__received`)).json()).filter((x) => x.path === '/catch/e2e?from=base' && x.body?.campaign === me.workspace.name);
+  const got = await until(async () => { const all = await received(); return all.length >= 2 ? all : null; });
+  const of = (p) => (got || []).find((x) => x.body.person.id === p.id);
+  check('the address got one message for each', got?.length === 2 && !!of(hana) && !!of(ivo), `${got?.length}`);
+  check('signed with the secret the screen showed, over the bytes received', !!of(hana) && verifySignature(of(hana).raw, of(hana).headers['base-signature'], [secret]).ok
+    && !verifySignature(`${of(hana).raw} `, of(hana).headers['base-signature'], [secret]).ok);
+  check('what it says: what started the ladder, the ladder, the label, the person', of(hana)?.body.event === 'tag' && of(hana).body.ladder === 'Tell the team'
+    && of(hana).body.step === 'Zapier' && of(hana).body.person.first_name === 'Hana' && of(hana).body.person.postal === 'V3T 1V8', JSON.stringify(of(hana)?.body).slice(0, 200));
+  check('Hana said yes to email: her email and mobile; Ivo never did: no email', of(hana)?.body.person.email === `hana.${tag}@example.org` && of(hana).body.person.phone === '+16045550171'
+    && of(ivo)?.body.person.email === null && !of(ivo).raw.includes(`ivo.${tag}`), JSON.stringify([of(hana)?.body.person.email, of(ivo)?.body.person.email]));
+  await until(async () => (await D.api(`/ladders/${told.id}`)).json.people.filter((p) => p.status === 'done').length === 2);
+  await D.go(`/ladders/${told.id}`);
+  await page.getByRole('button', { name: /^Finished · / }).click().catch(() => {});
+  await sleep(300);
+  await page.locator('.lad-sec .ops-row', { hasText: 'Hana Example' }).click();
+  await sleep(300);
+  const hlog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
+  check('her log: "Zapier: Sent · 200"', hlog.some((x) => /^Zapier: Sent · 200/.test(x)), hlog.join(' | '));
+  await D.shot('13c-web-address-sent');
+  // An address that is down: the first failure is said at once (the next tries are a minute, then five, away).
+  await fetch(`${HOOKS}/__answer`, { method: 'POST', body: JSON.stringify({ status: 500, times: 1 }) });
+  const jun = (await D.api('/actions/person.create', { name: 'Jun Example', tags: ['new-signer'] })).json.person;
+  const waiting = await until(async () => (await D.api(`/ladders/${told.id}`)).json.people.find((p) => p.person.id === jun.id && p.wait === 'retry'));
+  await D.go(`/ladders/${told.id}`);
+  t = await D.text();
+  check('a failing address: "The web address didn’t take it — trying again" (server and screen)', !!waiting && /Jun Example The web address didn’t take it — trying again/.test(t), t.slice(t.indexOf('People'), t.indexOf('People') + 160));
+  await page.locator('.lad-sec .ops-row', { hasText: 'Jun Example' }).click();
+  await sleep(300);
+  const jlog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
+  check('his log: "Zapier: Didn’t go (500) — trying again"', jlog.some((x) => /^Zapier: Didn’t go \(500\) — trying again/.test(x)), jlog.join(' | '));
+  await D.shot('13d-web-address-retry');
+  await D.api('/actions/ladder.setActive', { id: told.id, active: false });
+}
 
 // ── 13. The books still verify ──
 const v = (await D.api('/audit/verify')).json;
