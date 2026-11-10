@@ -379,9 +379,9 @@ What happens:
   CallHub's words and whose number it is, and asked about again with the
   next push. Only if CallHub takes none of a campaign's numbers at all
   (five refused in a row before any was ever taken) does the push stop,
-  once, with CallHub's words; **Carry on** goes on without them. Whether a calling campaign in
-  CallHub honours that list by itself or has to be pointed at it is not
-  confirmed: look in CallHub before the first night.
+  once, with CallHub's words; **Carry on** goes on without them. Whether a
+  calling campaign in CallHub honours that list by itself or has to be
+  pointed at it is not confirmed: look in CallHub before the first night.
 - **Each call's result** comes back as the caller saves it (CallHub's
   `cc.notes` webhook). It is matched by phone number against the numbers
   this campaign sent (the newest push first) and becomes one phone call on
