@@ -534,6 +534,7 @@ const testSaid = async () => ((await page.locator('.lad-hook-more .lad-hook-said
 const hooksGot = async () => (HOOKS ? (await (await fetch(`${HOOKS}/__received`)).json()).filter((x) => x.path === '/catch/e2e?from=base' && x.body?.campaign === me.workspace.name) : []);
 await page.getByRole('button', { name: 'Send a test' }).click();
 await until(testSaid, 12000);
+check('Send a test keeps the keyboard’s place while it sends and after', (await focused()) === 'Send a test', await focused());
 if (!HOOKS) {
   // No stand-in receiver: the name is looked up, and hooks.example.org is no one's.
   check('Send a test answers in place (no stand-in: the address is looked up first)', /^(We couldn’t find hooks\.example\.org — check the address|Sent · \d+|Failed · .+|Answered with a redirect .+)$/.test(await testSaid()), await testSaid());

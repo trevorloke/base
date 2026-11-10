@@ -177,7 +177,10 @@ function SendTest({ s }) {
   const [said, setSaid] = useState(null);
   // An answer is about the address it was sent to: gone once that changes.
   useEffect(() => { setSaid(null); }, [s.url]);
+  // While it sends the button stays as it is but for its words (a button
+  // that goes grey under the keyboard drops the keyboard's place).
   const send = async () => {
+    if (busy) return;
     const why = hookMissing(s);
     if (why) { setSaid({ ok: false, words: why }); return; }
     setBusy(true);
@@ -192,7 +195,7 @@ function SendTest({ s }) {
       <span className="lad-hook-more__name">Send a test</span>
       <p className="lad-hint">One message about a made-up person, Sam Example.</p>
       <div className="ops-actions">
-        <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={send}>{busy ? 'Sending…' : 'Send a test'}</button>
+        <button type="button" className="btn ops-tap" disabled={!online} aria-busy={busy} onClick={send}>{busy ? 'Sending…' : 'Send a test'}</button>
         {!online && <NeedsSignal>Needs signal</NeedsSignal>}
       </div>
       {said && <p className={said.ok ? 'ops-done lad-hook-said' : 'error lad-hook-said'} role={said.ok ? 'status' : 'alert'}>{said.words}</p>}
@@ -218,6 +221,7 @@ function SigningSecret() {
   const newBtn = useRef(null);
   const noBtn = useRef(null);
   const ask = async (name) => {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -244,8 +248,9 @@ function SigningSecret() {
           {confirm ? (
             <div className="ops-confirm">
               <span>Make a new secret? The old one stops working.</span>
-              <button type="button" className="btn ops-danger ops-tap" disabled={busy || !online} onClick={() => ask('ladder.newSigningSecret')}>Yes</button>
+              <button type="button" className="btn ops-danger ops-tap" disabled={!online} aria-busy={busy} onClick={() => ask('ladder.newSigningSecret')}>Yes</button>
               <button ref={noBtn} type="button" className="btn btn-quiet ops-tap" onClick={() => { focusOn(() => newBtn.current); setConfirm(false); }}>No</button>
+              {!online && <NeedsSignal>Needs signal</NeedsSignal>}
             </div>
           ) : (
             <div className="ops-actions">
@@ -257,7 +262,7 @@ function SigningSecret() {
         </>
       ) : (
         <div className="ops-actions">
-          <button ref={showBtn} type="button" className="btn ops-tap" disabled={busy || !online} onClick={() => ask('ladder.signingSecret')}>Show secret</button>
+          <button ref={showBtn} type="button" className="btn ops-tap" disabled={!online} aria-busy={busy} onClick={() => ask('ladder.signingSecret')}>Show secret</button>
           {!online && <NeedsSignal>Needs signal</NeedsSignal>}
         </div>
       )}
