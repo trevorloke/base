@@ -55,7 +55,7 @@ import { mayRun } from '../../lib/perms.js';
 // hours read it, and the tests set it).
 import { MAX_BODY, now } from '../texting/rules.js';
 import { quietState, settingsFor as textingSettings } from '../texting/store.js';
-import { dayInput, tzOf } from './rules.js';
+import { dayInput, inParts, tzOf } from './rules.js';
 
 export const TELL_JOB = 'schedule.tell';
 export const REMIND_JOB = 'schedule.remind';
@@ -150,12 +150,12 @@ const weekBookings = async (q, ws, monday, tz) => (await q.query(
   [ws, HOLD, instantOf(monday, '00:00', tz), instantOf(addDays(monday, 7), '00:00', tz), now().toISOString()],
 )).rows;
 
-const insertNotices = (tx, ws, { kind, batchId, week = null, userId = null }, list) => tx.query(
+const insertNotices = (tx, ws, { kind, batchId, week = null, userId = null }, list) => inParts(list, 25, (part) => tx.query(
   `insert into shift_notices (id, workspace_id, kind, batch_id, week, person_id, assignment_ids, created_by)
    select x.id, $1, $2, $3, $4::date, x.person_id, x.assignment_ids, $5
      from jsonb_to_recordset($6::jsonb) as x(id uuid, person_id uuid, assignment_ids jsonb)`,
-  [ws, kind, batchId, week, userId, JSON.stringify(list)],
-);
+  [ws, kind, batchId, week, userId, JSON.stringify(part)],
+));
 // One row a person, from their bookings in order.
 const byPerson = (bookings) => {
   const ids = new Map();

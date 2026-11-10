@@ -45,7 +45,7 @@ import { newId } from '../../lib/events.js';
 import { areasFor } from '../../lib/perms.js';
 import { cacheClear } from '../site/cache.js';
 import {
-  END_FIRST, clockInput, clockTimes, dayInput, livePlace, movedTimes, needInput, turfWords, tzOf,
+  END_FIRST, clockInput, clockTimes, dayInput, inParts, livePlace, movedTimes, needInput, turfWords, tzOf,
 } from './rules.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -72,24 +72,24 @@ const turfsFor = async (tx, ctx, ids) => {
   return live;
 };
 
-// Rows go in together: one statement however many (the campaign's lock is
-// held meanwhile — a city's door-knocks wait on it).
-const insertShifts = (tx, ws, userId, list) => tx.query(
+// Rows go in many to a statement — a few statements however many shifts
+// (the campaign's lock is held meanwhile: a city's door-knocks wait on it).
+const insertShifts = (tx, ws, userId, list) => inParts(list, 25, (part) => tx.query(
   `insert into shifts (id, workspace_id, title, role, location, starts_at, ends_at, instructions, link, capacity, created_by,
                        kind, place_id, need, title_custom, series_id, public)
    select x.id, $1, x.title, x.role, x.location, x.starts_at, x.ends_at, x.instructions, x.link, x.capacity, $2,
           x.kind, x.place_id, x.need, x.title_custom, x.series_id, coalesce(x.public, false)
      from jsonb_to_recordset($3::jsonb) as x(id uuid, title text, role text, location text, starts_at timestamptz, ends_at timestamptz,
           instructions text, link text, capacity int, kind text, place_id uuid, need int, title_custom boolean, series_id uuid, public boolean)`,
-  [ws, userId, JSON.stringify(list)],
-);
+  [ws, userId, JSON.stringify(part)],
+));
 // shift_turfs is ext/shiftturfs' table: a new shift has nobody on it yet,
 // so there are no walk lists to hand out — its hook does that per booking.
-const insertTurfs = (tx, ws, pairs) => (pairs.length ? tx.query(
+const insertTurfs = (tx, ws, pairs) => inParts(pairs, 200, (part) => tx.query(
   `insert into shift_turfs (workspace_id, shift_id, turf_id)
    select $1, x.shift_id, x.turf_id from jsonb_to_recordset($2::jsonb) as x(shift_id uuid, turf_id uuid) on conflict do nothing`,
-  [ws, JSON.stringify(pairs)],
-) : null);
+  [ws, JSON.stringify(part)],
+));
 
 // What a new shift's event says: what was stored, nothing empty.
 const createPayload = (s) => Object.fromEntries(Object.entries({
@@ -268,13 +268,11 @@ export const manyActions = {
             dst.holding += 1;
           }
         }
-        if (bookings.length) {
-          await tx.query(
-            `insert into shift_assignments (id, workspace_id, shift_id, person_id)
-             select x.id, $1, x.shift_id, x.person_id from jsonb_to_recordset($2::jsonb) as x(id uuid, shift_id uuid, person_id uuid)`,
-            [ws, JSON.stringify(bookings)],
-          );
-        }
+        await inParts(bookings, 100, (part) => tx.query(
+          `insert into shift_assignments (id, workspace_id, shift_id, person_id)
+           select x.id, $1, x.shift_id, x.person_id from jsonb_to_recordset($2::jsonb) as x(id uuid, shift_id uuid, person_id uuid)`,
+          [ws, JSON.stringify(part)],
+        ));
         for (const b of bookings) emit('shift_assignment', b.id, 'create', b);
       }
       const noTurfs = canTurfs ? 0 : turfsOf.size;

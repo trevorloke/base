@@ -60,3 +60,10 @@ export const turfWords = async (tx, ws, turfIds) => (await tx.query(
 
 // The name a shift gets when nobody typed one: its kind and its place.
 export const titleFor = (shift) => madeTitle(kindOf(shift).code, shift.location);
+
+// Many rows, a few to a statement: `each(part)` for every `size` of them, in
+// order. No statement is ever a very large message (two hundred shifts with
+// their instructions in one would be).
+export const inParts = async (list, size, each) => {
+  for (let i = 0; i < list.length; i += size) await each(list.slice(i, i + size));
+};
