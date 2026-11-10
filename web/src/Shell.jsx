@@ -34,6 +34,7 @@ import './pages/offline.css';
 import CommandBar from './components/CommandBar.jsx';
 import NewVersion from './components/NewVersion.jsx';
 import ScreenBoundary from './components/ScreenBoundary.jsx';
+import { usePageClass } from './layout.js';
 import { at } from './base.js';
 import { BRAND } from './brand.js';
 
@@ -289,6 +290,8 @@ function SignedInShell({ who, mode }) {
   const me = mode === 'field' ? fieldView(who) : who;
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // 'page', and 'page--map' on the map: the layout by class, not :has() (layout.js).
+  const pageClass = usePageClass();
 
   const desk = isDesk(me);
   // The admin: the tabs of the areas they have. The field app: a volunteer's five.
@@ -483,7 +486,7 @@ function SignedInShell({ who, mode }) {
         {/* The server has a newer build than this page: "A new version is ready · Reload". */}
         <NewVersion />
       </header>
-      <main className="page">
+      <main className={pageClass}>
         {/* A screen that fails to load says so (with Reload); the nav stays. */}
         <ScreenBoundary>
           <Suspense fallback={<p className="muted">Loading…</p>}>

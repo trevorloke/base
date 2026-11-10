@@ -4,11 +4,18 @@
    Field rule: every tap target here is at least 48px.
    Everything leans on the ink-on-paper tokens in app.css. */
 
-/* ── Page frame: full-bleed on phones, tall within the column on desktop ── */
+/* ── Page frame: full-bleed on phones, tall within the column on desktop ──
+   Every dvh height has the same in vh before it: a browser that doesn't know
+   dvh (Safari before 15.4, Chrome before 108) drops that line, and without
+   the one before it the map was 0 px tall on a phone.
+   On a desktop the map takes the window less the page's own padding (32 px
+   above; 48 below, of which the margin here takes 24 back), so nothing is
+   left to scroll; the floor is low enough for a phone held sideways. */
 .map-page {
   position: relative;
-  height: calc(100dvh - var(--nav-h, 49px) - var(--s-5) - var(--s-5));
-  min-height: 440px;
+  height: calc(100vh - var(--nav-h, 49px) - var(--s-6) - var(--s-5));
+  height: calc(100dvh - var(--nav-h, 49px) - var(--s-6) - var(--s-5));
+  min-height: 240px;
   margin-bottom: calc(var(--s-5) - var(--s-7));
   border: 1px solid var(--rule-2);
   border-radius: var(--r-card);
@@ -18,6 +25,7 @@
 @media (max-width: 720px) {
   .map-page {
     margin: calc(-1 * var(--s-5)) calc(-1 * var(--s-4)) -64px;
+    height: calc(100vh - var(--nav-h, 49px) - var(--tabbar-h, 34px));
     height: calc(100dvh - var(--nav-h, 49px) - var(--tabbar-h, 34px));
     min-height: 0;
     border: 0;
@@ -343,7 +351,9 @@
 }
 @media (hover: hover) { .btn.map-hint__x:hover { background: color-mix(in srgb, currentColor 14%, transparent); border-color: transparent; } }
 
-/* Filter sheet: popover under the button on desktop, bottom sheet on phones */
+/* Filter sheet: popover under the button on desktop, bottom sheet on phones.
+   It is taller than a laptop's map, so it scrolls inside it (it was cut off
+   at the map's edge, its last lines out of reach); its title and ✕ stay. */
 .map-scrim { position: absolute; inset: 0; z-index: 4; border: 0; padding: 0; margin: 0; background: rgba(15, 23, 51, 0.12); cursor: default; }
 .map-fsheet {
   position: absolute;
@@ -352,6 +362,9 @@
   z-index: 5;
   width: 340px;
   max-width: calc(100% - 16px);
+  max-height: calc(100% - 56px - 3 * var(--s-2));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 var(--s-4) var(--s-4);
   background: var(--paper-0);
   color: var(--text-1);
@@ -359,14 +372,16 @@
   border-radius: var(--r-card);
   box-shadow: var(--shadow-2);
 }
-.map-fsheet__head { display: flex; align-items: center; justify-content: space-between; min-height: 56px; }
+.map-fsheet__head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; min-height: 56px; background: var(--paper-0); }
 .map-fsheet__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
 .map-fopt {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  align-content: center;
+  gap: 2px 10px;
   min-height: 52px;
-  padding: 0 var(--s-3);
+  padding: 6px var(--s-3);
   font-family: var(--font-serif);
   font-size: 16px;
   text-align: left;
@@ -384,9 +399,12 @@
 .map-fopt[data-band='undecided'] { --dot-ring: #b87400; }
 .map-fopt[data-band='mine'] .map-fopt__dot { background: transparent; border: 2px solid currentColor; }
 .map-fopt[data-band='signs'] .map-fopt__dot { border-radius: 2px; background: #ffffff; border: 2px solid #161a2e; }
-.map-fopt__label { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.2; } /* field rule: words wrap, never cut */
+/* Field rule: words wrap, never cut — and never in the middle of one
+   ("Unra-ted" beside a whole voter list's count): the name keeps its line,
+   and a count too long to sit beside it goes under it. */
+.map-fopt__label { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; line-height: 1.2; }
 .map-fsheet__grid + .map-fsheet__sub { margin-top: var(--s-3); }
-.map-fopt__n { font-size: 13px; color: var(--text-3); }
+.map-fopt__n { margin-left: auto; font-size: 13px; color: var(--text-3); }
 .map-fopt.is-on { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
 .map-fopt.is-on .map-fopt__n { color: var(--paper-0); }
 /* "On the map" (desk): layer switches, plainly not one of the Show choices */
@@ -555,6 +573,7 @@
     bottom: var(--tabbar-h, 0px);
     width: auto;
     max-width: none;
+    max-height: 66vh;
     max-height: 66dvh;
     border-left: 0;
     border-right: 0;
@@ -861,7 +880,7 @@
 
 /* The turf sheet */
 .turf-sheet { --turf: #2b6cb0; }
-@media (max-width: 720px) { .turf-sheet { max-height: 70dvh; } }
+@media (max-width: 720px) { .turf-sheet { max-height: 70vh; max-height: 70dvh; } }
 .turf-swatch { display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 2px; background: var(--turf); vertical-align: 1px; }
 .turf-sheet__body { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-3) 0 var(--s-3); }
 .turf-sheet__body > :not(.fk-more) { margin-left: var(--s-4); margin-right: var(--s-4); }
