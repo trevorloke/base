@@ -769,6 +769,19 @@ try {
   const sunday = (await board(W4)).shifts.find((x) => x.id === dragged);
   check('narrow: a card dropped on Sunday in the day strip moves there, the same hours', lit === 1 && iso(sunday.starts_at) === at(addDays(W4, 6), '16:00')
     && iso(sunday.ends_at) === at(addDays(W4, 6), '18:00'), `${lit} ${sunday.starts_at}`);
+  // A small phone (360 wide): the week and the add sheet still fit across.
+  await sp.setViewportSize({ width: 360, height: 740 });
+  await sleep(300);
+  const small = await measure(sp);
+  await sp.locator('.sch-plus').click();
+  await sp.waitForSelector('.sch-sheet .sch-tile', { timeout: 8000 });
+  await sp.locator('.sch-sheet .sch-tile:has-text("Mainstreet")').click();
+  await sp.waitForSelector('.sch-sheet .sch-daychip', { timeout: 8000 });
+  const smallSheet = await measure(sp, SHEET_TARGETS);
+  const sheetW = await sp.locator('.sch-sheet').evaluate((el) => ({ w: el.getBoundingClientRect().width, inner: el.scrollWidth }));
+  check('360 wide: no sideways scroll on the week or in the add sheet', small.overflow <= 0 && smallSheet.overflow <= 0 && sheetW.inner <= Math.ceil(sheetW.w),
+    JSON.stringify({ small: small.overflow, sheet: smallSheet.overflow, sheetW }));
+  await sp.screenshot({ path: `${SHOTS}/41-add-sheet-360.png` });
   await slim.close();
 
   // A weak signal: the map is its own download; one that doesn't arrive says so, and the sheet stays.
