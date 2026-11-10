@@ -168,8 +168,11 @@ export function looksLikeData(cells) {
 // Text → { delimiter, all: [{ cells, row }], header } or { error }.
 // header: whether the first non-blank row is column names (a guess).
 // A big file is parsed a slice at a time; progress(share) hears how far (0–1).
-async function readTable(text, progress) {
-  if (!text || !/\S/.test(text)) return { error: 'That file is empty. Choose a CSV with at least one person in it.' };
+// what: what a row of the file is, for the words (the gift import's: gifts).
+const PEOPLE = { one: 'person', many: 'people' };
+async function readTable(text, progress, what = PEOPLE) {
+  const empty = { error: `That file is empty. Choose a CSV with at least one ${what.one} in it.` };
+  if (!text || !/\S/.test(text)) return empty;
   const parser = csvParser(text);
   while (!parser.step(PARSE_SLICE)) {
     progress?.(parser.at());
@@ -178,16 +181,16 @@ async function readTable(text, progress) {
   const { delimiter, rows } = parser;
   const all = [];
   rows.forEach((cells, i) => { if (!isBlankRow(cells)) all.push({ cells, row: i + 1 }); }); // spreadsheet row numbers
-  if (!all.length) return { error: 'That file is empty. Choose a CSV with at least one person in it.' };
+  if (!all.length) return empty;
   return { delimiter, all, header: !looksLikeData(all[0].cells) };
 }
 
 // The rows, with or without the first as column names → { headers, records } or { error }.
-function shapeTable(all, header) {
+function shapeTable(all, header, what = PEOPLE) {
   const head = header ? all[0].cells : [];
   const records = header ? all.slice(1) : all;
   if (records.length === 0) {
-    return { error: 'There’s a header row but no people under it. Check you saved the whole sheet.' };
+    return { error: `There’s a header row but no ${what.many} under it. Check you saved the whole sheet.` };
   }
   let width = Math.min(500, Math.max(head.length, ...records.slice(0, 500).map((r) => r.cells.length)));
   // Drop trailing columns with no header and nothing in them ("a,b," on every line).

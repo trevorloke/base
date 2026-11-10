@@ -66,6 +66,10 @@ test('Today carries the ones within 30 days, for money roles only', async () => 
     assert.deepEqual(await onToday(c), [{ name: 'Disclosure statement due', due_on: plus(12), days: 12 }]);
   }
   assert.equal((await onToday(vol)), undefined, 'a volunteer’s Today has none');
+  // Donations counts down to both, however far, from the same read.
+  assert.deepEqual(ok(await treas.get('/api/brief')).filingAll.map((d) => [d.slot, d.name, d.days]),
+    [[1, 'Disclosure statement due', 12], [2, 'Annual report due', 80]]);
+  assert.equal(ok(await vol.get('/api/brief')).filingAll, undefined);
   // The day itself and the 30th day count; the 31st does not; one that has passed is off Today.
   ok(await mgr.action('filing.dates', { dates: [{ name: 'Due today', due_on: plus(0) }, { name: 'Due in thirty', due_on: plus(30) }] }));
   assert.deepEqual((await onToday(staff)).map((d) => d.days), [0, 30]);

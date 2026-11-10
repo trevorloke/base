@@ -16,7 +16,9 @@
 //                 days }], today, can_edit } — days: whole days from today
 //                 on the campaign's calendar (negative once it has passed).
 //   brief hook    Today's brief.filing: the dates 0 to 30 days away, for
-//                 money roles; a volunteer's brief has none.
+//                 money roles; a volunteer's brief has none. And
+//                 brief.filingAll: both dates, however far — Donations
+//                 counts down to each from the read it already makes.
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
@@ -106,6 +108,7 @@ const briefFiling = async (db, ctx, brief) => {
   if (!MONEY_ROLES.includes(ctx.role) || decide(ctx.perms, 'money') === false) return;
   const { dates } = await datesOf(db, ctx);
   brief.filing = dates.filter((d) => d.days >= 0 && d.days <= TODAY_WITHIN).map(({ name, due_on, days }) => ({ name, due_on, days }));
+  brief.filingAll = dates;
 };
 
 export const hooks = { brief: briefFiling };

@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { runDueJobs } from '../lib/jobs.js';
+import { campaignDay } from '../lib/gifts.js';
 import {
   readAmount, readGiftDate, dateOrderOf, readMethod, flipName, giftKey, keyRows,
 } from '@starbase/shared/giftfile';
@@ -328,6 +329,8 @@ test('an import: through the one gift path, quiet, once only', async () => {
   assert.equal(brief.money.totalCents, 1000 + 122500);
   const profile = ok(await treas.get(`/api/persons/${P.ana.id}`));
   assert.equal(profile.gifts.length, 2);
+  assert.ok(profile.gifts.every((g) => g.source === 'import'), 'her profile can mark them Imported');
+  assert.equal(ok(await treas.get(`/api/persons/${P.cy.id}`)).gifts[0].source, null, 'a gift typed at the desk is not');
   assert.equal(Number(profile.totals.find((t) => t.year === yr).total_cents), 120000);
   assert.ok(stew.lapsed.some((d) => d.person_id === P.ana.id && d.last_year_cents === 120000), 'gave last year, not yet this one');
   const csv = (await raw(treas, `/api/receipts/disclosure.csv?period=${yr}`)).text;
@@ -365,6 +368,9 @@ test('without an id: donor, amount, date and method are the gift — and two tha
 test('the pile: imported gifts that need a donor, settled by a person', async () => {
   let list = ok(await staff.get('/api/gifts/imports'));
   assert.deepEqual(list.waiting, { gifts: 2, cents: 10000 });
+  // Donations reads the count with Today's brief (one read): money roles only.
+  assert.deepEqual(ok(await staff.get('/api/brief')).giftsWaiting, { gifts: 2, cents: 10000 });
+  assert.equal(ok(await vol.get('/api/brief')).giftsWaiting, undefined, 'a volunteer’s brief has none');
   let pile = ok(await staff.get('/api/gifts/imports/waiting'));
   assert.equal(pile.groups.length, 1, 'one donor, as the file names them');
   const g = pile.groups[0];
@@ -385,6 +391,7 @@ test('the pile: imported gifts that need a donor, settled by a person', async ()
   assert.ok(!ok(await treas.get('/api/stewardship')).to_thank.some((x) => x.person_id === made.person.id));
   list = ok(await staff.get('/api/gifts/imports'));
   assert.deepEqual(list.waiting, { gifts: 0, cents: 0 });
+  assert.deepEqual(ok(await staff.get('/api/brief')).giftsWaiting, { gifts: 0, cents: 0 });
   assert.equal((await staff.action('gift.importSettle', { ids: g.gifts.map((x) => x.id), person_id: made.person.id })).status, 409, 'settled once');
 
   // A row that could be two people shows them; the limit is checked when it is settled.
@@ -408,6 +415,40 @@ test('the pile: imported gifts that need a donor, settled by a person', async ()
   ok(await treas.action('gift.importSettle', { ids: out.gifts.map((x) => x.id), leave_out: true }));
   assert.deepEqual(ok(await treas.get('/api/gifts/imports')).waiting, { gifts: 0, cents: 0 });
   assert.deepEqual(states(await check([row({ name: 'Left Out', amount_cents: 100, source_id: 'GL-22' })])), ['already']);
+});
+
+// A ladder whose goal is "Gave" (ext/ladders): a gift brought in is on the
+// books today whenever it was given, so it counts by the day it was given —
+// one from long before they were put on the ladder ends nothing.
+test('a ladder’s goal “Gave”: a gift brought in counts by the day it was given', async () => {
+  const ask = ok(await mgr.action('ladder.create', {
+    name: 'Ask to give', trigger: { kind: 'tag', ref: 'ask-give' }, goal: 'gift',
+    steps: [{ kind: 'wait', n: 3, unit: 'days' }, { kind: 'tag', tag: 'asked' }],
+  })).ladder;
+  ok(await mgr.action('ladder.setActive', { id: ask.id, active: true }));
+  const gia = await person('Gia', 'Longago', { email: mail('gia'), tags: ['ask-give'] });
+  const hal = await person('Hal', 'Justnow', { email: mail('hal'), tags: ['ask-give'] });
+  const runOf = async (id) => (await db.query(
+    'select status, log from ladder_runs where workspace_id = $1 and ladder_id = $2 and person_id = $3', [ws, ask.id, id],
+  )).rows[0];
+  const last = (run) => (typeof run.log === 'string' ? JSON.parse(run.log) : run.log).slice(-1)[0];
+  assert.equal((await runOf(gia.id)).status, 'active');
+  const r = await bring([
+    row({ first: 'Gia', last: 'Longago', email: mail('gia'), date: `${yr}-03-01`, source_id: 'GL-70' }),
+    row({ first: 'Hal', last: 'Justnow', email: mail('hal'), date: campaignDay(new Date(), 'America/Vancouver'), source_id: 'GL-71' }),
+  ]);
+  assert.deepEqual(states(r), ['new', 'new']);
+  assert.equal((await runOf(gia.id)).status, 'active', 'given long before she was put on: still on the ladder');
+  const halRun = await runOf(hal.id);
+  assert.equal(halRun.status, 'done', 'given since he was put on: off it');
+  assert.equal(last(halRun).result, 'goal');
+  // The steps that run next look the same way: Gia's ladder runs to its end.
+  for (let i = 0; i < 2; i += 1) {
+    await db.query(`update jobs set run_at = now() where workspace_id = $1 and kind = 'ladder.step' and status = 'pending'`, [ws]);
+    await runDueJobs(db, { workspaceId: ws });
+  }
+  const giaRun = await runOf(gia.id);
+  assert.deepEqual([giaRun.status, last(giaRun).result], ['done', 'finished']);
 });
 
 test('who may: treasurers and managers bring a file in; the desk settles; volunteers see none of it', async () => {

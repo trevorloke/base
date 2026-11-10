@@ -30,10 +30,14 @@
 //   rows.js     one row of the file, checked
 //   match.js    whose gift it is
 //   actions.js  gift.import · gift.importSettle · gift.importUndo
-//   api.js      GET /gifts/imports · /gifts/imports/waiting (money roles)
+//   api.js      GET /gifts/imports · /gifts/imports/waiting (money roles);
+//               the brief's giftsWaiting (Donations → Needs you)
+import { briefWaiting } from './api.js';
+
 export { sql } from './sql.js';
 export { actions } from './actions.js';
 export { api, deskOnlyReads } from './api.js';
+export const hooks = { brief: briefWaiting };
 
 // In the full export: every file brought in, and what waited for a donor.
 export const exportTables = ['gift_imports', 'gift_import_rows'];

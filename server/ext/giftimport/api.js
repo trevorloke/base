@@ -10,7 +10,7 @@
 //                                names them: their gifts, and the records
 //                                they could be (as things stand now)
 import { Hono } from 'hono';
-import { mayRun } from '../../lib/perms.js';
+import { decide, mayRun } from '../../lib/perms.js';
 import { actions, MONEY_ROLES } from './actions.js';
 import { findDonors } from './match.js';
 
@@ -98,3 +98,17 @@ api.get('/gifts/imports/waiting', async (c) => {
 });
 
 export const deskOnlyReads = [/^\/api\/gifts\/imports(\/.*)?$/];
+
+// Donations → Needs you (GET /api/brief; money roles not kept out of
+// Donations): how many gifts from a file wait for a donor, and how much — on
+// the read the screen already makes, so the pile is never a block that goes
+// missing by itself.
+export const briefWaiting = async (db, ctx, brief) => {
+  if (!MONEY_ROLES.includes(ctx.role) || decide(ctx.perms, 'money') === false) return;
+  const w = (await db.query(
+    `select count(*)::int as n, coalesce(sum(amount_cents), 0)::bigint as cents from gift_import_rows
+      where workspace_id = $1 and status = 'waiting'`,
+    [ctx.workspaceId],
+  )).rows[0];
+  brief.giftsWaiting = { gifts: w.n, cents: Number(w.cents) };
+};

@@ -360,7 +360,7 @@ app.get('/persons/:id', async (c) => {
     return c.json(into ? { error: 'merged into another record', merged_into: into } : { error: 'not found' }, 404);
   }
   const gifts = (await db.query(
-    `select id, amount_cents, date, method, cadence, note, flagged, flag_reason from gifts
+    `select id, amount_cents, date, method, cadence, note, flagged, flag_reason, attrs->>'source' as source from gifts
      where workspace_id = $1 and person_id = $2 and deleted_at is null order by date desc limit 200`,
     [ctx.workspaceId, person.id],
   )).rows;
