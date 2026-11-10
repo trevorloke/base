@@ -15,11 +15,22 @@
 //                       re-routing speed to lead, ext/followups). A ladder's
 //                       own follow-ups ("Thank Ana for her gift") go to the
 //                       desk only: a volunteer never sees money.
+//   ladder.signingSecret  the secret this campaign's "Send to a web address"
+//                       messages are signed with, for whoever sets up the
+//                       other end. Answered only here, never by a read; each
+//                       look is on the event log.
+//
+// A "Send to a web address" step (create, update): its address must be
+// https and must not point inside a private network (webhook.js) — the
+// words are checked in the write, a new address's name is looked up before
+// it (`before`: no lookup ever holds the campaign's lock). Only the desk
+// makes one: it hands on emails a volunteer may never see.
 import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { triggerSchema, stepsSchema, goalSchema, runnable, parseJson, textProblem } from './shape.js';
 import { pauseLadder, resumeLadder, endRun, appendLog } from './engine.js';
+import { addressProblem, cleanAddress, lookupProblem, signingSecret } from './webhook.js';
 import { campaignOf, hasTable } from '../webdid/words.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -68,6 +79,38 @@ const checkTexts = (ctx, steps) => {
   }
 };
 
+// "Send to a web address" steps, each address checked on its words and
+// kept tidy. Never a volunteer's, even one given Outreach.
+const isHook = (s) => s.kind === 'webhook';
+const deskOnlyHooks = (ctx, steps) => {
+  if (ctx.role === 'volunteer' && (steps || []).some(isHook)) throw httpError(403, 'Only the desk can send to a web address');
+};
+const checkHooks = (ctx, steps) => {
+  deskOnlyHooks(ctx, steps);
+  return (steps || []).map((s) => {
+    if (!isHook(s)) return s;
+    const why = addressProblem(s.url);
+    if (why) throw httpError(400, why);
+    return { ...s, url: cleanAddress(s.url) };
+  });
+};
+// Before the write: the name behind each address this ladder doesn't
+// already send to is looked up (an address saved before isn't asked about
+// again — a lookup that fails must not stop another step being edited).
+const lookUpHooks = async (db, ctx, input) => {
+  const hooks = (input.steps || []).filter(isHook);
+  if (!hooks.length) return;
+  deskOnlyHooks(ctx, hooks);
+  const cur = input.id ? (await db.query(
+    'select steps from ladders where id = $1 and workspace_id = $2 and deleted_at is null', [input.id, ctx.workspaceId],
+  )).rows[0] : null;
+  const known = new Set(parseJson(cur?.steps, []).filter(isHook).map((s) => s.url));
+  for (const s of hooks) {
+    const why = addressProblem(s.url) || (known.has(cleanAddress(s.url)) ? null : await lookupProblem(s.url));
+    if (why) throw httpError(400, why);
+  }
+};
+
 const out = (l) => ({
   id: l.id, name: l.name, trigger: { kind: l.trigger_kind, ref: l.trigger_ref || null },
   steps: parseJson(l.steps, []), active: l.active, reentry: l.reentry, goal: l.goal || null,
@@ -83,9 +126,11 @@ export const actions = {
       reentry: z.boolean().default(false),
       goal: goalSchema.nullish(),
     }),
+    before: lookUpHooks,
     handler: async (tx, ctx, input, emit) => {
       const ref = await checkRef(tx, ctx.workspaceId, input.trigger);
       checkTexts(ctx, input.steps);
+      input.steps = checkHooks(ctx, input.steps);
       const id = newId();
       const goal = input.goal || null;
       await tx.query(
@@ -111,6 +156,7 @@ export const actions = {
       // A goal, or null to have none; left out, it stays as it is.
       goal: goalSchema.nullable().optional(),
     }),
+    before: lookUpHooks,
     handler: async (tx, ctx, input, emit) => {
       const cur = await loadLadder(tx, ctx.workspaceId, input.id);
       const next = { ...cur };
@@ -124,6 +170,7 @@ export const actions = {
       if (input.steps) {
         if (cur.active && !runnable(input.steps)) throw httpError(400, 'a ladder that is on needs a step that does something');
         checkTexts(ctx, input.steps);
+        input.steps = checkHooks(ctx, input.steps);
         next.steps = input.steps;
         patch.steps = input.steps;
       }
@@ -198,6 +245,20 @@ export const actions = {
       await appendLog(tx, run, { step: Number(run.step), kind: 'end', result: 'taken_off' });
       emit('ladder_run', run.id, 'update', { ladder_id: run.ladder_id, person_id: run.person_id, status: 'done', reason: 'taken_off' });
       return { id: run.id, status: 'done' };
+    },
+  },
+
+  'ladder.signingSecret': {
+    roles: DESK,
+    input: z.object({}),
+    // Worked out before the write (it reads the server's own secret).
+    before: async (db, ctx) => {
+      if (ctx.role === 'volunteer') throw httpError(403, 'Only the desk can see the signing secret');
+      return { secret: await signingSecret(ctx.workspaceId) };
+    },
+    handler: async (tx, ctx, input, emit, ready) => {
+      emit('workspace', ctx.workspaceId, 'update', { ladder_signing_secret: 'shown' });
+      return { secret: ready.secret };
     },
   },
 

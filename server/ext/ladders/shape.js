@@ -51,12 +51,17 @@ export const GOAL_KINDS = Object.keys(GOALS);
 // {{first_name}} and {{campaign}}; a follow-up is a task for staff. A text
 // goes through the campaign's texting (ext/texting): inside its hours,
 // never to a number that replied STOP, "Reply STOP to opt out" on each.
-export const STEP_KINDS = ['wait', 'email', 'text', 'tag', 'untag', 'followup', 'stop'];
+// "Send to a web address" (webhook) posts one small signed message about
+// the person to an https address the desk typed, under a short label
+// (webhook.js: which addresses, what is sent).
+export const STEP_KINDS = ['wait', 'email', 'text', 'tag', 'untag', 'followup', 'stop', 'webhook'];
 export const MAX_STEPS = 20;
 export const WAIT_UNITS = { hours: 3600_000, days: 86_400_000 };
 // A text's own words; the opt-out line is added after them, inside the
 // texting module's 1,000.
 export const TEXT_MAX = 900;
+export const HOOK_URL_MAX = 500;
+export const HOOK_LABEL_MAX = 40;
 
 const tagName = z.string().trim().min(1).max(40);
 export const stepSchema = z.discriminatedUnion('kind', [
@@ -71,6 +76,11 @@ export const stepSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('untag'), tag: tagName }),
   z.object({ kind: z.literal('followup'), text: z.string().trim().min(1).max(300) }),
   z.object({ kind: z.literal('stop') }),
+  z.object({
+    kind: z.literal('webhook'),
+    url: z.string().trim().min(1).max(HOOK_URL_MAX),
+    label: z.string().trim().min(1).max(HOOK_LABEL_MAX),
+  }),
 ]);
 export const stepsSchema = z.array(stepSchema).max(MAX_STEPS);
 

@@ -217,8 +217,13 @@ const runOut = (r, steps) => {
     last: log.length ? log[log.length - 1] : null,
     skipped: log.filter((e) => e.result === 'skipped').map((e) => ({ step: e.step, kind: e.kind, reason: e.reason })),
     // What each step did (kind, result, reason, when) — no addresses, no
-    // message text. 'Sending' shows only while it's the latest word.
-    log: log.filter((e, i) => e.result !== 'sending' || i === log.length - 1).slice(-20).map((e) => ({ step: e.step, kind: e.kind, result: e.result, reason: e.reason || null, tag: e.tag || null, until: e.until || null, goal: e.goal || null, at: e.at })),
+    // message text. 'Sending' shows only while it's the latest word. A
+    // "Send to a web address" step: its label, the answer's number ("Sent ·
+    // 200") or why there was none, and how many tries.
+    log: log.filter((e, i) => e.result !== 'sending' || i === log.length - 1).slice(-20).map((e) => ({
+      step: e.step, kind: e.kind, result: e.result, reason: e.reason || null, tag: e.tag || null, until: e.until || null, goal: e.goal || null, at: e.at,
+      ...(e.kind === 'webhook' ? { label: e.label || null, status: e.status ?? null, why: e.why || null, tries: e.tries ?? null } : {}),
+    })),
     started_at: r.started_at,
     finished_at: r.finished_at || null,
   };

@@ -49,6 +49,15 @@
 // email; a text is never tried twice by itself (texts carry no key the
 // provider could use to send one once).
 //
+// "Send to a web address" steps post one small signed message about the
+// person to the address the desk typed (webhook.js): their email or mobile
+// only when an email or a text step could reach them, nothing at all for
+// do-not-contact. Sent in the same two writes as an email, 5 seconds at
+// most; an address that doesn't take it is tried again after a minute,
+// then after five more — three tries in all — then logged as failed and
+// the run moves on. Each try carries the same key (the run and the step),
+// so a receiver that got one after all can tell.
+//
 // Goals: a ladder may have one (came to a shift, gave, became a member,
 // voted). The events hook takes anyone who does it off every ladder with
 // that goal at once, whatever step they are on — on or off — and each step
@@ -65,11 +74,15 @@ import { hasTable } from '../webdid/words.js';
 import {
   parseJson, tagsOf, sameTag, isDnc, noEmail, noText, fillIn, waitMs,
 } from './shape.js';
+import { hookBody, postHook, signingSecret } from './webhook.js';
 
 export const JOB = 'ladder.step';
 export const STEP_ACTION = 'ladder.step';
 const HOUR = 3600_000;
 const EMAIL_TRIES = 3;
+const HOOK_TRIES = 3;
+// After a try at a web address that failed: again in a minute, then in five.
+const HOOK_BACKOFF = [60_000, 5 * 60_000];
 const LOG_KEEP = 50;
 // Writes that never start a ladder.
 const QUIET_ACTIONS = new Set(['sample.load', 'sample.clear', 'import.persons']);
@@ -426,7 +439,8 @@ const loadStepContext = async (tx, job) => {
   )).rows[0];
   if (!ladder || ladder.deleted_at || !ladder.active) return null;
   const person = (await tx.query(
-    'select id, name, email, phone, tags from persons where id = $1 and workspace_id = $2 and deleted_at is null',
+    `select id, name, first_name, last_name, email, phone, postal, tags from persons
+     where id = $1 and workspace_id = $2 and deleted_at is null`,
     [run.person_id, job.workspace_id],
   )).rows[0];
   // The campaign as the texting rules read it (its time zone, for the hours).
@@ -490,13 +504,13 @@ const saidNoToTexts = async (tx, ws, personId) => {
   return last ? last.granted === false : false;
 };
 
-// Why a text step won't text this person, or null — the texting module's
-// rules (ext/texting): do-not-contact, do-not-text, a number that can be
-// texted and hasn't replied STOP, and one campaign conversation per number
-// (a teammate texting them lately). Plus: never a number that asked to stop
-// in words (a reply only flagged for the desk — nobody reads the thread
-// before a ladder sends), never someone who said no to texts on the website.
-const textSkip = async (tx, ws, person) => {
+// Why this person may not be texted at all, or null: do-not-contact,
+// do-not-text, no number that can be texted, a number that replied STOP —
+// or asked to stop in words (a reply only flagged for the desk — nobody
+// reads the thread before a ladder sends) — or someone who said no to texts
+// on the website. Also what decides whether a "Send to a web address" step
+// may pass their mobile on.
+const noTextReason = async (tx, ws, person) => {
   if (isDnc(person)) return 'do_not_contact';
   if (noText(person)) return 'do_not_text';
   if (!String(person.phone || '').trim()) return 'no_phone';
@@ -505,9 +519,14 @@ const textSkip = async (tx, ws, person) => {
   if (await isOptedOut(tx, ws, to)) return 'opted_out';
   if (await askedToStop(tx, ws, to)) return 'asked_to_stop';
   if (await saidNoToTexts(tx, ws, person.id)) return 'no_text_consent';
-  if (await inTouch(tx, ws, to, null)) return 'in_conversation';
   return null;
 };
+
+// Why a text step won't text this person, or null — the texting module's
+// rules (ext/texting): the above, and one campaign conversation per number
+// (a teammate texting them lately).
+const textSkip = async (tx, ws, person) => (await noTextReason(tx, ws, person))
+  || (await inTouch(tx, ws, e164(person.phone), null) ? 'in_conversation' : null);
 
 // When the hours texts may go open next, from now in the campaign's time
 // (the text blast's rule): later today, or tomorrow at the day's start. A
@@ -661,6 +680,40 @@ const STEPS = {
   },
 
   stop: async (c) => finish(c, 'stopped'),
+
+  webhook: async (c, s, attempt, at) => {
+    const { tx, run, person } = c;
+    const ws = run.workspace_id;
+    // Handed to the address by an earlier try that never recorded the
+    // answer: it may have arrived. Never again by itself.
+    if (run.wait === 'sending') {
+      await tx.query('update ladder_runs set wait = null where id = $1', [run.id]);
+      await record(c, { kind: 'webhook', label: s.label, result: 'unsure' });
+      return next(c);
+    }
+    // Asked not to be contacted: nothing about them leaves base.win.
+    if (isDnc(person)) {
+      await record(c, { kind: 'webhook', label: s.label, result: 'skipped', reason: 'do_not_contact' });
+      return next(c);
+    }
+    // What started the ladder for them (the run's own note: the ladder's
+    // trigger may have been changed since), and when they reached this
+    // step — a later try says the same, under the same key.
+    const [event, ...ref] = String(run.trigger_note || c.ladder.trigger_kind).split(':');
+    const key = `ladder-${run.id}-${c.step}`;
+    const when = at || new Date().toISOString();
+    const body = hookBody({
+      id: key, event, ref: ref.join(':') || null, ladder: c.ladder.name, step: s.label, at: when, campaign: c.ladder.campaign,
+      person,
+      emailOk: !(await skipReason(tx, ws, person)),
+      textOk: !(await noTextReason(tx, ws, person)),
+    });
+    // 1. Claim the send: 'sending', committed before the address is called.
+    await tx.query("update ladder_runs set wait = 'sending', next_at = null, updated_at = now() where id = $1", [run.id]);
+    run.wait = 'sending';
+    await record(c, { kind: 'webhook', label: s.label, result: 'sending' });
+    return { post: { run_id: run.id, step: c.step, attempt, at: when, url: s.url, label: s.label, key, body } };
+  },
 };
 
 const act = (db, ws, fn) => runAction(db, { workspaceId: ws, actorId: null, action: STEP_ACTION }, fn);
@@ -776,6 +829,50 @@ const deliverText = async (db, ws, send) => {
   });
 };
 
+// 2 + 3 for a web address: the message claimed above goes now, outside any
+// transaction, signed with the campaign's secret; then the second write
+// says what the address answered ("Sent · 200") and moves the run on — or
+// schedules the next try.
+const deliverHook = async (db, ws, post) => {
+  const res = await postHook({ url: post.url, body: post.body, key: post.key, secret: await signingSecret(ws) });
+  await act(db, ws, async (tx, emit) => {
+    const run = (await tx.query(
+      'select * from ladder_runs where id = $1 and workspace_id = $2 for update', [post.run_id, ws],
+    )).rows[0];
+    if (!run) return { gone: true };
+    const ladder = (await tx.query('select steps from ladders where id = $1 and workspace_id = $2', [run.ladder_id, ws])).rows[0];
+    const c = { tx, emit, run, steps: parseJson(ladder?.steps, []), step: post.step };
+    const tries = post.attempt + 1;
+    // An address that may not be called is never tried again.
+    const retry = !res.ok && !res.final && tries < HOOK_TRIES;
+    const entry = { kind: 'webhook', label: post.label, ...(res.ok ? { result: 'sent', status: res.status } : {
+      result: 'failed', reason: retry ? 'will_retry' : res.final ? 'refused' : 'gave_up',
+      ...(res.status ? { status: res.status } : { why: res.why }), tries,
+    }) };
+    // The run moved on meanwhile (taken off, deleted, a goal reached, or a
+    // retry already said "not sure it went"): say what happened, change
+    // nothing else.
+    if (run.wait !== 'sending' || Number(run.step) !== post.step) {
+      await record(c, entry);
+      return { late: true };
+    }
+    await tx.query('update ladder_runs set wait = $2, updated_at = now() where id = $1', [run.id, retry ? 'retry' : null]);
+    await record(c, entry);
+    if (run.status === 'paused') {
+      // Turned off mid-send: it holds its place after this step (a retry
+      // waits as 'retry' and runs again when the ladder is back on).
+      if (!retry) await tx.query('update ladder_runs set step = $2 where id = $1', [run.id, post.step + 1]);
+      return { paused: true };
+    }
+    if (run.status !== 'active') return { done: true };
+    if (retry) {
+      await again(c, HOOK_BACKOFF[tries - 1], { attempt: tries, at: post.at });
+      return { failed: tries };
+    }
+    return next(c);
+  });
+};
+
 export const runStepJob = async (db, job) => {
   const ws = job.workspace_id;
   const { result } = await act(db, ws, async (tx, emit) => {
@@ -790,8 +887,9 @@ export const runStepJob = async (db, job) => {
     const s = c.steps[c.step];
     const fn = STEPS[s?.kind];
     if (!fn) return finish(c, 'unknown_step');
-    return fn(c, s, Number(job.payload?.attempt) || 0);
+    return fn(c, s, Number(job.payload?.attempt) || 0, job.payload?.at);
   });
   if (result?.send) await deliver(db, ws, result.send);
   if (result?.sendText) await deliverText(db, ws, result.sendText);
+  if (result?.post) await deliverHook(db, ws, result.post);
 };
