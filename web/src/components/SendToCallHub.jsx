@@ -76,6 +76,12 @@ function Results({ p, online, onChanged }) {
   const [error, setError] = useState(null);
   // A pick that would tag or rate people already called waits here for a Yes: { at, words, input }.
   const [ask, setAsk] = useState(null);
+  // A big push's results move in the background: said while it goes, and when it is done.
+  const [wasMoving, setWasMoving] = useState(false);
+  useEffect(() => {
+    if (p.moving) setWasMoving(true);
+    else if (wasMoving) { setWasMoving(false); setSaid('Saved · the results already in have all moved'); }
+  }, [p.moving, wasMoving]);
   const save = async (input) => {
     setBusy(true); setError(null); setSaid(null); setAsk(null);
     try {
@@ -108,7 +114,7 @@ function Results({ p, online, onChanged }) {
     <span className="ops-confirm ch-confirm" role="alert">
       <span>{ask.words}</span>
       <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={() => save(ask.input)}>Yes</button>
-      <button type="button" className="btn btn-quiet ops-tap" autoFocus onClick={() => setAsk(null)}>No</button>
+      <button type="button" className="btn btn-quiet ops-tap" autoFocus onClick={() => { setAsk(null); document.getElementById(`${uid}-${at}`)?.focus(); }}>No</button>
     </span>
   );
   return (

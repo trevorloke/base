@@ -342,7 +342,8 @@ What happens:
 
 - **Send to CallHub** (a list's page, a phone bank's page — managers, staff
   and treasurers; the button is there only when CallHub is set up). It asks
-  first: how many numbers go, how many people are left out. Who goes:
+  first: how many numbers go, for how many people, how many are left out.
+  Who goes:
   everyone on the list (a phone bank: its numbers still to call) with a
   number that can be dialled, **never** someone tagged `do-not-contact` or
   `do-not-call`, and never a number one of them shares. One CallHub contact
@@ -356,42 +357,63 @@ What happens:
   850 of 2,000", then "Sent"). CallHub's documented limit is 3,600
   contacts a day: a bigger list says so and carries on by itself the next
   day, as it does when CallHub says to slow down. A number CallHub won't
-  take is left out and counted, with CallHub's words; if CallHub refuses
-  the push itself (a key that stopped working), it stops with CallHub's
-  words and **Carry on** picks up where it stopped. Nobody is sent twice.
+  take is left out and counted, with CallHub's words and whose it was (the
+  name is a way to their page); if CallHub refuses the push itself (a key
+  that stopped working), it stops with CallHub's words and how far it got,
+  and **Carry on** picks up where it stopped (*Send again instead* is
+  beside it, for a fresh phonebook). Nobody is sent twice.
 - **People not to call** go to a do-not-call list in CallHub named
   `base.win`, numbers only, with each push: people tagged `do-not-contact`
   (no calls, no texts) or `do-not-call` (no calls), and numbers that
   replied STOP to a text (no texts). Someone newly tagged `do-not-call` or
   `do-not-contact` does not wait for the next push: once the campaign has
   sent CallHub anything, a background job tells CallHub by itself (a number
-  already there for texts only is changed to calls too). base.win
-  only ever adds to that list: taking the tag off in base.win does not take
-  the number off CallHub's list — do that in CallHub. Whether a calling
-  campaign in CallHub honours that list by itself or has to be pointed at
-  it is not confirmed: look in CallHub before the first night.
+  already there for texts only is changed to calls too). The list follows
+  base.win the other way too: when nobody here blocks a number any more
+  (the tag taken off again), base.win takes it off CallHub's list, by the
+  entry CallHub named for it. Where CallHub never named one, or won't let
+  it go, **Check** says how many are still there — take those off in
+  CallHub. While a push is telling CallHub these numbers its line says so
+  (*Telling CallHub who not to call first · 150 to go*). A number CallHub
+  won't take for that list never stops a push: it is said on the page with
+  CallHub's words and whose number it is, and asked once more with the
+  next push (five refused in a row is not the numbers: the push stops with
+  CallHub's words, and Carry on asks again). Whether a calling campaign in
+  CallHub honours that list by itself or has to be pointed at it is not
+  confirmed: look in CallHub before the first night.
 - **Each call's result** comes back as the caller saves it (CallHub's
   `cc.notes` webhook). It is matched by phone number against the numbers
   this campaign sent (the newest push first) and becomes one phone call on
   the person's history: the calling campaign's name, CallHub's result, the
-  caller's notes and the survey answers. A caller whose CallHub email is their base.win sign-in is
-  credited with the call; anyone else is named in the note. If the person
-  is in an open base.win phone bank, the number is crossed off there too (a
-  No answer comes back by the bank's own rule). The same result sent twice
-  is one call. A result for a number base.win never sent is kept, unfiled —
-  it never lands on a guess and never makes a person.
+  caller's notes and the survey answers (the number is looked for under
+  the result's `contact`, then its `mobile`). A caller whose CallHub email
+  is their base.win sign-in is credited with the call; anyone else is named
+  in the note. If the person is in an open base.win phone bank, the number
+  is crossed off there too (a No answer comes back by the bank's own
+  rule). The same result sent twice is one call. A result for a number
+  base.win never sent is kept, unfiled — it never lands on a guess and
+  never makes a person.
 - **What each result counts as**: CallHub's results are the account's own
   words, so each push has a short table — filled in by pattern (*No
   answer*, *Busy* → No answer; *Voicemail*, *Left message* → Left message;
   *Wrong number*, *Disconnected* → Wrong number; *Refused*, *Not
   interested* → Refused; *Do not call*, *Remove* → Refused, and the person
   is tagged `do-not-call`; *Moved* → Moved; anything else → Talked) and
-  yours to correct; a correction also moves the results already in.
+  yours to correct. A correction also moves the results already in — only
+  the ones it is about — and an open phone bank's number with them (a
+  *Talked* that was a No answer comes back by the bank's own rule). Turning
+  a row to *Do not call* asks first (*Tag 6 people do-not-call?*), and
+  putting the row back takes the tag off again, and the number off
+  CallHub's list — never a tag someone set by hand. A push with thousands
+  of results is moved a part at a time, in the background.
 - **Ratings** only ever come from a survey answer someone mapped: pick the
   support question on the push, then which answer is which step of the
   campaign's scale. Until then the answers stay in the note and nobody's
   rating moves. A rating is never guessed, and a newer rating (a knock
-  since) is never overwritten by an older call.
+  since) is never overwritten by an older call. Mapping an answer asks
+  first, and can be taken back: when an answer stops rating (*Doesn't
+  rate*, or another question, or none) the people it rated are back to what
+  they were before the call, unless something else has rated them since.
 
 **Set it up — on staging first:**
 
@@ -453,6 +475,10 @@ export). A failure answers 500, so a sender that retries sends it again.
    fifteen minutes is taken to be the same call.
 7. Whether a calling campaign honours the `base.win` do-not-call list by
    itself or has to be pointed at it (step 3).
+8. Whether CallHub lets a number be taken off its do-not-call list through
+   the API, and whether it refuses numbers there that it thinks invalid.
+   Both are handled as documented; what CallHub would not take, or would
+   not let go, is said on the page and by Check.
 
 Not built yet: a large list by file (CallHub's bulk import), and reading a
 calling campaign's full export afterwards as the audit. CallHub's texting
@@ -467,8 +493,9 @@ texting (TESTING.md).
 **Check:** Services → Phone dialer asks CallHub two things and writes
 nothing: the key works, and one of the account's webhooks sends call
 results (`cc.notes`) to this base.win. Then it says how many results have
-arrived, how many were for numbers base.win never sent, and how many it
-could not read.
+arrived, how many were for numbers base.win never sent, how many it could
+not read, and how many numbers are still on CallHub's do-not-call list
+that nobody here blocks any more.
 
 ## Hosting — Render
 

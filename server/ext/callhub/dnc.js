@@ -38,10 +38,11 @@ export const dncListOf = async () => {
 };
 
 const REFUSALS_IN_A_ROW = 5;
-// What a run did: numbers told, numbers CallHub would not take (with its
-// words for the last), numbers taken off again.
-export const newTally = () => ({ told: 0, refused: 0, freed: 0 });
-const did = (t) => t.told + t.refused + t.freed;
+// What a run did: numbers told, numbers CallHub would not take, numbers
+// taken off again, numbers CallHub would not let go.
+export const newTally = () => ({ told: 0, refused: 0, freed: 0, kept: 0 });
+export const dncDid = (t) => t.told + t.refused + t.freed + t.kept;
+const did = dncDid;
 const told = async (db, ws) => new Map((await db.query(
   'select phone, category, entry, refused from callhub_dnc where workspace_id = $1', [ws],
 )).rows.map((r) => [r.phone, r]));
@@ -83,12 +84,15 @@ export const overToldOf = async (db, ws, blocked = null, { again = false } = {})
   }
   return out;
 };
-// How many numbers CallHub still holds that nobody here blocks any more
-// (Check says so: one it never named, or would not let go).
+// How many numbers CallHub still holds that nobody here blocks any more and
+// that base.win cannot take off itself: one CallHub never named, or would
+// not let go (Check says so). One the job is about to take off is not counted.
 export const heldTooLong = async (db, ws) => {
   const all = await notToCall(db, ws);
   let n = 0;
-  for (const [phone, row] of await told(db, ws)) if (Number(row.category) & ~(all.get(phone) || 0)) n += 1;
+  for (const [phone, row] of await told(db, ws)) {
+    if ((Number(row.category) & ~(all.get(phone) || 0)) && (!row.entry || row.refused != null)) n += 1;
+  }
   return n;
 };
 
@@ -165,9 +169,11 @@ export const tellCallHub = async (ws, { list, untold, budget, act, tally }) => {
 // Take off CallHub's list (or lower: both → texts only) what base.win no
 // longer blocks, by CallHub's own entry. Gone there already is what we
 // wanted; an entry CallHub won't change is remembered and left (Check
-// counts it) — it never stops the push.
+// counts it) — it never stops the push. Several refused in a row is CallHub
+// not letting numbers go at all: the rest are left as they are, unasked.
 export const freeAtCallHub = async (ws, { list, over, budget, act, tally }) => {
-  for (const [phone, keep, entry] of over) {
+  let inARow = 0;
+  for (const [i, [phone, keep, entry]] of over.entries()) {
     if (did(tally) >= budget) break;
     const at = `/dnc_contacts/${encodeURIComponent(entry)}/`;
     const idempotencyKey = `base-callhub-dnc-${ws}-${phone}-${keep}`;
@@ -185,7 +191,20 @@ export const freeAtCallHub = async (ws, { list, over, budget, act, tally }) => {
       else if (gone) await tx.query('delete from callhub_dnc where workspace_id = $1 and phone = $2', [ws, phone]);
       else await tx.query('update callhub_dnc set category = $3, refused = null, refused_note = null, sent_at = now() where workspace_id = $1 and phone = $2', [ws, phone, keep]);
     });
-    if (!no) tally.freed += 1;
+    if (no) { tally.kept += 1; inARow += 1; } else { tally.freed += 1; inARow = 0; }
+    if (inARow >= REFUSALS_IN_A_ROW) {
+      const rest = over.slice(i + 1);
+      await act(async (tx) => {
+        for (const k of new Set(rest.map((r) => r[1]))) {
+          await tx.query(
+            'update callhub_dnc set refused = $3, refused_note = $4 where workspace_id = $1 and phone = any($2::text[])',
+            [ws, rest.filter((r) => r[1] === k).map((r) => r[0]), k, no],
+          );
+        }
+      });
+      tally.kept += rest.length;
+      break;
+    }
     await pause();
   }
 };
@@ -194,6 +213,9 @@ export const freeAtCallHub = async (ws, { list, over, budget, act, tally }) => {
 // finds (or makes) CallHub's list once it is needed. → how many are left.
 export const syncDnc = async (db, ws, { blocked = null, again = false, budget, act, tally, book }) => {
   const all = blocked || await notToCall(db, ws);
+  // What CallHub would not take, for a number nobody blocks any more: forgotten.
+  const stale = (await db.query('select phone from callhub_dnc where workspace_id = $1 and category = 0', [ws])).rows.map((r) => r.phone).filter((n) => !all.has(n));
+  if (stale.length) await act((tx) => tx.query('delete from callhub_dnc where workspace_id = $1 and category = 0 and phone = any($2::text[])', [ws, stale]));
   const untold = await untoldOf(db, ws, all, { again });
   const over = await overToldOf(db, ws, all, { again });
   if (!untold.length && !over.length) return 0;
@@ -206,7 +228,8 @@ export const syncDnc = async (db, ws, { blocked = null, again = false, budget, a
 // One line on the log for a run: how many, never which.
 export const dncOnLog = (act, ws, t) => act(async (tx, emit) => {
   emit('callhub', ws, 'update', {
-    ...(t.told ? { do_not_call_told: t.told } : {}), ...(t.refused ? { do_not_call_not_taken: t.refused } : {}), ...(t.freed ? { do_not_call_freed: t.freed } : {}),
+    ...(t.told ? { do_not_call_told: t.told } : {}), ...(t.refused ? { do_not_call_not_taken: t.refused } : {}),
+    ...(t.freed ? { do_not_call_freed: t.freed } : {}), ...(t.kept ? { do_not_call_not_freed: t.kept } : {}),
   });
 });
 
@@ -228,12 +251,12 @@ export const onEvents = async (tx, meta, events) => {
     const sent = (await tx.query('select 1 from callhub_pushes where workspace_id = $1 and phonebook_id is not null limit 1', [ws])).rows[0];
     let wanted = Boolean(sent) && edits.some(marks);
     if (sent && !wanted) {
-      // Nobody newly marked: was one of them on CallHub's list (a tag taken off)?
+      // Nobody newly marked: is one of their numbers on file for CallHub's list (a tag taken off)?
       const phones = (await tx.query(
         'select phone from persons where workspace_id = $1 and id = any($2::uuid[])', [ws, edits.map((e) => e.entityId)],
       )).rows.map((r) => e164(r.phone)).filter(Boolean);
       wanted = phones.length > 0 && (await tx.query(
-        'select 1 from callhub_dnc where workspace_id = $1 and phone = any($2::text[]) and category > 0 limit 1', [ws, phones],
+        'select 1 from callhub_dnc where workspace_id = $1 and phone = any($2::text[]) limit 1', [ws, phones],
       )).rows.length > 0;
     }
     const queued = wanted && (await tx.query(`select 1 from jobs where workspace_id = $1 and kind = $2 and status = 'pending' limit 1`, [ws, DNC_JOB])).rows[0];

@@ -1027,6 +1027,15 @@ test('a do-not-call number CallHub won’t take is remembered and said, with who
     assert.equal(tries(), 2);
     assert.ok(fake.dnc.some((d) => d.phone_number === '+16045550144'));
     assert.equal((await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'callhub.dnc' and status = 'failed'`, [ws])).rows[0].n, 0, 'no job gave up over it');
+    // The tag taken off: nobody blocks that number now, so there is nothing left to say…
+    ok(await mgr.action('person.update', { id: odd.id, tags: [] }));
+    await drain();
+    assert.equal(ok(await staff.get(`/api/callhub/pushes?list=${list}`)).not_taken, null);
+    // …and marked again, it is asked again.
+    ok(await mgr.action('person.update', { id: odd.id, tags: ['do-not-contact'] }));
+    await drain();
+    assert.equal(tries(), 3);
+    assert.equal(ok(await staff.get(`/api/callhub/pushes?list=${list}`)).not_taken.n, 1);
     // Once CallHub takes it (with the next push), the line goes.
     fake.rejectDnc(false);
     ok(await mgr.action('callhub.push', { list_id: list }));
@@ -1093,11 +1102,32 @@ test('a number CallHub won’t let go, or never named, stays on its list: nothin
   } finally {
     globalThis.fetch = realFetch;
   }
-  // Once CallHub lets it go (the next push asks again), one is left: the one it never named.
+  // CallHub not letting any number go is not asked number by number: five, then the rest are left as they are.
+  const many = [];
+  for (let i = 0; i < 8; i += 1) many.push(await mgr.createPerson(`Kept${i} Example`, { phone: `778-555-011${i}`, tags: ['do-not-call'] }));
+  await drain();
+  globalThis.fetch = async (url, init) => {
+    if (init?.method === 'DELETE' && String(url).includes('/dnc_contacts/')) {
+      deletes += 1;
+      return new Response(JSON.stringify({ detail: 'Method "DELETE" not allowed.' }), { status: 405, headers: { 'content-type': 'application/json' } });
+    }
+    return realFetch(url, init);
+  };
+  try {
+    deletes = 0;
+    for (const m of many) ok(await mgr.action('person.update', { id: m.id, tags: [] }));
+    await drain();
+    assert.equal(deletes, 5, 'five asked, three left unasked');
+    assert.match(await check(), /still has 10 numbers nobody here blocks now — take them off in CallHub$/);
+    assert.equal((await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'callhub.dnc' and status in ('failed', 'pending')`, [ws])).rows[0].n, 0);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  // Once CallHub lets them go (the next push asks again), one is left: the one it never named.
   const again = ok(await mgr.action('list.create', { name: 'Held list 2', kind: 'people', person_ids: [a.id] })).list.id;
   ok(await mgr.action('callhub.push', { list_id: again }));
   await drain();
-  assert.ok(!fake.dnc.some((d) => d.phone_number === '+16045550147'));
+  assert.ok(!fake.dnc.some((d) => d.phone_number === '+16045550147' || d.phone_number.startsWith('+1778555011')));
   assert.match(await check(), / · CallHub’s do-not-call list still has 1 number nobody here blocks now — take it off in CallHub$/);
   // (Tidy: the stand-in still has it; base.win's record of it goes so later counts are their own.)
   await db.query(`delete from callhub_dnc where workspace_id = $1 and phone = '+16045550146'`, [ws]);

@@ -444,7 +444,14 @@ export const refile = async (tx, emit, ws, push) => {
 
 // The rest of a big push's results, a part at a time, as the person who
 // changed the table (the job's payload says who).
-export const refileRest = (tx, ws, pushId, by) => enqueueJob(tx, { workspaceId: ws, kind: REFILE_JOB, payload: { push_id: pushId, by: by || null } });
+export const refileRest = async (tx, ws, pushId, by) => {
+  // One at a time: a second save while the rest is still waiting adds nothing.
+  const queued = (await tx.query(
+    `select 1 from jobs where workspace_id = $1 and kind = $2 and status = 'pending' and payload @> $3::jsonb limit 1`,
+    [ws, REFILE_JOB, JSON.stringify({ push_id: pushId })],
+  )).rows[0];
+  if (!queued) await enqueueJob(tx, { workspaceId: ws, kind: REFILE_JOB, payload: { push_id: pushId, by: by || null } });
+};
 export const runRefileJob = async (db, job) => {
   const ws = job.workspace_id;
   const { push_id: id, by = null } = job.payload || {};

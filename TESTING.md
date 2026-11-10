@@ -308,6 +308,9 @@ one tap away under **More**.
   *Sending · 3 of 9*, then *Sent*. In CallHub, call from the phonebook it
   made and save a result: the call is on that person's history, and the
   list says *1 result back*; *What each result counts as* opens the table.
+  Turn a row to *Do not call*: it asks first; **Yes** tags that person,
+  and putting the row back takes the tag off again — and, a few seconds
+  later, the number off CallHub's `base.win` do-not-call list.
   It has not been run against a real CallHub account yet — this is that
   test. `node e2e-callhub.mjs` (PORT, SHOTS) runs all of it in a browser
   against a stand-in CallHub.
@@ -806,7 +809,8 @@ Built conservatively; the campaign should confirm these rules with counsel
   notices are never texted to an opted-out or do-not-text number.
 - Calls show the campaign's number, never the caller's own.
 - Someone tagged *do-not-call* is never put in a phone bank, never rung
-  through the campaign's number and never sent to CallHub's dialer; a
+  through the campaign's number and never sent to CallHub's dialer — and
+  their profile, Follow-ups and My people offer no Call to tap; a
   CallHub result that reads "do not call" tags them. The CRTC expects a
   campaign to keep and honour its own do-not-call list — **confirm what a
   dialer needs with counsel** before a calling night.

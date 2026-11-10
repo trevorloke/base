@@ -27,7 +27,7 @@ import { httpError } from '../../actions/util.js';
 import { timeZone } from '../../lib/org.js';
 import { toLocal } from '../../lib/tzsql.js';
 import { callhub, callhubOn, CallHubError, idOf, pause } from './callhub.js';
-import { dncListOf, dncOnLog, newTally, syncDnc } from './dnc.js';
+import { dncDid, dncListOf, dncOnLog, newTally, syncDnc } from './dnc.js';
 import { audienceOf, contactBody, noCalls, notToBeCalled, notToCall, sourceOf } from './people.js';
 
 export const PUSH_JOB = 'callhub.push';
@@ -199,7 +199,7 @@ export const runPushJob = async (db, job) => {
       return list;
     };
     const dncLeft = await syncDnc(db, ws, { blocked, again: fresh, budget: left, act, tally: dncTally, book });
-    left -= dncTally.told + dncTally.refused + dncTally.freed;
+    left -= dncDid(dncTally);
     if (dncLeft) { await again(); runJobsSoon(); return; }
     if (said) await set({ note: null });
 
@@ -297,6 +297,6 @@ export const runPushJob = async (db, job) => {
     if (!(e instanceof CallHubError)) console.error('callhub: push stopped:', e);
   } finally {
     // On the log: how many do-not-call numbers CallHub was told, never which.
-    if (dncTally.told + dncTally.refused + dncTally.freed) await dncOnLog(act, ws, dncTally).catch(() => {});
+    if (dncDid(dncTally)) await dncOnLog(act, ws, dncTally).catch(() => {});
   }
 };
