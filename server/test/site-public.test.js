@@ -163,8 +163,9 @@ test('the data the renderer gets: posts, upcoming public shifts with spots left,
   ok(await mgr.action('site.post.publish', { id: post.id }));
   const site = await siteWorkspace(db, ws);
   const data = await loadData(db, site);
-  assert.deepEqual(Object.keys(data).sort(), ['campaigns', 'counts', 'events', 'payments', 'posts', 'roles']);
+  assert.deepEqual(Object.keys(data).sort(), ['campaigns', 'counts', 'events', 'payments', 'posts', 'roles', 'shifts']);
   assert.deepEqual(data.events.map((e) => [e.title, e.spots_left, e.location]), [['Canvass in Newton', 3, 'Newton Seniors Centre']], 'public only; a "can’t make it" frees the spot');
+  assert.deepEqual(data.shifts, data.events, 'a shift with no kind is an opening and an event, as before kinds (schedule-site.test.js has the split)');
   assert.ok(!data.events.some((e) => e.id === hidden.id));
   assert.deepEqual(Object.keys(data.events[0]).sort(), ['ends_at', 'id', 'lat', 'lng', 'location', 'spots_left', 'starts_at', 'title']);
   assert.deepEqual(data.posts.map((p) => p.title), ['Hello Surrey']);
