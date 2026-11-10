@@ -125,12 +125,24 @@ export const lookupProblem = async (typed) => {
 
 // ── The campaign's signing secret ──
 // Made from the server's own secret (the website's: SITE_SECRET, or the one
-// base.win keeps) and the campaign, so it is never stored and is the same
-// every time it is asked for. Through HKDF: showing it to the desk says
-// nothing about the server's secret or another campaign's.
-export const signingSecret = async (workspaceId) => `sbw_${Buffer.from(
-  hkdfSync('sha256', await siteSecret(), String(workspaceId), 'base.win/ladder-webhook/v1', 32),
-).toString('hex')}`;
+// base.win keeps), the campaign, and how many times the campaign has made a
+// new one (its settings: ladderSecretNo) — so it is never stored, is the
+// same every time it is asked for, and "Make a new secret" replaces it at
+// once without touching the server's secret, which also signs the links in
+// every email already sent. Through HKDF: showing it to the desk says
+// nothing about the server's secret, another campaign's, or the one before.
+const SECRET_INFO = 'base.win/ladder-webhook/v1';
+export const secretNo = (settings) => Math.max(0, Math.floor(Number(settings?.ladderSecretNo) || 0));
+// A campaign's secrets by number, with the server's own secret in hand: it
+// may come from the database, so this is asked for before a write and the
+// answer used inside it.
+export const secretsFor = async (workspaceId) => {
+  const key = await siteSecret();
+  return (n = 0) => `sbw_${Buffer.from(
+    hkdfSync('sha256', key, String(workspaceId), n ? `${SECRET_INFO}/${n}` : SECRET_INFO, 32),
+  ).toString('hex')}`;
+};
+export const signingSecret = async (workspaceId, n = 0) => (await secretsFor(workspaceId))(n);
 
 // ── What is sent ──
 // Who they are and what started the ladder. An email or a mobile only when
@@ -143,14 +155,15 @@ const eventWords = (event, ref) => `${TRIGGERS[event]?.label || event}${event ==
 // In that one line a name is only ever a name: it can come from a website
 // form, and a chat tool reads <…> as its own marks (Slack: a link, @channel).
 const plain = (name) => String(name || '').replace(/[<>]/g, '');
-export const hookBody = ({ id, event, ref = null, ladder, step, at, campaign, person, emailOk, textOk }) => JSON.stringify({
+export const hookBody = ({ id, test = false, event, ref = null, ladder, step, at, campaign, person, emailOk, textOk }) => JSON.stringify({
   id,
+  ...(test ? { test: true } : {}),
   event,
   ladder,
   step,
   at,
   campaign,
-  text: `${ladder}: ${plain(person.name)} — ${eventWords(event, ref)}`,
+  text: `${test ? 'Test · ' : ''}${ladder}: ${plain(person.name)} — ${eventWords(event, ref)}`,
   person: {
     id: person.id,
     first_name: person.first_name || null,
@@ -160,6 +173,27 @@ export const hookBody = ({ id, event, ref = null, ladder, step, at, campaign, pe
     postal: person.postal || null,
     tags: tagsOf(person).filter((t) => !isMoneyTag(t)),
   },
+});
+
+// "Send a test": the same message, marked `test: true`, about nobody — so
+// the other tool can be set up (a Zapier catch hook wants one request
+// first) before anyone real reaches the step.
+const TEST_PERSON = {
+  id: '00000000-0000-4000-8000-000000000000', name: 'Sam Example', first_name: 'Sam', last_name: 'Example',
+  email: 'sam@example.org', phone: '604-555-0100', postal: 'V3T 1V8', tags: ['test'],
+};
+export const testBody = (about) => hookBody({
+  ...about, test: true, at: new Date().toISOString(), person: TEST_PERSON, emailOk: true, textOk: true,
+});
+
+// What an address's answer is noted as — on a run's log, on the event log,
+// and in what "Send a test" answers: sent, with the answer's number; or
+// failed, with the number or why there was none, and whether it is tried
+// again ('will_retry'), never will be ('redirect', 'refused': postHook's
+// final answers) or has had its tries ('gave_up').
+export const answerEntry = (res, { retry = false, tries = 1 } = {}) => (res.ok ? { result: 'sent', status: res.status } : {
+  result: 'failed', reason: retry ? 'will_retry' : !res.final ? 'gave_up' : res.status ? 'redirect' : 'refused',
+  ...(res.status ? { status: res.status } : { why: res.why }), tries,
 });
 
 // ── Sending ──

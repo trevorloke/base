@@ -82,7 +82,7 @@ import { hasTable } from '../webdid/words.js';
 import {
   parseJson, tagsOf, sameTag, isDnc, noEmail, noText, fillIn, waitMs,
 } from './shape.js';
-import { hookBody, notAnswering, postHook, signingSecret } from './webhook.js';
+import { answerEntry, hookBody, notAnswering, postHook, secretNo, signingSecret } from './webhook.js';
 
 export const JOB = 'ladder.step';
 export const STEP_ACTION = 'ladder.step';
@@ -720,7 +720,14 @@ const STEPS = {
     await tx.query("update ladder_runs set wait = 'sending', next_at = null, updated_at = now() where id = $1", [run.id]);
     run.wait = 'sending';
     await record(c, { kind: 'webhook', label: s.label, result: 'sending' });
-    return { post: { run_id: run.id, step: c.step, attempt, at: when, url: s.url, label: s.label, key, body } };
+    // Signed with the campaign's secret as it is now: a new one made
+    // between two tries signs the next.
+    return {
+      post: {
+        run_id: run.id, step: c.step, attempt, at: when, url: s.url, label: s.label, key, body,
+        secretNo: secretNo(c.workspace.settings),
+      },
+    };
   },
 };
 
@@ -847,7 +854,7 @@ const deliverHook = async (db, ws, post) => {
   // An address that has stopped answering isn't called (webhook.js): this
   // try fails at once, and nothing queued behind it waits.
   const res = notAnswering(post.url) ? { ok: false, why: 'not_answering' }
-    : await postHook({ url: post.url, body: post.body, key: post.key, secret: await signingSecret(ws) });
+    : await postHook({ url: post.url, body: post.body, key: post.key, secret: await signingSecret(ws, post.secretNo) });
   await act(db, ws, async (tx, emit) => {
     const run = (await tx.query(
       'select * from ladder_runs where id = $1 and workspace_id = $2 for update', [post.run_id, ws],
@@ -863,10 +870,7 @@ const deliverHook = async (db, ws, post) => {
     // Never tried again: an address that may not be called, or one that
     // answered with a redirect (the same one would come back).
     const retry = !late && !res.ok && !res.final && tries < HOOK_TRIES;
-    const entry = { kind: 'webhook', label: post.label, ...(res.ok ? { result: 'sent', status: res.status } : {
-      result: 'failed', reason: retry ? 'will_retry' : !res.final ? 'gave_up' : res.status ? 'redirect' : 'refused',
-      ...(res.status ? { status: res.status } : { why: res.why }), tries,
-    }) };
+    const entry = { kind: 'webhook', label: post.label, ...answerEntry(res, { retry, tries }) };
     if (late) {
       await record(c, entry);
       return { late: true };

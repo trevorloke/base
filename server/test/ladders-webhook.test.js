@@ -634,6 +634,141 @@ test('only the desk makes the step or sees the secret; each campaign has its own
   await verified();
 });
 
+test('"Make a new secret": the old one stops signing at once — this campaign’s only, the desk only, on the log by name', async () => {
+  const lad = await hookLadder('rotate');
+  const other = new Client();
+  ok(await other.signup({ workspaceName: `Rotating elsewhere ${tag}`, email: mail('elsewhere') }));
+  const theirs = ok(await other.action('ladder.signingSecret', {})).secret;
+  const old = ok(await mgr.action('ladder.signingSecret', {})).secret;
+  const made = ok(await mgr.action('ladder.newSigningSecret', {})).secret;
+  assert.match(made, /^sbw_[0-9a-f]{64}$/);
+  assert.notEqual(made, old);
+  assert.equal(ok(await mgr.action('ladder.signingSecret', {})).secret, made, 'the one shown from now on');
+  assert.equal(ok(await other.action('ladder.signingSecret', {})).secret, theirs, 'another campaign’s is as it was');
+
+  // The next message is signed with the new one — and a later try with the one after that.
+  hooks.answer(500, 1);
+  const quinn = await mgr.createPerson('Quinn Example', { tags: ['rotate'] });
+  await runJobs();
+  let m = got('rotate').pop();
+  assert.equal(verifySignature(m.raw, m.headers['base-signature'], [made]).ok, true);
+  assert.equal(verifySignature(m.raw, m.headers['base-signature'], [old]).ok, false, 'the old one no longer signs');
+  const third = ok(await mgr.action('ladder.newSigningSecret', {})).secret;
+  assert.equal(new Set([old, made, third]).size, 3, 'never one from before');
+  await fastForward(); await runJobs();
+  assert.equal(got('rotate').length, 2);
+  m = got('rotate').pop();
+  assert.equal(verifySignature(m.raw, m.headers['base-signature'], [third]).ok, true, 'each try is signed with the secret as it is then');
+  assert.equal(verifySignature(m.raw, m.headers['base-signature'], [made]).ok, false);
+  assert.equal((await runOf(lad.id, quinn.id)).status, 'done');
+
+  // Never a volunteer's, even one given Outreach.
+  const inv = ok(await mgr.action('member.invite', { email: mail('vol2'), role: 'volunteer' }));
+  const v = new Client();
+  await v.post('/api/auth/join', { token: inv.joinUrl.split('/join/')[1], name: 'Vic Example', password: 'knock-knock-2026' });
+  ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: ['outreach'], deny: [] }));
+  const sly = await v.action('ladder.newSigningSecret', {});
+  assert.equal(sly.status, 403);
+  assert.ok(!JSON.stringify(sly.json).includes('sbw_'));
+  ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
+  assert.equal(ok(await mgr.action('ladder.signingSecret', {})).secret, third, 'nothing changed');
+
+  // On the log by who and when; the secrets themselves never are, there or in any read.
+  const events = ok(await mgr.get('/api/events?since=0&limit=1000')).events;
+  const changes = events.filter((e) => e.action === 'ladder.newSigningSecret');
+  assert.deepEqual(changes.map((e) => e.payload), [{ ladder_signing_secret: 'changed' }, { ladder_signing_secret: 'changed' }]);
+  assert.ok(changes.every((e) => e.actor_id));
+  const kept = JSON.stringify([events, ok(await mgr.get('/api/auth/me')), ok(await mgr.get('/api/ladders'))]);
+  for (const s of [old, made, third]) assert.ok(!kept.includes(s));
+  await off(lad);
+  await verified();
+});
+
+test('"Send a test": one signed message about a made-up person to the address as typed; its answer in place; nothing on anyone’s log', async () => {
+  const lad = await create({ name: 'Welcome new signers', trigger: { kind: 'tag', ref: 'signed-up' }, steps: [{ kind: 'tag', tag: 'welcomed' }] });
+  const people = async () => (await db.query('select count(*)::int as n from persons where workspace_id = $1', [ws])).rows[0].n;
+  const runs = async () => (await db.query('select count(*)::int as n from ladder_runs where workspace_id = $1', [ws])).rows[0].n;
+  const before = [await people(), await runs()];
+  // The step needn't be saved yet: the address and label are the ones in the fields.
+  const test1 = ok(await mgr.action('ladder.testHook', { id: lad.id, url: ' https://Hooks.example.org/catch/trial?x=1 ', label: 'Zapier' }));
+  assert.deepEqual({ result: test1.result, status: test1.status }, { result: 'sent', status: 200 });
+  const [m] = got('trial');
+  assert.equal(got('trial').length, 1);
+  assert.equal(m.path, '/catch/trial?x=1');
+  const secret = ok(await mgr.action('ladder.signingSecret', {})).secret;
+  assert.equal(verifySignature(m.raw, m.headers['base-signature'], [secret]).ok, true, 'signed like the real thing, with the campaign’s secret');
+  assert.match(m.headers['idempotency-key'], /^test-[0-9a-f-]{36}$/);
+  assert.ok(Math.abs(new Date(m.body.at) - Date.now()) < 60_000);
+  assert.deepEqual({ ...m.body, at: null }, {
+    id: m.headers['idempotency-key'],
+    test: true,
+    event: 'tag',
+    ladder: 'Welcome new signers',
+    step: 'Zapier',
+    at: null,
+    campaign: wsName,
+    text: 'Test · Welcome new signers: Sam Example — Got a tag · signed-up',
+    person: {
+      id: '00000000-0000-4000-8000-000000000000', first_name: 'Sam', last_name: 'Example',
+      email: 'sam@example.org', phone: '+16045550100', postal: 'V3T 1V8', tags: ['test'],
+    },
+  }, 'the same shape as a real message, marked a test, about nobody');
+  assert.deepEqual([await people(), await runs()], before, 'no person made, nobody put on the ladder');
+  assert.equal(ok(await mgr.get(`/api/ladders/${lad.id}`)).ladder.steps.length, 1, 'and the ladder is as it was');
+
+  // What the address answers is what the desk is told.
+  const test = (url = 'https://hooks.example.org/catch/trial') => mgr.action('ladder.testHook', { id: lad.id, url, label: 'Zapier' });
+  hooks.answer(500);
+  let r = ok(await test());
+  assert.deepEqual([r.result, r.reason, r.status], ['failed', 'gave_up', 500]);
+  hooks.answer(301, 1, { location: 'https://elsewhere.example.org/' });
+  r = ok(await test());
+  assert.deepEqual([r.result, r.reason, r.status], ['failed', 'redirect', 301]);
+  hooks.hang(1);
+  _setTimeoutForTest(120);
+  try { r = ok(await test()); } finally { _setTimeoutForTest(null); }
+  assert.deepEqual([r.result, r.reason, r.why], ['failed', 'gave_up', 'timeout']);
+  // An address it may not be pointed at is refused in the same words as when saved; nothing is sent.
+  const sentSoFar = hooks.received.length;
+  for (const [url, words] of [
+    ['http://hooks.example.org/catch/trial', 'The address must start with https://'],
+    ['https://192.168.1.20/hook', 'That address points inside a private network — it can’t be used'],
+    ['https://sam:pw@hooks.example.org/x', 'Leave the name and password out of the address'],
+  ]) {
+    r = await test(url);
+    assert.equal(r.status, 400, url);
+    assert.equal(r.json.error, words);
+  }
+  names.set('inside.example.org', [{ address: '10.1.2.3', family: 4 }]);
+  await forReal(async () => {
+    r = await test('https://inside.example.org/hook');
+    assert.deepEqual([r.status, r.json.error], [400, 'That address points inside a private network — it can’t be used']);
+    r = await test('https://nowhere.example.org/hook');
+    assert.deepEqual([r.status, r.json.error], [400, 'We couldn’t find nowhere.example.org — check the address']);
+  });
+  assert.equal((await mgr.action('ladder.testHook', { id: '99999999-9999-4999-8999-999999999999', url: 'https://hooks.example.org/catch/trial', label: 'Zapier' })).status, 404);
+  assert.equal(hooks.received.length, sentSoFar, 'none of those sent anything');
+
+  // Never a volunteer's, even one given Outreach.
+  const inv = ok(await mgr.action('member.invite', { email: mail('vol3'), role: 'volunteer' }));
+  const v = new Client();
+  await v.post('/api/auth/join', { token: inv.joinUrl.split('/join/')[1], name: 'Vee Example', password: 'knock-knock-2026' });
+  ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: ['outreach'], deny: [] }));
+  r = await v.action('ladder.testHook', { id: lad.id, url: 'https://hooks.example.org/catch/trial', label: 'Mine' });
+  assert.deepEqual([r.status, r.json.error], [403, 'Only the desk can send to a web address']);
+  ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
+  assert.equal(hooks.received.length, sentSoFar);
+
+  // On the event log: that a test went and to which site — never the rest of the address, what was sent, or the secret.
+  const events = ok(await mgr.get('/api/events?since=0&limit=1000')).events;
+  const tests = events.filter((e) => e.action === 'ladder.testHook');
+  assert.equal(tests.length, 4, 'one for each that was sent');
+  assert.ok(tests.every((e) => e.actor_id && e.payload.ladder_hook_test === 'https://hooks.example.org/…'));
+  const kept = JSON.stringify(events);
+  for (const never of ['/catch/trial', 'sam@example.org', secret]) assert.ok(!kept.includes(never), never);
+  await verified();
+});
+
 test('what is sent, built by hand: an organization has no first or last name; nothing unlisted rides along', () => {
   const body = JSON.parse(hookBody({
     id: 'ladder-r-2', event: 'gift', ref: null, ladder: 'Thank donors', step: 'Slack', at: '2026-11-10T20:00:00.000Z', campaign: 'Imagine Surrey',
