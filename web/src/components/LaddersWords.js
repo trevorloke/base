@@ -68,7 +68,7 @@ export const hookMissing = (s) => {
 // was none).
 const HOOK_WHY = {
   timeout: 'no answer', unreachable: 'couldn’t connect', not_found: 'address not found',
-  private: 'the address points inside a private network', bad_address: 'not an address it can use',
+  private: 'the address points inside a private network', bad_address: 'the address can’t be used',
 };
 export const hookLogLine = (e) => {
   const to = e.label || 'Web address';

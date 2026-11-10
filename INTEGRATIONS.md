@@ -463,7 +463,8 @@ sent there, once, as one small JSON message:
   (their first gift), `gift`, `tag`, `rating`, `web`, `shift_booked`,
   `shift_attended`, `shift_no_show`, `member` or `survey`. `step` is the
   label. `text` says it in one line: what a chat tool posts (a Slack
-  incoming webhook posts its `text`).
+  incoming webhook posts its `text`); a name's `<` and `>` are left out of
+  it, so nothing typed into a form posts a link or an @channel there.
 - **What it never carries:** a rating, a note, an amount, a street address,
   or a tag that gives money away. `email` is `null` unless a ladder email
   could go to them (on the newsletter list, not unsubscribed, not
@@ -478,8 +479,8 @@ sent there, once, as one small JSON message:
   server's own secret (`SITE_SECRET`, or the one base.win keeps) and the
   campaign, never stored, the same every time; changing `SITE_SECRET`
   changes it. A receiver that checks should also refuse a `t` more than
-  five minutes old. Zapier, Make and Slack don't check: there the address
-  itself is the key, so treat it as one.
+  five minutes old. Zapier, Make and Slack don't check a signature by
+  themselves: there the address itself is the key, so treat it as one.
 - **Once.** `Idempotency-Key: ladder-<run>-<step>` (the body's `id`) is the
   same on every try for one person at one step.
 - **Tries.** The address has 5 seconds to answer 2xx. Anything else (a

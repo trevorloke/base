@@ -507,4 +507,13 @@ test('what is sent, built by hand: an organization has no first or last name; no
     text: 'Thank donors: Example Hall Society — Gave (any gift)',
     person: { id: 'p1', first_name: null, last_name: null, email: 'hall@example.org', phone: null, postal: null, tags: ['venue'] },
   });
+  // A name typed into a website form can't speak a chat tool's own marks in
+  // the one line it shows (Slack reads <!channel> and <https://…|words>).
+  const sly = JSON.parse(hookBody({
+    id: 'ladder-r-0', event: 'newsletter', ladder: 'Welcome', step: 'Slack', at: '2026-11-10T20:00:00.000Z', campaign: 'Imagine Surrey',
+    person: { id: 'p2', name: '<!channel> Sam <https://bad.example.org|Example>', first_name: '<!channel> Sam', last_name: 'Example', tags: [] },
+    emailOk: false, textOk: false,
+  }));
+  assert.equal(sly.text, 'Welcome: !channel Sam https://bad.example.org|Example — Joined the newsletter');
+  assert.equal(sly.person.first_name, '<!channel> Sam', 'the fields are as they are on file');
 });

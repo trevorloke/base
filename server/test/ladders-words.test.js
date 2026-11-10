@@ -79,6 +79,8 @@ test('"Send to a web address": the card names where it goes, never the whole add
   assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'timeout', tries: 3 }), 'Zapier: Failed · no answer after 3 tries');
   assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'not_found', tries: 3 }), 'Zapier: Failed · address not found after 3 tries');
   assert.equal(line({ result: 'failed', reason: 'refused', why: 'private', tries: 1 }), 'Zapier: Not sent — the address points inside a private network');
+  assert.equal(line({ result: 'failed', reason: 'refused', why: 'bad_address', tries: 1 }), 'Zapier: Not sent — the address can’t be used');
+  assert.equal(line({ result: 'failed', reason: 'will_retry', why: 'unreachable', tries: 2 }), 'Zapier: Didn’t go (couldn’t connect) — trying again');
   assert.equal(line({ result: 'skipped', reason: 'do_not_contact' }), 'Zapier: Skipped — do not contact');
   assert.equal(line({ result: 'unsure' }), 'Zapier: Not sure it went');
   assert.equal(line({ result: 'sending' }), 'Zapier: Sending');

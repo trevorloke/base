@@ -135,6 +135,9 @@ export const signingSecret = async (workspaceId) => `sbw_${Buffer.from(
 // a tag that gives money away, a rating, a note or an address. `text` says
 // it in one line (what a chat tool shows); `id` is the same on every try.
 const eventWords = (event, ref) => `${TRIGGERS[event]?.label || event}${event === 'tag' && ref ? ` · ${ref}` : ''}`;
+// In that one line a name is only ever a name: it can come from a website
+// form, and a chat tool reads <…> as its own marks (Slack: a link, @channel).
+const plain = (name) => String(name || '').replace(/[<>]/g, '');
 export const hookBody = ({ id, event, ref = null, ladder, step, at, campaign, person, emailOk, textOk }) => JSON.stringify({
   id,
   event,
@@ -142,7 +145,7 @@ export const hookBody = ({ id, event, ref = null, ladder, step, at, campaign, pe
   step,
   at,
   campaign,
-  text: `${ladder}: ${person.name} — ${eventWords(event, ref)}`,
+  text: `${ladder}: ${plain(person.name)} — ${eventWords(event, ref)}`,
   person: {
     id: person.id,
     first_name: person.first_name || null,
