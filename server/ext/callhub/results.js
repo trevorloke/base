@@ -206,24 +206,33 @@ const matchOf = async (db, phone) => (await db.query(
     order by pu.created_at desc, c.first_on_number desc, c.position, c.person_id limit 1`, [phone],
 )).rows[0] || null;
 
-// → whether the tag was put on (someone tagged already is left as they are).
-const markNoCall = async (tx, emit, ws, personId) => {
+// Whose tag it is. A result that counts as "do not call" holds the person's
+// do-not-call tag (callhub_results.tagged) when it put the tag on, or found
+// it on already because another of their results had. A tag nobody's result
+// holds is the desk's own — set by hand — and never the table's to take
+// off. The other way round, a tag the desk takes off by hand is held by no
+// result from then on (forgetHolders, from the events hook in dnc.js).
+const held = async (tx, ws, personId) => (await tx.query(
+  `select 1 from callhub_results where workspace_id = $1 and person_id = $2 and tagged and mapped = 'do_not_call' limit 1`, [ws, personId],
+)).rows.length > 0;
+export const forgetHolders = (tx, ws, personIds) => tx.query(
+  'update callhub_results set tagged = false where workspace_id = $1 and tagged and person_id = any($2::uuid[])', [ws, personIds],
+);
+
+// A result counts as "do not call". → 'new' (it put the tag on), 'shared'
+// (the tag was on already, held by another result — or by one that let go
+// of it in this same save: `released`), or null (on already, by hand).
+const markNoCall = async (tx, emit, ws, personId, { released = false } = {}) => {
   const p = (await tx.query('select tags from persons where id = $1 and workspace_id = $2 and deleted_at is null for update', [personId, ws])).rows[0];
-  if (!p || tagsOf(p).includes(NO_CALL_TAG)) return false;
+  if (!p) return null;
+  if (tagsOf(p).includes(NO_CALL_TAG)) return (released || await held(tx, ws, personId)) ? 'shared' : null;
   const tags = [...tagsOf(p), NO_CALL_TAG];
   await tx.query('update persons set tags = $3, updated_at = now() where id = $1 and workspace_id = $2', [personId, ws, JSON.stringify(tags)]);
   emit('person', personId, 'update', { tags, source: 'callhub' });
-  return true;
+  return 'new';
 };
-// A result that put the tag on no longer counts as "do not call": the tag
-// comes off again — unless another of the person's results still says so
-// (that one holds the mark from now on). → whether the tag came off.
-const unmarkNoCall = async (tx, emit, ws, personId, resultId) => {
-  const other = (await tx.query(
-    `select id from callhub_results where workspace_id = $1 and person_id = $2 and id <> $3 and contact_id is not null and mapped = 'do_not_call' limit 1`,
-    [ws, personId, resultId],
-  )).rows[0];
-  if (other) { await tx.query('update callhub_results set tagged = true where id = $1', [other.id]); return false; }
+// The tag comes off. → whether it was on.
+const unmarkNoCall = async (tx, emit, ws, personId) => {
   const p = (await tx.query('select tags from persons where id = $1 and workspace_id = $2 and deleted_at is null for update', [personId, ws])).rows[0];
   if (!p || !tagsOf(p).includes(NO_CALL_TAG)) return false;
   const tags = tagsOf(p).filter((t) => t !== NO_CALL_TAG);
@@ -323,7 +332,7 @@ export const fileResult = async (db, { body, fields }) => {
        values ($1, $2, $3, 'phone', $4, $5, $6, 'callhub', $7)`,
       [contactId, ws, person.id, outcome, rating, note, member?.id || null],
     );
-    const tagged = mapped === 'do_not_call' && await markNoCall(tx, emit, ws, person.id);
+    const tagged = mapped === 'do_not_call' && Boolean(await markNoCall(tx, emit, ws, person.id));
     // The call reached that line: everyone on the number is crossed off any
     // open phone bank, by the bank's own rule (a No answer comes back).
     const onNumber = (await tx.query('select distinct person_id from callhub_contacts where workspace_id = $1 and phone = $2', [ws, phone])).rows;
@@ -372,7 +381,8 @@ export const keepUnread = async (db, raw, type = '') => {
 // ones the change is about are touched, however often the table is saved:
 //   · the contact's outcome, and an open phone bank's number with it
 //   · "do not call": the people of a row that newly counts as it are tagged;
-//     a row that stops counting as it takes its tag off again
+//     a row that stops counting as it takes its tag off again — from
+//     everyone no other result still holds it for, never a tag set by hand
 //   · the rating: given where the answer is mapped now, taken back where it
 //     no longer is (settleRating)
 // At most `refileBatch` results in one write, so a push with thousands of
@@ -400,6 +410,7 @@ export const refile = async (tx, emit, ws, push) => {
   )).rows;
   const tally = { changed: 0, tagged: 0, untagged: 0, rated: 0, unrated: 0, more: false };
   const rerate = new Set();
+  const released = new Set(); // people a result of theirs held the tag for, and no longer does
   let done = 0;
   for (const c of rows) {
     const was = c.mapped || c.outcome;
@@ -421,10 +432,11 @@ export const refile = async (tx, emit, ws, push) => {
     }
     let tagged = Boolean(c.tagged);
     if (mapped === 'do_not_call' && was !== 'do_not_call') {
-      tagged = await markNoCall(tx, emit, ws, c.person_id);
-      if (tagged) tally.tagged += 1;
+      const mark = await markNoCall(tx, emit, ws, c.person_id, { released: released.has(c.person_id) });
+      tagged = Boolean(mark);
+      if (mark === 'new') tally.tagged += 1;
     } else if (was === 'do_not_call' && mapped !== 'do_not_call') {
-      if (tagged && await unmarkNoCall(tx, emit, ws, c.person_id, c.result_id)) tally.untagged += 1;
+      if (tagged) released.add(c.person_id);
       tagged = false;
     }
     await tx.query('update callhub_results set mapped = $2, tagged = $3 where id = $1', [c.result_id, mapped, tagged]);
@@ -434,6 +446,12 @@ export const refile = async (tx, emit, ws, push) => {
       const onNumber = (await tx.query('select distinct person_id from callhub_contacts where workspace_id = $1 and phone = $2', [ws, c.phone])).rows;
       await recross(tx, ws, { personIds: onNumber.map((r) => r.person_id), at: c.at, was: c.outcome, now: outcome, by: c.created_by || null });
     }
+  }
+  // Decided once every result of this part has its new reading: the tag
+  // comes off whoever no result holds it for any more — someone rung twice
+  // with the row's result is one person, untagged once.
+  for (const personId of released) {
+    if (!(await held(tx, ws, personId)) && await unmarkNoCall(tx, emit, ws, personId)) tally.untagged += 1;
   }
   for (const personId of rerate) {
     const how = await settleRating(tx, ws, personId);

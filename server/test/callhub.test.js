@@ -909,6 +909,97 @@ test('a do-not-call tag taken off by hand stays off when another row of the tabl
   await drain();
 });
 
+test('a row put back takes the tag off everyone it tagged — also someone rung twice with that result, asked or not', async () => {
+  const people = [];
+  for (let i = 0; i < 3; i += 1) people.push(await mgr.createPerson(`Twice${i} Example`, { phone: `672-555-010${i}` }));
+  const list = ok(await mgr.action('list.create', { name: 'Twice list', kind: 'people', person_ids: people.map((p) => p.id) })).list.id;
+  const r = ok(await mgr.action('callhub.push', { list_id: list }));
+  await drain();
+  // Everyone rang out; the first two were tried a second time.
+  for (let i = 0; i < 3; i += 1) await fake.note({ contact: `+1672555010${i}`, disposition: 'No Answer', campaign: 'Twice', notes: `try one ${i}` });
+  for (let i = 0; i < 2; i += 1) await fake.note({ contact: `+1672555010${i}`, disposition: 'No Answer', campaign: 'Twice', notes: `try two ${i}` });
+  const tagged = async () => Promise.all(people.map(async (p) => (await person(p.id)).tags.includes('do-not-call')));
+  const atCallHub = () => people.map((_, i) => fake.dnc.some((d) => d.phone_number === `+1672555010${i}`));
+  const map = async (outcomes) => ok(await staff.action('callhub.map', { id: r.push.id, outcomes }));
+
+  const slip = await map({ 'No Answer': 'do_not_call' });
+  assert.deepEqual([slip.changed, slip.tagged, slip.untagged], [5, 3, 0], 'three people, however often each was rung');
+  await drain();
+  assert.deepEqual([await tagged(), atCallHub()], [[true, true, true], [true, true, true]]);
+  const back = await map({ 'No Answer': null });
+  assert.deepEqual([back.changed, back.tagged, back.untagged], [5, 0, 3], 'everyone the row tagged');
+  await drain();
+  assert.deepEqual([await tagged(), atCallHub()], [[false, false, false], [false, false, false]]);
+  assert.equal(ok(await mgr.get(`/api/callhub/preview?list=${list}`)).numbers, 3, 'all three can be sent again');
+
+  // The same a part at a time (a big push's rest moves in the background).
+  const { _setRefileBatchForTest } = await import('../ext/callhub/results.js');
+  _setRefileBatchForTest(1);
+  try {
+    assert.equal((await map({ 'No Answer': 'do_not_call' })).more, true);
+    await drain();
+    assert.deepEqual(await tagged(), [true, true, true]);
+    assert.equal((await map({ 'No Answer': null })).more, true);
+    await drain();
+    assert.deepEqual([await tagged(), atCallHub()], [[false, false, false], [false, false, false]]);
+  } finally {
+    _setRefileBatchForTest(500);
+  }
+
+  // Nobody was asked here: the pattern reads "Remove sign request" as do-not-call as the results arrive.
+  await fake.note({ contact: '+16725550100', disposition: 'Remove sign request', campaign: 'Twice', notes: 'wants the old sign taken away' });
+  await fake.note({ contact: '+16725550100', disposition: 'Remove sign request', campaign: 'Twice', notes: 'rang again: the sign is still there' });
+  await fake.note({ contact: '+16725550101', disposition: 'Remove sign request', campaign: 'Twice', notes: 'sign fell over' });
+  assert.deepEqual(await tagged(), [true, true, false]);
+  const fix = await map({ 'Remove sign request': 'contacted' });
+  assert.deepEqual([fix.tagged, fix.untagged], [0, 2]);
+  assert.deepEqual(await tagged(), [false, false, false], 'the one with two such results too');
+
+  // One save that moves the mark from one row to another: the person stays tagged, by the row that says so now.
+  await map({ 'Remove sign request': null });
+  assert.deepEqual(await tagged(), [true, true, false]);
+  const swap = await map({ 'Remove sign request': 'contacted', 'No Answer': 'do_not_call' });
+  assert.deepEqual([swap.tagged, swap.untagged], [1, 0], 'only the third is new');
+  assert.deepEqual(await tagged(), [true, true, true]);
+  assert.equal((await map({ 'No Answer': null })).untagged, 3);
+  assert.deepEqual(await tagged(), [false, false, false]);
+  await drain();
+  assert.deepEqual(atCallHub(), [false, false, false]);
+});
+
+test('a tag the desk took off by hand is not brought back by a slip on another row and its undo', async () => {
+  const ben = await mgr.createPerson('Hand Off Example', { phone: '672-555-0103' });
+  const list = ok(await mgr.action('list.create', { name: 'Hand off list', kind: 'people', person_ids: [ben.id] })).list.id;
+  const r = ok(await mgr.action('callhub.push', { list_id: list }));
+  await drain();
+  await fake.note({ contact: '+16725550103', disposition: 'Do Not Call', campaign: 'Hand off', notes: 'the caller mis-clicked' });
+  const tags = async () => (await person(ben.id)).tags;
+  assert.deepEqual(await tags(), ['do-not-call']);
+  // He rang back: fine to call. The desk takes the tag off by hand.
+  ok(await mgr.action('person.update', { id: ben.id, tags: [] }));
+  await drain();
+  // Called again, he answers. Then "Answered" slips to Do not call, and is put back.
+  await fake.note({ contact: '+16725550103', disposition: 'Answered', campaign: 'Hand off', notes: 'happy to talk' });
+  assert.deepEqual(await tags(), []);
+  const slip = ok(await staff.action('callhub.map', { id: r.push.id, outcomes: { Answered: 'do_not_call' } }));
+  assert.equal(slip.tagged, 1);
+  assert.deepEqual(await tags(), ['do-not-call']);
+  const back = ok(await staff.action('callhub.map', { id: r.push.id, outcomes: { Answered: null } }));
+  assert.deepEqual([back.tagged, back.untagged], [0, 1]);
+  assert.deepEqual(await tags(), [], 'as he was before the slip: the old “Do Not Call” result no longer holds the mark');
+  await drain();
+  assert.ok(!fake.dnc.some((d) => d.phone_number === '+16725550103'), 'and not on CallHub’s list');
+  assert.equal(ok(await mgr.get(`/api/callhub/preview?list=${list}`)).numbers, 1);
+  // A tag the desk put on by hand is never the table's to take: the same slip and undo leave it.
+  ok(await mgr.action('person.update', { id: ben.id, tags: ['do-not-call'] }));
+  ok(await staff.action('callhub.map', { id: r.push.id, outcomes: { Answered: 'do_not_call' } }));
+  const undo = ok(await staff.action('callhub.map', { id: r.push.id, outcomes: { Answered: null } }));
+  assert.equal(undo.untagged, 0);
+  assert.deepEqual(await tags(), ['do-not-call']);
+  ok(await mgr.action('person.update', { id: ben.id, tags: [] }));
+  await drain();
+});
+
 test('an answer mapped by mistake and put back: the rating it gave is taken back — the door’s rating returns, and whoever had none has none', async () => {
   const a = await mgr.createPerson('Rated Before Example', { phone: '604-555-0136' });
   const b = await mgr.createPerson('Never Rated Example', { phone: '604-555-0137' });

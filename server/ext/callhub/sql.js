@@ -24,7 +24,9 @@
 //                     filed is remembered, so a change to the push's table
 //                     moves only what the change is about, and can be put
 //                     back: mapped (what the result counted as), tagged (it
-//                     put the do-not-call tag on the person), rated_over
+//                     holds the person's do-not-call tag: it put the tag
+//                     on, or shares it with another result that did — a
+//                     tag no result holds was set by hand), rated_over
 //                     (the rating the person had before this call's answer
 //                     rated them — { rating, at } — while it is the call
 //                     that rates them)
@@ -103,4 +105,5 @@ alter table callhub_results add column if not exists tagged boolean not null def
 alter table callhub_results add column if not exists rated_over jsonb;
 create index if not exists callhub_results_key_idx on callhub_results (workspace_id, key, created_at desc);
 create index if not exists callhub_results_push_idx on callhub_results (push_id) where push_id is not null;
+create index if not exists callhub_results_tagged_idx on callhub_results (workspace_id, person_id) where tagged;
 `;
