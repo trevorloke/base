@@ -67,12 +67,13 @@ export default function MailchimpPanel({ online, onChanged }) {
   const idle = Boolean(d?.pulling) && !d?.running;
   const pulling = busy === 'pull' || (Boolean(d?.pulling) && !idle);
   let line;
+  let stopped = false; // the line is the one about a pull that stopped
   if (q.isLoading) line = 'Loading…';
   else if (q.isError) {
     line = noSignal(q) ? <NoSignal /> : <>Unavailable — <button type="button" className="btn-link mcp-retry" onClick={() => q.refetch()}>Try again</button></>;
   } else if (idle && busy !== 'pull') line = 'Waiting · background work is off on this server';
   else if (pulling) line = 'Pulling…';
-  else if (d.pull_ok === false) line = `The last pull stopped: ${d.pull_note || 'no answer from Mailchimp'}`;
+  else if (d.pull_ok === false) { stopped = true; line = `The last pull stopped: ${d.pull_note || 'no answer from Mailchimp'}`; }
   else if (d.pulled_at) line = `Last pulled ${whenWord(d.pulled_at)} · ${d.pull_note || 'Nothing new'}`;
   else line = 'Not pulled yet';
 
@@ -95,7 +96,7 @@ export default function MailchimpPanel({ online, onChanged }) {
           </div>
         </div>
       )}
-      <p className={`sv2-detail mcp-pull${d?.pull_ok === false && !pulling ? ' is-stopped' : ''}`} role="status" aria-live="polite">{line}</p>
+      <p className={`sv2-detail mcp-pull${stopped ? ' is-stopped' : ''}`} role="status" aria-live="polite">{line}</p>
       {d?.waiting > 0 && (
         <p className="sv2-detail mcp-waiting">
           {num(d.waiting)} {d.waiting === 1 ? 'unsubscribe' : 'unsubscribes'} here still to tell Mailchimp{d.waiting_note ? ` (${d.waiting_note})` : ''} — Pull now sends {d.waiting === 1 ? 'it' : 'them'} again.

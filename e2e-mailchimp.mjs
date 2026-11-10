@@ -467,7 +467,8 @@ const json = (o) => (r) => r.fulfill({ status: 200, contentType: 'application/js
 const WAITING_OFF = 'Waiting · background work is off on this server';
 const offList = json({ on: true, running: false, sync: { id: list.id, list_id: list.id, status: 'queued', consent: 'subscribed', tag: TAG, total: 0, added: 0, tagged: 0, removed: 0, skipped: 0, todo: 0, note: null, synced_at: null, created_at: new Date().toISOString(), by: 'Marco Example', stalled: false } });
 const PANEL = '**/api/mailchimp';
-const offPanel = json({ on: true, running: false, pulling: true, pulled_at: null, pull_ok: null, pull_note: null, waiting: 0, waiting_note: null });
+// (An earlier pull had stopped, too: the line is still about the waiting, and not in the colour of a problem.)
+const offPanel = json({ on: true, running: false, pulling: true, pulled_at: null, pull_ok: false, pull_note: 'Mailchimp said: it was down', waiting: 0, waiting_note: null });
 for (const [p, size] of [[page, '1440'], [phone, '390']]) {
   await p.route(READ, offList);
   const l = await openList(p);
@@ -481,7 +482,7 @@ for (const [p, size] of [[page, '1440'], [phone, '390']]) {
   const r = await openServices(p);
   const pull = p.locator(`${ROW} .mcp-acts button`).nth(1);
   check(`…and a pull asked for (${size}): the same words; the button still reads "Pull now", and waits`, (await words(p.locator(`${ROW} .mcp-pull`))) === WAITING_OFF
-    && (await words(pull)) === 'Pull now' && (await pull.isDisabled()), await words(p.locator(`${ROW} .mcp`)));
+    && (await words(pull)) === 'Pull now' && (await pull.isDisabled()) && (await p.locator(`${ROW} .mcp-pull.is-stopped`).count()) === 0, await words(p.locator(`${ROW} .mcp`)));
   await shot(r, `13-jobs-off-services-${size}`);
   await p.unroute(PANEL);
 }
