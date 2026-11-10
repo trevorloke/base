@@ -381,7 +381,8 @@ check('Dee Twin’s gift could be two records: each with its address and why', c
 await simple(page, 'Gifts that need a donor (1360)');
 await page.screenshot({ path: `${SHOTS}/10-gifts-pile.png`, fullPage: true });
 await page.click('.gw-cand:has-text("2 Main St")');
-check('picking one asks first: "Put this gift on Dee Twin?"', /Put this gift on Dee Twin\?/.test(await page.innerText('.ops-confirm').catch(() => '')));
+const putOn = (await page.innerText('.ops-confirm').catch(() => '')).replace(/\s+/g, ' ');
+check('picking one asks first, and says which Dee Twin: "Put this gift on Dee Twin (2 Main St · V3S 1A1)?"', /Put this gift on Dee Twin \(2 Main St · V3S 1A1\)\?/.test(putOn), putOn);
 await page.click('.ops-confirm button:has-text("Yes")');
 await page.waitForSelector('.ops-done', { timeout: 8000 }).catch(() => {});
 const deeGifts = (await api(`/persons/${dee2.id}`)).json.gifts;
@@ -448,6 +449,36 @@ const live = (await api('/records/gift?limit=50')).json.records.filter((g) => g.
 check('"✓ Taken back — 5 gifts off the books": none of them is on the books, and nothing waits',
   /✓ Taken back — 5 gifts off the books/.test(await page.innerText('.gi-file__said').catch(() => '')) && live.length === 0 && (await api('/brief')).json.flagged.length === 0, `${live.length}`);
 await page.screenshot({ path: `${SHOTS}/12-gifts-taken-back.png`, fullPage: true });
+
+// A file with no gift numbers and a way of paying base.win doesn't know
+// ("Wire"): the screen asks what it means on every import — and whatever
+// is said this time, the same row is the same gift.
+const wireFile = ['Donor,Email,Amount,Date,Paid By', `Ana Example,ana.${tag}@example.org,15.00,${yr}-01-20,Wire`].join('\n');
+const pasteGifts = async (text) => {
+  await page.goto(`${ADMIN}/money/import`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#gi-file', { state: 'attached', timeout: 8000 });
+  await page.click('button:has-text("Paste text")');
+  await page.fill('#gi-paste', text);
+  await page.click('button:has-text("Use this text")');
+  await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+};
+await pasteGifts(wireFile);
+const wireAsk = (await page.innerText('.imp-rmap').catch(() => '')).replace(/\s+/g, ' ');
+check('a way of paying it doesn’t know is asked about: "Wire", left as Not recorded',
+  /Wire 1 row/.test(wireAsk) && (await page.$eval('.imp-rmap__select', (e) => e.options[e.selectedIndex].text).catch(() => '')) === 'Not recorded', wireAsk);
+await page.click('button:has-text("Check 1 row")');
+await page.waitForSelector('.imp-result', { timeout: 15000 }).catch(() => {});
+await page.getByRole('button', { name: 'Import 1 gift' }).click();
+await page.waitForSelector('.imp-done', { timeout: 15000 }).catch(() => {});
+await pasteGifts(wireFile);
+await page.selectOption('.imp-rmap__select', 'etransfer');
+await page.click('button:has-text("Check 1 row")');
+await page.waitForSelector('.imp-result', { timeout: 15000 }).catch(() => {});
+await sleep(400);
+const wireAgain = (await page.innerText('.imp-result').catch(() => '')).replace(/\s+/g, ' ');
+const wireGifts = (await api('/records/gift?limit=50')).json.records.filter((g) => Number(g.amount_cents) === 1500);
+check('the same file again, “Wire” now called an e-transfer: still the same gift — 0 gifts, 1 already here',
+  /Gifts 0/i.test(wireAgain) && /Already here 1/i.test(wireAgain) && wireGifts.length === 1 && wireGifts[0].method === null, `${wireAgain.slice(0, 120)} | ${wireGifts.length}`);
 
 // ── The financial agent's filing date: typed in, counted down ──
 const due = (() => { const [y, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }).split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + 12)).toISOString().slice(0, 10); })();

@@ -829,9 +829,11 @@ function DeskToday({ b, me, toast }) {
         <h2 className="today-h" id="today-next-h">Coming up</h2>
         <ul className="today-rows">
           <ShiftRow shift={(b.shifts ?? [])[0]} />
-          {/* The financial agent's filing dates within 30 days (ext/filingdates; money roles). */}
+          {/* The financial agent's filing dates within 30 days (ext/filingdates; money roles):
+              what is due, its day under it (as a shift's time is), so a phone shows both whole. */}
           {(b.filing ?? []).map((d) => (
-            <LinkRow key={`${d.name}|${d.due_on}`} to="/money" main={<>{d.name} <span className="muted">· {filingDay(d.due_on)}</span></>}
+            <LinkRow key={`${d.name}|${d.due_on}`} to="/money"
+              main={<><span className="today-row__title">{d.name}</span><span className="today-row__when">{filingDay(d.due_on)}</span></>}
               chip={daysLeft(d.days)} chipCls={filingSoon(d.days) ? 'chip chip-warn' : 'chip'} />
           ))}
         </ul>

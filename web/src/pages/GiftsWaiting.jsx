@@ -8,9 +8,10 @@
 //   finds someone else by name,
 //   adds them as a new person (from what the file says), or
 //   leaves the gifts out.
-// Each asks first, in place ("Put 2 gifts on Dee Twin? Yes · No"). The
-// gifts then go through the one gift path: the year's limit is checked, and
-// one that takes the donor over is said here and listed under Needs you.
+// Each asks first, in place, and says which record — two it could be often
+// share a name ("Put 2 gifts on Dee Twin (2 Main St · V3S 1A1)? Yes · No").
+// The gifts then go through the one gift path: the year's limit is checked,
+// and one that takes the donor over is said here and listed under Needs you.
 import { useState } from 'react';
 import { Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
@@ -117,7 +118,7 @@ function Waiting({ group, index, onSettled, online }) {
   const question = !ask ? null
     : ask.kind === 'out' ? `Leave ${them} out? ${n === 1 ? 'It stays' : 'They stay'} off the books.`
       : ask.kind === 'new' ? `Add ${whoIs(donor)} as a new person and put ${them} on them?`
-        : `Put ${them} on ${ask.person.name}?`;
+        : `Put ${them} on ${ask.person.name}${tell(ask.person) ? ` (${tell(ask.person)})` : ''}?`;
 
   return (
     <li className="ops-item" data-open={open ? '' : undefined}>
