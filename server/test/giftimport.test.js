@@ -112,7 +112,7 @@ test('the cells of a gift file are read one way', () => {
 // names are assumed — a column is matched by what its heading means, then
 // by its values, and a row is read into what the server takes.
 test('columns are matched by what their headings mean; rows are read; the check is added up', async () => {
-  const { guessGiftMapping, giftRow, fileRows, callsOf, newTally, addToTally, overLimit } = await import('../../web/src/components/GiftColumns.js');
+  const { guessGiftMapping, giftRow, fileRows, callsOf, newTally, addToTally, overLimit, slateOf } = await import('../../web/src/components/GiftColumns.js');
   const slates = [{ code: 'council', label: 'Council' }, { code: 'school', label: 'School board' }];
   const recs = (rows) => rows.map((cells, i) => ({ cells, row: i + 2 }));
   // One export's words…
@@ -150,6 +150,10 @@ test('columns are matched by what their headings mean; rows are read; the check 
   assert.equal(giftRow(a[1].cells, mapping, { slates, methodMap: { cheque: 'cash' }, slateMap: { 'school board trustees': '' } }).row.method, 'cash', 'what the person says a value means');
   assert.equal(giftRow(a[1].cells, mapping, { slates, methodMap: { cheque: '' } }).row.paid_as, 'Cheque', 'the file’s own word goes with it, whatever it was read as');
   assert.equal(giftRow(a[1].cells, mapping, { slates, slateMap: { 'school board trustees': '' } }).row.slate, undefined);
+  // Which slate a value names: its name or code, or a word of one slate's — a value two slates could be, or none, is asked about, never guessed.
+  const two = [{ code: 'council', label: 'City council' }, { code: 'school_board', label: 'School board' }];
+  assert.deepEqual(['Council', 'school board', 'School Board Trustees', 'Surrey City Council', 'General fund', 'City of Surrey School Board'].map((v) => slateOf(null, two, v)),
+    ['council', 'school_board', 'school_board', 'council', null, null]);
   assert.match(giftRow(['1', 'Ana Example', '', '', '', '', 'n/a', '03/14/2026'], mapping).error, /“n\/a” isn’t an amount/);
   assert.match(giftRow(['1', 'Ana Example', '', '', '', '', '5', 'someday'], mapping).error, /“someday” isn’t a date/);
   assert.match(giftRow(['1.6047E+10', 'Ana Example', '', '', '', '', '5', '03/14/2026'], mapping).error, /lost its last digits in Excel/);

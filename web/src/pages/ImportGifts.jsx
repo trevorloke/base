@@ -263,6 +263,8 @@ function Flow({ me }) {
   const methodValues = useMemo(() => (source ? valuesIn(source.records, methodCol) : []), [source, methodCol]);
   const slateValues = useMemo(() => (source ? valuesIn(source.records, slateCol) : []), [source, slateCol]);
   const unknownMethods = methodValues.filter(({ value }) => !Object.hasOwn(methodMap, value.toLowerCase()) && !methodOf(null, value)).length;
+  // A value in the Slate column that names no slate would go to the first one unasked: the limit is per slate, so it is asked.
+  const unknownSlates = slateValues.filter(({ value }) => !Object.hasOwn(slateMap, value.toLowerCase()) && !slateOf(null, slates, value)).length;
   // Numbers Excel cut short ("1.6047E+10"), by column: how many.
   const sciByCol = useMemo(() => {
     const out = {};
@@ -469,7 +471,7 @@ function Flow({ me }) {
               </Reveal>
             )}
             {slateValues.length > 0 && (
-              <Reveal label="Which slate each is to">
+              <Reveal label={`Which slate each is to${unknownSlates ? ` · ${fmtN(unknownSlates)} to say` : ''}`} defaultOpen={unknownSlates > 0}>
                 <Meanings title="Which slate each is to" disabled={locked} values={slateValues}
                   hint={`The year’s limit is per slate. One left as it is goes to ${slates[0].label}.`}
                   current={(v) => slateOf(slateMap, slates, v)} own={(v) => Object.hasOwn(slateMap, v.toLowerCase())}
@@ -482,6 +484,10 @@ function Flow({ me }) {
               <p className="imp-need" role="alert">
                 Match a column to the <strong>donor</strong> (a name or an email), the <strong>Amount</strong> and the <strong>Date of the gift</strong>.
               </p>
+            )}
+            {/* More than one slate and no column for it: said, since the year's limit is per slate. */}
+            {ready && slates.length > 1 && slateCol < 0 && (
+              <p className="imp-hint gi-slate-note">No column says which slate, so every gift goes to {slates[0].label}.</p>
             )}
 
             {ready && preview.length > 0 && (

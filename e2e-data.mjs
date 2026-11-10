@@ -19,7 +19,8 @@
 // one on a record it could be and one on a new person; the same file again
 // adds nothing; the import is taken back whole. A file with no gift numbers
 // and a way of paying base.win doesn't know ("Wire") adds nothing the second
-// time either, whatever the word is said to mean. The financial agent's
+// time either, whatever the word is said to mean; a slate it can't read is
+// asked about the same way. The financial agent's
 // filing date is typed in and counted down on Donations and on Today.
 // Donations says how it stands: Loading… while its reads are out,
 // Unavailable — Try again when they failed.
@@ -320,6 +321,7 @@ await page.waitForSelector('.imp-map__row', { timeout: 8000 });
 const gmap = await page.$$eval('.imp-map__select', (els) => els.map((e) => e.options[e.selectedIndex].text));
 check('a gift file’s columns match themselves, by what their headings mean',
   gmap.join('|') === 'Their number for the gift|Donor’s full name|Email|Phone|Street address|Postal code|Amount|Date of the gift|Paid by|Their receipt number', gmap.join('|'));
+check('with two slates and no column for one, it says where every gift goes', /No column says which slate, so every gift goes to City council\./.test((await page.innerText('.gi-slate-note').catch(() => '')).replace(/\s+/g, ' ')), await page.innerText('.gi-slate-note').catch(() => '(none)'));
 await simple(page, 'Import gifts, match columns (1360)');
 await page.screenshot({ path: `${SHOTS}/06-gifts-match-columns.png`, fullPage: true });
 await page.click('button:has-text("Check 6 rows")');
@@ -455,7 +457,7 @@ await page.screenshot({ path: `${SHOTS}/12-gifts-taken-back.png`, fullPage: true
 // A file with no gift numbers and a way of paying base.win doesn't know
 // ("Wire"): the screen asks what it means on every import — and whatever
 // is said this time, the same row is the same gift.
-const wireFile = ['Donor,Email,Amount,Date,Paid By', `Ana Example,ana.${tag}@example.org,15.00,${yr}-01-20,Wire`].join('\n');
+const wireFile = ['Donor,Email,Amount,Date,Paid By,Designation', `Ana Example,ana.${tag}@example.org,15.00,${yr}-01-20,Wire,General fund`].join('\n');
 const pasteGifts = async (text) => {
   await page.goto(`${ADMIN}/money/import`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#gi-file', { state: 'attached', timeout: 8000 });
@@ -468,6 +470,9 @@ await pasteGifts(wireFile);
 const wireAsk = (await page.innerText('.imp-rmap').catch(() => '')).replace(/\s+/g, ' ');
 check('a way of paying it doesn’t know is asked about: "Wire", left as Not recorded',
   /Wire 1 row/.test(wireAsk) && (await page.$eval('.imp-rmap__select', (e) => e.options[e.selectedIndex].text).catch(() => '')) === 'Not recorded', wireAsk);
+const slateAsk = (await page.locator('.imp-rmap').nth(1).innerText().catch(() => '')).replace(/\s+/g, ' ');
+check('…and so is a slate it can’t read ("General fund"): asked, opened, 1 to say — the limit is per slate',
+  (await page.getByRole('button', { name: 'Which slate each is to · 1 to say' }).getAttribute('aria-expanded').catch(() => '')) === 'true' && /General fund 1 row/.test(slateAsk), slateAsk.slice(0, 160));
 await page.click('button:has-text("Check 1 row")');
 await page.waitForSelector('.imp-result', { timeout: 15000 }).catch(() => {});
 await page.getByRole('button', { name: 'Import 1 gift' }).click();

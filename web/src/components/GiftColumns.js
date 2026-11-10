@@ -168,17 +168,21 @@ export const methodOf = (methodMap, value) => {
   return readMethod(value);
 };
 // Which slate a value in the Slate column names: the person's pick, else a
-// slate whose name or code it is (or holds: "School board trustees"), else
-// none — the first slate, as for a gift typed with no slate.
+// slate whose name or code it is, else the one slate a word of whose name
+// it holds ("School board trustees"). A value that fits two slates ("City
+// of Surrey School Board"), or none, names no slate here — the screen asks,
+// and one left unsaid goes to the first slate, as a gift typed with none.
 const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+const slateWords = (s) => `${s.label} ${s.code}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4);
 export const slateOf = (slateMap, slates, value) => {
   const k = String(value).toLowerCase();
   if (slateMap && Object.hasOwn(slateMap, k)) return slateMap[k] || null;
   const v = squash(value);
   if (!v) return null;
-  const hit = slates.find((s) => squash(s.code) === v || squash(s.label) === v)
-    || slates.find((s) => { const w = squash(String(s.label).split(/\s+/)[0]); return w.length >= 4 && v.includes(w); });
-  return hit ? hit.code : null;
+  const named = slates.find((s) => squash(s.code) === v || squash(s.label) === v);
+  if (named) return named.code;
+  const fits = slates.filter((s) => slateWords(s).some((w) => v.includes(w)));
+  return fits.length === 1 ? fits[0].code : null;
 };
 
 // One record of the file → { row } as the server takes it, or { error }:

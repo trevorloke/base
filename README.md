@@ -208,7 +208,9 @@ than a week after they came off is refused. Contacts are door, phone, text or
   Import & export; managers and the treasurer): a CSV or Excel file of
   donations taken elsewhere. No tool's column names are assumed — a column
   is matched by what its heading means, then by its values, and you correct
-  it. The check saves nothing and says the gifts and their total, the donors
+  it; a way of paying or a slate it can't read is asked about (the limit is
+  per slate), and with no slate column it says every gift goes to the first
+  slate. The check saves nothing and says the gifts and their total, the donors
   found, the gifts to settle, what is already here, what can't come in, and
   anyone the file would take over the year's limit. Each gift then goes
   through the same path as one typed at the desk, oldest first, so the limit
