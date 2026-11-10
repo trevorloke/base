@@ -57,10 +57,12 @@
 // then after five more — three tries in all — then logged as failed and
 // the run moves on. Each try carries the same key (the run and the step),
 // so a receiver that got one after all can tell. A redirect is never
-// followed and never tried again (the same one would come back). An
-// address that has stopped answering is left alone for five minutes
-// (webhook.js): a try in that time fails at once, so nothing queued behind
-// it waits.
+// followed and never tried again (the same one would come back). The job
+// runner isn't made to wait for an address: the step is handed back to it,
+// whatever is queued behind goes on at once, and the steps for one address
+// go one at a time in a line of their own (runStepJob). An address that has
+// stopped answering is left alone for five minutes (webhook.js): a try in
+// that time fails at once, so nobody in its line waits out the silence.
 //
 // An answer that comes in after the run has ended (someone taken off, or
 // their goal reached, while the email or the address was being called) is
@@ -852,7 +854,7 @@ const deliverText = async (db, ws, send) => {
 // schedules the next try.
 const deliverHook = async (db, ws, post) => {
   // An address that has stopped answering isn't called (webhook.js): this
-  // try fails at once, and nothing queued behind it waits.
+  // try fails at once, and nobody behind it in the line waits.
   const res = notAnswering(post.url) ? { ok: false, why: 'not_answering' }
     : await postHook({ url: post.url, body: post.body, key: post.key, secret: await signingSecret(ws, post.secretNo) });
   await act(db, ws, async (tx, emit) => {
@@ -892,7 +894,7 @@ const deliverHook = async (db, ws, post) => {
   });
 };
 
-export const runStepJob = async (db, job) => {
+const runStep = async (db, job) => {
   const ws = job.workspace_id;
   const { result } = await act(db, ws, async (tx, emit) => {
     const loaded = await loadStepContext(tx, job);
@@ -911,4 +913,52 @@ export const runStepJob = async (db, job) => {
   if (result?.send) await deliver(db, ws, result.send);
   if (result?.sendText) await deliverText(db, ws, result.sendText);
   if (result?.post) await deliverHook(db, ws, result.post);
+};
+
+// A web address may take seconds to answer, and the job runner runs one
+// job at a time: waited for, every such call would hold whatever is queued
+// behind it — another ladder's email, a receipt. So a step that sends to a
+// web address is handed back to the runner (lib/jobs.js `later`), which
+// goes on to the next job at once. The steps for one address stand in a
+// line of their own and go one at a time, as they always have — an address
+// is never handed two messages at once, three in a row with no answer still
+// means three people, and each step is claimed just before its own call —
+// while another address isn't made to wait for it. Should a line grow long
+// (a burst of people at a slow address), the runner waits for it after
+// all, so no more pile up behind.
+const LINE_MAX = 25;
+let lineMax = LINE_MAX;
+export const _setLineMaxForTest = (n) => { lineMax = n || LINE_MAX; };
+const lines = new Map(); // address → the end of the last step in its line
+let inLines = 0;
+const inLine = (url, fn) => {
+  inLines += 1;
+  const mine = (lines.get(url) || Promise.resolve()).then(fn);
+  // What the next one waits for: this one's end, however it ended.
+  const end = mine.then(() => {}, () => {}).then(() => {
+    inLines -= 1;
+    if (lines.get(url) === end) lines.delete(url);
+  });
+  lines.set(url, end);
+  return mine;
+};
+
+// The address this job's step sends to, if it is a "Send to a web address"
+// step: asked before the step runs (which reads the steps again itself, as
+// they are by then).
+const hookAddress = async (db, job) => {
+  const { ladder_id: ladderId, step } = job.payload || {};
+  if (!ladderId || !Number.isInteger(Number(step))) return null;
+  const s = parseJson((await db.query(
+    'select steps -> $3::int as step from ladders where id = $1 and workspace_id = $2', [ladderId, job.workspace_id, Number(step)],
+  )).rows[0]?.step, null);
+  return s?.kind === 'webhook' ? String(s.url) : null;
+};
+
+export const runStepJob = async (db, job) => {
+  const url = await hookAddress(db, job);
+  if (!url) return runStep(db, job);
+  const turn = inLine(url, () => runStep(db, job));
+  if (inLines > lineMax) return turn;
+  return { later: turn };
 };

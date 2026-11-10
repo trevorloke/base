@@ -84,6 +84,51 @@ test('failures retry with backoff, then park as failed with the error', async ()
   assert.match(row.last_error, /always broken/);
 });
 
+test('a handler may hand back work the runner needn’t wait for: the next job starts meanwhile; each is done when its work is, the pass when all are', async () => {
+  const seen = [];
+  let answer;
+  const answered = new Promise((r) => { answer = r; });
+  // A call to another tool, started and not waited for (a ladder's "Send to a web address").
+  registerJob(`test.call.${tag}`, async (d, job) => {
+    seen.push(`called ${job.payload.n}`);
+    return { later: answered.then(() => { if (job.payload.n === 2) throw new Error('no answer'); seen.push(`noted ${job.payload.n}`); }) };
+  });
+  registerJob(`test.quick.${tag}`, async () => { seen.push('quick'); });
+  const add = (kind, payload = {}) => runAction(db, { workspaceId: ws, actorId: null, action: 'x' }, (tx) => enqueueJob(tx, { workspaceId: ws, kind, payload }));
+  const one = (await add(`test.call.${tag}`, { n: 1 })).result;
+  const two = (await add(`test.call.${tag}`, { n: 2 })).result;
+  const quick = (await add(`test.quick.${tag}`)).result;
+  let over = false;
+  const pass = runDueJobs(db, { workspaceId: ws }).then((r) => { over = true; return r; });
+  for (let i = 0; i < 200 && seen.length < 3; i += 1) await new Promise((r) => { setTimeout(r, 10); });
+  assert.deepEqual([...seen].sort(), ['called 1', 'called 2', 'quick'], 'both calls are out and the job behind them has run — nobody has answered yet');
+  await new Promise((r) => { setTimeout(r, 50); });
+  assert.deepEqual([(await jobRow(one)).status, (await jobRow(two)).status, (await jobRow(quick)).status], ['running', 'running', 'done']);
+  assert.equal(over, false, 'the pass isn’t over while a call is out');
+  answer();
+  assert.deepEqual(await pass, { ran: 2, failed: 1 });
+  assert.equal((await jobRow(one)).status, 'done');
+  // Work that fails after the handler came back is a failed job like any other: kept, with why, and tried again later.
+  const row = await jobRow(two);
+  assert.equal(row.status, 'pending');
+  assert.match(row.last_error, /no answer/);
+  assert.ok(new Date(row.run_at) > new Date());
+  await db.query("update jobs set status = 'cancelled' where id = $1", [two]);
+
+  // The runner's own passes (settle: false) don't wait for such work at
+  // all: the pass is over while the call is still out, and the job is noted
+  // done when its work ends.
+  let answered3;
+  const call3 = new Promise((r) => { answered3 = r; });
+  registerJob(`test.call3.${tag}`, async () => ({ later: call3 }));
+  const three = (await add(`test.call3.${tag}`)).result;
+  assert.deepEqual(await runDueJobs(db, { workspaceId: ws, settle: false }), { ran: 0, failed: 0 }, 'over at once');
+  assert.equal((await jobRow(three)).status, 'running');
+  answered3();
+  for (let i = 0; i < 200 && (await jobRow(three)).status !== 'done'; i += 1) await new Promise((r) => { setTimeout(r, 10); });
+  assert.equal((await jobRow(three)).status, 'done');
+});
+
 test('pending jobs can be cancelled by payload', async () => {
   const j = await runAction(db, { workspaceId: ws, actorId: null, action: 'x' }, (tx) => enqueueJob(tx, {
     workspaceId: ws, kind: `test.write.${tag}`, runAt: new Date(Date.now() + 3600_000).toISOString(), payload: { n: 4, run: 'r1' },

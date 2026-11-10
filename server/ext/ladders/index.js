@@ -13,9 +13,10 @@
 // "Send to a web address" posts a small signed message to another tool,
 // with their email or mobile only when those steps could reach them.
 // When someone does the trigger they are put on every ladder that is on,
-// once, and the steps run one job at a time. Each person also has an
-// engagement level (Contact → Supporter → Signer → Donor or volunteer →
-// Leader), computed from what they did.
+// once, and the steps run one job at a time (a step that sends to a web
+// address is the one the runner never waits for: engine.js). Each person
+// also has an engagement level (Contact → Supporter → Signer → Donor or
+// volunteer → Leader), computed from what they did.
 //
 //   sql.js      tables + the persons trigger that notes tags just got
 //   shape.js    triggers, goals, steps, contracts, {{first_name}} / {{campaign}}

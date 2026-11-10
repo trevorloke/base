@@ -17,6 +17,7 @@ import { runDueJobs, enqueueJob } from '../lib/jobs.js';
 import { onHook } from '../lib/hooks.js';
 import { verifySignature, signPayload } from '../lib/signature.js';
 import { startFakeReceiver } from './fake-receiver.js';
+import { _setLineMaxForTest } from '../ext/ladders/engine.js';
 import {
   addressProblem, cleanAddress, isPublicAddress, lookupProblem, postHook, signingSecret, hookBody, _setResolverForTest,
   notAnswering, _setTimeoutForTest, _silentForTest,
@@ -594,6 +595,69 @@ test('an address that stops answering is left alone for five minutes: whoever re
   assert.equal(notAnswering(slow), true);
   _silentForTest.clear();
   await off(lad);
+  await verified();
+});
+
+test('an address that is slow to answer holds nothing queued behind it: the next jobs run while it is being called, and so does another address; it is still handed one message at a time', async () => {
+  const lad = await hookLadder('held');
+  const other = await hookLadder('nearby');
+  const thanks = await create({ name: 'Thank you', trigger: { kind: 'tag', ref: 'thanks' }, steps: [{ kind: 'tag', tag: 'thanked' }] });
+  await turnOn(thanks.id);
+  hooks.hold(2); // the first two messages to arrive are answered only when the test says
+  const three = [];
+  for (const n of ['Abe', 'Bea', 'Cal']) three.push(await mgr.createPerson(`${n} Example`, { tags: ['held'] }));
+  const dee = await mgr.createPerson('Dee Example', { tags: ['nearby'] });
+  const gia = await mgr.createPerson('Gia Example', { tags: ['thanks'] });
+  const running = runJobs();
+  try {
+    // Nobody has been answered — and the other ladder's step, in the same queue, has already run.
+    await waitFor(async () => (await tagsOf(gia.id)).includes('thanked'));
+    // Two calls are out at once: one to each address.
+    await waitFor(() => got('held').length === 1 && got('nearby').length === 1);
+    await new Promise((r) => { setTimeout(r, 150); });
+    assert.equal(got('held').length, 1, 'the second for the same address waits for the first to be answered');
+    const claimed = (await Promise.all(three.map((p) => runOf(lad.id, p.id)))).filter((r) => r.wait === 'sending').length;
+    assert.equal(claimed, 1, 'each claimed just before its own call, none ahead of it');
+  } finally {
+    hooks.release(200);
+    hooks.asUsual();
+    await running;
+  }
+  for (const p of [...three, dee]) {
+    const l = p === dee ? other : lad;
+    const run = await runOf(l.id, p.id);
+    assert.deepEqual([run.status, hookLog(run).map((e) => [e.result, e.status])], ['done', [['sent', 200]]], p.name);
+  }
+  assert.deepEqual([got('held').length, got('nearby').length], [3, 1], 'one each');
+  assert.ok((await tagsOf(three[2].id)).includes('after-held') && (await tagsOf(dee.id)).includes('after-nearby'));
+
+  // The runner's own passes don't wait for the address at all (lib/jobs.js
+  // settle: false) — until the line for it is long: then it waits after
+  // all, so no more pile up behind (two here; twenty-five on a server).
+  const pass = () => { const p = { over: false }; p.end = runDueJobs(db, { workspaceId: ws, settle: false }).then(() => { p.over = true; }); return p; };
+  const calls = () => got('held').length;
+  hooks.hold(1);
+  const later = [await mgr.createPerson('Hugo Example', { tags: ['held'] })];
+  let p = pass();
+  await waitFor(() => calls() === 4);
+  await waitFor(() => p.over, 2000).catch(() => {});
+  assert.deepEqual([p.over, (await runOf(lad.id, later[0].id)).wait], [true, 'sending'], 'one in the line: the pass is over while the address has yet to answer');
+  _setLineMaxForTest(2);
+  try {
+    later.push(await mgr.createPerson('Ivy Example', { tags: ['held'] }), await mgr.createPerson('Jan Example', { tags: ['held'] }));
+    p = pass();
+    await new Promise((r) => { setTimeout(r, 200); });
+    assert.equal(p.over, false, 'three in the line, more than two: this pass waits');
+    hooks.release(200);
+    await p.end;
+  } finally { _setLineMaxForTest(null); hooks.release(200); hooks.asUsual(); }
+  await waitFor(async () => (await Promise.all(later.map((x) => runOf(lad.id, x.id)))).every((r) => hookLog(r).some((e) => e.result === 'sent')));
+  await runJobs();
+  assert.ok((await Promise.all(later.map((x) => runOf(lad.id, x.id)))).every((r) => r.status === 'done'));
+  assert.equal(calls(), 6, 'and each was sent once');
+  await off(lad);
+  await off(other);
+  await off(thanks);
   await verified();
 });
 

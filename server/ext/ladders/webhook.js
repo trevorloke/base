@@ -251,13 +251,15 @@ const sendOnce = async ({ url, body, secret, key, timeoutMs = hookTimeoutMs }) =
 };
 
 // ── An address that has stopped answering ──
-// Jobs run one at a time (lib/jobs.js), so every call that waits out its
-// five seconds holds whatever is queued behind it: other ladders, receipts,
-// thank-you emails. After three calls in a row with no answer the address
-// is left alone for five minutes: the engine tells whoever reaches the step
-// meanwhile at once ("the address isn't answering") and tries them again on
-// the usual clock — by then it may be back. Any answer at all, a 500 too,
-// clears it. Kept in this server's memory: a restart starts the count again.
+// The calls to one address go one at a time (engine.js), so every call
+// that waits out its five seconds holds up whoever is next in line for it
+// — and, once the line is long, the job runner and all it has queued:
+// other ladders, receipts, thank-you emails. After three calls in a row
+// with no answer the address is left alone for five minutes: the engine
+// tells whoever reaches the step meanwhile at once ("the address isn't
+// answering") and tries them again on the usual clock — by then it may be
+// back. Any answer at all, a 500 too, clears it. Kept in this server's
+// memory: a restart starts the count again.
 const SILENT_AFTER = 3;
 const SILENT_MS = 5 * 60_000;
 const SILENT_KEEP = 500;
