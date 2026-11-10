@@ -89,9 +89,13 @@ const measure = (page, sel = null) => page.evaluate((targets) => {
   }
   return { words, yellow, overflow, minTap };
 }, sel);
+// A control is 48px wherever a thumb reaches and 40 on a desk with a mouse
+// (app.css --ctl): the page itself says which it is.
+const tapFloor = (page) => page.evaluate(() => (matchMedia('(min-width: 900px) and (pointer: fine)').matches ? 40 : 48));
 const simple = async (pg, name, sel = null, yellow = 1) => {
   const mm = await measure(pg, sel);
-  check(`${name}: ${yellow} yellow, no sideways scroll${sel ? ', targets ≥ 48px' : ''}`, mm.yellow === yellow && mm.overflow <= 0 && (mm.minTap == null || mm.minTap >= 47.5), JSON.stringify(mm));
+  const floor = await tapFloor(pg);
+  check(`${name}: ${yellow} yellow, no sideways scroll${sel ? `, targets ≥ ${floor}px` : ''}`, mm.yellow === yellow && mm.overflow <= 0 && (mm.minTap == null || mm.minTap >= floor - 0.5), JSON.stringify(mm));
   return mm;
 };
 // Days on the campaign's clock (the browsers run in Vancouver): the next

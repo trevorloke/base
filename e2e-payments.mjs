@@ -177,10 +177,14 @@ const measure = (page, sel) => page.evaluate((targets) => {
   return { yellow, overflow, minTap, minWho };
 }, sel);
 const TARGETS = 'main.page button, main.page a.btn, main.page a.ops-row, main.page input, main.page select';
+// A control is 48px wherever a thumb reaches and 40 on a desk with a mouse
+// (app.css --ctl): the page itself says which it is.
+const tapFloor = (page) => page.evaluate(() => (matchMedia('(min-width: 900px) and (pointer: fine)').matches ? 40 : 48));
 const measured = async (page, name) => {
   const m = await measure(page, TARGETS);
-  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥48px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= 47.5),
-    `yellow=${m.yellow} overflow=${m.overflow} minTap=${m.minTap} ${m.minTap < 47.5 ? m.minWho : ''}`);
+  const floor = await tapFloor(page);
+  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥${floor}px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= floor - 0.5),
+    `yellow=${m.yellow} overflow=${m.overflow} minTap=${m.minTap} ${m.minTap < floor - 0.5 ? m.minWho : ''}`);
 };
 
 // ── 1. The manager; Settings → Services ──

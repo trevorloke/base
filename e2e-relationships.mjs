@@ -92,10 +92,14 @@ const measure = (page, sel = null) => page.evaluate((targets) => {
   return { words, yellow, overflow, minTap, minWho };
 }, sel);
 const FIELDS = 'main.page input:not([type=checkbox]), main.page select, main.page textarea, main.page button, main.page a.btn';
+// A control is 48px wherever a thumb reaches and 40 on a desk with a mouse
+// (app.css --ctl): the page itself says which it is.
+const tapFloor = (page) => page.evaluate(() => (matchMedia('(min-width: 900px) and (pointer: fine)').matches ? 40 : 48));
 const simple = async (page, name, sel = FIELDS) => {
   const m = await measure(page, sel);
-  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥48px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= 47.5),
-    `words=${m.words} yellow=${m.yellow} overflow=${m.overflow} minTap=${m.minTap} ${m.minTap < 47.5 ? m.minWho : ''}`);
+  const floor = await tapFloor(page);
+  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥${floor}px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= floor - 0.5),
+    `words=${m.words} yellow=${m.yellow} overflow=${m.overflow} minTap=${m.minTap} ${m.minTap < floor - 0.5 ? m.minWho : ''}`);
   return m;
 };
 const until = async (fn, ms = 20000) => {
