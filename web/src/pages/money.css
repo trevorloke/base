@@ -1,0 +1,8 @@
+/* Donations — the big number while its read is out or has failed: words,
+   not a dash. Smaller than the number itself, so it never shouts. */
+.mny-wait { font-size: 22px; font-weight: 600; line-height: 1.3; color: var(--text-3); }
+.ops-hero .gi-down { margin: var(--s-1) 0 0; }
+.mny-line { margin: var(--s-2) 0 0; }
+.ops-needs .gi-down { margin-bottom: 0; }
+/* More: Receipts · Import a file, side by side. */
+.mny-more { margin-bottom: var(--s-1); }

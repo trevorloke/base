@@ -1,0 +1,44 @@
+/* The financial agent's filing dates on Donations: the countdown under the
+   big number, and the small form under More. Sentence case, the reading
+   face; the number 22px, everything else 13–16px. */
+.fl-count {
+  list-style: none;
+  margin: calc(-1 * var(--s-3)) 0 var(--s-5);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s-2);
+}
+.fl-count__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--s-3) var(--s-4);
+  background: var(--paper-0);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--rule-2);
+  border-radius: var(--r-card);
+}
+.fl-count__item.is-soon { border-left-color: var(--warn); }
+.fl-count__item.is-past { border-left-color: var(--danger); }
+.fl-count__n { font-family: var(--font-sans); font-size: 22px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.fl-count__word { font-size: 14px; font-weight: 500; color: var(--text-2); }
+.fl-count__item.is-soon .fl-count__word { color: var(--warn); }
+.fl-count__item.is-past .fl-count__n, .fl-count__item.is-past .fl-count__word { color: var(--danger); }
+.fl-count__what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fl-count__name { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.fl-count__day { font-size: 13px; color: var(--text-3); }
+/* A phone: one short row each — the days on the left, what is due beside them. */
+@media (max-width: 560px) {
+  .fl-count { grid-template-columns: minmax(0, 1fr); }
+  .fl-count__item { flex-direction: row; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); }
+  .fl-count__n { flex: none; min-width: 104px; }
+}
+
+.fl-form { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-2) 0 var(--s-4); }
+.fl-form .ops-meta { margin: 0 0 var(--s-1); }
+.fl-form .field { margin-bottom: 0; }
+.fl-form__name { flex: 3 1 220px; }
+.fl-form__day { flex: 1 1 150px; }
+.fl-form__said { font-size: 14px; color: var(--ok); }

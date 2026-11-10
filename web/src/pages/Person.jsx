@@ -38,6 +38,7 @@ import {
 } from '../components/TextingCard.jsx';
 import { KnowsNudge, PersonKnows, usePersonKnows } from '../components/RelationshipsBits.jsx';
 import NameFields from '../components/NameFields.jsx';
+import VoterNumber from '../components/VoterNumber.jsx';
 
 const TIER_LABEL = {
   superstar: DONOR_TIERS.superstar.label,
@@ -852,6 +853,7 @@ function Gifts({ person, gifts, totals, slates = FALLBACK_SLATES }) {
                   : <span className="chip chip-ghost">one-time</span>}
                 {slates.length > 1 && g.slate && g.slate !== slates[0].code && <span className="chip" title="The slate this contribution is to">{slateLabel(g.slate, slates)}</span>}
                 {g.flagged && <span className="chip chip-warn" title={g.flag_reason || ''}>flagged</span>}
+                {g.source === 'import' && <span className="chip" title="Brought in from another tool’s file">Imported</span>}
                 {g.note && <span className="note">{g.note}</span>}
               </li>
             ))}
@@ -986,10 +988,12 @@ export default function Person() {
         <Section title="Details" open={!!open.details} onToggle={toggle('details')}>
           <Details person={person} household={household} refresh={refresh} desk={desk} me={me} editing={editing} setEditing={setEditing} />
         </Section>
-        {/* The campaign's own fields (People → More → Profile fields); with no signal and no copy, it says so. */}
-        {(fields.data?.fields?.length > 0 || noSignal(fields)) && (
+        {/* The campaign's own fields (People → More → Profile fields); with no signal and no copy, it says so.
+            The desk always has it: the voter number lives here (ext/voternumber). */}
+        {(desk || fields.data?.fields?.length > 0 || noSignal(fields)) && (
           <Section title="More details" count={filledCount(fields) || ''} open={!!open.more} onToggle={toggle('more')}>
-            <PersonFields key={person.id} query={fields} personId={person.id} />
+            {desk && <VoterNumber key={`voter-${person.id}`} personId={person.id} />}
+            {(!desk || fields.data?.fields?.length !== 0) && <PersonFields key={person.id} query={fields} personId={person.id} />}
           </Section>
         )}
         {desk && (

@@ -46,6 +46,7 @@ import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { useRequestsCount } from '../components/RequestsCount.js';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
+import { daysLeft, filingDay, filingSoon } from '../components/FilingWords.js';
 import './today.css';
 import { at } from '../base.js';
 import { NS } from '../base.js';
@@ -828,6 +829,11 @@ function DeskToday({ b, me, toast }) {
         <h2 className="today-h" id="today-next-h">Coming up</h2>
         <ul className="today-rows">
           <ShiftRow shift={(b.shifts ?? [])[0]} />
+          {/* The financial agent's filing dates within 30 days (ext/filingdates; money roles). */}
+          {(b.filing ?? []).map((d) => (
+            <LinkRow key={`${d.name}|${d.due_on}`} to="/money" main={<>{d.name} <span className="muted">· {filingDay(d.due_on)}</span></>}
+              chip={daysLeft(d.days)} chipCls={filingSoon(d.days) ? 'chip chip-warn' : 'chip'} />
+          ))}
         </ul>
       </section>
 

@@ -1,5 +1,8 @@
 // Donations (the /money screen) — what came in, and what needs the desk.
-//   Top: one big "Raised this year" number, then "Needs you": gifts over
+//   Top: one big "Raised this year" number — this calendar year, added up
+//   by the server (the brief), so it means one thing however many gifts
+//   are loaded; under it the financial agent's filing dates, counted down
+//   (components/FilingDates.jsx). Then "Needs you": gifts over
 //   the contribution limit ("Over limit":
 //   "$150 over the $1,250 limit", the legal wording under "Why?", Donor ·
 //   Void right there; a gift that may be the same donor as another record
@@ -20,7 +23,13 @@
 //   The ledger: rows of donor, amount, date (+ monthly / over limit chips). Tap
 //   a row for how it was paid, note, the donor's profile and Void ("Void this
 //   gift? Yes · No", then a 7s Undo).
-//   Under "More": receipts.
+//   Under "More": receipts — and, for a manager or the treasurer, Import a
+//   file (gifts made in another tool: pages/ImportGifts.jsx) and the two
+//   filing dates. A gift that came from a file wears "Imported"; those with
+//   no sure donor wait under Needs you ("12 imported gifts need a donor").
+//   Honest states: the big number, Needs you and the gift list each say
+//   "Loading…" while their read is out and "Unavailable — Try again" when
+//   it failed — never a dash, a blank or a block that isn't there.
 //   Online giving (ext/payments, components/PaymentsBits.jsx): a gift paid
 //   on the website wears "online" in the ledger (and "disputed" or "partly
 //   refunded" when it is); Needs you lists the online payments the desk
@@ -41,11 +50,20 @@ import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/No
 import { usePayments, PaymentNeedRow, OnlineChips, MonthlyDonors, OnlinePayments } from '../components/PaymentsBits.jsx';
 // The over-limit line, and Not the same person's choices and words.
 import { fmtBig, overOf, overLine, apartChoices, apartSaid, compareHref, bannerAfter } from '../components/MoneyWords.js';
+// Gifts brought in from another tool's file (ext/giftimport), and the filing dates.
+import { PileRow, ImportedChip, ImportedLine, isImported, Unavailable } from '../components/GiftImportBits.jsx';
+import { FilingCountdown, FilingDatesForm } from '../components/FilingDates.jsx';
 import './shifts.css';
+import './money.css';
 
 // gift.log / gift.void / gift.restore and GET /records/* are desk-only
 // (server: MONEY_ROLES; volunteers get 403 on both reads and writes).
 const MONEY_ROLES = ['manager', 'treasurer', 'staff'];
+// The financial agent's people: they bring a gift file in and set the filing dates.
+const AGENT_ROLES = ['manager', 'treasurer'];
+// How a read stands, for a number or a block that must never be a blank:
+// 'ready' (it has an answer), 'loading', 'nosignal', or 'down' (it failed).
+const stateOf = (q) => (q.data !== undefined ? 'ready' : noSignal(q) ? 'nosignal' : q.isError ? 'down' : 'loading');
 // Registry: gift.method / gift.cadence select options, in plain words.
 const METHODS = ['card', 'etransfer', 'cheque', 'cash', 'pad', 'in-kind'];
 const METHOD_WORD = { card: 'Card', etransfer: 'E-transfer', cheque: 'Cheque', cash: 'Cash', pad: 'Pre-authorized debit', 'in-kind': 'In-kind' };
@@ -412,6 +430,7 @@ function GiftRow({ g, slates, open, onToggle, onVoid, online, onApart }) {
             {shortDate(g.date)}
             {g.cadence === 'monthly' && <MonthlyChip />}
             <OnlineChips g={g} info={online} />
+            {isImported(g) && <ImportedChip />}
             <SlateChip slate={g.slate} slates={slates} />
             {g.flagged && <OverChip title={g.flag_reason} />}
           </span>
@@ -427,7 +446,7 @@ function GiftRow({ g, slates, open, onToggle, onVoid, online, onApart }) {
             </p>
           )}
           {g.flagged && <p className="ops-over" title={g.flag_reason || undefined}>{overLine(overOf(g))}</p>}
-          <ReceiptsGiftLine giftId={g.id} />
+          {isImported(g) ? <ImportedLine g={g} /> : <ReceiptsGiftLine giftId={g.id} />}
           <GiftActions personId={g.person_id} onVoid={onVoid} apart={apart} onApart={onApart} compare={compareHref(g.person_id, g)} />
         </div>
       )}
@@ -440,6 +459,7 @@ export default function Money() {
   const queryClient = useQueryClient();
   const { me } = useOutletContext() ?? {};
   const canMoney = MONEY_ROLES.includes(me?.role);
+  const canAgent = AGENT_ROLES.includes(me?.role);
   const slates = slatesOf(me);
   const [params, setParams] = useSearchParams();
   const showNew = params.get('new') === '1' && canMoney; // the global 'n' key lands here too
@@ -452,6 +472,7 @@ export default function Money() {
   const [error, setError] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [more, setMore] = useState(false);
+  const [datesOpen, setDatesOpen] = useState(false);
   const [allGifts, setAllGifts] = useState(false);
   const toastTimer = useRef(null);
 
@@ -485,20 +506,15 @@ export default function Money() {
   const latest = rows.filter((g) => !flaggedIds.has(g.id)).slice(0, LATEST);
   const personOf = Object.fromEntries(rows.map((g) => [g.id, g.person_id]));
 
-  // The big number: this calendar year from the ledger once it's all loaded;
-  // until then (or past one page) the brief's running total.
-  const year = String(new Date().getFullYear());
-  const allLoaded = gifts.isSuccess && !gifts.hasNextPage;
-  let raised = null;
-  if (allLoaded) {
-    raised = {
-      label: 'Raised this year',
-      cents: rows.filter((g) => fmtDate(g.date).startsWith(year)).reduce((n, g) => n + (Number(g.amount_cents) || 0), 0),
-    };
-  } else if (brief.data?.money) {
-    raised = { label: 'Raised so far', cents: brief.data.money.totalCents };
-  }
+  // The big number: raised this calendar year, as the server adds it up
+  // (the brief) — one meaning, however many gifts this screen has loaded.
+  // An answer kept from before the number came with it has none: that is
+  // unavailable, never a guess.
+  const yearCents = brief.data?.money?.yearCents;
+  const raised = stateOf(brief) === 'ready' && !Number.isFinite(Number(yearCents ?? NaN)) ? 'down' : stateOf(brief);
   const weekCents = brief.data?.money?.weekCents ?? 0;
+  // Gifts from a file that wait for a donor (ext/giftimport), on the brief.
+  const pile = brief.data?.giftsWaiting;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['records', 'gift'] });
@@ -604,7 +620,15 @@ export default function Money() {
     );
   }
 
-  const needs = flagged.length + noAddress.length + payNeeds.length;
+  const needs = flagged.length + noAddress.length + payNeeds.length + (Number(pile?.gifts) > 0 ? 1 : 0);
+  // Needs you is three reads. While one is out it says Loading…; one that
+  // failed says so with Try again — the block never just isn't there. With
+  // no signal and nothing kept, the gift list's one line says it.
+  const needReads = [brief, receiptNeeds, payments];
+  const needStates = needReads.map(stateOf);
+  const needsDown = needReads.filter((q) => stateOf(q) === 'down');
+  const needsOffline = needStates.includes('nosignal') && needStates.includes('ready');
+  const showNeeds = needs > 0 || needStates.includes('loading') || needsDown.length > 0 || needsOffline;
 
   return (
     <div className="ops-page">
@@ -640,33 +664,51 @@ export default function Money() {
       )}
 
       <div className="ops-hero">
-        <span className="eyebrow">{raised?.label ?? 'Raised'}</span>
-        <span className="n">{raised ? fmtBig(raised.cents) : '—'}</span>
-        {weekCents > 0 && <span className="sub">+{fmtBig(weekCents)} this week</span>}
+        <span className="eyebrow">Raised this year</span>
+        {raised === 'ready' && <span className="n">{fmtBig(yearCents)}</span>}
+        {raised === 'loading' && <span className="mny-wait" role="status">Loading…</span>}
+        {raised === 'nosignal' && <span className="mny-wait" role="status">No signal</span>}
+        {raised === 'down' && <Unavailable onRetry={() => brief.refetch()} busy={brief.isFetching} />}
+        {raised === 'ready' && weekCents > 0 && <span className="sub">+{fmtBig(weekCents)} this week</span>}
       </div>
+      <FilingCountdown dates={brief.data?.filingAll} />
 
-      {needs > 0 && (
+      {showNeeds && (
         <section className="ops-needs" aria-labelledby="needs-head">
-          <span className="eyebrow" id="needs-head">Needs you · {needs}</span>
-          <ul className="ops-rows">
-            {flagged.map((f) => (
-              <FlaggedRow key={f.id} f={f} personId={f.person_id ?? personOf[f.id]} onVoid={() => voidGift(f.id)}
-                onApart={(other) => keepApart({ ...f, person_id: f.person_id ?? personOf[f.id] }, other)} />
-            ))}
-            {noAddress.map((r) => (
-              <AddressRow key={r.id} r={r} onSaved={(text) => { invalidate(); showToast({ text }); }} />
-            ))}
-            {payNeeds.map((n) => (
-              <PaymentNeedRow key={n.id} n={n} onDone={(text) => { invalidate(); showToast({ text }); }} />
-            ))}
-          </ul>
+          <span className="eyebrow" id="needs-head">Needs you{needStates.every((st) => st === 'ready') ? ` · ${needs}` : ''}</span>
+          {needs > 0 && (
+            <ul className="ops-rows">
+              {flagged.map((f) => (
+                <FlaggedRow key={f.id} f={f} personId={f.person_id ?? personOf[f.id]} onVoid={() => voidGift(f.id)}
+                  onApart={(other) => keepApart({ ...f, person_id: f.person_id ?? personOf[f.id] }, other)} />
+              ))}
+              {noAddress.map((r) => (
+                <AddressRow key={r.id} r={r} onSaved={(text) => { invalidate(); showToast({ text }); }} />
+              ))}
+              {payNeeds.map((n) => (
+                <PaymentNeedRow key={n.id} n={n} onDone={(text) => { invalidate(); showToast({ text }); }} />
+              ))}
+              <PileRow waiting={pile} />
+            </ul>
+          )}
+          {needStates.includes('loading') && <p className="ops-meta mny-line" role="status">Loading…</p>}
+          {!needStates.includes('loading') && needsDown.length > 0 && (
+            <Unavailable what={needs > 0 ? 'The rest' : null} busy={needsDown.some((q) => q.isFetching)}
+              onRetry={() => needsDown.forEach((q) => q.refetch())} />
+          )}
+          {!needStates.includes('loading') && needsDown.length === 0 && needsOffline && (
+            <p className="ops-meta mny-line" role="status">No signal — the rest loads when you’re back online.</p>
+          )}
         </section>
       )}
 
       <span className="eyebrow ops-label">Gifts</span>
       {error && <p className="error">{error}</p>}
       {giftsOffline && <NoSignal />}
-      {gifts.isError && !giftsOffline && <p className="error">{gifts.error.message}</p>}
+      {gifts.isPending && !giftsOffline && <p className="ops-meta" role="status">Loading…</p>}
+      {gifts.isError && !giftsOffline && (gifts.data
+        ? <p className="error">{gifts.error.message}</p>
+        : <Unavailable onRetry={() => gifts.refetch()} busy={gifts.isFetching} />)}
       {rows.length === 0 && gifts.isSuccess && <p className="ops-empty">No gifts yet.</p>}
       {rows.length > 0 && (
         <ul className="ops-rows" id="gift-list">
@@ -709,7 +751,26 @@ export default function Money() {
         </button>
         {more && (
           <div id="money-more" className="ops-more-body">
-            <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/receipts">Receipts</Link>
+            <div className="ops-actions mny-more">
+              <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/receipts">Receipts</Link>
+              {canAgent && <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/import">Import a file</Link>}
+            </div>
+            {canAgent && (
+              <>
+                <button type="button" className="ops-more disclose" aria-expanded={datesOpen} aria-controls="money-dates"
+                  onClick={() => setDatesOpen((v) => !v)}>
+                  Filing dates
+                </button>
+                {datesOpen && (
+                  <div id="money-dates">
+                    {stateOf(brief) === 'ready' && <FilingDatesForm dates={brief.data.filingAll} />}
+                    {stateOf(brief) === 'loading' && <p className="ops-meta" role="status">Loading…</p>}
+                    {stateOf(brief) === 'nosignal' && <NoSignal />}
+                    {stateOf(brief) === 'down' && <Unavailable onRetry={() => brief.refetch()} busy={brief.isFetching} />}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
