@@ -1,7 +1,8 @@
 // Background geocoding (ext/geocoding): a run works through everyone waiting
 // for a pin on the server, one lookup per household, copying pins already on
 // file, and stops, retries and pauses as it should — and after a pause tries
-// again by itself, on a long wait. The BC Address Geocoder is mocked; the
+// again by itself, on a long wait. An import that leaves addresses without
+// a pin starts the run by itself. The BC Address Geocoder is mocked; the
 // real job runner does the work.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -55,6 +56,11 @@ test('without the job runner, start says so (the page then looks up batches itse
   const r = await mgr.post('/api/geocode/start', {});
   assert.equal(r.status, 409);
   assert.equal(r.json.jobsOff, true);
+  // …and an import starts nothing either: no run that nothing would ever pick up.
+  const imp = await mgr.post('/api/data/import', { rows: [{ name: 'Early Import Example', address: '90001 80 Ave', lat: 49.15, lng: -122.81 }, { name: 'Early Unplaced Example', address: '90002 80 Ave' }] });
+  assert.equal(imp.json.created, 2);
+  assert.equal((await mgr.get('/api/geocode/status')).json.state, 'idle');
+  await db.query("update persons set lat = 49.15, lng = -122.812 where workspace_id = $1 and name = 'Early Unplaced Example'", [ws]);
 });
 
 test('a run places everyone: one lookup per household, pins already on file copied, units share the building', async () => {
@@ -208,6 +214,48 @@ test('Stop calls the next try off; Carry on before it leaves it nothing to do', 
   const after = (await mgr.get('/api/geocode/status')).json;
   assert.deepEqual([after.state, after.located, after.remaining], ['done', done.located, 0]);
   delete process.env.GEOCODE_RETRY_MS;
+});
+
+test('an import that leaves addresses without a pin starts the run by itself; nobody presses anything', async () => {
+  answer = () => null;
+  const stateNow = async () => (await mgr.get('/api/geocode/status')).json;
+  assert.equal((await stateNow()).state, 'done', 'the run before this is over');
+  const ranAt = (await stateNow()).updated_at;
+  // Everyone in the file has a pin already, or no address at all: nothing to place, nothing starts.
+  await mgr.post('/api/data/import', { rows: [{ name: 'Pinned Import Example', address: '70001 80 Ave', lat: 49.15, lng: -122.8 }, { name: 'No Address Import Example', phone: '604-555-0142' }] });
+  // A check of the file (the import's dry run) writes nothing and starts nothing.
+  await mgr.post('/api/data/import', { dryRun: true, rows: [{ name: 'Only Checked Example', address: '70002 80 Ave' }] });
+  // Address lookup turned off: the run would place nobody, so it is not started.
+  process.env.GEOCODER = 'off';
+  await mgr.post('/api/data/import', { rows: [{ name: 'Lookup Off Example', address: '70003 80 Ave' }] });
+  delete process.env.GEOCODER;
+  await later(1200);
+  assert.deepEqual([(await stateNow()).state, (await stateNow()).updated_at], ['done', ranAt], 'none of those started a run');
+
+  // Seven people at seven addresses, none with a pin: the run starts with the import.
+  const imp = await mgr.post('/api/data/import', { rows: Array.from({ length: 7 }, (_, i) => ({ name: `Imported ${i} Example`, address: `${71000 + i} 80 Ave` })) });
+  assert.equal(imp.json.created, 7);
+  assert.equal((await stateNow()).state, 'running', 'started in the import’s own write');
+  const done = await waitFor((x) => x.state === 'done');
+  // (Lookup Off Example, left waiting above, is placed by it too.)
+  assert.deepEqual([done.located, done.remaining], [8, 0], 'a fresh run, counting from zero');
+  const placed = (await db.query("select count(*)::int as n from persons where workspace_id = $1 and name like 'Imported % Example' and lat is not null", [ws])).rows[0].n;
+  assert.equal(placed, 7);
+  // Never a guessed place: no address, no pin.
+  const none = (await db.query("select lat, lng from persons where workspace_id = $1 and name = 'No Address Import Example'", [ws])).rows[0];
+  assert.deepEqual([none.lat, none.lng], [null, null]);
+  // The pins are the system's doing (nobody pressed Place on map): no actor on their events.
+  const actors = (await db.query("select distinct actor_id from events where workspace_id = $1 and action = 'person.geocode' and payload->>'geocoded' like '7100%'", [ws])).rows;
+  assert.deepEqual(actors.map((r) => r.actor_id), [null]);
+
+  // An import while the run is already going leaves it alone (it finds the newcomers by itself).
+  answer = () => new Promise((r) => setTimeout(() => r(null), 20));
+  await mgr.post('/api/data/import', { rows: Array.from({ length: 130 }, (_, i) => ({ name: `Second ${i} Example`, address: `${72000 + i} 80 Ave` })) });
+  await waitFor((x) => x.state === 'running' && x.located > 0);
+  await mgr.post('/api/data/import', { rows: [{ name: 'Third Example', address: '73000 80 Ave' }] });
+  const both = await waitFor((x) => x.state === 'done');
+  assert.deepEqual([both.located, both.remaining], [131, 0], 'one run placed both files');
+  answer = () => null;
 });
 
 test('volunteers cannot read or start a run', async () => {

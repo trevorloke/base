@@ -25,6 +25,11 @@
 // lookup failed spends nobody's tries — a short outage must not set good
 // addresses aside. Each job works for at most ROUND_BUDGET_MS and then
 // queues the next, so other jobs (ladder emails, A/B winners) keep moving.
+//
+// An import that leaves people with an address and no pin starts the run by
+// itself, in the import's own write (hooks.events below): nobody has to come
+// back and press "Place on map". Those pins are the system's doing — their
+// events carry no actor. A person with no address is never given a place.
 //   GEOCODE_CONCURRENCY  lookups at once (default 6)
 //   GEOCODE_BACKOFF_MS   wait after a round where nothing worked (default 30 s, × rounds in a row)
 //   GEOCODE_RETRY_MS     wait before a paused run's first try (default 15 min)
@@ -249,6 +254,44 @@ export const jobs = {
 
 export const deskOnlyReads = ['/geocode/status'];
 
+const lookupOff = () => (process.env.GEOCODER || '').toLowerCase() === 'off';
+
+// Start the run, or carry it on, in the caller's transaction — the job that
+// does the work is queued with it. false: it is running already. userId:
+// who pressed the button (null: nobody — the run started by itself).
+const startRun = async (tx, workspaceId, userId) => {
+  const run = await getRun(tx, workspaceId);
+  if (run?.state === 'running') return false;
+  // A fresh run counts from zero; Carry on after Stop or a pause keeps counting.
+  const fresh = !run || run.state === 'done' || run.state === 'idle';
+  await tx.query(
+    `insert into geocode_runs (workspace_id, state, started_by, started_at)
+     values ($1, 'running', $2, now())
+     on conflict (workspace_id) do update set state = 'running', started_by = $2, bad_rounds = 0, last_error = null,
+       retry_at = null, updated_at = now()${fresh ? ', started_at = now(), located = 0, copied = 0, missed = 0, errors = 0' : ''}`,
+    [workspaceId, userId],
+  );
+  await enqueueJob(tx, { workspaceId, kind: KIND });
+  return true;
+};
+
+// An import's own write (action import.persons), just before it commits: if
+// it leaves anyone with an address and no pin, the run starts with it. Not
+// where address lookup is turned off, and not where no job runner would
+// ever pick the run up (STARBASE_JOBS=off: the page's button still looks up
+// batches itself). A file whose people all came with pins, or with no
+// address, starts nothing.
+export const hooks = {
+  events: async (tx, meta, events) => {
+    if (meta.action !== 'import.persons' || lookupOff() || !jobRunnerOn()) return;
+    const waiting = events.some((e) => e.entityType === 'person' && (e.op === 'create' || e.op === 'update')
+      && e.payload?.address && e.payload.lat == null);
+    if (!waiting) return;
+    // (The job is seen once this write is in: a moment from now, not now.)
+    if (await startRun(tx, meta.workspaceId, null)) setTimeout(runJobsSoon, 1000).unref?.();
+  },
+};
+
 export const api = new Hono();
 
 const deskOnly = (c) => (DESK.includes(c.get('ctx').role) ? null : c.json({ error: 'only campaign staff can place people on the map' }, 403));
@@ -289,27 +332,13 @@ api.post('/geocode/start', async (c) => {
   if (denied) return denied;
   const ctx = c.get('ctx');
   const db = c.get('db');
-  if ((process.env.GEOCODER || '').toLowerCase() === 'off') {
+  if (lookupOff()) {
     return c.json({ error: 'geocoding is turned off (GEOCODER=off)', off: true }, 409);
   }
   // Without the job runner (STARBASE_JOBS=off) nothing would ever pick the
   // run up: the page falls back to looking up batches itself.
   if (!jobRunnerOn()) return c.json({ error: 'background jobs are off', jobsOff: true }, 409);
-  const run = await getRun(db, ctx.workspaceId);
-  if (run?.state === 'running') return c.json(await status(db, ctx.workspaceId));
-  await db.transaction(async (tx) => {
-    // A fresh run counts from zero; Carry on after Stop or a pause keeps counting.
-    const fresh = !run || run.state === 'done' || run.state === 'idle';
-    await tx.query(
-      `insert into geocode_runs (workspace_id, state, started_by, started_at)
-       values ($1, 'running', $2, now())
-       on conflict (workspace_id) do update set state = 'running', started_by = $2, bad_rounds = 0, last_error = null,
-         retry_at = null, updated_at = now()${fresh ? ', started_at = now(), located = 0, copied = 0, missed = 0, errors = 0' : ''}`,
-      [ctx.workspaceId, ctx.user.id],
-    );
-    await enqueueJob(tx, { workspaceId: ctx.workspaceId, kind: KIND });
-  });
-  runJobsSoon();
+  if (await db.transaction((tx) => startRun(tx, ctx.workspaceId, ctx.user.id))) runJobsSoon();
   return c.json(await status(db, ctx.workspaceId));
 });
 
