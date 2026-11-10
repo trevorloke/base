@@ -599,6 +599,26 @@ try {
     && (await board()).assignments.filter((a) => a.person_id === P.asha.id).length === 2, await toast());
   await page.locator('.sb-hand button:has-text("Done")').click();
   check('"Done" puts the name down', (await page.locator('.sb-hand').count()) === 0 && !(await pressed(ashaBtn)));
+  // Or drag: a name from the strip onto a card; her chip dragged back onto the strip comes off.
+  const dragOnto = async (fromLoc, toLoc) => {
+    const a = await fromLoc.boundingBox();
+    const z = await toLoc.boundingBox();
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(a.x + a.width / 2 + 8, a.y + a.height / 2 + 8, { steps: 3 });
+    await page.mouse.move(z.x + z.width / 2, z.y + Math.min(z.height / 2, 28), { steps: 8 });
+    await sleep(120);
+    await page.mouse.up();
+  };
+  await dragOnto(page.locator('.sb-person:has-text("Dee Example")'), page.locator(`.sch-card[data-shift="${satCards[0].id}"]`));
+  await until(async () => (await cards(sat))[0].people.join() === 'Dee E.');
+  check('a name dragged from the strip onto a card goes on it — and is not left in hand', (await cards(sat))[0].people.join() === 'Dee E.' && (await page.locator('.sb-hand').count()) === 0,
+    JSON.stringify((await cards(sat))[0].people));
+  await until(async () => (await page.locator(`.sch-card[data-shift="${satCards[0].id}"] .sb-chip:not([data-temp])`).count()) === 1);
+  await dragOnto(page.locator(`.sch-card[data-shift="${satCards[0].id}"] .sb-chip__name`), page.locator('.sb-tray'));
+  await until(async () => (await cards(sat))[0].people.length === 0);
+  check('her chip dragged back onto the strip comes off the shift, with Undo', (await cards(sat))[0].people.length === 0 && /^Dee off Canvass/.test(await toast())
+    && (await page.locator('.sb-toast button:has-text("Undo")').count()) === 1 && !(await board()).assignments.some((a) => a.person_id === P.dee.id), await toast());
   k = await D.keys();
   check('people placed with no key pressed, no text field focused', k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
   await openCard(monCards[0].id);
