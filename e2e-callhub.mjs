@@ -12,12 +12,15 @@
 // email is their sign-in; "What each result counts as" is filled in by
 // pattern and correctable, and a rating comes only from the question and
 // answers someone picks. A pick that would tag people do-not-call or rate
-// them asks first, in place; "No" changes nothing, and putting a row back
-// takes the tag (and CallHub's entry) off again. A phone bank is sent the
-// same way; a number CallHub calls is crossed off there. A refusal stops the
-// push with CallHub's words, Carry on finishes it, and "Send again" is only
-// offered quietly beside it. With CallHub off there is no button at all.
-// Measured at 1440 and 390.
+// them asks first, in place, naming the result; "No" (or Escape) changes
+// nothing, and putting a row back takes the tag (and CallHub's entry) off
+// again — on a list sent since that copied the row too. A phone bank is sent
+// the same way; a number CallHub calls is crossed off there. A refusal stops
+// the push with CallHub's words, Carry on finishes it, and "Send again" is
+// only offered quietly beside it (not at all on a push left part-way). The
+// do-not-call numbers CallHub won't take, and the ones it won't let go, are
+// said with whose they are — every one of them a tap away. With CallHub off
+// there is no button at all. Measured at 1440 and 390.
 //
 //   node e2e-callhub.mjs     (starts its own server on :4980 and the stand-in on :4981;
 //                             PORT=… to move them; SHOTS=… for the screenshots)
@@ -227,7 +230,7 @@ await page.selectOption(`${ch} .ch-rate .ch-map__row:has(label:has-text("Yes, de
 await page.waitForSelector(`${ch} .ch-confirm`, { timeout: 10000 });
 const rateAsk = await text(page, `${ch} .ch-confirm`);
 check('an answer picked to rate people asks first, in place — nobody is rated until Yes',
-  /^Rate everyone who answered “Yes, definitely” .+\? Yes No$/.test(rateAsk) && (await api(`/persons/${P.ana}`)).json.person.rating === null
+  /^Rate everyone who answered “Yes, definitely” as .+\? Yes No$/.test(rateAsk) && (await api(`/persons/${P.ana}`)).json.person.rating === null
   && (await page.evaluate(() => document.activeElement?.textContent)) === 'No', rateAsk);
 await page.screenshot({ path: `${SHOTS}/07-list-rating-ask-1440.png`, fullPage: true });
 await page.click(`${ch} .ch-confirm button:has-text("Yes")`);
@@ -245,8 +248,8 @@ await page.focus(`${answered} select`);
 await page.keyboard.press('d');
 await page.waitForSelector(`${answered} .ch-confirm`, { timeout: 10000 });
 const dncAsk = await text(page, `${answered} .ch-confirm`);
-check('“Do not call” on a row asks first: “Tag 3 people do-not-call? They leave every call list.” — and nothing is tagged',
-  dncAsk === 'Tag 3 people do-not-call? They leave every call list. Yes No' && !(await tagged(P.ana)) && !(await tagged(P.ben))
+check('“Do not call” on a row asks first, naming the result: “Tag the 3 people with “Answered” do-not-call? They leave every call list.” — and nothing is tagged',
+  dncAsk === 'Tag the 3 people with “Answered” do-not-call? They leave every call list. Yes No' && !(await tagged(P.ana)) && !(await tagged(P.ben))
   && (await page.$eval(`${answered} select`, (el) => el.selectedOptions[0].innerText)) === 'Talked', dncAsk);
 await page.locator(answered).scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOTS}/10-do-not-call-ask-1440.png` });
@@ -264,6 +267,15 @@ await page.keyboard.press('Enter'); // focus is on No
 await page.waitForSelector(`${answered} .ch-confirm`, { state: 'detached', timeout: 10000 }).catch(() => {});
 check('“No” (where the keyboard lands): the row is as it was, and nobody is tagged', !(await page.$(`${ch} .ch-confirm`)) && !(await tagged(P.ana))
   && (await api(`/persons/${P.ana}`)).json.contacts[0].outcome === 'contacted', '');
+// The keyboard is back on the select: the same slip again, and Escape is No too.
+await page.keyboard.press('d');
+await page.waitForSelector(`${answered} .ch-confirm`, { timeout: 10000 }).catch(() => {});
+const askedAgain = Boolean(await page.$(`${answered} .ch-confirm`));
+await page.keyboard.press('Escape');
+await page.waitForSelector(`${answered} .ch-confirm`, { state: 'detached', timeout: 10000 }).catch(() => {});
+check('Escape closes the question like No: nothing changes, and the keyboard is on the row’s select again',
+  askedAgain && !(await page.$(`${ch} .ch-confirm`)) && !(await tagged(P.ana)) && (await page.$eval(`${answered} select`, (el) => el.selectedOptions[0].innerText)) === 'Talked'
+  && (await page.locator(`${answered} select`).evaluate((el) => document.activeElement === el)), '');
 // Meant, on another row — and then put back: the tag comes off again, at CallHub too.
 const voicemail = `${ch} .ch-results > .ch-map .ch-map__row:has(label:has-text("Left voicemail"))`;
 await page.selectOption(`${voicemail} select`, 'do_not_call');
@@ -314,6 +326,31 @@ await phone.goto(`${ADMIN}/people/${P.gus}`, { waitUntil: 'domcontentloaded' });
 await phone.waitForSelector('.pf-meta', { timeout: 10000 });
 check('…his profile says “Do not call” by his name, and offers no Call to tap', /Do not call/.test(await text(phone, '.pf-meta')) && !(await phone.$('.pf-acts .pf-act:has-text("Call")')) && !(await phone.$('a[href^="tel:"]')), await text(phone, '.pf-meta'));
 await phone.screenshot({ path: `${SHOTS}/08-person-do-not-call-390.png` });
+// The same wherever the desk would otherwise dial with one tap: his follow-up, his request, the People list.
+await api('/actions/request.ask', { person_id: P.gus, kind: 'volunteer', note: 'Wants to help on weekends' });
+await api('/actions/request.ask', { person_id: P.hana, kind: 'volunteer', note: 'Wants to help' });
+const dials = (p, sel) => p.$$eval(sel, (els) => els.map((el) => `${(el.querySelector('a[href*="/people/"]')?.innerText || '?').trim()}: ${el.querySelector('a[href^="tel:"]') ? 'Call' : 'no Call'}${/Do not call/.test(el.innerText) ? ' · Do not call' : ''}`).sort());
+for (const [p, n] of [[page, '1440'], [phone, '390']]) {
+  await p.goto(`${ADMIN}/follow-ups`, { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('.lad-fu', { timeout: 15000 }).catch(() => {});
+  await sleep(500);
+  await p.screenshot({ path: `${SHOTS}/08-follow-ups-do-not-call-${n}.png` });
+}
+const fuRows = await dials(phone, '.lad-fu');
+check('the desk’s Follow-ups: Gus’s card says “Do not call” and has no Call; Hana’s still has one',
+  JSON.stringify(fuRows) === JSON.stringify(['Gus Example: no Call · Do not call', 'Hana Example: Call']) && JSON.stringify(await dials(page, '.lad-fu')) === JSON.stringify(fuRows), fuRows.join(' | '));
+m = await measure(phone, '.lad-fu');
+check('…at 390: no sideways scroll, nothing to tap under 48px', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+await page.goto(`${ADMIN}/requests`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.rq-row', { timeout: 15000 }).catch(() => {});
+const rqRows = await dials(page, '.rq-row');
+check('Requests from the doors: the same', JSON.stringify(rqRows) === JSON.stringify(['Gus Example: no Call · Do not call', 'Hana Example: Call']), rqRows.join(' | '));
+await page.screenshot({ path: `${SHOTS}/08-requests-do-not-call-1440.png` });
+await page.goto(`${ADMIN}/people`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.pp-table__name', { timeout: 15000 }).catch(() => {});
+const listed = await page.$$eval('.pp-table tbody tr', (rows) => Object.fromEntries(rows.map((r) => [r.querySelector('.pp-table__name a')?.innerText.trim(), Boolean(r.querySelector('a[href^="tel:"]'))])));
+check('the People list at the desk: Gus’s and Noel’s numbers are shown, not links to dial; Hana’s is one',
+  listed['Gus Example'] === false && listed['Noel Example'] === false && listed['Hana Example'] === true, JSON.stringify(listed).slice(0, 240));
 await sleep(2500);
 check('…and his number went to CallHub’s do-not-call list by itself', fake.dnc.some((d) => d.phone_number === '+16045550107' && d.category === 1), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
 const zoe = (await api(`/persons/${P.zoe}`)).json.contacts;
@@ -346,10 +383,132 @@ await phone.locator(ch).scrollIntoViewIfNeeded();
 await phone.screenshot({ path: `${SHOTS}/09-bank-stopped-390.png` });
 m = await measure(phone, ch);
 check('the bank’s page at 390: no sideways scroll, Carry on ≥ 48px', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+// "Send again instead" asks first — and while it asks, its Send · Cancel are the only pair of buttons.
+await page.click(`${ch} .ch-stopped .btn:last-child`);
+await page.waitForSelector(`${ch} .ch-ask strong`, { timeout: 10000 }).catch(() => {});
+const whileAsking = [Boolean(await page.$(`${ch} .ch-ask`)), Boolean(await page.$(`${ch} .ch-stopped`))];
+await page.click(`${ch} .ch-ask button:has-text("Cancel")`);
+await page.waitForSelector(`${ch} .ch-stopped`, { timeout: 10000 }).catch(() => {});
+check('“Send again instead” asks first, with one pair of buttons on screen; Cancel brings Carry on back',
+  whileAsking[0] && !whileAsking[1] && (await text(page, `${ch} .ch-stopped`)) === 'Carry on Send again instead' && !(await page.$(`${ch} .ch-ask`)), JSON.stringify(whileAsking));
+// A push left part-way with no job behind it (the server says "stalled"): only Carry on can work, so only Carry on is offered.
+const stalledPage = await dctx.newPage();
+await stalledPage.route('**/api/callhub/pushes*', async (route) => {
+  const res = await route.fetch();
+  const json = await res.json();
+  if (json.pushes?.[0]) json.pushes[0] = { ...json.pushes[0], status: 'sending', stalled: true, note: null };
+  await route.fulfill({ response: res, json });
+});
+await stalledPage.goto(`${ADMIN}/banks/${bankId}`, { waitUntil: 'domcontentloaded' });
+await stalledPage.waitForFunction((s) => /^Stopped/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-status`, { timeout: 10000 }).catch(() => {});
+check('a push left part-way: “Stopped: it stopped part-way · 0 of 1 sent”, and Carry on alone',
+  (await text(stalledPage, `${ch} .ch-status`)) === 'Stopped: it stopped part-way · 0 of 1 sent' && (await text(stalledPage, `${ch} .ch-stopped`)) === 'Carry on' && !(await stalledPage.$(`${ch} .ch-head .btn`)), await text(stalledPage, `${ch} .ch-push`));
+await stalledPage.locator(ch).scrollIntoViewIfNeeded();
+await stalledPage.screenshot({ path: `${SHOTS}/09-bank-stalled-1440.png` });
+await stalledPage.close();
 fake.refuse(false);
 await phone.tap(`${ch} .ch-stopped .btn:first-child`);
 await phone.waitForFunction((s) => /^Sent/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-status`, { timeout: 30000 }).catch(() => {});
 check('Carry on, from the phone: “Sent · 1 number”, in the same phonebook', /^Sent · 1 number ·/.test(await text(phone, `${ch} .ch-status`)) && [...fake.phonebooks.values()].filter((b) => /^Newton evening/.test(b.name)).length === 1, await text(phone, `${ch} .ch-status`));
+
+// ── A row put back is put back on the list sent since that copied it ──
+const rang = { campaign: 'Fall voter ID', disposition: 'Rang out', agent: jo };
+const ida = (await api('/actions/person.create', { name: 'Ida Example', city: 'Surrey', phone: '604-555-0131' })).json.person.id;
+const jay = (await api('/actions/person.create', { name: 'Jay Example', city: 'Surrey', phone: '604-555-0132' })).json.person.id;
+const firstList = (await api('/actions/list.create', { name: 'Fleetwood first', kind: 'people', person_ids: [ida] })).json.list.id;
+const laterList = (await api('/actions/list.create', { name: 'Fleetwood later', kind: 'people', person_ids: [jay] })).json.list.id;
+const sentOf = async (q) => { for (let i = 0; i < 80; i += 1) { const p = (await api(`/callhub/pushes?${q}`)).json.pushes[0]; if (p && (p.status === 'sent' || p.status === 'failed')) return p; await sleep(500); } return null; };
+const firstPush = (await api('/actions/callhub.push', { list_id: firstList })).json.push;
+await sentOf(`list=${firstList}`);
+await fake.note({ ...rang, contact: '+16045550131', notes: 'Rang and rang.' });
+// "Rang out" slips to Do not call on the first list (asked, Yes); a second list is sent before anyone notices.
+await api('/actions/callhub.map', { id: firstPush.id, outcomes: { 'Rang out': 'do_not_call' } });
+await api('/actions/callhub.push', { list_id: laterList });
+await sentOf(`list=${laterList}`);
+await fake.note({ ...rang, contact: '+16045550132', notes: 'No pick-up.' });
+check('a list sent after a slip starts as a copy of that table: its “Rang out” result tags Jay at once', (await tagged(ida)) && (await tagged(jay)), '');
+const rangOut = `${ch} .ch-results > .ch-map .ch-map__row:has(label:has-text("Rang out"))`;
+await page.goto(`${ADMIN}/lists/${firstList}`, { waitUntil: 'domcontentloaded' });
+await page.waitForFunction((sel) => /result back/.test(document.querySelector(sel)?.innerText || ''), ch, { timeout: 10000 }).catch(() => {});
+await page.click(`${ch} .ch-push .disclose`);
+await page.waitForSelector(`${rangOut} select`, { timeout: 10000 });
+await page.selectOption(`${rangOut} select`, 'contacted');
+await page.waitForFunction((sel) => /no longer do-not-call/.test(document.querySelector(sel)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
+const followed = await text(page, `${ch} .ch-results [role="status"]`);
+check('put back on the first list: “Saved · 1 result already in moved too · 1 person is no longer do-not-call · 1 list sent since follows too”',
+  followed === 'Saved · 1 result already in moved too · 1 person is no longer do-not-call · 1 list sent since follows too', followed);
+await page.locator(`${ch} .ch-results [role="status"]`).scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${SHOTS}/12-later-list-follows-1440.png` });
+// The same line at a phone's width (it is this page's own, so the window is narrowed).
+await page.setViewportSize({ width: 390, height: 844 });
+await sleep(400);
+await page.locator(`${ch} .ch-results [role="status"]`).scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${SHOTS}/12-later-list-follows-390.png` });
+m = await measure(page, ch);
+check('…the line at 390 wide: no sideways scroll', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+await page.setViewportSize({ width: 1440, height: 900 });
+for (let i = 0; i < 30 && await tagged(jay); i += 1) await sleep(500);
+const laterRow = (await api(`/callhub/pushes?list=${laterList}`)).json.pushes[0].dispositions.find((d) => d.disposition === 'Rang out');
+check('…and the later list follows by itself: its row reads Talked again, and Jay is no longer do-not-call', laterRow.outcome === 'contacted' && !(await tagged(jay)) && !(await tagged(ida)), JSON.stringify(laterRow));
+// A pick that tags is about the one list it was asked on: nothing follows on the later one.
+const only = (await api('/actions/callhub.map', { id: firstPush.id, outcomes: { 'Rang out': 'do_not_call' } })).json;
+check('a pick that tags stays on its own list', only.tagged === 1 && only.later === 0 && (await tagged(ida)) && !(await tagged(jay)), JSON.stringify({ tagged: only.tagged, later: only.later }));
+await api('/actions/callhub.map', { id: firstPush.id, outcomes: { 'Rang out': null } });
+
+// ── Do-not-call numbers CallHub won't take, and ones it won't let go: said, with whose they are ──
+fake.rejectDnc('all');
+const quiet = [];
+for (let i = 0; i < 8; i += 1) quiet.push((await api('/actions/person.create', { name: `Quiet${i} Example`, city: 'Surrey', phone: `604-555-014${i}`, tags: ['do-not-call'] })).json.person.id);
+for (let i = 0; i < 60 && ((await api(`/callhub/pushes?list=${listId}`)).json.not_taken?.n || 0) < 8; i += 1) await sleep(500);
+const nottaken = `${ch} .ch-nottaken:not(.ch-held)`;
+for (const [p, n] of [[page, '1440'], [phone, '390']]) {
+  await p.goto(`${ADMIN}/lists/${listId}`, { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector(nottaken, { timeout: 15000 }).catch(() => {});
+  await p.locator(nottaken).scrollIntoViewIfNeeded().catch(() => {});
+  await p.screenshot({ path: `${SHOTS}/13-not-taken-${n}.png` });
+}
+const fewNames = await text(page, nottaken);
+check('eight do-not-call numbers CallHub won’t take: its words, five names, and “3 more” to tap',
+  /^CallHub wouldn’t take 8 do-not-call numbers: “phone_number: Enter a valid phone number\.” — Quiet0 Example, Quiet1 Example, Quiet2 Example, Quiet3 Example, Quiet4 Example and 3 more$/.test(fewNames), fewNames);
+await phone.tap(`${nottaken} .btn-link`);
+await phone.waitForFunction((sel) => /Quiet7 Example/.test(document.querySelector(sel)?.innerText || ''), nottaken, { timeout: 10000 }).catch(() => {});
+const allNames = await text(phone, nottaken);
+check('“3 more”, on a phone: all eight by name, each a way to the person', /Quiet5 Example, Quiet6 Example, Quiet7 Example · Show fewer$/.test(allNames)
+  && (await phone.$$eval(`${nottaken} a[href*="/people/"]`, (els) => els.length)) === 8, allNames);
+await phone.locator(nottaken).scrollIntoViewIfNeeded();
+await phone.screenshot({ path: `${SHOTS}/13-not-taken-all-390.png` });
+m = await measure(phone, ch);
+check('…at 390: no sideways scroll, “Show fewer” ≥ 48px like every button', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+// CallHub takes them after all (the tags are touched: the job asks again once it does).
+fake.rejectDnc(false);
+await api('/actions/callhub.push', { list_id: laterList });
+await sentOf(`list=${laterList}`);
+for (let i = 0; i < 40 && fake.dnc.filter((d) => /^\+1604555014/.test(d.phone_number)).length < 8; i += 1) await sleep(500);
+check('once CallHub takes them (the next push asks again) the line is gone', fake.dnc.filter((d) => /^\+1604555014/.test(d.phone_number)).length === 8 && (await api(`/callhub/pushes?list=${listId}`)).json.not_taken === null, String(fake.dnc.length));
+// Two of them may be called again — and CallHub won't let their numbers go.
+fake.keepDnc(true);
+await api('/actions/person.update', { id: quiet[0], tags: [] });
+await api('/actions/person.update', { id: quiet[1], tags: [] });
+for (let i = 0; i < 40 && ((await api(`/callhub/pushes?list=${listId}`)).json.held?.n || 0) < 2; i += 1) await sleep(500);
+const heldLine = `${ch} .ch-held`;
+for (const [p, n] of [[page, '1440'], [phone, '390']]) {
+  await p.goto(`${ADMIN}/lists/${listId}`, { waitUntil: 'domcontentloaded' });
+  await p.waitForSelector(heldLine, { timeout: 15000 }).catch(() => {});
+  await p.locator(heldLine).scrollIntoViewIfNeeded().catch(() => {});
+  await p.screenshot({ path: `${SHOTS}/14-held-${n}.png` });
+}
+check('numbers CallHub still holds that nobody here blocks: how many, what to do, and whose they are',
+  (await text(page, heldLine)) === 'CallHub’s do-not-call list still has 2 numbers nobody here blocks now. Take them off in CallHub — Quiet0 Example, Quiet1 Example', await text(page, heldLine));
+await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector(row, { timeout: 10000 });
+await page.click(`${row} .sv2-check`);
+await page.locator(`${row} .sv2-row__main > .sv2-said`).filter({ hasText: 'nobody here blocks' }).waitFor({ timeout: 10000 }).catch(() => {});
+const checkSaid = await text(page, `${row} .sv2-row__main > .sv2-said`);
+check('Check says the same, naming them: “… take them off in CallHub: Quiet0 Example, Quiet1 Example”',
+  / · CallHub’s do-not-call list still has 2 numbers nobody here blocks now — take them off in CallHub: Quiet0 Example, Quiet1 Example$/.test(checkSaid), checkSaid);
+await page.locator(row).scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${SHOTS}/14-held-check-1440.png` });
+fake.keepDnc(false);
 
 // ── Off: no button at all ──
 const off = await dctx.newPage();
