@@ -65,20 +65,36 @@ export const notToCall = async (q, ws) => {
 };
 export const noCalls = (blocked, phone) => Boolean((blocked.get(phone) || 0) & 1);
 
-// Whose numbers these are: the people on file with one of them, by name —
-// so the desk can be told who, never which number. Found by the number's
-// last ten digits (the index people search and texting use), then matched
-// exactly. → [{ id, name }]
-export const whoseNumbers = async (q, ws, phones) => {
+// For a few numbers only — what a list's page and Check ask, often: the
+// people on file with one of them, in name order, found by the number's
+// last ten digits (the index people search and texting use) and matched
+// exactly; never a pass over everyone. → [{ id, name, number, tags }]
+export const peopleOn = async (q, ws, phones) => {
   if (!phones.length) return [];
   const numbers = new Set(phones);
   const { rows } = await q.query(
-    `select id, name, phone from persons
+    `select id, name, phone, tags from persons
       where workspace_id = $1 and deleted_at is null and ${PHONE_DIGITS_SQL('phone')} = any($2::text[])
-      order by lower(name), id limit 2000`,
+      order by lower(name), id limit 5000`,
     [ws, [...new Set(phones.map(last10))]],
   );
-  return rows.filter((p) => numbers.has(e164(p.phone))).map((p) => ({ id: p.id, name: p.name }));
+  return rows.map((p) => ({ id: p.id, name: p.name, number: e164(p.phone), tags: tagsOf(p) })).filter((p) => numbers.has(p.number));
+};
+// Whose numbers they are, so the desk can be told who — never which number.
+export const whoseNumbers = async (q, ws, phones) => (await peopleOn(q, ws, phones)).map((p) => ({ id: p.id, name: p.name }));
+// notToCall for those numbers alone (the same rules).
+export const notToCallAmong = async (q, ws, phones, people = null) => {
+  const out = new Map();
+  if (!phones.length) return out;
+  const numbers = new Set(phones);
+  const add = (n, category) => { if (numbers.has(n)) out.set(n, (out.get(n) || 0) | category); };
+  for (const p of people || await peopleOn(q, ws, phones)) {
+    if (p.tags.includes(NO_CONTACT_TAG)) add(p.number, 3); else if (p.tags.includes(NO_CALL_TAG)) add(p.number, 1);
+  }
+  // (texting keeps a number that replied STOP as +1… — its own lookups match it whole, as here.)
+  const stopped = (await q.query('select phone from texting_optouts where workspace_id = $1 and opted_out and phone = any($2::text[])', [ws, phones])).rows;
+  for (const r of stopped) add(e164(r.phone), 2);
+  return out;
 };
 
 // rows (in name order) → the numbers to send, each with its people (the

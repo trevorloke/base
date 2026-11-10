@@ -23,7 +23,7 @@ import { runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { e164, NO_CALL_TAG, NO_CONTACT_TAG } from '../texting/rules.js';
 import { apiBase, callhub, callhubOn, CallHubError, idOf, listAll, pause } from './callhub.js';
-import { notToCall } from './people.js';
+import { notToCall, notToCallAmong } from './people.js';
 import { forgetHolders } from './results.js';
 
 export const DNC_LIST = 'base.win';
@@ -97,14 +97,15 @@ export const overToldOf = async (db, ws, blocked = null, { again = false } = {})
 // base.win cannot take off itself: one CallHub never named, or would not
 // let go (Check says how many, a list's page whose). One the job is about
 // to take off is not among them. Asked often (a list's page reads it), so
-// who is blocked is only worked out when a number may be held at all.
+// who is blocked is worked out for the few numbers that may be held —
+// never by a pass over everyone on file.
 export const heldNumbers = async (db, ws) => {
   const rows = (await db.query(
     'select phone, category, entry, refused from callhub_dnc where workspace_id = $1 and category > 0 and (entry is null or refused is not null)', [ws],
   )).rows.filter((r) => !r.entry || !askedMore(r));
   if (!rows.length) return [];
-  const all = await notToCall(db, ws);
-  return rows.filter((r) => Number(r.category) & ~(all.get(r.phone) || 0)).map((r) => r.phone);
+  const blocked = await notToCallAmong(db, ws, rows.map((r) => r.phone));
+  return rows.filter((r) => Number(r.category) & ~(blocked.get(r.phone) || 0)).map((r) => r.phone);
 };
 
 // Tell CallHub, one a second, `budget` at most; each is remembered as it

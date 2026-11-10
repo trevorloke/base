@@ -11,10 +11,9 @@ import { Hono } from 'hono';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { timeZone } from '../../lib/org.js';
 import { toLocal } from '../../lib/tzsql.js';
-import { e164, NO_CALL_TAG, NO_CONTACT_TAG } from '../texting/rules.js';
 import { callhubOn } from './callhub.js';
 import { heldNumbers } from './dnc.js';
-import { audienceOf, notToCall, sourceOf, whoseNumbers } from './people.js';
+import { audienceOf, notToCall, notToCallAmong, notToBeCalled, peopleOn, sourceOf, whoseNumbers } from './people.js';
 import { jobLive, pushOut } from './push.js';
 import { fieldsOf, norm, outcomeFor, REFILE_JOB, surveyPairs } from './results.js';
 
@@ -138,16 +137,13 @@ const notTaken = async (db, ws) => {
     `select phone, category, refused_note from callhub_dnc where workspace_id = $1 and refused is not null and (refused | category) <> category order by sent_at desc`, [ws],
   )).rows;
   if (!refused.length) return null;
-  const blocked = await notToCall(db, ws);
+  // Asked often, so only the people on those numbers are looked up — never everyone tagged.
+  const on = await peopleOn(db, ws, refused.map((r) => r.phone));
+  const blocked = await notToCallAmong(db, ws, refused.map((r) => r.phone), on);
   const rows = refused.filter((r) => ((blocked.get(r.phone) || 0) | r.category) !== r.category);
   if (!rows.length) return null;
   const numbers = new Set(rows.map((r) => r.phone));
-  const tagged = (await db.query(
-    `select id, name, phone from persons where workspace_id = $1 and deleted_at is null and coalesce(phone, '') <> ''
-        and (tags @> $2::jsonb or tags @> $3::jsonb) order by lower(name), id`,
-    [ws, JSON.stringify([NO_CONTACT_TAG]), JSON.stringify([NO_CALL_TAG])],
-  )).rows;
-  return { n: rows.length, note: rows[0].refused_note || null, ...named(tagged.filter((p) => numbers.has(e164(p.phone))).map((p) => ({ id: p.id, name: p.name }))) };
+  return { n: rows.length, note: rows[0].refused_note || null, ...named(on.filter((p) => numbers.has(p.number) && notToBeCalled(p)).map((p) => ({ id: p.id, name: p.name }))) };
 };
 // The numbers CallHub still holds that nobody here blocks any more, and
 // that base.win could not take off itself (dnc.js): how many, and whose
