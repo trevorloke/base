@@ -13,9 +13,10 @@
 //       Pairs marked "not the same" stay away. ?with=<person id>[,…]: only
 //       the pairs with those records (Donations' Compare in Duplicates: a
 //       gift's donor and the records its flag names), so a voter file's
-//       other pairs never crowd them out; with more than one, those records
-//       pair with each other too ('flag'), whether or not a rule does — the
-//       pairs that settle the gift's flag are always there.
+//       other pairs never crowd them out; with more than one, those that a
+//       live gift's "possibly the same donor" flag names together pair with
+//       each other too ('flag'), whether or not a rule does — the pairs that
+//       settle the flag are always there.
 //   person.merge  { keep, drop }    desk. Everything that points at `drop`
 //       — contacts, gifts and receipts, shifts, signs, lists, answers,
 //       relationships, texts, requests, ladders… — moves to `keep`; where
@@ -387,12 +388,19 @@ api.get('/duplicates', async (c) => {
           and a.id in (select person_id from gifts where workspace_id = $1 and deleted_at is null)
           and ${sameText('a.first_name')} <> '' and ${sameText('a.last_name')} <> '' and length(${samePostal('a.postal')}) >= 6
      )
-     ${withIds && withIds.length > 1 ? `, named as (
-       select least(x.id, y.id) as a, greatest(x.id, y.id) as b, 'flag' as why
-         from persons x join persons y on y.workspace_id = x.workspace_id and y.id <> x.id
-        where x.workspace_id = $1 and x.deleted_at is null and y.deleted_at is null
-          and x.id = any($2::uuid[]) and y.id = any($2::uuid[])
-     ), all_hits as (select * from hits union all select distinct * from named)` : ', all_hits as (select * from hits)'}
+     ${withIds && withIds.length > 1 ? `, on_flag as (
+       select g.person_id as id, g.id as gift from gifts g
+        where g.workspace_id = $1 and g.deleted_at is null and g.flagged and g.attrs ? 'maybe_same_donor'
+       union
+       select e::uuid, g.id from gifts g cross join lateral jsonb_array_elements_text(g.attrs->'maybe_same_donor') e
+        where g.workspace_id = $1 and g.deleted_at is null and g.flagged and g.attrs ? 'maybe_same_donor'
+     ), named as (
+       select distinct x.id as a, y.id as b, 'flag' as why
+         from on_flag x join on_flag y on y.gift = x.gift and x.id < y.id
+         join persons px on px.id = x.id and px.workspace_id = $1 and px.deleted_at is null and px.kind = 'person'
+         join persons py on py.id = y.id and py.workspace_id = $1 and py.deleted_at is null and py.kind = 'person'
+        where x.id = any($2::uuid[]) and y.id = any($2::uuid[])
+     ), all_hits as (select * from hits union all select * from named)` : ', all_hits as (select * from hits)'}
      select h.a, h.b, array_agg(distinct h.why) as why from all_hits h
       where not exists (select 1 from person_not_dupes n where n.workspace_id = $1 and n.a = h.a and n.b = h.b)${withIds ? `
         and (h.a = any($2::uuid[]) or h.b = any($2::uuid[]))` : ''}

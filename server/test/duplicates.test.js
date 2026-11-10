@@ -477,6 +477,42 @@ test('Compare in Duplicates: the records a flag names pair there even when no fi
   assert.ok(!ok(await mgr.get(`/api${href.replace('/people', '')}`)).pairs.some((p) => key(p.a.id, p.b.id) === key(r1.id, r2.id)));
 });
 
+test('a maybe a gift took over on its own record, that gift undone: a maybe again, and a ruling still clears it', async () => {
+  const r1 = await mgr.createPerson('Una Typo', { postal: 'V3T 9T9' });
+  const r2 = await mgr.createPerson('Una Typo', { email: 'una.typo@example.org', postal: 'V3T 9T9' });
+  await cheque(r1, 100000, '2026-09-01');
+  const m = await cheque(r2, 50000, '2026-09-02');
+  const typo = await cheque(r2, 100000, '2026-09-03'); // $1,000 typed for $10
+  assert.match((await giftNow(m.id)).flag_reason, /^Una Typo is at \$1500\.00 for 2026/, 'over on R2’s own record');
+  const undo = ok(await mgr.action('gift.void', { id: typo.id }));
+  assert.ok(undo.rechecked.some((x) => x.id === m.id), 'the Undo checks it again');
+  const now = await giftNow(m.id);
+  assert.match(now.flag_reason, /^Possibly the same donor as Una Typo \(same postal code\): together they are at \$1,500\.00/, 'a maybe again, R2 alone at $500');
+  assert.deepEqual(now.attrs.maybe_same_donor, [r1.id], 'naming R1, so the desk can rule on it');
+  ok(await mgr.action('person.notDuplicate', { a: r1.id, b: r2.id }));
+  assert.equal((await giftNow(m.id)).flagged, false, 'ruled apart: R2 at $500 is under');
+});
+
+test('the gift that took a maybe over voided, then the maybe’s own gift voided and restored: never stuck over', async () => {
+  const r1 = await mgr.createPerson('Sy Sticky', { postal: 'V3T 5S5' });
+  const r2 = await mgr.createPerson('Sy Sticky', { email: 'sy.sticky@example.org', postal: 'V3T 5S5' });
+  await cheque(r1, 100000, '2026-07-01');
+  const m = await cheque(r2, 50000, '2026-07-02');
+  const typo = await cheque(r2, 100000, '2026-07-03');
+  ok(await mgr.action('gift.void', { id: typo.id }));
+  ok(await mgr.action('person.notDuplicate', { a: r1.id, b: r2.id }));
+  ok(await mgr.action('gift.void', { id: m.id }));
+  ok(await mgr.action('gift.restore', { id: m.id }));
+  assert.equal((await giftNow(m.id)).flagged, false, 'R2 is at $500, ruled apart from R1');
+});
+
+test('Compare’s pairs on a flag come from a live flag: records no flag names together don’t pair as one', async () => {
+  const a = await mgr.createPerson('Noflag One', { postal: 'V3N 1A1' });
+  const b = await mgr.createPerson('Noflag Two', { postal: 'V3N 2B2' });
+  const pairs = ok(await mgr.get(`/api/duplicates?with=${a.id},${b.id}`)).pairs;
+  assert.deepEqual(pairs, [], 'two unrelated records typed into the address');
+});
+
 test('refusals: the same record twice, one already gone, a volunteer; the books verify', async () => {
   const ben = (await db.query("select id from persons where name = 'Ben Example' and deleted_at is null order by created_at")).rows.map((x) => x.id);
   assert.equal((await mgr.action('person.merge', { keep: ben[0], drop: ben[0] })).status, 400);

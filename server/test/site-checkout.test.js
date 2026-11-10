@@ -615,6 +615,29 @@ test('the other record’s gift refunded in Stripe, or lost in a dispute: the ma
   await cleared(lost.desk);
 });
 
+test('a refund in Stripe after the donor crossed on their own record: their online gift is a maybe again', async () => {
+  const voter = ok(await mgr.action('person.create', { first_name: 'Lu', last_name: 'Webrefund', address: '1 Webrefund Rd', city: 'Surrey', postal: 'V3T 3W3' })).person;
+  ok(await mgr.action('gift.log', { person_id: voter.id, amount_cents: 100_000, date: today(), method: 'cheque' }));
+  const email = `lu.web.${tag}@example.org`;
+  const give = async (cents) => {
+    const r = ok(await send('donate', { first_name: 'Lu', last_name: 'Webrefund', email, address: '1 Webrefund Rd', city: 'Surrey', postal_code: 'V3T 3W3', amount_cents: cents, cadence: 'once', declaration: true }));
+    assert.equal((await paid(r.checkout_url)).body.result, 'gift recorded');
+    return fake.sessions.get(sessionOf(r.checkout_url)).payment_intent;
+  };
+  await give(50_000);
+  const second = await give(40_000);
+  const online = (await db.query('select id from persons where workspace_id = $1 and lower(email) = $2', [ws, email])).rows[0];
+  ok(await mgr.action('gift.log', { person_id: online.id, amount_cents: 60_000, date: today(), method: 'cheque' })); // $1,500 on its own
+  const first = async () => (await db.query('select flag_reason, attrs from gifts where workspace_id = $1 and person_id = $2 and deleted_at is null order by created_at limit 1', [ws, online.id])).rows[0];
+  assert.match((await first()).flag_reason, /^Lu Webrefund is at \$1500\.00/, 'over on its own record');
+  const refund = await fake.refund(second);
+  assert.equal(refund.status, 200);
+  const now = await first();
+  assert.match(now.flag_reason ?? '', /^Possibly the same donor as Lu Webrefund/, '$1,100 alone, $2,100 with the voter: a maybe again');
+  assert.deepEqual(now.attrs.maybe_same_donor, [voter.id]);
+  assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
+});
+
 test('the records that may be one donor are found through an index, never by reading the whole list', async () => {
   const { likelySameDonors } = await import('../ext/payments/limits.js');
   assert.equal(typeof likelySameDonors, 'function', 'limits.js finds them');
