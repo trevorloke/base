@@ -1,67 +1,62 @@
-// Shifts → Week (desk only): the week's shifts as slots — days across
-// (Mon–Sun), Morning / Afternoon / Evening down (shared/dayparts.js, in the
-// campaign's time zone). Each slot holds its shifts: title, time, "3 / 5",
-// and a chip per person on it.
+// Shifts → Week (desk only): the one place to schedule.
 //
-// Volunteers sit in a tray beside the board (search, role filter). Put
-// someone on a shift by:
-//   - dragging (mouse, pen, or touch: press and hold, then drag) a name onto
-//     a shift — or onto a slot, which takes the first shift there with room;
-//   - tapping (or Enter on) a name, then tapping a shift or a slot.
-// Dragging a chip to another slot moves them (assign there, then off the
-// old one); dragging it back to the tray, or its ×, takes them off.
+// Seven days across (one day at a time on a phone, with a day strip), each
+// a LIST of its shifts in start order from 6 am — any number of them — with
+// a quiet divider where each part of the day begins: Early · Morning ·
+// Afternoon · Evening (shared/dayparts.js WEEK_PARTS, on the campaign's
+// clock). A card shows what the shift is (its kind's mark and colour,
+// shared/shiftkinds.js), where, when, and who is on it.
 //
-// An empty slot: dropping a name there (or "+ Add shift") opens a short
-// "New shift" form above the board — What (filled in, "Canvass —
-// Evening"), Where, How many — with that day and part's hours; Create puts
-// the person on it. Shifts can't be edited once made, so the board never
-// makes one without the organizer seeing its name and place first.
+// Making and changing shifts never leaves this screen:
+//   "+" on a day (or "New shift")  the add sheet (ScheduleAdd.jsx): what,
+//                                  where, which days, when — all by tap.
+//                                  ?add=<day> in the address opens it.
+//   tap a card                     its sheet (ScheduleShift.jsx): another
+//                                  day, time or place, tell them, call off.
+//   drag a card to another day     moves that one shift (shift.update);
+//                                  the toast offers Undo — or "Tell them"
+//                                  when people are on it.
+//   "More"                         the whole week (ScheduleWeek.jsx): tell
+//                                  everyone, reminders, copy to next week.
+//   an empty week                  "Copy last week", when last week had any.
 //
-// A shift that carries turfs shows them as small chips under its time
-// (components/ShiftTurfs.jsx); "Change turfs" is on the shift's screen.
+// Volunteers sit in a tray beside the week (search, role filter). Put
+// someone on a shift by dragging a name onto a card (mouse, pen, or touch:
+// press and hold, then drag), or by tapping (or Enter on) a name and then a
+// card. Dragging a chip to another card moves them (on there, then off the
+// old one); dragging it back to the tray, or its ×, takes them off. Someone
+// already on an overlapping shift this week gets "Sam is already on … Add
+// anyway? Yes · No".
 //
-// Writes are the same as the shift screen's: shift.create / shift.assign /
-// shift.unassign — capacity, duplicates and permissions are the server's;
-// nothing is emailed or texted until someone presses Notify on the shift.
-// Someone already on an overlapping shift this week gets
-// "Sam is already on … Add anyway? Yes · No". The board changes at once and
-// goes back if the server says no. Needs signal: offline it shows the last
-// copy and nothing moves.
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+// Honest states: a week that hasn't loaded says "Loading…" and one that
+// can't says "Unavailable — Try again" — never a week of empty days.
+// Needs signal: offline the list shows instead (Shifts.jsx).
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import {
-  DAY_PARTS, addDays, dayOf, partOf, partRange, safeZone, wallClock, weekBounds, weekStart,
+  WEEK_PARTS, addDays, clockOf, dayOf, instantOf, isDay, safeZone, weekBounds, weekPartOf, weekStart,
 } from '@starbase/shared/dayparts';
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
+import { KindIcon, cardWords, kindVars } from '../components/ShiftKind.jsx';
 import { TurfChips, useShiftTurfs } from '../components/ShiftTurfs.jsx';
+import ScheduleAdd from './ScheduleAdd.jsx';
+import ScheduleShift from './ScheduleShift.jsx';
+import { Unavailable } from './ScheduleSheet.jsx';
+import WeekMore, { CopyLastWeek, weekKey, weekWords } from './ScheduleWeek.jsx';
+import { countWords, dayWords, peopleWords, plural, shiftSpan } from './ScheduleWords.js';
 import './shifts-board.css';
+import './schedule.css';
 
 const roleLabel = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label ?? code;
-const partLabel = (code) => DAY_PARTS.find((p) => p.code === code)?.label ?? code;
 const firstName = (name) => String(name || '').split(' ')[0];
 // "Sam O." — chips are small; the full name is in the label.
 const shortName = (name) => {
   const parts = String(name || '').trim().split(/\s+/);
   return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
 };
-const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''));
-
-// "5pm", "9:30am" on the campaign's clock
-const clockIn = (iso, tz) => {
-  const { hour, minute } = wallClock(iso, tz);
-  return `${hour % 12 || 12}${minute ? `:${String(minute).padStart(2, '0')}` : ''}${hour < 12 ? 'am' : 'pm'}`;
-};
-const timeIn = (s, tz) => (s.ends_at ? `${clockIn(s.starts_at, tz)}–${clockIn(s.ends_at, tz)}` : clockIn(s.starts_at, tz));
-// '2026-10-27' → { wd: 'Tue', md: 'Oct 27', long: 'Tuesday, October 27' } (a calendar day, no zone)
-const dayWords = (day) => {
-  const d = new Date(`${day}T12:00:00Z`);
-  const f = (o) => d.toLocaleDateString('en-CA', { timeZone: 'UTC', ...o });
-  return { wd: f({ weekday: 'short' }), md: f({ month: 'short', day: 'numeric' }), num: f({ day: 'numeric' }), long: f({ weekday: 'long', month: 'long', day: 'numeric' }) };
-};
-const hourWord = (h) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
 
 // For "already on a shift then": a shift with no end counts as an hour.
 const span = (s) => {
@@ -71,6 +66,16 @@ const span = (s) => {
 };
 const overlaps = (x, y) => { const [a1, b1] = span(x); const [a2, b2] = span(y); return a1 < b2 && a2 < b1; };
 const hasRoom = (s) => !s.capacity || (Number(s.filled) || 0) < s.capacity;
+const daysApart = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 864e5);
+// The same shift on another day: its own clock times, both ends (as the
+// server moves it — shift.update's `day`).
+const onDay = (s, day, tz) => {
+  const from = dayOf(s.starts_at, tz);
+  return {
+    starts_at: instantOf(day, clockOf(s.starts_at, tz), tz),
+    ends_at: s.ends_at ? instantOf(addDays(day, daysApart(from, dayOf(s.ends_at, tz))), clockOf(s.ends_at, tz), tz) : null,
+  };
+};
 
 function useNarrow(query = '(max-width: 720px)') {
   const get = () => typeof window !== 'undefined' && window.matchMedia?.(query).matches;
@@ -85,22 +90,27 @@ function useNarrow(query = '(max-width: 720px)') {
   return narrow;
 }
 
-// What a drop landed on, read off the element under the pointer.
-const targetAt = (x, y) => {
-  const el = document.elementFromPoint(x, y)?.closest?.('[data-drop]');
+// What a drop landed on, read off the element under the pointer: a person
+// goes on a shift's card (or back to the tray); a card goes to a day.
+const targetAt = (x, y, item) => {
+  const under = document.elementFromPoint(x, y);
+  if (item?.shift) {
+    const el = under?.closest?.('[data-day]');
+    return el ? { kind: 'day', day: el.dataset.day, key: `day:${el.dataset.day}` } : null;
+  }
+  const el = under?.closest?.('[data-drop]');
   if (!el) return null;
   const kind = el.dataset.drop;
   if (kind === 'shift') return { kind, shiftId: el.dataset.shift, key: `shift:${el.dataset.shift}` };
-  if (kind === 'cell') return { kind, day: el.dataset.day, part: el.dataset.part, key: `cell:${el.dataset.day}|${el.dataset.part}` };
   if (kind === 'tray') return { kind, key: 'tray' };
   return null;
 };
 
-export default function ShiftsBoard({ me }) {
+export default function ShiftsBoard({ me, onSheet }) {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const online = useOnline();
   const narrow = useNarrow();
+  const moreId = useId();
   const [params, setParams] = useSearchParams();
   const tz = safeZone(me?.workspace?.settings?.tz);
   const today = dayOf(new Date(), tz);
@@ -109,38 +119,54 @@ export default function ShiftsBoard({ me }) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(monday, i)), [monday]);
   const { from, to } = weekBounds(monday, tz);
   const boardKey = ['shifts', 'board', monday, tz];
+  const readBoard = (m) => {
+    const b = weekBounds(m, tz);
+    return apiGet(`/shifts/board?from=${encodeURIComponent(b.from)}&to=${encodeURIComponent(b.to)}`);
+  };
   const board = useQuery({
     queryKey: boardKey,
     queryFn: () => apiGet(`/shifts/board?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
     placeholderData: keepPreviousData,
   });
   const { byShift: turfsByShift } = useShiftTurfs(me, { side: true });
+  // The week's notice, reminders and what is connected (ScheduleWeek.jsx).
+  const week = useQuery({
+    queryKey: weekKey(monday),
+    queryFn: () => apiGet(`/schedule/week?week=${monday}`),
+    meta: { side: true },
+    // A notice going out: watched until everyone has their answer.
+    refetchInterval: (q) => (q.state.data?.last?.waiting > 0 ? 2000 : false),
+  });
 
-  const goWeek = (m) => setParams((cur) => {
+  const setParam = (name, value) => setParams((cur) => {
     const next = new URLSearchParams(cur);
-    if (m === thisWeek) next.delete('week'); else next.set('week', m);
+    if (value == null) next.delete(name); else next.set(name, value);
     return next;
   }, { replace: true });
+  const goWeek = (m) => setParam('week', m === thisWeek ? null : m);
 
   // Phone: one day at a time — today when it's in this week, else Monday.
   const [phoneDay, setPhoneDay] = useState(null);
   const shownDay = phoneDay && days.includes(phoneDay) ? phoneDay : (days.includes(today) ? today : monday);
   const shownDays = narrow ? [shownDay] : days;
 
-  // ── What's on the board ──
-  const data = board.data;
-  const shifts = data?.shifts ?? [];
-  const assignments = data?.assignments ?? [];
-  const peopleAll = data?.people ?? [];
-  const { byCell, byId, onShift, weekCount } = useMemo(() => {
-    const cells = new Map();
+  // ── What's on the week ──
+  // board.data may still be the week just left (kept so the tray stays put
+  // while the next one loads): its shifts are never drawn as this week's.
+  const have = board.data !== undefined && !board.isPlaceholderData;
+  const shifts = have ? board.data.shifts : [];
+  const assignments = have ? board.data.assignments : [];
+  const peopleAll = board.data?.people ?? [];
+  const { byDay, byId, onShift, weekCount } = useMemo(() => {
+    const perDay = new Map();
     const ids = new Map();
     for (const s of shifts) {
       ids.set(s.id, s);
-      const k = `${dayOf(s.starts_at, tz)}|${partOf(s.starts_at, tz)}`;
-      if (!cells.has(k)) cells.set(k, []);
-      cells.get(k).push(s);
+      const d = dayOf(s.starts_at, tz);
+      if (!perDay.has(d)) perDay.set(d, []);
+      perDay.get(d).push(s);
     }
+    for (const list of perDay.values()) list.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at) || a.title.localeCompare(b.title));
     const on = new Map();
     const count = new Map();
     for (const a of assignments) {
@@ -148,8 +174,18 @@ export default function ShiftsBoard({ me }) {
       on.get(a.shift_id).push(a);
       count.set(a.person_id, (count.get(a.person_id) || 0) + 1);
     }
-    return { byCell: cells, byId: ids, onShift: on, weekCount: count };
+    return { byDay: perDay, byId: ids, onShift: on, weekCount: count };
   }, [shifts, assignments, tz]);
+  // The parts of the day that hold a shift on a day shown: the rows drawn.
+  const bands = WEEK_PARTS.filter((p) => shownDays.some((d) => (byDay.get(d) ?? []).some((s) => weekPartOf(s.starts_at, tz) === p.code)));
+  const emptyWeek = have && shifts.length === 0;
+  const pastWeek = days[6] < today;
+  // An empty week offers last week's shifts — when last week had any.
+  const lastWeek = useQuery({
+    queryKey: ['shifts', 'board', addDays(monday, -7), tz],
+    queryFn: () => readBoard(addDays(monday, -7)),
+    enabled: emptyWeek && !pastWeek,
+  });
 
   // ── Tray: search + role ──
   const [q, setQ] = useState('');
@@ -172,31 +208,53 @@ export default function ShiftsBoard({ me }) {
   const trayIds = new Set(peopleAll.map((p) => p.id));
   const extra = needle.length >= 2 ? (others.data?.persons ?? []).filter((p) => !trayIds.has(p.id)).slice(0, 8) : [];
 
-  // ── Picking up a person: a drag, or a tap / Enter then a tap on a slot ──
-  // item: { person: { id, name }, from?: { assignmentId, shiftId } }
+  // ── In hand: a person ({ person, from? }) or a card ({ shift }) being
+  // dragged; a person may also be picked up by a tap / Enter ──
   const [picked, setPicked] = useState(null);
   const [dragging, setDragging] = useState(null);
   const [overKey, setOverKey] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [ask, setAsk] = useState(null);   // { kind: 'clash' | 'new', … }
-  const [note, setNote] = useState(null); // { text, undo? }
+  const [ask, setAsk] = useState(null);   // { item, shift, clash }: already on a shift then
+  const [note, setNote] = useState(null); // { text, act?: { label, run } }
   const [error, setError] = useState(null);
+  const [more, setMore] = useState(false);
+  // The card whose sheet is open: { id, tell } (tell: straight to "Tell them").
+  const [open, setOpen] = useState(null);
   const noteTimer = useRef(null);
   const say = (n) => {
     clearTimeout(noteTimer.current);
     setNote(n);
-    if (n) noteTimer.current = setTimeout(() => setNote(null), 6000);
+    if (n) noteTimer.current = setTimeout(() => setNote(null), n.act ? 9000 : 6000);
   };
   useEffect(() => () => clearTimeout(noteTimer.current), []);
+
+  // The add sheet is in the address (?add=<day>, or ?add=1 from "New
+  // shift"), so the page's own button and a link can open it.
+  const addParam = params.get('add');
+  const adding = addParam != null && online;
+  const addDay = isDay(addParam) && days.includes(addParam) ? addParam : (narrow ? shownDay : days.includes(today) ? today : null);
+  const openShift = open && byId.get(open.id);
+  // While a sheet is open its button is the one main button (Shifts.jsx).
+  const sheetOpen = adding || Boolean(openShift);
+  useEffect(() => { onSheet?.(sheetOpen); }, [sheetOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onSheet?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = (shiftIds = []) => {
     queryClient.invalidateQueries({ queryKey: ['shifts'] });
     for (const id of shiftIds) queryClient.invalidateQueries({ queryKey: ['shift', id] });
     queryClient.invalidateQueries({ queryKey: ['brief'] });
     queryClient.invalidateQueries({ queryKey: ['person'] });
+    queryClient.invalidateQueries({ queryKey: ['schedule'] });
+  };
+  // Shifts made, moved or called off: their turfs, places and the roster too.
+  const refreshAll = () => {
+    refresh();
+    queryClient.invalidateQueries({ queryKey: ['shiftturfs'] });
+    queryClient.invalidateQueries({ queryKey: ['places'] });
+    queryClient.invalidateQueries({ queryKey: ['volunteers'] });
   };
 
-  // Optimistic: the chip moves now; on a "no" the board goes back.
+  // Optimistic: the chip or card moves now; on a "no" the week goes back.
   const patch = (fn) => {
     const prev = queryClient.getQueryData(boardKey);
     queryClient.setQueryData(boardKey, (cur) => (cur ? fn(cur) : cur));
@@ -265,7 +323,7 @@ export default function ShiftsBoard({ me }) {
       await action('shift.unassign', { id: src.assignmentId });
       say({
         text: `${firstName(person.name)} off ${shift?.title ?? 'the shift'}`,
-        undo: undoable && shift ? () => assign({ person }, shift) : null,
+        act: undoable && shift ? { label: 'Undo', run: () => assign({ person }, shift) } : null,
       });
     } catch (e) {
       undo();
@@ -293,64 +351,45 @@ export default function ShiftsBoard({ me }) {
     }
     if (!hasRoom(shift)) { setPicked(null); say({ text: `${shift.title} is full` }); return; }
     const clash = clashFor(item.person.id, shift, item.from?.shiftId);
-    if (clash) { setPicked(null); setAsk({ kind: 'clash', item, shift, clash }); return; }
+    if (clash) { setPicked(null); setAsk({ item, shift, clash }); return; }
     assign(item, shift);
+  };
+
+  // A card to another day: this one shift, the same hours. `back`: an Undo.
+  const moveShift = async (shift, day, { back = false } = {}) => {
+    const was = dayOf(shift.starts_at, tz);
+    if (day === was) return;
+    if (day < today) { say({ text: 'That day is over — pick today or later' }); return; }
+    setError(null);
+    setBusy(true);
+    await queryClient.cancelQueries({ queryKey: boardKey });
+    const undo = patch((cur) => ({ ...cur, shifts: cur.shifts.map((s) => (s.id === shift.id ? { ...s, ...onDay(s, day, tz) } : s)) }));
+    const w = dayWords(day);
+    const n = (onShift.get(shift.id) ?? []).length;
+    try {
+      await action('shift.update', { id: shift.id, day });
+      const moved = { ...shift, ...onDay(shift, day, tz) };
+      say({
+        text: `${cardWords(shift).title} moved to ${w.wd}, ${w.md}${n ? ` — ${peopleWords(n)} ${n === 1 ? 'has' : 'have'} the old day` : ''}`,
+        act: back ? null : n ? { label: 'Tell them', run: () => setOpen({ id: shift.id, tell: true }) }
+          : { label: 'Undo', run: () => moveShift(moved, was, { back: true }) },
+      });
+    } catch (e) {
+      undo();
+      setError(e.message);
+    } finally {
+      setBusy(false);
+      refresh([shift.id]);
+    }
   };
 
   const dropOn = (item, target) => {
     if (!item || !target || busy) return;
     if (!online) { say({ text: 'Needs signal — nothing changed' }); return; }
+    if (item.shift) { if (target.kind === 'day') moveShift(item.shift, target.day); return; }
     if (target.kind === 'tray') { if (item.from) remove(item); else setPicked(null); return; }
-    if (target.kind === 'shift') { const s = byId.get(target.shiftId); if (s) putOn(item, s); return; }
-    // A slot: the first shift there that this person isn't on and has room.
-    const list = byCell.get(`${target.day}|${target.part}`) ?? [];
-    if (list.length === 0) { setPicked(null); openNew(target.day, target.part, item); return; }
-    const pick = list.find((s) => s.id !== item.from?.shiftId && hasRoom(s)
-      && !(onShift.get(s.id) ?? []).some((a) => a.person_id === item.person.id));
-    if (pick) { putOn(item, pick); return; }
-    setPicked(null);
-    say({ text: list.every((s) => (onShift.get(s.id) ?? []).some((a) => a.person_id === item.person.id))
-      ? `${firstName(item.person.name)} is already on it`
-      : `${partLabel(target.part)} is full` });
-  };
-
-  // ── New shift from an empty slot ──
-  const newRef = useRef(null);
-  const openNew = (day, part, item = null) => {
-    setError(null);
-    setAsk({ kind: 'new', day, part, item, title: `Canvass — ${partLabel(part)}`, location: '', capacity: '' });
-  };
-  useEffect(() => {
-    if (ask?.kind === 'new') newRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
-  }, [ask?.kind, ask?.day, ask?.part]);
-  const createShift = async (e) => {
-    e.preventDefault();
-    const f = ask;
-    const title = f.title.trim();
-    if (!title) { setError('Give the shift a name'); return; }
-    let capacity;
-    if (String(f.capacity).trim()) {
-      capacity = Number(f.capacity);
-      if (!Number.isInteger(capacity) || capacity < 1) { setError('How many: a whole number, 1 or more'); return; }
-    }
-    setError(null);
-    setBusy(true);
-    let shift = null;
-    try {
-      const res = await action('shift.create', {
-        title, location: f.location.trim() || undefined, capacity, ...partRange(f.day, f.part, tz),
-      });
-      shift = { ...res.shift, filled: 0 };
-      queryClient.setQueryData(boardKey, (cur) => (cur ? { ...cur, shifts: [...cur.shifts, shift] } : cur));
-      setAsk(null);
-    } catch (err) {
-      setError(err.message);
-      setBusy(false);
-      return;
-    }
-    setBusy(false);
-    if (f.item) await assign(f.item, shift);
-    else { say({ text: `${title} added` }); refresh(); }
+    const s = target.kind === 'shift' ? byId.get(target.shiftId) : null;
+    if (s) putOn(item, s);
   };
 
   // ── Drag: pointer events (mouse, pen, touch). Mouse and pen pick up after
@@ -364,7 +403,7 @@ export default function ShiftsBoard({ me }) {
     if (ghost.current) ghost.current.style.transform = `translate(${x + 12}px, ${y + 12}px)`;
   };
   // Picked up: the ghost follows the pointer; near the top or bottom of the
-  // screen the page scrolls so a slot further down can be reached.
+  // screen the page scrolls so a card further down can be reached.
   const begin = (d) => {
     d.active = true;
     setDragging(d.item);
@@ -401,7 +440,7 @@ export default function ShiftsBoard({ me }) {
         beginRef.current(d);
       }
       if (ghost.current) ghost.current.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
-      const t = targetAt(e.clientX, e.clientY);
+      const t = targetAt(e.clientX, e.clientY, d.item);
       setOverKey(t?.key ?? null);
     };
     const onUp = (e) => {
@@ -410,7 +449,7 @@ export default function ShiftsBoard({ me }) {
       if (d.active) {
         swallowClick.current = true;
         setTimeout(() => { swallowClick.current = false; }, 0);
-        const t = targetAt(e.clientX, e.clientY);
+        const t = targetAt(e.clientX, e.clientY, d.item);
         const { item } = d;
         end();
         dropRef.current(item, t);
@@ -453,10 +492,11 @@ export default function ShiftsBoard({ me }) {
     setError(null);
     setPicked((cur) => (cur && cur.person.id === item.person.id && cur.from?.assignmentId === item.from?.assignmentId ? null : item));
   };
-  const tapTarget = (target) => {
-    if (swallowClick.current || !picked) return false;
-    dropOn(picked, target);
-    return true;
+  // A card: with someone in hand it takes them; otherwise its sheet opens.
+  const tapShift = (s) => {
+    if (swallowClick.current) return;
+    if (picked) dropOn(picked, { kind: 'shift', shiftId: s.id });
+    else { setError(null); setOpen({ id: s.id, tell: false }); }
   };
   const dragProps = (item) => ({
     onPointerDown: grab(item),
@@ -467,8 +507,36 @@ export default function ShiftsBoard({ me }) {
   });
   const hot = (key) => (dragging && overKey === key ? '' : undefined);
 
+  // ── What the sheets and the week's "More" hand back ──
+  const closeAdd = () => setParam('add', null);
+  const added = (res) => {
+    closeAdd();
+    const n = res.shifts.length;
+    const here = res.shifts.filter((s) => days.includes(s.day)).length;
+    const skipped = res.skipped.length;
+    say({
+      text: [
+        n ? `${plural(n, 'shift')} added${here < n ? ` — ${here} this week` : ''}` : 'Nothing new to add',
+        skipped ? `${skipped} already there` : null,
+      ].filter(Boolean).join(' · '),
+    });
+    refreshAll();
+  };
+  const changed = (r) => {
+    refreshAll();
+    if (r.quiet) return;
+    const id = open?.id;
+    setOpen(null);
+    say({ text: r.text, act: r.tell && id ? { label: 'Tell them', run: () => setOpen({ id, tell: true }) } : null });
+  };
+  const gone = (r) => { setOpen(null); say({ text: r.text }); refreshAll(); };
+  const copied = (r) => {
+    refreshAll();
+    setMore(false);
+    say({ text: r.text, act: r.to !== monday ? { label: 'Go there', run: () => goWeek(r.to) } : null });
+  };
+
   // ── Render ──
-  const weekLabel = `${dayWords(days[0]).md} – ${dayWords(days[6]).md}`;
   const personBtn = (p, isExtra = false) => {
     const item = { person: { id: p.id, name: p.name } };
     const n = weekCount.get(p.id) || 0;
@@ -483,19 +551,27 @@ export default function ShiftsBoard({ me }) {
     );
   };
 
-  const shiftBlock = (s, day, part) => {
+  const card = (s) => {
     const chips = onShift.get(s.id) ?? [];
     const filled = Number(s.filled) || 0;
     const full = !!s.capacity && filled >= s.capacity;
-    const label = `${s.title}, ${timeIn(s, tz)}, ${s.capacity ? `${filled} of ${s.capacity}` : `${filled} on it`}`;
+    const short = !full && !!s.need && filled < s.need;
+    const words = cardWords(s);
+    const over = new Date(s.ends_at || s.starts_at) < new Date();
+    const label = `${s.title}, ${shiftSpan(s, tz)}, ${countWords(s)}`;
     return (
-      <div key={s.id} className="sb-shift" data-drop="shift" data-shift={s.id} data-hot={hot(`shift:${s.id}`)} data-full={full ? '' : undefined}>
-        <button type="button" className="sb-shift__head" aria-label={picked ? `Put ${picked.person.name} on ${label}` : `Open ${label}`}
-          onClick={() => { if (!tapTarget({ kind: 'shift', shiftId: s.id })) navigate(`/shifts/${s.id}`); }}>
-          <span className="sb-shift__title">{s.title}</span>
-          <span className="sb-shift__meta">
-            <span>{timeIn(s, tz)}</span>
-            <span className="sb-cap" data-full={full ? '' : undefined}>{s.capacity ? `${filled} / ${s.capacity}` : `${filled} on`}</span>
+      <li key={s.id} className="sb-shift sch-card" style={kindVars(words.kind)} data-drop="shift" data-shift={s.id} data-kind={words.kind.code}
+        data-hot={hot(`shift:${s.id}`)} data-full={full ? '' : undefined} data-over={over ? '' : undefined}
+        data-lifted={dragging?.shift?.id === s.id ? '' : undefined}>
+        <button type="button" className="sb-shift__head sch-card__head" aria-label={picked ? `Put ${picked.person.name} on ${label}` : `${label} — change it`}
+          title={picked || over ? undefined : 'Change it — or drag it to another day'}
+          onPointerDown={over ? undefined : grab({ shift: s })} onContextMenu={(e) => e.preventDefault()} onClick={() => tapShift(s)}>
+          <span className="sch-card__kind"><KindIcon kind={words.kind} /></span>
+          <span className="sb-shift__title sch-card__title">{words.title}</span>
+          {words.place && <span className="sch-card__place">{words.place}</span>}
+          <span className="sb-shift__meta sch-card__meta">
+            <span className="sch-card__time">{shiftSpan(s, tz)}</span>
+            <span className="sb-cap" data-full={full ? '' : undefined} data-short={short ? '' : undefined}>{countWords(s)}</span>
           </span>
         </button>
         <TurfChips turfs={turfsByShift[s.id]} label={`Turfs for ${s.title}`} card />
@@ -517,83 +593,70 @@ export default function ShiftsBoard({ me }) {
             })}
           </ul>
         )}
-      </div>
+      </li>
     );
   };
 
-  const cell = (day, part) => {
-    const list = byCell.get(`${day}|${part.code}`) ?? [];
-    const key = `cell:${day}|${part.code}`;
-    const past = day < today;
+  // A day: its heading with "+", then its shifts under the part of the day
+  // they start in. Every day draws the same rows, so they line up across.
+  const dayColumn = (d) => {
+    const w = dayWords(d);
+    const list = byDay.get(d) ?? [];
+    const past = d < today;
     return (
-      <div key={key} className="sb-cell" role="group" aria-label={`${dayWords(day).long}, ${part.label}`}
-        data-drop="cell" data-day={day} data-part={part.code} data-hot={hot(key)} data-past={past ? '' : undefined}
-        data-empty={list.length ? undefined : ''}>
-        {narrow && <span className="sb-cell__part">{part.label} <small>{hourWord(part.start)}–{hourWord(part.end)}</small></span>}
-        {list.map((s) => shiftBlock(s, day, part.code))}
-        {list.length === 0 && (
-          <button type="button" className="sb-add" disabled={!online || busy}
-            onClick={() => { if (!tapTarget({ kind: 'cell', day, part: part.code })) openNew(day, part.code); }}>
-            {picked ? `+ New shift for ${firstName(picked.person.name)}` : '+ Add shift'}
-          </button>
-        )}
-      </div>
+      <section key={d} className="sch-day" data-day={d} data-hot={hot(`day:${d}`)} data-past={past ? '' : undefined}
+        data-today={d === today ? '' : undefined} aria-label={`${w.long}${list.length ? `, ${plural(list.length, 'shift')}` : ', no shifts'}`}>
+        <header className="sch-day__head">
+          <span className="sch-day__name">{narrow ? <><b>{w.long.split(',')[0]}</b> {w.md}</> : <><b>{w.wd}</b> {w.num}</>}</span>
+          {!past && (
+            <button type="button" className="sch-plus" aria-label={`Add a shift on ${w.long}`} title="Add a shift" disabled={!online}
+              onClick={() => { setError(null); setParam('add', d); }}>
+              +
+            </button>
+          )}
+        </header>
+        {bands.map((p) => {
+          const here = list.filter((s) => weekPartOf(s.starts_at, tz) === p.code);
+          return [
+            <span key={`${p.code}:label`} className="sch-part" aria-hidden={here.length ? undefined : 'true'}>{here.length ? p.label : ''}</span>,
+            <ol key={p.code} className="sch-list" aria-label={here.length ? `${p.label}, ${w.long}` : undefined}>{here.map(card)}</ol>,
+          ];
+        })}
+      </section>
     );
   };
+
+  const ghostWords = dragging?.person?.name ?? (dragging?.shift ? cardWords(dragging.shift).title : '');
+  const paused = board.fetchStatus === 'paused';
 
   return (
-    <div className="sb" data-dragging={dragging ? '' : undefined}>
-      <div className="sb-week" role="group" aria-label="Week">
+    <div className="sb sch" data-dragging={dragging ? '' : undefined}>
+      <div className="sb-week sch-week" role="group" aria-label="Week">
         <button type="button" className="btn btn-quiet sb-nav" aria-label="Last week" onClick={() => goWeek(addDays(monday, -7))}>‹</button>
-        <span className="sb-week__label">{weekLabel}</span>
+        <span className="sb-week__label">{weekWords(monday)}</span>
         <button type="button" className="btn btn-quiet sb-nav" aria-label="Next week" onClick={() => goWeek(addDays(monday, 7))}>›</button>
         {monday !== thisWeek && (
           <button type="button" className="btn btn-quiet sb-today" onClick={() => { setPhoneDay(null); goWeek(thisWeek); }}>This week</button>
         )}
+        <button type="button" className="btn btn-quiet sb-today sch-week__more" aria-expanded={more} aria-controls={moreId}
+          onClick={() => setMore((v) => !v)}>
+          More
+        </button>
       </div>
 
-      {!online && <NeedsSignalLine>Moving people needs signal</NeedsSignalLine>}
-      {board.isError && <p className="error">{board.error.message}</p>}
-      {board.isPending && <p className="muted">{board.fetchStatus === 'paused' ? 'Offline — loads with signal' : 'Loading…'}</p>}
+      {more && (
+        <WeekMore id={moreId} monday={monday} thisMonday={thisWeek} tz={tz} week={week} count={have ? shifts.length : 0}
+          online={online} onCopied={copied} />
+      )}
 
-      {ask?.kind === 'clash' && (
+      {!online && <NeedsSignalLine>Scheduling needs signal</NeedsSignalLine>}
+
+      {ask && (
         <div className="ops-confirm sb-ask" role="group" aria-label="Already on a shift then">
-          <span>{firstName(ask.item.person.name)} is already on {ask.clash.title} ({timeIn(ask.clash, tz)}). Add anyway?</span>
+          <span>{firstName(ask.item.person.name)} is already on {ask.clash.title} ({shiftSpan(ask.clash, tz)}). Add anyway?</span>
           <button type="button" className="btn ops-solid ops-tap" disabled={busy} onClick={() => assign(ask.item, ask.shift)}>Yes</button>
           <button type="button" className="btn btn-quiet ops-tap" onClick={() => setAsk(null)}>No</button>
         </div>
-      )}
-
-      {ask?.kind === 'new' && (
-        <form className="card ops-form sb-new" ref={newRef} onSubmit={createShift} aria-label="New shift">
-          <span className="eyebrow">
-            New shift · {dayWords(ask.day).wd} {dayWords(ask.day).md} · {partLabel(ask.part)}{' '}
-            {(() => { const p = DAY_PARTS.find((x) => x.code === ask.part); return `${hourWord(p.start)}–${hourWord(p.end)}`; })()}
-          </span>
-          <div className="sb-new__fields">
-            <div className="field">
-              <label htmlFor="sb-new-title">What</label>
-              <input id="sb-new-title" className="input" autoFocus value={ask.title}
-                onChange={(e) => setAsk((a) => ({ ...a, title: e.target.value }))} />
-            </div>
-            <div className="field">
-              <label htmlFor="sb-new-where">Where</label>
-              <input id="sb-new-where" className="input" placeholder="Campaign office" value={ask.location}
-                onChange={(e) => setAsk((a) => ({ ...a, location: e.target.value }))} />
-            </div>
-            <div className="field sb-new__n">
-              <label htmlFor="sb-new-n">How many</label>
-              <input id="sb-new-n" className="input mono" type="number" min="1" step="1" inputMode="numeric" placeholder="No limit"
-                value={ask.capacity} onChange={(e) => setAsk((a) => ({ ...a, capacity: e.target.value }))} />
-            </div>
-          </div>
-          <div className="ops-actions">
-            <button type="submit" className="btn ops-solid ops-tap" disabled={busy || !online}>
-              {ask.item ? `Create + add ${firstName(ask.item.person.name)}` : 'Create shift'}
-            </button>
-            <button type="button" className="btn btn-quiet ops-tap" onClick={() => setAsk(null)}>Cancel</button>
-          </div>
-        </form>
       )}
 
       {error && <p className="error" role="alert">{error}</p>}
@@ -611,7 +674,7 @@ export default function ShiftsBoard({ me }) {
             )}
           </div>
           {dragging?.from && <p className="sb-tray__drop">Drop here to take off the shift</p>}
-          {board.isSuccess && tray.length === 0 && extra.length === 0 && (
+          {board.data && tray.length === 0 && extra.length === 0 && (
             <p className="ops-meta sb-tray__none">
               {peopleAll.length === 0 && !needle ? <>No volunteers yet. <Link to="/people">Add roles in People</Link></> : 'No one matches.'}
             </p>
@@ -625,7 +688,7 @@ export default function ShiftsBoard({ me }) {
         <div className="sb-board">
           {picked && (
             <div className="sb-hand" role="status">
-              <span><b>{picked.person.name}</b> — tap a shift or a slot</span>
+              <span><b>{picked.person.name}</b> — tap a shift</span>
               {picked.from && (
                 <button type="button" className="btn btn-quiet sb-hand__btn" disabled={busy}
                   onClick={() => remove(picked)}>Take off</button>
@@ -638,10 +701,10 @@ export default function ShiftsBoard({ me }) {
             <div className="sb-days" role="group" aria-label="Day">
               {days.map((d) => {
                 const w = dayWords(d);
-                const n = DAY_PARTS.reduce((t, p) => t + (byCell.get(`${d}|${p.code}`)?.length ?? 0), 0);
+                const n = (byDay.get(d) ?? []).length;
                 return (
                   <button key={d} type="button" className="sb-day" aria-pressed={d === shownDay} data-today={d === today ? '' : undefined}
-                    aria-label={`${w.long}${n ? `, ${n} ${n === 1 ? 'shift' : 'shifts'}` : ''}`} onClick={() => setPhoneDay(d)}>
+                    aria-label={`${w.long}${n ? `, ${plural(n, 'shift')}` : ''}`} onClick={() => setPhoneDay(d)}>
                     <span className="sb-day__wd">{w.wd}</span>
                     <span className="sb-day__n">{w.num}</span>
                     {n > 0 && <span className="sb-day__dot" aria-hidden="true" />}
@@ -651,39 +714,41 @@ export default function ShiftsBoard({ me }) {
             </div>
           )}
 
-          <div className="sb-grid" style={{ '--sb-cols': shownDays.length }} data-narrow={narrow ? '' : undefined}>
-            {!narrow && <span className="sb-corner" aria-hidden="true" />}
-            {!narrow && shownDays.map((d) => {
-              const w = dayWords(d);
-              return (
-                <span key={d} className="sb-colhead" data-today={d === today ? '' : undefined}>
-                  <span className="sb-colhead__wd">{w.wd}</span> <span className="sb-colhead__md">{w.md}</span>
-                </span>
-              );
-            })}
-            {DAY_PARTS.map((part) => (
-              <div key={part.code} className="sb-row" role="presentation">
-                {!narrow && (
-                  <span className="sb-rowhead">
-                    {part.label}
-                    <small>{hourWord(part.start)}–{hourWord(part.end)}</small>
-                  </span>
-                )}
-                {shownDays.map((d) => cell(d, part))}
-              </div>
-            ))}
-          </div>
+          {!have && !board.isError && <p className="muted sch-state" role="status">{paused ? 'Offline — loads with signal' : 'Loading…'}</p>}
+          {board.isError && !have && <Unavailable onRetry={() => board.refetch()} />}
+          {board.isError && have && <Unavailable what="The latest" onRetry={() => board.refetch()} />}
+
+          {emptyWeek && (
+            <div className="ops-empty-block sch-empty">
+              <p className="ops-empty">{pastWeek ? 'No shifts that week.' : 'No shifts this week yet.'}</p>
+              {!pastWeek && <CopyLastWeek monday={monday} lastCount={lastWeek.data?.shifts?.length ?? 0} online={online} onCopied={copied} />}
+            </div>
+          )}
+
+          {have && (
+            <div className="sch-days" data-narrow={narrow ? '' : undefined}
+              style={{ '--sch-cols': shownDays.length, gridTemplateRows: `auto${bands.length ? ` repeat(${bands.length}, auto auto)` : ''} var(--sch-tail)` }}>
+              {shownDays.map(dayColumn)}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Always in the page (hidden when idle) so it can be placed the moment a drag starts. */}
-      <div className="sb-ghost" ref={ghost} aria-hidden="true" hidden={!dragging}>{dragging?.person.name}</div>
+      <div className="sb-ghost" ref={ghost} aria-hidden="true" hidden={!dragging}>{ghostWords}</div>
 
       {note && (
-        <div className="toast ops-toast sb-toast" data-plain={note.undo ? undefined : ''} role="status">
+        <div className="toast ops-toast sb-toast" data-plain={note.act ? undefined : ''} role="status">
           <span>{note.text}</span>
-          {note.undo && <button type="button" className="btn" disabled={busy} onClick={() => { const u = note.undo; say(null); u(); }}>Undo</button>}
+          {note.act && <button type="button" className="btn" disabled={busy} onClick={() => { const a = note.act; say(null); a.run(); }}>{note.act.label}</button>}
         </div>
+      )}
+
+      {adding && <ScheduleAdd me={me} days={days} today={today} day={addDay} onClose={closeAdd} onAdded={added} />}
+      {openShift && (
+        <ScheduleShift key={`${open.id}:${open.tell}`} me={me} shift={openShift} on={onShift.get(open.id) ?? []} turfs={turfsByShift[open.id] ?? []}
+          days={days} today={today} tz={tz} tell={open.tell} providers={week.data?.providers ?? null}
+          onClose={() => setOpen(null)} onChanged={changed} onGone={gone} />
       )}
     </div>
   );

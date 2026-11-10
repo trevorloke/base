@@ -1,0 +1,236 @@
+/* Shifts → Week: the day lists and their cards (ShiftsBoard.jsx), and the
+   sheets that make and change shifts (Schedule*.jsx). Classes are sch-*;
+   the tray, the people chips and the phone's day strip keep their sb-*
+   styles (shifts-board.css). Every colour, radius and space is a token from
+   app.css; a kind's own colour arrives as --kind (components/ShiftKind.jsx).
+   Where a rule refines an sb-* or .btn rule the class is doubled, so it
+   wins whichever sheet loads first. */
+
+.sk-icon { flex: none; display: block; }
+
+/* ── The week row: ‹ Nov 16 – Nov 22 › · This week · More ── */
+.sb-week.sch-week .sch-week__more { margin-left: auto; }
+.sch-weekmore.card { display: flex; flex-direction: column; padding: 0 var(--s-4); margin: 0 0 var(--s-3); }
+.sch-row { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; padding: var(--s-3) 0; border-top: 1px solid var(--rule); }
+.sch-row:first-child { border-top: 0; }
+.sch-row__main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 220px; min-width: 0; font-size: 15px; }
+.sch-row > .sch-ask, .sch-row > .error, .sch-last { flex: 1 1 100%; }
+.sch-last { display: flex; align-items: center; gap: var(--s-1) var(--s-3); flex-wrap: wrap; }
+.sch-last .ops-done { margin: 0; }
+.sch-last .ops-results { flex: 1 1 100%; }
+
+/* A switch: 48px to the finger, the track drawn inside it. */
+.sch-switch { flex: none; position: relative; width: 56px; height: 48px; padding: 0; background: none; border: 0; cursor: pointer; touch-action: manipulation; }
+.sch-switch::before {
+  content: ''; position: absolute; left: 2px; right: 2px; top: 8px; height: 32px;
+  border-radius: 999px; background: var(--paper-2); border: 1px solid var(--rule-2); transition: background-color 0.12s, border-color 0.12s;
+}
+.sch-switch__knob {
+  position: absolute; top: 12px; left: 6px; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--paper-0); box-shadow: var(--shadow-1); transition: transform 0.12s;
+}
+.sch-switch[aria-checked='true']::before { background: var(--ok); border-color: var(--ok); }
+.sch-switch[aria-checked='true'] .sch-switch__knob { transform: translateX(20px); }
+.sch-switch:disabled { opacity: 0.5; cursor: default; }
+.sch-switch:focus-visible { outline: 2px solid var(--mark); outline-offset: 0; border-radius: var(--r-ctrl); }
+
+/* Loading, failed, nothing yet — said in words, never drawn as empty days. */
+.sch-state { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; margin: var(--s-3) 0; font-size: 16px; color: var(--text-2); }
+.sch-empty.ops-empty-block { margin: 0 0 var(--s-3); }
+.sch-note { margin: 0; font-size: 14px; color: var(--text-3); }
+.sch-unavailable { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; margin: 0; font-size: 14px; color: var(--text-2); }
+
+/* ── Seven days across, each a list. Every day draws the same rows (its
+   heading, then a divider and a list per part of the day), and the rows
+   are the week's own (subgrid), so a 6:30 on Monday sits beside a 6:30 on
+   Tuesday. Where a browser has no subgrid each day is simply its own list. ── */
+.sch-days {
+  /* The last row is empty: room under every day's list to drop a card into. */
+  --sch-tail: 56px;
+  display: grid;
+  grid-template-columns: repeat(var(--sch-cols, 7), minmax(0, 1fr));
+  column-gap: var(--s-2);
+  row-gap: 0;
+  align-items: start;
+}
+.sch-day {
+  display: grid;
+  grid-row: 1 / -1;
+  grid-template-rows: subgrid;
+  align-self: stretch;
+  align-content: start;
+  min-width: 0;
+  padding: var(--s-1);
+  background: var(--paper-1);
+  border: 1px solid transparent;
+  border-radius: var(--r-ctrl);
+  transition: background-color 0.1s, border-color 0.1s;
+}
+@supports not (grid-template-rows: subgrid) {
+  .sch-day { display: flex; flex-direction: column; }
+  .sch-part:empty, .sch-list:empty { display: none; }
+}
+.sch-day[data-past] { opacity: 0.65; }
+/* A card in hand: every day it may go to shows its edge; the one under it fills. */
+.sch[data-dragging] .sch-day:not([data-past]) { border-color: var(--rule-2); border-style: dashed; }
+.sch[data-dragging] .sch-day[data-hot] { background: var(--mark-soft); border-color: var(--mark); border-style: solid; }
+
+.sch-day__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-1); min-height: 40px; padding-left: var(--s-1); min-width: 0; }
+.sch-day__name { font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sch-day__name b { font-weight: 700; color: var(--text-1); }
+.sch-day[data-today] .sch-day__head { box-shadow: inset 0 -2px 0 var(--mark); }
+.sch-plus {
+  flex: none; width: 36px; height: 36px; padding: 0;
+  font: inherit; font-size: 22px; font-weight: 500; line-height: 1;
+  color: var(--text-2); background: var(--paper-0); border: 1px solid var(--rule-2); border-radius: var(--r-ctrl);
+  cursor: pointer; touch-action: manipulation;
+}
+@media (hover: hover) { .sch-plus:hover { border-color: var(--mark); color: var(--text-1); } }
+.sch-plus:focus-visible { outline: 2px solid var(--mark); outline-offset: 1px; }
+.sch-plus:disabled { opacity: 0.5; cursor: default; }
+
+/* "Early ———" — quiet, and only where that day has a shift then. */
+.sch-part { display: flex; align-items: center; gap: var(--s-2); min-height: 26px; padding: var(--s-2) var(--s-1) 2px; font-size: 12px; font-weight: 600; color: var(--text-3); }
+.sch-part:not(:empty)::after { content: ''; flex: 1; height: 1px; background: var(--rule-2); }
+.sch-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+
+/* A shift: its kind's colour down the edge and on its mark. */
+.sb-shift.sch-card { border-left: 4px solid var(--kind, var(--rule-2)); }
+.sb-shift.sch-card[data-over] { opacity: 0.7; }
+.sb-shift.sch-card[data-lifted] { opacity: 0.4; }
+/* The mark and the name on one line; the place and the hours the card's full width. */
+.sb-shift__head.sch-card__head {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 2px 6px; padding: var(--s-2) var(--s-2) var(--s-2) 6px;
+  touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.sch-card__kind { display: inline-flex; color: var(--kind, var(--text-3)); }
+.sch-card__kind .sk-icon { width: 18px; height: 18px; }
+.sch-card__place, .sb-shift__meta.sch-card__meta { grid-column: 1 / -1; }
+.sch-card__place { font-size: 12px; line-height: 1.3; color: var(--text-2); overflow-wrap: anywhere; }
+.sb-shift__meta.sch-card__meta { font-size: 12px; }
+.sch-card__time { white-space: nowrap; }
+.sb-cap[data-short] { color: var(--warn); }
+
+/* ── Sheets: a panel at the right on a desk, up from the bottom on a phone ── */
+.sch-scrim { position: fixed; inset: 0; z-index: 985; background: rgb(0 0 0 / 0.38); }
+.sch-sheet {
+  position: fixed; z-index: 990; top: 0; right: 0; bottom: 0; width: min(460px, 100vw);
+  display: flex; flex-direction: column;
+  background: var(--paper-0); color: var(--text-1);
+  border-left: 1px solid var(--rule-2); box-shadow: var(--shadow-2);
+}
+.sch-sheet__head { display: flex; align-items: flex-start; gap: var(--s-2); padding: var(--s-3) var(--s-2) var(--s-3) var(--s-4); border-bottom: 1px solid var(--rule); }
+.sch-sheet__titles { flex: 1 1 auto; min-width: 0; padding-top: var(--s-2); }
+.sch-sheet__head h2 { margin: 0; font-family: var(--font-sans); font-size: 20px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.sch-sheet__head h2:focus { outline: none; }
+.sch-sheet__sub { margin: 2px 0 0; font-size: 14px; color: var(--text-2); }
+.btn.sch-x { flex: none; min-width: 48px; min-height: 48px; padding: 0; font-size: 16px; }
+.sch-sheet__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--s-4); }
+.sch-sheet__foot {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  padding: var(--s-3) var(--s-4) calc(var(--s-3) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--rule); background: var(--paper-0);
+}
+.sch-sheet__foot .error { margin: 0; }
+.btn.ops-tap.sch-go { width: 100%; min-height: 52px; font-size: 15px; }
+.sch-summary { margin: 0; font-size: 14px; line-height: 1.35; color: var(--text-2); overflow-wrap: anywhere; }
+.sch-sheet .input { min-height: 48px; }
+
+.sch-sec { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-4); min-width: 0; }
+.sch-label { margin: 0; font-family: var(--font-sans); font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--text-3); }
+.sch-onit { margin: 0 0 var(--s-4); font-size: 15px; color: var(--text-2); overflow-wrap: anywhere; }
+.sch-onit b { color: var(--text-1); }
+
+/* What: a tile a kind; once picked, one line and "Change". */
+.sch-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); }
+.sch-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-width: 0; min-height: 80px; padding: var(--s-2) var(--s-1);
+  font: inherit; font-size: 14px; font-weight: 600; line-height: 1.2; text-align: center;
+  color: var(--text-1); background: var(--paper-0); border: var(--border-2); border-radius: var(--r-card);
+  cursor: pointer; touch-action: manipulation;
+}
+.sch-tile .sk-icon { width: 26px; height: 26px; color: var(--kind); }
+@media (hover: hover) { .sch-tile:hover { border-color: var(--kind); } }
+.sch-tile[aria-pressed='true'] { border-color: var(--kind); box-shadow: inset 0 0 0 1px var(--kind); background: color-mix(in srgb, var(--kind) 10%, var(--paper-0)); }
+.sch-tile:focus-visible, .sch-chip:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+.sch-what { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-width: 0; }
+.sch-what__kind { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 0; font-size: 18px; font-weight: 700; }
+.sch-what__kind .sk-icon { width: 24px; height: 24px; color: var(--kind); }
+.btn.sch-what__change { min-height: 48px; }
+
+/* Chips to tap: pressed is the accent's edge, a soft fill and a check. */
+.sch-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); min-width: 0; }
+.sch-chip {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  min-height: 44px; max-width: 100%; padding: 0 14px;
+  font: inherit; font-size: 15px; font-weight: 600; line-height: 1.2;
+  color: var(--text-1); background: var(--paper-0); border: var(--border-2); border-radius: 999px;
+  cursor: pointer; touch-action: manipulation;
+}
+.sch-chip[aria-pressed='true'] { background: var(--mark-soft); border-color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); }
+.sch-chip[aria-pressed='true']::before { content: '✓'; font-size: 13px; }
+.sch-chip:disabled { opacity: 0.45; cursor: default; }
+.sch-chip--quiet { border-style: dashed; color: var(--text-2); }
+.sch-chip__words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (hover: hover) { .sch-chip:not(:disabled):hover { border-color: var(--mark); } }
+
+/* The week's seven days, in one row whatever the width. */
+.sch-chips.sch-daychips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.sch-chip.sch-daychip { flex-direction: column; justify-content: center; gap: 0; min-height: 52px; padding: 4px 0; border-radius: var(--r-ctrl); font-size: 12px; font-weight: 500; color: var(--text-2); }
+.sch-daychip b { font-size: 16px; font-weight: 700; color: var(--text-1); }
+.sch-chip.sch-daychip[aria-pressed='true'] { background: var(--mark); border-color: var(--mark); box-shadow: none; color: var(--mark-ink); }
+.sch-chip.sch-daychip[aria-pressed='true']::before { content: none; }
+.sch-daychip[aria-pressed='true'] b { color: var(--mark-ink); }
+
+/* Another time: part of the day, a start, a length. */
+.sch-when { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.sch-other, .sch-pick { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-2); background: var(--paper-1); border: 1px solid var(--rule); border-radius: var(--r-card); min-width: 0; }
+.ops-seg.sch-parts button { font-size: 13px; padding: 4px 2px; }
+
+/* Where: the chips, and the small map a place is picked on. */
+.sch-where { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
+.sch-map { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.sch-map__box { position: relative; z-index: 0; height: 240px; border-radius: var(--r-ctrl); overflow: hidden; background: var(--paper-2); }
+.sch-map__box.leaflet-container { cursor: crosshair; font-family: var(--font-sans); }
+.btn.sch-map__mid { align-self: flex-start; min-height: 48px; }
+.sch-pin { stroke: var(--mark); fill: var(--mark); }
+.sch-named { min-height: 24px; font-size: 15px; }
+.sch-named__name { font-size: 16px; overflow-wrap: anywhere; }
+.field.sch-rename { margin: 0; }
+
+/* In-place questions and the quiet buttons under a shift. */
+.ops-confirm.sch-ask { padding: var(--s-3); background: var(--paper-1); border-radius: var(--r-ctrl); }
+.sch-ask .ops-meta { flex: 1 1 100%; }
+.sch-tools { margin-top: var(--s-5); }
+.btn.sch-toggle[aria-pressed='true'] { border-color: var(--ok); color: var(--ok); }
+.btn.sch-toggle[aria-pressed='true']::before { content: '✓'; }
+
+/* More: what is typed or rare. */
+.disclose.sch-more { margin-top: var(--s-2); }
+.sch-more__body { padding-top: var(--s-2); }
+.sch-options { display: inline-flex; align-items: center; min-height: 48px; font-size: 15px; color: var(--text-2); }
+
+@media (pointer: coarse), (max-width: 720px) {
+  .sch-chip { min-height: 48px; }
+  .sch-plus { width: 48px; height: 48px; }
+  .sb-week.sch-week .btn { min-height: 48px; min-width: 48px; }
+}
+
+/* Phone: one day, full width; the sheet comes up from the bottom, over the tab bar. */
+@media (max-width: 720px) {
+  .sch-days { --sch-tail: 0px; }
+  .sch-day { padding: var(--s-2); }
+  .sch-day__name { font-size: 15px; }
+  .sch-part { font-size: 13px; }
+  .sch-card__kind .sk-icon { width: 20px; height: 20px; }
+  .sch-card__place { font-size: 14px; }
+  .sb-shift__meta.sch-card__meta { font-size: 13px; }
+  .sb-shift__head.sch-card__head { padding: var(--s-2); gap: 2px var(--s-2); }
+  .sch-sheet {
+    top: auto; left: 0; right: 0; bottom: 0; width: auto;
+    max-height: 92vh; max-height: 92dvh;
+    border-left: 0; border-top: 1px solid var(--rule-2); border-radius: var(--r-card) var(--r-card) 0 0;
+  }
+  .sch-map__box { height: 220px; }
+}

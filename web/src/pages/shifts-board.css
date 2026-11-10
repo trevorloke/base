@@ -1,12 +1,13 @@
-/* Shifts → Week: the slot board (ShiftsBoard.jsx). Classes are sb-*; every
-   colour, radius, space and font is a token from app.css, so the board
+/* Shifts → Week (ShiftsBoard.jsx): the week row, the volunteers' tray, a
+   shift's card and its people, the drag ghost and the phone's day strip.
+   The day lists and the sheets are in schedule.css. Classes are sb-*; every
+   colour, radius, space and font is a token from app.css, so the screen
    follows whatever the app's look is. */
 
 /* The board wants room: the page goes wider than a list screen. */
 .page:has(.sb) { max-width: 1400px; }
 .ops-page:has(> .sb) { max-width: none; }
 
-.sb { --sb-gap: var(--s-2); }
 .ops-seg.sb-views { max-width: 280px; }
 
 /* Week: ‹ Oct 26 – Nov 1 › · This week */
@@ -16,9 +17,6 @@
 .btn.sb-today { min-height: 44px; }
 
 .sb-ask { margin: 0 0 var(--s-3); padding: var(--s-3) var(--s-4); background: var(--paper-0); border: 1px solid var(--warn); border-radius: var(--r-card); }
-.sb-new { margin: 0 0 var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); }
-.sb-new__fields { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: var(--s-3); }
-.sb-new .field { margin: 0; }
 
 /* Tray left, board right; on a phone the tray sits on top. */
 .sb-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
@@ -68,7 +66,7 @@
 .sb-person[data-extra] { background: var(--paper-0); border-color: var(--rule); border-style: dashed; }
 .sb-person:hover { border-color: var(--rule-2); }
 .sb-person[aria-pressed='true'] { background: var(--mark-soft); border-color: var(--mark); }
-.sb-person:focus-visible, .sb-chip__name:focus-visible, .sb-shift__head:focus-visible, .sb-add:focus-visible, .sb-day:focus-visible {
+.sb-person:focus-visible, .sb-chip__name:focus-visible, .sb-shift__head:focus-visible, .sb-day:focus-visible {
   outline: 2px solid var(--mark); outline-offset: 1px;
 }
 .sb-person:disabled { cursor: default; opacity: 0.6; }
@@ -85,7 +83,7 @@
   line-height: 18px;
 }
 
-/* "Sam — tap a shift or a slot · Take off · Cancel" */
+/* "Sam — tap a shift · Take off · Cancel" */
 .sb-hand {
   position: sticky;
   top: 0;
@@ -105,58 +103,7 @@
 .sb-hand > span { flex: 1 1 auto; min-width: 0; }
 .btn.sb-hand__btn { min-height: 36px; }
 
-/* ── The grid: a corner + day headings, then one row per part of day ── */
-.sb-grid {
-  display: grid;
-  grid-template-columns: 76px repeat(var(--sb-cols, 7), minmax(0, 1fr));
-  gap: var(--sb-gap);
-}
-.sb-grid[data-narrow] { grid-template-columns: minmax(0, 1fr); }
-.sb-row { display: contents; }
-.sb-colhead {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-3);
-  text-align: center;
-  padding: var(--s-1) 0;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sb-colhead__wd { font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
-.sb-colhead[data-today] { border-bottom-color: var(--mark); }
-.sb-colhead[data-today] .sb-colhead__wd { color: var(--mark-deep); }
-.sb-rowhead {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  padding-top: var(--s-2);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-.sb-rowhead small, .sb-cell__part small { font-family: var(--font-mono); font-size: 11px; font-weight: 400; color: var(--text-4); }
-
-/* A slot: that day's morning, afternoon or evening */
-.sb-cell {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-1);
-  min-width: 0;
-  min-height: 96px;
-  padding: var(--s-1);
-  background: var(--paper-1);
-  border: 1px solid transparent;
-  border-radius: var(--r-ctrl);
-  transition: background-color 0.1s, border-color 0.1s;
-}
-.sb-cell[data-past] { opacity: 0.6; }
-.sb[data-dragging] .sb-cell { border-color: var(--rule-2); border-style: dashed; }
-.sb-cell[data-hot], .sb[data-dragging] .sb-cell[data-hot] { background: var(--mark-soft); border-color: var(--mark); border-style: solid; }
-.sb-cell__part { font-size: 13px; font-weight: 600; color: var(--text-2); padding: var(--s-1) var(--s-1) 0; }
-
-/* A shift in a slot */
+/* A shift's card (its kind's colour and mark: schedule.css) */
 .sb-shift {
   background: var(--paper-0);
   border: 1px solid var(--rule);
@@ -229,21 +176,6 @@
 .sb-chip__x:hover { color: var(--danger); }
 .sb-chip__x:disabled, .sb-chip__name:disabled { cursor: default; }
 
-/* "+ Add shift" in an empty slot — quiet until hovered */
-.sb-add {
-  flex: 1 1 auto;
-  min-height: 40px;
-  font: inherit;
-  font-size: 12px;
-  color: var(--text-4);
-  background: none;
-  border: 1px dashed transparent;
-  border-radius: var(--r-ctrl);
-  cursor: pointer;
-}
-.sb-cell:hover .sb-add, .sb-add:focus-visible { color: var(--text-2); border-color: var(--rule-2); }
-.sb-add:disabled { cursor: default; }
-
 /* The name that follows the pointer while dragging */
 .sb-ghost {
   position: fixed;
@@ -289,11 +221,10 @@
 
 @media (max-width: 1100px) {
   .sb-layout { grid-template-columns: 170px minmax(0, 1fr); gap: var(--s-3); }
-  .sb-grid:not([data-narrow]) { grid-template-columns: 58px repeat(var(--sb-cols, 7), minmax(0, 1fr)); gap: 4px; }
 }
 
 /* Phone: tray on top as a strip of names that scrolls sideways (inside
-   itself — never the page), then the day switcher, then three slots. */
+   itself — never the page), then the day switcher, then that day's list. */
 @media (max-width: 720px) {
   .sb-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-3); }
   .sb-tray { position: static; max-height: none; padding: var(--s-2); }
@@ -303,13 +234,10 @@
   .sb-people { flex-direction: row; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; overscroll-behavior-x: contain; }
   .sb-people > li { flex: none; }
   .sb-person { width: auto; min-height: 44px; max-width: 70vw; }
-  .sb-cell { min-height: 72px; }
   .sb-shift__title { font-size: 15px; }
   .sb-shift__meta { font-size: 12px; }
   .sb-chip__name { font-size: 14px; padding: 6px 6px 6px 12px; }
   .sb-chip__x { width: 36px; font-size: 18px; }
-  .sb-add { min-height: 48px; font-size: 14px; }
-  .sb-new__fields { grid-template-columns: minmax(0, 1fr); }
   .sb-hand { top: var(--s-1); }
   .sb-hand > span { flex-basis: 100%; }
 }

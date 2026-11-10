@@ -63,6 +63,8 @@ import { NeedsSignal, NeedsSignalLine, useOnline } from '../components/NoSignal.
 import ShiftsBoard from './ShiftsBoard.jsx';
 import ShiftCrew from './ShiftCrew.jsx';
 import { TurfPicker, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
+import { normalizeLink, safeHref } from '../components/shiftLink.js';
+import { NOTIFIED_WORD, NotifyChip, notifySummary, outcomeOf, people } from '../components/NotifyWords.jsx';
 import './shifts.css';
 import { NS } from '../base.js';
 
@@ -154,124 +156,11 @@ function SpotsBar({ filled, capacity }) {
   );
 }
 
-// Only http(s) links become clickable; bare domains get https:// in front.
-const BARE_DOMAIN = /^[\w-]+(\.[\w-]+)+([/?#]|$)/;
-const safeHref = (link) => {
-  const v = String(link || '').trim();
-  if (!v) return null;
-  if (/^https?:\/\//i.test(v)) return v;
-  if (BARE_DOMAIN.test(v)) return `https://${v}`;
-  return null;
-};
-// What gets saved: a pasted "bit.ly/turf" is stored as https://bit.ly/turf so
-// the link in the email/text is tappable too. Anything else is kept as typed.
-const normalizeLink = (link) => {
-  const v = String(link || '').trim();
-  if (!v) return undefined;
-  if (!/^[a-z][a-z\d+.-]*:/i.test(v) && BARE_DOMAIN.test(v)) return `https://${v}`;
-  return v;
-};
-
 // The server 500s on a malformed uuid in the path, so a hand-typed or
 // truncated link is treated as "not found" before it ever hits the API.
 const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
 
 const ASSIGN_TONE = { assigned: '', confirmed: 'ok', completed: 'ok', declined: 'danger', no_show: 'danger' };
-const NOTIFY_CHIP = { sent: 'chip-ok', queued: 'chip-warn', failed: 'chip-danger', skipped: '', opted_out: '', quiet: 'chip-warn' };
-// What happened to one message, in plain words ("Email not sent"). 'queued'
-// means the server sent nothing because that channel isn't connected, and
-// nothing sends it later: connect it, then Notify again.
-const NOTIFY_WORDS = {
-  email: {
-    sent: 'Email sent', queued: 'Email not sent', failed: 'Email didn’t send', skipped: 'No email on file',
-    // A week's notice and the evening reminders leave out do-not-email (ext/schedule).
-    opted_out: 'Opted out of email',
-  },
-  text: {
-    sent: 'Text sent', queued: 'Text not sent', failed: 'Text didn’t send', skipped: 'No phone on file',
-    // The texting rules hold a notice back too (server/ext/texting).
-    opted_out: 'Opted out of texts', quiet: 'Text not sent — quiet hours',
-  },
-};
-const NOTIFY_TITLE = {
-  email: {
-    queued: 'Not sent — email isn’t connected', failed: 'Try again, or reach them another way',
-    opted_out: 'They are marked do not email or do not contact',
-  },
-  text: {
-    queued: 'Not sent — texting isn’t connected', failed: 'Try again, or reach them another way',
-    opted_out: 'They replied STOP or are marked do not text', quiet: 'Texts go out only in the campaign’s hours',
-  },
-};
-
-// One person's outcome across both channels:
-//   reached — at least one message went out
-//   failed  — nothing went out, and a provider turned one down
-//   offline — nothing went out: that channel isn't connected
-//   quiet   — nothing went out: the text waits for the campaign's hours
-//   optedout — nothing went out: no email, and they opted out of texts
-//   skipped — no email or phone on file
-const outcomeOf = (email, text) => {
-  if (email === 'sent' || text === 'sent') return 'reached';
-  if (email === 'failed' || text === 'failed') return 'failed';
-  if (email === 'queued' || text === 'queued') return 'offline';
-  if (text === 'quiet') return 'quiet';
-  if (text === 'opted_out') return 'optedout';
-  return 'skipped';
-};
-const people = (n) => `${n} ${n === 1 ? 'person' : 'people'}`;
-
-// The result of one Notify, counted per person, in one line:
-//   "✓ Sent to 2 people"
-//   "✓ Sent to 1 of 2 · 1 not reached — see Details"
-//   "Not sent · 2 people — connect email and text, then Notify again"
-// Green only when everyone was reached.
-function notifySummary(results) {
-  const total = results.length;
-  const n = { reached: 0, failed: 0, offline: 0, quiet: 0, optedout: 0, skipped: 0 };
-  // Texts held back for quiet hours, whoever else reached them by email.
-  const quietTexts = results.filter((r) => r.text === 'quiet');
-  let offEmail = false;
-  let offText = false;
-  for (const r of results) {
-    const o = outcomeOf(r.email, r.text);
-    n[o] += 1;
-    if (o === 'offline') {
-      if (r.email === 'queued') offEmail = true;
-      if (r.text === 'queued') offText = true;
-    }
-  }
-  const connect = offEmail && offText ? 'email and text' : offEmail ? 'email' : 'text';
-  const parts = [];
-  if (n.reached) parts.push(n.reached === total ? `✓ Sent to ${people(total)}` : `✓ Sent to ${n.reached} of ${total}`);
-  // The first part leads ("Not sent · 2 people …"); later ones are counts.
-  const say = (lead, count) => parts.push(parts.length === 0 ? lead : count);
-  if (n.failed) say(`Not reached · ${people(n.failed)} — see Details`, `${n.failed} not reached — see Details`);
-  if (n.offline) {
-    const next = `connect ${connect}, then Notify again`;
-    say(`Not sent · ${people(n.offline)} — ${next}`, `${n.offline} not sent — ${next}`);
-  }
-  if (quietTexts.length) {
-    // "Quiet hours — sending opens at 9 am" (the server's words).
-    const note = quietTexts.find((r) => r.text_note)?.text_note || 'Quiet hours';
-    const k = quietTexts.length;
-    say(`${note} · ${k} ${k === 1 ? 'text' : 'texts'} not sent`, `${k} ${k === 1 ? 'text' : 'texts'} not sent — ${note.toLowerCase()}`);
-  }
-  if (n.optedout) say(`Opted out of texts · ${people(n.optedout)}`, `${n.optedout} opted out of texts`);
-  if (n.skipped) say(`No email or phone on file · ${people(n.skipped)}`, `${n.skipped} with no email or phone`);
-  return { text: parts.join(' · '), ok: total > 0 && n.reached === total && quietTexts.length === 0 };
-}
-
-function NotifyChip({ channel, status }) {
-  if (!status) return null;
-  return (
-    <span className={`chip ${NOTIFY_CHIP[status] ?? ''}`.trim()} title={NOTIFY_TITLE[channel]?.[status]}>
-      {NOTIFY_WORDS[channel]?.[status] ?? `${channel} ${status}`}
-    </span>
-  );
-}
-
-const NOTIFIED_WORD = { reached: 'Notified', failed: 'Tried', offline: 'Saved', quiet: 'Saved', optedout: 'Saved', skipped: 'Saved' };
 
 // ── Fill bar: filled / capacity ──
 export function FillBar({ filled = 0, capacity }) {
@@ -743,8 +632,8 @@ function ShiftList({ canDesk, me }) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const showNew = canDesk && params.get('new') === '1';
-  // A link with ?week= opens the week board.
-  const [view, setView] = useState(() => (!canDesk ? 'list' : params.get('week') ? 'week' : savedView()));
+  // A link with ?week= (or ?add=, the week's add sheet) opens the week.
+  const [view, setView] = useState(() => (!canDesk ? 'list' : params.get('week') || params.get('add') ? 'week' : savedView()));
   // The board needs signal (it's live, not kept on the phone): with none,
   // the list and its offline copy show instead, and the board comes back
   // with the signal. The saved choice stays as it was.
@@ -753,7 +642,14 @@ function ShiftList({ canDesk, me }) {
   const pickView = (v) => {
     setView(v);
     saveView(v);
-    if (v === 'list' && params.get('week')) setParams({}, { replace: true });
+    if (v === 'list' && (params.get('week') || params.get('add'))) setParams({}, { replace: true });
+  };
+  // "New shift" is the week's add sheet (ScheduleAdd.jsx): the week opens
+  // with it. While any sheet is open there, its button is the main one.
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const newShift = () => {
+    setView('week');
+    setParams((cur) => { const next = new URLSearchParams(cur); next.set('add', '1'); return next; }, { replace: true });
   };
   const [showPast, setShowPast] = useState(false);
   const shifts = useQuery({ queryKey: ['shifts'], queryFn: () => apiGet('/shifts'), ...phoneCopy(me, 'shifts') });
@@ -779,7 +675,7 @@ function ShiftList({ canDesk, me }) {
       <div className="ops-head">
         <h1>Shifts</h1>
         {canDesk && !showNew && (
-          <button type="button" className="btn btn-primary ops-tap" disabled={!online} onClick={() => setParams({ new: '1' })}>
+          <button type="button" className={`btn ops-tap${week && sheetOpen ? '' : ' btn-primary'}`} disabled={!online} onClick={newShift}>
             New shift
           </button>
         )}
@@ -797,7 +693,7 @@ function ShiftList({ canDesk, me }) {
             title={online ? undefined : 'The volunteer list needs signal'}>Volunteers</button>
         </div>
       )}
-      {week ? <ShiftsBoard me={me} /> : (
+      {week ? <ShiftsBoard me={me} onSheet={setSheetOpen} /> : (
       <>
 
       {listCopy && <p className="ops-copy"><span className="chip obx-copy">Offline copy</span></p>}
@@ -976,6 +872,8 @@ function ShiftDetail({ id, canDesk, me }) {
   const location = useLocation();
   const navigate = useNavigate();
   const handed = location.state;
+  // Opened from the week screen: "← Shifts" goes back to that week.
+  const backTo = /^\d{4}-\d{2}-\d{2}$/.test(String(handed?.week || '')) ? `/shifts?week=${handed.week}` : '/shifts';
   const [editTurfs, setEditTurfs] = useState(() => (Array.isArray(handed?.turfIds) ? handed.turfIds : null));
   const [turfBusy, setTurfBusy] = useState(false);
   const [turfError, setTurfError] = useState(() => (handed?.turfError ? `Turfs not saved: ${handed.turfError}` : null));
@@ -1028,7 +926,7 @@ function ShiftDetail({ id, canDesk, me }) {
   if (!validId || (shiftQ.isError && (!shiftQ.data || shiftQ.error?.status))) {
     return (
       <div className="ops-page">
-        <Link to="/shifts" className="ops-back">← Shifts</Link>
+        <Link to={backTo} className="ops-back">← Shifts</Link>
         <p className="ops-empty">
           {!validId || shiftQ.error.status === 404 ? 'That shift is gone.' : shiftQ.error.message}
         </p>
@@ -1040,7 +938,7 @@ function ShiftDetail({ id, canDesk, me }) {
   if (shiftQ.isPending) {
     return shiftQ.fetchStatus === 'paused' ? (
       <div className="ops-page">
-        <Link to="/shifts" className="ops-back">← Shifts</Link>
+        <Link to={backTo} className="ops-back">← Shifts</Link>
         <p className="ops-empty">Offline — open this shift once with signal.</p>
       </div>
     ) : <p className="muted">Loading…</p>;
@@ -1270,7 +1168,7 @@ function ShiftDetail({ id, canDesk, me }) {
       refresh();
       // The board opens without it, not with it for a moment.
       await queryClient.refetchQueries({ queryKey: ['shifts'] }).catch(() => {});
-      navigate('/shifts');
+      navigate(backTo);
     } catch (e) {
       setOffError(e.message);
       setOffBusy(false);
@@ -1280,7 +1178,7 @@ function ShiftDetail({ id, canDesk, me }) {
   if (canDesk && editing) {
     return (
       <div className="ops-page">
-        <Link to="/shifts" className="ops-back">← Shifts</Link>
+        <Link to={backTo} className="ops-back">← Shifts</Link>
         <h1>Edit shift</h1>
         <EditShiftForm shift={shift} booked={active.length} onClose={() => setEditing(false)}
           onSaved={(r) => { setEditing(false); setEdited(r); refresh(); }} />
@@ -1290,7 +1188,7 @@ function ShiftDetail({ id, canDesk, me }) {
 
   return (
     <div className="ops-page">
-      <Link to="/shifts" className="ops-back">← Shifts</Link>
+      <Link to={backTo} className="ops-back">← Shifts</Link>
       <h1>{shift.title}</h1>
       {canDesk && (
         <div className="ops-actions ops-shift-tools">
