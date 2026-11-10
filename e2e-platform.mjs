@@ -90,7 +90,7 @@ const lena = (await api(page, '/actions/person.create', { name: 'Lena Example', 
 check('a person to find later', Boolean(lena?.id));
 
 // ── One name: base.win ──
-check('the desk says base.win, the campaign under it', (await page.innerText('.brand-name')).trim() === 'base.win' && /Imagine Surrey/.test(await page.innerText('.brand-org')));
+check('the desk: the campaign leads, base.win under it', (await page.innerText('.brand-name')).trim() === 'base.win' && /Imagine Surrey/.test(await page.innerText('.brand-org')));
 check('no app switcher', (await page.locator('.apps-btn, .apps-panel').count()) === 0);
 const SCREENS = ['/', '/map', '/people', '/shifts', '/money', '/signs', '/outreach/email', '/imagineu', '/lists', '/reports', '/data',
   '/settings', '/settings/teams', '/settings/permissions', '/settings/services', '/settings/campaign', '/rating-scale', '/profile', '/people/import'];

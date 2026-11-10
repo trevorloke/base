@@ -1,11 +1,15 @@
-// Two looks: Imagine Surrey's own (production) and base.win's generic one
-// (staging, any other campaign) — server/lib/brand.js. This script starts
-// two fresh in-memory servers: one STARBASE_BRAND=base named "Demo Campaign"
-// (as staging is), one Imagine Surrey (as production is, nothing set but
-// the name). On each: the page arrives marked before it paints, with that
-// brand's icon, colours and mark; the generic one says nothing of Imagine Surrey
-// anywhere a person can see (sign-in, Today, the menu, training, Settings);
-// Imagine Surrey's is as it always was. A manager renames the campaign in
+// Two brands a campaign can start from: Imagine Surrey's own (production)
+// and base.win's (staging, any other campaign) — server/lib/brand.js. Both
+// are presets through one rule (shared/brand-look.js), on the same look: a
+// light, neutral shell where the campaign's logo — or its initials — and one
+// colour do the branding. This script starts two fresh in-memory servers:
+// one STARBASE_BRAND=base named "Demo Campaign" (as staging is), one Imagine
+// Surrey (as production is, nothing set but the name). On each: the page
+// arrives marked before it paints, with that brand's icon and shades; the
+// campaign leads (logo, or initials and name) and base.win is the small line
+// under it; base.win's own says nothing of Imagine Surrey anywhere a person
+// can see (sign-in, Today, the menu, training, Settings); Imagine Surrey's
+// wears Surrey Navy and its wordmark. A manager renames the campaign in
 // Settings → Campaign, and the sign-in page then says the new name.
 // Screenshots of sign-in and Today, desktop and phone, light and dark, for
 // each.
@@ -47,7 +51,7 @@ const visibleText = (page) => page.evaluate(() => document.body.innerText);
 const tokens = (page) => page.evaluate(() => {
   const cs = getComputedStyle(document.documentElement);
   const v = (k) => cs.getPropertyValue(k).trim().toLowerCase();
-  return { brand: document.documentElement.dataset.brand || null, navy: v('--navy'), gold: v('--gold'), mark: v('--mark'), display: v('--font-display') };
+  return { brand: document.documentElement.dataset.brand || null, accent: v('--accent'), second: v('--second'), mark: v('--mark'), words: v('--accent-words'), page: v('--page'), side: v('--side'), gold: v('--gold'), display: v('--font-display') };
 });
 
 const signUp = async (page, base, campaign) => {
@@ -77,10 +81,10 @@ const shoot = async (base, who, scheme) => {
 const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging', STARBASE_ORG_NAME: 'Demo Campaign', STARBASE_OPEN_SIGNUP: '' });
 {
   const html = await (await fetch(`${BASE}/`)).text();
-  check('base: the page leaves marked data-brand="base", with the Base icon and slate bar colour',
-    /<html lang="en" data-brand="base">/.test(html) && /href="\/base-mark.svg"/.test(html) && /content="#1e293b"/.test(html) && !/star\.png/.test(html));
+  check('base: the page leaves marked data-brand="base", with the Base icon and a light bar colour (app.css holds its shades: no block)',
+    /<html lang="en" data-brand="base">/.test(html) && /href="\/base-mark.svg"/.test(html) && /name="theme-color" content="#ffffff"/.test(html) && !/<style id="brand">/.test(html) && !/star\.png/.test(html));
   const manifest = await (await fetch(`${BASE}/manifest.webmanifest`)).json();
-  check('base: installed, it is base.win in slate, with the generic look’s icons', manifest.name === 'base.win' && manifest.theme_color === '#1e293b' && manifest.icons.every((i) => i.src.includes('base-')), JSON.stringify(manifest).slice(0, 200));
+  check('base: installed, it is base.win on the page colour, with base.win’s icons', manifest.name === 'base.win' && manifest.theme_color === '#ffffff' && manifest.background_color === '#fafafb' && manifest.icons.every((i) => i.src.includes('base-')), JSON.stringify(manifest).slice(0, 200));
   for (const icon of ['/base-mark.svg', '/base-icon-192.png', '/base-icon-512.png', '/base-icon-maskable-512.png', '/base-touch-icon.png']) {
     check(`base: ${icon} is there`, (await fetch(`${BASE}${icon}`)).status === 200);
   }
@@ -93,13 +97,17 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   check('base: marked before the app’s script runs', early === 'base', early);
   await page.waitForLoadState('networkidle');
   const t = await tokens(page);
-  check('base: slate and indigo, Inter headlines — not Surrey Navy or Marigold', t.brand === 'base' && t.navy === '#1e293b' && t.mark === '#4f46e5' && /^["']?inter/.test(t.display), JSON.stringify(t));
+  check('base: indigo as the accent on a light sidebar, Inter headlines — not Surrey Navy or Marigold', t.brand === 'base' && t.accent === '#4f46e5' && t.mark === '#4f46e5' && t.side === '#f3f4f6' && t.gold !== '#ffc72c' && /^["']?inter/.test(t.display), JSON.stringify(t));
   const signin = await visibleText(page);
   check('base: sign-in names the demo campaign, nothing of Imagine Surrey', /Demo Campaign/.test(signin) && !/Imagine|Surrey/i.test(signin), signin.slice(0, 200));
   const authBg = await page.evaluate(() => getComputedStyle(document.documentElement).backgroundImage);
-  check('base: the sign-in backdrop is Base’s wash, not the rise', /linear-gradient\(160deg/.test(authBg), authBg.slice(0, 120));
-  const markBg = await page.evaluate(() => getComputedStyle(document.querySelector('.auth-page .brand'), '::before').backgroundImage);
-  check('base: the sign-in mark is Base’s', /base-mark\.svg/.test(markBg), markBg);
+  check('base: the sign-in backdrop is a soft wash of the tint on the page colour', /radial-gradient/.test(authBg) && !/linear-gradient/.test(authBg), authBg.slice(0, 120));
+  // No logo: the campaign's initials on the brand colour lead; base.win is the line at the foot.
+  const lead = await page.evaluate(() => {
+    const m = document.querySelector('.auth-head .brand-mono');
+    return { initials: m?.innerText.trim() || null, fill: m ? getComputedStyle(m).backgroundColor : null, imgs: document.querySelectorAll('.auth-page img').length, foot: document.querySelector('.auth-foot .brand')?.innerText.trim() || null };
+  });
+  check('base: sign-in leads with the campaign’s initials on the brand colour; base.win is the line at the foot', lead.initials === 'DC' && lead.fill === 'rgb(79, 70, 229)' && lead.imgs === 0 && lead.foot === 'base.win', JSON.stringify(lead));
   await page.screenshot({ path: `${SHOTS}/base-signin-desktop.png` });
 
   await signUp(page, BASE, 'Demo Campaign');
@@ -107,8 +115,8 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   await sleep(600);
   const today = await visibleText(page);
   check('base: Today and the menu say nothing of Imagine Surrey; training is "Training"', !/Imagine|Surrey/i.test(today) && /Training/.test(today), today.slice(0, 300));
-  const markSrc = await page.getAttribute('.brand-mark', 'src');
-  check('base: the sidebar’s mark is Base’s', /base-mark\.svg$/.test(markSrc || ''), markSrc);
+  const side = await page.evaluate(() => ({ initials: document.querySelector('.nav .brand-mono')?.innerText.trim() || null, imgs: document.querySelectorAll('.nav .brand img').length, org: document.querySelector('.nav .brand-org')?.innerText.trim() || null, sub: document.querySelector('.nav .brand-name')?.innerText.trim() || null, ground: getComputedStyle(document.querySelector('.nav')).backgroundColor }));
+  check('base: the sidebar is light and leads with the campaign — its initials and name, base.win under it', side.initials === 'DC' && side.imgs === 0 && side.org === 'Demo Campaign' && side.sub === 'base.win' && side.ground === 'rgb(243, 244, 246)', JSON.stringify(side));
   await page.screenshot({ path: `${SHOTS}/base-today-desktop.png` });
 
   await page.goto(`${BASE}/admin/imagineu`, { waitUntil: 'networkidle' });
@@ -151,6 +159,8 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   check('base, phone: the field app says nothing of Imagine Surrey; its tab reads Training', !/Imagine|Surrey/i.test(field) && /Training/.test(await pp.innerText('.tabbar')), field.slice(0, 200));
   const overflow = await pp.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check('base, phone: no sideways scroll', overflow <= 0, overflow);
+  const bars = await pp.evaluate(() => ({ top: getComputedStyle(document.querySelector('header.nav')).backgroundColor, tabs: getComputedStyle(document.querySelector('.tabbar')).backgroundColor, on: getComputedStyle(document.querySelector('.tabbar a.active')).color }));
+  check('base, phone: the top bar and the tab bar are light; the tab you are on is the brand colour', bars.top === 'rgb(255, 255, 255)' && bars.tabs === 'rgb(255, 255, 255)' && bars.on === 'rgb(79, 70, 229)', JSON.stringify(bars));
   await pp.screenshot({ path: `${SHOTS}/base-today-phone.png` });
   // Dark.
   const dark = await browser.newContext({ viewport: { width: 1360, height: 900 }, colorScheme: 'dark' });
@@ -159,7 +169,7 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   await dp.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
   await sleep(600);
   const dt = await tokens(dp);
-  check('base, dark: deep slate with light indigo', dt.mark === '#818cf8', JSON.stringify(dt));
+  check('base, dark: neutral dark grounds, the brand lightened where it is words', dt.page === '#0f1012' && dt.accent === '#4f46e5' && dt.words === '#8983ee', JSON.stringify(dt));
   await dp.screenshot({ path: `${SHOTS}/base-today-desktop-dark.png` });
   await shoot(BASE, 'base', 'dark');
   await shoot(BASE, 'base', 'light');
@@ -170,20 +180,26 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
 const IS = await start(PORT + 1, { STARBASE_ENV: 'production', STARBASE_ORG_NAME: 'Imagine Surrey' });
 {
   const html = await (await fetch(`${IS}/`)).text();
-  check('imagine-surrey: marked, with the star and Surrey Navy, as before', /data-brand="imagine-surrey"/.test(html) && /href="\/star.png"/.test(html) && /content="#003979"/.test(html));
+  check('imagine-surrey: marked, with the star as its icon, its shades in the page before the stylesheets (Surrey Navy the accent) and a light bar',
+    /data-brand="imagine-surrey"/.test(html) && /href="\/star.png"/.test(html) && /<style id="brand">:root\{[^<]*--accent:#003979;/.test(html)
+    && html.indexOf('<style id="brand">') < html.indexOf('<link rel="stylesheet"') && /name="theme-color" content="#ffffff"/.test(html));
   const manifest = await (await fetch(`${IS}/manifest.webmanifest`)).json();
-  check('imagine-surrey: the manifest as it was', manifest.theme_color === '#003979' && manifest.icons[0].src === '/icon-192.png');
+  check('imagine-surrey: the manifest has its icons, on the page colour', manifest.theme_color === '#ffffff' && manifest.background_color === '#fafafb' && manifest.icons[0].src === '/icon-192.png', JSON.stringify(manifest).slice(0, 200));
   const ctx = await browser.newContext({ viewport: { width: 1360, height: 900 } });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`[is] ${e.message}`));
   await page.goto(`${IS}/login`, { waitUntil: 'networkidle' });
   const t = await tokens(page);
-  check('imagine-surrey: Surrey Navy, Marigold, Barlow Condensed — unchanged', t.brand === 'imagine-surrey' && t.navy === '#003979' && t.gold === '#ffc72c' && /barlow/i.test(t.display), JSON.stringify(t));
+  check('imagine-surrey: Surrey Navy the accent, Marigold the second colour, Inter headlines', t.brand === 'imagine-surrey' && t.accent === '#003979' && t.mark === '#003979' && t.second === '#ffc72c' && t.gold === '#ffc72c' && /^["']?inter/.test(t.display), JSON.stringify(t));
+  const signinLogo = await page.evaluate(() => { const i = document.querySelector('.auth-head img.brand-mark'); return i ? { src: i.getAttribute('src'), alt: i.alt, drawn: i.complete && i.naturalWidth > 0 } : null; });
+  check('imagine-surrey: sign-in leads with its wordmark, named for people who cannot see it', /\/site-assets\/imagine-surrey\/logo\.webp$/.test(signinLogo?.src || '') && signinLogo.alt === 'Imagine Surrey' && signinLogo.drawn, JSON.stringify(signinLogo));
   await page.screenshot({ path: `${SHOTS}/is-signin-desktop.png` });
   await signUp(page, IS, 'Imagine Surrey');
   await page.goto(`${IS}/admin`, { waitUntil: 'networkidle' });
   await sleep(600);
-  check('imagine-surrey: training is ImagineU; the star in the sidebar', /ImagineU/.test(await visibleText(page)) && /star\.png$/.test(await page.getAttribute('.brand-mark', 'src') || ''));
+  const logo = await page.evaluate(() => { const i = document.querySelector('.nav img.brand-mark'); return i ? { src: i.getAttribute('src'), alt: i.alt, drawn: i.complete && i.naturalWidth > 0, sub: document.querySelector('.nav .brand-name')?.innerText.trim() } : null; });
+  check('imagine-surrey: training is ImagineU; its wordmark leads the sidebar (alt: the campaign’s name), base.win under it',
+    /ImagineU/.test(await visibleText(page)) && /\/site-assets\/imagine-surrey\/logo\.webp$/.test(logo?.src || '') && logo.alt === 'Imagine Surrey' && logo.drawn && logo.sub === 'base.win', JSON.stringify(logo));
   await page.screenshot({ path: `${SHOTS}/is-today-desktop.png` });
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await phone.addCookies(await ctx.cookies());
@@ -191,8 +207,21 @@ const IS = await start(PORT + 1, { STARBASE_ENV: 'production', STARBASE_ORG_NAME
   await pp.goto(`${IS}/`, { waitUntil: 'networkidle' });
   await sleep(600);
   await pp.screenshot({ path: `${SHOTS}/is-today-phone.png` });
+  // Dark: neutral grounds, navy lightened where it is words, and the wordmark's light version.
+  const dark = await browser.newContext({ viewport: { width: 1360, height: 900 }, colorScheme: 'dark' });
+  await dark.addCookies(await ctx.cookies());
+  const dp = await dark.newPage();
+  dp.on('pageerror', (e) => errors.push(`[is dark] ${e.message}`));
+  await dp.goto(`${IS}/admin`, { waitUntil: 'networkidle' });
+  await sleep(600);
+  const dt = await tokens(dp);
+  const darkLogo = await dp.evaluate(() => { const i = document.querySelector('.nav img.brand-mark'); return i ? { src: i.currentSrc, drawn: i.complete && i.naturalWidth > 0 } : null; });
+  check('imagine-surrey, dark: neutral dark grounds (not a blue mode), navy lightened where it is words, the light wordmark',
+    dt.page === '#0f1012' && dt.accent === '#003979' && dt.words !== '#003979' && /logo-light\.png$/.test(darkLogo?.src || '') && darkLogo.drawn, JSON.stringify({ ...dt, darkLogo }));
+  await dp.screenshot({ path: `${SHOTS}/is-today-desktop-dark.png` });
   await shoot(IS, 'is', 'light');
-  await ctx.close(); await phone.close();
+  await shoot(IS, 'is', 'dark');
+  await ctx.close(); await phone.close(); await dark.close();
 }
 
 check('no page errors', errors.length === 0, errors.join(' | '));
