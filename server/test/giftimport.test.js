@@ -471,6 +471,38 @@ test('the gift that crosses the limit is the later one, whatever order the file 
   assert.deepEqual((await giftsOf(ivy.id)).map((g) => [Number(g.amount_cents), g.flagged]), [[60000, false], [60000, true]]);
 });
 
+// A gift under the limit on its own record is added up with the records
+// that may be the same donor (ext/payments limits.js), whatever door it came
+// in by — one from a file too. The flag and the import's own marks sit side
+// by side on the gift, and a flag that changes later leaves the marks alone:
+// they are what keeps the file from coming in twice.
+test('an imported gift is added up with a record that may be the same donor; its flag coming and going never costs it its marks', async () => {
+  const jo1 = await person('Jo', 'Maybe', { postal: 'V3R 1A1', address: '5 Elm St' });
+  const jo2 = await person('Jo', 'Maybe', { email: mail('jo'), postal: 'V3R 1A1', address: '7 Oak St' });
+  const desk = ok(await mgr.action('gift.log', { person_id: jo1.id, amount_cents: 70000, date: `${yr}-02-10`, method: 'cheque' })).gift;
+  const rows = [row({ first: 'Jo', last: 'Maybe', email: mail('jo'), amount_cents: 60000, date: `${yr}-03-10`, source_id: 'GL-60', receipt: 'GL-R-0060' })];
+  const r = await bring(rows);
+  assert.deepEqual(r.results.map((x) => [x.state, x.person_id, x.flagged]), [['new', jo2.id, true]]);
+  let [g] = await giftsOf(jo2.id);
+  assert.match(g.flag_reason, /^Possibly the same donor as Jo Maybe \(same postal code\): together they are at \$1,300\.00 for \d{4} — over the \$1,000\.00 limit/);
+  assert.deepEqual(g.attrs.maybe_same_donor, [jo1.id]);
+  assert.deepEqual([g.attrs.source, g.attrs.import_ref, g.attrs.import_receipt], ['import', 'GL-60', 'GL-R-0060']);
+  assert.ok(ok(await treas.get('/api/brief')).flagged.some((f) => f.id === g.id), 'under Needs you, as any maybe is');
+  // The desk's gift leaves the books: together they are under the limit, and the flag goes…
+  ok(await mgr.action('gift.void', { id: desk.id }));
+  [g] = await giftsOf(jo2.id);
+  assert.equal(g.flagged, false);
+  // …with the import's marks untouched, so the file still adds nothing.
+  assert.deepEqual([g.attrs.source, g.attrs.import_ref, g.attrs.import_receipt, g.attrs.import_id], ['import', 'GL-60', 'GL-R-0060', r.id]);
+  assert.deepEqual(states(await bring(rows)), ['already']);
+  // Back on the books (the desk's Undo): flagged again, marks still there.
+  ok(await mgr.action('gift.restore', { id: desk.id }));
+  [g] = await giftsOf(jo2.id);
+  assert.equal(g.flagged, true);
+  assert.equal(g.attrs.import_key, 'id:GL-60');
+  assert.equal(await count('select count(*) as n from receipts r join gifts x on x.id = r.gift_id where x.person_id = $1', [jo2.id]), 0, 'and still no receipt for it');
+});
+
 // A ladder whose goal is "Gave" (ext/ladders): a gift brought in is on the
 // books today whenever it was given, so it counts by the day it was given —
 // one from long before they were put on the ladder ends nothing.
