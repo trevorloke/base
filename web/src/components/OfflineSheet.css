@@ -90,9 +90,10 @@
 .obx-hint { margin: 0; font-size: 14px; font-style: italic; color: var(--text-3); }
 
 /* Desks: the strip sits at the foot of the sidebar, so the sheet opens
-   upward from it, to the right — on the screen, never below it. */
+   beside it, at the foot of the window. Pinned to the window, not to the
+   strip: the sidebar scrolls, and so cuts off anything wider than itself. */
 @media (min-width: 721px) {
-  .nav .obx-sheet { top: auto; bottom: calc(100% + 4px); left: var(--s-3); right: auto; }
+  .nav .obx-sheet { position: fixed; top: auto; right: auto; bottom: var(--s-3); left: calc(var(--side-w) + var(--s-2)); }
 }
 
 /* Phones: a bottom sheet over the tab bar, in thumb reach. */
@@ -105,8 +106,8 @@
     border-width: 1px 0 0;
     border-radius: var(--r-card) var(--r-card) 0 0;
     padding-bottom: env(safe-area-inset-bottom);
-  box-shadow: var(--shadow-2);
-}
+    box-shadow: var(--shadow-2);
+  }
   .obx-foot .obx-send { width: 100%; }
 }
 
