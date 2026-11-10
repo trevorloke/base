@@ -9,13 +9,25 @@
 //                     the only numbers a result can ever land on. Everyone
 //                     on the list with the number is remembered (sent_at:
 //                     when the number went); the first by name is the one
-//                     whose name went and the one results are filed on
+//                     whose name went and the one results are filed on.
+//                     refused: CallHub's words for a number it would not
+//                     take — kept, so the desk can see whose it was
 //   callhub_dnc       the numbers sent to CallHub's do-not-call list, so
-//                     none is sent twice (category: 1 calls, 2 texts, 3 both;
-//                     entry: CallHub's own id for it, when it said — how a
-//                     number told for texts only is changed to calls too)
+//                     none is sent twice (category: 1 calls, 2 texts, 3 both,
+//                     0 never taken; entry: CallHub's own id for it, when it
+//                     said — how a number told for texts only is changed to
+//                     calls too, and how one is taken off again). refused:
+//                     what CallHub would not take (the category asked for),
+//                     with its words — not tried again until the next push
 //   callhub_results   every result as it came (raw), once: filed on a person
-//                     (contact_id) or kept unfiled for the desk
+//                     (contact_id) or kept unfiled for the desk. How it was
+//                     filed is remembered, so a change to the push's table
+//                     moves only what the change is about, and can be put
+//                     back: mapped (what the result counted as), tagged (it
+//                     put the do-not-call tag on the person), rated_over
+//                     (the rating the person had before this call's answer
+//                     rated them — { rating, at } — while it is the call
+//                     that rates them)
 export const sql = `
 create table if not exists callhub_pushes (
   id uuid primary key,
@@ -50,8 +62,10 @@ create table if not exists callhub_contacts (
   first_on_number boolean not null default true,
   position int not null default 0,
   sent_at timestamptz,
+  refused text,
   primary key (push_id, person_id)
 );
+alter table callhub_contacts add column if not exists refused text;
 create index if not exists callhub_contacts_phone_idx on callhub_contacts (phone);
 create index if not exists callhub_contacts_sent_idx on callhub_contacts (sent_at) where sent_at is not null;
 
@@ -60,9 +74,13 @@ create table if not exists callhub_dnc (
   phone text not null,
   category int not null,
   entry text,
+  refused int,
+  refused_note text,
   sent_at timestamptz not null default now(),
   primary key (workspace_id, phone)
 );
+alter table callhub_dnc add column if not exists refused int;
+alter table callhub_dnc add column if not exists refused_note text;
 
 create table if not exists callhub_results (
   id uuid primary key,
@@ -75,8 +93,14 @@ create table if not exists callhub_results (
   phone text,
   disposition text,
   raw jsonb not null,
+  mapped text,
+  tagged boolean not null default false,
+  rated_over jsonb,
   created_at timestamptz not null default now()
 );
+alter table callhub_results add column if not exists mapped text;
+alter table callhub_results add column if not exists tagged boolean not null default false;
+alter table callhub_results add column if not exists rated_over jsonb;
 create index if not exists callhub_results_key_idx on callhub_results (workspace_id, key, created_at desc);
 create index if not exists callhub_results_push_idx on callhub_results (push_id) where push_id is not null;
 `;

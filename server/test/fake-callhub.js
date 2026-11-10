@@ -24,6 +24,7 @@
 //   GET    /v1/dnc_lists/ · POST /v1/dnc_lists/
 //   POST   /v1/dnc_contacts/                   { dnc: <a list's url>, phone_number, category }
 //   PUT    /v1/dnc_contacts/:id/               the same, for an entry already there
+//   DELETE /v1/dnc_contacts/:id/               the number comes off the list
 // Lists are paged ten at a time (count, next, results), as CallHub's are.
 // For tests, in code or over HTTP (POST /__name with JSON):
 //   note(fields, { envelope: 'data' | 'flat', as: 'json' | 'form' })
@@ -38,6 +39,8 @@
 //   oneHookPerEvent(true | false) a second webhook for an event is refused (400)
 //   uniqueDnc(true | false)       a number already on a do-not-call list is
 //                                 refused a second entry there (400)
+//   rejectDnc(numbers | 'all' | false)  dnc_contacts won't take these numbers
+//                                 (400, { phone_number: ["Enter a valid phone number."] })
 //   calls · phonebooks · contacts · dnc · dncLists · webhooks · delivered
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
@@ -68,6 +71,7 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
   let rejected = null;     // a Set of numbers, or 'all'
   let onePerEvent = false;
   let dncOnce = false;
+  let dncRejected = null;  // a Set of numbers, or 'all'
 
   const urlOf = (kind, id) => `${base}/v1/${kind}/${id}/`;
   const paged = (rows, url) => {
@@ -126,12 +130,13 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
     reject: (numbers) => { rejected = numbers === 'all' ? 'all' : numbers ? new Set(numbers) : null; },
     oneHookPerEvent: (on) => { onePerEvent = Boolean(on); },
     uniqueDnc: (on) => { dncOnce = Boolean(on); },
+    rejectDnc: (numbers) => { dncRejected = numbers === 'all' ? 'all' : numbers ? new Set(numbers) : null; },
     // What left base.win for one phonebook: its contacts, in the order sent.
     sent: (phonebookId) => calls.filter((c) => c.method === 'POST' && c.path === `/v1/phonebooks/${phonebookId}/upsert_contact/` && c.status < 300).map((c) => c.params),
     upserts: () => calls.filter((c) => c.method === 'POST' && /\/upsert_contact\/$/.test(c.path)),
     reset: () => {
       calls.length = 0; delivered.length = 0; webhooks.length = 0; dncLists.length = 0; dnc.length = 0;
-      phonebooks.clear(); contacts.clear(); upserts = 0; throttled = null; refused = false; limit = 3600; rejected = null; onePerEvent = false; dncOnce = false;
+      phonebooks.clear(); contacts.clear(); upserts = 0; throttled = null; refused = false; limit = 3600; rejected = null; onePerEvent = false; dncOnce = false; dncRejected = null;
     },
   };
 
@@ -159,7 +164,8 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
           }
           const fn = { note: () => note(params.fields || {}, params.options || {}), throttle: () => api.throttle(params.after, params.seconds),
             dailyLimit: () => api.dailyLimit(params.limit), refuse: () => api.refuse(params.status), reject: () => api.reject(params.numbers),
-            oneHookPerEvent: () => api.oneHookPerEvent(params.on), uniqueDnc: () => api.uniqueDnc(params.on), reset: () => api.reset() }[name];
+            oneHookPerEvent: () => api.oneHookPerEvent(params.on), uniqueDnc: () => api.uniqueDnc(params.on), rejectDnc: () => api.rejectDnc(params.numbers),
+            reset: () => api.reset() }[name];
           if (!fn) return json({ detail: 'Not found.' }, 404);
           return json({ ok: true, result: await fn() ?? null });
         }
@@ -224,6 +230,7 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
           const list = dncLists.find((l) => urlOf('dnc_lists', l.id) === String(params.dnc || ''));
           if (!list) return json({ dnc: ['Invalid hyperlink - Object does not exist.'] }, 400);
           if (!String(params.phone_number || '').trim()) return json({ phone_number: ['This field is required.'] }, 400);
+          if (dncRejected === 'all' || dncRejected?.has(String(params.phone_number))) return json({ phone_number: ['Enter a valid phone number.'] }, 400);
           if (dncOnce && dnc.some((d) => d.list === list.name && d.phone_number === String(params.phone_number))) {
             return json({ phone_number: ['dnc contact with this phone number already exists.'] }, 400);
           }
@@ -235,8 +242,15 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
         if (m && req.method === 'PUT') {
           const row = dnc.find((d) => String(d.id) === m[1]);
           if (!row) return json({ detail: 'Not found.' }, 404);
+          if (dncRejected === 'all' || dncRejected?.has(row.phone_number)) return json({ phone_number: ['Enter a valid phone number.'] }, 400);
           if (params.category != null) row.category = Number(params.category);
           return json({ url: urlOf('dnc_contacts', row.id), dnc: params.dnc, phone_number: row.phone_number, category: row.category });
+        }
+        if (m && req.method === 'DELETE') {
+          const i = dnc.findIndex((d) => String(d.id) === m[1]);
+          if (i < 0) return json({ detail: 'Not found.' }, 404);
+          dnc.splice(i, 1);
+          return json(null, 204);
         }
         return json({ detail: 'Not found.' }, 404);
       } catch (e) {

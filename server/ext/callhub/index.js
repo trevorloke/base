@@ -17,7 +17,8 @@
 //                queues the callhub.dnc job)
 //   results.js   a delivery read every way it may come; the result →
 //                outcome table; one phone contact per result, once; a
-//                rating only from a survey answer the desk mapped
+//                rating only from a survey answer the desk mapped; a change
+//                to the table moves what is already in, and can be put back
 //   webhook.js   POST /hooks/callhub/<key> (public; also allowed on the
 //                campaign's website domain — ext/site/public.js)
 //   api.js       GET /api/callhub/preview, /api/callhub/pushes (desk)
@@ -31,13 +32,14 @@ import { registerIntegration } from '../integrations/index.js';
 import { callhubOn } from './callhub.js';
 import { DNC_JOB, onEvents, runDncJob } from './dnc.js';
 import { PUSH_JOB, runPushJob } from './push.js';
+import { REFILE_JOB, runRefileJob } from './results.js';
 
 export { sql } from './sql.js';
 export { actions } from './actions.js';
 export { api } from './api.js';
 export { publicRoutes } from './webhook.js';
 
-export const jobs = { [PUSH_JOB]: runPushJob, [DNC_JOB]: runDncJob };
+export const jobs = { [PUSH_JOB]: runPushJob, [DNC_JOB]: runDncJob, [REFILE_JOB]: runRefileJob };
 export const hooks = { events: onEvents };
 // In the full export: what was sent where, and every result as it came.
 export const exportTables = ['callhub_pushes', 'callhub_contacts', 'callhub_dnc', 'callhub_results'];

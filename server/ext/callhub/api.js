@@ -1,15 +1,21 @@
 // GET /callhub/preview?list=<id> | ?bank=<id>   desk: before sending — how many numbers would go, for how many
 //                                                people, how many are left out, and how many days CallHub needs
 // GET /callhub/pushes?list=<id> | ?bank=<id>    desk: what was sent from this list or bank, newest first — how far
-//                                                each is, and its results: how many came back, what each of
-//                                                CallHub's results counts as, and the survey answers seen
-// Never a phone number, a name or a key: counts and CallHub's own words only.
+//                                                each is (its clock times in words, in the campaign's own time),
+//                                                and its results: how many came back, what each of CallHub's
+//                                                results counts as, and the survey answers seen
+// Never a phone number or a key: counts, CallHub's own words, and — so the
+// desk can find and fix them — the names of people whose number CallHub
+// would not take.
 import { Hono } from 'hono';
 import { jobRunnerOn } from '../../lib/jobs.js';
+import { timeZone } from '../../lib/org.js';
+import { toLocal } from '../../lib/tzsql.js';
+import { e164, NO_CALL_TAG, NO_CONTACT_TAG } from '../texting/rules.js';
 import { callhubOn } from './callhub.js';
 import { audienceOf, notToCall, sourceOf } from './people.js';
 import { jobLive, pushOut } from './push.js';
-import { fieldsOf, norm, outcomeFor, surveyPairs } from './results.js';
+import { fieldsOf, norm, outcomeFor, REFILE_JOB, surveyPairs } from './results.js';
 
 export const api = new Hono();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -87,6 +93,48 @@ const resultsOf = async (db, ws, push) => {
   };
 };
 
+// A clock time in words, in the campaign's own time (the clock the
+// phonebook's name was stamped with): "3:42 pm" today, "Nov 9, 3:42 pm"
+// another day. `tz` is the query's parameter holding the time zone.
+const whenWords = (col, tz) => {
+  const local = toLocal(col, tz);
+  return `case when ${col} is null then null
+    when (${local})::date = (${toLocal('now()', tz)})::date then to_char(${local}, 'FMHH12:MI am')
+    else to_char(${local}, 'Mon FMDD, FMHH12:MI am') end`;
+};
+const WHO_SHOWN = 5;
+// Whose numbers CallHub would not take in this push (the first by name on each), a few of them.
+const refusedPeople = async (db, ws, pushId) => (await db.query(
+  `select p.id, p.name from callhub_contacts c join persons p on p.id = c.person_id and p.deleted_at is null
+    where c.push_id = $1 and c.workspace_id = $2 and c.refused is not null and c.first_on_number
+    order by lower(p.name), p.id limit ${WHO_SHOWN}`, [pushId, ws],
+)).rows.map((r) => ({ id: r.id, name: r.name }));
+
+// The campaign's do-not-call numbers CallHub would not take: how many, its
+// words for the last, and whose they are (people tagged on that number; a
+// number that only replied STOP has nobody). null when there are none.
+const notTaken = async (db, ws) => {
+  const rows = (await db.query(
+    `select phone, refused_note from callhub_dnc where workspace_id = $1 and refused is not null and (refused | category) <> category order by sent_at desc`, [ws],
+  )).rows;
+  if (!rows.length) return null;
+  const numbers = new Set(rows.map((r) => r.phone));
+  const tagged = (await db.query(
+    `select id, name, phone from persons where workspace_id = $1 and deleted_at is null and coalesce(phone, '') <> ''
+        and (tags @> $2::jsonb or tags @> $3::jsonb) order by lower(name), id`,
+    [ws, JSON.stringify([NO_CONTACT_TAG]), JSON.stringify([NO_CALL_TAG])],
+  )).rows;
+  return {
+    n: rows.length, note: rows[0].refused_note || null,
+    people: tagged.filter((p) => numbers.has(e164(p.phone))).slice(0, WHO_SHOWN).map((p) => ({ id: p.id, name: p.name })),
+  };
+};
+// Whether results already in are still being moved after a change to the push's table.
+const moving = async (db, ws, id) => (await db.query(
+  `select 1 from jobs where workspace_id = $1 and kind = $2 and status in ('pending', 'running') and payload @> $3::jsonb limit 1`,
+  [ws, REFILE_JOB, JSON.stringify({ push_id: id })],
+)).rows.length > 0;
+
 api.get('/callhub/pushes', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db'); const ws = ctx.workspaceId;
   const no = deskOnly(c);
@@ -94,16 +142,22 @@ api.get('/callhub/pushes', async (c) => {
   const from = sourceIn(c);
   if (!from) return c.json({ error: 'a list or a phone bank' }, 400);
   const rows = (await db.query(
-    `select p.*, u.name as by from callhub_pushes p left join users u on u.id = p.created_by
+    `select p.*, u.name as by, ${whenWords('p.sent_at', '$4::text')} as sent_words, ${whenWords('p.resume_at', '$4::text')} as resume_words
+       from callhub_pushes p left join users u on u.id = p.created_by
       where p.workspace_id = $1 and p.source_kind = $2 and p.source_id = $3 order by p.created_at desc limit 5`,
-    [ws, from.list_id ? 'list' : 'bank', from.list_id || from.bank_id],
+    [ws, from.list_id ? 'list' : 'bank', from.list_id || from.bank_id, timeZone()],
   )).rows;
   const pushes = [];
   for (const p of rows) {
     // Still going with no job left to do it: it stopped part-way (Carry on restarts it).
     const stalled = (p.status === 'queued' || p.status === 'sending') && jobRunnerOn() && !(await jobLive(db, ws, p.id));
-    pushes.push({ ...pushOut(p), by: p.by || null, stalled, ...(await resultsOf(db, ws, p)) });
+    pushes.push({
+      ...pushOut(p), by: p.by || null, stalled, sent_words: p.sent_words || null, resume_words: p.resume_words || null,
+      refused_people: p.refused ? await refusedPeople(db, ws, p.id) : [], moving: await moving(db, ws, p.id),
+      ...(await resultsOf(db, ws, p)),
+    });
   }
   // running: whether this server does background work at all (STARBASE_JOBS=off: a push waits).
-  return c.json({ on: callhubOn(), running: jobRunnerOn(), pushes });
+  // not_taken: the campaign's do-not-call numbers CallHub would not take.
+  return c.json({ on: callhubOn(), running: jobRunnerOn(), pushes, not_taken: await notTaken(db, ws) });
 });

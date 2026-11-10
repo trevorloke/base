@@ -18,15 +18,20 @@
 //                             CallHub really sends can be seen (Check counts
 //                             them)
 //   refile(tx, emit, ws, push)  the desk changed how a push's results are
-//                             read: what is already in follows.
+//                             read: what is already in follows — only what
+//                             the change is about, and all of it can be put
+//                             back (a do-not-call tag the table put on comes
+//                             off, a rating an answer gave is taken back).
+//                             A part at a time; runRefileJob does the rest.
 //
 // A rating only ever comes from a survey answer the desk mapped
 // (callhub.map); nothing here guesses one. Every result is kept as it came
 // (callhub_results.raw).
 import { createHash } from 'node:crypto';
 import { runAction, newId } from '../../lib/events.js';
+import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { e164, NO_CALL_TAG } from '../texting/rules.js';
-import { crossOff } from '../banks/actions.js';
+import { crossOff, recross } from '../banks/actions.js';
 import { loadScale, ratingRefusal } from '../scale/rules.js';
 import { tagsOf } from './people.js';
 
@@ -201,18 +206,80 @@ const matchOf = async (db, phone) => (await db.query(
     order by pu.created_at desc, c.first_on_number desc, c.position, c.person_id limit 1`, [phone],
 )).rows[0] || null;
 
+// → whether the tag was put on (someone tagged already is left as they are).
 const markNoCall = async (tx, emit, ws, personId) => {
   const p = (await tx.query('select tags from persons where id = $1 and workspace_id = $2 and deleted_at is null for update', [personId, ws])).rows[0];
-  if (!p || tagsOf(p).includes(NO_CALL_TAG)) return;
+  if (!p || tagsOf(p).includes(NO_CALL_TAG)) return false;
   const tags = [...tagsOf(p), NO_CALL_TAG];
   await tx.query('update persons set tags = $3, updated_at = now() where id = $1 and workspace_id = $2', [personId, ws, JSON.stringify(tags)]);
   emit('person', personId, 'update', { tags, source: 'callhub' });
+  return true;
+};
+// A result that put the tag on no longer counts as "do not call": the tag
+// comes off again — unless another of the person's results still says so
+// (that one holds the mark from now on). → whether the tag came off.
+const unmarkNoCall = async (tx, emit, ws, personId, resultId) => {
+  const other = (await tx.query(
+    `select id from callhub_results where workspace_id = $1 and person_id = $2 and id <> $3 and contact_id is not null and mapped = 'do_not_call' limit 1`,
+    [ws, personId, resultId],
+  )).rows[0];
+  if (other) { await tx.query('update callhub_results set tagged = true where id = $1', [other.id]); return false; }
+  const p = (await tx.query('select tags from persons where id = $1 and workspace_id = $2 and deleted_at is null for update', [personId, ws])).rows[0];
+  if (!p || !tagsOf(p).includes(NO_CALL_TAG)) return false;
+  const tags = tagsOf(p).filter((t) => t !== NO_CALL_TAG);
+  await tx.query('update persons set tags = $3, updated_at = now() where id = $1 and workspace_id = $2', [personId, ws, JSON.stringify(tags)]);
+  emit('person', personId, 'update', { tags, source: 'callhub' });
+  return true;
+};
+
+// The person's rating as their calls and everything else say now. The
+// newest call whose answer is mapped rates them — unless something else has
+// rated them since (a door knock stands). With no such call they are back
+// to what they were before any call rated them: that earlier rating is kept
+// on the result of the call that rates them now (rated_over), so a mapping
+// made by mistake can be taken back, whatever order things were mapped in.
+// → 'rated' | 'unrated' | null (nothing moved)
+const CALLS = `callhub_results r join contacts c on c.id = r.contact_id and c.workspace_id = r.workspace_id
+  where r.workspace_id = $1 and c.person_id = $2`;
+const settleRating = async (tx, ws, personId) => {
+  const p = (await tx.query(
+    `select rating, to_jsonb(rated_at) #>> '{}' as at from persons where id = $1 and workspace_id = $2 and deleted_at is null for update`, [personId, ws],
+  )).rows[0];
+  if (!p) return null;
+  // Is it a call that rates them now? Then what they were before is on its result.
+  const holder = p.at ? (await tx.query(
+    `select r.rated_over from ${CALLS} and r.rated_over is not null and c.created_at = $3::timestamptz limit 1`, [ws, personId, p.at],
+  )).rows[0] : null;
+  const before = holder ? parseJ(holder.rated_over, {}) : { rating: p.rating, at: p.at };
+  const base = { rating: before.rating || null, at: before.at || null };
+  const top = (await tx.query(
+    `select r.id, c.rating, to_jsonb(c.created_at) #>> '{}' as at from ${CALLS} and c.rating is not null
+        and ($3::timestamptz is null or c.created_at >= $3::timestamptz) order by c.created_at desc, c.id desc limit 1`, [ws, personId, base.at],
+  )).rows[0];
+  await tx.query(
+    `update callhub_results r set rated_over = null from contacts c
+      where c.id = r.contact_id and r.workspace_id = $1 and c.person_id = $2 and r.rated_over is not null and ($3::uuid is null or r.id <> $3)`,
+    [ws, personId, top?.id || null],
+  );
+  if (top) await tx.query('update callhub_results set rated_over = $2::jsonb where id = $1', [top.id, JSON.stringify(base)]);
+  const next = top ? { rating: top.rating, at: top.at } : base;
+  if (next.rating === (p.rating || null) && next.at === (p.at || null)) return null;
+  await tx.query(
+    'update persons set rating = $3, rated_at = $4::timestamptz, updated_at = now() where id = $1 and workspace_id = $2', [personId, ws, next.rating, next.at],
+  );
+  return top ? 'rated' : 'unrated';
 };
 
 // One result, once. → { filed: true } | { filed: false } | { duplicate: true }
 export const fileResult = async (db, { body, fields }) => {
-  const phone = e164(fields.contact) || e164(fields.mobile);
-  const match = phone ? await matchOf(db, phone) : null;
+  // The number: under `contact`, then under `mobile` — the first of them this campaign sent.
+  const given = [...new Set([e164(fields.contact), e164(fields.mobile)].filter(Boolean))];
+  let phone = given[0] || null;
+  let match = null;
+  for (const n of given) {
+    match = await matchOf(db, n);
+    if (match) { phone = n; break; }
+  }
   // A result for a number never sent is kept for the desk, with the campaign
   // that last sent anything; a server that never sent anything keeps nothing.
   const ws = match?.workspace_id
@@ -227,9 +294,10 @@ export const fileResult = async (db, { body, fields }) => {
     if (again) return { duplicate: true };
     const resultId = newId();
     const keep = (extra = {}) => tx.query(
-      `insert into callhub_results (id, workspace_id, key, via, push_id, person_id, contact_id, phone, disposition, raw)
-       values ($1, $2, $3, 'webhook', $4, $5, $6, $7, $8, $9)`,
-      [resultId, ws, key, extra.pushId || null, extra.personId || null, extra.contactId || null, phone, fields.disposition || null, JSON.stringify(body)],
+      `insert into callhub_results (id, workspace_id, key, via, push_id, person_id, contact_id, phone, disposition, raw, mapped, tagged)
+       values ($1, $2, $3, 'webhook', $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [resultId, ws, key, extra.pushId || null, extra.personId || null, extra.contactId || null, phone, fields.disposition || null, JSON.stringify(body),
+        extra.mapped || null, Boolean(extra.tagged)],
     );
     const push = match && (await tx.query('select id, outcomes, rating_map from callhub_pushes where id = $1 and workspace_id = $2', [match.push_id, ws])).rows[0];
     const person = push && (await tx.query('select id from persons where id = $1 and workspace_id = $2 and deleted_at is null', [match.person_id, ws])).rows[0];
@@ -255,15 +323,16 @@ export const fileResult = async (db, { body, fields }) => {
        values ($1, $2, $3, 'phone', $4, $5, $6, 'callhub', $7)`,
       [contactId, ws, person.id, outcome, rating, note, member?.id || null],
     );
-    if (rating) await tx.query('update persons set rating = $3, rated_at = now(), updated_at = now() where id = $1 and workspace_id = $2', [person.id, ws, rating]);
-    if (mapped === 'do_not_call') await markNoCall(tx, emit, ws, person.id);
+    const tagged = mapped === 'do_not_call' && await markNoCall(tx, emit, ws, person.id);
     // The call reached that line: everyone on the number is crossed off any
     // open phone bank, by the bank's own rule (a No answer comes back).
     const onNumber = (await tx.query('select distinct person_id from callhub_contacts where workspace_id = $1 and phone = $2', [ws, phone])).rows;
     for (const r of onNumber) {
       await crossOff(tx, { workspaceId: ws, user: { id: member?.id || null } }, { contact: { person_id: r.person_id, channel: 'phone', outcome }, anyCaller: true });
     }
-    await keep({ pushId: push.id, personId: person.id, contactId });
+    await keep({ pushId: push.id, personId: person.id, contactId, mapped, tagged });
+    // The call's mapped answer rates them now; what they were before is remembered.
+    if (rating) await settleRating(tx, ws, person.id);
     emit('contact', contactId, 'create', {
       id: contactId, person_id: person.id, channel: 'phone', outcome, ...(rating ? { rating } : {}), note, source: 'callhub',
       ...(member ? { created_by: member.id } : {}),
@@ -298,40 +367,93 @@ export const keepUnread = async (db, raw, type = '') => {
 };
 
 // The desk changed a push's outcome table or its support question: the
-// results already filed from it follow — the contact's outcome, and its
-// rating where the answer is mapped now. A person's own rating moves only
-// when nothing newer has rated them (a door knock since stands), and a
-// rating is never taken away. → how many contacts changed.
+// results already filed from it follow. Each result remembers how it was
+// filed (mapped, tagged, the contact's own outcome and rating), so only the
+// ones the change is about are touched, however often the table is saved:
+//   · the contact's outcome, and an open phone bank's number with it
+//   · "do not call": the people of a row that newly counts as it are tagged;
+//     a row that stops counting as it takes its tag off again
+//   · the rating: given where the answer is mapped now, taken back where it
+//     no longer is (settleRating)
+// At most `refileBatch` results in one write, so a push with thousands of
+// results never holds the campaign's other writes up: more says there is a
+// rest (runRefileJob does it).
+// → { changed, tagged, untagged, rated, unrated, more }
+let refileBatch = 500;
+export const _setRefileBatchForTest = (n) => { refileBatch = n; };
+export const REFILE_JOB = 'callhub.refile';
+
 export const refile = async (tx, emit, ws, push) => {
   const own = parseJ(push.outcomes, {});
   const map = parseJ(push.rating_map, null);
   const scale = map ? await loadScale(tx, ws) : null;
+  // The answers are in the raw result: read only when a rating may move.
+  const rates = Boolean(map) || (await tx.query(
+    `select 1 from callhub_results r join contacts c on c.id = r.contact_id and c.workspace_id = r.workspace_id
+      where r.workspace_id = $1 and r.push_id = $2 and c.rating is not null limit 1`, [ws, push.id],
+  )).rows.length > 0;
   const rows = (await tx.query(
-    `select r.disposition, r.raw, c.id, c.person_id, c.outcome, c.rating, c.created_at
+    `select r.id as result_id, r.disposition, r.phone, r.mapped, r.tagged, ${rates ? 'r.raw,' : ''}
+            c.id, c.person_id, c.outcome, c.rating, c.created_by, to_jsonb(c.created_at) #>> '{}' as at
        from callhub_results r join contacts c on c.id = r.contact_id and c.workspace_id = r.workspace_id
       where r.workspace_id = $1 and r.push_id = $2 order by c.created_at, c.id`, [ws, push.id],
   )).rows;
-  let changed = 0;
+  const tally = { changed: 0, tagged: 0, untagged: 0, rated: 0, unrated: 0, more: false };
+  const rerate = new Set();
+  let done = 0;
   for (const c of rows) {
+    const was = c.mapped || c.outcome;
     const mapped = outcomeFor(c.disposition, own);
     const outcome = contactOutcome(mapped);
     let rating = map ? ratingFor(surveyPairs(fieldsOf(parseJ(c.raw, {})).surveys), map) : null;
     if (rating && ratingRefusal(scale, rating)) rating = null;
     const patch = {};
     if (outcome !== c.outcome) patch.outcome = outcome;
-    if (rating && rating !== c.rating) patch.rating = rating;
-    if (mapped === 'do_not_call') await markNoCall(tx, emit, ws, c.person_id);
-    if (!Object.keys(patch).length) continue;
-    await tx.query('update contacts set outcome = $3, rating = $4 where id = $1 and workspace_id = $2', [c.id, ws, outcome, patch.rating || c.rating]);
-    if (patch.rating) {
-      await tx.query(
-        `update persons set rating = $3, rated_at = $4, updated_at = now()
-          where id = $1 and workspace_id = $2 and deleted_at is null and (rated_at is null or rated_at <= $4)`,
-        [c.person_id, ws, patch.rating, c.created_at],
-      );
+    if ((rating || null) !== (c.rating || null)) patch.rating = rating || null;
+    const moved = Object.keys(patch).length > 0;
+    if (!moved && mapped === was) continue;
+    if (done >= refileBatch) { tally.more = true; break; }
+    done += 1;
+    if (moved) {
+      await tx.query('update contacts set outcome = $3, rating = $4 where id = $1 and workspace_id = $2', [c.id, ws, outcome, rating || null]);
+      emit('contact', c.id, 'update', { id: c.id, person_id: c.person_id, ...patch, source: 'callhub' });
+      tally.changed += 1;
     }
-    emit('contact', c.id, 'update', { id: c.id, person_id: c.person_id, ...patch, source: 'callhub' });
-    changed += 1;
+    let tagged = Boolean(c.tagged);
+    if (mapped === 'do_not_call' && was !== 'do_not_call') {
+      tagged = await markNoCall(tx, emit, ws, c.person_id);
+      if (tagged) tally.tagged += 1;
+    } else if (was === 'do_not_call' && mapped !== 'do_not_call') {
+      if (tagged && await unmarkNoCall(tx, emit, ws, c.person_id, c.result_id)) tally.untagged += 1;
+      tagged = false;
+    }
+    await tx.query('update callhub_results set mapped = $2, tagged = $3 where id = $1', [c.result_id, mapped, tagged]);
+    if ('rating' in patch) rerate.add(c.person_id);
+    if (patch.outcome && c.phone) {
+      // The numbers that call settled in an open phone bank follow.
+      const onNumber = (await tx.query('select distinct person_id from callhub_contacts where workspace_id = $1 and phone = $2', [ws, c.phone])).rows;
+      await recross(tx, ws, { personIds: onNumber.map((r) => r.person_id), at: c.at, was: c.outcome, now: outcome, by: c.created_by || null });
+    }
   }
-  return changed;
+  for (const personId of rerate) {
+    const how = await settleRating(tx, ws, personId);
+    if (how) tally[how] += 1;
+  }
+  return tally;
+};
+
+// The rest of a big push's results, a part at a time, as the person who
+// changed the table (the job's payload says who).
+export const refileRest = (tx, ws, pushId, by) => enqueueJob(tx, { workspaceId: ws, kind: REFILE_JOB, payload: { push_id: pushId, by: by || null } });
+export const runRefileJob = async (db, job) => {
+  const ws = job.workspace_id;
+  const { push_id: id, by = null } = job.payload || {};
+  const { result } = await runAction(db, { workspaceId: ws, actorId: by, action: 'callhub.map' }, async (tx, emit) => {
+    const push = (await tx.query('select * from callhub_pushes where id = $1 and workspace_id = $2 for update', [id, ws])).rows[0];
+    if (!push) return { more: false };
+    const t = await refile(tx, emit, ws, push);
+    if (t.more) await refileRest(tx, ws, id, by);
+    return t;
+  });
+  if (result?.more) runJobsSoon();
 };

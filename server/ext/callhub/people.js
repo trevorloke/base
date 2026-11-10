@@ -38,7 +38,7 @@ export const sourceOf = async (q, ctx, { list_id: listId = null, bank_id: bankId
   if (!UUID.test(String(bankId || ''))) throw httpError(404, 'phone bank not found');
   const bank = (await q.query('select id, name, closed_at from call_banks where id = $1 and workspace_id = $2 and deleted_at is null', [bankId, ws])).rows[0];
   if (!bank) throw httpError(404, 'phone bank not found');
-  if (bank.closed_at) throw httpError(409, 'this phone bank is closed');
+  if (bank.closed_at) throw httpError(409, 'This phone bank is closed — reopen it to send it');
   const { rows } = await q.query(
     `select ${COLS} from call_bank_numbers n join persons p on p.id = n.person_id
       where n.bank_id = $1 and n.workspace_id = $2 and n.done_at is null and p.deleted_at is null

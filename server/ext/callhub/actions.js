@@ -7,7 +7,10 @@
 //                              (the same question again: these answers join the ones already said,
 //                              null takes one away; another question starts afresh)
 //                              or null (no question rates anyone)
-//                  What is already in follows (results.js refile).
+//                  What is already in follows (results.js refile): only what the change is about,
+//                  and putting a row back undoes it. → { push, changed, tagged, untagged, rated,
+//                  unrated, more } — people newly tagged do-not-call or no longer, people an answer
+//                  now rates or no longer; more: a big push's rest follows in the background.
 // callhub.connect  {}                       managers: give CallHub the address results come back to
 import { z } from 'zod';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
@@ -15,7 +18,7 @@ import { httpError } from '../../actions/util.js';
 import { runJobsSoon } from '../../lib/jobs.js';
 import { loadScale, ratingRefusal } from '../scale/rules.js';
 import { preparePush, pushOut, resumePush, startPush } from './push.js';
-import { MAP_OUTCOMES, norm, refile } from './results.js';
+import { MAP_OUTCOMES, norm, refile, refileRest } from './results.js';
 import { connect } from './service.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -83,10 +86,12 @@ export const actions = {
         'update callhub_pushes set outcomes = $3::jsonb, rating_map = $4::jsonb where id = $1 and workspace_id = $2 returning *',
         [push.id, ws, JSON.stringify(outcomes), rating ? JSON.stringify(rating) : null],
       )).rows[0];
-      const changed = await refile(tx, emit, ws, row);
-      emit('callhub_push', push.id, 'update', { corrections: Object.keys(outcomes).length, rating_question: rating?.label || null, refiled: changed });
-      return { push: pushOut(row), changed };
+      const moved = await refile(tx, emit, ws, row);
+      if (moved.more) await refileRest(tx, ws, push.id, ctx.user.id);
+      emit('callhub_push', push.id, 'update', { corrections: Object.keys(outcomes).length, rating_question: rating?.label || null, refiled: moved.changed });
+      return { push: pushOut(row), ...moved };
     },
+    after: startNow,
   },
 
   'callhub.connect': {

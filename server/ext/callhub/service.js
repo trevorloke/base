@@ -6,6 +6,7 @@
 // That address ends in a key made from the API key (callhub.js): it is
 // given to CallHub and never shown, logged or put in an answer.
 import { callhub, callhubOn, CallHubError, hookUrl, HOOK_PREFIX, idOf, listAll } from './callhub.js';
+import { heldTooLong } from './dnc.js';
 
 const NEEDS = ['CALLHUB_API_KEY'];
 const EVENT = 'cc.notes'; // CallHub's webhook for a call-center agent saving a call's result
@@ -67,9 +68,12 @@ export const checkCallHub = async (db, ws, base) => {
        from callhub_results where workspace_id = $1`, [ws],
   )).rows[0];
   const results = n.total - n.unread;
+  // held: numbers still on CallHub's do-not-call list that nobody here
+  // blocks any more, and that base.win could not take off itself.
+  const held = await heldTooLong(db, ws);
   return {
     ok: true,
-    said: `The key works · results come back here${results ? ` · ${plural(results, 'result')} so far` : ''}${n.unfiled ? ` · ${n.unfiled.toLocaleString('en-CA')} for numbers base.win never sent` : ''}${n.unread ? ` · ${n.unread.toLocaleString('en-CA')} base.win couldn’t read (kept as they came)` : ''}`,
+    said: `The key works · results come back here${results ? ` · ${plural(results, 'result')} so far` : ''}${n.unfiled ? ` · ${n.unfiled.toLocaleString('en-CA')} for numbers base.win never sent` : ''}${n.unread ? ` · ${n.unread.toLocaleString('en-CA')} base.win couldn’t read (kept as they came)` : ''}${held ? ` · CallHub’s do-not-call list still has ${plural(held, 'number')} nobody here blocks now — take ${held === 1 ? 'it' : 'them'} off in CallHub` : ''}`,
   };
 };
 

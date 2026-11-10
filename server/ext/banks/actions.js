@@ -223,3 +223,34 @@ export const crossOff = async (tx, ctx, { contact, reply, anyCaller = false }) =
     }
   }
 };
+
+// A call made outside base.win was read differently after the fact (the
+// desk corrected what one of the dialer's results counts as, ext/callhub):
+// the numbers that very call settled follow, by the same rule. `at` is when
+// the call was filed — a number is touched only if that call crossed it off
+// (done at that moment) or sent it back (due the bank's hours after it).
+export const recross = async (tx, ws, { personIds, at, was, now, by = null }) => {
+  if (!personIds?.length || was === now) return;
+  const rows = (await tx.query(
+    `select n.bank_id, n.person_id, n.tries, n.done_at, b.retry_hours, b.max_tries from call_bank_numbers n
+       join call_banks b on b.id = n.bank_id and b.workspace_id = $1 and b.deleted_at is null
+      where n.person_id = any($2::uuid[])
+        and ((n.done_at = $3::timestamptz and n.outcome = $4)
+          or (n.done_at is null and $4 = 'no_answer' and n.next_at = $3::timestamptz + make_interval(hours => b.retry_hours)))`,
+    [ws, personIds, at, was],
+  )).rows;
+  for (const r of rows) {
+    const comesBack = now === 'no_answer' && Number(r.retry_hours) > 0 && Number(r.tries) < Number(r.max_tries);
+    if (comesBack) {
+      await tx.query(
+        `update call_bank_numbers set done_at = null, done_by = null, outcome = null, next_at = $3::timestamptz + make_interval(hours => $4::int)
+          where bank_id = $1 and person_id = $2`, [r.bank_id, r.person_id, at, Number(r.retry_hours)],
+      );
+    } else {
+      await tx.query(
+        'update call_bank_numbers set done_at = $3::timestamptz, done_by = coalesce(done_by, $4), outcome = $5 where bank_id = $1 and person_id = $2',
+        [r.bank_id, r.person_id, at, by, now],
+      );
+    }
+  }
+};
