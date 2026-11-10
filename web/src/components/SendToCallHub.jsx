@@ -4,10 +4,11 @@
 // otherwise. A tap asks first — how many numbers go, how many people are
 // left out — then the sending happens in the background and the line under
 // it says how far it is ("Sending · 850 of 2,000", "Sent", or "Stopped:
-// CallHub said … · Carry on"). Once calls are made, how many results came
-// back; under "What each result counts as", CallHub's own results with the
-// outcome each is filed as (filled in by pattern, yours to change), and the
-// survey question whose answers rate people — none until someone picks it.
+// CallHub said … · Carry on"), and how many numbers CallHub would not take,
+// in its words. Once calls are made, how many results came back; under
+// "What each result counts as", CallHub's own results with the outcome each
+// is filed as (filled in by pattern, yours to change), and the survey
+// question whose answers rate people — none until someone picks it.
 import { useId, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { offeredCodes, ratingText } from '@starbase/shared/scale';
@@ -20,7 +21,10 @@ import './send-to-callhub.css';
 
 const num = (n) => (Number(n) || 0).toLocaleString('en-CA');
 const plural = (n, one, many = `${one}s`) => (Number(n) === 1 ? one : many);
-const errorText = (e) => (e instanceof ApiError ? e.message : 'No signal — try again');
+const errorText = (e) => e?.message || 'No answer — check your signal';
+// A refusal with its reason (a closed phone bank, a list too long to send):
+// said as it is. Anything else is "Unavailable — Try again".
+const refusal = (e) => (e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 401 ? e.message : null);
 // The outcomes a result can be filed as, in the Calls screen's own words.
 const OUTCOMES = [
   ['contacted', 'Talked'], ['no_answer', 'No answer'], ['left_message', 'Left message'], ['inaccessible', 'Wrong number'],
@@ -117,23 +121,24 @@ function Push({ p, running, online, onChanged }) {
   };
   const stopped = p.status === 'failed' || p.stalled;
   const pct = p.total ? Math.min(100, Math.round((p.sent / p.total) * 100)) : 0;
-  let line;
-  if (stopped) line = <><strong>Stopped</strong>: {p.note || 'it stopped part-way'}</>;
-  else if (p.status === 'sent') line = <><strong>Sent</strong> · {num(p.sent)} {plural(p.sent, 'number')}{p.sent_at ? ` · ${whenWord(p.sent_at)}` : ''}</>;
-  else if (p.status === 'queued') line = <><strong>Waiting</strong> · {running ? 'starting…' : 'background work is off on this server'}</>;
+  // said: announced when it changes (the state, and why it waits or
+  // stopped); rest: the count on the way, read but not announced each time.
+  let said; let rest = null;
+  if (stopped) said = <><strong>Stopped</strong>: {p.note || 'it stopped part-way'}</>;
+  else if (p.status === 'sent') said = <><strong>Sent</strong> · {num(p.sent)} {plural(p.sent, 'number')}{p.sent_at ? ` · ${whenWord(p.sent_at)}` : ''}</>;
+  else if (p.status === 'queued') said = <><strong>Waiting</strong> · {running ? 'starting…' : 'background work is off on this server'}</>;
   else {
-    line = (
-      <><strong>Sending</strong> · {num(p.sent)} of {num(p.total)}
-        {p.note ? ` · ${p.note}` : ''}{p.resume_at ? ` · carries on ${whenWord(p.resume_at)}` : ''}</>
-    );
+    said = <><strong>Sending</strong>{p.note ? ` · ${p.note}` : ''}{p.resume_at ? ` · carries on ${whenWord(p.resume_at)}` : ''}</>;
+    rest = <> · {num(p.sent)} of {num(p.total)}</>;
   }
   return (
     <li className="ch-push" data-status={stopped ? 'stopped' : p.status}>
-      <p className="ch-line ch-status" role="status" aria-live="polite">{line}</p>
+      <p className="ch-line ch-status"><span role="status" aria-live="polite">{said}</span>{rest}</p>
       {active(p) && !stopped && <span className="ch-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>}
       {stopped && <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={carryOn}>{busy ? 'Starting…' : 'Carry on'}</button>}
       {error && <p className="error" role="alert">{error}</p>}
       <p className="ops-meta ch-book">Phonebook in CallHub: “{p.name}”{p.skipped ? ` · ${num(p.skipped)} left out` : ''}{p.by ? ` · sent by ${p.by}` : ''}</p>
+      {p.refused > 0 && <p className="ops-meta">CallHub wouldn’t take {num(p.refused)} {plural(p.refused, 'number')}{p.refused_note ? `: “${p.refused_note}”` : ''}</p>}
       {p.results > 0 ? (
         <>
           <p className="ch-line"><strong>{num(p.results)}</strong> {plural(p.results, 'result')} back</p>
@@ -188,21 +193,25 @@ export default function SendToCallHub({ kind, id }) {
     setBusy(false);
   };
   const list = pushes.data?.pushes || [];
-  const going = list.some((p) => active(p) && !p.stalled);
+  // One at a time: while one is on its way (or stopped part-way, with its
+  // own Carry on), there is nothing new to send.
+  const going = list.some(active);
   const pv = preview.data;
+  const why = preview.isError ? refusal(preview.error) : null;
   return (
     <section className="ch" aria-label="CallHub">
       <div className="ch-head">
         <h2 className="ch-title">CallHub</h2>
-        {!asking && (
-          <button type="button" className="btn ops-tap" disabled={!online || going} onClick={() => { setError(null); setAsking(true); }}>
+        {!asking && !going && (
+          <button type="button" className="btn ops-tap" disabled={!online} onClick={() => { setError(null); setAsking(true); }}>
             {list.length ? 'Send again' : 'Send to CallHub'}
           </button>
         )}
       </div>
       {asking && (
         <div className="ch-ask">
-          {preview.isError ? <Unavailable onRetry={() => preview.refetch()} />
+          {why ? <p className="ch-line" role="status">{why}</p>
+            : preview.isError ? <Unavailable onRetry={() => preview.refetch()} />
             : !pv ? <p className="ch-line" role="status">Counting…</p> : (
               <>
                 <p className="ch-line" role="status">

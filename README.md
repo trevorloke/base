@@ -316,11 +316,26 @@ than a week after they came off is refused. Contacts are door, phone, text or
   card says *On file*), the desk may change any.
 - **Phone banks** (People → More, or Calls → Phone banks): a named list of
   numbers to call, made from the people list (a rating, a tag, a search —
-  everyone with a phone who matches, never do-not-contact), with a script.
+  everyone with a phone who matches, never do-not-contact or do-not-call),
+  with a script.
   The desk hands numbers to a caller, or splits them across a team, takes
   unfinished ones back, closes the bank. A caller's *Your call lists* (on
   Calls) opens each bank on the Calls card, script and all; a phone call
   they log crosses the number off, *Skip* crosses one off without a call.
+- **Do not call**: the tag `do-not-call` (among the suggested tags) is
+  someone who asked not to be phoned. They are never put in a phone bank,
+  left off the Calls list for a call, never rung through the campaign's
+  number and never sent to the dialer; texts, email and the door are
+  untouched (`do-not-contact` stops all of them).
+- **A dialer for a room of callers (CallHub)**: with CallHub connected, a
+  list's page and a phone bank's page have **Send to CallHub** — the phone
+  numbers, names and cities go to a CallHub phonebook in the background
+  ("Sending · 850 of 2,000"), and every call's result comes back onto the
+  person as a phone call, crossing the number off an open phone bank. What
+  each of CallHub's results counts as is filled in by pattern and yours to
+  correct; a rating comes only from a survey answer someone mapped
+  (`server/ext/callhub`; INTEGRATIONS.md, *Phone dialer — CallHub*, says
+  how to set it up and what is not yet confirmed against a real account).
 - **ImagineU** (a tab for every role): the campaign's training. **Courses**
   of **modules**; a module opens with words (Markdown) and a file or link —
   a note, a document (PDF, Word, PowerPoint, Excel), a video (a YouTube or
@@ -425,13 +440,17 @@ no login:
 - `/r/:token` — a donation receipt
 - `POST /stripe/webhook` — Stripe's payment events, signed (INTEGRATIONS.md,
   *Online payments — Stripe*)
+- `POST /hooks/callhub/<key>` — each call's result from CallHub's dialer;
+  the address's last part, made from the API key, is its lock
+  (INTEGRATIONS.md, *Phone dialer — CallHub*)
 - `/learn/:slug` (and `/learn-files/:id`) — ImagineU's public lessons
 - `/media/:id`, `/o/…`, `/c/…` — pictures in emails, and the open and click
   counts
 - `/api/public/twilio/…` — Twilio's webhooks, signed (INTEGRATIONS.md)
 
-The pictures, the three unsubscribe links and the Stripe and Twilio webhooks
-also answer on the campaign's website domain (SITE.md); the others don't.
+The pictures, the three unsubscribe links and the Stripe, Twilio and CallHub
+webhooks also answer on the campaign's website domain (SITE.md); the others
+don't.
 
 A gift is logged at the desk (Donations → Log a gift) to one slate — city
 council or school board (`shared/canvass.js` SLATES) — and the annual limit
@@ -537,7 +556,10 @@ and texting use `tel:` / `sms:` links (the phone's own dialer and messages)
 with one-tap logging; with it, texts and calls go through the campaign's
 number — from Calls, the profile and the door card alike, and shift notices
 keep the same opt-outs and quiet hours (setup and the compliance notes are
-in TESTING.md).
+in TESTING.md). A dialer is optional too: `CALLHUB_API_KEY` (and
+`CALLHUB_API_BASE` when the account's API is on another host) turns on
+*Send to CallHub*; without it the button is not there and nothing else
+changes.
 
 ## Map tiles and offline field mode
 

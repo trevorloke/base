@@ -300,6 +300,17 @@ one tap away under **More**.
   the number is on the Twilio account and its replies come here; Address
   lookup, the map background, the public address and the database answer
   too. *Coming in* lists the address to give Twilio. Staff can't open it.
+- **Phone dialer (CallHub)** (optional — `CALLHUB_API_KEY`; INTEGRATIONS.md)
+  — Settings → Services: **Check** says the key works but CallHub isn't
+  sending results here yet; **Connect**, then **Check** passes. On a list
+  of your own team's numbers (tag one *do-not-call* first): **Send to
+  CallHub** says how many numbers go and how many are left out, then
+  *Sending · 3 of 9*, then *Sent*. In CallHub, call from the phonebook it
+  made and save a result: the call is on that person's history, and the
+  list says *1 result back*; *What each result counts as* opens the table.
+  It has not been run against a real CallHub account yet — this is that
+  test. `node e2e-callhub.mjs` (PORT, SHOTS) runs all of it in a browser
+  against a stand-in CallHub.
 - **Website keys** (Settings → Services) — **Make a key**: it's shown once
   to copy. Send a person in with it as the website would (INTEGRATIONS.md
   has a `curl` line): a new person appears, tagged with the source; with
@@ -794,3 +805,8 @@ Built conservatively; the campaign should confirm these rules with counsel
   them, shift notices included (*Text not sent — quiet hours*). Shift
   notices are never texted to an opted-out or do-not-text number.
 - Calls show the campaign's number, never the caller's own.
+- Someone tagged *do-not-call* is never put in a phone bank, never rung
+  through the campaign's number and never sent to CallHub's dialer; a
+  CallHub result that reads "do not call" tags them. The CRTC expects a
+  campaign to keep and honour its own do-not-call list — **confirm what a
+  dialer needs with counsel** before a calling night.
