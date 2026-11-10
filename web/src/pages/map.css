@@ -974,6 +974,9 @@
 /* A map request out for more than a moment: "Loading…" beside the count
    (what was drawn stays until the answer is in). */
 .map-filter-btn__busy { font-size: 12px; font-weight: 500; color: var(--text-3); white-space: nowrap; }
+/* Nothing to count from this far out (signs, votes): no empty chip beside
+   the filter's name — the note along the bottom says to zoom in. */
+.map-filter-btn__n:empty { display: none; }
 /* The part of the map on screen was asked for and not answered. */
 .map-chip.map-retry { color: var(--danger); }
 

@@ -156,7 +156,16 @@ const inkAt = (pts) => page.evaluate((points) => points.map(([x, y]) => {
   }
   return most;
 }), pts);
-const zoomBy = async (sel, times = 1) => { for (let i = 0; i < times; i += 1) { await page.click(sel); await sleep(450); } };
+// (A tap on + or − while the last zoom is still moving is ignored: each one
+// waits for the map to land on its new zoom.)
+const zoomBy = async (sel, times = 1) => {
+  for (let i = 0; i < times; i += 1) {
+    const was = (await mapState())?.zoom;
+    await page.click(sel);
+    await until((s) => s.zoom !== was, 4000);
+    await sleep(200);
+  }
+};
 
 let failed = null;
 try {
@@ -239,13 +248,19 @@ try {
   await page.click('.map-fsheet .map-fopt:has-text("Strong yes (1)")');
   st = await settled((s) => /Strong yes/.test(s.pill || '') && s.doors === 2);
   check('“Strong yes (1)”: the server keeps the dots to those doors', st.doors === 2 && numberIn(st.pill) === 2, JSON.stringify({ doors: st.doors, pill: st.pill }));
+  // What dots can’t say is said in a sentence, with no empty count beside the filter’s name.
+  await page.click('.map-filter-btn');
+  await page.click('.map-fsheet .map-fopt:has-text("Has a sign")');
+  st = await settled((s) => /Has a sign/.test(s.pill || ''));
+  const chip = await page.evaluate(() => Math.round(document.querySelector('.map-filter-btn__n')?.getBoundingClientRect().width || 0));
+  check('“Has a sign” from this far: “Zoom in to see signs”, and no empty count', st.note === 'Zoom in to see signs' && chip === 0, JSON.stringify({ note: st.note, pill: st.pill, chip }));
   await page.click('.map-filter-btn');
   await page.click('.map-fsheet .map-fopt[data-band="all"]');
   await settled((s) => /All/.test(s.pill || ''));
   // Further out: dots while they fit, then patches again — and it says why.
   await zoomBy('.leaflet-control-zoom-out', 2);
   st = await settled((s) => s.zoom <= 15.5);
-  check('zoom 15: still every door a dot', st.view === 'dots' && st.doors > 60, JSON.stringify({ zoom: st.zoom, view: st.view, doors: st.doors, pill: st.pill }));
+  check('zoom 15: still every door a dot', st.zoom === 15 && st.view === 'dots' && st.doors > 60, JSON.stringify({ zoom: st.zoom, view: st.view, doors: st.doors, pill: st.pill }));
   await zoomBy('.leaflet-control-zoom-out', 1);
   st = await settled((s) => s.view === 'density');
   await page.screenshot({ path: `${SHOTS}/3-too-many-doors-for-dots.png` });

@@ -70,6 +70,9 @@ const VOTED_FILTERS = [
   { key: 'voted', label: 'Voted' },
 ];
 const FILTER_LABEL = Object.fromEntries([MINE, ...FILTERS, ...VOTED_FILTERS].map((f) => [f.key, f.label]));
+// What a closer look shows, for the filters only the people themselves can
+// answer ("Zoom in to see signs").
+const CLOSER = { signs: 'signs', voted: 'who has voted', gotv: 'supporters who haven’t voted' };
 // The rating apart: 1s and 2s on their own ("Strong yes (1)"), and each
 // opponent on the "Voting for?" list ("Voting Locke") — in the campaign's
 // own words. A door shows when anyone there has that rating.
@@ -1355,9 +1358,9 @@ export default function MapPage() {
   const farFilter = filter === 'mine' ? false
     : drawn?.kind === 'density' ? !densityKeep
       : drawn?.kind === 'dots' ? ['signs', 'voted', 'gotv'].includes(filter) : false;
-  const zoomInFor = farFilter ? labelOf(filter) : null;
+  const zoomInFor = farFilter ? CLOSER[filter] || labelOf(filter).toLowerCase() : null;
   const viewCut = Boolean(drawn?.kind === 'density' && drawn.cut && filter !== 'mine');
-  const zoomNote = viewCut ? 'Zoom in to see each door' : zoomInFor ? `Zoom in to see ${zoomInFor.toLowerCase()}` : null;
+  const zoomNote = viewCut ? 'Zoom in to see each door' : zoomInFor ? `Zoom in to see ${zoomInFor}` : null;
   // Every sign on the map, by status and by kind (for the Signs chips).
   const signCounts = useMemo(() => {
     const c = {};
@@ -2289,7 +2292,7 @@ export default function MapPage() {
           filter={filter}
           onFilter={(key) => { setFilter(key); closeFilter(); }}
           counts={counts}
-          countsNote={drawn?.kind === 'density' ? `People in view, by how they’re rated — zoom in to see doors${zoomInFor ? `, and ${zoomInFor.toLowerCase()}` : ''}.` : big ? 'Doors in view.' : null}
+          countsNote={drawn?.kind === 'density' ? `People in view, by how they’re rated — zoom in to see doors${zoomInFor ? `, and ${zoomInFor}` : ''}.` : big ? 'Doors in view.' : null}
           showTurfs={showTurfs}
           onTurfs={setTurfsShown}
           turfCount={turfs.length}
