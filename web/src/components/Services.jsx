@@ -38,7 +38,7 @@ function Row({ s, online }) {
           <p className="sv2-missing">Set in the hosting’s environment: {s.missing.map((k) => <code key={k}>{k}</code>).reduce((a, b) => [a, ' · ', b])}</p>
         )}
         {s.webhook && <Webhook w={s.webhook} />}
-        {s.connect && <ServiceConnect connect={s.connect} online={online} />}
+        {s.connect && <ServiceConnect connect={s.connect} online={online} onDone={() => setRes(null)} />}
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
       </div>
       {s.checkable && (

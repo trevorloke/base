@@ -158,6 +158,12 @@ test('Settings → Services: Check reads and says what is missing; Connect is it
   const again = ok(await mgr.action('callhub.connect', {}));
   assert.deepEqual([again.ok, again.said], [true, 'CallHub already sends each call’s result here']);
   assert.equal(fake.webhooks.length, 1, 'connecting twice is one webhook');
+  // The same address as CallHub may hand it back (a last slash, the host's capitals) is still this one.
+  const asGiven = fake.webhooks[0].target;
+  fake.webhooks[0].target = `${asGiven.replace('base.example.org', 'Base.Example.ORG')}/`;
+  assert.equal(ok(await mgr.post('/api/connections/check', { key: 'callhub' })).ok, true);
+  assert.equal(ok(await mgr.action('callhub.connect', {})).said, 'CallHub already sends each call’s result here');
+  fake.webhooks[0].target = asGiven;
   // After a new key the address is new: Connect gives CallHub the new one and
   // takes the old one of this base.win away — never another tool's webhook,
   // however many pages CallHub lists them on.
@@ -823,6 +829,10 @@ test('every write is on the hash chain, as the person who pushed or as the syste
   assert.ok(rows.filter((r) => r.action === 'callhub.result' || r.action === 'callhub.dnc').every((r) => r.actor_id === null), 'results and newly marked numbers are the system’s');
   assert.ok(rows.filter((r) => r.action === 'callhub.push').every((r) => r.actor_id), 'a push is the sender’s');
   assert.equal((await verifyChain(db, ws)).ok, true);
+  // Every write this file made at CallHub carried a key to know a repeat by, and the API key.
+  const writes = fake.calls.filter((c) => c.method === 'POST');
+  assert.ok(writes.length > 50 && writes.every((c) => c.idem), 'an idempotency key on every write');
+  assert.equal(new Set(writes.filter((c) => /upsert_contact/.test(c.path) && c.status < 300).map((c) => c.idem)).size, writes.filter((c) => /upsert_contact/.test(c.path) && c.status < 300).length, 'one key per contact');
   const exported = ok(await mgr.get('/api/export'));
   for (const t of ['callhub_pushes', 'callhub_contacts', 'callhub_results', 'callhub_dnc']) assert.ok(Array.isArray(exported[t]) && exported[t].length, t);
   const everything = JSON.stringify([exported.events, exported.callhub_pushes]);

@@ -117,7 +117,8 @@ check('Check, before connecting: “The key works, but CallHub isn’t sending r
 check('…and Check wrote nothing at CallHub', fake.webhooks.length === 0 && fake.calls.every((c) => c.method === 'GET'), fake.calls.map((c) => `${c.method} ${c.path}`).join(' | '));
 await page.click(`${row} .svc-connect button`);
 await page.waitForSelector(`${row} .svc-connect .sv2-said`, { timeout: 10000 });
-check('Connect: “CallHub now sends each call’s result here”', (await text(page, `${row} .svc-connect .sv2-said`)) === '✓ CallHub now sends each call’s result here', await text(page, `${row} .svc-connect .sv2-said`));
+check('Connect: “CallHub now sends each call’s result here”, and the earlier Check’s line is gone',
+  (await text(page, `${row} .svc-connect .sv2-said`)) === '✓ CallHub now sends each call’s result here' && !(await page.$(`${row} .sv2-row__main > .sv2-said`)), await text(page, row));
 const hook = fake.webhooks[0]?.target || '';
 check('CallHub was given one cc.notes address on this server, ending in a key', fake.webhooks.length === 1 && fake.webhooks[0].event === 'cc.notes' && new RegExp(`^${BASE}/hooks/callhub/[0-9a-f]{32}$`).test(hook), hook.replace(/[0-9a-f]{32}$/, '<key>'));
 await page.click(`${row} .sv2-check`);
@@ -255,6 +256,10 @@ const ben = (await api(`/persons/${P.ben}`)).json.contacts[0];
 check('a caller who is not on the campaign is named in the note instead', ben.by_name === null && /Caller: jo\./.test(ben.note), ben.note);
 const gus = (await api(`/persons/${P.gus}`)).json;
 check('“Do not call” is a refusal, and Gus is tagged do-not-call', gus.contacts[0].outcome === 'refused' && gus.person.tags.includes('do-not-call'), JSON.stringify(gus.person.tags));
+await phone.goto(`${ADMIN}/people/${P.gus}`, { waitUntil: 'domcontentloaded' });
+await phone.waitForSelector('.pf-meta', { timeout: 10000 });
+check('…his profile says “Do not call” by his name', /Do not call/.test(await text(phone, '.pf-meta')), await text(phone, '.pf-meta'));
+await phone.screenshot({ path: `${SHOTS}/08-person-do-not-call-390.png` });
 await sleep(2500);
 check('…and his number went to CallHub’s do-not-call list by itself', fake.dnc.some((d) => d.phone_number === '+16045550107' && d.category === 1), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
 const zoe = (await api(`/persons/${P.zoe}`)).json.contacts;

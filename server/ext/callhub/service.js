@@ -34,7 +34,12 @@ export const callhubInbound = (base) => ({
 const REFUSED = 'CallHub refused the key — is the address right? Some accounts use api-na1.callhub.io (CALLHUB_API_BASE)';
 const refused = (e) => e instanceof CallHubError && (e.httpStatus === 401 || e.httpStatus === 403);
 const words = (e) => String(e?.message || e).slice(0, 160);
-const same = (a, b) => String(a || '').replace(/\/+$/, '') === String(b || '').replace(/\/+$/, '');
+// Two addresses that are one: a host however its capitals were typed, with
+// or without a last slash.
+const plain = (u) => {
+  try { const x = new URL(String(u)); return `${x.protocol}//${x.host}${x.pathname.replace(/\/+$/, '')}${x.search}`; } catch { return String(u || '').replace(/\/+$/, ''); }
+};
+const same = (a, b) => plain(a) === plain(b);
 const plural = (n, one) => `${n.toLocaleString('en-CA')} ${n === 1 ? one : `${one}s`}`;
 
 export const checkCallHub = async (db, ws, base) => {

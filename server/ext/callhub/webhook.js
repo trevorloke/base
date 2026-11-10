@@ -44,7 +44,7 @@ publicRoutes.post(`${HOOK_PREFIX}:key`, async (c) => {
   }
 });
 // "Is anyone there?" at the right address: yes, and nothing more.
-publicRoutes.on(['GET', 'HEAD'], `${HOOK_PREFIX}:key`, (c) => (callhubOn() && pathKeyMatches(c.req.param('key'))
+publicRoutes.on(['GET', 'HEAD'], `${HOOK_PREFIX}:key`, (c) => (!limited(clientIp(c)) && callhubOn() && pathKeyMatches(c.req.param('key'))
   ? c.json({ ok: true })
   : c.json({ error: 'not found' }, 404)));
 // Nothing else answers under that address (not the app's own page either).
