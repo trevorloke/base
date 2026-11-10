@@ -12,7 +12,10 @@
 //     (an address inside a private network) is said in the card. "Send to a
 //     web address": the address (https) and a short label; the card says
 //     where it goes (the site's name only) and what it never carries; its
-//     More details show the campaign's signing secret when asked. An email
+//     More details send a test (one message about a made-up person, the
+//     answer said in place) and show the campaign's signing secret when
+//     asked, with "Make a new secret" beside it. A step kind this page
+//     doesn't know says so and is saved as it is. An email
 //     card says who it goes to: only people who said
 //     yes to email ("· 67 people said yes"); a text card, the texting rules
 //     it keeps (its hours, never after STOP, the opt-out line added). "+ First
@@ -30,12 +33,12 @@ import { useCaret } from '../components/useCaret.js';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
-import { NoSignal, noSignal } from '../components/NoSignal.jsx';
+import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import {
   CONNECT_TO, GOAL_HINT, GoalPicker, LadBack, OTHER_STEPS, STEP_KINDS, TriggerPicker, countsLine, fmtWhen, goalOf, logLine,
   stepLine, triggerLine, triggerMissing, whereLine,
 } from '../components/LaddersBits.jsx';
-import { FILLS, cleanStep, emailWho, hookMissing, hookWho, textNamesCampaign, textWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
+import { FILLS, cleanStep, emailWho, hookMissing, hookSaid, hookWho, textNamesCampaign, textWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
 import './shifts.css';
 import './ladders.css';
 import './ladders-webhook.css';
@@ -151,45 +154,122 @@ function TextFields({ s, set, idp }) {
   );
 }
 
-// The campaign's signing secret, for whoever sets up the other end: asked
-// for with a tap (no screen loads it), shown to copy, hidden again.
-function SigningSecret() {
-  const [secret, setSecret] = useState(null);
+// The keyboard's place follows a tap that swaps what was tapped for
+// something else ("Show secret" for the secret, a "+ Email" button for its
+// form): say what to focus, and it is focused once it is on the page.
+function useFocusOn() {
+  const find = useRef(null);
+  useEffect(() => {
+    const el = find.current?.();
+    if (el) { find.current = null; el.focus(); }
+  });
+  return (fn) => { find.current = fn; };
+}
+
+// "Send a test": one message about a made-up person to the address in the
+// field as it is typed — saved or not — and what the address answered, in
+// place. Setting up the other tool usually takes one first (a Zapier catch
+// hook asks for a request before its fields can be used).
+function SendTest({ s }) {
+  const { id } = useParams();
+  const online = useOnline();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  const [copied, setCopied] = useState(false);
-  const show = async () => {
+  const [said, setSaid] = useState(null);
+  // An answer is about the address it was sent to: gone once that changes.
+  useEffect(() => { setSaid(null); }, [s.url]);
+  const send = async () => {
+    const why = hookMissing(s);
+    if (why) { setSaid({ ok: false, words: why }); return; }
     setBusy(true);
-    setError(null);
-    try { setSecret((await action('ladder.signingSecret', {})).secret); } catch (e) { setError(e.message); } finally { setBusy(false); }
+    setSaid(null);
+    try {
+      const r = await action('ladder.testHook', { id, url: s.url.trim(), label: s.label.trim() });
+      setSaid({ ok: r.result === 'sent', words: hookSaid(r) });
+    } catch (e) { setSaid({ ok: false, words: e.message }); } finally { setBusy(false); }
   };
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(secret); setCopied(true); } catch { setCopied(false); }
-  };
-  const hide = () => { setSecret(null); setCopied(false); };
   return (
-    <div className="lad-hook-secret">
-      <span className="lad-hook-secret__name">Signing secret</span>
-      <p className="lad-hint">For whoever runs the other tool: it proves a message came from base.win.</p>
-      {secret ? (
-        <>
-          <code className="lad-hook-secret__code">{secret}</code>
-          <div className="ops-actions">
-            <button type="button" className="btn ops-tap" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
-            <button type="button" className="btn btn-quiet ops-tap" onClick={hide}>Hide</button>
-          </div>
-        </>
-      ) : (
-        <button type="button" className="btn ops-tap" disabled={busy} onClick={show}>Show secret</button>
-      )}
-      {error && <p className="error" role="alert">{error}</p>}
-      <span className="lad-sr" role="status">{copied ? 'Copied' : secret ? 'Secret shown' : ''}</span>
+    <div className="lad-hook-more">
+      <span className="lad-hook-more__name">Send a test</span>
+      <p className="lad-hint">One message about a made-up person, Sam Example.</p>
+      <div className="ops-actions">
+        <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={send}>{busy ? 'Sending…' : 'Send a test'}</button>
+        {!online && <NeedsSignal>Needs signal</NeedsSignal>}
+      </div>
+      {said && <p className={said.ok ? 'ops-done lad-hook-said' : 'error lad-hook-said'} role={said.ok ? 'status' : 'alert'}>{said.words}</p>}
     </div>
   );
 }
 
-// "Send to a web address": where, and a short label (the card's name, and
-// "step" in what is sent).
+// The campaign's signing secret, for whoever sets up the other end: asked
+// for with a tap (no screen loads it), shown to copy, hidden again. "Make a
+// new secret" replaces it at once — for when someone who has seen it
+// leaves — after one more Yes, in place.
+function SigningSecret() {
+  const online = useOnline();
+  const [secret, setSecret] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [made, setMade] = useState(false);
+  const focusOn = useFocusOn();
+  const showBtn = useRef(null);
+  const copyBtn = useRef(null);
+  const newBtn = useRef(null);
+  const noBtn = useRef(null);
+  const ask = async (name) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await action(name, {});
+      focusOn(() => copyBtn.current);
+      setSecret(r.secret);
+      setCopied(false);
+      setConfirm(false);
+      setMade(name === 'ladder.newSigningSecret');
+    } catch (e) { setError(e.message); } finally { setBusy(false); }
+  };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(secret); setCopied(true); } catch { setCopied(false); }
+  };
+  const hide = () => { focusOn(() => showBtn.current); setSecret(null); setCopied(false); setConfirm(false); setMade(false); setError(null); };
+  return (
+    <div className="lad-hook-more lad-hook-secret">
+      <span className="lad-hook-more__name">Signing secret</span>
+      <p className="lad-hint">For whoever runs the other tool: it proves a message came from base.win.</p>
+      {secret ? (
+        <>
+          <code className="lad-hook-secret__code">{secret}</code>
+          {made && <p className="ops-done lad-hook-said">New secret — the old one no longer works.</p>}
+          {confirm ? (
+            <div className="ops-confirm">
+              <span>Make a new secret? The old one stops working.</span>
+              <button type="button" className="btn ops-danger ops-tap" disabled={busy || !online} onClick={() => ask('ladder.newSigningSecret')}>Yes</button>
+              <button ref={noBtn} type="button" className="btn btn-quiet ops-tap" onClick={() => { focusOn(() => newBtn.current); setConfirm(false); }}>No</button>
+            </div>
+          ) : (
+            <div className="ops-actions">
+              <button ref={copyBtn} type="button" className="btn ops-tap" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}</button>
+              <button type="button" className="btn btn-quiet ops-tap" onClick={hide}>Hide</button>
+              <button ref={newBtn} type="button" className="btn btn-quiet ops-tap" onClick={() => { focusOn(() => noBtn.current); setConfirm(true); }}>Make a new secret</button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="ops-actions">
+          <button ref={showBtn} type="button" className="btn ops-tap" disabled={busy || !online} onClick={() => ask('ladder.signingSecret')}>Show secret</button>
+          {!online && <NeedsSignal>Needs signal</NeedsSignal>}
+        </div>
+      )}
+      {error && <p className="error lad-hook-said" role="alert">{error}</p>}
+      <span className="lad-sr" role="status">{copied ? 'Copied' : made ? 'New secret shown' : secret ? 'Secret shown' : ''}</span>
+    </div>
+  );
+}
+
+// "Send to a web address": where, and a short label (the card's name, the
+// start of each line on a person's log, and "step" in what is sent). More
+// details: a test message, and the signing secret.
 function HookFields({ s, set, idp }) {
   const [more, setMore] = useState(false);
   return (
@@ -201,7 +281,7 @@ function HookFields({ s, set, idp }) {
           placeholder="https://hooks.zapier.com/…" value={s.url} onChange={(e) => set({ ...s, url: e.target.value })} />
       </div>
       <div className="field">
-        <label htmlFor={`${idp}-label`}>Label</label>
+        <label htmlFor={`${idp}-label`}>Label — what to call the other tool</label>
         <input id={`${idp}-label`} className="input lad-input" maxLength={40} autoComplete="off"
           placeholder="Zapier" value={s.label} onChange={(e) => set({ ...s, label: e.target.value })} />
       </div>
@@ -210,7 +290,12 @@ function HookFields({ s, set, idp }) {
         onClick={() => setMore((v) => !v)}>
         More details
       </button>
-      {more && <div id={`${idp}-more`} className="ops-more-body"><SigningSecret /></div>}
+      {more && (
+        <div id={`${idp}-more`} className="ops-more-body lad-hook-mores">
+          <SendTest s={s} />
+          <SigningSecret />
+        </div>
+      )}
     </div>
   );
 }
@@ -335,28 +420,42 @@ function StepCard({ step, index, count, open, onToggle, onSave, onRemove, onMove
 function AddStep({ onAdd, busy, tags, campaign, problem }) {
   const [kind, setKind] = useState(null);
   const [more, setMore] = useState(false);
+  const focusOn = useFocusOn();
+  const row = useRef(null);
+  const head = useRef(null);
+  // Back on the button that opened the step, once the step is added or cancelled.
+  const close = (k) => { focusOn(() => row.current?.querySelector(`[data-kind="${k}"]`)); setKind(null); };
   if (kind) {
     return (
       <div className="card lad-new-step">
-        <span className="eyebrow">New step · {STEP_KINDS.find((k) => k.kind === kind).label}</span>
+        <span className="eyebrow" ref={head} tabIndex={-1}>New step · {STEP_KINDS.find((k) => k.kind === kind).label}</span>
         <StepEditor initial={BLANK[kind]} saveLabel="Add step" busy={busy} tags={tags} campaign={campaign} problem={problem}
-          onSave={async (s) => { if (await onAdd(s)) setKind(null); }} onCancel={() => setKind(null)} />
+          onSave={async (s) => { if (await onAdd(s)) close(kind); }} onCancel={() => close(kind)} />
       </div>
     );
   }
+  // The new step's name takes the keyboard's place: Tab goes on to its
+  // first field (not the field itself: on a phone that would open the
+  // keyboard before the step has been read).
   const add = (k) => (
-    <button key={k.kind} type="button" className="btn ops-tap lad-add__btn" disabled={busy} onClick={() => setKind(k.kind)}>
+    <button key={k.kind} type="button" className="btn ops-tap lad-add__btn" data-kind={k.kind} disabled={busy}
+      onClick={() => { focusOn(() => head.current); setKind(k.kind); }}>
       + {k.label}
     </button>
   );
   // The other steps open as a row of their own: "Send to a web address" is
   // long, and "Stop" would be left alone on a line.
   return (
-    <div className="lad-add" role="group" aria-label="Add a step">
+    <div className="lad-add" role="group" aria-label="Add a step" ref={row}>
       {STEP_KINDS.filter((k) => !k.more).map(add)}
       {more
         ? <div className="lad-add lad-add--other">{STEP_KINDS.filter((k) => k.more).map(add)}</div>
-        : <button type="button" className="btn btn-quiet ops-tap" onClick={() => setMore(true)}>{OTHER_STEPS}</button>}
+        : (
+          <button type="button" className="btn btn-quiet ops-tap"
+            onClick={() => { focusOn(() => row.current?.querySelector('.lad-add--other button')); setMore(true); }}>
+            {OTHER_STEPS}
+          </button>
+        )}
     </div>
   );
 }

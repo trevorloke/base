@@ -16,6 +16,7 @@
 //   On its own:  PORT=5021 node server/test/fake-receiver.js
 //                GET  /__received            what arrived, as JSON
 //                POST /__answer { status, times } · POST /__hang { times }
+//                POST /__hold { times } · POST /__release { status }
 //                POST /__reset
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
@@ -48,6 +49,8 @@ export const startFakeReceiver = async ({ port = 0 } = {}) => {
       if (req.url === '/__reset') { api.reset(); return json({ ok: true }); }
       if (req.url === '/__answer') { const b = sent(); api.answer(Number(b.status) || 500, Number(b.times) || 1); return json({ ok: true }); }
       if (req.url === '/__hang') { api.hang(Number(sent().times) || 1); return json({ ok: true }); }
+      if (req.url === '/__hold') { api.hold(Number(sent().times) || 1); return json({ ok: true }); }
+      if (req.url === '/__release') { api.release(Number(sent().status) || 200); return json({ ok: true }); }
       let body = null;
       try { body = JSON.parse(raw); } catch { /* kept as it came */ }
       received.push({ method: req.method, path: req.url, headers: req.headers, raw, body });

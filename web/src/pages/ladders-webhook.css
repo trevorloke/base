@@ -1,19 +1,38 @@
 /* Ladders: the "Send to a web address" step. Its fields are the shared
    ones (ladders.css, shifts.css), spaced the same in a new step and in an
-   open card; only the signing secret under More details is new. */
+   open card; only what sits under More details is new: a test message and
+   the signing secret. */
 
 /* "Other steps" open as a row of their own under the everyday ones: the
-   step's name is long, and "Stop" would be left alone on a line. */
+   step's name is long, and "Stop" would be left alone on a line. On a phone
+   the long one takes the row, so it reads on one line; the two short ones
+   share the next. */
 .lad-add.lad-add--other { flex: 1 0 100%; margin-top: 0; }
+@media (max-width: 480px) {
+  .lad-add--other .btn.lad-add__btn[data-kind='webhook'] { flex-basis: 100%; }
+}
+
+/* A new step's name takes the keyboard's place when its button is tapped. */
+.card.lad-new-step > .eyebrow:focus { outline: none; }
+.card.lad-new-step > .eyebrow:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+
+/* Why a step wasn't saved sits clear of the buttons under it, in a new
+   step and in an open card alike (.ops-body takes a paragraph's margin). */
+.lad-step-form > .error { margin: 0 0 var(--s-3); }
 
 .lad-hook { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-2); }
 .lad-hook .ops-more-body { padding-bottom: var(--s-3); }
 .lad-step-form .lad-hook .field,
 .lad-step-form .lad-hook .lad-hint { margin: 0; }
 .lad-hook > .disclose { align-self: flex-start; }
-.lad-hook-secret { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); }
-.lad-hook-secret__name { font-size: 15px; font-weight: 600; color: var(--text-1); }
-.lad-hook-secret .lad-hint { margin: 0; }
+
+/* More details: each a name, one line, its button, and what came of it. */
+.lad-hook-mores { display: flex; flex-direction: column; gap: var(--s-4); }
+.lad-hook-more { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); }
+.lad-hook-more__name { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.lad-hook-more .lad-hint,
+.lad-hook-more .lad-hook-said { margin: 0; }
+.lad-hook-more .ops-confirm > span { overflow-wrap: anywhere; }
 .lad-hook-secret__code {
   display: block;
   max-width: 100%;
