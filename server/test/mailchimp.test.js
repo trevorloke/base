@@ -17,6 +17,7 @@ import { signPayload } from '../ext/payments/stripe.js';
 import { _forgetAudienceForTest, pathKey } from '../ext/mailchimp/mailchimp.js';
 import { _setSliceForTest } from '../ext/mailchimp/push.js';
 import { suppress } from '../ext/mail/webhook.js';
+import { recordConsent } from '../ext/site/consent.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const mail = (who) => `${who}.mc.${tag}@example.org`;
@@ -203,6 +204,36 @@ test('a second sync changes nothing; then it adds and removes exactly the differ
   assert.deepEqual([s.total, s.added, s.tagged, s.removed], [3, 1, 1, 1]);
   assert.deepEqual(inTag(), [mail('ana'), mail('cal'), mail('hal')]);
   assert.equal(fake.member(mail('ben')).status, 'subscribed', 'out of the tag, still in the audience');
+});
+
+test('two lists of one name never share a tag; an address goes as it is written and is told apart whatever its capitals', async () => {
+  const { c, ws } = await campaign('Names');
+  const typed = `Ana.Caps.${tag}@Example.org`;
+  await c.createPerson('Ana Example', { email: typed, tags: ['member'] });
+  await person(c, 'ben', { tags: ['member', 'board'] });
+  ok(await c.action('subscription.add', { email: typed }));
+  await subscribe(c, 'ben');
+  const members = await membersList(c);
+  const board = ok(await c.action('list.create', { name: 'Members', kind: 'filter', filter: { tag: 'board' } })).list;
+  await push(c, ws, members.id);
+  const second = await push(c, ws, board.id);
+  assert.equal(second.sync.tag, 'base.win: Members (2)');
+  assert.deepEqual(fake.tagged(TAG), [typed.toLowerCase(), mail('ben')]);
+  assert.deepEqual(fake.tagged('base.win: Members (2)'), [mail('ben')]);
+  assert.equal(fake.member(typed).email_address, typed, 'as it is on file');
+  // Again: the capitals don't make her look new, and each list keeps its own tag.
+  fake.calls.length = 0;
+  await push(c, ws, members.id);
+  await push(c, ws, board.id);
+  assert.deepEqual(writes(), []);
+  assert.equal((await stateOf(c, board.id)).sync.tag, 'base.win: Members (2)');
+  // A very long name still makes a tag Mailchimp will take (100 characters), and the two still differ.
+  const long = 'L'.repeat(120);
+  const l1 = ok(await c.action('list.create', { name: long, kind: 'filter', filter: { tag: 'member' } })).list;
+  const l2 = ok(await c.action('list.create', { name: long, kind: 'filter', filter: { tag: 'board' } })).list;
+  const t1 = (await push(c, ws, l1.id)).sync.tag;
+  const t2 = (await push(c, ws, l2.id)).sync.tag;
+  assert.deepEqual([t1.length, t2.length, t1 === t2, t2.endsWith(' (2)')], [100, 100, false, true]);
 });
 
 test('a big list goes in parts: each address once, an address Mailchimp refuses is counted and not tried twice', async () => {
@@ -484,19 +515,22 @@ test('a 429 halfway leaves a sync the next run completes; a refusal that will no
 
 test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and a yes here that is newer than a no there', async () => {
   const { c, ws } = await campaign('Pull');
-  for (const w of ['ana', 'ben', 'cal', 'dee']) await person(c, w);
-  await subscribe(c, 'ana', 'ben', 'dee');
+  for (const w of ['ana', 'ben', 'cal', 'dee', 'gil']) await person(c, w);
+  await subscribe(c, 'ana', 'ben', 'dee', 'gil');
   const list = await membersList(c);
   const withEmail = async () => ok(await c.get('/api/lists')).lists.find((l) => l.id === list.id).counts.with_email;
-  assert.equal(await withEmail(), 4);
+  assert.equal(await withEmail(), 5);
   // In Mailchimp before base.win knew of it: Cal's address was cleaned, Ben left last week, and so did
-  // someone base.win has never heard of. Dee left Mailchimp long ago — and joined the newsletter here since.
+  // someone base.win has never heard of. Dee and Gil left Mailchimp long ago. Since then Dee ticked the
+  // newsletter box on the campaign's website herself; Gil was only typed in at the desk.
   fake.add(mail('cal'), { status: 'cleaned', changed: new Date(Date.now() - 9 * 86400e3) });
   fake.add(mail('ben'), { status: 'unsubscribed', changed: new Date(Date.now() - 7 * 86400e3) });
   fake.add(mail('nobody'), { status: 'unsubscribed' });
   fake.add(mail('dee'), { status: 'unsubscribed', changed: new Date(Date.now() - 400 * 86400e3) });
-  await db.query("update subscriptions set created_at = now() - interval '30 days' where workspace_id = $1 and email = $2", [ws, mail('ben')]);
-  await db.query("update consent_events set created_at = now() - interval '30 days' where workspace_id = $1 and address = $2", [ws, mail('ben')]);
+  fake.add(mail('gil'), { status: 'unsubscribed', changed: new Date(Date.now() - 400 * 86400e3) });
+  await runAction(db, { workspaceId: ws, actorId: null, action: 'site.form' }, (tx, emit) => recordConsent(tx, ws, {
+    channel: 'email', granted: true, source: 'newsletter-form', wording: 'Yes, email me news from the campaign', address: mail('dee'),
+  }, emit));
 
   let st = ok(await c.get('/api/mailchimp'));
   assert.deepEqual([st.on, st.pulling, st.pulled_at], [true, false, null]);
@@ -506,11 +540,12 @@ test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and 
 
   assert.deepEqual(await suppressions(ws), [{ email: mail('cal'), reason: 'bounce', source: 'mailchimp' }]);
   assert.equal((await subOf(ws, 'ben')).status, 'unsubscribed');
-  assert.equal((await subOf(ws, 'dee')).status, 'subscribed', 'her yes here is newer than her no there');
+  assert.equal((await subOf(ws, 'dee')).status, 'subscribed', 'her own yes here is newer than her no there');
+  assert.equal((await subOf(ws, 'gil')).status, 'unsubscribed', 'the desk typing him in does not undo his no');
   assert.equal((await db.query('select count(*)::int as n from consent_events where workspace_id = $1 and address = $2', [ws, mail('nobody')])).rows[0].n, 0, 'nothing is kept about an address nobody here holds');
   assert.equal(await withEmail(), 2, 'the list counts neither');
   st = ok(await c.get('/api/mailchimp'));
-  assert.deepEqual([st.pulling, st.pull_ok, st.pull_note], [false, true, '1 unsubscribed · 1 dead address']);
+  assert.deepEqual([st.pulling, st.pull_ok, st.pull_note], [false, true, '2 unsubscribed · 1 dead address']);
   assert.ok(st.pulled_at);
   // Neither change is told back to Mailchimp.
   assert.deepEqual(writes(), []);

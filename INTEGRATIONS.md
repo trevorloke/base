@@ -218,8 +218,11 @@ What happens:
 - **Unsubscribed and cleaned come back.** Someone who unsubscribes in
   Mailchimp is turned off here — off the newsletter list, or *do-not-email*
   when they were never on it — with a no on the consent record (source
-  `mailchimp-unsubscribe`), unless they said yes *here* after they left
-  there: a newer yes of their own is not undone by an older no. An address
+  `mailchimp-unsubscribe`), unless they have said yes *here themselves*
+  since they left there (ticked the newsletter box on the campaign's
+  website, or used their own link from an email): a newer yes of their own
+  is not undone by an older no. An address the team typed in or imported
+  is the team's word, not theirs, and does not count. An address
   Mailchimp *cleaned* (it bounced for good) goes on the suppression list, so
   nothing here emails it either. Three ways it arrives: Mailchimp's webhook,
   the moment it happens; a job every night, for anything a webhook missed

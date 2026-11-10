@@ -3,8 +3,9 @@
 //   unsubscribed  → email is off here for everyone with that address
 //                   (emailOff: off the newsletter list, or do-not-email, and
 //                   a no on the consent record, source mailchimp-unsubscribe)
-//                   — unless they said yes HERE after they left there: a
-//                   newer yes of their own is never undone by an older no.
+//                   — unless they have said yes HERE THEMSELVES since they
+//                   left there (the website's box, their own link): a newer
+//                   yes of their own is never undone by an older no.
 //   cleaned       → the address goes on the suppression list (ext/mail): it
 //                   bounced for good at Mailchimp; nothing emails it again.
 // Only addresses this campaign holds are touched: nothing is kept about a
@@ -66,12 +67,14 @@ const heldUnsuppressed = async (db, ws, emails) => (emails.length ? (await db.qu
     where ${HELD} and not exists (select 1 from email_suppressions x where x.workspace_id = $1 and x.email = e and x.lifted_at is null)`, [ws, emails],
 )).rows.map((r) => r.email) : []);
 
-// When this address last said yes to email here: the consent record, or the
-// day it joined the newsletter list (a list from before the record began).
-const latestYes = async (tx, ws, email) => (await tx.query(
-  `select greatest(
-     (select max(created_at) from consent_events where workspace_id = $1 and channel = 'email' and granted and address = $2),
-     (select created_at from subscriptions where workspace_id = $1 and email = $2 and status = 'subscribed')) as at`, [ws, email],
+// When the person last said yes to email here THEMSELVES: a yes on the
+// consent record with the words they saw — a box they ticked on the
+// campaign's website, or their own link from an email. An address the team
+// typed in or imported is the team's word, not theirs, and never undoes
+// their no.
+const latestOwnYes = async (tx, ws, email) => (await tx.query(
+  `select max(created_at) as at from consent_events
+    where workspace_id = $1 and channel = 'email' and granted and wording is not null and address = $2`, [ws, email],
 )).rows[0]?.at || null;
 const after = (a, b) => new Date(a).getTime() > new Date(b).getTime();
 
@@ -81,7 +84,7 @@ const after = (a, b) => new Date(a).getTime() > new Date(b).getTime();
 const takeMember = async (tx, emit, ws, m) => {
   if (m.status === 'unsubscribed') {
     if (!(await stillOn(tx, ws, m.email))) return null;
-    const yes = await latestYes(tx, ws, m.email);
+    const yes = await latestOwnYes(tx, ws, m.email);
     if (yes && m.changedAt && !after(m.changedAt, yes)) return null;
     const who = (await tx.query(
       'select id from persons where workspace_id = $1 and lower(email) = $2 and deleted_at is null order by created_at, id limit 1', [ws, m.email],

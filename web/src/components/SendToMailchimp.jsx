@@ -131,7 +131,8 @@ export default function SendToMailchimp({ listId }) {
                 </>
               )}
               <div className="ops-actions">
-                <button type="button" className="btn ops-solid ops-tap" disabled={busy || !online || !n} onClick={() => send(everyone)}>{busy ? 'Sending…' : 'Send'}</button>
+                {/* Nothing to send is nothing to do — unless it was sent before: then the tag is emptied. */}
+                <button type="button" className="btn ops-solid ops-tap" disabled={busy || !online || !counts || (!n && !s)} onClick={() => send(everyone)}>{busy ? 'Sending…' : 'Send'}</button>
                 <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => { setAsking(false); setError(null); }}>Cancel</button>
               </div>
             </div>

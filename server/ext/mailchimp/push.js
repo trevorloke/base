@@ -29,13 +29,13 @@ import { httpError } from '../../actions/util.js';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { loadList, recipientsOf } from '../lists/audience.js';
-import { lower, mailchimp, mailchimpOn, MailchimpError, pages } from './mailchimp.js';
+import { lower, mailchimp, mailchimpOn, MailchimpError, memberHash, pages } from './mailchimp.js';
 import { pull, queueDays } from './pull.js';
 
 export const PUSH_ACTION = 'mailchimp.push';
 export const SYNC_JOB = 'mailchimp.sync';
 const TAG_MAX = 100; // a tag's name in Mailchimp
-const tagFor = (listName) => `base.win: ${listName}`.slice(0, TAG_MAX);
+const tagFor = (listName, ending = '') => `${`base.win: ${listName}`.slice(0, TAG_MAX - ending.length)}${ending}`;
 
 // A part's length and a call's size (tests make both small).
 let sliceMs = 20_000;
@@ -63,10 +63,11 @@ const ctxOf = async (db, ws) => {
 const subscribedAmong = async (db, ws, emails) => new Set(emails.length ? (await db.query(
   "select email from subscriptions where workspace_id = $1 and status = 'subscribed' and email = any($2::text[])", [ws, emails],
 )).rows.map((r) => r.email) : []);
-// One row per address, in address order: { id (the person), email }.
+// One row per address, in address order: { id (the person), email (lower
+// case, what addresses are told apart by), as (the address as it is on file) }.
 export const whoGoes = async (db, ws, list, consent) => {
   const rows = await recipientsOf(db, await ctxOf(db, ws), { list, reach: 'email' });
-  let people = rows.map((r) => ({ id: r.id, email: lower(r.email) })).filter((p) => p.email);
+  let people = rows.map((r) => ({ id: r.id, email: lower(r.email), as: String(r.email).trim() })).filter((p) => p.email);
   if (consent !== 'all') {
     const yes = await subscribedAmong(db, ws, people.map((p) => p.email));
     people = people.filter((p) => yes.has(p.email));
@@ -91,7 +92,14 @@ export const startSync = async (tx, ctx, emit, { list_id: listId, everyone = fal
   // Still on its way: this tap is that one — never two jobs filling one tag.
   if (cur && ['queued', 'syncing'].includes(cur.status) && await jobLive(tx, ws, cur.id)) return { sync: syncOut(cur) };
   const id = cur?.id || newId();
-  const tag = cur?.tag || tagFor(list.name);
+  // The tag's name is the list's, kept from the first send. Two lists of one
+  // name never share a tag (each would empty the other's): the second is "… (2)".
+  let tag = cur?.tag;
+  if (!tag) {
+    const taken = new Set((await tx.query('select tag from mailchimp_syncs where workspace_id = $1 and audience_id = $2', [ws, audience])).rows.map((r) => r.tag));
+    tag = tagFor(list.name);
+    for (let n = 2; taken.has(tag); n += 1) tag = tagFor(list.name, ` (${n})`);
+  }
   const row = (await tx.query(
     `insert into mailchimp_syncs (id, workspace_id, list_id, audience_id, tag, consent, status, created_by)
      values ($1, $2, $3, $4, $5, $6, 'queued', $7)
@@ -154,17 +162,17 @@ const emailsIn = (errors) => errors.flatMap((e) => [e?.email_address, ...(Array.
 const addPart = async (db, sync, segment, part) => {
   const names = new Map((await db.query('select id, first_name, last_name from persons where id = any($1::uuid[])', [part.map((p) => p.id)])).rows.map((r) => [r.id, r]));
   const members = part.map((p) => ({
-    email_address: p.email, status: 'subscribed',
+    email_address: p.as, status: 'subscribed',
     merge_fields: { FNAME: names.get(p.id)?.first_name || '', LNAME: names.get(p.id)?.last_name || '' },
   }));
-  const key = `${sync.id}-${part[0].email}`;
+  const key = `${sync.id}-${memberHash(part[0].email)}`;
   const res = await mailchimp('POST', `/lists/${sync.audience_id}`, { body: { members, update_existing: false }, idempotencyKey: `base-mc-add-${key}`, timeoutMs: 60_000 });
   const refused = refusedBy(res);
   const no = new Set(emailsIn(refused));
   const added = num(res?.total_created, Array.isArray(res?.new_members) ? res.new_members.length : 0);
   // What Mailchimp took (or already had) goes into the tag; said at once, so a retry never counts it twice.
   await patch(db, sync, 'added = added + $3, skipped = skipped + $4', [added, Math.max(refused.length, no.size)]);
-  const toTag = part.map((p) => p.email).filter((e) => !no.has(e));
+  const toTag = part.filter((p) => !no.has(p.email)).map((p) => p.as);
   if (!toTag.length) return;
   const tagged = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, { body: { members_to_add: toTag }, idempotencyKey: `base-mc-tag-${key}`, timeoutMs: 60_000 });
   const missed = emailsIn(Array.isArray(tagged?.errors) ? tagged.errors : []).length;
@@ -201,7 +209,7 @@ const part = async (db, sync) => {
   }
   while (toRemove.length) {
     const some = toRemove.splice(0, chunkSize);
-    const res = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, { body: { members_to_remove: some }, idempotencyKey: `base-mc-untag-${sync.id}-${some[0]}`, timeoutMs: 60_000 });
+    const res = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, { body: { members_to_remove: some }, idempotencyKey: `base-mc-untag-${sync.id}-${memberHash(some[0])}`, timeoutMs: 60_000 });
     cursor.remove = some.at(-1);
     await patch(db, sync, 'removed = removed + $3, todo = $4, cursor = $5::jsonb', [num(res?.total_removed, some.length), left(), JSON.stringify(cursor)]);
     if (left() && Date.now() >= until) return true;

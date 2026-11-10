@@ -83,7 +83,7 @@ export const mailchimp = async (method, path, { query, body, idempotencyKey, tim
         Authorization: `Basic ${Buffer.from(`base.win:${apiKey()}`).toString('base64')}`,
         Accept: 'application/json',
         ...(body ? { 'Content-Type': 'application/json' } : {}),
-        ...(idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey).slice(0, 200) } : {}),
+        ...(idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey).replace(/[^\x21-\x7e]/g, '').slice(0, 200) } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
