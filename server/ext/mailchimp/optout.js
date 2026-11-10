@@ -3,7 +3,8 @@
 // for the addresses it turned off:
 //   a subscription ended     (their unsubscribe link, a ladder's or a
 //                            blast's, the desk's Remove)
-//   a person was tagged      do-not-email or do-not-contact
+//   a person was tagged      do-not-email or do-not-contact — or, already
+//                            tagged, was given another address
 //   an address was suppressed  (it bounced for good, or reported spam)
 // The job looks the member up and, only if Mailchimp would still email them
 // ("subscribed"), marks them unsubscribed there. An address Mailchimp does
@@ -26,18 +27,48 @@ const NO_CONTACT = 'do-not-contact';
 const QUIET = new Set(['sample.load', 'sample.clear']);
 const PER_JOB = 50;
 
-// The person's address, when this write is what turned email off for them.
-// A later change to someone already do-not-email carries the tag again and
-// says nothing new: the consent record already has their no from before
-// this write (now() is this write's start; its own rows come after).
-const newlyOff = async (tx, ws, personId, given) => {
-  const email = lower(given || (await tx.query('select email from persons where id = $1 and workspace_id = $2 and deleted_at is null', [personId, ws])).rows[0]?.email);
-  if (!email) return null;
-  const before = (await tx.query(
-    `select granted from consent_events where workspace_id = $1 and person_id = $2 and channel = 'email' and created_at < now()
-      order by created_at desc, id desc limit 1`, [ws, personId],
-  )).rows[0];
-  return before && before.granted === false ? null : email;
+const parseJ = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
+const off = (tags) => Array.isArray(tags) && (tags.includes(NO_EMAIL) || tags.includes(NO_CONTACT));
+
+// What was last written down about a person before this write: whether they
+// were tagged do-not-email or do-not-contact, and their address. Read from
+// the event log, where every change to a person's tags carries all of them
+// and every change of address the new one — this write's own events join
+// the log only after the hooks. (No "order by … limit": a person has a
+// handful of these, found through the log's index by person.)
+const before = async (tx, ws, personId) => {
+  const rows = (await tx.query(
+    `select seq, jsonb_typeof(payload->'tags') = 'array' as has_tags, payload->'tags' as tags,
+            (payload->'email') is not null as has_email, payload->>'email' as email
+       from events where workspace_id = $1 and entity_type = 'person' and entity_id = $2
+        and (jsonb_typeof(payload->'tags') = 'array' or (payload->'email') is not null)`, [ws, personId],
+  )).rows.sort((a, b) => Number(a.seq) - Number(b.seq));
+  return { off: off(parseJ(rows.filter((r) => r.has_tags).at(-1)?.tags)), email: lower(rows.filter((r) => r.has_email).at(-1)?.email) };
+};
+
+// The person's address, when this write is what turned email off for it:
+// the tag was put on (their own link, the desk, an import, a merge), or
+// someone already tagged was given another address. Decided from what the
+// person carried before the write and what they carry after it — never from
+// the consent record, which is one line per person: a no from last year,
+// with another address or under a tag the desk has since lifted, says
+// nothing about today's.
+// A change that says nothing new (another tag beside it, the same address
+// again) is told to nobody: someone who has since said yes in Mailchimp
+// itself is never taken off there by an edit here.
+// `known`: what this write has already been seen to leave, by person.
+const newlyOff = async (tx, ws, e, known) => {
+  const p = e.payload || {};
+  const fresh = e.op === 'create'; // someone new: all there is to know is in the event
+  // Most writes cost nothing here: tags with neither of the two, or — for
+  // someone already on file — no word on tags or on the address at all.
+  if ((Array.isArray(p.tags) || fresh) ? !off(p.tags) : !p.email) return null;
+  const row = (await tx.query('select email, tags from persons where id = $1 and workspace_id = $2 and deleted_at is null', [e.entityId, ws])).rows[0];
+  const email = lower(row?.email);
+  if (!email || !off(parseJ(row.tags))) return null;
+  const was = fresh ? null : known.get(e.entityId) || await before(tx, ws, e.entityId);
+  known.set(e.entityId, { off: true, email });
+  return was?.off && was.email === email ? null : email;
 };
 
 export const onEvents = async (tx, meta, events) => {
@@ -47,15 +78,15 @@ export const onEvents = async (tx, meta, events) => {
   if (action === PULL_ACTION || QUIET.has(action)) return;
   const ws = meta.workspaceId;
   const emails = new Set();
+  const known = new Map();
   for (const e of events) {
     const p = e.payload || {};
     if (e.entityType === 'subscription' && (e.op === 'void' || p.status === 'unsubscribed')) {
       emails.add(lower(p.email || (await tx.query('select email from subscriptions where id = $1 and workspace_id = $2', [e.entityId, ws])).rows[0]?.email));
     } else if (e.entityType === 'email_suppression' && (e.op === 'create' || e.op === 'update') && p.source !== 'mailchimp') {
       emails.add(lower(p.email));
-    } else if (e.entityType === 'person' && (e.op === 'create' || e.op === 'update') && Array.isArray(p.tags)
-      && (p.tags.includes(NO_EMAIL) || p.tags.includes(NO_CONTACT))) {
-      emails.add(await newlyOff(tx, ws, e.entityId, p.email) || '');
+    } else if (e.entityType === 'person' && (e.op === 'create' || e.op === 'update')) {
+      emails.add(await newlyOff(tx, ws, e, known) || '');
     }
   }
   emails.delete('');

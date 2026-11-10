@@ -485,6 +485,76 @@ test('an unsubscribe in base.win reaches Mailchimp once — a do-not-email tag a
   assert.equal(ok(await c.get('/api/mailchimp')).waiting, 0);
 });
 
+test('an older no on someone’s record never hides a new one: their own link, the desk’s tag again, do-not-contact, a new address', async () => {
+  const { c, ws } = await campaign('Older');
+  const there = (...who) => who.map((w) => fake.member(mail(w))?.status);
+  const tags = async (p, ...t) => ok(await c.action('person.update', { id: p.id, tags: ['member', ...t] }));
+  const patches = () => fake.calls.filter((x) => x.method === 'PATCH');
+  // Ana left the newsletter last year by her own link, with the address she had then;
+  // the desk has since typed in her new one.
+  const ana = await person(c, 'ana-old');
+  await subscribe(c, 'ana-old');
+  assert.equal((await app.request(`/u/${(await subOf(ws, 'ana-old')).id}`, { method: 'POST' })).status, 200);
+  ok(await c.action('person.update', { id: ana.id, email: mail('ana') }));
+  // Dee, Eli and Fay were each tagged do-not-email once, and the desk lifted it.
+  const people = {};
+  for (const w of ['dee', 'eli', 'fay']) {
+    people[w] = await person(c, w);
+    await tags(people[w], 'do-not-email');
+    await tags(people[w]);
+  }
+  await run(ws);
+  const list = await membersList(c);
+  await push(c, ws, list.id, { everyone: true });
+  assert.deepEqual(there('ana', 'dee', 'eli', 'fay'), ['subscribed', 'subscribed', 'subscribed', 'subscribed'], 'all four can be emailed here, so all four went');
+
+  // An email goes to the list from base.win (no sender is set up here: the rows are made, nothing is sent).
+  ok(await c.action('blast.send', { kind: 'eblast', subject: 'Hello', body: 'Hello there', audience: { list_id: list.id } }));
+  const theirLink = async (who) => {
+    const row = (await db.query('select id from blast_recipients where workspace_id = $1 and lower(email) = $2', [ws, mail(who)])).rows[0];
+    assert.ok(row, `the email went to ${who}`);
+    assert.equal((await app.request(`/bu/${row.id}`, { method: 'POST' })).status, 200);
+  };
+  fake.calls.length = 0;
+  await theirLink('ana'); // her own unsubscribe, at an address typed in after an old no
+  await theirLink('dee'); // her own unsubscribe, after a tag the desk had lifted
+  await tags(people.eli, 'do-not-contact'); // do-not-contact, after a lifted do-not-email
+  await tags(people.fay, 'do-not-email'); // the desk’s tag, again
+  assert.equal((await run(ws)).failed, 0);
+  assert.deepEqual(there('ana', 'dee', 'eli', 'fay'), ['unsubscribed', 'unsubscribed', 'unsubscribed', 'unsubscribed'], 'each new no reached Mailchimp');
+  assert.equal(patches().length, 4, 'once each');
+  keysAreTrue();
+
+  // The same no, a new address. Gus is do-not-email here; the desk corrects his address to one Mailchimp
+  // has subscribed (he joined there himself, with it): Mailchimp is told about that address — once.
+  const gus = await person(c, 'gus', { tags: ['member', 'do-not-email'] });
+  fake.add(mail('gus-work'));
+  await run(ws);
+  fake.calls.length = 0;
+  ok(await c.action('person.update', { id: gus.id, email: mail('gus-work') }));
+  await run(ws);
+  assert.deepEqual([there('gus-work'), patches().length], [['unsubscribed'], 1]);
+  // …and nothing that says nothing new about email is ever told: another tag beside it, a phone number,
+  // do-not-contact on top of do-not-email, the same address typed again.
+  fake.calls.length = 0;
+  await tags(gus, 'do-not-email', 'volunteer');
+  ok(await c.action('person.update', { id: gus.id, phone: '604-555-0143' }));
+  await tags(gus, 'do-not-email', 'volunteer', 'do-not-contact');
+  ok(await c.action('person.update', { id: gus.id, email: mail('gus-work') }));
+  assert.deepEqual([(await run(ws)).ran, fake.calls.length], [0, 0]);
+  // So someone who says yes again in Mailchimp itself keeps that yes: a later change to their record
+  // here, still tagged, is no new no and never takes them off there.
+  fake.member(mail('fay')).status = 'subscribed';
+  await tags(people.fay, 'do-not-email', 'volunteer');
+  assert.deepEqual([(await run(ws)).ran, there('fay')], [0, ['subscribed']]);
+  // The tag lifted and put on once more is a new no, and is told.
+  await tags(people.fay, 'volunteer');
+  await tags(people.fay, 'volunteer', 'do-not-email');
+  await run(ws);
+  assert.deepEqual(there('fay'), ['unsubscribed']);
+  assert.equal(ok(await c.get('/api/audit/verify')).ok, true);
+});
+
 test('a 429 halfway leaves a sync the next run completes; a refusal that will not change stops it with Mailchimp’s words', async () => {
   const { c, ws } = await campaign('Limit');
   for (const w of ['ana', 'ben', 'cal']) await person(c, w);

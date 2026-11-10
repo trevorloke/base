@@ -238,7 +238,13 @@ What happens:
 - **base.win's own no goes out.** An unsubscribe here (the link in an email,
   the desk's Remove), a *do-not-email* or *do-not-contact* tag, or an address
   that bounced or reported spam: within moments the member is marked
-  unsubscribed in Mailchimp — only if Mailchimp has them as subscribed. An
+  unsubscribed in Mailchimp — only if Mailchimp has them as subscribed. Each
+  new no is told, whatever older one is on the person's record (a no from
+  the address they had before, a tag the desk has since lifted), and so is
+  the new address of someone already tagged. A change that says nothing new
+  about email (another tag beside it, a phone number) tells Mailchimp
+  nothing: someone who has since said yes in Mailchimp itself is not taken
+  off there by an edit here. An
   address Mailchimp doesn't have is never added to say no for it. One
   address Mailchimp won't change never holds up the others: they are told,
   and Settings → Services says how many are still waiting, in Mailchimp's
