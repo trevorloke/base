@@ -57,6 +57,7 @@ INTEGRATIONS.md.
 | `STARBASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
 | `RESEND_WEBHOOK_SECRET` | bounces, spam complaints and "delivered" back from Resend (INTEGRATIONS.md; SendGrid: `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY`) | optional — without it a send says *sent* and a dead address is tried again next time |
+| `MAILCHIMP_API_KEY` | *Send to Mailchimp* on a list, unsubscribes kept in step both ways (INTEGRATIONS.md; `MAILCHIMP_AUDIENCE_ID` for an account with several audiences, `MAILCHIMP_WEBHOOK_SECRET` to check its webhook's signature) | optional — without it the button is not there |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
 | `GOOGLE_MAPS_SERVER_KEY` | Google geocoding (`GEOCODER=google` or `GEOCODER_FALLBACK=google`) and Google Maps tiles (`GOOGLE_MAPS_TILES=1`) | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 | `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
@@ -303,6 +304,18 @@ one tap away under **More**.
   doesn't): that address is unsubscribed too. `node e2e-mail.mjs` (PORT,
   SHOTS) runs the *Sending domain* panel, Check and a send's delivery line
   in a browser against a stand-in sender.
+- **Mailchimp** (optional — `MAILCHIMP_API_KEY`; INTEGRATIONS.md) —
+  Settings → Services: **Check** names the audience and says Mailchimp isn't
+  sending unsubscribes here yet; **Connect**, copy the signing secret it
+  shows once into `MAILCHIMP_WEBHOOK_SECRET`, and **Check** passes. On a
+  list of your own team's addresses: **Send to Mailchimp** says how many go
+  (only the newsletter's subscribers unless you tick *Everyone…*), then
+  *In Mailchimp · 3 addresses · tag “base.win: …”* — look for the tag in
+  Mailchimp. Unsubscribe one address there: in a moment it is off the
+  newsletter here, and **Sync again** takes it out of the tag. Unsubscribe
+  another here: Mailchimp has it unsubscribed. It has not been run against
+  a real Mailchimp account yet — this is that test. `node e2e-mailchimp.mjs`
+  (PORT, SHOTS) runs all of it in a browser against a stand-in Mailchimp.
 - **Settings → Services** (managers) — every outside service: what it's
   for, *Set up* / *Not set up* (naming the settings missing) / *Using the
   free default*. **Check** on each makes one real call: Email says whether

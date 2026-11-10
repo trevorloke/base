@@ -89,6 +89,7 @@ Then, as each one is ready:
 | `RESEND_WEBHOOK_SECRET` | the signing secret of the webhook added at Resend (below) | bounces and spam complaints coming back: a dead address is never emailed again |
 | `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` | only for a campaign that sends through SendGrid instead: `sendgrid`, its key, its Event Webhook's verification key (INTEGRATIONS.md) | email through SendGrid |
 | `RESEND_REGION` | leave unset (`us-east-1`) unless the domain should be made in another Resend region | *Add domain* in Settings → Services |
+| `MAILCHIMP_API_KEY`, `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET` | from Mailchimp: the account's key, whole (its ending names the server); the audience's id only when the account has several; the signing secret *Connect* shows, once | only if the campaign builds its emails in Mailchimp: *Send to Mailchimp* on a list, unsubscribes and dead addresses kept in step both ways (INTEGRATIONS.md, *Mailchimp*) |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio; for texts to a list in Canada the number should be a verified toll-free number or a short code (INTEGRATIONS.md) | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
@@ -111,6 +112,15 @@ Email: Resend → **Webhooks** → add one at
 shows the exact address and the events to tick) and put its signing secret
 in `RESEND_WEBHOOK_SECRET`. From then on a bounce or a spam complaint takes
 the address off every later send, and a send says how many were delivered.
+
+Mailchimp: nothing to paste into Mailchimp by hand. With the key set,
+**Settings → Services → Mailchimp** → **Check**, then **Connect** (it gives
+Mailchimp the address unsubscribes come back to, built from
+`STARBASE_PUBLIC_URL`, and shows a signing secret once, for
+`MAILCHIMP_WEBHOOK_SECRET`), then **Pull now**. It was built against
+Mailchimp's published API and has not been run against a real account:
+before the first real list, try it on one of your own team's addresses
+(INTEGRATIONS.md has the steps and what is not confirmed).
 
 Stripe: Developers → **Webhooks** → add an endpoint at
 `https://starbase.imaginesurrey.ca/stripe/webhook` (Settings → Services

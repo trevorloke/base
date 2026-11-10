@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
+import SendToMailchimp from '../components/SendToMailchimp.jsx';
 import { useScale } from '../components/RatingButtons.jsx';
 import { useAction, ratingBands } from './People.jsx';
 import { CUT_KEYS, CutFields, useTurfs } from '../components/FieldCuts.jsx';
@@ -186,6 +187,7 @@ function OneList({ id }) {
       <p className="ls-preview"><Counts counts={list.data.counts} kind={l.kind} /></p>
       <div className="ops-actions ls-tools">
         <a className="btn btn-quiet ops-tap" href={at(`/api/lists/${id}/export.csv`)}>Download CSV</a>
+        <SendToMailchimp listId={id} />
         {l.kind === 'filter' && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setEditing((v) => !v)}>{editing ? 'Close' : 'Edit the filter'}</button>}
         {asking ? (
           <span className="ops-confirm"><span>Delete this list?</span>

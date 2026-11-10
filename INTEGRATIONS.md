@@ -13,6 +13,7 @@ is written) and says exactly what is wrong if anything is.
 | [Database](#database) | everything the campaign records | yes | `DATABASE_URL` |
 | [Public address](#public-address) | links in email, texting's callbacks | yes | `STARBASE_PUBLIC_URL` |
 | [Email — Resend or SendGrid](#email--resend-or-sendgrid) | invites, newsletters, press, ladders, shift alerts, receipts; bounces and spam complaints back | yes | `RESEND_API_KEY`, `MAIL_FROM` (+ `RESEND_WEBHOOK_SECRET`); or `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` |
+| [Mailchimp](#mailchimp) | a list sent to the campaign's Mailchimp audience as a tag; unsubscribes and dead addresses back, and base.win's own out | no (only if the campaign builds its emails in Mailchimp) | `MAILCHIMP_API_KEY` (+ `MAILCHIMP_AUDIENCE_ID`, `MAILCHIMP_WEBHOOK_SECRET`) |
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, ladder texts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
@@ -181,6 +182,134 @@ reference comes back on each event (the sender's id is used when it
 doesn't), the name of the header that carries that id (`X-Message-Id`), how
 big a batch of events can be (up to 1 MB is taken), and how a retried
 delivery is stamped (no age limit is put on its signature).
+
+## Mailchimp
+
+[mailchimp.com](https://mailchimp.com). For a campaign whose communications
+lead already builds emails in Mailchimp and wants to keep doing so. The
+audience is still chosen in base.win, and nobody who said no in either place
+is emailed from the other. base.win calls Mailchimp's Marketing API with
+plain HTTPS (no SDK, `server/ext/mailchimp`). Not needed to launch: without
+`MAILCHIMP_API_KEY` there is no button and nothing else changes.
+
+What happens:
+
+- **A list becomes a tag.** On a list's page, **Send to Mailchimp** (desk
+  roles; later **Sync again**). It asks first: how many addresses go. By
+  default only the list's addresses that are **subscribed to base.win's
+  newsletter**; one tick — *Everyone on this list who can be emailed; they
+  agreed to hear from us by email* — widens it to everyone the list could
+  email (never do-not-email, do-not-contact, unsubscribed, or an address
+  that bounced). Mailchimp's terms require permission, which is why the
+  careful one is the default.
+- **Only the email address, first name and last name leave base.win.**
+  Never a rating, a tag, a note, a street address or anything about money.
+- **Nobody already in the audience is changed.** New addresses are added as
+  subscribed; someone already there keeps their name and their status, so a
+  person who unsubscribed in Mailchimp is never put back. Then the tag
+  **base.win: *list name*** is brought into line with the list: who is
+  missing joins it, who left the list leaves it (they stay in the audience).
+  Running it twice changes nothing. It works in the background and the line
+  under the buttons says how it stands — *Syncing with Mailchimp · 1,500 to
+  go*, *In Mailchimp · 4,212 addresses · tag “base.win: Members”*, or
+  *Stopped: Mailchimp said …* with **Try again**. If Mailchimp says "too
+  many" or is down, base.win tries again by itself and carries on where it
+  stopped.
+- **Unsubscribed and cleaned come back.** Someone who unsubscribes in
+  Mailchimp is turned off here — off the newsletter list, or *do-not-email*
+  when they were never on it — with a no on the consent record (source
+  `mailchimp-unsubscribe`), unless they said yes *here* after they left
+  there: a newer yes of their own is not undone by an older no. An address
+  Mailchimp *cleaned* (it bounced for good) goes on the suppression list, so
+  nothing here emails it either. Three ways it arrives: Mailchimp's webhook,
+  the moment it happens; a job every night, for anything a webhook missed
+  (once a week, and the first time, it reads everyone unsubscribed or
+  cleaned, so someone added here after they left there is found); and **Pull
+  now** on Settings → Services. Every sync pulls first, so nobody who left
+  in Mailchimp is ever offered to it again. Only addresses the campaign
+  already holds are touched: nothing is kept about a stranger.
+- **base.win's own no goes out.** An unsubscribe here (the link in an email,
+  the desk's Remove), a *do-not-email* or *do-not-contact* tag, or an address
+  that bounced or reported spam: within moments the member is marked
+  unsubscribed in Mailchimp — only if Mailchimp has them as subscribed. An
+  address Mailchimp doesn't have is never added to say no for it. **base.win
+  never moves anyone in Mailchimp to subscribed.**
+- **The webhook is only a hint.** Whatever a delivery says, base.win then
+  reads that member from Mailchimp itself and acts on the answer, so a forged
+  call can do nothing but cause one read, about an address already on file.
+  Its address ends in 32 characters made from the API key (never shown here;
+  Connect gives it to Mailchimp), and when `MAILCHIMP_WEBHOOK_SECRET` is set
+  each delivery must also carry Mailchimp's signature.
+
+Set it up:
+
+1. Mailchimp → your profile → **Account & billing** → **Extras** → **API
+   keys** → create a key. The whole key, ending included (`…-us19`: that is
+   the server the account lives on).
+2. Set `MAILCHIMP_API_KEY` to it. An account with more than one audience
+   also needs `MAILCHIMP_AUDIENCE_ID`: **Check** names each audience with
+   its id so you can pick.
+3. **Settings → Services → Mailchimp** → **Check**: *The key works ·
+   audience “…” · 4,212 subscribed — but Mailchimp isn’t sending
+   unsubscribes here yet: tap Connect*.
+4. **Connect** (the one step that changes something at Mailchimp): it adds a
+   webhook on the audience to this base.win's public address
+   (`STARBASE_PUBLIC_URL` must be set) for *unsubscribes*, *cleaned* and
+   *address changes*, from subscribers and admins — not from the API, so
+   base.win's own changes don't echo back. If Mailchimp answers with a
+   **signing secret**, it is shown once: copy it into
+   `MAILCHIMP_WEBHOOK_SECRET`. (Connect again later shows no secret —
+   Mailchimp gives it once. For a new one, delete the webhook in Mailchimp
+   → Audience → Settings → Webhooks and Connect again.)
+5. **Check** again: *… · unsubscribes come back here*. Then **Pull now**
+   once, for everyone who left before today.
+
+| Setting | Default | For |
+|---|---|---|
+| `MAILCHIMP_API_KEY` | — | the key; its ending is the account's server |
+| `MAILCHIMP_AUDIENCE_ID` | the account's only audience | which audience, when the account has several |
+| `MAILCHIMP_WEBHOOK_SECRET` | — | optional: the signing secret Connect showed (a comma list while one is rolled). Set, an unsigned delivery is refused |
+| `MAILCHIMP_API_BASE` | from the key | tests point it at a stand-in |
+
+**Check:** Services → Mailchimp reads, and writes nothing: the key works;
+the audience (with how many are subscribed), or each audience by name when
+one has to be chosen; and whether a webhook on it sends unsubscribes and
+cleaned addresses to this server — *tap Connect* when it doesn't, or when
+it points at an address made from an earlier key. The line under the
+buttons says when the last pull was and what it found, and how many of
+base.win's unsubscribes Mailchimp has not been told yet (Pull now sends them
+again).
+
+What it does not do: people who said no in base.win **before** Mailchimp was
+connected are not told to Mailchimp by themselves — a list sent from here
+never includes them, but if the audience has them from elsewhere,
+unsubscribe them there once. It does not import an audience (People →
+Import reads Mailchimp's CSV export), bring back a Mailchimp campaign's
+opens and clicks, or rename a tag when its list is renamed.
+
+Built against Mailchimp's published API; confirm on your own account with
+Settings → Services → Check before relying on it. It has not been run
+against a real Mailchimp account: only against a stand-in built from
+Mailchimp's documentation (`server/test/fake-mailchimp.js`). Not confirmed
+there:
+
+- that webhook signing is on for the account, and the header's exact name
+  and shape (`X-Mailchimp-Signature: t=…,v1=…` is what is read; the
+  signature is only required once `MAILCHIMP_WEBHOOK_SECRET` is set);
+- that Mailchimp asks the webhook's address with a GET before saving it
+  (base.win answers 200 there either way);
+- what a batch answers for an address that is unsubscribed or cleaned in the
+  audience (base.win counts on *nobody already there is changed*, and reads
+  who left before every sync);
+- how many addresses one tag change takes (500 at a time is sent) and how
+  long a tag's name may be (cut at 100 characters);
+- whether Mailchimp sends a webhook again after a failure (the nightly pull
+  is the net either way).
+
+Before the first real send: on a small list of your own team's addresses,
+**Send to Mailchimp**, look at the tag in Mailchimp, unsubscribe one
+address there and see it turn off here, then unsubscribe another here and
+see it marked unsubscribed there.
 
 ## Texting and calls — Twilio
 

@@ -1,7 +1,8 @@
 // Settings → Services (managers): every outside service Starbase uses, what
 // it's for, whether it's set up, and "Check" — one real call to the service
 // (GET /api/connections, POST /api/connections/check — ext/connections).
-// The Email row carries the sender's "Sending domain" (SendingDomain.jsx).
+// The Email row carries the sender's "Sending domain" (SendingDomain.jsx);
+// the Mailchimp row its own Connect and Pull now (MailchimpPanel.jsx).
 // Keys live in the hosting's settings (Render → the service → Environment),
 // never here: a missing one is named, with where it goes. The long version
 // is INTEGRATIONS.md.
@@ -12,6 +13,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, apiPost } from '../api.js';
 import SendingDomain from './SendingDomain.jsx';
+import MailchimpPanel from './MailchimpPanel.jsx';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import './services.css';
 
@@ -39,6 +41,7 @@ function Row({ s, online }) {
           <p className="sv2-missing">Set in the hosting’s environment: {s.missing.map((k) => <code key={k}>{k}</code>).reduce((a, b) => [a, ' · ', b])}</p>
         )}
         {s.domainPanel && <SendingDomain online={online} />}
+        {s.panel === 'mailchimp' && <MailchimpPanel online={online} onChanged={() => setRes(null)} />}
         {s.webhook && <Webhook w={s.webhook} />}
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
       </div>

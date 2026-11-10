@@ -29,6 +29,7 @@
 //   refuse(email, words)      batch subscribe refuses this address
 //   limit({ after, times })   answer 429 — after that many more calls, that many times
 //   fail(code | false)        every call answers that status
+//   slow(ms)                  every call waits that long first (a browser check watching a sync)
 //   signing(secret | null)    a webhook made from now on is signed with it (shown once, on create)
 //   probe(fn | null)          saving a webhook first asks fn(url) → status; refused unless 200
 //   calls                     every request: { method, path, query, body, auth }
@@ -47,6 +48,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
   let n = 0;
   let limited = null; // { after, times }
   let failWith = false;
+  let slowMs = 0;
   let signWith = null;
   let probeWith = null;
   let base = '';
@@ -125,10 +127,11 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
     refuse: (email, words = 'looks fake or invalid, please enter a real email address.') => { refusals.set(lower(email), words); },
     limit: (v = {}) => { limited = v === false ? null : { after: v.after ?? 0, times: v.times ?? 1 }; },
     fail: (v) => { failWith = v; },
+    slow: (ms) => { slowMs = Number(ms) || 0; },
     signing: (secret) => { signWith = secret; },
     probe: (fn) => { probeWith = fn; },
     reset: () => {
-      calls.length = 0; refusals.clear(); limited = null; failWith = false; signWith = null; probeWith = null;
+      calls.length = 0; refusals.clear(); limited = null; failWith = false; slowMs = 0; signWith = null; probeWith = null;
       for (const a of audiences.values()) { a.members.clear(); a.segments.clear(); a.webhooks.length = 0; }
       for (const id of [...audiences.keys()]) if (id !== first.id) audiences.delete(id);
     },
@@ -260,6 +263,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
         const basic = /^Basic (.+)$/.exec(auth);
         const given = basic ? Buffer.from(basic[1], 'base64').toString('utf8').split(':').slice(1).join(':') : (/^Bearer (.+)$/.exec(auth)?.[1] || '');
         if (!given || (apiKey && given !== apiKey)) return send(problem(401, 'API Key Invalid', "Your API key may be invalid, or you've attempted to access the wrong datacenter."));
+        if (slowMs) await new Promise((r) => { setTimeout(r, slowMs); });
         if (failWith) return send(problem(failWith, 'Internal Server Error', 'An unexpected internal error has occurred.'));
         if (limited) {
           if (limited.after > 0) limited.after -= 1;

@@ -34,7 +34,7 @@ The contract the website work is built against. Read with ROADMAP.md.
   `/media/:id`, `/site-assets/*` are answered, and what services and emails
   already sent call back, each only in its own shape, case and method: `POST
   /stripe/webhook`, Twilio's `POST /api/public/twilio/…`, the email sender's
-  `POST /hooks/mail/<sender>` and the unsubscribe
+  `POST /hooks/mail/<sender>`, Mailchimp's `/hooks/mailchimp/<key>` and the unsubscribe
   links `/u/<id>`, `/bu/<id>`, `/lu/<id>` (the id in either case; `/U/…` is
   the site's) — so no domain setting can drop a payment, a STOP, a bounce or
   an unsubscribe. (`/r/…` there is the referral link.)

@@ -540,6 +540,27 @@ setup and what is not confirmed against a real account.
 | `RESEND_REGION` | where *Add domain* makes the domain at Resend (default `us-east-1`) |
 | `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` | sending through SendGrid, and its delivery events |
 
+Mailchimp, for a campaign that builds its emails there (optional —
+`server/ext/mailchimp`): a list's page has **Send to Mailchimp**, which
+makes the list a tag of the campaign's Mailchimp audience. By default only
+the addresses subscribed to the newsletter here go, one tick widens it to
+everyone on the list who can be emailed, and only the email, first and last
+name leave — never a rating, a tag, a note, an address or money. Nobody
+already in the audience is changed, and a no in either place is a no in
+both: unsubscribed and cleaned come back (Mailchimp's webhook at `POST
+/hooks/mailchimp/<key>` — the address's last part is made from the API key,
+and it answers on the campaign's website domain too — plus a nightly pull
+and *Pull now*), and an unsubscribe, a do-not-email tag or a dead address
+here unsubscribes the member there. **Settings → Services → Mailchimp** has
+*Check*, *Connect* and *Pull now*. INTEGRATIONS.md has the setup and what is
+not confirmed against a real account.
+
+| Setting | For |
+|---|---|
+| `MAILCHIMP_API_KEY` | the Mailchimp account's key (its ending names the account's server) |
+| `MAILCHIMP_AUDIENCE_ID` | which audience, when the account has more than one |
+| `MAILCHIMP_WEBHOOK_SECRET` | optional: the signing secret *Connect* shows once |
+
 Provider-pluggable, no SDKs: `RESEND_API_KEY` (+ `MAIL_FROM`) for email,
 `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` for SMS. Without
 them, blasts and shift notifications are recorded as **queued** per recipient
