@@ -3,7 +3,7 @@
 //   GET /requests?open=1|all     desk: newest first (500 at most) — open ones
 //                                by default, every one with open=all — each
 //                                with the person (name, phone, address, unit,
-//                                rating), who asked and who marked it done
+//                                rating, tags), who asked and who marked it done
 //   GET /requests/count          desk: { open: n } for Today's "Needs you"
 //   GET /persons/:id/requests    any role: a person's requests, newest first.
 //                                The desk gets everything; a volunteer only
@@ -22,10 +22,15 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const isDesk = (c) => c.get('ctx').role !== 'volunteer';
 const refuse = (c) => c.json({ error: 'volunteers cannot view this' }, 403);
 const LIMIT = 500;
+const tagsOf = (v) => { try { const t = typeof v === 'string' ? JSON.parse(v) : v; return Array.isArray(t) ? t : []; } catch { return []; } };
 
 const rowOut = (r) => ({
   id: r.id, kind: r.kind, note: r.note, created_at: r.created_at, done_at: r.done_at, done_note: r.done_note,
-  person: { id: r.person_id, name: r.person_name, phone: r.person_phone, address: r.person_address, unit: r.person_unit, rating: r.person_rating },
+  person: {
+    id: r.person_id, name: r.person_name, phone: r.person_phone, address: r.person_address, unit: r.person_unit, rating: r.person_rating,
+    // So the desk's Call is not offered for someone tagged do-not-call.
+    tags: tagsOf(r.person_tags),
+  },
   asked_by_name: r.asked_by_name || null,
   done_by_name: r.done_by_name || null,
 });
@@ -46,7 +51,7 @@ api.get('/requests', async (c) => {
   const rows = (await c.get('db').query(
     `select r.id, r.kind, r.note, r.created_at, r.done_at, r.done_note, r.person_id,
        p.name as person_name, p.phone as person_phone, p.address as person_address,
-       p.unit as person_unit, p.rating as person_rating,
+       p.unit as person_unit, p.rating as person_rating, p.tags as person_tags,
        a.name as asked_by_name, d.name as done_by_name
      from door_requests r
      join persons p on p.id = r.person_id and p.deleted_at is null

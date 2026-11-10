@@ -10,6 +10,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { noCalls } from '@starbase/shared/canvass';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { KIND_WORDS } from '../components/RequestAsk.jsx';
@@ -53,6 +54,7 @@ function Row({ r, online, busy, onDone, onReopen, confirming, setConfirming }) {
           <span className="ops-row__name">
             <Link to={`/people/${r.person.id}`} className="rq-who">{r.person.name}</Link>
             <span className="rq-kind-word"> · {KIND_WORDS[r.kind] || KIND_WORDS.other}</span>
+            {!done && noCalls(r.person) && <> <span className="chip chip-danger">Do not call</span></>}
           </span>
           {r.note && <span className="rq-said">“{r.note}”</span>}
           <span className="ops-row__sub">
@@ -83,7 +85,7 @@ function Row({ r, online, busy, onDone, onReopen, confirming, setConfirming }) {
         </form>
       ) : (
         <div className="rq-row__acts">
-          {!done && r.person.phone && <a className="btn ops-tap" href={`tel:${dialable(r.person.phone)}`}>Call</a>}
+          {!done && r.person.phone && !noCalls(r.person) && <a className="btn ops-tap" href={`tel:${dialable(r.person.phone)}`}>Call</a>}
           <Link className="btn ops-tap" to={`/people/${r.person.id}`}>Profile</Link>
           {done
             ? <button type="button" className="btn btn-quiet ops-tap" disabled={busy || !online} onClick={() => onReopen(r)}>Reopen</button>

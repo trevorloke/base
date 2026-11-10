@@ -72,6 +72,9 @@ export const SUGGESTED_TAGS = [
   'newsletter', 'petition', 'youth', 'senior', 'business', 'faith',
   'union', 'do-not-call', 'do-not-contact',
 ];
+// Asked not to be phoned: every Call a screen offers checks this first (a
+// number that is only shown can still be read; it is never one tap to dial).
+export const noCalls = (p) => Array.isArray(p?.tags) && p.tags.includes('do-not-call');
 
 // Donor tiers, derived from real gifts — never self-declared.
 //   star:      $1,000+ in the calendar year, or $100+/mo recurring
