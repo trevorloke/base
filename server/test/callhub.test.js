@@ -4,14 +4,17 @@
 //   · who leaves: a number e164() takes, never do-not-contact or do-not-call
 //     (nor a number one of them shares); one contact per number; only the
 //     phone, first and last name and city
-//   · people not to call go to a CallHub do-not-call list with each push
+//   · people not to call go to a CallHub do-not-call list with each push,
+//     and when someone is newly marked
 //   · a throttle or the daily limit waits and carries on by itself; a
-//     refusal stops with CallHub's words and "Carry on"
+//     number CallHub won't take is left out and counted; a refusal of the
+//     push stops with CallHub's words and "Carry on"
 //   · a result: JSON or a form, at the top level or inside `data`; matched
 //     by number against what this campaign sent; one phone contact with the
 //     mapped outcome, credited to the member whose sign-in email is the
 //     agent's; an open phone bank's number crossed off; once only; nothing
-//     for a number never sent; a wrong address refused
+//     for a number never sent; a wrong address refused; what can't be read
+//     is kept as it came
 //   · the outcome table is filled by pattern and correctable; a rating only
 //     from a survey answer the desk mapped
 //   · Settings → Services: Check reads, Connect writes; never a key in an
@@ -68,7 +71,7 @@ before(async () => {
     },
   });
   // One a second in real life; the tests don't wait.
-  (await import('../ext/callhub/push.js').catch(() => null))?._setPaceForTest(0);
+  (await import('../ext/callhub/callhub.js'))._setPaceForTest(0);
   for (const k of ENV) delete process.env[k];
   mgr = new Client();
   const r = await mgr.signup({ name: 'Marco Example', workspaceName: 'Imagine Surrey', email: `marco+${tag}@example.org`, jurisdiction: 'bc-municipal' });
@@ -126,6 +129,12 @@ test('not set up: the desk is told CallHub is off, a push says so, the address a
 });
 
 test('Settings → Services: Check reads and says what is missing; Connect is its own step; never the key in an answer', async () => {
+  // With the key but no public address, Connect has nowhere to point CallHub: it says so and writes nothing.
+  process.env.CALLHUB_API_KEY = KEY;
+  process.env.CALLHUB_API_BASE = `${fake.url}/v1/`;
+  const early = ok(await mgr.action('callhub.connect', {}));
+  assert.deepEqual([early.ok, early.said], [false, 'Set the public address first (STARBASE_PUBLIC_URL): CallHub needs somewhere to send results']);
+  assert.equal(fake.calls.length, 0, 'CallHub was not asked');
   connectCallHub();
   assert.deepEqual(ok(await staff.get('/api/integrations')), { callhub: true });
   let l = ok(await mgr.get('/api/connections'));
@@ -163,6 +172,21 @@ test('Settings → Services: Check reads and says what is missing; Connect is it
   assert.equal(fake.webhooks.filter((w) => w.target.startsWith('https://other-tool.example.org/')).length, 12, 'other tools’ webhooks are untouched');
   c2 = ok(await mgr.post('/api/connections/check', { key: 'callhub' }));
   assert.equal(c2.ok, true, 'found on the second page');
+  // Should CallHub keep one webhook per event: our own old address makes way for the new one.
+  fake.webhooks.length = 0;
+  fake.webhooks.push({ id: 951, event: 'cc.notes', target: `${PUBLIC}/hooks/callhub/${'e'.repeat(32)}` });
+  fake.oneHookPerEvent(true);
+  assert.equal(ok(await mgr.action('callhub.connect', {})).said, 'CallHub now sends each call’s result here');
+  assert.deepEqual(fake.webhooks.map((w) => w.target), [mine]);
+  // …but never someone else's: CallHub's refusal is passed on in its words.
+  fake.webhooks.length = 0;
+  fake.webhooks.push({ id: 952, event: 'cc.notes', target: 'https://other-tool.example.org/hook/x' });
+  const no = ok(await mgr.action('callhub.connect', {}));
+  assert.deepEqual([no.ok, no.said], [false, 'CallHub didn’t take it: event: A webhook for this event already exists.']);
+  assert.equal(fake.webhooks.length, 1, 'the other tool’s webhook stands');
+  fake.oneHookPerEvent(false);
+  fake.webhooks.length = 0;
+  ok(await mgr.action('callhub.connect', {}));
   // (From here on only this base.win hears results.)
   for (let i = fake.webhooks.length - 1; i >= 0; i -= 1) if (!fake.webhooks[i].target.startsWith(PUBLIC)) fake.webhooks.splice(i, 1);
 
@@ -245,14 +269,24 @@ test('people not to call go to a CallHub do-not-call list with the push: once ea
   assert.equal(fake.dnc.length, 4, 'what was sent is remembered');
   const [p2] = await pushesOf(`list=${ids.list}`);
   assert.deepEqual([p2.id, p2.status, p2.sent], [r.push.id, 'sent', 4]);
-  // Someone newly marked goes with the next push.
+  // Someone newly marked does not wait for the next push: a job tells CallHub, as the system.
   ok(await mgr.action('person.update', { id: P.ben.id, tags: ['do-not-call'] }));
+  await drain();
+  assert.deepEqual([fake.dnc.at(-1).phone_number, fake.dnc.at(-1).category], ['+16045550102', 1]);
+  assert.equal(fake.dnc.length, 5);
+  const told = (await db.query(`select actor_id, payload from events where workspace_id = $1 and action = 'callhub.dnc'`, [ws])).rows;
+  assert.deepEqual(told.map((e) => [e.actor_id, e.payload]), [[null, { do_not_call_told: 1 }]], 'on the log: how many, never which');
+  // …and the next push leaves them out, and tells CallHub nothing twice.
   const r3 = ok(await mgr.action('callhub.push', { list_id: ids.list }));
   assert.deepEqual([r3.push.total, r3.push.skipped], [3, 7]);
   await drain();
-  assert.deepEqual(fake.dnc.at(-1).phone_number, '+16045550102');
   assert.equal(fake.dnc.length, 5);
+  // A tag that changes nothing about calls queues nothing.
+  const jobs = async () => (await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'callhub.dnc'`, [ws])).rows[0].n;
+  const before = await jobs();
   ok(await mgr.action('person.update', { id: P.ben.id, tags: [] }));
+  ok(await mgr.action('person.update', { id: P.ana.id, city: 'Surrey' }));
+  assert.equal(await jobs(), before);
   ids.push = r3.push.id; // the newest push: where results for Ana, Cy and the shared number land
 });
 
@@ -353,12 +387,33 @@ test('a result for a number never sent files nothing and never makes a person; a
     const res = await app.request(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
     assert.equal(res.status, 404, path);
   }
-  assert.equal((await app.request(hookPath(), { method: 'GET' })).status, 404, 'only POST');
+  assert.equal((await app.request(`/hooks/callhub/${'0'.repeat(32)}`, { method: 'GET' })).status, 404);
   assert.equal((await db.query('select count(*)::int as n from callhub_results where workspace_id = $1', [ws])).rows[0].n, stored);
   assert.ok(!(await contactsOf(P.ana.id)).some((c) => /forged/.test(c.note || '')));
-  // Not a result at all: said so, nothing kept.
-  const junk = await app.request(hookPath(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'not json' });
-  assert.equal(junk.status, 400);
+});
+
+test('what base.win can’t read as a result is kept as it came, and Check says so; a probe of the address is answered', async () => {
+  const post = (body, type = 'application/json') => app.request(hookPath(), { method: 'POST', headers: { 'content-type': type }, body });
+  const contacts = (await db.query('select count(*)::int as n from contacts where workspace_id = $1', [ws])).rows[0].n;
+  // CallHub's real shape is not confirmed: something else entirely is not thrown away.
+  const odd = '<call><number>+16045550101</number><result>Answered</result></call>';
+  let res = await post(odd, 'application/xml');
+  assert.deepEqual([res.status, await res.json()], [200, { received: true, read: false, filed: false }]);
+  res = await post(odd, 'application/xml');
+  assert.deepEqual(await res.json(), { received: true, read: false, duplicate: true }, 'the same bytes again are the same delivery');
+  res = await post(JSON.stringify([{ contact: '+16045550101' }]));
+  assert.deepEqual(await res.json(), { received: true, read: false, filed: false }, 'a list is not a result base.win reads');
+  const kept = (await db.query(`select raw, person_id, contact_id from callhub_results where workspace_id = $1 and raw->>'unread' is not null order by created_at`, [ws])).rows;
+  assert.deepEqual(kept.map((k) => [k.raw.unread, k.raw.type, k.person_id, k.contact_id]), [[odd, 'application/xml', null, null], ['[{"contact":"+16045550101"}]', 'application/json', null, null]]);
+  assert.equal((await db.query('select count(*)::int as n from contacts where workspace_id = $1', [ws])).rows[0].n, contacts, 'nothing is filed from it');
+  const check = ok(await mgr.post('/api/connections/check', { key: 'callhub' }));
+  assert.match(check.said, /^The key works · results come back here · \d+ results so far · 3 for numbers base\.win never sent · 2 base\.win couldn’t read \(kept as they came\)$/);
+  // Nothing sent at all (a service trying the address): fine, and nothing kept.
+  res = await post('');
+  assert.deepEqual([res.status, await res.json()], [200, { received: true, filed: false }]);
+  res = await app.request(hookPath(), { method: 'GET' });
+  assert.deepEqual([res.status, await res.json()], [200, { ok: true }]);
+  assert.equal((await db.query(`select count(*)::int as n from callhub_results where workspace_id = $1 and raw->>'unread' is not null`, [ws])).rows[0].n, 2);
 });
 
 test('an agent whose email is a member’s sign-in is credited with the call', async () => {
@@ -535,7 +590,7 @@ test('CallHub’s daily limit: said in plain words, and the rest carries on by i
   for (let i = 0; i < 5; i += 1) people.push((await mgr.createPerson(`Daily${i} Example`, { phone: `604-555-016${i}` })).id);
   const list = ok(await mgr.action('list.create', { name: 'Daily list', kind: 'people', person_ids: people })).list.id;
   const { _setDailyLimitForTest } = await import('../ext/callhub/push.js');
-  const sentToday = (await db.query(`select count(*)::int as n from callhub_contacts where sent_at > now() - interval '24 hours'`)).rows[0].n;
+  const sentToday = (await db.query(`select count(*)::int as n from (select distinct push_id, phone from callhub_contacts where sent_at > now() - interval '24 hours') x`)).rows[0].n;
   _setDailyLimitForTest(sentToday + 2);
   try {
     ok(await mgr.action('callhub.push', { list_id: list }));
@@ -659,6 +714,77 @@ test('two records made one: results for the number follow the record that was ke
   assert.deepEqual((await fake.note({ contact: '+16045550185', disposition: 'Answered', notes: 'gone' })).body, { received: true, filed: false });
 });
 
+test('a number CallHub won’t take is left out and counted, with its words; the rest go on', async () => {
+  const people = [];
+  for (let i = 0; i < 4; i += 1) people.push((await mgr.createPerson(`Picky${i} Example`, { phone: `604-555-019${i}` })).id);
+  const list = ok(await mgr.action('list.create', { name: 'Picky list', kind: 'people', person_ids: people })).list.id;
+  fake.reject(['+16045550191']);
+  ok(await mgr.action('callhub.push', { list_id: list }));
+  await drain();
+  const [p] = await pushesOf(`list=${list}`);
+  assert.deepEqual([p.status, p.total, p.sent, p.refused, p.note], ['sent', 3, 3, 1, null]);
+  assert.equal(p.refused_note, 'contact: Enter a valid phone number.');
+  assert.deepEqual(fake.sent(bookOf(p.name).id).map((c) => c.contact), ['+16045550190', '+16045550192', '+16045550193']);
+  // It never reached CallHub, so a result for it is for a number never sent.
+  assert.deepEqual((await fake.note({ contact: '+16045550191', disposition: 'Answered' })).body, { received: true, filed: false });
+  fake.reject(false);
+});
+
+test('CallHub taking none of them is not the numbers: the push stops with its words, and nothing more is dropped', async () => {
+  const people = [];
+  for (let i = 0; i < 8; i += 1) people.push((await mgr.createPerson(`None${i} Example`, { phone: `604-555-020${i}` })).id);
+  const list = ok(await mgr.action('list.create', { name: 'None list', kind: 'people', person_ids: people })).list.id;
+  fake.reject('all');
+  const r = ok(await mgr.action('callhub.push', { list_id: list }));
+  await drain();
+  let [p] = await pushesOf(`list=${list}`);
+  assert.deepEqual([p.status, p.sent, p.refused, p.total], ['failed', 0, 4, 4], 'four left out, then it stops: the fifth and the rest are still to go');
+  assert.equal(p.note, 'CallHub wouldn’t take 5 numbers in a row. It said “contact: Enter a valid phone number.”');
+  fake.reject(false);
+  ok(await mgr.action('callhub.resume', { id: r.push.id }));
+  await drain();
+  [p] = await pushesOf(`list=${list}`);
+  assert.deepEqual([p.status, p.sent, p.refused, p.total], ['sent', 4, 4, 4]);
+});
+
+test('a saved filter is sent as whoever matches it today', async () => {
+  for (const [name, phone, tags] of [['Filter A Example', '604-555-0210', ['callhub-filter']], ['Filter B Example', '604-555-0211', ['callhub-filter', 'do-not-call']], ['Filter C Example', '604-555-0212', []]]) {
+    await mgr.createPerson(name, { phone, tags });
+  }
+  const list = ok(await mgr.action('list.create', { name: 'Filter list', kind: 'filter', filter: { tag: 'callhub-filter' } })).list.id;
+  const pre = ok(await staff.get(`/api/callhub/preview?list=${list}`));
+  assert.deepEqual([pre.numbers, pre.people, pre.left_out, pre.days], [1, 1, 1, 1]);
+  ok(await staff.action('callhub.push', { list_id: list }));
+  await drain();
+  const [p] = await pushesOf(`list=${list}`);
+  assert.deepEqual([p.status, p.sent, p.skipped], ['sent', 1, 1]);
+  assert.deepEqual(fake.sent(bookOf(p.name).id).map((c) => c.contact), ['+16045550210']);
+});
+
+test('a number still waiting to go has not been sent: a result for it files nothing until it has', async () => {
+  const a = await mgr.createPerson('Waiting Example', { phone: '604-555-0213' });
+  const list = ok(await mgr.action('list.create', { name: 'Waiting list', kind: 'people', person_ids: [a.id] })).list.id;
+  ok(await mgr.action('callhub.push', { list_id: list }));
+  assert.deepEqual((await fake.note({ contact: '+16045550213', disposition: 'Answered', notes: 'too early' })).body, { received: true, filed: false });
+  await drain();
+  assert.deepEqual((await fake.note({ contact: '+16045550213', disposition: 'Answered', notes: 'in time' })).body, { received: true, filed: true });
+  assert.deepEqual((await contactsOf(a.id)).map((c) => /in time/.test(c.note)), [true]);
+});
+
+test('two records on one number made one while the push waits: the number still goes, once', async () => {
+  const first = await mgr.createPerson('Twin Exampl', { phone: '604-555-0214' });
+  const kept = await mgr.createPerson('Twin Example', { phone: '(604) 555-0214' });
+  const list = ok(await mgr.action('list.create', { name: 'Twin list', kind: 'people', person_ids: [first.id, kept.id] })).list.id;
+  ok(await mgr.action('callhub.push', { list_id: list }));
+  ok(await mgr.action('person.merge', { keep: kept.id, drop: first.id }));
+  await drain();
+  const [p] = await pushesOf(`list=${list}`);
+  assert.deepEqual([p.status, p.total, p.sent], ['sent', 1, 1]);
+  assert.deepEqual(fake.sent(bookOf(p.name).id), [{ contact: '+16045550214', first_name: 'Twin', last_name: 'Example', country_code: 'CA' }]);
+  assert.deepEqual((await fake.note({ contact: '+16045550214', disposition: 'Answered', notes: 'one record' })).body, { received: true, filed: true });
+  assert.match((await contactsOf(kept.id))[0].note, /one record/);
+});
+
 test('who may: the desk only, and never someone a manager took People away from', async () => {
   for (const path of [`/api/callhub/pushes?list=${ids.list}`, `/api/callhub/preview?list=${ids.list}`]) {
     assert.equal((await vol.get(path)).status, 403, path);
@@ -683,8 +809,8 @@ test('who may: the desk only, and never someone a manager took People away from'
 test('every write is on the hash chain, as the person who pushed or as the system; the books verify; the export carries it', async () => {
   const rows = (await db.query(`select action, actor_id from events where workspace_id = $1 and action like 'callhub.%'`, [ws])).rows;
   const actions = [...new Set(rows.map((r) => r.action))].sort();
-  assert.deepEqual(actions, ['callhub.connect', 'callhub.map', 'callhub.push', 'callhub.result', 'callhub.resume']);
-  assert.ok(rows.filter((r) => r.action === 'callhub.result').every((r) => r.actor_id === null), 'results are the system’s');
+  assert.deepEqual(actions, ['callhub.connect', 'callhub.dnc', 'callhub.map', 'callhub.push', 'callhub.result', 'callhub.resume']);
+  assert.ok(rows.filter((r) => r.action === 'callhub.result' || r.action === 'callhub.dnc').every((r) => r.actor_id === null), 'results and newly marked numbers are the system’s');
   assert.ok(rows.filter((r) => r.action === 'callhub.push').every((r) => r.actor_id), 'a push is the sender’s');
   assert.equal((await verifyChain(db, ws)).ok, true);
   const exported = ok(await mgr.get('/api/export'));
@@ -722,6 +848,24 @@ test('the rules, with no database: the outcome a result counts as, how a deliver
   assert.deepEqual(surveyPairs(null), []);
 
   const keep = { k: process.env.CALLHUB_API_KEY, b: process.env.CALLHUB_API_BASE };
+  // A list's next page is followed on the API's own host, at the address set here — never anywhere else.
+  const { listAll } = await import('../ext/callhub/callhub.js');
+  const realFetch = globalThis.fetch;
+  const asked = [];
+  const pages = (next) => { globalThis.fetch = async (url, init) => { asked.push([String(url), init.headers.Authorization]); return new Response(JSON.stringify(asked.length === 1 ? { results: [1], next } : { results: [2], next: null }), { status: 200 }); }; };
+  try {
+    process.env.CALLHUB_API_KEY = 'page-key';
+    delete process.env.CALLHUB_API_BASE;
+    pages('http://api.callhub.io/v1/webhooks/?page=2');
+    assert.deepEqual(await listAll('/webhooks/'), [1, 2]);
+    assert.deepEqual(asked, [['https://api.callhub.io/v1/webhooks/', 'Token page-key'], ['https://api.callhub.io/v1/webhooks/?page=2', 'Token page-key']], 'an http:// next still goes out as https');
+    asked.length = 0;
+    pages('https://elsewhere.example.org/v1/webhooks/?page=2');
+    await assert.rejects(listAll('/webhooks/'), /another address/);
+    assert.equal(asked.length, 1, 'the key never goes to another host');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
   try {
     process.env.CALLHUB_API_KEY = 'one';
     const one = pathKey();

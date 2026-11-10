@@ -13,6 +13,10 @@
 //                             the person (source 'callhub'), an open phone
 //                             bank's number crossed off — or kept unfiled.
 //                             Never makes a person.
+//   keepUnread(db, raw, type) a delivery base.win could not read as a
+//                             result: kept as it came all the same, so what
+//                             CallHub really sends can be seen (Check counts
+//                             them)
 //   refile(tx, emit, ws, push)  the desk changed how a push's results are
 //                             read: what is already in follows.
 //
@@ -163,13 +167,15 @@ export const keyFor = (fields, phone) => createHash('sha256').update(JSON.string
 // ── Filing ──
 const parseJ = (v, d) => { try { return (typeof v === 'string' ? JSON.parse(v) : v) ?? d; } catch { return d; } };
 
-// The newest push with this number, and the person results go to: the first
-// by name still on file (a record merged since has passed its place on).
+// The newest push this number went to CallHub in (sent_at: a number still
+// waiting to go has not been sent), and the person results go to: the one
+// whose name went, else the first by name still on file (a record merged
+// since has passed its place on).
 const matchOf = async (db, phone) => (await db.query(
   `select c.push_id, c.workspace_id, c.person_id from callhub_contacts c
      join callhub_pushes pu on pu.id = c.push_id
      join persons p on p.id = c.person_id and p.deleted_at is null
-    where c.phone = $1
+    where c.phone = $1 and c.sent_at is not null
     order by pu.created_at desc, c.first_on_number desc, c.position, c.person_id limit 1`, [phone],
 )).rows[0] || null;
 
@@ -241,6 +247,30 @@ export const fileResult = async (db, { body, fields }) => {
       ...(member ? { created_by: member.id } : {}),
     });
     return { filed: true };
+  });
+  return result;
+};
+
+// A delivery that is not a result base.win can read (CallHub's real shape is
+// not confirmed): its bytes are kept, unfiled, with the campaign that last
+// sent CallHub anything. The same bytes again soon are the same delivery.
+const UNREAD_MAX = 20_000;
+export const keepUnread = async (db, raw, type = '') => {
+  const ws = (await db.query('select workspace_id from callhub_pushes order by created_at desc limit 1')).rows[0]?.workspace_id;
+  if (!ws) return { filed: false };
+  const key = createHash('sha256').update(raw).digest('hex');
+  const { result } = await runAction(db, { workspaceId: ws, actorId: null, action: RESULT_ACTION }, async (tx, emit) => {
+    const again = (await tx.query(
+      `select 1 from callhub_results where workspace_id = $1 and key = $2 and created_at > now() - interval '${SAME_CALL_MINUTES} minutes' limit 1`, [ws, key],
+    )).rows[0];
+    if (again) return { duplicate: true };
+    const id = newId();
+    await tx.query(
+      `insert into callhub_results (id, workspace_id, key, via, raw) values ($1, $2, $3, 'webhook', $4)`,
+      [id, ws, key, JSON.stringify({ unread: Buffer.from(raw).toString('utf8').slice(0, UNREAD_MAX), type: String(type).slice(0, 120) })],
+    );
+    emit('callhub_result', id, 'create', { filed: false, read: false });
+    return { filed: false };
   });
   return result;
 };

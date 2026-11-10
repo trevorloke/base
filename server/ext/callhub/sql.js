@@ -1,13 +1,15 @@
 // CallHub's tables. Nothing secret is kept: no key, no address.
 //   callhub_pushes    one list or phone bank sent to a CallHub phonebook:
-//                     how far it is, what CallHub said when it stopped, and
-//                     how its results are read (outcomes: the desk's
-//                     corrections to the pattern table; rating_map: the
-//                     survey question and which answer is which rating)
+//                     how far it is, what CallHub said when it stopped, the
+//                     numbers it would not take (refused, with its words for
+//                     the last), and how its results are read (outcomes: the
+//                     desk's corrections to the pattern table; rating_map:
+//                     the survey question and which answer is which rating)
 //   callhub_contacts  who went into which phonebook, under which number —
 //                     the only numbers a result can ever land on. Everyone
-//                     on the list with the number is remembered; the first
-//                     by name is the one sent and the one results are filed on
+//                     on the list with the number is remembered (sent_at:
+//                     when the number went); the first by name is the one
+//                     whose name went and the one results are filed on
 //   callhub_dnc       the numbers sent to CallHub's do-not-call list, so
 //                     none is sent twice (category: 1 calls, 2 texts, 3 both)
 //   callhub_results   every result as it came (raw), once: filed on a person
@@ -28,6 +30,8 @@ create table if not exists callhub_pushes (
   total int not null default 0,
   sent int not null default 0,
   skipped int not null default 0,
+  refused int not null default 0,
+  refused_note text,
   note text,
   resume_at timestamptz,
   created_by uuid references users(id) on delete set null,

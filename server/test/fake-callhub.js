@@ -32,6 +32,9 @@
 //                                 <seconds> seconds"); throttle(false) ends it
 //   dailyLimit(n)                 upsert_contact's limit a day (3,600)
 //   refuse(status | false)        every API call answers this status (500, 401…)
+//   reject(numbers | 'all' | false)  upsert_contact won't take these numbers
+//                                 (400, { contact: ["Enter a valid phone number."] })
+//   oneHookPerEvent(true | false) a second webhook for an event is refused (400)
 //   calls · phonebooks · contacts · dnc · dncLists · webhooks · delivered
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
@@ -59,6 +62,8 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
   let upserts = 0;
   let throttled = null;    // { after, seconds }
   let refused = false;
+  let rejected = null;     // a Set of numbers, or 'all'
+  let onePerEvent = false;
 
   const urlOf = (kind, id) => `${base}/v1/${kind}/${id}/`;
   const paged = (rows, url) => {
@@ -114,12 +119,14 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
     throttle: (after, seconds = 30) => { throttled = after === false || after == null ? null : { after: upserts + Number(after), seconds }; },
     dailyLimit: (v) => { limit = Number(v); },
     refuse: (status) => { refused = status || false; },
+    reject: (numbers) => { rejected = numbers === 'all' ? 'all' : numbers ? new Set(numbers) : null; },
+    oneHookPerEvent: (on) => { onePerEvent = Boolean(on); },
     // What left base.win for one phonebook: its contacts, in the order sent.
     sent: (phonebookId) => calls.filter((c) => c.method === 'POST' && c.path === `/v1/phonebooks/${phonebookId}/upsert_contact/` && c.status < 300).map((c) => c.params),
     upserts: () => calls.filter((c) => c.method === 'POST' && /\/upsert_contact\/$/.test(c.path)),
     reset: () => {
       calls.length = 0; delivered.length = 0; webhooks.length = 0; dncLists.length = 0; dnc.length = 0;
-      phonebooks.clear(); contacts.clear(); upserts = 0; throttled = null; refused = false; limit = 3600;
+      phonebooks.clear(); contacts.clear(); upserts = 0; throttled = null; refused = false; limit = 3600; rejected = null; onePerEvent = false;
     },
   };
 
@@ -146,7 +153,8 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
             return read ? json(read()) : json({ detail: 'Not found.' }, 404);
           }
           const fn = { note: () => note(params.fields || {}, params.options || {}), throttle: () => api.throttle(params.after, params.seconds),
-            dailyLimit: () => api.dailyLimit(params.limit), refuse: () => api.refuse(params.status), reset: () => api.reset() }[name];
+            dailyLimit: () => api.dailyLimit(params.limit), refuse: () => api.refuse(params.status), reject: () => api.reject(params.numbers),
+            oneHookPerEvent: () => api.oneHookPerEvent(params.on), reset: () => api.reset() }[name];
           if (!fn) return json({ detail: 'Not found.' }, 404);
           return json({ ok: true, result: await fn() ?? null });
         }
@@ -173,6 +181,7 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
           if (upserts >= limit) return json({ detail: 'Request was throttled. Expected available in 86400 seconds.' }, 429, { 'retry-after': '86400' });
           const number = String(params.contact || '').trim();
           if (!number) return json({ contact: ['This field is required.'] }, 400);
+          if (rejected === 'all' || rejected?.has(number)) return json({ contact: ['Enter a valid phone number.'] }, 400);
           upserts += 1;
           const had = contacts.get(number);
           const contact = { id: had?.id || next(), ...params };
@@ -184,6 +193,7 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
           if (req.method === 'GET') return json(paged(webhooks.map((w) => ({ ...w, url: urlOf('webhooks', w.id) })), url));
           if (req.method === 'POST') {
             if (!params.event || !params.target) return json({ detail: 'event and target are required' }, 400);
+            if (onePerEvent && webhooks.some((w) => w.event === String(params.event))) return json({ event: ['A webhook for this event already exists.'] }, 400);
             const w = { id: next(), event: String(params.event), target: String(params.target) };
             webhooks.push(w);
             return json({ ...w, url: urlOf('webhooks', w.id) }, 201);

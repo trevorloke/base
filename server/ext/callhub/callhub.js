@@ -41,14 +41,16 @@ export const pathKeyMatches = (given) => {
 
 // throttled: CallHub said to slow down (429, or its "Request was
 // throttled"); retryAfter: in how many seconds it will take the next call,
-// when it says.
+// when it says. theirs: the message is CallHub's own words (an answer it
+// gave), not ours for an answer that never came.
 export class CallHubError extends Error {
-  constructor(message, { status = 0, throttled = false, retryAfter = null } = {}) {
+  constructor(message, { status = 0, throttled = false, retryAfter = null, theirs = false } = {}) {
     super(message);
     this.name = 'CallHubError';
     this.httpStatus = status;
     this.throttled = throttled;
     this.retryAfter = retryAfter;
+    this.theirs = theirs;
   }
 }
 
@@ -64,15 +66,23 @@ const wordsOf = (body, status) => {
   return `CallHub answered ${status}`;
 };
 
+// Writes go out one a second (CallHub's documented pace for create calls).
+let paceMs = 1000;
+export const _setPaceForTest = (ms) => { paceMs = ms; };
+export const pause = () => (paceMs > 0 ? new Promise((r) => { setTimeout(r, paceMs); }) : null);
+
 // One call to CallHub. `path` is under /v1 ("/phonebooks/"), or a whole
-// address CallHub gave for the next page — followed only on the API's own
-// host, so the key never goes anywhere else. Never a key in an error.
+// address CallHub gave for the next page. That one is followed only on the
+// API's own host, and always at the address set here (a "next" written
+// http:// by a server behind a proxy still goes out as https), so the key
+// never goes anywhere else. Never a key in an error.
 export const callhub = async (method, path, { body, idempotencyKey, timeoutMs = 10_000 } = {}) => {
   const base = apiBase();
   let url = `${base}/v1${path}`;
   if (/^https?:\/\//i.test(path)) {
-    if (new URL(path).origin !== new URL(base).origin) throw new CallHubError('CallHub pointed at another address; not followed');
-    url = path;
+    const next = new URL(path);
+    if (next.hostname !== new URL(base).hostname) throw new CallHubError('CallHub pointed at another address; not followed');
+    url = `${new URL(base).origin}${next.pathname}${next.search}`;
   }
   let res;
   try {
@@ -101,7 +111,7 @@ export const callhub = async (method, path, { body, idempotencyKey, timeoutMs = 
   const header = Number(res.headers.get('retry-after'));
   const inWords = Number((/available in (\d+) second/i.exec(words) || [])[1]);
   const retryAfter = Number.isFinite(header) && header > 0 ? header : Number.isFinite(inWords) && inWords > 0 ? inWords : null;
-  throw new CallHubError(words, { status: res.status, throttled, retryAfter });
+  throw new CallHubError(words, { status: res.status, throttled, retryAfter, theirs: words !== `CallHub answered ${res.status}` });
 };
 
 // Every row of a paged list (count, next, results) — ten to a page; at most

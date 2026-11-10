@@ -12,6 +12,9 @@
 //   push.js      callhub.push (the tap) and its job: the phonebook, the
 //                do-not-call numbers, then a contact a second within
 //                CallHub's daily limit; waits and resumes by itself
+//   dnc.js       the campaign's do-not-call numbers at CallHub: with each
+//                push, and when someone is newly marked (an events hook
+//                queues the callhub.dnc job)
 //   results.js   a delivery read every way it may come; the result →
 //                outcome table; one phone contact per result, once; a
 //                rating only from a survey answer the desk mapped
@@ -26,6 +29,7 @@
 // CALLHUB_API_KEY, CALLHUB_API_BASE.
 import { registerIntegration } from '../integrations/index.js';
 import { callhubOn } from './callhub.js';
+import { DNC_JOB, onEvents, runDncJob } from './dnc.js';
 import { PUSH_JOB, runPushJob } from './push.js';
 
 export { sql } from './sql.js';
@@ -33,7 +37,8 @@ export { actions } from './actions.js';
 export { api } from './api.js';
 export { publicRoutes } from './webhook.js';
 
-export const jobs = { [PUSH_JOB]: runPushJob };
+export const jobs = { [PUSH_JOB]: runPushJob, [DNC_JOB]: runDncJob };
+export const hooks = { events: onEvents };
 // In the full export: what was sent where, and every result as it came.
 export const exportTables = ['callhub_pushes', 'callhub_contacts', 'callhub_dnc', 'callhub_results'];
 export const deskOnlyReads = [/^\/api\/callhub(\/|$)/];

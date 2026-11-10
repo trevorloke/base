@@ -5,40 +5,45 @@
 //                             and its job are stored in one write. Nothing
 //                             is sent to CallHub inside the tap.
 //   runPushJob                the job: the phonebook once, then the
-//                             campaign's do-not-call numbers, then one
-//                             contact a second, fifty to a run, the next run
-//                             queued straight away — so receipts and ladder
-//                             steps are never kept waiting behind a big list.
+//                             campaign's do-not-call numbers (dnc.js), then
+//                             one contact a second, fifty to a run, the next
+//                             run queued straight away — so receipts and
+//                             ladder steps are never kept waiting behind a
+//                             big list.
 //
 // Every call to CallHub is made outside any transaction; each contact
 // CallHub takes is recorded in its own short write (the cursor), so a crash,
 // a deploy or a wait loses nothing and nobody is sent twice. A throttle or
 // CallHub's daily limit (3,600 contacts) waits and carries on by itself; a
-// refusal stops with CallHub's words, and "Carry on" (callhub.resume) picks
-// up where it stopped. Writes are the sender's, labelled callhub.push.
+// number CallHub won't take is left out and counted, and the rest go on; a
+// refusal of the push itself stops it with CallHub's words, and "Carry on"
+// (callhub.resume) picks up where it stopped. Writes are the sender's,
+// labelled callhub.push.
 import { runAction, newId } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { httpError } from '../../actions/util.js';
 import { timeZone } from '../../lib/org.js';
 import { toLocal } from '../../lib/tzsql.js';
-import { apiBase, callhub, callhubOn, CallHubError, idOf, listAll } from './callhub.js';
+import { callhub, callhubOn, CallHubError, idOf, pause } from './callhub.js';
+import { dncListOf, tellCallHub, toldOnLog, untoldOf } from './dnc.js';
 import { audienceOf, contactBody, noCalls, notToBeCalled, notToCall, sourceOf } from './people.js';
 
 export const PUSH_JOB = 'callhub.push';
 export const PUSH_ACTION = 'callhub.push';
-export const DNC_LIST = 'base.win';
 const PER_RUN = 50;
 const TRIES = 3;                  // a run that CallHub didn't answer, before it stops
 const INSERT_BATCH = 500;
-// One contact a second, and CallHub's documented limit a day.
-let paceMs = 1000;
+// CallHub won't take a number: it is left out. This many in a row (fewer
+// while nothing has gone yet) is not the numbers, it is the push: it stops.
+const REFUSALS_IN_A_ROW = 10;
+const REFUSALS_AT_THE_START = 5;
+// CallHub's documented limit on contacts a day.
 let dailyLimit = 3600;
-export const _setPaceForTest = (ms) => { paceMs = ms; };
 export const _setDailyLimitForTest = (n) => { dailyLimit = n; };
-const sleep = (ms) => (ms > 0 ? new Promise((r) => { setTimeout(r, ms); }) : null);
 
 export const pushOut = (p) => ({
   id: p.id, name: p.name, status: p.status, total: p.total, sent: p.sent, skipped: p.skipped,
+  refused: p.refused || 0, refused_note: p.refused_note || null,
   note: p.note || null, resume_at: p.resume_at || null, created_at: p.created_at, sent_at: p.sent_at || null,
 });
 
@@ -114,16 +119,10 @@ export const jobLive = async (q, ws, id) => (await q.query(
 )).rows.length > 0;
 
 // ── The job ──
-const said = (e) => `CallHub said “${String(e?.message || e).slice(0, 300)}”`;
+// CallHub's own words are quoted as its; ours (no answer, no key) stand alone.
+const said = (e) => (e?.theirs ? `CallHub said “${String(e.message).slice(0, 300)}”` : String(e?.message || e).slice(0, 300));
 const untilWords = (e) => `CallHub asked us to wait: “${String(e.message).slice(0, 300)}”`;
-
-// CallHub's do-not-call list named base.win: found, or made once.
-const dncListOf = async () => {
-  const lists = await listAll('/dnc_lists/');
-  const found = lists.find((l) => String(l?.name || '').trim() === DNC_LIST)
-    || await callhub('POST', '/dnc_lists/', { body: { name: DNC_LIST }, idempotencyKey: 'base-callhub-dnc-list' });
-  return found?.url || (idOf(found) ? `${apiBase()}/v1/dnc_lists/${idOf(found)}/` : null);
-};
+const plural = (n, one) => `${n.toLocaleString('en-CA')} ${n === 1 ? one : `${one}s`}`;
 
 export const runPushJob = async (db, job) => {
   const ws = job.workspace_id;
@@ -149,6 +148,18 @@ export const runPushJob = async (db, job) => {
     await set({ note, resume_at: at.toISOString() }, { waiting_until: at.toISOString() });
     await again(at);
   };
+  // A number that is not going after all (marked do-not-call since the tap,
+  // or CallHub won't take it): never sent, so a result can never land there.
+  const leaveOut = (phone, fields) => act(async (tx) => {
+    await tx.query('delete from callhub_contacts where push_id = $1 and phone = $2', [id, phone]);
+    const keys = Object.keys(fields);
+    await tx.query(
+      `update callhub_pushes set total = total - 1, ${keys.map((k, i) => (k === 'refused_note' ? `${k} = $${i + 3}` : `${k} = ${k} + $${i + 3}`)).join(', ')}
+        where id = $1 and workspace_id = $2`,
+      [id, ws, ...keys.map((k) => fields[k])],
+    );
+  });
+  const dncTally = { told: 0 };
 
   try {
     if (!callhubOn()) throw new CallHubError('CALLHUB_API_KEY isn’t set on this server', { status: 400 });
@@ -168,8 +179,7 @@ export const runPushJob = async (db, job) => {
 
     // People not to call, first: once each, by kind (callhub_dnc remembers).
     const blocked = await notToCall(db, ws);
-    const told = new Map((await db.query('select phone, category from callhub_dnc where workspace_id = $1', [ws])).rows.map((r) => [r.phone, Number(r.category)]));
-    const untold = [...blocked].filter(([phone, category]) => ((told.get(phone) || 0) | category) !== (told.get(phone) || 0));
+    const untold = await untoldOf(db, ws, blocked);
     if (untold.length) {
       let list = push.dnc_list;
       if (!list) {
@@ -177,32 +187,21 @@ export const runPushJob = async (db, job) => {
         if (!list) throw new CallHubError('CallHub’s do-not-call list couldn’t be found or made', { status: 400 });
         await set({ dnc_list: list });
       }
-      for (const [phone, category] of untold) {
-        if (left <= 0) break;
-        const both = (told.get(phone) || 0) | category;
-        try {
-          await callhub('POST', '/dnc_contacts/', { body: { dnc: list, phone_number: phone, category: both }, idempotencyKey: `base-callhub-dnc-${ws}-${phone}-${both}` });
-        } catch (e) {
-          // Already on CallHub's list: what we wanted.
-          if (!(e instanceof CallHubError && e.httpStatus === 400 && /already|exist|unique|duplicate/i.test(e.message))) throw e;
-        }
-        await act(async (tx) => {
-          await tx.query(
-            `insert into callhub_dnc (workspace_id, phone, category) values ($1, $2, $3)
-             on conflict (workspace_id, phone) do update set category = excluded.category, sent_at = now()`, [ws, phone, both],
-          );
-        });
-        left -= 1;
-        await sleep(paceMs);
-      }
-      if (untold.length > PER_RUN) { await again(); runJobsSoon(); return; }
+      await tellCallHub(ws, { list, untold, budget: left, act, tally: dncTally });
+      left -= dncTally.told;
+      if (untold.length > dncTally.told) { await again(); runJobsSoon(); return; }
     }
 
-    // Then the contacts, where the last run stopped.
-    let today = (await db.query(`select count(*)::int as n from callhub_contacts where sent_at > now() - interval '24 hours'`)).rows[0].n;
+    // Then the contacts, where the last run stopped. A number is one
+    // contact, whoever on the list shares it.
+    let today = (await db.query(
+      `select count(*)::int as n from (select distinct push_id, phone from callhub_contacts where sent_at > now() - interval '24 hours') x`,
+    )).rows[0].n;
+    let went = Number(push.sent);
+    let refusedInARow = 0;
     while (left > 0) {
       const next = (await db.query(
-        `select phone from callhub_contacts where push_id = $1 and first_on_number and sent_at is null order by position limit $2`, [id, left],
+        `select phone from callhub_contacts where push_id = $1 and sent_at is null group by phone order by min(position) limit $2`, [id, left],
       )).rows.map((r) => r.phone);
       if (!next.length) break;
       // Everyone on those numbers, as they are now: someone marked
@@ -217,11 +216,7 @@ export const runPushJob = async (db, job) => {
         const here = people.filter((p) => p.phone === phone);
         const live = here.filter((p) => !p.deleted_at);
         if (!live.length || live.some(notToBeCalled) || noCalls(blocked, phone)) {
-          // Never sent, so a result can never land there either.
-          await act(async (tx) => {
-            await tx.query('delete from callhub_contacts where push_id = $1 and phone = $2', [id, phone]);
-            await tx.query('update callhub_pushes set total = total - 1, skipped = skipped + $3 where id = $1 and workspace_id = $2', [id, ws, here.length]);
-          });
+          await leaveOut(phone, { skipped: here.length });
           continue;
         }
         if (today >= dailyLimit) {
@@ -233,24 +228,42 @@ export const runPushJob = async (db, job) => {
           return;
         }
         const first = live[0];
-        await callhub('POST', `/phonebooks/${encodeURIComponent(push.phonebook_id)}/upsert_contact/`, {
-          body: contactBody(phone, first), idempotencyKey: `base-callhub-${id}-${phone}`,
-        });
+        try {
+          await callhub('POST', `/phonebooks/${encodeURIComponent(push.phonebook_id)}/upsert_contact/`, {
+            body: contactBody(phone, first), idempotencyKey: `base-callhub-${id}-${phone}`,
+          });
+        } catch (e) {
+          // A plain refusal (400) is about this one number: it is left out
+          // and counted, with CallHub's words. Several in a row is the push.
+          if (!(e instanceof CallHubError && e.httpStatus === 400 && !e.throttled)) throw e;
+          refusedInARow += 1;
+          if (refusedInARow >= (went ? REFUSALS_IN_A_ROW : REFUSALS_AT_THE_START)) {
+            throw new CallHubError(`CallHub wouldn’t take ${plural(refusedInARow, 'number')} in a row. It said “${String(e.message).slice(0, 240)}”`, { status: 400 });
+          }
+          await leaveOut(phone, { refused: 1, refused_note: String(e.message).slice(0, 300) });
+          left -= 1;
+          await pause();
+          continue;
+        }
+        refusedInARow = 0;
         await act(async (tx, emit) => {
-          // The one sent is the one results are filed on.
-          await tx.query('update callhub_contacts set first_on_number = (person_id = $3), sent_at = case when person_id = $3 then now() else sent_at end where push_id = $1 and phone = $2', [id, phone, first.person_id]);
+          // Everyone on the number is marked sent; the one whose name went
+          // is the one results are filed on.
+          await tx.query('update callhub_contacts set first_on_number = (person_id = $3), sent_at = now() where push_id = $1 and phone = $2', [id, phone, first.person_id]);
           await tx.query('update callhub_pushes set sent = sent + 1 where id = $1 and workspace_id = $2', [id, ws]);
           emit('callhub_contact', first.person_id, 'create', { push_id: id });
         });
+        went += 1;
         today += 1;
         left -= 1;
-        await sleep(paceMs);
+        await pause();
       }
     }
-    const more = (await db.query('select 1 from callhub_contacts where push_id = $1 and first_on_number and sent_at is null limit 1', [id])).rows.length > 0;
+    const more = (await db.query('select 1 from callhub_contacts where push_id = $1 and sent_at is null limit 1', [id])).rows.length > 0;
     if (more) { await again(); runJobsSoon(); return; }
     const done = await load();
-    await set({ status: 'sent', sent_at: new Date().toISOString(), note: null, resume_at: null }, { status: 'sent', sent: done.sent, total: done.total });
+    await set({ status: 'sent', sent_at: new Date().toISOString(), note: null, resume_at: null },
+      { status: 'sent', sent: done.sent, total: done.total, ...(done.refused ? { refused: done.refused } : {}) });
   } catch (e) {
     if (e instanceof CallHubError && e.throttled) {
       // CallHub says when it will take the next one; a minute when it doesn't.
@@ -268,5 +281,8 @@ export const runPushJob = async (db, job) => {
     await set({ status: 'failed', note: e instanceof CallHubError ? said(e) : 'Something went wrong on our side', resume_at: null },
       { status: 'failed', note: e instanceof CallHubError ? String(e.message).slice(0, 300) : 'error' });
     if (!(e instanceof CallHubError)) console.error('callhub: push stopped:', e);
+  } finally {
+    // On the log: how many do-not-call numbers CallHub was told, never which.
+    if (dncTally.told) await toldOnLog(act, ws, dncTally.told).catch(() => {});
   }
 };

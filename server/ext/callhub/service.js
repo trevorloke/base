@@ -53,12 +53,18 @@ export const checkCallHub = async (db, ws, base) => {
   if (!hooks.some((h) => h?.event === EVENT && same(h.target, hookUrl(base)))) {
     return { ok: false, said: 'The key works, but CallHub isn’t sending results here yet — tap Connect' };
   }
+  // unread: deliveries kept as they came that base.win could not read as a
+  // result — the sign that CallHub sends something other than expected.
   const n = (await db.query(
-    'select count(*)::int as total, (count(*) filter (where contact_id is null))::int as unfiled from callhub_results where workspace_id = $1', [ws],
+    `select count(*)::int as total,
+            (count(*) filter (where contact_id is null and raw->>'unread' is null))::int as unfiled,
+            (count(*) filter (where raw->>'unread' is not null))::int as unread
+       from callhub_results where workspace_id = $1`, [ws],
   )).rows[0];
+  const results = n.total - n.unread;
   return {
     ok: true,
-    said: `The key works · results come back here${n.total ? ` · ${plural(n.total, 'result')} so far` : ''}${n.unfiled ? ` · ${n.unfiled.toLocaleString('en-CA')} for numbers base.win never sent` : ''}`,
+    said: `The key works · results come back here${results ? ` · ${plural(results, 'result')} so far` : ''}${n.unfiled ? ` · ${n.unfiled.toLocaleString('en-CA')} for numbers base.win never sent` : ''}${n.unread ? ` · ${n.unread.toLocaleString('en-CA')} base.win couldn’t read (kept as they came)` : ''}`,
   };
 };
 
@@ -66,16 +72,32 @@ export const checkCallHub = async (db, ws, base) => {
 // already sends results here.
 export const connect = async (base) => {
   if (!callhubOn()) return { ok: false, said: 'CALLHUB_API_KEY isn’t set' };
+  // CallHub is given this base.win's public address: without one it would
+  // be told to send results to wherever this page happens to be open.
+  if (!String(process.env.STARBASE_PUBLIC_URL || '').trim()) {
+    return { ok: false, said: 'Set the public address first (STARBASE_PUBLIC_URL): CallHub needs somewhere to send results' };
+  }
   const want = hookUrl(base);
   try {
     const mine = (await listAll('/webhooks/')).filter((h) => h?.event === EVENT);
     if (mine.some((h) => same(h.target, want))) return { ok: true, said: 'CallHub already sends each call’s result here' };
-    await callhub('POST', '/webhooks/', { body: { event: EVENT, target: want }, idempotencyKey: 'base-callhub-webhook' });
-    // An address made from an earlier key answers nothing now: taken away.
+    // An address made from an earlier key answers nothing now: it goes.
     const old = `${String(base || '').replace(/\/+$/, '')}${HOOK_PREFIX}`;
-    for (const h of mine) {
-      if (String(h.target || '').startsWith(old) && idOf(h)) await callhub('DELETE', `/webhooks/${encodeURIComponent(idOf(h))}/`).catch(() => {});
+    const stale = mine.filter((h) => String(h.target || '').startsWith(old) && idOf(h));
+    const drop = async () => {
+      for (const h of stale.splice(0)) await callhub('DELETE', `/webhooks/${encodeURIComponent(idOf(h))}/`).catch(() => {});
+    };
+    const add = () => callhub('POST', '/webhooks/', { body: { event: EVENT, target: want }, idempotencyKey: 'base-callhub-webhook' });
+    try {
+      await add();
+    } catch (e) {
+      // Refused while our old address is still there (CallHub may keep one
+      // per event): the old one goes first, then once more.
+      if (!(stale.length && e instanceof CallHubError && e.httpStatus === 400)) throw e;
+      await drop();
+      await add();
     }
+    await drop();
     return { ok: true, made: true, said: 'CallHub now sends each call’s result here' };
   } catch (e) {
     return { ok: false, said: refused(e) ? REFUSED : `CallHub didn’t take it: ${words(e)}` };
