@@ -224,7 +224,6 @@
 .sch-vrow__kind .sk-icon { width: 22px; height: 22px; }
 /* "6:30–8:30 am · King George Blvd & 88 Ave" — one run of words that wraps where it must. */
 .ops-row__sub.sch-vrow__sub { display: block; font-family: var(--font-sans); font-size: 14px; line-height: 1.35; color: var(--text-2); overflow-wrap: anywhere; }
-.sch-vrow__sub > span + span::before { content: ' · '; color: var(--text-3); }
 .btn.ops-tap.sch-vrow__join { flex: none; margin-right: var(--s-3); padding: 0 12px; white-space: nowrap; }
 .ops-confirm.sch-vrow__ask { padding: var(--s-3) var(--s-4); border-top: 1px solid var(--rule); background: var(--paper-1); }
 .error.sch-vrow__error { margin: 0; padding: 0 var(--s-4) var(--s-3); }

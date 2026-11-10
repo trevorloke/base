@@ -607,10 +607,9 @@ function ShiftRow({ s, tz, now, past = false, mine = false, waiting = false, tur
           <span className="sch-vrow__kind" title={words.kind.label}><KindIcon kind={words.kind} /></span>
           <span className="ops-row__main">
             <span className="ops-row__name">{words.title}{names && <span className="st-row-turfs"> · {names}</span>}</span>
+            {/* One run of words, the dots in it real: "6:30–8:30 am · King George Blvd & 88 Ave". */}
             <span className="ops-row__sub sch-vrow__sub">
-              <span>{day ? `${dayName(s.starts_at, tz)} · ` : ''}{hours}</span>
-              {place && <span className="sch-vrow__place">{place}</span>}
-              {join && (s.capacity || shortBy(s) > 0) && <span>{roomText(s)}</span>}
+              {[day ? `${dayName(s.starts_at, tz)} · ${hours}` : hours, place, join && (s.capacity || shortBy(s) > 0) ? roomText(s) : null].filter(Boolean).join(' · ')}
             </span>
           </span>
           {state && <span className="ops-row__end">{state}</span>}
@@ -689,6 +688,9 @@ function ShiftList({ canDesk, me }) {
   const showNew = canDesk && params.get('new') === '1';
   // A link with ?week= (or ?add=, the week's add sheet) opens the week.
   const [view, setView] = useState(() => (!canDesk ? 'list' : params.get('week') || params.get('add') ? 'week' : savedView()));
+  // …and so does one followed while the List is showing (the command bar's
+  // "New shift" from the Shifts screen itself).
+  useEffect(() => { if (canDesk && (params.get('week') || params.get('add'))) setView('week'); }, [params, canDesk]);
   // The board needs signal (it's live, not kept on the phone): with none,
   // the list and its offline copy show instead, and the board comes back
   // with the signal. The saved choice stays as it was.

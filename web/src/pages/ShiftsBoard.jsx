@@ -222,6 +222,7 @@ export default function ShiftsBoard({ me, onSheet }) {
   const sheetOpen = adding || Boolean(openShift);
   // (And the last toast goes: it would sit over that button.)
   useEffect(() => { onSheet?.(sheetOpen); if (sheetOpen) say(null); }, [sheetOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (peopleOpen) say(null); }, [peopleOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Nothing can be added to a week that is over: "New shift" there is this week's.
   useEffect(() => { if (adding && days[6] < today) setParam('week', null); }, [adding, monday]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onSheet?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
