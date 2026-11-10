@@ -61,9 +61,12 @@ test('the email card\'s number says what it counts', () => {
 test('"Send to a web address": the card names where it goes, never the whole address; the log says what the address answered', () => {
   const step = { kind: 'webhook', url: 'https://hooks.zapier.com/hooks/catch/123/s3cret-key/', label: 'Zapier' };
   assert.equal(W.stepLine(step), 'Send to a web address · Zapier');
-  assert.equal(W.hookWho(step), 'To hooks.zapier.com · email only if they said yes, mobile never after STOP · no ratings, notes or money');
+  // One short line: where it goes and what it never carries (who gets an
+  // email or a mobile passed on is said once, under the fields).
+  assert.equal(W.hookWho(step), 'To hooks.zapier.com · no ratings, notes or money');
   assert.ok(!W.hookWho(step).includes('s3cret-key'), 'the rest of an address can be a key');
-  assert.equal(W.hookWho({ kind: 'webhook', url: '', label: '' }), 'email only if they said yes, mobile never after STOP · no ratings, notes or money');
+  assert.equal(W.hookWho({ kind: 'webhook', url: '', label: '' }), 'No ratings, notes or money');
+  assert.ok(W.hookWho(step).split(/\s+/).filter((w) => /\w/.test(w)).length <= 12, 'about twelve words at most');
 
   assert.equal(W.hookMissing({ url: '', label: 'Zapier' }), 'Add the web address');
   assert.equal(W.hookMissing({ url: 'http://hooks.example.org/x', label: 'Zapier' }), 'The address must start with https://');
@@ -85,4 +88,42 @@ test('"Send to a web address": the card names where it goes, never the whole add
   assert.equal(line({ result: 'unsure' }), 'Zapier: Not sure it went');
   assert.equal(line({ result: 'sending' }), 'Zapier: Sending');
   assert.equal(W.hookLogLine({ kind: 'webhook', result: 'sent', status: 204 }), 'Web address: Sent · 204');
+  // A redirect is never followed or tried again; an address that has stopped answering isn't called.
+  assert.equal(line({ result: 'failed', reason: 'redirect', status: 302, tries: 1 }), 'Zapier: Answered with a redirect (302) — not followed');
+  assert.equal(line({ result: 'failed', reason: 'will_retry', why: 'not_answering', tries: 1 }), 'Zapier: Didn’t go (the address isn’t answering) — trying again');
+  assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'not_answering', tries: 3 }), 'Zapier: Failed · the address isn’t answering after 3 tries');
+  // One try and no other (someone taken off while the address was being called; a test): no count.
+  assert.equal(line({ result: 'failed', reason: 'gave_up', status: 500, tries: 1 }), 'Zapier: Failed · 500');
+  assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'timeout', tries: 1 }), 'Zapier: Failed · no answer');
+  // The same words without the label: what "Send a test" answers.
+  assert.equal(W.hookSaid({ result: 'sent', status: 200 }), 'Sent · 200');
+  assert.equal(W.hookSaid({ result: 'failed', reason: 'gave_up', status: 404 }), 'Failed · 404');
+});
+
+test('the people row says when a web address never got someone, and why', () => {
+  const hook = (e) => ({ kind: 'webhook', label: 'Zapier', ...e });
+  const sent = hook({ result: 'sent', status: 200 });
+  assert.equal(W.hookRowNote([sent, { kind: 'end', result: 'finished' }]), null);
+  assert.equal(W.hookRowNote([hook({ result: 'failed', reason: 'will_retry', status: 500, tries: 1 }), sent]), null, 'it went on a later try');
+  assert.equal(W.hookRowNote([hook({ result: 'failed', reason: 'gave_up', status: 500, tries: 3 })]), 'not sent to Zapier');
+  assert.equal(W.hookRowNote([hook({ result: 'failed', reason: 'refused', why: 'private', tries: 1 })]), 'not sent to Zapier');
+  assert.equal(W.hookRowNote([hook({ result: 'skipped', reason: 'do_not_contact' })]), 'not sent to Zapier (do not contact)');
+  assert.equal(W.hookRowNote([hook({ result: 'failed', reason: 'redirect', status: 301, tries: 1 })]), 'Zapier answered with a redirect');
+  assert.equal(W.hookRowNote([{ kind: 'webhook', result: 'skipped' }]), 'not sent to the web address (do not contact)');
+  assert.equal(W.hookRowNote([{ kind: 'email', result: 'failed', reason: 'gave_up' }]), null);
+  assert.equal(W.hookRowNote(undefined), null);
+});
+
+test('a step kind this page doesn’t know is said so and saved as it is, never as a Stop', () => {
+  // A tab left open from before a release that added a step kind.
+  const later = { kind: 'call', number: '604-555-0100', after: 2 };
+  assert.equal(W.stepLine(later), 'A step this page doesn’t know — reload');
+  assert.deepEqual(W.cleanStep(later), later, 'saving its card (or another one) hands it back unchanged');
+  assert.deepEqual(W.cleanStep({ kind: 'stop', extra: 1 }), { kind: 'stop' });
+  assert.deepEqual(W.cleanStep({ kind: 'webhook', url: ' https://hooks.example.org/x ', label: ' Zapier ' }), { kind: 'webhook', url: 'https://hooks.example.org/x', label: 'Zapier' });
+  assert.deepEqual(W.cleanStep({ kind: 'wait', n: '2.4', unit: 'hours' }), { kind: 'wait', n: 2, unit: 'hours' });
+  assert.deepEqual(W.cleanStep({ kind: 'email', subject: ' S ', body: ' B ' }), { kind: 'email', subject: 'S', body: 'B' });
+  assert.deepEqual(W.cleanStep({ kind: 'untag', tag: ' old ' }), { kind: 'untag', tag: 'old' });
+  assert.deepEqual(W.cleanStep({ kind: 'followup', text: ' Call ' }), { kind: 'followup', text: 'Call' });
+  assert.deepEqual(W.cleanStep({ kind: 'text', body: ' Hi ' }), { kind: 'text', body: 'Hi' });
 });

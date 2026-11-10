@@ -35,7 +35,7 @@ import {
   CONNECT_TO, GOAL_HINT, GoalPicker, LadBack, OTHER_STEPS, STEP_KINDS, TriggerPicker, countsLine, fmtWhen, goalOf, logLine,
   stepLine, triggerLine, triggerMissing, whereLine,
 } from '../components/LaddersBits.jsx';
-import { FILLS, emailWho, hookMissing, hookWho, textNamesCampaign, textWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
+import { FILLS, cleanStep, emailWho, hookMissing, hookWho, textNamesCampaign, textWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
 import './shifts.css';
 import './ladders.css';
 import './ladders-webhook.css';
@@ -73,16 +73,6 @@ const missing = (s, campaign) => {
   if (s.kind === 'webhook') return hookMissing(s);
   return null;
 };
-const clean = (s) => {
-  if (s.kind === 'wait') return { kind: 'wait', n: Math.max(1, Math.round(Number(s.n))), unit: s.unit };
-  if (s.kind === 'email') return { kind: 'email', subject: s.subject.trim(), body: s.body.trim() };
-  if (s.kind === 'text') return { kind: 'text', body: s.body.trim() };
-  if (s.kind === 'tag' || s.kind === 'untag') return { kind: s.kind, tag: s.tag.trim() };
-  if (s.kind === 'followup') return { kind: 'followup', text: s.text.trim() };
-  if (s.kind === 'webhook') return { kind: 'webhook', url: s.url.trim(), label: s.label.trim() };
-  return { kind: 'stop' };
-};
-
 // Subject and message, and the two fill-in buttons: a tap puts the fill-in
 // ("[first name]") where the cursor was (in whichever of the two was last
 // touched). The fields show the words; the step keeps the codes.
@@ -265,7 +255,10 @@ function StepFields({ s, set, idp, tags }) {
       </div>
     );
   }
-  return <p className="lad-hint">The ladder ends here for them.</p>;
+  if (s.kind === 'stop') return <p className="lad-hint">The ladder ends here for them.</p>;
+  // A kind this page has no fields for (LaddersWords.js UNKNOWN_STEP): it
+  // can be moved or removed here, and saving hands it back as it is.
+  return <p className="lad-hint">Reload the page to see and change this step.</p>;
 }
 
 // problem: why the server wouldn't save this step ({ message }: LaddersEdit's
@@ -283,7 +276,7 @@ function StepEditor({ initial, saveLabel, onSave, onCancel, busy, tags, extra, c
     const why = missing(s, campaign);
     if (why) { setError(why); return; }
     setError(null);
-    await onSave(clean(s));
+    await onSave(cleanStep(s));
   };
   return (
     <form className="lad-step-form" onSubmit={submit}>

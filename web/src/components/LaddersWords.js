@@ -18,6 +18,9 @@ const waitWords = (s) => plural(Number(s.n) || 0, s.unit === 'hours' ? 'hour' : 
 // "Send to a web address": one small message about the person to another
 // tool (a Zapier or Make catch hook, a Slack channel, the campaign's own).
 export const HOOK_STEP = 'Send to a web address';
+// A step kind this page has no words for: a colleague added one a newer
+// base.win knows, in a tab left open from before it. Said, never guessed at.
+export const UNKNOWN_STEP = 'A step this page doesn’t know — reload';
 
 // One step as one line: "Wait 1 day", "Email · Thanks, [first name]",
 // "Text · Hi [first name], thanks for…" (a long text is cut short).
@@ -31,7 +34,22 @@ export const stepLine = (s) => {
   if (s.kind === 'untag') return `Remove tag · ${s.tag}`;
   if (s.kind === 'followup') return `Follow-up · ${toWords(s.text)}`;
   if (s.kind === 'webhook') return `${HOOK_STEP} · ${s.label}`;
-  return 'Stop';
+  if (s.kind === 'stop') return 'Stop';
+  return UNKNOWN_STEP;
+};
+
+// A step as it is saved: trimmed, and nothing but its own fields. A kind
+// this page doesn't know is handed back exactly as it is — never saved as
+// a Stop, which would end the ladder there for everyone after.
+export const cleanStep = (s) => {
+  if (s.kind === 'wait') return { kind: 'wait', n: Math.max(1, Math.round(Number(s.n))), unit: s.unit };
+  if (s.kind === 'email') return { kind: 'email', subject: s.subject.trim(), body: s.body.trim() };
+  if (s.kind === 'text') return { kind: 'text', body: s.body.trim() };
+  if (s.kind === 'tag' || s.kind === 'untag') return { kind: s.kind, tag: s.tag.trim() };
+  if (s.kind === 'followup') return { kind: 'followup', text: s.text.trim() };
+  if (s.kind === 'webhook') return { kind: 'webhook', url: s.url.trim(), label: s.label.trim() };
+  if (s.kind === 'stop') return { kind: 'stop' };
+  return s;
 };
 
 // Under an email card: who it can reach, and how many said yes so far.
@@ -48,9 +66,10 @@ export const textNamesCampaign = (body, campaign) => /\{\{\s*campaign\s*\}\}/i.t
 
 // Under a "Send to a web address" card: where it goes — the site's name
 // only, the rest of an address can be a key — and what it never carries
-// (the server decides: ladders/webhook.js).
+// (the server decides: ladders/webhook.js). Whose email and mobile go
+// along is said once, under the step's fields.
 const hostOf = (url) => { try { return new URL(String(url || '')).host; } catch { return ''; } };
-export const hookWho = (s) => `${hostOf(s?.url) ? `To ${hostOf(s.url)} · ` : ''}email only if they said yes, mobile never after STOP · no ratings, notes or money`;
+export const hookWho = (s) => (hostOf(s?.url) ? `To ${hostOf(s.url)} · no ratings, notes or money` : 'No ratings, notes or money');
 
 // What a "Send to a web address" step still needs before it can be saved,
 // or null. The server checks the same and more (where the address points).
@@ -65,19 +84,33 @@ export const hookMissing = (s) => {
 
 // What one "Send to a web address" log entry says: "Zapier: Sent · 200",
 // "Zapier: Failed · 500 after 3 tries" (the answer's number, or why there
-// was none).
+// was none). hookSaid is the same without the label: what "Send a test"
+// answers.
 const HOOK_WHY = {
   timeout: 'no answer', unreachable: 'couldn’t connect', not_found: 'address not found',
+  not_answering: 'the address isn’t answering',
   private: 'the address points inside a private network', bad_address: 'the address can’t be used',
 };
-export const hookLogLine = (e) => {
-  const to = e.label || 'Web address';
+export const hookSaid = (e) => {
   const what = e.status || HOOK_WHY[e.why] || 'no answer';
-  if (e.result === 'sent') return `${to}: Sent · ${e.status}`;
-  if (e.result === 'sending') return `${to}: Sending`;
-  if (e.result === 'unsure') return `${to}: Not sure it went`;
-  if (e.result === 'skipped') return `${to}: Skipped — do not contact`;
-  if (e.reason === 'refused') return `${to}: Not sent — ${what}`;
-  if (e.reason === 'will_retry') return `${to}: Didn’t go (${what}) — trying again`;
-  return `${to}: Failed · ${what} after ${plural(e.tries || 1, 'try', 'tries')}`;
+  if (e.result === 'sent') return `Sent · ${e.status}`;
+  if (e.result === 'sending') return 'Sending';
+  if (e.result === 'unsure') return 'Not sure it went';
+  if (e.result === 'skipped') return 'Skipped — do not contact';
+  if (e.reason === 'redirect') return `Answered with a redirect (${e.status}) — not followed`;
+  if (e.reason === 'refused') return `Not sent — ${what}`;
+  if (e.reason === 'will_retry') return `Didn’t go (${what}) — trying again`;
+  return `Failed · ${what}${e.tries > 1 ? ` after ${plural(e.tries, 'try', 'tries')}` : ''}`;
+};
+export const hookLogLine = (e) => `${e.label || 'Web address'}: ${hookSaid(e)}`;
+
+// What a finished person's row adds when a web address never got them — it
+// didn't take the message (after its tries, or refused), answered with a
+// redirect, or wasn't sent to at all (do not contact) — or null.
+export const hookRowNote = (log) => {
+  const e = (log || []).find((x) => x.kind === 'webhook' && (x.result === 'skipped' || (x.result === 'failed' && x.reason !== 'will_retry')));
+  if (!e) return null;
+  const to = e.label || 'the web address';
+  if (e.result === 'skipped') return `not sent to ${to} (do not contact)`;
+  return e.reason === 'redirect' ? `${to} answered with a redirect` : `not sent to ${to}`;
 };
