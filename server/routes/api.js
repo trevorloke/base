@@ -646,9 +646,13 @@ app.get('/shifts', async (c) => {
 
 // The desk's week board: every shift starting in [from, to) with who holds
 // a spot on it (booked, confirmed or checked in — names only, as many as
-// "filled" counts), and the people to drag in:
-// anyone holding a volunteer role or signed in as a volunteer (matched by
-// email). The client sorts shifts into Morning / Afternoon / Evening
+// "filled" counts), and the tray — the people to put on shifts: anyone
+// holding a volunteer role, signed in as a volunteer (matched by email),
+// who asked to volunteer (the website's form, a door, Mainstreeting:
+// `asked` while that is still open) or who has been on a shift (a spot
+// taken on the website is one). Names and roles only. Read from those small
+// tables first, so a city-wide voter list is never gone through for it.
+// The client sorts shifts by the part of the day they start in
 // (shared/dayparts.js). At most 15 days per read.
 app.get('/shifts/board', async (c) => {
   const ctx = c.get('ctx');
@@ -675,18 +679,24 @@ app.get('/shifts/board', async (c) => {
     [ctx.workspaceId, ids],
   )).rows : [];
   const people = (await db.query(
-    `select p.id, p.name,
+    `with ids as (
+       select person_id as id from volunteer_roles where workspace_id = $1
+       union select person_id from shift_assignments where workspace_id = $1
+       union select person_id from door_requests where workspace_id = $1 and kind = 'volunteer'
+       union select p.id from memberships m
+         join users u on u.id = m.user_id
+         join persons p on p.workspace_id = $1 and p.deleted_at is null and p.email is not null and lower(p.email) = lower(u.email)
+         where m.workspace_id = $1 and m.role = 'volunteer')
+     select p.id, p.name,
             coalesce((select json_agg(distinct v.role) from volunteer_roles v
-                      where v.person_id = p.id and v.workspace_id = p.workspace_id), '[]'::json) as roles
-     from persons p
-     where p.workspace_id = $1 and p.deleted_at is null and (
-       exists (select 1 from volunteer_roles v where v.person_id = p.id and v.workspace_id = p.workspace_id)
-       or exists (select 1 from memberships m join users u on u.id = m.user_id
-                  where m.workspace_id = p.workspace_id and m.role = 'volunteer'
-                    and p.email is not null and lower(u.email) = lower(p.email)))
-     order by lower(p.name) limit 1000`,
+                      where v.person_id = p.id and v.workspace_id = p.workspace_id), '[]'::json) as roles,
+            exists (select 1 from door_requests r
+                    where r.workspace_id = p.workspace_id and r.person_id = p.id and r.kind = 'volunteer' and r.done_at is null) as asked
+     from persons p join ids on ids.id = p.id
+     where p.workspace_id = $1 and p.deleted_at is null
+     order by lower(p.name), p.id limit 1000`,
     [ctx.workspaceId],
-  )).rows.map((p) => ({ ...p, roles: typeof p.roles === 'string' ? JSON.parse(p.roles) : p.roles }));
+  )).rows.map((p) => ({ ...p, roles: typeof p.roles === 'string' ? JSON.parse(p.roles) : p.roles, asked: !!p.asked }));
   return c.json({ shifts, assignments, people });
 });
 
