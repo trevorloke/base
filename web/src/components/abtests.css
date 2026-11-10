@@ -17,7 +17,7 @@
 .ab-stats, .ab-line, .ab-b {
   font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--label-tracking);
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
@@ -29,5 +29,5 @@
 .ab-note { font-size: 13px; }
 
 @media (pointer: coarse), (max-width: 720px) {
-  .ab-opts select.input, .ab-fields .input { min-height: 48px; }
+  .ab-opts select.input, .ab-fields .input { min-height: var(--ctl); }
 }

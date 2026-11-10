@@ -13,6 +13,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, apiPost } from '../api.js';
 import { NeedsSignalLine, useOnline } from './NoSignal.jsx';
+import AuthPage from './AuthPage.jsx';
 import './two-step.css';
 
 const day = (ts) => (ts ? new Date(ts).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
@@ -272,9 +273,7 @@ export function TwoStepRequired({ me, onHold }) {
     window.location.reload();
   };
   return (
-    <div className="auth-page ts-gate">
-      <span className="brand">base.win</span>
-      <span className="brand-org">{me?.workspace?.name}</span>
+    <AuthPage org={me?.workspace?.name} className="ts-gate">
       <h1>Set up two-step sign-in</h1>
       <p className="ts-line">{me?.workspace?.name || 'Your campaign'} asks everyone at the desk to use it.</p>
       <TwoStepCard me={me} forced onCodes={() => onHold?.(true)}
@@ -282,6 +281,6 @@ export function TwoStepRequired({ me, onHold }) {
       <p className="ts-signout">
         <button type="button" className="btn-link" disabled={leaving} onClick={signOut}>{leaving ? 'Signing out…' : 'Sign out'}</button>
       </p>
-    </div>
+    </AuthPage>
   );
 }

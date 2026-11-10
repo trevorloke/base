@@ -1,8 +1,10 @@
 // App chrome. The nav is the handful of things each role actually does:
 //   desk (staff, treasurer, manager): Today · Map · People · Shifts · Donations · Signs · Outreach
 //   volunteer:                        Today · Map · Calls · Shifts
-// A navy sidebar on desktop, a top bar plus a big-label tab bar on phones
-// (field mode lives on /map): every label whole at 360px, never cut off.
+// A sidebar on desktop, a top bar plus a tab bar on phones (field mode lives
+// on /map): never more than five tabs, every label whole at 360px — a desk
+// role with more places gets its first four and "More". The campaign leads
+// (its logo, or its initials and its name); base.win is the small line under.
 // One account menu (the avatar) holds the name, the campaign, Your profile
 // (two-step sign-in), Settings (managers) and Sign out. Keyboard: 'n'
 // anywhere → log a gift (desk roles); Ctrl+K / ⌘K → the command bar (the
@@ -32,7 +34,7 @@ import { useShareLocation } from './components/ShareLocation.js';
 import { adminHref, fieldHref, fieldView, mayAdmin } from './mode.js';
 import './pages/offline.css';
 import CommandBar from './components/CommandBar.jsx';
-import { at } from './base.js';
+import BrandMark, { HAS_LOGO } from './components/BrandMark.jsx';
 import { BRAND } from './brand.js';
 
 // Staff, treasurers and managers. App.jsx guards the desk-only routes with it.
@@ -53,6 +55,7 @@ const ICONS = {
   outreach: <><path d="M4 10v4h3l7 4.5v-13L7 10H4z" /><path d="M17 9.5a3.5 3.5 0 0 1 0 5M19.2 7a7 7 0 0 1 0 10" /></>,
   learn: <><path d="M3 9.5 12 5l9 4.5-9 4.5-9-4.5z" /><path d="M6.5 11.5v4.2c0 1.3 2.5 2.8 5.5 2.8s5.5-1.5 5.5-2.8v-4.2" /><path d="M21 9.5v5" /></>,
   website: <><rect x="3" y="4.5" width="18" height="15" rx="1.5" /><path d="M3 8.5h18" /><path d="M6 6.5h.01M8.5 6.5h.01" /><path d="M7 12.5h6M7 15.5h10" /></>,
+  more: <><circle cx="5.5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="18.5" cy="12" r="1.4" /></>,
 };
 const Icon = ({ name }) => (
   <svg className="tab-icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
@@ -85,6 +88,44 @@ const NAV_VOLUNTEER = [
   { to: '/shifts', label: 'Shifts', icon: 'shifts' },
   { to: '/imagineu', label: BRAND.learn, icon: 'learn' },
 ];
+
+// A phone's tab bar holds five. More places than that: the first four, then
+// "More" with the rest.
+const TAB_MAX = 5;
+const onPlace = (path, n) => (n.end ? path === n.to : path === n.to || path.startsWith(`${n.to}/`));
+
+// "More": the rest of a desk role's places, in a sheet above the tab bar. A
+// disclosure (button + panel), like the account menu: Tab moves through it,
+// Escape or a tap outside closes it, and a new screen closes it too. On one
+// of its places, More is the tab you are on.
+function MoreTab({ items, badge }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const wrapRef = useRef(null);
+  const btnRef = useRef(null);
+  const { pathname } = useLocation();
+  useEffect(() => { setOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => { if (!wrapRef.current?.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [open]);
+  const here = items.some((n) => onPlace(pathname, n));
+  return (
+    <div className="tab-more" ref={wrapRef}
+      onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); btnRef.current?.focus(); } }}>
+      <button type="button" ref={btnRef} className={`tab-more__btn${here ? ' active' : ''}`} aria-expanded={open} aria-controls={panelId}
+        onClick={() => setOpen((v) => !v)}>
+        <span className="tab-iconwrap"><Icon name="more" /></span>
+        <span className="tab-label">More</span>
+      </button>
+      <div className="tab-more__panel" id={panelId} hidden={!open}>
+        {items.map((n) => <NavLink key={n.to} to={n.to} end={n.end}><Icon name={n.icon} />{n.label}{badge(n)}</NavLink>)}
+      </div>
+    </div>
+  );
+}
 
 // Everything sent field work can change (ratings, doors left, new people,
 // pins, signs, shift spots, the brief).
@@ -300,6 +341,10 @@ function SignedInShell({ who, mode }) {
   const badge = (n) => (n.to === '/calls' && unread > 0
     ? <span className="tab-badge mono"><span aria-hidden="true">{unread}</span><span className="tab-sr">{` · ${unread} new ${unread === 1 ? 'reply' : 'replies'}`}</span></span>
     : null);
+  // The phone's tab bar: everything when it fits five, else four and "More".
+  const tabs = nav.length > TAB_MAX ? nav.slice(0, TAB_MAX - 1) : nav;
+  const more = nav.slice(tabs.length);
+  const tabCount = tabs.length + (more.length ? 1 : 0);
   useEffect(() => {
     if (!desk) return undefined;
     const onKey = (e) => {
@@ -452,11 +497,14 @@ function SignedInShell({ who, mode }) {
     <>
       <header className="nav" ref={headerRef}>
         <div className="nav-inner">
-          <NavLink to="/" className="brand" aria-label={`base.win — ${me.workspace.name}`}>
-            <img className="brand-mark" src={at(BRAND.mark)} alt="" height="32" />
+          <NavLink to="/" className={`brand${HAS_LOGO ? ' has-logo' : ''}`} aria-label={`${me.workspace.name} — base.win`}>
+            <BrandMark name={me.workspace.name} side />
             <span className="brand-text">
-              <span className="brand-name">base.win</span>
-              <span className="brand-org">{me.workspace.name}{me.org?.env === 'staging' && <span className="env-badge">Staging</span>}</span>
+              <span className="brand-org">{me.workspace.name}</span>
+              <span className="brand-sub">
+                <span className="brand-name">base.win</span>
+                {me.org?.env === 'staging' && <span className="env-badge">Staging</span>}
+              </span>
             </span>
           </NavLink>
           {mode === 'admin' && <CommandBar me={me} nav={nav} />}
@@ -484,14 +532,15 @@ function SignedInShell({ who, mode }) {
           <Outlet context={{ me }} />
         </Suspense>
       </main>
-      <nav className="tabbar" aria-label="Main (mobile)" data-count={nav.length}
-        style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(min-content, 1fr))` }}>
-        {nav.map((n) => (
+      <nav className="tabbar" aria-label="Main (mobile)" data-count={tabCount}
+        style={{ gridTemplateColumns: `repeat(${tabCount}, minmax(min-content, 1fr))` }}>
+        {tabs.map((n) => (
           <NavLink key={n.to} to={n.to} end={n.end}>
             <span className="tab-iconwrap"><Icon name={n.icon} />{badge(n)}</span>
             <span className="tab-label">{n.label}</span>
           </NavLink>
         ))}
+        {more.length > 0 && <MoreTab items={more} badge={badge} />}
       </nav>
     </>
   );

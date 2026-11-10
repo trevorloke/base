@@ -3,7 +3,7 @@
 /* The section names are headings for screen readers, eyebrows to the eye. */
 .pay-h { margin-bottom: var(--s-2); font-size: 13px; line-height: 1.4; }
 .pay-note { margin: 0 0 var(--s-2); font-size: 14px; color: var(--text-2); max-width: 64ch; }
-.pay-line { font-size: 15.5px; line-height: 1.45; color: var(--text-1); max-width: 64ch; }
+.pay-line { font-size: 15px; line-height: 1.45; color: var(--text-1); max-width: 64ch; }
 a.ops-row { color: inherit; }
 .pay-month { flex-direction: column; align-items: flex-end; gap: 0; }
 .pay-month .ops-meta { font-size: 12px; line-height: 1.2; }

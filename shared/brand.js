@@ -1,26 +1,36 @@
 // The product's name, in one place: base.win — one product for the
 // campaign's people, map, field, money, outreach and website (the website is
 // one of the desk's areas, like People or Donations). The campaign's own
-// name is the workspace's, shown beside it. Internal names (STARBASE_*
+// name is the workspace's, and leads. Internal names (STARBASE_*
 // settings, package names, the database) are unchanged, so nothing deployed
 // moves.
 export const APP_NAME = 'base.win';
 
-// The look one deployment wears (STARBASE_BRAND — server/lib/brand.js picks;
-// the server marks the app's page <html data-brand="…">; web/src/brand.js
-// reads it; web/src/brand-base.css re-colours the tokens).
-//   imagine-surrey  Imagine Surrey's own: Surrey Navy and Marigold, the
-//                   star, Barlow Condensed headlines. Training is "ImagineU".
-//   base            base.win's own, for staging and any other campaign: slate
-//                   and indigo, Inter throughout, the base.win mark. Training
-//                   is "Training". Nothing in it names Imagine Surrey.
-// theme / themeDark colour the browser's bar; link is a link in an email;
-// mapInk draws a turf with no colour of its own.
+// The two built-in looks, as data. Each is a brand a campaign starts from:
+// one colour (and maybe a second), a sidebar, corners, a heading face, a logo
+// — and every shade on screen is worked out from the colour by one rule
+// (brand-look.js), the same for both. STARBASE_BRAND picks which one a
+// deployment starts from (server/lib/brand.js); the server marks the app's
+// page <html data-brand="…"> and writes the shades into it; web/src/brand.js
+// reads the mark.
+//   imagine-surrey  Imagine Surrey's own: Surrey Navy, marigold as the
+//                   second colour, its wordmark. Training is "ImagineU".
+//   base            base.win's own, for staging and any other campaign:
+//                   indigo, no logo (the campaign's initials stand in).
+//                   Training is "Training". Nothing in it names Imagine Surrey.
+// logo sits on light grounds, logoDark on dark ones; icon / touchIcon / icons
+// are the tab's and the installed app's.
 export const BRANDS = {
   'imagine-surrey': {
     key: 'imagine-surrey',
+    color: '#003979',
+    second: '#ffc72c',
+    sidebar: 'light',
+    corners: 'soft',
+    heading: 'inter',
+    logo: '/site-assets/imagine-surrey/logo.webp',
+    logoDark: '/site-assets/imagine-surrey/logo-light.png',
     learn: 'ImagineU',
-    mark: '/star.png',
     icon: { href: '/star.png', type: 'image/png' },
     touchIcon: '/apple-touch-icon.png',
     icons: [
@@ -28,17 +38,19 @@ export const BRANDS = {
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
       { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
-    theme: '#003979',
-    themeDark: '#00224d',
-    link: '#003979',
-    mapInk: '#003979',
     sitePlaceholder: 'https://imaginesurrey.ca',
     sampleLede: 'Try it with 52 made-up Surrey voters.',
   },
   base: {
     key: 'base',
+    color: '#4f46e5',
+    second: null,
+    sidebar: 'light',
+    corners: 'soft',
+    heading: 'inter',
+    logo: null,
+    logoDark: null,
     learn: 'Training',
-    mark: '/base-mark.svg',
     icon: { href: '/base-mark.svg', type: 'image/svg+xml' },
     touchIcon: '/base-touch-icon.png',
     icons: [
@@ -46,15 +58,11 @@ export const BRANDS = {
       { src: '/base-icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
       { src: '/base-icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
-    theme: '#1e293b',
-    themeDark: '#0f172a',
-    link: '#4338ca',
-    mapInk: '#4f46e5',
     sitePlaceholder: 'https://yourcampaign.ca',
     sampleLede: 'Try it with 52 made-up voters.',
   },
 };
 export const BRAND_KEYS = Object.keys(BRANDS);
-// No mark on the page (a dev server, a page from before brands): Imagine
-// Surrey's, as everything looked before there was a choice.
-export const DEFAULT_BRAND = 'imagine-surrey';
+// No mark on the page (a dev server): base.win's own, which is what app.css
+// holds when nothing is written into the page.
+export const DEFAULT_BRAND = 'base';

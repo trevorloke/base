@@ -10,7 +10,7 @@ a.chip.pass-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-3);
   color: var(--text-1);
   text-decoration: none;
@@ -19,15 +19,15 @@ a.chip.pass-chip {
 a.chip.pass-chip:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .chip.pass-chip--quiet { display: inline-flex; align-items: center; min-height: 32px; }
 /* "Try again · 1 of 2": amber — the door is still to do, not done */
-.chip.pass-again { background: #fff3d6; border-color: transparent; color: #8a5a00; }
+.chip.pass-again { background: color-mix(in srgb, var(--warn) 12%, var(--card)); border-color: transparent; color: var(--warn); }
 
 /* ── Show: All · Not knocked · Try again (the walk list) ── */
 .pass-show { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
-.pass-show__label { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.pass-show__label { font-family: var(--font-mono); font-size: 12px; letter-spacing: var(--label-tracking); text-transform: var(--label-case); font-weight: 500; color: var(--text-3); }
 .pass-show__pill {
   display: inline-flex;
   align-items: center;
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-3);
   font: inherit;
   font-size: 13px;
@@ -39,23 +39,23 @@ a.chip.pass-chip:focus-visible { outline: 2px solid var(--mark-deep); outline-of
   cursor: pointer;
   touch-action: manipulation;
 }
-.pass-show__pill[aria-pressed='true'] { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
+.pass-show__pill[aria-pressed='true'] { background: var(--tint-2); color: var(--accent-words); border-color: var(--mark); }
 .pass-show__pill:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 
 /* ── /passes (desk) ── */
-.pass-page { max-width: 720px; margin: 0 auto; }
-.pass-empty { font-size: 17px; color: var(--text-2); margin: var(--s-4) 0; max-width: 46ch; }
+.pass-page { max-width: 720px; }
+.pass-empty { font-size: 16px; color: var(--text-2); margin: var(--s-4) 0; max-width: 46ch; }
 .card.pass-open { margin-bottom: var(--s-4); }
-.pass-open__name { margin: 0 0 var(--s-1); font-size: 24px; overflow-wrap: anywhere; }
+.pass-open__name { margin: 0 0 var(--s-1); font-size: 22px; overflow-wrap: anywhere; }
 .pass-open__line { margin: 0; font-size: 15px; color: var(--text-2); }
 .pass-open__meta { margin: var(--s-1) 0 0; font-size: 13px; }
 .pass-open__stats { margin: var(--s-3) 0; font-size: 15px; }
 .pass-open .ops-confirm { margin-top: var(--s-2); }
 .card.pass-form { margin-bottom: var(--s-4); }
 .pass-form h2 { margin-bottom: var(--s-3); }
-.pass-form .input { min-height: 48px; font-size: 16px; }
+.pass-form .input { min-height: var(--ctl); font-size: 16px; }
 /* Tries: five small pills, in a row */
 .pass-tries { display: flex; flex-wrap: wrap; gap: 6px; }
-.pass-tries .sv-kind { min-width: 48px; flex: 0 0 auto; }
+.pass-tries .sv-kind { min-width: var(--ctl); flex: 0 0 auto; }
 .pass-form__note { margin: 0 0 var(--s-3); font-size: 13px; }
 .pass-past__h { font-size: 15px; margin: var(--s-5) 0 var(--s-2); }

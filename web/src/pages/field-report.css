@@ -6,7 +6,7 @@
 /* The range: one pill per range, 48px tall. */
 .fr-ranges { display: flex; flex-wrap: wrap; gap: 2px; padding: 2px; background: var(--paper-1); border-radius: 999px; width: fit-content; max-width: 100%; }
 .fr-range {
-  font: inherit; font-size: 14px; font-weight: 600; min-height: 48px; padding: 0 16px; border: 0; border-radius: 999px;
+  font: inherit; font-size: 14px; font-weight: 600; min-height: var(--ctl); padding: 0 16px; border: 0; border-radius: 999px;
   background: transparent; color: var(--text-2); cursor: pointer; touch-action: manipulation;
 }
 .fr-range.is-on { background: var(--paper-0); color: var(--text-1); box-shadow: var(--shadow-1); }
@@ -37,7 +37,7 @@
 .fr-table-wrap { overflow-x: auto; border: var(--border); border-radius: var(--r-card); background: var(--paper-0); max-width: 100%; }
 .fr-table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .fr-table th, .fr-table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-.fr-table th { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); white-space: normal; vertical-align: bottom; }
+.fr-table th { font-size: 12px; letter-spacing: var(--label-tracking); text-transform: var(--label-case); font-weight: 500; color: var(--text-3); white-space: normal; vertical-align: bottom; }
 .fr-table .num { text-align: right; }
 .fr-table tbody tr:last-child td { border-bottom: 0; }
 .fr-table .fr-name { font-weight: 600; white-space: normal; min-width: 104px; }

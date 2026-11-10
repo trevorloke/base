@@ -5,17 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>base.win</title>
     <meta name="description" content="Walk lists, door knocks and signs for the campaign — keeps working when you lose signal." />
-    <!-- Installable: Add to Home Screen opens straight into the field map. -->
+    <!-- Installable: Add to Home Screen opens straight into the field map.
+         The icons and bar colours here are base.win's own; the server puts a
+         campaign's brand in on the way out (server/lib/brand.js). -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" href="/star.png" type="image/png" />
+    <link rel="icon" href="/base-mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/fonts/fonts.css" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <meta name="theme-color" content="#003979" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#00224d" media="(prefers-color-scheme: dark)" />
+    <link rel="apple-touch-icon" href="/base-touch-icon.png" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#17181c" media="(prefers-color-scheme: dark)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="base.win" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   </head>
   <body>
     <div id="root"></div>

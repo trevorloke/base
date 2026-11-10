@@ -9,4 +9,4 @@
 .ms-asks .ot-check { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }
 .ms-met { margin-top: var(--s-4); }
 .ms-foot { margin-top: var(--s-5); }
-@media (pointer: coarse), (max-width: 720px) { .ms-page .input { min-height: 48px; font-size: 16px; } }
+@media (pointer: coarse), (max-width: 720px) { .ms-page .input { min-height: var(--ctl); font-size: 16px; } }

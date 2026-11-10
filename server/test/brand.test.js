@@ -1,10 +1,12 @@
-// The look a deployment wears (lib/brand.js): Imagine Surrey's own in
-// production, base.win's generic one on staging and for any other campaign.
-// Unset, production keeps today's look; the app's page and manifest leave
-// marked with the brand (before any paint) and its icons and colours;
-// training is "ImagineU" or "Training" on every screen that names it; an
-// email's links take the brand's colour; a manager renames the campaign in
-// one step (Settings → Campaign) and nobody else can.
+// The brand a deployment wears (lib/brand.js): Imagine Surrey's own in
+// production, base.win's on staging and for any other campaign — two presets
+// through one rule. Unset, it is worked out as it always was; the app's page
+// leaves marked with the brand, its shades written in before the stylesheets
+// (none for base.win's own: app.css holds those), its logo asked for early,
+// its icons and the browser's bar colours, and so does the manifest; training
+// is "ImagineU" or "Training" on every screen that names it; an email's links
+// take the brand's colour; a manager renames the campaign in one step
+// (Settings → Campaign) and nobody else can.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -13,6 +15,8 @@ import { freshDb, Client } from './helpers.js';
 import { brandKey, brandHtml, brandManifest, brandPages, learnName } from '../lib/brand.js';
 import { emailBody } from '../ext/abtests/send.js';
 import { BRANDS } from '@starbase/shared/brand';
+import { contrast } from '@starbase/shared/site/theme';
+import { rewriters } from '../lib/mount.js';
 
 const ENV = ['STARBASE_BRAND', 'STARBASE_ENV', 'STARBASE_ORG_NAME'];
 const saved = Object.fromEntries(ENV.map((k) => [k, process.env[k]]));
@@ -46,23 +50,54 @@ test('set, it is what it says (a bad value is worked out as unset)', () => {
   assert.equal(brandKey(), 'base');
 });
 
-test('the app’s page: marked on <html>, the brand’s icons and the browser’s colours', () => {
+test('the app’s page: marked on <html>, the brand’s shades, icons and the browser’s colours', () => {
+  // base.win's own: the page as built (app.css holds its shades), marked.
   const base = brandHtml(INDEX, BRANDS.base);
   assert.match(base, /<html lang="en" data-brand="base">/);
+  assert.equal(base.replace(' data-brand="base"', ''), INDEX, 'base.win’s page is the page as built, marked');
+  assert.doesNotMatch(base, /<style id="brand">|star\.png|#003979|imagine/i, 'no block, and nothing of Imagine Surrey’s');
   assert.match(base, /<link rel="icon" href="\/base-mark.svg" type="image\/svg\+xml" \/>/);
-  assert.match(base, /<link rel="apple-touch-icon" href="\/base-touch-icon.png" \/>/);
-  assert.match(base, /<meta name="theme-color" content="#1e293b" media="\(prefers-color-scheme: light\)" \/>/);
-  assert.match(base, /<meta name="theme-color" content="#0f172a" media="\(prefers-color-scheme: dark\)" \/>/);
-  assert.doesNotMatch(base, /star\.png|#003979|#00224d/, 'nothing of Imagine Surrey’s left');
+  // Imagine Surrey's: its shades before the stylesheets, its logo asked for early.
   const is = brandHtml(INDEX, BRANDS['imagine-surrey']);
   assert.match(is, /<html lang="en" data-brand="imagine-surrey">/);
-  assert.equal(is.replace(' data-brand="imagine-surrey"', ''), INDEX, 'Imagine Surrey’s page is the page as built, marked');
-  assert.match(brandHtml(is, BRANDS.base), /<html lang="en" data-brand="base">/, 'marked once, never twice');
+  assert.match(is, /<link rel="icon" href="\/star.png" type="image\/png" \/>/);
+  assert.match(is, /<link rel="apple-touch-icon" href="\/apple-touch-icon.png" \/>/);
+  const block = /<style id="brand">([^<]*)<\/style>/.exec(is);
+  assert.ok(block, 'the shades are in the page');
+  assert.match(block[1], /--accent:#003979;/, 'Surrey Navy is the accent');
+  assert.match(block[1], /--second:#ffc72c;/, 'marigold is the second colour');
+  assert.match(block[1], /@media \(prefers-color-scheme:dark\)/, 'dark too');
+  assert.doesNotMatch(block[1], /url\(|\/\//, 'no addresses in it');
+  assert.ok(is.indexOf('<style id="brand">') < is.indexOf('<link rel="stylesheet"'), 'before the first stylesheet');
+  assert.match(is, /<link rel="preload" as="image" href="\/site-assets\/imagine-surrey\/logo\.webp" data-brand media="\(prefers-color-scheme: light\)" \/>/);
+  assert.match(is, /<link rel="preload" as="image" href="\/site-assets\/imagine-surrey\/logo-light\.png" data-brand media="\(prefers-color-scheme: dark\)" \/>/);
+  // A light sidebar: the browser's bar is the phone's top bar, not a slab of navy.
+  assert.match(is, /<meta name="theme-color" content="#ffffff" media="\(prefers-color-scheme: light\)" \/>/);
+  assert.match(is, /<meta name="theme-color" content="#17181c" media="\(prefers-color-scheme: dark\)" \/>/);
+  assert.match(is, /apple-mobile-web-app-status-bar-style" content="default"/);
+  // Branded once, never twice — and back to base.win's leaves nothing behind.
+  assert.equal(brandHtml(is, BRANDS['imagine-surrey']), is);
+  assert.equal(brandHtml(is, BRANDS.base), base);
   assert.equal((brandHtml(is, BRANDS.base).match(/data-brand=/g) || []).length, 1);
+  // A brand-coloured sidebar: the bar is the brand, and the status bar text is light.
+  const rail = brandHtml(INDEX, { ...BRANDS['imagine-surrey'], sidebar: 'brand' });
+  assert.match(rail, /<meta name="theme-color" content="#003979" media="\(prefers-color-scheme: light\)" \/>/);
+  assert.match(rail, /status-bar-style" content="black"/);
+  assert.match(rail, /href="\/site-assets\/imagine-surrey\/logo-light\.png" data-brand \/>/, 'the light logo, whatever the scheme');
+
   const m = brandManifest(MANIFEST, BRANDS.base);
-  assert.deepEqual([m.name, m.theme_color, m.background_color, m.start_url], ['base.win', '#1e293b', '#1e293b', MANIFEST.start_url]);
+  assert.deepEqual(m, MANIFEST, 'base.win’s manifest is the one built');
+  assert.deepEqual([m.name, m.theme_color, m.background_color], ['base.win', '#ffffff', '#fafafb']);
   assert.ok(m.icons.every((i) => i.src.startsWith('/base-')) && m.icons.some((i) => i.purpose === 'maskable'));
-  assert.deepEqual(brandManifest(MANIFEST, BRANDS['imagine-surrey']), MANIFEST, 'Imagine Surrey’s manifest as it is');
+  const im = brandManifest(MANIFEST, BRANDS['imagine-surrey']);
+  assert.deepEqual([im.name, im.theme_color, im.background_color, im.start_url, im.icons[0].src], ['base.win', '#ffffff', '#fafafb', MANIFEST.start_url, '/icon-192.png']);
+});
+
+test('under a client’s path: the icons and the logo are found there; the shades need no address', () => {
+  const page = rewriters('/imaginesurrey').html(brandHtml(INDEX, BRANDS['imagine-surrey']));
+  assert.match(page, /<link rel="icon" href="\/imaginesurrey\/star.png"/);
+  assert.match(page, /<link rel="preload" as="image" href="\/imaginesurrey\/site-assets\/imagine-surrey\/logo\.webp"/);
+  assert.equal(/<style id="brand">([^<]*)<\/style>/.exec(page)[1], /<style id="brand">([^<]*)<\/style>/.exec(brandHtml(INDEX, BRANDS['imagine-surrey']))[1], 'the block is the same under any path');
 });
 
 test('on the way out: the page and the manifest are branded; the API and other files pass as they came', async () => {
@@ -83,11 +118,15 @@ test('on the way out: the page and the manifest are branded; the API and other f
   assert.equal(page.headers.get('content-length'), null, 'not the file’s length any more');
   const man = await app.request('/manifest.webmanifest');
   assert.equal(man.headers.get('content-length'), null);
-  assert.equal((await man.json()).theme_color, '#1e293b');
+  assert.ok((await man.json()).icons.every((i) => i.src.startsWith('/base-')));
   assert.deepEqual(await (await app.request('/api/x')).json(), { html: '<html lang="en">' });
   assert.doesNotMatch(await (await app.request('/u/x')).text(), /data-brand/, 'only the app’s own page');
   setEnv({ STARBASE_BRAND: 'imagine-surrey' });
-  assert.match(await (await app.request('/')).text(), /data-brand="imagine-surrey"/);
+  const is = await (await app.request('/')).text();
+  assert.match(is, /data-brand="imagine-surrey"/);
+  assert.match(is, /<style id="brand">:root\{[^<]*--accent:#003979;/, 'Imagine Surrey’s shades ride in the page');
+  assert.match(is, /<\/html>\s*$/, 'the whole page, longer than the file');
+  assert.equal((await (await app.request('/manifest.webmanifest')).json()).icons[0].src, '/icon-192.png');
 });
 
 let mgr, vol, db;
@@ -114,11 +153,17 @@ test('training is called what the deployment calls it: Permissions, the public p
   assert.equal((await mgr.get('/api/admin/permissions')).json.areas.find((a) => a.key === 'learn').label, 'ImagineU');
 });
 
-test('an email’s links take the brand’s colour', () => {
+test('an email’s links take the brand’s colour, as words that read', () => {
   setEnv({ STARBASE_BRAND: 'base' });
-  assert.match(emailBody('See [the plan](https://example.org/plan)'), /style="color:#4338ca"/);
+  assert.match(emailBody('See [the plan](https://example.org/plan)'), /style="color:#4f46e5"/);
   setEnv({ STARBASE_BRAND: 'imagine-surrey' });
   assert.match(emailBody('See https://example.org/plan'), /style="color:#003979"/);
+  // The colour is the brand as words (4.5:1 on white and on the mail's pale ground).
+  for (const key of Object.keys(BRANDS)) {
+    setEnv({ STARBASE_BRAND: key });
+    const colour = /style="color:(#[0-9a-f]{6})"/.exec(emailBody('See https://example.org/plan'))[1];
+    for (const ground of ['#ffffff', '#f4f5fa']) assert.ok(contrast(colour, ground) >= 4.5, `${key} ${colour} on ${ground}`);
+  }
 });
 
 test('Settings → Campaign: a manager renames the campaign in one step; nobody else can', async () => {

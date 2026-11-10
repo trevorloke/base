@@ -8,10 +8,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost, ApiError, noAnswer } from '../api.js'; // no signal at all keeps its own words
 import { landing } from '../mode.js';
 import { CodeField } from '../components/TwoStep.jsx';
+import AuthPage from '../components/AuthPage.jsx';
 
 // Big, thumb-sized controls (auth pages load before any page stylesheet).
 const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
-const AUTH_BUTTON = { width: '100%', minHeight: 52, fontSize: 13, marginTop: 'var(--s-2)' };
+const AUTH_BUTTON = { width: '100%', minHeight: 48, fontSize: 15, marginTop: 'var(--s-2)' };
 
 // What went wrong, in words that say what to do: a wrong password, a pause
 // after too many tries, or a server that isn't answering (restarting, or its
@@ -71,18 +72,12 @@ export default function Login({ mode = 'field' }) {
     }
   };
 
-  const head = (
-    <>
-      <span className="brand">base.win</span>
-      {setup.data?.organization && <span className="brand-org">{setup.data.organization}</span>}
-      {setup.data?.org?.env === 'staging' && <span className="env-badge">Staging</span>}
-    </>
-  );
+  // Whose sign-in this is (the campaign's name once it is set up).
+  const whose = { org: setup.data?.organization || null, staging: setup.data?.org?.env === 'staging' };
 
   if (step === 'code') {
     return (
-      <div className="auth-page">
-        {head}
+      <AuthPage {...whose}>
         <h1>Enter your code</h1>
         <form onSubmit={submitCode}>
           <p className="ts-hint" id="code-hint">The 6-digit code from your authenticator app.</p>
@@ -97,13 +92,12 @@ export default function Login({ mode = 'field' }) {
         <p className="ts-again">
           <button type="button" className="btn-link" onClick={() => { setStep('password'); setError(null); setPassword(''); }}>Start again</button>
         </p>
-      </div>
+      </AuthPage>
     );
   }
 
   return (
-    <div className="auth-page">
-      {head}
+    <AuthPage {...whose}>
       <h1>Sign in</h1>
       <form onSubmit={submit}>
         <div className="field">
@@ -127,6 +121,6 @@ export default function Login({ mode = 'field' }) {
           <p className="muted"><Link to="/signup">Set up base.win{setup.data.organization ? ` for ${setup.data.organization}` : ''}</Link></p>
         </>
       )}
-    </div>
+    </AuthPage>
   );
 }

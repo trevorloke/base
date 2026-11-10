@@ -8,7 +8,7 @@
 
 .cb { margin: var(--s-5) 0 var(--s-4); }
 .cb-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s-1) var(--s-3); }
-.cb-title { margin: 0; font-size: 20px; }
+.cb-title { margin: 0; font-size: 18px; }
 .cb-count { color: var(--text-3); font-size: 14px; }
 .btn.cb-split { margin-left: auto; }
 .cb-help { margin: var(--s-1) 0 var(--s-3); color: var(--text-3); font-size: 14px; }
@@ -47,7 +47,7 @@
   align-items: flex-start;
   gap: 2px;
   width: 100%;
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: var(--s-1) var(--s-3);
   font: inherit;
   text-align: left;
@@ -117,7 +117,7 @@
 
 .cb-card { display: grid; grid-template-columns: minmax(0, 1fr) 44px; gap: 2px; align-items: stretch; }
 .cb-card__more {
-  min-height: 48px;
+  min-height: var(--ctl);
   font: inherit;
   font-size: 18px;
   line-height: 1;
@@ -129,7 +129,7 @@
 }
 .cb-card__more:hover, .cb-card__more[aria-expanded='true'] { background: var(--paper-1); color: var(--text-1); }
 .cb-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.cb-tags .chip { font-size: 11px; padding: 1px 7px; }
+.cb-tags .chip { font-size: 12px; padding: 1px 7px; }
 .chip.cb-job--lead { background: var(--mark); color: var(--mark-ink); border-color: transparent; }
 .chip.cb-job--driver { background: var(--paper-2); border-color: transparent; }
 .chip.cb-nosign { color: var(--text-3); border-style: dashed; }
@@ -150,7 +150,7 @@
 /* The tap path: "Move here" on each column that can take what's picked. */
 .btn.cb-here {
   width: 100%;
-  min-height: 48px;
+  min-height: var(--ctl);
   border: 2px dashed var(--mark);
   background: var(--mark-soft);
   color: var(--text-1);
@@ -196,7 +196,7 @@
 
 /* Read out, not shown (the toast shows it). */
 .cb-live { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.toast.ops-toast.cb-toast { display: flex; align-items: center; gap: var(--s-2); max-width: calc(100vw - 32px); min-height: 48px; }
+.toast.ops-toast.cb-toast { display: flex; align-items: center; gap: var(--s-2); max-width: calc(100vw - 32px); min-height: var(--ctl); }
 .toast.ops-toast.cb-toast .btn { min-height: 40px; }
 
 @media (max-width: 860px) {

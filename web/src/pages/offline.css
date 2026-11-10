@@ -6,7 +6,7 @@
 
 .offline-strip {
   border-top: 1px solid var(--rule);
-  background: var(--mark-soft);
+  background: var(--tint);
   color: var(--text-1);
 }
 .offline-strip.is-offline { background: var(--paper-1); }
@@ -35,11 +35,9 @@
 }
 
 .offline-strip__text {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
 }
 .offline-strip__hint {
   font-size: 13px;
@@ -54,6 +52,7 @@
   padding: 5px 12px;
   margin-left: auto;
 }
+@media (min-width: 900px) and (pointer: fine) { .btn.offline-strip__btn { min-height: 32px; } }
 .offline-strip__btn::after {
   content: '';
   position: absolute;

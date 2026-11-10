@@ -7,10 +7,10 @@
 .ops-body .fd-fform .sv-switch.fd-switch { margin: 0; }
 /* A kind it can't become now (filled in): plainly off. */
 .fd-fform .sv-kind:disabled { opacity: 0.4; cursor: default; }
-.input.fd-input { min-height: 48px; font-size: 16px; }
+.input.fd-input { min-height: var(--ctl); font-size: 16px; }
 .fd-why { margin: var(--s-1) 0 0; font-size: 13px; }
 .fd-choice--kept {
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-3);
   border: 1px dashed var(--rule-2);
   border-radius: var(--r-ctrl);
