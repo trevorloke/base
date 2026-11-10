@@ -11,7 +11,7 @@ import { freshDb, Client } from './helpers.js';
 import { verifyChain } from '../lib/events.js';
 import { runDueJobs } from '../lib/jobs.js';
 import { _setClockForTest } from '../ext/texting/rules.js';
-import { noticeWords, remindAt } from '../ext/schedule/tell.js';
+import { _setPerRunForTest, noticeWords, remindAt } from '../ext/schedule/tell.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const TZ = 'America/Vancouver';
@@ -324,6 +324,26 @@ test('a shift under way still counts: who the count names is who is told', async
   assert.deepEqual((await noticesOf(r.batch_id)).map((n) => [n.name, n.email, n.text]),
     [['Asha Example', 'sent', 'sent'], ['Dee Example', 'sent', 'sent'], ['Eli Example', 'sent', 'sent']]);
   assert.match(emails.find((m) => m.to[0] === P.dee.email).text, /Tuesday, May 7 at 4:00 p\.m\. – 6:00 p\.m\./);
+});
+
+test('a long list goes a run at a time: the job hands the rest to the next run, and everyone is told once', async () => {
+  connect();
+  emails.length = 0; texts.length = 0;
+  at('2030-05-08T00:00:00Z');
+  _setPerRunForTest(2);
+  try {
+    const r = ok(await mgr.action('shift.tellWeek', { week: MON }));
+    assert.equal(r.people, 3);
+    const first = await runDueJobs(db, { workspaceId: ws });
+    assert.deepEqual([first.ran, first.failed], [1, 0]);
+    assert.deepEqual((await noticesOf(r.batch_id)).map((n) => n.state).sort(), ['asked', 'done', 'done'], 'two told, one waiting for the next run');
+    assert.equal((await mgr.action('shift.tellWeek', { week: MON })).status, 409, 'still going out');
+    await runJobs();
+    assert.deepEqual((await noticesOf(r.batch_id)).map((n) => [n.name, n.state, n.email]), [['Asha Example', 'done', 'sent'], ['Dee Example', 'done', 'sent'], ['Eli Example', 'done', 'sent']]);
+    assert.deepEqual(emails.map((m) => m.to[0]).sort(), [P.asha.email, P.dee.email, P.eli.email].sort(), 'each once');
+    const runs = await rows(`select status from jobs where workspace_id = $1 and kind = 'schedule.tell' and payload->>'batch_id' = $2`, [ws, r.batch_id]);
+    assert.deepEqual(runs.map((j) => j.status), ['done', 'done'], 'the tap’s job and the one that carried on');
+  } finally { _setPerRunForTest(null); }
 });
 
 test('reminders are off until a manager turns them on; then 6 pm the evening before, inside the texting hours', async () => {

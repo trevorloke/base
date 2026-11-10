@@ -34,8 +34,11 @@ test('the catalogue: nine kinds, their words, usual hours, and colours from the 
   assert.deepEqual(hours('signs'), ['09:00-12:00']);
   assert.deepEqual(hours('office'), ['09:00-12:00', '13:00-16:00']);
   assert.deepEqual([hours('event'), hours('other')], [[], []]);
+  // The app's own colour variables (web/src/app.css): a campaign's brand and a new look re-value these.
+  const APP_COLOURS = ['--mark', '--mark-ink', '--mark-soft', '--mark-deep', '--text-1', '--text-2', '--text-3', '--text-4', '--ink', '--ok', '--warn', '--danger'];
   for (const k of SHIFT_KINDS) {
     assert.match(k.color, /^--[a-z0-9-]+$/, `${k.code}: a CSS variable, never a hex`);
+    assert.ok(APP_COLOURS.includes(k.color), `${k.code}: ${k.color} is one the app already has`);
     assert.ok(k.icon && k.minutes >= 60, `${k.code}: an icon and a usual length`);
     assert.ok(k.role === null || VOLUNTEER_ROLE_CODES.includes(k.role), `${k.code}: a real volunteer role`);
     assert.ok(k.slots.every((s) => isClock(s.start) && isClock(s.end) && s.start < s.end));

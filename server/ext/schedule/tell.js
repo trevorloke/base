@@ -164,21 +164,28 @@ const byPerson = (bookings) => {
 };
 
 // ── Sending ──
+// A run sends to a hundred people, or for five minutes when a provider is
+// slow to answer — well inside the ten after which the job runner takes a
+// running job for dead — and the next run carries on.
 const PER_RUN = 100;
+const RUN_MS = 5 * 60_000;
 const BATCH = 10;
+let perRun = PER_RUN;
+export const _setPerRunForTest = (n) => { perRun = n || PER_RUN; };
 const GONE = 'No longer on a shift';
 const jobCtx = async (db, ws) => {
   const w = (await db.query('select name, settings from workspaces where id = $1', [ws])).rows[0];
   return w ? { workspaceId: ws, workspace: { name: w.name, settings: parseJ(w.settings, {}) || {} } } : null;
 };
 
-const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION, max = PER_RUN } = {}) => {
+const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION, max = perRun } = {}) => {
   const ws = ctx.workspaceId;
   const tz = tzOf(ctx);
   const act = (fn) => runAction(db, { workspaceId: ws, actorId, action }, fn);
+  const started = Date.now();
   let claimed = 0;
   for (;;) {
-    if (claimed >= max) {
+    if (claimed >= max || Date.now() - started >= RUN_MS) {
       const left = (await db.query(`select 1 from shift_notices where workspace_id = $1 and batch_id = $2 and state = 'asked' limit 1`, [ws, batchId])).rows;
       return { more: left.length > 0 };
     }
@@ -261,8 +268,8 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
   }
 };
 
-// The job that sends a notice's rows: a hundred people a run, then the next
-// run straight away — other background work isn't kept waiting.
+// The job that sends a notice's rows, a run at a time (PER_RUN, RUN_MS), the
+// next run straight away — other background work isn't kept waiting.
 const runTellJob = async (db, job) => {
   const { batch_id: batchId, actor_id: actorId = null, action } = job.payload || {};
   const ctx = await jobCtx(db, job.workspace_id);
