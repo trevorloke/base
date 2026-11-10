@@ -128,7 +128,7 @@ export default function ShiftsBoard({ me, onSheet }) {
     queryFn: () => apiGet(`/shifts/board?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
     placeholderData: keepPreviousData,
   });
-  const { byShift: turfsByShift } = useShiftTurfs(me, { side: true });
+  const { byShift: turfsByShift, ready: turfsReady, failed: turfsFailed } = useShiftTurfs(me, { side: true });
   // The week's notice, reminders and what is connected (ScheduleWeek.jsx).
   const week = useQuery({
     queryKey: weekKey(monday),
@@ -233,10 +233,15 @@ export default function ShiftsBoard({ me, onSheet }) {
   const addParam = params.get('add');
   const adding = addParam != null && online;
   const addDay = isDay(addParam) && days.includes(addParam) ? addParam : (narrow ? shownDay : days.includes(today) ? today : null);
-  const openShift = open && byId.get(open.id);
+  // A card's sheet waits for its turfs: it changes them from what they are
+  // (and leaves them alone when they can't be read).
+  const openShift = open && (turfsReady || turfsFailed) && byId.get(open.id);
   // While a sheet is open its button is the one main button (Shifts.jsx).
   const sheetOpen = adding || Boolean(openShift);
-  useEffect(() => { onSheet?.(sheetOpen); }, [sheetOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // (And the last toast goes: it would sit over that button.)
+  useEffect(() => { onSheet?.(sheetOpen); if (sheetOpen) say(null); }, [sheetOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nothing can be added to a week that is over: "New shift" there is this week's.
+  useEffect(() => { if (adding && days[6] < today) setParam('week', null); }, [adding, monday]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onSheet?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refresh = (shiftIds = []) => {
@@ -645,7 +650,7 @@ export default function ShiftsBoard({ me, onSheet }) {
       </div>
 
       {more && (
-        <WeekMore id={moreId} monday={monday} thisMonday={thisWeek} tz={tz} week={week} count={have ? shifts.length : 0}
+        <WeekMore id={moreId} monday={monday} tz={tz} week={week} count={have ? shifts.length : null}
           online={online} onCopied={copied} />
       )}
 
@@ -721,7 +726,7 @@ export default function ShiftsBoard({ me, onSheet }) {
           {emptyWeek && (
             <div className="ops-empty-block sch-empty">
               <p className="ops-empty">{pastWeek ? 'No shifts that week.' : 'No shifts this week yet.'}</p>
-              {!pastWeek && <CopyLastWeek monday={monday} lastCount={lastWeek.data?.shifts?.length ?? 0} online={online} onCopied={copied} />}
+              {!pastWeek && <CopyLastWeek monday={monday} last={lastWeek} online={online} onCopied={copied} />}
             </div>
           )}
 
@@ -746,7 +751,8 @@ export default function ShiftsBoard({ me, onSheet }) {
 
       {adding && <ScheduleAdd me={me} days={days} today={today} day={addDay} onClose={closeAdd} onAdded={added} />}
       {openShift && (
-        <ScheduleShift key={`${open.id}:${open.tell}`} me={me} shift={openShift} on={onShift.get(open.id) ?? []} turfs={turfsByShift[open.id] ?? []}
+        <ScheduleShift key={`${open.id}:${open.tell}`} me={me} shift={openShift} on={onShift.get(open.id) ?? []}
+          turfs={turfsReady ? (turfsByShift[open.id] ?? []) : null}
           days={days} today={today} tz={tz} tell={open.tell} providers={week.data?.providers ?? null}
           onClose={() => setOpen(null)} onChanged={changed} onGone={gone} />
       )}

@@ -274,7 +274,8 @@ one tap away under **More**.
   a 0 never un-marks anyone, and the import's line says *adds voted*. Switch
   it off (and *Turn on by itself* off, on a voting day) and the buttons go;
   the marks stay.
-- **Shifts → New shift → More details → Turfs** — tap one or more turfs
+- **Shifts → New shift → More → More options → More details → Turfs** (the
+  long form) — tap one or more turfs
   (*Anyone who counts themselves in gets these walk lists*), then *Create
   shift*. The shift reads *Walk list: Newton block* (or *Walk lists: …*)
   with *Change turfs*; the list row reads *Saturday canvass · Newton block*
@@ -492,9 +493,26 @@ one tap away under **More**.
   role (incl. *Hi-rise building captain*); open a profile; add tags, roles,
   social handles. **More → Call list / Text list** opens Calls with the same
   filter; **More → Inbox** has every text conversation.
-- **Shifts** — **New shift** (what, when, where, how many; role,
-  instructions and link under *More details*), **Add volunteer**, then
-  **Notify everyone** (email + text). Without email/text connected the
+- **Shifts → Week** — next week (**›**). **+** on Monday: tap *Burma
+  Shave*; *Pick on the map*, tap a corner, *Use this place*; *Weekdays*;
+  **Add 5 shifts** — five cards under *Early*, 6:30–8:30 am, named for the
+  corner, and nothing was typed. **+** on Saturday: *Canvass*, a turf,
+  *2–5 pm* as well: a morning and an afternoon canvass, each with its turf
+  chip. Tap a card: another day and **Save** moves it (or drag the card to
+  another day — *Undo*); with someone on it the week says who has the old
+  time, with **Tell them**. *Every week for 4 weeks* makes a repeating slot:
+  its card offers *This one · This and the following*. **More**: *Tell
+  everyone on this week's shifts* shows the count first, then *Details* a
+  person a row; *Remind people the evening before* is a switch (a
+  manager's); *Copy to next week* asks *With the same people?*. Go a week
+  further: an empty week offers **Copy last week**. On a phone it is one
+  day at a time and the sheets come up from the bottom.
+  `PORT=4900 SHOTS=/tmp/schedule node e2e-schedule.mjs` runs all of it in a
+  browser at both sizes (its own server, a stand-in address service and
+  texting provider), checking that no key is pressed in the add sheet.
+- **Shifts** — the long form (**New shift → More → More options**: what,
+  when, where, how many; role, instructions and link under *More details*),
+  **Add volunteer**, then **Notify everyone** (email + text). Without email/text connected the
   button says *Save — nothing sends*; once connected, *Notify again* reaches
   them. Nothing on any screen claims to be sent unless it was.
   **Edit** under the title opens the shift filled in; move its time or

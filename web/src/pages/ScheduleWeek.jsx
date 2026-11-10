@@ -31,7 +31,7 @@ const copiedWords = (r, to) => [
   r.shifts.length ? `${plural(r.shifts.length, 'shift')} copied to ${weekWords(to)}` : `Nothing new to copy to ${weekWords(to)}`,
   r.already ? `${r.already} already there` : null,
   r.past ? `${r.past} already over` : null,
-  r.booked ? `${peopleWords(r.booked)} booked` : null,
+  r.booked ? plural(r.booked, 'booking') : null,
   r.full ? `${r.full} didn’t fit a limit` : null,
   r.no_turfs ? 'turfs not copied — that needs Map & turfs' : null,
 ].filter(Boolean).join(' · ');
@@ -62,9 +62,13 @@ function CopyAsk({ from, to, words, onCopied, onCancel }) {
   );
 }
 
-// An empty week's one offer: last week's shifts, when it had any.
-export function CopyLastWeek({ monday, lastCount, online, onCopied }) {
+// An empty week's one offer: last week's shifts, when it had any. `last`:
+// the read of last week (the week screen's own, for that week).
+export function CopyLastWeek({ monday, last, online, onCopied }) {
   const [asking, setAsking] = useState(false);
+  if (last.isPending) return <p className="sch-note" role="status">{last.fetchStatus === 'paused' ? 'Offline — loads with signal' : 'Looking at last week…'}</p>;
+  if (last.isError && !last.data) return <Unavailable what="Last week" onRetry={() => last.refetch()} />;
+  const lastCount = last.data?.shifts?.length ?? 0;
   if (!lastCount) return null;
   return asking ? (
     <CopyAsk from={addDays(monday, -7)} to={monday} words={`Copy last week’s ${plural(lastCount, 'shift')} here?`}
@@ -97,7 +101,7 @@ function NoticeDetails({ batchId }) {
   );
 }
 
-function TellWeek({ monday, tz, week, online, thisWeek }) {
+function TellWeek({ monday, tz, week, online }) {
   const queryClient = useQueryClient();
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -119,12 +123,11 @@ function TellWeek({ monday, tz, week, online, thisWeek }) {
   };
   const none = !d.providers.email && !d.providers.text;
   const going = d.last && d.last.waiting > 0;
-  const whose = thisWeek ? 'this week’s' : 'that week’s';
 
   return (
     <div className="sch-row">
       <div className="sch-row__main">
-        <b>Tell everyone on {whose} shifts</b>
+        <b>Tell everyone on this week’s shifts</b>
         <span className="ops-meta" role="status">
           {d.people ? `${peopleWords(d.people)} · ${plural(d.shifts, 'shift')}` : 'Nobody is on a shift still to come'}
         </span>
@@ -203,7 +206,7 @@ function Reminders({ monday, tz, week, online }) {
   );
 }
 
-export default function WeekMore({ id, monday, thisMonday, tz, week, count, online, onCopied }) {
+export default function WeekMore({ id, monday, tz, week, count, online, onCopied }) {
   const [copying, setCopying] = useState(false);
   const next = addDays(monday, 7);
   return (
@@ -212,14 +215,16 @@ export default function WeekMore({ id, monday, thisMonday, tz, week, count, onli
       {week.isError && !week.data && <Unavailable onRetry={() => week.refetch()} />}
       {week.data && (
         <>
-          <TellWeek monday={monday} tz={tz} week={week} online={online} thisWeek={monday === thisMonday} />
+          <TellWeek monday={monday} tz={tz} week={week} online={online} />
           <Reminders monday={monday} tz={tz} week={week} online={online} />
         </>
       )}
       <div className="sch-row">
         <div className="sch-row__main">
           <b>Copy to next week</b>
-          <span className="ops-meta">{count ? `${plural(count, 'shift')} → ${weekWords(next)}` : 'Nothing here to copy'}</span>
+          <span className="ops-meta" role="status">
+            {count == null ? 'Loading…' : count ? `${plural(count, 'shift')} → ${weekWords(next)}` : 'Nothing here to copy'}
+          </span>
         </div>
         {!copying && <button type="button" className="btn ops-tap" disabled={!online || !count} onClick={() => setCopying(true)}>Copy</button>}
         {copying && (

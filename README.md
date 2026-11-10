@@ -49,7 +49,7 @@ button, no paragraphs, everything else one tap away.
 | **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. *Show* filters by band, by 1s or 2s on their own, and by each opponent on the Voting-for list (*Voting Locke*); its **Signs** chips show signs up and sign requests together (requests a pale flag, a billboard a bigger one) and narrow them by status and kind. Turfs and walk lists; **passes** — a sweep over every turf with a purpose (persuasion, get out the vote, lit drop, find out who's who), a universe (who to knock) and a try rule, so a *No answer* door comes back (*Try again · 1 of 2*) until it's given up. With GOTV mode on, every door card, walk-list door and Calls card has a one-tap *Voted ✓* (offline too, sent once), and a get-out-the-vote pass drops a door once everyone there has voted; a voted file from the campaign's website comes in through People → Import |
 | **Scripts** | What to say at the door and on the phone (`/scripts`, desk): shown as *Script* above the rating buttons on the walk list, the door card and Calls, the voter's and the canvasser's first names filled in, kept on the phone |
 | **People** | Everyone, filterable by rating / tag / role / the campaign's own fields, and by the field's cuts (never knocked or not in 7–30 days, the last outcome, a turf, a postal code, without a tag, what they did on the website — saved lists, blasts and Calls keep them); profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time; **My people** is each volunteer's own circle |
-| **Shifts** | Schedule volunteers, assign by role, notify by email + text with instructions and a link; volunteers tap *Count me in*; a shift can carry turfs; *Count me in* puts the walk list on your phone; the desk can *Edit* a shift (moved in time or place → *Let them know*) or *Call off* one, which takes back the walk lists it gave. Each shift has a **crew board**: drag volunteers on from a tray (free or busy then, asked to volunteer, new), onto its turfs — each person gets only their turf's walk list — or *No walk list*; team lead and driver; *Here* / *No-show* on the day; *Split the rest evenly*. **Shifts → Volunteers** is the roster: asked to volunteer, new, active, lapsed, by role; call, text and *Put on a shift* in a tap |
+| **Shifts** | Schedule a week by tap: **Shifts → Week** lists each day's shifts from 6 am, *+* adds them — what, where, which days, when — with nothing typed, a card moves by a drag or a tap, and a week copies to the next; assign by role, notify by email + text with instructions and a link; volunteers tap *Count me in*; a shift can carry turfs; *Count me in* puts the walk list on your phone; the desk can *Edit* a shift (moved in time or place → *Let them know*) or *Call off* one, which takes back the walk lists it gave. Each shift has a **crew board**: drag volunteers on from a tray (free or busy then, asked to volunteer, new), onto its turfs — each person gets only their turf's walk list — or *No walk list*; team lead and driver; *Here* / *No-show* on the day; *Split the rest evenly*. **Shifts → Volunteers** is the roster: asked to volunteer, new, active, lapsed, by role; call, text and *Put on a shift* in a tap |
 | **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers — the only money base.win tracks |
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
 | **Lists** | Saved filters (a tag, a rating band, a role, has an email…) and hand-picked lists of people: an audience for an email or text blast, a CSV, a report; People's *Save as a list* starts one |
@@ -390,6 +390,26 @@ than a week after they came off is refused. Contacts are door, phone, text or
   offers *Needs a ride to vote*, a request for the drivers. Shift roles
   include Driver, Scrutineer (a voting place), Runner, Poll greeter and Zone
   house captain.
+- **Scheduling by tap** (Shifts → **Week**, the desk's): each day is a
+  list of its shifts in start order — *Early* (before 9), *Morning*,
+  *Afternoon*, *Evening* — any number to a part, and a card shows the kind,
+  the place, the hours and who is on it. **+** on a day (or *New shift*)
+  opens one sheet where nothing is typed: **What** (a tile a kind) →
+  **Where** (turfs for a canvass, places used before, or *Pick on the map*)
+  → **Which days** (several, or *Weekdays*) → **When** (the kind's usual
+  hours already chosen; several at once, or *Another time* by tap) →
+  **Repeat** (*Just this week*, *Every week for 4 weeks*, *Every week until
+  election day* when one is set) → *Add 5 shifts*. A name, instructions, a
+  link, *Limit sign-ups to*, *We need* and *Show on the website* sit under
+  *More*, with the long form as *More options*. Tap a card to change its
+  day, time or place, *Tell them*, put it *On the website* or *Call off* —
+  for a repeating slot, *This one* or *This and the following* — or drag it
+  to another day (*Undo*). **More** on the week: *Tell everyone on this
+  week's shifts* (the count first, then how each person's message went),
+  *Remind people the evening before* (a switch, off until a manager turns
+  it on) and *Copy to next week*; an empty week offers *Copy last week*.
+  Each copy asks *With the same people?*. A week that hasn't loaded says
+  *Loading…*, one that can't says *Unavailable — Try again*.
 - **Scheduling, underneath** (`server/ext/schedule`): a shift has a
   **kind** — Canvass, Phone bank, Mainstreet, Burma Shave, Lit drop, Signs,
   Event, Office, Other (`shared/shiftkinds.js`) — that brings its usual
@@ -400,9 +420,9 @@ than a week after they came off is refused. Contacts are door, phone, text or
   nearest door on file, else its coordinates — a geocoder that is slow or
   down never holds a save. A shift's name is made from the two ("Burma
   Shave — King George Blvd & 88 Ave") unless one is typed. `shift.createMany`
-  makes every chosen day in one write and can repeat it weekly (200 shifts
-  and 26 weeks a call; a day that already has that kind at that place and
-  time is skipped and said so); `shift.copyWeek` copies a week — the same
+  makes every chosen day in one write — at one time or several (`slots`) —
+  and can repeat it weekly (200 shifts and 26 weeks a call; a day that
+  already has that kind at that place and time is skipped and said so); `shift.copyWeek` copies a week — the same
   local times, turfs, target, limit and on-the-website — with its people as
   plain bookings when asked, never those who declined or didn't show; a
   repeating slot is changed or ended from one of its shifts

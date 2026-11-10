@@ -215,7 +215,7 @@ try {
   // ── 2. Honest states: a week that hasn't loaded, or can't, never shows as empty days ──
   let hold = null; let fail = false;
   await page.route(/\/api\/shifts\/board/, async (route) => {
-    if (fail) { fail = false; await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"database is busy"}' }); return; }
+    if (fail) { await route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"database is busy"}' }); return; }
     if (hold) await hold;
     await route.continue();
   });
@@ -235,6 +235,7 @@ try {
   check('a week that can’t be read: "Unavailable" and "Try again", no empty days', /Unavailable/.test(body) && (await page.locator('.sch-day').count()) === 0
     && !/No shifts/.test(body) && (await page.locator('.sch-unavailable button:has-text("Try again")').count()) === 1, body.slice(0, 200));
   await D.shot('02-week-unavailable-1440');
+  fail = false;
   await page.locator('.sch-unavailable button:has-text("Try again")').click();
   await page.waitForSelector('.sch-day', { timeout: 10000 });
   check('Try again loads it', (await page.locator('.sch-day').count()) === 7);
@@ -566,7 +567,7 @@ try {
   await page.waitForSelector('.sch-weekmore .sch-row', { timeout: 8000 });
   const state0 = (await D.api(`/schedule/week?week=${MON}`)).json;
   let moreText = await D.text('.sch-weekmore');
-  check('the count is shown before anything is sent: 2 people · 3 shifts', state0.people === 2 && state0.shifts === 3 && /Tell everyone on that week’s shifts 2 people · 3 shifts/.test(moreText), moreText.slice(0, 160));
+  check('the count is shown before anything is sent: 2 people · 3 shifts', state0.people === 2 && state0.shifts === 3 && /Tell everyone on this week’s shifts 2 people · 3 shifts/.test(moreText), moreText.slice(0, 160));
   check('reminders are off until a manager turns them on', state0.reminders.on === false && /Remind people the evening before Off/.test(moreText)
     && (await page.locator('.sch-switch').getAttribute('aria-checked')) === 'false');
   mm = await measure(page);
@@ -602,22 +603,22 @@ try {
 
   // ── 14. Copy to next week, with the same people ──
   const count = (await board()).shifts.length;
-  check('the week holds eight shifts now', count === 8, count);
+  check('the week holds nine shifts now', count === 9, count);
   await page.locator('.sch-weekmore button:has-text("Copy")').click();
   const copyAsk = await D.text('.sch-weekmore .sch-ask');
-  check('"Copy to next week" asks: with the same people?', copyAsk.includes(`Copy 8 shifts to ${md(addDays(MON, 7))} – ${md(addDays(MON, 13))}? With the same people?`), copyAsk);
+  check('"Copy to next week" asks: with the same people?', copyAsk.includes(`Copy 9 shifts to ${md(addDays(MON, 7))} – ${md(addDays(MON, 13))}? With the same people?`), copyAsk);
   await D.shot('18-copy-ask-1440');
   await page.locator('.sch-weekmore .sch-ask button:has-text("With the people")').click();
   await until(async () => /copied/.test(await toast()));
-  check('copied, with the people booked', (await toast()).startsWith(`8 shifts copied to ${md(addDays(MON, 7))} – ${md(addDays(MON, 13))} · 3 people booked`), await toast());
+  check('copied, with the people booked', (await toast()).startsWith(`9 shifts copied to ${md(addDays(MON, 7))} – ${md(addDays(MON, 13))} · 3 bookings`), await toast());
   const next = await board(addDays(MON, 7));
-  check('server: the same eight a week on, at the same local times, three plain bookings',
-    next.shifts.length === 8 && next.shifts.some((s) => s.kind === 'mainstreet' && iso(s.starts_at) === at(addDays(tue, 7), '07:00'))
+  check('server: the same nine a week on, at the same local times, three plain bookings',
+    next.shifts.length === 9 && next.shifts.some((s) => s.kind === 'mainstreet' && iso(s.starts_at) === at(addDays(tue, 7), '07:00'))
     && next.assignments.length === 3 && next.assignments.every((a) => a.status === 'assigned'), `${next.shifts.length} · ${next.assignments.map((a) => a.status).join()}`);
   await page.locator('.sb-toast button:has-text("Go there")').click();
   await until(async () => (await page.locator('.sb-week__label').innerText()).startsWith(md(addDays(MON, 7))));
   await page.waitForSelector('.sch-card', { timeout: 10000 });
-  check('"Go there": next week, with its eight cards', (await page.locator('.sch-card').count()) === 8 && new URL(page.url()).searchParams.get('week') === addDays(MON, 7));
+  check('"Go there": next week, with its nine cards', (await page.locator('.sch-card').count()) === 9 && new URL(page.url()).searchParams.get('week') === addDays(MON, 7));
   await D.shot('19-next-week-copied-1440');
 
   // ── 15. An empty week offers "Copy last week" ──
@@ -627,11 +628,11 @@ try {
   check('an empty week after a full one: "Copy last week"', (await page.locator('.sch-empty button:has-text("Copy last week")').count()) === 1);
   await D.shot('20-empty-week-offer-1440');
   await page.locator('.sch-empty button:has-text("Copy last week")').click();
-  check('it asks: with the same people?', (await D.text('.sch-empty .sch-ask')).includes('Copy last week’s 8 shifts here? With the same people?'), await D.text('.sch-empty .sch-ask'));
+  check('it asks: with the same people?', (await D.text('.sch-empty .sch-ask')).includes('Copy last week’s 9 shifts here? With the same people?'), await D.text('.sch-empty .sch-ask'));
   await page.locator('.sch-empty .sch-ask button:has-text("Just the shifts")').click();
-  await until(async () => (await page.locator('.sch-card').count()) === 8);
+  await until(async () => (await page.locator('.sch-card').count()) === 9);
   const third = await board(addDays(MON, 14));
-  check('just the shifts: eight, nobody on them', third.shifts.length === 8 && third.assignments.length === 0 && (await page.locator('.sch-card').count()) === 8, `${third.shifts.length}/${third.assignments.length}`);
+  check('just the shifts: nine, nobody on them', third.shifts.length === 9 && third.assignments.length === 0 && (await page.locator('.sch-card').count()) === 9, `${third.shifts.length}/${third.assignments.length}`);
 
   // ── 16. This week: a day that is over has no "+" ──
   await D.go('/shifts');

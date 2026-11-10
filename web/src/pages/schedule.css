@@ -112,7 +112,8 @@
 .sb-cap[data-short] { color: var(--warn); }
 
 /* ── Sheets: a panel at the right on a desk, up from the bottom on a phone ── */
-.sch-scrim { position: fixed; inset: 0; z-index: 985; background: rgb(0 0 0 / 0.38); }
+/* (touch-action: a finger on the scrim doesn't scroll the week behind it.) */
+.sch-scrim { position: fixed; inset: 0; z-index: 985; background: rgb(0 0 0 / 0.38); touch-action: none; }
 .sch-sheet {
   position: fixed; z-index: 990; top: 0; right: 0; bottom: 0; width: min(460px, 100vw);
   display: flex; flex-direction: column;

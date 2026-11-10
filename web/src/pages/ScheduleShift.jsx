@@ -37,15 +37,17 @@ const whereOf = (shift, turfs) => ({
   words: !shift.place_id && shift.location && !same(shift.location, turfNames(turfs)) ? shift.location : null,
 });
 
+// turfs: the shift's own, or null when they couldn't be read — then they
+// are not offered, so a save never changes what it can't see.
 export default function ScheduleShift({
   me, shift, on = [], turfs = [], days, today, tz, tell = false, providers = null, onClose, onChanged, onGone,
 }) {
   const kind = kindOf(shift);
-  const canMap = (me?.areas ?? []).includes('map');
+  const canMap = (me?.areas ?? []).includes('map') && turfs !== null;
   const day0 = dayOf(shift.starts_at, tz);
   const at0 = shiftClock(shift, tz);
   const over = new Date(shift.ends_at || shift.starts_at) < new Date();
-  const [where0] = useState(() => whereOf(shift, turfs));
+  const [where0] = useState(() => whereOf(shift, turfs ?? []));
   const [scope, setScope] = useState('one');
   const [day, setDay] = useState(day0);
   const [when, setWhen] = useState(() => whenFor(kind, at0));
@@ -132,7 +134,7 @@ export default function ScheduleShift({
         {on.length ? <><b>On it:</b> {on.map((a) => a.name).join(', ')}</> : 'Nobody on it yet.'}
       </p>
 
-      {over ? <p className="sch-note">This shift is over.{error && <span className="error" role="alert"> {error}</span>}</p> : (
+      {over ? <p className="sch-note">This shift is over.</p> : (
         <>
           {shift.series_id && (
             <section className="sch-sec" aria-label="Change">
