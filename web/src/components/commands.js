@@ -47,7 +47,8 @@ export const SCREENS = [
   { label: 'Get out the vote', to: '/voted', area: 'people', words: 'gotv voted election day voting' },
   { label: 'Passes', to: '/passes', area: 'map', words: 'sweep pass universe' },
   { label: 'Receipts', to: '/money/receipts', area: 'money', words: 'tax receipt donation' },
-  { label: 'Import donations', to: '/money/import', area: 'money', desk: true, words: 'gifts file csv spreadsheet excel another tool upload' },
+  // Never the word "gift" here: typed, the bar lists screens before jobs, and "gift" + Enter must stay Log a gift.
+  { label: 'Import donations', to: '/money/import', area: 'money', desk: true, words: 'file csv spreadsheet excel another tool upload' },
   { label: 'Stewardship', to: '/money/stewardship', area: 'money', words: 'thank donors lapsed top donors' },
   { label: 'Ladders', to: '/ladders', area: 'outreach', words: 'automatic emails automation engagement' },
   { label: 'Follow-ups', to: '/follow-ups', area: 'outreach', words: 'follow up ladder' },
