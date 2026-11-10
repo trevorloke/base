@@ -1000,6 +1000,91 @@ test('a tag the desk took off by hand is not brought back by a slip on another r
   await drain();
 });
 
+test('what is taken back on a list is taken back on the lists sent since that copied it — a later list never tags or rates anyone unasked', async () => {
+  const mk = async (name, n) => mgr.createPerson(name, { phone: `672-555-01${n}` });
+  const [a, b, c, own, d, e] = [await mk('Copy A Example', '06'), await mk('Copy B Example', '07'), await mk('Copy C Example', '08'),
+    await mk('Copy Own Example', '09'), await mk('Copy D Example', '10'), await mk('Copy E Example', '11')];
+  const send = async (name, p) => {
+    const list = ok(await mgr.action('list.create', { name, kind: 'people', person_ids: [p.id] })).list.id;
+    const r = ok(await mgr.action('callhub.push', { list_id: list }));
+    await drain();
+    return { list, id: r.push.id };
+  };
+  const answered = (n, extra = {}) => fake.note({ contact: `+167255501${n}`, disposition: 'Answered', campaign: 'Copy', notes: `talked ${n}`, ...extra });
+  const isTagged = async (p) => (await person(p.id)).tags.includes('do-not-call');
+  const rowOf = async (l) => { const row = (await pushesOf(`list=${l.list}`))[0].dispositions.find((x) => x.disposition === 'Answered'); return [row.outcome, row.auto]; };
+  const map = async (l, input) => ok(await staff.action('callhub.map', { id: l.id, ...input }));
+
+  // "Answered" slips to Do not call on the first list (asked: Yes). A second list is sent
+  // before anyone notices: it starts as a copy of that table, and tags as its results arrive.
+  const first = await send('Copy first', a);
+  await answered('06');
+  assert.equal((await map(first, { outcomes: { Answered: 'do_not_call' } })).tagged, 1);
+  const second = await send('Copy second', b);
+  await answered('07');
+  assert.deepEqual([await rowOf(second), await isTagged(b)], [['do_not_call', false], true]);
+  // The first is put back: the list that still carries the copy follows.
+  const back = await map(first, { outcomes: { Answered: null } });
+  assert.deepEqual([back.untagged, back.later], [1, 1]);
+  assert.deepEqual(await rowOf(second), ['contacted', true], 'its table at once');
+  await drain();
+  assert.deepEqual([await isTagged(a), await isTagged(b)], [false, false], 'and its people once the results already in have moved');
+  assert.ok(!fake.dnc.some((x) => ['+16725550106', '+16725550107'].includes(x.phone_number)), 'CallHub’s list follows');
+  // A list sent after the put-back copies a table that is right again: nobody is tagged unasked.
+  const third = await send('Copy third', c);
+  await answered('08');
+  assert.deepEqual([await rowOf(third), await isTagged(c)], [['contacted', true], false]);
+
+  // A later list where the desk picked the row itself is its own: it does not follow.
+  assert.equal((await map(third, { outcomes: { Answered: 'do_not_call' } })).tagged, 1);
+  const fourth = await send('Copy fourth', own);
+  await answered('09');
+  assert.equal(await isTagged(own), true);
+  assert.deepEqual([(await map(fourth, { outcomes: { Answered: 'refused' } })).untagged, await isTagged(own)], [1, false]);
+  const again = await map(third, { outcomes: { Answered: null } });
+  assert.deepEqual([again.untagged, again.later], [1, 0]);
+  assert.deepEqual(await rowOf(fourth), ['refused', false]);
+  // Nothing follows a pick that tags: that was asked about one list's people only.
+  assert.equal((await map(second, { outcomes: { Answered: 'do_not_call' } })).later, 0);
+  assert.deepEqual([await isTagged(b), await isTagged(c)], [true, false]);
+  assert.equal((await map(second, { outcomes: { Answered: null } })).later, 0, 'no later list carries that pick');
+  await map(fourth, { outcomes: { Answered: null } });
+
+  // The same for an answer that rates. "Yes" slips to 4 on the newest list; the next list copies it.
+  const survey = { surveys: [{ question: 'Sign?', answer: 'Yes' }] };
+  await answered('09', { ...survey, notes: 'asked about a sign' });
+  assert.equal((await map(fourth, { rating: { question: 'Sign?', answers: { Yes: '4' } } })).rated, 1);
+  const fifth = await send('Copy fifth', d);
+  await answered('10', survey);
+  const ratings = async () => [(await person(own.id)).rating, (await person(d.id)).rating];
+  assert.deepEqual(await ratings(), ['4', '4'], 'the copy rates as its results arrive');
+  // Corrected on the list where it was picked: the copy reads the answer the same way from now on…
+  const fixed = await map(fourth, { rating: { question: 'Sign?', answers: { Yes: '1' } } });
+  assert.deepEqual([fixed.rated, fixed.later], [1, 1]);
+  await drain();
+  assert.deepEqual(await ratings(), ['1', '1']);
+  // …and taken away there, it is taken away on the copy: the ratings its answers gave go back.
+  assert.equal((await map(fourth, { rating: null })).later, 1);
+  await drain();
+  assert.deepEqual(await ratings(), [null, null]);
+  assert.equal((await pushesOf(`list=${fifth.list}`))[0].rating, null);
+  // An answer newly mapped is one list's: nobody on another list is rated by a question about this one.
+  assert.equal((await map(fourth, { rating: { question: 'Sign?', answers: { Yes: '2' } } })).later, 0);
+  assert.deepEqual(await ratings(), ['2', null]);
+  await map(fourth, { rating: null });
+  // A copy the desk has changed since is its own: its answers stay as they are.
+  await map(fifth, { rating: { question: 'Sign?', answers: { Yes: '2' } } });
+  const sixth = await send('Copy sixth', e);
+  await answered('11', survey);
+  assert.equal((await person(e.id)).rating, '2');
+  await map(sixth, { rating: { question: 'Sign?', answers: { Yes: '3' } } });
+  assert.equal((await map(fifth, { rating: null })).later, 0);
+  await drain();
+  assert.deepEqual([await ratings(), (await person(e.id)).rating], [[null, null], '3']);
+  await map(sixth, { rating: null });
+  await drain();
+});
+
 test('an answer mapped by mistake and put back: the rating it gave is taken back — the door’s rating returns, and whoever had none has none', async () => {
   const a = await mgr.createPerson('Rated Before Example', { phone: '604-555-0136' });
   const b = await mgr.createPerson('Never Rated Example', { phone: '604-555-0137' });

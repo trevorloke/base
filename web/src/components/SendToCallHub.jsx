@@ -52,6 +52,8 @@ const savedLine = (r) => [
   r.rated && `${num(r.rated)} ${plural(r.rated, 'person', 'people')} rated`,
   r.unrated && `${num(r.unrated)} ${plural(r.unrated, 'rating')} taken back`,
   r.more && 'the rest follow by themselves',
+  // What was taken back here was copied into the lists sent since: they follow.
+  r.later && `${num(r.later)} ${plural(r.later, 'list')} sent since ${plural(r.later, 'follows', 'follow')} too`,
 ].filter(Boolean).join(' · ');
 
 function Unavailable({ onRetry }) {
