@@ -4,6 +4,10 @@
 
 .today { min-width: 0; }
 .today > h1 { margin-bottom: var(--s-4); }
+/* The volunteer's Today is one column, as on a phone: at a desk it keeps
+   the width its sister screens have (Shifts, the walk list), so its one
+   big button is a button and not a band across the window. */
+.today--field { max-width: 720px; }
 
 /* ── Shared bits ── */
 .today-actions { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }

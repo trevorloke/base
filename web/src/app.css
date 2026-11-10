@@ -79,8 +79,10 @@
   --shadow-2: 0 1px 2px rgba(16, 18, 24, 0.06), 0 8px 24px rgba(16, 18, 24, 0.12);
   --shadow-3: 0 24px 64px rgba(16, 18, 24, 0.24);
   --side-w: 232px;
-  /* One column edge for every screen: the page's side gutter. */
+  /* One column edge for every screen: the page's side gutter. And how wide
+     a screen with no width of its own may grow on a big monitor. */
   --gutter: var(--s-6);
+  --page-max: 1200px;
 
   --border: 1px solid var(--line);
   --border-2: 1px solid var(--line-strong);
@@ -506,9 +508,11 @@ h3 { font-size: 16px; line-height: 1.35; }
 }
 
 /* One column edge: every screen starts at the same place beside the nav,
-   and is as wide as it needs (its own max-width). Only the map fills the
-   whole room. */
-.page { margin: 0; padding: var(--s-6) var(--gutter) var(--s-7); }
+   and is as wide as it needs (its own max-width) — up to --page-max, past
+   which a table or a row of figures only gets harder to read. Only the map
+   fills the whole room. */
+.page { margin: 0; padding: var(--s-6) var(--gutter) var(--s-7); max-width: calc(var(--page-max) + 2 * var(--gutter)); }
+.page:has(> .map-page) { max-width: none; }
 .page > * { margin-inline: 0; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); margin-bottom: var(--s-5); flex-wrap: wrap; }
 .page-head h1 { margin: 0; }
