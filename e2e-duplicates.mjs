@@ -5,7 +5,7 @@
 // "Not the same" keeps a pair away. On Donations, a gift that may be the
 // same donor as two records offers one "Not the same person" choice for
 // each, and ruling one out leaves the other a pair; two that read the same
-// get no choice, Compare in Duplicates (that donor's pairs) instead. A
+// get no choice, Compare in Duplicates (the donor's pairs and theirs) instead. A
 // merge that clears a maybe with a record only the merged one matched
 // names it by what it shared, and links to it. Measured at 1360 and 390.
 //

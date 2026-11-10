@@ -29,6 +29,10 @@ export const logGift = async (tx, workspace, input, emit) => {
   const { cap, flagReason, sameAs } = await flagIfOver(tx, workspace, { id, person_id: input.person_id, date: input.date, donorName: donor.name, slate });
   const payload = { id, ...input, slate, flagged: !!flagReason, flag_reason: flagReason, ...(sameAs ? { maybe_same_donor: sameAs } : {}) };
   emit('gift', id, 'create', payload);
+  // The maybes this donor is in are added up again with this gift in: one
+  // naming them says the new total, and one of theirs reads over on their
+  // own record once this gift takes them over — never an old total.
+  await recheckMaybes(tx, workspace, [input.person_id], emit);
   return { gift: payload, compliance: cap };
 };
 
@@ -92,7 +96,8 @@ export const maybesAbout = async (tx, workspaceId, personIds) => (await tx.query
 // or a gift on them left the books (or came back). Each is added up again
 // with what is left: still over together, the reason as it stands now;
 // over on its own record now, the plain reason (never less flagged than it
-// should be); neither, the flag goes.
+// should be — like every gift logged while a donor is over); neither, the
+// flag goes.
 // → [{ id, flagged, flag_reason, maybe_same_donor? }], the gifts that changed.
 export const recheckMaybes = async (tx, workspace, personIds, emit) => {
   const rows = await maybesAbout(tx, workspace.id, personIds);
@@ -141,7 +146,7 @@ export const voidGift = async (tx, workspace, id, emit) => {
 // A gift back in the books: the gifts whose maybe its void cleared (ids)
 // are checked again and flagged again if over again — as things stand, so
 // a Not the same ruled since still counts: as a maybe, or over on their
-// own record unless a gift of that year crossed since and carries it. One
+// own record (as every gift of a donor's year over the limit is). One
 // voided or flagged since is left as it is.
 const flagAgain = async (tx, workspace, ids, emit) => {
   const rows = (await tx.query(
@@ -153,23 +158,10 @@ const flagAgain = async (tx, workspace, ids, emit) => {
   for (const g of rows) {
     const flag = await flagOf(tx, workspace, { person_id: g.person_id, date: g.date, donorName: g.name, slate: g.slate });
     if (!flag.flagReason) continue;
-    // Over on its own record now: the year's crossing gift carries that
-    // flag (one logged while this was out, say) — one row for a donor's
-    // year over the limit, never two.
-    if (!flag.sameAs && await crossedAlready(tx, workspace.id, g)) continue;
     await setFlag(tx, workspace.id, g.id, flag);
     emit('gift', g.id, 'update', { flagged: true, flag_reason: flag.flagReason, ...(flag.sameAs ? { maybe_same_donor: flag.sameAs } : {}) });
   }
 };
-// Another live gift of this donor's year and slate flagged over the limit
-// on their own record (not a maybe).
-const crossedAlready = async (tx, workspaceId, g) => Boolean((await tx.query(
-  `select 1 from gifts where workspace_id = $1 and person_id = $2 and id <> $3 and deleted_at is null and flagged
-      and not (coalesce(attrs, '{}'::jsonb) ? 'maybe_same_donor') and coalesce(slate, $4) = coalesce($5, $4)
-      and date >= make_date($6, 1, 1) and date < make_date($6 + 1, 1, 1)
-    limit 1`,
-  [workspaceId, g.person_id, g.id, DEFAULT_SLATE, g.slate, Number(isoDay(g.date).slice(0, 4))],
-)).rows[0]);
 
 export const restoreGift = async (tx, workspace, id, emit) => {
   const gift = (await tx.query(

@@ -326,7 +326,8 @@ const shownNote = (n) => (n && n.trim().toLowerCase() !== 'sample' ? n : null);
 // Donor · Void — and, on a maybe, Not the same person: one choice for each
 // record it names (apart: MoneyWords.js apartChoices), each asking about
 // that record alone (onApart(its id)); or, for records it can't tell
-// apart, People → Duplicates with the donor's pairs alone.
+// apart, People → Duplicates with the pairs of the donor and of the records
+// it names (compare: MoneyWords.js compareHref).
 function GiftActions({ personId, onVoid, apart, onApart, compare }) {
   const [confirm, setConfirm] = useState(null); // 'void' | one of apart.choices
   if (confirm === 'void') {
@@ -544,8 +545,7 @@ export default function Money() {
       const done = await action('gift.void', { id });
       // A maybe that added this gift up was added up again: the banner's
       // line for it is out of date (Needs you has it as it stands).
-      const again = done?.rechecked ?? [];
-      if (again.length) setBanner((b) => (b && again.some((x) => x.id === b.giftId) ? null : b));
+      setBanner((b) => bannerAfter(b, done?.rechecked));
       showToast({ text: 'Gift voided', undo: () => undoVoid(id) });
       // Its receipt already went to the donor: offer to tell them it's void.
       const r = await receiptOf(id);
@@ -570,7 +570,7 @@ export default function Money() {
       const r = await action('person.notDuplicate', { a: g.person_id, b: other });
       const now = r?.rechecked?.find((x) => x.id === g.id);
       showToast({ text: apartSaid(now) });
-      setBanner((b) => bannerAfter(b, g.id, now)); // as it stands now: gone, or what's still over
+      setBanner((b) => bannerAfter(b, r?.rechecked)); // as it stands now: gone, or what's still over
     } catch (e) {
       setError(e.message);
     } finally {

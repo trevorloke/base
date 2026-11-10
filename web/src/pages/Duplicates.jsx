@@ -15,7 +15,7 @@ import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/No
 import { mergedParts } from '../components/DuplicatesWords.js';
 import './duplicates.css';
 
-const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door', postal: 'Same name and postal code' };
+const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door', postal: 'Same name and postal code', flag: 'Named together on a donation flag' };
 const when = (iso) => new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
 const count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 

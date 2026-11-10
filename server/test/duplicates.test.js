@@ -372,7 +372,7 @@ test('a gift over on its own voided, then Undo: the maybe its void cleared besid
   assert.match((await briefRow(big.id))?.flag_reason ?? '', /^Pat Over is at \$1500\.00/, 'and its own flag as it was');
 });
 
-test('void, a gift that crosses on its own since, then Undo: the cleared maybe isn’t back as a second over-limit row', async () => {
+test('void, a gift that crosses on its own since, then Undo: the cleared maybe comes back as things stand', async () => {
   const r1 = await mgr.createPerson('Una Later', { postal: 'V3T 9L9' });
   const r2 = await mgr.createPerson('Una Later', { email: 'una.later@example.org', postal: 'V3T 9L9' });
   const a = await cheque(r1, 100000, '2026-10-01');
@@ -383,7 +383,7 @@ test('void, a gift that crosses on its own since, then Undo: the cleared maybe i
   const m3 = await cheque(r2, 100000, '2026-10-03');
   assert.match(m3.flag_reason, /^Una Later is at \$1500\.00 for 2026/, 'R2 crosses on its own: M3 is the gift that crossed');
   ok(await mgr.action('gift.restore', { id: a.id }));
-  assert.equal((await giftNow(m.id)).flagged, false, 'M is not flagged over again: the year has its crossing gift, M3');
+  assert.match((await giftNow(m.id)).flag_reason, /^Una Later is at \$1500\.00 for 2026/, 'M: R2’s year is over on its own record now — as every gift of it reads');
   assert.match((await giftNow(m3.id)).flag_reason, /^Una Later is at \$1500\.00 for 2026/, 'M3 keeps it');
   assert.match((await giftNow(a.id)).flag_reason, /^Possibly the same donor as Una Later \(same postal code\): together they are at \$2,500\.00/, 'A, back, is the maybe');
 });
@@ -421,10 +421,60 @@ test('Donations’ banner after Not the same person: the amount still over, neve
   const banner = { name: 'Aman Banner', line: overLine(overOf(g)), reason: g.flag_reason, giftId: g.id };
   assert.equal(banner.line, 'Maybe $370.30 over the $1,429.70 limit');
   const r = ok(await mgr.action('person.notDuplicate', { a: w.id, b: z.id }));
-  const now = r.rechecked.find((x) => x.id === g.id);
-  assert.equal(bannerAfter(banner, g.id, now).line, 'Maybe $70.30 over the $1,429.70 limit', 'W and V still together');
-  assert.equal(bannerAfter(banner, 'another-gift', now), banner, 'another gift’s banner is left as it is');
-  assert.equal(bannerAfter(banner, g.id, { ...now, flagged: false }), null, 'cleared: the banner goes');
+  assert.equal(bannerAfter(banner, r.rechecked).line, 'Maybe $70.30 over the $1,429.70 limit', 'W and V still together');
+  assert.equal(bannerAfter({ ...banner, giftId: 'another-gift' }, r.rechecked).giftId, 'another-gift', 'a gift the ruling didn’t touch: as it was');
+  assert.equal(bannerAfter(banner, [{ id: g.id, flagged: false }]), null, 'cleared: the banner goes');
+});
+
+test('Donations’ banner follows its own gift when a ruling on another gift re-totals it', async () => {
+  const { bannerAfter, overLine, overOf } = await import('../../web/src/components/MoneyWords.js');
+  const v = await mgr.createPerson('Aman Two', { phone: '604-555-0199' });
+  const z = await mgr.createPerson('Aman Two', { postal: 'V3W 5B7' });
+  await cheque(v, 60000, '2026-03-01');
+  await cheque(z, 30000, '2026-03-02');
+  const w = await mgr.createPerson('Aman Two', { email: 'aman.two@example.org', phone: '604-555-0199', postal: 'V3W 5B7' });
+  const g1 = await cheque(w, 70000, '2026-03-03');
+  const g2 = await cheque(w, 20000, '2026-03-04');
+  const banner = { name: 'Aman Two', line: overLine(overOf(g2)), reason: g2.flag_reason, giftId: g2.id };
+  assert.equal(banner.line, 'Maybe $370.30 over the $1,429.70 limit');
+  // The desk taps Not Aman Two (same postal code) on g1, not on the banner's gift.
+  const r = ok(await mgr.action('person.notDuplicate', { a: w.id, b: z.id }));
+  assert.ok(r.rechecked.some((x) => x.id === g1.id) && r.rechecked.some((x) => x.id === g2.id), 'both of W’s maybes added up again');
+  assert.equal(bannerAfter(banner, r.rechecked).line, 'Maybe $70.30 over the $1,429.70 limit', 'the banner’s own gift, as it stands now');
+});
+
+test('a donor who crosses on their own after a maybe: the maybe reads as things stand, never the old together total', async () => {
+  const r1 = await mgr.createPerson('Una Cross', { postal: 'V3T 9C9' });
+  const r2 = await mgr.createPerson('Una Cross', { email: 'una.cross@example.org', postal: 'V3T 9C9' });
+  await cheque(r1, 100000, '2026-09-01');
+  const m = await cheque(r2, 50000, '2026-09-02');
+  assert.match(m.flag_reason, /together they are at \$1,500\.00/);
+  const m3 = await cheque(r2, 100000, '2026-09-03');
+  assert.match(m3.flag_reason, /^Una Cross is at \$1500\.00 for 2026/, 'R2 crosses on their own with M3');
+  assert.match((await giftNow(m.id)).flag_reason, /^Una Cross is at \$1500\.00 for 2026/, 'M: over on R2’s own record now, not “together they are at $1,500”');
+  ok(await mgr.action('person.notDuplicate', { a: r1.id, b: r2.id }));
+  assert.match((await giftNow(m.id)).flag_reason, /^Una Cross is at \$1500\.00/, 'a ruling after it: still R2’s own year');
+  assert.match((await giftNow(m3.id)).flag_reason, /^Una Cross is at \$1500\.00/, 'M3 keeps it');
+});
+
+test('Compare in Duplicates: the records a flag names pair there even when no finder rule does (a unit each, no postal code)', async () => {
+  const { compareHref } = await import('../../web/src/components/MoneyWords.js');
+  const r1 = await mgr.createPerson('Raj Apart', { address: '3 Apart Rd', unit: 'A' });
+  const r2 = await mgr.createPerson('Raj Apart', { address: '3 Apart Rd', unit: 'C' });
+  await cheque(r1, 60000, '2026-05-01');
+  await cheque(r2, 60000, '2026-05-02');
+  const n = await mgr.createPerson('Raj Apart', { address: '3 Apart Rd', unit: 'B', phone: '604-555-0166' });
+  const g = await cheque(n, 40000, '2026-05-03');
+  assert.deepEqual([...g.maybe_same_donor].sort(), [r1.id, r2.id].sort());
+  const href = compareHref(n.id, { flagged: true, maybe_same_donor: g.maybe_same_donor });
+  const pairs = ok(await mgr.get(`/api${href.replace('/people', '')}`)).pairs;
+  const key = (a, b) => [a, b].sort().join('|');
+  assert.deepEqual(pairs.map((p) => key(p.a.id, p.b.id)).sort(), [key(n.id, r1.id), key(n.id, r2.id), key(r1.id, r2.id)].sort());
+  assert.ok(pairs.every((p) => p.why.includes('flag')), 'named together on a donation flag');
+  assert.equal(ok(await mgr.get(`/api/duplicates?with=${n.id}`)).pairs.length, 0, 'the donor alone: no finder rule pairs them');
+  // Kept apart there, the pair stays away here too.
+  ok(await mgr.action('person.notDuplicate', { a: r1.id, b: r2.id }));
+  assert.ok(!ok(await mgr.get(`/api${href.replace('/people', '')}`)).pairs.some((p) => key(p.a.id, p.b.id) === key(r1.id, r2.id)));
 });
 
 test('refusals: the same record twice, one already gone, a volunteer; the books verify', async () => {

@@ -570,9 +570,10 @@ the gift up again without it: the flag goes, or names what is left (over
 on its own record, the plain over-limit reason).
 A gift that leaves the books (voided, refunded, a dispute lost) is taken
 out of every maybe that added it up the same way, and one restored (the
-desk's Undo) counts in them again — a maybe its void cleared comes back
-(over on its own record instead, only if no gift of that year has crossed
-since: one over-limit row per donor and year).
+desk's Undo) counts in them again — a maybe its void cleared comes back,
+as things stand (over on its own record now, the plain reason, as every
+gift of a donor's year over the limit is flagged). A new gift adds up the
+maybes its donor is in again too, so none keeps an old total.
 A merge keeps the dropped record's Not the same rulings, and says so when
 it clears a maybe with a record only the dropped one matched, naming it by
 what it shared (its phone, address or postal code) with a link to it.

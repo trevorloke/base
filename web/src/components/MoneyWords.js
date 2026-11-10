@@ -107,11 +107,13 @@ export const compareHref = (personId, g) => {
   return ids.length ? `/people/duplicates?with=${ids.join(',')}` : '/people/duplicates';
 };
 
-// Donations' Over-limit banner after Not the same person on its gift
-// (now: the gift's entry in person.notDuplicate's rechecked): gone when the
-// flag is, else the amount still over — never the amount before.
-export const bannerAfter = (b, giftId, now) => {
-  if (!b || b.giftId !== giftId || !now) return b;
+// Donations' Over-limit banner after a ruling or a void added maybes up
+// again (rechecked: the gifts that changed, as the server answers): its own
+// gift among them — whichever gift the desk acted on — is gone when the
+// flag is, else the amount still over; never the amount before.
+export const bannerAfter = (b, rechecked) => {
+  const now = b && Array.isArray(rechecked) ? rechecked.find((x) => x.id === b.giftId) : null;
+  if (!now) return b;
   return now.flagged ? { ...b, line: overLine(overOf(now)), reason: now.flag_reason } : null;
 };
 
