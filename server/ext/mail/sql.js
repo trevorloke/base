@@ -12,6 +12,9 @@
 // The row's status stays 'sent' (the sender took it); a row left 'sending'
 // (not sure it went) becomes 'sent' when an event for it arrives.
 //
+// mail_events: each of the sender's events once (provider, its id), with the
+// campaign it was about when there is one, kept 30 days (webhook.js).
+//
 // email_suppressions is about an ADDRESS, not a person and not a consent: a
 // bounce is not someone saying no, and a person who gets a new address is
 // reachable again. A complaint is both: the address goes on the list and
@@ -35,7 +38,7 @@ create table if not exists mail_events (
   received_at timestamptz not null default now(),
   primary key (provider, id)
 );
-create index if not exists mail_events_ws_idx on mail_events (workspace_id, provider);
+create index if not exists mail_events_ws_at_idx on mail_events (workspace_id, provider, received_at);
 
 create table if not exists email_suppressions (
   id uuid primary key,

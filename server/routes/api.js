@@ -23,7 +23,8 @@ import { runHooks } from '../lib/hooks.js';
 import { forViewer, loginEmail } from '../lib/viewer.js';
 import { personsWhere } from '../lib/audience.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
-import { goingRow, retryable, sendJobOn } from '../ext/abtests/send.js';
+import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
+import { notSuppressed } from '../lib/mail/index.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
 // The open pass (ext/passes) and the door rule it shares with the phone.
 import { openPass } from '../ext/passes/rule.js';
@@ -674,16 +675,22 @@ app.get('/shifts/:id', async (c) => {
   return c.json({ shift, assignees });
 });
 
+// can_email: false for an address that bounced for good or reported spam
+// (the suppression list, ext/mail) — still on the list as they left it, but
+// nothing emails it. emailable: the subscribed ones a newsletter would reach.
 app.get('/subscriptions', async (c) => {
   const ctx = c.get('ctx');
   const { rows } = await c.get('db').query(
-    `select id, email, name, status, source, created_at, unsubscribed_at from subscriptions
-     where workspace_id = $1 order by created_at desc limit 5000`,
+    `select s.id, s.email, s.name, s.status, s.source, s.created_at, s.unsubscribed_at,
+            ${notSuppressed('s.workspace_id', 's.email')} as can_email
+     from subscriptions s
+     where s.workspace_id = $1 order by s.created_at desc limit 5000`,
     [ctx.workspaceId],
   );
   return c.json({
     subscriptions: rows,
     subscribed: rows.filter((r) => r.status === 'subscribed').length,
+    emailable: rows.filter((r) => r.status === 'subscribed' && r.can_email).length,
     unsubscribed: rows.filter((r) => r.status === 'unsubscribed').length,
     slug: ctx.workspace.slug,
   });
@@ -692,17 +699,20 @@ app.get('/subscriptions', async (c) => {
 // Each send carries its recipients by status, so the screen can say exactly
 // how many were sent, failed, and are still waiting. queued_count for a
 // newsletter counts only addresses still subscribed — the ones Send now
-// would actually email (blast.resend drops the rest); retry_count is the
-// same for Try again (failed + queued, still subscribed, plus any the email
-// service never answered for in 10 minutes). failed_count stays the plain
-// record of what happened; sending_count is "not sure it went". going_count:
-// on their way now — a send job is carrying the send on (ext/abtests
-// send.js goingRow); those are never "not sent" and not in retry_count.
+// would actually email (blast.resend drops the rest, and any address that
+// went on the suppression list since); retry_count is the same for Try again
+// (failed + queued, still subscribed, plus any the email service never
+// answered for — ext/abtests send.js retryable says when). repeat_count: of
+// those, the ones that may get a second copy (a sender that can't drop a
+// repeat). failed_count stays the plain record of what happened;
+// sending_count is "not sure it went". going_count: on their way now — a
+// send job is carrying the send on (send.js goingRow); those are never "not
+// sent" and not in retry_count.
 app.get('/blasts', async (c) => {
   const ctx = c.get('ctx');
   const { rows } = await c.get('db').query(
     `select b.id, b.kind, b.subject, b.status, b.provider_note, b.audience_count, b.sent_at, b.created_at, b.audience, b.list_id,
-            k.sent_count, k.failed_count, k.queued_count, k.retry_count, k.sending_count, k.going_count
+            k.sent_count, k.failed_count, k.queued_count, k.retry_count, k.repeat_count, k.sending_count, k.going_count
      from blasts b
      cross join lateral (select ${sendJobOn('b.id', 'b.workspace_id')} as job_on) j
      cross join lateral (
@@ -710,13 +720,15 @@ app.get('/blasts', async (c) => {
               (count(*) filter (where r.status = 'failed'))::int as failed_count,
               (count(*) filter (where r.status = 'queued' and l.live))::int as queued_count,
               (count(*) filter (where ${retryable('r')} and l.live and not (j.job_on and ${goingRow('r')})))::int as retry_count,
+              (count(*) filter (where ${repeatRow('r')} and l.live and not (j.job_on and ${goingRow('r')})))::int as repeat_count,
               (count(*) filter (where r.status = 'sending'))::int as sending_count,
               (count(*) filter (where j.job_on and ${goingRow('r')} and l.live))::int as going_count
        from blast_recipients r
        cross join lateral (
-         select (b.kind <> 'newsletter' or exists (
+         select ((b.kind <> 'newsletter' or exists (
            select 1 from subscriptions s
-           where s.workspace_id = b.workspace_id and lower(s.email) = lower(r.email) and s.status = 'subscribed')) as live
+           where s.workspace_id = b.workspace_id and lower(s.email) = lower(r.email) and s.status = 'subscribed'))
+           and ${notSuppressed('b.workspace_id', 'r.email')}) as live
        ) l
        where r.workspace_id = b.workspace_id and r.blast_id = b.id
      ) k

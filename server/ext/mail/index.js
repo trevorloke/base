@@ -16,5 +16,9 @@
 export { sql } from './sql.js';
 export { publicRoutes } from './webhook.js';
 
+// SendGrid posts its events in batches that run to hundreds of kilobytes;
+// Resend posts one event at a time, well inside the ordinary limit.
+export const bodyMax = { '/hooks/mail/sendgrid': 1024 * 1024 };
+
 // In the full export: the addresses not to email, and why.
 export const exportTables = ['email_suppressions'];

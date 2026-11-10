@@ -20,11 +20,14 @@
 //   suppressed   the sender refused to send because of its own list: the row
 //                counts as bounced and the address is suppressed here too, so
 //                base.win's count and the sender's agree. No consent changes.
-//   deferred, failed   the sender's words are kept on the row; nothing else.
+//   deferred     the sender has it and is still trying: its words are kept
+//                on the row until it arrives (and a row "not sure it went"
+//                did go). failed: the sender's words on the row; nothing else.
 // The row is found by base.win's own ref (it rides on every email), else by
 // the sender's id. An event with no row of ours — a ladder email, a receipt
 // — still stops the address after a bounce or a complaint, in every campaign
 // on this server that holds it, as a STOP does for a number.
+// Events are kept 30 days (long past any sender's retries), then dropped.
 import { Hono } from 'hono';
 import { getDb } from '../../db/client.js';
 import { newId, runAction } from '../../lib/events.js';
@@ -37,8 +40,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const lower = (s) => String(s ?? '').trim().toLowerCase();
 // Events that stop an address.
 const STOPS = new Set(['bounced', 'complained', 'suppressed']);
-// Events about an email the sender did take (a row "not sure it went" went).
-const WENT = new Set(['delivered', 'bounced', 'complained', 'suppressed']);
+// Events that say the sender has (or had) the email: a row "not sure it
+// went" went. Not 'failed': the sender couldn't send that one.
+const WENT = new Set(['delivered', 'bounced', 'complained', 'suppressed', 'deferred']);
 
 // "Each event once": false when this one was done before.
 const claim = async (q, provider, ev, workspaceId) => (await q.query(
@@ -79,7 +83,18 @@ const holders = async (db, email) => (await db.query(
 
 const detailOf = (provider, ev) => (ev.kind === 'suppressed'
   ? `${provider.name} won’t send to it — ${ev.detail || 'it is on its suppression list'}`
-  : ev.detail || null);
+  : ev.detail || (ev.kind === 'failed' ? `${provider.name} couldn’t send it` : ev.kind === 'deferred' ? 'Delivery delayed' : null));
+// The sender's words kept on a row after this event, given what the row
+// already says: a bounce's words stay whatever comes later; an email that
+// arrived has none (an earlier delay is moot, a later one says nothing new);
+// otherwise the latest delay or failure.
+const wordsAfter = (provider, ev, cur) => {
+  if (cur.bounced_at) return cur.bounce_detail;
+  if (ev.kind === 'bounced' || ev.kind === 'suppressed') return detailOf(provider, ev);
+  if (ev.kind === 'delivered') return null;
+  if (ev.kind === 'deferred' || ev.kind === 'failed') return cur.delivered_at ? cur.bounce_detail : detailOf(provider, ev);
+  return cur.bounce_detail;
+};
 
 // Put an address on the campaign's suppression list (inside a write).
 // → whether anything changed: a new address, one the desk had lifted, or a
@@ -112,7 +127,7 @@ export const suppress = async (tx, emit, workspaceId, { email, reason, source, d
 // refused) to sent, so the send's own status needs another look.
 const markRow = async (tx, emit, provider, ev, row) => {
   const cur = (await tx.query(
-    'select status, delivered_at, bounced_at, complained_at from blast_recipients where id = $1 and workspace_id = $2 for update',
+    'select status, delivered_at, bounced_at, complained_at, bounce_detail from blast_recipients where id = $1 and workspace_id = $2 for update',
     [row.id, row.workspace_id],
   )).rows[0];
   if (!cur) return false;
@@ -127,12 +142,12 @@ const markRow = async (tx, emit, provider, ev, row) => {
        send_asked_at = case when $3::boolean then null else send_asked_at end,
        delivered_at = case when $5::boolean then $4::timestamptz else delivered_at end,
        bounced_at = case when $6::boolean then $4::timestamptz else bounced_at end,
-       bounce_detail = case when $6::boolean then $8 else bounce_detail end,
+       bounce_detail = $8,
        complained_at = case when $7::boolean then $4::timestamptz else complained_at end,
        provider = coalesce(provider, $9), provider_id = coalesce(provider_id, $10)
      where id = $1 and workspace_id = $2`,
     [row.id, row.workspace_id, settle, ev.at || new Date().toISOString(), delivered, bounce, complaint,
-      detailOf(provider, ev), provider.key, ev.messageId || null],
+      wordsAfter(provider, ev, cur), provider.key, ev.messageId || null],
   );
   if (settle || bounce || complaint) {
     emit('blast_recipient', row.id, 'update', {
@@ -149,13 +164,27 @@ const settleSend = async (tx, emit, row) => {
   if (s?.wrote) emit('blast', row.blast_id, 'update', { status: s.status });
 };
 
+// Whether email to this address is still on in the campaign: on the
+// newsletter list as subscribed, or (never on the list) someone on file with
+// it who isn't do-not-email — what emailOff would turn off.
+const stillOn = async (tx, workspaceId, email) => {
+  const sub = (await tx.query('select status from subscriptions where workspace_id = $1 and email = $2', [workspaceId, email])).rows[0];
+  if (sub) return sub.status !== 'unsubscribed';
+  return (await tx.query(
+    `select 1 from persons where workspace_id = $1 and lower(email) = $2 and deleted_at is null
+       and not (tags @> '"do-not-email"'::jsonb) limit 1`, [workspaceId, email],
+  )).rows.length > 0;
+};
+
 // An event that changes who may be emailed, in one campaign.
 const stop = async (tx, emit, provider, ev, { workspaceId, row, email }) => {
   const settled = row ? await markRow(tx, emit, provider, ev, row) : false;
   const reason = ev.kind === 'complained' || ev.reason === 'complaint' ? 'complaint' : 'bounce';
   const changed = await suppress(tx, emit, workspaceId, { email, reason, source: provider.key, detail: detailOf(provider, ev) });
-  // A complaint is also a no to email, recorded once.
-  if (ev.kind === 'complained' && changed) {
+  // A complaint is also a no to email, recorded once: with the address's
+  // first complaint, or whenever email to it is still on (the sender's own
+  // list said "complaint" before the reader's complaint reached us).
+  if (ev.kind === 'complained' && (changed || await stillOn(tx, workspaceId, email))) {
     await emailOff(tx, workspaceId, { personId: row?.person_id || null, email, source: 'complaint' }, emit);
   }
   if (settled) await settleSend(tx, emit, row);
@@ -196,19 +225,52 @@ export const handleEvent = async (db, provider, ev) => {
     })).result;
   }
   // Delivered (the row already 'sent'), delayed or failed: the row alone.
+  // The words follow wordsAfter's rule, in one statement.
   return db.transaction(async (tx) => {
     if (!(await claim(tx, provider, ev, row.workspace_id))) return 'duplicate';
     await tx.query(
       `update blast_recipients set
          delivered_at = case when $3 = 'delivered' then coalesce(delivered_at, $4::timestamptz) else delivered_at end,
-         bounce_detail = case when $3 <> 'delivered' and bounced_at is null then $5 else bounce_detail end,
+         bounce_detail = case when bounced_at is not null then bounce_detail
+                              when $3 = 'delivered' then null
+                              when delivered_at is not null then bounce_detail
+                              else $5 end,
          provider = coalesce(provider, $6), provider_id = coalesce(provider_id, $7)
        where id = $1 and workspace_id = $2`,
-      [row.id, row.workspace_id, ev.kind, ev.at || new Date().toISOString(),
-        ev.detail || (ev.kind === 'failed' ? `${provider.name} couldn’t send it` : 'Delivery delayed'), provider.key, ev.messageId || null],
+      [row.id, row.workspace_id, ev.kind, ev.at || new Date().toISOString(), detailOf(provider, ev), provider.key, ev.messageId || null],
     );
     return 'done';
   });
+};
+
+// Events older than 30 days are dropped: far past any sender's retries, and
+// one row per email would otherwise grow without end. Looked at every few
+// hours, when a delivery comes in; never in the way of one.
+const KEEP = "interval '30 days'";
+const PRUNE_EVERY_MS = 6 * 3600_000;
+let prunedAt = 0;
+export const pruneEvents = (db) => db.query(`delete from mail_events where received_at < now() - ${KEEP}`);
+const pruneSoon = (db) => {
+  if (Date.now() - prunedAt < PRUNE_EVERY_MS) return;
+  prunedAt = Date.now();
+  pruneEvents(db).catch((e) => console.error('mail: old delivery events not cleared:', e.message));
+};
+
+// A delivery's events, a few at a time (SendGrid posts hundreds in one
+// delivery): each is its own short write, and no two events share an id.
+const TOGETHER = 6;
+const handleAll = async (db, provider, events) => {
+  const todo = events.filter((ev) => ev.id); // nothing to tell a repeat by: left alone
+  let duplicate = 0;
+  let failed = null;
+  const work = async () => {
+    for (let ev = todo.shift(); ev && !failed; ev = todo.shift()) {
+      try { if ((await handleEvent(db, provider, ev)) === 'duplicate') duplicate += 1; } catch (e) { failed = e; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(TOGETHER, todo.length) }, work));
+  if (failed) throw failed;
+  return duplicate;
 };
 
 export const publicRoutes = new Hono();
@@ -226,10 +288,8 @@ publicRoutes.post('/hooks/mail/:provider', async (c) => {
   let duplicate = 0;
   try {
     const db = await getDb();
-    for (const ev of events) {
-      if (!ev.id) continue; // nothing to tell a repeat by: left alone
-      if ((await handleEvent(db, provider, ev)) === 'duplicate') duplicate += 1;
-    }
+    duplicate = await handleAll(db, provider, events);
+    pruneSoon(db);
   } catch (e) {
     console.error(`mail: a ${provider.name} delivery event failed — it will be sent again:`, e.message);
     return c.json({ error: 'not done — send it again' }, 500);

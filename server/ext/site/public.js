@@ -607,16 +607,18 @@ const atRootFor = (workspaceId) => {
   return sites.get(k);
 };
 // Shared: pictures, and what services and emails already sent call back
-// (Stripe's and Twilio's webhooks, the unsubscribe links /u, /bu and /lu),
-// so no domain setting ever drops a payment, a STOP or an unsubscribe. Each
-// only in the shape, the case and with the method it comes in, as its route
-// takes it (an unsubscribe link's id in either case): nothing else of the
-// app answers there. (/r/… there is the site's referral link, never a receipt.)
+// (Stripe's and Twilio's webhooks, the email sender's delivery events, the
+// unsubscribe links /u, /bu and /lu), so no domain setting ever drops a
+// payment, a STOP, a bounce or an unsubscribe. Each only in the shape, the
+// case and with the method it comes in, as its route takes it (an
+// unsubscribe link's id in either case): nothing else of the app answers
+// there. (/r/… there is the site's referral link, never a receipt.)
 const TWILIO = /^\/api\/public\/twilio\/(?:sms|(?:sms-status|voice-dial|voice-status)\/[^/]+|voice\/[^/]+(?:\/connect)?)$/;
 const UNSUBSCRIBE = /^\/(?:u|bu|lu)\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const SHARED = [
   [['GET', 'HEAD'], /^\/media\/[^/]+$/],
   [['POST'], /^\/stripe\/webhook$/],
+  [['POST'], /^\/hooks\/mail\/[a-z]+$/], // the email sender's delivery events (ext/mail)
   [['POST'], TWILIO],
   [['GET', 'HEAD', 'POST'], UNSUBSCRIBE],
 ];

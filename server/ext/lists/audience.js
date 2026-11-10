@@ -2,10 +2,12 @@
 // filter (lib/audience.js personsWhere) or the members of a hand-picked
 // list, then the reach: 'email' keeps people with an address who may be
 // emailed (not do-not-email, not do-not-contact, not unsubscribed from the
-// newsletter list), one row per address; 'phone' keeps people with a number
-// that can be texted (not do-not-text, not do-not-contact, not opted out),
-// one row per number.
+// newsletter list, and an address that hasn't bounced for good or reported
+// spam: the suppression list, ext/mail), one row per address; 'phone' keeps
+// people with a number that can be texted (not do-not-text, not
+// do-not-contact, not opted out), one row per number.
 import { personsWhere } from '../../lib/audience.js';
+import { notSuppressed } from '../../lib/mail/index.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const parseJ = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v ?? d); } catch { return d; } };
@@ -32,7 +34,8 @@ export const whereFor = async (db, ctx, { list = null, filter = null }) => {
 const REACH = {
   email: `and p.email is not null and trim(p.email) <> ''
     and not (p.tags @> '"do-not-email"'::jsonb) and not (p.tags @> '"do-not-contact"'::jsonb)
-    and not exists (select 1 from subscriptions s where s.workspace_id = p.workspace_id and s.email = lower(p.email) and s.status = 'unsubscribed')`,
+    and not exists (select 1 from subscriptions s where s.workspace_id = p.workspace_id and s.email = lower(p.email) and s.status = 'unsubscribed')
+    and ${notSuppressed('p.workspace_id', 'p.email')}`,
   phone: `and p.phone is not null and trim(p.phone) <> ''
     and not (p.tags @> '"do-not-text"'::jsonb) and not (p.tags @> '"do-not-contact"'::jsonb)`,
 };

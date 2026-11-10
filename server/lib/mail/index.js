@@ -83,6 +83,8 @@ export const sendEmail = async ({ to, subject, text, html, idempotencyKey, heade
 // newsletter's and the press list's audience, a row at the moment it is
 // sent (ext/abtests), a ladder's email step. The list is email_suppressions
 // (ext/mail): an address that bounced for good or reported spam, until the
-// desk lifts it. `ws` and `email` are SQL expressions (a column, a $n).
+// desk lifts it. `ws` and `email` are SQL expressions naming the row being
+// decided — a $n, or a column WITH its table's alias (s.email): a bare
+// "email" in here would be the suppression's own.
 export const notSuppressed = (ws, email) => `not exists (select 1 from email_suppressions sup
   where sup.workspace_id = ${ws} and sup.email = lower(trim(${email})) and sup.lifted_at is null)`;

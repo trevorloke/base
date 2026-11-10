@@ -30,6 +30,9 @@ app.use('*', (c, next) => bodyLimit({
   maxSize: BODY_MAX[c.req.path] || 256 * 1024,
   onError: (cc) => cc.json({ error: 'request too large' }, 413),
 })(c, next));
+// A feature's own limit for an address of its own (bodyMax: { path: bytes }):
+// the email sender's delivery events come in batches (ext/mail).
+for (const e of EXTENSIONS) Object.assign(BODY_MAX, e.bodyMax || {});
 // Headers every answer carries: not framed by another site (voter data on
 // screen), no sniffing a type, no full URLs leaking off-site. A route that
 // set its own keeps it.

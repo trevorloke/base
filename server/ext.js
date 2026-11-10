@@ -15,6 +15,8 @@
 //   exportTables   ['surveys', { table: 'receipts', omit: ['token'] }, …] —
 //                  the feature's tables in GET /api/export (rows of this
 //                  workspace; omit drops secrets such as a link's token)
+//   bodyMax        { '/hooks/mail/sendgrid': bytes } — a bigger request body
+//                  than the 256 KB every address takes, for one of its own
 //
 // Feature modules import from lib/* and actions/util.js only — never from
 // actions/index.js or routes/* (that would be an import cycle).

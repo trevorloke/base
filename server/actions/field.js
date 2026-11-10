@@ -13,6 +13,8 @@ import { checkRating } from '../ext/scale/rules.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { newId } from '../lib/events.js';
 import { emailConfigured, sendEmail, sendText, shiftMessage } from '../lib/notify.js';
+// Addresses the campaign must not email (they bounced for good or reported spam).
+import { notSuppressed } from '../lib/mail/index.js';
 import { httpError } from './util.js';
 import { runHooks, hasHook } from '../lib/hooks.js';
 // The tracked newsletter/press send path and A/B subject lines.
@@ -751,14 +753,15 @@ export const FIELD_ACTIONS = {
           : rows;
       } else if (input.kind === 'newsletter') {
         audience = (await tx.query(
-          `select id, email, name from subscriptions where workspace_id = $1 and status = 'subscribed'`,
+          `select s.id, s.email, s.name from subscriptions s where s.workspace_id = $1 and s.status = 'subscribed'
+             and ${notSuppressed('s.workspace_id', 's.email')}`,
           [ctx.workspaceId],
         )).rows;
       } else {
         audience = (await tx.query(
-          `select id as person_id, email, name from persons
-           where workspace_id = $1 and deleted_at is null and email is not null
-             and tags @> '"media"'::jsonb`,
+          `select p.id as person_id, p.email, p.name from persons p
+           where p.workspace_id = $1 and p.deleted_at is null and p.email is not null
+             and p.tags @> '"media"'::jsonb and ${notSuppressed('p.workspace_id', 'p.email')}`,
           [ctx.workspaceId],
         )).rows;
       }
@@ -878,11 +881,14 @@ export const FIELD_ACTIONS = {
   // A 'sent' row is never touched, so no one gets it twice however often it
   // runs. Refused (409) while email isn't connected: nothing pretends to send.
   // A newsletter subscriber who unsubscribed since is taken off the send
-  // (never emailed); its status and sent time follow blast.send's rule.
+  // (never emailed), and so is an address that bounced for good or reported
+  // spam since; its status and sent time follow blast.send's rule.
   // An A/B send saved while email wasn't connected starts its test here: A
   // and B go out, the rest stay held until the winner job (ext/abtests).
   // Answers { blast, counts: { total, sent, failed, queued } } for the whole
-  // send after this run, plus resent: { sent, failed, skipped } for this run.
+  // send after this run, plus resent: { sent, failed, skipped, suppressed? }
+  // for this run (skipped: unsubscribed since; suppressed: can't be emailed
+  // since — only when there are any).
   'blast.resend': {
     roles: DESK_ROLES,
     input: z.object({ id: uuid() }),
@@ -927,7 +933,10 @@ export const FIELD_ACTIONS = {
         done: !run.more, jobId: plan.jobId, nextAt: run.heldUntil || null,
       });
       return {
-        result: { blast: blastOut(done.blast), counts: done.counts, resent: { sent: run.sent, failed: run.failed, skipped: run.skipped } },
+        result: {
+          blast: blastOut(done.blast), counts: done.counts,
+          resent: { sent: run.sent, failed: run.failed, skipped: run.skipped, ...(run.suppressed ? { suppressed: run.suppressed } : {}) },
+        },
         lastSeq: done.lastSeq,
       };
     },
