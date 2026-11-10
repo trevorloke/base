@@ -555,8 +555,8 @@ test('a donor is found through an index, never by reading the whole list', async
   const ben = await mk('Ben', 'Listed', { phone: '604-555-0102' });
   await db.query(
     `insert into persons (id, workspace_id, kind, name, email, phone, address)
-     select gen_random_uuid(), $1, 'person', 'Filler' || g || ' Person' || g, 'filler' || g || '.' || $2 || '@example.org',
-            '604-555-' || lpad((g % 10000)::text, 4, '0'), g || ' Filler St'
+     select gen_random_uuid(), $1, 'person', 'Filler' || g || ' Example' || g, 'filler' || g || '.' || $2 || '@example.org',
+            '604-555-01' || lpad((g % 100)::text, 2, '0'), g || ' Filler St'
        from generate_series(1, 3000) g`, [ws2, tag]);
   await db.query('analyze persons');
   const seen = [];
@@ -565,9 +565,9 @@ test('a donor is found through an index, never by reading the whole list', async
   const found = await findDonors(recording, ws2, [
     { i: 0, donor: donor({ name: 'Ana Listed', email: mail('ana-listed') }) },
     { i: 1, donor: donor({ name: 'Ben Listed', first: 'Ben', last: 'Listed', phone: '6045550102' }) },
-    { i: 2, donor: donor({ name: 'Filler7 Person7', phone: '604-555-0007' }) },
+    { i: 2, donor: donor({ name: 'Filler7 Example7', phone: '604-555-0107' }) },
   ]);
-  assert.deepEqual([0, 1, 2].map((i) => found.get(i).person?.name), ['Ana Listed', 'Ben Listed', 'Filler7 Person7']);
+  assert.deepEqual([0, 1, 2].map((i) => found.get(i).person?.name), ['Ana Listed', 'Ben Listed', 'Filler7 Example7']);
   assert.deepEqual([found.get(0).person.id, found.get(1).person.id], [ana.id, ben.id]);
   assert.equal(seen.length, 2, 'one read by email, one by name');
   const plans = [];
