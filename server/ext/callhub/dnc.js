@@ -46,7 +46,7 @@ export const newTally = () => ({ told: 0, refused: 0, freed: 0, kept: 0 });
 export const dncDid = (t) => t.told + t.refused + t.freed + t.kept;
 const did = dncDid;
 const told = async (db, ws) => new Map((await db.query(
-  'select phone, category, entry, refused from callhub_dnc where workspace_id = $1', [ws],
+  'select phone, category, entry, refused, extract(epoch from sent_at)::float8 as asked from callhub_dnc where workspace_id = $1', [ws],
 )).rows.map((r) => [r.phone, r]));
 // A refusal that is about the one number (or entry), not a throttle and not the key.
 const plainNo = (e) => e instanceof CallHubError && !e.throttled && e.httpStatus >= 400 && e.httpStatus < 500 && ![401, 403, 429].includes(e.httpStatus);
@@ -66,9 +66,11 @@ export const untoldOf = async (db, ws, blocked = null, { again = false } = {}) =
     const want = has | category;
     if (want === has) continue;
     if (!again && row?.refused != null && (Number(row.refused) | want) === Number(row.refused)) continue;
-    out.push([phone, want, row?.entry || null, row?.refused != null]);
+    out.push([phone, want, row?.entry || null, row?.refused != null, Number(row?.asked) || 0]);
   }
-  return out;
+  // Never asked first; then what CallHub refused before, longest ago first —
+  // so asking a few of them again each push gets round to every one.
+  return out.sort((x, y) => Number(x[3]) - Number(y[3]) || x[4] - y[4]);
 };
 
 // The numbers CallHub holds for more than base.win blocks now: [[number,
@@ -120,7 +122,7 @@ export const tellCallHub = async (ws, { list, untold, budget, act, tally, everTa
   let unasked = 0;
   const NOT_TAKEN = `insert into callhub_dnc (workspace_id, phone, category, refused, refused_note)
     select $1, x.phone, 0, x.category, $4 from unnest($2::text[], $3::int[]) as x(phone, category)
-    on conflict (workspace_id, phone) do update set refused = excluded.refused, refused_note = excluded.refused_note`;
+    on conflict (workspace_id, phone) do update set refused = excluded.refused, refused_note = excluded.refused_note, sent_at = now()`;
   const notTaken = (rows, words) => act((tx) => tx.query(NOT_TAKEN, [ws, rows.map((r) => r[0]), rows.map((r) => r[1]), words]));
   const writeOff = async () => {
     const rows = streak.splice(0);
@@ -158,8 +160,10 @@ export const tellCallHub = async (ws, { list, untold, budget, act, tally, everTa
           streak.push([phone, category, words, before]);
           if (streak.length >= REFUSALS_IN_A_ROW) {
             if (streak.every((r) => r[3])) {
-              // Asked again, refused again: remembered already.
-              tally.refused += streak.splice(0).length;
+              // Asked again, refused again: remembered already (when is noted, so others get their turn next time).
+              const again = streak.splice(0);
+              await act((tx) => tx.query('update callhub_dnc set sent_at = now() where workspace_id = $1 and phone = any($2::text[])', [ws, again.map((r) => r[0])]));
+              tally.refused += again.length;
               stillRefused = true;
             } else if (taken) {
               await writeOff();
@@ -315,7 +319,8 @@ export const runDncJob = async (db, job) => {
       if (!list) throw new CallHubError('CallHub’s do-not-call list couldn’t be found or made', { status: 400 });
       return list;
     };
-    let left = await syncDnc(db, ws, { budget: PER_RUN, act, tally, book });
+    // Nobody is watching a job: what CallHub won't take is left as not taken and said on the page — it never fails over it.
+    let left = await syncDnc(db, ws, { lenient: true, budget: PER_RUN, act, tally, book });
     // Someone's tag may have changed while this ran: one more look.
     if (!left && did(tally)) left = (await untoldOf(db, ws)).length + (await overToldOf(db, ws)).length;
     if (left) { await again(); runJobsSoon(); }

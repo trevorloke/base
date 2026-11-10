@@ -1091,10 +1091,20 @@ test('CallHub taking none of a campaign’s do-not-call numbers stops its first 
     assert.equal(asked(), 10);
     assert.deepEqual([seen.not_taken.n, seen.not_taken.note, seen.not_taken.people.length], [7, 'phone_number: Enter a valid phone number.', 5]);
     // The next push asks about them again: five, still refused, and the rest are left as they are. It does not stop.
+    const askedOf = (from) => fake.calls.slice(from).filter((c) => c.path === '/v1/dnc_contacts/').map((c) => c.params.phone_number);
+    let mark = fake.calls.length;
     ok(await other.action('callhub.push', { list_id: list }));
     await run();
     assert.equal(asked(), 15);
     assert.equal((await page()).pushes[0].status, 'sent');
+    const first = askedOf(mark);
+    // …and the push after that starts with the ones not asked last time, so every number gets its turn.
+    mark = fake.calls.length;
+    ok(await other.action('callhub.push', { list_id: list }));
+    await run();
+    const second = askedOf(mark);
+    assert.equal(second.length, 5);
+    assert.equal(new Set([...first, ...second]).size, 7, `${first} / ${second}`);
     // Once CallHub takes them, all of them go and the line is gone.
     fake.rejectDnc(false);
     ok(await other.action('callhub.push', { list_id: list }));
