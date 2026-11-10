@@ -33,13 +33,13 @@ export default function MapCheck({ facts, onClose }) {
         <button type="button" className="btn btn-quiet mapsheet-close" onClick={onClose} aria-label="Close the map check" autoFocus>✕</button>
       </header>
       <div className="map-check__body">
-        <p className="map-check__lead">What this map is drawn from. A screenshot of it shows what’s wrong.</p>
+        <p className="map-check__lead">A screenshot of this sheet shows what’s wrong.</p>
         {lines ? (
           <>
             <dl className="map-check__list">
               {lines.map((l) => (
                 <div key={l.key} data-key={l.key} className={`map-check__row${l.warn ? ' is-warn' : ''}`}>
-                  <dt>{l.warn && <span className="map-check__flag" role="img" aria-label="Look here">!</span>}{l.label}</dt>
+                  <dt>{l.warn && <span className="map-check__flag" role="img" aria-label="Look here">!</span>}<span>{l.label}</span></dt>
                   <dd className="map-check__value">{l.value}</dd>
                   {l.note && <dd className="map-check__note">{l.note}</dd>}
                 </div>

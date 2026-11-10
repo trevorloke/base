@@ -260,8 +260,8 @@ test('the map’s check: one line for each way a map can look empty; nothing fla
   assert.equal(l.offmap.value, '3 — 3 with no address');
   assert.equal(l.placing.value, 'Nothing waiting');
   assert.equal(l.area.value, '6,012 of the 300,049 on the map');
-  assert.equal(l.tiles.value, 'Clean · basemaps.cartocdn.com — 24 loaded, 0 failed');
-  assert.deepEqual([l.build.value, l.build.note], ['Up to date', 'The server runs 04ab25f']);
+  assert.equal(l.tiles.value, 'Clean · CARTO — 24 loaded, 0 failed');
+  assert.deepEqual([l.build.value, l.build.note], ['Up to date', 'Version 04ab25f']);
   assert.equal(l.screen.value, '1,158 × 844 px · zoom 12.25');
   assert.deepEqual(flagged(lines), []);
 });
@@ -302,7 +302,10 @@ test('…and each trouble is flagged in its own line, so one screenshot says whi
 
   // The street map isn't loading.
   l = checkLines(CHECK, { ...PAGE, look: 'Muted', tilesFrom: 'tile.openstreetmap.org', tiles: { loaded: 0, failed: 18, down: true } });
-  assert.deepEqual([flagged(l), said(l).tiles.value], [['tiles'], 'Muted · tile.openstreetmap.org — isn’t loading: 0 loaded, 18 failed']);
+  assert.deepEqual([flagged(l), said(l).tiles.value], [['tiles'], 'Muted · OpenStreetMap — isn’t loading: 0 loaded, 18 failed']);
+  // A campaign's own provider is named by its host (never its whole address); the server's own tiles by what the server says they are.
+  assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'tiles.example', custom: true } }, { ...PAGE, look: 'Muted', tilesFrom: 'tiles.example' })).tiles.value, /^Muted · tiles\.example — /);
+  assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, source: 'Google Maps', custom: true } }, { ...PAGE, look: 'Standard', tilesFrom: '' })).tiles.value, /^Standard · Google Maps — /);
   // A street map address the server ignored is said on the same line.
   assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['url'] } }, PAGE)).tiles.note, /was ignored/);
 

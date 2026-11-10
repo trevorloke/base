@@ -536,7 +536,8 @@ try {
     let t = await tiled();
     t.net.up.clean = false;
     await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
-    let ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok');
+    let ts = await tilesUntil(t.pg, (s) => /switched to/.test(s.note || '') && s.tiles === 'ok');
+    await sleep(600);
     await t.pg.screenshot({ path: `${SHOTS}/8-street-map-switched-by-itself.png` });
     check('the street map’s provider refuses: the map switches to the other one by itself, and says so',
       ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && ts.said === 'The street map wasn’t loading — switched to Muted', JSON.stringify(ts));
@@ -564,10 +565,10 @@ try {
     t.net.hold.clean = 20000;
     const t0 = Date.now();
     await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
-    ts = await tilesUntil(t.pg, (s) => s.look === 'muted', 14000);
+    ts = await tilesUntil(t.pg, (s) => /switched to Muted/.test(s.note || ''), 14000);
     const took = Date.now() - t0;
     ts = await tilesUntil(t.pg, (s) => s.tiles === 'ok', 6000);
-    check('no tile at all after six seconds: the same switch', ts.look === 'muted' && ts.tiles === 'ok' && took > 5500 && took < 11000, `${took} ms · ${JSON.stringify(ts)}`);
+    check('no tile at all after six seconds: the same switch', ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && took > 5500 && took < 11000, `${took} ms · ${JSON.stringify(ts)}`);
     await t.tctx.close();
 
     // A campaign's own provider has no second one: said, with Try again.
@@ -599,6 +600,7 @@ try {
     }))).catch(() => false);
     await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
     ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 15000);
+    await sleep(600);
     await t.pg.screenshot({ path: `${SHOTS}/8-street-map-not-loading-service-worker.png` });
     check('under the service worker a tile that fails is a failure: none “loaded”, and the map says so',
       controlled && ts.loaded === 0 && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || ''), JSON.stringify({ controlled, ...ts }));
@@ -780,6 +782,7 @@ try {
       await route.fulfill({ response: res, json: {
         ...body,
         people: { total: 300052, onMap: 22424, waiting: 277625, noAddress: 3 },
+        area: { ...body.area, inside: 22422, outside: 2 },
         placing: { ...body.placing, state: 'paused', located: 22000, copied: 424, missed: 0, remaining: 277625, lastError: 'geocoder 503', retryAt: new Date(Date.now() + 15 * 60000).toISOString() },
         build: 'index-NEWER000.js',
       } });

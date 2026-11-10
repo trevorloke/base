@@ -196,8 +196,11 @@ export const timeOfDay = (iso) => {
 // own, flagged (warn) when it applies.
 //   c     the server's answer
 //   page  { build, look, tilesFrom, tiles: { loaded, failed, down }, size: { x, y }, zoom }
+//         tilesFrom: the host the street map's tiles come from ('' for the
+//         server's own) — said by the provider's name where it has one
 //   → [{ key, label, value, note, warn }]
 const enCA = (n) => Number(n || 0).toLocaleString('en-CA');
+const PROVIDER = { 'basemaps.cartocdn.com': 'CARTO', 'tile.openstreetmap.org': 'OpenStreetMap' };
 export const checkLines = (c, page, { num = enCA, clock = (iso) => iso } = {}) => {
   const p = c.people;
   const g = c.placing;
@@ -229,14 +232,14 @@ export const checkLines = (c, page, { num = enCA, clock = (iso) => iso } = {}) =
   add('turfs', 'Turfs', num(c.turfs));
 
   const t = page.tiles || { loaded: 0, failed: 0, down: false };
-  const from = [page.look, page.tilesFrom].filter(Boolean).join(' · ') || c.tiles.source;
+  const from = [page.look, PROVIDER[page.tilesFrom] || page.tilesFrom || c.tiles.source].filter(Boolean).join(' · ');
   add('tiles', 'Street map', `${from} — ${t.down ? 'isn’t loading: ' : ''}${num(t.loaded)} loaded, ${num(t.failed)} failed`, {
     note: (c.tiles.ignored || []).includes('url') ? 'The street map address set on the server was ignored' : null, warn: t.down,
   });
 
   const known = Boolean(page.build && c.build);
   add('build', 'This page', !known ? 'Not compared' : page.build === c.build ? 'Up to date' : 'Older than the server — reload it', {
-    note: c.commit ? `The server runs ${c.commit}` : null, warn: known && page.build !== c.build,
+    note: c.commit ? `Version ${c.commit}` : null, warn: known && page.build !== c.build,
   });
 
   const { x = 0, y = 0 } = page.size || {};
