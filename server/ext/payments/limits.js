@@ -23,7 +23,7 @@ import { capFor, donorYearTotal } from '../../lib/cap.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
-import { sameText, samePhone, samePostal } from '../duplicates/same.js';
+import { sameText, samePhone, samePostal, sharesOf, listed, sharedWords } from '../duplicates/same.js';
 
 export const money = (cents) => `$${(Number(cents || 0) / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 export const tzOf = (ws) => ws?.settings?.tz || DEFAULT_TZ;
@@ -139,24 +139,98 @@ export const likelySameDonors = async (q, ws, personId, { year, slate }) => (awa
   [ws.id, personId, year, DEFAULT_SLATE, slate || DEFAULT_SLATE],
 )).rows;
 
-const listed = (words) => (words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0]);
-const sharedBy = (o) => listed([o.by_phone && 'phone', o.by_address && 'address', o.by_postal && 'postal code'].filter(Boolean));
+// The pairs among these records the desk said are two people (Duplicates:
+// Not the same), each both ways round: "a|b" and "b|a".
+const ruledApart = async (q, wsId, ids) => {
+  const pairs = new Set();
+  if (ids.length < 2) return pairs;
+  const rows = (await q.query(
+    'select a, b from person_not_dupes where workspace_id = $1 and a = any($2::uuid[]) and b = any($2::uuid[])',
+    [wsId, ids],
+  )).rows;
+  for (const { a, b } of rows) pairs.add(`${a}|${b}`).add(`${b}|${a}`);
+  return pairs;
+};
+
+// Past this many records ruled apart from another, the sets aren't all
+// tried (2^12 = 4,096 is plenty: few records share a donor's name and
+// phone, address or postal code, and fewer still were ruled apart).
+const MOST_TRIED = 12;
+
+// The records the donor may be all at once, out of those that may be them
+// ([{ id, given_cents }], in order): never two the desk ruled apart (apart:
+// ruledApart's pairs) — the donor is at most one of each such pair — and,
+// of the sets that are left, the one that gave the most. A ruling says
+// nothing about a third record (X ≠ Y and Y ≠ Z leave X and Z), so the
+// sets are tried, not grouped. Past MOST_TRIED, the largest givers first,
+// each beside none it was ruled apart from: still never two of a pair.
+export const mostTogether = (others, apart) => {
+  if (!apart.size) return others;
+  const clash = (a, b) => apart.has(`${a.id}|${b.id}`);
+  const ruled = others.filter((o) => others.some((x) => clash(o, x)));
+  const cents = (set) => set.reduce((n, o) => n + Number(o.given_cents), 0);
+  const fits = (set, o) => !set.some((x) => clash(o, x));
+  let best = [];
+  if (ruled.length <= MOST_TRIED) {
+    for (let mask = 1; mask < 2 ** ruled.length; mask += 1) {
+      const set = ruled.filter((_, i) => Math.floor(mask / 2 ** i) % 2 === 1);
+      if (set.every((o, i) => fits(set.slice(i + 1), o)) && cents(set) > cents(best)) best = set;
+    }
+  } else {
+    for (const o of [...ruled].sort((a, b) => Number(b.given_cents) - Number(a.given_cents))) if (fits(best, o)) best.push(o);
+  }
+  return others.filter((o) => !ruled.includes(o) || best.includes(o));
+};
 
 // A gift under the limit for its own donor (check: lib/cap.js checkCap's,
-// this gift in it), with what the records that may be the same donor gave:
-// over together? → { reason, ids } — the reason its gift is flagged and the
-// records it names — or null. It says the two together in the words of
-// lib/gifts.js flagIfOver, so the desk reads the numbers out of it the same
-// way (Money: parseOver).
+// this gift in it), with what the records that may be the same donor gave
+// (the most they can be together: mostTogether): over together? →
+// { reason, ids } — the reason its gift is flagged and the records it
+// names — or null. It says the two together in the words of lib/gifts.js
+// flagIfOver, so the desk reads the numbers out of it the same way (Money:
+// parseOver).
 export const overTogether = async (q, ws, personId, check, slate) => {
-  const others = await likelySameDonors(q, ws, personId, { year: check.year, slate });
+  const found = await likelySameDonors(q, ws, personId, { year: check.year, slate });
+  const others = mostTogether(found, await ruledApart(q, ws.id, found.map((o) => o.id)));
   const totalCents = others.reduce((n, o) => n + Number(o.given_cents), Number(check.totalCents));
   if (!others.length || totalCents <= Number(check.capCents)) return null;
-  const who = listed(others.map((o) => `${o.name} (same ${sharedBy(o)})`));
+  const who = listed(others.map((o) => `${o.name} (same ${sharedWords(o)})`));
   return {
     reason: `Possibly the same donor as ${who}: together they are at ${money(totalCents)} for ${check.year} — over the ${money(check.capCents)} limit on the ${slateLabel(slate).toLowerCase()} slate (${check.source})`,
     ids: others.map((o) => o.id),
   };
+};
+
+// The records each maybe names (the gift keeps their ids, attrs.
+// maybe_same_donor), as the desk needs them to rule one out (Donations:
+// Not the same person): each one's name, what it shares with the gift's
+// donor ("phone", "address and postal code"), what it gave that year on
+// that slate, and when it was added — read with the gift, as things stand,
+// so a maybe flagged before has them too. → Map: gift id → [{ id, name,
+// shares, given_cents, created_at }], in the order the flag names them.
+export const maybesNamed = async (q, wsId, giftIds) => {
+  const named = new Map();
+  if (!giftIds.length) return named;
+  const rows = (await q.query(
+    `select g.id as gift_id, o.id, o.name, o.created_at, ${sharesOf('d', 'o')},
+            (select coalesce(sum(x.amount_cents), 0) from gifts x
+              where x.workspace_id = g.workspace_id and x.person_id = o.id and x.deleted_at is null
+                and coalesce(x.slate, $3) = coalesce(g.slate, $3)
+                and x.date >= make_date(extract(year from g.date)::int, 1, 1)
+                and x.date < make_date(extract(year from g.date)::int + 1, 1, 1))::bigint as given_cents
+       from gifts g
+       join persons d on d.id = g.person_id and d.workspace_id = g.workspace_id
+       cross join lateral jsonb_array_elements_text(g.attrs->'maybe_same_donor') with ordinality m(other, n)
+       join persons o on o.id = m.other::uuid and o.workspace_id = g.workspace_id
+      where g.workspace_id = $1 and g.id = any($2::uuid[]) and jsonb_typeof(g.attrs->'maybe_same_donor') = 'array'
+      order by g.id, m.n`,
+    [wsId, giftIds, DEFAULT_SLATE],
+  )).rows;
+  for (const r of rows) {
+    if (!named.has(r.gift_id)) named.set(r.gift_id, []);
+    named.get(r.gift_id).push({ id: r.id, name: r.name, shares: sharedWords(r), given_cents: Number(r.given_cents), created_at: r.created_at });
+  }
+  return named;
 };
 
 // lib/hooks.js underLimit: every gift whose donor is under the limit on
@@ -167,4 +241,11 @@ export const overTogether = async (q, ws, personId, check, slate) => {
 export const underLimit = async (tx, ws, { personId, slate, cap }, out) => {
   const r = await overTogether(tx, ws, personId, cap, slate);
   if (r) Object.assign(out, { flagReason: r.reason, sameAs: r.ids });
+};
+
+// lib/hooks.js sameDonors: a gift back in the books (a void undone) — the
+// records that may be its donor, so lib/gifts.js adds up their maybes
+// again with it.
+export const sameDonors = async (tx, ws, { personId, year, slate }, ids) => {
+  for (const o of await likelySameDonors(tx, ws, personId, { year, slate })) ids.push(o.id);
 };

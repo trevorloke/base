@@ -4,13 +4,15 @@
 // — side by side. "Keep this one" merges the other into it (person.merge:
 // everything that pointed at the other moves; blanks are filled; it asks
 // once). "Not the same" keeps the pair away (and a gift flagged as maybe
-// one donor on the two is added up again without the other).
+// one donor on the two is added up again without the other). ?with=<id>[,…]
+// (Donations' Compare in Duplicates): the pairs with that donor's record and
+// the records its flag names.
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
-import { mergedSaid } from '../components/DuplicatesWords.js';
+import { mergedParts } from '../components/DuplicatesWords.js';
 import './duplicates.css';
 
 const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door', postal: 'Same name and postal code' };
@@ -61,7 +63,7 @@ function Pair({ pair, onDone }) {
             history moves over and fills its blanks.
           </span>
           <button type="button" className="btn btn-primary ops-tap" disabled={busy || !online}
-            onClick={() => run('person.merge', { keep: asking.keep.id, drop: asking.drop.id }, (r) => mergedSaid(asking.keep.name, r))}>
+            onClick={() => run('person.merge', { keep: asking.keep.id, drop: asking.drop.id }, (r) => mergedParts(asking.keep.name, r))}>
             {busy ? 'Merging…' : 'Merge'}
           </button>
           <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => setAsking(null)}>Cancel</button>
@@ -83,7 +85,9 @@ function Pair({ pair, onDone }) {
 export default function Duplicates() {
   const qc = useQueryClient();
   const online = useOnline();
-  const q = useQuery({ queryKey: ['duplicates'], queryFn: () => apiGet('/duplicates') });
+  const [params] = useSearchParams();
+  const only = params.get('with');
+  const q = useQuery({ queryKey: ['duplicates', only], queryFn: () => apiGet(only ? `/duplicates?with=${encodeURIComponent(only)}` : '/duplicates') });
   const [said, setSaid] = useState(null);
   const done = (text) => {
     setSaid(text);
@@ -100,8 +104,13 @@ export default function Duplicates() {
       <Link to="/people" className="ops-back">← People</Link>
       <h1>Duplicates</h1>
       <p className="muted">Two records that look like one person. Keep the better one: the other’s contacts, gifts, shifts, lists and answers move to it.</p>
+      {only && <p className="muted">{only.includes(',') ? 'Only the pairs with the donor’s record and the records its flag names.' : 'Only the pairs with the donor’s record.'} <Link to="/people/duplicates">All duplicates</Link></p>}
       {!online && <NeedsSignalLine>Merging needs signal</NeedsSignalLine>}
-      {said && <p className="ops-done" role="status">{said}</p>}
+      {said && (
+        <p className="ops-done" role="status">
+          {[].concat(said).map((p, i) => (typeof p === 'string' ? p : <Link key={i} to={`/people/${p.id}`}>{p.text}</Link>))}
+        </p>
+      )}
       {!q.data ? (
         noSignal(q) ? <NoSignal /> : q.isError ? <p className="error">{q.error.message}</p> : <p className="muted">Loading…</p>
       ) : q.data.pairs.length === 0 ? (

@@ -30,6 +30,15 @@ import { openPass } from '../ext/passes/rule.js';
 import { doorState, inPass } from '@starbase/shared/passes';
 // Where people use the app: never a website domain (ext/site).
 import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
+// The records a maybe one donor names, by name (ext/payments).
+import { maybesNamed } from '../ext/payments/limits.js';
+
+// Gift rows flagged as maybe one donor (idsOf: the ids a row names, as
+// stored) get maybe_same_as: those records by name, as things stand.
+const nameMaybes = async (db, wsId, rows, idsOf) => {
+  const named = await maybesNamed(db, wsId, rows.filter((g) => Array.isArray(idsOf(g)) && idsOf(g).length).map((g) => g.id));
+  for (const g of rows) if (named.has(g.id)) g.maybe_same_as = named.get(g.id);
+};
 
 // A date column as YYYY-MM-DD (both backends hand back a Date at UTC midnight).
 const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
@@ -748,6 +757,8 @@ app.get('/records/:type', async (c) => {
        order by g.created_at desc, g.id desc limit $2`
     : `select * from ${t.table} where ${where} order by created_at desc, id desc limit $2`;
   const { rows } = await c.get('db').query(select, params);
+  // A maybe in the ledger names its records as the brief does.
+  if (type === 'gift') await nameMaybes(c.get('db'), ctx.workspaceId, rows, (g) => g.flagged && g.attrs?.maybe_same_donor);
   const next = rows.length === limit
     ? `${new Date(rows[rows.length - 1].created_at).toISOString()}~${rows[rows.length - 1].id}`
     : null;
@@ -794,7 +805,8 @@ app.get('/brief', async (c) => {
   // engine that flagged it — so the desk shows "$150 over the $1,250 limit"
   // without parsing flag_reason. Null when no cap rule is known for that
   // year. A maybe (lib/gifts.js) also carries the other records it names
-  // (maybe_same_donor), for the desk's Not the same person.
+  // (maybe_same_donor: their ids; maybe_same_as: each one's name and what it
+  // shares), for the desk's Not the same person, one record at a time.
   if (ctx.role !== 'volunteer') {
     for (const g of flagged) {
       const cap = await checkCap(db, {
@@ -804,6 +816,7 @@ app.get('/brief', async (c) => {
       g.total_cents = cap.checked ? Number(cap.totalCents) : null;
       g.cap_cents = cap.checked ? Number(cap.capCents) : null;
     }
+    await nameMaybes(db, ws, flagged, (g) => g.maybe_same_donor);
   }
   const people = (await db.query(
     `select count(*)::int as total from persons where workspace_id = $1 and deleted_at is null`, [ws],

@@ -27,7 +27,7 @@
 import { REFUND_JOB } from './apply.js';
 import { runRefundJob } from './refunds.js';
 import { briefOverLimit } from './api.js';
-import { underLimit } from './limits.js';
+import { underLimit, sameDonors } from './limits.js';
 
 export { sql } from './sql.js';
 export { publicRoutes } from './webhook.js';
@@ -39,7 +39,7 @@ export { paymentsReady, stripeMode, STRIPE_EVENTS } from './stripe.js';
 export const jobs = { [REFUND_JOB]: runRefundJob };
 // Today: a payment over the limit rides with the gifts over the limit.
 // Every gift under the limit: added up with the records that may be the
-// same donor (limits.js).
-export const hooks = { brief: briefOverLimit, underLimit };
+// same donor (limits.js); a gift restored, their maybes with it again.
+export const hooks = { brief: briefOverLimit, underLimit, sameDonors };
 // In the full export: every checkout (the declaration as made) and payment.
 export const exportTables = ['stripe_checkouts', 'stripe_payments'];

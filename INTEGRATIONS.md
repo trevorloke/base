@@ -238,9 +238,14 @@ What happens:
   else. A cheque logged at the desk after the gift online is added up the
   same way, and a postal code is its letters and digits (V3T-2C3 is V3T
   2C3). The treasurer merges the two (People → Duplicates) and refunds, or
-  taps *Not the same person* on the flagged gift (or *Not the same* in
-  Duplicates): the records are kept apart and the gift is added up again
-  without the other, so the flag goes or names what is left.
+  taps *Not the same person* on the flagged gift, one choice for each
+  record it names (two that read the same: *Compare in Duplicates*, the
+  pairs with the donor and with the records it names), or *Not the same*
+  in Duplicates: that pair is
+  kept apart and the gift is added up again without it, so the flag goes
+  or names what is left. Two records marked Not the same are never added
+  up together, and a refund or a lost dispute on the other record's gift
+  takes it out of the maybe the same way.
 - **A refund or a dispute in Stripe**: a full refund voids the gift and its
   receipt (refunded dues void the membership); a partial refund and an open
   dispute are flagged under Needs you; a lost dispute voids the gift. A

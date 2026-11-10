@@ -76,26 +76,31 @@ export const flagIfOver = async (tx, workspace, gift) => {
   return flag;
 };
 
+// The live gifts flagged as maybes on these records, or naming them →
+// [{ id, person_id, date, slate, flag_reason, same_as: [ids it names], name }].
+export const maybesAbout = async (tx, workspaceId, personIds) => (await tx.query(
+  `select g.id, g.person_id, g.date, g.slate, g.flag_reason, g.attrs->'maybe_same_donor' as same_as, p.name
+     from gifts g join persons p on p.id = g.person_id
+    where g.workspace_id = $1 and g.deleted_at is null and g.flagged and g.attrs ? 'maybe_same_donor'
+      and (g.person_id = any($2::uuid[]) or g.attrs->'maybe_same_donor' ?| $3::text[])
+    order by g.date, g.created_at`,
+  [workspaceId, personIds, personIds],
+)).rows.map((g) => ({ ...g, same_as: typeof g.same_as === 'string' ? JSON.parse(g.same_as) : g.same_as }));
+
 // The maybes on these records' gifts (and on any gift naming them), checked
-// again: the desk said two records are different people, or made two one.
-// Each is added up again with what is left: still over together, the
-// reason as it stands now; over on its own record now, the plain reason
-// (never less flagged than it should be); neither, the flag goes.
+// again: the desk said two records are different people, or made two one,
+// or a gift on them left the books (or came back). Each is added up again
+// with what is left: still over together, the reason as it stands now;
+// over on its own record now, the plain reason (never less flagged than it
+// should be); neither, the flag goes.
 // → [{ id, flagged, flag_reason, maybe_same_donor? }], the gifts that changed.
 export const recheckMaybes = async (tx, workspace, personIds, emit) => {
-  const rows = (await tx.query(
-    `select g.id, g.person_id, g.date, g.slate, g.flag_reason, g.attrs->'maybe_same_donor' as same_as, p.name
-       from gifts g join persons p on p.id = g.person_id
-      where g.workspace_id = $1 and g.deleted_at is null and g.flagged and g.attrs ? 'maybe_same_donor'
-        and (g.person_id = any($2::uuid[]) or g.attrs->'maybe_same_donor' ?| $3::text[])
-      order by g.date, g.created_at`,
-    [workspace.id, personIds, personIds],
-  )).rows;
+  const rows = await maybesAbout(tx, workspace.id, personIds);
   const changed = [];
   for (const g of rows) {
     const flag = await flagOf(tx, workspace, { person_id: g.person_id, date: g.date, donorName: g.name, slate: g.slate });
     if (!flag.cap.checked) continue;
-    const had = typeof g.same_as === 'string' ? JSON.parse(g.same_as) : g.same_as;
+    const had = g.same_as;
     if (flag.flagReason === g.flag_reason && JSON.stringify(flag.sameAs) === JSON.stringify(had)) continue;
     await setFlag(tx, workspace.id, g.id, flag);
     const change = { flagged: !!flag.flagReason, flag_reason: flag.flagReason, ...(flag.sameAs ? { maybe_same_donor: flag.sameAs } : {}) };
@@ -108,20 +113,68 @@ export const recheckMaybes = async (tx, workspace, personIds, emit) => {
 // ── Voids and restores ──
 // A void is an event, never a delete: the gift leaves every total but stays
 // in the books; restore brings it back and runs the cap check again.
-export const voidGift = async (tx, workspaceId, id, emit) => {
+// Either way, the maybes it was added up in — on its donor's gifts, or
+// naming its donor — are added up again as things stand (recheckMaybes),
+// so a "together they are at …" never keeps a gift that left the books.
+// The desk's void, and a refund or a lost dispute in Stripe (ext/payments
+// unbook), come through here. The maybes a void clears are kept with the
+// gift (attrs.void_cleared), so its restore — the desk's Undo — puts them
+// back. → { id, rechecked }
+export const voidGift = async (tx, workspace, id, emit) => {
   const gift = (await tx.query(
-    `update gifts set deleted_at = now() where id = $1 and workspace_id = $2 and deleted_at is null returning id`,
-    [id, workspaceId],
+    `update gifts set deleted_at = now() where id = $1 and workspace_id = $2 and deleted_at is null returning id, person_id`,
+    [id, workspace.id],
   )).rows[0];
   if (!gift) throw httpError(404, 'gift not found');
   emit('gift', id, 'void', {});
-  return { id };
+  const rechecked = await recheckMaybes(tx, workspace, [gift.person_id], emit);
+  const cleared = rechecked.filter((g) => !g.flagged).map((g) => g.id);
+  if (cleared.length) {
+    await tx.query(
+      `update gifts set attrs = jsonb_set(attrs, '{void_cleared}', $3::jsonb) where id = $1 and workspace_id = $2`,
+      [id, workspace.id, JSON.stringify(cleared)],
+    );
+  }
+  return { id, rechecked };
 };
+
+// A gift back in the books: the gifts whose maybe its void cleared (ids)
+// are checked again and flagged again if over again — as things stand, so
+// a Not the same ruled since still counts: as a maybe, or over on their
+// own record unless a gift of that year crossed since and carries it. One
+// voided or flagged since is left as it is.
+const flagAgain = async (tx, workspace, ids, emit) => {
+  const rows = (await tx.query(
+    `select g.id, g.person_id, g.date, g.slate, p.name from gifts g join persons p on p.id = g.person_id
+      where g.workspace_id = $1 and g.id = any($2::uuid[]) and g.deleted_at is null and not g.flagged
+      order by g.date, g.created_at`,
+    [workspace.id, ids],
+  )).rows;
+  for (const g of rows) {
+    const flag = await flagOf(tx, workspace, { person_id: g.person_id, date: g.date, donorName: g.name, slate: g.slate });
+    if (!flag.flagReason) continue;
+    // Over on its own record now: the year's crossing gift carries that
+    // flag (one logged while this was out, say) — one row for a donor's
+    // year over the limit, never two.
+    if (!flag.sameAs && await crossedAlready(tx, workspace.id, g)) continue;
+    await setFlag(tx, workspace.id, g.id, flag);
+    emit('gift', g.id, 'update', { flagged: true, flag_reason: flag.flagReason, ...(flag.sameAs ? { maybe_same_donor: flag.sameAs } : {}) });
+  }
+};
+// Another live gift of this donor's year and slate flagged over the limit
+// on their own record (not a maybe).
+const crossedAlready = async (tx, workspaceId, g) => Boolean((await tx.query(
+  `select 1 from gifts where workspace_id = $1 and person_id = $2 and id <> $3 and deleted_at is null and flagged
+      and not (coalesce(attrs, '{}'::jsonb) ? 'maybe_same_donor') and coalesce(slate, $4) = coalesce($5, $4)
+      and date >= make_date($6, 1, 1) and date < make_date($6 + 1, 1, 1)
+    limit 1`,
+  [workspaceId, g.person_id, g.id, DEFAULT_SLATE, g.slate, Number(isoDay(g.date).slice(0, 4))],
+)).rows[0]);
 
 export const restoreGift = async (tx, workspace, id, emit) => {
   const gift = (await tx.query(
     `update gifts set deleted_at = null where id = $1 and workspace_id = $2 and deleted_at is not null
-     returning id, person_id, date, method, slate, flagged, flag_reason`,
+     returning id, person_id, date, method, slate, flagged, flag_reason, attrs->'void_cleared' as void_cleared`,
     [id, workspace.id],
   )).rows[0];
   if (!gift) throw httpError(404, 'gift not found in trash');
@@ -136,6 +189,20 @@ export const restoreGift = async (tx, workspace, id, emit) => {
     ({ flagReason: flag, sameAs } = await flagIfOver(tx, workspace, { id, person_id: gift.person_id, date: gift.date, donorName: donor?.name || 'This donor', slate: gift.slate }));
   }
   emit('gift', id, 'restore', flag ? { flagged: true, flag_reason: flag, ...(sameAs ? { maybe_same_donor: sameAs } : {}) } : {});
+  // Every maybe it may be in counts it again, so an Undo leaves Needs you
+  // as the void found it: those its void cleared come back if over, and
+  // those on its donor or on the records that may be them (ext/payments:
+  // sameDonors) — or naming one of them — are added up as things stand,
+  // a maybe it kept through its void too.
+  const cleared = typeof gift.void_cleared === 'string' ? JSON.parse(gift.void_cleared) : gift.void_cleared;
+  if (Array.isArray(cleared)) {
+    await tx.query(`update gifts set attrs = attrs - 'void_cleared' where id = $1 and workspace_id = $2`, [id, workspace.id]);
+    await flagAgain(tx, workspace, cleared, emit);
+  }
+  const near = [];
+  await runHooks('sameDonors', tx, workspace, { personId: gift.person_id, year: Number(isoDay(gift.date).slice(0, 4)), slate: gift.slate }, near);
+  const now = (await recheckMaybes(tx, workspace, [gift.person_id, ...near], emit)).find((g) => g.id === id);
+  if (now) return { id, flagged: now.flagged, flag_reason: now.flag_reason };
   return { id, flagged: !!flag || !!gift.flagged, flag_reason: flag || gift.flag_reason || null };
 };
 
