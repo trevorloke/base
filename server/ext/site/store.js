@@ -23,9 +23,9 @@ const iso = (d) => (d instanceof Date ? d.toISOString() : d ? new Date(d).toISOS
 
 // ── Hosts ──
 // SITE_HOSTS and APP_HOSTS are the operator's: host names or addresses,
-// comma-separated (127.0.0.1 for a test).
+// comma-separated (127.0.0.1 for a test), a final dot or not.
 const hostList = (raw) => String(raw || '').split(',')
-  .map((h) => h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, ''))
+  .map((h) => h.trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/\.+$/, ''))
   .filter((h) => /^[a-z0-9.-]{1,253}$/.test(h));
 export const envHosts = () => hostList(process.env.SITE_HOSTS);
 
@@ -40,7 +40,7 @@ const DOOR = 'base.win';
 export const appHosts = () => {
   const out = [DOOR];
   try {
-    const h = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim()).hostname.toLowerCase();
+    const h = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim()).hostname.toLowerCase().replace(/\.+$/, '');
     if (h && !out.includes(h)) out.push(h);
   } catch { /* not set */ }
   const r = hostOf(process.env.RENDER_EXTERNAL_HOSTNAME);
@@ -134,9 +134,13 @@ const domains = async () => {
 };
 export const forgetDomains = () => { domainsAt = 0; };
 
-// The host a request came to: lowercase, no port.
+// The host a request came to: lowercase, no port, no dots at the end — a
+// browser sends imaginesurrey.ca. as it was typed, and it is
+// imaginesurrey.ca. The site gate and the noting both read it here, so a
+// website domain is the site's however it's written, and never noted as
+// the app's.
 export const hostOfRequest = (c) => {
-  try { return new URL(c.req.url).hostname.toLowerCase(); } catch { return ''; }
+  try { return new URL(c.req.url).hostname.toLowerCase().replace(/\.+$/, ''); } catch { return ''; }
 };
 
 // → { host, workspaceId } when this request is to the campaign's own domain

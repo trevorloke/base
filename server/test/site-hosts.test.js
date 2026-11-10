@@ -13,7 +13,8 @@
 // the save's words. On a website domain the webhooks and the unsubscribe
 // links in emails still answer, each only in its own shape and case; a tab,
 // a line break or a backslash in the address is the site's 404, never a
-// redirect.
+// redirect. A host written with a final dot (imaginesurrey.ca.) is the same
+// host, in a request and in the server's own lists.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { connect } from 'node:net';
@@ -28,9 +29,9 @@ const { twilioSignature } = await import('../ext/texting/twilio.js');
 const { serve } = await import('@hono/node-server');
 
 const SITE = 'campaign.example.org';
-let db, mgr, ws;
+let db, mgr, ws, user;
 before(async () => {
-  ({ db, mgr, ws } = await campaign());
+  ({ db, mgr, ws, user } = await campaign());
   ok(await mgr.get('/api/site'));
 });
 
@@ -282,6 +283,76 @@ test('a note that fails is written by the next request there, not an hour on: th
   }
 });
 
+const notedHosts = async () => (await db.query('select host from app_hosts order by host')).rows.map((r) => r.host);
+
+test('a website domain with a final dot is the same domain: only the site answers there, and it is never noted as the app’s', async () => {
+  const SAVED = 'vote3.example.net';
+  try {
+    ok(await mgr.action('site.settings.save', { domains: [SAVED] }));
+    const was = await notedHosts();
+    // A browser sends imaginesurrey.ca. as it was typed: SITE_HOSTS's and a saved one, in any case
+    // (and with two dots, which the noting would otherwise read as the domain itself).
+    for (const host of [`${SITE}.`, `${SAVED}.`, 'VOTE3.Example.NET.', `${SAVED}..`]) {
+      const home = await hit('/', { host });
+      assert.equal(home.status, 200, host);
+      assert.match(home.text, /data-skin=/, `${host}: the site’s page`);
+      // Signed in or not, nothing of the app: the site's 404, and no cookie.
+      for (const [method, path, body] of [['GET', '/api/auth/me'], ['GET', '/api/site'], ['GET', '/desk'],
+        ['POST', '/api/auth/login', { email: user.email, password: 'northshore2026' }]]) {
+        const r = await hit(path, { host, method, body, headers: { cookie: mgr.cookie } });
+        assert.equal(r.status, 404, `${method} ${host}${path}`);
+        assert.match(r.headers.get('content-type'), /text\/html/, `${method} ${host}${path}: the site’s 404 page`);
+        assert.equal(r.headers.get('set-cookie'), null, `${method} ${host}${path}: no sign-in cookie`);
+      }
+    }
+    assert.deepEqual(await notedHosts(), was, 'no website domain noted as where the app answers');
+    // So it can be taken off and put back.
+    ok(await mgr.action('site.settings.save', { domains: [] }));
+    ok(await mgr.action('site.settings.save', { domains: [SAVED] }));
+  } finally {
+    await db.query('delete from app_hosts where host in ($1, $2)', [SAVED, SITE]);
+    await noDomains();
+  }
+});
+
+test('the app’s own address with a final dot is still the app’s, as itself: refused as a website domain in its own words', async () => {
+  const DESK = 'desk3.example.org';
+  try {
+    assert.equal((await mgr.get(at(`${DESK}.`, '/api/auth/me'))).status, 200, 'the app answers');
+    assert.equal((await hit('/api/auth/login', { host: `${DESK}.`, method: 'POST', body: { email: 'x@example.org', password: 'whatever-1234' } })).status, 401, 'sign-in answers');
+    const site = ok(await mgr.get(at(`${DESK}.`, '/api/site')));
+    assert.ok(site.urls.app_hosts.includes(DESK), JSON.stringify(site.urls.app_hosts));
+    assert.ok(!site.urls.used_hosts.some((u) => u.host === DESK), 'refused in words of its own, not as one people used');
+    const r = await mgr.post(at(`${DESK}.`, '/api/actions/site.settings.save'), { domains: [DESK] });
+    assert.equal(r.status, 400);
+    assert.match(r.json.error, /^desk3\.example\.org is where base\.win itself answers/);
+    assert.ok((await notedHosts()).includes(DESK), 'noted as people write it');
+  } finally {
+    await db.query('delete from app_hosts where host = $1', [DESK]);
+    await noDomains();
+  }
+});
+
+test('the server’s own lists with a final dot are the same hosts: SITE_HOSTS, APP_HOSTS, STARBASE_PUBLIC_URL', async () => {
+  const was = { SITE_HOSTS: process.env.SITE_HOSTS, APP_HOSTS: process.env.APP_HOSTS, STARBASE_PUBLIC_URL: process.env.STARBASE_PUBLIC_URL };
+  process.env.SITE_HOSTS = `${was.SITE_HOSTS},dotted.example.org.`;
+  process.env.APP_HOSTS = 'starbase.dotted.example.';
+  process.env.STARBASE_PUBLIC_URL = 'https://public.dotted.example./';
+  try {
+    assert.match((await hit('/', { host: 'dotted.example.org' })).text, /data-skin=/, 'the site');
+    assert.equal((await mgr.get(at('dotted.example.org', '/api/auth/me'))).status, 404, 'nothing of the app');
+    for (const d of ['starbase.dotted.example', 'public.dotted.example']) {
+      const r = await mgr.action('site.settings.save', { domains: [d] });
+      assert.equal(r.status, 400, d);
+      assert.match(r.json.error, /base\.win itself answers/, d);
+    }
+  } finally {
+    for (const [k, v] of Object.entries(was)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    await db.query("delete from app_hosts where host = 'dotted.example.org'");
+    await noDomains();
+  }
+});
+
 test('on a website domain Twilio still reaches base.win: a STOP is never lost', async () => {
   const before = process.env.TWILIO_AUTH_TOKEN;
   process.env.TWILIO_AUTH_TOKEN = 'site-hosts-twilio-token';
@@ -378,8 +449,8 @@ test('the redirect never leaves the site: a tab, a line break or a backslash, en
 
 test('the same through Node’s own server, as the host runs it', async () => {
   const server = await new Promise((resolve) => { const s = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' }, () => resolve(s)); });
-  const ask = (target) => new Promise((resolve, reject) => {
-    const s = connect(server.address().port, '127.0.0.1', () => s.write(`GET ${target} HTTP/1.1\r\nHost: site.test\r\nX-Forwarded-For: 192.0.2.79\r\nConnection: close\r\n\r\n`));
+  const ask = (target, host = 'site.test') => new Promise((resolve, reject) => {
+    const s = connect(server.address().port, '127.0.0.1', () => s.write(`GET ${target} HTTP/1.1\r\nHost: ${host}\r\nX-Forwarded-For: 192.0.2.79\r\nConnection: close\r\n\r\n`));
     let out = '';
     s.on('data', (d) => { out += d; });
     s.on('end', () => resolve([Number(out.split(' ')[1]), /\r\nlocation: ([^\r]*)/i.exec(out)?.[1] ?? null]));
@@ -390,6 +461,8 @@ test('the same through Node’s own server, as the host runs it', async () => {
     assert.deepEqual(await ask('/%09%5Cevil.example/'), [404, null]);
     assert.deepEqual(await ask('//evil.example/'), [301, '/evil.example']);
     assert.deepEqual(await ask('/donate/?a=1'), [301, '/donate?a=1']);
+    // The website's domain with a final dot, as a browser sends it: the site's 404, not the app.
+    assert.deepEqual(await ask('/api/auth/me', 'site.test.'), [404, null]);
   } finally {
     server.closeAllConnections?.();
     await new Promise((r) => server.close(r));

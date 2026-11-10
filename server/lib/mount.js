@@ -9,7 +9,8 @@
 // over to base.win in their own time. On the way in the client's
 // path is taken off, so every route inside is the same as at a root; on the
 // way out it is put back where a browser will read it:
-//   Location     a redirect to /x goes to /imaginesurrey/x
+//   Location     a redirect to /x goes to /imaginesurrey/x (a path, so the
+//                browser stays on base.win)
 //   Set-Cookie   the sign-in cookie's Path is the client's, so two
 //                campaigns on base.win never see each other's sign-in
 //   HTML / CSS   href, src, action and url(…) that start with / (the page
@@ -92,6 +93,12 @@ const rewriteResponse = async (res, base, rw) => {
   return new Response(out, { status: res.status, statusText: res.statusText, headers });
 };
 
+// A way on that stays on the address the browser used: a path and its
+// query, never a whole address. The URL here is the one this server sees —
+// behind the base.win door, its own host's (http://<service>.onrender.com),
+// which would send people off base.win, signed out.
+const sendOn = (location) => new Response(null, { status: 302, headers: { location, 'cache-control': 'no-store' } });
+
 // → fetch(req, env) for the server: the app at base (or as is, base '').
 export const mountAt = (app, base) => {
   if (!base) return (req, env) => app.fetch(req, env);
@@ -106,9 +113,9 @@ export const mountAt = (app, base) => {
     let inner = p.slice(base.length) || '/';
     // The client's path alone, or an address from before (/admin, /login…):
     // the volunteers' app, or the office's for /admin.
-    if (inner === '/') return Response.redirect(new URL(`${base}/field/${url.search}`, url), 302);
+    if (inner === '/') return sendOn(`${base}/field/${url.search}`);
     if (inner === '/admin' || inner.startsWith('/admin/')) {
-      return Response.redirect(new URL(`${base}/desk${inner.slice('/admin'.length) || '/'}${url.search}`, url), 302);
+      return sendOn(`${base}/desk${inner.slice('/admin'.length) || '/'}${url.search}`);
     }
     url.pathname = inner;
     const init = { method: req.method, headers: req.headers, redirect: 'manual', signal: req.signal };

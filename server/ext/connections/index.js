@@ -16,6 +16,7 @@ import { Hono } from 'hono';
 import { suggestAddresses } from '../../lib/geocode.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { KEY_ENV, KEY_MIN, keyStatus } from '../../lib/twostep.js';
+import { basePath } from '../../lib/mount.js';
 // Online payments (ext/payments): its row carries the webhook address and
 // the events to tick in Stripe, and state 'test' in test mode.
 import { stripeService, checkStripe, webhookUrl } from '../payments/service.js';
@@ -93,16 +94,25 @@ export const services = (base = publicUrl()) => {
 
 // What other services call here: Twilio's webhooks (all checked against
 // TWILIO_AUTH_TOKEN), and the ways in for the campaign's own files.
-const inbound = (base) => [
+const inbound = (base, desk) => [
   { name: 'Twilio — a message comes in', url: `${base}/api/public/twilio/sms`, how: 'Set by hand: Twilio → the number → Messaging → “A message comes in”, HTTP POST' },
   { name: 'Twilio — delivery reports, calls', url: `${base}/api/public/twilio/…`, how: 'Sent by base.win with each text and call (from the public address); nothing to set' },
   { name: 'The website — people in', url: `${base}/in/v1/people`, how: 'From the website’s server with a website key (below): sign-ups, petitions, volunteers, the newsletter' },
-  { name: 'Lists and voted files', url: `${base}/admin/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
+  { name: 'Lists and voted files', url: `${desk}/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
   { name: 'Stripe — payments, refunds, disputes', url: webhookUrl(base), how: 'Set by hand: Stripe → Developers → Webhooks → Add endpoint, with the events under Online payments (above)' },
 ];
 // This Base's own address as the outside world reaches it: the public
 // address, else the one this page was opened at (with the client's path).
 const baseOf = (c) => publicUrl() || `${new URL(c.req.url).origin}${c.env?.base || ''}`;
+// The desk at that address: /desk under the client's path on base.win
+// (lib/mount.js; /admin there is only an old address, sent on), /admin at
+// a server's root.
+const deskOf = (c, base) => {
+  const client = c.env?.base || basePath();
+  let path = '';
+  try { path = new URL(base).pathname.replace(/\/+$/, ''); } catch { /* not an address: as at a root */ }
+  return `${base}${client && path === client ? '/desk' : '/admin'}`;
+};
 
 const within = (p) => Promise.race([p, new Promise((_, rej) => { setTimeout(() => rej(new Error('no answer in 8 s')), TIMEOUT_MS); })]);
 
@@ -189,7 +199,7 @@ api.get('/connections', (c) => {
   const denied = managerOnly(c);
   if (denied) return denied;
   const base = baseOf(c);
-  return c.json({ services: services(base), inbound: inbound(base), publicUrl: publicUrl() || null });
+  return c.json({ services: services(base), inbound: inbound(base, deskOf(c, base)), publicUrl: publicUrl() || null });
 });
 
 api.post('/connections/check', async (c) => {

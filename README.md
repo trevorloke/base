@@ -12,8 +12,10 @@ base.win (`apps/door`; [setting it up](apps/door/README.md)):
 `/<client>/field` is the volunteers' app and `/<client>/desk` the office's.
 The server goes under a client's path with `BASE_PATH=/<client>` (and keeps
 answering at its own address); unset, it runs at a site's root as it always
-has. Internal names — the `STARBASE_*` settings, package names, the
-database — are unchanged, so nothing deployed moves.
+has. An old `/<client>/admin…` link goes on to `/<client>/desk…` on the
+address it was opened at, never the server's own. Internal names — the
+`STARBASE_*` settings, package names, the database — are unchanged, so
+nothing deployed moves.
 
 `apps/web` is Imagine Surrey's website as it runs today (Next.js, [its
 README](apps/web/README.md)), until its pages move into base.win. It came in
@@ -701,7 +703,7 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
 | `STARBASE_BRAND` | `imagine-surrey` or `base` — the look (*The brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
-| `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app (SITE.md) | blank: the website is at `/site/` only |
+| `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
 | `APP_HOSTS` | the app's other addresses on this server (`starbase.imaginesurrey.ca` once base.win is the public one): never made a website domain, so the app keeps answering there (SITE.md) | blank |
 | `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters) | blank: one is made and kept in the database |
 

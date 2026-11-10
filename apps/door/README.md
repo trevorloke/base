@@ -10,6 +10,7 @@ database.
 | `base.win/imaginesurrey/field` | the volunteers' app | everyone the campaign invites |
 | `base.win/imaginesurrey/desk` | the office — every area, the Website among them | managers, staff, treasurers (and anyone given an area); a volunteer is turned away |
 | `base.win/imaginesurrey/web…` | → `/imaginesurrey/desk/website` (the old back-office address) | |
+| `base.win/imaginesurrey/admin…` | → `/imaginesurrey/desk…` (the office's old address: the server sends it on as a path, so the browser stays on base.win) | |
 
 The door passes requests through to the client's server with the path as it
 came. It checks no one: signing in, and who may open the desk, are the
