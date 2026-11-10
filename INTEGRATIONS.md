@@ -496,7 +496,10 @@ sent there, once, as one small JSON message:
   looked up, at every send — the call goes to the very address that was
   checked.
 - **Who.** Only the desk adds the step, changes a ladder that has one, or
-  sees the secret — never a volunteer, even one given Outreach.
+  sees the secret — never a volunteer, even one given Outreach. The address
+  is kept with the ladder (and so in the campaign's full export); the event
+  log keeps only the site it goes to (`https://hooks.zapier.com/…`), and a
+  person's log on the ladder only the label and the answer.
 
 Checking the signature, in Node (`raw` is the body exactly as received):
 

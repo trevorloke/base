@@ -25,7 +25,8 @@
 // words are checked in the write, a new address's name is looked up before
 // it (`before`: no lookup ever holds the campaign's lock). Only the desk
 // makes one, or changes or turns on a ladder that has one: it hands on
-// emails a volunteer may never see.
+// emails a volunteer may never see. The address is kept with the ladder; the
+// event log keeps only the site it goes to (forLog).
 import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
@@ -97,6 +98,10 @@ const checkHooks = (ctx, steps) => {
     return { ...s, url: cleanAddress(s.url) };
   });
 };
+// What the event log keeps of the steps: an address there is only where it
+// goes (the site's name). The rest of it can be a key, and the log is kept —
+// and exported — for good, long after a step is changed or removed.
+const forLog = (steps) => steps.map((s) => (isHook(s) ? { ...s, url: `${new URL(s.url).origin}/…` } : s));
 // Before the write: the name behind each address this ladder doesn't
 // already send to is looked up (an address saved before isn't asked about
 // again — a lookup that fails must not stop another step being edited).
@@ -143,7 +148,7 @@ export const actions = {
          input.reentry, ctx.publicUrl || null, ctx.user.id, goal],
       );
       const ladder = { id, name: input.name, trigger: { kind: input.trigger.kind, ref }, steps: input.steps, active: false, reentry: input.reentry, goal };
-      emit('ladder', id, 'create', ladder);
+      emit('ladder', id, 'create', { ...ladder, steps: forLog(input.steps) });
       return { ladder };
     },
   },
@@ -187,7 +192,7 @@ export const actions = {
         [cur.id, ctx.workspaceId, next.name, next.trigger_kind, next.trigger_ref || null,
          JSON.stringify(parseJson(next.steps, [])), next.reentry, ctx.publicUrl || null, next.goal || null],
       );
-      emit('ladder', cur.id, 'update', patch);
+      emit('ladder', cur.id, 'update', patch.steps ? { ...patch, steps: forLog(patch.steps) } : patch);
       return { ladder: out(next) };
     },
   },

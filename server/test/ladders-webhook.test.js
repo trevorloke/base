@@ -170,6 +170,18 @@ test('reaching the step sends one signed message; the run’s log says "sent" wi
   for (const never of ['hooks.example.org', '/catch/signed', secret, mail('asha'), '+16045550142']) {
     assert.ok(!kept.includes(never), `${never} is not kept on the run`);
   }
+  // The ladder's own writes are on the log too (the step made, then its
+  // label changed): there the address is only where it goes. The rest of it
+  // can be a key, and the log is kept, and exported, for good.
+  const saved = ok(await mgr.action('ladder.update', { id: lad.id, steps: [{ ...lad.steps[0], label: 'Zapier 2' }, lad.steps[1]] })).ladder;
+  assert.equal(saved.steps[0].url, 'https://hooks.example.org/catch/signed?source=base', 'the desk is answered the whole address');
+  const writes = ok(await mgr.get('/api/events?since=0&limit=1000')).events.filter((e) => e.entity_type === 'ladder' && e.entity_id === lad.id && e.payload.steps);
+  assert.deepEqual(writes.map((e) => [e.op, e.payload.steps[0]]), [
+    ['create', { kind: 'webhook', url: 'https://hooks.example.org/…', label: 'Zapier' }],
+    ['update', { kind: 'webhook', url: 'https://hooks.example.org/…', label: 'Zapier 2' }],
+  ]);
+  const everything = JSON.stringify([ok(await mgr.get('/api/events?since=0&limit=1000')).events, ok(await mgr.get('/api/export')).events]);
+  assert.ok(!everything.includes('/catch/signed') && !everything.includes('source=base'), 'nowhere on the log, nor in its export');
   await off(lad);
   await verified();
 });
