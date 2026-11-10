@@ -456,12 +456,15 @@ export const FIELD_ACTIONS = {
       if (patch.kind && !('role' in patch) && (cur.role || null) === (shiftKind(cur.kind)?.role || null)) {
         patch.role = shiftKind(patch.kind).role;
       }
+      // A name is typed when it comes in different from the one it has: a
+      // form that sends back the made name it was shown hasn't typed one.
+      const typed = typeof patch.title === 'string' && patch.title !== cur.title;
       let custom = cur.title_custom;
       if (patch.title === null) custom = false;
-      else if (typeof patch.title === 'string' && patch.title !== cur.title) custom = true;
+      else if (typed) custom = true;
       if (custom !== cur.title_custom) patch.title_custom = custom;
       const next = { ...cur, ...patch };
-      if (custom === false && typeof patch.title !== 'string') {
+      if (custom === false && !typed) {
         next.title = titleFor(next);
         if (next.title === cur.title) delete patch.title; else patch.title = next.title;
       }

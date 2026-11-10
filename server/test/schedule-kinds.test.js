@@ -119,6 +119,11 @@ test('a typed name is kept; without one the name follows the kind and the place'
   assert.equal((await row(id)).title, 'Burma Shave — 152 St & 64 Ave');
   ok(await c.action('shift.update', { id, capacity: 6 }));
   assert.equal((await row(id)).title, 'Burma Shave — 152 St & 64 Ave', 'nothing to do with the name');
+  // A form that sends the made name back as it was shown hasn't typed one: it still follows.
+  ok(await c.action('shift.update', { id, title: 'Burma Shave — 152 St & 64 Ave', location: 'Scott Rd & 72 Ave' }));
+  s = await row(id);
+  assert.deepEqual([s.title, s.title_custom], ['Burma Shave — Scott Rd & 72 Ave', false]);
+  ok(await c.action('shift.update', { id, location: '152 St & 64 Ave' }));
 
   // Typing a name again wins again.
   ok(await c.action('shift.update', { id, title: 'Sign wave with the candidates' }));

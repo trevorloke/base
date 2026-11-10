@@ -196,16 +196,17 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
         const person = (await tx.query(
           'select id, name, email, phone, tags from persons where id = $1 and workspace_id = $2 and deleted_at is null', [n.person_id, ws],
         )).rows[0];
-        // What to say, as things stand now. A reminder is for tomorrow:
-        // one whose day has come is too late to send.
+        // What to say, as things stand now: their shifts of these that are
+        // not over (as the count before the tap counted them). A reminder
+        // is for tomorrow: one whose day has come is too late to send.
         const shifts = person ? (await tx.query(
           `select a.id as assignment_id, s.title, s.starts_at, s.ends_at, s.location, s.instructions, s.link
              from shift_assignments a join shifts s on s.id = a.shift_id and s.deleted_at is null
             where a.workspace_id = $1 and a.id = any($2::uuid[]) and a.status = any($3::text[])
-              and coalesce(s.ends_at, s.starts_at) >= $4 and s.starts_at >= $5
+              and coalesce(s.ends_at, s.starts_at) >= $4 and ($5::timestamptz is null or s.starts_at >= $5)
             order by s.starts_at, s.id`,
           [ws, parseJ(n.assignment_ids, []), onIt(n.kind), t.toISOString(),
-            n.kind === 'reminder' ? instantOf(addDays(today, 1), '00:00', tz) : t.toISOString()],
+            n.kind === 'reminder' ? instantOf(addDays(today, 1), '00:00', tz) : null],
         )).rows : [];
         if (!shifts.length) {
           await tx.query(

@@ -311,6 +311,21 @@ test('who may: the desk tells a week; a volunteer only when granted Shifts, and 
   assert.equal((await mgr.get('/api/schedule/notices/not-an-id')).status, 404);
 });
 
+test('a shift under way still counts: who the count names is who is told', async () => {
+  connect();
+  emails.length = 0; texts.length = 0;
+  // Tuesday 5 pm: the 4–6 pm shift (Dee, Eli) is on now; Wednesday's (Asha) is to come; Monday's is over.
+  at('2030-05-08T00:00:00Z');
+  const count = ok(await mgr.get(`/api/schedule/week?week=${MON}`));
+  assert.deepEqual([count.people, count.shifts], [3, 2]);
+  const r = ok(await mgr.action('shift.tellWeek', { week: MON }));
+  assert.equal(r.people, 3);
+  await runJobs();
+  assert.deepEqual((await noticesOf(r.batch_id)).map((n) => [n.name, n.email, n.text]),
+    [['Asha Example', 'sent', 'sent'], ['Dee Example', 'sent', 'sent'], ['Eli Example', 'sent', 'sent']]);
+  assert.match(emails.find((m) => m.to[0] === P.dee.email).text, /Tuesday, May 7 at 4:00 p\.m\. – 6:00 p\.m\./);
+});
+
 test('reminders are off until a manager turns them on; then 6 pm the evening before, inside the texting hours', async () => {
   const texting = { allow_from: 9, allow_until: 21, weekend_from: 10, weekend_until: 18 };
   assert.equal(remindAt('2030-05-06', texting, TZ), '2030-05-06T18:00:00-07:00', 'a weekday: 6 pm');
