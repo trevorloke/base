@@ -537,6 +537,42 @@ test('a ladder’s goal “Gave”: a gift brought in counts by the day it was g
   assert.deepEqual([giaRun.status, last(giaRun).result], ['done', 'finished']);
 });
 
+// With a list of electors on file, whose gift it is must be found through
+// the indexes — the email's, and the same-donor one on last and first name
+// (ext/payments sql.js) — never by reading the whole list for each row. A
+// campaign of its own with a few thousand made-up people, so the plan is
+// one a real list would get.
+test('a donor is found through an index, never by reading the whole list', async () => {
+  const { findDonors } = await import('../ext/giftimport/match.js');
+  const big = new Client();
+  const ws2 = (await big.signup({ workspaceName: `Big list ${tag}`, email: mail('biglist') })).json.workspace.id;
+  const mk = async (first, last, extra) => ok(await big.action('person.create', { kind: 'person', first_name: first, last_name: last, ...extra })).person;
+  const ana = await mk('Ana', 'Listed', { email: mail('ana-listed') });
+  const ben = await mk('Ben', 'Listed', { phone: '604-555-0102' });
+  await db.query(
+    `insert into persons (id, workspace_id, kind, name, email, phone, address)
+     select gen_random_uuid(), $1, 'person', 'Filler' || g || ' Person' || g, 'filler' || g || '.' || $2 || '@example.org',
+            '604-555-' || lpad((g % 10000)::text, 4, '0'), g || ' Filler St'
+       from generate_series(1, 3000) g`, [ws2, tag]);
+  await db.query('analyze persons');
+  const seen = [];
+  const recording = { query: (sql, params) => { seen.push({ sql, params }); return db.query(sql, params); } };
+  const donor = (d) => ({ name: null, first: null, last: null, email: null, phone: null, postal: null, address: null, ...d });
+  const found = await findDonors(recording, ws2, [
+    { i: 0, donor: donor({ name: 'Ana Listed', email: mail('ana-listed') }) },
+    { i: 1, donor: donor({ name: 'Ben Listed', first: 'Ben', last: 'Listed', phone: '6045550102' }) },
+    { i: 2, donor: donor({ name: 'Filler7 Person7', phone: '604-555-0007' }) },
+  ]);
+  assert.deepEqual([0, 1, 2].map((i) => found.get(i).person?.name), ['Ana Listed', 'Ben Listed', 'Filler7 Person7']);
+  assert.deepEqual([found.get(0).person.id, found.get(1).person.id], [ana.id, ben.id]);
+  assert.equal(seen.length, 2, 'one read by email, one by name');
+  const plans = [];
+  for (const s of seen) plans.push((await db.query(`explain ${s.sql}`, s.params)).rows.map((r) => Object.values(r)[0]).join('\n'));
+  assert.match(plans[0], /persons_ws_email_idx/, plans[0]);
+  assert.match(plans[1], /persons_same_donor_idx/, plans[1]);
+  for (const plan of plans) assert.doesNotMatch(plan, /Seq Scan on persons/, plan);
+});
+
 test('who may: treasurers and managers bring a file in; the desk settles; volunteers see none of it', async () => {
   const rows = [row({ first: 'Ana', last: 'Example', email: mail('ana'), source_id: 'GL-90' })];
   for (const c of [staff, vol]) {
