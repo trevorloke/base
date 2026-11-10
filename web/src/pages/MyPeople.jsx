@@ -23,7 +23,7 @@ import { NeedsSignal, NoSignal, noSignal, useOnline } from '../components/NoSign
 import { showingCopy } from '../components/OfflineCache.js';
 import { queuedChip, queuedText } from '../components/queued.js';
 import { newClientId, onOutboxSent, queueAction, useOutbox } from '../offline.js';
-import { Icon, firstName, invalidatePersonData, isDnc, smsHref, telHref, textBody, useAction } from './People.jsx';
+import { Icon, firstName, invalidatePersonData, isDnc, noCalls, smsHref, telHref, textBody, useAction } from './People.jsx';
 import './shifts.css';
 import './people.css';
 import './relationships.css';
@@ -143,7 +143,7 @@ function Reach({ link, me, onClose }) {
   const rm = useAction(refresh, { needsSignal: true });
   const online = useOnline();
   const dnc = isDnc(p);
-  const ways = [p.phone && 'phone', p.phone && !noTexts(p) && 'text', 'in_person'].filter(Boolean);
+  const ways = [p.phone && !noCalls(p) && 'phone', p.phone && !noTexts(p) && 'text', 'in_person'].filter(Boolean);
   const [way, setWay] = useState(ways[0]);
   const [picked, setPicked] = useState(null);
   const [said, setSaid] = useState(null);
@@ -185,6 +185,7 @@ function Reach({ link, me, onClose }) {
         <p><span className="chip chip-danger">Do not contact</span></p>
       ) : (
         <>
+          {noCalls(p) && <p><span className="chip chip-danger">Do not call</span></p>}
           {ways.length > 1 ? (
             <div className="rel-how">
               <span className="rel-label" id={howId}>How you talked</span>

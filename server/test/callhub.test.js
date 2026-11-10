@@ -524,20 +524,23 @@ test('the outcome table is filled by pattern and correctable; a correction also 
   let [p] = await pushesOf(`bank=${ok(await mgr.get('/api/banks')).banks.find((b) => b.name === 'Whalley calls').id}`);
   assert.equal(p.results, 3);
   assert.deepEqual(p.dispositions, [
-    { disposition: 'Call back later', n: 2, outcome: 'contacted', auto: true, suggested: 'contacted' },
-    { disposition: 'Supporter', n: 1, outcome: 'contacted', auto: true, suggested: 'contacted' },
+    { disposition: 'Call back later', n: 2, people: 2, outcome: 'contacted', auto: true, suggested: 'contacted' },
+    { disposition: 'Supporter', n: 1, people: 1, outcome: 'contacted', auto: true, suggested: 'contacted' },
   ]);
   assert.equal((await staff.action('callhub.map', { id: p.id, outcomes: { 'Call back later': 'talked' } })).status, 400, 'an outcome base.win has');
   assert.equal((await vol.action('callhub.map', { id: p.id, outcomes: { 'Call back later': 'no_answer' } })).status, 403);
   const fixed = ok(await staff.action('callhub.map', { id: p.id, outcomes: { 'call back LATER ': 'no_answer' } }));
   assert.equal(fixed.changed, 2, 'the two already filed');
   [p] = await pushesOf(`bank=${ok(await mgr.get('/api/banks')).banks.find((b) => b.name === 'Whalley calls').id}`);
-  assert.deepEqual(p.dispositions[0], { disposition: 'Call back later', n: 2, outcome: 'no_answer', auto: false, suggested: 'contacted' });
+  assert.deepEqual(p.dispositions[0], { disposition: 'Call back later', n: 2, people: 2, outcome: 'no_answer', auto: false, suggested: 'contacted' });
   const ben = (await contactsOf(P.ben.id)).filter((c) => /Whalley/.test(c.note || ''));
   assert.deepEqual(ben.map((c) => c.outcome).sort(), ['contacted', 'no_answer']);
   // …and the next one with that result follows the correction.
   await fake.note({ contact: '+16045550102', disposition: 'CALL BACK LATER', campaign: 'Whalley', notes: 'third' });
   assert.equal((await contactsOf(P.ben.id))[0].outcome, 'no_answer');
+  // However it is spelt it is one row, and Ben — who has it both ways — is one person.
+  [p] = await pushesOf(`bank=${ok(await mgr.get('/api/banks')).banks.find((b) => b.name === 'Whalley calls').id}`);
+  assert.deepEqual([p.dispositions[0].n, p.dispositions[0].people], [3, 2]);
   // Back to the pattern.
   ok(await staff.action('callhub.map', { id: p.id, outcomes: { 'Call back later': null } }));
   assert.equal((await contactsOf(P.ben.id))[0].outcome, 'contacted');
@@ -1052,6 +1055,54 @@ test('a do-not-call number CallHub won’t take is remembered and said, with who
   }
 });
 
+test('a number CallHub won’t let go, or never named, stays on its list: nothing stops, and Check says how many', async () => {
+  const a = await mgr.createPerson('Held A Example', { phone: '604-555-0146', tags: ['do-not-call'] });
+  const b = await mgr.createPerson('Held B Example', { phone: '604-555-0147', tags: ['do-not-call'] });
+  await drain();
+  assert.equal(fake.dnc.filter((d) => ['+16045550146', '+16045550147'].includes(d.phone_number)).length, 2);
+  const check = async () => ok(await mgr.post('/api/connections/check', { key: 'callhub' })).said;
+  assert.doesNotMatch(await check(), /nobody here blocks/);
+  // CallHub never said which entry the first one was; and it refuses to delete the second.
+  await db.query(`update callhub_dnc set entry = null where workspace_id = $1 and phone = '+16045550146'`, [ws]);
+  const realFetch = globalThis.fetch;
+  let deletes = 0;
+  globalThis.fetch = async (url, init) => {
+    if (init?.method === 'DELETE' && String(url).includes('/dnc_contacts/')) {
+      deletes += 1;
+      return new Response(JSON.stringify({ detail: 'Method "DELETE" not allowed.' }), { status: 405, headers: { 'content-type': 'application/json' } });
+    }
+    return realFetch(url, init);
+  };
+  try {
+    ok(await mgr.action('person.update', { id: a.id, tags: [] }));
+    ok(await mgr.action('person.update', { id: b.id, tags: [] }));
+    await drain();
+    assert.equal(deletes, 1, 'asked once for the one CallHub named');
+    assert.match(await check(), / · CallHub’s do-not-call list still has 2 numbers nobody here blocks now — take them off in CallHub$/);
+    // Not asked again each time someone's tags change; no job gave up; a push still goes.
+    ok(await mgr.action('person.update', { id: b.id, tags: ['newton'] }));
+    await drain();
+    assert.equal(deletes, 1);
+    assert.equal((await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'callhub.dnc' and status in ('failed', 'pending')`, [ws])).rows[0].n, 0);
+    const list = ok(await mgr.action('list.create', { name: 'Held list', kind: 'people', person_ids: [a.id, b.id] })).list.id;
+    ok(await mgr.action('callhub.push', { list_id: list }));
+    await drain();
+    const [p] = await pushesOf(`list=${list}`);
+    assert.deepEqual([p.status, p.sent, p.note], ['sent', 2, null]);
+    assert.equal(deletes, 2, 'once more with the push');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  // Once CallHub lets it go (the next push asks again), one is left: the one it never named.
+  const again = ok(await mgr.action('list.create', { name: 'Held list 2', kind: 'people', person_ids: [a.id] })).list.id;
+  ok(await mgr.action('callhub.push', { list_id: again }));
+  await drain();
+  assert.ok(!fake.dnc.some((d) => d.phone_number === '+16045550147'));
+  assert.match(await check(), / · CallHub’s do-not-call list still has 1 number nobody here blocks now — take it off in CallHub$/);
+  // (Tidy: the stand-in still has it; base.win's record of it goes so later counts are their own.)
+  await db.query(`delete from callhub_dnc where workspace_id = $1 and phone = '+16045550146'`, [ws]);
+});
+
 test('with many numbers not to call the push says what it is doing first, instead of “0 of N” with no words', async () => {
   const a = await mgr.createPerson('Patient Example', { phone: '604-555-0145' });
   const list = ok(await mgr.action('list.create', { name: 'Patient list', kind: 'people', person_ids: [a.id] })).list.id;
@@ -1059,6 +1110,7 @@ test('with many numbers not to call the push says what it is doing first, instea
   await db.query(
     `insert into texting_optouts (id, workspace_id, phone, opted_out, keyword) select gen_random_uuid(), $1, x, true, 'STOP' from unnest($2::text[]) as x`, [ws, rows],
   );
+  await drain();
   ok(await mgr.action('callhub.push', { list_id: list }));
   await runDueJobs(db, { workspaceId: ws, limit: 1 }); // one run: fifty of the fifty-five
   let [p] = await pushesOf(`list=${list}`);

@@ -49,23 +49,37 @@ api.get('/callhub/preview', async (c) => {
 
 // A push's results, counted: each of CallHub's results with what it counts
 // as (auto: by the pattern table, not the desk's own word; suggested: what
-// the pattern table says), and each survey question seen with its answers
+// the pattern table says; people: how many people have that result — who a
+// change to the row is about), and each survey question seen with its answers
 // and the rating an answer is mapped to (support: the question that rates).
 const resultsOf = async (db, ws, push) => {
   const own = parseJ(push.outcomes, {});
   const map = parseJ(push.rating_map, null);
   const byResult = new Map();
   let results = 0;
+  const spelt = new Map(); // a result's spellings ("No Answer", "no answer"), when it has more than one
   for (const r of (await db.query(
-    'select disposition, count(*)::int as n from callhub_results where workspace_id = $1 and push_id = $2 group by disposition', [ws, push.id],
+    `select disposition, count(*)::int as n, count(distinct person_id)::int as people
+       from callhub_results where workspace_id = $1 and push_id = $2 group by disposition`, [ws, push.id],
   )).rows) {
     results += r.n;
     const key = norm(r.disposition);
     const row = byResult.get(key) || {
-      disposition: String(r.disposition || '').trim(), n: 0, outcome: outcomeFor(r.disposition, own), auto: !Object.hasOwn(own, key), suggested: outcomeFor(r.disposition),
+      disposition: String(r.disposition || '').trim(), n: 0, people: 0, outcome: outcomeFor(r.disposition, own), auto: !Object.hasOwn(own, key), suggested: outcomeFor(r.disposition),
     };
     row.n += r.n;
+    row.people += r.people;
     byResult.set(key, row);
+    spelt.set(key, [...(spelt.get(key) || []), r.disposition]);
+  }
+  // Someone with the result under two spellings is one person.
+  for (const [key, ways] of spelt) {
+    if (ways.length < 2) continue;
+    byResult.get(key).people = (await db.query(
+      `select count(distinct person_id)::int as n from callhub_results
+        where workspace_id = $1 and push_id = $2 and (disposition = any($3::text[]) or ($4::boolean and disposition is null))`,
+      [ws, push.id, ways.filter((w) => w != null), ways.some((w) => w == null)],
+    )).rows[0].n;
   }
   // The questions, from the newest results (their answers are in the raw result).
   const questions = new Map();

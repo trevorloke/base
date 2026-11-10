@@ -11,9 +11,12 @@
 // call on the person's history, credited to the caller when their CallHub
 // email is their sign-in; "What each result counts as" is filled in by
 // pattern and correctable, and a rating comes only from the question and
-// answers someone picks. A phone bank is sent the same way; a number CallHub
-// calls is crossed off there. A refusal stops the push with CallHub's words
-// and Carry on finishes it. With CallHub off there is no button at all.
+// answers someone picks. A pick that would tag people do-not-call or rate
+// them asks first, in place; "No" changes nothing, and putting a row back
+// takes the tag (and CallHub's entry) off again. A phone bank is sent the
+// same way; a number CallHub calls is crossed off there. A refusal stops the
+// push with CallHub's words, Carry on finishes it, and "Send again" is only
+// offered quietly beside it. With CallHub off there is no button at all.
 // Measured at 1440 and 390.
 //
 //   node e2e-callhub.mjs     (starts its own server on :4980 and the stand-in on :4981;
@@ -148,7 +151,7 @@ await page.screenshot({ path: `${SHOTS}/02-list-before-1440.png` });
 await page.click(`${ch} .ch-head .btn`);
 await page.waitForSelector(`${ch} .ch-ask strong`, { timeout: 10000 });
 const ask = await text(page, `${ch} .ch-ask`);
-check('it asks first: “9 numbers to send · 3 left out (no number, or do not call)”, and what goes', /^9 numbers to send · 3 left out \(no number, or do not call\) Only names, numbers and cities go\./.test(ask), ask);
+check('it asks first: “9 numbers to send for 10 people · 3 left out (no number, or do not call)”, and what goes', /^9 numbers to send for 10 people · 3 left out \(no number, or do not call\) Only names, numbers and cities go\./.test(ask), ask);
 await page.screenshot({ path: `${SHOTS}/03-list-ask-1440.png` });
 const before = fake.calls.length;
 await page.click(`${ch} .ch-ask button:has-text("Send")`);
@@ -165,7 +168,7 @@ check('…the same on a phone', /^(Sending · \d of 9|Sent · 9 numbers)/.test(a
 await page.waitForFunction((s) => /^Sent/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-status`, { timeout: 60000 }).catch(() => {});
 const done = await text(page, `${ch} .ch-push`);
 check('then: “Sent · 9 numbers”, the phonebook’s name, who was left out, who sent it, and what to do next',
-  /^Sent · 9 numbers · \d{1,2}:\d{2}/.test(done) && /Phonebook in CallHub: “Undecided in Newton — [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [ap]m” · 3 left out · sent by Marco Manager/.test(done)
+  /^Sent · 9 numbers · \d{1,2}:\d{2} [ap]m /.test(done) && /Phonebook in CallHub: “Undecided in Newton — [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [ap]m” · 3 left out · sent by Marco Manager/.test(done)
   && /Next: start the calling campaign on this phonebook in CallHub\./.test(done), done);
 const sent = fake.upserts().filter((c) => c.status < 300).map((c) => c.params);
 const left = JSON.stringify(sent);
@@ -221,11 +224,62 @@ check('before a question is picked nobody’s rating has moved', benBefore === n
 await page.selectOption(`${ch} .ch-rate .field select`, 'Can we count on your support?');
 await page.waitForSelector(`${ch} .ch-rate .ch-map__row`, { timeout: 10000 });
 await page.selectOption(`${ch} .ch-rate .ch-map__row:has(label:has-text("Yes, definitely")) select`, '1');
+await page.waitForSelector(`${ch} .ch-confirm`, { timeout: 10000 });
+const rateAsk = await text(page, `${ch} .ch-confirm`);
+check('an answer picked to rate people asks first, in place — nobody is rated until Yes',
+  /^Rate everyone who answered “Yes, definitely” .+\? Yes No$/.test(rateAsk) && (await api(`/persons/${P.ana}`)).json.person.rating === null
+  && (await page.evaluate(() => document.activeElement?.textContent)) === 'No', rateAsk);
+await page.screenshot({ path: `${SHOTS}/07-list-rating-ask-1440.png`, fullPage: true });
+await page.click(`${ch} .ch-confirm button:has-text("Yes")`);
 await page.waitForFunction((s) => /2 results already in moved too/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
+check('…then: “Saved · 2 results already in moved too · 2 people rated”', (await text(page, `${ch} .ch-results [role="status"]`)) === 'Saved · 2 results already in moved too · 2 people rated', await text(page, `${ch} .ch-results [role="status"]`));
 const ana = (await api(`/persons/${P.ana}`)).json;
 check('“Yes, definitely” mapped to the scale’s first step: Ana and Alex are rated; “Not sure yet”, unmapped, rates nobody',
   ana.person.rating === '1' && (await api(`/persons/${P.alex}`)).json.person.rating === '1' && (await api(`/persons/${P.ben}`)).json.person.rating === null, ana.person.rating);
 await page.screenshot({ path: `${SHOTS}/07-list-rating-1440.png`, fullPage: true });
+
+// A slip on a result's row: one key on "Answered" would make every supporter reached do-not-call.
+const tagged = async (id) => (await api(`/persons/${id}`)).json.person.tags.includes('do-not-call');
+const answered = `${ch} .ch-results > .ch-map .ch-map__row:has(label:has-text("Answered"))`;
+await page.focus(`${answered} select`);
+await page.keyboard.press('d');
+await page.waitForSelector(`${answered} .ch-confirm`, { timeout: 10000 });
+const dncAsk = await text(page, `${answered} .ch-confirm`);
+check('“Do not call” on a row asks first: “Tag 3 people do-not-call? They leave every call list.” — and nothing is tagged',
+  dncAsk === 'Tag 3 people do-not-call? They leave every call list. Yes No' && !(await tagged(P.ana)) && !(await tagged(P.ben))
+  && (await page.$eval(`${answered} select`, (el) => el.selectedOptions[0].innerText)) === 'Talked', dncAsk);
+await page.locator(answered).scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${SHOTS}/10-do-not-call-ask-1440.png` });
+await phone.goto(`${ADMIN}/lists/${listId}`, { waitUntil: 'domcontentloaded' });
+await phone.waitForFunction((s) => /results back/.test(document.querySelector(s)?.innerText || ''), ch, { timeout: 10000 }).catch(() => {});
+await phone.tap(`${ch} .ch-push .disclose`);
+await phone.waitForSelector(`${answered} select`, { timeout: 10000 });
+await phone.selectOption(`${answered} select`, 'do_not_call');
+await phone.waitForSelector(`${answered} .ch-confirm`, { timeout: 10000 });
+await phone.locator(`${answered} .ch-confirm`).scrollIntoViewIfNeeded();
+await phone.screenshot({ path: `${SHOTS}/10-do-not-call-ask-390.png` });
+m = await measure(phone, ch);
+check('the ask at 390: no sideways scroll, Yes and No ≥ 48px', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+await page.keyboard.press('Enter'); // focus is on No
+await page.waitForSelector(`${answered} .ch-confirm`, { state: 'detached', timeout: 10000 }).catch(() => {});
+check('“No” (where the keyboard lands): the row is as it was, and nobody is tagged', !(await page.$(`${ch} .ch-confirm`)) && !(await tagged(P.ana))
+  && (await api(`/persons/${P.ana}`)).json.contacts[0].outcome === 'contacted', '');
+// Meant, on another row — and then put back: the tag comes off again, at CallHub too.
+const voicemail = `${ch} .ch-results > .ch-map .ch-map__row:has(label:has-text("Left voicemail"))`;
+await page.selectOption(`${voicemail} select`, 'do_not_call');
+await page.click(`${voicemail} .ch-confirm button:has-text("Yes")`);
+await page.waitForFunction((s) => /tagged do-not-call/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
+check('Yes: “Saved · 1 result already in moved too · 1 person tagged do-not-call”',
+  (await text(page, `${ch} .ch-results [role="status"]`)) === 'Saved · 1 result already in moved too · 1 person tagged do-not-call' && await tagged(P.eli), await text(page, `${ch} .ch-results [role="status"]`));
+for (let i = 0; i < 20 && !fake.dnc.some((d) => d.phone_number === '+16045550105'); i += 1) await sleep(500);
+check('…and CallHub is told', fake.dnc.some((d) => d.phone_number === '+16045550105' && d.category === 1), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
+await page.selectOption(`${voicemail} select`, 'left_message');
+await page.waitForFunction((s) => /no longer do-not-call/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
+check('put back: “Saved · 1 result already in moved too · 1 person is no longer do-not-call”',
+  (await text(page, `${ch} .ch-results [role="status"]`)) === 'Saved · 1 result already in moved too · 1 person is no longer do-not-call' && !(await tagged(P.eli)), await text(page, `${ch} .ch-results [role="status"]`));
+for (let i = 0; i < 20 && fake.dnc.some((d) => d.phone_number === '+16045550105'); i += 1) await sleep(500);
+check('…and the number comes off CallHub’s do-not-call list again', !fake.dnc.some((d) => d.phone_number === '+16045550105'), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
+await page.screenshot({ path: `${SHOTS}/11-put-back-1440.png`, fullPage: true });
 m = await measure(page, ch);
 check('the list’s page at 1440: one yellow button at most, nothing to tap under 48px in the CallHub block', m.yellow <= 1 && m.minTap >= 48, JSON.stringify(m));
 
@@ -258,7 +312,7 @@ const gus = (await api(`/persons/${P.gus}`)).json;
 check('“Do not call” is a refusal, and Gus is tagged do-not-call', gus.contacts[0].outcome === 'refused' && gus.person.tags.includes('do-not-call'), JSON.stringify(gus.person.tags));
 await phone.goto(`${ADMIN}/people/${P.gus}`, { waitUntil: 'domcontentloaded' });
 await phone.waitForSelector('.pf-meta', { timeout: 10000 });
-check('…his profile says “Do not call” by his name', /Do not call/.test(await text(phone, '.pf-meta')), await text(phone, '.pf-meta'));
+check('…his profile says “Do not call” by his name, and offers no Call to tap', /Do not call/.test(await text(phone, '.pf-meta')) && !(await phone.$('.pf-acts .pf-act:has-text("Call")')) && !(await phone.$('a[href^="tel:"]')), await text(phone, '.pf-meta'));
 await phone.screenshot({ path: `${SHOTS}/08-person-do-not-call-390.png` });
 await sleep(2500);
 check('…and his number went to CallHub’s do-not-call list by itself', fake.dnc.some((d) => d.phone_number === '+16045550107' && d.category === 1), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
@@ -281,8 +335,9 @@ await page.waitForSelector(`${ch} .ch-ask strong`, { timeout: 10000 });
 check('it asks: the one number still to call', /^1 number to send/.test(await text(page, `${ch} .ch-ask`)), await text(page, `${ch} .ch-ask`));
 await page.click(`${ch} .ch-ask button:has-text("Send")`);
 await page.waitForFunction((s) => /^Stopped/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-status`, { timeout: 30000 }).catch(() => {});
-check('a refusal: “Stopped: CallHub said “Invalid token.”” and Carry on',
-  (await text(page, `${ch} .ch-status`)) === 'Stopped: CallHub said “Invalid token.”' && (await text(page, `${ch} .ch-push > .btn`)) === 'Carry on', await text(page, `${ch} .ch-push`));
+check('a refusal: “Stopped: CallHub said “Invalid token.” · 0 of 1 sent”, Carry on first, and “Send again” only quietly beside it',
+  (await text(page, `${ch} .ch-status`)) === 'Stopped: CallHub said “Invalid token.” · 0 of 1 sent' && (await text(page, `${ch} .ch-stopped`)) === 'Carry on Send again instead'
+  && !(await page.$(`${ch} .ch-head .btn`)) && (await page.$eval(`${ch} .ch-stopped .btn:last-child`, (el) => el.classList.contains('btn-quiet'))), await text(page, `${ch} .ch-push`));
 await page.locator(ch).scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOTS}/09-bank-stopped-1440.png` });
 await phone.goto(`${ADMIN}/banks/${bankId}`, { waitUntil: 'domcontentloaded' });
@@ -292,9 +347,9 @@ await phone.screenshot({ path: `${SHOTS}/09-bank-stopped-390.png` });
 m = await measure(phone, ch);
 check('the bank’s page at 390: no sideways scroll, Carry on ≥ 48px', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
 fake.refuse(false);
-await phone.tap(`${ch} .ch-push > .btn`);
+await phone.tap(`${ch} .ch-stopped .btn:first-child`);
 await phone.waitForFunction((s) => /^Sent/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-status`, { timeout: 30000 }).catch(() => {});
-check('Carry on, from the phone: “Sent · 1 number”', /^Sent · 1 number ·/.test(await text(phone, `${ch} .ch-status`)), await text(phone, `${ch} .ch-status`));
+check('Carry on, from the phone: “Sent · 1 number”, in the same phonebook', /^Sent · 1 number ·/.test(await text(phone, `${ch} .ch-status`)) && [...fake.phonebooks.values()].filter((b) => /^Newton evening/.test(b.name)).length === 1, await text(phone, `${ch} .ch-status`));
 
 // ── Off: no button at all ──
 const off = await dctx.newPage();

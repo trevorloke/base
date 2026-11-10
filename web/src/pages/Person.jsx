@@ -201,7 +201,7 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit }) {
       </div>
       {(tiles || person.address) && (
         <div className={`pf-acts${tiles ? '' : ' pf-acts--quiet'}`}>
-          {person.phone && (on.voice === false ? (
+          {person.phone && !noCalls(person) && (on.voice === false ? (
             <a className="btn pf-act" href={telHref(person.phone)} onClick={() => onLog('phone')}>
               <Icon name="phone" /> Call
             </a>
@@ -580,7 +580,7 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
         <li>
           <span className="k">Phone</span>
           <span className="v">{person.phone
-            ? (ownDialler ? <a className="mono" href={telHref(person.phone)}>{person.phone}</a> : <span className="mono">{person.phone}</span>)
+            ? (ownDialler && !noCalls(person) ? <a className="mono" href={telHref(person.phone)}>{person.phone}</a> : <span className="mono">{person.phone}</span>)
             : none}</span>
         </li>
         {desk && (

@@ -41,8 +41,24 @@
 .ch-rate .field { margin-bottom: 0; }
 .ch-rate .field .ch-select { flex: none; width: 100%; }
 
+
+/* A pick that tags or rates people asks first, under its own row: the words, then Yes · No */
+.ch-confirm { flex: 1 1 100%; padding: var(--s-2) var(--s-3); background: var(--paper-1); border-radius: var(--r-card); }
+.ch-confirm > span { flex: 1 1 220px; min-width: 0; font-size: 14px; color: var(--text-1); overflow-wrap: anywhere; }
+.ch-rate .field .ch-confirm { margin-top: var(--s-2); }
+/* The picked question in full (a phone's closed select cuts it short) */
+.ch .ch-question { margin: var(--s-1) 0 0; }
+/* A stopped push: Carry on, and quietly beside it, Send again instead */
+.ch-stopped { margin-top: var(--s-2); }
+.ch .ops-meta a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.ch-nottaken { padding-top: var(--s-3); border-top: 1px solid var(--rule); }
+.ch .ch-nottaken { margin-top: var(--s-3); }
+
 @media (max-width: 560px) {
   .ch { padding: var(--s-3); }
   .ch-head .btn { width: 100%; }
   .ch .ch-select { flex: 1 1 100%; width: 100%; }
+  /* The question on its own line, Yes and No side by side under it */
+  .ch-confirm > span { flex-basis: 100%; }
+  .ch-confirm .btn { flex: 1 1 0; }
 }
