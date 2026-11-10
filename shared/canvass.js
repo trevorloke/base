@@ -65,10 +65,12 @@ export const VOLUNTEER_ROLE_CODES = VOLUNTEER_ROLES.map((r) => r.code);
 export const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'x', 'tiktok', 'reddit', 'youtube', 'linkedin', 'bluesky', 'other'];
 
 // Tags are free-form; these seed the picker so the vocabulary stays consistent.
+// do-not-call: no phone bank, no call through the campaign's number, never
+// sent to the dialer — texts, email and the door are untouched.
 export const SUGGESTED_TAGS = [
   'media', 'VIP', 'endorser', 'host', 'donor-prospect', 'lapsed',
   'newsletter', 'petition', 'youth', 'senior', 'business', 'faith',
-  'union', 'do-not-contact',
+  'union', 'do-not-call', 'do-not-contact',
 ];
 
 // Donor tiers, derived from real gifts — never self-declared.

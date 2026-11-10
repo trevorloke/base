@@ -75,6 +75,7 @@ const PATH_AREA = [
   [/^\/api\/fields(\/|$)/, 'admin'],
   [/^\/api\/learn\/progress$/, 'learn'],
   [/^\/api\/(banks|lists)(\/|$)/, 'people'],
+  [/^\/api\/callhub(\/|$)/, 'people'],
   [/^\/api\/persons(\/|$)/, 'people'],
   [/^\/api\/duplicates$/, 'people'],
   [/^\/api\/passes(\/|$)/, 'map'],

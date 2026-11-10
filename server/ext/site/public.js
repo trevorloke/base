@@ -618,6 +618,7 @@ const SHARED = [
   [['GET', 'HEAD'], /^\/media\/[^/]+$/],
   [['POST'], /^\/stripe\/webhook$/],
   [['POST'], TWILIO],
+  [['POST'], /^\/hooks\/callhub\/[0-9a-f]{32}$/], // the dialer's call results (ext/callhub)
   [['GET', 'HEAD', 'POST'], UNSUBSCRIBE],
 ];
 const shared = (c) => SHARED.some(([methods, path]) => methods.includes(c.req.method) && path.test(c.req.path));

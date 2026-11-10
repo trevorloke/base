@@ -26,7 +26,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import {
-  e164, NO_TEXT_TAG, NO_CONTACT_TAG, MAX_BODY, PER_MINUTE,
+  e164, NO_TEXT_TAG, NO_CONTACT_TAG, NO_CALL_TAG, MAX_BODY, PER_MINUTE,
   namesCampaign, withFooter, hasBlanks,
 } from './rules.js';
 import { smsReady, voiceReady, publicBase, sendSms, ringCaller } from './twilio.js';
@@ -209,6 +209,7 @@ export const actions = {
       const to = e164(person.phone);
       if (!to) throw httpError(400, `No number to call for ${firstWord(person.name)}`);
       if (tagsOf(person).includes(NO_CONTACT_TAG)) throw httpError(409, `${firstWord(person.name)} is marked do not contact`);
+      if (tagsOf(person).includes(NO_CALL_TAG)) throw httpError(409, `${firstWord(person.name)} asked not to be called`);
       const quiet = quietState(await settingsFor(tx, ctx.workspaceId), ctx.workspace);
       if (quiet.now) throw httpError(409, `Quiet hours — calls open at ${quiet.opens}`);
 

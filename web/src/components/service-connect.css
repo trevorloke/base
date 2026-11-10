@@ -1,0 +1,4 @@
+/* Settings → Services: a row's Connect (components/ServiceConnect.jsx) */
+.svc-connect { margin-top: var(--s-2); }
+.svc-connect .btn { min-height: 48px; }
+.svc-connect .sv2-said { margin-top: var(--s-2); }

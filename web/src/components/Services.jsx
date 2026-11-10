@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, apiPost } from '../api.js';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
+import ServiceConnect from './ServiceConnect.jsx';
 import './services.css';
 
 const STATE_WORD = { ready: 'Set up', missing: 'Not set up', default: 'Using the free default', test: 'Test mode' };
@@ -37,6 +38,7 @@ function Row({ s, online }) {
           <p className="sv2-missing">Set in the hosting’s environment: {s.missing.map((k) => <code key={k}>{k}</code>).reduce((a, b) => [a, ' · ', b])}</p>
         )}
         {s.webhook && <Webhook w={s.webhook} />}
+        {s.connect && <ServiceConnect connect={s.connect} online={online} />}
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
       </div>
       {s.checkable && (

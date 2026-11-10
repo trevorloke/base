@@ -763,6 +763,17 @@ test('a text from a number nobody texted counts as new for the desk, not for a v
   assert.ok(conv && conv.unread && !conv.person_id);
 });
 
+test('someone tagged do-not-call is never called through the campaign; texting them is another matter', async () => {
+  const nico = await desk.createPerson('Nico Example', { phone: '604-555-0150', tags: ['do-not-call'] });
+  const n = calls().length;
+  const r = await desk.action('call.start', { person_id: nico.id });
+  assert.equal(r.status, 409, JSON.stringify(r.json));
+  assert.match(r.json.error, /^Nico asked not to be called$/);
+  assert.equal(calls().length, n, 'nothing rang');
+  const card = (await desk.get(`/api/texting/people/${nico.id}`)).json;
+  assert.deepEqual([card.textable, card.opted_out, card.no_contact], [true, false, false], 'do-not-call is about calls only');
+});
+
 test('one person tapping Send: a scripted burst is refused', async () => {
   const burst = await desk.createPerson('Burst Example', { phone: '604-555-0149' });
   let refused = null;
