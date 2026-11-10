@@ -222,10 +222,11 @@ What happens:
   Mailchimp is turned off here — off the newsletter list, or *do-not-email*
   when they were never on it — with a no on the consent record (source
   `mailchimp-unsubscribe`), unless they have said yes *here themselves*
-  since they left there (ticked the newsletter box on the campaign's
-  website, or used their own link from an email): a newer yes of their own
-  is not undone by an older no. An address the team typed in or imported
-  is the team's word, not theirs, and does not count. An address
+  since they left there (ticked the newsletter box on the website base.win
+  serves, or used their own link from an email): a newer yes of their own
+  is not undone by an older no. An address the team typed in or imported,
+  or one another website's server sent in, comes without the words they
+  saw: it is not their yes here, and does not count. An address
   Mailchimp *cleaned* (it bounced for good) goes on the suppression list, so
   nothing here emails it either. Three ways it arrives: Mailchimp's webhook,
   the moment it happens; a job every night, for anything a webhook missed
@@ -292,10 +293,11 @@ cleaned addresses to this server — *tap Connect* when it doesn't, or when
 it points at an address made from an earlier key. With
 `MAILCHIMP_WEBHOOK_SECRET` set it also says when that secret would have
 Mailchimp's deliveries refused: the webhook isn't a signed one, or the last
-thing it sent didn't match the secret. The line under the
-buttons says when the last pull was and what it found, and how many of
-base.win's unsubscribes Mailchimp has not been told yet, with what Mailchimp
-last said about one of them (Pull now sends them again).
+thing it sent didn't match the secret. The line under the buttons says when
+the last pull was and what it found (or that it stopped, in Mailchimp's
+words), and how many of base.win's unsubscribes Mailchimp has not been told
+yet, with what Mailchimp last said about one of them (Pull now sends them
+again).
 
 What it does not do: people who said no in base.win **before** Mailchimp was
 connected are not told to Mailchimp by themselves — a list sent from here

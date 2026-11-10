@@ -4,9 +4,11 @@
 // otherwise. A tap asks first — how many addresses go: only the newsletter's
 // subscribers, or, with one tick, everyone on the list who can be emailed —
 // then the work happens in the background and the line under the buttons
-// says how it stands: "Syncing with Mailchimp · 120 to go", "In Mailchimp ·
-// 212 addresses · tag “base.win: Members”", or "Stopped: Mailchimp said … ·
-// Try again". Once sent, the button reads "Sync again".
+// says how it stands: "Syncing with Mailchimp · 120 to go" (and "trying
+// again soon (Mailchimp said: …)" while it waits out a refusal that will
+// pass), "In Mailchimp · 212 addresses · tag “base.win: Members”", or
+// "Stopped: Mailchimp said … · Try again". Once sent, the button reads
+// "Sync again". A read that fails says "Unavailable — Try again".
 // It sits in the page's row of buttons; what it opens takes the row's whole
 // width underneath (send-to-mailchimp.css).
 import { useState } from 'react';
@@ -35,7 +37,7 @@ function Status({ s, running }) {
     if (!running) return <p className="mc-line"><strong>Waiting</strong> · background work is off on this server</p>;
     return (
       <p className="mc-line">
-        <strong>Syncing with Mailchimp</strong>{s.todo > 0 ? ` · ${num(s.todo)} to go` : ''}{s.note ? ` · ${s.note} — trying again soon` : ''}
+        <strong>Syncing with Mailchimp</strong>{s.todo > 0 ? ` · ${num(s.todo)} to go` : ''}{s.note ? ` · trying again soon (${s.note})` : ''}
       </p>
     );
   }
@@ -59,6 +61,9 @@ function Status({ s, running }) {
 export default function SendToMailchimp({ listId }) {
   const online = useOnline();
   const queryClient = useQueryClient();
+  // Whether Mailchimp is on at all (the read "Send to CallHub" shares). With
+  // no answer there is nothing to show, not even "Unavailable": most
+  // campaigns have no Mailchimp to be unavailable.
   const on = useQuery({ queryKey: ['integrations'], queryFn: () => apiGet('/integrations'), staleTime: 5 * 60_000, retry: false });
   const isOn = Boolean(on.data?.mailchimp);
   const key = ['mailchimp', 'list', listId];

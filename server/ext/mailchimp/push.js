@@ -16,12 +16,13 @@
 //      false: a member already there is never changed, and nobody
 //      unsubscribed there is ever put back
 //   3. the tag (a static segment named "base.win: <list>") gains who is
-//      missing and loses who left the list — the difference against who is
-//      in it now
+//      missing and loses who left the list — the difference against
+//      everyone in it now, whoever unsubscribed there included
 // It works in parts of about 20 seconds so a big list never holds up the
-// other background work; how far it got is kept on the sync (cursor), so a
-// part, or a retry after Mailchimp said "too many", carries on from there
-// and an address Mailchimp refused is not offered twice in one sync.
+// other background work; how far it got is kept on the sync (cursor), so
+// the next part, or a retry after Mailchimp said "too many", carries on
+// from there: an address Mailchimp refused is not offered again by a later
+// part, and is counted once however often its own part is tried.
 // Mailchimp's "too many" (429) or a fault of its own fails the job, which
 // the job runner tries again later; a refusal that waiting won't change (the
 // key, the audience) stops the sync with Mailchimp's words.

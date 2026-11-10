@@ -92,7 +92,7 @@ export default function MailchimpPanel({ online, onChanged }) {
           </div>
         </div>
       )}
-      <p className="sv2-detail mcp-pull" role="status" aria-live="polite">{line}</p>
+      <p className={`sv2-detail mcp-pull${d?.pull_ok === false && !pulling ? ' is-stopped' : ''}`} role="status" aria-live="polite">{line}</p>
       {d?.waiting > 0 && (
         <p className="sv2-detail mcp-waiting">
           {num(d.waiting)} {d.waiting === 1 ? 'unsubscribe' : 'unsubscribes'} here still to tell Mailchimp{d.waiting_note ? ` (${d.waiting_note})` : ''} — Pull now sends {d.waiting === 1 ? 'it' : 'them'} again.
