@@ -2,12 +2,13 @@
 //                                        ?counts=1 how many addresses would go: only the newsletter's subscribers, or everyone
 //                                        on the list who can be emailed. Counts only; never an address or a key.
 // GET /mailchimp                         managers: what the last pull said, whether one is under way, and how many
-//                                        unsubscribes Mailchimp has not been told yet (Settings → Services)
+//                                        unsubscribes Mailchimp has not been told yet — with its own words for why
+//                                        (Settings → Services)
 import { Hono } from 'hono';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { loadList } from '../lists/audience.js';
 import { mailchimpOn } from './mailchimp.js';
-import { optoutsWaiting } from './optout.js';
+import { optoutsWaiting, optoutsWhy } from './optout.js';
 import { pulling } from './pull.js';
 import { countsFor, jobLive, syncOut } from './push.js';
 
@@ -39,6 +40,7 @@ api.get('/mailchimp', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db'); const ws = ctx.workspaceId;
   if (ctx.role !== 'manager') return c.json({ error: 'managers only' }, 403);
   const s = (await db.query('select pulled_at, pull_ok, pull_note from mailchimp_state where workspace_id = $1', [ws])).rows[0];
+  const waiting = await optoutsWaiting(db, ws);
   return c.json({
     on: mailchimpOn(),
     running: jobRunnerOn(),
@@ -46,6 +48,7 @@ api.get('/mailchimp', async (c) => {
     pulled_at: s?.pulled_at || null,
     pull_ok: s?.pull_ok ?? null,
     pull_note: s?.pull_note || null,
-    waiting: await optoutsWaiting(db, ws),
+    waiting,
+    waiting_note: waiting ? await optoutsWhy(db, ws) : null,
   });
 });

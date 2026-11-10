@@ -11,10 +11,13 @@
 // left as it is. base.win never moves anyone in Mailchimp to subscribed —
 // not here, not anywhere (a sync adds new addresses and never changes one
 // already there).
+// One address Mailchimp will not change never holds up the others: they are
+// told, and the job keeps only who is still to tell — which is what Settings
+// → Services counts, with Mailchimp's own words for why.
 // What happened before Mailchimp was connected is not sent by itself
 // (INTEGRATIONS.md says so): a list sent from here never includes them.
 import { enqueueJob } from '../../lib/jobs.js';
-import { audienceId, lower, mailchimp, mailchimpOn, memberHash } from './mailchimp.js';
+import { audienceId, keyFor, lower, mailchimp, mailchimpOn, MailchimpError, memberHash } from './mailchimp.js';
 import { OPTOUT_JOB, PULL_ACTION, readMember } from './pull.js';
 
 const NO_EMAIL = 'do-not-email';
@@ -63,23 +66,62 @@ export const onEvents = async (tx, meta, events) => {
   }
 };
 
+// A refusal about this one member (Mailchimp answered, and said no to the
+// change) — not Mailchimp failing to answer, and not the key being refused.
+const aboutThisOne = (e) => e instanceof MailchimpError && !e.retryable && ![401, 403].includes(e.httpStatus);
+
 // payload { emails }. Safe to run again from the start: someone already
 // unsubscribed there is found so and left alone.
+// skip_merge_validation: an audience may insist on a field of its own (a
+// last name, say) and refuse any change to a member without it. A no is
+// never held back by that.
 export const runOptoutJob = async (db, job) => {
   if (!mailchimpOn()) return;
   const audience = await audienceId();
-  for (const email of job.payload?.emails || []) {
-    const m = await readMember(audience, email);
-    if (m?.status !== 'subscribed') continue;
-    await mailchimp('PATCH', `/lists/${audience}/members/${memberHash(email)}`, {
-      body: { status: 'unsubscribed' }, idempotencyKey: `base-mc-optout-${memberHash(email)}`, timeoutMs: 10_000,
-    });
+  const emails = job.payload?.emails || [];
+  const left = []; // who Mailchimp has still not been told about
+  let why = null;
+  for (const [i, email] of emails.entries()) {
+    try {
+      const m = await readMember(audience, email);
+      if (m?.status !== 'subscribed') continue;
+      try {
+        await mailchimp('PATCH', `/lists/${audience}/members/${memberHash(email)}`, {
+          query: { skip_merge_validation: true }, body: { status: 'unsubscribed' },
+          idempotencyKey: keyFor('optout', job.id, lower(email)), timeoutMs: 10_000,
+        });
+      } catch (e) {
+        if (!aboutThisOne(e)) throw e;
+        // Only this one: the others are still told.
+        left.push(email);
+        why ||= e;
+      }
+    } catch (e) {
+      // Mailchimp isn't answering (or refuses the key): everyone not yet told waits.
+      left.push(...emails.slice(i));
+      why = e;
+      break;
+    }
   }
+  if (!why) return;
+  // Kept on the job: only who is still to tell, so a later try asks about
+  // nobody twice and the count on Settings → Services is the count.
+  if (left.length !== emails.length) await db.query('update jobs set payload = $2 where id = $1', [job.id, JSON.stringify({ ...job.payload, emails: left })]);
+  throw why;
 };
 
 // How many unsubscribes Mailchimp has not been told yet (it didn't answer,
-// or refused): Settings → Services says so.
+// or refused): Settings → Services says so…
+const WAITING = "kind = $2 and (status = 'failed' or (status = 'pending' and attempts > 0))";
 export const optoutsWaiting = async (q, ws) => (await q.query(
-  `select coalesce(sum(jsonb_array_length(payload->'emails')), 0)::int as n from jobs
-    where workspace_id = $1 and kind = $2 and (status = 'failed' or (status = 'pending' and attempts > 0))`, [ws, OPTOUT_JOB],
+  `select coalesce(sum(jsonb_array_length(payload->'emails')), 0)::int as n from jobs where workspace_id = $1 and ${WAITING}`, [ws, OPTOUT_JOB],
 )).rows[0].n;
+// …and why, in Mailchimp's words: what it last answered about one of them.
+// (Only its words: anything else that stopped a job is not for this screen.)
+export const optoutsWhy = async (q, ws) => {
+  const said = (await q.query(
+    `select last_error from jobs where workspace_id = $1 and ${WAITING} and last_error is not null
+      order by coalesce(done_at, started_at) desc nulls last limit 1`, [ws, OPTOUT_JOB],
+  )).rows[0]?.last_error;
+  return said && /^Mailchimp\b/.test(said) ? said.slice(0, 300) : null;
+};

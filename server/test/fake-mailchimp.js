@@ -16,7 +16,12 @@
 //   GET  /lists/:id/members                 ?status ?since_last_changed ?count ?offset
 //   GET · PATCH /lists/:id/members/:hash    the md5 of the lower-cased address
 //   GET · POST /lists/:id/segments          the tags
-//   GET · POST /lists/:id/segments/:id[/members]   who is in a tag; add and remove (500 each)
+//   GET · POST /lists/:id/segments/:id[/members]   who is in a tag; add and remove (500 each).
+//                                           As Mailchimp's own client library documents it, the
+//                                           members of a tag are listed without the unsubscribed,
+//                                           the cleaned and the transactional unless
+//                                           include_unsubscribed / include_cleaned /
+//                                           include_transactional is true
 //   GET · POST /lists/:id/webhooks · DELETE /lists/:id/webhooks/:id
 // For tests:
 //   audience(id, name)        one more audience (there is one to start: fake.id)
@@ -27,13 +32,19 @@
 //                             the webhook says so (send: false: it never arrives)
 //   hook(type, data, { sign, signWith, path })   any webhook, forged ones too
 //   refuse(email, words)      batch subscribe refuses this address
+//   requireMerge(field | null)  the audience insists on a merge field: an add or a change to a
+//                             member without it is refused unless skip_merge_validation=true
+//                             (the parameter is the client library's; the refusal's words are
+//                             this stand-in's)
+//   lock(email, words)        a change to this member is refused (400), whatever is asked
 //   limit({ after, times })   answer 429 — after that many more calls, that many times
 //   fail(code | false)        every call answers that status
 //   slow(ms)                  every call waits that long first (a browser check watching a sync)
 //   pageMax(n)                a list gives at most n rows to a page, whatever was asked for
 //   signing(secret | null)    a webhook made from now on is signed with it (shown once, on create)
 //   probe(fn | null)          saving a webhook first asks fn(url) → status; refused unless 200
-//   calls                     every request: { method, path, query, body, auth }
+//   calls                     every request: { method, path, query, body, auth, key } — key is
+//                             its Idempotency-Key header
 import http from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 import { signPayload } from '../ext/payments/stripe.js';
@@ -46,6 +57,8 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
   const calls = [];
   const audiences = new Map();
   const refusals = new Map();
+  const locked = new Map();
+  let required = null;
   let n = 0;
   let limited = null; // { after, times }
   let failWith = false;
@@ -127,6 +140,8 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
       return post(raw, headers, url);
     },
     refuse: (email, words = 'looks fake or invalid, please enter a real email address.') => { refusals.set(lower(email), words); },
+    requireMerge: (field) => { required = field || null; },
+    lock: (email, words = 'This member can’t be changed just now.') => { if (words === false) locked.delete(lower(email)); else locked.set(lower(email), words); },
     limit: (v = {}) => { limited = v === false ? null : { after: v.after ?? 0, times: v.times ?? 1 }; },
     fail: (v) => { failWith = v; },
     slow: (ms) => { slowMs = Number(ms) || 0; },
@@ -134,7 +149,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
     signing: (secret) => { signWith = secret; },
     probe: (fn) => { probeWith = fn; },
     reset: () => {
-      calls.length = 0; refusals.clear(); limited = null; failWith = false; slowMs = 0; pageCap = 1000; signWith = null; probeWith = null;
+      calls.length = 0; refusals.clear(); locked.clear(); required = null; limited = null; failWith = false; slowMs = 0; pageCap = 1000; signWith = null; probeWith = null;
       for (const a of audiences.values()) { a.members.clear(); a.segments.clear(); a.webhooks.length = 0; }
       for (const id of [...audiences.keys()]) if (id !== first.id) audiences.delete(id);
     },
@@ -146,6 +161,8 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
     const parts = url.pathname.replace(/^\/3\.0/, '').split('/').filter(Boolean);
     const q = url.searchParams;
     const count = Math.min(Number(q.get('count')) || 10, pageCap);
+    // A merge field the audience insists on, missing here — and nobody said to let it pass.
+    const lacks = (fields) => required && q.get('skip_merge_validation') !== 'true' && !String(fields?.[required] ?? '').trim();
     const offset = Number(q.get('offset')) || 0;
     const page = (rows) => rows.slice(offset, offset + count);
     if (!url.pathname.startsWith('/3.0/')) return problem(404, 'Resource Not Found', 'The requested resource could not be found.');
@@ -170,6 +187,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
         const have = a.members.get(md5(email));
         if (!VALID.test(email)) out.errors.push({ email_address: email, error: 'Please provide a valid email address.', error_code: 'ERROR_GENERIC' });
         else if (refusals.has(lower(email))) out.errors.push({ email_address: email, error: `${email} ${refusals.get(lower(email))}`, error_code: 'ERROR_GENERIC' });
+        else if (!have && lacks(m.merge_fields)) out.errors.push({ email_address: email, error: 'Your merge fields were invalid.', error_code: 'ERROR_GENERIC', field: required, field_message: 'This value should not be blank.' });
         else if (have && !body.update_existing) out.errors.push({ email_address: email, error: `${email} is already a list member, do you want to update? please provide update_existing:true in the request body`, error_code: 'ERROR_CONTACT_EXISTS' });
         else if (have) { Object.assign(have, { status: m.status, merge_fields: { ...have.merge_fields, ...m.merge_fields }, last_changed: new Date().toISOString() }); out.updated_members.push(memberOut(have)); }
         else out.new_members.push(memberOut(put(a, email, { status: m.status, first: m.merge_fields?.FNAME, last: m.merge_fields?.LNAME })));
@@ -189,6 +207,8 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
       if (!m) return problem(404, 'Resource Not Found', 'The requested resource could not be found.');
       if (req.method === 'GET') return [memberOut(m), 200];
       if (req.method === 'PATCH') {
+        if (locked.has(lower(m.email_address))) return problem(400, 'Invalid Resource', locked.get(lower(m.email_address)));
+        if (lacks({ ...m.merge_fields, ...body.merge_fields })) return problem(400, 'Invalid Resource', 'Your merge fields were invalid.');
         Object.assign(m, { ...(body.status ? { status: body.status } : {}), last_changed: new Date().toISOString() });
         // base.win's own change: an "api" source, which its webhook leaves off.
         if (body.status === 'unsubscribed') await fire(a, 'unsubscribe', { email: m.email_address, id: m.id.slice(0, 10), reason: 'manual' }, 'api');
@@ -212,7 +232,8 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
       const s = a.segments.get(parts[3]);
       if (!s) return problem(404, 'Resource Not Found', 'The requested resource could not be found.');
       if (parts.length === 5 && parts[4] === 'members' && req.method === 'GET') {
-        const rows = [...s.members].sort().map((e) => a.members.get(md5(e))).filter(Boolean);
+        const hidden = ['unsubscribed', 'cleaned', 'transactional'].filter((st) => q.get(`include_${st}`) !== 'true');
+        const rows = [...s.members].sort().map((e) => a.members.get(md5(e))).filter((m) => m && !hidden.includes(m.status));
         return [{ members: page(rows).map(memberOut), total_items: rows.length }, 200];
       }
       if (parts.length === 4 && req.method === 'POST') {
@@ -259,7 +280,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
       const auth = req.headers.authorization || '';
       let body = null;
       try { body = raw ? JSON.parse(raw) : null; } catch { body = null; }
-      calls.push({ method: req.method, path: url.pathname.replace(/^\/3\.0/, ''), query: Object.fromEntries(url.searchParams), body, auth });
+      calls.push({ method: req.method, path: url.pathname.replace(/^\/3\.0/, ''), query: Object.fromEntries(url.searchParams), body, auth, key: req.headers['idempotency-key'] || null });
       const send = ([o, status]) => { res.writeHead(status, { 'content-type': status >= 400 ? 'application/problem+json' : 'application/json' }); res.end(o === null ? '' : JSON.stringify(o)); };
       try {
         // Basic auth, any user name, the key as the password (or a Bearer key).

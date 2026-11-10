@@ -425,13 +425,19 @@ no login:
 - `/r/:token` — a donation receipt
 - `POST /stripe/webhook` — Stripe's payment events, signed (INTEGRATIONS.md,
   *Online payments — Stripe*)
+- `POST /hooks/mail/<sender>` — the email sender's delivery events
+  (delivered, bounced, spam complaints), signed (INTEGRATIONS.md, *Email*)
+- `POST /hooks/mailchimp/<key>` — Mailchimp's unsubscribes and dead
+  addresses; only a hint, base.win reads the member itself (INTEGRATIONS.md,
+  *Mailchimp*)
 - `/learn/:slug` (and `/learn-files/:id`) — ImagineU's public lessons
 - `/media/:id`, `/o/…`, `/c/…` — pictures in emails, and the open and click
   counts
 - `/api/public/twilio/…` — Twilio's webhooks, signed (INTEGRATIONS.md)
 
-The pictures, the three unsubscribe links and the Stripe and Twilio webhooks
-also answer on the campaign's website domain (SITE.md); the others don't.
+The pictures, the three unsubscribe links and the Stripe, Twilio, email
+sender's and Mailchimp's webhooks also answer on the campaign's website
+domain (SITE.md); the others don't.
 
 A gift is logged at the desk (Donations → Log a gift) to one slate — city
 council or school board (`shared/canvass.js` SLATES) — and the annual limit

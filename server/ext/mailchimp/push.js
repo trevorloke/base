@@ -29,7 +29,7 @@ import { httpError } from '../../actions/util.js';
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { loadList, recipientsOf } from '../lists/audience.js';
-import { lower, mailchimp, mailchimpOn, MailchimpError, memberHash, pages } from './mailchimp.js';
+import { keyFor, lower, mailchimp, mailchimpOn, MailchimpError, pages } from './mailchimp.js';
 import { pull, queueDays } from './pull.js';
 
 export const PUSH_ACTION = 'mailchimp.push';
@@ -126,19 +126,29 @@ const finish = (db, sync, status, payload, note = null) => runAction(db, { works
 });
 const stop = (db, sync, why) => finish(db, sync, 'failed', { note: why }, why);
 
-// The tag's id in Mailchimp: the one kept, else one of that name, else a new one.
-const segmentOf = async (db, sync) => {
+// A write's key in this sync: the sync, this run of it (each tap starts a
+// new one), and what the call says. A retry of a part says the same and
+// carries the same key; "Sync again" next month never does.
+const keyOf = (sync, what, ...said) => keyFor(what, sync.id, new Date(sync.created_at).getTime(), ...said);
+
+// The tag's id in Mailchimp: the one kept, else one of that name, else a new
+// one (`gone`: the id of one that was deleted there, when this replaces it).
+const segmentOf = async (db, sync, gone = '') => {
   if (sync.segment_id) return sync.segment_id;
   const base = `/lists/${sync.audience_id}/segments`;
   const have = (await pages(base, 'segments', { type: 'static', fields: 'segments.id,segments.name,total_items' })).find((s) => s?.name === sync.tag);
-  const made = have || await mailchimp('POST', base, { body: { name: sync.tag, static_segment: [] }, idempotencyKey: `base-mc-tag-${sync.id}` });
+  const made = have || await mailchimp('POST', base, { body: { name: sync.tag, static_segment: [] }, idempotencyKey: keyOf(sync, 'newtag', sync.tag, gone) });
   if (made?.id == null) throw new MailchimpError('Mailchimp made the tag but didn’t say which it is');
   await patch(db, sync, 'segment_id = $3', [String(made.id)]);
   return String(made.id);
 };
-// Who is in the tag now. A tag deleted in Mailchimp is made again.
+// Who is in the tag now — everyone: Mailchimp lists a tag's members without
+// the unsubscribed, the cleaned and the transactional unless asked, and
+// whoever left must still be found here to be taken out of the tag (or seen
+// to be in it already). A tag deleted in Mailchimp is made again.
+const EVERYONE = { include_unsubscribed: true, include_cleaned: true, include_transactional: true };
 const inTag = async (db, sync) => {
-  const read = async (segment) => new Set((await pages(`/lists/${sync.audience_id}/segments/${segment}/members`, 'members', { fields: 'members.email_address,total_items' }))
+  const read = async (segment) => new Set((await pages(`/lists/${sync.audience_id}/segments/${segment}/members`, 'members', { ...EVERYONE, fields: 'members.email_address,total_items' }))
     .map((m) => lower(m?.email_address)).filter(Boolean));
   let segment = await segmentOf(db, sync);
   try {
@@ -146,7 +156,7 @@ const inTag = async (db, sync) => {
   } catch (e) {
     if (!(e instanceof MailchimpError && e.httpStatus === 404 && sync.segment_id)) throw e;
     await patch(db, sync, 'segment_id = null');
-    segment = await segmentOf(db, { ...sync, segment_id: null });
+    segment = await segmentOf(db, { ...sync, segment_id: null }, segment);
     return { segment, have: await read(segment) };
   }
 };
@@ -158,25 +168,36 @@ const alreadyThere = (e) => e?.error_code === 'ERROR_CONTACT_EXISTS' || /already
 const refusedBy = (res) => (Array.isArray(res?.errors) ? res.errors : []).filter((e) => !alreadyThere(e));
 const emailsIn = (errors) => errors.flatMap((e) => [e?.email_address, ...(Array.isArray(e?.email_addresses) ? e.email_addresses : [])]).map(lower).filter(Boolean);
 
-// New addresses into the audience, then into the tag. → what happened.
+// New addresses into the audience, then into the tag. → what to count once
+// the sync is past them: { tagged, skipped }.
+// skip_merge_validation: an audience may insist on a field of its own for
+// every new member (a postal code, a last name). Only the address and the
+// two names ever go, so Mailchimp is asked to take a member without it —
+// rather than refuse everyone, or have base.win make something up.
 const addPart = async (db, sync, segment, part) => {
   const names = new Map((await db.query('select id, first_name, last_name from persons where id = any($1::uuid[])', [part.map((p) => p.id)])).rows.map((r) => [r.id, r]));
   const members = part.map((p) => ({
     email_address: p.as, status: 'subscribed',
     merge_fields: { FNAME: names.get(p.id)?.first_name || '', LNAME: names.get(p.id)?.last_name || '' },
   }));
-  const key = `${sync.id}-${memberHash(part[0].email)}`;
-  const res = await mailchimp('POST', `/lists/${sync.audience_id}`, { body: { members, update_existing: false }, idempotencyKey: `base-mc-add-${key}`, timeoutMs: 60_000 });
+  const res = await mailchimp('POST', `/lists/${sync.audience_id}`, {
+    query: { skip_merge_validation: true }, body: { members, update_existing: false },
+    idempotencyKey: keyOf(sync, 'add', ...part.map((p) => p.email)), timeoutMs: 60_000,
+  });
   const refused = refusedBy(res);
   const no = new Set(emailsIn(refused));
-  const added = num(res?.total_created, Array.isArray(res?.new_members) ? res.new_members.length : 0);
-  // What Mailchimp took (or already had) goes into the tag; said at once, so a retry never counts it twice.
-  await patch(db, sync, 'added = added + $3, skipped = skipped + $4', [added, Math.max(refused.length, no.size)]);
+  // Who is new to the audience is said at once: tried again, this call
+  // finds them already there and could never count them.
+  await patch(db, sync, 'added = added + $3', [num(res?.total_created, Array.isArray(res?.new_members) ? res.new_members.length : 0)]);
+  const skipped = Math.max(refused.length, no.size);
+  // What Mailchimp took (or already had) goes into the tag.
   const toTag = part.filter((p) => !no.has(p.email)).map((p) => p.as);
-  if (!toTag.length) return;
-  const tagged = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, { body: { members_to_add: toTag }, idempotencyKey: `base-mc-tag-${key}`, timeoutMs: 60_000 });
+  if (!toTag.length) return { tagged: 0, skipped };
+  const tagged = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, {
+    body: { members_to_add: toTag }, idempotencyKey: keyOf(sync, 'tag', segment, ...toTag.map(lower)), timeoutMs: 60_000,
+  });
   const missed = emailsIn(Array.isArray(tagged?.errors) ? tagged.errors : []).length;
-  await patch(db, sync, 'tagged = tagged + $3, skipped = skipped + $4', [num(tagged?.total_added, toTag.length - missed), missed]);
+  return { tagged: num(tagged?.total_added, toTag.length - missed), skipped: skipped + missed };
 };
 
 // One part of a sync. → true when there is more to do.
@@ -202,14 +223,16 @@ const part = async (db, sync) => {
   const left = () => toAdd.length + toRemove.length;
   while (toAdd.length) {
     const some = toAdd.splice(0, chunkSize);
-    await addPart(db, sync, segment, some);
+    const did = await addPart(db, sync, segment, some);
     cursor.add = some.at(-1).email;
-    await patch(db, sync, 'todo = $3, cursor = $4::jsonb', [left(), JSON.stringify(cursor)]);
+    // Counted in the same write that moves past them: a part tried again
+    // (Mailchimp said "too many" half-way) never counts a refusal twice.
+    await patch(db, sync, 'tagged = tagged + $3, skipped = skipped + $4, todo = $5, cursor = $6::jsonb', [did.tagged, did.skipped, left(), JSON.stringify(cursor)]);
     if (left() && Date.now() >= until) return true;
   }
   while (toRemove.length) {
     const some = toRemove.splice(0, chunkSize);
-    const res = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, { body: { members_to_remove: some }, idempotencyKey: `base-mc-untag-${sync.id}-${memberHash(some[0])}`, timeoutMs: 60_000 });
+    const res = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, { body: { members_to_remove: some }, idempotencyKey: keyOf(sync, 'untag', segment, ...some), timeoutMs: 60_000 });
     cursor.remove = some.at(-1);
     await patch(db, sync, 'removed = removed + $3, todo = $4, cursor = $5::jsonb', [num(res?.total_removed, some.length), left(), JSON.stringify(cursor)]);
     if (left() && Date.now() >= until) return true;

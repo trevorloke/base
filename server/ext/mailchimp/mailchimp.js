@@ -34,6 +34,10 @@ export const webhookSecrets = () => env('MAILCHIMP_WEBHOOK_SECRET').split(',').m
 export const lower = (s) => String(s ?? '').trim().toLowerCase();
 // How Mailchimp names a member: the MD5 of the lower-cased address.
 export const memberHash = (email) => createHash('md5').update(lower(email)).digest('hex');
+// A write's idempotency key: a name for the kind of call and a fingerprint of
+// everything it says — so the same call said again (a retry) carries the same
+// key, and a different call never does, however alike the two look.
+export const keyFor = (what, ...said) => `base-mc-${what}-${createHash('sha256').update(JSON.stringify(said.map((v) => String(v ?? '')))).digest('hex').slice(0, 32)}`;
 
 // The last part of the address Mailchimp's webhook calls: 32 hex characters
 // made from the API key (HMAC-SHA256 over a fixed label). One secret to set,
@@ -70,9 +74,10 @@ const wordsOf = (body, status) => {
 
 // One call to Mailchimp. `path` is under /3.0 ("/lists/abc/members").
 // Never a key in an error: it travels as a password (Basic auth, any user
-// name), never in an address. idempotencyKey: sent with every write so a
-// repeat is recognisable if Mailchimp ever reads one — it documents none,
-// which is why each write here is one that is safe to repeat by its nature.
+// name), never in an address. idempotencyKey (keyFor, above): sent with
+// every write so a repeat is recognisable if Mailchimp ever reads one — it
+// documents none, which is why each write here is also one that is safe to
+// repeat by its nature.
 export const mailchimp = async (method, path, { query, body, idempotencyKey, timeoutMs = 20_000 } = {}) => {
   const qs = query ? new URLSearchParams(Object.entries(query).filter(([, v]) => v != null && v !== '')).toString() : '';
   let res;

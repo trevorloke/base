@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { runAction } from '../lib/events.js';
-import { runDueJobs } from '../lib/jobs.js';
+import { enqueueJob, runDueJobs } from '../lib/jobs.js';
 import { startFakeMailchimp } from './fake-mailchimp.js';
 import { signPayload } from '../ext/payments/stripe.js';
 import { _forgetAudienceForTest, pathKey } from '../ext/mailchimp/mailchimp.js';
@@ -89,6 +89,17 @@ const stateOf = async (c, listId, counts = false) => ok(await c.get(`/api/lists/
 const TAG = 'base.win: Members';
 const inTag = () => fake.tagged(TAG);
 const writes = () => fake.calls.filter((x) => x.method !== 'GET');
+// Every write to Mailchimp carries an idempotency key, and a key is only ever shared by the same call said again.
+const keysAreTrue = (calls = writes()) => {
+  const said = new Map();
+  for (const x of calls) {
+    assert.match(String(x.key), /^base-mc-[a-z]+-[0-9a-f-]{20,}$/, `${x.method} ${x.path} carries a key`);
+    const what = JSON.stringify([x.method, x.path, x.query, x.body]);
+    assert.equal(said.get(x.key) ?? what, what, `one key, two different calls: ${x.key}`);
+    said.set(x.key, what);
+  }
+  return said.size;
+};
 const logged = async (c) => ok(await c.get('/api/events?since=0&limit=1000')).events;
 const mine = async (c, action) => (await logged(c)).filter((e) => e.action === action);
 const subOf = async (ws, who) => (await db.query('select id, status from subscriptions where workspace_id = $1 and email = $2', [ws, mail(who)])).rows[0];
@@ -189,7 +200,7 @@ test('a second sync changes nothing; then it adds and removes exactly the differ
   assert.deepEqual([s.status, s.total, s.added, s.tagged, s.removed, s.skipped], ['synced', 3, 0, 0, 0, 0]);
 
   // Hal joins the list; Ben leaves it (he is still a member of the audience — only the tag goes).
-  await person(c, 'hal');
+  people.hal = await person(c, 'hal');
   await subscribe(c, 'hal');
   ok(await c.action('person.update', { id: people.ben.id, tags: [] }));
   await run(ws);
@@ -204,6 +215,20 @@ test('a second sync changes nothing; then it adds and removes exactly the differ
   assert.deepEqual([s.total, s.added, s.tagged, s.removed], [3, 1, 1, 1]);
   assert.deepEqual(inTag(), [mail('ana'), mail('cal'), mail('hal')]);
   assert.equal(fake.member(mail('ben')).status, 'subscribed', 'out of the tag, still in the audience');
+  assert.equal(keysAreTrue(w), 3, 'three writes, three keys');
+
+  // Hal leaves the list and comes back. The last sync then says to Mailchimp exactly what an earlier
+  // one said about him — and must not be taken for that one said again: a key belongs to one run.
+  ok(await c.action('person.update', { id: people.hal.id, tags: [] }));
+  await push(c, ws, list.id);
+  assert.deepEqual(inTag(), [mail('ana'), mail('cal')]);
+  ok(await c.action('person.update', { id: people.hal.id, tags: ['member'] }));
+  fake.calls.length = 0;
+  await push(c, ws, list.id);
+  const again = writes();
+  assert.deepEqual(again.map((x) => x.body), [w[0].body, w[1].body], 'the same two calls as before');
+  assert.equal(keysAreTrue([...w, ...again]), 5, 'five writes over the two syncs, five keys');
+  assert.deepEqual(inTag(), [mail('ana'), mail('cal'), mail('hal')]);
 });
 
 test('two lists of one name never share a tag; an address goes as it is written and is told apart whatever its capitals', async () => {
@@ -589,6 +614,19 @@ test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and 
   assert.deepEqual((await pullJobs(ws)).filter((j) => j.status === 'pending').map((j) => j.key), [2, 3].map((n) => `mailchimp.pull:${day(n)}`));
   assert.equal(ok(await c.get('/api/mailchimp')).pull_note, '1 dead address');
 
+  // Dee is still on here (her own yes), and unsubscribed there. Sent to Mailchimp, she is put in the tag
+  // and left exactly as she is — and the next sync finds her there and writes nothing: Mailchimp lists
+  // a tag's members without the unsubscribed unless asked, and base.win asks.
+  fake.calls.length = 0;
+  await push(c, ws, list.id);
+  assert.deepEqual([inTag(), fake.member(mail('dee')).status], [[mail('dee')], 'unsubscribed']);
+  const tagRead = fake.calls.find((x) => x.method === 'GET' && /\/segments\/\d+\/members$/.test(x.path));
+  assert.deepEqual([tagRead.query.include_unsubscribed, tagRead.query.include_cleaned, tagRead.query.include_transactional], ['true', 'true', 'true']);
+  fake.calls.length = 0;
+  await push(c, ws, list.id);
+  assert.deepEqual(writes(), [], 'nothing to do the second time');
+  assert.equal(fake.member(mail('dee')).status, 'unsubscribed', 'never put back');
+
   // Mailchimp down: the pull says so, the job runner tries again later, and the days to come stay queued.
   fake.fail(500);
   ok(await c.action('mailchimp.pull', {}));
@@ -617,6 +655,113 @@ test('an address changed in Mailchimp is noted on the log, once — and only whe
   await fake.hook('upemail', { old_email: mail('ana'), new_email: mail('made-up'), list_id: fake.id });
   await run(ws);
   assert.equal((await mine(c, 'mailchimp.pull')).filter((e) => e.entity_type === 'mailchimp_address').length, 1);
+});
+
+test('an audience that insists on a field of its own still takes a new address, and an unsubscribe', async () => {
+  const { c, ws } = await campaign('Required');
+  for (const w of ['ana', 'ben']) await person(c, w);
+  await c.createPerson('Cher', { email: mail('cher'), tags: ['member'] }); // one name only: no last name to send
+  await subscribe(c, 'ana', 'ben', 'cher');
+  // The audience asks every new member for a postal code (a field base.win never sends) — and for a last name.
+  fake.requireMerge('POSTAL');
+  const list = await membersList(c);
+  await push(c, ws, list.id);
+  let s = (await stateOf(c, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.added, s.tagged, s.skipped], ['synced', 3, 3, 3, 0], 'nobody was refused for a field the audience usually asks for');
+  fake.requireMerge('LNAME');
+  const dee = await person(c, 'dee');
+  await c.createPerson('Eli', { email: mail('eli'), tags: ['member'] });
+  await subscribe(c, 'dee', 'eli');
+  await push(c, ws, list.id);
+  s = (await stateOf(c, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.added, s.skipped], ['synced', 5, 2, 0]);
+  assert.deepEqual(fake.member(mail('eli')).merge_fields, { FNAME: 'Eli', LNAME: '' });
+  // Still only the address and the two names: nothing is made up to satisfy the audience.
+  for (const x of fake.calls.filter((y) => y.method === 'POST' && y.path === `/lists/${fake.id}`)) {
+    assert.equal(x.query.skip_merge_validation, 'true');
+    for (const m of x.body.members) assert.deepEqual(Object.keys(m.merge_fields).sort(), ['FNAME', 'LNAME']);
+  }
+  // Eli (no last name in Mailchimp either) says no here: the audience's rule about a last name never stops that.
+  ok(await c.action('subscription.remove', { id: (await subOf(ws, 'eli')).id }));
+  ok(await c.action('person.update', { id: dee.id, tags: ['member', 'do-not-email'] }));
+  assert.equal((await run(ws)).failed, 0);
+  assert.deepEqual([fake.member(mail('eli')).status, fake.member(mail('dee')).status], ['unsubscribed', 'unsubscribed']);
+});
+
+test('an address Mailchimp refuses is counted once, however often its part of the sync is tried', async () => {
+  const { c, ws } = await campaign('Once');
+  for (const w of ['ana', 'ben', 'cal']) await person(c, w);
+  await subscribe(c, 'ana', 'ben', 'cal');
+  fake.refuse(mail('cal'));
+  const list = await membersList(c);
+  ok(await c.action('mailchimp.push', { list_id: list.id }));
+  // Mailchimp takes two into the audience and refuses the third; then says "too many" before the tag is filled.
+  fake.calls.length = 0;
+  fake.limit({ after: 6 });
+  assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 0, failed: 1 });
+  const refusedCall = fake.calls.at(-1);
+  assert.deepEqual([refusedCall.method, refusedCall.path.replace(/\d+$/, 'N')], ['POST', `/lists/${fake.id}/segments/N`]);
+  let s = (await stateOf(c, list.id)).sync;
+  assert.deepEqual([s.status, s.added, s.tagged, s.skipped], ['syncing', 2, 0, 0], 'nothing is counted for a part that isn’t done');
+  // The job runner tries again: the same part, from its start.
+  await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'mailchimp.sync' and status = 'pending'", [ws]);
+  assert.deepEqual(await run(ws), { ran: 1, failed: 0 });
+  s = (await stateOf(c, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.added, s.tagged, s.skipped], ['synced', 3, 2, 2, 1], 'Cal was refused twice and is counted once');
+  assert.deepEqual(inTag(), [mail('ana'), mail('ben')]);
+  // The tag call that was refused and the one that went through said the same thing: one key.
+  const tagCalls = fake.calls.filter((x) => x.method === 'POST' && /\/segments\/\d+$/.test(x.path));
+  assert.deepEqual([tagCalls.length, new Set(tagCalls.map((x) => x.key)).size], [2, 1]);
+  keysAreTrue();
+});
+
+test('one address Mailchimp will not change never holds up the others; Settings → Services says who is waiting, and why', async () => {
+  const { c, ws } = await campaign('Held');
+  const names = ['ana', 'ben', 'cal', 'dee'];
+  for (const w of names) await person(c, w);
+  await subscribe(c, ...names);
+  const list = await membersList(c);
+  await push(c, ws, list.id);
+  assert.deepEqual(names.map((w) => fake.member(mail(w)).status), ['subscribed', 'subscribed', 'subscribed', 'subscribed']);
+  const waitingJob = async () => (await db.query("select status, attempts, payload from jobs where workspace_id = $1 and kind = 'mailchimp.optout' order by created_at desc limit 1", [ws])).rows
+    .map((j) => [j.status, j.attempts, (typeof j.payload === 'string' ? JSON.parse(j.payload) : j.payload).emails])[0];
+
+  // Four people say no here in one go; Mailchimp will not change Ben just now.
+  fake.lock(mail('ben'), 'Ben’s record is being looked at.');
+  await enqueueJob(db, { workspaceId: ws, kind: 'mailchimp.optout', payload: { emails: names.map(mail) } });
+  fake.calls.length = 0;
+  assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 0, failed: 1 });
+  assert.deepEqual(names.map((w) => fake.member(mail(w)).status), ['unsubscribed', 'subscribed', 'unsubscribed', 'unsubscribed'], 'the others were told');
+  assert.deepEqual(await waitingJob(), ['pending', 1, [mail('ben')]], 'only Ben is still to tell');
+  let st = ok(await c.get('/api/mailchimp'));
+  assert.deepEqual([st.waiting, st.waiting_note], [1, 'Mailchimp said: Ben’s record is being looked at.']);
+  keysAreTrue();
+  // Tried again: one read and one try about Ben, nothing about anyone else.
+  await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'mailchimp.optout' and status = 'pending'", [ws]);
+  fake.calls.length = 0;
+  assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 0, failed: 1 });
+  assert.deepEqual(fake.calls.map((x) => x.method), ['GET', 'PATCH']);
+  // Mailchimp lets go of him: the next try tells it, and nothing is waiting.
+  fake.lock(mail('ben'), false);
+  await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'mailchimp.optout' and status = 'pending'", [ws]);
+  assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 1, failed: 0 });
+  assert.equal(fake.member(mail('ben')).status, 'unsubscribed');
+  st = ok(await c.get('/api/mailchimp'));
+  assert.deepEqual([st.waiting, st.waiting_note], [0, null]);
+
+  // Mailchimp not answering at all is another matter: nobody is asked about one by one, everyone waits.
+  for (const w of ['eli', 'fay']) { await person(c, w); await subscribe(c, w); }
+  await push(c, ws, list.id);
+  await enqueueJob(db, { workspaceId: ws, kind: 'mailchimp.optout', payload: { emails: [mail('eli'), mail('fay')] } });
+  fake.fail(503);
+  fake.calls.length = 0;
+  assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 0, failed: 1 });
+  assert.equal(fake.calls.length, 1, 'one call found Mailchimp down; the rest were not tried');
+  assert.deepEqual(await waitingJob(), ['pending', 1, [mail('eli'), mail('fay')]]);
+  st = ok(await c.get('/api/mailchimp'));
+  assert.equal(st.waiting, 2);
+  assert.match(st.waiting_note, /^Mailchimp said: /);
+  fake.fail(false);
 });
 
 test('Settings → Services: the Mailchimp row, Check and Connect — and who may do what', async () => {
@@ -707,6 +852,8 @@ test('Settings → Services: the Mailchimp row, Check and Connect — and who ma
   assert.deepEqual(answers.at(-1), { key: 'mailchimp', ok: false, said: 'The key works · audience “Sample Campaign” · 2 subscribed — but Mailchimp sends unsubscribes to an address from an earlier key: tap Connect' });
   ok(await mgr.action('mailchimp.connect', {}));
   assert.deepEqual(fake.webhooks().map((w) => w.url).sort(), ['https://another-tool.example/hook', `${PUBLIC}/hooks/mailchimp/${pathKey()}`], 'another tool’s webhook is left alone');
+  assert.deepEqual(writes().map((x) => x.method), ['POST', 'DELETE'], 'the new one is made before the old one goes');
+  keysAreTrue();
   // A webhook there with the events switched off is not "connected".
   fake.webhooks().find((w) => w.url.includes('/hooks/mailchimp/')).events.cleaned = false;
   assert.match((await check()).said, /isn’t sending unsubscribes here yet: tap Connect$/);

@@ -206,7 +206,10 @@ What happens:
   Never a rating, a tag, a note, a street address or anything about money.
 - **Nobody already in the audience is changed.** New addresses are added as
   subscribed; someone already there keeps their name and their status, so a
-  person who unsubscribed in Mailchimp is never put back. Then the tag
+  person who unsubscribed in Mailchimp is never put back. An audience that
+  insists on a field of its own for every member (a postal code, a last
+  name) still takes them: Mailchimp is asked to accept a member without it
+  (`skip_merge_validation`), and nothing is made up to fill it. Then the tag
   **base.win: *list name*** is brought into line with the list: who is
   missing joins it, who left the list leaves it (they stay in the audience).
   Running it twice changes nothing. It works in the background and the line
@@ -235,8 +238,11 @@ What happens:
   the desk's Remove), a *do-not-email* or *do-not-contact* tag, or an address
   that bounced or reported spam: within moments the member is marked
   unsubscribed in Mailchimp — only if Mailchimp has them as subscribed. An
-  address Mailchimp doesn't have is never added to say no for it. **base.win
-  never moves anyone in Mailchimp to subscribed.**
+  address Mailchimp doesn't have is never added to say no for it. One
+  address Mailchimp won't change never holds up the others: they are told,
+  and Settings → Services says how many are still waiting, in Mailchimp's
+  own words for why. **base.win never moves anyone in Mailchimp to
+  subscribed.**
 - **The webhook is only a hint.** Whatever a delivery says, base.win then
   reads that member from Mailchimp itself and acts on the answer, so a forged
   call can do nothing but cause one read, about an address already on file.
@@ -288,8 +294,8 @@ it points at an address made from an earlier key. With
 Mailchimp's deliveries refused: the webhook isn't a signed one, or the last
 thing it sent didn't match the secret. The line under the
 buttons says when the last pull was and what it found, and how many of
-base.win's unsubscribes Mailchimp has not been told yet (Pull now sends them
-again).
+base.win's unsubscribes Mailchimp has not been told yet, with what Mailchimp
+last said about one of them (Pull now sends them again).
 
 What it does not do: people who said no in base.win **before** Mailchimp was
 connected are not told to Mailchimp by themselves — a list sent from here
@@ -303,8 +309,12 @@ Settings → Services → Check before relying on it. It has not been run
 against a real Mailchimp account: only against a stand-in
 (`server/test/fake-mailchimp.js`) built from what Mailchimp publishes about
 its API — search extracts of its documentation and its own client library;
-the documentation itself could not be opened while this was written. Not
-confirmed there:
+the documentation itself could not be opened while this was written. Two
+things here come from that client library alone (`@mailchimp/mailchimp_marketing`
+3.0.80, read, not run): a tag's members are listed without the unsubscribed
+and the cleaned unless asked (base.win asks, so someone who left is still
+found and taken out of the tag), and `skip_merge_validation` lets a member
+in without a field the audience usually requires. Not confirmed there:
 
 - that webhook signing is on for the account, and the header's exact name
   and shape (`X-Mailchimp-Signature: t=…,v1=…` is what is read; the
@@ -316,6 +326,11 @@ confirmed there:
   who left before every sync);
 - how many addresses one tag change takes (500 at a time is sent) and how
   long a tag's name may be (cut at 100 characters);
+- that someone unsubscribed in Mailchimp can be put in a tag (base.win only
+  tries for a person who said yes here since; refused, they are counted
+  among those *Mailchimp wouldn’t take*);
+- that Mailchimp reads an `Idempotency-Key` (one is sent with every write;
+  each write is also safe to repeat by its nature);
 - whether Mailchimp sends a webhook again after a failure (the nightly pull
   is the net either way).
 
