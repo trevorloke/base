@@ -7,6 +7,10 @@
 //   webhook.js   POST /hooks/mail/:provider (public, signed, each event once):
 //                delivered, bounced, complained — a bounce or a complaint
 //                puts the address on the suppression list
+//   service.js   Email on Settings → Services (ext/connections): the row,
+//                where delivery events go, and Check
+//   domain.js    the "Sending domain" panel there: GET /api/mail/domain,
+//                mail.domain.add, mail.domain.check (managers)
 //
 // Who can be emailed honours the list everywhere through one SQL fragment
 // (lib/mail notSuppressed): a list's reach, the newsletter, a row at the
@@ -15,6 +19,7 @@
 // SENDGRID_WEBHOOK_PUBLIC_KEY (lib/mail has each sender's own).
 export { sql } from './sql.js';
 export { publicRoutes } from './webhook.js';
+export { api, actions } from './domain.js';
 
 // SendGrid posts its events in batches that run to hundreds of kilobytes;
 // Resend posts one event at a time, well inside the ordinary limit.
