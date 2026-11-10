@@ -771,7 +771,7 @@ test('a number CallHub won’t take is left out and counted, with its words; the
 
 test('CallHub taking none of them is not the numbers: the push stops with its words, and nothing more is dropped', async () => {
   const people = [];
-  for (let i = 0; i < 8; i += 1) people.push((await mgr.createPerson(`None${i} Example`, { phone: `604-555-020${i}` })).id);
+  for (let i = 0; i < 8; i += 1) people.push((await mgr.createPerson(`None${i} Example`, { phone: `604-555-011${i + 1}` })).id);
   const list = ok(await mgr.action('list.create', { name: 'None list', kind: 'people', person_ids: people })).list.id;
   fake.reject('all');
   const r = ok(await mgr.action('callhub.push', { list_id: list }));
@@ -787,7 +787,7 @@ test('CallHub taking none of them is not the numbers: the push stops with its wo
 });
 
 test('a saved filter is sent as whoever matches it today', async () => {
-  for (const [name, phone, tags] of [['Filter A Example', '604-555-0210', ['callhub-filter']], ['Filter B Example', '604-555-0211', ['callhub-filter', 'do-not-call']], ['Filter C Example', '604-555-0212', []]]) {
+  for (const [name, phone, tags] of [['Filter A Example', '604-555-0122', ['callhub-filter']], ['Filter B Example', '604-555-0123', ['callhub-filter', 'do-not-call']], ['Filter C Example', '604-555-0124', []]]) {
     await mgr.createPerson(name, { phone, tags });
   }
   const list = ok(await mgr.action('list.create', { name: 'Filter list', kind: 'filter', filter: { tag: 'callhub-filter' } })).list.id;
@@ -797,30 +797,30 @@ test('a saved filter is sent as whoever matches it today', async () => {
   await drain();
   const [p] = await pushesOf(`list=${list}`);
   assert.deepEqual([p.status, p.sent, p.skipped], ['sent', 1, 1]);
-  assert.deepEqual(fake.sent(bookOf(p.name).id).map((c) => c.contact), ['+16045550210']);
+  assert.deepEqual(fake.sent(bookOf(p.name).id).map((c) => c.contact), ['+16045550122']);
 });
 
 test('a number still waiting to go has not been sent: a result for it files nothing until it has', async () => {
-  const a = await mgr.createPerson('Waiting Example', { phone: '604-555-0213' });
+  const a = await mgr.createPerson('Waiting Example', { phone: '604-555-0125' });
   const list = ok(await mgr.action('list.create', { name: 'Waiting list', kind: 'people', person_ids: [a.id] })).list.id;
   ok(await mgr.action('callhub.push', { list_id: list }));
-  assert.deepEqual((await fake.note({ contact: '+16045550213', disposition: 'Answered', notes: 'too early' })).body, { received: true, filed: false });
+  assert.deepEqual((await fake.note({ contact: '+16045550125', disposition: 'Answered', notes: 'too early' })).body, { received: true, filed: false });
   await drain();
-  assert.deepEqual((await fake.note({ contact: '+16045550213', disposition: 'Answered', notes: 'in time' })).body, { received: true, filed: true });
+  assert.deepEqual((await fake.note({ contact: '+16045550125', disposition: 'Answered', notes: 'in time' })).body, { received: true, filed: true });
   assert.deepEqual((await contactsOf(a.id)).map((c) => /in time/.test(c.note)), [true]);
 });
 
 test('two records on one number made one while the push waits: the number still goes, once', async () => {
-  const first = await mgr.createPerson('Twin Exampl', { phone: '604-555-0214' });
-  const kept = await mgr.createPerson('Twin Example', { phone: '(604) 555-0214' });
+  const first = await mgr.createPerson('Twin Exampl', { phone: '604-555-0126' });
+  const kept = await mgr.createPerson('Twin Example', { phone: '(604) 555-0126' });
   const list = ok(await mgr.action('list.create', { name: 'Twin list', kind: 'people', person_ids: [first.id, kept.id] })).list.id;
   ok(await mgr.action('callhub.push', { list_id: list }));
   ok(await mgr.action('person.merge', { keep: kept.id, drop: first.id }));
   await drain();
   const [p] = await pushesOf(`list=${list}`);
   assert.deepEqual([p.status, p.total, p.sent], ['sent', 1, 1]);
-  assert.deepEqual(fake.sent(bookOf(p.name).id), [{ contact: '+16045550214', first_name: 'Twin', last_name: 'Example', country_code: 'CA' }]);
-  assert.deepEqual((await fake.note({ contact: '+16045550214', disposition: 'Answered', notes: 'one record' })).body, { received: true, filed: true });
+  assert.deepEqual(fake.sent(bookOf(p.name).id), [{ contact: '+16045550126', first_name: 'Twin', last_name: 'Example', country_code: 'CA' }]);
+  assert.deepEqual((await fake.note({ contact: '+16045550126', disposition: 'Answered', notes: 'one record' })).body, { received: true, filed: true });
   assert.match((await contactsOf(kept.id))[0].note, /one record/);
 });
 
