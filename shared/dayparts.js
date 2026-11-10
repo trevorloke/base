@@ -1,9 +1,12 @@
-// Parts of the day for the Shifts week board — defined once, used by the
-// web board and the server. A shift belongs to the part its start falls in,
-// in the campaign's time zone (workspace settings.tz, Vancouver by default —
-// the same zone shift emails are written in):
+// Days, weeks and clock times on the campaign's clock (workspace
+// settings.tz, Vancouver by default — the same zone shift emails are
+// written in) — defined once, used by the screens and the server.
+//
+// Three parts of the day, as the first week board had them as slots:
 //   before noon → Morning, noon to 5pm → Afternoon, 5pm on → Evening.
-// `start`/`end` are the hours a new shift made from an empty slot gets.
+// `start`/`end` are the hours a shift made from such a slot got. The week
+// screen's day lists have four (WEEK_PARTS, further down): an early start
+// is Early there.
 export const DAY_PARTS = [
   { code: 'morning', label: 'Morning', start: 9, end: 12 },
   { code: 'afternoon', label: 'Afternoon', start: 12, end: 17 },
@@ -151,4 +154,42 @@ export const fmtIn = (when, tz, opts, locale = 'en-CA') => {
   return bcByRule(zone, d.getTime())
     ? new Intl.DateTimeFormat(locale, { ...opts, timeZone: 'UTC' }).format(new Date(d.getTime() + BC_OFFSET_MS))
     : new Intl.DateTimeFormat(locale, { ...opts, timeZone: zone }).format(d);
+};
+
+// ── The week screen's day lists ──
+// Each day is a list in start order with a quiet divider where a part of
+// the day begins. Early is everything before 9 (a 6:30 Burma Shave, a 7:00
+// Mainstreet); `from` is the hour a part begins.
+export const WEEK_PARTS = [
+  { code: 'early', label: 'Early', from: 0 },
+  { code: 'morning', label: 'Morning', from: 9 },
+  { code: 'afternoon', label: 'Afternoon', from: 12 },
+  { code: 'evening', label: 'Evening', from: 17 },
+];
+// The part a start falls in: a moment (on the clock of `tz`) or a clock
+// time ('HH:MM').
+export const weekPartOf = (when, tz) => {
+  const hour = isClock(when) ? Number(String(when).slice(0, 2)) : wallClock(when, tz).hour;
+  return WEEK_PARTS.reduce((code, p) => (hour >= p.from ? p.code : code), WEEK_PARTS[0].code);
+};
+
+// A clock time some minutes on ('06:30' + 120 → '08:30'), or null once that
+// is past the end of the day — a shift made by tap ends the day it starts.
+export const addClock = (clock, minutes) => {
+  const [h, m] = String(clock).split(':').map(Number);
+  const t = h * 60 + m + minutes;
+  return t < 24 * 60 ? `${pad(Math.floor(t / 60))}:${pad(t % 60)}` : null;
+};
+
+// A start and an end ('HH:MM') said the short way: "6:30–8:30 am",
+// "10 am–1 pm", "6 pm" with no end.
+const clockBits = (clock) => {
+  const [h, m] = String(clock).split(':').map(Number);
+  return { words: `${h % 12 || 12}${m ? `:${pad(m)}` : ''}`, half: h < 12 ? 'am' : 'pm' };
+};
+export const spanWords = (start, end) => {
+  const a = clockBits(start);
+  if (!end) return `${a.words} ${a.half}`;
+  const b = clockBits(end);
+  return a.half === b.half ? `${a.words}–${b.words} ${b.half}` : `${a.words} ${a.half}–${b.words} ${b.half}`;
 };

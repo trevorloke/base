@@ -8,14 +8,18 @@
 //   Every chosen day ('YYYY-MM-DD'), at start–end ('HH:MM') on the
 //   campaign's clock — and each again weekly: repeat { weeks: n } (n weeks
 //   in all) or { until: day }. At most 200 shifts and 26 weeks a call.
+//   Several times a day (a morning and an afternoon canvass): slots:
+//   [{ start, end }, …] in place of start and end — still one write.
 //   Where: a saved place, the turfs (for a canvass the turf IS the place:
 //   its walk list comes with the shift and its name is the name — needs
 //   Map & turfs, as shift.turfs.set does), or words. The name is made from
 //   kind and place unless one is typed (name). A day that already has a
 //   live shift of that kind at that place and start is skipped and said so
-//   (skipped). A call that repeats makes one repeating slot (series_id).
-//   → { shifts: [{ id, title, day, starts_at, ends_at }], skipped: [{ day,
-//   start }], series_id }
+//   (skipped). A call that repeats makes one repeating slot a time
+//   (series_id).
+//   → { shifts: [{ id, title, day, starts_at, ends_at, series_id }],
+//   skipped: [{ day, start }], series_id } — series_id: the repeating slot
+//   made, when the call made exactly one.
 //
 // shift.copyWeek { from, to, with_people? }
 //   The week holding `from` onto the week holding `to`: the same kind,
@@ -91,6 +95,20 @@ const insertTurfs = (tx, ws, pairs) => inParts(pairs, 200, (part) => tx.query(
   [ws, JSON.stringify(part)],
 ));
 
+// The times a call asks for, soonest first: its start and end, or its
+// slots — one way or the other, each ending after it starts, no two
+// starting together (they would be the same shift twice).
+const slotsOf = (input) => {
+  const one = input.start !== undefined || input.end !== undefined;
+  if (one === Boolean(input.slots)) throw httpError(400, 'say when: a start and an end, or slots — one or the other');
+  if (one && (input.start === undefined || input.end === undefined)) throw httpError(400, 'say when: a start and an end');
+  const slots = (input.slots || [{ start: input.start, end: input.end }])
+    .map(({ start, end }) => ({ start, end })).sort((a, b) => a.start.localeCompare(b.start));
+  if (slots.some((s) => s.end <= s.start)) throw httpError(400, END_FIRST);
+  if (new Set(slots.map((s) => s.start)).size !== slots.length) throw httpError(400, 'two of those times start together');
+  return slots;
+};
+
 // What a new shift's event says: what was stored, nothing empty.
 const createPayload = (s) => Object.fromEntries(Object.entries({
   id: s.id, title: s.title, kind: s.kind, role: s.role, place_id: s.place_id, location: s.location,
@@ -107,8 +125,9 @@ export const manyActions = {
       turf_ids: z.array(z.uuid()).max(20).optional(),
       location: z.string().trim().max(400).nullish(),
       days: z.array(dayInput()).min(1).max(31),
-      start: clockInput(),
-      end: clockInput(),
+      start: clockInput().optional(),
+      end: clockInput().optional(),
+      slots: z.array(z.object({ start: clockInput(), end: clockInput() })).min(1).max(8).optional(),
       repeat: z.union([
         z.object({ weeks: z.number().int().min(1).max(MAX_WEEKS) }),
         z.object({ until: dayInput() }),
@@ -123,13 +142,14 @@ export const manyActions = {
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
       const tz = tzOf(ctx);
-      if (input.end <= input.start) throw httpError(400, END_FIRST);
+      const slots = slotsOf(input);
       const first = [...input.days].sort()[0];
       if (input.repeat?.until && input.repeat.until > addDays(first, MAX_WEEKS * 7 - 1)) {
         throw httpError(400, `${MAX_WEEKS} weeks at most — pick an earlier last day`);
       }
       const days = repeatDays(input.days, input.repeat);
-      if (days.length > MAX_SHIFTS) throw httpError(400, `That would make ${days.length} shifts — ${MAX_SHIFTS} at most at a time`);
+      const total = days.length * slots.length;
+      if (total > MAX_SHIFTS) throw httpError(400, `That would make ${total} shifts — ${MAX_SHIFTS} at most at a time`);
 
       const kind = shiftKind(input.kind);
       const place = input.place_id ? await livePlace(tx, ws, input.place_id) : null;
@@ -138,26 +158,31 @@ export const manyActions = {
       const where = { place_id: place?.id || null, location };
 
       // Each day's moments on the campaign's clock, and which are taken.
-      const want = days.map((day) => ({ day, starts_at: instantOf(day, input.start, tz), ends_at: instantOf(day, input.end, tz) }));
+      const want = days.flatMap((day) => slots.map((slot) => ({
+        day, slot, starts_at: instantOf(day, slot.start, tz), ends_at: instantOf(day, slot.end, tz),
+      })));
       const there = (await tx.query(
         `select place_id, location, starts_at, series_id from shifts
           where workspace_id = $1 and deleted_at is null and kind = $2
             and starts_at in (select value::timestamptz from jsonb_array_elements_text($3::jsonb))`,
         [ws, kind.code, JSON.stringify(want.map((w) => w.starts_at))],
       )).rows.filter((s) => sameWhere(s, where));
-      const taken = new Set(there.map((s) => new Date(s.starts_at).getTime()));
+      const taken = new Map(there.map((s) => [new Date(s.starts_at).getTime(), s]));
       const isTaken = (w) => taken.has(Date.parse(w.starts_at));
-      // A call that repeats is one repeating slot — the one its days are
-      // already part of, when the same call is made again to run longer.
-      const had = [...new Set(there.map((s) => s.series_id).filter(Boolean))];
+      // A call that repeats is one repeating slot a time — the one that
+      // time's days are already part of, when the same call is made again
+      // to run longer.
       const repeats = days.length > new Set(input.days).size;
-      const seriesId = repeats ? (had.length === 1 ? had[0] : newId()) : null;
+      for (const slot of slots) {
+        const had = [...new Set(want.filter((w) => w.slot === slot).map((w) => taken.get(Date.parse(w.starts_at))?.series_id).filter(Boolean))];
+        slot.seriesId = repeats ? (had.length === 1 ? had[0] : newId()) : null;
+      }
 
       const made = want.filter((w) => !isTaken(w)).map((w) => ({
         id: newId(), day: w.day, title: input.name || madeTitle(kind.code, location), title_custom: Boolean(input.name),
         kind: kind.code, role: kind.role, place_id: where.place_id, location, starts_at: w.starts_at, ends_at: w.ends_at,
         instructions: input.instructions || null, link: input.link || null, capacity: input.capacity ?? null, need: input.need ?? null,
-        public: Boolean(input.public), series_id: seriesId,
+        public: Boolean(input.public), series_id: w.slot.seriesId,
       }));
       if (made.length) {
         await insertShifts(tx, ws, ctx.user.id, made);
@@ -167,10 +192,11 @@ export const manyActions = {
         emit('shift', s.id, 'create', createPayload(s));
         if (turfIds.length) emit('shift', s.id, 'update', { turf_ids: turfIds });
       }
+      const series = [...new Set(made.map((s) => s.series_id).filter(Boolean))];
       return {
-        shifts: made.map((s) => ({ id: s.id, title: s.title, day: s.day, starts_at: s.starts_at, ends_at: s.ends_at })),
-        skipped: want.filter(isTaken).map((w) => ({ day: w.day, start: input.start })),
-        series_id: made.length ? seriesId : null,
+        shifts: made.map((s) => ({ id: s.id, title: s.title, day: s.day, starts_at: s.starts_at, ends_at: s.ends_at, series_id: s.series_id })),
+        skipped: want.filter(isTaken).map((w) => ({ day: w.day, start: w.slot.start })),
+        series_id: series.length === 1 ? series[0] : null,
       };
     },
     after: clearSite,

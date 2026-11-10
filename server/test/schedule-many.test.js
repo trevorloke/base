@@ -361,3 +361,57 @@ test('ending a repeating slot calls off the ones nobody is on and answers with t
   assert.equal((await vol.action('shift.series.cancel', { id: w1.id })).status, 403);
   assert.equal((await verifyChain(db, ws)).ok, true);
 });
+
+test('several times in one write: a morning and an afternoon on each chosen day, each its own repeating slot', async () => {
+  const turfless = { kind: 'canvass', location: 'Bear Creek Park', days: ['2030-10-05', '2030-10-06'] };
+  const two = ok(await mgr.action('shift.createMany', { ...turfless, slots: [{ start: '14:00', end: '17:00' }, { start: '10:00', end: '13:00' }] }));
+  assert.deepEqual(two.shifts.map((s) => [s.day, iso(s.starts_at).slice(11, 16)]),
+    [['2030-10-05', '17:00'], ['2030-10-05', '21:00'], ['2030-10-06', '17:00'], ['2030-10-06', '21:00']], 'each day, soonest first');
+  assert.equal(two.series_id, null, 'just this week');
+  const events = (await eventsOf('shift.createMany', 'shift')).filter((e) => two.shifts.some((s) => s.id === e.entity_id));
+  assert.equal(events.length, 4, 'an ordinary shift/create each');
+  assert.equal(new Set(events.map((e) => iso(e.server_ts))).size, 1, 'one transaction');
+  // Asked again with a third time: only the new time is made, and each one skipped is said with its time.
+  const more = ok(await mgr.action('shift.createMany', {
+    ...turfless, slots: [{ start: '10:00', end: '13:00' }, { start: '14:00', end: '17:00' }, { start: '18:00', end: '20:00' }],
+  }));
+  assert.deepEqual(more.shifts.map((s) => iso(s.starts_at).slice(11, 16)), ['01:00', '01:00'], '6 pm both days');
+  assert.deepEqual(more.skipped, [
+    { day: '2030-10-05', start: '10:00' }, { day: '2030-10-05', start: '14:00' }, { day: '2030-10-06', start: '10:00' }, { day: '2030-10-06', start: '14:00' },
+  ]);
+  // Repeating: each time is its own repeating slot, so "this and the following" on the morning leaves the afternoon alone.
+  const rep = ok(await mgr.action('shift.createMany', {
+    kind: 'burma_shave', location: '152 St & 64 Ave', days: ['2030-10-07'], repeat: { weeks: 3 },
+    slots: [{ start: '06:30', end: '08:30' }, { start: '16:00', end: '18:00' }],
+  }));
+  assert.equal(rep.shifts.length, 6);
+  const made = await rows('select starts_at, series_id from shifts where id = any($1::uuid[]) order by starts_at', [rep.shifts.map((s) => s.id)]);
+  const am = [...new Set(made.filter((s) => iso(s.starts_at).slice(11, 16) === '13:30').map((s) => s.series_id))];
+  const pm = [...new Set(made.filter((s) => iso(s.starts_at).slice(11, 16) === '23:00').map((s) => s.series_id))];
+  assert.deepEqual([am.length, pm.length], [1, 1], 'one slot a time');
+  assert.ok(am[0] && pm[0] && am[0] !== pm[0], 'and not the same one');
+  assert.deepEqual(rep.shifts.map((s) => s.series_id), made.map((s) => s.series_id), 'the answer says which');
+  const moved = ok(await mgr.action('shift.series.update', { id: rep.shifts[0].id, patch: { start: '07:00', end: '09:00' } }));
+  assert.equal(moved.changed.length, 3, 'the three mornings');
+  assert.deepEqual((await rows('select starts_at from shifts where series_id = $1 order by starts_at', [pm[0]])).map((s) => iso(s.starts_at).slice(11, 16)),
+    ['23:00', '23:00', '23:00'], 'the afternoons are as they were');
+  // Refusals, and nothing half-made: a time said both ways, two that start together, an end before its start, 200 at most.
+  const count = async () => (await rows('select count(*)::int as n from shifts where workspace_id = $1', [ws]))[0].n;
+  const had = await count();
+  const call = (extra) => mgr.action('shift.createMany', { kind: 'office', location: 'Campaign office', days: ['2030-10-08'], ...extra });
+  assert.equal((await call({ start: '09:00', end: '12:00', slots: [{ start: '13:00', end: '16:00' }] })).status, 400, 'both ways');
+  assert.equal((await call({})).status, 400, 'no time at all');
+  assert.equal((await call({ start: '09:00' })).status, 400, 'a start with no end');
+  assert.equal((await call({ slots: [] })).status, 400, 'no times');
+  assert.equal((await call({ slots: [{ start: '09:00', end: '12:00' }, { start: '09:00', end: '11:00' }] })).status, 400, 'two that start together');
+  const back = await call({ slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '12:00' }] });
+  assert.equal(back.status, 400, 'an end before its start');
+  assert.match(back.json.error, /end has to be after the start/);
+  const july = Array.from({ length: 31 }, (_, i) => new Date(Date.UTC(2031, 6, 1 + i)).toISOString().slice(0, 10));
+  // 136 days would be fine once a day; twice a day they are 272 shifts.
+  const big = await call({ days: july, repeat: { weeks: 16 }, slots: [{ start: '09:00', end: '12:00' }, { start: '13:00', end: '16:00' }] });
+  assert.equal(big.status, 400);
+  assert.match(big.json.error, /272 shifts — 200 at most/);
+  assert.equal(await count(), had, 'a refused call makes nothing');
+  assert.equal((await verifyChain(db, ws)).ok, true);
+});

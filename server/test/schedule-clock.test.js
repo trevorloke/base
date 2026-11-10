@@ -7,7 +7,8 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import {
-  clockOf, clockWords, dayOf, fmtIn, fromInput, instantOf, partOf, toInput, wallClock, weekBounds, zonedISO,
+  WEEK_PARTS, addClock, clockOf, clockWords, dayOf, fmtIn, fromInput, instantOf, partOf, spanWords, toInput, wallClock,
+  weekBounds, weekPartOf, zonedISO,
 } from '@starbase/shared/dayparts';
 import { shiftMessage } from '../lib/notify.js';
 
@@ -70,6 +71,36 @@ test('times read and are typed on the campaign’s clock, not this laptop’s', 
   assert.equal(clockWords(AT, 'Not/AZone'), '6:30am');
   // Another campaign's zone is its own.
   assert.equal(clockWords(AT, 'America/Toronto'), '8:30am');
+});
+
+test('the week’s day lists: an early start is Early, and a time is said the short way', () => {
+  assert.deepEqual(WEEK_PARTS.map((p) => p.label), ['Early', 'Morning', 'Afternoon', 'Evening']);
+  withOldRules(() => {
+    assert.equal(weekPartOf(AT, BC), 'early', '6:30 am — not “Morning 9am–12pm”');
+    assert.equal(weekPartOf('2026-11-16T15:59:00Z', BC), 'early', '8:59 am');
+    assert.equal(weekPartOf('2026-11-16T16:00:00Z', BC), 'morning', '9 am');
+    assert.equal(weekPartOf('2026-11-16T19:00:00Z', BC), 'afternoon', 'noon');
+    assert.equal(weekPartOf('2026-11-17T00:00:00Z', BC), 'evening', '5 pm');
+    assert.equal(weekPartOf('2026-11-16T12:00:00Z', BC), 'early', '5 am: before the list’s 6 am, still at its top');
+    assert.equal(weekPartOf('2026-11-17T06:30:00Z', BC), 'evening', '11:30 pm');
+  });
+  assert.equal(weekPartOf('07:00'), 'early', 'a clock time too');
+  assert.equal(weekPartOf('16:30'), 'afternoon');
+  // What the chips and cards say.
+  assert.equal(spanWords('06:30', '08:30'), '6:30–8:30 am');
+  assert.equal(spanWords('07:00', '09:00'), '7–9 am');
+  assert.equal(spanWords('10:00', '13:00'), '10 am–1 pm');
+  assert.equal(spanWords('16:30', '18:30'), '4:30–6:30 pm');
+  assert.equal(spanWords('12:00', '13:30'), '12–1:30 pm');
+  assert.equal(spanWords('00:00', '12:00'), '12 am–12 pm');
+  assert.equal(spanWords('18:00'), '6 pm', 'no end');
+  assert.equal(spanWords('18:00', null), '6 pm');
+  // A start and how long: the end, or null once it would run past the day.
+  assert.equal(addClock('06:30', 120), '08:30');
+  assert.equal(addClock('06:00', 90), '07:30');
+  assert.equal(addClock('21:30', 120), '23:30');
+  assert.equal(addClock('21:30', 180), null, 'past midnight');
+  assert.equal(addClock('23:00', 60), null, 'midnight is the next day');
 });
 
 test('a shift notice says the campaign’s hour', () => {
