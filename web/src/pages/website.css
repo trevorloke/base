@@ -224,7 +224,6 @@
 .wb-frame { position: sticky; top: var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
 .wb-frame__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); }
 .wb-frame__h { font-weight: 700; color: var(--text-2); }
-.wb-frame__seg button { min-height: 44px; }
 .wb-frame__box {
   width: 452px; height: calc(100vh - 140px); min-height: 480px; overflow: auto;
   border: 1px solid var(--rule-2); border-radius: var(--r-sheet); background: #fff; box-shadow: var(--shadow-1);
@@ -447,7 +446,6 @@
 .wb-goal__bar[data-full] > span { background: var(--ok); }
 .btn.wb-row__who { flex: none; }
 .wb-editor { padding: var(--s-4) var(--s-5); }
-.wb-kind button { min-height: var(--ctl); }
 @media (max-width: 560px) {
   .wb-row__pic { width: 64px; height: 48px; }
   .wb-row--camp { flex-wrap: wrap; }

@@ -12,7 +12,8 @@
 //   - the shell: the campaign leads, the sidebar and the phone's bars are
 //     light, a desk role on a phone has four tabs and More;
 //   - the desk's density: with a mouse a button and a field are 40px; on a
-//     phone they are 48.
+//     phone they are 48 — and so is every choice in a pick-one control,
+//     and the control itself (it lines up with the button beside it).
 // Then the same screens under four hard brand colours — a yellow, a red, a
 // pale pink, near-black — each with the light, the brand-coloured and the
 // dark sidebar, written into the page the way the server writes a brand's
@@ -177,6 +178,23 @@ const DESK_PHONE = (s) => ['/', '/people', `/people/${s.person}`, '/shifts', `/s
 const FIELD = (s) => ['/', '/map', '/shifts', `/shifts/${s.shift}`, '/calls', '/turfs', `/turfs/${s.turf}`, '/imagineu', '/profile', '/mainstreet', '/my-people'];
 // The screens that carry the most of the brand: enough to judge a colour by.
 const CORE = (s) => ['/admin', '/admin/people', `/admin/people/${s.person}`, '/admin/shifts', '/admin/money', '/admin/signs', '/admin/website', '/admin/settings'];
+// Every pick-one control on these screens (app.css §13): how tall it is, how
+// many rows its choices take, and its shortest choice.
+const pickOnes = async (page, base, paths) => {
+  const out = [];
+  for (const path of paths) {
+    await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
+    out.push(...await page.evaluate(() => [...document.querySelectorAll('.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs')].map((g) => {
+      const r = g.getBoundingClientRect();
+      const choices = [...g.children].filter((c) => c.matches('button, a')).map((c) => c.getBoundingClientRect());
+      if (!r.height || !choices.length) return null;
+      const tenth = (n) => Math.round(n * 10) / 10;
+      return { is: g.className.split(' ')[0], h: tenth(r.height), rows: new Set(choices.map((c) => Math.round(c.top))).size, least: tenth(Math.min(...choices.map((c) => c.height))) };
+    }).filter(Boolean)));
+  }
+  return out;
+};
+const wholeControl = (groups, px) => groups.length >= 3 && groups.every((g) => g.least >= px && (g.rows > 1 || g.h === px));
 const none = (b) => b.low.length === 0;
 const say = (list) => list.slice(0, 4).join(' | ');
 
@@ -205,6 +223,8 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
         shell.side === 'rgb(243, 244, 246)' && shell.edge === '1px' && shell.shadow === 'none' && /^["']?Inter/.test(shell.h1) && shell.caps === 'none' && shell.sub === 'base.win' && shell.lead, JSON.stringify(shell));
       check(`${key}: with a mouse a button and a field are 40px and a table row 44`, shell.btn === 40 && shell.field === 40 && shell.row >= 44 && shell.row <= 46, JSON.stringify({ btn: shell.btn, field: shell.field, row: shell.row }));
       await dp.screenshot({ path: `${SHOTS}/${key}-people-desk.png` });
+      const picks = await pickOnes(dp, base, ['/admin', '/admin/outreach', '/admin/settings']);
+      check(`${key}: with a mouse every choice in a pick-one control is 40px, and so is the control`, wholeControl(picks, 40), JSON.stringify(picks));
     }
     await d.close();
 
@@ -224,6 +244,8 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
       });
       check(`${key}, on a phone: light bars, four tabs and More, and 48px controls`, bars.top === 'rgb(255, 255, 255)' && bars.tabs === 'rgb(255, 255, 255)' && bars.n === 5 && bars.more && bars.btn >= 48 && bars.field >= 48, JSON.stringify(bars));
       await mp.screenshot({ path: `${SHOTS}/${key}-people-phone.png` });
+      const picks = await pickOnes(mp, base, ['/admin', '/admin/outreach', '/admin/settings']);
+      check(`${key}, on a phone: every choice in a pick-one control is 48px — a row of them is 48, and tabs that wrap keep 48 a row`, wholeControl(picks, 48), JSON.stringify(picks));
     }
     await m.close();
 

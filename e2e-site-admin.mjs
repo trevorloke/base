@@ -84,6 +84,7 @@ await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
 await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 const navLink = page.locator('nav.links a', { hasText: 'Website' });
+await navLink.waitFor({ timeout: 10000 }).catch(() => {}); // the menu draws a moment after the address changes
 check('the desk’s menu has Website (a manager)', await navLink.isVisible().catch(() => false));
 await navLink.click();
 await page.waitForURL(/\/admin\/website$/);

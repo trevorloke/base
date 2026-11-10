@@ -548,33 +548,47 @@ h3 { font-size: 16px; line-height: 1.35; }
 
 /* ── 13. Pick one — the one segmented control ──
    Every "one of these" on every screen is this shape: a bordered group,
-   hairlines between the choices, and the chosen one on the brand's tint in
-   the brand's words with an edge. Screens keep their own class (and only
-   their layout: a full-width grid, rows that wrap); the look is here.
+   hairlines between the choices, and the chosen one a rounded tile on the
+   brand's tint, in the brand's words, with an edge all the way round.
+   Screens keep their own class (and only their layout: a full-width grid,
+   rows that wrap); the look is here.
    The chosen one is said in the markup — aria-pressed, aria-checked,
    aria-selected, a NavLink's .active, or .is-on.
-   Each choice draws its own hairline around itself, in the 1px between
-   them — so a group that wraps onto a second row (a door's people, Settings'
-   tabs on a phone) still has every edge, and a short last row ends closed. */
+   Every choice is a whole control tall (48px under a thumb, 40 with a
+   mouse), and so is the group, so it lines up with the button beside it.
+   That is why the edges are drawn the way they are: each choice draws its
+   own hairline inside itself and laps its neighbour's by that 1px, so there
+   is one line between two choices, a group that wraps onto a second row (a
+   door's people, Settings' tabs on a phone) still has every edge, and a
+   short last row ends closed. The group's own edge is drawn over them
+   (::after), so its corners are round whichever choice sits in them. */
 :is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) {
+  position: relative;
   display: inline-flex;
   max-width: 100%;
-  padding: 0;
-  gap: 1px;
+  padding: 1px 0 0 1px;
+  gap: 0;
   background: var(--card);
-  border: 1px solid var(--line-strong);
+  border: 0;
   border-radius: var(--r-ctrl);
   overflow: hidden;
+}
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs)::after {
+  content: '';
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: inherit;
+  pointer-events: none;
 }
 :is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a) {
   flex: 1 1 auto;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-width: 0; min-height: calc(var(--ctl) - 2px);
-  margin: 0; padding: 4px 14px;
+  min-width: 0; min-height: var(--ctl);
+  margin: -1px 0 0 -1px; padding: 4px 14px;
   font-family: var(--font-sans); font-size: 14px; font-weight: 500; line-height: 1.25; letter-spacing: 0; text-transform: none;
   text-align: center; text-decoration: none; white-space: nowrap;
   color: var(--text-2); background: transparent;
-  border: 0; border-radius: 0; box-shadow: 0 0 0 1px var(--line-strong);
+  border: 0; border-radius: 0; box-shadow: inset 0 0 0 1px var(--line-strong);
   cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 @media (hover: hover) {
@@ -585,9 +599,11 @@ h3 { font-size: 16px; line-height: 1.35; }
   background: var(--tint-2);
   color: var(--accent-words);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px var(--accent-edge), 0 0 0 1px var(--line-strong);
+  border-radius: var(--r-ctrl);
+  box-shadow: inset 0 0 0 1px var(--line-strong), inset 0 0 0 2px var(--accent-edge);
 }
-:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):focus-visible { outline-offset: -2px; }
+/* The focus ring sits inside the hairline, whole on every side. */
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):focus-visible { outline-offset: -3px; }
 :is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):disabled { opacity: 0.45; cursor: default; }
 /* More choices than fit across (a door's people, Settings' tabs on a
    phone): they wrap, so every one shows. */
