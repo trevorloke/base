@@ -81,9 +81,13 @@ export const MARK = {
 };
 export const css = ([r, g, b, a = 1]) => (a >= 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${a})`);
 
-// A dot's radius on screen (CSS px) at the zoom the map is at (quarter zooms
-// too): never under 2.5, big enough close in to aim a finger at.
-export const dotRadius = (z) => (z < 14 ? 2.5 : z < 15 ? 3.2 : z < 16 ? 4.2 : z < 17 ? 5.4 : 7);
+// A dot's radius (CSS px) as drawn on a tile of whole zoom z, big enough
+// close in to aim a finger at. The map stops at quarter zooms too, and
+// between whole zooms the nearest zoom's tiles are stretched: on screen a
+// dot is 0.7 to 1.4 times this — never under 2.5 px (dotOnScreen).
+export const dotRadius = (z) => (z <= 14 ? 3.6 : z <= 15 ? 4.2 : z <= 16 ? 5.4 : 7);
+export const dotOnScreen = (zoom) => dotRadius(Math.round(zoom)) * 2 ** (zoom - Math.round(zoom));
+// From zoom 14 every dot wears a white ring (a tile's whole zoom).
 export const ringedAt = (z) => z >= 14;
 
 // ── The far-out picture ──

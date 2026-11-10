@@ -1174,6 +1174,7 @@ export default function MapPage() {
     staleTime: 20_000,
   });
   const oneDoor = big && personParam && doorQ.data?.scope === 'door' ? doorQ.data : null;
+  const doorFailed = Boolean(big && personParam && doorQ.isError && !doorQ.data);
   // A big list: what came whole (a volunteer's own turfs, kept on the
   // phone), the people in view where they fit, and the open door — each
   // person once.
@@ -1719,11 +1720,15 @@ export default function MapPage() {
     L.control.attribution({ position: 'bottomleft', prefix: false }).addTo(map);
     L.control.zoom({ position: 'bottomleft' }).addTo(map);
     // Tiles: added below once GET /api/map/config (or the phone's copy) says which.
-    // Turf polygons sit under everything else; a turf being drawn sits over
-    // the other vectors (pins and its corner dots are in the marker pane).
+    // A big list's far-out picture (filled patches) lies right on the base
+    // map; turf polygons sit over it and under everything else; a turf being
+    // drawn sits over the other vectors (pins and its corner dots are in the
+    // marker pane).
+    map.createPane('patches').style.zIndex = 340;
+    map.getPane('patches').style.pointerEvents = 'none';
     map.createPane('turfs').style.zIndex = 350;
-    // Dots and patches above turf fills, under pins and the turf being drawn;
-    // they never take a tap themselves (the map asks onDotTapRef).
+    // Dots above turf fills, under pins and the turf being drawn. Neither
+    // dots nor patches take a tap themselves (the map asks onDotTapRef).
     map.createPane('dots').style.zIndex = 380;
     map.getPane('dots').style.pointerEvents = 'none';
     map.createPane('turfDraft').style.zIndex = 450;
@@ -1886,24 +1891,25 @@ export default function MapPage() {
   // One zoom further out, a door with room around it already has its pin
   // (and its names); the rest stay dots until they come apart.
   const loneOn = zoom != null && !pinsOn && zoom >= Math.min(LONE_PIN_ZOOM, offZoom);
-  const clusters = useMemo(() => {
-    if (pinsOn) return clusterDoors(visible, zoom, offZoom, viewBounds);
-    if (!loneOn) return EMPTY_LIST;
-    return clusterDoors(visible, zoom, offZoom, viewBounds, LONE_PX).filter((g) => g.length === 1);
-  }, [pinsOn, loneOn, visible, zoom, offZoom, viewBounds]);
-  // (The open door's pin is drawn by itself while the rest are dots.)
-  const groups = useMemo(
-    () => (loneOn && selectedKey ? clusters.filter((g) => g[0].key !== selectedKey) : clusters),
-    [loneOn, clusters, selectedKey],
+  // (Which doors stand alone is worked out over every door loaded, on screen
+  // or not, so a pan changes no dot; only the ones in view get a marker.)
+  const lone = useMemo(
+    () => (loneOn ? clusterDoors(visible, zoom, offZoom, null, LONE_PX).filter((g) => g.length === 1) : EMPTY_LIST),
+    [loneOn, visible, zoom, offZoom],
   );
+  const groups = useMemo(() => {
+    if (pinsOn) return clusterDoors(visible, zoom, offZoom, viewBounds);
+    // (The open door's pin is drawn by itself while the rest are dots.)
+    return lone.filter((g) => g[0].key !== selectedKey && (!viewBounds || viewBounds.contains([g[0].lat, g[0].lng])));
+  }, [pinsOn, lone, visible, zoom, offZoom, viewBounds, selectedKey]);
   // Below street zoom: every door a dot (the open one keeps its pin) — the
   // doors the map has whole and, on a big list, the ones answered as dots —
   // or a big list's patches further out.
   const dotDoors = useMemo(() => {
     if (pinsOn) return EMPTY_LIST;
-    const pinned = loneOn && clusters.length ? new Set(clusters.map((g) => g[0].key)) : null;
+    const pinned = lone.length ? new Set(lone.map((g) => g[0].key)) : null;
     return visible.filter((d) => d.key !== selectedKey && !pinned?.has(d.key));
-  }, [pinsOn, loneOn, clusters, visible, selectedKey]);
+  }, [pinsOn, lone, visible, selectedKey]);
   const dotItems = useMemo(() => (leanShown.length ? [...dotDoors, ...leanShown] : dotDoors), [dotDoors, leanShown]);
   useEffect(() => {
     const layers = layersRef.current;
@@ -1995,27 +2001,32 @@ export default function MapPage() {
   const hasSheet = Boolean(pickerOpen || addAt || mode === 'add' || naming || (selectedDoor && !mode) || turfSheetOpen || signSheetOpen);
   const showEmpty = doorsQ.data && !big && doors.length === 0 && !hasSheet && !mode;
   // A big list's number is what is on screen, so it says what it counts:
-  // people from further out, doors closer in. (A list loaded whole: its doors.)
-  const unit = big ? (drawn?.kind === 'density' ? ['person', 'people'] : ['door', 'doors']) : null;
+  // people from further out, doors closer in. A list loaded whole — or a
+  // volunteer's own turf, which comes whole — counts its doors, as ever.
+  const byView = big && filter !== 'mine';
+  const unit = byView ? (drawn?.kind === 'density' ? ['person', 'people'] : ['door', 'doors']) : null;
   const shownN = counts[filter];
   // Nothing drawn yet — the first answer is on its way: "Loading…", never a 0.
   // (No signal: the strip under the nav says so; nothing is on its way.)
   const paused = viewQ.fetchStatus === 'paused' || densQ.fetchStatus === 'paused';
-  const opening = doorsQ.isPending || (big && !drawn && !viewFailed && !paused);
+  const opening = doorsQ.isPending || (byView && !drawn && !viewFailed && !paused);
   const pillN = opening ? 'Loading…'
-    : shownN === null || (big && !drawn) ? ''
+    : shownN === null || (byView && !drawn) ? ''
       : unit ? `${num(shownN ?? 0)} ${shownN === 1 ? unit[0] : unit[1]}` : num(shownN ?? 0);
   // A map request out for more than a moment says so beside the count; what
   // was drawn stays until its answer is in.
-  const slow = useSlow(Boolean(big && (viewQ.isFetching || densQ.isFetching || doorQ.isFetching)) || spotBusy);
+  const slow = useSlow(Boolean(byView && (viewQ.isFetching || densQ.isFetching)) || doorQ.isFetching || spotBusy);
   // A big list, and nobody at all in the part asked for (the screen and
   // some): say so, with the way back.
-  const nobodyHere = Boolean(big && fresh && !viewQ.isFetching && !densQ.isFetching
+  const nobodyHere = Boolean(byView && fresh && !viewQ.isFetching && !densQ.isFetching
     && (fresh.kind === 'density' ? !(fresh.density.cells || []).length : fresh.view.count === 0));
   // The key under the count, once there are marks to explain.
   const showKey = Boolean(doorsQ.data) && !noSignal && (big ? Boolean(drawn) : doors.length > 0);
-  const keyWords = drawn?.kind === 'density' ? 'Each square is a block — zoom in for doors'
-    : drawn?.kind === 'dots' || (drawn && !pinsOn) ? 'Each dot is a door' : null;
+  // (On "My turf" a volunteer sees their own doors, not the list's patches.)
+  const patches = byView && drawn?.kind === 'density';
+  const keyWords = nobodyHere || !byView ? null
+    : patches ? 'Each square is a block — zoom in for doors'
+      : drawn?.kind === 'dots' || (drawn && !pinsOn) ? 'Each dot is a door' : null;
   // First visit (volunteers): "Tap a house to start" under the pill, only on
   // the plain map with houses to tap — never over a card, sheet or mode bar.
   // Opening any door counts as having started.
@@ -2042,12 +2053,24 @@ export default function MapPage() {
     if (Array.isArray(b) && b.length === 4 && b.every((v) => Number.isFinite(v))) return [[b[0], b[1]], [b[2], b[3]]];
     return doors.length ? doors.map((d) => [d.lat, d.lng]) : null;
   };
-  // "Whole list" / "Back to your list": the list, in the part of the map
-  // the controls leave free.
+  // A volunteer's own doors (the "My turf" ones), close enough that each is
+  // its own pin — or, with none on the map yet, their turfs' outlines.
+  const fitMine = (map, list) => {
+    const rings = list.map((t) => t.polygon.map(([lat, lng]) => [Number(lat), Number(lng)]));
+    const inside = doors.filter((d) => rings.some((r) => pointInPolygon(d.lat, d.lng, r)));
+    const pts = inside.length ? inside.map((d) => [d.lat, d.lng]) : rings.flat();
+    fitTurf(map, pts, pageRef.current, { maxZoom: 18, inset: inside.length ? PIN_INSET : 0 });
+  };
+  // "Whole list" / "Back to your list" (a volunteer on their turf: "My
+  // turf"): back to it, in the part of the map the controls leave free.
+  const backToMine = filter === 'mine';
   const fitList = () => {
     const map = mapRef.current;
+    if (!map) return;
+    const own = backToMine ? turfs.filter((t) => validRing(t.polygon)) : EMPTY_LIST;
+    if (own.length) { fitMine(map, own); return; }
     const box = listBox();
-    if (map && box) fitTurf(map, box, pageRef.current, { maxZoom: 16, pad: big ? 0 : 0.15 });
+    if (box) fitTurf(map, box, pageRef.current, { maxZoom: 16, pad: big ? 0 : 0.15 });
   };
 
   // First data: fit the deep-linked turf, else center on the deep-linked
@@ -2078,11 +2101,7 @@ export default function MapPage() {
       revealLatLng(map, L.latLng(selectedDoor.lat, selectedDoor.lng), pageRef.current);
       centeredOnRef.current = personParam;
     } else if (mine.length) {
-      // Their doors, close enough that each is its own pin.
-      const rings = mine.map((t) => t.polygon.map(([lat, lng]) => [Number(lat), Number(lng)]));
-      const inside = doors.filter((d) => rings.some((r) => pointInPolygon(d.lat, d.lng, r)));
-      const pts = inside.length ? inside.map((d) => [d.lat, d.lng]) : rings.flat();
-      fitTurf(map, pts, pageRef.current, { maxZoom: 18, inset: inside.length ? PIN_INSET : 0 });
+      fitMine(map, mine);
     } else {
       fitList();
     }
@@ -2209,8 +2228,11 @@ export default function MapPage() {
               </button>
             )}
             {/* The part of the map on screen was asked for and not answered. */}
-            {viewFailed && !noSignal && (
-              <button type="button" className="map-chip map-retry" onClick={() => (wantsPatches ? densQ.refetch() : viewQ.refetch())}>
+            {(viewFailed || doorFailed) && !noSignal && (
+              <button
+                type="button" className="map-chip map-retry"
+                onClick={() => { if (doorFailed) doorQ.refetch(); if (viewFailed) (wantsPatches ? densQ : viewQ).refetch(); }}
+              >
                 Unavailable — Try again
               </button>
             )}
@@ -2253,7 +2275,7 @@ export default function MapPage() {
             <button type="button" className="btn map-hint__x" onClick={hideHint} aria-label="Dismiss" title="Dismiss">✕</button>
           </div>
         )}
-        {showKey && !mode && <MapKey squares={drawn?.kind === 'density'} dark={view === 'dark'} words={keyWords} />}
+        {showKey && !mode && <MapKey squares={patches} dark={view === 'dark'} words={keyWords} />}
       </div>
 
       {filterOpen && !mode && (
@@ -2287,7 +2309,7 @@ export default function MapPage() {
         <div className="map-fabs__row">
           {/* Back to the campaign's own list from wherever the map has got to. */}
           {doorsQ.data && (big || doors.length > 0) && mode !== 'draw' && (
-            <button type="button" className="map-fab map-fab--list" onClick={fitList}>Whole list</button>
+            <button type="button" className="map-fab map-fab--list" onClick={fitList}>{backToMine ? 'My turf' : 'Whole list'}</button>
           )}
           <button type="button" className="map-fab" title="Locate me" aria-label="Locate me" onClick={locateMe} disabled={locating}>
             <LocateGlyph />

@@ -19,10 +19,9 @@ const ORDER = ['unrated', 'undecided', 'opposed', 'support']; // drawn last = on
 
 // Shared by both layers: items with a latlng, bucketed by the tile they fall
 // in at each zoom (built once per zoom, on first draw), drawn per tile.
-// The map stops at quarter zooms (a turf can fill the screen exactly), and
-// between whole zooms Leaflet stretches the nearest zoom's tiles — so a tile
-// is drawn for the zoom the map is really at (`k`: tile pixels to a screen
-// pixel), and drawn again when the map settles on another.
+// (The map stops at quarter zooms, and between whole zooms Leaflet stretches
+// the nearest zoom's tiles: a mark is on screen between 0.7 and 1.4 times
+// the size it is drawn at — mapView.js dotOnScreen.)
 const BucketLayer = L.GridLayer.extend({
   options: { pane: 'dots', tileSize: 256, updateWhenZooming: false, keepBuffer: 2 },
   initialize(options) {
@@ -30,18 +29,6 @@ const BucketLayer = L.GridLayer.extend({
     this._items = [];
     this._buckets = new Map();
     this._dark = false;
-  },
-  onAdd(map) {
-    L.GridLayer.prototype.onAdd.call(this, map);
-    map.on('zoomend', this._sameSize, this);
-  },
-  onRemove(map) {
-    map.off('zoomend', this._sameSize, this);
-    L.GridLayer.prototype.onRemove.call(this, map);
-  },
-  // Tiles drawn for another zoom (and only stretched since): draw them again.
-  _sameSize() {
-    if (this._items.length && this._drawnAt != null && this._drawnAt !== this._map.getZoom()) this.redraw();
   },
   setItems(items, { dark = false, flagged = null } = {}) {
     this._items = items;
@@ -76,8 +63,6 @@ const BucketLayer = L.GridLayer.extend({
     tile.style.width = `${size.x}px`;
     tile.style.height = `${size.y}px`;
     if (!this._items.length) return tile;
-    const zoom = this._map.getZoom();
-    this._drawnAt = zoom;
     const ctx = tile.getContext('2d');
     ctx.scale(dpr, dpr);
     const buckets = this._bucketsAt(coords.z);
@@ -89,7 +74,7 @@ const BucketLayer = L.GridLayer.extend({
         if (got) near.push(...got);
       }
     }
-    this._draw(ctx, near, coords.z, coords.x * size.x, coords.y * size.y, { size: size.x, dpr, zoom, k: 2 ** (coords.z - zoom) });
+    this._draw(ctx, near, coords.z, coords.x * size.x, coords.y * size.y, { size: size.x, dpr });
     return tile;
   },
 });
@@ -100,18 +85,15 @@ const BucketLayer = L.GridLayer.extend({
 // up) a door with a sign flies a little flag; at z17 a household's size is
 // written on its dot.
 export const DotLayer = BucketLayer.extend({
-  _draw(ctx, doors, z, ox, oy, { size, zoom, k }) {
+  _draw(ctx, doors, z, ox, oy, { size }) {
     const theme = this._dark ? 'dark' : 'light';
-    const r0 = dotRadius(zoom);
-    const ring = ringedAt(zoom);
-    // Sizes below are screen pixels: the tile is drawn at k tile pixels to one.
-    ctx.scale(k, k);
-    const at = (d) => [(d._p[z].x - ox) / k, (d._p[z].y - oy) / k];
-    const edge = size / k;
+    const r0 = dotRadius(z);
+    const ring = ringedAt(z);
+    const at = (d) => [d._p[z].x - ox, d._p[z].y - oy];
     const reach = r0 + 12; // a dot, its ring, its flag
     const shown = doors.filter((d) => {
       const [x, y] = at(d);
-      return x > -reach && x < edge + reach && y > -reach && y < edge + reach;
+      return x > -reach && x < size + reach && y > -reach && y < size + reach;
     });
     for (const band of ORDER) {
       ctx.fillStyle = css(band === 'unrated' ? MARK.unrated[theme] : MARK[band]);
@@ -137,7 +119,7 @@ export const DotLayer = BucketLayer.extend({
         }
       }
     }
-    if (zoom < 16) return;
+    if (z < 16) return;
     if (this._flagged) {
       ctx.lineWidth = 1.2;
       for (const d of shown) {
@@ -150,7 +132,7 @@ export const DotLayer = BucketLayer.extend({
         ctx.beginPath(); ctx.moveTo(x, y - 9); ctx.lineTo(x + 7, y - 6.5); ctx.lineTo(x, y - 4); ctx.closePath(); ctx.fill(); ctx.stroke();
       }
     }
-    if (zoom < 17) return;
+    if (z < 17) return;
     ctx.font = '700 9px Inter, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -167,6 +149,7 @@ export const DotLayer = BucketLayer.extend({
 // people, how many are rated). Each is filled edge to edge — neighbours meet
 // on a whole pixel, so the city reads as one shape, not a lattice of marks.
 export const DensityLayer = BucketLayer.extend({
+  options: { pane: 'patches' }, // under the turf outlines (Map.jsx makes the pane)
   _draw(ctx, cells, z, ox, oy, { size, dpr }) {
     const whole = (v) => Math.round(v * dpr) / dpr;
     const dark = this._dark;

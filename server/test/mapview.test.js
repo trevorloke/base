@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
-  dotsFrom, dotRadius, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
+  dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -113,10 +113,12 @@ test('“not asked yet” reads on every base map: 3 to 1 or better, from the sm
   assert.ok(contrast(MARK.unrated.dark, DARK_GROUND) >= 3);
   assert.ok(contrast(MARK.undecidedEdge.dark, DARK_GROUND) >= 3);
   assert.deepEqual([MARK.support, MARK.undecided, MARK.opposed], [[19, 138, 82], [232, 150, 12], [212, 60, 60]], 'the rating colours are what they were');
-  // On screen, at the zoom the map is really at — it stops at quarter zooms.
-  for (let z = 8; z <= 20; z += 0.25) assert.ok(dotRadius(z) >= 2.5, `zoom ${z}: a dot of ${dotRadius(z)} px`);
-  assert.ok(dotRadius(17) > dotRadius(14.5) && dotRadius(14.5) > dotRadius(11) && dotRadius(13.75) === dotRadius(13));
-  assert.deepEqual([13, 13.75, 14, 15, 19].map(ringedAt), [false, false, true, true, true], 'a white ring on every dot from zoom 14');
+  // On screen, at the zoom the map is really at: it stops at quarter zooms,
+  // where the nearest whole zoom's tiles are stretched or shrunk.
+  for (let z = 8; z <= 20; z += 0.25) assert.ok(dotOnScreen(z) >= 2.5, `zoom ${z}: a dot of ${dotOnScreen(z).toFixed(2)} px`);
+  assert.ok(Math.abs(dotOnScreen(12.5) - dotRadius(13) / Math.SQRT2) < 1e-9 && dotOnScreen(16) === dotRadius(16));
+  assert.ok(dotRadius(17) > dotRadius(15) && dotRadius(15) > dotRadius(11));
+  assert.deepEqual([13, 14, 15, 19].map(ringedAt), [false, true, true, true], 'a white ring on every dot from zoom 14');
   // A pin, a bubble's ring and the filter's dot wear the same slate, solid.
   for (const [name, ground] of Object.entries(LIGHT_GROUNDS)) {
     assert.ok(contrast(MARK.unratedPin, ground) >= 3, `a “not asked yet” pin on ${name}: ${contrast(MARK.unratedPin, ground).toFixed(2)}`);

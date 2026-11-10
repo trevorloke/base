@@ -546,9 +546,19 @@ one tap away under **More**.
   door with a sign gets a little flag, and close in a household's size is
   on its dot; at street zoom the dots become pins. Tap a dot to open that
   door. With your whole voter file loaded (more than 5,000 people placed),
-  the city view shows patches of people instead — grey for how many live
-  there, colour for the share rated — and **Show** counts people in view
-  (*300,049*); zoom in and it loads the doors where you're looking.
+  the map opens on your list as a picture — shaded squares, darker where
+  more people live, coloured as far as they've been rated — with a key and
+  *Each square is a block — zoom in for doors* under the count, and **Show**
+  counts what is on screen (*300,049 people*); from zoom 14 every door is a
+  dot (*1,211 doors*), and a tap on one opens it. Zooming never empties the
+  map: what was drawn stays until the next answer is in. **Whole list** goes
+  back; over open water it says *Nobody on file here · Back to your list*.
+  (`node e2e-map.mjs` runs a big list in miniature through all of this in a
+  browser.)
+- **A tab left open across a deploy** — its next answer from the server says
+  so: *A new version is ready · Reload* under the nav, and the next link you
+  tap loads the new page. It never shows an empty map or a blank screen
+  (`node e2e-deploy.mjs`: two builds take turns on one server).
 - **Map → filter button → Draw turf** — tap the corners, name it, assign a
   canvasser.
 - **A profile → More details** — tap Yes/No or a choice, type the rest,

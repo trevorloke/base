@@ -566,17 +566,34 @@ other looks too — *Satellite*, *Terrain* (or *Streets*), each through the
 same key.
 
 **Doors on the map.** From street zoom (18) every door is a pin, with its
-household and sign flags. Further out every door is a small dot in its
-band's colour (support, undecided, opposed; slate grey for not asked yet),
+household and sign flags; one zoom further out a door with room around it
+already has its pin. Further out every door is a small dot in its band's
+colour (support, undecided, opposed; slate for not asked yet, dark enough
+to read on any base map, and from zoom 14 every dot wears a white ring),
 drawn on canvas tiles so a whole voter file pans smoothly; at 16 a door
 with a sign flies a little flag, at 17 a household's size is on its dot. A
 tap near a dot opens that door (or zooms in, further out). Up to
 `STARBASE_MAP_ALL` (5,000) located people the map loads them all at once
-(and keeps a copy on the phone); a bigger list loads by the part of the map
-in view (up to 8,000 at a time), and from further out as patches of people:
-a grey disc for the people there, a coloured disc inside it for the share
-rated. It opens fitted to where your voters live. Turfs and walk lists read
-only the people inside each turf.
+(and keeps a copy on the phone). A bigger list is asked for by the part of
+the map on screen (the screen and 15% more, counted first): from zoom 14
+door by door — the people themselves where they fit (2,400 in a view, 8,000
+at street zoom), else every door a dot (up to 25,000), else patches and
+*Zoom in to see each door* — and from further out as a picture: every patch
+with people in it a shaded square, darker the more people, in the colour of
+support only as far as the people there are rated. Under the count a key
+names the colours and says what a mark is (*Each square is a block — zoom
+in for doors*); the count says *people* or *doors* and counts what is on
+screen. While an answer is on its way what was drawn stays, with *Loading…*
+beside the count; one that doesn't come says *Unavailable — Try again*.
+
+The map opens on the campaign's own list: where its people are inside the
+campaign's area (`STARBASE_GEO_BOUNDS`) when most of them are, else the
+middle of the list — a few addresses in another city don't zoom it out to
+the province. **Whole list** goes back there from anywhere, and a part of
+the map with nobody in it says *Nobody on file here · Back to your list*. A
+link to one person (`/map?person=…`) always shows that door and its card,
+however busy the place. Turfs and walk lists read only the people inside
+each turf.
 
 **Google Maps** instead: `GOOGLE_MAPS_TILES=1` with a `GOOGLE_MAPS_SERVER_KEY`
 that has the **Map Tiles API** enabled (`GOOGLE_MAPS_TILE_TYPE` roadmap |
@@ -716,6 +733,17 @@ Two environments per client: **staging** deploys every push to `main`,
 production* workflow (GitHub → Actions) fast-forwards to `main` once CI is
 green there. `render.yaml` holds the pair for one client; another client is
 another pair with its own names and values (GOING-LIVE.md, *A new client*).
+
+**A page open across a deploy.** Every `/api` answer names the web build the
+server hands out (`X-Build`; `/api/health` shows it as `build`). A page that
+sees a name that is not its own says *A new version is ready · Reload*
+under the nav, and its next link is a full page load; one just opened and
+not yet touched (the page a phone kept while the server was slow) takes the
+new page by itself. A screen whose file is gone — a missing `/assets` file
+is a 404 — reloads the page once, and one that cannot load at all says
+*This screen didn't load · Reload* with the nav still there: never a blank
+page. The service worker keeps the files of the build before for a day, so
+a tab that hasn't caught up can still open its screens.
 
 
 Taking it live for the campaign, step by step: [GOING-LIVE.md](GOING-LIVE.md).
