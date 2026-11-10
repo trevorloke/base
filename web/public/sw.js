@@ -16,6 +16,8 @@
  *               postMessage { type: 'starbase:tiles', url }), kept across
  *               restarts. Only tiles the map itself asked for are kept —
  *               nothing is ever fetched ahead (tile servers' usage rules).
+ *               A tile that can't be fetched and was never kept is a failed
+ *               tile, as it is without this worker (the map counts them).
  *   Never       /api/* (live data and every write — the outbox in
  *               src/offline.js handles knocks), public form pages
  *               (/p /n /v /u /e /d), feature pages served to people
@@ -324,10 +326,13 @@ async function tile(event, url, own = false) {
   if (res) return res; // the tile server's own answer (404 past the edge, 429…)
   // No CORS answer and nothing cached: try the plain request once, so a tile
   // server without CORS headers still draws online (it just isn't kept).
+  // No answer that way either is a failed tile, and is handed on as one: the
+  // map counts them and says when the street map isn't loading (a blank
+  // square in its place read as a tile that had come).
   try {
     return await fetch(event.request);
   } catch {
-    return blankTile();
+    return Response.error();
   }
 }
 
@@ -359,13 +364,6 @@ async function trimTiles(cache) {
   const extra = keys.length - TILE_MAX;
   if (extra <= 0) return;
   await Promise.all(keys.slice(0, extra).map((k) => cache.delete(k)));
-}
-
-// Paper-coloured stand-in for a street we've never loaded: pins still sit on
-// it, and it isn't a broken image.
-function blankTile() {
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e8ebf3"/><path d="M0 .5H256M.5 0V256" stroke="#d3d8e6" stroke-width="1"/></svg>';
-  return new Response(svg, { status: 200, headers: { 'content-type': 'image/svg+xml', 'cache-control': 'no-store' } });
 }
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

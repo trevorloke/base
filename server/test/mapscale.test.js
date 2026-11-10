@@ -245,3 +245,41 @@ test('turf outlines come without counts; one turf’s counts on their own', asyn
   assert.equal((await mgr.get('/api/turfs/not-an-id')).status, 404);
   assert.equal((await mgr.get(`/api/turfs/${randomUUID()}`)).status, 404);
 });
+
+test('a city cut into turfs: the outlines read nobody, however many turfs there are', async () => {
+  // Forty more turfs in a grid over the list — a campaign that has cut its whole city up.
+  for (let i = 0; i < 40; i += 1) {
+    const s = 49.0995 + (i % 10) * 0.001;
+    const w = -122.8505 + Math.floor(i / 10) * 0.0015;
+    ok(await mgr.action('turf.create', { name: `Grid ${i + 1}`, polygon: [[s, w], [s, w + 0.0015], [s + 0.001, w + 0.0015], [s + 0.001, w]] }));
+  }
+  // What each answer reads from the database.
+  const asked = [];
+  const real = db.query;
+  db.query = (sql, ...rest) => { asked.push(String(sql)); return real.call(db, sql, ...rest); };
+  let outline; let whole; let outlineAsked; let wholeAsked;
+  try {
+    outline = ok(await mgr.get('/api/turfs?outline=1'));
+    outlineAsked = asked.splice(0);
+    whole = ok(await mgr.get('/api/turfs'));
+    wholeAsked = asked.splice(0);
+  } finally {
+    db.query = real;
+  }
+  const ofPeople = (list) => list.filter((q) => /\bfrom persons\b/.test(q)).length;
+  const n = whole.turfs.length;
+  assert.ok(n > 40 && outline.turfs.length === n, `${outline.turfs.length} outlines of ${n} turfs`);
+  assert.equal(ofPeople(outlineAsked), 0, 'the outlines: not one read of the people');
+  assert.ok(ofPeople(wholeAsked) >= n, `every turf counted reads the people inside it: ${ofPeople(wholeAsked)} reads`);
+  assert.ok(outlineAsked.length < wholeAsked.length - 40, `${outlineAsked.length} queries for the outlines, ${wholeAsked.length} with every count`);
+  // The same names, shapes and canvassers either way…
+  const shape = (t) => [t.id, t.name, t.polygon, t.members];
+  assert.deepEqual(outline.turfs.map(shape), whole.turfs.map(shape));
+  // …and a turf's counts, asked for on their own, are the ones the whole answer gives.
+  const counts = (t) => [t.doors, t.people, t.doorsDone, t.doorsAgain, t.rated];
+  for (const name of ['Grid 1', 'Grid 17', 'Two rows']) {
+    const t = whole.turfs.find((x) => x.name === name);
+    assert.deepEqual(counts(ok(await mgr.get(`/api/turfs/${t.id}`)).turf), counts(t), name);
+  }
+  assert.ok(whole.turfs.find((x) => x.name === 'Grid 1').people > 0);
+});

@@ -459,9 +459,11 @@ Google's Geocoding API is the other option (`GOOGLE_MAPS_SERVER_KEY`, a key
 with only that API enabled and restricted to the server's IP; lookups are
 biased to Surrey and limited to BC, and only a rooftop or street-number
 match counts). `GEOCODER_FALLBACK=google` keeps the free BC service first
-and asks Google only for addresses it can't place. **Place on
-map** starts a background run (`server/ext/geocoding`, a job like ladder
-emails): rounds of 120 people, one lookup per address (a household shares
+and asks Google only for addresses it can't place. A list is placed by a
+background run (`server/ext/geocoding`, a job like ladder emails). An import
+that leaves addresses without a pin starts it by itself, in the import's own
+write; **Place on map** and the map's *Look up addresses* start it by hand.
+It works in rounds of 120 people, one lookup per address (a household shares
 it), pins already on file at the same address copied, `GEOCODE_CONCURRENCY`
 lookups at once (default 6). A lookup that fails while others work is tried
 3 times, then set aside for a pin by hand; a round where every lookup fails
@@ -472,8 +474,13 @@ one round after 15 minutes (`GEOCODE_RETRY_MS`), then after twice as long
 each time lookups still don't answer, up to six hours (**Carry on** does it
 now, **Stop** calls it off). `GET /api/geocode/status` reports progress and,
 while paused, when the next try is (`retryAt`); the page shows the progress
-and works out the time left. With
-`STARBASE_JOBS=off` the page falls back to looking up batches itself.
+and works out the time left. The desk's map shows the run without opening
+anything — *Placing addresses · 12,400 of 150,000* where *Not on map* was,
+*Placing addresses paused* while it waits to try again — and draws what it
+has placed as it goes. Nobody is placed by guessing: a person with no
+address stays off the map (the Map check counts them). With
+`STARBASE_JOBS=off` nothing starts by itself, and the page falls back to
+looking up batches itself.
 
 **Typing an address** (`server/ext/addresses`, `web/src/components/AddressField.jsx`):
 the map's *+ Door*, People → *Add person*, a profile's *Edit* and *Add a sign*
@@ -560,6 +567,17 @@ A bad value falls back to the default (and logs once); desk roles see which
 tiles took on the map's filter sheet (*Map tiles: OpenStreetMap — custom
 address ignored*).
 
+**When the street map isn't loading** the map says so. It listens to its
+tiles: a view where most of them failed, or six seconds with not one, and —
+once in a page's life — it switches to its other provider by itself (the
+*Clean* look's CARTO ↔ the standard tiles) with a line saying it did; if
+that doesn't load either, or there is no second provider (a campaign's own,
+Google's), *The street map isn’t loading* stays under the count with one
+tap: *Try Clean* / *Try Muted*, or *Try again*. The person's own choice of
+look is only changed by their tap. Behind the tiles is the app's paper, not
+grey. Choose the provider before election week:
+[GOING-LIVE.md](GOING-LIVE.md), section 5.
+
 **The map's look** is each person's own (Show → *Map*, kept on that
 browser): *Clean* (the default on the standard tiles: CARTO's light map of
 the same OpenStreetMap streets, without shop icons, parking lots or house
@@ -597,7 +615,24 @@ the province. **Whole list** goes back there from anywhere, and a part of
 the map with nobody in it says *Nobody on file here · Back to your list*. A
 link to one person (`/map?person=…`) always shows that door and its card,
 however busy the place. Turfs and walk lists read only the people inside
-each turf.
+each turf. The map asks for turfs as names and outlines
+(`GET /api/turfs?outline=1`) and for one turf's counts when its sheet opens
+(`GET /api/turfs/:id`: *Loading…* until they are in, never *No doors* on
+the way) — with 158 turfs over 300,000 people the outlines answer in 6 ms,
+where every turf counted took 3.6 s and held the outlines up. (A
+volunteer's own few turfs still come whole, and stay on the phone.)
+
+**Map check** (managers: Show → *Map check*; `GET /api/map/check`,
+`server/ext/mapcheck`). One sheet with what the map is drawn from: people on
+file, on the map and not (waiting for a pin; with no address), the placing
+run, how many live outside the campaign's area, the turfs, the street map in
+use and how many of its tiles loaded and failed, this page's build against
+the server's, the map's size on screen. The line that applies is flagged, so
+a screenshot of it says which trouble a map has.
+
+Older browsers: every `dvh` height in the map's sheet has the same in `vh`
+before it, and the sidebar's room and the map's width come from classes the
+shell sets (`web/src/layout.js`) as well as `:has()`.
 
 **Google Maps** instead: `GOOGLE_MAPS_TILES=1` with a `GOOGLE_MAPS_SERVER_KEY`
 that has the **Map Tiles API** enabled (`GOOGLE_MAPS_TILE_TYPE` roadmap |
@@ -610,7 +645,9 @@ as with any provider. Google bills per tile past its free allowance, and its
 terms have their own rules on attribution and caching — check them before
 election week. The service worker
 keeps the tiles a phone has already looked at (about 1,500, oldest out), so a
-turf viewed with signal still draws offline; it never fetches tiles ahead.
+turf viewed with signal still draws offline; it never fetches tiles ahead. A
+tile it can't fetch and never kept is a failed tile, as without the worker —
+not a blank square that counts as loaded.
 
 With no signal, field work saves on the phone and sends once, in order, when
 the signal is back: knocks, new people and doors (staff), dropped pins, sign

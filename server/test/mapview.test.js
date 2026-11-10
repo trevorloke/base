@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
   dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
+  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -109,8 +110,9 @@ const contrast = (mark, ground) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 // The grounds the research measured: CARTO's land, OpenStreetMap's land and
-// its residential grey, and Leaflet's grey when no tile has come.
-const LIGHT_GROUNDS = { clean: [250, 250, 248], standard: [242, 239, 233], residential: [224, 223, 223], noTiles: [221, 221, 221] };
+// its residential grey, Leaflet's grey — and the app's paper, which is what
+// now shows where no tile has come (map.css).
+const LIGHT_GROUNDS = { clean: [250, 250, 248], standard: [242, 239, 233], residential: [224, 223, 223], leafletGrey: [221, 221, 221], paper: [232, 235, 243] };
 const DARK_GROUND = [26, 28, 34];
 
 test('“not asked yet” reads on every base map: 3 to 1 or better, from the smallest dot up', () => {
@@ -176,4 +178,138 @@ test('a patch takes the colour of support only as far as people there are rated'
   // The filter's own patches (only one rating kept) count only those people.
   const kept = cellsFrom({ cell, cells: [[1000, -2000, '', 150], [1000, -2000, '1', 50]] }, bandOf, (r) => r === '1');
   assert.deepEqual([kept[0].n, kept[0].rated, kept[0].band], [50, 50, 'support']);
+});
+
+// ── Is the street map loading? ──
+test('the street map isn’t loading: most of a view’s tiles failed, or not one came in six seconds', () => {
+  const h = tileHealth();
+  assert.deepEqual(h.get(), { loaded: 0, failed: 0, down: false }, 'nothing asked for: nothing claimed');
+  // A view's tiles all come.
+  h.batch(0);
+  for (let i = 0; i < 20; i += 1) h.tile(true);
+  h.done();
+  assert.deepEqual(h.get(), { loaded: 20, failed: 0, down: false });
+  // The next view: the host refuses every one. Said once the view is done —
+  // a few quick failures among slow tiles are not yet "most".
+  h.batch(1000);
+  for (let i = 0; i < 12; i += 1) h.tile(false);
+  assert.equal(h.get().down, false);
+  h.done();
+  assert.deepEqual(h.get(), { loaded: 20, failed: 12, down: true }, 'counted since the layer was added; this view failed');
+  // One tile in four failing (one of four hosts down): most came.
+  h.batch(2000);
+  for (let i = 0; i < 12; i += 1) h.tile(i % 4 !== 0);
+  h.done();
+  assert.equal(h.get().down, false, 'loading again');
+  // A view with nothing new to ask for says nothing either way.
+  h.batch(3000);
+  h.done();
+  assert.equal(h.get().down, false);
+
+  // A host that never answers: six seconds and not one tile.
+  const slow = tileHealth();
+  slow.batch(0);
+  slow.late(TILE_WAIT_MS - 1);
+  assert.equal(slow.get().down, false, 'not before six seconds');
+  slow.late(TILE_WAIT_MS);
+  assert.equal(slow.get().down, true);
+  // …and when its tiles come after all, it is loading.
+  for (let i = 0; i < 6; i += 1) slow.tile(true);
+  slow.done();
+  assert.equal(slow.get().down, false);
+  // Six seconds in with some here and none failed: still loading. With most of what has settled failed: not.
+  const some = tileHealth();
+  some.batch(0);
+  some.tile(true);
+  some.late(TILE_WAIT_MS + 5);
+  assert.equal(some.get().down, false);
+  some.tile(false);
+  some.tile(false);
+  some.late(TILE_WAIT_MS + 900);
+  assert.equal(some.get().down, true, 'one tile hanging must not hide that the rest failed');
+  // A view done in time: the six-second look has nothing to say.
+  const quick = tileHealth();
+  quick.batch(0);
+  quick.tile(true);
+  quick.done();
+  quick.late(TILE_WAIT_MS + 5);
+  assert.equal(quick.get().down, false);
+  assert.equal(TILE_WAIT_MS, 6000);
+});
+
+// ── The map's check, for managers ──
+const CHECK = {
+  people: { total: 300052, onMap: 300049, waiting: 0, noAddress: 3 },
+  area: { box: [49.002, -122.92, 49.222, -122.67], inside: 294037, outside: 6012 },
+  turfs: 158,
+  placing: { state: 'done', located: 150000, copied: 150049, missed: 0, errors: 0, lastError: null, retryAt: null, remaining: 0, unmatched: 0, jobs: true, off: false },
+  tiles: { source: 'OpenStreetMap', custom: false, ignored: [], clean: true },
+  build: 'index-NEWbuild2.js',
+  commit: '04ab25f',
+};
+const PAGE = { build: 'index-NEWbuild2.js', look: 'Clean', tilesFrom: 'basemaps.cartocdn.com', tiles: { loaded: 24, failed: 0, down: false }, size: { x: 1158, y: 844 }, zoom: 12.25 };
+const said = (lines) => Object.fromEntries(lines.map((l) => [l.key, l]));
+const flagged = (lines) => lines.filter((l) => l.warn).map((l) => l.key).sort();
+
+test('the map’s check: one line for each way a map can look empty; nothing flagged when nothing is wrong', () => {
+  const lines = checkLines(CHECK, PAGE);
+  assert.deepEqual(lines.map((l) => l.key), ['file', 'onmap', 'offmap', 'placing', 'area', 'turfs', 'tiles', 'build', 'screen']);
+  const l = said(lines);
+  assert.deepEqual([l.file.value, l.onmap.value, l.turfs.value], ['300,052', '300,049', '158'], 'numbers wear their separators');
+  // Nobody is placed by guessing: no address, no pin — and counted.
+  assert.equal(l.offmap.value, '3 — 3 with no address');
+  assert.equal(l.placing.value, 'Nothing waiting');
+  assert.equal(l.area.value, '6,012 of the 300,049 on the map');
+  assert.equal(l.tiles.value, 'Clean · basemaps.cartocdn.com — 24 loaded, 0 failed');
+  assert.deepEqual([l.build.value, l.build.note], ['Up to date', 'The server runs 04ab25f']);
+  assert.equal(l.screen.value, '1,158 × 844 px · zoom 12.25');
+  assert.deepEqual(flagged(lines), []);
+});
+
+test('…and each trouble is flagged in its own line, so one screenshot says which', () => {
+  const clock = () => '3:40 pm';
+  // An old page: the server hands out another build.
+  let l = checkLines(CHECK, { ...PAGE, build: 'index-OLDbuild1.js' });
+  assert.deepEqual([flagged(l), said(l).build.value], [['build'], 'Older than the server — reload it']);
+  // No web build to compare (a server without one): said, not flagged.
+  assert.deepEqual(flagged(checkLines({ ...CHECK, build: null }, PAGE)), []);
+  assert.equal(said(checkLines({ ...CHECK, build: null }, PAGE)).build.value, 'Not compared');
+
+  // Most of the list never placed, and nothing placing it.
+  const unplaced = { ...CHECK, people: { total: 300052, onMap: 22424, waiting: 277625, noAddress: 3 }, placing: { ...CHECK.placing, state: 'idle', located: 0, copied: 0, remaining: 277625 } };
+  l = checkLines(unplaced, PAGE);
+  assert.deepEqual(flagged(l), ['offmap', 'placing']);
+  assert.equal(said(l).offmap.value, '277,628 — 277,625 waiting for a pin, 3 with no address');
+  assert.deepEqual([said(l).placing.value, said(l).placing.note], ['Not running', '277,625 addresses waiting — tap “Not on map”, then “Look up addresses”']);
+  // The run going: its progress, not a trouble.
+  l = checkLines({ ...unplaced, placing: { ...unplaced.placing, state: 'running', located: 12000, copied: 400, remaining: 137600 } }, PAGE);
+  assert.equal(said(l).placing.value, 'Running · 12,400 of 150,000');
+  assert.deepEqual(flagged(l), ['offmap']);
+  // Paused because lookups aren't answering: why, and when it tries again by itself.
+  l = checkLines({ ...unplaced, placing: { ...unplaced.placing, state: 'paused', lastError: 'geocoder 503', retryAt: '2026-11-10T23:40:00.000Z' } }, PAGE, { clock });
+  assert.deepEqual([said(l).placing.value, said(l).placing.note, said(l).placing.warn], ['Paused — tries again at 3:40 pm', 'Address lookup isn’t answering (geocoder 503)', true]);
+  // (The time is a time of day on the reader's own clock, whatever the day.)
+  const at = new Date(2026, 10, 11, 0, 5);
+  assert.deepEqual([timeOfDay(at.toISOString()), timeOfDay(new Date(2026, 10, 10, 15, 40).toISOString()), timeOfDay('nonsense')], ['12:05 am', '3:40 pm', '']);
+  // Stopped by someone; lookups turned off; no background jobs on this server.
+  assert.equal(said(checkLines({ ...unplaced, placing: { ...unplaced.placing, state: 'stopped' } }, PAGE)).placing.value, 'Stopped');
+  l = checkLines({ ...unplaced, placing: { ...unplaced.placing, off: true } }, PAGE);
+  assert.deepEqual([said(l).placing.value, said(l).placing.warn], ['Turned off', true]);
+  assert.match(said(checkLines({ ...unplaced, placing: { ...unplaced.placing, jobs: false } }, PAGE)).placing.note, /background jobs are off on this server/);
+  // A handful that couldn't be matched is said, and is no alarm on a list of 300,000.
+  l = checkLines({ ...CHECK, people: { ...CHECK.people, waiting: 12 }, placing: { ...CHECK.placing, unmatched: 12 } }, PAGE);
+  assert.deepEqual([flagged(l), said(l).placing.note], [[], '12 couldn’t be matched — they need a pin by hand']);
+
+  // The street map isn't loading.
+  l = checkLines(CHECK, { ...PAGE, look: 'Muted', tilesFrom: 'tile.openstreetmap.org', tiles: { loaded: 0, failed: 18, down: true } });
+  assert.deepEqual([flagged(l), said(l).tiles.value], [['tiles'], 'Muted · tile.openstreetmap.org — isn’t loading: 0 loaded, 18 failed']);
+  // A street map address the server ignored is said on the same line.
+  assert.match(said(checkLines({ ...CHECK, tiles: { ...CHECK.tiles, ignored: ['url'] } }, PAGE)).tiles.note, /was ignored/);
+
+  // Most of the list lives outside the area the campaign is set to.
+  l = checkLines({ ...CHECK, area: { ...CHECK.area, inside: 9000, outside: 291049 } }, PAGE);
+  assert.deepEqual(flagged(l), ['area']);
+  // A map with no room on screen (a browser that gave it no height).
+  l = checkLines(CHECK, { ...PAGE, size: { x: 390, y: 0 } });
+  assert.deepEqual([flagged(l), said(l).screen.value], [['screen'], '390 × 0 px · zoom 12.25']);
 });

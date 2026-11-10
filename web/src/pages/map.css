@@ -34,13 +34,19 @@
 }
 
 /* The Leaflet canvas. z-index:0 makes a stacking context so Leaflet's own
-   z-indexes (controls at 1000) stay underneath our overlays and the tabbar. */
-.map-canvas {
+   z-indexes (controls at 1000) stay underneath our overlays and the tabbar.
+   The ground behind the tiles — what shows while they load, and where one
+   fails — is the app's paper, not Leaflet's grey: said with the page's own
+   class, because Leaflet's rule for its container is as strong as a plain
+   .map-canvas one and comes later. The marks are drawn for a light map
+   whatever the scheme, and for a dark one on the Dark look: so is the ground. */
+.map-page .map-canvas {
   position: absolute;
   inset: 0;
   z-index: 0;
   background: #e8ebf3; /* tiles are always light, whatever the scheme */
 }
+.map-page.map-view--dark .map-canvas { background: rgb(26, 28, 34); }
 .map-canvas .leaflet-control-attribution { font: 10px/1.4 var(--font-mono); background: rgba(255, 255, 255, 0.85); color: #2c3250; }
 .map-canvas .leaflet-control-attribution a { color: #161a2e; }
 .map-page .map-canvas .leaflet-bar a { width: 48px; height: 48px; line-height: 48px; font-size: 20px; font-family: var(--font-serif); color: #161a2e; background: #ffffff; border-bottom-color: #dde0ec; }
@@ -1036,3 +1042,46 @@
 @media (max-width: 720px) {
   .map-zoomnote, .map-nobody { bottom: 164px; }
 }
+
+/* The street map isn't loading: one line and one tap (the other provider,
+   or Try again). It sits under the count, like the key. */
+.map-top > .map-tilenote {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  max-width: 100%;
+  padding: 4px 4px 4px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  background: var(--paper-0);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-2);
+}
+.btn.map-tilenote__btn { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; white-space: nowrap; }
+
+/* ── The map's check (managers): what the map is drawn from, line by line.
+   The line that applies is flagged with a mark and words, not colour alone. ── */
+/* (Over its scrim, as the Show sheet is over its own.) */
+.map-sheet.map-check { z-index: 5; }
+@media (max-width: 720px) { .map-sheet.map-check { z-index: 950; } }
+.btn.map-fsheet__check { display: inline-flex; align-items: center; min-height: 48px; margin: var(--s-2) 0 0 calc(-1 * var(--s-3)); padding: 0 var(--s-3); }
+.map-check__body { padding: var(--s-3) var(--s-4) var(--s-4); }
+.map-check__lead { margin: 0 0 var(--s-3); font-size: 13px; line-height: 1.4; color: var(--text-3); }
+.map-check__list { margin: 0; }
+.map-check__row { display: grid; grid-template-columns: 124px minmax(0, 1fr); gap: 2px var(--s-3); padding: 10px 0; border-top: 1px solid var(--rule); }
+.map-check__row dt { font-size: 13px; line-height: 1.4; color: var(--text-3); }
+.map-check__row dd { margin: 0; font-size: 15px; line-height: 1.35; color: var(--text-1); overflow-wrap: anywhere; }
+.map-check__row dd.map-check__note { grid-column: 2; font-size: 13px; color: var(--text-2); }
+.map-check__row.is-warn dt { color: var(--danger); font-weight: 600; }
+.map-check__row.is-warn .map-check__value { font-weight: 600; }
+.map-check__flag {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-right: 6px;
+  border-radius: 50%; background: var(--danger); color: var(--paper-0); font-size: 12px; font-weight: 700; vertical-align: -3px;
+}
+.map-check__when { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin: var(--s-2) 0 0; padding-top: var(--s-2); border-top: 1px solid var(--rule); font-size: 13px; color: var(--text-3); }
+.btn.map-check__again, .btn.map-check__retry { display: inline-flex; align-items: center; min-height: 48px; padding: 0 var(--s-3); }
+.map-check__wait { margin: 0; font-size: 15px; color: var(--text-2); }

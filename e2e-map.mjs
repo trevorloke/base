@@ -20,11 +20,24 @@
 //     here · Back to your list";
 //   · on a 390 px phone the first view fits, nothing scrolls sideways, and
 //     after a finger drag the picture is still one sheet (its tiles lap: no
-//     line of the street map between two of them).
+//     line of the street map between two of them);
+//   · layout: the map fills its place in a browser without :has() or dvh, on
+//     a phone held sideways, and the Show sheet scrolls inside the map;
+//   · the street map says when it isn't loading: one switch to the other
+//     provider by itself, then "The street map isn’t loading" with one tap;
+//     with the service worker in control a failed tile is a failure;
+//   · turfs come as outlines at once; a turf's counts load when its sheet
+//     opens ("Loading…", never "No doors" on the way);
+//   · an import that leaves addresses without a pin starts the placing run
+//     by itself (a stand-in address lookup on :4949), the map shows its
+//     progress, and after a pause it tries again with nobody tapping;
+//   · the Map check (managers) says which trouble a map has, in one screen.
 //
-//   (cd web && npm run build) && node e2e-map.mjs        (its own server on :4948)
+//   (cd web && npm run build) && node e2e-map.mjs        (its own server on :4948, the stand-in lookup on :4949)
+//   ONLY=tiles,check node e2e-map.mjs                    just those parts: list · layout · tiles · turfs · placing · check
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,10 +53,34 @@ const check = (name, ok, extra = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  — ' + String(extra).slice(0, 300) : ''}`);
 };
 
+// A stand-in for the BC Address Geocoder (the real one can't be reached from
+// a test, and a test must not lean on it): "<n> Placing Way" is found at a
+// spot of its own, after geo.ms; geo.mode 'down' answers 503 to everything.
+const geo = { mode: 'ok', ms: 200, asked: 0 };
+const geocoder = http.createServer((req, res) => {
+  const q = new URL(req.url, 'http://x').searchParams.get('addressString') || '';
+  geo.asked += 1;
+  setTimeout(() => {
+    if (geo.mode === 'down') { res.writeHead(503); res.end('busy'); return; }
+    const n = Number(/^\d+/.exec(q)?.[0] || 0);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ features: [{
+      geometry: { coordinates: [Number((-122.83 + (n % 20) * 0.0004).toFixed(6)), Number((49.105 + Math.floor((n % 400) / 20) * 0.0003).toFixed(6))] },
+      properties: { score: 97, matchPrecision: 'CIVIC_NUMBER', fullAddress: q },
+    }] }));
+  }, geo.ms);
+});
+await new Promise((resolve) => geocoder.listen(PORT + 1, '127.0.0.1', resolve));
+
+// Background jobs are on (the placing run is one): looked at every 400 ms.
+// A round where no lookup answers is tried again at once, and a paused run
+// tries again by itself after 8 s (15 minutes, outside a test).
 const server = spawn(process.execPath, ['server/index.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)),
   env: {
-    ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off', GEOCODE_ON_SAVE: 'off',
+    ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), GEOCODE_ON_SAVE: 'off',
+    STARBASE_JOBS: 'on', STARBASE_JOBS_EVERY_MS: '400', GEOCODER: 'bc', BC_GEOCODER_URL: `http://127.0.0.1:${PORT + 1}`,
+    GEOCODE_BACKOFF_MS: '0', GEOCODE_RETRY_MS: '8000',
     STARBASE_MAP_ALL: '40', STARBASE_MAP_VIEW: '60', STARBASE_MAP_DOTS: '200',
   },
   stdio: ['ignore', 'pipe', 'inherit'],
@@ -55,6 +92,9 @@ await new Promise((resolve, reject) => {
 });
 const BASE = `http://127.0.0.1:${PORT}`;
 
+// (With this on, the tile routes below also answer what a service worker
+// fetches — the part that checks a failed tile under one needs it.)
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
@@ -64,9 +104,11 @@ const tileSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256
 const EMAIL = `map+${Date.now().toString(36)}@example.org`;
 const PASSWORD = 'surrey-forward-2026';
 let signedUp = false;
-const context = async (opts = {}) => {
+const standIn = { status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg };
+// tiles: false — the part that tests the street map answers the tile hosts itself.
+const context = async (opts = {}, { tiles = true } = {}) => {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Vancouver', serviceWorkers: 'block', ...opts });
-  await ctx.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg }));
+  if (tiles) await ctx.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill(standIn));
   const r = signedUp
     ? await ctx.request.post(`${BASE}/api/auth/login`, { data: { email: EMAIL, password: PASSWORD } })
     : await ctx.request.post(`${BASE}/api/auth/signup`, { data: { name: 'Riley Manager', email: EMAIL, password: PASSWORD, workspaceName: 'Big list', jurisdiction: 'bc-municipal' } });
@@ -449,12 +491,334 @@ try {
     await turned.lctx.close();
   }
 
+  // ══ 8. The street map says when it isn't loading ══
+  if (want('tiles')) {
+    // Which tile host answers is the test: clean is CARTO (the look the map
+    // opens on), base is OpenStreetMap (Standard, Muted, Dark).
+    const tiled = async (opts = {}) => {
+      const tctx = await context(opts, { tiles: false });
+      const net = { up: { clean: true, base: true, own: true }, hold: { clean: 0, base: 0, own: 0 }, asked: { clean: 0, base: 0, own: 0 } };
+      const answer = (who) => async (route) => {
+        net.asked[who] += 1;
+        if (net.hold[who]) await sleep(net.hold[who]);
+        await (net.up[who] ? route.fulfill(standIn) : route.abort('connectionrefused')).catch(() => {});
+      };
+      await tctx.route(/basemaps\.cartocdn\.com/, answer('clean'));
+      await tctx.route(/tile\.openstreetmap\.org/, answer('base'));
+      await tctx.route(/tiles\.example\//, answer('own'));
+      const pg = await tctx.newPage();
+      pg.on('pageerror', (e) => errors.push(`[tiles] ${e.message}`));
+      return { tctx, pg, net };
+    };
+    const tileState = (pg) => pg.evaluate(() => {
+      const el = document.querySelector('.map-canvas');
+      const words = (s) => document.querySelector(s)?.innerText.replace(/\s+/g, ' ').trim() || null;
+      return {
+        tiles: el?.dataset.tiles || '', look: (document.querySelector('.map-page')?.className.match(/map-view--(\w+)/) || [])[1] || null,
+        note: words('.map-tilenote'), toast: words('.map-toast'),
+        loaded: el ? [...el.querySelectorAll('.leaflet-tile-pane img.leaflet-tile-loaded')].filter((i) => i.complete && i.naturalWidth > 0).length : 0,
+        ground: el ? getComputedStyle(el).backgroundColor : null, pick: localStorage.getItem('starbase:map:view'),
+      };
+    }).catch(() => ({}));
+    // Until fn(state) — and whatever the toast said on the way (it is gone in a few seconds).
+    const tilesUntil = async (pg, fn, ms = 12000) => {
+      const end = Date.now() + ms;
+      let said = null;
+      for (;;) {
+        const s = await tileState(pg);
+        said = s.toast || said;
+        if (fn(s) || Date.now() > end) return { ...s, said };
+        await sleep(150);
+      }
+    };
+
+    // The look's own provider refuses: one switch to the other, by itself.
+    let t = await tiled();
+    t.net.up.clean = false;
+    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    let ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok');
+    await t.pg.screenshot({ path: `${SHOTS}/8-street-map-switched-by-itself.png` });
+    check('the street map’s provider refuses: the map switches to the other one by itself, and says so',
+      ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && /street map wasn’t loading/.test(ts.said || '') && /Muted/.test(ts.said || ''), JSON.stringify(ts));
+    check('…the ground behind the tiles is the app’s paper, not Leaflet’s grey; the person’s own choice of look is untouched',
+      ts.ground === 'rgb(232, 235, 243)' && ts.pick === null, JSON.stringify({ ground: ts.ground, pick: ts.pick }));
+    // The other refuses too: said, with one tap to the other provider — no more switching by itself.
+    t.net.up.base = false;
+    const askedClean = t.net.asked.clean;
+    await t.pg.click('.leaflet-control-zoom-in');
+    ts = await tilesUntil(t.pg, (s) => s.note);
+    await sleep(1200);
+    ts = { ...ts, ...(await tileState(t.pg)) };
+    await t.pg.screenshot({ path: `${SHOTS}/8-street-map-not-loading.png` });
+    check('the other refuses too: “The street map isn’t loading”, one tap to the other provider — and no second switch by itself',
+      /^The street map isn’t loading/.test(ts.note || '') && /Try Clean/.test(ts.note || '') && ts.look === 'muted' && ts.tiles === 'down' && t.net.asked.clean === askedClean,
+      JSON.stringify({ ...ts, askedClean: [askedClean, t.net.asked.clean] }));
+    t.net.up.clean = true;
+    await t.pg.click('.map-tilenote button');
+    ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && s.tiles === 'ok' && !s.note);
+    check('one tap: the other provider’s map loads, and the note goes', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note, JSON.stringify(ts));
+    await t.tctx.close();
+
+    // Nothing at all after six seconds (a host that never answers): the same switch.
+    t = await tiled();
+    t.net.hold.clean = 20000;
+    const t0 = Date.now();
+    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    ts = await tilesUntil(t.pg, (s) => s.look === 'muted', 14000);
+    const took = Date.now() - t0;
+    ts = await tilesUntil(t.pg, (s) => s.tiles === 'ok', 6000);
+    check('no tile at all after six seconds: the same switch', ts.look === 'muted' && ts.tiles === 'ok' && took > 5500 && took < 11000, `${took} ms · ${JSON.stringify(ts)}`);
+    await t.tctx.close();
+
+    // A campaign's own provider has no second one: said, with Try again.
+    t = await tiled();
+    await t.tctx.route('**/api/map/config', async (route) => {
+      const res = await route.fetch();
+      await route.fulfill({ response: res, json: { tiles: { url: 'https://tiles.example/{z}/{x}/{y}.png', attribution: 'Example Tiles', maxZoom: 19 }, setup: { source: 'tiles.example', custom: true, ignored: [], maxZoom: 19 } } });
+    });
+    t.net.up.own = false;
+    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    ts = await tilesUntil(t.pg, (s) => s.note);
+    check('a campaign’s own street map isn’t loading: said, with “Try again” (there is no other provider to switch to)',
+      /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && t.net.asked.clean === 0 && t.net.asked.base === 0, JSON.stringify({ ...ts, asked: t.net.asked }));
+    t.net.up.own = true;
+    await t.pg.click('.map-tilenote button');
+    ts = await tilesUntil(t.pg, (s) => s.tiles === 'ok' && !s.note);
+    check('…Try again asks for it again, and it loads', ts.tiles === 'ok' && ts.loaded > 0 && !ts.note, JSON.stringify(ts));
+    await t.tctx.close();
+
+    // With the service worker in control, a tile that can't be fetched is a
+    // failure — it was answered with a blank square and counted as loaded.
+    t = await tiled({ serviceWorkers: 'allow' });
+    t.net.up.clean = false;
+    t.net.up.base = false;
+    await t.pg.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+    const controlled = await t.pg.evaluate(() => navigator.serviceWorker.ready.then(() => new Promise((resolve) => {
+      if (navigator.serviceWorker.controller) resolve(true);
+      else { navigator.serviceWorker.addEventListener('controllerchange', () => resolve(true)); setTimeout(() => resolve(Boolean(navigator.serviceWorker.controller)), 8000); }
+    }))).catch(() => false);
+    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    ts = await tilesUntil(t.pg, (s) => s.note, 15000);
+    await t.pg.screenshot({ path: `${SHOTS}/8-street-map-not-loading-service-worker.png` });
+    check('under the service worker a tile that fails is a failure: none “loaded”, and the map says so',
+      controlled && ts.loaded === 0 && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || ''), JSON.stringify({ controlled, ...ts }));
+    await t.tctx.close();
+  }
+
+  // ══ 9. Turfs don't hold the map up ══
+  if (want('turfs')) {
+    // The block (64 doors), the busy row (36 doors, two people each, five of them knocked) and a field with nobody in it.
+    const ring = (s, w, n, e) => [[s, w], [s, e], [n, e], [n, w]];
+    const [block, busy, field] = [
+      (await post('/actions/turf.create', { name: 'The block', polygon: ring(49.1298, -122.8503, 49.132, -122.8469) })).turf,
+      (await post('/actions/turf.create', { name: 'Busy row', polygon: ring(49.13395, -122.85005, 49.1347, -122.8491) })).turf,
+      (await post('/actions/turf.create', { name: 'Empty field', polygon: ring(49.2, -122.75, 49.205, -122.745) })).turf,
+    ];
+    const tp = await ctx.newPage();
+    tp.on('pageerror', (e) => errors.push(`[turfs] ${e.message}`));
+    const turfAsks = [];
+    tp.on('request', (r) => { if (/\/api\/turfs/.test(r.url())) turfAsks.push(r.url().replace(/^.*\/api/, '')); });
+    await tp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    await tp.waitForFunction(() => document.querySelectorAll('.map-canvas path.map-turf').length >= 2, null, { timeout: 12000 }).catch(() => {});
+    const outlines = await tp.locator('.map-canvas path.map-turf').count();
+    check('the map asks for turfs as outlines — names and shapes, nobody inside read — and draws them',
+      turfAsks.includes('/turfs?outline=1') && !turfAsks.includes('/turfs') && outlines >= 2, `${turfAsks.join(' ')} · ${outlines} outlines`);
+
+    // A turf's counts come when its sheet opens.
+    const sheet = () => tp.evaluate(() => {
+      const words = (s) => document.querySelector(s)?.innerText.replace(/\s+/g, ' ').trim() || null;
+      return { title: words('.turf-sheet .mapsheet-title'), progress: words('.turf-progress__text'), retry: words('.turf-retry'), walk: Boolean(document.querySelector('.turf-sheet a.btn-primary')) };
+    });
+    const sheetUntil = async (fn, ms = 8000) => {
+      const end = Date.now() + ms;
+      let s = await sheet();
+      while (!fn(s) && Date.now() < end) { await sleep(120); s = await sheet(); }
+      return s;
+    };
+    const counted = async (t) => (await (await ctx.request.get(`${BASE}/api/turfs/${t.id}`)).json()).turf;
+    const leftIn = (t) => `${t.doors - t.doorsDone} doors left`;
+    const truth = await counted(block);
+    const busyTruth = await counted(busy);
+    await tp.route(`**/api/turfs/${block.id}`, async (route) => { await sleep(2500); await route.continue().catch(() => {}); });
+    await tp.goto(`${BASE}/admin/map?turf=${block.id}`, { waitUntil: 'domcontentloaded' });
+    let ss = await sheetUntil((s) => s.title);
+    await sleep(400);
+    ss = await sheet();
+    check('a turf’s sheet opens at once: its name, the walk list, and “Loading…” where its counts go — never “No doors” on the way',
+      ss.title === 'The block' && ss.walk && ss.progress === 'Loading…', JSON.stringify(ss));
+    ss = await sheetUntil((s) => /left|done|No doors/.test(s.progress || ''));
+    await tp.screenshot({ path: `${SHOTS}/9-turf-sheet-counts.png` });
+    check('…then the server’s own counts', truth.doors === 64 && ss.progress === leftIn(truth), `${ss.progress} (server: ${truth.doors} doors, ${truth.doorsDone} done, ${truth.people} people)`);
+    await tp.unroute(`**/api/turfs/${block.id}`);
+    // No answer: said, with a way to try again.
+    await tp.route(`**/api/turfs/${busy.id}`, (route) => route.abort('failed'));
+    await tp.goto(`${BASE}/admin/map?turf=${busy.id}`, { waitUntil: 'domcontentloaded' });
+    ss = await sheetUntil((s) => s.retry, 15000);
+    check('no answer for a turf’s counts: “Unavailable — Try again”, never a 0', /Unavailable — Try again/.test(ss.retry || '') && !/\b0\b|No doors/.test(ss.progress || ''), JSON.stringify(ss));
+    await tp.unroute(`**/api/turfs/${busy.id}`);
+    await tp.click('.turf-retry');
+    ss = await sheetUntil((s) => /left/.test(s.progress || ''));
+    check('…Try again brings them', busyTruth.doors === 36 && ss.progress === leftIn(busyTruth) && !ss.retry, `${JSON.stringify(ss)} (server: ${busyTruth.doors} doors, ${busyTruth.doorsDone} done)`);
+    await tp.goto(`${BASE}/admin/map?turf=${field.id}`, { waitUntil: 'domcontentloaded' });
+    ss = await sheetUntil((s) => /No doors/.test(s.progress || ''));
+    check('a turf with nobody in it says “No doors” — once the server has said so', ss.progress === 'No doors', JSON.stringify(ss));
+    await tp.close();
+  }
+
+  // ══ 10. People get onto the map by themselves ══
+  if (want('placing')) {
+    const status = async () => (await ctx.request.get(`${BASE}/api/geocode/status`)).json();
+    const mp = await ctx.newPage();
+    mp.on('pageerror', (e) => errors.push(`[placing] ${e.message}`));
+    const chip = () => mp.evaluate(() => document.querySelector('.map-unloc__chip')?.innerText.replace(/\s+/g, ' ').trim() || null).catch(() => null);
+    const pillNumber = () => mp.evaluate(() => Number((/([\d,]+)\s+people/.exec(document.querySelector('.map-filter-btn')?.innerText || '') || [])[1]?.replace(/,/g, '') ?? NaN)).catch(() => NaN);
+    const onMap = async () => (await (await ctx.request.get(`${BASE}/api/map/check`)).json()).people;
+    const before = await onMap();
+
+    // An import of 260 people at 260 addresses, none with a pin — three rounds of lookups.
+    geo.mode = 'ok';
+    geo.ms = 200;
+    const imp = await post('/data/import', { rows: Array.from({ length: 260 }, (_, i) => ({ name: `Placing ${i} Example`, address: `${400 + i} Placing Way`, city: 'Surrey' })) });
+    const st0 = await status();
+    check('an import that leaves addresses without a pin starts the placing run by itself', imp.created === 260 && st0.state === 'running', JSON.stringify({ created: imp.created, state: st0.state, remaining: st0.remaining }));
+    // The map, opened after it: the run's progress, without opening anything.
+    await mp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    const said = new Set();
+    for (const end = Date.now() + 40000; Date.now() < end;) {
+      const c = await chip();
+      if (c) said.add(c);
+      if (said.size && !c && (await status()).state === 'done') break;
+      await sleep(250);
+    }
+    const counts = [...said].map((c) => /^Placing addresses · ([\d,]+) of 260$/.exec(c)?.[1]).filter(Boolean).map(Number);
+    check('the map shows the run’s progress without opening anything: “Placing addresses · N of 260”, N moving',
+      counts.length >= 1 && counts.some((n) => n > 0 && n < 260), [...said].join(' | '));
+    const after = await onMap();
+    await mp.waitForFunction((n) => new RegExp(`${n} people`).test(document.querySelector('.map-filter-btn')?.innerText || ''), before.onMap + 260 - 2, { timeout: 15000 }).catch(() => {});
+    await mp.screenshot({ path: `${SHOTS}/10-placed-by-itself.png` });
+    check('when it is done they are on the map (the two filed in another city aside), and the note is gone',
+      after.onMap === before.onMap + 260 && after.waiting === 0 && (await chip()) === null && (await pillNumber()) === after.onMap - 2, JSON.stringify({ before, after, chip: await chip(), pill: await pillNumber() }));
+
+    // Lookups stop answering: the run pauses, says when it tries again — and does, with nobody tapping.
+    geo.mode = 'down';
+    geo.ms = 10;
+    await post('/data/import', { rows: Array.from({ length: 6 }, (_, i) => ({ name: `Later ${i} Example`, address: `${900 + i} Placing Way`, city: 'Surrey' })) });
+    for (const end = Date.now() + 15000; Date.now() < end && (await status()).state !== 'paused';) await sleep(150);
+    const paused = await status();
+    await mp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    await mp.waitForSelector('.map-unloc__chip', { timeout: 10000 }).catch(() => {});
+    const pausedChip = await chip();
+    await mp.click('.map-unloc__chip').catch(() => {});
+    await sleep(500);
+    const panel = await mp.evaluate(() => document.querySelector('.map-unloc')?.innerText.replace(/\s+/g, ' ').trim() || '');
+    await mp.screenshot({ path: `${SHOTS}/10-placing-paused.png` });
+    check('lookups not answering: the run pauses, and the map says so and when it tries again',
+      paused.state === 'paused' && Boolean(paused.retryAt) && /^Placing addresses paused/.test(pausedChip || '') && /isn’t answering/.test(panel) && /tries again/.test(panel), JSON.stringify({ state: paused.state, retryAt: paused.retryAt, chip: pausedChip, panel: panel.slice(0, 200) }));
+    geo.mode = 'ok';
+    for (const end = Date.now() + 25000; Date.now() < end && (await status()).state !== 'done';) await sleep(250);
+    const resumed = await status();
+    for (const end = Date.now() + 15000; Date.now() < end && (await chip()) !== null;) await sleep(250);
+    check('…and it does, by itself: nobody tapped Carry on, everyone is placed, the note is gone',
+      resumed.state === 'done' && resumed.remaining === 0 && (await onMap()).waiting === 0 && (await chip()) === null, JSON.stringify({ state: resumed.state, remaining: resumed.remaining, chip: await chip() }));
+
+    // A whole voter file's counts wear their separators.
+    await mp.route('**/api/geocode/status', (route) => route.fulfill({ json: { state: 'running', located: 12000, copied: 400, missed: 0, errors: 0, lastError: null, retryAt: null, remaining: 137600, unmatched: 0, jobs: true } }));
+    await mp.route(/\/api\/map\/doors$/, async (route) => { const res = await route.fetch(); await route.fulfill({ response: res, json: { ...(await res.json()), unlocated: 137600 } }); });
+    await mp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    await mp.waitForFunction(() => /150,000/.test(document.querySelector('.map-unloc__chip')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+    const big1 = await chip();
+    await mp.unroute('**/api/geocode/status');
+    await mp.route('**/api/geocode/status', (route) => route.fulfill({ json: { state: 'stopped', located: 12000, copied: 400, missed: 0, errors: 0, lastError: null, retryAt: null, remaining: 277625, unmatched: 0, jobs: true } }));
+    await mp.unroute(/\/api\/map\/doors$/);
+    await mp.route(/\/api\/map\/doors$/, async (route) => { const res = await route.fetch(); await route.fulfill({ response: res, json: { ...(await res.json()), unlocated: 277625 } }); });
+    await mp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    // (The map opens on the copy this browser kept — the count before — and then the server's.)
+    await mp.waitForFunction(() => /Not on map 277/.test(document.querySelector('.map-unloc__chip')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+    const big2 = await chip();
+    check('counts wear their separators: “Placing addresses · 12,400 of 150,000”, “Not on map 277,625”',
+      big1 === 'Placing addresses · 12,400 of 150,000' && big2 === 'Not on map 277,625', `${big1} | ${big2}`);
+    await mp.close();
+  }
+
+  // ══ 11. The map's check, for managers ══
+  if (want('check')) {
+    const fmt = (n) => Number(n).toLocaleString('en-CA');
+    const openCheck = async (pg) => {
+      await pg.click('.map-filter-btn');
+      await pg.waitForSelector('.map-fsheet');
+      await pg.click('.map-fsheet__check');
+      await pg.waitForSelector('.map-check .map-check__row', { timeout: 10000 });
+      await sleep(400);
+      const rows = await pg.$$eval('.map-check .map-check__row', (els) => els.map((r) => ({
+        key: r.dataset.key, label: r.querySelector('dt')?.innerText.trim(), value: r.querySelector('dd')?.innerText.replace(/\s+/g, ' ').trim(), warn: r.classList.contains('is-warn'),
+      })));
+      return Object.fromEntries(rows.map((r) => [r.key, r]));
+    };
+    const cp = await ctx.newPage();
+    cp.on('pageerror', (e) => errors.push(`[check] ${e.message}`));
+    await cp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    await cp.waitForFunction(() => document.querySelector('.map-canvas')?.dataset.tiles === 'ok', null, { timeout: 12000 }).catch(() => {});
+    const truth = await (await ctx.request.get(`${BASE}/api/map/check`)).json();
+    let lines = await openCheck(cp);
+    await cp.screenshot({ path: `${SHOTS}/11-map-check-1440.png` });
+    const v = (k) => lines[k]?.value || '';
+    check('Map check: the people on file, on the map and not on it, as the server counts them',
+      v('file') === fmt(truth.people.total) && v('onmap') === fmt(truth.people.onMap) && v('offmap').startsWith(fmt(truth.people.waiting + truth.people.noAddress)), JSON.stringify({ file: v('file'), onmap: v('onmap'), offmap: v('offmap'), truth: truth.people }));
+    check('…how many live outside the campaign’s area, the turfs, the placing run',
+      v('area').startsWith(`${fmt(truth.area.outside)} `) && truth.area.outside === 2 && v('turfs') === fmt(truth.turfs) && Boolean(v('placing')), JSON.stringify({ area: v('area'), turfs: v('turfs'), placing: v('placing') }));
+    check('…the street map in use and that its tiles came; this page against the server’s build; the map’s size on screen',
+      /^Clean/.test(v('tiles')) && /[1-9]\d* loaded/.test(v('tiles')) && /0 failed/.test(v('tiles')) && v('build') === 'Up to date' && /^\d[\d,]* × \d+ px/.test(v('screen')), JSON.stringify({ tiles: v('tiles'), build: v('build'), screen: v('screen') }));
+    check('…with nothing flagged when nothing is wrong', Object.values(lines).every((l) => !l.warn), Object.values(lines).filter((l) => l.warn).map((l) => `${l.label}: ${l.value}`).join(' | '));
+    await cp.close();
+
+    // Each trouble is flagged in its own line — one screenshot says which.
+    const bad = await context({}, { tiles: false });
+    await bad.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort('connectionrefused'));
+    await bad.route('**/api/map/check', async (route) => {
+      const res = await route.fetch();
+      const body = await res.json();
+      await route.fulfill({ response: res, json: {
+        ...body,
+        people: { total: 300052, onMap: 22424, waiting: 277625, noAddress: 3 },
+        placing: { ...body.placing, state: 'paused', located: 22000, copied: 424, missed: 0, remaining: 277625, lastError: 'geocoder 503', retryAt: new Date(Date.now() + 15 * 60000).toISOString() },
+        build: 'index-NEWER000.js',
+      } });
+    });
+    const bp = await bad.newPage();
+    bp.on('pageerror', (e) => errors.push(`[check troubles] ${e.message}`));
+    await bp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    await bp.waitForSelector('.map-tilenote', { timeout: 15000 }).catch(() => {});
+    lines = await openCheck(bp);
+    await bp.screenshot({ path: `${SHOTS}/11-map-check-troubles-1440.png` });
+    const flagged = Object.values(lines).filter((l) => l.warn).map((l) => l.key).sort().join(',');
+    check('troubles are flagged line by line: people waiting for a pin, a paused placing run, a street map that isn’t loading, an older page',
+      flagged === 'build,offmap,placing,tiles' && /277,628/.test(lines.offmap.value) && /Paused/.test(lines.placing.value) && /tries again/.test(lines.placing.value)
+        && /isn’t loading/.test(lines.tiles.value) && /older than the server/i.test(lines.build.value), JSON.stringify(Object.values(lines).map((l) => `${l.warn ? '!' : ' '}${l.label}: ${l.value}`)));
+    await bad.close();
+
+    // On a phone, in the field app (a manager is shown a volunteer's screens there; the check is still theirs).
+    const pc = await context({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+    const pp = await pc.newPage();
+    pp.on('pageerror', (e) => errors.push(`[check phone] ${e.message}`));
+    await pp.goto(`${BASE}/map`, { waitUntil: 'domcontentloaded' });
+    await pp.waitForFunction(() => document.querySelector('.map-canvas')?.dataset.view, null, { timeout: 12000 }).catch(() => {});
+    lines = await openCheck(pp);
+    await pp.screenshot({ path: `${SHOTS}/11-map-check-390.png` });
+    const fit = await pp.evaluate(() => {
+      const r = document.querySelector('.map-check').getBoundingClientRect();
+      return { left: Math.round(r.left), right: Math.round(r.right), sideways: document.documentElement.scrollWidth - window.innerWidth, close: Math.round(document.querySelector('.map-check .mapsheet-close').getBoundingClientRect().height) };
+    });
+    check('on a phone: the same lines, nothing scrolls sideways, a full-size ✕', Object.keys(lines).length >= 8 && fit.left >= 0 && fit.right <= 390 && fit.sideways <= 0 && fit.close >= 48, JSON.stringify({ lines: Object.keys(lines), ...fit }));
+    await pc.close();
+  }
+
   check('no page errors', errors.length === 0, errors.join(' | '));
 } catch (e) {
   failed = e;
 } finally {
   await browser.close().catch(() => {});
   server.kill();
+  geocoder.close();
 }
 if (failed) { console.error('FAILED', failed); process.exit(1); }
 const fails = results.filter((r) => !r).length;

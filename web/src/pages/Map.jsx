@@ -43,12 +43,14 @@ import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, rowsBudget, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, rowsBudget, tileHealth, viewBox } from './mapView.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
 import { pendingVoted, useVotedMode } from '../components/Voted.jsx';
 import { NS } from '../base.js';
+import { OWN_BUILD } from '../build.js';
+import MapCheck from './MapCheck.jsx';
 
 const SURREY = [49.1913, -122.849];
 // "My turf" (volunteers with a turf) comes first and is where they start:
@@ -107,13 +109,24 @@ const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: '
 // choice made is kept.
 const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'clean'; } catch { return 'clean'; } };
 const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch { /* storage blocked */ } };
+// When the street map isn't loading, the map tries its other provider by
+// itself — once in a page's life ({ from: the look that was picked, to: the
+// one it went to }); after that the switch is the person's tap. While their
+// pick is still the one that failed, the map keeps to the other.
+let fellBack = null;
+// Where a tile address points, in a word a person (or a screenshot) can
+// read: its host — never the whole address, which may carry a key. '' for
+// the server's own tiles.
+const tileHost = (url) => {
+  try { return /^https?:/i.test(url || '') ? new URL(url.replace(/\{s\}\./g, '').replace(/\{[^}]*\}/g, 'x')).hostname : ''; } catch { return ''; }
+};
 
 const isPhone = () => window.matchMedia('(max-width: 720px)').matches;
 const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const norm = (s) => String(s || '').trim().toLowerCase();
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 // 300049 → "300,049" (a whole voter list's counts).
 const num = (n) => (n == null ? '' : Number(n).toLocaleString('en-CA'));
+const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many}`;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Leaflet hands back unwrapped longitudes after panning round the world; the
 // server's zod schema wants lat ∈ [-90, 90], lng ∈ [-180, 180].
@@ -133,6 +146,25 @@ const MAX_TURF_POINTS = 500; // turf.create: polygon max(500)
 const TURFS_PREF = `${NS}map:turfs`;
 const EMPTY_LIST = [];
 const EMPTY_DRAFT = { points: [], naming: false };
+// The map's turfs. A volunteer's own (a few) come whole, counts and all, and
+// stay on the phone: with no signal they still open on "My turf". Anyone
+// else's map asks for names and outlines only (GET /turfs?outline=1) — a
+// city cut into 158 turfs took seconds to count, and no outline showed
+// until it had; a turf's counts are asked for when its sheet opens.
+const TURFS_WHOLE = { key: ['turfs'], path: '/turfs', copy: 'turfs' };
+const TURFS_OUTLINE = { key: ['turfs', 'outline'], path: '/turfs?outline=1', copy: 'turfOutlines' };
+const turfCountsKey = (id) => ['turfs', 'counts', id];
+// How often the placing run is looked at from the map (desk, while anyone
+// waits for a pin): every few seconds while it runs; when a paused run is
+// due to try again; else now and then, to notice one started elsewhere (an
+// import, another tab).
+const placingPoll = (st) => {
+  if (st?.state === 'running') return 4000;
+  if (st?.state === 'paused' && st.retryAt) return Math.min(60_000, Math.max(2000, Date.parse(st.retryAt) - Date.now() + 1500));
+  return 30_000;
+};
+// While it runs, what it has placed so far is drawn this often.
+const PLACING_REFRESH_MS = 15_000;
 const readTurfsPref = () => { try { return localStorage.getItem(TURFS_PREF) !== '0'; } catch { return true; } };
 const writeTurfsPref = (on) => { try { localStorage.setItem(TURFS_PREF, on ? '1' : '0'); } catch { /* storage blocked */ } };
 // A volunteer's first-visit hint, once per browser (blocked storage: once per visit).
@@ -522,7 +554,7 @@ function PlacePicker({ unlocated, onPick, onClose }) {
   return (
     <aside className="map-sheet map-place-picker" aria-label="People not on the map yet">
       <header className="mapsheet-head">
-        <h2 className="mapsheet-title">Drop pins by hand · {unlocated}</h2>
+        <h2 className="mapsheet-title">Drop pins by hand · {num(unlocated)}</h2>
         <button type="button" className="btn btn-quiet mapsheet-close" onClick={onClose} aria-label="Close">✕</button>
       </header>
       <div className="field">
@@ -543,7 +575,7 @@ function PlacePicker({ unlocated, onPick, onClose }) {
           </li>
         ))}
         {partial && rows.length > 0 && (
-          <li className="muted map-place-empty">{rows.length} of {unlocated} · search for more</li>
+          <li className="muted map-place-empty">{num(rows.length)} of {num(unlocated)} · search for more</li>
         )}
         {persons.isPending && persons.fetchStatus === 'paused' && (
           <li className="muted map-place-empty">Offline — loads with signal</li>
@@ -586,7 +618,13 @@ function TurfSheet({ turf, me, desk, onClose, onDeleted, toast }) {
   const options = (membersQ.data?.members ?? []).filter((m) => !assigned.has(m.id));
   // A team with someone not on the turf yet.
   const teams = (teamsQ.data?.teams ?? []).filter((t) => t.members.some((m) => !assigned.has(m.id)));
-  const left = Math.max(0, turf.doors - turf.doorsDone);
+  // Its counts: with the turf where it came whole (a volunteer's own), else
+  // asked for now that its sheet is open — "Loading…" until they are here,
+  // never a "No doors" or a 0 on the way.
+  const whole = turf.doors != null;
+  const countsQ = useQuery({ queryKey: turfCountsKey(turf.id), queryFn: () => apiGet(`/turfs/${turf.id}`), enabled: !whole });
+  const counts = whole ? turf : countsQ.data?.turf || null;
+  const left = counts ? Math.max(0, counts.doors - counts.doorsDone) : 0;
   const invite = me?.role === 'manager'; // the Team screen is manager-only
 
   // Assignment changes the turf list and Today's "my turfs".
@@ -634,7 +672,9 @@ function TurfSheet({ turf, me, desk, onClose, onDeleted, toast }) {
       await action('turf.delete', { id: turf.id });
       onDeleted(turf); // close the sheet first so the URL never points at a missing turf
       queryClient.removeQueries({ queryKey: ['turf', turf.id] });
-      queryClient.setQueryData(['turfs'], (d) => (d ? { ...d, turfs: d.turfs.filter((t) => t.id !== turf.id) } : d));
+      queryClient.removeQueries({ queryKey: turfCountsKey(turf.id) });
+      // Off every list of turfs in memory (whole, and the map's outlines).
+      queryClient.setQueriesData({ queryKey: ['turfs'] }, (d) => (d?.turfs ? { ...d, turfs: d.turfs.filter((t) => t.id !== turf.id) } : d));
       for (const key of ['turfs', 'brief']) queryClient.invalidateQueries({ queryKey: [key] });
     } catch (err) {
       setError(err.message || 'Not deleted — try again');
@@ -652,10 +692,18 @@ function TurfSheet({ turf, me, desk, onClose, onDeleted, toast }) {
       <div className="turf-sheet__body">
         {/* One phrase everywhere (sheet, walk list, turf list, Today): "1 door left" + the bar. */}
         <div className="turf-progress">
-          <span className={`turf-progress__text mono${turf.doors && !left ? ' is-done' : ''}`}>
-            {turf.doors === 0 ? 'No doors' : left === 0 ? <>All done <span aria-hidden="true">✓</span></> : <><strong>{left}</strong> {left === 1 ? 'door' : 'doors'} left</>}
-          </span>
-          <TurfBar done={turf.doorsDone} total={turf.doors} />
+          {counts ? (
+            <>
+              <span className={`turf-progress__text mono${counts.doors && !left ? ' is-done' : ''}`}>
+                {counts.doors === 0 ? 'No doors' : left === 0 ? <>All done <span aria-hidden="true">✓</span></> : <><strong>{num(left)}</strong> {left === 1 ? 'door' : 'doors'} left</>}
+              </span>
+              <TurfBar done={counts.doorsDone} total={counts.doors} />
+            </>
+          ) : countsQ.isError ? (
+            <button type="button" className="btn turf-act turf-retry" onClick={() => countsQ.refetch()}>Unavailable — Try again</button>
+          ) : (
+            <span className="turf-progress__text" role="status">{countsQ.fetchStatus === 'paused' ? 'No signal — its counts load when you’re back' : 'Loading…'}</span>
+          )}
         </div>
         <Link className="btn btn-primary turf-act" to={`/turfs/${turf.id}`}>Open walk list</Link>
 
@@ -725,11 +773,13 @@ function TurfSheet({ turf, me, desk, onClose, onDeleted, toast }) {
         )}
 
         <More id="turf-more" open={moreOpen} onToggle={() => setMoreOpen((o) => !o)}>
-          <dl className="turf-stats">
-            <div><dt>Left</dt><dd>{left}</dd></div>
-            <div><dt>People</dt><dd>{turf.people}</dd></div>
-            <div><dt>Rated</dt><dd>{turf.rated}</dd></div>
-          </dl>
+          {counts && (
+            <dl className="turf-stats">
+              <div><dt>Left</dt><dd>{num(left)}</dd></div>
+              <div><dt>People</dt><dd>{num(counts.people)}</dd></div>
+              <div><dt>Rated</dt><dd>{num(counts.rated)}</dd></div>
+            </dl>
+          )}
           {!desk && turf.members.length > 0 && (
             <p className="turf-crew">
               {turf.members.map((m) => (m.id === me?.user?.id ? `${m.name} (you)` : m.name)).join(' · ')}
@@ -804,7 +854,10 @@ function suggestTurfName(doors, ring, taken) {
 }
 
 // After Finish: name the drawn shape. The draft stays on the map behind it.
-function NameTurfForm({ points, doors, takenNames, busy, error, onSave, onBack, onCancel }) {
+// counted: the map has every door inside loaded (a list loaded whole) — on a
+// big list it hasn't, so no count is claimed here; the saved turf's sheet
+// has the server's.
+function NameTurfForm({ points, doors, takenNames, busy, error, counted = true, onSave, onBack, onCancel }) {
   const [name, setName] = useState(() => suggestTurfName(doors, points, takenNames));
   const [localError, setLocalError] = useState(null);
   const inside = useMemo(() => countInside(doors, points), [doors, points]);
@@ -821,7 +874,7 @@ function NameTurfForm({ points, doors, takenNames, busy, error, onSave, onBack, 
       <header className="mapsheet-head">
         <div>
           <h2 className="mapsheet-title">Name this turf</h2>
-          <span className="door-head__addr">{plural(inside.doors, 'door', 'doors')} · {plural(inside.people, 'person', 'people')}</span>
+          {counted && <span className="door-head__addr">{plural(inside.doors, 'door', 'doors')} · {plural(inside.people, 'person', 'people')}</span>}
         </div>
         <button type="button" className="btn btn-quiet mapsheet-close" onClick={onCancel} disabled={busy} aria-label="Discard this turf">✕</button>
       </header>
@@ -859,7 +912,8 @@ const tilesLine = (setup) => {
 // The filter pill's sheet. "Show" — which doors, one at a time. "On the
 // map" (desk) — the turf outlines switch. Then the turf tools (walk lists,
 // "Draw turf"); a volunteer's walk list has its own chip on the map. Last,
-// for desks, one quiet line naming the map tiles (tilesNote).
+// for desks, one quiet line naming the map tiles (tilesNote), and for
+// managers "Map check".
 function FilterOpt({ f, filter, onFilter, counts, autoFocus }) {
   return (
     <button
@@ -890,7 +944,7 @@ function SignChips({ signShow, onSigns, signCounts }) {
       className={`map-schip map-schip--${field === 'status' ? code : 'kind'}${signShow[field].includes(code) ? ' is-on' : ''}`}
       onClick={() => flip(field, code)}>
       {field === 'status' && <i className={`map-flag map-flag--${code}`} aria-hidden="true"><i className="map-flag__face" /></i>}
-      <span>{label}</span> <span className="mono map-schip__n">{n}</span>
+      <span>{label}</span> <span className="mono map-schip__n">{num(n)}</span>
     </button>
   );
   return (
@@ -909,7 +963,7 @@ function SignChips({ signShow, onSigns, signCounts }) {
 function FilterSheet({
   filters, filter, onFilter, counts, showTurfs, onTurfs, turfCount, desk, onDraw, unlocated, onPlace, onClose, tilesNote = null, countsNote = null,
   sharing = false, onShare = null, signShow = null, onSigns = null, signCounts = {},
-  views = [], view = 'standard', onView = null,
+  views = [], view = 'standard', onView = null, onCheck = null,
 }) {
   const main = filters.filter((f) => !f.group);
   const opponents = filters.filter((f) => f.group === 'Voting for');
@@ -957,7 +1011,7 @@ function FilterSheet({
               className={`map-fswitch${showTurfs ? ' is-on' : ''}`}
               onClick={() => onTurfs(!showTurfs)}
             >
-              <span className="map-fswitch__label">Turfs <span className="mono map-fswitch__n">{turfCount}</span></span>
+              <span className="map-fswitch__label">Turfs <span className="mono map-fswitch__n">{num(turfCount)}</span></span>
               <span className="map-fswitch__track" aria-hidden="true"><span className="map-fswitch__knob" /></span>
             </button>
           </div>
@@ -987,12 +1041,14 @@ function FilterSheet({
               <button type="button" className="btn map-fsheet__act" onClick={onDraw}><TurfGlyph /> Draw turf</button>
             )}
             {!desk && unlocated > 0 && (
-              <button type="button" className="btn map-fsheet__act" onClick={onPlace}>Place {unlocated} on map</button>
+              <button type="button" className="btn map-fsheet__act" onClick={onPlace}>Place {num(unlocated)} on map</button>
             )}
           </div>
         )}
         {countsNote && <p className="map-fsheet__tiles">{countsNote}</p>}
         {desk && tilesNote && <p className="map-fsheet__tiles">{tilesNote}</p>}
+        {/* Managers: what the map is drawn from, on one sheet (MapCheck.jsx). */}
+        {onCheck && <button type="button" className="btn btn-quiet map-fsheet__check" onClick={onCheck}>Map check</button>}
       </div>
     </>
   );
@@ -1088,10 +1144,18 @@ export default function MapPage() {
   const [spotBusy, setSpotBusy] = useState(false); // a tapped dot's door is on its way
   const [signSel, setSignSel] = useState(null);  // an orphan sign's sheet
   const [filterOpen, setFilterOpen] = useState(false);
+  const [checkOpen, setCheckOpen] = useState(false); // the map's check (managers)
   const filterBtnRef = useRef(null);
   // Closing the filter sheet hands focus back to the button that opened it.
   const closeFilter = useCallback(() => {
     setFilterOpen(false);
+    requestAnimationFrame(() => filterBtnRef.current?.focus({ preventScroll: true }));
+  }, []);
+  // The check is the server's for managers (in the field app too, where a
+  // manager is shown a volunteer's screens).
+  const mayCheck = (me?.admin_role || me?.role) === 'manager';
+  const closeCheck = useCallback(() => {
+    setCheckOpen(false);
     requestAnimationFrame(() => filterBtnRef.current?.focus({ preventScroll: true }));
   }, []);
   const [unlocOpen, setUnlocOpen] = useState(false);
@@ -1115,7 +1179,7 @@ export default function MapPage() {
     if (personId) queryClient.invalidateQueries({ queryKey: ['person', personId] });
   }, [queryClient]);
   const onGeocoded = useCallback(() => {
-    for (const key of ['doors', 'brief', 'persons', 'turfs', 'turf']) queryClient.invalidateQueries({ queryKey: [key] });
+    for (const key of ['doors', 'brief', 'persons', 'turfs', 'turf', 'geocode']) queryClient.invalidateQueries({ queryKey: [key] });
   }, [queryClient]);
 
   // ── Data ──
@@ -1197,6 +1261,37 @@ export default function MapPage() {
   const unlocated = (big ? doorsQ.data?.unlocated : doorsData?.unlocated) ?? 0;
   const doorsCopy = showingCopy(doorsQ);
 
+  // The placing run (desk), looked at while anyone waits for a pin: its
+  // progress shows on the map without opening anything ("Placing addresses ·
+  // 12,400 of 150,000" where "Not on map" was), and what it places is drawn
+  // as it goes. A paused run tries again by itself; the map says so.
+  const placingQ = useQuery({
+    queryKey: ['geocode', 'status'], queryFn: () => apiGet('/geocode/status'),
+    enabled: canCreate && unlocated > 0, refetchInterval: (q) => placingPoll(q.state.data), staleTime: 2000,
+  });
+  const lastRun = canCreate && unlocated > 0 ? placingQ.data || null : null;
+  const placingRun = lastRun && (lastRun.state === 'running' || (lastRun.state === 'paused' && lastRun.retryAt)) ? lastRun : null;
+  const placedSoFar = placingRun ? placingRun.located + placingRun.copied : 0;
+  const placingWords = placingRun
+    ? `Placing addresses${placingRun.state === 'paused' ? ' paused' : ''} · ${num(placedSoFar)} of ${num(placedSoFar + placingRun.missed + placingRun.remaining)}`
+    : null;
+  const seenRun = useRef({ state: null, placed: 0, at: 0 });
+  useEffect(() => {
+    const st = placingQ.data;
+    if (!st) return;
+    const was = seenRun.current;
+    const placed = st.located + st.copied;
+    const now = Date.now();
+    // It started, paused or ended since the last look (a paused run may be
+    // done by the next one): everything a new pin changes. Still going: the
+    // doors it has placed so far.
+    const turned = was.state !== null && was.state !== st.state;
+    const moved = st.state === 'running' && placed !== was.placed && now - was.at > PLACING_REFRESH_MS;
+    if (turned) onGeocoded();
+    else if (moved) queryClient.invalidateQueries({ queryKey: ['doors'] });
+    seenRun.current = { state: st.state, placed: turned || moved ? placed : was.placed, at: turned || moved ? now : was.at };
+  }, [placingQ.data, onGeocoded, queryClient]);
+
   // Which tiles to draw (kept on the phone too, so offline asks for the same
   // tiles the service worker kept).
   const tilesQ = useQuery({
@@ -1206,13 +1301,32 @@ export default function MapPage() {
   const baseTiles = tilesQ.data?.tiles || (tilesQ.isError || tilesQ.fetchStatus === 'paused' ? DEFAULT_TILES : null);
   const views = tilesQ.data?.views ?? EMPTY_LIST;
   const [viewPick, setViewPick] = useState(readViewPref);
-  const setView = (v) => { setViewPick(v); writeViewPref(v); };
+  // The look the map went to by itself because the picked one's street map
+  // wasn't loading (this visit only: the pick itself is not changed).
+  const [autoView, setAutoView] = useState(() => (fellBack?.from && fellBack.from === readViewPref() ? fellBack.to : null));
+  const setView = (v) => { setViewPick(v); writeViewPref(v); setAutoView(null); if (fellBack) fellBack.from = null; };
+  const lookPick = autoView || viewPick;
   // A provider look this server no longer offers falls back to Standard.
-  const providerView = views.find((v) => v.key === viewPick) || null;
+  const providerView = views.find((v) => v.key === lookPick) || null;
   // Clean comes from the server; where it isn't offered (Google tiles, the
   // campaign's own provider), Muted.
-  const view = providerView || SHADES.some((s) => s.key === viewPick) ? viewPick : viewPick === 'clean' ? 'muted' : 'standard';
+  const view = providerView || SHADES.some((s) => s.key === lookPick) ? lookPick : lookPick === 'clean' ? 'muted' : 'standard';
   const tiles = providerView ? { url: providerView.url, attribution: providerView.attribution, maxZoom: providerView.maxZoom } : baseTiles;
+  // Is the street map loading? (The tile layer's own events, below.)
+  const [street, setStreet] = useState({ down: false, any: false });
+  const streetRef = useRef({ loaded: 0, failed: 0, down: false }); // every tile since the layer was added
+  const [tilesTry, setTilesTry] = useState(0); // "Try again": the layer is made afresh
+  // The look whose street map comes from the other provider (the campaign's
+  // base tiles ↔ a provider's look such as Clean), or null: a campaign's own
+  // provider, or Google's, has no second one.
+  const baseUrl = baseTiles?.url;
+  const otherLook = useMemo(() => {
+    const here = tileHost(tiles?.url);
+    if (!here || !baseUrl) return null;
+    if (providerView) return tileHost(baseUrl) && tileHost(baseUrl) !== here ? SHADES.find((x) => x.key === 'muted') : null;
+    return views.find((v) => tileHost(v.url) && tileHost(v.url) !== here) || null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiles?.url, baseUrl, providerView, views]);
   const offZoom = Math.min(CLUSTER_OFF_ZOOM, tiles?.maxZoom || CLUSTER_OFF_ZOOM);
   const offZoomRef = useRef(offZoom);
   offZoomRef.current = offZoom;
@@ -1228,10 +1342,13 @@ export default function MapPage() {
   // Declared before the marker effects so Leaflet handlers see the current key.
   useEffect(() => { selectedKeyRef.current = selectedKey; }, [selectedKey]);
 
-  // Turfs (volunteers get only the ones assigned to them), kept on the phone
+  // Turfs (volunteers get only the ones assigned to them, whole; anyone the
+  // server answers as a desk role — a manager in the field app too — gets
+  // every turf's outline, and counts when a sheet opens), kept on the phone
   // too: offline, a volunteer still opens on "My turf".
-  const turfsQ = useQuery({ queryKey: ['turfs'], queryFn: () => apiGet('/turfs'), ...phoneCopy(me, 'turfs') });
-  useKeepCopy(me, 'turfs', turfsQ);
+  const turfsFrom = (me?.admin_role || me?.role) === 'volunteer' ? TURFS_WHOLE : TURFS_OUTLINE;
+  const turfsQ = useQuery({ queryKey: turfsFrom.key, queryFn: () => apiGet(turfsFrom.path), ...phoneCopy(me, turfsFrom.copy) });
+  useKeepCopy(me, turfsFrom.copy, turfsQ);
   const turfs = turfsQ.data?.turfs ?? EMPTY_LIST;
   // A volunteer's own turf outline always shows (the switch is desk-only).
   const turfsOn = canCreate ? showTurfs : true;
@@ -1244,6 +1361,24 @@ export default function MapPage() {
   // kept on this phone (it opens offline). A server refusal is not this.
   const online = useOnline();
   const noSignal = !doorsQ.data && (doorsQ.fetchStatus === 'paused' || (doorsQ.isError && (!online || !doorsQ.error?.status)));
+
+  // The street map isn't loading, and there is signal: once, the map tries
+  // its other provider by itself and says so. After that — or where there is
+  // no other — it says "The street map isn’t loading" and the tap is theirs.
+  const willSwitch = Boolean(street.down && online && !fellBack && otherLook);
+  useEffect(() => {
+    if (!willSwitch) return;
+    fellBack = { from: viewPick, to: otherLook.key };
+    setAutoView(otherLook.key);
+    toast(`The street map wasn’t loading — switched to ${otherLook.label}`);
+  }, [willSwitch, otherLook, viewPick, toast]);
+  // Signal is back: the street map is asked for again (the tiles that failed
+  // without it would stay blank until the map moved).
+  const hadSignal = useRef(online);
+  useEffect(() => {
+    if (online && !hadSignal.current) setTilesTry((n) => n + 1);
+    hadSignal.current = online;
+  }, [online]);
   const offlineWalk = useMemo(() => (noSignal ? cachedWalkLists(me)[0] || null : null), [noSignal, me]);
 
   // A volunteer's own doors: inside any turf they walk (the walk list's doors).
@@ -1457,14 +1592,12 @@ export default function MapPage() {
     try {
       const res = await action('turf.create', { name, polygon, color });
       const id = res.turf.id;
-      // Show it (and its sheet) now; the refetch brings the server's counts.
+      // Show it (and its sheet) now, on the map's own list of turfs; its
+      // counts are the server's, asked for by its sheet.
       queryClient.cancelQueries({ queryKey: ['turfs'] });
-      queryClient.setQueryData(['turfs'], (d) => (d ? {
+      queryClient.setQueryData(turfsFrom.key, (d) => (d ? {
         ...d,
-        turfs: [...d.turfs.filter((t) => t.id !== id), {
-          id, name: res.turf.name || name, color, polygon, notes: null, members: [],
-          ...countInside(doors, polygon), doorsDone: 0, rated: 0,
-        }],
+        turfs: [...d.turfs.filter((t) => t.id !== id), { id, name: res.turf.name || name, color, polygon, notes: null, members: [] }],
       } : d));
       for (const key of ['turfs', 'brief']) queryClient.invalidateQueries({ queryKey: [key] });
       drawShiftRef.current = 0; // the new turf stays where it was drawn
@@ -1685,6 +1818,7 @@ export default function MapPage() {
       }
       if (e.key !== 'Escape') return;
       if (filterOpen) closeFilter();
+      else if (checkOpen) closeCheck();
       else if (unlocOpen) setUnlocOpen(false);
       else if (mode === 'draw' && draft.naming) backToDrawing();
       else if (mode) cancelMode();
@@ -1805,10 +1939,34 @@ export default function MapPage() {
     const map = mapRef.current;
     if (!map || !tileUrl) return undefined;
     tellServiceWorker(tileUrl); // first, so the first tiles are kept too
-    const layer = L.tileLayer(tileUrl, { maxZoom: tileMax || 19, attribution: safeAttribution(tileCredit) }).addTo(map);
+    const layer = L.tileLayer(tileUrl, { maxZoom: tileMax || 19, attribution: safeAttribution(tileCredit) });
+    // Is it loading? Its tiles' own loads and errors say (mapView.js
+    // tileHealth) — listened to before the layer goes on the map, which is
+    // when its first tiles are asked for. With no signal a failed tile says
+    // nothing about the provider (the strip under the nav says "Offline").
+    const health = tileHealth();
+    let timer = null;
+    let shown = '';
+    const tell = () => {
+      const h = health.get();
+      const down = h.down && navigator.onLine !== false;
+      streetRef.current = { ...h, down };
+      const next = `${down}|${h.loaded > 0}`;
+      if (next !== shown) { shown = next; setStreet({ down, any: h.loaded > 0 }); }
+    };
+    tell();
+    layer.on('loading', () => {
+      health.batch(Date.now());
+      clearTimeout(timer);
+      timer = setTimeout(() => { health.late(Date.now()); tell(); }, TILE_WAIT_MS + 20);
+    });
+    layer.on('tileload', () => { health.tile(true); tell(); });
+    layer.on('tileerror', () => { health.tile(false); });
+    layer.on('load', () => { clearTimeout(timer); health.done(); tell(); });
+    layer.addTo(map);
     map.setMaxZoom(tileMax || 19);
-    return () => { layer.remove(); };
-  }, [tileUrl, tileMax, tileCredit]);
+    return () => { clearTimeout(timer); layer.remove(); };
+  }, [tileUrl, tileMax, tileCredit, tilesTry]);
 
   // Turf polygons. Hidden by the Turfs chip, except a selected turf always shows.
   useEffect(() => {
@@ -2005,7 +2163,21 @@ export default function MapPage() {
   const naming = mode === 'draw' && draft.naming;
   const turfSheetOpen = Boolean(selectedTurf && !mode && !pickerOpen && !addAt && !selectedDoor);
   const signSheetOpen = Boolean(signSel && !mode && !pickerOpen && !addAt && !selectedDoor && !turfSheetOpen);
-  const hasSheet = Boolean(pickerOpen || addAt || mode === 'add' || naming || (selectedDoor && !mode) || turfSheetOpen || signSheetOpen);
+  // The check sits over a scrim, like the Show sheet it opens from: nothing
+  // else opens under it, and a tap beside it closes it.
+  const checkSheetOpen = Boolean(checkOpen && mayCheck && !mode);
+  const hasSheet = Boolean(pickerOpen || addAt || mode === 'add' || naming || (selectedDoor && !mode) || turfSheetOpen || signSheetOpen || checkSheetOpen);
+  // What only this page knows, for the check: its build, the street map in
+  // use and whether its tiles came, the map's size on screen.
+  const lookLabel = [...SHADES, ...views].find((v) => v.key === view)?.label || view;
+  const checkFacts = useCallback(() => {
+    const map = mapRef.current;
+    const size = map?.getSize();
+    return {
+      build: OWN_BUILD, look: lookLabel, tilesFrom: tileHost(tileUrl), tiles: streetRef.current,
+      size: { x: size?.x || 0, y: size?.y || 0 }, zoom: map ? map.getZoom() : null,
+    };
+  }, [lookLabel, tileUrl]);
   const showEmpty = doorsQ.data && !big && doors.length === 0 && !hasSheet && !mode;
   // A big list's number is what is on screen, so it says what it counts:
   // people from further out, doors closer in. A list loaded whole — or a
@@ -2145,14 +2317,15 @@ export default function MapPage() {
   }, [naming]);
 
   // Opening a turf's sheet: refresh its counts (doors knocked from the door
-  // card or another phone since the list loaded).
+  // card or another phone since the list loaded). Where turfs come as
+  // outlines the sheet asks for its own counts as it opens.
   useEffect(() => {
-    if (!turfParam) return;
+    if (!turfParam || turfsFrom !== TURFS_WHOLE) return;
     const state = queryClient.getQueryState(['turfs']);
     if (state?.dataUpdatedAt && Date.now() - state.dataUpdatedAt > 5000) {
       queryClient.invalidateQueries({ queryKey: ['turfs'] });
     }
-  }, [turfParam, queryClient]);
+  }, [turfParam, queryClient, turfsFrom]);
 
   const drawCount = draft.points.length;
   // The look's class sits on the page, never on Leaflet's own element: React
@@ -2161,11 +2334,13 @@ export default function MapPage() {
 
   return (
     <div className={pageCls} ref={pageRef} style={MARK_VARS}>
-      {/* For tests: how many doors are drawn (pins and dots), the zoom, and
-          what a big list is drawn as (density · dots · rows). */}
+      {/* For tests: how many doors are drawn (pins and dots), the zoom, what a
+          big list is drawn as (density · dots · rows), and whether the street
+          map's tiles are coming (ok · down). */}
       <div
         className="map-canvas" ref={canvasRef} role="application" aria-label="Canvass map"
         data-doors={visible.length + leanShown.length} data-zoom={zoom ?? ''} data-view={big ? drawn?.kind || '' : doorsQ.data ? 'all' : ''}
+        data-tiles={street.down ? 'down' : street.any ? 'ok' : ''}
       />
 
       <div className="map-top">
@@ -2258,11 +2433,16 @@ export default function MapPage() {
                   type="button"
                   className="map-unloc__chip"
                   aria-expanded={unlocOpen}
-                  aria-label={`${plural(unlocated, 'person', 'people')} not on the map`}
+                  aria-label={placingWords ? placingWords.replace(/ · /g, ', ') : `${plural(unlocated, 'person', 'people')} not on the map`}
                   onClick={() => { setUnlocOpen((o) => !o); setFilterOpen(false); }}
                 >
-                  <PinGlyph /> <span className="map-unloc__label">Not on map</span> <span className="map-unloc__n mono">{unlocated}</span>
+                  <PinGlyph />
+                  {placingWords
+                    ? <span className="map-unloc__label">{placingWords}</span>
+                    : <><span className="map-unloc__label">Not on map</span> <span className="map-unloc__n mono">{num(unlocated)}</span></>}
                 </button>
+                {/* Said once when the run starts, pauses or stops — not with every count. */}
+                <span className="fk-sr" role="status">{placingRun ? (placingRun.state === 'paused' ? 'Placing addresses is paused' : 'Placing addresses on the map') : ''}</span>
                 {unlocOpen && (
                   <span className="map-unloc__btns">
                     <button type="button" className="btn map-unloc__btn" onClick={() => { setPickerOpen(true); setAddAt(null); setUnlocOpen(false); cancelMode(); }}>
@@ -2281,6 +2461,16 @@ export default function MapPage() {
           <div className="map-hint" role="status">
             <span className="map-hint__text">Tap a house to start</span>
             <button type="button" className="btn map-hint__x" onClick={hideHint} aria-label="Dismiss" title="Dismiss">✕</button>
+          </div>
+        )}
+        {/* The street map isn't loading (and the map has already tried its
+            other provider by itself, or has none): one line, one tap. */}
+        {street.down && online && !willSwitch && !mode && (
+          <div className="map-tilenote" role="status">
+            <span>The street map isn’t loading</span>
+            {otherLook
+              ? <button type="button" className="btn map-tilenote__btn" onClick={() => setView(otherLook.key)}>Try {otherLook.label}</button>
+              : <button type="button" className="btn map-tilenote__btn" onClick={() => setTilesTry((n) => n + 1)}>Try again</button>}
           </div>
         )}
         {showKey && !mode && <MapKey squares={patches} dark={view === 'dark'} words={keyWords} />}
@@ -2310,6 +2500,7 @@ export default function MapPage() {
           views={views}
           view={view}
           onView={setView}
+          onCheck={mayCheck ? () => { setFilterOpen(false); setPickerOpen(false); setAddAt(null); select(null); setCheckOpen(true); } : null}
         />
       )}
 
@@ -2415,6 +2606,7 @@ export default function MapPage() {
           <NameTurfForm
             points={draft.points}
             doors={doors}
+            counted={!big}
             takenNames={turfs.map((t) => t.name)}
             busy={turfBusy}
             error={turfError}
@@ -2438,6 +2630,13 @@ export default function MapPage() {
       )}
 
       {signSheetOpen && <SignSheet sign={signSel} desk={canCreate} onClose={() => setSignSel(null)} />}
+
+      {checkSheetOpen && (
+        <>
+          <button type="button" className="map-scrim" aria-label="Close the map check" tabIndex={-1} onClick={closeCheck} />
+          <MapCheck facts={checkFacts} onClose={closeCheck} />
+        </>
+      )}
 
       {toastMsg && (
         <div className="toast map-toast" role="status">

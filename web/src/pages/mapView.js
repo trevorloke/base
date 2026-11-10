@@ -157,3 +157,90 @@ export const cellFill = (c, dark) => {
   const band = mix(MARK[c.band], ramp.many, s * 0.35);
   return [...mix(neutral, band, (lead / c.n) ** 0.75 * Math.min(1, lead / 3)), CELL_ALPHA];
 };
+
+// ── Is the street map loading? ──
+// Leaflet asks for a view's tiles in one go ('loading' … 'load'). When a view
+// is done and most of its tiles failed, the street map isn't loading; so too
+// when a view is six seconds old and not one tile has come (a host that never
+// answers), or most of what has settled by then failed. A later view where
+// most come says it is loading again. Map.jsx feeds it the layer's events;
+// loaded and failed count every tile since the layer was added (the map's
+// check shows them).
+export const TILE_WAIT_MS = 6000;
+export const tileHealth = () => {
+  let ok = 0; let bad = 0;         // this view's tiles
+  let loaded = 0; let failed = 0;
+  let since = null;                // when this view's tiles were asked for; null once they are all in
+  let down = false;
+  return {
+    batch(now) { ok = 0; bad = 0; since = now; },
+    tile(good) { if (good) { ok += 1; loaded += 1; } else { bad += 1; failed += 1; } },
+    done() { if (ok + bad) down = bad > ok; since = null; },
+    late(now) { if (since != null && now - since >= TILE_WAIT_MS) down = ok === 0 || bad > ok; },
+    get: () => ({ loaded, failed, down }),
+  };
+};
+
+// "3:40 pm", on the reader's own clock: when a paused placing run tries
+// again (always a time of day — it may be after midnight).
+export const timeOfDay = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const h = d.getHours();
+  return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+};
+
+// ── The map's check, for managers ──
+// GET /api/map/check (ext/mapcheck) and what only the page knows, as lines to
+// read — and to screenshot: each way a map can look empty has a line of its
+// own, flagged (warn) when it applies.
+//   c     the server's answer
+//   page  { build, look, tilesFrom, tiles: { loaded, failed, down }, size: { x, y }, zoom }
+//   → [{ key, label, value, note, warn }]
+const enCA = (n) => Number(n || 0).toLocaleString('en-CA');
+export const checkLines = (c, page, { num = enCA, clock = (iso) => iso } = {}) => {
+  const p = c.people;
+  const g = c.placing;
+  const lines = [];
+  const add = (key, label, value, { note = null, warn = false } = {}) => lines.push({ key, label, value, note, warn: Boolean(warn) });
+
+  add('file', 'On file', num(p.total));
+  add('onmap', 'On the map', num(p.onMap));
+  // Nobody is placed by guessing: no address, no pin — counted here.
+  const why = [p.waiting ? `${num(p.waiting)} waiting for a pin` : null, p.noAddress ? `${num(p.noAddress)} with no address` : null].filter(Boolean);
+  add('offmap', 'Not on map', `${num(p.waiting + p.noAddress)}${why.length ? ` — ${why.join(', ')}` : ''}`, { warn: p.waiting > 0 && p.waiting * 100 >= p.total });
+
+  const placed = g.located + g.copied;
+  const waiting = `${num(g.remaining)} ${g.remaining === 1 ? 'address' : 'addresses'} waiting`;
+  let run;
+  if (g.off) run = ['Turned off', { note: g.remaining ? `${waiting} — addresses are not looked up on this server; drop pins by hand` : null, warn: g.remaining > 0 }];
+  else if (g.state === 'running') run = [`Running · ${num(placed)} of ${num(placed + g.missed + g.remaining)}`, {}];
+  else if (g.state === 'paused') run = [`Paused${g.retryAt ? ` — tries again at ${clock(g.retryAt)}` : ''}`, { note: `Address lookup isn’t answering${g.lastError ? ` (${g.lastError})` : ''}`, warn: true }];
+  else if (g.remaining > 0 && !g.jobs) run = ['Not running', { note: `${waiting} — background jobs are off on this server; “Look up addresses” works while its page stays open`, warn: true }];
+  else if (g.remaining > 0) run = [g.state === 'stopped' ? 'Stopped' : 'Not running', { note: `${waiting} — tap “Not on map”, then “Look up addresses”`, warn: true }];
+  else run = ['Nothing waiting', {}];
+  if (g.unmatched > 0) run[1].note = [run[1].note, `${num(g.unmatched)} couldn’t be matched — they need a pin by hand`].filter(Boolean).join(' · ');
+  add('placing', 'Placing addresses', run[0], run[1]);
+
+  const elsewhere = p.onMap > 0 && c.area.inside * 2 <= p.onMap;
+  add('area', 'Outside your area', `${num(c.area.outside)} of the ${num(p.onMap)} on the map`, {
+    note: elsewhere ? 'Most of the list is outside the area this campaign is set to — the map opens on the middle of the list' : null, warn: elsewhere,
+  });
+  add('turfs', 'Turfs', num(c.turfs));
+
+  const t = page.tiles || { loaded: 0, failed: 0, down: false };
+  const from = [page.look, page.tilesFrom].filter(Boolean).join(' · ') || c.tiles.source;
+  add('tiles', 'Street map', `${from} — ${t.down ? 'isn’t loading: ' : ''}${num(t.loaded)} loaded, ${num(t.failed)} failed`, {
+    note: (c.tiles.ignored || []).includes('url') ? 'The street map address set on the server was ignored' : null, warn: t.down,
+  });
+
+  const known = Boolean(page.build && c.build);
+  add('build', 'This page', !known ? 'Not compared' : page.build === c.build ? 'Up to date' : 'Older than the server — reload it', {
+    note: c.commit ? `The server runs ${c.commit}` : null, warn: known && page.build !== c.build,
+  });
+
+  const { x = 0, y = 0 } = page.size || {};
+  const cramped = x < 200 || y < 200;
+  add('screen', 'Map on screen', `${num(x)} × ${num(y)} px · zoom ${page.zoom ?? '—'}`, { note: cramped ? 'The map has almost no room on this screen' : null, warn: cramped });
+  return lines;
+};

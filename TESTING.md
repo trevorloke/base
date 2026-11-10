@@ -554,7 +554,25 @@ one tap away under **More**.
   map: what was drawn stays until the next answer is in. **Whole list** goes
   back; over open water it says *Nobody on file here · Back to your list*.
   (`node e2e-map.mjs` runs a big list in miniature through all of this in a
-  browser.)
+  browser, and through the next four; `ONLY=tiles,check node e2e-map.mjs`
+  runs parts of it.)
+- **Map, the street map not loading** — block `basemaps.cartocdn.com` in
+  the browser's network tools and reload: within a moment a line says *The
+  street map wasn’t loading — switched to Muted* and the streets are there.
+  Block `tile.openstreetmap.org` too and move the map: *The street map isn’t
+  loading · Try Clean* stays under the count; unblock, tap it, the streets
+  load and the line goes.
+- **Map, many turfs** — outlines and names show at once however many turfs
+  there are; tap one and its sheet opens with *Loading…* where *64 doors
+  left* then appears.
+- **Map → filter button → Map check** (managers) — one sheet: on file, on
+  the map, not on map (and why), the placing run, outside your area, turfs,
+  the street map and its tiles, this page against the server, the map's
+  size. Whatever is wrong is flagged; send a screenshot of it with any
+  report that the map looks empty.
+- **Map on an older or odder screen** — a phone held sideways: nothing to
+  scroll past the map. A laptop: the Show sheet scrolls inside the map to
+  its last line.
 - **A tab left open across a deploy** — its next answer from the server says
   so: *A new version is ready · Reload* under the nav, and the next link you
   tap loads the new page. It never shows an empty map or a blank screen
@@ -716,14 +734,19 @@ not marked voted.
   three columns (*Punjabi; Hindi*). Their volunteer roles offer *Candidate
   aide*, *Social media team* and *Photography / videography*. A Sign (Yes/No) column shows ticked as *Sign 2022*: they
 get that tag, and their Sign profile field stays empty.
-Then **Place on map** looks the addresses up with the BC Address
-Geocoder (needs internet). It runs on the server: you can close the page and
-it keeps going (come back to Import or the map to see how far it's got, or
-**Stop** it). Everyone at one address is one lookup, and an address already
+Then the addresses are looked up with the BC Address Geocoder (needs
+internet) — by themselves: an import that leaves addresses without a pin
+starts placing them, and the import page shows it going (**Place on map** is
+there where it didn't start: no background jobs, or lookups turned off). It
+runs on the server: you can close the page and it keeps going. The map says
+*Placing addresses · 12,400 of 150,000* where *Not on map* was, and the new
+doors appear as it goes (tap it for **Stop**, or come back to Import). Everyone at one address is one lookup, and an address already
 on the map is copied without a lookup. If the geocoder stops answering, the
 run pauses with the reason and tries again by itself (after 15 minutes, then
-less and less often); **Carry on** resumes it at once. Addresses it can't
-find end up under **Not on map** for a pin by hand.
+less and less often) — the map says *Placing addresses paused*, and tapping
+it says when the next try is; **Try now** does it at once. Addresses it
+can't find end up under **Not on map** for a pin by hand. Someone with no
+address at all is never put on the map; the Map check counts them.
 
 A full voter list (hundreds of thousands of people) takes a few hours. Set
 `BC_GEOCODER_KEY` (a free key from the BC government's API gateway) for
@@ -754,10 +777,14 @@ latest).
 
 ## 4 · Known limits in this build
 
-- Map tiles come from OpenStreetMap; very large teams should switch to a paid
-  tile provider before election week: Google Maps (`GOOGLE_MAPS_TILES=1` and
-  a `GOOGLE_MAPS_SERVER_KEY` with the Map Tiles API enabled) or any
-  `{z}/{x}/{y}` provider (`STARBASE_TILE_URL`) — see the README.
+- Map tiles come from CARTO (the *Clean* look the map opens on) and
+  OpenStreetMap, both free and neither for heavy use; choose a provider the
+  campaign has an agreement with before election week: Google Maps
+  (`GOOGLE_MAPS_TILES=1` and a `GOOGLE_MAPS_SERVER_KEY` with the Map Tiles
+  API enabled) or any `{z}/{x}/{y}` provider (`STARBASE_TILE_URL`) —
+  GOING-LIVE.md, section 5. The browser tests run where neither host can be
+  reached, on stand-in tiles: nothing here has checked the real street map.
+  If it stops loading, the map says so.
 - Offline covers **field work** (knocks, new people and doors, pins, sign
   requests, shift sign-ups, *My people*) and **reading the desk**; on a
   profile, ratings, notes and tags save offline. Gifts, imports, outreach

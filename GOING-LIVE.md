@@ -89,7 +89,8 @@ Then, as each one is ready:
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
-| `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
+| `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise the free tiles, which are not for a large team in election week (§5, *The street map*) | the map's background |
+| `STARBASE_TILE_URL`, `STARBASE_TILE_ATTRIBUTION`, `STARBASE_TILE_MAX_ZOOM` | a tile provider the campaign has an agreement with: its `https://…/{z}/{x}/{y}.png` address, its credit line, its deepest zoom (§5, *The street map*) | the map's background, instead of the free tiles |
 | `STARBASE_TRUSTED_PROXIES` | leave unset on Render (one proxy). Set to the number of proxies in front if there is a CDN before Render | rate limits reading the right address |
 | `BASE_DOOR_KEY` | behind the base.win door only: the same 32 or more random characters (`openssl rand -base64 32`) as the door's `BASE_DOOR_KEY` (apps/door/README.md) | each visitor through base.win keeping their own address for the sign-in and form limits — without it, everyone who comes through the door counts as one |
 | `SITE_HOSTS` | the campaign's own domains, once the website moves onto base.win (`imaginesurrey.ca,www.imaginesurrey.ca`; §2) | the website at `/` there, nothing of the app (SITE.md) |
@@ -146,10 +147,15 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    themselves (house number and street, latitude and longitude, the 1/0
    flags, and the standard fields named after them); social handles
    (Instagram, X, TikTok, Reddit) fill blank ones only.
-2. **Place on map** starts a background run; the import page and the map
-   show progress and the time left, and it carries on with the page closed.
-   Addresses the geocoder can't place are set aside for a pin by hand (drag
-   on the map).
+2. Placing starts by itself: an import that leaves addresses without a pin
+   starts a background run (**Place on map** is there where it didn't
+   start). The import page shows its progress and the time left, the map
+   says *Placing addresses · 12,400 of 150,000*, and it carries on with the
+   page closed. If address lookup stops answering it pauses and tries again
+   by itself (15 minutes later, then less often); the map says *Placing
+   addresses paused*. Addresses the geocoder can't place are set aside for a
+   pin by hand (drag on the map). Someone with no address at all is never
+   put on the map.
 3. Open the map on a phone as a volunteer: tap a house, rate the door, see
    it save; turn on airplane mode, do it again, turn it off, watch it send.
 4. Tell volunteers about **Show → Share my location while I'm out** on the
@@ -157,6 +163,55 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    dashboard (Today) shows where they are. Location needs the site on
    `https` (every host in section 2 is). A position is kept only while they
    share it, a trail for the day; neither is in the export.
+5. **Map → Show → Map check** (managers): one sheet with the people on
+   file, on the map and not (and why), the placing run, how many live
+   outside the campaign's area, the turfs, the street map in use and whether
+   its tiles came, and whether this page is the server's current one.
+   Nothing should be flagged. If anyone says the map looks empty, ask for a
+   screenshot of this sheet: the flagged line says which trouble it is.
+
+### The street map: choose a provider before election week
+
+The map's street tiles go straight from a provider to each phone; base.win
+only says which. Out of the box there are two, both free:
+
+| Look | Provider |
+|---|---|
+| *Clean* (what the map opens on) | CARTO's light basemap (`basemaps.cartocdn.com`) |
+| *Standard*, *Muted*, *Dark* | OpenStreetMap's own tile servers (`tile.openstreetmap.org`) |
+
+Neither is meant for heavy use. **We could not read either provider's
+current terms from where this was written** (both sites were out of reach),
+so what follows is what we remember, not their wording. OpenStreetMap's
+servers are run by volunteers on donated machines; its tile usage policy
+does not allow heavy use and lets it block a user without notice. CARTO's
+free basemaps are for light or non-commercial use, with a paid licence
+above that. A campaign's field app in election week is plausibly neither
+light nor non-commercial. Read OpenStreetMap's *Tile Usage Policy*
+(operations.osmfoundation.org) and CARTO's basemap terms (carto.com) before
+relying on either.
+
+Before election week, choose a provider the campaign has an agreement with
+and set it on both environments:
+
+- `STARBASE_TILE_URL` (its `https://…/{z}/{x}/{y}.png` address — a key may
+  ride in it; the phones see it), `STARBASE_TILE_ATTRIBUTION` (its credit
+  line) and `STARBASE_TILE_MAX_ZOOM`. *Clean* is then no longer offered, and
+  every look draws on the campaign's own tiles. Or:
+- Google Maps: `GOOGLE_MAPS_TILES=1` with `GOOGLE_MAPS_SERVER_KEY` (the Map
+  Tiles API enabled). The key stays on the server. Google bills per tile
+  past its free allowance.
+
+To tell it took: **Map → Show → Map check** names the street map in use and
+counts the tiles that loaded and failed, and the foot of the Show sheet says
+*Map tiles: …*. If a provider stops answering, the map says so: it switches
+once by itself to the other free provider where there is one, then shows
+*The street map isn’t loading* with one tap to try the other or try again.
+With a provider of the campaign's own there is no second one to fall back
+on — so test it on staging, on a phone, before the week it matters.
+
+No test of ours has drawn the real street map: the browser tests run where
+the tile hosts can't be reached, on stand-in tiles. Look at it on staging.
 
 ## 6 · A new client
 
@@ -190,6 +245,10 @@ shared, and the code names no client.
   gift. Then live keys on production, one small real gift, and refund it.
 - Backups: Render's managed Postgres keeps daily backups; **Today → Export
   all data** (managers) downloads everything (message pictures are not in it).
+- The map, on production, on a phone and a desk: streets behind the doors,
+  the whole list as a picture with its key, doors by zoom 15; **Show → Map
+  check** with nothing flagged (section 5); and the street map's provider
+  chosen for election week.
 - Two-step sign-in: on for you (**Your profile**, from the account menu)
   and **Require two-step sign-in for desk roles** ticked under **Settings →
   Members** (it covers volunteers given an area under Permissions too);
