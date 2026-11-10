@@ -264,7 +264,8 @@ function OverTime({ d, period }) {
                   parts.push(<path key={o.key} d={topRounded(gx + j * gw, y1, Math.max(1, gw - 1), h, 3)} fill={o.color} className="dash-bar" />);
                 });
               }
-              const show = i % labelEvery === 0 || i === n - 1;
+              // The last bar is always named; one too close before it gives way.
+              const show = i === n - 1 || (i % labelEvery === 0 && n - 1 - i >= labelEvery);
               return (
                 <g key={r.day}>
                   {parts}

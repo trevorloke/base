@@ -76,7 +76,8 @@
   cursor: pointer;
   margin-bottom: var(--s-2);
 }
-.imp-drop:hover { border-color: var(--mark); }
+/* Only for a mouse: a touch screen keeps :hover after a tap. */
+@media (hover: hover) { .imp-drop:hover { border-color: var(--mark); } }
 .imp-drop.is-over { border-style: solid; border-color: var(--mark); background: var(--tint); }
 .imp-drop.is-busy { cursor: progress; opacity: 0.8; }
 .imp-drop:focus-within { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
@@ -330,8 +331,6 @@
 .imp-headrow input { width: 20px; height: 20px; margin: 0; accent-color: var(--mark); cursor: pointer; }
 .imp-headrow input:disabled { cursor: default; }
 .imp-headrow input:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
-/* Touch screens keep :hover after a tap: the drop box only darkens for a mouse. */
-@media (hover: none) { .imp-drop:hover { border-color: var(--mark); } }
 .imp-split { display: flex; gap: var(--s-2); align-items: flex-start; margin: 0 0 var(--s-4); padding: var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); font-size: 14px; color: var(--text-2); }
 .imp-split input { margin-top: 3px; }
 .imp-past { margin: 0 0 var(--s-4); padding: var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); }

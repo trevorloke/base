@@ -33,7 +33,7 @@
   border-radius: var(--r-ctrl);
   cursor: pointer;
 }
-.vl-shift:hover:not(:disabled) { border-color: var(--mark); background: var(--mark-soft); }
+@media (hover: hover) { .vl-shift:hover:not(:disabled) { border-color: var(--mark); background: var(--mark-soft); } }
 .vl-shift:focus-visible { outline: 2px solid var(--focus, var(--mark)); outline-offset: 2px; }
 .vl-shift:disabled { cursor: default; opacity: 0.55; }
 .vl-shift[data-clash] { border-style: dashed; }

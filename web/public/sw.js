@@ -6,6 +6,12 @@
  *               install, and whenever a newer index.html arrives, the whole
  *               build graph is fetched so lazy screens (Map, People…) open
  *               offline too, and files from older builds are dropped.
+ *   Its face    The fonts (/fonts/*) and the campaign's own pictures — the
+ *               logo the page asks for early (<link … data-brand>, written
+ *               by server/lib/brand.js) — are kept with the build, so the
+ *               app opens with no signal looking like itself. They are not
+ *               named by their content, so they are fetched again whenever
+ *               the page changes (a new build, a new brand).
  *   Map tiles   Tiles you've already looked at, in their own capped cache
  *               (~1500 tiles, oldest out first), so a turf seen with signal
  *               still draws offline. OpenStreetMap by default; the map tells
@@ -41,7 +47,7 @@ const KEEP = [SHELL, ASSETS, TILES, META];
 const MINE = BASE ? new RegExp(`^${NAME}-(?:shell|assets|tiles|meta)-`) : /^starbase-(?:shell|assets|tiles|meta)-/;
 
 const INDEX = `${BASE}/index.html`;
-const SHELL_EXTRAS = [`${BASE}/manifest.webmanifest`, `${BASE}/icon.svg`];
+const SHELL_EXTRAS = [`${BASE}/manifest.webmanifest`];
 // A path inside base.win: the address with the client's path taken off.
 const inside = (pathname) => (BASE && (pathname === BASE || pathname.startsWith(`${BASE}/`)) ? pathname.slice(BASE.length) || '/' : pathname);
 const NAV_TIMEOUT_MS = 4000;  // then show the cached app, let the network finish in the background
@@ -150,13 +156,18 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(navigate(event));
     return;
   }
-  if (inside(url.pathname).startsWith('/assets/')) {
+  const path = inside(url.pathname);
+  if (path.startsWith('/assets/') || path.startsWith('/fonts/')) {
     event.respondWith(asset(req));
     return;
   }
   if (SHELL_EXTRAS.includes(url.pathname)) {
     event.respondWith(staleWhileRevalidate(event, SHELL, url.pathname));
+    return;
   }
+  // The campaign's logo: from the cache when the page named it (syncAssets),
+  // so the header keeps it with no signal. Any other picture: the network.
+  if (req.destination === 'image') event.respondWith(kept(req));
 });
 
 // ── App shell ──
@@ -196,6 +207,11 @@ async function asset(req) {
   }
 }
 
+async function kept(req) {
+  const cache = await caches.open(ASSETS);
+  return (await cache.match(req.url, { ignoreVary: true })) || fetch(req);
+}
+
 async function staleWhileRevalidate(event, cacheName, key) {
   const cache = await caches.open(cacheName);
   const hit = await cache.match(key);
@@ -219,13 +235,26 @@ async function adoptIndex(res, previous) {
 
 // Two ways a build file names another: "assets/Map-x1.js" (index.html, CSS,
 // Vite's preload map) and "./Map-x1.js" (a chunk importing its neighbour).
+// The page also names the fonts' stylesheet, which names the font files
+// ("/fonts/…", the client's path in front when there is one), and the
+// campaign's own pictures: the links the server marks data-brand.
 const ASSET_REF = /\/?assets\/[A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf)\b/g;
 const SIBLING_REF = /["'`]\.\/([A-Za-z0-9._-]+\.(?:js|css))["'`]/g;
+const FONT_REF = new RegExp(`["'(](${BASE}/fonts/[A-Za-z0-9._-]+\\.(?:css|woff2?))["')]`, 'g');
+const BRAND_LINK = /<link\b[^>]*\sdata-brand\b[^>]*>/gi;
 const refsIn = (text, inAssets = false) => {
   const out = new Set((text.match(ASSET_REF) || []).map((p) => `${BASE}${p.startsWith('/') ? p : `/${p}`}`));
   if (inAssets) for (const m of text.matchAll(SIBLING_REF)) out.add(`${BASE}/assets/${m[1]}`);
+  for (const m of text.matchAll(FONT_REF)) out.add(m[1]);
+  for (const link of text.match(BRAND_LINK) || []) {
+    const href = /\shref="([^"]+)"/i.exec(link)?.[1].replace(/&amp;/g, '&');
+    // Only this server's own (and, under a client's path, only that client's).
+    if (href && href.startsWith(`${BASE}/`) && !href.startsWith('//')) out.add(href);
+  }
   return [...out];
 };
+// A build's own files carry their content in their name and never change.
+const named = (path) => path.startsWith(`${BASE}/assets/`);
 
 async function syncAssets(html) {
   const cache = await caches.open(ASSETS);
@@ -236,16 +265,22 @@ async function syncAssets(html) {
     const path = queue.shift();
     if (want.has(path)) continue;
     want.add(path);
-    let res = await cache.match(path);
+    // Fonts and the campaign's pictures keep their names when they change:
+    // asked for again (the page changed, or this would not be running) — and
+    // the copy already here stands when there is no answer.
+    const had = await cache.match(path);
+    let res = named(path) ? had : null;
     if (!res) {
       try {
-        res = await fetch(path);
-        if (!res.ok || isHtml(res)) { complete = false; continue; }
-        await cache.put(path, res.clone());
+        res = await fetch(path, named(path) ? undefined : { cache: 'no-cache' });
+        if (!res.ok || isHtml(res)) res = null;
+        else await cache.put(path, res.clone());
       } catch {
-        complete = false;
-        continue;
+        res = null;
       }
+      if (!res && !had) complete = false;
+      res = res || had;
+      if (!res) continue;
     }
     if (/\.(?:js|css)$/.test(path)) {
       const text = await res.text().catch(() => '');

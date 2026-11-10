@@ -3,8 +3,8 @@
    and forms from shifts.css; only what's new lives here (ws-*). */
 .ws-page { max-width: 820px; }
 
-/* Tabs: the one pick-one shape (app.css §13) — one row that scrolls inside
-   its edge, never wraps into a second line on a phone */
+/* Tabs: the one pick-one shape (app.css §13) — on a phone they wrap onto a
+   second row, so every tab shows */
 .ws-tabs { margin: 0 0 var(--s-5); }
 
 .ws-note { margin: 0 0 var(--s-4); padding: 10px 14px; border-radius: var(--r-ctrl); background: var(--mark-soft); color: var(--text-1); font-size: 14px; }

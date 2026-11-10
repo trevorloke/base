@@ -7,8 +7,6 @@
 .wb-page .input, .wb-build .input, .wb-dialog .input { min-height: var(--ctl); }
 .wb-page textarea.input, .wb-build textarea.input { min-height: 96px; resize: vertical; }
 .wb-tabs { margin-bottom: var(--s-5); }
-/* On a phone every tab shows (two rows), rather than a row that scrolls. */
-@media (max-width: 720px) { .ws-tabs.wb-tabs { flex-wrap: wrap; overflow: visible; } }
 .wb-page .form-row > .field, .wb-build .form-row > .field { flex: 1 1 220px; min-width: 0; }
 .wb-help { margin: 0 0 var(--s-3); color: var(--text-3); font-size: 14px; }
 .wb-h2 { font-size: 22px; margin: var(--s-5) 0 var(--s-2); }
@@ -359,7 +357,7 @@
 .wb-skin input { width: 22px; height: 22px; margin: 0; accent-color: var(--mark); }
 .wb-skin__name { font-weight: 700; flex: 1 1 auto; }
 .wb-skin__dots { display: inline-flex; gap: 4px; }
-.wb-skin__dots span { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.18); }
+.wb-skin__dots span { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-strong); }
 .wb-skin:has(input:focus-visible) { outline: 2px solid var(--mark); outline-offset: 2px; }
 .wb-colors { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: var(--s-2) var(--s-4); }
 .wb-color { display: flex; align-items: flex-start; gap: var(--s-2); }

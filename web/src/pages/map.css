@@ -265,9 +265,12 @@
   letter-spacing: 0;
   text-transform: none;
 }
-.map-filter-btn.is-filtered .map-filter-btn__n { background: var(--dot, var(--ink)); color: #ffffff; }
+/* The count on a filtered map: the band's own colour where the filter is a
+   rating band; any other filter (my turf, signs, a candidate) in ink, which
+   turns with the scheme. */
+.map-filter-btn.is-filtered .map-filter-btn__n { background: var(--ink); color: var(--paper-0); }
+.map-filter-btn:is([data-band='support'], [data-band='undecided'], [data-band='opposed'], [data-band='unrated']).is-filtered .map-filter-btn__n { background: var(--dot); color: #ffffff; }
 .map-filter-btn[data-band='undecided'].is-filtered .map-filter-btn__n { color: #161a2e; }
-.map-filter-btn[data-band='signs'].is-filtered .map-filter-btn__n { background: var(--ink); color: var(--paper-0); }
 
 .map-filter-btn[data-band='support'], .map-fopt[data-band='support']     { --dot: #138a52; }
 .map-filter-btn[data-band='undecided'], .map-fopt[data-band='undecided'] { --dot: #f5a524; }

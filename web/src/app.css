@@ -462,7 +462,7 @@ h3 { font-size: 16px; line-height: 1.35; }
   overflow: hidden;
 }
 @media (min-width: 721px) {
-  .acct-panel { top: auto; bottom: calc(100% + 6px); left: 0; right: auto; }
+  .acct-panel { top: auto; bottom: calc(100% + 6px); left: 0; right: 0; min-width: 0; }
 }
 .acct-panel[hidden] { display: none; }
 .acct-panel :focus-visible { outline-color: var(--focus); }
@@ -546,14 +546,17 @@ h3 { font-size: 16px; line-height: 1.35; }
    Every "one of these" on every screen is this shape: a bordered group,
    hairlines between the choices, and the chosen one on the brand's tint in
    the brand's words with an edge. Screens keep their own class (and only
-   their layout: a full-width grid, a row that scrolls); the look is here.
+   their layout: a full-width grid, rows that wrap); the look is here.
    The chosen one is said in the markup — aria-pressed, aria-checked,
-   aria-selected, a NavLink's .active, or .is-on. */
+   aria-selected, a NavLink's .active, or .is-on.
+   Each choice draws its own hairline around itself, in the 1px between
+   them — so a group that wraps onto a second row (a door's people, Settings'
+   tabs on a phone) still has every edge, and a short last row ends closed. */
 :is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) {
   display: inline-flex;
   max-width: 100%;
   padding: 0;
-  gap: 0;
+  gap: 1px;
   background: var(--card);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-ctrl);
@@ -567,10 +570,9 @@ h3 { font-size: 16px; line-height: 1.35; }
   font-family: var(--font-sans); font-size: 14px; font-weight: 500; line-height: 1.25; letter-spacing: 0; text-transform: none;
   text-align: center; text-decoration: none; white-space: nowrap;
   color: var(--text-2); background: transparent;
-  border: 0; border-left: 1px solid var(--line-strong); border-radius: 0;
+  border: 0; border-radius: 0; box-shadow: 0 0 0 1px var(--line-strong);
   cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
-:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):first-child { border-left: 0; }
 @media (hover: hover) {
   :is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):hover { background: var(--panel); color: var(--text); }
 }
@@ -579,15 +581,13 @@ h3 { font-size: 16px; line-height: 1.35; }
   background: var(--tint-2);
   color: var(--accent-words);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px var(--accent-edge);
+  box-shadow: inset 0 0 0 1px var(--accent-edge), 0 0 0 1px var(--line-strong);
 }
 :is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):focus-visible { outline-offset: -2px; }
 :is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):disabled { opacity: 0.45; cursor: default; }
-/* A row of choices longer than the screen scrolls inside its edge (a door's
-   people, Settings' tabs on a phone). */
-:is(.fk-tabs, .ws-tabs) { overflow-x: auto; scrollbar-width: none; }
-:is(.fk-tabs, .ws-tabs)::-webkit-scrollbar { display: none; }
-:is(.fk-tabs, .ws-tabs) > :is(button, a) { flex: 0 0 auto; }
+/* More choices than fit across (a door's people, Settings' tabs on a
+   phone): they wrap, so every one shows. */
+:is(.fk-tabs, .ws-tabs) { flex-wrap: wrap; }
 
 /* Small helpers (shared, not per-screen) */
 .ok-text { color: var(--ok); }

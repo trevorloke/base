@@ -28,7 +28,7 @@
   font-weight: 600;
   cursor: pointer;
 }
-.st-opt:hover { background: var(--paper-1); }
+@media (hover: hover) { .st-opt:hover { background: var(--paper-1); } }
 .st-opt[aria-pressed='true'] { border-color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); background: var(--tint); }
 .st-opt:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .st-opt:disabled { opacity: 0.6; cursor: default; }
