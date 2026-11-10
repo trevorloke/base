@@ -110,7 +110,8 @@ export const resumePush = async (tx, ctx, emit, id) => {
   const row = (await tx.query(
     `update callhub_pushes set status = 'queued', note = null, resume_at = null where id = $1 and workspace_id = $2 returning *`, [id, ws],
   )).rows[0];
-  await enqueueJob(tx, { workspaceId: ws, kind: PUSH_JOB, payload: { push_id: id } });
+  // carry: someone looked at why it stopped and said go on (dnc.js is lenient then).
+  await enqueueJob(tx, { workspaceId: ws, kind: PUSH_JOB, payload: { push_id: id, carry: true } });
   emit('callhub_push', id, 'update', { status: 'queued' });
   return { push: pushOut(row) };
 };
@@ -143,8 +144,9 @@ export const runPushJob = async (db, job) => {
     if (payload) emit('callhub_push', id, 'update', payload);
   });
   // The next run: now, or when CallHub will take more.
+  const carry = Boolean(job.payload?.carry);
   const again = (at = null) => act(async (tx) => {
-    await enqueueJob(tx, { workspaceId: ws, kind: PUSH_JOB, payload: { push_id: id }, ...(at ? { runAt: at.toISOString() } : {}) });
+    await enqueueJob(tx, { workspaceId: ws, kind: PUSH_JOB, payload: { push_id: id, ...(carry ? { carry } : {}) }, ...(at ? { runAt: at.toISOString() } : {}) });
   });
   const waitUntil = async (at, note) => {
     await set({ note, resume_at: at.toISOString() }, { waiting_until: at.toISOString() });
@@ -198,7 +200,7 @@ export const runPushJob = async (db, job) => {
       await set({ dnc_list: list });
       return list;
     };
-    const dncLeft = await syncDnc(db, ws, { blocked, again: fresh, budget: left, act, tally: dncTally, book });
+    const dncLeft = await syncDnc(db, ws, { blocked, again: fresh, lenient: carry, budget: left, act, tally: dncTally, book });
     left -= dncDid(dncTally);
     if (dncLeft) { await again(); runJobsSoon(); return; }
     if (said) await set({ note: null });

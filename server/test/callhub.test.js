@@ -259,7 +259,8 @@ test('a push: do-not-call and do-not-contact never leave, one contact per number
   assert.deepEqual(ev[0].payload, { source_kind: 'list', source_id: ids.list, name: p.name, total: 4, skipped: 6 });
   assert.equal(ev[0].actor_id, ids['Sam Example']);
   assert.equal(ev.filter((e) => e.entity_type === 'callhub_contact').length, 4, 'one line per number sent');
-  assert.ok(!JSON.stringify(ev).includes('555'), 'no phone number on the log');
+  // (A made-up number's digits, not just "555": an id is hex and may hold that by chance.)
+  assert.doesNotMatch(JSON.stringify(ev), /555\D?01\d\d/, 'no phone number on the log');
 });
 
 test('people not to call go to a CallHub do-not-call list with the push: once each, by kind', async () => {
@@ -1044,21 +1045,64 @@ test('a do-not-call number CallHub won’t take is remembered and said, with who
     assert.equal(seen.not_taken, null);
     assert.ok(fake.dnc.some((d) => d.phone_number === '+16045550138' && d.category === 3));
 
-    // CallHub taking none of them is not the numbers: the push stops with its words, nothing is written off, and Carry on tells them all.
+    // CallHub has taken this campaign's numbers before, so refusals are the numbers' own: however many in a row, the push goes.
     for (let i = 0; i < 6; i += 1) await db.query(`insert into texting_optouts (id, workspace_id, phone, opted_out, keyword) values (gen_random_uuid(), $1, $2, true, 'STOP')`, [ws, `+1778555010${i}`]);
     fake.rejectDnc('all');
-    const r = ok(await mgr.action('callhub.push', { list_id: list }));
+    ok(await mgr.action('callhub.push', { list_id: list }));
     await drain();
-    let [p] = await pushesOf(`list=${list}`);
-    assert.deepEqual([p.status, p.sent], ['failed', 0]);
-    assert.equal(p.note, 'CallHub wouldn’t take 5 do-not-call numbers in a row. It said “phone_number: Enter a valid phone number.”');
-    assert.equal((await db.query('select count(*)::int as n from callhub_dnc where workspace_id = $1 and refused is not null', [ws])).rows[0].n, 0);
+    seen = ok(await staff.get(`/api/callhub/pushes?list=${list}`));
+    assert.deepEqual([seen.pushes[0].status, seen.pushes[0].sent, seen.pushes[0].note], ['sent', 3, null]);
+    assert.deepEqual(seen.not_taken, { n: 6, note: 'phone_number: Enter a valid phone number.', people: [] }, 'numbers that only replied STOP are nobody’s on file');
     fake.rejectDnc(false);
-    ok(await mgr.action('callhub.resume', { id: r.push.id }));
+    ok(await mgr.action('callhub.push', { list_id: list }));
     await drain();
-    [p] = await pushesOf(`list=${list}`);
-    assert.deepEqual([p.status, p.sent], ['sent', 3]);
+    assert.equal(ok(await staff.get(`/api/callhub/pushes?list=${list}`)).not_taken, null);
     assert.equal(fake.dnc.filter((d) => d.phone_number.startsWith('+1778555010')).length, 6);
+  } finally {
+    fake.rejectDnc(false);
+  }
+});
+
+test('CallHub taking none of a campaign’s do-not-call numbers stops its first push with CallHub’s words — once: Carry on goes on without them', async () => {
+  const other = new Client();
+  const ows = (await other.signup({ name: 'Nora Example', workspaceName: `Second ${tag}`, email: `nora+${tag}@example.org` })).json.workspace.id;
+  const run = async () => {
+    for (let i = 0; i < 40; i += 1) { const r = await runDueJobs(db, { workspaceId: ows }); if (!r.ran && !r.failed) return; }
+    throw new Error('jobs never settled');
+  };
+  for (let i = 0; i < 7; i += 1) await other.createPerson(`Never${i} Example`, { phone: `250-555-010${i}`, tags: ['do-not-call'] });
+  const go = await other.createPerson('Goes Example', { phone: '250-555-0110' });
+  const list = ok(await other.action('list.create', { name: 'Second list', kind: 'people', person_ids: [go.id] })).list.id;
+  const asked = () => fake.calls.filter((c) => c.path === '/v1/dnc_contacts/' && String(c.params.phone_number).startsWith('+1250555010')).length;
+  const page = async () => ok(await other.get(`/api/callhub/pushes?list=${list}`));
+  fake.rejectDnc('all');
+  try {
+    const r = ok(await other.action('callhub.push', { list_id: list }));
+    await run();
+    let seen = await page();
+    assert.deepEqual([seen.pushes[0].status, seen.pushes[0].sent], ['failed', 0]);
+    assert.equal(seen.pushes[0].note, 'CallHub wouldn’t take 5 do-not-call numbers in a row. It said “phone_number: Enter a valid phone number.”');
+    assert.deepEqual([asked(), seen.not_taken], [5, null], 'five asked; nothing written off yet');
+    // Carry on: someone has read why. Five more refusals, and the rest are left as not taken, unasked — the contacts go.
+    ok(await other.action('callhub.resume', { id: r.push.id }));
+    await run();
+    seen = await page();
+    assert.deepEqual([seen.pushes[0].status, seen.pushes[0].sent, seen.pushes[0].note], ['sent', 1, null]);
+    assert.equal(asked(), 10);
+    assert.deepEqual([seen.not_taken.n, seen.not_taken.note, seen.not_taken.people.length], [7, 'phone_number: Enter a valid phone number.', 5]);
+    // The next push asks about them again: five, still refused, and the rest are left as they are. It does not stop.
+    ok(await other.action('callhub.push', { list_id: list }));
+    await run();
+    assert.equal(asked(), 15);
+    assert.equal((await page()).pushes[0].status, 'sent');
+    // Once CallHub takes them, all of them go and the line is gone.
+    fake.rejectDnc(false);
+    ok(await other.action('callhub.push', { list_id: list }));
+    await run();
+    seen = await page();
+    assert.equal(seen.not_taken, null);
+    assert.equal(fake.dnc.filter((d) => d.phone_number.startsWith('+1250555010')).length, 7);
+    assert.equal((await verifyChain(db, ows)).ok, true);
   } finally {
     fake.rejectDnc(false);
   }
@@ -1187,7 +1231,7 @@ test('who may: the desk only, and never someone a manager took People away from'
   assert.equal((await staff.get('/api/callhub/preview?list=nope')).status, 400);
   assert.equal((await staff.get(`/api/callhub/preview?list=${ids.push}`)).status, 404, 'not a list');
   const seen = JSON.stringify((await staff.get(`/api/callhub/pushes?list=${ids.list}`)).json);
-  assert.ok(!seen.includes('555') && !seen.includes(KEY), 'counts and CallHub’s words: never a number, never the key');
+  assert.ok(!/555\D?01\d\d/.test(seen) && !seen.includes(KEY), 'counts, CallHub’s words and names: never a number, never the key');
   ok(await mgr.action('permission.member.set', { user_id: ids['Sam Example'], grant: [], deny: ['people'] }));
   try {
     assert.equal((await staff.get(`/api/callhub/pushes?list=${ids.list}`)).status, 403);

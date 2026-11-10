@@ -14,9 +14,11 @@
 // too: a number nobody here blocks any more (the tag taken off again, a
 // result's "do not call" put back) comes off CallHub's list, by the entry
 // CallHub named for it. A number CallHub won't take is remembered with its
-// words and left for the next push — one bad number never stops the rest;
-// several refused in a row is not the numbers, and stops with CallHub's
-// words. Numbers only ever leave here: never a name.
+// words and asked about again with the next push — it never stops the rest.
+// Only when CallHub takes none of a campaign's numbers at all (five refused
+// in a row before any was ever taken) does a push stop, once, with
+// CallHub's words; Carry on goes on without them. Numbers only ever leave
+// here: never a name.
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { e164, NO_CALL_TAG, NO_CONTACT_TAG } from '../texting/rules.js';
@@ -50,9 +52,10 @@ const told = async (db, ws) => new Map((await db.query(
 const plainNo = (e) => e instanceof CallHubError && !e.throttled && e.httpStatus >= 400 && e.httpStatus < 500 && ![401, 403, 429].includes(e.httpStatus);
 
 // The numbers CallHub has not been told, or not everything about:
-// [[number, what it must not get — 1 calls, 2 texts, 3 both — and CallHub's
-// entry for it, when it has one already]]. What CallHub refused is left out
-// until `again` (the next push asks once more).
+// [[number, what it must not get — 1 calls, 2 texts, 3 both —, CallHub's
+// entry for it when it has one already, and whether CallHub refused it
+// before]]. What CallHub refused is left out until `again` (the next push
+// asks once more).
 export const untoldOf = async (db, ws, blocked = null, { again = false } = {}) => {
   const all = blocked || await notToCall(db, ws);
   const had = await told(db, ws);
@@ -63,7 +66,7 @@ export const untoldOf = async (db, ws, blocked = null, { again = false } = {}) =
     const want = has | category;
     if (want === has) continue;
     if (!again && row?.refused != null && (Number(row.refused) | want) === Number(row.refused)) continue;
-    out.push([phone, want, row?.entry || null]);
+    out.push([phone, want, row?.entry || null, row?.refused != null]);
   }
   return out;
 };
@@ -99,25 +102,34 @@ export const heldTooLong = async (db, ws) => {
 // Tell CallHub, one a second, `budget` at most; each is remembered as it
 // goes, and counted on `tally` (so a caller stopped part-way still knows how
 // many went). `act` is the caller's write (the push's sender, or the
-// system). A number CallHub won't take is remembered with its words once a
-// later one goes through (or the run ends); several refused in a row is not
-// the numbers: it stops with CallHub's words and none of them is written
-// off. A throttle, or anything else, is the caller's to handle.
-export const tellCallHub = async (ws, { list, untold, budget, act, tally }) => {
+// system). A number CallHub won't take is remembered with its words, and
+// the rest go on. Five refused in a row is looked at:
+//   · all of them refused before (a push asking again): still refused —
+//     the rest of those are left as they are
+//   · CallHub has taken this campaign's numbers before (`everTaken`): they
+//     are the numbers' own, remembered like any other
+//   · it never has: it is not the numbers. The push stops with CallHub's
+//     words and nothing is written off; carried on (`lenient`), they and
+//     the rest are left as not taken, unasked, and the push goes on
+// A throttle, or anything else, is the caller's to handle.
+// → how many it left unasked.
+export const tellCallHub = async (ws, { list, untold, budget, act, tally, everTaken = true, lenient = false }) => {
   const streak = [];
+  let taken = everTaken;
+  let stillRefused = false;
+  let unasked = 0;
+  const NOT_TAKEN = `insert into callhub_dnc (workspace_id, phone, category, refused, refused_note)
+    select $1, x.phone, 0, x.category, $4 from unnest($2::text[], $3::int[]) as x(phone, category)
+    on conflict (workspace_id, phone) do update set refused = excluded.refused, refused_note = excluded.refused_note`;
+  const notTaken = (rows, words) => act((tx) => tx.query(NOT_TAKEN, [ws, rows.map((r) => r[0]), rows.map((r) => r[1]), words]));
   const writeOff = async () => {
-    for (const [phone, category, words] of streak.splice(0)) {
-      await act(async (tx) => {
-        await tx.query(
-          `insert into callhub_dnc (workspace_id, phone, category, refused, refused_note) values ($1, $2, 0, $3, $4)
-           on conflict (workspace_id, phone) do update set refused = excluded.refused, refused_note = excluded.refused_note`,
-          [ws, phone, category, words],
-        );
-      });
-      tally.refused += 1;
-    }
+    const rows = streak.splice(0);
+    if (!rows.length) return;
+    await notTaken(rows, rows.at(-1)[2]);
+    tally.refused += rows.length;
   };
-  for (const [phone, category, had] of untold) {
+  for (const [i, [phone, category, had, before]] of untold.entries()) {
+    if (before && stillRefused) { unasked += 1; continue; }
     if (did(tally) + streak.length >= budget) break;
     const body = { dnc: list, phone_number: phone, category };
     const idempotencyKey = `base-callhub-dnc-${ws}-${phone}-${category}`;
@@ -142,9 +154,23 @@ export const tellCallHub = async (ws, { list, untold, budget, act, tally }) => {
         const there = e instanceof CallHubError && e.httpStatus === 400 && /already|exist|unique|duplicate/i.test(e.message);
         if (!there && !(plainNo(e) && e.httpStatus === 400)) throw e;
         if (!there) {
-          streak.push([phone, category, String(e.message).slice(0, 300)]);
+          const words = String(e.message).slice(0, 300);
+          streak.push([phone, category, words, before]);
           if (streak.length >= REFUSALS_IN_A_ROW) {
-            throw new CallHubError(`CallHub wouldn’t take ${streak.length} do-not-call numbers in a row. It said “${String(e.message).slice(0, 240)}”`, { status: 400 });
+            if (streak.every((r) => r[3])) {
+              // Asked again, refused again: remembered already.
+              tally.refused += streak.splice(0).length;
+              stillRefused = true;
+            } else if (taken) {
+              await writeOff();
+            } else if (lenient) {
+              const rest = untold.slice(i + 1);
+              await writeOff();
+              if (rest.length) await notTaken(rest, words);
+              return unasked + rest.length;
+            } else {
+              throw new CallHubError(`CallHub wouldn’t take ${streak.length} do-not-call numbers in a row. It said “${words.slice(0, 240)}”`, { status: 400 });
+            }
           }
           await pause();
           continue;
@@ -160,10 +186,12 @@ export const tellCallHub = async (ws, { list, untold, budget, act, tally }) => {
         [ws, phone, category, entry],
       );
     });
+    taken = true;
     tally.told += 1;
     await pause();
   }
   await writeOff();
+  return unasked;
 };
 
 // Take off CallHub's list (or lower: both → texts only) what base.win no
@@ -210,8 +238,9 @@ export const freeAtCallHub = async (ws, { list, over, budget, act, tally }) => {
 };
 
 // One run of both, for the push's job and the newly-marked job. `book`
-// finds (or makes) CallHub's list once it is needed. → how many are left.
-export const syncDnc = async (db, ws, { blocked = null, again = false, budget, act, tally, book }) => {
+// finds (or makes) CallHub's list once it is needed; `lenient`: a push that
+// was carried on (tellCallHub). → how many are left.
+export const syncDnc = async (db, ws, { blocked = null, again = false, lenient = false, budget, act, tally, book }) => {
   const all = blocked || await notToCall(db, ws);
   // What CallHub would not take, for a number nobody blocks any more: forgotten.
   const stale = (await db.query('select phone from callhub_dnc where workspace_id = $1 and category = 0', [ws])).rows.map((r) => r.phone).filter((n) => !all.has(n));
@@ -220,9 +249,10 @@ export const syncDnc = async (db, ws, { blocked = null, again = false, budget, a
   const over = await overToldOf(db, ws, all, { again });
   if (!untold.length && !over.length) return 0;
   const list = untold.length || over.some(([, keep]) => keep) ? await book(untold.length + over.length) : null;
-  await tellCallHub(ws, { list, untold, budget, act, tally });
+  const everTaken = (await db.query('select 1 from callhub_dnc where workspace_id = $1 and category > 0 limit 1', [ws])).rows.length > 0;
+  const unasked = await tellCallHub(ws, { list, untold, budget, act, tally, everTaken, lenient });
   await freeAtCallHub(ws, { list, over, budget, act, tally });
-  return Math.max(0, untold.length + over.length - did(tally));
+  return Math.max(0, untold.length + over.length - did(tally) - unasked);
 };
 
 // One line on the log for a run: how many, never which.

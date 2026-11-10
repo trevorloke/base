@@ -376,9 +376,10 @@ What happens:
   CallHub. While a push is telling CallHub these numbers its line says so
   (*Telling CallHub who not to call first · 150 to go*). A number CallHub
   won't take for that list never stops a push: it is said on the page with
-  CallHub's words and whose number it is, and asked once more with the
-  next push (five refused in a row is not the numbers: the push stops with
-  CallHub's words, and Carry on asks again). Whether a calling campaign in
+  CallHub's words and whose number it is, and asked about again with the
+  next push. Only if CallHub takes none of a campaign's numbers at all
+  (five refused in a row before any was ever taken) does the push stop,
+  once, with CallHub's words; **Carry on** goes on without them. Whether a calling campaign in
   CallHub honours that list by itself or has to be pointed at it is not
   confirmed: look in CallHub before the first night.
 - **Each call's result** comes back as the caller saves it (CallHub's

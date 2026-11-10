@@ -12,7 +12,7 @@
 // none until someone picks it. A change moves the results already in too,
 // and putting it back undoes it; one that would tag people do-not-call or
 // rate them asks first, in place.
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { offeredCodes, ratingText } from '@starbase/shared/scale';
@@ -76,6 +76,12 @@ function Results({ p, online, onChanged }) {
   const [error, setError] = useState(null);
   // A pick that would tag or rate people already called waits here for a Yes: { at, words, input }.
   const [ask, setAsk] = useState(null);
+  // The question is brought clear of the phone's bottom bar, once, when it appears.
+  const askRef = useRef(null);
+  useEffect(() => {
+    const el = askRef.current;
+    if (el && el.getBoundingClientRect().bottom > window.innerHeight - 96) el.scrollIntoView({ block: 'center' });
+  }, [ask?.at]);
   // A big push's results move in the background: said while it goes, and when it is done.
   const [wasMoving, setWasMoving] = useState(false);
   useEffect(() => {
@@ -111,7 +117,7 @@ function Results({ p, online, onChanged }) {
     setAsk({ at: `a${i}`, input, words: `Rate everyone who answered “${a.answer}” ${ratingText(scale, value)}?` });
   };
   const confirm = (at) => ask?.at === at && (
-    <span className="ops-confirm ch-confirm" role="alert">
+    <span className="ops-confirm ch-confirm" role="alert" ref={askRef}>
       <span>{ask.words}</span>
       <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={() => save(ask.input)}>Yes</button>
       <button type="button" className="btn btn-quiet ops-tap" autoFocus onClick={() => { setAsk(null); document.getElementById(`${uid}-${at}`)?.focus(); }}>No</button>
