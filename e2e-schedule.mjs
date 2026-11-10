@@ -95,6 +95,9 @@ await new Promise((resolve, reject) => {
   server.stdout.on('data', (d) => { if (/starbase on/.test(String(d))) { clearTimeout(t); resolve(); } });
   server.once('exit', (code) => { clearTimeout(t); reject(new Error(`server exited ${code}: ${serverLog.join('')}`)); });
 });
+// Whatever ends this run, the server goes with it.
+process.on('exit', () => { try { server.kill('SIGKILL'); } catch { /* gone */ } });
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(sig, () => process.exit(1));
 const stop = async () => {
   await new Promise((r) => { if (server.exitCode !== null) { r(); return; } server.removeAllListeners('exit'); server.once('exit', r); server.kill('SIGTERM'); });
   geocoder.close();
@@ -488,6 +491,20 @@ try {
   ph = (await D.api(`/shifts/${phone.id}`)).json.shift;
   check('Undo: back on Thursday', iso(ph.starts_at) === at(thu, '18:30') && (await cards(thu)).some((c) => c.id === phone.id));
 
+  // A shift's target, by tap: Tuesday's Mainstreet wants 3, not the kind's 2.
+  await D.watchKeys();
+  await openCard(tueCards[1].id);
+  await page.locator('.sch-sheet .sch-more').click();
+  check('"More" on a card: "We need", its target pressed', await pressed(page.locator('.sch-sheet [aria-label="We need"] .sch-chip:text-is("2")'))
+    && (await D.text('.sch-sheet [aria-label="We need"].sch-chips')).startsWith('No target 1 2 3 4 5 6 8 10'), await D.text('.sch-sheet [aria-label="We need"].sch-chips'));
+  await page.locator('.sch-sheet [aria-label="We need"] .sch-chip:text-is("3")').click();
+  await go.click();
+  await sheetGone();
+  await until(async () => (await cards(tue))[1].count === '0 of 3');
+  k = await D.keys();
+  check('"We need 3": the card says "0 of 3" — set by tap', (await cards(tue))[1].count === '0 of 3' && (await D.api(`/shifts/${tueCards[1].id}`)).json.shift.need === 3
+    && (await toast()) === 'Saved' && k.keys === 0 && k.fields.length === 0, `${await toast()} ${JSON.stringify(k)}`);
+
   // ── 11. People still go on by tap; a shift with people moved says who has the old time, and "Tell them" ──
   await page.locator('.sb-person:has-text("Asha Example")').click();
   await page.locator(`.sch-card[data-shift="${monCards[0].id}"] .sch-card__head`).click();
@@ -730,6 +747,28 @@ try {
   check('phone, "More": nobody is on these shifts, so nobody to tell', /Nobody is on a shift still to come/.test(await M.text('.sch-weekmore')) && await mp.locator('.sch-weekmore button:has-text("Tell them")').isDisabled());
   await M.shot('36-week-more-390', true);
   await mobile.close();
+
+  // A narrow window with a mouse: a card dragged onto another day's button in the strip moves there.
+  const slim = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, timezoneId: 'America/Vancouver', locale: 'en-CA', storageState: await desk.storageState() });
+  const sp = await slim.newPage();
+  wire(sp, 'narrow');
+  await sp.goto(`${ADMIN}/shifts?week=${W4}`, { waitUntil: 'domcontentloaded' });
+  await sp.waitForSelector('.sch-card', { timeout: 10000 });
+  const dragged = await sp.locator('.sch-card').nth(1).getAttribute('data-shift');
+  const fromBox = await sp.locator(`.sch-card[data-shift="${dragged}"] .sch-card__head`).boundingBox();
+  const sunBtn = await sp.locator(`.sb-day[data-day="${addDays(W4, 6)}"]`).boundingBox();
+  await sp.mouse.move(fromBox.x + 40, fromBox.y + 16);
+  await sp.mouse.down();
+  await sp.mouse.move(fromBox.x + 50, fromBox.y + 26, { steps: 3 });
+  await sp.mouse.move(sunBtn.x + sunBtn.width / 2, sunBtn.y + sunBtn.height / 2, { steps: 8 });
+  await sleep(150);
+  const lit = await sp.locator(`.sb-day[data-day="${addDays(W4, 6)}"][data-hot]`).count();
+  await sp.mouse.up();
+  await until(async () => /moved to Sun/.test(await sp.locator('.sb-toast').innerText().catch(() => '')));
+  const sunday = (await board(W4)).shifts.find((x) => x.id === dragged);
+  check('narrow: a card dropped on Sunday in the day strip moves there, the same hours', lit === 1 && iso(sunday.starts_at) === at(addDays(W4, 6), '16:00')
+    && iso(sunday.ends_at) === at(addDays(W4, 6), '18:00'), `${lit} ${sunday.starts_at}`);
+  await slim.close();
 
   // ── 19. The books still verify ──
   const v = (await D.api('/audit/verify')).json;

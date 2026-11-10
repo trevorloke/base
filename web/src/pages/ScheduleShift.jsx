@@ -5,6 +5,8 @@
 //           to another day (ShiftsBoard.jsx)
 //   Time    the kind's usual hours, or another time by tap
 //   Place   turfs, places used before, or a point on the map
+//   More    "We need": how many people it wants — a target that never
+//           turns anyone away — by tap
 //   Save    one write: shift.update — or, for a repeating slot set to "This
 //           and the following", shift.series.update (the ones changed on
 //           their own are left alone)
@@ -15,7 +17,7 @@
 //
 // Nobody is told about a change by itself: after a move the week says how
 // many have the old time, with "Tell them".
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dayOf } from '@starbase/shared/dayparts';
 import { kindOf } from '@starbase/shared/shiftkinds';
@@ -28,6 +30,8 @@ import Where, { wherePatch } from './ScheduleWhere.jsx';
 import { countWords, dayWords, peopleWords, plural, shiftClock, shiftSpan } from './ScheduleWords.js';
 
 const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+// "We need": the targets offered by tap (its own, when it is another number, joins them).
+const NEEDS = [1, 2, 3, 4, 5, 6, 8, 10];
 
 // Where the shift is now, as the Where chips read it. Words that are only
 // its turfs' names are the turfs, not a place of their own.
@@ -52,6 +56,10 @@ export default function ScheduleShift({
   const [day, setDay] = useState(day0);
   const [when, setWhen] = useState(() => whenFor(kind, at0));
   const [where, setWhere] = useState(where0);
+  const need0 = shift.need ?? null;
+  const [need, setNeed] = useState(need0);
+  const [more, setMore] = useState(false);
+  const moreId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   // 'tell' | 'off' — the in-place question open under the quiet buttons.
@@ -65,7 +73,8 @@ export default function ScheduleShift({
   const t = timesOf(when)[0] || null;
   const timePatch = t && (t.start !== at0.start || (t.end || null) !== (at0.end || null))
     ? { start: t.start, ...(t.end ? { end: t.end } : {}) } : {};
-  const patch = { ...(day !== day0 ? { day } : {}), ...timePatch, ...wherePatch(where0, where) };
+  const moves = { ...(day !== day0 ? { day } : {}), ...timePatch, ...wherePatch(where0, where) };
+  const patch = { ...moves, ...(need !== need0 ? { need } : {}) };
   const dirty = Object.keys(patch).length > 0;
 
   const run = async (fn) => {
@@ -75,7 +84,8 @@ export default function ScheduleShift({
   };
 
   const save = () => run(async () => {
-    const moved = on.length > 0;
+    // People are only out of date when the day, the time or the place changed.
+    const moved = on.length > 0 && Object.keys(moves).length > 0;
     if (following) {
       const res = await action('shift.series.update', { id: shift.id, patch });
       onChanged({
@@ -170,6 +180,20 @@ export default function ScheduleShift({
             <h3 className="sch-label">Place</h3>
             <Where kind={kind} value={where} onChange={setWhere} canMap={canMap} />
           </section>
+
+          <button type="button" className="disclose sch-more" aria-expanded={more} aria-controls={moreId} onClick={() => setMore((v) => !v)}>More</button>
+          {more && (
+            <section id={moreId} className="sch-sec sch-more__body" aria-label="We need">
+              <h3 className="sch-label">We need</h3>
+              <div className="sch-chips" role="group" aria-label="We need">
+                <button type="button" className="sch-chip" aria-pressed={need === null} onClick={() => setNeed(null)}>No target</button>
+                {[...new Set([...NEEDS, ...(need0 ? [need0] : [])])].sort((a, b) => a - b).map((n) => (
+                  <button key={n} type="button" className="sch-chip" aria-pressed={need === n} onClick={() => setNeed(n)}>{n}</button>
+                ))}
+              </div>
+              <span className="ops-meta">A target — nobody is turned away</span>
+            </section>
+          )}
         </>
       )}
 

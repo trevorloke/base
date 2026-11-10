@@ -74,6 +74,8 @@
 /* A card in hand: every day it may go to shows its edge; the one under it fills. */
 .sch[data-dragging] .sch-day:not([data-past]) { border-color: var(--rule-2); border-style: dashed; }
 .sch[data-dragging] .sch-day[data-hot] { background: var(--mark-soft); border-color: var(--mark); border-style: solid; }
+/* On a phone the other days are the strip's buttons: a card dropped on one moves there. */
+.sch[data-dragging] .sb-day[data-hot] { border-color: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 
 .sch-day__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-1); min-height: 40px; padding-left: var(--s-1); min-width: 0; }
 .sch-day__name { font-size: 13px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

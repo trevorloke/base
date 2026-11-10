@@ -91,7 +91,8 @@ function useNarrow(query = '(max-width: 720px)') {
 }
 
 // What a drop landed on, read off the element under the pointer: a person
-// goes on a shift's card (or back to the tray); a card goes to a day.
+// goes on a shift's card (or back to the tray); a card goes to a day — its
+// column, or on a phone its button in the day strip.
 const targetAt = (x, y, item) => {
   const under = document.elementFromPoint(x, y);
   if (item?.shift) {
@@ -709,6 +710,7 @@ export default function ShiftsBoard({ me, onSheet }) {
                 const n = (byDay.get(d) ?? []).length;
                 return (
                   <button key={d} type="button" className="sb-day" aria-pressed={d === shownDay} data-today={d === today ? '' : undefined}
+                    data-day={d} data-hot={hot(`day:${d}`)}
                     aria-label={`${w.long}${n ? `, ${plural(n, 'shift')}` : ''}`} onClick={() => setPhoneDay(d)}>
                     <span className="sb-day__wd">{w.wd}</span>
                     <span className="sb-day__n">{w.num}</span>
