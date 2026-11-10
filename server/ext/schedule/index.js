@@ -17,18 +17,27 @@
 //               place.save · place.rename · place.remove
 //   many.js     shift.createMany · shift.copyWeek · shift.series.update ·
 //               shift.series.cancel — each one transaction
-//   api.js      GET /places · /places/name (desk)
+//   tell.js     shift.tellWeek · shift.reminders, and the two jobs that
+//               send: a notice's rows, and the evening before
+//   brief.js    Today's short shifts (brief hook)
+//   api.js      GET /places · /places/name · /schedule/week ·
+//               /schedule/notices/:id (desk)
 import { placeActions } from './places.js';
 import { manyActions } from './many.js';
+import { tellActions } from './tell.js';
+import { briefShortShifts } from './brief.js';
 
 export { sql } from './sql.js';
 export { api } from './api.js';
+export { jobs } from './tell.js';
 
-export const actions = { ...placeActions, ...manyActions };
+export const actions = { ...placeActions, ...manyActions, ...tellActions };
+
+export const hooks = { brief: briefShortShifts };
 
 // In the full export: its tables.
 export const exportTables = ['places', 'schedule_settings', 'shift_notices'];
 
 // The lists to pick from are the desk's (or a volunteer's granted Shifts).
 // A volunteer's own shifts carry their place's words and pin themselves.
-export const deskOnlyReads = ['/places', '/places/name'];
+export const deskOnlyReads = ['/places', '/places/name', '/schedule/week', '/schedule/notices/:id'];

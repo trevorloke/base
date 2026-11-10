@@ -53,6 +53,19 @@ export const madeTitle = (kind, place) => {
 // Where the website lists a public shift: 'event', 'opening', or 'both' for
 // a shift made before kinds (it shows in both, as it always did).
 export const siteListOf = (shift) => (shiftKind(shift?.kind) ? shiftKind(shift.kind).site : 'both');
+// The kinds the website lists under each heading (the server's query).
+export const SITE_KINDS = {
+  event: SHIFT_KINDS.filter((k) => k.site === 'event').map((k) => k.code),
+  opening: SHIFT_KINDS.filter((k) => k.site === 'opening').map((k) => k.code),
+};
+
+// How many more people a shift wants: by its target (need) — a number that
+// never refuses anyone — or, on a shift from before targets, by its limit.
+// 0 when it has enough, or wants no number. `filled`: those holding a spot.
+export const shortBy = (shift) => {
+  const want = Number(shift?.need ?? shift?.capacity) || 0;
+  return Math.max(0, want - (Number(shift?.filled) || 0));
+};
 
 // ── Many at once ──
 // One "Add" makes every chosen day, and each of them again every week:

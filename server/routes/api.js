@@ -893,7 +893,7 @@ app.get('/brief', async (c) => {
      where workspace_id = $1 and deleted_at is null and rating is not null group by rating`, [ws],
   )).rows;
   const shifts = (await db.query(
-    `select s.id, s.title, s.starts_at, s.location, s.capacity,
+    `select s.id, s.title, s.starts_at, s.location, s.capacity, s.kind, s.need,
             (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,
             ${MINE_ON_SHIFT} as mine
      from shifts s where s.workspace_id = $1 and s.deleted_at is null and s.starts_at >= now()
