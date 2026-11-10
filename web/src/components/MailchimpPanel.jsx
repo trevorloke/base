@@ -62,12 +62,15 @@ export default function MailchimpPanel({ online, onChanged }) {
   };
 
   const d = q.data;
-  const pulling = busy === 'pull' || Boolean(d?.pulling);
+  // A pull asked for on a server whose background work is off: nothing here
+  // will do it, so nothing says "Pulling…".
+  const idle = Boolean(d?.pulling) && !d?.running;
+  const pulling = busy === 'pull' || (Boolean(d?.pulling) && !idle);
   let line;
   if (q.isLoading) line = 'Loading…';
   else if (q.isError) {
     line = noSignal(q) ? <NoSignal /> : <>Unavailable — <button type="button" className="btn-link mcp-retry" onClick={() => q.refetch()}>Try again</button></>;
-  } else if (d.pulling && !d.running) line = 'Waiting · background work is off on this server';
+  } else if (idle && busy !== 'pull') line = 'Waiting · background work is off on this server';
   else if (pulling) line = 'Pulling…';
   else if (d.pull_ok === false) line = `The last pull stopped: ${d.pull_note || 'no answer from Mailchimp'}`;
   else if (d.pulled_at) line = `Last pulled ${whenWord(d.pulled_at)} · ${d.pull_note || 'Nothing new'}`;
@@ -77,7 +80,7 @@ export default function MailchimpPanel({ online, onChanged }) {
     <div className="mcp">
       <div className="mcp-acts">
         <button type="button" className="btn ops-tap" disabled={!!busy || !online} onClick={connect}>{busy === 'connect' ? 'Connecting…' : 'Connect'}</button>
-        <button type="button" className="btn ops-tap" disabled={!!busy || pulling || !online || q.isLoading} onClick={pull}>{pulling ? 'Pulling…' : 'Pull now'}</button>
+        <button type="button" className="btn ops-tap" disabled={!!busy || pulling || idle || !online || q.isLoading} onClick={pull}>{pulling ? 'Pulling…' : 'Pull now'}</button>
       </div>
       <p className="sv2-for">Connect tells Mailchimp to send unsubscribes here. Pull now reads them at once.</p>
       {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}

@@ -16,7 +16,8 @@
 //     Mailchimp arrives by its webhook and the next sync takes the address
 //     out of the tag; "too many" from Mailchimp reads "trying again soon"
 //     and carries on by itself; a refused key reads "Stopped: … Try again";
-//     a read that fails reads "Unavailable — Try again".
+//     a read that fails reads "Unavailable — Try again"; on a server whose
+//     background work is off, both screens say "Waiting".
 // Every number on screen is checked against the API and against what the
 // stand-in holds; the books verify.
 //
@@ -131,7 +132,8 @@ const api = async (path, body) => {
   return { status: r.status(), json: await r.json().catch(() => null) };
 };
 const act = (name, input) => api(`/actions/${name}`, input);
-const words = async (loc) => ((await loc.innerText().catch(() => '')) || '').replace(/\s+/g, ' ').trim();
+// What is written there now — '' when it isn't there (never a long wait for something only a reload would bring).
+const words = async (loc) => ((await loc.innerText({ timeout: 2000 }).catch(() => '')) || '').replace(/\s+/g, ' ').trim();
 const until = async (fn, ms = 12000) => {
   for (const end = Date.now() + ms; Date.now() < end;) { if (await fn()) return true; await sleep(200); }
   return false;
@@ -459,18 +461,43 @@ await page.keyboard.press('Enter');
 const again = await until(async () => /^In Mailchimp · 6 addresses/.test(await words(page.locator('.mc-status'))), 10000);
 check('Try again (by keyboard): the line is back, and Sync again with it', again && /^Download CSV Sync again In Mailchimp/.test(await words(page.locator('.ls-tools'))), await words(page.locator('.ls-tools')));
 
-// ── 11. An unsubscribe here reaches Mailchimp — and one it will not take is said, and sent again ──
+// ── 11. A server whose background work is off (STARBASE_JOBS=off): "Waiting" — never "Syncing…" or "Pulling…" for ever ──
+// (This server's is on: what it would answer then is put in its place.)
+const json = (o) => (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+const WAITING_OFF = 'Waiting · background work is off on this server';
+const offList = json({ on: true, running: false, sync: { id: list.id, list_id: list.id, status: 'queued', consent: 'subscribed', tag: TAG, total: 0, added: 0, tagged: 0, removed: 0, skipped: 0, todo: 0, note: null, synced_at: null, created_at: new Date().toISOString(), by: 'Marco Example', stalled: false } });
+const PANEL = '**/api/mailchimp';
+const offPanel = json({ on: true, running: false, pulling: true, pulled_at: null, pull_ok: null, pull_note: null, waiting: 0, waiting_note: null });
+for (const [p, size] of [[page, '1440'], [phone, '390']]) {
+  await p.route(READ, offList);
+  const l = await openList(p);
+  await p.locator('.mc-status').waitFor({ timeout: 10000 }).catch(() => {});
+  const pmOff = await measure(p.locator('.ls-tools'));
+  check(`background work off, a list sent (${size}): "${WAITING_OFF}" — and no button to send it twice`, (await words(p.locator('.mc-status'))) === WAITING_OFF
+    && !/Sync again|Send to Mailchimp/.test(await words(p.locator('.ls-tools'))) && fits(pmOff), `${await words(p.locator('.ls-tools'))} · ${JSON.stringify(pmOff)}`);
+  await shot(l, `13-jobs-off-list-${size}`);
+  await p.unroute(READ);
+  await p.route(PANEL, offPanel);
+  const r = await openServices(p);
+  const pull = p.locator(`${ROW} .mcp-acts button`).nth(1);
+  check(`…and a pull asked for (${size}): the same words; the button still reads "Pull now", and waits`, (await words(p.locator(`${ROW} .mcp-pull`))) === WAITING_OFF
+    && (await words(pull)) === 'Pull now' && (await pull.isDisabled()), await words(p.locator(`${ROW} .mcp`)));
+  await shot(r, `13-jobs-off-services-${size}`);
+  await p.unroute(PANEL);
+}
+
+// ── 12. An unsubscribe here reaches Mailchimp — and one it will not take is said, and sent again ──
 subs = (await api('/subscriptions')).json;
 await set({ lock: [{ email: addr('Cal'), words: 'This contact is being reviewed.' }] });
 await act('subscription.remove', { id: subs.subscriptions.find((s) => s.email === addr('Cal')).id });
 const WAITING = '1 unsubscribe here still to tell Mailchimp (Mailchimp said: This contact is being reviewed.) — Pull now sends it again.';
 const waiting = await until(async () => { row = await openServices(page); return (await words(page.locator(`${ROW} .mcp-waiting`))) === WAITING; }, 15000);
 check('Mailchimp will not take Cal’s unsubscribe: Settings → Services says one is waiting, and why', waiting, await words(page.locator(`${ROW} .mcp`)));
-await shot(row, '13-waiting-1440');
+await shot(row, '14-waiting-1440');
 prow = await openServices(phone);
 pm = await measure(phone.locator(ROW));
 check('at 390: the same line, wrapped — no sideways scroll, every button ≥ 48px', (await words(phone.locator(`${ROW} .mcp-waiting`))) === WAITING && fits(pm), JSON.stringify(pm));
-await shot(prow, '13-waiting-390');
+await shot(prow, '14-waiting-390');
 await set({ lock: [{ email: addr('Cal'), words: false }] });
 await phone.locator(`${ROW} button:has-text("Pull now")`).tap();
 const toldCal = await until(async () => (await mc()).members.find(([e]) => e === addr('Cal'))?.[1] === 'unsubscribed', 15000);
