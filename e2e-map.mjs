@@ -18,7 +18,9 @@
 //     its pin at zoom 17, every door at 18;
 //   · "Whole list" goes back; an empty part of the map says "Nobody on file
 //     here · Back to your list";
-//   · on a 390 px phone the first view fits, nothing scrolls sideways.
+//   · on a 390 px phone the first view fits, nothing scrolls sideways, and
+//     after a finger drag the picture is still one sheet (its tiles lap: no
+//     line of the street map between two of them).
 //
 //   (cd web && npm run build) && node e2e-map.mjs        (its own server on :4948)
 import { chromium } from 'playwright-core';
@@ -296,6 +298,28 @@ try {
   });
   check('a phone: the whole list as a picture, the count in people', ph.view === 'density' && DOORS.every((d) => inside(ph.bounds, d)) && numberIn(ph.pill) === PEOPLE, JSON.stringify({ view: ph.view, pill: ph.pill }));
   check('…the key and “Whole list” on screen, a full-size tap, nothing scrolls sideways', ph.key && ph.key.l >= 0 && ph.key.r <= 390 && ph.list && ph.list.r <= 390 && ph.list.h >= 48 && ph.sideways <= 0, JSON.stringify(ph));
+  // A finger drag leaves the map a fraction of a pixel off (and some phones'
+  // pixels are a fraction of one anyway). The picture's tiles lap over each
+  // other, so no line of the street map shows between two of them.
+  const touch = await pctx.newCDPSession(phone);
+  const finger = (type, x, y) => touch.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+  await finger('touchStart', 180.4, 420.2);
+  for (let i = 1; i <= 12; i += 1) await finger('touchMove', 180.4 + (61.3 * i) / 12, 420.2 + (37.7 * i) / 12);
+  await sleep(250);
+  await finger('touchEnd');
+  await sleep(900);
+  const lap = await phone.evaluate(() => {
+    const el = document.querySelector('.map-canvas');
+    const tiles = [...el.querySelectorAll('.leaflet-patches-pane canvas.map-dots-tile')].map((c) => ({ r: c.getBoundingClientRect(), w: parseFloat(c.style.width) }));
+    const k = tiles.length ? tiles[0].r.width / tiles[0].w : 1; // between whole zooms the tiles are stretched
+    const laps = [];
+    for (const { r: a } of tiles) for (const { r: b } of tiles) {
+      if (Math.abs(b.top - a.top) < 0.5 && Math.abs(b.left - a.left - 256 * k) < 2) laps.push(a.right - b.left);
+      if (Math.abs(b.left - a.left) < 0.5 && Math.abs(b.top - a.top - 256 * k) < 2) laps.push(a.bottom - b.top);
+    }
+    return { view: el.dataset.view, tiles: tiles.length, pairs: laps.length, least: laps.length ? +Math.min(...laps).toFixed(3) : null, needs: +(k / window.devicePixelRatio).toFixed(3), mapAt: el.querySelector('.leaflet-map-pane').style.transform };
+  });
+  check('…after a finger drag the picture is still one sheet: its tiles lap, no line of map between two', lap.view === 'density' && lap.pairs > 0 && lap.least >= lap.needs - 0.01, JSON.stringify(lap));
   await pctx.close();
 
   check('no page errors', errors.length === 0, errors.join(' | '));

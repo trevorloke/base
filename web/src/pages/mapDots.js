@@ -13,7 +13,7 @@
 // layer takes taps itself (a canvas tile can't tell what was hit): the map
 // asks nearest() / cellAt() where it was tapped.
 import L from 'leaflet';
-import { MARK, css, cellFill, dotRadius, ringedAt } from './mapView.js';
+import { MARK, css, cellFill, CELL_ALPHA, dotRadius, ringedAt } from './mapView.js';
 
 const ORDER = ['unrated', 'undecided', 'opposed', 'support']; // drawn last = on top
 
@@ -22,8 +22,10 @@ const ORDER = ['unrated', 'undecided', 'opposed', 'support']; // drawn last = on
 // (The map stops at quarter zooms, and between whole zooms Leaflet stretches
 // the nearest zoom's tiles: a mark is on screen between 0.7 and 1.4 times
 // the size it is drawn at — mapView.js dotOnScreen.)
+// over: how far (CSS px) a tile's drawing reaches past its right and bottom
+// edges, over the next tiles'.
 const BucketLayer = L.GridLayer.extend({
-  options: { pane: 'dots', tileSize: 256, updateWhenZooming: false, keepBuffer: 2 },
+  options: { pane: 'dots', tileSize: 256, updateWhenZooming: false, keepBuffer: 2, over: 0 },
   initialize(options) {
     L.setOptions(this, options);
     this._items = [];
@@ -55,15 +57,26 @@ const BucketLayer = L.GridLayer.extend({
     return b;
   },
   createTile(coords) {
-    const tile = L.DomUtil.create('canvas', 'leaflet-tile map-dots-tile');
     const size = this.getTileSize();
+    const { over } = this.options;
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    tile.width = size.x * dpr;
-    tile.height = size.y * dpr;
-    tile.style.width = `${size.x}px`;
-    tile.style.height = `${size.y}px`;
+    const canvas = L.DomUtil.create('canvas', 'map-dots-tile');
+    // A whole number of device pixels, shown at exactly that size.
+    canvas.width = Math.ceil((size.x + over) * dpr);
+    canvas.height = Math.ceil((size.y + over) * dpr);
+    canvas.style.width = `${canvas.width / dpr}px`;
+    canvas.style.height = `${canvas.height / dpr}px`;
+    // Leaflet makes a tile exactly its own size: a canvas that reaches
+    // further sits inside one.
+    let tile = canvas;
+    if (over) {
+      tile = L.DomUtil.create('div');
+      canvas.style.display = 'block';
+      canvas.style.maxWidth = 'none';
+      tile.appendChild(canvas);
+    }
     if (!this._items.length) return tile;
-    const ctx = tile.getContext('2d');
+    const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
     const buckets = this._bucketsAt(coords.z);
     // This tile's own items and its neighbours' (a mark near an edge spills over).
@@ -74,7 +87,7 @@ const BucketLayer = L.GridLayer.extend({
         if (got) near.push(...got);
       }
     }
-    this._draw(ctx, near, coords.z, coords.x * size.x, coords.y * size.y, { size: size.x, dpr });
+    this._draw(ctx, near, coords.z, coords.x * size.x, coords.y * size.y, { size: size.x + over, dpr });
     return tile;
   },
 });
@@ -148,8 +161,13 @@ export const DotLayer = BucketLayer.extend({
 // The far-out picture. Items: mapView.js cellsFrom's patches (their corners,
 // people, how many are rated). Each is filled edge to edge — neighbours meet
 // on a whole pixel, so the city reads as one shape, not a lattice of marks.
+// Tiles meet the same way: each reaches a pixel over the next. A finger drag
+// leaves the map a fraction of a pixel off (and some phones' pixels are a
+// fraction of one anyway), and tiles that only touched would show a line of
+// street map between them. So nothing shows twice where they lap, the
+// patches are drawn solid and the layer as a whole is see-through.
 export const DensityLayer = BucketLayer.extend({
-  options: { pane: 'patches' }, // under the turf outlines (Map.jsx makes the pane)
+  options: { pane: 'patches', over: 1, opacity: CELL_ALPHA }, // under the turf outlines (Map.jsx makes the pane)
   _draw(ctx, cells, z, ox, oy, { size, dpr }) {
     const whole = (v) => Math.round(v * dpr) / dpr;
     const dark = this._dark;
@@ -168,7 +186,7 @@ export const DensityLayer = BucketLayer.extend({
       const y1 = whole(q[3] - oy);
       if (x1 <= 0 || y1 <= 0 || x0 >= size || y0 >= size) continue;
       c._fill = c._fill || {};
-      ctx.fillStyle = c._fill[dark] || (c._fill[dark] = css(cellFill(c, dark)));
+      ctx.fillStyle = c._fill[dark] || (c._fill[dark] = css(cellFill(c, dark).slice(0, 3)));
       ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
     }
   },

@@ -35,7 +35,9 @@ export const viewBox = (center, size, zoom) => {
   // In quarter-screens from the middle: half the screen (2), its 15% (0.6),
   // half a step for where the middle snapped to (0.5), and a hair.
   const reach = 3.2;
-  return [lat - reach * stepLat, lng - reach * stepLng, lat + reach * stepLat, lng + reach * stepLng]
+  // (Zoomed right out the screen is taller than the Earth: never a latitude
+  // past a pole — the server refuses one.)
+  return [Math.max(-90, lat - reach * stepLat), lng - reach * stepLng, Math.min(90, lat + reach * stepLat), lng + reach * stepLng]
     .map((v) => Number(v.toFixed(5)));
 };
 export const inBox = ([s, w, n, e], it) => it.lat >= s && it.lat <= n && it.lng >= w && it.lng <= e;
@@ -136,19 +138,22 @@ export function cellsFrom(data, bandOfCode, keep = () => true) {
 // patch where a tenth have said yes stays nearly neutral, one where nearly
 // everyone has is green (or ochre, or red); a patch split between yes and no
 // says neither loudly, and one or two answers don't colour a block (a map
-// of single answers reads as confetti). → [r, g, b, alpha]
+// of single answers reads as confetti). → [r, g, b, alpha]; the alpha is
+// the same for every patch (CELL_ALPHA: the picture is one see-through
+// sheet — mapDots.js draws it solid and fades the sheet).
 const SHADE = {
   light: { few: [100, 110, 134], many: [22, 26, 46] },
   dark: { few: [128, 138, 165], many: [232, 237, 247] },
 };
 const FULL_PER_KM2 = 8000; // as strong as it gets: a block of towers
+export const CELL_ALPHA = 0.92;
 const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
 export const cellFill = (c, dark) => {
   const ramp = SHADE[dark ? 'dark' : 'light'];
   const s = Math.min(1, Math.sqrt(c.per / FULL_PER_KM2));
   const neutral = mix(ramp.few, ramp.many, s);
   const lead = c.rated ? c[c.band] : 0;
-  if (!lead) return [...neutral, 0.92];
+  if (!lead) return [...neutral, CELL_ALPHA];
   const band = mix(MARK[c.band], ramp.many, s * 0.35);
-  return [...mix(neutral, band, (lead / c.n) ** 0.75 * Math.min(1, lead / 3)), 0.92];
+  return [...mix(neutral, band, (lead / c.n) ** 0.75 * Math.min(1, lead / 3)), CELL_ALPHA];
 };

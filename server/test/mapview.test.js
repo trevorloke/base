@@ -41,6 +41,15 @@ test('it asks for the screen and 15% more, never many screens’ worth', () => {
   }
 });
 
+test('zoomed right out it still asks for a part of the Earth (the server refuses a latitude past a pole)', () => {
+  for (const size of [DESK, PHONE]) {
+    for (const z of [0, 1, 2, 3, 4, 5]) {
+      const [s, w, n, e] = viewBox({ lat: 49.1335, lng: -122.848 }, size, z);
+      assert.ok(s >= -90 && n <= 90 && s < n && w < e, `zoom ${z}: ${[s, w, n, e]}`);
+    }
+  }
+});
+
 test('a short pan asks for the same box; a screen’s worth of panning asks about four times', () => {
   const z = 16;
   const c = { lat: 49.1335, lng: -122.848 };
