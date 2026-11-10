@@ -52,7 +52,7 @@ test('the tokens: every role, light and dark, with no address in them', () => {
   const t = lookTokens(BRANDS['imagine-surrey']);
   for (const scheme of SCHEMES) {
     for (const name of ['--page', '--card', '--panel', '--panel-2', '--line', '--line-strong', '--field-edge', '--text', '--text-2', '--quiet', '--faint',
-      '--accent', '--accent-ink', '--accent-hover', '--accent-words', '--accent-edge', '--accent-edge-ink', '--focus', '--tint', '--tint-2', '--second', '--second-ink',
+      '--accent', '--accent-ink', '--accent-hover', '--accent-words', '--accent-words-ink', '--accent-edge', '--focus', '--tint', '--tint-2', '--second', '--second-ink',
       '--side', '--side-top', '--side-ink', '--side-quiet', '--side-hover', '--side-active', '--side-active-ink', '--side-mark', '--side-edge',
       '--inverse', '--inverse-2', '--inverse-ink', '--inverse-quiet']) {
       assert.match(t[scheme][name] || '', /^#[0-9a-f]{6}$/, `${scheme} ${name}`);

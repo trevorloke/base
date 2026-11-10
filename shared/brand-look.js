@@ -108,10 +108,11 @@ export function deriveLook(brand, scheme = 'light') {
   const tint2 = tintOf(dark ? [0.26, 0.2, 0.15, 0.1, 0.06, 0.03] : [0.15, 0.11, 0.08, 0.05, 0.02]);
   // Faint text: lighter than quiet where it can be, and still read on the tints.
   const faint = walk(mix(n.text, n.card, 0.56), n.text, [...grounds, tint, tint2], 4.5);
-  // The brand as words and small marks; as an edge, a bar, the focus ring.
+  // The brand as words and small marks (and the text on it where a screen
+  // fills with it); as an edge, a bar, the focus ring.
   const accentWords = walk(accent, toward, [...grounds, tint, tint2], 4.5);
+  const accentWordsInk = inkOn(accentWords);
   const accentEdge = walk(accent, toward, [...grounds, tint, tint2], 3);
-  const accentEdgeInk = inkOn(accentEdge);
   const secondInk = inkOn(second);
 
   const side = sidebarOf(sidebar, n, { fill: accent, words: accentWords, edge: accentEdge, toward, second: secondSet }, dark);
@@ -124,12 +125,12 @@ export function deriveLook(brand, scheme = 'light') {
   const look = {
     scheme: dark ? 'dark' : 'light', sidebar, corners, heading, radii: CORNERS[corners],
     ...n, quiet, faint, fieldEdge,
-    accent, accentInk, accentHover, accentWords, accentEdge, accentEdgeInk, tint, tint2, second, secondInk,
+    accent, accentInk, accentHover, accentWords, accentWordsInk, accentEdge, tint, tint2, second, secondInk,
     side, inverse, inverse2, inverseInk, inverseQuiet,
   };
   const C = (what, fg, bg, min = 4.5) => { const ratio = contrast(fg, bg); return { what, fg, bg, min, ratio, ok: ratio >= min }; };
   look.checks = [
-    C('text on the brand fill', accentInk, accent), C('text on the hover fill', accentInk, accentHover), C('text on the brand as an edge colour', accentEdgeInk, accentEdge),
+    C('text on the brand fill', accentInk, accent), C('text on the hover fill', accentInk, accentHover), C('text on a fill of the brand as words', accentWordsInk, accentWords),
     C('brand words on the page', accentWords, n.page), C('brand words on a card', accentWords, n.card), C('brand words on a soft panel', accentWords, n.panel),
     C('brand words on the tint', accentWords, tint), C('brand words on the deeper tint', accentWords, tint2),
     C('text on the tint', n.text, tint), C('text on the deeper tint', n.text, tint2), C('quiet text on the tint', quiet, tint), C('quiet text on the deeper tint', quiet, tint2),
@@ -151,7 +152,7 @@ const colours = (l) => ({
   '--line': l.line, '--line-strong': l.lineStrong, '--field-edge': l.fieldEdge,
   '--text': l.text, '--text-2': l.text2, '--quiet': l.quiet, '--faint': l.faint,
   '--accent': l.accent, '--accent-ink': l.accentInk, '--accent-hover': l.accentHover,
-  '--accent-words': l.accentWords, '--accent-edge': l.accentEdge, '--accent-edge-ink': l.accentEdgeInk, '--focus': l.accentEdge,
+  '--accent-words': l.accentWords, '--accent-words-ink': l.accentWordsInk, '--accent-edge': l.accentEdge, '--focus': l.accentEdge,
   '--tint': l.tint, '--tint-2': l.tint2, '--second': l.second, '--second-ink': l.secondInk,
   '--side': l.side.bg, '--side-top': l.side.top, '--side-ink': l.side.ink, '--side-quiet': l.side.quiet, '--side-hover': l.side.hover,
   '--side-active': l.side.active, '--side-active-ink': l.side.activeInk, '--side-mark': l.side.mark, '--side-edge': l.side.edge,

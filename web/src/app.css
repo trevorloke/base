@@ -20,7 +20,7 @@
   --line: #e7e8ec; --line-strong: #d2d5db; --field-edge: #888b90;
   --text: #14161a; --text-2: #30343b; --quiet: #656669; --faint: #656568;
   --accent: #4f46e5; --accent-ink: #ffffff; --accent-hover: #443cc5; --accent-words: #4f46e5;
-  --accent-edge: #4f46e5; --accent-edge-ink: #ffffff; --focus: #4f46e5;
+  --accent-words-ink: #ffffff; --accent-edge: #4f46e5; --focus: #4f46e5;
   --tint: #f1f0fd; --tint-2: #e5e3fb; --second: #4f46e5; --second-ink: #ffffff;
   --side: #f3f4f6; --side-top: #ffffff; --side-ink: #14161a; --side-quiet: #57595c; --side-hover: #e9eaee;
   --side-active: #ffffff; --side-active-ink: #4f46e5; --side-mark: #4f46e5; --side-edge: #e7e8ec;
@@ -37,7 +37,7 @@
     --line: #26282e; --line-strong: #3a3d46; --field-edge: #6c6f76;
     --text: #f4f5f6; --text-2: #d6d8dd; --quiet: #97989a; --faint: #929396;
     --accent: #4f46e5; --accent-ink: #ffffff; --accent-hover: #443cc5; --accent-words: #8983ee;
-    --accent-edge: #6962e9; --accent-edge-ink: #ffffff; --focus: #6962e9;
+    --accent-words-ink: #14161a; --accent-edge: #6962e9; --focus: #6962e9;
     --tint: #201f3c; --tint-2: #262450; --second: #4f46e5; --second-ink: #ffffff;
     --side: #1e2025; --side-top: #17181c; --side-ink: #f4f5f6; --side-quiet: #b4b5b7; --side-hover: #282b32;
     --side-active: #17181c; --side-active-ink: #8983ee; --side-mark: #6962e9; --side-edge: #26282e;
@@ -89,13 +89,14 @@
   --max-w: calc(var(--page-w) + 2 * var(--s-4));
 
   /* The old names, kept: anything written against them follows the roles.
-     --mark is the brand as an edge, a ring or a small mark (3:1 on every
-     ground) and --mark-ink reads on it; the one primary button's fill is
-     --accent, exactly the colour the campaign chose. */
+     --mark and --mark-deep are the brand as words — readable as text (4.5:1
+     on every ground), so as an edge, a ring or a bar too — and --mark-ink
+     reads on a --mark fill. The one primary button's fill is --accent,
+     exactly the colour the campaign chose. */
   --paper: var(--page); --paper-0: var(--card); --paper-1: var(--panel); --paper-2: var(--panel-2);
   --rule: var(--line); --rule-2: var(--line-strong);
   --ink: var(--text); --text-1: var(--text); --text-3: var(--quiet); --text-4: var(--faint);
-  --mark: var(--accent-edge); --mark-ink: var(--accent-edge-ink); --mark-soft: var(--tint); --mark-deep: var(--focus);
+  --mark: var(--accent-words); --mark-ink: var(--accent-words-ink); --mark-soft: var(--tint); --mark-deep: var(--accent-words);
   --link: var(--accent-words);
   --navy: var(--inverse); --navy-2: var(--inverse-2); --navy-text: var(--inverse-quiet); --gold: var(--second);
   --red: var(--danger); --red-text: var(--danger); --cream: var(--panel);
