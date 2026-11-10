@@ -19,6 +19,7 @@ import { verifySignature, signPayload } from '../lib/signature.js';
 import { startFakeReceiver } from './fake-receiver.js';
 import {
   addressProblem, cleanAddress, isPublicAddress, lookupProblem, postHook, signingSecret, hookBody, _setResolverForTest,
+  notAnswering, _setTimeoutForTest, _silentForTest,
 } from '../ext/ladders/webhook.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
@@ -61,6 +62,14 @@ const got = (ref) => hooks.received.filter((r) => r.path.startsWith(`/catch/${re
 const verified = async () => {
   const v = await mgr.get('/api/audit/verify');
   assert.equal(v.json.ok, true, JSON.stringify(v.json));
+};
+const waitFor = async (fn, ms = 4000) => {
+  for (const t0 = Date.now(); ;) {
+    const v = await fn();
+    if (v) return v;
+    assert.ok(Date.now() - t0 < ms, 'waited too long');
+    await new Promise((r) => { setTimeout(r, 10); });
+  }
 };
 
 // No name is ever looked up for real: what each resolves to is said here.
@@ -382,9 +391,11 @@ test('the sender: five seconds at most, a redirect is not followed, the answer�
   assert.deepEqual(await send(), { ok: true, status: 204 });
   hooks.answer(410);
   assert.deepEqual(await send(), { ok: false, status: 410 });
-  // A redirect could lead anywhere (inside the network, too): it is a failure, not followed.
+  // A redirect could lead anywhere (inside the network, too): it is not followed — and final, the same one would come back.
   hooks.answer(302, 1, { location: `${hooks.url}/catch/elsewhere` });
-  assert.deepEqual(await send(), { ok: false, status: 302 });
+  assert.deepEqual(await send(), { ok: false, final: true, status: 302 });
+  hooks.answer(308, 1, { location: `${hooks.url}/catch/elsewhere` });
+  assert.deepEqual(await send(), { ok: false, final: true, status: 308 });
   assert.equal(got('elsewhere').length, 0);
   // No answer: given up on (150 ms here; 5 s when a ladder sends).
   hooks.hang(1);
@@ -454,6 +465,124 @@ test('turned off mid-try: the run holds its place and tries again when the ladde
   assert.equal(run.status, 'done');
   assert.deepEqual(hookLog(run).map((e) => e.result), ['failed', 'sent']);
   await off(lad);
+});
+
+test('taken off, or their goal reached, while the address is being called: the row says how it ended and the late answer promises no other try', async () => {
+  const lad = await hookLadder('late');
+  hooks.hold(1);
+  const lee = await mgr.createPerson('Lee Example', { tags: ['late'] });
+  let running = runJobs();
+  await waitFor(() => got('late').length === 1); // the address has it and hasn't answered
+  ok(await mgr.action('ladder.stopRun', { id: (await rowOf(lad.id, lee.id)).id }));
+  hooks.release(500);
+  await running;
+  let run = await runOf(lad.id, lee.id);
+  assert.equal(run.status, 'done');
+  assert.deepEqual([run.last.kind, run.last.result], ['end', 'taken_off'], 'the row’s last word is how it ended');
+  assert.deepEqual(hookLog(run).map((e) => [e.result, e.reason, e.status, e.tries]), [['failed', 'gave_up', 500, 1]], 'no "trying again": nothing will');
+  await fastForward(); await runJobs();
+  assert.equal(got('late').length, 1, 'and nothing does');
+  assert.ok(!(await tagsOf(lee.id)).includes('after-late'), 'the rest of the ladder didn’t run');
+  await off(lad);
+
+  // The same with their goal reached mid-call: still counted as reached.
+  const ask = await create({
+    name: 'Ask late', trigger: { kind: 'tag', ref: 'late-goal' }, goal: 'gift',
+    steps: [{ kind: 'webhook', url: 'https://hooks.example.org/catch/late-goal', label: 'Zapier' }, { kind: 'tag', tag: 'after-late-goal' }],
+  });
+  await turnOn(ask.id);
+  hooks.hold(1);
+  const max = await mgr.createPerson('Max Example', { tags: ['late-goal'] });
+  running = runJobs();
+  await waitFor(() => got('late-goal').length === 1);
+  ok(await mgr.action('gift.log', { person_id: max.id, amount_cents: 2500, date: new Date().toISOString().slice(0, 10) }));
+  hooks.release(200);
+  await running;
+  const view = ok(await mgr.get(`/api/ladders/${ask.id}`));
+  run = view.people.find((p) => p.person.id === max.id);
+  assert.deepEqual([run.status, run.last.kind, run.last.result], ['done', 'end', 'goal']);
+  assert.deepEqual(hookLog(run).map((e) => [e.result, e.status]), [['sent', 200]], 'what the address answered is still on the log');
+  assert.equal(view.ladder.reached, 1, 'reached the goal, whatever came in after');
+  assert.equal(ok(await mgr.get('/api/ladders')).ladders.find((l) => l.id === ask.id).reached, 1);
+  await off(ask);
+  await verified();
+});
+
+test('an address that answers with a redirect is handed the message once: never followed, never tried again', async () => {
+  const lad = await hookLadder('moved');
+  hooks.answer(302, 3, { location: `${hooks.url}/catch/elsewhere` }); // it would say so every time
+  const pat = await mgr.createPerson('Pat Example', { tags: ['moved'] });
+  await runJobs();
+  const run = await runOf(lad.id, pat.id);
+  assert.deepEqual(hookLog(run).map((e) => [e.result, e.reason, e.status, e.tries]), [['failed', 'redirect', 302, 1]]);
+  assert.equal(run.status, 'done', 'no six minutes of waiting: the ladder carries on at once');
+  assert.ok((await tagsOf(pat.id)).includes('after-moved'));
+  await fastForward(); await runJobs();
+  assert.equal(got('moved').length, 1, 'one copy, not three');
+  assert.equal(got('elsewhere').length, 0, 'and it is not followed');
+  hooks.asUsual();
+  await off(lad);
+  await verified();
+});
+
+test('a ladder that starts on a money tag never names it, in the one line either', async () => {
+  const lad = await hookLadder('Donor 2026', { url: 'https://hooks.example.org/catch/money', name: 'Tell the treasurer' });
+  const zoe = await mgr.createPerson('Zoë Example', { tags: ['Donor 2026', 'lapsed', 'host'] });
+  await runJobs();
+  const [m] = got('money');
+  assert.equal(m.body.person.id, zoe.id);
+  assert.equal(m.body.text, 'Tell the treasurer: Zoë Example — Got a tag');
+  assert.deepEqual(m.body.person.tags, ['host']);
+  assert.ok(!/donor|lapsed/i.test(m.raw), 'nowhere in what was sent');
+  // Any other tag is still named.
+  const said = (ref) => JSON.parse(hookBody({ event: 'tag', ref, ladder: 'L', step: 'S', person: { name: 'Sam Example' } })).text;
+  assert.deepEqual([said('host'), said('lapsed'), said('Major donors')], ['L: Sam Example — Got a tag · host', 'L: Sam Example — Got a tag', 'L: Sam Example — Got a tag']);
+  await off(lad);
+});
+
+test('an address that stops answering is left alone for five minutes: whoever reaches the step meanwhile is told at once and tried again on the usual clock', async () => {
+  const url = 'https://hooks.example.org/catch/quiet';
+  const lad = await hookLadder('quiet', { url });
+  const early = [];
+  for (const n of ['Ada', 'Ben', 'Cy']) early.push(await mgr.createPerson(`${n} Example`, { tags: ['quiet'] }));
+  hooks.hang(3);
+  _setTimeoutForTest(120);
+  try { await runJobs(); } finally { _setTimeoutForTest(null); }
+  assert.equal(got('quiet').length, 3, 'three in a row with no answer');
+  // The fourth isn't made to wait out the same silence — nor is any other job queued behind them.
+  const dot = await mgr.createPerson('Dot Example', { tags: ['quiet'] });
+  await runJobs();
+  assert.equal(got('quiet').length, 3, 'the address isn’t called');
+  let run = await runOf(lad.id, dot.id);
+  assert.deepEqual(hookLog(run).map((e) => [e.result, e.reason, e.why, e.tries]), [['failed', 'will_retry', 'not_answering', 1]]);
+  assert.deepEqual([run.status, run.wait], ['active', 'retry'], 'tried again on the usual clock');
+  // A minute on it is still being left alone …
+  await fastForward(); await runJobs();
+  assert.equal(got('quiet').length, 3);
+  // … after five it is called again — and it is back: everyone's third try lands.
+  _silentForTest.get(url).until = Date.now() - 1;
+  await fastForward(); await runJobs();
+  assert.equal(got('quiet').length, 7, 'one each');
+  for (const p of [...early, dot]) {
+    run = await runOf(lad.id, p.id);
+    assert.equal(run.status, 'done');
+    assert.deepEqual(hookLog(run).map((e) => e.result), ['failed', 'failed', 'sent'], p.name);
+  }
+  assert.deepEqual(hookLog(await runOf(lad.id, early[0].id)).map((e) => e.why || e.status), ['timeout', 'not_answering', 200]);
+  assert.equal(notAnswering(url), false, 'an answer clears it');
+
+  // Only silence counts, and only in a row: any answer at all — a 500 too — starts the count again.
+  const slow = 'https://hooks.example.org/catch/slow';
+  const send = (timeoutMs) => postHook({ url: slow, body: '{}', secret: 'sbw_test', key: 'k', timeoutMs });
+  hooks.hang(2); await send(100); await send(100);
+  hooks.answer(500); assert.deepEqual(await send(), { ok: false, status: 500 });
+  hooks.hang(2); await send(100); await send(100);
+  assert.equal(notAnswering(slow), false, 'two, an answer, two more: never three in a row');
+  hooks.hang(1); assert.deepEqual(await send(100), { ok: false, why: 'timeout' });
+  assert.equal(notAnswering(slow), true);
+  _silentForTest.clear();
+  await off(lad);
+  await verified();
 });
 
 test('only the desk makes the step or sees the secret; each campaign has its own; looking is on the log', async () => {

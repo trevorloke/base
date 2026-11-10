@@ -466,7 +466,8 @@ sent there, once, as one small JSON message:
   incoming webhook posts its `text`); a name's `<` and `>` are left out of
   it, so nothing typed into a form posts a link or an @channel there.
 - **What it never carries:** a rating, a note, an amount, a street address,
-  or a tag that gives money away. `email` is `null` unless a ladder email
+  or a tag that gives money away (a ladder that starts on one says only
+  *Got a tag* in `text`). `email` is `null` unless a ladder email
   could go to them (on the newsletter list, not unsubscribed, not
   do-not-email); `phone` is `null` unless a ladder text could (a number
   that hasn't replied STOP or asked to stop, not do-not-text, no "no" to
@@ -483,13 +484,24 @@ sent there, once, as one small JSON message:
   themselves: there the address itself is the key, so treat it as one.
 - **Once.** `Idempotency-Key: ladder-<run>-<step>` (the body's `id`) is the
   same on every try for one person at one step.
-- **Tries.** The address has 5 seconds to answer 2xx. Anything else (a
-  redirect is not followed) is tried again after a minute, then after five
-  more — three in all — and then the person's log on the ladder says
-  *Zapier: Failed · 500 after 3 tries* and the ladder carries on: a failing
-  address never holds anyone up. *Zapier: Sent · 200* is the address's own
-  answer. If the server stopped between the send and noting the answer, it
-  never sends again by itself; the log says *Not sure it went*.
+- **Tries.** The address has 5 seconds to answer 2xx. Anything else is
+  tried again after a minute, then after five more — three in all — and
+  then the person's log on the ladder says *Zapier: Failed · 500 after 3
+  tries* and the ladder carries on: a failing address never holds anyone
+  up. *Zapier: Sent · 200* is the address's own answer. If the server
+  stopped between the send and noting the answer, it never sends again by
+  itself; the log says *Not sure it went*.
+- **A redirect** (any 3xx) is never followed and never tried again — the
+  same one would come back: *Zapier: Answered with a redirect (302) — not
+  followed*. Give the step the address it points to. (A tool that takes
+  the message and then redirects, as a Google Apps Script web app does,
+  has it once; the log line still says so.)
+- **An address that stops answering** — three calls in a row with no
+  answer — is left alone for five minutes, so nobody behind it, and no
+  other send, waits out its silence: whoever reaches the step meanwhile is
+  logged *Didn't go (the address isn't answering) — trying again* and
+  tried on the same clock, by when it may be back. Any answer, a 500 too,
+  clears it.
 - **Where it may point.** `https://` only, no name and password in it, and
   never inside a private network (the server's own, a cloud's metadata
   address): refused when the step is saved and again, after the name is

@@ -10,6 +10,8 @@
 //                hooks.received          [{ method, path, headers, raw, body }]
 //                hooks.answer(500, 3)    the next three deliveries answer 500
 //                hooks.hang(1)           the next one is never answered
+//                hooks.hold(1)           the next one waits for hooks.release(500)
+//                hooks.asUsual()         back to answering 200
 //                hooks.reset() · hooks.close()
 //   On its own:  PORT=5021 node server/test/fake-receiver.js
 //                GET  /__received            what arrived, as JSON
@@ -20,12 +22,18 @@ import { pathToFileURL } from 'node:url';
 
 export const startFakeReceiver = async ({ port = 0 } = {}) => {
   const received = [];
-  let plan = []; // what the next deliveries get: { status, headers } or { hang: true }
+  let plan = []; // what the next deliveries get: { status, headers }, { hang: true } or { hold: true }
+  let held = []; // deliveries waiting for release(): each answers when told
 
   const api = {
     received,
     answer: (status, times = 1, headers = {}) => { for (let i = 0; i < times; i += 1) plan.push({ status, headers }); },
     hang: (times = 1) => { for (let i = 0; i < times; i += 1) plan.push({ hang: true }); },
+    // Held open until the test says what it answers: lets something happen
+    // on the campaign's side while the address is still being called.
+    hold: (times = 1) => { for (let i = 0; i < times; i += 1) plan.push({ hold: true }); },
+    release: (status = 200) => { for (const answer of held.splice(0)) answer(status); },
+    asUsual: () => { plan = []; },
     reset: () => { received.length = 0; plan = []; },
   };
 
@@ -45,6 +53,7 @@ export const startFakeReceiver = async ({ port = 0 } = {}) => {
       received.push({ method: req.method, path: req.url, headers: req.headers, raw, body });
       const next = plan.shift();
       if (next?.hang) return undefined; // the sender gives up on its own
+      if (next?.hold) { held.push((status) => json({ ok: status < 300 }, status)); return undefined; }
       if (next) { res.writeHead(next.status, { 'content-type': 'application/json', ...next.headers }); return res.end(JSON.stringify({ ok: next.status < 300 })); }
       return json({ ok: true });
     });

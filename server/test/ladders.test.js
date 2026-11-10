@@ -59,7 +59,7 @@ const withEmail = async (fn, { fail = () => false } = {}) => {
   globalThis.fetch = async (url, init) => {
     if (String(url).startsWith('https://api.resend.com')) {
       const m = JSON.parse(init.body);
-      if (fail(m.to[0])) return new Response('provider says no', { status: 500 });
+      if (await fail(m.to[0])) return new Response('provider says no', { status: 500 });
       sent.push({ ...m, key: init.headers?.['Idempotency-Key'] || null });
       return new Response(JSON.stringify({ id: 'msg' }), { status: 200 });
     }
@@ -454,6 +454,33 @@ test('a provider refusal is tried again hourly, three times, then logged as fail
   assert.equal(evs.filter((e) => e.payload.result === 'sending').length, 3, 'each try is claimed before the provider call');
   assert.ok((await personByEmail(mail('rae'))).tags.includes('after-retry'));
   await mgr.action('ladder.setActive', { id: lad.id, active: false });
+});
+
+test('taken off while the provider has the email: the row says "taken off", and its late refusal promises no other try', async () => {
+  const lad = await create({ name: 'Late answer', trigger: { kind: 'tag', ref: 'late-mail' }, steps: [{ kind: 'email', subject: 'S', body: 'B' }] });
+  await turnOn(lad.id);
+  assert.equal((await mgr.action('subscription.add', { email: mail('lea') })).status, 200);
+  const p = await mgr.createPerson('Lea Late', { email: mail('lea'), tags: ['late-mail'] });
+  let asked; let answer;
+  const called = new Promise((r) => { asked = r; });
+  const held = new Promise((r) => { answer = r; });
+  await withEmail(async () => {
+    const running = runJobs();
+    await called; // the provider has it and hasn't answered
+    assert.equal((await mgr.action('ladder.stopRun', { id: (await runOf(lad.id, p.id)).id })).status, 200);
+    answer();
+    await running;
+  }, { fail: async () => { asked(); await held; return true; } });
+  const run = await runOf(lad.id, p.id);
+  assert.equal(run.status, 'done');
+  assert.deepEqual([run.last.kind, run.last.result], ['end', 'taken_off'], 'the row’s last word is how it ended');
+  assert.deepEqual(run.log.filter((e) => e.kind === 'email' && e.result === 'failed').map((e) => e.reason), ['gave_up'], 'no "trying again": nothing will');
+  const pending = (await db.query(
+    "select count(*)::int as n from jobs where workspace_id = $1 and kind = 'ladder.step' and status = 'pending' and payload->>'run_id' = $2", [ws, run.id],
+  )).rows[0].n;
+  assert.equal(pending, 0);
+  await mgr.action('ladder.setActive', { id: lad.id, active: false });
+  await verified();
 });
 
 test('off holds everyone in place and cancels their steps; on resumes from the same step', async () => {

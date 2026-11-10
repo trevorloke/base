@@ -27,6 +27,9 @@ import { siteSecret } from '../site/tokens.js';
 import { TRIGGERS, tagsOf } from './shape.js';
 
 export const HOOK_TIMEOUT_MS = 5000;
+// Tests wait out an address that never answers in a fraction of that.
+let hookTimeoutMs = HOOK_TIMEOUT_MS;
+export const _setTimeoutForTest = (ms) => { hookTimeoutMs = ms || HOOK_TIMEOUT_MS; };
 const LOOKUP_MS = 3000;
 const standIn = () => String(process.env.LADDER_WEBHOOK_API_BASE || '').trim().replace(/\/+$/, '');
 
@@ -134,7 +137,9 @@ export const signingSecret = async (workspaceId) => `sbw_${Buffer.from(
 // a ladder email or text could go to it (emailOk, textOk: engine.js); never
 // a tag that gives money away, a rating, a note or an address. `text` says
 // it in one line (what a chat tool shows); `id` is the same on every try.
-const eventWords = (event, ref) => `${TRIGGERS[event]?.label || event}${event === 'tag' && ref ? ` · ${ref}` : ''}`;
+// The tag that started the ladder is named there — unless it gives money
+// away: then the line says only "Got a tag".
+const eventWords = (event, ref) => `${TRIGGERS[event]?.label || event}${event === 'tag' && ref && !isMoneyTag(ref) ? ` · ${ref}` : ''}`;
 // In that one line a name is only ever a name: it can come from a website
 // form, and a chat tool reads <…> as its own marks (Slack: a link, @channel).
 const plain = (name) => String(name || '').replace(/[<>]/g, '');
@@ -176,13 +181,14 @@ const post = (to, { body, headers, lookup, signal }) => new Promise((resolve, re
 });
 
 // Send `body` to `url`, signed, once. → { ok: true, status } when the
-// address answered 2xx; { ok: false, status } for any other answer (a
-// redirect too); { ok: false, why } when it never answered ('timeout'), has
-// no such name ('not_found') or couldn't be reached ('unreachable'); and
-// { ok: false, final: true, why } when it may not be called at all — not an
-// address the step may have ('bad_address'), or one whose name now points
-// inside a private network ('private'): trying again would meet the same wall.
-export const postHook = async ({ url, body, secret, key, timeoutMs = HOOK_TIMEOUT_MS }) => {
+// address answered 2xx; { ok: false, status } for any other answer;
+// { ok: false, why } when it never answered ('timeout'), has no such name
+// ('not_found') or couldn't be reached ('unreachable'); and { ok: false,
+// final: true, … } when trying again would meet the same wall — it answered
+// with a redirect (status: never followed, and the same one would come
+// back), it is not an address the step may have (why: 'bad_address'), or
+// its name now points inside a private network (why: 'private').
+const sendOnce = async ({ url, body, secret, key, timeoutMs = hookTimeoutMs }) => {
   const { url: target, host, why } = parse(url);
   if (why) return { ok: false, final: true, why: 'bad_address' };
   const signal = AbortSignal.timeout(timeoutMs);
@@ -201,6 +207,7 @@ export const postHook = async ({ url, body, secret, key, timeoutMs = HOOK_TIMEOU
         'Idempotency-Key': key,
       },
     });
+    if (status >= 300 && status < 400) return { ok: false, final: true, status };
     return { ok: status >= 200 && status < 300, status };
   } catch (e) {
     if (e instanceof Inside) return { ok: false, final: true, why: 'private' };
@@ -208,3 +215,29 @@ export const postHook = async ({ url, body, secret, key, timeoutMs = HOOK_TIMEOU
     return { ok: false, why: e?.code === 'ENOTFOUND' ? 'not_found' : 'unreachable' };
   }
 };
+
+// ── An address that has stopped answering ──
+// Jobs run one at a time (lib/jobs.js), so every call that waits out its
+// five seconds holds whatever is queued behind it: other ladders, receipts,
+// thank-you emails. After three calls in a row with no answer the address
+// is left alone for five minutes: the engine tells whoever reaches the step
+// meanwhile at once ("the address isn't answering") and tries them again on
+// the usual clock — by then it may be back. Any answer at all, a 500 too,
+// clears it. Kept in this server's memory: a restart starts the count again.
+const SILENT_AFTER = 3;
+const SILENT_MS = 5 * 60_000;
+const SILENT_KEEP = 500;
+const silent = new Map(); // address → { misses, until }
+export const _silentForTest = silent;
+export const notAnswering = (url) => (silent.get(url)?.until || 0) > Date.now();
+const heard = (url, res) => {
+  const misses = res.why === 'timeout' ? (silent.get(url)?.misses || 0) + 1 : 0;
+  silent.delete(url);
+  if (!misses) return res;
+  silent.set(url, { misses, until: misses >= SILENT_AFTER ? Date.now() + SILENT_MS : 0 });
+  if (silent.size > SILENT_KEEP) silent.delete(silent.keys().next().value);
+  return res;
+};
+
+// The call itself, and what it says about whether the address answers.
+export const postHook = async (args) => heard(args.url, await sendOnce(args));

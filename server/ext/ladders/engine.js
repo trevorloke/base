@@ -56,7 +56,15 @@
 // most; an address that doesn't take it is tried again after a minute,
 // then after five more — three tries in all — then logged as failed and
 // the run moves on. Each try carries the same key (the run and the step),
-// so a receiver that got one after all can tell.
+// so a receiver that got one after all can tell. A redirect is never
+// followed and never tried again (the same one would come back). An
+// address that has stopped answering is left alone for five minutes
+// (webhook.js): a try in that time fails at once, so nothing queued behind
+// it waits.
+//
+// An answer that comes in after the run has ended (someone taken off, or
+// their goal reached, while the email or the address was being called) is
+// logged after the end, with no promise of another try: nothing will.
 //
 // Goals: a ladder may have one (came to a shift, gave, became a member,
 // voted). The events hook takes anyone who does it off every ladder with
@@ -74,7 +82,7 @@ import { hasTable } from '../webdid/words.js';
 import {
   parseJson, tagsOf, sameTag, isDnc, noEmail, noText, fillIn, waitMs,
 } from './shape.js';
-import { hookBody, postHook, signingSecret } from './webhook.js';
+import { hookBody, notAnswering, postHook, signingSecret } from './webhook.js';
 
 export const JOB = 'ladder.step';
 export const STEP_ACTION = 'ladder.step';
@@ -736,13 +744,15 @@ const deliver = async (db, ws, send) => {
     const unsure = !sent && res.status === 'failed' && res.unknown;
     const detail = sent ? undefined : String(res.detail || res.status).slice(0, 200);
     const tries = send.attempt + 1;
-    const retry = !sent && !unsure && tries < EMAIL_TRIES;
+    // The run moved on meanwhile (taken off, deleted, a goal reached, or a
+    // retry already said "not sure it went"): say what happened, promise no
+    // other try, change nothing else.
+    const late = run.wait !== 'sending' || Number(run.step) !== send.step;
+    const retry = !late && !sent && !unsure && tries < EMAIL_TRIES;
     const entry = { kind: 'email', ...(sent ? { result: 'sent' }
       : unsure ? { result: 'unsure', detail }
       : { result: 'failed', reason: retry ? 'will_retry' : 'gave_up', detail, tries }) };
-    // The run moved on meanwhile (taken off, deleted, or a retry already
-    // said "not sure it went"): say what happened, change nothing else.
-    if (run.wait !== 'sending' || Number(run.step) !== send.step) {
+    if (late) {
       await record(c, entry);
       return { late: true };
     }
@@ -834,7 +844,10 @@ const deliverText = async (db, ws, send) => {
 // says what the address answered ("Sent · 200") and moves the run on — or
 // schedules the next try.
 const deliverHook = async (db, ws, post) => {
-  const res = await postHook({ url: post.url, body: post.body, key: post.key, secret: await signingSecret(ws) });
+  // An address that has stopped answering isn't called (webhook.js): this
+  // try fails at once, and nothing queued behind it waits.
+  const res = notAnswering(post.url) ? { ok: false, why: 'not_answering' }
+    : await postHook({ url: post.url, body: post.body, key: post.key, secret: await signingSecret(ws) });
   await act(db, ws, async (tx, emit) => {
     const run = (await tx.query(
       'select * from ladder_runs where id = $1 and workspace_id = $2 for update', [post.run_id, ws],
@@ -843,16 +856,18 @@ const deliverHook = async (db, ws, post) => {
     const ladder = (await tx.query('select steps from ladders where id = $1 and workspace_id = $2', [run.ladder_id, ws])).rows[0];
     const c = { tx, emit, run, steps: parseJson(ladder?.steps, []), step: post.step };
     const tries = post.attempt + 1;
-    // An address that may not be called is never tried again.
-    const retry = !res.ok && !res.final && tries < HOOK_TRIES;
+    // The run moved on meanwhile (taken off, deleted, a goal reached, or a
+    // retry already said "not sure it went"): say what the address
+    // answered, promise no other try, change nothing else.
+    const late = run.wait !== 'sending' || Number(run.step) !== post.step;
+    // Never tried again: an address that may not be called, or one that
+    // answered with a redirect (the same one would come back).
+    const retry = !late && !res.ok && !res.final && tries < HOOK_TRIES;
     const entry = { kind: 'webhook', label: post.label, ...(res.ok ? { result: 'sent', status: res.status } : {
-      result: 'failed', reason: retry ? 'will_retry' : res.final ? 'refused' : 'gave_up',
+      result: 'failed', reason: retry ? 'will_retry' : !res.final ? 'gave_up' : res.status ? 'redirect' : 'refused',
       ...(res.status ? { status: res.status } : { why: res.why }), tries,
     }) };
-    // The run moved on meanwhile (taken off, deleted, a goal reached, or a
-    // retry already said "not sure it went"): say what happened, change
-    // nothing else.
-    if (run.wait !== 'sending' || Number(run.step) !== post.step) {
+    if (late) {
       await record(c, entry);
       return { late: true };
     }
