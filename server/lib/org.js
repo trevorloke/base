@@ -48,7 +48,7 @@ export const geoBox = () => {
   const [a, b] = geoBounds().split('|').map((pt) => pt.split(',').map(Number));
   return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
 };
-export const envName =() => (['production', 'staging'].includes(str('STARBASE_ENV')) ? str('STARBASE_ENV')
+export const envName = () => (['production', 'staging'].includes(str('STARBASE_ENV')) ? str('STARBASE_ENV')
   : process.env.NODE_ENV === 'production' ? 'production' : 'local');
 
 // Sign-up past first run: only when this is set (tests, local dev).
