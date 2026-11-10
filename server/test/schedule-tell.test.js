@@ -346,6 +346,22 @@ test('a long list goes a run at a time: the job hands the rest to the next run, 
   } finally { _setPerRunForTest(null); }
 });
 
+test('a notice whose job gave up doesn’t block the week: the next tap closes what it left and tells them', async () => {
+  connect();
+  emails.length = 0; texts.length = 0;
+  at('2030-05-08T00:00:00Z');
+  const dead = ok(await mgr.action('shift.tellWeek', { week: MON }));
+  // Its job is parked as failed before it sent anything.
+  await db.query(`update jobs set status = 'failed', done_at = now() where workspace_id = $1 and kind = 'schedule.tell' and payload->>'batch_id' = $2`, [ws, dead.batch_id]);
+  const again = ok(await mgr.action('shift.tellWeek', { week: MON }), 'not “still going out”: nothing would ever send it');
+  assert.deepEqual((await noticesOf(dead.batch_id)).map((n) => [n.state, n.email, n.text]), Array(3).fill(['done', null, null]), 'closed, and never sent late');
+  const closed = await rows(`select payload from events where workspace_id = $1 and action = 'shift.tellWeek' and op = 'update' and payload->>'replaced' = 'true'`, [ws]);
+  assert.equal(closed.length, 3, 'on the log');
+  await runJobs();
+  assert.deepEqual((await noticesOf(again.batch_id)).map((n) => [n.name, n.email]), [['Asha Example', 'sent'], ['Dee Example', 'sent'], ['Eli Example', 'sent']]);
+  assert.equal(emails.length, 3, 'each told once');
+});
+
 test('reminders are off until a manager turns them on; then 6 pm the evening before, inside the texting hours', async () => {
   const texting = { allow_from: 9, allow_until: 21, weekend_from: 10, weekend_until: 18 };
   assert.equal(remindAt('2030-05-06', texting, TZ), '2030-05-06T18:00:00-07:00', 'a weekday: 6 pm');

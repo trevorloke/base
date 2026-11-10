@@ -347,9 +347,11 @@ export const tellActions = {
       if (!bookings.length) throw httpError(409, 'nobody is on a shift still to come that week');
       // What an older notice never got to send (its job gave up) is closed:
       // this one tells them.
-      await tx.query(
-        `update shift_notices set state = 'done' where workspace_id = $1 and kind = 'week' and week = $2::date and state = 'asked'`, [ws, monday],
-      );
+      const stale = (await tx.query(
+        `update shift_notices set state = 'done' where workspace_id = $1 and kind = 'week' and week = $2::date and state = 'asked' returning id`,
+        [ws, monday],
+      )).rows;
+      for (const n of stale) emit('shift_notice', n.id, 'update', { state: 'done', replaced: true });
       const batchId = newId();
       const list = byPerson(bookings);
       await insertNotices(tx, ws, { kind: 'week', batchId, week: monday, userId: ctx.user.id }, list);
