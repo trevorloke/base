@@ -29,7 +29,7 @@ export default function VoterNumber({ personId }) {
   if (q.isError && !q.data) {
     return (
       <p className="vn-line vn-down" role="alert">
-        <span>Voter number: unavailable</span>
+        <span>Voter number: unavailable —</span>
         <button type="button" className="btn vn-btn" onClick={() => q.refetch()} disabled={q.isFetching}>Try again</button>
       </p>
     );

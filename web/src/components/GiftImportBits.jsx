@@ -38,11 +38,12 @@ export function ImportedLine({ g }) {
   );
 }
 
-// A read that failed: never a blank where a number or a list should be.
+// A read that failed: never a blank where a number or a list should be —
+// "Unavailable — Try again", the same words everywhere.
 export function Unavailable({ what = null, onRetry, busy = false }) {
   return (
     <p className="gi-down" role="alert">
-      <span>{what ? `${what}: unavailable` : 'Unavailable'}</span>
+      <span>{what ? `${what}: unavailable` : 'Unavailable'}{onRetry ? ' —' : ''}</span>
       {onRetry && <button type="button" className="btn ops-tap" onClick={onRetry} disabled={busy}>Try again</button>}
     </p>
   );

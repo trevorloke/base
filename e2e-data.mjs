@@ -19,6 +19,8 @@
 // one on a record it could be and one on a new person; the same file again
 // adds nothing; the import is taken back whole. The financial agent's
 // filing date is typed in and counted down on Donations and on Today.
+// Donations says how it stands: Loading… while its reads are out,
+// Unavailable — Try again when they failed.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4135 node server/index.js &
 //   BASE=http://127.0.0.1:4135 SHOTS=/tmp/data node e2e-data.mjs
@@ -465,6 +467,47 @@ await page.waitForSelector('#today-next-h', { timeout: 10000 }).catch(() => {});
 await sleep(800);
 const coming = (await page.innerText('section[aria-labelledby="today-next-h"]').catch(() => '')).replace(/\s+/g, ' ');
 check('Today → Coming up: the date within 30 days, "in 12 days"', /Disclosure statement due/.test(coming) && /in 12 days/.test(coming), coming);
+
+// ── Donations says how it stands: never a dash, a zero or a block that isn't there ──
+// A fresh tab (nothing kept from an earlier load): its reads slow, then failing.
+const hctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
+await hctx.addCookies(await dctx.cookies());
+const hp = await hctx.newPage();
+hp.on('pageerror', (e) => errors.push(`states: ${e.message}`));
+const READS = ['**/api/brief', '**/api/receipts/needs', '**/api/payments', '**/api/records/gift*'];
+for (const r of READS) await hp.route(r, (route) => { setTimeout(() => route.continue().catch(() => {}), 4000); });
+await hp.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await hp.waitForSelector('.ops-hero', { timeout: 10000 }).catch(() => {});
+await sleep(1200);
+const heroSlow = (await hp.innerText('.ops-hero').catch(() => '')).replace(/\s+/g, ' ');
+const pageSlow = (await hp.innerText('main.page').catch(() => '')).replace(/\s+/g, ' ');
+check('reads still out: the big number, Needs you and the gift list each say Loading… — no dash, no $0',
+  /Raised this year Loading…/i.test(heroSlow) && /Needs you Loading…/i.test(pageSlow) && /Gifts Loading…/i.test(pageSlow) && !/—|\$0\b/.test(heroSlow), pageSlow.slice(0, 220));
+await hp.screenshot({ path: `${SHOTS}/14-donations-loading.png` });
+await hp.waitForSelector('.ops-hero .n', { timeout: 15000 }).catch(() => {});
+check('…then the number: "Raised this year" with its amount', /Raised this year \$\d/i.test((await hp.innerText('.ops-hero').catch(() => '')).replace(/\s+/g, ' ')));
+await hctx.close();
+// Another fresh tab, so no copy is kept to fall back on: every read answers 500.
+const fctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
+await fctx.addCookies(await dctx.cookies());
+const fp = await fctx.newPage();
+fp.on('pageerror', (e) => errors.push(`states: ${e.message}`));
+for (const r of READS) await fp.route(r, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"down for a moment"}' }));
+await fp.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await fp.waitForSelector('.ops-hero .gi-down', { timeout: 15000 }).catch(() => {});
+await fp.waitForSelector('.ops-needs .gi-down', { timeout: 15000 }).catch(() => {});
+await sleep(1500);
+const downs = await fp.$$eval('main.page .gi-down', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()));
+check('reads failed: the big number, Needs you and the gift list each say "Unavailable — Try again" — nothing just missing, no number made up',
+  downs.length === 3 && downs.every((d) => d === 'Unavailable — Try again') && (await fp.locator('.ops-hero .gi-down').count()) === 1 && (await fp.locator('.ops-needs .gi-down').count()) === 1
+  && (await fp.locator('.ops-hero .n').count()) === 0 && !/\$\d/.test(await fp.innerText('.ops-hero').catch(() => '$0')), JSON.stringify(downs));
+await simple(fp, 'Donations, its reads failed (1360)');
+await fp.screenshot({ path: `${SHOTS}/15-donations-unavailable.png` });
+for (const r of READS) await fp.unroute(r);
+await fp.click('.ops-hero .gi-down button:has-text("Try again")', { timeout: 5000 }).catch(() => {});
+await fp.waitForSelector('.ops-hero .n', { timeout: 10000 }).catch(() => {});
+check('Try again brings the number back', /\$\d/.test(await fp.innerText('.ops-hero .n').catch(() => '')));
+await fctx.close();
 
 // ── And out ──
 for (const k of ['people', 'contacts', 'gifts', 'volunteers', 'signs', 'shifts', 'subscribers', 'lists']) {
