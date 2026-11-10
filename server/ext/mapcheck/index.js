@@ -1,0 +1,66 @@
+// The map's check, for managers: GET /api/map/check.
+//
+// A map can look empty for several unrelated reasons — people never placed,
+// a placing run that stopped, a list that mostly lives outside the campaign's
+// area, a street map that isn't answering, a page older than the server. One
+// answer (and, on the map's Show sheet, one screenshot of it) says which:
+//
+//   people   { total, onMap, waiting, noAddress } — on file; with a pin;
+//            an address but no pin yet; neither. Nobody is placed by
+//            guessing: a person with no address stays off the map and is
+//            counted here.
+//   area     { box: [south, west, north, east], inside, outside } — of those
+//            on the map, how many are inside the campaign's own box
+//            (STARBASE_GEO_BOUNDS)
+//   turfs    how many
+//   placing  the background run (ext/geocoding status), and off: address
+//            lookup is turned off (GEOCODER=off)
+//   tiles    { source, custom, ignored, clean } — which street map the
+//            server names (ext/offline), never its whole address
+//   build    the web build this server hands out (lib/build.js); commit
+//
+// What only the browser knows (whether tiles loaded, the page's own build,
+// the map's size on screen) the page adds itself.
+import { Hono } from 'hono';
+import { geoBox } from '../../lib/org.js';
+import { currentBuild } from '../../lib/build.js';
+import { status as placingStatus } from '../geocoding/index.js';
+import { tileConfig, tileSource, TILE_DEFAULTS } from '../offline/index.js';
+
+export const api = new Hono();
+
+api.get('/map/check', async (c) => {
+  const ctx = c.get('ctx');
+  if (ctx.role !== 'manager') return c.json({ error: 'the map check is for managers' }, 403);
+  const db = c.get('db');
+  const ws = ctx.workspaceId;
+  const p = (await db.query(
+    `select count(*)::int as total,
+            count(*) filter (where lat is not null and lng is not null)::int as on_map,
+            count(*) filter (where lat is null and address is not null)::int as waiting,
+            count(*) filter (where lat is null and address is null)::int as no_address
+     from persons where workspace_id = $1 and deleted_at is null`,
+    [ws],
+  )).rows[0];
+  const box = geoBox();
+  const inside = (await db.query(
+    `select count(*)::int as n from persons
+     where workspace_id = $1 and deleted_at is null and lat between $2 and $4 and lng between $3 and $5`,
+    [ws, ...box],
+  )).rows[0].n;
+  const turfs = (await db.query('select count(*)::int as n from turfs where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
+  const t = tileConfig();
+  return c.json({
+    people: { total: p.total, onMap: p.on_map, waiting: p.waiting, noAddress: p.no_address },
+    area: { box, inside, outside: Math.max(0, p.on_map - inside) },
+    turfs,
+    placing: { ...(await placingStatus(db, ws)), off: (process.env.GEOCODER || '').toLowerCase() === 'off' },
+    tiles: {
+      source: tileSource(t.url), custom: t.url !== TILE_DEFAULTS.url, ignored: t.ignored,
+      // The Clean look (CARTO's tiles) is offered beside the standard ones.
+      clean: t.url === TILE_DEFAULTS.url && process.env.STARBASE_TILE_CLEAN !== 'off',
+    },
+    build: currentBuild(),
+    commit: String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || null,
+  });
+});

@@ -18,6 +18,7 @@ import { appRedirect, basePath, mountAt } from './lib/mount.js';
 import { doorKeySet } from './lib/guard.js';
 import { brandPages } from './lib/brand.js';
 import { siteGate } from './ext/site/public.js';
+import { currentBuild } from './lib/build.js';
 
 export const app = new Hono();
 
@@ -32,13 +33,17 @@ app.use('*', (c, next) => bodyLimit({
 })(c, next));
 // Headers every answer carries: not framed by another site (voter data on
 // screen), no sniffing a type, no full URLs leaking off-site. A route that
-// set its own keeps it.
+// set its own keeps it. The API's answers also name the web build this
+// server hands out (lib/build.js): a page from before a deploy sees that it
+// is older than the server, and says so.
 app.use('*', async (c, next) => {
   await next();
   const h = c.res.headers;
   if (!h.has('X-Frame-Options')) h.set('X-Frame-Options', 'DENY');
   if (!h.has('X-Content-Type-Options')) h.set('X-Content-Type-Options', 'nosniff');
   if (!h.has('Referrer-Policy')) h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  const build = c.req.path.startsWith('/api/') ? currentBuild() : null;
+  if (build) h.set('X-Build', build);
 });
 // The campaign's own domain (SITE_HOSTS, or a domain set under Website):
 // only the public website answers there — never an app route, never the
@@ -52,7 +57,7 @@ const COMMIT = String(process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT ||
 // keeps the old version or restarts it.
 app.get('/api/health', async (c) => {
   const database = await dbReachable();
-  return c.json({ ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, tzdataCurrent: !staleTimeZoneData() }, database ? 200 : 503);
+  return c.json({ ok: database, database: database ? 'ok' : 'not reachable', service: 'starbase', env: envName(), organization: orgName(), commit: COMMIT, build: currentBuild(), tzdataCurrent: !staleTimeZoneData() }, database ? 200 : 503);
 });
 app.route('/api/auth', authRoutes);
 app.route('/', publicRoutes); // /u, /bu — no auth
@@ -64,6 +69,10 @@ app.route('/api', apiRoutes);
 const WEB_ROOT = relative(process.cwd(), fileURLToPath(new URL('../web/dist', import.meta.url))) || '.';
 app.use('*', brandPages); // the app's page and manifest wear this deployment's look (lib/brand.js)
 app.use('*', serveStatic({ root: WEB_ROOT }));
+// A build file that isn't there (an older build's, asked for by a page left
+// open across a deploy) is missing — 404, never the app's page under a .js
+// name: a browser refuses that as a script and the screen stayed blank.
+app.get('/assets/*', (c) => c.text('Not found', 404, { 'Cache-Control': 'no-store' }));
 // Under a client's path (BASE_PATH, lib/mount.js) an address that isn't the
 // app's — /join/…, an old /login — goes to the volunteers' app at /field.
 app.get('*', async (c, next) => appRedirect(c) || next());

@@ -1,13 +1,15 @@
 // Background geocoding (ext/geocoding): a run works through everyone waiting
 // for a pin on the server, one lookup per household, copying pins already on
-// file, and stops, retries and pauses as it should. The BC Address Geocoder
-// is mocked; the real job runner does the work.
+// file, and stops, retries and pauses as it should — and after a pause tries
+// again by itself, on a long wait. The BC Address Geocoder is mocked; the
+// real job runner does the work.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
-import { startJobRunner, stopJobRunner } from '../lib/jobs.js';
+import { runDueJobs, startJobRunner, stopJobRunner } from '../lib/jobs.js';
 
 let mgr;
+let ws;
 let db;
 const realFetch = globalThis.fetch;
 const asked = [];
@@ -20,7 +22,7 @@ before(async () => {
   process.env.GEOCODE_BACKOFF_MS = '0'; // retry rounds at once, not in 30 s steps
   db = await freshDb();
   mgr = new Client();
-  await mgr.signup({ workspaceName: 'Imagine Surrey', jurisdiction: 'bc-municipal' });
+  ws = (await mgr.signup({ workspaceName: 'Imagine Surrey', jurisdiction: 'bc-municipal' })).json.workspace.id;
   globalThis.fetch = async (url, opts) => {
     const u = new URL(String(url));
     if (u.hostname !== 'geocoder.api.gov.bc.ca') return realFetch(url, opts);
@@ -148,6 +150,64 @@ test('stop holds the run; carry on resumes it', async () => {
   const done = await waitFor((x) => x.state === 'done');
   assert.ok(done.located > before, 'carry on keeps counting');
   assert.equal(done.remaining, 0);
+});
+
+// The wait before a paused run tries again (GEOCODE_RETRY_MS; 15 minutes
+// unless set), from the pause to the time it names.
+const waitOf = (s) => Date.parse(s.retryAt) - Date.parse(s.updated_at);
+const later = (ms) => new Promise((r) => setTimeout(r, ms));
+
+test('after a pause the run tries again by itself, each wait twice as long; nobody taps Carry on', async () => {
+  process.env.GEOCODE_RETRY_MS = '400';
+  answer = () => new Response('busy', { status: 503 });
+  for (let i = 0; i < 3; i++) await mgr.createPerson(`Wait ${i}`, { address: `${50000 + i} 60 Ave` });
+  await mgr.post('/api/geocode/start', {});
+  const first = await waitFor((x) => x.state === 'paused');
+  assert.ok(first.retryAt, 'it says when it tries again');
+  assert.ok(Math.abs(waitOf(first) - 400) < 150, `the first wait: ${waitOf(first)} ms`);
+  // Not before its time…
+  await runDueJobs(db, { workspaceId: ws });
+  assert.equal((await mgr.get('/api/geocode/status')).json.state, 'paused');
+  // …then one round: still no answer, so it waits again, twice as long.
+  await later(450);
+  await runDueJobs(db, { workspaceId: ws });
+  const second = await waitFor((x) => x.state === 'paused' && x.retryAt !== first.retryAt);
+  assert.ok(Math.abs(waitOf(second) - 800) < 200, `the second wait: ${waitOf(second)} ms`);
+  assert.equal(second.remaining, 3, 'nobody set aside meanwhile');
+  // The lookup service is back. The next try finishes the job.
+  answer = () => null;
+  await later(850);
+  await runDueJobs(db, { workspaceId: ws });
+  const done = await waitFor((x) => x.state === 'done');
+  assert.deepEqual([done.remaining, done.retryAt], [0, null]);
+  delete process.env.GEOCODE_RETRY_MS;
+});
+
+test('Stop calls the next try off; Carry on before it leaves it nothing to do', async () => {
+  process.env.GEOCODE_RETRY_MS = '300';
+  answer = () => new Response('busy', { status: 503 });
+  for (let i = 0; i < 2; i++) await mgr.createPerson(`Held ${i}`, { address: `${60000 + i} 56 Ave` });
+  await mgr.post('/api/geocode/start', {});
+  await waitFor((x) => x.state === 'paused');
+  const stopped = (await mgr.post('/api/geocode/stop', {})).json;
+  assert.deepEqual([stopped.state, stopped.retryAt], ['stopped', null]);
+  answer = () => null;
+  await later(350);
+  await runDueJobs(db, { workspaceId: ws });
+  await later(100);
+  assert.deepEqual([(await mgr.get('/api/geocode/status')).json.state, (await mgr.get('/api/geocode/status')).json.remaining], ['stopped', 2], 'stopped stays stopped');
+  // Paused again, then carried on by hand before the wait is over.
+  answer = () => new Response('busy', { status: 503 });
+  await mgr.post('/api/geocode/start', {});
+  await waitFor((x) => x.state === 'paused');
+  answer = () => null;
+  await mgr.post('/api/geocode/start', {});
+  const done = await waitFor((x) => x.state === 'done');
+  await later(350);
+  await runDueJobs(db, { workspaceId: ws }); // the try that was waiting: the run is done, it does nothing
+  const after = (await mgr.get('/api/geocode/status')).json;
+  assert.deepEqual([after.state, after.located, after.remaining], ['done', done.located, 0]);
+  delete process.env.GEOCODE_RETRY_MS;
 });
 
 test('volunteers cannot read or start a run', async () => {

@@ -1,10 +1,16 @@
 // A city-wide list on the map. Up to STARBASE_MAP_ALL located people the map
 // loads them all (never cut off part way, as the old 5,000 limit did — by
 // address, so a whole voter file showed only the "10…" streets). Past it the
-// map asks by the part in view (?bbox), at most 8,000 people at a time, and
-// from further out by a count per patch (/map/density), by rating. Turfs
-// count only the people inside their own corners. A volunteer kept to their
-// turfs gets those doors, however big the list.
+// map asks by the part in view (?bbox): the server counts first, and a view
+// over the cap (8,000 people, or the page's own ?rows=) answers
+// { truncated, count } with no rows; ?dots=1 answers one lean row per door
+// ([lat, lng, band, people]) so every door can be a dot long before its
+// people are loaded; ?person=<id> answers that person's door wherever it is.
+// From further out it is a count per patch (/map/density), by rating. The
+// map opens on the campaign's own list (strays elsewhere don't zoom it out).
+// Turfs count only the people inside their own corners; ?outline=1 leaves
+// the counts out (the map draws the outlines at once) and /turfs/:id counts
+// one. A volunteer kept to their turfs gets those doors, however big the list.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -70,22 +76,21 @@ test('from further out: a count per patch, by rating, adding up to everyone in v
   assert.equal((await mgr.get('/api/map/density')).status, 400);
 });
 
-test('over the cap, a view keeps the people nearest its middle and says so', async () => {
+test('over the cap, a view is counted first and answers with no rows', async () => {
   process.env.STARBASE_MAP_ALL = '20';
   const prev = process.env.STARBASE_MAP_VIEW;
-  // 60 people on the grid; the box covers all of them; a cap of 10 (test
-  // setting) keeps the 10 nearest the middle.
+  // 60 people on the grid; the box covers all of them; a cap of 10 (test setting).
   process.env.STARBASE_MAP_VIEW = '10';
   const v = ok(await mgr.get('/api/map/doors?bbox=49.0995,-122.8505,49.1095,-122.8445'));
-  assert.equal(v.truncated, true);
-  assert.equal(v.persons.length, 10);
-  const mid = [(49.0995 + 49.1095) / 2, (-122.8505 + -122.8445) / 2];
-  const d = (p) => Math.abs(p.lat - mid[0]) + Math.abs(p.lng - mid[1]);
-  const kept = Math.max(...v.persons.map(d));
   if (prev === undefined) delete process.env.STARBASE_MAP_VIEW; else process.env.STARBASE_MAP_VIEW = prev;
-  // The grid's 10 nearest the middle are within 0.002° (rows 4–5 by
-  // columns 1–4); the far corners are 0.007° out.
-  assert.ok(kept <= 0.0021, `the kept ones are the middle ones (furthest kept ${kept.toFixed(4)})`);
+  assert.equal(v.truncated, true);
+  assert.equal(v.count, 60, 'how many are there');
+  assert.deepEqual(v.persons, [], 'nobody is read, sent and thrown away');
+  // The page's own budget (?rows=), never more than the server's cap.
+  const tight = ok(await mgr.get('/api/map/doors?bbox=49.0995,-122.8505,49.1095,-122.8445&rows=59'));
+  assert.deepEqual([tight.truncated, tight.count, tight.persons.length], [true, 60, 0]);
+  const roomy = ok(await mgr.get('/api/map/doors?bbox=49.0995,-122.8505,49.1095,-122.8445&rows=60'));
+  assert.deepEqual([roomy.truncated, roomy.count, roomy.persons.length], [false, 60, 60]);
 });
 
 test('a sign asked for before its person had a pin shows at their door', async () => {
@@ -121,4 +126,122 @@ test('a volunteer kept to their turfs gets those doors, however big the list; no
   assert.equal(all.persons.length, 12, 'their own turf comes whole (kept on the phone for no signal)');
   assert.equal(ok(await mgr.get('/api/map/doors')).persons.length, 0, 'the desk: all by view');
   delete process.env.STARBASE_MAP_ALL;
+});
+
+// ── Every door a dot, long before its people are loaded ──
+const BOX = '49.0995,-122.8505,49.1095,-122.8445'; // the whole grid
+const spot = (n) => GRID.find((g) => g.n === n);
+const near = (dots, g) => dots.find((x) => Math.abs(x[0] - g.lat) < 1e-6 && Math.abs(x[1] - g.lng) < 1e-6);
+
+test('?dots=1: one lean row per door — [lat, lng, band, people] — with the household’s band', async () => {
+  process.env.STARBASE_MAP_ALL = '20';
+  // Two more at Voter 1's door (nobody there asked yet): one undecided, one
+  // for Locke — the door reads opposed. One more at Voter 2's: undecided.
+  for (const [name, n, rating] of [['Housemate A Example', 1, '3'], ['Housemate B Example', 1, '4B'], ['Housemate C Example', 2, '3']]) {
+    await db.query(
+      `insert into persons (id, workspace_id, name, address, lat, lng, rating) values ($1, $2, $3, $4, $5, $6, $7)`,
+      [randomUUID(), ws, name, `${1000 + n} Example St`, spot(n).lat, spot(n).lng, rating],
+    );
+  }
+  const d = ok(await mgr.get(`/api/map/doors?bbox=${BOX}&dots=1`));
+  assert.equal(d.scope, 'view');
+  assert.equal(d.persons, undefined, 'no names, phones or ids in a dots answer');
+  assert.equal(d.dots.length, 60, 'one per door');
+  assert.equal(d.count, 63, 'the people in the box');
+  assert.equal(d.dots.reduce((n, x) => n + x[3], 0), 63, 'people add up');
+  // band: 0 not asked yet · 1 undecided · 2 support · 3 opposed (any opposed
+  // beats support beats undecided, as a pin's colour does).
+  assert.deepEqual(near(d.dots, spot(1)).slice(2), [3, 3], 'opposed, 3 people');
+  assert.deepEqual(near(d.dots, spot(2)).slice(2), [1, 2], 'undecided, 2 people');
+  assert.deepEqual(near(d.dots, spot(0)).slice(2), [2, 1], 'rated 1: support');
+  assert.deepEqual(near(d.dots, spot(5)).slice(2), [3, 1], 'rated 4: opposed');
+  assert.deepEqual(near(d.dots, spot(7)).slice(2), [0, 1], 'not asked yet');
+  assert.ok(d.dots.every((x) => x.length === 4 && String(x[0]).length <= 8 && String(x[1]).length <= 10), 'short numbers: a metre is enough');
+  // Only the doors where someone has one rating (the map's "Strong yes (1)").
+  const ones = ok(await mgr.get(`/api/map/doors?bbox=${BOX}&dots=1&rating=1`));
+  assert.deepEqual([ones.dots.length, ones.dots.every((x) => x[2] === 2 && x[3] === 1)], [20, true]);
+});
+
+test('too many doors for dots: counted, said, and none sent', async () => {
+  process.env.STARBASE_MAP_ALL = '20';
+  process.env.STARBASE_MAP_DOTS = '59';
+  const cut = ok(await mgr.get(`/api/map/doors?bbox=${BOX}&dots=1`));
+  process.env.STARBASE_MAP_DOTS = '60';
+  const fits = ok(await mgr.get(`/api/map/doors?bbox=${BOX}&dots=1`));
+  delete process.env.STARBASE_MAP_DOTS;
+  assert.deepEqual([cut.truncated, cut.count, cut.dots], [true, 63, undefined]);
+  assert.deepEqual([fits.truncated, fits.dots.length], [false, 60]);
+});
+
+test('?dots=1&rows=N: the people themselves where they fit, dots where they don’t', async () => {
+  process.env.STARBASE_MAP_ALL = '20';
+  // The south-west corner: rows 0–4, columns 0–2 → 15 doors, 18 people.
+  const corner = '49.0995,-122.8505,49.1045,-122.8475';
+  const rows = ok(await mgr.get(`/api/map/doors?bbox=${corner}&dots=1&rows=18`));
+  assert.deepEqual([rows.persons.length, rows.dots, rows.truncated, rows.count], [18, undefined, false, 18]);
+  const dots = ok(await mgr.get(`/api/map/doors?bbox=${corner}&dots=1&rows=17`));
+  assert.deepEqual([dots.persons, dots.dots.length, dots.truncated, dots.count], [undefined, 15, false, 18]);
+});
+
+test('?person=<id>: that door and everyone at it, wherever it is', async () => {
+  process.env.STARBASE_MAP_ALL = '20';
+  const idOf = async (name) => (await db.query('select id from persons where workspace_id = $1 and name = $2', [ws, name])).rows[0].id;
+  const d = ok(await mgr.get(`/api/map/doors?person=${await idOf('Housemate B Example')}`));
+  assert.equal(d.scope, 'door');
+  assert.deepEqual(d.persons.map((p) => p.name).sort(), ['Housemate A Example', 'Housemate B Example', 'Voter 1 Example']);
+  // Voter 0's door comes with its sign.
+  const v0 = ok(await mgr.get(`/api/map/doors?person=${await idOf('Voter 0 Example')}`));
+  assert.deepEqual([v0.persons.length, v0.signs.length], [1, 1]);
+  // No pin, nobody, or not an id: no door (the map then offers to place them, or says not found).
+  for (const id of [await idOf('Unplaced Example'), randomUUID(), 'nonsense']) {
+    assert.deepEqual(ok(await mgr.get(`/api/map/doors?person=${id}`)).persons, [], id);
+  }
+});
+
+test('the map opens on the campaign’s own list: strays elsewhere don’t zoom it out', async () => {
+  process.env.STARBASE_MAP_ALL = '20';
+  const prev = process.env.STARBASE_GEO_BOUNDS;
+  // Two people whose address on file is in Prince George: 3% of the list.
+  for (const n of [1, 2]) {
+    await db.query(`insert into persons (id, workspace_id, name, address, lat, lng) values ($1, $2, $3, $4, $5, $6)`,
+      [randomUUID(), ws, `Away ${n} Example`, `${n} Far St`, 53.91 + n / 1000, -122.75]);
+  }
+  // Most are inside the campaign's box (Surrey's, unless set): where those people are.
+  delete process.env.STARBASE_GEO_BOUNDS;
+  const area = ok(await mgr.get('/api/map/doors'));
+  // A campaign whose box is somewhere else: the middle of the list (5th–95th percentile).
+  process.env.STARBASE_GEO_BOUNDS = '50.6,-120.5|50.8,-120.2';
+  const spread = ok(await mgr.get('/api/map/doors'));
+  if (prev === undefined) delete process.env.STARBASE_GEO_BOUNDS; else process.env.STARBASE_GEO_BOUNDS = prev;
+  const fits = ([s, w, n, e]) => s >= 49.0999 && n <= 49.1091 && w >= -122.8501 && e <= -122.8449 && s < n && w < e;
+  assert.deepEqual([area.total, area.fit], [65, 'area']);
+  assert.ok(fits(area.bounds), `the list inside the campaign’s box: ${area.bounds}`);
+  assert.equal(spread.fit, 'spread');
+  assert.ok(fits(spread.bounds), `the middle of the list: ${spread.bounds}`);
+  // A small list says where to open too (the same strays would zoom it out to the province).
+  delete process.env.STARBASE_MAP_ALL;
+  const small = ok(await mgr.get('/api/map/doors'));
+  assert.deepEqual([small.big, small.persons.length, small.fit], [undefined, 65, 'area']);
+  assert.ok(fits(small.bounds), `${small.bounds}`);
+});
+
+test('turf outlines come without counts; one turf’s counts on their own', async () => {
+  const t = ok(await mgr.get('/api/turfs')).turfs.find((x) => x.name === 'Two rows');
+  assert.deepEqual([t.people, t.doors], [15, 12]);
+  // The map draws every outline at once: names, shapes and who walks them — nobody inside is read.
+  const o = ok(await mgr.get('/api/turfs?outline=1')).turfs.find((x) => x.id === t.id);
+  assert.deepEqual([o.name, o.polygon, o.members.map((m) => m.id)], [t.name, t.polygon, [volId]]);
+  assert.deepEqual([o.doors, o.people, o.doorsDone, o.rated], [undefined, undefined, undefined, undefined]);
+  // Its counts, when its sheet opens.
+  const one = ok(await mgr.get(`/api/turfs/${t.id}`)).turf;
+  assert.deepEqual([one.id, one.doors, one.people, one.doorsDone, one.rated, one.members.length], [t.id, t.doors, t.people, t.doorsDone, t.rated, 1]);
+  // A volunteer's own turfs come whole either way (a few, kept on the phone for no signal).
+  const mine = ok(await vol.get('/api/turfs?outline=1')).turfs;
+  assert.deepEqual([mine.length, mine[0].doors, mine[0].people], [1, 12, 15]);
+  assert.equal(ok(await vol.get(`/api/turfs/${t.id}`)).turf.people, 15);
+  // …and a turf that isn't theirs is not theirs to count.
+  const other = ok(await mgr.action('turf.create', { name: 'Not theirs', polygon: [[49.2, -122.8], [49.2, -122.79], [49.21, -122.79]] })).turf;
+  assert.equal((await vol.get(`/api/turfs/${other.id}`)).status, 403);
+  assert.equal((await mgr.get('/api/turfs/not-an-id')).status, 404);
+  assert.equal((await mgr.get(`/api/turfs/${randomUUID()}`)).status, 404);
 });

@@ -6,7 +6,7 @@
 //   POST /api/geocode/start   start (or resume) a run       desk roles
 //   POST /api/geocode/stop    stop after the current round  desk roles
 //   GET  /api/geocode/status  { state, located, copied, missed, errors,
-//                               lastError, remaining, unmatched, jobs }
+//                               lastError, retryAt, remaining, unmatched, jobs }
 //
 // Each round takes the next people waiting for a pin (oldest first) and
 // groups them by address, so a household is one lookup. An address someone
@@ -17,12 +17,17 @@
 // A lookup that errors (the service is down or busy) leaves the person
 // waiting for the next round; after GEO_MAX_TRIES errors they're set aside
 // as 'failed' with the 'nomatch'/'weak' ones, for a pin by hand. Rounds
-// where nothing worked back off; five in a row pause the run with the reason
-// (Carry on resumes it). A round where every lookup failed spends nobody's
-// tries — a short outage must not set good addresses aside. Each job works for at most ROUND_BUDGET_MS and then
+// where nothing worked back off; five in a row pause the run with the reason.
+// A paused run tries again by itself: one round after 15 minutes, then after
+// twice as long each time lookups still don't answer, up to six hours (the
+// status says when: retryAt) — nobody has to come back and tap Carry on,
+// though Carry on does it now and Stop calls it off. A round where every
+// lookup failed spends nobody's tries — a short outage must not set good
+// addresses aside. Each job works for at most ROUND_BUDGET_MS and then
 // queues the next, so other jobs (ladder emails, A/B winners) keep moving.
 //   GEOCODE_CONCURRENCY  lookups at once (default 6)
 //   GEOCODE_BACKOFF_MS   wait after a round where nothing worked (default 30 s, × rounds in a row)
+//   GEOCODE_RETRY_MS     wait before a paused run's first try (default 15 min)
 import { Hono } from 'hono';
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
@@ -36,6 +41,9 @@ const PAUSE_AFTER = 5;           // rounds in a row where every lookup failed
 const DESK = ['manager', 'staff', 'treasurer'];
 // Wait after a round where nothing worked, × the rounds in a row (tests: 0).
 const backoffMs = () => (process.env.GEOCODE_BACKOFF_MS != null ? Number(process.env.GEOCODE_BACKOFF_MS) : 30_000);
+// Wait before a paused run tries again, doubling while it still gets no answer.
+const retryMs = () => (Number(process.env.GEOCODE_RETRY_MS) > 0 ? Number(process.env.GEOCODE_RETRY_MS) : 15 * 60_000);
+const RETRY_MAX_MS = 6 * 3600_000;
 
 export const sql = `
 create table if not exists geocode_runs (
@@ -51,6 +59,8 @@ create table if not exists geocode_runs (
   bad_rounds integer not null default 0,
   last_error text
 );
+-- When a paused run tries again by itself.
+alter table geocode_runs add column if not exists retry_at timestamptz;
 -- The people still waiting for a pin, oldest first: what every round reads.
 create index if not exists persons_ws_geopending_idx on persons (workspace_id, created_at)
   where deleted_at is null and address is not null and lat is null;
@@ -190,17 +200,33 @@ const statsReady = async (db) => {
   } catch { /* only a speed-up */ }
 };
 
+// Lookups aren't answering: the run pauses, and tries again by itself — one
+// round after GEOCODE_RETRY_MS, then twice as long each time it still gets
+// no answer (bad counts on past PAUSE_AFTER), up to six hours.
+const pause = async (db, workspaceId, bad) => {
+  const wait = Math.min(retryMs() * 2 ** Math.min(bad - PAUSE_AFTER, 12), Math.max(retryMs(), RETRY_MAX_MS));
+  const at = new Date(Date.now() + wait).toISOString();
+  await setRun(db, workspaceId, { state: 'paused', retry_at: at });
+  await enqueueJob(db, { workspaceId, kind: KIND, runAt: at, payload: { retry: true } });
+};
+
 // The job: rounds until the budget is spent, then the next job is queued.
 export const jobs = {
   [KIND]: async (db, job) => {
     const workspaceId = job.workspace_id;
     await statsReady(db);
+    // The try after a pause. Carried on by hand meanwhile, stopped or done:
+    // that run has its own jobs (or none), and this one has nothing to do.
+    if (job.payload?.retry) {
+      if ((await getRun(db, workspaceId))?.state !== 'paused') return;
+      await setRun(db, workspaceId, { state: 'running', retry_at: null });
+    }
     const until = Date.now() + ROUND_BUDGET_MS;
     for (;;) {
       const run = await getRun(db, workspaceId);
       if (!run || run.state !== 'running') return; // stopped (or paused) from the desk
       const r = await geocodeRound(db, workspaceId, run.started_by);
-      if (r.done) { await setRun(db, workspaceId, { state: 'done', last_error: null }); return; }
+      if (r.done) { await setRun(db, workspaceId, { state: 'done', last_error: null, retry_at: null }); return; }
       const progressed = r.located + r.copied + r.missed > 0;
       const bad = progressed ? 0 : run.bad_rounds + 1;
       await db.query(
@@ -208,7 +234,7 @@ export const jobs = {
            bad_rounds = $6, last_error = coalesce($7, last_error), updated_at = now() where workspace_id = $1`,
         [workspaceId, r.located, r.copied, r.missed, r.errors, bad, r.lastError],
       );
-      if (bad >= PAUSE_AFTER) { await setRun(db, workspaceId, { state: 'paused' }); return; }
+      if (bad >= PAUSE_AFTER) { await pause(db, workspaceId, bad); return; }
       if (!progressed || r.busy) {
         // Nothing worked (the service is down or busy): wait longer each time.
         const wait = backoffMs() * Math.max(bad, 1);
@@ -227,7 +253,8 @@ export const api = new Hono();
 
 const deskOnly = (c) => (DESK.includes(c.get('ctx').role) ? null : c.json({ error: 'only campaign staff can place people on the map' }, 403));
 
-const status = async (db, workspaceId) => {
+// (The map's check for managers reads it too: ext/mapcheck.)
+export const status = async (db, workspaceId) => {
   const run = await getRun(db, workspaceId);
   const unmatched = (await db.query(
     `select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and lat is null
@@ -243,6 +270,8 @@ const status = async (db, workspaceId) => {
     missed: run?.missed || 0,
     errors: run?.errors || 0,
     lastError: run?.last_error || null,
+    // Paused: when it tries again by itself.
+    retryAt: (run?.state === 'paused' && run.retry_at) || null,
     remaining: await pendingCount(db, workspaceId),
     unmatched,
     jobs: jobRunnerOn(),
@@ -275,7 +304,7 @@ api.post('/geocode/start', async (c) => {
       `insert into geocode_runs (workspace_id, state, started_by, started_at)
        values ($1, 'running', $2, now())
        on conflict (workspace_id) do update set state = 'running', started_by = $2, bad_rounds = 0, last_error = null,
-         updated_at = now()${fresh ? ', started_at = now(), located = 0, copied = 0, missed = 0, errors = 0' : ''}`,
+         retry_at = null, updated_at = now()${fresh ? ', started_at = now(), located = 0, copied = 0, missed = 0, errors = 0' : ''}`,
       [ctx.workspaceId, ctx.user.id],
     );
     await enqueueJob(tx, { workspaceId: ctx.workspaceId, kind: KIND });
@@ -289,6 +318,6 @@ api.post('/geocode/stop', async (c) => {
   if (denied) return denied;
   const ctx = c.get('ctx');
   const db = c.get('db');
-  await setRun(db, ctx.workspaceId, { state: 'stopped' }).catch(() => {});
+  await setRun(db, ctx.workspaceId, { state: 'stopped', retry_at: null }).catch(() => {});
   return c.json(await status(db, ctx.workspaceId));
 });
