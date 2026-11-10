@@ -104,12 +104,13 @@ function Results({ p, online, onChanged }) {
   const pickOutcome = (d, i, value) => {
     const input = { outcomes: { [d.disposition]: value === d.suggested ? null : value } };
     if (value !== 'do_not_call') { save(input); return; }
-    setAsk({ at: `d${i}`, input, words: `Tag ${num(d.people)} ${plural(d.people, 'person', 'people')} do-not-call? They leave every call list.` });
+    const who = d.people ? `${num(d.people)} ${plural(d.people, 'person', 'people')}` : 'everyone with this result';
+    setAsk({ at: `d${i}`, input, words: `Tag ${who} do-not-call? They leave every call list.` });
   };
   const pickQuestion = (value) => {
     const input = { rating: value ? { question: value, answers: {} } : null };
     if (!rates) { save(input); return; }
-    setAsk({ at: 'q', input, words: `Stop rating people from “${picked}”? The ratings its answers gave are taken back.` });
+    setAsk({ at: 'q', input, words: 'Stop rating people from this question? The ratings its answers gave are taken back.' });
   };
   const pickRating = (a, i, value) => {
     const input = { rating: { question: picked, answers: { [a.answer]: value || null } } };
