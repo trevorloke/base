@@ -141,7 +141,7 @@
   min-width: 0; min-height: 80px; padding: var(--s-2) var(--s-1);
   font: inherit; font-size: 14px; font-weight: 600; line-height: 1.2; text-align: center;
   color: var(--text-1); background: var(--paper-0); border: var(--border-2); border-radius: var(--r-card);
-  cursor: pointer; touch-action: manipulation;
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 .sch-tile .sk-icon { width: 26px; height: 26px; color: var(--kind); }
 @media (hover: hover) { .sch-tile:hover { border-color: var(--kind); } }
@@ -159,7 +159,7 @@
   min-height: 44px; max-width: 100%; padding: 0 14px;
   font: inherit; font-size: 15px; font-weight: 600; line-height: 1.2;
   color: var(--text-1); background: var(--paper-0); border: var(--border-2); border-radius: 999px;
-  cursor: pointer; touch-action: manipulation;
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 .sch-chip[aria-pressed='true'] { background: var(--mark-soft); border-color: var(--mark); box-shadow: inset 0 0 0 1px var(--mark); }
 .sch-chip[aria-pressed='true']::before { content: '✓'; font-size: 13px; }

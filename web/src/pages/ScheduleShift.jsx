@@ -17,7 +17,7 @@
 //
 // Nobody is told about a change by itself: after a move the week says how
 // many have the old time, with "Tell them".
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { dayOf } from '@starbase/shared/dayparts';
 import { kindOf } from '@starbase/shared/shiftkinds';
@@ -77,10 +77,14 @@ export default function ScheduleShift({
   const patch = { ...moves, ...(need !== need0 ? { need } : {}) };
   const dirty = Object.keys(patch).length > 0;
 
+  // One write at a time — a second tap before the buttons grey out is dropped.
+  const running = useRef(false);
   const run = async (fn) => {
+    if (running.current) return;
+    running.current = true;
     setError(null);
     setBusy(true);
-    try { await fn(); } catch (e) { setError(e.message); } finally { setBusy(false); }
+    try { await fn(); } catch (e) { setError(e.message); } finally { running.current = false; setBusy(false); }
   };
 
   const save = () => run(async () => {

@@ -771,6 +771,36 @@ try {
     && iso(sunday.ends_at) === at(addDays(W4, 6), '18:00'), `${lit} ${sunday.starts_at}`);
   await slim.close();
 
+  // A weak signal: the map is its own download; one that doesn't arrive says so, and the sheet stays.
+  // (No service worker in this window, so the download can be dropped on its way.)
+  const weak = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, timezoneId: 'America/Vancouver', locale: 'en-CA',
+    serviceWorkers: 'block', storageState: await desk.storageState() });
+  await tiles(weak);
+  const wp = await weak.newPage();
+  const Wk = wire(wp, 'weak');
+  let dropMap = true;
+  await wp.route(/\/assets\/SchedulePlaceMap-[^/]*\.js/, (route) => (dropMap ? route.abort() : route.continue()));
+  await wp.goto(`${ADMIN}/shifts?week=${W4}&add=${addDays(W4, 5)}`, { waitUntil: 'domcontentloaded' });
+  await wp.waitForSelector('.sch-sheet .sch-tile', { timeout: 10000 });
+  check('?add=<day> in the address opens the add sheet on that day', (await Wk.text('.sch-sheet h2')) === 'Add shifts');
+  await wp.locator('.sch-sheet .sch-tile:has-text("Signs")').click();
+  await wp.waitForSelector('.sch-sheet .sch-daychip', { timeout: 8000 });
+  check('…with that day chosen', (await wp.locator('.sch-sheet .sch-daychip[aria-pressed="true"] b').innerText()) === dayNum(addDays(W4, 5)));
+  await wp.locator('.sch-sheet .sch-chip:has-text("Pick on the map")').click();
+  await until(async () => /The map didn’t load/.test(await Wk.text('.sch-pick')));
+  check('a map that doesn’t load says so, with "Reload" — the sheet stays', /The map didn’t load/.test(await Wk.text('.sch-pick'))
+    && (await wp.locator('.sch-pick button:has-text("Reload")').count()) === 1 && (await wp.locator('.sch-sheet .sch-go').innerText()).trim() === 'Add 1 shift', await Wk.text('.sch-pick'));
+  await Wk.shot('40-map-unavailable-1440');
+  dropMap = false;
+  await wp.locator('.sch-pick button:has-text("Reload")').click();
+  await wp.waitForSelector('.sch-sheet .sch-tile', { timeout: 15000 });
+  await wp.locator('.sch-sheet .sch-tile:has-text("Signs")').click();
+  await wp.locator('.sch-sheet .sch-chip:has-text("Pick on the map")').click();
+  const mapBack = await wp.waitForSelector('.sch-map__box.leaflet-container', { timeout: 15000 }).then(() => true).catch(() => false);
+  check('"Reload" comes back to the same week and day’s sheet, and the map loads', mapBack && new URL(wp.url()).searchParams.get('add') === addDays(W4, 5)
+    && (await wp.locator('.sch-sheet .sch-daychip[aria-pressed="true"] b').innerText()) === dayNum(addDays(W4, 5)));
+  await weak.close();
+
   // ── 19. The books still verify ──
   const v = (await D.api('/audit/verify')).json;
   check('hash chain verifies after the whole journey', v.ok === true && v.checked > 60, JSON.stringify(v));

@@ -2,8 +2,10 @@
 //   /shifts        rows: title, day/time, "5 spots left". Volunteers see their
 //                  own shifts first ("Your shifts", marked "You're on"), then
 //                  the open ones. Past shifts fold away under one quiet toggle.
-//   /shifts?new=1  new shift: what, when, where, how many. Role, end time,
-//                  instructions and link sit under "More details".
+//   /shifts?new=1  the long form: what, when, where, how many. Role, end
+//                  time, instructions and link sit under "More details".
+//                  ("New shift" itself is the week's add sheet — by tap,
+//                  /shifts?add=1; this form is its "More options".)
 //   /shifts/:id    the shift in plain lines, the spots left, then who's on
 //                  it. Desk: one yellow button under the spots — "+ Add
 //                  volunteer" while spots are open (people holding the shift's
@@ -42,8 +44,9 @@
 // their row says so.
 //
 // Desk: "Week · List · Volunteers" under the title. Week (the default) is
-// the slot board (ShiftsBoard.jsx) — drag people into each day's morning,
-// afternoon or evening. The choice is remembered on this device.
+// where a week is scheduled (ShiftsBoard.jsx): each day's shifts as a list,
+// made, moved and staffed without leaving it. The choice is remembered on
+// this device.
 // Volunteers is the roster (/shifts/volunteers, Volunteers.jsx).
 //
 // A shift (desk) also has its crew board (ShiftCrew.jsx) under the spots:

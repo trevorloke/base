@@ -6,7 +6,7 @@
 //   kindVars(kind)              style for an element that wears the kind's
 //                               colour: { '--kind': 'var(--warn)' } — a CSS
 //                               variable the app already has, never a hex
-//   cardWords(shift, tz)        what a card says: { kind, title, place } —
+//   cardWords(shift)            what a card says: { kind, title, place } —
 //                               the kind's label and the place for a made
 //                               name ("Burma Shave" / "King George Blvd &
 //                               88 Ave"), the typed name where one was typed

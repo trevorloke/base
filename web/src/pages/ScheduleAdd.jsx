@@ -18,7 +18,7 @@
 // link, "Limit sign-ups to", "We need" (a target that never turns anyone
 // away; the kind may suggest one) and "Show on the website". "More options"
 // there is the long form (/shifts?new=1).
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { addDays, spanWords, weekdayIndex } from '@starbase/shared/dayparts';
@@ -55,6 +55,7 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
   const [more, setMore] = useState(false);
   const [f, setF] = useState({ name: '', instructions: '', link: '', capacity: '', need: '', public: false });
   const [busy, setBusy] = useState(false);
+  const sending = useRef(false); // a second tap before the button greys out
   const [error, setError] = useState(null);
   const set = (k) => (e) => setF((cur) => ({ ...cur, [k]: e.target.value }));
   const voted = useQuery({ queryKey: ['voted', 'status'], queryFn: () => apiGet('/voted/status'), staleTime: 60_000, meta: { side: true } });
@@ -100,6 +101,8 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
     const need = wholeOf(f.need);
     if (Number.isNaN(capacity)) { setMore(true); setError('Limit sign-ups to: a whole number, 1 or more'); return; }
     if (Number.isNaN(need)) { setMore(true); setError('We need: a whole number, 1 or more'); return; }
+    if (sending.current) return;
+    sending.current = true;
     setError(null);
     setBusy(true);
     try {
@@ -120,6 +123,7 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
     } catch (e) {
       setError(e.message);
       setBusy(false);
+      sending.current = false;
     }
   };
 

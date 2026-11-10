@@ -17,7 +17,18 @@ import { apiGet, action } from '../api.js';
 import { DEFAULT_TILES } from '../components/tiles.js';
 import { Unavailable } from './ScheduleSheet.jsx';
 
-const PlaceMap = lazy(() => import('./SchedulePlaceMap.jsx'));
+// The map is its own download, fetched when someone opens it. One that
+// doesn't arrive (a weak signal) says so and never takes the sheet down
+// with it. A browser won't fetch a failed download again on the same page,
+// so trying again is a reload: the week and the day stay (they are in the
+// address), the sheet's other choices are made again.
+const MapFailed = () => (
+  <p className="sch-unavailable" role="alert">
+    <span>The map didn’t load</span>
+    <button type="button" className="btn ops-tap" onClick={() => window.location.reload()}>Reload</button>
+  </p>
+);
+const PlaceMap = lazy(() => import('./SchedulePlaceMap.jsx').catch(() => ({ default: MapFailed })));
 // Chips shown before "More places".
 const FIRST = 8;
 const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
@@ -98,7 +109,6 @@ function MapPick({ around, ready, onPlace, onClose }) {
         </Suspense>
       ) : <p className="sch-note" role="status">Loading the map…</p>}
       <div className="sch-named" role="status">
-        {!point && <span className="sch-note">Tap where it is.</span>}
         {named?.state === 'naming' && <span className="sch-note">Finding a name…</span>}
         {named?.state === 'failed' && <Unavailable what="A name" onRetry={() => nameIt(point)} />}
         {named?.state === 'named' && typed === null && <b className="sch-named__name">{named.name}</b>}

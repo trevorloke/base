@@ -60,6 +60,7 @@ export default function PlaceMap({ tiles, around = [], point, onPoint }) {
     <div className="sch-map">
       <div ref={boxRef} className="sch-map__box" role="application" aria-label="Map — tap where the shift is" />
       <button type="button" className="btn btn-quiet sch-map__mid" onClick={useMiddle}>Use the middle of the map</button>
+      {!point && <p className="sch-note">Tap where it is.</p>}
     </div>
   );
 }
