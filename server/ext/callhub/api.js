@@ -126,11 +126,16 @@ const refusedPeople = async (db, ws, pushId) => (await db.query(
 
 // The campaign's do-not-call numbers CallHub would not take: how many, its
 // words for the last, and whose they are (people tagged on that number; a
-// number that only replied STOP has nobody). null when there are none.
+// number that only replied STOP has nobody). Only what is still wanted
+// today: a number whose tag came off again is nothing CallHub needs to
+// take. null when there are none.
 const notTaken = async (db, ws) => {
-  const rows = (await db.query(
-    `select phone, refused_note from callhub_dnc where workspace_id = $1 and refused is not null and (refused | category) <> category order by sent_at desc`, [ws],
+  const refused = (await db.query(
+    `select phone, category, refused_note from callhub_dnc where workspace_id = $1 and refused is not null and (refused | category) <> category order by sent_at desc`, [ws],
   )).rows;
+  if (!refused.length) return null;
+  const blocked = await notToCall(db, ws);
+  const rows = refused.filter((r) => ((blocked.get(r.phone) || 0) | r.category) !== r.category);
   if (!rows.length) return null;
   const numbers = new Set(rows.map((r) => r.phone));
   const tagged = (await db.query(

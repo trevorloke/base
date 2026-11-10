@@ -1154,6 +1154,37 @@ test('a do-not-call number CallHub won’t take is remembered and said, with who
   }
 });
 
+test('“CallHub wouldn’t take …” goes once there is nothing left to take: a number told for texts, its person tagged and then no longer', async () => {
+  // +1 672 555 0104 replied STOP to a text: CallHub is told, for texts.
+  await db.query(`insert into texting_optouts (id, workspace_id, phone, opted_out, keyword) values (gen_random_uuid(), $1, '+16725550104', true, 'STOP')`, [ws]);
+  const a = await mgr.createPerson('Stopped Texts Example', { phone: '672-555-0104' });
+  const go = await mgr.createPerson('Texts Go Example', { phone: '672-555-0105' });
+  const list = ok(await mgr.action('list.create', { name: 'Texts list', kind: 'people', person_ids: [go.id] })).list.id;
+  ok(await mgr.action('callhub.push', { list_id: list }));
+  await drain();
+  const atCallHub = () => fake.dnc.filter((d) => d.phone_number === '+16725550104').map((d) => d.category);
+  const line = async () => ok(await staff.get(`/api/callhub/pushes?list=${list}`)).not_taken;
+  const row = async () => (await db.query(`select category, refused, refused_note from callhub_dnc where workspace_id = $1 and phone = '+16725550104'`, [ws])).rows[0];
+  assert.deepEqual([atCallHub(), await line()], [[2], null]);
+  fake.rejectDnc(['+16725550104']);
+  try {
+    // Tagged do-not-contact: calls too now — and CallHub refuses the change.
+    ok(await mgr.action('person.update', { id: a.id, tags: ['do-not-contact'] }));
+    await drain();
+    assert.deepEqual([(await line()).n, (await line()).people.map((p) => p.name)], [1, ['Stopped Texts Example']]);
+    // The tag taken off again: CallHub holds exactly what base.win wants. The line goes at once…
+    ok(await mgr.action('person.update', { id: a.id, tags: [] }));
+    assert.equal(await line(), null, 'nothing more is wanted than CallHub holds');
+    await drain();
+    // …and the refusal is forgotten, so no later push or Check brings it up.
+    assert.deepEqual(await row(), { category: 2, refused: null, refused_note: null });
+    assert.deepEqual([atCallHub(), await line()], [[2], null]);
+    assert.doesNotMatch(ok(await mgr.post('/api/connections/check', { key: 'callhub' })).said, /nobody here blocks/);
+  } finally {
+    fake.rejectDnc(false);
+  }
+});
+
 test('CallHub taking none of a campaign’s do-not-call numbers stops its first push with CallHub’s words — once: Carry on goes on without them', async () => {
   const other = new Client();
   const ows = (await other.signup({ name: 'Nora Example', workspaceName: `Second ${tag}`, email: `nora+${tag}@example.org` })).json.workspace.id;

@@ -51,6 +51,9 @@ const told = async (db, ws) => new Map((await db.query(
 )).rows.map((r) => [r.phone, r]));
 // A refusal that is about the one number (or entry), not a throttle and not the key.
 const plainNo = (e) => e instanceof CallHubError && !e.throttled && e.httpStatus >= 400 && e.httpStatus < 500 && ![401, 403, 429].includes(e.httpStatus);
+// What a remembered refusal was about: CallHub asked to hold a number for
+// more than it does (calls as well as texts) — or, when not, to let go.
+export const askedMore = (row) => row.refused != null && (Number(row.refused) | Number(row.category)) !== Number(row.category);
 
 // The numbers CallHub has not been told, or not everything about:
 // [[number, what it must not get — 1 calls, 2 texts, 3 both —, CallHub's
@@ -97,7 +100,7 @@ export const heldTooLong = async (db, ws) => {
   const all = await notToCall(db, ws);
   let n = 0;
   for (const [phone, row] of await told(db, ws)) {
-    if ((Number(row.category) & ~(all.get(phone) || 0)) && (!row.entry || row.refused != null)) n += 1;
+    if ((Number(row.category) & ~(all.get(phone) || 0)) && (!row.entry || (row.refused != null && !askedMore(row)))) n += 1;
   }
   return n;
 };
@@ -247,9 +250,19 @@ export const freeAtCallHub = async (ws, { list, over, budget, act, tally }) => {
 // was carried on (tellCallHub). → how many are left.
 export const syncDnc = async (db, ws, { blocked = null, again = false, lenient = false, budget, act, tally, book }) => {
   const all = blocked || await notToCall(db, ws);
-  // What CallHub would not take, for a number nobody blocks any more: forgotten.
-  const stale = (await db.query('select phone from callhub_dnc where workspace_id = $1 and category = 0', [ws])).rows.map((r) => r.phone).filter((n) => !all.has(n));
+  // What CallHub would not take, for a number nobody blocks any more:
+  // forgotten. So is a refusal nobody needs lifted now — the tag came off
+  // again before CallHub took the change, or went back on before it let go.
+  const stale = [];
+  const moot = [];
+  for (const [phone, row] of await told(db, ws)) {
+    const has = Number(row.category) || 0;
+    const want = all.get(phone) || 0;
+    if (!has) { if (!want) stale.push(phone); continue; }
+    if (row.refused != null && (askedMore(row) ? (want | has) === has : (has & ~want) === 0)) moot.push(phone);
+  }
   if (stale.length) await act((tx) => tx.query('delete from callhub_dnc where workspace_id = $1 and category = 0 and phone = any($2::text[])', [ws, stale]));
+  if (moot.length) await act((tx) => tx.query('update callhub_dnc set refused = null, refused_note = null where workspace_id = $1 and phone = any($2::text[])', [ws, moot]));
   const untold = await untoldOf(db, ws, all, { again });
   const over = await overToldOf(db, ws, all, { again });
   if (!untold.length && !over.length) return 0;
