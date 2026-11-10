@@ -38,9 +38,11 @@ const provider = () => (env('GEOCODER') || 'bc').toLowerCase();
 const TOLL_FREE = /^1?8(?:00|33|44|55|66|77|88)\d{7}$/;
 const numberKind = (number) => {
   const digits = String(number).replace(/\D/g, '');
-  if (digits.length >= 5 && digits.length <= 6) return 'a short code';
-  if (TOLL_FREE.test(digits)) return 'toll-free — Twilio must verify it before it can text';
-  return 'a local number — for a text to a list in Canada, Twilio asks for a verified toll-free number or a short code';
+  if (digits.length >= 5 && digits.length <= 6) return ' · a short code';
+  if (TOLL_FREE.test(digits)) return ' · toll-free — Twilio must verify it before it can text';
+  // A North American number that isn't toll-free. Anything else: not said.
+  if (/^1?[2-9]\d{9}$/.test(digits)) return ' · a local number — for a text to a list in Canada, Twilio asks for a verified toll-free number or a short code';
+  return '';
 };
 const googleTiles = () => env('GOOGLE_MAPS_TILES') === '1';
 
@@ -65,7 +67,7 @@ export const services = (base = publicUrl()) => {
     emailService(base),
     row('texting', 'Texting and calls (Twilio)', 'One-to-one texts, text blasts, STOP/START, calls through the campaign’s number, SMS shift alerts', false,
       ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM'], {
-        detail: has('TWILIO_FROM') ? `Number ${env('TWILIO_FROM')} · ${numberKind(env('TWILIO_FROM'))}${env('TWILIO_VOICE') === 'off' ? ' · calls off (TWILIO_VOICE=off)' : pub ? '' : ' · calls need the public address'}` : 'Without it, Call and Text use the phone’s own apps',
+        detail: has('TWILIO_FROM') ? `Number ${env('TWILIO_FROM')}${numberKind(env('TWILIO_FROM'))}${env('TWILIO_VOICE') === 'off' ? ' · calls off (TWILIO_VOICE=off)' : pub ? '' : ' · calls need the public address'}` : 'Without it, Call and Text use the phone’s own apps',
       }),
     row('geocoder', `Address lookup (${{ bc: 'BC Address Geocoder', google: 'Google Geocoding', nominatim: 'OpenStreetMap Nominatim', off: 'off' }[geo] || geo})`,
       'Address suggestions as you type, placing people on the map', true,

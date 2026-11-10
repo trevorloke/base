@@ -584,9 +584,15 @@ test('not sure it went, with a sender that can’t drop a repeat: offered only o
     assert.deepEqual(await now(), [2, 0, 0], 'delivery events aren’t connected: nothing says they didn’t go — never offered');
     assert.deepEqual(ok(await c.action('blast.resend', { id: sent.blast.id })).resent, { sent: 0, failed: 0, skipped: 0 });
     assert.equal(grid.sent.length, 0);
-    // Connected (the key is set), but no event has come in for this campaign yet: still not proof.
+    // Connected (the key is set), but no event has come in for this campaign yet: still not proof —
+    // not even when another campaign on this server is hearing from SendGrid right now.
     process.env.SENDGRID_WEBHOOK_PUBLIC_KEY = grid.publicKey;
+    const other = await campaign('Repeat neighbour');
+    await db.query("insert into mail_events (provider, id, workspace_id, kind) values ('sendgrid', $1, $2, 'delivered')", [`neighbour-${tag}`, other.ws]);
     assert.deepEqual(await now(), [2, 0, 0]);
+    assert.deepEqual(ok(await c.action('blast.resend', { id: sent.blast.id })).resent, { sent: 0, failed: 0, skipped: 0 });
+    assert.equal(grid.sent.length, 0, 'Try again reaches no one on a neighbour’s word');
+    assert.equal((await db.query('select count(*)::int as n from blast_recipients where blast_id = $1 and send_asked_at is not null', [sent.blast.id])).rows[0].n, 0, '…and asks for no one');
     // Another email goes, and its delivery event arrives: events flow now.
     const probe = ok(await c.action('blast.send', { kind: 'newsletter', subject: 'Probe', body: 'Hello' }));
     assert.equal(grid.sent.length, 2);

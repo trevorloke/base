@@ -85,15 +85,18 @@ const sameKey = (a) => {
   const p = chosenProvider();
   return `(${a}email is null or ${p?.idempotent ? `${a}provider is null or ${a}provider = '${p.key}'` : 'false'})`;
 };
-const eventsSince = (a) => {
+// (The row's columns always carry its table's name in here: inside the
+// subquery a bare workspace_id would be the event's own.)
+const eventsSince = (alias) => {
   const p = chosenProvider();
+  const row = alias || 'blast_recipients';
   return p && hookOn(p)
-    ? `exists (select 1 from mail_events me where me.workspace_id = ${a}workspace_id and me.provider = '${p.key}' and me.received_at > ${a}sending_at)`
+    ? `exists (select 1 from mail_events me where me.workspace_id = ${row}.workspace_id and me.provider = '${p.key}' and me.received_at > ${row}.sending_at)`
     : 'false';
 };
 export const repeatRow = (alias = '') => {
   const a = alias ? `${alias}.` : '';
-  return `(${a}status = 'sending' and not ${sameKey(a)} and ${a}sending_at < now() - ${STALE_REPEAT} and ${eventsSince(a)})`;
+  return `(${a}status = 'sending' and not ${sameKey(a)} and ${a}sending_at < now() - ${STALE_REPEAT} and ${eventsSince(alias)})`;
 };
 export const retryable = (alias = '') => {
   const a = alias ? `${alias}.` : '';

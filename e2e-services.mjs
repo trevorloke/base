@@ -77,6 +77,10 @@ await page.tap(`${dbRow} .sv2-check`);
 await page.waitForSelector(`${dbRow} .sv2-said`, { timeout: 8000 }).catch(() => {});
 check('Check on the database: "✓ Answering · N people on file"', /^✓ Answering · \d+ people on file$/.test((await text(page, `${dbRow} .sv2-said`)).trim()), await text(page, `${dbRow} .sv2-said`));
 check('Coming in: the address to give Twilio', (await text(page, '.sv2-in')).includes(`${BASE}/api/public/twilio/sms`), await text(page, '.sv2-in'));
+// A service that calls back says where its address goes (Stripe here; the email sender's row does the same once it can send).
+check('Stripe’s webhook block says where to paste the address', /Webhook address — in Stripe: Developers → Webhooks → Add endpoint:/.test(stripeRow), stripeRow.slice(0, 200));
+check('Coming in: where the email sender posts delivered, bounced and spam complaints', (await text(page, '.sv2-in')).includes(`${BASE}/hooks/mail/resend`), await text(page, '.sv2-in'));
+check('Email not set up: no Sending domain panel yet', !(await page.$(`${emailRow} .sd`)));
 const m = await page.evaluate(() => {
   const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
   const taps = [...document.querySelectorAll('.sv2-check')].filter(vis).map((el) => el.getBoundingClientRect().height);

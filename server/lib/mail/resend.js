@@ -72,12 +72,15 @@ const shape = (d) => ({
   })),
 });
 const NONE = { found: false, status: null, records: [] };
-const find = async (name) => ((await call('GET', '/domains'))?.data || []).find((d) => lower(d.name) === name) || null;
+// Lists come twenty at a time unless asked: a hundred is the most (and far
+// more domains or webhooks than one campaign's account holds).
+const LIST = '?limit=100';
+const find = async (name) => ((await call('GET', `/domains${LIST}`))?.data || []).find((d) => lower(d.name) === name) || null;
 
 const sameUrl = (a, b) => String(a || '').replace(/\/+$/, '') === String(b || '').replace(/\/+$/, '');
 // What is missing for delivery events to come back, in one sentence — or null.
 const hookShortfall = async (hookUrl) => {
-  const hooks = (await call('GET', '/webhooks'))?.data || [];
+  const hooks = (await call('GET', `/webhooks${LIST}`))?.data || [];
   const h = hooks.find((x) => sameUrl(x.endpoint || x.url, hookUrl));
   if (!h) return `Resend isn’t sending bounces and complaints here yet: add a webhook to ${hookUrl}.`;
   if (h.status && h.status !== 'enabled') return `The webhook to ${hookUrl} is off in Resend: turn it back on.`;
@@ -201,7 +204,7 @@ export default {
   async check({ domain, hookUrl }) {
     let domains;
     try {
-      domains = (await call('GET', '/domains'))?.data || [];
+      domains = (await call('GET', `/domains${LIST}`))?.data || [];
     } catch (e) {
       if (!e.restricted) return { ok: false, said: e.message };
       return {

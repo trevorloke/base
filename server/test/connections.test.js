@@ -128,6 +128,7 @@ test('texting: the number is on the account and its replies come here', async ()
   assert.equal(await kind('55501'), 'Number 55501 · a short code');
   assert.match(await kind('+18005550100'), /toll-free/);
   assert.match(await kind('+18015550100'), /a local number/, '801 is Utah, not toll-free');
+  assert.equal(await kind('+442079460000'), 'Number +442079460000', 'not a North American number: its kind isn’t guessed');
   process.env.TWILIO_FROM = '+16045550100';
 });
 
