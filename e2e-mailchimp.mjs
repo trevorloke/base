@@ -209,6 +209,9 @@ let prow = await openServices(phone);
 let pm = await measure(phone.locator(ROW));
 check('at 390: the row — no sideways scroll, every button ≥ 48px, no yellow button', pm.overflow <= 0 && pm.minTap >= 48 && pm.primary.length === 0, JSON.stringify(pm));
 await shot(prow, '03-set-up-390');
+// The whole screen, to look at the row among the others.
+await phone.screenshot({ path: `${SHOTS}/03-services-page-390.png`, fullPage: true });
+await page.screenshot({ path: `${SHOTS}/03-services-page-1440.png`, fullPage: true });
 
 // ── 4. Pull now: who left in Mailchimp, whose address died ──
 await post('/unsubscribe', { email: addr('Fay'), send: false });
