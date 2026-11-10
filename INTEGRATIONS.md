@@ -501,11 +501,11 @@ sent there, once, as one small JSON message:
   anyone's log; the event log notes that a test went, and to which site.
 - **Once.** `Idempotency-Key: ladder-<run>-<step>` (the body's `id`) is the
   same on every try for one person at one step.
-- **Tries.** The address has 5 seconds to answer 2xx. Anything else is
-  tried again after a minute, then after five more — three in all — and
-  then the person's log on the ladder says *Zapier: Failed · 500 after 3
-  tries* and the ladder carries on: a failing address never holds anyone
-  up. *Zapier: Sent · 200* is the address's own answer. If the server
+- **Tries.** The address has 5 seconds to answer 2xx. Any other answer
+  but a redirect, or none, is tried again after a minute, then after five
+  more — three in all — and then the person's log on the ladder says
+  *Zapier: Failed · 500 after 3 tries* and the ladder carries on: a
+  failing address never holds anyone up. *Zapier: Sent · 200* is the address's own answer. If the server
   stopped between the send and noting the answer, it never sends again by
   itself; the log says *Not sure it went*. Someone taken off the ladder
   (or reaching its goal) while the address is being called stays *Taken

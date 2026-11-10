@@ -402,6 +402,7 @@ test('the sender: five seconds at most, a redirect is not followed, the answer�
   const t0 = Date.now();
   assert.deepEqual(await send({ timeoutMs: 150 }), { ok: false, why: 'timeout' });
   assert.ok(Date.now() - t0 < 2000);
+  hooks.asUsual();
   // Nothing listening there at all.
   const base = process.env.LADDER_WEBHOOK_API_BASE;
   process.env.LADDER_WEBHOOK_API_BASE = 'http://127.0.0.1:9';
@@ -545,24 +546,29 @@ test('an address that stops answering is left alone for five minutes: whoever re
   const lad = await hookLadder('quiet', { url });
   const early = [];
   for (const n of ['Ada', 'Ben', 'Cy']) early.push(await mgr.createPerson(`${n} Example`, { tags: ['quiet'] }));
+  // Three in a row with no answer (a third of a second each here; five when a ladder sends).
   hooks.hang(3);
-  _setTimeoutForTest(120);
-  try { await runJobs(); } finally { _setTimeoutForTest(null); }
-  assert.equal(got('quiet').length, 3, 'three in a row with no answer');
+  _setTimeoutForTest(300);
+  try { await runJobs(); } finally { _setTimeoutForTest(null); hooks.asUsual(); }
+  for (const p of early) {
+    assert.deepEqual(hookLog(await runOf(lad.id, p.id)).map((e) => [e.result, e.reason, e.why, e.tries]), [['failed', 'will_retry', 'timeout', 1]], p.name);
+  }
+  assert.equal(notAnswering(url), true);
+  const called = got('quiet').length;
   // The fourth isn't made to wait out the same silence — nor is any other job queued behind them.
   const dot = await mgr.createPerson('Dot Example', { tags: ['quiet'] });
   await runJobs();
-  assert.equal(got('quiet').length, 3, 'the address isn’t called');
+  assert.equal(got('quiet').length, called, 'the address isn’t called');
   let run = await runOf(lad.id, dot.id);
   assert.deepEqual(hookLog(run).map((e) => [e.result, e.reason, e.why, e.tries]), [['failed', 'will_retry', 'not_answering', 1]]);
   assert.deepEqual([run.status, run.wait], ['active', 'retry'], 'tried again on the usual clock');
   // A minute on it is still being left alone …
   await fastForward(); await runJobs();
-  assert.equal(got('quiet').length, 3);
+  assert.equal(got('quiet').length, called);
   // … after five it is called again — and it is back: everyone's third try lands.
   _silentForTest.get(url).until = Date.now() - 1;
   await fastForward(); await runJobs();
-  assert.equal(got('quiet').length, 7, 'one each');
+  assert.equal(got('quiet').length, called + 4, 'one each');
   for (const p of [...early, dot]) {
     run = await runOf(lad.id, p.id);
     assert.equal(run.status, 'done');
@@ -574,11 +580,17 @@ test('an address that stops answering is left alone for five minutes: whoever re
   // Only silence counts, and only in a row: any answer at all — a 500 too — starts the count again.
   const slow = 'https://hooks.example.org/catch/slow';
   const send = (timeoutMs) => postHook({ url: slow, body: '{}', secret: 'sbw_test', key: 'k', timeoutMs });
-  hooks.hang(2); await send(100); await send(100);
-  hooks.answer(500); assert.deepEqual(await send(), { ok: false, status: 500 });
-  hooks.hang(2); await send(100); await send(100);
+  const silence = async (times) => {
+    hooks.hang(times);
+    for (let i = 0; i < times; i += 1) assert.deepEqual(await send(100), { ok: false, why: 'timeout' });
+    hooks.asUsual();
+  };
+  await silence(2);
+  hooks.answer(500);
+  assert.deepEqual(await send(), { ok: false, status: 500 });
+  await silence(2);
   assert.equal(notAnswering(slow), false, 'two, an answer, two more: never three in a row');
-  hooks.hang(1); assert.deepEqual(await send(100), { ok: false, why: 'timeout' });
+  await silence(1);
   assert.equal(notAnswering(slow), true);
   _silentForTest.clear();
   await off(lad);
@@ -725,8 +737,8 @@ test('"Send a test": one signed message about a made-up person to the address as
   r = ok(await test());
   assert.deepEqual([r.result, r.reason, r.status], ['failed', 'redirect', 301]);
   hooks.hang(1);
-  _setTimeoutForTest(120);
-  try { r = ok(await test()); } finally { _setTimeoutForTest(null); }
+  _setTimeoutForTest(200);
+  try { r = ok(await test()); } finally { _setTimeoutForTest(null); hooks.asUsual(); }
   assert.deepEqual([r.result, r.reason, r.why], ['failed', 'gave_up', 'timeout']);
   // An address it may not be pointed at is refused in the same words as when saved; nothing is sent.
   const sentSoFar = hooks.received.length;
