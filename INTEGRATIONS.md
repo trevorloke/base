@@ -102,6 +102,13 @@ not set up is never quietly swapped for the other one.
 base.win turns SendGrid's own click, open and unsubscribe tracking off in
 every email: it counts its own and has its own unsubscribe pages.
 
+One difference to know before choosing it: SendGrid has no idempotency key.
+With Resend, an email tried again after a timeout is dropped by Resend when
+the first try did get through. With SendGrid it can arrive twice — a receipt
+or an over-limit notice that base.win tries again by itself after SendGrid
+didn't answer. Newsletters and list emails are the exception: base.win
+waits for SendGrid's delivery events before it offers *Try again* (below).
+
 **What comes back.** Every newsletter, press and list email carries
 base.win's own reference, and base.win keeps the sender's id for it. The
 sender then posts what happened to `/hooks/mail/<sender>` — signed (Svix's
