@@ -107,6 +107,10 @@ const door = http.createServer((req, res) => {
 await new Promise((resolve) => door.listen(DOOR, '127.0.0.1', resolve));
 const BASE = `http://127.0.0.1:${DOOR}`;
 
+// The stand-in tiles also answer what the service worker fetches (once it
+// controls the page, every tile goes through it): a tile it can't fetch is a
+// failed tile now, and the map says when its street map isn't loading.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--no-sandbox', '--disable-dev-shm-usage'],

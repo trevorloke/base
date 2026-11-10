@@ -515,18 +515,18 @@ try {
       const words = (s) => document.querySelector(s)?.innerText.replace(/\s+/g, ' ').trim() || null;
       return {
         tiles: el?.dataset.tiles || '', look: (document.querySelector('.map-page')?.className.match(/map-view--(\w+)/) || [])[1] || null,
-        note: words('.map-tilenote'), toast: words('.map-toast'),
+        note: words('.map-tilenote'),
         loaded: el ? [...el.querySelectorAll('.leaflet-tile-pane img.leaflet-tile-loaded')].filter((i) => i.complete && i.naturalWidth > 0).length : 0,
         ground: el ? getComputedStyle(el).backgroundColor : null, pick: localStorage.getItem('starbase:map:view'),
       };
     }).catch(() => ({}));
-    // Until fn(state) — and whatever the toast said on the way (it is gone in a few seconds).
+    // Until fn(state) — and what the line under the count said on the way (the "switched" one goes after a few seconds).
     const tilesUntil = async (pg, fn, ms = 12000) => {
       const end = Date.now() + ms;
       let said = null;
       for (;;) {
         const s = await tileState(pg);
-        said = s.toast || said;
+        said = s.note || said;
         if (fn(s) || Date.now() > end) return { ...s, said };
         await sleep(150);
       }
@@ -539,14 +539,14 @@ try {
     let ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok');
     await t.pg.screenshot({ path: `${SHOTS}/8-street-map-switched-by-itself.png` });
     check('the street map’s provider refuses: the map switches to the other one by itself, and says so',
-      ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && /street map wasn’t loading/.test(ts.said || '') && /Muted/.test(ts.said || ''), JSON.stringify(ts));
+      ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && ts.said === 'The street map wasn’t loading — switched to Muted', JSON.stringify(ts));
     check('…the ground behind the tiles is the app’s paper, not Leaflet’s grey; the person’s own choice of look is untouched',
       ts.ground === 'rgb(232, 235, 243)' && ts.pick === null, JSON.stringify({ ground: ts.ground, pick: ts.pick }));
     // The other refuses too: said, with one tap to the other provider — no more switching by itself.
     t.net.up.base = false;
     const askedClean = t.net.asked.clean;
     await t.pg.click('.leaflet-control-zoom-in');
-    ts = await tilesUntil(t.pg, (s) => s.note);
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''));
     await sleep(1200);
     ts = { ...ts, ...(await tileState(t.pg)) };
     await t.pg.screenshot({ path: `${SHOTS}/8-street-map-not-loading.png` });
@@ -556,7 +556,7 @@ try {
     t.net.up.clean = true;
     await t.pg.click('.map-tilenote button');
     ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && s.tiles === 'ok' && !s.note);
-    check('one tap: the other provider’s map loads, and the note goes', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note, JSON.stringify(ts));
+    check('one tap: the other provider’s map loads, the note goes, and that look is now their choice', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && ts.pick === 'clean', JSON.stringify(ts));
     await t.tctx.close();
 
     // Nothing at all after six seconds (a host that never answers): the same switch.
@@ -578,7 +578,7 @@ try {
     });
     t.net.up.own = false;
     await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
-    ts = await tilesUntil(t.pg, (s) => s.note);
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''));
     check('a campaign’s own street map isn’t loading: said, with “Try again” (there is no other provider to switch to)',
       /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && t.net.asked.clean === 0 && t.net.asked.base === 0, JSON.stringify({ ...ts, asked: t.net.asked }));
     t.net.up.own = true;
@@ -598,7 +598,7 @@ try {
       else { navigator.serviceWorker.addEventListener('controllerchange', () => resolve(true)); setTimeout(() => resolve(Boolean(navigator.serviceWorker.controller)), 8000); }
     }))).catch(() => false);
     await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
-    ts = await tilesUntil(t.pg, (s) => s.note, 15000);
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 15000);
     await t.pg.screenshot({ path: `${SHOTS}/8-street-map-not-loading-service-worker.png` });
     check('under the service worker a tile that fails is a failure: none “loaded”, and the map says so',
       controlled && ts.loaded === 0 && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || ''), JSON.stringify({ controlled, ...ts }));
@@ -787,7 +787,7 @@ try {
     const bp = await bad.newPage();
     bp.on('pageerror', (e) => errors.push(`[check troubles] ${e.message}`));
     await bp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
-    await bp.waitForSelector('.map-tilenote', { timeout: 15000 }).catch(() => {});
+    await bp.waitForFunction(() => document.querySelector('.map-canvas')?.dataset.tiles === 'down' && /isn’t loading/.test(document.querySelector('.map-tilenote')?.innerText || ''), null, { timeout: 15000 }).catch(() => {});
     lines = await openCheck(bp);
     await bp.screenshot({ path: `${SHOTS}/11-map-check-troubles-1440.png` });
     const flagged = Object.values(lines).filter((l) => l.warn).map((l) => l.key).sort().join(',');

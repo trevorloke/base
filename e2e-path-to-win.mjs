@@ -49,6 +49,10 @@ const tiles = (ctx) => ctx.route(/(tile\.openstreetmap\.org|basemaps\.cartocdn\.
   route.fulfill({ status: 200, contentType: 'image/svg+xml', headers: { 'access-control-allow-origin': '*' }, body: tileSvg(+m[2], +m[3]) });
 });
 
+// The stand-in tiles also answer what the service worker fetches (once it
+// controls the page, every tile goes through it): a tile it can't fetch is a
+// failed tile now, and the map says when its street map isn't loading.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
 const browser = await chromium.launch({
   executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
   args: ['--no-sandbox', '--disable-dev-shm-usage'],

@@ -1363,15 +1363,23 @@ export default function MapPage() {
   const noSignal = !doorsQ.data && (doorsQ.fetchStatus === 'paused' || (doorsQ.isError && (!online || !doorsQ.error?.status)));
 
   // The street map isn't loading, and there is signal: once, the map tries
-  // its other provider by itself and says so. After that — or where there is
-  // no other — it says "The street map isn’t loading" and the tap is theirs.
+  // its other provider by itself and says so (a line under the count for a
+  // few seconds — not the toast, which is for what the person just did).
+  // After that — or where there is no other — it says "The street map isn’t
+  // loading" and the tap is theirs.
   const willSwitch = Boolean(street.down && online && !fellBack && otherLook);
+  const [switchedTo, setSwitchedTo] = useState(null);
   useEffect(() => {
     if (!willSwitch) return;
     fellBack = { from: viewPick, to: otherLook.key };
     setAutoView(otherLook.key);
-    toast(`The street map wasn’t loading — switched to ${otherLook.label}`);
-  }, [willSwitch, otherLook, viewPick, toast]);
+    setSwitchedTo(otherLook.label);
+  }, [willSwitch, otherLook, viewPick]);
+  useEffect(() => {
+    if (!switchedTo) return undefined;
+    const t = setTimeout(() => setSwitchedTo(null), 8000);
+    return () => clearTimeout(t);
+  }, [switchedTo]);
   // Signal is back: the street map is asked for again (the tiles that failed
   // without it would stay blank until the map moved).
   const hadSignal = useRef(online);
@@ -2464,15 +2472,18 @@ export default function MapPage() {
           </div>
         )}
         {/* The street map isn't loading (and the map has already tried its
-            other provider by itself, or has none): one line, one tap. */}
-        {street.down && online && !willSwitch && !mode && (
+            other provider by itself, or has none): one line, one tap. Or it
+            has just switched by itself: said for a few seconds. */}
+        {street.down && online && !willSwitch && !mode ? (
           <div className="map-tilenote" role="status">
             <span>The street map isn’t loading</span>
             {otherLook
-              ? <button type="button" className="btn map-tilenote__btn" onClick={() => setView(otherLook.key)}>Try {otherLook.label}</button>
+              ? <button type="button" className="btn map-tilenote__btn" onClick={() => { setSwitchedTo(null); setView(otherLook.key); }}>Try {otherLook.label}</button>
               : <button type="button" className="btn map-tilenote__btn" onClick={() => setTilesTry((n) => n + 1)}>Try again</button>}
           </div>
-        )}
+        ) : switchedTo && !mode ? (
+          <div className="map-tilenote map-tilenote--done" role="status">The street map wasn’t loading — switched to {switchedTo}</div>
+        ) : null}
         {showKey && !mode && <MapKey squares={patches} dark={view === 'dark'} words={keyWords} />}
       </div>
 

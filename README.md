@@ -570,7 +570,8 @@ address ignored*).
 **When the street map isn't loading** the map says so. It listens to its
 tiles: a view where most of them failed, or six seconds with not one, and —
 once in a page's life — it switches to its other provider by itself (the
-*Clean* look's CARTO ↔ the standard tiles) with a line saying it did; if
+*Clean* look's CARTO ↔ the standard tiles) with a line under the count
+saying it did (*The street map wasn’t loading — switched to Muted*); if
 that doesn't load either, or there is no second provider (a campaign's own,
 Google's), *The street map isn’t loading* stays under the count with one
 tap: *Try Clean* / *Try Muted*, or *Try again*. The person's own choice of
