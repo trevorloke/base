@@ -70,16 +70,36 @@ const asObject = (v) => {
   return null;
 };
 
-// The fields base.win reads, wherever they sit in what came.
-export const fieldsOf = (body) => {
-  const src = asObject(body?.data) || body || {};
-  const flat = {};
+// A form's nested keys — "agent.email", "agent[email]",
+// "data[agent][email]" — as the objects they stand for. A name that could
+// reach into an object's own workings is left out.
+const UNSAFE = new Set(['__proto__', 'prototype', 'constructor']);
+const nested = (src) => {
+  const out = {};
   for (const [k, v] of Object.entries(src)) {
-    // "agent.email" and "agent[email]" are the agent's email.
-    const m = /^([^.[\]]+)(?:\.([^.[\]]+)|\[([^\]]+)\])$/.exec(k);
-    if (m) flat[m[1]] = { ...(asObject(flat[m[1]]) || {}), [m[2] ?? m[3]]: v };
-    else if (!(asObject(flat[k]) && !asObject(v))) flat[k] = v;
+    const path = String(k).split(/[.[\]]+/).filter(Boolean);
+    if (path.some((p) => UNSAFE.has(p))) continue;
+    if (path.length < 2) {
+      // A plain value never replaces what the nested keys already built.
+      if (!(asObject(out[k]) && !asObject(v))) out[k] = v;
+      continue;
+    }
+    let at = out;
+    for (const part of path.slice(0, -1)) {
+      at[part] = { ...(asObject(at[part]) || {}) };
+      at = at[part];
+    }
+    at[path.at(-1)] = v;
   }
+  return out;
+};
+
+// The fields base.win reads, wherever they sit in what came: inside `data`,
+// unless the number or the result is at the top level itself.
+export const fieldsOf = (body) => {
+  const top = nested(body || {});
+  const inner = asObject(top.data) ? nested(asObject(top.data)) : null;
+  const flat = inner && !['contact', 'mobile', 'disposition'].some((k) => str(top[k])) ? inner : top;
   const agent = asObject(flat.agent) || (str(flat.agent) ? { username: str(flat.agent) } : {});
   return {
     contact: str(flat.contact, 60), mobile: str(flat.mobile, 60),
@@ -119,6 +139,8 @@ export const surveyPairs = (given) => {
     if (!t) return [];
     try { v = JSON.parse(t); } catch { return [['Answers', t.replace(/\s+/g, ' ').slice(0, 300)]]; }
   }
+  // A list written as a form ("surveys[0][question]"): its items in order.
+  if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length && Object.keys(v).every((k) => /^\d+$/.test(k))) v = Object.values(v);
   const out = [];
   const pair = (q, a) => { const qq = say(q); const aa = say(a); if (qq && aa) out.push([qq.slice(0, 200), aa.slice(0, 300)]); };
   const one = (item) => {

@@ -248,8 +248,11 @@ export const runPushJob = async (db, job) => {
         refusedInARow = 0;
         await act(async (tx, emit) => {
           // Everyone on the number is marked sent; the one whose name went
-          // is the one results are filed on.
-          await tx.query('update callhub_contacts set first_on_number = (person_id = $3), sent_at = now() where push_id = $1 and phone = $2', [id, phone, first.person_id]);
+          // is the one results are filed on. Counted once, whatever ran twice.
+          const r = await tx.query(
+            'update callhub_contacts set first_on_number = (person_id = $3), sent_at = now() where push_id = $1 and phone = $2 and sent_at is null', [id, phone, first.person_id],
+          );
+          if (!(r.affectedRows ?? r.rowCount ?? 0)) return;
           await tx.query('update callhub_pushes set sent = sent + 1 where id = $1 and workspace_id = $2', [id, ws]);
           emit('callhub_contact', first.person_id, 'create', { push_id: id });
         });

@@ -126,7 +126,7 @@ export { noSignal };
 export const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
 export const isDnc = (p) => Array.isArray(p?.tags) && p.tags.includes('do-not-contact');
 // Asked not to be phoned: off the Calls list for a call; a text is another matter.
-const noCalls = (p) => Array.isArray(p?.tags) && p.tags.includes('do-not-call');
+export const noCalls = (p) => Array.isArray(p?.tags) && p.tags.includes('do-not-call');
 export const streetLine = (p) => [p.unit ? `${p.unit} –` : null, p.address].filter(Boolean).join(' ');
 // The opening line of a text: "Hi Aisha, it's Trevor with Imagine Surrey."
 export const textBody = (p, me) =>

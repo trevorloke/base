@@ -360,13 +360,15 @@ What happens:
   the push itself (a key that stopped working), it stops with CallHub's
   words and **Carry on** picks up where it stopped. Nobody is sent twice.
 - **People not to call** go to a do-not-call list in CallHub named
-  `base.win`, numbers only: with each push, and by itself when someone is
-  newly tagged `do-not-call` or `do-not-contact` (calls and texts), or a
-  number replied STOP to a text (texts). base.win only ever adds to that
-  list: taking the tag off in base.win does not take the number off
-  CallHub's list — do that in CallHub. Whether a calling campaign in
-  CallHub honours that list by itself or has to be pointed at it is not
-  confirmed: look in CallHub before the first night.
+  `base.win`, numbers only, with each push: people tagged `do-not-contact`
+  (no calls, no texts) or `do-not-call` (no calls), and numbers that
+  replied STOP to a text (no texts). Someone newly tagged `do-not-call` or
+  `do-not-contact` does not wait for the next push: once the campaign has
+  sent CallHub anything, a background job tells CallHub by itself. base.win
+  only ever adds to that list: taking the tag off in base.win does not take
+  the number off CallHub's list — do that in CallHub. Whether a calling
+  campaign in CallHub honours that list by itself or has to be pointed at
+  it is not confirmed: look in CallHub before the first night.
 - **Each call's result** comes back as the caller saves it (CallHub's
   `cc.notes` webhook). It is
   matched by phone number against the numbers this campaign sent (the

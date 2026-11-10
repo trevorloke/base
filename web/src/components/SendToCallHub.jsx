@@ -62,8 +62,6 @@ function Results({ p, online, onChanged }) {
   const support = p.questions.find((q) => q.support) || null;
   const picked = support?.question || p.rating?.question || '';
   const questions = picked && !p.questions.some((q) => q.question === picked) ? [...p.questions, { question: picked, answers: [] }] : p.questions;
-  // The whole table for the question goes each time: what the selects show.
-  const answersNow = (change = {}) => Object.fromEntries((support?.answers || []).map((a) => [a.answer, a.rating || null]).concat(Object.entries(change)));
   return (
     <div className="ch-results">
       <ul className="ch-map">
@@ -93,7 +91,7 @@ function Results({ p, online, onChanged }) {
                 <li key={a.answer} className="ch-map__row">
                   <label htmlFor={`${uid}-a${i}`} className="ch-map__name">{a.answer} <span className="ops-meta">{num(a.n)}</span></label>
                   <select id={`${uid}-a${i}`} className="input ch-select" value={a.rating || ''} disabled={busy || !online}
-                    onChange={(e) => save({ rating: { question: picked, answers: answersNow({ [a.answer]: e.target.value || null }) } })}>
+                    onChange={(e) => save({ rating: { question: picked, answers: { [a.answer]: e.target.value || null } } })}>
                     <option value="">Doesn’t rate</option>
                     {offeredCodes(scale).map((code) => <option key={code} value={code}>{ratingText(scale, code)}</option>)}
                   </select>

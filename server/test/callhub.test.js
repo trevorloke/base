@@ -538,6 +538,16 @@ test('a rating only ever comes from a survey answer the desk mapped — never gu
   assert.deepEqual(p.questions.find((x) => x.question === 'Can we count on your support?').answers.map((a) => a.rating), ['3', '1']);
   assert.deepEqual(p.questions.map((x) => [x.question, x.support]), [['Can we count on your support?', true], ['Top issue', false]]);
 
+  // One answer at a time joins what is already said; null takes one away; another question starts afresh.
+  ok(await staff.action('callhub.map', { id: p.id, rating: { question: 'can we count on your SUPPORT?', answers: { Probably: '2' } } }));
+  const mapOf = async () => (await db.query('select rating_map from callhub_pushes where id = $1', [p.id])).rows[0].rating_map;
+  assert.deepEqual((await mapOf()).answers, { 'yes, definitely': '1', 'not sure yet': '3', probably: '2' });
+  ok(await staff.action('callhub.map', { id: p.id, rating: { question: 'Can we count on your support?', answers: { Probably: null } } }));
+  assert.deepEqual((await mapOf()).answers, { 'yes, definitely': '1', 'not sure yet': '3' });
+  ok(await staff.action('callhub.map', { id: p.id, rating: { question: 'Top issue', answers: {} } }));
+  assert.deepEqual([(await mapOf()).label, (await mapOf()).answers], ['Top issue', {}]);
+  assert.equal((await person(P.ben.id)).rating, '1', 'changing the question takes no rating away');
+  ok(await staff.action('callhub.map', { id: p.id, rating: { question: 'Can we count on your support?', answers: { 'Yes, definitely': '1', 'Not sure yet': '3' } } }));
   // From now on a mapped answer rates as it arrives; an answer nobody mapped never does.
   await fake.note({ contact: '+16045550102', disposition: 'Answered', campaign: 'Whalley', notes: 'r3', surveys: survey('not sure YET') });
   assert.equal((await person(P.ben.id)).rating, '3');
@@ -838,7 +848,17 @@ test('the rules, with no database: the outcome a result counts as, how a deliver
   assert.equal(json({ data: { contact: '1' } }).fields.contact, '1');
   assert.equal(json({ contact: '2', 'agent.email': 'a@example.org' }).fields.agent.email, 'a@example.org', 'dotted keys');
   assert.equal(json({ data: JSON.stringify({ contact: '3' }) }).fields.contact, '3', 'data as text');
+  assert.equal(json({ contact: '8', disposition: 'Busy', data: { custom: 'x' } }).fields.contact, '8', 'a data that is something else');
   assert.equal(readDelivery(Buffer.from('contact=4&agent%5Bemail%5D=b%40example.org&surveys=%5B%5D'), 'application/x-www-form-urlencoded').fields.agent.email, 'b@example.org', 'bracket keys');
+  // A form with everything under data[…], nested as deep as it likes.
+  const form = new URLSearchParams({ event: 'cc.notes', 'data[contact]': '6', 'data[disposition]': 'Busy', 'data[agent][email]': 'C@Example.org',
+    'data[surveys][0][question]': 'H?', 'data[surveys][0][answer]': 'u', 'data[surveys][1][question]': 'I?', 'data[surveys][1][answer]': 't' }).toString();
+  const deep = readDelivery(Buffer.from(form), 'application/x-www-form-urlencoded').fields;
+  assert.deepEqual([deep.contact, deep.disposition, deep.agent.email, surveyPairs(deep.surveys)], ['6', 'Busy', 'c@example.org', [['H?', 'u'], ['I?', 't']]]);
+  // A key that reaches for an object's own workings is left out, and touches nothing.
+  const sly = json({ contact: '7', '__proto__.polluted': 'yes', 'agent[constructor][prototype][polluted]': 'yes', 'a.__proto__.polluted': 'yes' });
+  assert.equal(sly.fields.contact, '7');
+  assert.equal({}.polluted, undefined);
   assert.equal(readDelivery(Buffer.from('{"contact":"5"}'), '').fields.contact, '5', 'JSON with no type said');
   assert.equal(readDelivery(Buffer.from('not json'), 'application/json'), null);
   assert.equal(readDelivery(Buffer.from('[1,2]'), 'application/json'), null);

@@ -4,6 +4,8 @@
 //                    outcomes: { "<CallHub's result>": 'contacted' | 'no_answer' | 'left_message' |
 //                                'inaccessible' | 'refused' | 'moved' | 'do_not_call' | null (back to the pattern) }
 //                    rating:   { question, answers: { "<answer>": '<a code on the campaign's scale>' | null } }
+//                              (the same question again: these answers join the ones already said,
+//                              null takes one away; another question starts afresh)
 //                              or null (no question rates anyone)
 //                  What is already in follows (results.js refile).
 // callhub.connect  {}                       managers: give CallHub the address results come back to
@@ -65,14 +67,17 @@ export const actions = {
       if (input.rating === null) rating = null;
       else if (input.rating) {
         const scale = await loadScale(tx, ws);
-        const answers = {};
+        const question = norm(input.rating.question);
+        const answers = rating?.question === question ? { ...rating.answers } : {};
         for (const [answer, code] of Object.entries(input.rating.answers)) {
-          if (code === null || !norm(answer)) continue;
+          if (!norm(answer)) continue;
+          if (code === null) { delete answers[norm(answer)]; continue; }
           const why = ratingRefusal(scale, code);
           if (why) throw httpError(400, why);
           answers[norm(answer)] = code;
         }
-        rating = { question: norm(input.rating.question), label: input.rating.question, answers };
+        if (Object.keys(answers).length > 200) throw httpError(400, 'too many answers');
+        rating = { question, label: input.rating.question, answers };
       }
       const row = (await tx.query(
         'update callhub_pushes set outcomes = $3::jsonb, rating_map = $4::jsonb where id = $1 and workspace_id = $2 returning *',

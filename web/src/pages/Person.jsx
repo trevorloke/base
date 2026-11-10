@@ -29,7 +29,7 @@ import { useOutbox, applyOutboxToProfile, pendingAbout, logContact, holdNote } f
 import { useOnline } from '../components/NoSignal.jsx';
 import {
   TagEditor, Icon, useAction, fmtWhen, fmtShort, telHref, smsHref, textBody,
-  canDesk, invalidatePersonData, isDnc, tagWord, RatingTag, noSignal,
+  canDesk, invalidatePersonData, isDnc, noCalls, tagWord, RatingTag, noSignal,
 } from './People.jsx';
 import QuickDetails from '../components/QuickDetails.jsx';
 import './people.css';
@@ -190,6 +190,7 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit }) {
           </span>
         )}
         {isDnc(person) && <span className="chip chip-danger">Do not contact</span>}
+        {!isDnc(person) && noCalls(person) && <span className="chip chip-danger">Do not call</span>}
         {desk && shownLevel?.label && <EngagementChip level={shownLevel} />}
         {/* donor is null for volunteers (the server hides money from them) */}
         {tierShown && (
