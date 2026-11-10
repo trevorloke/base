@@ -24,7 +24,8 @@
 // https and must not point inside a private network (webhook.js) — the
 // words are checked in the write, a new address's name is looked up before
 // it (`before`: no lookup ever holds the campaign's lock). Only the desk
-// makes one: it hands on emails a volunteer may never see.
+// makes one, or changes or turns on a ladder that has one: it hands on
+// emails a volunteer may never see.
 import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
@@ -80,7 +81,9 @@ const checkTexts = (ctx, steps) => {
 };
 
 // "Send to a web address" steps, each address checked on its words and
-// kept tidy. Never a volunteer's, even one given Outreach.
+// kept tidy. Never a volunteer's, even one given Outreach — to make, or (a
+// ladder that has one) to change or turn on: the answer carries the steps,
+// and the address in them can be a key.
 const isHook = (s) => s.kind === 'webhook';
 const deskOnlyHooks = (ctx, steps) => {
   if (ctx.role === 'volunteer' && (steps || []).some(isHook)) throw httpError(403, 'Only the desk can send to a web address');
@@ -159,6 +162,7 @@ export const actions = {
     before: lookUpHooks,
     handler: async (tx, ctx, input, emit) => {
       const cur = await loadLadder(tx, ctx.workspaceId, input.id);
+      deskOnlyHooks(ctx, parseJson(cur.steps, []));
       const next = { ...cur };
       const patch = {};
       if (input.name) { next.name = input.name; patch.name = input.name; }
@@ -193,6 +197,7 @@ export const actions = {
     input: z.object({ id: uuid(), active: z.boolean() }),
     handler: async (tx, ctx, input, emit) => {
       const cur = await loadLadder(tx, ctx.workspaceId, input.id);
+      deskOnlyHooks(ctx, parseJson(cur.steps, []));
       if (cur.active === input.active) return { ladder: out(cur), paused: 0, resumed: 0 };
       if (input.active && !runnable(parseJson(cur.steps, []))) {
         throw httpError(400, 'add a step first — an email, a tag or a follow-up');

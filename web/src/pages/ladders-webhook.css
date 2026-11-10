@@ -1,7 +1,13 @@
 /* Ladders: the "Send to a web address" step. Its fields are the shared
    ones (ladders.css, shifts.css), spaced the same in a new step and in an
    open card; only the signing secret under More details is new. */
+
+/* "Other steps" open as a row of their own under the everyday ones: the
+   step's name is long, and "Stop" would be left alone on a line. */
+.lad-add.lad-add--other { flex: 1 0 100%; margin-top: 0; }
+
 .lad-hook { display: flex; flex-direction: column; gap: var(--s-3); margin-bottom: var(--s-2); }
+.lad-hook .ops-more-body { padding-bottom: var(--s-3); }
 .lad-step-form .lad-hook .field,
 .lad-step-form .lad-hook .lad-hint { margin: 0; }
 .lad-hook > .disclose { align-self: flex-start; }

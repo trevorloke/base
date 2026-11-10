@@ -461,6 +461,20 @@ test('only the desk makes the step or sees the secret; each campaign has its own
   const peek = await v.action('ladder.signingSecret', {});
   assert.equal(peek.status, 403);
   assert.ok(!JSON.stringify(peek.json).includes('sbw_'));
+  // Nor do they change or turn on a ladder the desk gave one to: the answer
+  // would hand them its steps, and the address in them can be a key.
+  const deskMade = await create({ name: 'Desk made', trigger: { kind: 'tag', ref: 'deskmade' }, steps: [step, { kind: 'tag', tag: 'z' }] });
+  for (const [name, input] of [
+    ['ladder.update', { id: deskMade.id, name: 'Renamed' }],
+    ['ladder.update', { id: deskMade.id, steps: [{ kind: 'tag', tag: 'z' }] }],
+    ['ladder.setActive', { id: deskMade.id, active: true }],
+  ]) {
+    const r = await v.action(name, input);
+    assert.equal(r.status, 403, `${name} ${JSON.stringify(input)} → ${JSON.stringify(r.json)}`);
+    assert.ok(!JSON.stringify(r.json).includes('hooks.example.org'), name);
+  }
+  const still = ok(await mgr.get(`/api/ladders/${deskMade.id}`)).ladder;
+  assert.deepEqual([still.name, still.active, still.steps.length], ['Desk made', false, 2], 'nothing changed');
   ok(await mgr.action('permission.role.set', { role: 'volunteer', grant: [], deny: [] }));
 
   const mine = ok(await mgr.action('ladder.signingSecret', {})).secret;

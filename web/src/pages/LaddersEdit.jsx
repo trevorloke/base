@@ -351,15 +351,19 @@ function AddStep({ onAdd, busy, tags, campaign, problem }) {
       </div>
     );
   }
-  const shown = STEP_KINDS.filter((k) => !k.more || more);
+  const add = (k) => (
+    <button key={k.kind} type="button" className="btn ops-tap lad-add__btn" disabled={busy} onClick={() => setKind(k.kind)}>
+      + {k.label}
+    </button>
+  );
+  // The other steps open as a row of their own: "Send to a web address" is
+  // long, and "Stop" would be left alone on a line.
   return (
     <div className="lad-add" role="group" aria-label="Add a step">
-      {shown.map((k) => (
-        <button key={k.kind} type="button" className="btn ops-tap lad-add__btn" disabled={busy} onClick={() => setKind(k.kind)}>
-          + {k.label}
-        </button>
-      ))}
-      {!more && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setMore(true)}>{OTHER_STEPS}</button>}
+      {STEP_KINDS.filter((k) => !k.more).map(add)}
+      {more
+        ? <div className="lad-add lad-add--other">{STEP_KINDS.filter((k) => k.more).map(add)}</div>
+        : <button type="button" className="btn btn-quiet ops-tap" onClick={() => setMore(true)}>{OTHER_STEPS}</button>}
     </div>
   );
 }
