@@ -230,8 +230,9 @@
 .sb-day[aria-pressed='true'] .sb-day__wd { color: var(--mark-ink); }
 .sb-day__dot { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.6; }
 
-/* A finger: a person's chip and its × are a full target each. */
+/* A finger: a name, a person's chip and its × are a full target each. */
 @media (pointer: coarse), (max-width: 720px) {
+  .sb-person, .sb-tray .input { min-height: 48px; }
   .sb-chips { gap: var(--s-1); padding: 0 var(--s-2) var(--s-2); }
   .sb-chip__name { min-height: 48px; font-size: 14px; padding: 0 6px 0 14px; }
   .sb-chip__x { width: 48px; min-height: 48px; font-size: 20px; }

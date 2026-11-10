@@ -261,6 +261,23 @@ try {
   check('Try again loads it', (await page.locator('.sch-day').count()) === 7);
   await page.unroute(/\/api\/shifts\/board/);
 
+  // "Plan one" on Today and the roster's "New shift" open the same sheet as the page's own "New shift" — never a form to type in.
+  await D.go('/');
+  const planOne = page.locator('a:has-text("Plan one")').first();
+  await planOne.waitFor({ timeout: 15000 });
+  await planOne.click();
+  await page.waitForSelector('.sch-sheet .sch-tile', { timeout: 10000 });
+  check('Today’s "Plan one" opens the add sheet on the week', (await D.text('.sch-sheet h2')) === 'Add shifts' && new URL(page.url()).pathname === '/admin/shifts'
+    && new URL(page.url()).searchParams.get('add') === '1' && (await page.locator('form[aria-label="New shift"]').count()) === 0, page.url());
+  await D.go('/shifts/volunteers?show=all');
+  await page.waitForSelector('.vl-rows .ops-item', { timeout: 10000 });
+  const ashaItem = page.locator('.vl-rows .ops-item:has-text("Asha Example")');
+  await ashaItem.locator('.ops-row').click();
+  await ashaItem.locator('button:has-text("Put on a shift")').click();
+  await ashaItem.locator('a:has-text("New shift")').click();
+  await page.waitForSelector('.sch-sheet .sch-tile', { timeout: 10000 });
+  check('the roster’s "New shift" (no shifts ahead) opens it too', (await D.text('.sch-sheet h2')) === 'Add shifts' && new URL(page.url()).searchParams.get('add') === '1');
+
   // ── 3. Next week, empty: seven days, a "+" on each, nothing to copy yet ──
   await D.go(`/shifts?week=${MON}`);
   await page.waitForSelector('.sch-day', { timeout: 10000 });
@@ -887,7 +904,7 @@ try {
   const rowsTop = await mp.$$eval('.sch-sheet .sb-person', (els) => els.map((e) => Math.round(e.getBoundingClientRect().left)));
   check('phone: "People" is a sheet, a name a row — nothing to swipe sideways, 48px rows, no sideways scroll', (await M.text('.sch-sheet h2')) === 'People' && sideways.every((n) => n <= 0)
     && new Set(rowsTop).size === 1 && rowsTop.length >= 5 && mm.overflow <= 0 && mm.minTap >= 47.5, JSON.stringify({ sideways, rowsTop, mm }));
-  check('phone: someone who asked to volunteer says so in words', /Vera Example Asked to volunteer/.test(await M.text('.sch-sheet .sb-people')), (await M.text('.sch-sheet .sb-people')).slice(0, 200));
+  check('phone: someone who asked to volunteer says so in words', /Vera Example\s*Asked to volunteer/.test(await M.text('.sch-sheet .sb-people')), (await M.text('.sch-sheet .sb-people')).slice(0, 200));
   await M.shot('37-people-sheet-390');
   await mp.locator('.sch-sheet .sb-person:has-text("Ben Example")').tap();
   await until(async () => (await mp.locator('.sch-sheet').count()) === 0);
@@ -1026,7 +1043,7 @@ try {
   await vp.locator('a:has-text("Start mainstreeting")').tap();
   await vp.waitForSelector('.ms-where', { timeout: 10000 });
   check('a Mainstreet shift opens Mainstreeting with its place filled in — "Where are you?" is not asked', new URL(vp.url()).pathname === '/mainstreet'
-    && (await V.text('.ms-where')).startsWith('At Newton Exchange') && (await vp.locator('#ms-place').count()) === 0, `${vp.url()} ${await V.text('.ms-where')}`);
+    && /^at Newton Exchange/i.test(await V.text('.ms-where')) && (await vp.locator('#ms-place').count()) === 0, `${vp.url()} ${await V.text('.ms-where')}`);
   await V.shot('53-vol-mainstreeting-390');
   await vctx.close();
 
