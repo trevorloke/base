@@ -222,8 +222,12 @@ than a week after they came off is refused. Contacts are door, phone, text or
   one, and the gift waits under **Needs you** (*12 imported gifts need a
   donor*) for a person to pick the record, find someone else, add a new
   person or leave it out. The gift's number in the other tool — or, without
-  one, donor, amount, date and how it was paid — is kept on it, so the same
-  file twice adds nothing. An import can be taken back whole for a day.
+  one, donor, amount, date and how it was paid, as the file writes it — is
+  kept on it, so the same file twice adds nothing. That is all the import
+  knows: a gift already typed in here by hand and also in the file would
+  come in a second time, so void the typed one or take its row out; and a
+  refunded payment the file still lists comes in as a gift — take those
+  rows out first. An import can be taken back whole for a day.
 - **Filing dates** (Donations → More → *Filing dates*, managers and the
   treasurer): two dates the financial agent types in, each a name and a day
   (*Disclosure statement due*). Donations counts down to each under the big

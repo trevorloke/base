@@ -17,7 +17,9 @@
 // books without using a receipt number; Donations marks them Imported and
 // lists "2 imported gifts need a donor" under Needs you; the pile settles
 // one on a record it could be and one on a new person; the same file again
-// adds nothing; the import is taken back whole. The financial agent's
+// adds nothing; the import is taken back whole. A file with no gift numbers
+// and a way of paying base.win doesn't know ("Wire") adds nothing the second
+// time either, whatever the word is said to mean. The financial agent's
 // filing date is typed in and counted down on Donations and on Today.
 // Donations says how it stands: Loading… while its reads are out,
 // Unavailable — Try again when they failed.

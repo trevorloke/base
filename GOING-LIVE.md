@@ -154,10 +154,12 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    it save; turn on airplane mode, do it again, turn it off, watch it send.
 4. Gifts taken in another tool this year: **Donations → More → Import a
    file** (a manager or the treasurer), before the first gift is taken
-   here, so the year's contribution limit counts them. Check first; the
-   gifts with no sure donor wait under **Needs you** to be settled. Then
-   the financial agent types their filing dates under **Donations → More →
-   Filing dates** — base.win knows none.
+   here, so the year's contribution limit counts them. Take refunded
+   payments out of the file, and any gift already typed in here by hand
+   (it would come in twice). Check first; the gifts with no sure donor
+   wait under **Needs you** to be settled. Then the financial agent types
+   their filing dates under **Donations → More → Filing dates** — base.win
+   knows none.
 5. Tell volunteers about **Show → Share my location while I'm out** on the
    map: it's off until they turn it on, and while it's on the managers'
    dashboard (Today) shows where they are. Location needs the site on
