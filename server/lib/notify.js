@@ -9,6 +9,7 @@
 //   SMS:   set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM
 
 import { DEFAULT_TZ } from './org.js';
+import { fmtIn } from '@starbase/shared/dayparts';
 export const emailConfigured = () => !!process.env.RESEND_API_KEY;
 export const textConfigured = () =>
   !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
@@ -91,14 +92,14 @@ export const sendText = async ({ to, body }) => {
 // Shift notification copy: time, place, instructions, link — one message,
 // both channels.
 // Times render in the campaign's zone, never the server's (a UTC host would
-// otherwise tell Surrey volunteers the wrong hour).
+// otherwise tell Surrey volunteers the wrong hour) — on the shared clock
+// (shared/dayparts.js), so a server with old time-zone rules says the same
+// hour the screens do.
 export const shiftMessage = (shift, workspaceName, timeZone = DEFAULT_TZ) => {
-  const when = new Date(shift.starts_at).toLocaleString('en-CA', {
-    weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone,
-  });
+  const when = fmtIn(shift.starts_at, timeZone, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const lines = [
     `You're scheduled: ${shift.title}`,
-    when + (shift.ends_at ? ` – ${new Date(shift.ends_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone })}` : ''),
+    when + (shift.ends_at ? ` – ${fmtIn(shift.ends_at, timeZone, { hour: 'numeric', minute: '2-digit' })}` : ''),
     shift.location ? `Where: ${shift.location}` : null,
     shift.instructions ? `Instructions: ${shift.instructions}` : null,
     shift.link ? `Details: ${shift.link}` : null,

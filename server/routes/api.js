@@ -14,6 +14,8 @@ import { tierFor } from '../lib/tiers.js';
 import { emailConfigured, textConfigured } from '../lib/notify.js';
 import { RECORD_TYPES } from '@starbase/shared/registry';
 import { staleTimeZoneData } from '../lib/tzcheck.js';
+import { startOfDay } from '../lib/tzsql.js';
+import { DEFAULT_TZ } from '../lib/org.js';
 import { crossSiteWrite } from '../lib/guard.js';
 import dataRoutes from './data.js';
 import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
@@ -589,17 +591,57 @@ const MINE_ON_SHIFT = `exists (
   where a.shift_id = s.id and a.workspace_id = s.workspace_id and a.status in ('assigned', 'confirmed')
     and p.deleted_at is null and $2::text <> '' and lower(p.email) = $2::text)`;
 
+// The shifts list: what is coming up — everything not yet over at the start
+// of today, on the campaign's clock — soonest first. Past shifts only when
+// asked (?past=1), newest first. A page at a time: 500 coming up (100 past),
+// and `next` is the cursor for the page after (?cursor=…), null at the end.
+// Each row is the shift's own columns plus filled, mine and its saved
+// place's pin (place_lat, place_lng: ext/schedule). A caller's own shifts
+// past the first page of 500 come with it all the same, so "Your next
+// shift" is never one the list left out.
+const SHIFTS_PAGE = 500;
+const PAST_PAGE = 100;
+const SHIFT_ROW = `s.*, pl.lat as place_lat, pl.lng as place_lng,
+            (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,
+            ${MINE_ON_SHIFT} as mine`;
+const SHIFT_FROM = 'from shifts s left join places pl on pl.id = s.place_id where s.workspace_id = $1 and s.deleted_at is null';
+// The start of the campaign's today ($3: its zone).
+const TODAY_START = startOfDay('$3::text');
+const NOT_OVER = `coalesce(s.ends_at, s.starts_at) >= ${TODAY_START}`;
+const shiftCursor = (raw) => {
+  const [at, id] = String(raw || '').split(',');
+  return UUID_RE.test(id || '') && !Number.isNaN(Date.parse(at)) ? [new Date(at).toISOString(), id] : null;
+};
+const cursorOf = (s) => `${new Date(s.starts_at).toISOString()},${s.id}`;
+
 app.get('/shifts', async (c) => {
   const ctx = c.get('ctx');
-  const { rows } = await c.get('db').query(
-    `select s.*,
-            (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,
-            ${MINE_ON_SHIFT} as mine
-     from shifts s where s.workspace_id = $1 and s.deleted_at is null
-     order by s.starts_at limit 500`,
-    [ctx.workspaceId, loginEmail(ctx)],
-  );
-  return c.json({ shifts: rows.map((s) => ({ ...s, mine: !!s.mine })) });
+  const db = c.get('db');
+  const past = c.req.query('past') === '1';
+  const page = past ? PAST_PAGE : SHIFTS_PAGE;
+  const limit = Math.min(Math.max(Number(c.req.query('limit')) || page, 1), SHIFTS_PAGE);
+  const cursor = shiftCursor(c.req.query('cursor'));
+  const params = [ctx.workspaceId, loginEmail(ctx), ctx.workspace?.settings?.tz || DEFAULT_TZ, limit + 1];
+  if (cursor) params.push(...cursor);
+  const after = cursor ? `and (s.starts_at, s.id) ${past ? '<' : '>'} ($5::timestamptz, $6::uuid)` : '';
+  const rows = (await db.query(
+    past
+      ? `select ${SHIFT_ROW} ${SHIFT_FROM} and not (${NOT_OVER}) ${after} order by s.starts_at desc, s.id desc limit $4`
+      : `select ${SHIFT_ROW} ${SHIFT_FROM} and ${NOT_OVER} ${after} order by s.starts_at, s.id limit $4`,
+    params,
+  )).rows;
+  const more = rows.length > limit;
+  const shifts = more ? rows.slice(0, limit) : rows;
+  const next = more ? cursorOf(shifts[shifts.length - 1]) : null;
+  if (more && !past && !cursor) {
+    const [at, id] = shiftCursor(next);
+    shifts.push(...(await db.query(
+      `select ${SHIFT_ROW} ${SHIFT_FROM} and ${NOT_OVER} and (s.starts_at, s.id) > ($4::timestamptz, $5::uuid) and ${MINE_ON_SHIFT}
+       order by s.starts_at, s.id limit 50`,
+      [ctx.workspaceId, loginEmail(ctx), ctx.workspace?.settings?.tz || DEFAULT_TZ, at, id],
+    )).rows);
+  }
+  return c.json({ shifts: shifts.map((s) => ({ ...s, mine: !!s.mine })), next });
 });
 
 // The desk's week board: every shift starting in [from, to) with who holds
@@ -618,6 +660,7 @@ app.get('/shifts/board', async (c) => {
   }
   const shifts = (await db.query(
     `select s.id, s.title, s.role, s.location, s.starts_at, s.ends_at, s.capacity,
+            s.kind, s.place_id, s.need, s.series_id, s.public,
             (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled
      from shifts s where s.workspace_id = $1 and s.deleted_at is null and s.starts_at >= $2 and s.starts_at < $3
      order by s.starts_at, s.title limit 500`,
@@ -651,8 +694,10 @@ app.get('/shifts/:id', async (c) => {
   if (badId(c)) return c.json({ error: 'not found' }, 404);
   const ctx = c.get('ctx');
   const db = c.get('db');
+  // With its saved place's pin, when it has one (ext/schedule).
   const shift = (await db.query(
-    'select * from shifts where id = $1 and workspace_id = $2 and deleted_at is null',
+    `select s.*, pl.lat as place_lat, pl.lng as place_lng from shifts s left join places pl on pl.id = s.place_id
+     where s.id = $1 and s.workspace_id = $2 and s.deleted_at is null`,
     [c.req.param('id'), ctx.workspaceId],
   )).rows[0];
   if (!shift) return c.json({ error: 'not found' }, 404);
