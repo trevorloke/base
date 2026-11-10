@@ -244,11 +244,16 @@ What happens:
   Connect gives it to Mailchimp), and when `MAILCHIMP_WEBHOOK_SECRET` is set
   each delivery must also carry Mailchimp's signature.
 
+Before you connect: the first pull turns off, here, everyone on file who has
+unsubscribed in that Mailchimp audience. That is the point — and the desk
+cannot put them back; only they can. So be sure the audience is the one the
+campaign's emails really go to.
+
 Set it up:
 
-1. Mailchimp → your profile → **Account & billing** → **Extras** → **API
-   keys** → create a key. The whole key, ending included (`…-us19`: that is
-   the server the account lives on).
+1. In Mailchimp, create an API key (today: your profile → **Account &
+   billing** → **Extras** → **API keys**). The whole key, ending included
+   (`…-us19`: that is the server the account lives on).
 2. Set `MAILCHIMP_API_KEY` to it. An account with more than one audience
    also needs `MAILCHIMP_AUDIENCE_ID`: **Check** names each audience with
    its id so you can pick.
@@ -262,8 +267,8 @@ Set it up:
    base.win's own changes don't echo back. If Mailchimp answers with a
    **signing secret**, it is shown once: copy it into
    `MAILCHIMP_WEBHOOK_SECRET`. (Connect again later shows no secret —
-   Mailchimp gives it once. For a new one, delete the webhook in Mailchimp
-   → Audience → Settings → Webhooks and Connect again.)
+   Mailchimp gives it once. For a new one, delete the webhook in Mailchimp,
+   under the audience's settings, and Connect again.)
 5. **Check** again: *… · unsubscribes come back here*. Then **Pull now**
    once, for everyone who left before today.
 
@@ -278,7 +283,10 @@ Set it up:
 the audience (with how many are subscribed), or each audience by name when
 one has to be chosen; and whether a webhook on it sends unsubscribes and
 cleaned addresses to this server — *tap Connect* when it doesn't, or when
-it points at an address made from an earlier key. The line under the
+it points at an address made from an earlier key. With
+`MAILCHIMP_WEBHOOK_SECRET` set it also says when that secret would have
+Mailchimp's deliveries refused: the webhook isn't a signed one, or the last
+thing it sent didn't match the secret. The line under the
 buttons says when the last pull was and what it found, and how many of
 base.win's unsubscribes Mailchimp has not been told yet (Pull now sends them
 again).
@@ -292,9 +300,11 @@ opens and clicks, or rename a tag when its list is renamed.
 
 Built against Mailchimp's published API; confirm on your own account with
 Settings → Services → Check before relying on it. It has not been run
-against a real Mailchimp account: only against a stand-in built from
-Mailchimp's documentation (`server/test/fake-mailchimp.js`). Not confirmed
-there:
+against a real Mailchimp account: only against a stand-in
+(`server/test/fake-mailchimp.js`) built from what Mailchimp publishes about
+its API — search extracts of its documentation and its own client library;
+the documentation itself could not be opened while this was written. Not
+confirmed there:
 
 - that webhook signing is on for the account, and the header's exact name
   and shape (`X-Mailchimp-Signature: t=…,v1=…` is what is read; the

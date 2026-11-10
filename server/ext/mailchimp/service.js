@@ -8,7 +8,8 @@
 // given to Mailchimp and never shown, logged or put in an answer. If
 // Mailchimp answers Connect with a signing secret, it is passed on once, to
 // set as MAILCHIMP_WEBHOOK_SECRET, and kept nowhere here.
-import { apiKey, AudienceError, audienceId, audiences, HOOK_PREFIX, hookUrl, mailchimp, mailchimpOn, MailchimpError } from './mailchimp.js';
+import { apiKey, AudienceError, audienceId, audiences, HOOK_PREFIX, hookUrl, mailchimp, mailchimpOn, MailchimpError, webhookSecrets } from './mailchimp.js';
+import { deliveries } from './webhook.js';
 
 const NEEDS = ['MAILCHIMP_API_KEY'];
 const env = (k) => String(process.env[k] || '').trim();
@@ -76,6 +77,22 @@ const audienceForCheck = async () => {
   return { id: String(all[0].id), name: all[0].name, subscribed: all[0].stats?.member_count };
 };
 
+// The webhook is there. With MAILCHIMP_WEBHOOK_SECRET set every delivery
+// must be signed with it — so a webhook that isn't signed, or one signed
+// with another secret, would have everything it sends refused: said here.
+const signed = (hook, said) => {
+  if (webhookSecrets().length) {
+    if (hook.signing_enabled === false) {
+      return { ok: false, said: `${said} — but MAILCHIMP_WEBHOOK_SECRET is set and that webhook isn’t signed, so what it sends is refused: take the setting away, or delete the webhook in Mailchimp and tap Connect` };
+    }
+    const d = deliveries();
+    if (d.refusedAt > d.takenAt) {
+      return { ok: false, said: `${said} — but the last thing Mailchimp sent was refused: its signature didn’t match MAILCHIMP_WEBHOOK_SECRET` };
+    }
+  }
+  return { ok: true, said: `${said} · unsubscribes come back here` };
+};
+
 export const checkMailchimp = async (db, ws, base) => {
   if (!apiKey()) return { ok: false, said: 'MAILCHIMP_API_KEY isn’t set' };
   if (!mailchimpOn()) return { ok: false, said: NO_SERVER };
@@ -86,7 +103,8 @@ export const checkMailchimp = async (db, ws, base) => {
     const count = Number.isFinite(Number(a.subscribed)) ? ` · ${Number(a.subscribed).toLocaleString('en-CA')} subscribed` : '';
     const said = `The key works · audience “${a.name}”${count}`;
     const hooks = await webhooksOf(a.id);
-    if (hooks.some((h) => here(h, base) && sends(h))) return { ok: true, said: `${said} · unsubscribes come back here` };
+    const hook = hooks.find((h) => here(h, base) && sends(h));
+    if (hook) return { ...signed(hook, said) };
     const stale = hooks.some((h) => ours(h, base) && !here(h, base));
     return { ok: false, said: `${said} — but Mailchimp ${stale ? 'sends unsubscribes to an address from an earlier key' : 'isn’t sending unsubscribes here yet'}: tap Connect` };
   } catch (e) {

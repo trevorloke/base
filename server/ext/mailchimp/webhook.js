@@ -27,6 +27,12 @@ import { HOOK_PREFIX, knownAudience, lower, mailchimpOn, pathKeyMatches, webhook
 import { MEMBER_JOB } from './pull.js';
 
 const limited = makeLimiter({ windowMs: 60_000, max: 600 });
+// When a delivery's signature was last refused, and when one was last taken
+// (since this server started): Settings → Services' Check says so when the
+// secret set here is not the webhook's — otherwise every hint would be
+// refused and nobody would know.
+const seen = { refusedAt: 0, takenAt: 0 };
+export const deliveries = () => ({ ...seen });
 const EMAIL = /^[^@\s]{1,200}@[^@\s]{1,200}$/;
 const address = (v) => (EMAIL.test(lower(v)) ? lower(v) : null);
 
@@ -79,7 +85,11 @@ publicRoutes.post(`${HOOK_PREFIX}:key`, async (c) => {
   if (!mailchimpOn() || !pathKeyMatches(c.req.param('key'))) return c.json({ error: 'not found' }, 404);
   const raw = Buffer.from(await c.req.arrayBuffer());
   const secrets = webhookSecrets();
-  if (secrets.length && !verifySignature(raw, c.req.header('x-mailchimp-signature'), secrets).ok) return c.json({ error: 'signature refused' }, 400);
+  if (secrets.length && !verifySignature(raw, c.req.header('x-mailchimp-signature'), secrets).ok) {
+    seen.refusedAt = Date.now();
+    return c.json({ error: 'signature refused' }, 400);
+  }
+  seen.takenAt = Date.now();
   const hint = readHint(raw, c.req.header('content-type'));
   try {
     if (hint) await queue(await getDb(), hint);

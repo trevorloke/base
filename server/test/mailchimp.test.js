@@ -440,6 +440,24 @@ test('an unsubscribe in base.win reaches Mailchimp once — a do-not-email tag a
   assert.equal(fake.member(mail('cal')).status, 'unsubscribed', 'Cal stays unsubscribed in Mailchimp until Cal says otherwise there');
   assert.ok(fake.calls.filter((x) => x.method === 'PATCH').every((x) => x.body.status === 'unsubscribed'));
   assert.ok(fake.calls.filter((x) => x.method === 'POST' && x.path === `/lists/${fake.id}`).every((x) => x.body.update_existing === false));
+
+  // Mailchimp is down when someone unsubscribes here: the no is kept, said on Settings → Services,
+  // and sent once Mailchimp answers again (the next pull puts it back in line).
+  await person(c, 'hal');
+  await subscribe(c, 'hal');
+  await push(c, ws, list.id, { everyone: true });
+  assert.equal(fake.member(mail('hal')).status, 'subscribed');
+  fake.fail(500);
+  ok(await c.action('subscription.remove', { id: (await subOf(ws, 'hal')).id }));
+  assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 0, failed: 1 });
+  assert.equal(ok(await c.get('/api/mailchimp')).waiting, 1);
+  await db.query("update jobs set status = 'failed', done_at = now() where workspace_id = $1 and kind = 'mailchimp.optout' and status = 'pending'", [ws]);
+  assert.equal(ok(await c.get('/api/mailchimp')).waiting, 1, 'given up on by the job runner: still waiting, still said');
+  fake.fail(false);
+  ok(await c.action('mailchimp.pull', {}));
+  await run(ws);
+  assert.equal(fake.member(mail('hal')).status, 'unsubscribed');
+  assert.equal(ok(await c.get('/api/mailchimp')).waiting, 0);
 });
 
 test('a 429 halfway leaves a sync the next run completes; a refusal that will not change stops it with Mailchimp’s words', async () => {
@@ -694,6 +712,24 @@ test('Settings → Services: the Mailchimp row, Check and Connect — and who ma
   assert.match((await check()).said, /isn’t sending unsubscribes here yet: tap Connect$/);
   ok(await mgr.action('mailchimp.connect', {}));
   assert.equal((await check()).ok, true);
+
+  // A signing secret set here that is not the webhook's would have every delivery refused: Check says so.
+  const hookPost = (raw, headers = {}) => app.request(hookPath(), { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', ...headers }, body: raw });
+  const hint = new URLSearchParams({ type: 'unsubscribe', 'data[email]': mail('ana'), 'data[list_id]': fake.id }).toString();
+  on({ MAILCHIMP_AUDIENCE_ID: fake.id, MAILCHIMP_WEBHOOK_SECRET: 'not-the-webhooks-secret' });
+  assert.equal((await check()).ok, true, 'nothing has been refused yet');
+  assert.equal((await hookPost(hint, { 'x-mailchimp-signature': signPayload(hint, 'mc-shown-once') })).status, 400);
+  answers.push(await check());
+  assert.deepEqual(answers.at(-1), { key: 'mailchimp', ok: false, said: 'The key works · audience “Sample Campaign” · 2 subscribed — but the last thing Mailchimp sent was refused: its signature didn’t match MAILCHIMP_WEBHOOK_SECRET' });
+  on({ MAILCHIMP_AUDIENCE_ID: fake.id, MAILCHIMP_WEBHOOK_SECRET: 'mc-shown-once' });
+  assert.equal((await hookPost(hint, { 'x-mailchimp-signature': signPayload(hint, 'mc-shown-once') })).status, 200);
+  assert.equal((await check()).ok, true, 'the right secret: taken, and Check is content again');
+  // …and a webhook that isn't signed at all, with a secret set here.
+  fake.webhooks().find((w) => w.url.includes('/hooks/mailchimp/')).secret = null;
+  assert.match((await check()).said, /— but MAILCHIMP_WEBHOOK_SECRET is set and that webhook isn’t signed, so what it sends is refused: take the setting away, or delete the webhook in Mailchimp and tap Connect$/);
+  on({ MAILCHIMP_AUDIENCE_ID: fake.id });
+  assert.equal((await check()).ok, true);
+  await run(ws);
 
   // Mailchimp needs somewhere public to send to.
   delete process.env.STARBASE_PUBLIC_URL;
