@@ -6,7 +6,8 @@
 //   Time    the kind's usual hours, or another time by tap
 //   Place   turfs, places used before, or a point on the map
 //   More    "We need": how many people it wants — a target that never
-//           turns anyone away — by tap
+//           turns anyone away — by tap (ScheduleNeed.jsx). It has none
+//           until someone taps a number.
 //   Save    one write: shift.update — or, for a repeating slot set to "This
 //           and the following", shift.series.update (the ones changed on
 //           their own are left alone)
@@ -24,14 +25,13 @@ import { kindOf } from '@starbase/shared/shiftkinds';
 import { action } from '../api.js';
 import { NotifyChip, notifySummary } from '../components/NotifyWords.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
+import NeedChips from './ScheduleNeed.jsx';
 import Sheet from './ScheduleSheet.jsx';
 import When, { timesOf, whenFor } from './ScheduleWhen.jsx';
 import Where, { wherePatch } from './ScheduleWhere.jsx';
-import { countWords, dayWords, peopleWords, plural, shiftClock, shiftSpan } from './ScheduleWords.js';
+import { countLong, dayWords, peopleWords, plural, shiftClock, shiftSpan } from './ScheduleWords.js';
 
 const same = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
-// "We need": the targets offered by tap (its own, when it is another number, joins them).
-const NEEDS = [1, 2, 3, 4, 5, 6, 8, 10];
 
 // Where the shift is now, as the Where chips read it. Words that are only
 // its turfs' names are the turfs, not a place of their own.
@@ -131,7 +131,7 @@ export default function ScheduleShift({
 
   const nothingSends = providers && !providers.email && !providers.text;
   const summary = told?.length ? notifySummary(told) : null;
-  const sub = `${dayWords(day0).wd}, ${dayWords(day0).md} · ${shiftSpan(shift, tz)} · ${countWords(shift)}`;
+  const sub = [`${dayWords(day0).wd}, ${dayWords(day0).md}`, shiftSpan(shift, tz), countLong(shift)].filter(Boolean).join(' · ');
 
   const foot = over ? null : (
     <>
@@ -189,13 +189,7 @@ export default function ScheduleShift({
           {more && (
             <section id={moreId} className="sch-sec sch-more__body" aria-label="We need">
               <h3 className="sch-label">We need</h3>
-              <div className="sch-chips" role="group" aria-label="We need">
-                <button type="button" className="sch-chip" aria-pressed={need === null} onClick={() => setNeed(null)}>No target</button>
-                {[...new Set([...NEEDS, ...(need0 ? [need0] : [])])].sort((a, b) => a - b).map((n) => (
-                  <button key={n} type="button" className="sch-chip" aria-pressed={need === n} onClick={() => setNeed(n)}>{n}</button>
-                ))}
-              </div>
-              <span className="ops-meta">A target — nobody is turned away</span>
+              <NeedChips kind={kind} value={need} onChange={setNeed} own={need0} />
             </section>
           )}
         </>

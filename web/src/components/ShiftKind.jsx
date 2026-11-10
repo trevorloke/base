@@ -9,8 +9,10 @@
 //   cardWords(shift)            what a card says: { kind, title, place } —
 //                               the kind's label and the place for a made
 //                               name ("Burma Shave" / "King George Blvd &
-//                               88 Ave"), the typed name where one was typed
-import { kindOf, madeTitle } from '@starbase/shared/shiftkinds';
+//                               88 Ave"), the typed name where one was typed.
+//                               A point nothing could name is "Pinned place"
+//                               here, never its coordinates (placeLabel)
+import { kindOf, madeTitle, placeLabel } from '@starbase/shared/shiftkinds';
 
 // Line icons on the app's 24-unit grid, drawn like the tab bar's (Shell.jsx).
 const PATHS = {
@@ -42,6 +44,6 @@ export const cardWords = (shift) => {
   const kind = kindOf(shift);
   const place = String(shift.location || '').trim();
   // A made name is its kind and its place: say each once.
-  if (shift.title === madeTitle(kind.code, place)) return { kind, title: kind.name || kind.label, place: place || null };
-  return { kind, title: shift.title, place: place && !has(shift.title, place) ? place : null };
+  if (shift.title === madeTitle(kind.code, place)) return { kind, title: kind.name || kind.label, place: placeLabel(place) || null };
+  return { kind, title: shift.title, place: place && !has(shift.title, place) ? placeLabel(place) : null };
 };

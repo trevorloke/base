@@ -6,6 +6,10 @@
 //   - "Pick on the map": tap a point on a small map, the server suggests a
 //     name ("King George Blvd & 88 Ave"), one tap accepts it. Renaming is
 //     the only typing, and nobody has to.
+// A point nothing could name is saved by its coordinates and said here as
+// "Pinned place" (shared/shiftkinds.js placeLabel): the coordinates sit
+// under it, with "Name it" — one tap to the optional name (place.rename,
+// which the shifts to come that say it follow).
 //
 //   value   { turfs: [{ id, name }], place: null | { id, name }, words: null | '…' }
 //   whereInput(value)        → what shift.createMany takes for it
@@ -13,6 +17,7 @@
 //   whereName(value)         → the words the shift will show
 import { Suspense, lazy, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { PINNED_PLACE, isPinName, placeLabel } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
 import { DEFAULT_TILES } from '../components/tiles.js';
 import { Unavailable } from './ScheduleSheet.jsx';
@@ -55,6 +60,52 @@ export const wherePatch = (before, now) => {
 };
 
 export const whereName = (v) => v.place?.name || v.words || v.turfs.map((t) => t.name).join(', ') || null;
+// "Pin at 49.1451, −122.8599" → "49.1451, −122.8599": where an unnamed pin is.
+const pinCoords = (name) => String(name || '').trim().replace(/^Pin at /, '');
+
+// "Name it": the optional name for a place nothing could name. Only this
+// asks for the keyboard, and only after its own tap.
+function NameIt({ place, onNamed }) {
+  const queryClient = useQueryClient();
+  const [typed, setTyped] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await action('place.rename', { id: place.id, name: typed.trim() });
+      for (const k of ['places', 'shifts', 'brief', 'schedule']) queryClient.invalidateQueries({ queryKey: [k] });
+      onNamed({ id: res.place.id, name: res.place.name });
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="sch-pinned" role="group" aria-label="Pinned place">
+      {typed === null ? (
+        <>
+          <span className="sch-note">{PINNED_PLACE} · {pinCoords(place.name)}</span>
+          <button type="button" className="btn btn-quiet ops-tap" onClick={() => setTyped('')}>Name it</button>
+        </>
+      ) : (
+        <>
+          <div className="field sch-rename">
+            <label htmlFor="sch-pin-name">Name</label>
+            <input id="sch-pin-name" className="input" autoFocus maxLength={200} placeholder="What people call it" value={typed}
+              onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim() && !busy) save(); }} />
+          </div>
+          <div className="ops-actions">
+            <button type="button" className="btn ops-solid ops-tap" disabled={busy || !typed.trim()} onClick={save}>{busy ? 'Saving…' : 'Save name'}</button>
+            <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => { setTyped(null); setError(null); }}>Cancel</button>
+          </div>
+          {error && <p className="error" role="alert">{error}</p>}
+        </>
+      )}
+    </div>
+  );
+}
 
 // The map, the name the server gives the point, and one tap to take it.
 function MapPick({ around, ready, onPlace, onClose }) {
@@ -62,7 +113,8 @@ function MapPick({ around, ready, onPlace, onClose }) {
   const tilesQ = useQuery({ queryKey: ['mapConfig'], queryFn: () => apiGet('/map/config'), staleTime: 10 * 60_000, retry: 1 });
   const tiles = tilesQ.data?.tiles || (tilesQ.isError ? DEFAULT_TILES : null);
   const [point, setPoint] = useState(null);
-  // { state: 'naming' | 'named' | 'failed', name, address }
+  // { state: 'naming' | 'named' | 'failed', name, address, pin } — pin: nothing
+  // could name it, so the name is its coordinates
   const [named, setNamed] = useState(null);
   const [typed, setTyped] = useState(null); // a name being typed instead, when someone wants one
   const [busy, setBusy] = useState(false);
@@ -78,13 +130,14 @@ function MapPick({ around, ready, onPlace, onClose }) {
     try {
       const r = await apiGet(`/places/name?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}`);
       // A second tap while the first was being named: only the last counts.
-      if (mine === asked.current) setNamed({ state: 'named', name: r.name, address: r.address || null });
+      if (mine === asked.current) setNamed({ state: 'named', name: r.name, address: r.address || null, pin: isPinName(r.name) });
     } catch {
       if (mine === asked.current) setNamed({ state: 'failed' });
     }
   };
   const save = async () => {
-    const name = (typed ?? named?.name ?? '').trim();
+    // A name left empty is no name: the place keeps the one it was given.
+    const name = (typed ?? '').trim() || (named?.name ?? '').trim();
     if (!name || !point) return;
     setBusy(true);
     setError(null);
@@ -111,23 +164,27 @@ function MapPick({ around, ready, onPlace, onClose }) {
       <div className="sch-named" role="status">
         {named?.state === 'naming' && <span className="sch-note">Finding a name…</span>}
         {named?.state === 'failed' && <Unavailable what="A name" onRetry={() => nameIt(point)} />}
-        {named?.state === 'named' && typed === null && <b className="sch-named__name">{named.name}</b>}
+        {named?.state === 'named' && typed === null && <b className="sch-named__name">{placeLabel(named.name)}</b>}
+        {named?.state === 'named' && named.pin && typed === null && <span className="sch-note sch-named__where">{pinCoords(named.name)} — nothing near to name it by</span>}
       </div>
       {named?.state === 'named' && typed !== null && (
         <div className="field sch-rename">
           <label htmlFor="sch-place-name">Name</label>
-          <input id="sch-place-name" className="input" autoFocus maxLength={200} value={typed} onChange={(e) => setTyped(e.target.value)} />
+          <input id="sch-place-name" className="input" autoFocus maxLength={200} placeholder={named.pin ? 'What people call it' : undefined}
+            value={typed} onChange={(e) => setTyped(e.target.value)} />
         </div>
       )}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="ops-actions">
         {named?.state === 'named' && (
-          <button type="button" className="btn ops-solid ops-tap" disabled={busy || !(typed ?? named.name).trim()} onClick={save}>
+          <button type="button" className="btn ops-solid ops-tap" disabled={busy} onClick={save}>
             {busy ? 'Saving…' : 'Use this place'}
           </button>
         )}
         {named?.state === 'named' && typed === null && (
-          <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => setTyped(named.name)}>Rename</button>
+          <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => setTyped(named.pin ? '' : named.name)}>
+            {named.pin ? 'Name it' : 'Rename'}
+          </button>
         )}
         <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={onClose}>Cancel</button>
       </div>
@@ -188,8 +245,9 @@ export default function Where({ kind, value, onChange, canMap }) {
       {places.isError && <Unavailable what="Places" onRetry={() => places.refetch()} />}
       <div className="sch-chips" role="group" aria-label="Places">
         {shown.map((c) => (
-          <button key={c.key} type="button" className="sch-chip" aria-pressed={chosen(c)} onClick={() => pick(c)}>
-            <span className="sch-chip__words">{c.place ? c.place.name : c.words}</span>
+          <button key={c.key} type="button" className="sch-chip" aria-pressed={chosen(c)} onClick={() => pick(c)}
+            title={c.place && isPinName(c.place.name) ? c.place.name : undefined}>
+            <span className="sch-chip__words">{placeLabel(c.place ? c.place.name : c.words)}</span>
           </button>
         ))}
         {!all && list.length > shown.length && (
@@ -205,6 +263,9 @@ export default function Where({ kind, value, onChange, canMap }) {
           </button>
         )}
       </div>
+      {value.place && isPinName(value.place.name) && !mapOpen && (
+        <NameIt key={value.place.id} place={value.place} onNamed={(place) => onChange({ ...value, place })} />
+      )}
       {mapOpen && (
         <MapPick around={around} ready={!canMap || !turfsQ.isPending} onClose={() => setMapOpen(false)}
           onPlace={(place) => { onChange({ ...value, place, words: null }); setMapOpen(false); }} />

@@ -1,5 +1,6 @@
-/* Shifts → Week (ShiftsBoard.jsx): the week row, the volunteers' tray, a
-   shift's card and its people, the drag ghost and the phone's day strip.
+/* Shifts → Week (ShiftsBoard.jsx): the week row, the people strip
+   (SchedulePeople.jsx), a shift's card and its people, the drag ghost and
+   the phone's day strip.
    The day lists and the sheets are in schedule.css. Classes are sb-*; every
    colour, radius, space and font is a token from app.css, so the screen
    follows whatever the app's look is. */
@@ -18,28 +19,36 @@
 
 .sb-ask { margin: 0 0 var(--s-3); padding: var(--s-3) var(--s-4); background: var(--paper-0); border: 1px solid var(--warn); border-radius: var(--r-card); }
 
-/* Tray left, board right; on a phone the tray sits on top. */
-.sb-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: var(--s-4); align-items: start; }
+/* The people to put on shifts: a strip across the top of the week — find,
+   role, then every name, wrapping — so the seven days keep the whole width
+   (a card's kind reads on one line). A few rows of names, then it scrolls
+   inside itself. On a phone it is a sheet instead (further down). */
+.sb-layout { display: flex; flex-direction: column; gap: var(--s-3); min-width: 0; }
 
 .sb-tray {
-  position: sticky;
-  top: var(--s-3);
-  max-height: calc(100vh - 2 * var(--s-4));
   display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  padding: var(--s-3);
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-2) var(--s-3);
   background: var(--paper-0);
   border: 1px solid var(--rule);
   border-radius: var(--r-card);
   min-width: 0;
 }
 .sb-tray[data-hot] { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger); }
-.sb-tray__find { display: flex; flex-direction: column; gap: var(--s-2); }
-.sb-tray .input { min-height: 40px; width: 100%; }
-.sb-tray__drop { margin: 0; font-size: 13px; color: var(--danger); }
-.sb-tray__none { margin: 0; }
-.sb-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); overflow-y: auto; min-height: 0; }
+.sb-tray__find { display: flex; gap: var(--s-2); flex: 0 1 330px; min-width: 0; }
+.sb-tray .input { min-height: 40px; }
+.sb-tray .sb-search { flex: 1 1 150px; width: auto; min-width: 0; }
+.sb-tray .sb-role { flex: 0 1 140px; width: auto; min-width: 0; }
+.sb-tray__drop { flex: 1 1 100%; margin: 0; font-size: 13px; color: var(--danger); }
+.sb-tray__none { flex: 1 1 200px; margin: 0; align-self: center; }
+.sb-people {
+  flex: 1 1 380px; list-style: none; margin: 0; padding: 0; min-width: 0;
+  display: flex; flex-wrap: wrap; gap: var(--s-1);
+  max-height: 128px; overflow-y: auto; overscroll-behavior: contain;
+}
+.sb-people:empty { display: none; }
 
 /* A person you can pick up */
 .sb-person {
@@ -47,7 +56,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2);
-  width: 100%;
+  max-width: 230px;
   min-height: 40px;
   padding: var(--s-1) var(--s-3);
   font: inherit;
@@ -71,6 +80,8 @@
 }
 .sb-person:disabled { cursor: default; opacity: 0.6; }
 .sb-person__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Asked to volunteer, and not yet on a shift for it. */
+.sb-person__asked { flex: none; font-size: 12px; font-weight: 600; color: var(--warn); white-space: nowrap; }
 .sb-person__n {
   flex: none;
   font-family: var(--font-mono);
@@ -219,25 +230,24 @@
 .sb-day[aria-pressed='true'] .sb-day__wd { color: var(--mark-ink); }
 .sb-day__dot { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.6; }
 
-@media (max-width: 1100px) {
-  .sb-layout { grid-template-columns: 170px minmax(0, 1fr); gap: var(--s-3); }
+/* A finger: a person's chip and its × are a full target each. */
+@media (pointer: coarse), (max-width: 720px) {
+  .sb-chips { gap: var(--s-1); padding: 0 var(--s-2) var(--s-2); }
+  .sb-chip__name { min-height: 48px; font-size: 14px; padding: 0 6px 0 14px; }
+  .sb-chip__x { width: 48px; min-height: 48px; font-size: 20px; }
+  .btn.sb-hand__btn { min-height: 48px; }
 }
 
-/* Phone: tray on top as a strip of names that scrolls sideways (inside
-   itself — never the page), then the day switcher, then that day's list. */
+/* Phone: "People" opens a sheet with the list, a name a row (never a strip
+   to swipe sideways); then the day switcher, then that day's list. */
 @media (max-width: 720px) {
-  .sb-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s-3); }
-  .sb-tray { position: static; max-height: none; padding: var(--s-2); }
-  .sb-tray__find { flex-direction: row; }
-  .sb-tray__find .sb-search { flex: 1 1 auto; min-width: 0; }
-  .sb-tray__find .sb-role { flex: 0 0 auto; width: auto; max-width: 48%; }
-  .sb-people { flex-direction: row; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; overscroll-behavior-x: contain; }
-  .sb-people > li { flex: none; }
-  .sb-person { width: auto; min-height: 44px; max-width: 70vw; }
+  .sb-tray.sch-peoplesheet { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--s-3); padding: 0; border: 0; }
+  .sch-peoplesheet .sb-tray__find { flex: none; }
+  .sch-peoplesheet .sb-tray__find .sb-role { flex: 0 1 44%; }
+  .sch-peoplesheet .sb-people { flex: none; flex-direction: column; flex-wrap: nowrap; max-height: none; overflow: visible; }
+  .sch-peoplesheet .sb-person { width: 100%; max-width: none; min-height: 48px; font-size: 16px; }
   .sb-shift__title { font-size: 15px; }
   .sb-shift__meta { font-size: 12px; }
-  .sb-chip__name { font-size: 14px; padding: 6px 6px 6px 12px; }
-  .sb-chip__x { width: 36px; font-size: 18px; }
   .sb-hand { top: var(--s-1); }
   .sb-hand > span { flex-basis: 100%; }
 }

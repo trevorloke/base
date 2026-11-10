@@ -46,7 +46,7 @@
 .sch-days {
   display: grid;
   grid-template-columns: repeat(var(--sch-cols, 7), minmax(0, 1fr));
-  gap: var(--s-2);
+  gap: 6px;
   align-items: stretch;
 }
 .sch-day {
@@ -54,7 +54,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 176px;
-  padding: var(--s-1) var(--s-1) var(--s-6);
+  padding: var(--s-1) 3px var(--s-6);
   background: var(--paper-1);
   border: 1px solid transparent;
   border-radius: var(--r-ctrl);
@@ -90,9 +90,10 @@
 .sb-shift.sch-card { border-left: 4px solid var(--kind, var(--rule-2)); }
 .sb-shift.sch-card[data-over] { opacity: 0.7; }
 .sb-shift.sch-card[data-lifted] { opacity: 0.4; }
-/* The mark and the name on one line; the place and the hours the card's full width. */
+/* The mark and the name on one line ("Burma Shave", "Phone bank": never two
+   at a desk); the place and the hours the card's full width. */
 .sb-shift__head.sch-card__head {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 2px 6px; padding: var(--s-2) var(--s-2) var(--s-2) 6px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 2px 5px; padding: var(--s-2) 6px;
   touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 .sch-card__kind { display: inline-flex; color: var(--kind, var(--text-3)); }
@@ -198,6 +199,14 @@
 .sch-tools { margin-top: var(--s-5); }
 .btn.sch-toggle[aria-pressed='true'] { border-color: var(--ok); color: var(--ok); }
 .btn.sch-toggle[aria-pressed='true']::before { content: '✓'; }
+
+/* A place nothing could name: where it is, and "Name it". */
+.sch-pinned { display: flex; align-items: center; gap: var(--s-1) var(--s-3); flex-wrap: wrap; min-width: 0; }
+.sch-pinned .field, .sch-pinned .ops-actions, .sch-pinned .error { flex: 1 1 100%; margin: 0; }
+.sch-named { display: flex; flex-direction: column; gap: 2px; }
+
+/* The phone's "People": one button over the day strip. */
+.btn.ops-tap.sch-peoplebtn { align-self: flex-start; }
 
 /* More: what is typed or rare. */
 .disclose.sch-more { margin-top: var(--s-2); }

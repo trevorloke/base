@@ -20,21 +20,21 @@
 //                                  everyone, reminders, copy to next week.
 //   an empty week                  "Copy last week", when last week had any.
 //
-// Volunteers sit in a tray beside the week (search, role filter). Put
-// someone on a shift by dragging a name onto a card (mouse, pen, or touch:
-// press and hold, then drag), or by tapping (or Enter on) a name and then a
-// card. Dragging a chip to another card moves them (on there, then off the
-// old one); dragging it back to the tray, or its ×, takes them off. Someone
-// already on an overlapping shift this week gets "Sam is already on … Add
-// anyway? Yes · No".
+// The people to put on shifts are a strip across the top of the week — on a
+// phone a sheet, "People" (SchedulePeople.jsx). Tap (or Enter on) a name and
+// it STAYS in hand while you tap as many cards as you like ("Done", Escape
+// or the name again puts it down); or drag a name onto a card (mouse, pen,
+// or touch: press and hold, then drag). Dragging a chip to another card
+// moves them (on there, then off the old one); dragging it back to the
+// strip, or its ×, takes them off. Someone already on an overlapping shift
+// this week gets "Sam is already on … Add anyway? Yes · No".
 //
 // Honest states: a week that hasn't loaded says "Loading…" and one that
 // can't says "Unavailable — Try again" — never a week of empty days.
 // Needs signal: offline the list shows instead (Shifts.jsx).
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import {
   WEEK_PARTS, addDays, clockOf, dayOf, instantOf, isDay, safeZone, weekBounds, weekPartOf, weekStart,
 } from '@starbase/shared/dayparts';
@@ -43,14 +43,14 @@ import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import { KindIcon, cardWords, kindVars } from '../components/ShiftKind.jsx';
 import { TurfChips, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import ScheduleAdd from './ScheduleAdd.jsx';
+import People from './SchedulePeople.jsx';
 import ScheduleShift from './ScheduleShift.jsx';
 import { Unavailable } from './ScheduleSheet.jsx';
 import WeekMore, { CopyLastWeek, noticeGoing, weekKey, weekWords } from './ScheduleWeek.jsx';
-import { countWords, dayWords, peopleWords, plural, shiftSpan } from './ScheduleWords.js';
+import { countLong, countWords, dayWords, peopleWords, plural, shiftSpan } from './ScheduleWords.js';
 import './shifts-board.css';
 import './schedule.css';
 
-const roleLabel = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label ?? code;
 const firstName = (name) => String(name || '').split(' ')[0];
 // "Sam O." — chips are small; the full name is in the label.
 const shortName = (name) => {
@@ -186,30 +186,13 @@ export default function ShiftsBoard({ me, onSheet }) {
     enabled: emptyWeek && !pastWeek,
   });
 
-  // ── Tray: search + role ──
-  const [q, setQ] = useState('');
-  const [role, setRole] = useState('');
-  const rolesHere = useMemo(() => {
-    const set = new Set(peopleAll.flatMap((p) => p.roles || []));
-    return VOLUNTEER_ROLES.filter((r) => set.has(r.code));
-  }, [peopleAll]);
-  const needle = q.trim().toLowerCase();
-  const tray = peopleAll.filter((p) => (!role || (p.roles || []).includes(role))
-    && (!needle || p.name.toLowerCase().includes(needle)));
-  // Typing a name that isn't a volunteer yet: anyone on the list, like the
-  // shift screen's "+ Add volunteer".
-  const others = useQuery({
-    queryKey: ['persons', 'search', needle],
-    queryFn: () => apiGet(`/persons?q=${encodeURIComponent(needle)}&limit=8`),
-    enabled: needle.length >= 2,
-    placeholderData: keepPreviousData,
-  });
-  const trayIds = new Set(peopleAll.map((p) => p.id));
-  const extra = needle.length >= 2 ? (others.data?.persons ?? []).filter((p) => !trayIds.has(p.id)).slice(0, 8) : [];
-
   // ── In hand: a person ({ person, from? }) or a card ({ shift }) being
-  // dragged; a person may also be picked up by a tap / Enter ──
+  // dragged; a person may also be picked up by a tap / Enter. A name picked
+  // from the people strip stays in hand from card to card; a chip picked up
+  // off a card (from) is one move. ──
   const [picked, setPicked] = useState(null);
+  // The phone's "People" sheet.
+  const [peopleOpen, setPeopleOpen] = useState(false);
   const [dragging, setDragging] = useState(null);
   const [overKey, setOverKey] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -283,7 +266,7 @@ export default function ShiftsBoard({ me, onSheet }) {
     const { person, from: src } = item;
     setError(null);
     setAsk(null);
-    setPicked(null);
+    if (src) setPicked(null); // a move is one move; a name from the strip stays in hand
     setBusy(true);
     await queryClient.cancelQueries({ queryKey: boardKey });
     const undo = patch((cur) => {
@@ -318,7 +301,8 @@ export default function ShiftsBoard({ me, onSheet }) {
     if (!src) return;
     setError(null);
     setAsk(null);
-    setPicked(null);
+    // The chip in hand is put down; a name in hand from the strip stays.
+    setPicked((cur) => (cur?.from ? null : cur));
     setBusy(true);
     await queryClient.cancelQueries({ queryKey: boardKey });
     const shift = byId.get(src.shiftId);
@@ -345,18 +329,21 @@ export default function ShiftsBoard({ me, onSheet }) {
     .map((a) => byId.get(a.shift_id))
     .find((s) => s && overlaps(s, shift)) || null;
 
+  // (A chip being moved is put down whatever the answer; a name from the
+  // strip stays in hand for the next card.)
   const putOn = (item, shift) => {
     const name = firstName(item.person.name);
-    if (item.from?.shiftId === shift.id) { setPicked(null); return; }
+    const down = () => { if (item.from) setPicked(null); };
+    if (item.from?.shiftId === shift.id) { setPicked(null); return null; }
     if ((onShift.get(shift.id) ?? []).some((a) => a.person_id === item.person.id)) {
-      setPicked(null);
+      down();
       say({ text: `${name} is already on ${shift.title}` });
-      return;
+      return null;
     }
-    if (!hasRoom(shift)) { setPicked(null); say({ text: `${shift.title} is full` }); return; }
+    if (!hasRoom(shift)) { down(); say({ text: `${shift.title} is full` }); return null; }
     const clash = clashFor(item.person.id, shift, item.from?.shiftId);
-    if (clash) { setPicked(null); setAsk({ item, shift, clash }); return; }
-    assign(item, shift);
+    if (clash) { down(); setAsk({ item, shift, clash }); return null; }
+    return assign(item, shift);
   };
 
   // A card to another day: this one shift, the same hours. `back`: an Undo.
@@ -387,13 +374,15 @@ export default function ShiftsBoard({ me, onSheet }) {
     }
   };
 
-  const dropOn = (item, target) => {
-    if (!item || !target || busy) return;
-    if (!online) { say({ text: 'Needs signal — nothing changed' }); return; }
-    if (item.shift) { if (target.kind === 'day') moveShift(item.shift, target.day); return; }
-    if (target.kind === 'tray') { if (item.from) remove(item); else setPicked(null); return; }
+  // queued: one of a run of taps taken in turn (tapShift) — the write before
+  // it is back, whatever this render still thinks.
+  const dropOn = (item, target, queued = false) => {
+    if (!item || !target || (busy && !queued)) return null;
+    if (!online) { say({ text: 'Needs signal — nothing changed' }); return null; }
+    if (item.shift) { if (target.kind === 'day') moveShift(item.shift, target.day); return null; }
+    if (target.kind === 'tray') { if (item.from) remove(item); else setPicked(null); return null; }
     const s = target.kind === 'shift' ? byId.get(target.shiftId) : null;
-    if (s) putOn(item, s);
+    return s ? putOn(item, s) : null;
   };
 
   // ── Drag: pointer events (mouse, pen, touch). Mouse and pen pick up after
@@ -497,10 +486,18 @@ export default function ShiftsBoard({ me, onSheet }) {
     setPicked((cur) => (cur && cur.person.id === item.person.id && cur.from?.assignmentId === item.from?.assignmentId ? null : item));
   };
   // A card: with someone in hand it takes them; otherwise its sheet opens.
+  // With a name in hand cards can be tapped one after another without
+  // waiting: each tap is taken in turn, once the write before it is back
+  // (and the screen has caught up), so none is dropped.
+  const taps = useRef(Promise.resolve());
   const tapShift = (s) => {
     if (swallowClick.current) return;
-    if (picked) dropOn(picked, { kind: 'shift', shiftId: s.id });
-    else { setError(null); setOpen({ id: s.id, tell: false }); }
+    if (!picked) { setError(null); setOpen({ id: s.id, tell: false }); return; }
+    const item = picked;
+    taps.current = taps.current
+      .then(() => new Promise((r) => { setTimeout(r, 0); }))
+      .then(() => dropRef.current(item, { kind: 'shift', shiftId: s.id }, true))
+      .catch(() => {});
   };
   const dragProps = (item) => ({
     onPointerDown: grab(item),
@@ -541,20 +538,6 @@ export default function ShiftsBoard({ me, onSheet }) {
   };
 
   // ── Render ──
-  const personBtn = (p, isExtra = false) => {
-    const item = { person: { id: p.id, name: p.name } };
-    const n = weekCount.get(p.id) || 0;
-    return (
-      <li key={p.id}>
-        <button type="button" className="sb-person" data-extra={isExtra ? '' : undefined} {...dragProps(item)}
-          title={(p.roles || []).map(roleLabel).join(', ') || undefined}>
-          <span className="sb-person__name">{p.name}</span>
-          {n > 0 && <span className="sb-person__n" aria-label={`${n} this week`}>{n}</span>}
-        </button>
-      </li>
-    );
-  };
-
   const card = (s) => {
     const chips = onShift.get(s.id) ?? [];
     const filled = Number(s.filled) || 0;
@@ -562,7 +545,10 @@ export default function ShiftsBoard({ me, onSheet }) {
     const short = !full && !!s.need && filled < s.need;
     const words = cardWords(s);
     const over = new Date(s.ends_at || s.starts_at) < new Date();
-    const label = `${s.title}, ${shiftSpan(s, tz)}, ${countWords(s)}`;
+    // Who is on it: "2 on" — "3 of 4" only once someone set a target (or an
+    // older shift has a limit); nothing at all while nobody is.
+    const count = countWords(s);
+    const label = [s.title, shiftSpan(s, tz), countLong(s)].filter(Boolean).join(', ');
     return (
       <li key={s.id} className="sb-shift sch-card" style={kindVars(words.kind)} data-drop="shift" data-shift={s.id} data-kind={words.kind.code}
         data-hot={hot(`shift:${s.id}`)} data-full={full ? '' : undefined} data-over={over ? '' : undefined}
@@ -575,7 +561,7 @@ export default function ShiftsBoard({ me, onSheet }) {
           {words.place && <span className="sch-card__place">{words.place}</span>}
           <span className="sb-shift__meta sch-card__meta">
             <span className="sch-card__time">{shiftSpan(s, tz)}</span>
-            <span className="sb-cap" data-full={full ? '' : undefined} data-short={short ? '' : undefined}>{countWords(s)}</span>
+            {count && <span className="sb-cap" data-full={full ? '' : undefined} data-short={short ? '' : undefined}>{count}</span>}
           </span>
         </button>
         <TurfChips turfs={turfsByShift[s.id]} label={`Turfs for ${s.title}`} card />
@@ -666,38 +652,20 @@ export default function ShiftsBoard({ me, onSheet }) {
       {error && <p className="error" role="alert">{error}</p>}
 
       <div className="sb-layout">
-        <aside className="sb-tray" data-drop="tray" data-hot={hot('tray')} aria-label="Volunteers">
-          <div className="sb-tray__find">
-            <input className="input sb-search" type="search" placeholder="Find a volunteer" aria-label="Find a volunteer"
-              value={q} onChange={(e) => setQ(e.target.value)} />
-            {rolesHere.length > 0 && (
-              <select className="input sb-role" aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="">Any role</option>
-                {rolesHere.map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}
-              </select>
-            )}
-          </div>
-          {dragging?.from && <p className="sb-tray__drop">Drop here to take off the shift</p>}
-          {board.data && tray.length === 0 && extra.length === 0 && (
-            <p className="ops-meta sb-tray__none">
-              {peopleAll.length === 0 && !needle ? <>No volunteers yet. <Link to="/people">Add roles in People</Link></> : 'No one matches.'}
-            </p>
-          )}
-          <ul className="sb-people">
-            {tray.map((p) => personBtn(p))}
-            {extra.map((p) => personBtn(p, true))}
-          </ul>
-        </aside>
+        <People narrow={narrow} people={peopleAll} loaded={board.data !== undefined} weekCount={weekCount}
+          inHand={picked && !picked.from ? picked.person.id : null} taking={Boolean(dragging?.from)} hot={hot} online={online}
+          open={peopleOpen} onOpen={setPeopleOpen} props={dragProps}
+          onTap={(item) => { setPeopleOpen(false); tapPerson(item); }} />
 
         <div className="sb-board">
           {picked && (
             <div className="sb-hand" role="status">
-              <span><b>{picked.person.name}</b> — tap a shift</span>
+              <span><b>{picked.person.name}</b> — {picked.from ? 'tap the shift to move to' : 'tap each shift'}</span>
               {picked.from && (
                 <button type="button" className="btn btn-quiet sb-hand__btn" disabled={busy}
                   onClick={() => remove(picked)}>Take off</button>
               )}
-              <button type="button" className="btn btn-quiet sb-hand__btn" onClick={() => setPicked(null)}>Cancel</button>
+              <button type="button" className="btn btn-quiet sb-hand__btn" onClick={() => setPicked(null)}>{picked.from ? 'Cancel' : 'Done'}</button>
             </div>
           )}
 

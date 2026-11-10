@@ -31,10 +31,19 @@ export const shiftClock = (s, tz) => ({
 export const plural = (n, one, many = `${one}s`) => `${Number(n).toLocaleString('en-CA')} ${n === 1 ? one : many}`;
 export const peopleWords = (n) => plural(n, 'person', 'people');
 
-// How many are on a shift, the short way a card says it: "3 of 4" against
-// its target (or, on an older shift, its limit), "3 on" with neither.
+// Who is on a shift, the short way a card says it. Nothing asks how many
+// people a shift takes, so with no number set it is just "2 on" — and
+// nothing at all while nobody is. "3 of 4" only against a target someone
+// set (or, on an older shift, its limit).
 export const countWords = (s) => {
   const filled = Number(s.filled) || 0;
   const want = s.need ?? s.capacity;
-  return want ? `${filled} of ${want}` : `${filled} on`;
+  if (want) return `${filled} of ${want}`;
+  return filled ? `${filled} on` : '';
+};
+// The same with room for words: "3 of 4 — one more" against a target.
+export const countLong = (s) => {
+  const filled = Number(s.filled) || 0;
+  const more = s.need ? Math.max(0, s.need - filled) : 0;
+  return more ? `${filled} of ${s.need} — ${more === 1 ? 'one' : more} more` : countWords(s);
 };

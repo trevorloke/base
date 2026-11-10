@@ -14,10 +14,12 @@
 //               /voted/status).
 //   "Add 5 shifts" — one write (shift.createMany): all of them or none.
 //
-// "More" (closed) holds what is typed or rare: a name, instructions, a
-// link, "Limit sign-ups to", "We need" (a target that never turns anyone
-// away; the kind may suggest one) and "Show on the website". "More options"
-// there is the long form (/shifts?new=1).
+// Nothing asks how many people, and no shift is given a number: "More"
+// (closed) holds what is typed or rare — a name, instructions, a link, "We
+// need" (a target that never turns anyone away, by tap; what the kind
+// usually wants is only the first number offered), "Limit sign-ups to" and
+// "Show on the website". "More options" there is the long form
+// (/shifts?new=1).
 import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -28,6 +30,7 @@ import {
 import { apiGet, action } from '../api.js';
 import { KindIcon, kindVars } from '../components/ShiftKind.jsx';
 import { normalizeLink } from '../components/shiftLink.js';
+import NeedChips from './ScheduleNeed.jsx';
 import Sheet from './ScheduleSheet.jsx';
 import When, { timesOf, whenFor } from './ScheduleWhen.jsx';
 import Where, { NOWHERE, whereInput, whereName } from './ScheduleWhere.jsx';
@@ -53,7 +56,8 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
   const [when, setWhen] = useState(null);
   const [repeat, setRepeat] = useState('once');
   const [more, setMore] = useState(false);
-  const [f, setF] = useState({ name: '', instructions: '', link: '', capacity: '', need: '', public: false });
+  const [f, setF] = useState({ name: '', instructions: '', link: '', capacity: '', public: false });
+  const [need, setNeed] = useState(null); // no target until someone taps one
   const [busy, setBusy] = useState(false);
   const sending = useRef(false); // a second tap before the button greys out
   const [error, setError] = useState(null);
@@ -66,10 +70,10 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
     setTiles(false);
     setError(null);
     if (k.code === kindCode) return;
-    // Its own usual hours, places and target.
+    // Its own usual hours and places — and no target: that is never assumed.
     setWhen(whenFor(k));
     setWhere(NOWHERE);
-    setF((cur) => ({ ...cur, need: k.need ? String(k.need) : '' }));
+    setNeed(null);
   };
 
   // ── Which days ──
@@ -98,9 +102,7 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
 
   const submit = async () => {
     const capacity = wholeOf(f.capacity);
-    const need = wholeOf(f.need);
     if (Number.isNaN(capacity)) { setMore(true); setError('Limit sign-ups to: a whole number, 1 or more'); return; }
-    if (Number.isNaN(need)) { setMore(true); setError('We need: a whole number, 1 or more'); return; }
     if (sending.current) return;
     sending.current = true;
     setError(null);
@@ -222,18 +224,14 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
                 <input id="sch-link" className="input" type="text" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false}
                   placeholder="Turf map, sign-up doc, call script" value={f.link} onChange={set('link')} />
               </div>
-              <div className="form-row">
-                <div className="field">
-                  <label htmlFor="sch-need">We need</label>
-                  <input id="sch-need" className="input mono" type="number" min="1" step="1" inputMode="numeric" placeholder="No target"
-                    value={f.need} onChange={set('need')} />
-                  <span className="ops-meta">A target — nobody is turned away</span>
-                </div>
-                <div className="field">
-                  <label htmlFor="sch-capacity">Limit sign-ups to</label>
-                  <input id="sch-capacity" className="input mono" type="number" min="1" step="1" inputMode="numeric" placeholder="No limit"
-                    value={f.capacity} onChange={set('capacity')} />
-                </div>
+              <section className="sch-sec" aria-label="We need">
+                <h3 className="sch-label">We need</h3>
+                <NeedChips kind={kind} value={need} onChange={setNeed} />
+              </section>
+              <div className="field">
+                <label htmlFor="sch-capacity">Limit sign-ups to</label>
+                <input id="sch-capacity" className="input mono" type="number" min="1" step="1" inputMode="numeric" placeholder="No limit"
+                  value={f.capacity} onChange={set('capacity')} />
               </div>
               <label className="ops-check">
                 <input type="checkbox" checked={f.public} onChange={(e) => setF((cur) => ({ ...cur, public: e.target.checked }))} />
