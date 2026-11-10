@@ -213,6 +213,7 @@ const FIELDS = [
   { key: 'unit', label: 'Unit / apt' },
   { key: 'city', label: 'City' },
   { key: 'postal', label: 'Postal code' },
+  { key: 'voter_number', label: 'Voter number' },
   { key: 'tags', label: 'Tags' },
   { key: 'rating', label: 'Rating (the scale)' },
   { key: 'lat', label: 'Latitude' },
@@ -227,7 +228,7 @@ const FIELDS = [
 ];
 const SKIP = '';
 const fieldLabel = (key) => FIELDS.find((f) => f.key === key)?.label || key;
-const FIELD_WORD = { socials: 'social handles', email: 'email', phone: 'phone', address: 'address', house_number: 'house number', unit: 'unit', city: 'city', postal: 'postal code', tags: 'tags', rating: 'rating', lat: 'latitude', lng: 'longitude', volunteer: 'volunteer tag', donor: 'donor tag', voted: 'voted', instagram: 'Instagram', x: 'X', tiktok: 'TikTok', reddit: 'Reddit' };
+const FIELD_WORD = { socials: 'social handles', email: 'email', phone: 'phone', address: 'address', house_number: 'house number', unit: 'unit', city: 'city', postal: 'postal code', voter_number: 'voter number', tags: 'tags', rating: 'rating', lat: 'latitude', lng: 'longitude', volunteer: 'volunteer tag', donor: 'donor tag', voted: 'voted', instagram: 'Instagram', x: 'X', tiktok: 'TikTok', reddit: 'Reddit' };
 const MULTI = new Set(['tags']); // several columns can feed tags; every other field takes one column
 
 const normHeader = (h) =>
@@ -256,6 +257,8 @@ const EXACT = [
   ['address', /^(address|streetaddress|streetaddress1|address1|addressline1|street|street1|streetname|civicaddress|homeaddress|residentialaddress|mailingaddress|addr)$/],
   ['city', /^(city|town|municipality|locality|cityname)$/],
   ['postal', /^(postal|postalcode|postcode|zip|zipcode|pc)$/],
+  // The list of electors' own number for each voter (never a bare "ID": that is the rating's).
+  ['voter_number', /^(voternumber|voterno|voternum|voterid|votersid|voteridnumber|electorid|electornumber|electorno)$/],
   ['tags', /^(tags?|groups?|labels?|lists?|segments?|categories|category)$/],
   ['rating', /^(rating|supportlevel|supportid|id|idlevel|supportscore|canvassid|canvassrating|doorrating)$/],
   ['instagram', /^(instagram|insta|ig|instagramhandle|instagramusername)$/],
@@ -273,6 +276,7 @@ const CONTAINS = [
   ['lat', /latitude/],
   ['lng', /longitude/],
   ['postal', /postal|postcode|zip/],
+  ['voter_number', /voterid|voternumber|electorid|electornumber/],
   ['unit', /^(unit|apt|suite)|(house|home|suite|apt)unit$/],
   ['address', /address|street/],
   ['city', /(^|home|mailing|mail|res|residential|billing|primary|registered)city|^town|municipal/],
@@ -474,7 +478,7 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, v
     if (key.startsWith(FIELD_KEY)) { fieldCell(row, key, SCI_RE.test(v) && i === homeCol ? '' : v); return; }
     if (key === 'tags') row.tags = row.tags ? `${row.tags};${v}` : v;
     else if (key === 'rating') { const code = resolveRating(scale, ratingMap, v); if (code) row.rating = code; }
-    else if (key === 'phone' && SCI_RE.test(v)) { /* digits lost in Excel */ }
+    else if ((key === 'phone' || key === 'voter_number') && SCI_RE.test(v)) { /* digits lost in Excel */ }
     else row[key] = v;
   });
   if (!row.phone && homeCol >= 0 && mapping[homeCol]) {
@@ -844,7 +848,7 @@ function ImportFlow() {
     const out = {};
     if (!source) return out;
     source.headers.forEach((_, i) => {
-      if (mapping[i] !== 'phone' && i !== homeCol) return;
+      if (mapping[i] !== 'phone' && mapping[i] !== 'voter_number' && i !== homeCol) return;
       const n = source.records.reduce((m, r) => m + (SCI_RE.test(String(r.cells[i] ?? '').trim()) ? 1 : 0), 0);
       if (n) out[i] = n;
     });
@@ -1531,3 +1535,11 @@ function ImportFlow() {
     </div>
   );
 }
+
+// The pieces Donations → Import a file shares (pages/ImportGifts.jsx): how a
+// file is read, the column-matching helpers and the steps’ small parts.
+export {
+  readTable, shapeTable, decodeBytes, isSpreadsheetBinary, columnValues, normHeader, mostly,
+  fmtN, fmtMB, plural, breathe, EXACT, CONTAINS, EMAIL_RE, POSTAL_RE, PHONE_RE, NAME_RE, DELIM_NAMES, MAX_FILE_BYTES,
+  Step, Bar, Reveal, InvalidList,
+};

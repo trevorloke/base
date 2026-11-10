@@ -107,6 +107,88 @@ test('the cells of a gift file are read one way', () => {
   assert.notEqual(keyed[0].key, keyed[1].key, 'two $20 cash gifts on one day are two gifts');
 });
 
+// The screen's side (web/src/components/GiftColumns.js): no tool's column
+// names are assumed — a column is matched by what its heading means, then
+// by its values, and a row is read into what the server takes.
+test('columns are matched by what their headings mean; rows are read; the check is added up', async () => {
+  const { guessGiftMapping, giftRow, fileRows, callsOf, newTally, addToTally, overLimit } = await import('../../web/src/components/GiftColumns.js');
+  const slates = [{ code: 'council', label: 'Council' }, { code: 'school', label: 'School board' }];
+  const recs = (rows) => rows.map((cells, i) => ({ cells, row: i + 2 }));
+  // One export's words…
+  const a = recs([
+    ['7001', 'Example, Ana', 'ana@example.org', '604-555-0101', '13450 104 Ave', 'V3T 1V8', '$1,250.00', '03/14/2026', 'Visa', 'Council', 'R-17', 'Spring appeal'],
+    ['7002', 'Ben Example', 'ben@example.org', '6045550102', '9 Oak Ave', 'V3T 2C3', '50', '04/02/2026', 'Cheque', 'School board trustees', '', 'Spring appeal'],
+  ]);
+  assert.deepEqual(
+    guessGiftMapping(['Transaction ID', 'Donor', 'Donor Email', 'Phone', 'Billing Address', 'Postal Code', 'Amount', 'Date Received', 'Payment Method', 'Designation', 'Receipt #', 'Campaign Name'], a, { slates }),
+    ['source_id', 'name', 'email', 'phone', 'address', 'postal', 'amount', 'date', 'method', 'slate', 'receipt', ''],
+  );
+  // …and another's: first and last apart, the gift's own date beside the record's, no slate to match with one slate.
+  const b = recs([
+    ['Cy', 'Example', 'cy@example.org', '2026-05-01 09:12', '2026-05-03', '20.00', 'E-Transfer', 'General', 'Fall Gala'],
+    ['Dee', 'Twin', 'dee@example.org', '2026-05-02 10:00', '2026-05-04', '35.50', 'Cash', 'General', 'Fall Gala'],
+  ]);
+  assert.deepEqual(
+    guessGiftMapping(['First Name', 'Last Name', 'E-mail', 'Created At', 'Donation Date', 'Gift Amount', 'Paid By', 'Fund', 'Event name'], b, { slates: [slates[0]] }),
+    ['first', 'last', 'email', '', 'date', 'amount', 'method', '', ''],
+    'the date named for the gift is taken; a name beside first and last is not the donor’s',
+  );
+  // A heading that says Amount over cells that aren't amounts is not taken.
+  assert.deepEqual(guessGiftMapping(['Name', 'Amount', 'Date'], recs([['Ana Example', 'pending', 'soon']]), {}), ['name', '', '']);
+  // No headings at all: from the values.
+  assert.deepEqual(guessGiftMapping(['Column 1', 'Column 2', 'Column 3', 'Column 4'], recs([['Ana Example', 'ana@example.org', '$50.00', 'Mar 1, 2026'], ['Ben Example', 'ben@example.org', '$20.00', 'Mar 2, 2026']]), { noHeader: true }),
+    ['name', 'email', 'amount', 'date']);
+
+  const mapping = ['source_id', 'name', 'email', 'phone', 'address', 'postal', 'amount', 'date', 'method', 'slate', 'receipt', ''];
+  assert.deepEqual(giftRow(a[0].cells, mapping, { slates }).row, {
+    name: 'Ana Example', email: 'ana@example.org', phone: '604-555-0101', address: '13450 104 Ave', postal: 'V3T 1V8',
+    source_id: '7001', amount_cents: 125000, date: '2026-03-14', method: 'card', slate: 'council', receipt: 'R-17',
+  });
+  assert.equal(giftRow(a[1].cells, mapping, { slates }).row.slate, 'school', 'a slate by the word it holds');
+  assert.equal(giftRow(a[1].cells, mapping, { slates, order: 'dmy' }).row.date, '2026-02-04');
+  assert.equal(giftRow(a[1].cells, mapping, { slates, methodMap: { cheque: 'cash' }, slateMap: { 'school board trustees': '' } }).row.method, 'cash', 'what the person says a value means');
+  assert.equal(giftRow(a[1].cells, mapping, { slates, slateMap: { 'school board trustees': '' } }).row.slate, undefined);
+  assert.match(giftRow(['1', 'Ana Example', '', '', '', '', 'n/a', '03/14/2026'], mapping).error, /“n\/a” isn’t an amount/);
+  assert.match(giftRow(['1', 'Ana Example', '', '', '', '', '5', 'someday'], mapping).error, /“someday” isn’t a date/);
+  assert.match(giftRow(['1.6047E+10', 'Ana Example', '', '', '', '', '5', '03/14/2026'], mapping).error, /lost its last digits in Excel/);
+  assert.equal(giftRow(['1', 'Ana Example', '', '1.6047E+10', '', '', '5', '03/14/2026'], mapping).row.phone, undefined, 'a phone Excel cut short is dropped');
+
+  // A file's rows: a gift number met twice is that gift again; rows alike with no number are each a gift.
+  const f = fileRows(recs([
+    ['9', 'Ana Example', '', '', '', '', '20', '2026-03-01'], ['9', 'Ana Example', '', '', '', '', '20', '2026-03-01'],
+    ['', 'Ben Example', '', '', '', '', '20', '2026-03-01'], ['', 'Ben Example', '', '', '', '', '20', '2026-03-01'],
+    ['', 'Cy Example', '', '', '', '', '', '2026-03-01'],
+  ]), mapping, {});
+  assert.deepEqual([f.rows.length, f.repeats, f.alike, f.unread.length], [3, 1, 1, 1]);
+  assert.deepEqual(f.rows.map((r) => [r.row, r.nth]), [[2, undefined], [4, undefined], [5, 2]]);
+  assert.deepEqual(f.unread, [{ row: 6, text: 'No amount.' }]);
+
+  // Calls stay small: by rows, and by size.
+  const many = Array.from({ length: 450 }, (_, i) => ({ row: i, name: 'Ana Example', amount_cents: 100 }));
+  assert.deepEqual(callsOf(many).map((p) => p.length), [200, 200, 50]);
+  assert.ok(callsOf(many.map((r) => ({ ...r, address: 'x'.repeat(900) }))).every((p) => JSON.stringify(p).length < 200_000));
+
+  // The check, added up over two calls: a donor the file takes over the limit across them.
+  const t = newTally();
+  addToTally(t, { results: [
+    { state: 'new', person_id: 'p1', person_name: 'Ana Example', by: 'email', name_differs: false, year: 2026, slate: 'council', amount_cents: 60000 },
+    { state: 'waiting', candidates: 0 }, { state: 'already' }, { state: 'invalid', error: 'The date is in the future.' },
+  ], donors: [{ person_id: 'p1', name: 'Ana Example', year: 2026, slate: 'council', on_file_cents: 30000, cap_cents: 100000 }] },
+  [{ row: 2, name: 'Ana Example' }, { row: 3, name: 'New Donor', amount_cents: 2500 }, { row: 4 }, { row: 5 }]);
+  assert.deepEqual(overLimit(t), [], 'not over yet');
+  addToTally(t, { results: [
+    { state: 'new', person_id: 'p1', person_name: 'Ana Example', by: 'email', name_differs: true, year: 2026, slate: 'council', amount_cents: 20000 },
+    { state: 'new', person_id: 'p2', person_name: 'Ben Example', by: 'phone', name_differs: false, year: 2026, slate: 'council', amount_cents: 5000 },
+  ], donors: [
+    { person_id: 'p1', name: 'Ana Example', year: 2026, slate: 'council', on_file_cents: 30000, cap_cents: 100000 },
+    { person_id: 'p2', name: 'Ben Example', year: 2026, slate: 'council', on_file_cents: 0, cap_cents: null },
+  ] }, [{ row: 6, name: 'A. Example' }, { row: 7, name: 'Ben Example' }]);
+  assert.deepEqual([t.fresh, t.waiting, t.already, t.invalid.length, t.people.size, t.cents, t.differs], [3, 1, 1, 1, 2, 87500, 1]);
+  assert.deepEqual(overLimit(t), [{ person_id: 'p1', name: 'Ana Example', year: 2026, slate: 'council', total_cents: 110000, cap_cents: 100000 }]);
+  assert.deepEqual(t.invalid, [{ row: 5, text: 'The date is in the future.' }]);
+  assert.equal(t.matches[0].differs, true, 'a match under another name is listed first');
+});
+
 test('the check saves nothing and says what would happen', async () => {
   const before = await count('select count(*) as n from events where workspace_id = $1');
   const r = await check([
