@@ -234,9 +234,12 @@ test('a push: do-not-call and do-not-contact never leave, one contact per number
   const [p] = await pushesOf(`list=${ids.list}`);
   assert.deepEqual([p.status, p.total, p.sent, p.skipped, p.by], ['sent', 4, 4, 6, 'Sam Example']);
   assert.ok(p.sent_at);
-  // When it was sent, in the campaign's own time — the clock the phonebook's name was stamped with.
+  // When it was sent, in the campaign's own time — the clock the phonebook's name was stamped with
+  // at the tap: the same minute, or the next when the sending ran across the turn of one.
   assert.match(p.sent_words, /^\d{1,2}:\d{2} [ap]m$/);
-  assert.ok(p.name.endsWith(p.sent_words) || Math.abs(new Date(p.sent_at) - new Date(p.created_at)) > 30_000, `${p.name} / ${p.sent_words}`);
+  const minuteOf = (words) => { const m = /(\d{1,2}):(\d{2}) ([ap])m$/.exec(words); return ((Number(m[1]) % 12) + (m[3] === 'p' ? 12 : 0)) * 60 + Number(m[2]); };
+  const after = (minuteOf(p.sent_words) - minuteOf(p.name) + 1440) % 1440;
+  assert.ok(after <= 1 || Math.abs(new Date(p.sent_at) - new Date(p.created_at)) > 30_000, `${p.name} / ${p.sent_words}`);
   const book = bookOf(p.name);
   assert.ok(book, 'a phonebook by the push’s name');
   assert.deepEqual(fake.sent(book.id), [
@@ -696,6 +699,31 @@ test('a refusal stops the push with CallHub’s words; Carry on picks up where i
   assert.equal((await staff.action('callhub.resume', { id: r.push.id })).status, 409, 'nothing to carry on');
 });
 
+test('a push whose background job is gone has stopped part-way: sending again says so, and Carry on finishes it', async () => {
+  const a = await mgr.createPerson('Stall Example', { phone: '672-555-0112' });
+  const list = ok(await mgr.action('list.create', { name: 'Stalled list', kind: 'people', person_ids: [a.id] })).list.id;
+  const r = ok(await mgr.action('callhub.push', { list_id: list }));
+  // The job is lost before it ran (it stands for one that gave up after its tries).
+  await db.query(`delete from jobs where workspace_id = $1 and kind = 'callhub.push' and payload @> $2::jsonb`, [ws, JSON.stringify({ push_id: r.push.id })]);
+  // Where background work is on, the page is told it stopped…
+  const { startJobRunner, stopJobRunner } = await import('../lib/jobs.js');
+  startJobRunner(db, { everyMs: 3_600_000 });
+  try {
+    const [p] = await pushesOf(`list=${list}`);
+    assert.deepEqual([p.status, p.stalled, p.sent, p.total], ['queued', true, 0, 1]);
+  } finally {
+    stopJobRunner();
+  }
+  // …and sending again is refused in words that are true of it: nothing is on its way.
+  const again = await mgr.action('callhub.push', { list_id: list });
+  assert.deepEqual([again.status, again.json.error], [409, 'The last send stopped part-way — Carry on finishes it']);
+  ok(await staff.action('callhub.resume', { id: r.push.id }));
+  assert.deepEqual([(await mgr.action('callhub.push', { list_id: list })).json.error], ['This is already on its way to CallHub'], 'now it is');
+  await drain();
+  const [p] = await pushesOf(`list=${list}`);
+  assert.deepEqual([p.status, p.sent, p.stalled], ['sent', 1, false]);
+});
+
 test('someone marked do-not-call while a push waits is not sent', async () => {
   const a = await mgr.createPerson('Late A Example', { phone: '604-555-0180' });
   const b = await mgr.createPerson('Late B Example', { phone: '604-555-0181' });
@@ -792,6 +820,23 @@ test('a number CallHub won’t take is left out and counted, with its words; the
   // It never reached CallHub, so a result for it is for a number never sent.
   assert.deepEqual((await fake.note({ contact: '+16045550191', disposition: 'Answered' })).body, { received: true, filed: false });
   fake.reject(false);
+});
+
+test('everyone whose number CallHub would not take is named — not only the first five', async () => {
+  const people = [];
+  for (let i = 0; i < 14; i += 1) people.push(await mgr.createPerson(`Named${String(i).padStart(2, '0')} Example`, { phone: `672-555-01${13 + i}` }));
+  const list = ok(await mgr.action('list.create', { name: 'Named list', kind: 'people', person_ids: people.map((p) => p.id) })).list.id;
+  // Every second number is one CallHub won't take: never five in a row, so the push goes on.
+  fake.reject(people.map((_, i) => `+167255501${13 + i}`).filter((_, i) => i % 2));
+  try {
+    ok(await mgr.action('callhub.push', { list_id: list }));
+    await drain();
+    const [p] = await pushesOf(`list=${list}`);
+    assert.deepEqual([p.status, p.sent, p.refused], ['sent', 7, 7]);
+    assert.deepEqual(p.refused_people, people.filter((_, i) => i % 2).map((x) => ({ id: x.id, name: x.name })), 'all seven, by name');
+  } finally {
+    fake.reject(false);
+  }
 });
 
 test('CallHub taking none of them is not the numbers: the push stops with its words, and nothing more is dropped', async () => {
@@ -1196,7 +1241,7 @@ test('a do-not-call number CallHub won’t take is remembered and said, with who
     let seen = ok(await staff.get(`/api/callhub/pushes?list=${list}`));
     assert.deepEqual([seen.pushes[0].status, seen.pushes[0].sent, seen.pushes[0].note], ['sent', 3, null], 'the push goes');
     assert.equal(tries(), 2, 'tried once more with the push');
-    assert.deepEqual(seen.not_taken, { n: 1, note: 'phone_number: Enter a valid phone number.', people: [{ id: odd.id, name: 'Odd Number Example' }] });
+    assert.deepEqual(seen.not_taken, { n: 1, note: 'phone_number: Enter a valid phone number.', people: [{ id: odd.id, name: 'Odd Number Example' }], more: 0 });
     // Not tried again each time someone else is marked.
     ok(await mgr.action('person.update', { id: quiet.id, tags: ['do-not-call', 'newton'] }));
     await mgr.createPerson('Late Quiet Example', { phone: '604-555-0144', tags: ['do-not-call'] });
@@ -1228,7 +1273,7 @@ test('a do-not-call number CallHub won’t take is remembered and said, with who
     await drain();
     seen = ok(await staff.get(`/api/callhub/pushes?list=${list}`));
     assert.deepEqual([seen.pushes[0].status, seen.pushes[0].sent, seen.pushes[0].note], ['sent', 3, null]);
-    assert.deepEqual(seen.not_taken, { n: 6, note: 'phone_number: Enter a valid phone number.', people: [] }, 'numbers that only replied STOP are nobody’s on file');
+    assert.deepEqual(seen.not_taken, { n: 6, note: 'phone_number: Enter a valid phone number.', people: [], more: 0 }, 'numbers that only replied STOP are nobody’s on file');
     fake.rejectDnc(false);
     ok(await mgr.action('callhub.push', { list_id: list }));
     await drain();
@@ -1296,7 +1341,8 @@ test('CallHub taking none of a campaign’s do-not-call numbers stops its first 
     seen = await page();
     assert.deepEqual([seen.pushes[0].status, seen.pushes[0].sent, seen.pushes[0].note], ['sent', 1, null]);
     assert.equal(asked(), 10);
-    assert.deepEqual([seen.not_taken.n, seen.not_taken.note, seen.not_taken.people.length], [7, 'phone_number: Enter a valid phone number.', 5]);
+    assert.deepEqual([seen.not_taken.n, seen.not_taken.note, seen.not_taken.people.map((x) => x.name), seen.not_taken.more],
+      [7, 'phone_number: Enter a valid phone number.', [0, 1, 2, 3, 4, 5, 6].map((i) => `Never${i} Example`), 0], 'every one of them named, not only the first five');
     // The next push asks about them again: five, still refused, and the rest are left as they are. It does not stop.
     const askedOf = (from) => fake.calls.slice(from).filter((c) => c.path === '/v1/dnc_contacts/').map((c) => c.params.phone_number);
     let mark = fake.calls.length;
@@ -1348,7 +1394,9 @@ test('a number CallHub won’t let go, or never named, stays on its list: nothin
     ok(await mgr.action('person.update', { id: b.id, tags: [] }));
     await drain();
     assert.equal(deletes, 1, 'asked once for the one CallHub named');
-    assert.match(await check(), / · CallHub’s do-not-call list still has 2 numbers nobody here blocks now — take them off in CallHub$/);
+    assert.match(await check(), / · CallHub’s do-not-call list still has 2 numbers nobody here blocks now — take them off in CallHub: Held A Example, Held B Example$/);
+    // …and any list’s page names whose they are, each a way to the person.
+    assert.deepEqual(ok(await staff.get(`/api/callhub/pushes?list=${ids.list}`)).held, { n: 2, people: [{ id: a.id, name: 'Held A Example' }, { id: b.id, name: 'Held B Example' }], more: 0 });
     // Not asked again each time someone's tags change; no job gave up; a push still goes.
     ok(await mgr.action('person.update', { id: b.id, tags: ['newton'] }));
     await drain();
@@ -1379,7 +1427,9 @@ test('a number CallHub won’t let go, or never named, stays on its list: nothin
     for (const m of many) ok(await mgr.action('person.update', { id: m.id, tags: [] }));
     await drain();
     assert.equal(deletes, 5, 'five asked, three left unasked');
-    assert.match(await check(), /still has 10 numbers nobody here blocks now — take them off in CallHub$/);
+    assert.match(await check(), /still has 10 numbers nobody here blocks now — take them off in CallHub: Held A Example, Held B Example, Kept0 Example and 7 more \(a list’s page names them all\)$/);
+    assert.deepEqual(ok(await staff.get(`/api/callhub/pushes?list=${ids.list}`)).held.people.map((x) => x.name),
+      ['Held A Example', 'Held B Example', ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `Kept${i} Example`)]);
     assert.equal((await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'callhub.dnc' and status in ('failed', 'pending')`, [ws])).rows[0].n, 0);
   } finally {
     globalThis.fetch = realFetch;
@@ -1389,9 +1439,10 @@ test('a number CallHub won’t let go, or never named, stays on its list: nothin
   ok(await mgr.action('callhub.push', { list_id: again }));
   await drain();
   assert.ok(!fake.dnc.some((d) => d.phone_number === '+16045550147' || d.phone_number.startsWith('+1778555011')));
-  assert.match(await check(), / · CallHub’s do-not-call list still has 1 number nobody here blocks now — take it off in CallHub$/);
+  assert.match(await check(), / · CallHub’s do-not-call list still has 1 number nobody here blocks now — take it off in CallHub: Held A Example$/);
   // (Tidy: the stand-in still has it; base.win's record of it goes so later counts are their own.)
   await db.query(`delete from callhub_dnc where workspace_id = $1 and phone = '+16045550146'`, [ws]);
+  assert.equal(ok(await staff.get(`/api/callhub/pushes?list=${ids.list}`)).held, null);
 });
 
 test('with many numbers not to call the push says what it is doing first, instead of “0 of N” with no words', async () => {

@@ -93,16 +93,18 @@ export const overToldOf = async (db, ws, blocked = null, { again = false } = {})
   }
   return out;
 };
-// How many numbers CallHub still holds that nobody here blocks any more and
-// that base.win cannot take off itself: one CallHub never named, or would
-// not let go (Check says so). One the job is about to take off is not counted.
-export const heldTooLong = async (db, ws) => {
+// The numbers CallHub still holds that nobody here blocks any more and that
+// base.win cannot take off itself: one CallHub never named, or would not
+// let go (Check says how many, a list's page whose). One the job is about
+// to take off is not among them. Asked often (a list's page reads it), so
+// who is blocked is only worked out when a number may be held at all.
+export const heldNumbers = async (db, ws) => {
+  const rows = (await db.query(
+    'select phone, category, entry, refused from callhub_dnc where workspace_id = $1 and category > 0 and (entry is null or refused is not null)', [ws],
+  )).rows.filter((r) => !r.entry || !askedMore(r));
+  if (!rows.length) return [];
   const all = await notToCall(db, ws);
-  let n = 0;
-  for (const [phone, row] of await told(db, ws)) {
-    if ((Number(row.category) & ~(all.get(phone) || 0)) && (!row.entry || (row.refused != null && !askedMore(row)))) n += 1;
-  }
-  return n;
+  return rows.filter((r) => Number(r.category) & ~(all.get(r.phone) || 0)).map((r) => r.phone);
 };
 
 // Tell CallHub, one a second, `budget` at most; each is remembered as it

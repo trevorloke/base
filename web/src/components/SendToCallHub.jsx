@@ -5,13 +5,17 @@
 // how many are left out — then the sending happens in the background and
 // the line under it says how far it is ("Sending · 850 of 2,000", "Sent",
 // or "Stopped: CallHub said … · Carry on"), and how many numbers CallHub
-// would not take, in its words, with whose they were. Once calls are made,
-// how many results came back; under "What each result counts as", CallHub's
-// own results with the outcome each is filed as (filled in by pattern,
-// yours to change), and the survey question whose answers rate people —
-// none until someone picks it. A change moves the results already in too,
-// and putting it back undoes it; one that would tag people do-not-call or
-// rate them asks first, in place.
+// would not take, in its words, with whose they were (a few by name, the
+// rest on a tap). Once calls are made, how many results came back; under
+// "What each result counts as", CallHub's own results with the outcome each
+// is filed as (filled in by pattern, yours to change), and the survey
+// question whose answers rate people — none until someone picks it. A
+// change moves the results already in too, and putting it back undoes it
+// (on the lists sent since that copied it as well); one that would tag
+// people do-not-call or rate them asks first, in place, naming the result.
+// Under everything: the do-not-call numbers CallHub would not take, and
+// the ones it still holds though nobody here blocks them now — with whose
+// they are, so someone can put it right in CallHub.
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -60,12 +64,22 @@ function Unavailable({ onRetry }) {
   return <p className="ch-line" role="status">Unavailable — <button type="button" className="btn-link" onClick={onRetry}>Try again</button></p>;
 }
 
-// A few people by name, each a way to their page: "Ana Example, Ben Example and 3 more".
-function Names({ people, of = 0 }) {
+// People by name, each a way to their page: a few, and the rest on a tap —
+// "Ana Example, Ben Example and 3 more". more: how many the server could
+// not name here at all (said, with nothing to open).
+const WHO_SHOWN = 5;
+function Names({ people, more = 0 }) {
+  const [all, setAll] = useState(false);
   if (!people?.length) return null;
-  const more = Math.max(0, of - people.length);
+  const shown = all ? people : people.slice(0, WHO_SHOWN);
+  const rest = people.length - shown.length;
   return (
-    <> — {people.map((who, i) => <span key={who.id}>{i > 0 && ', '}<Link to={`/people/${who.id}`}>{who.name}</Link></span>)}{more > 0 && ` and ${num(more)} more`}</>
+    <>
+      {' — '}{shown.map((who, i) => <span key={who.id}>{i > 0 && ', '}<Link to={`/people/${who.id}`}>{who.name}</Link></span>)}
+      {rest > 0 && <>{' and '}<button type="button" className="btn-link" aria-expanded="false" onClick={() => setAll(true)}>{num(rest + more)} more</button></>}
+      {rest === 0 && more > 0 && ` and ${num(more)} more`}
+      {all && people.length > WHO_SHOWN && <>{' · '}<button type="button" className="btn-link" aria-expanded="true" onClick={() => setAll(false)}>Show fewer</button></>}
+    </>
   );
 }
 
@@ -106,8 +120,10 @@ function Results({ p, online, onChanged }) {
   const pickOutcome = (d, i, value) => {
     const input = { outcomes: { [d.disposition]: value === d.suggested ? null : value } };
     if (value !== 'do_not_call') { save(input); return; }
-    const who = d.people ? `${num(d.people)} ${plural(d.people, 'person', 'people')}` : 'everyone with this result';
-    setAsk({ at: `d${i}`, input, words: `Tag ${who} do-not-call? They leave every call list.` });
+    // The question names the result it is about: it is read on its own, not only under its row.
+    const who = d.people ? `the ${num(d.people)} ${plural(d.people, 'person', 'people')}` : 'everyone';
+    const result = d.disposition ? `with “${d.disposition}”` : 'with no result given';
+    setAsk({ at: `d${i}`, input, words: `Tag ${who} ${result} do-not-call? They leave every call list.` });
   };
   const pickQuestion = (value) => {
     const input = { rating: value ? { question: value, answers: {} } : null };
@@ -117,13 +133,15 @@ function Results({ p, online, onChanged }) {
   const pickRating = (a, i, value) => {
     const input = { rating: { question: picked, answers: { [a.answer]: value || null } } };
     if (!value) { save(input); return; }
-    setAsk({ at: `a${i}`, input, words: `Rate everyone who answered “${a.answer}” ${ratingText(scale, value)}?` });
+    setAsk({ at: `a${i}`, input, words: `Rate everyone who answered “${a.answer}” as ${ratingText(scale, value)}?` });
   };
+  // No — by its button or by Escape: nothing changes, and the keyboard is back on the select.
+  const sayNo = (at) => { setAsk(null); document.getElementById(`${uid}-${at}`)?.focus(); };
   const confirm = (at) => ask?.at === at && (
-    <span className="ops-confirm ch-confirm" role="alert" ref={askRef}>
+    <span className="ops-confirm ch-confirm" role="alert" ref={askRef} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); sayNo(at); } }}>
       <span>{ask.words}</span>
       <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={() => save(ask.input)}>Yes</button>
-      <button type="button" className="btn btn-quiet ops-tap" autoFocus onClick={() => { setAsk(null); document.getElementById(`${uid}-${at}`)?.focus(); }}>No</button>
+      <button type="button" className="btn btn-quiet ops-tap" autoFocus onClick={() => sayNo(at)}>No</button>
     </span>
   );
   return (
@@ -179,8 +197,10 @@ function Results({ p, online, onChanged }) {
 }
 
 // newest: the one push that can still be carried on; an earlier one that
-// stopped was left behind when the list was sent again.
-function Push({ p, running, online, onChanged, newest, onSendAgain }) {
+// stopped was left behind when the list was sent again. asking: the "how
+// many go?" question is open above — its Send · Cancel are the only pair of
+// buttons then.
+function Push({ p, running, online, onChanged, newest, asking, onSendAgain }) {
   const uid = useId();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -210,17 +230,19 @@ function Push({ p, running, online, onChanged, newest, onSendAgain }) {
     <li className="ch-push" data-status={stopped ? 'stopped' : p.status}>
       <p className="ch-line ch-status"><span role="status" aria-live="polite">{said}</span>{rest}</p>
       {active(p) && !stopped && <span className="ch-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>}
-      {stopped && newest && (
+      {stopped && newest && !asking && (
         <div className="ops-actions ch-stopped">
           <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={carryOn}>{busy ? 'Starting…' : 'Carry on'}</button>
-          <button type="button" className="btn btn-quiet ops-tap" disabled={busy || !online} onClick={onSendAgain}>Send again instead</button>
+          {/* Only where CallHub refused it: one left part-way with no job behind it can only be carried on. */}
+          {p.status === 'failed' && <button type="button" className="btn btn-quiet ops-tap" disabled={busy || !online} onClick={onSendAgain}>Send again instead</button>}
         </div>
       )}
       {error && <p className="error" role="alert">{error}</p>}
       <p className="ops-meta ch-book">Phonebook in CallHub: “{p.name}”{p.skipped ? ` · ${num(p.skipped)} left out` : ''}{p.by ? ` · sent by ${p.by}` : ''}</p>
       {p.refused > 0 && (
         <p className="ops-meta ch-refused">
-          CallHub wouldn’t take {num(p.refused)} {plural(p.refused, 'number')}{p.refused_note ? `: “${p.refused_note}”` : ''}<Names people={p.refused_people} of={p.refused} />
+          CallHub wouldn’t take {num(p.refused)} {plural(p.refused, 'number')}{p.refused_note ? `: “${p.refused_note}”` : ''}
+          <Names people={p.refused_people} more={Math.max(0, p.refused - (p.refused_people?.length || 0))} />
         </p>
       )}
       {p.results > 0 ? (
@@ -290,6 +312,7 @@ export default function SendToCallHub({ kind, id }) {
   const pv = preview.data;
   const why = preview.isError ? refusal(preview.error) : null;
   const nt = pushes.data?.not_taken;
+  const held = pushes.data?.held;
   return (
     <section className="ch" aria-label="CallHub">
       <div className="ch-head">
@@ -329,7 +352,7 @@ export default function SendToCallHub({ kind, id }) {
           : !list.length && !asking && <p className="ops-meta">Sends this {kind === 'list' ? 'list' : 'phone bank'} to CallHub’s dialer. Each call’s result comes back onto the person.</p>}
       {list.length > 0 && (
         <ul className="ch-pushes">
-          <Push p={list[0]} running={pushes.data.running} online={online} onChanged={refresh} newest onSendAgain={ask} />
+          <Push p={list[0]} running={pushes.data.running} online={online} onChanged={refresh} newest asking={asking} onSendAgain={ask} />
         </ul>
       )}
       {list.length > 1 && (
@@ -346,7 +369,14 @@ export default function SendToCallHub({ kind, id }) {
       )}
       {nt && (
         <p className="ops-meta ch-nottaken">
-          CallHub wouldn’t take {num(nt.n)} do-not-call {plural(nt.n, 'number')}{nt.note ? `: “${nt.note}”` : ''}<Names people={nt.people} />
+          CallHub wouldn’t take {num(nt.n)} do-not-call {plural(nt.n, 'number')}{nt.note ? `: “${nt.note}”` : ''}
+          <Names people={nt.people} more={nt.more || 0} />
+        </p>
+      )}
+      {held && (
+        <p className="ops-meta ch-nottaken ch-held">
+          CallHub’s do-not-call list still has {num(held.n)} {plural(held.n, 'number')} nobody here blocks now. Take {plural(held.n, 'it', 'them')} off in CallHub
+          <Names people={held.people} more={held.more || 0} />
         </p>
       )}
     </section>

@@ -41,6 +41,8 @@
 //                                 refused a second entry there (400)
 //   rejectDnc(numbers | 'all' | false)  dnc_contacts won't take these numbers
 //                                 (400, { phone_number: ["Enter a valid phone number."] })
+//   keepDnc(true | false)         a number can't be taken off a do-not-call
+//                                 list (DELETE answers 405)
 //   calls · phonebooks · contacts · dnc · dncLists · webhooks · delivered
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
@@ -72,6 +74,7 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
   let onePerEvent = false;
   let dncOnce = false;
   let dncRejected = null;  // a Set of numbers, or 'all'
+  let dncKept = false;
 
   const urlOf = (kind, id) => `${base}/v1/${kind}/${id}/`;
   const paged = (rows, url) => {
@@ -131,12 +134,13 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
     oneHookPerEvent: (on) => { onePerEvent = Boolean(on); },
     uniqueDnc: (on) => { dncOnce = Boolean(on); },
     rejectDnc: (numbers) => { dncRejected = numbers === 'all' ? 'all' : numbers ? new Set(numbers) : null; },
+    keepDnc: (on) => { dncKept = Boolean(on); },
     // What left base.win for one phonebook: its contacts, in the order sent.
     sent: (phonebookId) => calls.filter((c) => c.method === 'POST' && c.path === `/v1/phonebooks/${phonebookId}/upsert_contact/` && c.status < 300).map((c) => c.params),
     upserts: () => calls.filter((c) => c.method === 'POST' && /\/upsert_contact\/$/.test(c.path)),
     reset: () => {
       calls.length = 0; delivered.length = 0; webhooks.length = 0; dncLists.length = 0; dnc.length = 0;
-      phonebooks.clear(); contacts.clear(); upserts = 0; throttled = null; refused = false; limit = 3600; rejected = null; onePerEvent = false; dncOnce = false; dncRejected = null;
+      phonebooks.clear(); contacts.clear(); upserts = 0; throttled = null; refused = false; limit = 3600; rejected = null; onePerEvent = false; dncOnce = false; dncRejected = null; dncKept = false;
     },
   };
 
@@ -165,6 +169,7 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
           const fn = { note: () => note(params.fields || {}, params.options || {}), throttle: () => api.throttle(params.after, params.seconds),
             dailyLimit: () => api.dailyLimit(params.limit), refuse: () => api.refuse(params.status), reject: () => api.reject(params.numbers),
             oneHookPerEvent: () => api.oneHookPerEvent(params.on), uniqueDnc: () => api.uniqueDnc(params.on), rejectDnc: () => api.rejectDnc(params.numbers),
+            keepDnc: () => api.keepDnc(params.on),
             reset: () => api.reset() }[name];
           if (!fn) return json({ detail: 'Not found.' }, 404);
           return json({ ok: true, result: await fn() ?? null });
@@ -247,6 +252,7 @@ export const startFakeCallHub = async ({ port = 0, apiKey = process.env.CALLHUB_
           return json({ url: urlOf('dnc_contacts', row.id), dnc: params.dnc, phone_number: row.phone_number, category: row.category });
         }
         if (m && req.method === 'DELETE') {
+          if (dncKept) return json({ detail: 'Method "DELETE" not allowed.' }, 405);
           const i = dnc.findIndex((d) => String(d.id) === m[1]);
           if (i < 0) return json({ detail: 'Not found.' }, 404);
           dnc.splice(i, 1);

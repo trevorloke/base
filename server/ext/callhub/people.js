@@ -8,7 +8,7 @@
 // Nothing here writes, and nothing here talks to CallHub.
 import { httpError } from '../../actions/util.js';
 import { loadList, whereFor } from '../lists/audience.js';
-import { e164, NO_CONTACT_TAG, NO_CALL_TAG } from '../texting/rules.js';
+import { e164, last10, NO_CONTACT_TAG, NO_CALL_TAG, PHONE_DIGITS_SQL } from '../texting/rules.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // CallHub takes 3,600 contacts a day: a list bigger than this would be on
@@ -64,6 +64,22 @@ export const notToCall = async (q, ws) => {
   return out;
 };
 export const noCalls = (blocked, phone) => Boolean((blocked.get(phone) || 0) & 1);
+
+// Whose numbers these are: the people on file with one of them, by name —
+// so the desk can be told who, never which number. Found by the number's
+// last ten digits (the index people search and texting use), then matched
+// exactly. → [{ id, name }]
+export const whoseNumbers = async (q, ws, phones) => {
+  if (!phones.length) return [];
+  const numbers = new Set(phones);
+  const { rows } = await q.query(
+    `select id, name, phone from persons
+      where workspace_id = $1 and deleted_at is null and ${PHONE_DIGITS_SQL('phone')} = any($2::text[])
+      order by lower(name), id limit 2000`,
+    [ws, [...new Set(phones.map(last10))]],
+  );
+  return rows.filter((p) => numbers.has(e164(p.phone))).map((p) => ({ id: p.id, name: p.name }));
+};
 
 // rows (in name order) → the numbers to send, each with its people (the
 // first is the one sent), how many people that is, and how many were left out.

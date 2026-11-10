@@ -61,10 +61,12 @@ export const preparePush = async (db, ctx, input) => {
 export const startPush = async (tx, ctx, emit, { src, numbers, leftOut }) => {
   const ws = ctx.workspaceId;
   const busy = (await tx.query(
-    `select 1 from callhub_pushes where workspace_id = $1 and source_kind = $2 and source_id = $3 and status in ('queued', 'sending') limit 1`,
+    `select id from callhub_pushes where workspace_id = $1 and source_kind = $2 and source_id = $3 and status in ('queued', 'sending')
+      order by created_at desc limit 1`,
     [ws, src.kind, src.id],
   )).rows[0];
-  if (busy) throw httpError(409, 'This is already on its way to CallHub');
+  // On its way — or left part-way with no job behind it: then nothing is on its way, and Carry on is the way on.
+  if (busy) throw httpError(409, await jobLive(tx, ws, busy.id) ? 'This is already on its way to CallHub' : 'The last send stopped part-way — Carry on finishes it');
   if (!numbers.length) throw httpError(409, 'No one here to send: no numbers left to call');
   // The phonebook's name in CallHub: the list's, and when it was sent
   // (campaign time), so the right one is easy to pick there.

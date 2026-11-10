@@ -6,14 +6,15 @@
 //                                                results counts as, and the survey answers seen
 // Never a phone number or a key: counts, CallHub's own words, and — so the
 // desk can find and fix them — the names of people whose number CallHub
-// would not take.
+// would not take, or still holds though nobody here blocks it now.
 import { Hono } from 'hono';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { timeZone } from '../../lib/org.js';
 import { toLocal } from '../../lib/tzsql.js';
 import { e164, NO_CALL_TAG, NO_CONTACT_TAG } from '../texting/rules.js';
 import { callhubOn } from './callhub.js';
-import { audienceOf, notToCall, sourceOf } from './people.js';
+import { heldNumbers } from './dnc.js';
+import { audienceOf, notToCall, sourceOf, whoseNumbers } from './people.js';
 import { jobLive, pushOut } from './push.js';
 import { fieldsOf, norm, outcomeFor, REFILE_JOB, surveyPairs } from './results.js';
 
@@ -116,12 +117,15 @@ const whenWords = (col, tz) => {
     when (${local})::date = (${toLocal('now()', tz)})::date then to_char(${local}, 'FMHH12:MI am')
     else to_char(${local}, 'Mon FMDD, FMHH12:MI am') end`;
 };
-const WHO_SHOWN = 5;
-// Whose numbers CallHub would not take in this push (the first by name on each), a few of them.
+// People are named so the desk can find them: all of them, up to this many
+// (the page shows a few and the rest on a tap; `more` counts any beyond).
+const NAMED = 100;
+const named = (people) => ({ people: people.slice(0, NAMED), more: Math.max(0, people.length - NAMED) });
+// Whose numbers CallHub would not take in this push (the first by name on each).
 const refusedPeople = async (db, ws, pushId) => (await db.query(
   `select p.id, p.name from callhub_contacts c join persons p on p.id = c.person_id and p.deleted_at is null
     where c.push_id = $1 and c.workspace_id = $2 and c.refused is not null and c.first_on_number
-    order by lower(p.name), p.id limit ${WHO_SHOWN}`, [pushId, ws],
+    order by lower(p.name), p.id limit ${NAMED}`, [pushId, ws],
 )).rows.map((r) => ({ id: r.id, name: r.name }));
 
 // The campaign's do-not-call numbers CallHub would not take: how many, its
@@ -143,10 +147,15 @@ const notTaken = async (db, ws) => {
         and (tags @> $2::jsonb or tags @> $3::jsonb) order by lower(name), id`,
     [ws, JSON.stringify([NO_CONTACT_TAG]), JSON.stringify([NO_CALL_TAG])],
   )).rows;
-  return {
-    n: rows.length, note: rows[0].refused_note || null,
-    people: tagged.filter((p) => numbers.has(e164(p.phone))).slice(0, WHO_SHOWN).map((p) => ({ id: p.id, name: p.name })),
-  };
+  return { n: rows.length, note: rows[0].refused_note || null, ...named(tagged.filter((p) => numbers.has(e164(p.phone))).map((p) => ({ id: p.id, name: p.name }))) };
+};
+// The numbers CallHub still holds that nobody here blocks any more, and
+// that base.win could not take off itself (dnc.js): how many, and whose
+// they are — whoever is on file with the number — so someone can take them
+// off in CallHub. null when there are none.
+const held = async (db, ws) => {
+  const numbers = await heldNumbers(db, ws);
+  return numbers.length ? { n: numbers.length, ...named(await whoseNumbers(db, ws, numbers)) } : null;
 };
 // Whether results already in are still being moved after a change to the push's table.
 const moving = async (db, ws, id) => (await db.query(
@@ -178,5 +187,6 @@ api.get('/callhub/pushes', async (c) => {
   }
   // running: whether this server does background work at all (STARBASE_JOBS=off: a push waits).
   // not_taken: the campaign's do-not-call numbers CallHub would not take.
-  return c.json({ on: callhubOn(), running: jobRunnerOn(), pushes, not_taken: await notTaken(db, ws) });
+  // held: the numbers CallHub still holds that nobody here blocks now.
+  return c.json({ on: callhubOn(), running: jobRunnerOn(), pushes, not_taken: await notTaken(db, ws), held: await held(db, ws) });
 });
