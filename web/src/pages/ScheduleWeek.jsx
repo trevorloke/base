@@ -25,6 +25,11 @@ import { dayWords, peopleWords, plural } from './ScheduleWords.js';
 
 export const weekWords = (monday) => `${dayWords(monday).md} – ${dayWords(addDays(monday, 6)).md}`;
 export const weekKey = (monday) => ['schedule', 'week', monday];
+// A notice still going out: someone is waiting their turn or mid-send. One
+// left mid-send by a crash is never sent again by itself (the server can't
+// know whether it went), so after ten minutes it stops being watched.
+const GOING_MS = 10 * 60_000;
+export const noticeGoing = (last) => Boolean(last) && last.waiting + last.unsure > 0 && Date.now() - Date.parse(last.at) < GOING_MS;
 
 // How a copy went, in one line.
 const copiedWords = (r, to) => [
@@ -91,7 +96,7 @@ function NoticeDetails({ batchId }) {
         <li key={p.person_id}>
           <span>{p.name}</span>
           <span className="chips">
-            {p.state !== 'done' && <span className="chip">Not sent yet</span>}
+            {p.state !== 'done' && <span className="chip chip-warn">Not finished</span>}
             <NotifyChip channel="email" status={p.email} />
             <NotifyChip channel="text" status={p.text} />
           </span>
@@ -122,7 +127,9 @@ function TellWeek({ monday, tz, week, online }) {
     }
   };
   const none = !d.providers.email && !d.providers.text;
-  const going = d.last && d.last.waiting > 0;
+  const going = noticeGoing(d.last);
+  // Not finished, and no longer being sent: said, with the people under Details.
+  const stuck = d.last && !going ? d.last.waiting + d.last.unsure : 0;
 
   return (
     <div className="sch-row">
@@ -159,11 +166,11 @@ function TellWeek({ monday, tz, week, online }) {
         <div className="sch-last">
           <span className={!going && d.last.reached === d.last.people ? 'ops-done' : 'ops-done ops-done--wait'} role="status">
             {going
-              ? `Going out — ${d.last.waiting} of ${d.last.people} to go…`
-              : `${d.last.reached === d.last.people ? '✓ ' : ''}Reached ${d.last.reached} of ${d.last.people} · ${stamp(d.last.at, tz)}`}
+              ? `Going out — ${d.last.waiting + d.last.unsure} of ${d.last.people} to go…`
+              : `${d.last.reached === d.last.people ? '✓ ' : ''}Reached ${d.last.reached} of ${d.last.people}${stuck ? ` · ${stuck} not finished` : ''} · ${stamp(d.last.at, tz)}`}
           </span>
           <button type="button" className="ops-more disclose disclose--inline" aria-expanded={details} onClick={() => setDetails((v) => !v)}>Details</button>
-          {details && <NoticeDetails batchId={d.last.batch_id} key={`${d.last.batch_id}:${d.last.waiting}`} />}
+          {details && <NoticeDetails batchId={d.last.batch_id} key={`${d.last.batch_id}:${d.last.waiting}:${d.last.unsure}`} />}
         </div>
       )}
     </div>

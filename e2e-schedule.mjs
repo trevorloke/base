@@ -399,13 +399,14 @@ try {
   k = await D.keys();
   check('ten shifts on the week — still no key pressed, no text field focused', k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
 
-  // The rows line up across days: Monday's and Tuesday's 6:30 sit side by side, Wednesday's evening lower than every early card.
+  // Each day is its own list: both early cards at the top of their days, and Wednesday's evening straight under its early one.
   const tops = await page.evaluate(([m, t, w]) => {
-    const top = (day, i) => document.querySelectorAll(`.sch-day[data-day="${day}"] .sch-card`)[i]?.getBoundingClientRect().top;
-    const bottom = (day, i) => document.querySelectorAll(`.sch-day[data-day="${day}"] .sch-card`)[i]?.getBoundingClientRect().bottom;
-    return { mon: top(m, 0), tue: top(t, 0), tueEnd: bottom(t, 1), wedEve: top(w, 1) };
+    const box = (day, i) => document.querySelectorAll(`.sch-day[data-day="${day}"] .sch-card`)[i]?.getBoundingClientRect();
+    const col = (day) => document.querySelector(`.sch-day[data-day="${day}"]`).getBoundingClientRect();
+    return { mon: box(m, 0).top, tue: box(t, 0).top, wedEarlyEnd: box(w, 0).bottom, wedEve: box(w, 1).top, monCol: col(m).bottom, wedCol: col(w).bottom };
   }, [mon, tue, wed]);
-  check('the day lists line up: early beside early, evening below', Math.abs(tops.mon - tops.tue) < 1.5 && tops.wedEve > tops.tueEnd, JSON.stringify(tops));
+  check('each day is a list from the top: no rows held open for other days; the columns end together', Math.abs(tops.mon - tops.tue) < 1.5
+    && tops.wedEve - tops.wedEarlyEnd > 0 && tops.wedEve - tops.wedEarlyEnd < 48 && Math.abs(tops.monCol - tops.wedCol) < 1.5, JSON.stringify(tops));
   mm = await measure(page);
   check('the full week (1440): one main button, no sideways scroll', mm.yellow.join('|') === 'New shift' && mm.overflow <= 0, JSON.stringify(mm));
   await D.shot('09-week-ten-shifts-1440');

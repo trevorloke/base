@@ -40,35 +40,25 @@
 .sch-note { margin: 0; font-size: 14px; color: var(--text-3); }
 .sch-unavailable { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; margin: 0; font-size: 14px; color: var(--text-2); }
 
-/* ── Seven days across, each a list. Every day draws the same rows (its
-   heading, then a divider and a list per part of the day), and the rows
-   are the week's own (subgrid), so a 6:30 on Monday sits beside a 6:30 on
-   Tuesday. Where a browser has no subgrid each day is simply its own list. ── */
+/* ── Seven days across, each its own list: a heading, then its shifts in
+   start order under the part of the day they start in. Every column is as
+   tall as the tallest, with room at its foot to drop a card into. ── */
 .sch-days {
-  /* The last row is empty: room under every day's list to drop a card into. */
-  --sch-tail: 56px;
   display: grid;
   grid-template-columns: repeat(var(--sch-cols, 7), minmax(0, 1fr));
-  column-gap: var(--s-2);
-  row-gap: 0;
-  align-items: start;
+  gap: var(--s-2);
+  align-items: stretch;
 }
 .sch-day {
-  display: grid;
-  grid-row: 1 / -1;
-  grid-template-rows: subgrid;
-  align-self: stretch;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: var(--s-1);
+  min-height: 176px;
+  padding: var(--s-1) var(--s-1) var(--s-6);
   background: var(--paper-1);
   border: 1px solid transparent;
   border-radius: var(--r-ctrl);
   transition: background-color 0.1s, border-color 0.1s;
-}
-@supports not (grid-template-rows: subgrid) {
-  .sch-day { display: flex; flex-direction: column; }
-  .sch-part:empty, .sch-list:empty { display: none; }
 }
 .sch-day[data-past] { opacity: 0.65; }
 /* A card in hand: every day it may go to shows its edge; the one under it fills. */
@@ -93,7 +83,7 @@
 
 /* "Early ———" — quiet, and only where that day has a shift then. */
 .sch-part { display: flex; align-items: center; gap: var(--s-2); min-height: 26px; padding: var(--s-2) var(--s-1) 2px; font-size: 12px; font-weight: 600; color: var(--text-3); }
-.sch-part:not(:empty)::after { content: ''; flex: 1; height: 1px; background: var(--rule-2); }
+.sch-part::after { content: ''; flex: 1; height: 1px; background: var(--rule-2); }
 .sch-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 
 /* A shift: its kind's colour down the edge and on its mark. */
@@ -222,8 +212,7 @@
 
 /* Phone: one day, full width; the sheet comes up from the bottom, over the tab bar. */
 @media (max-width: 720px) {
-  .sch-days { --sch-tail: 0px; }
-  .sch-day { padding: var(--s-2); }
+  .sch-day { min-height: 0; padding: var(--s-2); }
   .sch-day__name { font-size: 15px; }
   .sch-part { font-size: 13px; }
   .sch-card__kind .sk-icon { width: 20px; height: 20px; }

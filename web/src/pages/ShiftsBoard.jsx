@@ -45,7 +45,7 @@ import { TurfChips, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import ScheduleAdd from './ScheduleAdd.jsx';
 import ScheduleShift from './ScheduleShift.jsx';
 import { Unavailable } from './ScheduleSheet.jsx';
-import WeekMore, { CopyLastWeek, weekKey, weekWords } from './ScheduleWeek.jsx';
+import WeekMore, { CopyLastWeek, noticeGoing, weekKey, weekWords } from './ScheduleWeek.jsx';
 import { countWords, dayWords, peopleWords, plural, shiftSpan } from './ScheduleWords.js';
 import './shifts-board.css';
 import './schedule.css';
@@ -136,7 +136,7 @@ export default function ShiftsBoard({ me, onSheet }) {
     queryFn: () => apiGet(`/schedule/week?week=${monday}`),
     meta: { side: true },
     // A notice going out: watched until everyone has their answer.
-    refetchInterval: (q) => (q.state.data?.last?.waiting > 0 ? 2000 : false),
+    refetchInterval: (q) => (noticeGoing(q.state.data?.last) ? 2000 : false),
   });
 
   const setParam = (name, value) => setParams((cur) => {
@@ -177,8 +177,6 @@ export default function ShiftsBoard({ me, onSheet }) {
     }
     return { byDay: perDay, byId: ids, onShift: on, weekCount: count };
   }, [shifts, assignments, tz]);
-  // The parts of the day that hold a shift on a day shown: the rows drawn.
-  const bands = WEEK_PARTS.filter((p) => shownDays.some((d) => (byDay.get(d) ?? []).some((s) => weekPartOf(s.starts_at, tz) === p.code)));
   const emptyWeek = have && shifts.length === 0;
   const pastWeek = days[6] < today;
   // An empty week offers last week's shifts — when last week had any.
@@ -603,8 +601,8 @@ export default function ShiftsBoard({ me, onSheet }) {
     );
   };
 
-  // A day: its heading with "+", then its shifts under the part of the day
-  // they start in. Every day draws the same rows, so they line up across.
+  // A day: its heading with "+", then its shifts in start order, a quiet
+  // divider where each part of the day begins.
   const dayColumn = (d) => {
     const w = dayWords(d);
     const list = byDay.get(d) ?? [];
@@ -621,12 +619,12 @@ export default function ShiftsBoard({ me, onSheet }) {
             </button>
           )}
         </header>
-        {bands.map((p) => {
+        {WEEK_PARTS.map((p) => {
           const here = list.filter((s) => weekPartOf(s.starts_at, tz) === p.code);
-          return [
-            <span key={`${p.code}:label`} className="sch-part" aria-hidden={here.length ? undefined : 'true'}>{here.length ? p.label : ''}</span>,
-            <ol key={p.code} className="sch-list" aria-label={here.length ? `${p.label}, ${w.long}` : undefined}>{here.map(card)}</ol>,
-          ];
+          return here.length ? [
+            <span key={`${p.code}:label`} className="sch-part" aria-hidden="true">{p.label}</span>,
+            <ol key={p.code} className="sch-list" aria-label={`${p.label}, ${w.long}`}>{here.map(card)}</ol>,
+          ] : null;
         })}
       </section>
     );
@@ -733,8 +731,7 @@ export default function ShiftsBoard({ me, onSheet }) {
           )}
 
           {have && (
-            <div className="sch-days" data-narrow={narrow ? '' : undefined}
-              style={{ '--sch-cols': shownDays.length, gridTemplateRows: `auto${bands.length ? ` repeat(${bands.length}, auto auto)` : ''} var(--sch-tail)` }}>
+            <div className="sch-days" data-narrow={narrow ? '' : undefined} style={{ '--sch-cols': shownDays.length }}>
               {shownDays.map(dayColumn)}
             </div>
           )}
