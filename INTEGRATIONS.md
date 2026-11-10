@@ -12,7 +12,7 @@ is written) and says exactly what is wrong if anything is.
 |---|---|---|---|
 | [Database](#database) | everything the campaign records | yes | `DATABASE_URL` |
 | [Public address](#public-address) | links in email, texting's callbacks | yes | `STARBASE_PUBLIC_URL` |
-| [Email — Resend](#email--resend) | invites, newsletters, press, ladders, shift alerts, receipts | yes | `RESEND_API_KEY`, `MAIL_FROM` |
+| [Email — Resend or SendGrid](#email--resend-or-sendgrid) | invites, newsletters, press, ladders, shift alerts, receipts; bounces and spam complaints back | yes | `RESEND_API_KEY`, `MAIL_FROM` (+ `RESEND_WEBHOOK_SECRET`); or `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` |
 | [Texting and calls — Twilio](#texting-and-calls--twilio) | the campaign's number: texts, text blasts, ladder texts, calls, SMS shift alerts | no (phones' own apps until then) | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` |
 | [Address lookup](#address-lookup) | suggestions as you type, placing people on the map | yes (free default, no key) | `GEOCODER`, `GEOCODER_FALLBACK`, `BC_GEOCODER_KEY`, `GOOGLE_MAPS_SERVER_KEY` |
 | [Map background](#map-background) | the map volunteers walk | no (free default; change before election week) | `GOOGLE_MAPS_TILES`, `GOOGLE_MAPS_SERVER_KEY`, or `STARBASE_TILE_URL` |
@@ -53,32 +53,122 @@ it, links use whatever address the page was opened at, background sends
 **Check:** Services → Public address fetches `<address>/api/health` and
 makes sure it's this base.win.
 
-## Email — Resend
+## Email — Resend or SendGrid
 
-[resend.com](https://resend.com). Sends with a plain HTTPS call
-(`POST https://api.resend.com/emails`), one idempotency key per email so a
-retry is never a second copy.
+One email sender per deployment, behind one small layer (`server/lib/mail`:
+plain HTTPS, no SDK, a file per sender). [Resend](https://resend.com) is the
+default and the one base.win was built on;
+[SendGrid](https://sendgrid.com) is there for a campaign that already pays
+for it. `MAIL_PROVIDER` names one (`resend` or `sendgrid`); unset, base.win
+uses whichever has its key, Resend first — so a deployment with only
+`RESEND_API_KEY` sends exactly as it always has. A sender that is named but
+not set up is never quietly swapped for the other one.
 
-1. Resend → **Domains** → add the campaign's domain (e.g. `imaginesurrey.ca`)
-   and add the DNS records it shows (SPF, DKIM) at the domain's DNS host.
-   Wait for **Verified**.
-2. Resend → **API Keys** → create one with **Sending access** for that
-   domain.
-3. Set `RESEND_API_KEY` to it and `MAIL_FROM` to a sender on the domain:
-   `Imagine Surrey <team@imaginesurrey.ca>`. Staging: a separate key, or none.
+**Resend**
+
+1. Resend → **API Keys** → create a key. *Full access* lets base.win show
+   the domain's DNS records and check the webhook; a *Sending access* key
+   sends just as well, and Settings → Services says what it can't see.
+2. Set `RESEND_API_KEY` to it and `MAIL_FROM` to a sender on the campaign's
+   domain: `Imagine Surrey <team@imaginesurrey.ca>`. Staging: a separate
+   key, or none.
+3. **Settings → Services → Email → Sending domain** → **Add domain**. The
+   panel lists the DNS records Resend asks for (SPF, DKIM) and one more,
+   DMARC — no sender sets that one up, and Gmail, Yahoo and Outlook ask
+   bulk senders for it. Add each at the domain's DNS host, then **Check
+   again** until every line says *In*. (Adding the domain in Resend's own
+   screen does the same; the panel then shows where it stands.)
+4. Bounces and complaints: Resend → **Webhooks** → **Add webhook** with the
+   address on the Email row (`https://<public address>/hooks/mail/resend`)
+   and the events listed there. Set `RESEND_WEBHOOK_SECRET` to the webhook's
+   signing secret (`whsec_…`).
+
+**SendGrid**
+
+1. SendGrid → **Settings → API Keys** → a key that can send mail (with
+   access to Sender Authentication the panel can show the domain's records).
+2. Set `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY` and `MAIL_FROM`
+   (SendGrid has no test sender: without `MAIL_FROM` nothing is sent).
+3. **Sending domain**, as above (SendGrid asks for three CNAME records).
+4. SendGrid → **Settings → Mail Settings → Event Webhooks**: the address on
+   the Email row (`https://<public address>/hooks/mail/sendgrid`), the
+   events *delivered*, *bounce*, *dropped*, *deferred* and *spam report*,
+   and **Signed Event Webhook** on. Set `SENDGRID_WEBHOOK_PUBLIC_KEY` to its
+   verification key.
+
+base.win turns SendGrid's own click, open and unsubscribe tracking off in
+every email: it counts its own and has its own unsubscribe pages.
+
+**What comes back.** Every newsletter, press and list email carries
+base.win's own reference, and base.win keeps the sender's id for it. The sender then posts
+what happened to `/hooks/mail/<sender>` — signed (Svix's HMAC for Resend, an
+ECDSA signature for SendGrid; checked over the exact bytes), each event done
+once, and answered at every address of the server, the campaign's website
+domain included:
+
+- **Delivered** — the send's row says *Delivered 1,180 of 1,200*. Until the
+  sender has said something, a send says *sent*, as before.
+- **Bounced for good** — the address goes on the campaign's suppression
+  list (`email_suppressions`): no list, newsletter or ladder emails it again,
+  and a send saved earlier leaves it off when it goes. A bounce is about the
+  address, not the person: nobody's consent changes, and a person given a
+  new address is reachable again. A full mailbox or a block is not a
+  bounce for good and stops nothing.
+- **Marked as spam** — the address is suppressed and the consent is ended
+  too (off the newsletter, or *do-not-email*, with the no on record). A send
+  at or over 0.1% complaints says so on its row; that is Gmail's line.
+- **Refused by the sender** (its own suppression list) — counted with the
+  bounces and suppressed here too, so the two lists agree.
+- A bounce or a complaint about an email that wasn't a newsletter or a list
+  email (a receipt, a ladder email, an invite) still stops the address, in
+  every campaign on the server that holds it.
+- **Not sure it went** (the sender never answered): any event that says the
+  sender has the email settles it. Resend drops a repeat that carries the
+  same key, so *Try again* is safe there after ten minutes. SendGrid has no
+  such key: *Try again* is offered only after thirty minutes, once its
+  events have come in since and none was for that email — and it says a
+  second copy is possible.
+
+There is no button yet to take an address back off the suppression list; a
+corrected address is a different address and is not on it.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `RESEND_API_KEY` | — | without it nothing is emailed: sends are recorded as *queued*, invites show their link to copy, receipts wait |
-| `MAIL_FROM` | `onboarding@resend.dev` | Resend's test sender reaches only the account's owner — set it |
+| `MAIL_PROVIDER` | — | `resend` or `sendgrid`. Unset: whichever has its key, Resend first |
+| `MAIL_FROM` | Resend: `onboarding@resend.dev` | Resend's test sender reaches only the account's owner — set it. SendGrid needs it |
+| `RESEND_API_KEY` | — | without a sender's key nothing is emailed: sends are recorded as *queued*, invites show their link to copy, receipts wait |
+| `RESEND_WEBHOOK_SECRET` | — | the Resend webhook's signing secret; a comma list while one is rolled to the next. Without it delivery events are refused (503) |
+| `RESEND_REGION` | `us-east-1` | where **Add domain** makes the domain at Resend (`us-east-1`, `eu-west-1`, `sa-east-1`, `ap-northeast-1`; Resend has no Canadian region) |
+| `SENDGRID_API_KEY` | — | SendGrid's key |
+| `SENDGRID_WEBHOOK_PUBLIC_KEY` | — | the Event Webhook's verification key, as SendGrid shows it (or a PEM block); a comma list while it is changed |
+| `SENDGRID_API_BASE` | `https://api.sendgrid.com` | `https://api.eu.sendgrid.com` for an EU subuser |
 | `STARBASE_EMAIL_TIMEOUT_MS` | `15000` | one email's time limit |
 
-There is nothing to point back at base.win: opens and clicks are counted by
-base.win itself (`/o`, `/c`), and unsubscribes are base.win's own pages.
+Opens and clicks are still counted by base.win itself (`/o`, `/c`), and
+unsubscribes are base.win's own pages.
 
-**Check:** Services → Email asks Resend for the account's domains: the key
-works, and `MAIL_FROM`'s domain is there and verified (a sending-only key
-can't list domains; the check says so and the key is fine).
+**Check:** Services → Email reads, and sends nothing: the key works;
+`MAIL_FROM`'s domain is on the sender's account and verified; the domain has
+a DMARC record (base.win's own DNS lookup); and bounces and complaints come
+back — at Resend, a webhook to this server with those events and the secret
+set here; at SendGrid, the verification key set and an event that has come
+in. Each thing missing is one sentence saying what to do. A sending-only key
+can't list domains or webhooks: the check says so and the key is fine.
+
+Built against Resend's published API; confirm on your own account with
+Settings → Services → Check before relying on it. Not confirmed there: every
+value a bounce's type can take (base.win stops an address only on
+*Permanent*), and that an email to an address on Resend's own suppression
+list is accepted and then reported as *suppressed*.
+
+Built against SendGrid's published API; confirm on your own account with
+Settings → Services → Check before relying on it. It has not been run
+against a real SendGrid account. Not confirmed there: how the spam-report
+event is spelled as delivered (both spellings are read), that base.win's
+reference comes back on each event (the sender's id is used when it
+doesn't), the name of the header that carries that id (`X-Message-Id`), how
+big a batch of events can be (up to 1 MB is taken), and how a retried
+delivery is stamped (no age limit is put on its signature).
 
 ## Texting and calls — Twilio
 
@@ -94,7 +184,14 @@ the campaign's own conversation). Without it, Call and Text open the
 phone's own dialer and messages, a ladder's text waits, and nothing is lost.
 
 1. Twilio → buy a Canadian number with SMS and voice. Register it for
-   messaging as Twilio requires (A2P/10DLC or toll-free verification).
+   messaging as Twilio requires. For a Canadian campaign that means a
+   **verified toll-free number** (or a short code) for any text to a list:
+   Twilio's guidance for Canada is that the carriers don't take application
+   texts from an ordinary local number, and a toll-free number can't text
+   at all until Twilio has verified it. (10DLC registration is a US scheme
+   and doesn't apply.) One-to-one texts a volunteer types are another case;
+   a local number may serve for those. Settings → Services says which kind
+   of number `TWILIO_FROM` is.
 2. Account SID and Auth Token from the Twilio console → `TWILIO_ACCOUNT_SID`,
    `TWILIO_AUTH_TOKEN`; the number in `+1…` form → `TWILIO_FROM`.
 3. Twilio → **Phone Numbers** → the number → **Messaging** → *A message comes

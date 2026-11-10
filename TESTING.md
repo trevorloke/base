@@ -56,6 +56,7 @@ INTEGRATIONS.md.
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES` | the campaign this deployment runs for (README → *One deployment per client*) | set them before the first sign-in |
 | `STARBASE_ENV` | `staging` on the test environment: a *Staging* badge on every screen | **yes**, on staging |
 | `RESEND_API_KEY`, `MAIL_FROM` | real email (invites, newsletters, press, shift alerts) | optional — without it, sends are saved as *queued* and invite links are shown to copy |
+| `RESEND_WEBHOOK_SECRET` | bounces, spam complaints and "delivered" back from Resend (INTEGRATIONS.md; SendGrid: `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY`) | optional — without it a send says *sent* and a dead address is tried again next time |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | SMS shift alerts; texting and calling from the app through the campaign's number | optional — without it, Calls opens the phone's own Messages and dialer |
 | `GOOGLE_MAPS_SERVER_KEY` | Google geocoding (`GEOCODER=google` or `GEOCODER_FALLBACK=google`) and Google Maps tiles (`GOOGLE_MAPS_TILES=1`) | optional — the free BC geocoder and OpenStreetMap tiles work without it |
 | `STARBASE_TWO_STEP_KEY` | seals everyone's two-step sign-in key (INTEGRATIONS.md) | optional to test — without it a key kept in the database is used, and Settings → Services says so |
@@ -293,10 +294,20 @@ one tap away under **More**.
   the name; change one thing and **Save** — only that changes; a new address
   picked moves the pin with it, one typed is found after the save.
 
+- **Email that hears back** (needs `RESEND_WEBHOOK_SECRET` and the webhook
+  at Resend) — send a newsletter to a few addresses of your own and one
+  that doesn't exist: in a minute or two **Outreach → Email → More → Past
+  sends** says *Delivered 3 of 4 · 1 bounced*, **Subscribers** marks that
+  address *can't be emailed*, and the next send counts one fewer. Mark one
+  as spam from a mailbox whose provider reports it (Resend says Gmail
+  doesn't): that address is unsubscribed too.
 - **Settings → Services** (managers) — every outside service: what it's
   for, *Set up* / *Not set up* (naming the settings missing) / *Using the
   free default*. **Check** on each makes one real call: Email says whether
-  Resend took the key and the sender's domain is verified; Texting whether
+  the sender took the key, the domain is verified, it has a DMARC record
+  and bounces come back (its *Sending domain* panel lists the DNS records,
+  each *In* or *Not found yet*, with **Add domain** and **Check again**);
+  Texting whether
   the number is on the Twilio account and its replies come here; Address
   lookup, the map background, the public address and the database answer
   too. *Coming in* lists the address to give Twilio. Staff can't open it.

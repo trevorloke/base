@@ -522,6 +522,24 @@ desk can't add them back. Ladder emails go only to addresses on the list as
 subscribed. Shift messages render in campaign time
 (`America/Vancouver` unless `settings.tz` says otherwise).
 
+Email hears back. The email sender (Resend, or SendGrid with
+`MAIL_PROVIDER=sendgrid`) posts what happened to each email to
+`/hooks/mail/<sender>`, signed: a send's row then says *Delivered 1,180 of
+1,200 · 12 bounced · 1 spam complaint*, an address that bounced for good or
+reported spam goes on the campaign's suppression list — no list, newsletter
+or ladder emails it again — and a complaint ends that person's consent too.
+**Settings → Services → Email** carries the sender's *Sending domain*: its
+DNS records with Copy and *In / Not found yet*, the DMARC record base.win
+looks up itself, *Add domain* and *Check again*. INTEGRATIONS.md has the
+setup and what is not confirmed against a real account.
+
+| Setting | For |
+|---|---|
+| `MAIL_PROVIDER` | `resend` or `sendgrid`; unset, whichever has its key (Resend first) |
+| `RESEND_WEBHOOK_SECRET` | Resend's delivery events (the webhook's signing secret) |
+| `RESEND_REGION` | where *Add domain* makes the domain at Resend (default `us-east-1`) |
+| `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` | sending through SendGrid, and its delivery events |
+
 Provider-pluggable, no SDKs: `RESEND_API_KEY` (+ `MAIL_FROM`) for email,
 `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` for SMS. Without
 them, blasts and shift notifications are recorded as **queued** per recipient

@@ -15,6 +15,8 @@
 # INTEGRATIONS.md. Settings with sync: false are asked for when the Blueprint
 # is created and set per service after. Optional ones, added under the
 # service's Environment only when wanted:
+#   RESEND_WEBHOOK_SECRET, RESEND_REGION                email: bounces and complaints back; where Add domain makes the domain
+#   MAIL_PROVIDER, SENDGRID_API_KEY, SENDGRID_WEBHOOK_PUBLIC_KEY   email through SendGrid instead of Resend
 #   GEOCODER (bc), GEOCODER_FALLBACK, BC_GEOCODER_KEY   address lookup
 #   GOOGLE_MAPS_TILES=1, GOOGLE_MAPS_TILE_TYPE          Google map tiles
 #   STARBASE_TILE_URL, _ATTRIBUTION, _MAX_ZOOM          another tile provider

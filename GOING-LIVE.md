@@ -79,14 +79,17 @@ the candidates the code ships with (`shared/scale.js`).
 | `STARBASE_ENV` | `staging` on the staging service, `production` on production (set by `render.yaml`) | the *Staging* badge; `/api/health` |
 | `STARBASE_ORG_NAME`, `STARBASE_JURISDICTION`, `STARBASE_TZ`, `STARBASE_CITY`, `STARBASE_SLATES`, `STARBASE_CANDIDATES` | the campaign (README → *One deployment per client*) | the name the first sign-up sets up, the contribution rules, the campaign's day, addresses, the slates a gift can go to, the rating scale's first candidates |
 | `STARBASE_PUBLIC_URL` | `https://starbase.imaginesurrey.ca` (staging: its own address) | every link in an email: invites, unsubscribe, receipts |
-| `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on a domain verified there | email; without it invites are shown to copy and sends wait as *queued* |
+| `RESEND_API_KEY`, `MAIL_FROM` | from Resend; `Imagine Surrey <team@imaginesurrey.ca>` on the campaign's domain (Settings → Services → Email → *Sending domain* walks through its DNS records) | email; without it invites are shown to copy and sends wait as *queued* |
 | `STARBASE_TWO_STEP_KEY` | 32 or more random characters (`openssl rand -base64 32`), a different one per environment | two-step sign-in's keys sealed with a key the database doesn't hold (INTEGRATIONS.md) |
 
 Then, as each one is ready:
 
 | Variable | Set it to | Needed for |
 |---|---|---|
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
+| `RESEND_WEBHOOK_SECRET` | the signing secret of the webhook added at Resend (below) | bounces and spam complaints coming back: a dead address is never emailed again |
+| `MAIL_PROVIDER`, `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` | only for a campaign that sends through SendGrid instead: `sendgrid`, its key, its Event Webhook's verification key (INTEGRATIONS.md) | email through SendGrid |
+| `RESEND_REGION` | leave unset (`us-east-1`) unless the domain should be made in another Resend region | *Add domain* in Settings → Services |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | from Twilio; for texts to a list in Canada the number should be a verified toll-free number or a short code (INTEGRATIONS.md) | texting and calling through the campaign's number, SMS shift alerts; without them the phone's own apps are used |
 | `GEOCODER` | leave unset (`bc`, the free BC Address Geocoder); `GEOCODER_FALLBACK=google` to ask Google only for addresses BC can't place | placing people on the map |
 | `GOOGLE_MAPS_SERVER_KEY` | a Google Cloud key restricted to the server's IP with only the APIs used enabled (Geocoding; Map Tiles for `GOOGLE_MAPS_TILES=1`) | Google geocoding and Google Maps tiles |
 | `GOOGLE_MAPS_TILES` | `1` to draw the field map on Google's tiles (`GOOGLE_MAPS_TILE_TYPE` roadmap, satellite or terrain); otherwise OpenStreetMap, which is not for a large team in election week | the map's background |
@@ -103,6 +106,12 @@ each text and call, built from `STARBASE_PUBLIC_URL`; nothing else to set.
 They answer at every address of the server, the website's own domain
 included, so no domain setting can lose a STOP.
 
+Email: Resend → **Webhooks** → add one at
+`https://starbase.imaginesurrey.ca/hooks/mail/resend` (Settings → Services
+shows the exact address and the events to tick) and put its signing secret
+in `RESEND_WEBHOOK_SECRET`. From then on a bounce or a spam complaint takes
+the address off every later send, and a send says how many were delivered.
+
 Stripe: Developers → **Webhooks** → add an endpoint at
 `https://starbase.imaginesurrey.ca/stripe/webhook` (Settings → Services
 shows the exact address and the ten events to tick) and put its signing
@@ -113,7 +122,7 @@ are in.
 
 **Check them.** After the first sign-in (below): **Settings → Services** in
 the admin lists every service, says which settings are missing, and
-**Check** calls each one for real — Resend's key and domain, the Twilio
+**Check** calls each one for real — the email sender's key, domain, DMARC record and webhook, the Twilio
 number and where its replies go, the address service, Google's tiles, the
 public address and the database.
 

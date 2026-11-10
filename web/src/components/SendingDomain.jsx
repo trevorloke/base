@@ -97,8 +97,13 @@ export default function SendingDomain({ online }) {
   if (!d?.provider) return null;
   if (!d.domain) return head(<p className="sd-note">Set MAIL_FROM to a sender on your own domain: its records show here.</p>);
 
-  const lines = d.records.length + (d.dmarc && d.dmarc.found !== null ? 1 : 0);
-  const inNow = d.records.filter((r) => r.ok).length + (d.dmarc?.found ? 1 : 0);
+  // Every record on the panel that can be told apart: in, or still to add.
+  const count = (x) => ({
+    lines: x.records.length + (x.dmarc && x.dmarc.found !== null ? 1 : 0),
+    inNow: x.records.filter((r) => r.ok).length + (x.dmarc?.found ? 1 : 0),
+  });
+  const { lines, inNow } = count(d);
+  const missing = lines - inNow;
   const run = async (which) => {
     setBusy(which); setSaid(null); setError(null);
     try {
@@ -107,14 +112,14 @@ export default function SendingDomain({ online }) {
       else if (d.canManage) next = await action('mail.domain.check', {});
       else next = (await q.refetch({ throwOnError: true })).data; // a sending-only key: only the DMARC line can be looked at again
       if (d.canManage) qc.setQueryData(KEY, next);
-      const n = next.records.length + (next.dmarc && next.dmarc.found !== null ? 1 : 0);
-      const ok = next.records.filter((r) => r.ok).length + (next.dmarc?.found ? 1 : 0);
+      const now = count(next);
       setSaid(which === 'add' ? 'Added. Now add these records at your domain’s DNS host.'
-        : ok === n ? 'Checked: every record is in.'
-          : `Checked: ${ok} of ${n} in. A new record can take an hour to show.`);
+        : now.inNow === now.lines ? 'Checked: every record is in.'
+          : `Checked: ${now.inNow} of ${now.lines} in. A new record can take an hour to show.`);
     } catch (e) { setError(e.message); }
     setBusy(null);
   };
+  // Nothing left to do: the sender has verified the domain and DMARC is in.
   const allIn = d.status === 'verified' && d.dmarc?.found === true;
   const [chipClass, chipWord] = STATUS[d.status] || [];
 
@@ -126,10 +131,12 @@ export default function SendingDomain({ online }) {
         {d.found === false && <span className="chip chip-warn">Not added yet</span>}
       </p>
       {d.canManage === false && (
-        <p className="sd-note">This key can only send, so the records can’t be shown here. Make a full-access key in {d.name}, or add the domain in {d.name}’s own screen.</p>
+        <p className="sd-note">A sending-only key can’t show the records: use a full-access key, or {d.name}’s own screen.</p>
       )}
       {d.found === false && <p className="sd-note">{d.name} doesn’t have this domain yet.</p>}
-      {d.found && !allIn && <p className="sd-note">Add these at your domain’s DNS host, then tap Check again.</p>}
+      {d.found !== false && missing > 0 && (
+        <p className="sd-note">{missing === 1 ? 'Add this record' : 'Add these'} at your domain’s DNS host, then tap Check again.</p>
+      )}
       <ul className="sd-recs">
         {d.records.map((r) => (
           <Record key={`${r.purpose}-${r.type}-${r.name}`} what={`${r.purpose} · ${r.type}${r.priority != null ? ` · priority ${r.priority}` : ''}`} name={r.name} value={r.value} chip={inChip(r.ok)} />
@@ -140,7 +147,7 @@ export default function SendingDomain({ online }) {
         {d.found === false && d.canManage
           ? <button type="button" className="btn btn-primary ops-tap" disabled={!!busy || !online} onClick={() => run('add')}>{busy === 'add' ? 'Adding…' : 'Add domain'}</button>
           : <button type="button" className={`btn ops-tap${allIn ? '' : ' btn-primary'}`} disabled={!!busy || !online} onClick={() => run('check')}>{busy === 'check' ? 'Checking…' : 'Check again'}</button>}
-        {lines > 0 && !said && !error && <span className="sd-count">{inNow} of {lines} in</span>}
+        {d.found && lines > 0 && !said && !error && <span className="sd-count">{inNow} of {lines} in</span>}
         {said && <span className="sd-count" role="status">{said}</span>}
       </div>
       {error && <p className="error" role="alert">{error}</p>}

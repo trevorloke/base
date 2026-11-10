@@ -61,7 +61,10 @@ export const apiCall = async (who, url, { method = 'GET', key, body, refusal }) 
     });
   } catch (e) {
     const timedOut = e?.name === 'TimeoutError' || e?.name === 'AbortError';
-    throw new MailError(`${who} didn’t answer${timedOut ? ' in 8 s' : ` (${String(e?.cause?.code || e?.message || e).slice(0, 80)})`}`);
+    // Why, when the network says so in a word (ECONNREFUSED, ENOTFOUND) —
+    // never fetch's own "fetch failed".
+    const code = [e?.cause?.code, e?.cause?.errors?.[0]?.code].find((c) => /^E[A-Z_]+$/.test(String(c || '')));
+    throw new MailError(`${who} didn’t answer${timedOut ? ' in 8 s' : code ? ` (${code})` : ''}`);
   }
   const json = await res.json().catch(() => null);
   if (!res.ok) throw refusal(res, json);

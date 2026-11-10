@@ -1,6 +1,7 @@
 /* Settings → Services, the Email row: "Sending domain" (components/SendingDomain.jsx) */
 .sd { margin-top: var(--s-3); padding: var(--s-3); border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
-.sd-h { margin: 0; font-size: 15px; font-weight: 700; }
+.sd-h { margin: 0; font-family: var(--font-sans); font-size: 15px; font-weight: 700; letter-spacing: 0; text-transform: none; line-height: 1.4; }
+.sd .btn { min-height: 48px; }
 .sd-domain { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-1) 0 0; font-size: 15px; overflow-wrap: anywhere; }
 .sd-note { margin: var(--s-1) 0 0; font-size: 14px; color: var(--text-3); }
 .sd-recs { list-style: none; margin: var(--s-3) 0 0; padding: 0; border-top: var(--border); }
