@@ -70,20 +70,22 @@ export const shortBy = (shift) => {
 // ── Many at once ──
 // One "Add" makes every chosen day, and each of them again every week:
 // `{ weeks: n }` — n weeks in all, the first included — or `{ until: day }`
-// — while the day is on or before it. A chosen day is always made itself.
-// The screen's count ("Add 5 shifts") and the server use this same list.
+// — while the day is on or before it. A chosen day is always made itself,
+// and each day is in the list once (two chosen days a week apart repeat
+// onto the same days). The screen's count ("Add 5 shifts") and the server
+// use this same list.
 export const MAX_SHIFTS = 200;
 export const MAX_WEEKS = 26;
 export const repeatDays = (days, repeat) => {
-  const out = [];
+  const out = new Set();
   for (const day of [...new Set(days)].sort()) {
-    out.push(day);
+    out.add(day);
     for (let k = 1; k < MAX_WEEKS; k += 1) {
       const next = addDays(day, 7 * k);
       const more = repeat?.weeks ? k < repeat.weeks : Boolean(repeat?.until) && next <= repeat.until;
       if (!more) break;
-      out.push(next);
+      out.add(next);
     }
   }
-  return out.sort();
+  return [...out].sort();
 };

@@ -80,6 +80,8 @@ test('days and repeats: each chosen day, then weekly — n weeks in all, or unti
   assert.deepEqual(repeatDays(['2026-11-20'], { until: '2026-11-18' }), ['2026-11-20'], 'a chosen day is always made itself');
   assert.equal(repeatDays(['2026-11-16'], { until: '2036-01-01' }).length, 26, '26 weeks at most');
   assert.equal(repeatDays(['2026-11-16'], { weeks: 1 }).length, 1);
+  assert.deepEqual(repeatDays(['2026-11-16', '2026-11-23'], { weeks: 3 }), ['2026-11-16', '2026-11-23', '2026-11-30', '2026-12-07'],
+    'two chosen days a week apart: each day once, never two shifts on one');
 });
 
 test('shift.create takes a kind and a target; a wrong kind is refused; old shifts stay as they were', async () => {

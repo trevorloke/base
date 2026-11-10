@@ -94,6 +94,12 @@ test('every week for 4 weeks, or until a day: one repeating slot', async () => {
     kind: 'phone_bank', location: 'Campaign office', start: '18:00', end: '20:00', days: ['2030-06-05'], repeat: { until: '2030-06-20' },
   }));
   assert.deepEqual(until.shifts.map((s) => s.day), ['2030-06-05', '2030-06-12', '2030-06-19'], 'while on or before the day');
+  // Two chosen days a week apart, repeating: their weeks overlap, and each day is made once.
+  const overlap = ok(await mgr.action('shift.createMany', {
+    kind: 'office', location: 'Campaign office', start: '09:00', end: '12:00', days: ['2030-06-03', '2030-06-10'], repeat: { weeks: 3 },
+  }));
+  assert.deepEqual(overlap.shifts.map((s) => s.day), ['2030-06-03', '2030-06-10', '2030-06-17', '2030-06-24']);
+  assert.equal((await shiftsOf('Office — Campaign office')).length, 4, 'never two at the same place and time');
   // Asking again only fills what is missing: nothing.
   const again = ok(await mgr.action('shift.createMany', {
     kind: 'phone_bank', location: 'Campaign office', start: '18:00', end: '20:00', days: ['2030-06-05'], repeat: { until: '2030-06-20' },
@@ -106,9 +112,11 @@ test('limits and refusals: 200 shifts and 26 weeks a call, an end after the star
   const had = await count();
   const week = ['2030-07-01', '2030-07-02', '2030-07-03', '2030-07-04', '2030-07-05', '2030-07-06', '2030-07-07'];
   const call = (extra) => mgr.action('shift.createMany', { kind: 'canvass', location: 'Somewhere', start: '10:00', end: '13:00', days: week, ...extra });
-  const big = await call({ days: [...week, '2030-07-08'], repeat: { weeks: 26 } });
-  assert.equal(big.status, 400, '208 shifts');
-  assert.match(big.json.error, /200/);
+  // Every day of July, each again for 26 weeks: 206 different days.
+  const july = Array.from({ length: 31 }, (_, i) => new Date(Date.UTC(2030, 6, 1 + i)).toISOString().slice(0, 10));
+  const big = await call({ days: july, repeat: { weeks: 26 } });
+  assert.equal(big.status, 400, '206 shifts');
+  assert.match(big.json.error, /206 shifts — 200 at most/);
   assert.equal((await call({ repeat: { weeks: 27 } })).status, 400, '27 weeks');
   const far = await call({ days: ['2030-07-01'], repeat: { until: '2031-01-01' } });
   assert.equal(far.status, 400, 'until a day more than 26 weeks on');
@@ -122,9 +130,12 @@ test('limits and refusals: 200 shifts and 26 weeks a call, an end after the star
   assert.equal((await call({ place_id: '99999999-9999-4999-8999-999999999999' })).status, 400, 'no such place');
   assert.equal((await call({ turf_ids: ['99999999-9999-4999-8999-999999999999'] })).status, 400, 'no such turf');
   assert.equal(await count(), had, 'a refused call makes nothing');
-  // 26 weeks of one day is fine — and so is exactly 200.
+  // 26 weeks of one day is fine — and so is exactly 200 (25 days in a row, each again for 26 weeks).
   const full = ok(await call({ repeat: { weeks: 26 }, days: week.slice(0, 1) }));
   assert.equal(full.shifts.length, 26);
+  const exact = ok(await call({ kind: 'signs', repeat: { weeks: 26 }, days: july.slice(0, 25) }));
+  assert.equal(exact.shifts.length, 200);
+  assert.equal((await eventsOf('shift.createMany', 'shift')).filter((e) => e.payload.series_id === exact.series_id).length, 200, 'an event each, however many');
 });
 
 test('a turf is the place: its walk list comes with the shift, and its name is the name', async () => {
