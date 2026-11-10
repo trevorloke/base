@@ -8,6 +8,8 @@
 //     (the rating colours, the map and the website's own theme sample are
 //     data, not the app's look, and are not judged; nor is anything dimmed
 //     because it is off);
+//   - a field can be found: its edge (and the primary button's) is at least
+//     3:1 against the ground it sits on;
 //   - at most one primary button; no sideways scroll at 390;
 //   - the shell: the campaign leads, the sidebar and the phone's bars are
 //     light, a desk role on a phone has four tabs and More;
@@ -114,13 +116,40 @@ const read = (page) => page.evaluate(() => {
       if (!low.has(key)) low.set(key, `${ratio.toFixed(2)} “${text.slice(0, 20)}”`);
     }
   }
-  return { overflow, primaries, low: [...low.entries()].map(([k, v]) => `${k} = ${v}`) };
+  // A field's edge, and the primary button's: 3:1 against the ground it sits
+  // on (its own edge, or its fill, or the edge of the box that wraps it).
+  const ratioOf = (a, b) => { const x = lum(a); const y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const solid = (c, under) => (c.a >= 1 ? c.rgb : over(c.rgb, c.a, under));
+  const edgeOf = (el, under) => {
+    const s = getComputedStyle(el);
+    const c = parseFloat(s.borderTopWidth) > 0 && s.borderTopStyle !== 'none' ? parse(s.borderTopColor) : null;
+    return c && c.a > 0 ? ratioOf(solid(c, under), under) : 0;
+  };
+  const faint = new Map();
+  for (const el of document.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]), select, textarea, .btn-primary')) {
+    if (!shown(el) || el.closest(DATA)) continue;
+    let off = false;
+    for (let n = el; n; n = n.parentElement) if (Number(getComputedStyle(n).opacity) < 1 || n.disabled) { off = true; break; }
+    const under = !off && el.parentElement ? ground(el.parentElement) : null;
+    if (!under) continue;
+    const fill = parse(getComputedStyle(el).backgroundColor);
+    let best = Math.max(edgeOf(el, under), fill && fill.a > 0 ? ratioOf(solid(fill, under), under) : 0);
+    for (let box = el.parentElement, i = 0; best < 2.95 && box?.parentElement && i < 2; box = box.parentElement, i += 1) {
+      const behind = ground(box.parentElement);
+      if (behind) best = Math.max(best, edgeOf(box, behind));
+    }
+    if (best < 2.95) {
+      const key = `${el.tagName.toLowerCase()}.${String(el.className).split(' ').filter(Boolean).slice(0, 2).join('.')} on rgb(${under.map(Math.round).join(',')})`;
+      if (!faint.has(key)) faint.set(key, best.toFixed(2));
+    }
+  }
+  return { overflow, primaries, low: [...low.entries()].map(([k, v]) => `${k} = ${v}`), edges: [...faint.entries()].map(([k, v]) => `${k} = ${v}`) };
 });
 
 // Opens each screen and reads it; `css` is a brand's shades written into
 // the page (as the server writes them), for the colours no preset has.
 const walk = async (page, base, paths, { css = null, phone = false } = {}) => {
-  const bad = { low: [], overflow: [], primaries: [] };
+  const bad = { low: [], overflow: [], primaries: [], edges: [] };
   for (const path of paths) {
     await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded' });
     if (css) await page.addStyleTag({ content: css });
@@ -128,6 +157,7 @@ const walk = async (page, base, paths, { css = null, phone = false } = {}) => {
     await sleep(350);
     const m = await read(page);
     if (m.low.length) bad.low.push(`${path}: ${m.low.slice(0, 3).join('; ')}`);
+    if (m.edges.length) bad.edges.push(`${path}: ${m.edges.slice(0, 3).join('; ')}`);
     if (phone && m.overflow > 0) bad.overflow.push(`${path}: ${m.overflow}px`);
     if (m.primaries > 1) bad.primaries.push(`${path}: ${m.primaries}`);
   }
@@ -195,7 +225,7 @@ const pickOnes = async (page, base, paths) => {
   return out;
 };
 const wholeControl = (groups, px) => groups.length >= 3 && groups.every((g) => g.least >= px && (g.rows > 1 || g.h === px));
-const none = (b) => b.low.length === 0;
+const none = (b) => b.low.length === 0 && b.edges.length === 0;
 const say = (list) => list.slice(0, 4).join(' | ');
 
 for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Riverside Forward'], ['imagine-surrey', { STARBASE_BRAND: 'imagine-surrey' }, 'Imagine Surrey']]) {
@@ -209,7 +239,7 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
     const dp = await d.newPage();
     dp.on('pageerror', (e) => errors.push(`[${key} ${scheme} desk] ${e.message}`));
     let bad = await walk(dp, base, DESK(s));
-    check(`${key}, ${scheme}, at a desk: text reads on all ${DESK(s).length} screens`, none(bad), say(bad.low));
+    check(`${key}, ${scheme}, at a desk: text reads, and every field has a 3:1 edge, on all ${DESK(s).length} screens`, none(bad), say([...bad.low, ...bad.edges]));
     check(`${key}, ${scheme}, at a desk: never more than one primary button`, bad.primaries.length === 0, say(bad.primaries));
     if (scheme === 'light') {
       await dp.goto(`${base}/admin/people`, { waitUntil: 'networkidle' });
@@ -233,7 +263,7 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
     const mp = await m.newPage();
     mp.on('pageerror', (e) => errors.push(`[${key} ${scheme} phone] ${e.message}`));
     bad = await walk(mp, base, DESK_PHONE(s), { phone: true });
-    check(`${key}, ${scheme}, the desk on a phone: text reads, no sideways scroll, one primary at most`, none(bad) && bad.overflow.length === 0 && bad.primaries.length === 0, say([...bad.low, ...bad.overflow, ...bad.primaries]));
+    check(`${key}, ${scheme}, the desk on a phone: text and field edges read, no sideways scroll, one primary at most`, none(bad) && bad.overflow.length === 0 && bad.primaries.length === 0, say([...bad.low, ...bad.edges, ...bad.overflow, ...bad.primaries]));
     if (scheme === 'light') {
       await mp.goto(`${base}/admin/people`, { waitUntil: 'networkidle' });
       const bars = await mp.evaluate(() => {
@@ -254,7 +284,7 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
     const vp = await v.newPage();
     vp.on('pageerror', (e) => errors.push(`[${key} ${scheme} volunteer] ${e.message}`));
     bad = await walk(vp, base, FIELD(s), { phone: true });
-    check(`${key}, ${scheme}, a volunteer’s phone: text reads, no sideways scroll, one primary at most`, none(bad) && bad.overflow.length === 0 && bad.primaries.length === 0, say([...bad.low, ...bad.overflow, ...bad.primaries]));
+    check(`${key}, ${scheme}, a volunteer’s phone: text and field edges read, no sideways scroll, one primary at most`, none(bad) && bad.overflow.length === 0 && bad.primaries.length === 0, say([...bad.low, ...bad.edges, ...bad.overflow, ...bad.primaries]));
     await vp.goto(`${base}/`, { waitUntil: 'networkidle' });
     await vp.screenshot({ path: `${SHOTS}/${key}-today-phone-${scheme}.png` });
     await v.close();
@@ -263,7 +293,7 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
     const o = await context(base, { scheme });
     const op = await o.newPage();
     bad = await walk(op, base, ['/login', '/signup']);
-    check(`${key}, ${scheme}, signed out: sign-in reads`, none(bad), say(bad.low));
+    check(`${key}, ${scheme}, signed out: sign-in reads, fields and button edged`, none(bad), say([...bad.low, ...bad.edges]));
     await op.screenshot({ path: `${SHOTS}/${key}-signin-${scheme}.png` });
     await o.close();
   }
@@ -279,16 +309,16 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
           const d = await context(base, { scheme, cookies: s.desk });
           const dp = await d.newPage();
           const bad = await walk(dp, base, CORE(s), { css });
-          found.push(...bad.low.map((x) => `${scheme} desk ${x}`));
+          found.push(...[...bad.low, ...bad.edges].map((x) => `${scheme} desk ${x}`));
           if (scheme === 'light' && sidebar !== 'light') await dp.screenshot({ path: `${SHOTS}/brand-${name.replace(/\W+/g, '-')}-${sidebar}-desk.png` });
           await d.close();
           const m = await context(base, { phone: true, scheme, cookies: s.vol });
           const mp = await m.newPage();
           const badPhone = await walk(mp, base, ['/', '/calls', `/turfs/${s.turf}`], { css, phone: true });
-          found.push(...badPhone.low.map((x) => `${scheme} phone ${x}`), ...badPhone.overflow.map((x) => `${scheme} phone ${x}`));
+          found.push(...[...badPhone.low, ...badPhone.edges].map((x) => `${scheme} phone ${x}`), ...badPhone.overflow.map((x) => `${scheme} phone ${x}`));
           await m.close();
         }
-        check(`a ${name} brand (${color}), ${sidebar} sidebar: text reads on real screens, light and dark`, found.length === 0, say(found));
+        check(`a ${name} brand (${color}), ${sidebar} sidebar: text and edges read on real screens, light and dark`, found.length === 0, say(found));
       }
     }
   }
