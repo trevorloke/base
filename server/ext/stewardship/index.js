@@ -129,6 +129,8 @@ api.get('/stewardship', async (c) => {
        from gifts g join persons p on p.id = g.person_id and p.deleted_at is null
       where g.workspace_id = $1 and g.deleted_at is null
         and not exists (select 1 from gift_thanks t where t.workspace_id = g.workspace_id and t.gift_id = g.id)
+        -- A gift brought in from another tool's file (ext/giftimport) was thanked there, or long ago.
+        and coalesce(g.attrs->>'source', '') <> 'import'
       order by g.date, g.created_at limit 500`,
     [ws],
   )).rows.map((r) => ({ ...r, date: day(r.date), amount_cents: Number(r.amount_cents) }));

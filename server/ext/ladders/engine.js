@@ -71,8 +71,9 @@ export const STEP_ACTION = 'ladder.step';
 const HOUR = 3600_000;
 const EMAIL_TRIES = 3;
 const LOG_KEEP = 50;
-// Writes that never start a ladder.
-const QUIET_ACTIONS = new Set(['sample.load', 'sample.clear', 'import.persons']);
+// Writes that never start a ladder (gifts brought in from another tool's
+// file, and settled from its pile, among them: ext/giftimport).
+const QUIET_ACTIONS = new Set(['sample.load', 'sample.clear', 'import.persons', 'gift.import', 'gift.importSettle']);
 const YES_RATINGS = new Set(['1', '2']);
 
 const iso = (ms) => new Date(ms).toISOString();

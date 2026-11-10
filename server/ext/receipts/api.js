@@ -134,7 +134,7 @@ api.get('/receipts/disclosure.csv', async (c) => {
   // keyed by donor — never by name.
   const rows = (await db.query(
     `select g.id, g.person_id, g.date, g.amount_cents, p.name, p.address, p.unit, p.city, p.postal,
-            r.number, r.donor_address
+            r.number, r.donor_address, g.attrs->>'import_receipt' as import_receipt
      from gifts g join persons p on p.id = g.person_id
      left join receipts r on r.workspace_id = g.workspace_id and r.gift_id = g.id
      where g.workspace_id = $1 and g.deleted_at is null
@@ -164,7 +164,9 @@ api.get('/receipts/disclosure.csv', async (c) => {
   ];
   for (const grp of sorted) {
     for (const g of grp.gifts) {
-      lines.push([grp.name, grp.address || '', dollars(grp.total), over.get(grp.id) ?? '', isoDay(g.date), dollars(g.amount_cents), g.number || '']);
+      // A gift brought in from another tool's file (ext/giftimport) has no
+      // receipt here: the number that tool gave it, when its file had one.
+      lines.push([grp.name, grp.address || '', dollars(grp.total), over.get(grp.id) ?? '', isoDay(g.date), dollars(g.amount_cents), g.number || g.import_receipt || '']);
     }
   }
   const span = period.key === 'campaign' ? `campaign-${period.from}-to-${period.to}` : period.key;

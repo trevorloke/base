@@ -11,6 +11,7 @@
     "./markdown": "./markdown.js",
     "./passes": "./passes.js",
     "./names": "./names.js",
+    "./giftfile": "./giftfile.js",
     "./brand": "./brand.js",
     "./site/*": "./site/*.js"
   },
