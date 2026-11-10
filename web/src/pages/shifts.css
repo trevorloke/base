@@ -10,12 +10,15 @@
 
 /* ── Page frame ── */
 .ops-page { max-width: 720px; }
+/* As tall as the button a head usually carries, so a title with none
+   (Settings, Reports) sits where every other screen's does. */
 .ops-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2) var(--s-3);
   flex-wrap: wrap;
+  min-height: var(--ctl);
   margin-bottom: var(--s-4);
 }
 .ops-head h1 { margin: 0; overflow-wrap: anywhere; }
