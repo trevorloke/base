@@ -64,21 +64,24 @@ function Unavailable({ onRetry }) {
   return <p className="ch-line" role="status">Unavailable — <button type="button" className="btn-link" onClick={onRetry}>Try again</button></p>;
 }
 
-// People by name, each a way to their page: a few, and the rest on a tap —
-// "Ana Example, Ben Example and 3 more". more: how many the server could
-// not name here at all (said, with nothing to open).
+// People by name, each a way to their page: a few — "Ana Example, Ben
+// Example and 3 more" — and, on its own row under them, "Show all 8". more:
+// how many the server could not name here at all (said, with nothing to open).
 const WHO_SHOWN = 5;
 function Names({ people, more = 0 }) {
   const [all, setAll] = useState(false);
   if (!people?.length) return null;
   const shown = all ? people : people.slice(0, WHO_SHOWN);
-  const rest = people.length - shown.length;
+  const rest = people.length - shown.length + more;
   return (
     <>
       {' — '}{shown.map((who, i) => <span key={who.id}>{i > 0 && ', '}<Link to={`/people/${who.id}`}>{who.name}</Link></span>)}
-      {rest > 0 && <>{' and '}<button type="button" className="btn-link" aria-expanded="false" onClick={() => setAll(true)}>{num(rest + more)} more</button></>}
-      {rest === 0 && more > 0 && ` and ${num(more)} more`}
-      {all && people.length > WHO_SHOWN && <>{' · '}<button type="button" className="btn-link" aria-expanded="true" onClick={() => setAll(false)}>Show fewer</button></>}
+      {rest > 0 && ` and ${num(rest)} more`}
+      {people.length > WHO_SHOWN && (
+        <button type="button" className="btn-link ch-all" aria-expanded={all} onClick={() => setAll((v) => !v)}>
+          {all ? 'Show fewer' : `Show all ${num(people.length)}`}
+        </button>
+      )}
     </>
   );
 }

@@ -351,6 +351,39 @@ await page.waitForSelector('.pp-table__name', { timeout: 15000 }).catch(() => {}
 const listed = await page.$$eval('.pp-table tbody tr', (rows) => Object.fromEntries(rows.map((r) => [r.querySelector('.pp-table__name a')?.innerText.trim(), Boolean(r.querySelector('a[href^="tel:"]'))])));
 check('the People list at the desk: Gus’s and Noel’s numbers are shown, not links to dial; Hana’s is one',
   listed['Gus Example'] === false && listed['Noel Example'] === false && listed['Hana Example'] === true, JSON.stringify(listed).slice(0, 240));
+// A door's card and a walk list: there the canvasser's own phone would dial.
+await pctx.route(/tile\.openstreetmap\.org/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e8eef2"/></svg>' }));
+const doorQuiet = (await api('/actions/person.create', { name: 'Door Quiet Example', phone: '604-555-0133', address: '12390 72 Ave', city: 'Surrey', lat: 49.1331, lng: -122.8495, tags: ['do-not-call'] })).json.person.id;
+const doorOpen = (await api('/actions/person.create', { name: 'Door Open Example', phone: '604-555-0134', address: '7120 124 St', city: 'Surrey', lat: 49.131, lng: -122.852 })).json.person.id;
+const onDoor = async (id) => {
+  await phone.goto(`${ADMIN}/map?person=${id}`, { waitUntil: 'domcontentloaded' });
+  await phone.waitForSelector('aside.door-card', { timeout: 15000 }).catch(() => {});
+  await phone.click('aside.door-card .fk-more__btn').catch(() => {});
+  await phone.waitForSelector('aside.door-card .door-more__row', { timeout: 10000 }).catch(() => {});
+  const card = phone.locator('aside.door-card');
+  return { call: await card.getByRole('link', { name: 'Call', exact: true }).count(), tel: await card.locator('a[href^="tel:"]').count(), text: await card.getByRole('link', { name: 'Text', exact: true }).count(), says: /Do not call/.test(await text(phone, 'aside.door-card')) };
+};
+const quietDoor = await onDoor(doorQuiet);
+await phone.screenshot({ path: `${SHOTS}/08-door-do-not-call-390.png` });
+const openDoorCard = await onDoor(doorOpen);
+check('a door’s card: “Do not call” where Call would be (Text stays); a neighbour’s card still has Call',
+  quietDoor.call === 0 && quietDoor.tel === 0 && quietDoor.text === 1 && quietDoor.says && openDoorCard.call === 1 && !openDoorCard.says, JSON.stringify([quietDoor, openDoorCard]));
+const turf = (await api('/actions/turf.create', { name: 'Newton East', polygon: [[49.125, -122.860], [49.140, -122.860], [49.140, -122.838], [49.125, -122.838]] })).json.turf;
+await phone.goto(`${BASE}/turfs/${turf.id}`, { waitUntil: 'domcontentloaded' });
+await phone.waitForSelector('.walk-door', { timeout: 15000 }).catch(() => {});
+const onWalk = async (addr) => {
+  const head = phone.locator('.walk-door', { hasText: addr }).locator('.walk-door__head');
+  if ((await head.getAttribute('aria-expanded')) !== 'true') await head.click();
+  await phone.waitForSelector('.walk-door.is-open .walk-panel', { timeout: 10000 });
+  const more = phone.locator('.walk-door.is-open .walk-panel .fk-more__btn');
+  if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
+  await phone.waitForSelector('.walk-door.is-open .walk-panel .fk-more__body', { timeout: 10000 });
+  return phone.locator('.walk-door.is-open .walk-panel a[href^="tel:"]').count();
+};
+const walkQuiet = await onWalk('12390 72 Ave').catch((e) => String(e.message).slice(0, 120));
+await phone.screenshot({ path: `${SHOTS}/08-walk-do-not-call-390.png` });
+const walkOpen = await onWalk('7120 124 St').catch((e) => String(e.message).slice(0, 120));
+check('a walk list: no Call for her door; the neighbour’s has one', walkQuiet === 0 && walkOpen === 1, JSON.stringify([walkQuiet, walkOpen]));
 await sleep(2500);
 check('…and his number went to CallHub’s do-not-call list by itself', fake.dnc.some((d) => d.phone_number === '+16045550107' && d.category === 1), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
 const zoe = (await api(`/persons/${P.zoe}`)).json.contacts;
@@ -442,7 +475,7 @@ await page.screenshot({ path: `${SHOTS}/12-later-list-follows-1440.png` });
 // The same line at a phone's width (it is this page's own, so the window is narrowed).
 await page.setViewportSize({ width: 390, height: 844 });
 await sleep(400);
-await page.locator(`${ch} .ch-results [role="status"]`).scrollIntoViewIfNeeded();
+await page.locator(`${ch} .ch-results [role="status"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
 await page.screenshot({ path: `${SHOTS}/12-later-list-follows-390.png` });
 m = await measure(page, ch);
 check('…the line at 390 wide: no sideways scroll', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
@@ -464,18 +497,18 @@ const nottaken = `${ch} .ch-nottaken:not(.ch-held)`;
 for (const [p, n] of [[page, '1440'], [phone, '390']]) {
   await p.goto(`${ADMIN}/lists/${listId}`, { waitUntil: 'domcontentloaded' });
   await p.waitForSelector(nottaken, { timeout: 15000 }).catch(() => {});
-  await p.locator(nottaken).scrollIntoViewIfNeeded().catch(() => {});
+  await p.locator(nottaken).evaluate((el) => el.scrollIntoView({ block: 'center' })).catch(() => {});
   await p.screenshot({ path: `${SHOTS}/13-not-taken-${n}.png` });
 }
 const fewNames = await text(page, nottaken);
-check('eight do-not-call numbers CallHub won’t take: its words, five names, and “3 more” to tap',
-  /^CallHub wouldn’t take 8 do-not-call numbers: “phone_number: Enter a valid phone number\.” — Quiet0 Example, Quiet1 Example, Quiet2 Example, Quiet3 Example, Quiet4 Example and 3 more$/.test(fewNames), fewNames);
-await phone.tap(`${nottaken} .btn-link`);
+check('eight do-not-call numbers CallHub won’t take: its words, five names “and 3 more”, and “Show all 8” to tap',
+  /^CallHub wouldn’t take 8 do-not-call numbers: “phone_number: Enter a valid phone number\.” — Quiet0 Example, Quiet1 Example, Quiet2 Example, Quiet3 Example, Quiet4 Example and 3 more Show all 8$/.test(fewNames), fewNames);
+await phone.tap(`${nottaken} .ch-all`);
 await phone.waitForFunction((sel) => /Quiet7 Example/.test(document.querySelector(sel)?.innerText || ''), nottaken, { timeout: 10000 }).catch(() => {});
 const allNames = await text(phone, nottaken);
-check('“3 more”, on a phone: all eight by name, each a way to the person', /Quiet5 Example, Quiet6 Example, Quiet7 Example · Show fewer$/.test(allNames)
+check('“Show all 8”, on a phone: all eight by name, each a way to the person', /Quiet5 Example, Quiet6 Example, Quiet7 Example Show fewer$/.test(allNames)
   && (await phone.$$eval(`${nottaken} a[href*="/people/"]`, (els) => els.length)) === 8, allNames);
-await phone.locator(nottaken).scrollIntoViewIfNeeded();
+await phone.locator(nottaken).evaluate((el) => el.scrollIntoView({ block: 'center' }));
 await phone.screenshot({ path: `${SHOTS}/13-not-taken-all-390.png` });
 m = await measure(phone, ch);
 check('…at 390: no sideways scroll, “Show fewer” ≥ 48px like every button', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
@@ -494,7 +527,7 @@ const heldLine = `${ch} .ch-held`;
 for (const [p, n] of [[page, '1440'], [phone, '390']]) {
   await p.goto(`${ADMIN}/lists/${listId}`, { waitUntil: 'domcontentloaded' });
   await p.waitForSelector(heldLine, { timeout: 15000 }).catch(() => {});
-  await p.locator(heldLine).scrollIntoViewIfNeeded().catch(() => {});
+  await p.locator(heldLine).evaluate((el) => el.scrollIntoView({ block: 'center' })).catch(() => {});
   await p.screenshot({ path: `${SHOTS}/14-held-${n}.png` });
 }
 check('numbers CallHub still holds that nobody here blocks: how many, what to do, and whose they are',
