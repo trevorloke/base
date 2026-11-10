@@ -20,6 +20,7 @@ import { useMemo, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { placeLabel } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import { clockText, monthDay, overlaps, shortDay, zoneOf } from '../components/shiftTime.js';
@@ -82,9 +83,9 @@ function PutOnShift({ v, shifts, tz, onDone }) {
               <button type="button" className="vl-shift" disabled={on || full || busyId !== null}
                 data-clash={clash ? '' : undefined} onClick={() => book(s)}>
                 <span className="vl-shift__what">{s.title}</span>
-                <span className="vl-shift__when">{shortDay(s.starts_at, tz)} · {clockText(s.starts_at, tz)}{s.location ? ` · ${s.location}` : ''}</span>
+                <span className="vl-shift__when">{shortDay(s.starts_at, tz)} · {clockText(s.starts_at, tz)}{s.location ? ` · ${placeLabel(s.location)}` : ''}</span>
                 <span className="vl-shift__note">
-                  {on ? 'On it' : full ? 'Full' : clash ? `Busy then: ${clash.title}` : left != null ? `${plural(left, 'spot')} left` : `${Number(s.filled) || 0} going`}
+                  {on ? 'On it' : full ? 'Full' : clash ? `Busy then: ${clash.title}` : left != null ? `${plural(left, 'spot')} left` : Number(s.filled) ? `${Number(s.filled)} going` : 'Nobody yet'}
                   {busyId === s.id && ' — saving…'}
                 </span>
               </button>

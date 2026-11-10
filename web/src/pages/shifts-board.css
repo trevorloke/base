@@ -250,8 +250,9 @@
   .sb-shift__title { font-size: 15px; }
   .sb-shift__meta { font-size: 12px; }
   .sb-hand { top: var(--s-1); }
-  .sb-hand > span { flex-basis: 100%; }
 }
 
-/* A toast with no Undo keeps even padding */
-.toast.ops-toast.sb-toast[data-plain] { padding-right: var(--s-4); }
+/* A toast with no Undo keeps even padding — and, having nothing to tap,
+   lets a tap through to the card under it (a name in hand goes on card
+   after card while "… added to …" is still showing). */
+.toast.ops-toast.sb-toast[data-plain] { padding-right: var(--s-4); pointer-events: none; }

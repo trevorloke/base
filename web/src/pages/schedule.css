@@ -205,8 +205,9 @@
 .sch-pinned .field, .sch-pinned .ops-actions, .sch-pinned .error { flex: 1 1 100%; margin: 0; }
 .sch-named { display: flex; flex-direction: column; gap: 2px; }
 
-/* The phone's "People": one button over the day strip. */
-.btn.ops-tap.sch-peoplebtn { align-self: flex-start; }
+/* The phone's "People": one button in the week's row, beside "More". */
+.sb-week.sch-week .sch-peoplebtn ~ .sch-week__more { margin-left: var(--s-1); }
+.sb-week.sch-week .sch-peoplebtn { margin-left: auto; }
 
 /* More: what is typed or rare. */
 .disclose.sch-more { margin-top: var(--s-2); }
@@ -232,7 +233,7 @@
 /* A shift's page: its kind, a place that opens a map, the day's tool. */
 .chip.sch-kindchip { display: inline-flex; align-items: center; gap: 4px; }
 .sch-kindchip .sk-icon { width: 14px; height: 14px; color: var(--kind, var(--text-3)); }
-.ops-lines > a.sch-maplink { display: inline-flex; align-items: center; align-self: flex-start; min-height: 48px; }
+.ops-lines > a.sch-maplink { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 48px; }
 .ops-actions.sch-daytool { margin: 0 0 var(--s-3); }
 
 /* "More options": the long form's own name. */

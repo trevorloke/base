@@ -619,6 +619,14 @@ export default function ShiftsBoard({ me, onSheet }) {
 
   const ghostWords = dragging?.person?.name ?? (dragging?.shift ? cardWords(dragging.shift).title : '');
   const paused = board.fetchStatus === 'paused';
+  // The people: a strip over the days at a desk; on a phone one button in
+  // the week's row, which opens them as a sheet.
+  const peopleEl = (
+    <People narrow={narrow} people={peopleAll} loaded={board.data !== undefined} weekCount={weekCount}
+      inHand={picked && !picked.from ? picked.person.id : null} taking={Boolean(dragging?.from)} hot={hot} online={online}
+      open={peopleOpen} onOpen={setPeopleOpen} props={dragProps}
+      onTap={(item) => { setPeopleOpen(false); tapPerson(item); }} />
+  );
 
   return (
     <div className="sb sch" data-dragging={dragging ? '' : undefined}>
@@ -629,6 +637,7 @@ export default function ShiftsBoard({ me, onSheet }) {
         {monday !== thisWeek && (
           <button type="button" className="btn btn-quiet sb-today" onClick={() => { setPhoneDay(null); goWeek(thisWeek); }}>This week</button>
         )}
+        {narrow && peopleEl}
         <button type="button" className="btn btn-quiet sb-today sch-week__more" aria-expanded={more} aria-controls={moreId}
           onClick={() => setMore((v) => !v)}>
           More
@@ -653,10 +662,7 @@ export default function ShiftsBoard({ me, onSheet }) {
       {error && <p className="error" role="alert">{error}</p>}
 
       <div className="sb-layout">
-        <People narrow={narrow} people={peopleAll} loaded={board.data !== undefined} weekCount={weekCount}
-          inHand={picked && !picked.from ? picked.person.id : null} taking={Boolean(dragging?.from)} hot={hot} online={online}
-          open={peopleOpen} onOpen={setPeopleOpen} props={dragProps}
-          onTap={(item) => { setPeopleOpen(false); tapPerson(item); }} />
+        {!narrow && peopleEl}
 
         <div className="sb-board">
           {picked && (

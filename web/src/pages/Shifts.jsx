@@ -577,12 +577,13 @@ function useLegacyMyShifts(me, enabled) {
 const sameWords = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 // How a shift stands for people: "5 spots left" / "Full" against a limit;
 // "3 of 4 — one more" against its target (which never turns anyone away);
-// else "3 going".
+// else who is going — "3 going", "Nobody yet". No number unless one was set.
 const roomText = (s, filled = s.filled) => {
   const n = Number(filled) || 0;
   if (s.capacity) return spotsText(n, s.capacity);
   const short = shortBy({ ...s, filled: n });
-  return short ? `${n} of ${s.need} — ${short === 1 ? 'one' : short} more` : `${n} going`;
+  if (short) return `${n} of ${s.need} — ${short === 1 ? 'one' : short} more`;
+  return n ? `${n} going` : 'Nobody yet';
 };
 
 // A shift on the list: its kind's mark, what it is, the hours and where
@@ -597,9 +598,11 @@ function ShiftRow({ s, tz, now, past = false, mine = false, waiting = false, tur
   const place = words.place && !sameWords(words.place, names) ? words.place : null;
   const hours = isLive(s, now) && s.ends_at ? `Now · until ${clockText(s.ends_at, tz)}` : timeRange(s.starts_at, s.ends_at, tz);
   const join = !past && !mine && !waiting && !full && onJoin;
+  // Nobody on it and no number set: the row has nothing to count.
+  const bare = !s.capacity && !s.need && !(Number(s.filled) > 0);
   const state = waiting ? <span className="chip obx-chip ops-chip-lg">Not sent yet</span>
     : mine ? <span className="chip chip-ok ops-chip-lg">You’re on ✓</span>
-      : join ? null : <span className={`chip ops-chip-lg${full ? ' chip-ok' : ''}`}>{roomText(s)}</span>;
+      : join || bare ? null : <span className={`chip ops-chip-lg${full ? ' chip-ok' : ''}`}>{roomText(s)}</span>;
   return (
     <li className="ops-item sch-vrow" style={kindVars(words.kind)} data-tone={past ? 'past' : undefined} data-shift={s.id} data-kind={words.kind.code}>
       <div className="sch-vrow__line">
