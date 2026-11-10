@@ -1055,10 +1055,11 @@ function Subscribers({ subs, canWrite, toast }) {
                         {s.name && <span>{s.name}</span>}
                         {sourceLabel(s.source) && <span>{sourceLabel(s.source)}</span>}
                         <span>{s.status === 'subscribed' || !s.unsubscribed_at ? fmtDay(s.created_at) : `Left ${fmtDay(s.unsubscribed_at)}`}</span>
+                        {/* Still on the list, but the address bounced for good or reported spam: nothing emails it. */}
+                        {s.status === 'subscribed' && s.can_email === false && <StatusChip status="failed" label="can’t be emailed" />}
                       </span>
                     </span>
                     {s.status !== 'subscribed' && <StatusChip status={s.status} />}
-                    {s.status === 'subscribed' && s.can_email === false && <StatusChip status="failed" label="can’t be emailed" />}
                     {canWrite && s.status === 'subscribed' && removing !== s.id && (
                       <button type="button" className="btn btn-quiet ot-btn-tap" disabled={act.busy} onClick={() => setRemoving(s.id)}>Remove</button>
                     )}
