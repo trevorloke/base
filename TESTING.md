@@ -721,8 +721,9 @@ Geocoder (needs internet). It runs on the server: you can close the page and
 it keeps going (come back to Import or the map to see how far it's got, or
 **Stop** it). Everyone at one address is one lookup, and an address already
 on the map is copied without a lookup. If the geocoder stops answering, the
-run pauses with the reason; **Carry on** resumes it. Addresses it can't find
-end up under **Not on map** for a pin by hand.
+run pauses with the reason and tries again by itself (after 15 minutes, then
+less and less often); **Carry on** resumes it at once. Addresses it can't
+find end up under **Not on map** for a pin by hand.
 
 A full voter list (hundreds of thousands of people) takes a few hours. Set
 `BC_GEOCODER_KEY` (a free key from the BC government's API gateway) for

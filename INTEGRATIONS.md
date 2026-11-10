@@ -155,6 +155,7 @@ sees it.
 | `GEOCODE_MIN_SCORE` | `75` | BC's match score a pin needs |
 | `GEOCODE_ON_SAVE` | on | `off`: no lookup when a person is saved (the background run still places them) |
 | `GEOCODE_CONCURRENCY`, `GEOCODE_BACKOFF_MS` | `6`, `30000` | the background run's pace |
+| `GEOCODE_RETRY_MS` | `900000` | how long a paused run waits before it tries again by itself (doubling, up to six hours) |
 | `BC_GEOCODER_URL` | the official service | a self-hosted mirror |
 
 **Check:** Services → Address lookup asks for a few addresses in the

@@ -467,8 +467,12 @@ lookups at once (default 6). A lookup that fails while others work is tried
 3 times, then set aside for a pin by hand; a round where every lookup fails
 counts as an outage (nobody's tries are spent), backs off
 (`GEOCODE_BACKOFF_MS`, default 30 s × rounds in a row) and after 5 such
-rounds pauses the run with the reason. `GET /api/geocode/status` reports
-progress; the page shows it and works out the time left. With
+rounds pauses the run with the reason. A paused run tries again by itself:
+one round after 15 minutes (`GEOCODE_RETRY_MS`), then after twice as long
+each time lookups still don't answer, up to six hours (**Carry on** does it
+now, **Stop** calls it off). `GET /api/geocode/status` reports progress and,
+while paused, when the next try is (`retryAt`); the page shows the progress
+and works out the time left. With
 `STARBASE_JOBS=off` the page falls back to looking up batches itself.
 
 **Typing an address** (`server/ext/addresses`, `web/src/components/AddressField.jsx`):
