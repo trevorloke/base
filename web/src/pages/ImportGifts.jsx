@@ -560,7 +560,7 @@ function Flow({ me }) {
                 {file.repeats > 0 && <p className="imp-map__note is-warn gi-note">{plural(file.repeats, 'row repeats', 'rows repeat')} a gift number from earlier in the file — left out as the same gift.</p>}
                 {file.alike > 0 && <p className="imp-hint imp-hint--sm">{plural(file.alike, 'row reads', 'rows read')} like an earlier one (same donor, amount and day) — each comes in as its own gift.</p>}
                 {t.matches.length > 0 && (
-                  <Reveal label={t.differs ? `See whose each is · ${fmtN(t.differs)} under another name` : 'See whose each is'} defaultOpen={t.differs > 0}>
+                  <Reveal label={t.differs ? `Who each gift goes to · ${fmtN(t.differs)} under another name` : 'Who each gift goes to'} defaultOpen={t.differs > 0}>
                     {t.fresh > t.matches.length && <p className="imp-hint imp-hint--sm">First {fmtN(t.matches.length)} of {fmtN(t.fresh)}.</p>}
                     <ul className="imp-matches__list">
                       {t.matches.map((m, i) => (
@@ -606,7 +606,7 @@ function Flow({ me }) {
                       {(held?.waiting ?? imp.waiting) > 0 && (
                         <li>{plural(held?.waiting ?? imp.waiting, 'gift needs', 'gifts need')} a donor{held ? ` · ${fmtMoney(held.waiting_cents)}` : ''}</li>
                       )}
-                      {imp.flagged > 0 && <li>{plural(imp.flagged, 'gift is', 'gifts are')} over the year’s limit — under Needs you on Donations</li>}
+                      {(held?.flagged ?? imp.flagged) > 0 && <li>{plural(held?.flagged ?? imp.flagged, 'gift is', 'gifts are')} over the year’s limit — under Needs you on Donations</li>}
                       {imp.already > 0 && <li>{plural(imp.already, 'was', 'were')} already here</li>}
                       <li>No receipts were made or emailed: the other tool did that.</li>
                     </ul>

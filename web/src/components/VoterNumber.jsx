@@ -58,7 +58,7 @@ export default function VoterNumber({ personId }) {
     <form className="vn-form" onSubmit={save} aria-label="Voter number">
       <div className="field vn-field">
         <label htmlFor={`vn-${personId}`}>Voter number</label>
-        <input id={`vn-${personId}`} className="input mono vn-input" maxLength={60} autoComplete="off" spellCheck={false}
+        <input id={`vn-${personId}`} className="input mono vn-input" maxLength={40} autoComplete="off" spellCheck={false}
           disabled={busy || !online} value={value} onChange={(e) => { setSaid(null); setError(null); setDraft(e.target.value); }} />
       </div>
       <button type="submit" className="btn vn-btn" disabled={busy || !online || !changed}>{busy ? 'Saving…' : 'Save'}</button>

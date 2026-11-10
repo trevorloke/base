@@ -36,8 +36,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // A voter number as it is kept and compared: its letters and digits, in
 // capitals ("123 456-789" and "123456789" are one number), at most 40;
-// nothing → null.
-export const voterNumber = (v) => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 40) || null;
+// nothing → null. So is anything that can't be one — fewer than three
+// characters, or no digit at all ("1", "yes", "N/A"): a flag column read as
+// voter numbers would make one person of everyone who shares the flag.
+export const voterNumber = (v) => {
+  const n = String(v ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 40);
+  return n.length >= 3 && /\d/.test(n) ? n : null;
+};
 
 export const actions = {
   'person.voterNumber': {
@@ -45,6 +50,10 @@ export const actions = {
     input: z.object({ id: z.uuid(), voter_number: z.string().max(60).nullish() }),
     handler: async (tx, ctx, input, emit) => {
       const next = voterNumber(input.voter_number);
+      // Typed, but not a number we keep: said, never saved as nothing.
+      if (!next && String(input.voter_number ?? '').trim()) {
+        throw httpError(400, 'That isn’t a voter number: it has three or more letters and digits, at least one of them a digit.');
+      }
       const row = (await tx.query(
         `update persons set voter_number = $3, updated_at = now()
           where id = $1 and workspace_id = $2 and deleted_at is null returning id`,

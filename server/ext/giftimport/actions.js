@@ -72,11 +72,12 @@ const logImported = async (tx, ws, emit, { personId, importId, r }) => {
   return gift;
 };
 
-// What an import holds as things stand: its gifts on the books and what
-// still waits for a donor.
+// What an import holds as things stand: its gifts on the books (and how
+// many of them are flagged for the year's limit) and what still waits for
+// a donor.
 export const totalsOf = async (q, wsId, importId) => {
   const g = (await q.query(
-    `select count(*)::int as n, coalesce(sum(amount_cents), 0)::bigint as cents from gifts
+    `select count(*)::int as n, coalesce(sum(amount_cents), 0)::bigint as cents, (count(*) filter (where flagged))::int as flagged from gifts
       where workspace_id = $1 and attrs ? 'import_id' and attrs->>'import_id' = $2 and deleted_at is null`,
     [wsId, importId],
   )).rows[0];
@@ -85,7 +86,7 @@ export const totalsOf = async (q, wsId, importId) => {
       where workspace_id = $1 and import_id = $2 and status = 'waiting'`,
     [wsId, importId],
   )).rows[0];
-  return { gifts: g.n, cents: Number(g.cents), waiting: w.n, waiting_cents: Number(w.cents) };
+  return { gifts: g.n, cents: Number(g.cents), waiting: w.n, waiting_cents: Number(w.cents), flagged: g.flagged };
 };
 
 // The import's own record: looked at before anything is read (an import

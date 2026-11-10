@@ -91,6 +91,28 @@ test('one side without a number: matched as before, and the number fills the bla
   assert.equal((await byName('New Elector')).length, 1);
 });
 
+// A column that isn't a voter number — a 1/0 flag, yes/no, a poll's two
+// digits — must never be read as one: "the same number is the same person"
+// would make one person of everyone who shares the flag.
+test('a flag is not a voter number: nothing is kept, and no two people are made one by it', async () => {
+  const r = await imp([
+    { name: 'Ann Flagged', address: '1 Flag St', voter_number: '1' },
+    { name: 'Bob Flagged', address: '2 Flag St', voter_number: '1' },
+    { name: 'Cam Flagged', address: '3 Flag St', voter_number: 'yes' },
+    { name: 'Dot Flagged', address: '4 Flag St', voter_number: 'YES' },
+    { name: 'Eve Flagged', address: '5 Flag St', voter_number: 'n/a' },
+    { name: 'Fox Flagged', address: '6 Flag St', voter_number: '12' },
+  ]);
+  assert.deepEqual(acts(r), ['created', 'created', 'created', 'created', 'created', 'created']);
+  const flagged = (await people()).filter((p) => p.name.endsWith(' Flagged'));
+  assert.equal(flagged.length, 6);
+  assert.ok(flagged.every((p) => p.voter_number === null), JSON.stringify(flagged.map((p) => p.voter_number)));
+  // At the desk too: it is said, never saved as something else or silently dropped.
+  const typed = await mgr.action('person.voterNumber', { id: flagged[0].id, voter_number: '12' });
+  assert.equal(typed.status, 400);
+  assert.match(typed.json.error, /voter number/i);
+});
+
 test('on a profile: the desk reads and sets it; a volunteer gets neither', async () => {
   const lee = (await byName('Lee Example'))[0];
   assert.deepEqual(ok(await mgr.get(`/api/persons/${lee.id}/voter-number`)), { voter_number: '555' });
@@ -109,7 +131,7 @@ test('on a profile: the desk reads and sets it; a volunteer gets neither', async
   const seen = ok(await vol.get(`/api/persons/${lee.id}`));
   assert.ok(!JSON.stringify(seen).includes('555'), 'nothing a volunteer reads carries it');
   assert.ok(!JSON.stringify(ok(await vol.get('/api/persons?q=Lee'))).includes('voter_number'));
-  assert.equal((await mgr.action('person.voterNumber', { id: '00000000-0000-4000-8000-000000000000', voter_number: '1' })).status, 404);
+  assert.equal((await mgr.action('person.voterNumber', { id: '00000000-0000-4000-8000-000000000000', voter_number: '111' })).status, 404);
 });
 
 test('in the exports, and kept when two records are made one', async () => {

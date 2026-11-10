@@ -310,7 +310,7 @@ test('an import: through the one gift path, quiet, once only', async () => {
   }
   P.importId = first.id;
   assert.deepEqual(states(first), ['new', 'new', 'new', 'waiting', 'waiting', 'invalid']);
-  assert.deepEqual(first.totals, { gifts: 3, cents: 122500, waiting: 2, waiting_cents: 10000 });
+  assert.deepEqual(first.totals, { gifts: 3, cents: 122500, waiting: 2, waiting_cents: 10000, flagged: 1 });
 
   // On the books as gifts, marked as brought in, with the other tool's id and receipt number kept as text.
   const ana = await giftsOf(P.ana.id);
@@ -360,13 +360,14 @@ test('an import: through the one gift path, quiet, once only', async () => {
   // The same file again adds nothing, and says so.
   const again = await bring(rows);
   assert.deepEqual(states(again), ['already', 'already', 'already', 'already', 'already', 'invalid']);
-  assert.deepEqual(again.totals, { gifts: 0, cents: 0, waiting: 0, waiting_cents: 0 });
+  assert.deepEqual(again.totals, { gifts: 0, cents: 0, waiting: 0, waiting_cents: 0, flagged: 0 });
   assert.equal((await giftsOf(P.ana.id)).length, 2);
   assert.deepEqual(states(await check(rows)), ['already', 'already', 'already', 'already', 'already', 'invalid']);
   // A call sent twice (its answer lost on the way) is the same import: nothing doubles.
   const resent = await bring(rows, { id: first.id });
   assert.deepEqual(states(resent), ['resent', 'resent', 'resent', 'resent', 'resent', 'invalid']);
-  assert.deepEqual(resent.totals, { gifts: 3, cents: 122500, waiting: 2, waiting_cents: 10000 });
+  // …and its totals are the import's as it stands — the flagged gift too, though this answer's rows don't say.
+  assert.deepEqual(resent.totals, { gifts: 3, cents: 122500, waiting: 2, waiting_cents: 10000, flagged: 1 });
 });
 
 test('without an id: donor, amount, date and method are the gift — and two that read alike are two gifts', async () => {

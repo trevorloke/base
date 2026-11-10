@@ -330,6 +330,10 @@ function guessMapping(scale, headers, records, noHeader = false, custom = []) {
     if (key === 'rating' && !looksLikeRatings(scale, values[i], /^(id|idlevel)$/.test(normHeader(headers[i])) ? 1 : 0.9)) return; // "ID" only if it holds 1/2/3/4/4D…
     if (loose && VALUE_CHECK[key] && values[i].length && !mostly(values[i], VALUE_CHECK[key], 0.6)) return;
     if (key === 'name' && mostly(values[i], EMAIL_RE)) return; // a "Contact" column of emails isn't a name
+    // A voter's own number: different on every row, with digits. A "Voter ID
+    // verified" column of yes/no (or any number that repeats) is not it —
+    // read as one, everyone who shares a value would be made one person.
+    if (key === 'voter_number' && values[i].length && (new Set(values[i].map((v) => v.toUpperCase())).size < values[i].length || !mostly(values[i], /\d/))) return;
     out[i] = key;
     taken.add(key);
   };
@@ -857,6 +861,21 @@ function ImportFlow() {
     });
     return out;
   }, [source, mapping, homeCol]);
+  // Rows whose voter number another row of the file has: the same number
+  // is the same person, so a column that isn't each voter's own would fold
+  // people together — said under the column before anything is checked.
+  const voterCol = mapping.indexOf('voter_number');
+  const sharedVoters = useMemo(() => {
+    if (!source || voterCol < 0) return 0;
+    const seen = new Set();
+    let n = 0;
+    for (const r of source.records) {
+      const v = String(r.cells[voterCol] ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+      if (v.length < 3 || !/\d/.test(v)) continue;
+      if (seen.has(v)) n += 1; else seen.add(v);
+    }
+    return n;
+  }, [source, voterCol]);
   const ratingCol = mapping.indexOf('rating');
   const hasName = mapping.some((k) => k === 'name' || k === 'first' || k === 'middle' || k === 'last');
   const usedCount = mapping.filter(Boolean).length;
@@ -1161,6 +1180,11 @@ function ImportFlow() {
                     {sciByCol[i] > 0 && (
                       <p className="imp-map__note is-warn">
                         {plural(sciByCol[i], 'number has', 'numbers have')} lost {sciByCol[i] === 1 ? 'its' : 'their'} last digits in Excel (like 1.6047E+10), so {sciByCol[i] === 1 ? 'it' : 'they'} won’t be imported. In the spreadsheet, format this column as Text (or Number with no decimals), save again, and choose the file again.
+                      </p>
+                    )}
+                    {mapping[i] === 'voter_number' && sharedVoters > 0 && (
+                      <p className="imp-map__note is-warn">
+                        {plural(sharedVoters, 'row has', 'rows have')} a number another row has, and the same number is read as the same person. Not each voter’s own number? Set this column to Don’t import.
                       </p>
                     )}
                     {i === homeCol && mapping[i] !== 'phone' && mapping[i] && !sciByCol[i] && (
@@ -1540,9 +1564,10 @@ function ImportFlow() {
 }
 
 // The pieces Donations → Import a file shares (pages/ImportGifts.jsx): how a
-// file is read, the column-matching helpers and the steps’ small parts.
+// file is read, and the steps’ small parts. (Which column is what is its
+// own: components/GiftColumns.js.)
 export {
-  readTable, shapeTable, decodeBytes, isSpreadsheetBinary, columnValues, normHeader, mostly,
-  fmtN, fmtMB, plural, breathe, EXACT, CONTAINS, EMAIL_RE, POSTAL_RE, PHONE_RE, NAME_RE, DELIM_NAMES, MAX_FILE_BYTES,
+  readTable, shapeTable, decodeBytes, isSpreadsheetBinary,
+  fmtN, fmtMB, plural, breathe, DELIM_NAMES, MAX_FILE_BYTES,
   Step, Bar, Reveal, InvalidList,
 };

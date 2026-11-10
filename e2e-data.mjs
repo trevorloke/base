@@ -251,9 +251,11 @@ await sleep(1800);
 // The same voter, written another way, with a phone: found by the number.
 await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
 await page.click('button:has-text("Paste text")');
-await page.fill('#imp-paste', ['Name\tVoter Number\tPhone', 'ELECTOR Vera\ta123456\t604-555-0143'].join('\n'));
+await page.fill('#imp-paste', ['Name\tVoter Number\tPhone\tVoter ID Verified', 'ELECTOR Vera\ta123456\t604-555-0143\tyes'].join('\n'));
 await page.click('button:has-text("Use this text")');
 await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+const vmap2 = await page.$$eval('.imp-map__select', (els) => els.map((e) => e.options[e.selectedIndex].text));
+check('a yes/no column that only mentions the voter ID is not taken for the number', vmap2.join('|') === 'Full name|Voter number|Phone|Don’t import', vmap2.join('|'));
 await page.click('button:has-text("Check 1 row")');
 await sleep(1500);
 const vcheck = (await page.innerText('.imp-result').catch(() => '')).replace(/\s+/g, ' ');
