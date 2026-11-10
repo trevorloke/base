@@ -607,9 +607,9 @@ const atRootFor = (workspaceId) => {
   return sites.get(k);
 };
 // Shared: pictures, and what services and emails already sent call back
-// (Stripe's and Twilio's webhooks, the email sender's delivery events, the
-// unsubscribe links /u, /bu and /lu), so no domain setting ever drops a
-// payment, a STOP, a bounce or an unsubscribe. Each only in the shape, the
+// (Stripe's and Twilio's webhooks, the email sender's delivery events,
+// Mailchimp's unsubscribes, the unsubscribe links /u, /bu and /lu), so no
+// domain setting ever drops a payment, a STOP, a bounce or an unsubscribe. Each only in the shape, the
 // case and with the method it comes in, as its route takes it (an
 // unsubscribe link's id in either case): nothing else of the app answers
 // there. (/r/… there is the site's referral link, never a receipt.)
@@ -619,6 +619,7 @@ const SHARED = [
   [['GET', 'HEAD'], /^\/media\/[^/]+$/],
   [['POST'], /^\/stripe\/webhook$/],
   [['POST'], /^\/hooks\/mail\/[a-z]+$/], // the email sender's delivery events (ext/mail)
+  [['GET', 'HEAD', 'POST'], /^\/hooks\/mailchimp\/[0-9a-f]{32}$/], // Mailchimp's unsubscribes (ext/mailchimp); it asks the address before saving it
   [['POST'], TWILIO],
   [['GET', 'HEAD', 'POST'], UNSUBSCRIBE],
 ];

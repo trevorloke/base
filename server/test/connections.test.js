@@ -21,7 +21,7 @@ let dmarc = null; // the sender's domain's DMARC record (TXT), when it has one
 let twilioNumbers = [];
 let refuse = false;
 const seen = [];
-KEYS.push('MAIL_PROVIDER', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY');
+KEYS.push('MAIL_PROVIDER', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID');
 
 before(async () => {
   for (const k of KEYS) delete process.env[k];
@@ -66,7 +66,7 @@ const check = async (key) => ok(await mgr.post('/api/connections/check', { key }
 
 test('nothing set: what each service is for and which settings are missing — managers only', async () => {
   const s = byKey(await list());
-  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'stripe', 'twostep']);
+  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'mailchimp', 'stripe', 'twostep']);
   assert.deepEqual(s.email.missing, ['RESEND_API_KEY', 'MAIL_FROM']);
   assert.equal(s.email.state, 'missing');
   assert.deepEqual(s.texting.missing, ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']);

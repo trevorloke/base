@@ -11,7 +11,7 @@
 // the app at (app_hosts, noted by the API) is refused too, unless the site
 // has it already, and the screen has those to refuse as they're typed, in
 // the save's words. On a website domain the webhooks (Stripe's, Twilio's, the
-// email sender's delivery events) and the unsubscribe
+// email sender's delivery events, Mailchimp's) and the unsubscribe
 // links in emails still answer, each only in its own shape and case; a tab,
 // a line break or a backslash in the address is the site's 404, never a
 // redirect. A host written with a final dot (imaginesurrey.ca.) is the same
@@ -28,6 +28,7 @@ const { mountAt } = await import('../lib/mount.js');
 const { forgetDomains } = await import('../ext/site/store.js');
 const { twilioSignature } = await import('../ext/texting/twilio.js');
 const { signPayload: resendSignature } = await import('../lib/mail/resend.js');
+const { pathKey } = await import('../ext/mailchimp/mailchimp.js');
 const { serve } = await import('@hono/node-server');
 
 const SITE = 'campaign.example.org';
@@ -408,6 +409,37 @@ test('on a website domain the email sender’s delivery events still reach base.
       assert.match(res.headers.get('content-type'), /text\/html/, `${method} ${p}: the site’s 404 page`);
     }
   } finally {
+    for (const k of KEYS) { if (before[k] === undefined) delete process.env[k]; else process.env[k] = before[k]; }
+  }
+});
+
+test('on a website domain Mailchimp’s webhook still reaches base.win: an unsubscribe there is never lost', async () => {
+  const KEYS = ['MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID', 'MAILCHIMP_WEBHOOK_SECRET'];
+  const before = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
+  for (const k of KEYS) delete process.env[k];
+  Object.assign(process.env, { MAILCHIMP_API_KEY: 'site-hosts-key-us19', MAILCHIMP_AUDIENCE_ID: 'aud-site-hosts' });
+  try {
+    ok(await mgr.action('subscription.add', { name: 'Mo Example', email: 'mo.mailchimp@example.org' }));
+    const path = `/hooks/mailchimp/${pathKey()}`;
+    const form = new URLSearchParams({ type: 'unsubscribe', 'data[email]': 'mo.mailchimp@example.org', 'data[list_id]': 'aud-site-hosts' }).toString();
+    const r = await hit(path, { host: SITE, method: 'POST', body: form, headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+    assert.deepEqual([r.status, r.json], [200, { received: true }], r.text.slice(0, 200));
+    // Taken as a hint: a job to read Mo's record from Mailchimp is waiting.
+    const jobs = (await db.query("select payload from jobs where workspace_id = $1 and kind = 'mailchimp.member' and status = 'pending'", [ws])).rows;
+    assert.deepEqual(jobs.map((j) => (typeof j.payload === 'string' ? JSON.parse(j.payload) : j.payload)), [{ email: 'mo.mailchimp@example.org' }]);
+    // Mailchimp asks the address before it saves a webhook to it.
+    assert.equal((await hit(path, { host: SITE })).status, 200);
+    // Another key there: the webhook's own "not found", not the site's page.
+    const wrong = await hit('/hooks/mailchimp/0123456789abcdef0123456789abcdef', { host: SITE, method: 'POST', body: form });
+    assert.deepEqual([wrong.status, wrong.json], [404, { error: 'not found' }]);
+    // Only that shape: anything else there is the site's.
+    for (const [method, p] of [['POST', `${path}/`], ['POST', `${path}/x`], ['POST', '/hooks/mailchimp'], ['POST', `/Hooks/mailchimp/${pathKey()}`], ['PUT', path], ['POST', `/hooks/mailchimp/${pathKey().toUpperCase()}`]]) {
+      const res = await hit(p, { host: SITE, method });
+      assert.equal(res.status, 404, `${method} ${p}`);
+      assert.match(res.headers.get('content-type'), /text\/html/, `${method} ${p}: the site’s 404 page`);
+    }
+  } finally {
+    await db.query("delete from jobs where workspace_id = $1 and kind = 'mailchimp.member'", [ws]);
     for (const k of KEYS) { if (before[k] === undefined) delete process.env[k]; else process.env[k] = before[k]; }
   }
 });

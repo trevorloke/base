@@ -20,6 +20,8 @@ import { basePath } from '../../lib/mount.js';
 // Email (ext/mail): its row follows the sender in use (Resend, SendGrid) and
 // carries where that sender's delivery events go.
 import { emailService, emailInbound, checkEmail } from '../mail/service.js';
+// Mailchimp (ext/mailchimp): its row carries a panel — Connect and Pull now.
+import { mailchimpService, mailchimpInbound, checkMailchimp } from '../mailchimp/service.js';
 // Online payments (ext/payments): its row carries the webhook address and
 // the events to tick in Stripe, and state 'test' in test mode.
 import { stripeService, checkStripe, webhookUrl } from '../payments/service.js';
@@ -90,6 +92,7 @@ export const services = (base = publicUrl()) => {
       state: jobRunnerOn() ? 'ready' : 'missing',
       checkable: false,
     }),
+    mailchimpService(),
     stripeService(base),
     // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
     // one in the database — it works, but a copy of the database would
@@ -112,6 +115,7 @@ const inbound = (base, desk) => [
   { name: 'Twilio — a message comes in', url: `${base}/api/public/twilio/sms`, how: 'Set by hand: Twilio → the number → Messaging → “A message comes in”, HTTP POST' },
   { name: 'Twilio — delivery reports, calls', url: `${base}/api/public/twilio/…`, how: 'Sent by base.win with each text and call (from the public address); nothing to set' },
   emailInbound(base),
+  mailchimpInbound(base),
   { name: 'The website — people in', url: `${base}/in/v1/people`, how: 'From the website’s server with a website key (below): sign-ups, petitions, volunteers, the newsletter' },
   { name: 'Lists and voted files', url: `${desk}/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
   { name: 'Stripe — payments, refunds, disputes', url: webhookUrl(base), how: 'Set by hand: Stripe → Developers → Webhooks → Add endpoint, with the events under Online payments (above)' },
@@ -148,6 +152,7 @@ const CHECKS = {
     return { ok: true, said: `${pub} reaches this base.win (${body.env})` };
   },
   email: (db, ws, base) => checkEmail(db, base),
+  mailchimp: checkMailchimp,
   texting: async () => {
     const need = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM'].filter((k) => !has(k));
     if (need.length) return { ok: false, said: `${need.join(', ')} not set` };

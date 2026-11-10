@@ -72,8 +72,8 @@ const rowFor = async (db, provider, ev) => {
 };
 
 // Every campaign on this server that holds the address: someone on file
-// with it, or a newsletter subscription.
-const holders = async (db, email) => (await db.query(
+// with it, or a newsletter subscription. (ext/mailchimp asks the same.)
+export const holders = async (db, email) => (await db.query(
   `select w.id from workspaces w
    where exists (select 1 from persons p where p.workspace_id = w.id and lower(p.email) = $1 and p.deleted_at is null)
       or exists (select 1 from subscriptions s where s.workspace_id = w.id and s.email = $1)
@@ -167,7 +167,7 @@ const settleSend = async (tx, emit, row) => {
 // Whether email to this address is still on in the campaign: on the
 // newsletter list as subscribed, or (never on the list) someone on file with
 // it who isn't do-not-email — what emailOff would turn off.
-const stillOn = async (tx, workspaceId, email) => {
+export const stillOn = async (tx, workspaceId, email) => {
   const sub = (await tx.query('select status from subscriptions where workspace_id = $1 and email = $2', [workspaceId, email])).rows[0];
   if (sub) return sub.status !== 'unsubscribed';
   return (await tx.query(
