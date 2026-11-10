@@ -68,7 +68,7 @@ export const fmtWhen = (ts) => new Date(ts).toLocaleString('en-CA', {
 
 const REASON = {
   no_email: 'no email', unsubscribed: 'unsubscribed', do_not_contact: 'do not contact',
-  do_not_email: 'do not email', no_consent: 'didn’t ask for email',
+  do_not_email: 'do not email', no_consent: 'didn’t ask for email', suppressed: 'the address bounced or reported spam',
   // A text step's (ext/ladders engine textSkip).
   no_phone: 'no mobile number', bad_number: 'a number that can’t be texted', do_not_text: 'do not text',
   opted_out: 'replied STOP', asked_to_stop: 'asked to stop in a reply', no_text_consent: 'said no to texts',

@@ -1,0 +1,7 @@
+/* A send's delivery line in Outreach (components/MailDelivery.jsx) */
+.md { display: flex; flex-direction: column; gap: 2px; font-size: 13px; overflow-wrap: anywhere; }
+.md-line { display: flex; flex-wrap: wrap; gap: 0 var(--s-2); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.md-line > span:not(:last-child)::after { content: '·'; margin-left: var(--s-2); color: var(--text-3); }
+.md-bad { color: var(--danger); font-weight: 600; }
+.md-note { color: var(--text-3); }
+.md-warn { color: var(--warn); font-weight: 600; }

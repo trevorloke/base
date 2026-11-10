@@ -19,6 +19,7 @@ import {
   AB_MIN, AbFields, OpensNote, SendStats, TestingList, abAsk, abPlan, abPlanLine, abState, hasLinks,
   useBlastStat, useBlastStats,
 } from '../components/AbTests.jsx';
+import { DeliveryStats } from '../components/MailDelivery.jsx';
 import LaddersLink from '../components/LaddersLink.jsx';
 import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
@@ -261,6 +262,9 @@ const countsOf = (b) => {
     return {
       total, sent: num(b.sent_count), failed: num(b.failed_count) ?? 0, queued: num(b.queued_count) ?? 0,
       sending: num(b.sending_count) ?? 0, retry: num(b.retry_count), going: num(b.going_count) ?? 0,
+      // Of the ones a retry would reach: how many may get a second copy (a
+      // sender that can't drop a repeat — server/ext/abtests send.js).
+      repeat: num(b.repeat_count) ?? 0,
     };
   }
   if (b.status === 'sent') return { total, sent: total, failed: 0, queued: 0 };
@@ -290,9 +294,13 @@ const useBlastList = () => {
   });
 };
 // Who a retry would reach: the failed ones (and any still saved) — for a
-// newsletter the server leaves out anyone who unsubscribed since (retry_count;
-// it also counts the not-sure ones once they are ten minutes old).
+// newsletter the server leaves out anyone who unsubscribed since, and any
+// address that bounced or reported spam since (retry_count; it also counts
+// the not-sure ones once the server offers them).
 const retryCount = (c) => (c && c.sent != null ? (c.retry ?? c.failed + c.queued) : 0);
+// Trying again may send some a second copy: said beside the button and
+// again where the person says yes.
+const repeatWords = (c) => (c?.repeat > 0 ? `${c.repeat === 1 ? 'One' : c.repeat} may get a second copy.` : null);
 // What isn't settled, in a few words: "1 failed · 2 not sent · 1 not sure".
 const restWords = (c) => [
   c.failed ? `${c.failed} failed` : null, c.queued ? `${c.queued} not sent` : null, c.sending ? `${c.sending} not sure` : null,
@@ -306,7 +314,7 @@ const plainReason = (note) => {
   if (/no SMS provider/i.test(t)) return 'Texting isn’t connected.';
   if (noProviderNote(t)) return 'Email isn’t connected.';
   if (/quiet hours/i.test(t)) return t;
-  if (/unsubscribed/i.test(t)) return 'Everyone on it unsubscribed.';
+  if (/unsubscribed|no one left/i.test(t)) return 'No one left on it can be emailed.';
   const code = Number((/provider (\d{3})/i.exec(t) || [])[1]) || 0;
   if (code === 429) return 'The email service was busy.';
   if (code === 401 || code === 403) return 'The email service refused the connection.';
@@ -374,9 +382,11 @@ function BlastResult({ blast: answered, emailConfigured, canWrite, onDismiss, on
   const c = countsOf(blast);
   const who = (n) => audienceWords(blast.kind, n);
   const gone = blast.resent?.skipped || 0;
+  // Addresses that bounced or reported spam since the send was saved: left off.
+  const stopped = blast.resent?.suppressed || 0;
   let line;
   let tone;
-  if (c.total === 0) { line = 'Not sent — everyone on it unsubscribed.'; tone = 'failed'; }
+  if (c.total === 0) { line = 'Not sent — no one left on it can be emailed.'; tone = 'failed'; }
   else if (c.sent == null) { line = `Partly sent to ${who(c.total)}.`; tone = 'queued'; }
   else if (c.sent === c.total) { line = `Sent to ${who(c.total)}.`; tone = 'sent'; }
   else if (c.sent > 0) {
@@ -406,6 +416,7 @@ function BlastResult({ blast: answered, emailConfigured, canWrite, onDismiss, on
         <strong>
           {line}
           {gone > 0 && c.total > 0 && <span className="ot-result-next"> {gone} unsubscribed first.</span>}
+          {stopped > 0 && c.total > 0 && <span className="ot-result-next"> {stopped} left off (bounced or reported spam).</span>}
           {unsent && emailConfigured !== true && (
             <span className="ot-result-next"> <Link to={CONNECT_TO}>Connect {wayOf(blast)}</Link>, then {saved ? 'Start test' : 'Send now'}.</span>
           )}
@@ -666,8 +677,8 @@ function PastRow({ b, showKind, emailConfigured, canWrite }) {
   let why = null;
   if (going) why = null;
   else if (!allSent && c.failed > 0) why = plainReason(b.provider_note);
-  else if (!allSent && c.sending > 0 && !held) why = `We don’t know if ${c.sending} got it.`;
-  else if (!allSent && c.sent === 0 && c.failed === 0) why = 'Everyone on it unsubscribed.';
+  else if (!allSent && c.sending > 0 && !held) why = `We don’t know if ${c.sending} got it.${canRetry && repeatWords(c) ? ' Trying again may send a second copy.' : ''}`;
+  else if (!allSent && c.sent === 0 && c.failed === 0) why = 'No one left on it can be emailed.';
   return (
     <li className="ot-item">
       <div className="ot-row ot-row--static ot-row--wrap">
@@ -686,13 +697,17 @@ function PastRow({ b, showKind, emailConfigured, canWrite }) {
           {ab && <span className="ab-b">B · {ab.subject_b}</span>}
           {abNow && <span className="ab-line" data-tone={abNow.tone}>{abNow.line}</span>}
           <SendStats stat={stat} />
+          <DeliveryStats stat={stat} />
           {why && <span className="ot-row-note">{why}</span>}
         </span>
         <StatusChip status={chip.status} label={chip.label} />
       </div>
       {(canRetry || result) && (
         <div className="ot-body">
-          {canRetry && <ResendButton b={b} n={retry} label="Try again" onDone={setResult} />}
+          {canRetry && (
+            <ResendButton b={b} n={retry} label="Try again" onDone={setResult}
+              ask={repeatWords(c) ? <>Send to <strong>{retry}</strong> {nounFor(b.kind, retry)} now? {repeatWords(c)}</> : undefined} />
+          )}
           {result && (
             <BlastResult blast={result} emailConfigured={emailConfigured} canWrite={canWrite}
               onDismiss={() => setResult(null)} onRetried={setResult} />
@@ -925,8 +940,11 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
   const isNews = to === 'newsletter';
   const chosen = isNews ? null : all.find((l) => l.id === to) || null;
   const subscribed = subs.data?.subscribed ?? null;
+  // Who a newsletter reaches: the subscribed, less any address that bounced
+  // for good or reported spam (an older server has only the first number).
+  const emailable = subs.data?.emailable ?? subscribed;
   const emailConfigured = blasts.data?.emailConfigured;
-  const count = isNews ? subscribed : chosen ? chosen.counts.with_email : null;
+  const count = isNews ? emailable : chosen ? chosen.counts.with_email : null;
 
   return (
     <>
@@ -935,12 +953,12 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
           <div className="field">
             <label htmlFor="em-to">To</label>
             <select id="em-to" className="input" value={to} onChange={(e) => setTo(e.target.value)}>
-              <option value="newsletter">Newsletter subscribers — {subscribed ?? '…'}</option>
+              <option value="newsletter">Newsletter subscribers — {emailable ?? '…'}</option>
               {all.map((l) => <option key={l.id} value={l.id}>{l.name} — {l.counts.with_email} {plural(l.counts.with_email, 'person', 'people')}</option>)}
             </select>
             <span className="ops-meta">
               The newsletter: everyone who signed up. A list: a saved filter or hand-picked people (<Link to="/lists">Lists</Link>).
-              Do-not-email, do-not-contact and unsubscribed addresses are left out.
+              Do-not-email, do-not-contact, unsubscribed and bounced addresses are left out.
             </span>
           </div>
         </div>
@@ -1002,6 +1020,8 @@ function Subscribers({ subs, canWrite, toast }) {
   const list = subs.data?.subscriptions ?? [];
   const subscribed = subs.data?.subscribed ?? null;
   const unsubscribed = subs.data?.unsubscribed ?? 0;
+  // Subscribed, but the address bounced for good or reported spam: nothing emails it.
+  const stopped = subs.data?.emailable != null && subscribed != null ? subscribed - subs.data.emailable : 0;
   const visible = showAll ? list : list.slice(0, 50);
 
   const add = async (e) => {
@@ -1021,7 +1041,7 @@ function Subscribers({ subs, canWrite, toast }) {
 
   return (
         <section className="ot-sec" aria-label="Subscribers">
-          <h2 className="ot-sec-h">Subscribers <span className="ot-count">{subs.isPending ? '…' : subscribed}{unsubscribed > 0 && ` · ${unsubscribed} unsubscribed`}</span></h2>
+          <h2 className="ot-sec-h">Subscribers <span className="ot-count">{subs.isPending ? '…' : subscribed}{stopped > 0 && ` · ${stopped} can’t be emailed`}{unsubscribed > 0 && ` · ${unsubscribed} unsubscribed`}</span></h2>
           {subs.isError && <p className="error">{subs.error.message}</p>}
           {list.length === 0 && !subs.isPending && <p className="ot-empty">No subscribers yet.</p>}
           {list.length > 0 && (
@@ -1038,6 +1058,7 @@ function Subscribers({ subs, canWrite, toast }) {
                       </span>
                     </span>
                     {s.status !== 'subscribed' && <StatusChip status={s.status} />}
+                    {s.status === 'subscribed' && s.can_email === false && <StatusChip status="failed" label="can’t be emailed" />}
                     {canWrite && s.status === 'subscribed' && removing !== s.id && (
                       <button type="button" className="btn btn-quiet ot-btn-tap" disabled={act.busy} onClick={() => setRemoving(s.id)}>Remove</button>
                     )}

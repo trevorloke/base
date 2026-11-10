@@ -1,0 +1,18 @@
+/* Settings → Services, the Email row: "Sending domain" (components/SendingDomain.jsx) */
+.sd { margin-top: var(--s-3); padding: var(--s-3); border: var(--border); border-radius: var(--r-card); background: var(--paper-0); }
+.sd-h { margin: 0; font-size: 15px; font-weight: 700; }
+.sd-domain { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-1) 0 0; font-size: 15px; overflow-wrap: anywhere; }
+.sd-note { margin: var(--s-1) 0 0; font-size: 14px; color: var(--text-3); }
+.sd-recs { list-style: none; margin: var(--s-3) 0 0; padding: 0; border-top: var(--border); }
+.sd-rec { padding: var(--s-3) 0; border-bottom: var(--border); }
+.sd-rec__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.sd-rec__what { font-size: 14px; font-weight: 600; color: var(--text-2); }
+.sd-rec__lines { margin: var(--s-1) 0 0; }
+.sd-rec__lines > div { display: flex; gap: var(--s-2); align-items: flex-start; margin-top: var(--s-1); }
+.sd-rec__lines dt { flex: 0 0 44px; padding-top: 3px; font-size: 13px; color: var(--text-3); }
+.sd-rec__lines dd { flex: 1 1 auto; min-width: 0; margin: 0; }
+.sd-rec__value { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s-2); }
+.sd-val { display: block; flex: 1 1 220px; min-width: 0; padding: 4px 6px; font-size: 13px; user-select: all; overflow-wrap: anywhere; }
+.sd-copy { flex: 0 0 auto; }
+.sd-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin-top: var(--s-3); }
+.sd-count { font-size: 14px; color: var(--text-3); }
