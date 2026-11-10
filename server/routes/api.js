@@ -736,7 +736,8 @@ app.get('/blasts', async (c) => {
     [ctx.workspaceId],
   );
   const media = (await c.get('db').query(
-    `select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and email is not null and tags @> '"media"'::jsonb`,
+    `select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null and p.email is not null and p.tags @> '"media"'::jsonb
+       and ${notSuppressed('p.workspace_id', 'p.email')}`,
     [ctx.workspaceId],
   )).rows[0].n;
   const files = await attachmentsOf(c.get('db'), ctx.workspaceId);

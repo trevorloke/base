@@ -477,6 +477,18 @@ test('an A/B send: the rest held for the winner leave out an address suppressed 
   assert.deepEqual([b.audience_count, b.sent_count, b.status], [49, 49, 'sent']);
 });
 
+test('the press list leaves out a suppressed address too, and its count says so before the send', async () => {
+  const { c } = await campaign('Press');
+  for (const w of ['p-ana', 'p-ben']) await c.createPerson(`${w} Example`, { email: mail(w), tags: ['media'] });
+  assert.equal(ok(await c.get('/api/blasts')).mediaContacts, 2);
+  assert.equal((await resend.event('bounced', { to: mail('p-ana') })).status, 200);
+  assert.equal(ok(await c.get('/api/blasts')).mediaContacts, 1, 'the number the Press screen asks about');
+  resend.reset();
+  const sent = ok(await c.action('blast.send', { kind: 'press', subject: 'Release', body: 'For immediate release.' }));
+  assert.equal(sent.blast.audience_count, 1);
+  assert.deepEqual(resend.sent.map((m) => m.to), [mail('p-ben')]);
+});
+
 test('a ladder’s email step skips a suppressed address, and says so', async () => {
   const { c, ws } = await campaign('Ladder');
   const lad = ok(await c.action('ladder.create', { name: 'Thanks', trigger: { kind: 'tag', ref: 'signer' }, steps: [{ kind: 'email', subject: 'Thanks', body: 'Thank you.' }] })).ladder;
