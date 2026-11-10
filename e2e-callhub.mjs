@@ -148,7 +148,7 @@ await page.screenshot({ path: `${SHOTS}/02-list-before-1440.png` });
 await page.click(`${ch} .ch-head .btn`);
 await page.waitForSelector(`${ch} .ch-ask strong`, { timeout: 10000 });
 const ask = await text(page, `${ch} .ch-ask`);
-check('it asks first: “9 numbers to send · 3 left out”, and what goes', /^9 numbers to send · 3 left out Only names, numbers and cities go\./.test(ask), ask);
+check('it asks first: “9 numbers to send · 3 left out (no number, or do not call)”, and what goes', /^9 numbers to send · 3 left out \(no number, or do not call\) Only names, numbers and cities go\./.test(ask), ask);
 await page.screenshot({ path: `${SHOTS}/03-list-ask-1440.png` });
 const before = fake.calls.length;
 await page.click(`${ch} .ch-ask button:has-text("Send")`);

@@ -33,10 +33,11 @@ The contract the website work is built against. Read with ROADMAP.md.
   never shadowed on the app host. On a site host, only the site's routes and
   `/media/:id`, `/site-assets/*` are answered, and what services and emails
   already sent call back, each only in its own shape, case and method: `POST
-  /stripe/webhook`, Twilio's `POST /api/public/twilio/…` and the unsubscribe
+  /stripe/webhook`, Twilio's `POST /api/public/twilio/…`, CallHub's `POST
+  /hooks/callhub/<key>` and the unsubscribe
   links `/u/<id>`, `/bu/<id>`, `/lu/<id>` (the id in either case; `/U/…` is
-  the site's) — so no domain setting can drop a payment, a STOP or an
-  unsubscribe. (`/r/…` there is the referral link.)
+  the site's) — so no domain setting can drop a payment, a STOP, a call's
+  result or an unsubscribe. (`/r/…` there is the referral link.)
 
 Site routes (relative to the site root):
 `/` (the page with slug `home`) · `/:slug` (any published page) ·

@@ -200,7 +200,7 @@ export default function SendToCallHub({ kind, id }) {
     <section className="ch" aria-label="CallHub">
       <div className="ch-head">
         <h2 className="ch-title">CallHub</h2>
-        {!asking && !going && (
+        {!asking && !going && pushes.data && (
           <button type="button" className="btn ops-tap" disabled={!online} onClick={() => { setError(null); setAsking(true); }}>
             {list.length ? 'Send again' : 'Send to CallHub'}
           </button>
@@ -213,7 +213,7 @@ export default function SendToCallHub({ kind, id }) {
             : !pv ? <p className="ch-line" role="status">Counting…</p> : (
               <>
                 <p className="ch-line" role="status">
-                  <strong>{num(pv.numbers)}</strong> {plural(pv.numbers, 'number')} to send{pv.left_out ? ` · ${num(pv.left_out)} left out` : ''}
+                  <strong>{num(pv.numbers)}</strong> {plural(pv.numbers, 'number')} to send{pv.left_out ? ` · ${num(pv.left_out)} left out (no number, or do not call)` : ''}
                 </p>
                 <p className="ops-meta">
                   {pv.numbers ? `Only names, numbers and cities go.${pv.days > 1 ? ` About ${num(pv.days)} days: CallHub takes 3,600 a day.` : ''}`
