@@ -46,11 +46,14 @@
    people badge on its corner, and a group of nearby doors is a white bubble
    with a house, the door count and a band ring.
    Pin colors are literal (not tokens): the OSM basemap is light in both
-   schemes, so the dark-mode pastel status tokens would wash out on it. ── */
+   schemes, so the dark-mode pastel status tokens would wash out on it.
+   "Not asked yet" (--door-unrated) and undecided's darker edge
+   (--door-undecided-edge) come from mapView.js, the same as the canvas
+   dots': both read at 3 to 1 or better on any base map. ── */
 .map-pin-wrap, .map-sign-wrap, .map-me-wrap, .map-cluster-wrap { background: transparent; border: 0; }
 .map-pin-wrap, .map-sign-wrap, .map-cluster-wrap { cursor: pointer; }
 .map-pin {
-  --pin-bg: #8a90a6;
+  --pin-bg: var(--door-unrated, #8a90a6);
   --pin-fg: #ffffff;
   position: absolute;
   left: 9px;
@@ -79,9 +82,9 @@
 }
 .map-pin__dot { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--pin-fg); }
 .map-pin--support   { --pin-bg: #138a52; }
-.map-pin--undecided { --pin-bg: #f5a524; --pin-fg: #161a2e; }
+.map-pin--undecided { --pin-bg: #f5a524; --pin-fg: #161a2e; box-shadow: 0 0 0 1.5px var(--door-undecided-edge, transparent), 0 1px 3px rgba(0, 0, 0, 0.45); }
 .map-pin--opposed   { --pin-bg: #d43c3c; }
-.map-pin--unrated   { --pin-bg: #8a90a6; }
+.map-pin--unrated   { --pin-bg: var(--door-unrated, #8a90a6); }
 /* Household head-count: people glyph + number in a white badge */
 .map-pin__hh {
   position: absolute;
@@ -119,7 +122,7 @@
   width: var(--size, 42px);
   height: var(--size, 42px);
   border-radius: 50%;
-  background: conic-gradient(#138a52 0 var(--a), #f5a524 0 var(--b), #d43c3c 0 var(--c), #8a90a6 0);
+  background: conic-gradient(#138a52 0 var(--a), #f5a524 0 var(--b), #d43c3c 0 var(--c), var(--door-unrated, #8a90a6) 0);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: center;
@@ -293,7 +296,7 @@
 .map-filter-btn[data-band='support'], .map-fopt[data-band='support']     { --dot: #138a52; }
 .map-filter-btn[data-band='undecided'], .map-fopt[data-band='undecided'] { --dot: #f5a524; }
 .map-filter-btn[data-band='opposed'], .map-fopt[data-band='opposed']     { --dot: #d43c3c; }
-.map-filter-btn[data-band='unrated'], .map-fopt[data-band='unrated']     { --dot: #8a90a6; }
+.map-filter-btn[data-band='unrated'], .map-fopt[data-band='unrated']     { --dot: var(--door-unrated, #8a90a6); }
 
 .map-unloc { display: inline-flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 /* "Not on map 4": the same quiet pill (not yellow), saying what the 4 is */
@@ -483,7 +486,7 @@
 @media (hover: hover) { .map-fab:hover { background: var(--paper-1); } }
 /* "+ Door" (desk roles): a labelled pill, quiet even while active — the
    mode bar on top already says "Tap the new door". */
-.map-fab--add {
+.map-fab--add, .map-fab--list {
   width: auto;
   min-width: 56px;
   padding: 0 18px 0 14px;
@@ -497,6 +500,9 @@
 }
 .map-fab__plus { font-size: 22px; line-height: 1; font-weight: 400; }
 .map-fab--add.is-on { background: var(--paper-1); border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+/* "Whole list" beside Locate me: back to the campaign's own list. */
+.map-fabs__row { display: flex; align-items: center; gap: var(--s-2); }
+.map-fab--list { padding: 0 16px; }
 .map-fabs { align-items: flex-end; }
 .map-fab:disabled { opacity: 0.6; cursor: default; }
 .map-fab:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
@@ -950,7 +956,7 @@
 .map-dot--support   { --dot: #138a52; }
 .map-dot--undecided { --dot: #f5a524; }
 .map-dot--opposed   { --dot: #d43c3c; }
-.map-dot--unrated   { --dot: #8a90a6; }
+.map-dot--unrated   { --dot: var(--door-unrated, #8a90a6); }
 .map-dot--selected  { transform: scale(1.4); box-shadow: 0 0 0 3px #161a2e; }
 @media (hover: hover) { .leaflet-marker-icon:hover .map-dot { transform: scale(1.3); } }
 
@@ -963,3 +969,43 @@
   background: var(--paper-0); color: var(--text-2); box-shadow: var(--shadow-2); font-size: 14px; font-weight: 600;
   pointer-events: none; white-space: nowrap;
 }
+
+/* ── What the map is showing: the count's words, the key, "nobody here" ── */
+/* A map request out for more than a moment: "Loading…" beside the count
+   (what was drawn stays until the answer is in). */
+.map-filter-btn__busy { font-size: 12px; font-weight: 500; color: var(--text-3); white-space: nowrap; }
+/* The part of the map on screen was asked for and not answered. */
+.map-chip.map-retry { color: var(--danger); }
+
+/* The key under the count: what the colours mean and, where the marks
+   aren't doors you can read off, what a mark is. It never takes a tap — the
+   map under it still drags. Its marks are the map's own (colours from
+   mapView.js), squares while the far-out picture shows. */
+.map-top > .map-key {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-2);
+  background: var(--paper-0);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-ctrl);
+  box-shadow: var(--shadow-1);
+  pointer-events: none;
+}
+.map-key__marks { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.map-key__marks li { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.map-key__mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+.map-key--squares .map-key__mark { border-radius: 2px; }
+.map-key__words { margin: 4px 0 0; font-size: 13px; font-weight: 600; color: var(--text-1); }
+
+/* A big list, and nobody in this part of the map: one line and the way back. */
+.map-nobody {
+  position: absolute; left: 50%; bottom: calc(var(--tabbar-h, 0px) + 24px); transform: translateX(-50%);
+  z-index: 3; display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: var(--s-1) var(--s-3);
+  max-width: calc(100% - 32px); padding: 4px 4px 4px 16px;
+  background: var(--paper-0); color: var(--text-1); border: 1px solid var(--rule-2); border-radius: var(--r-card);
+  box-shadow: var(--shadow-2); font-size: 14px; font-weight: 600;
+}
+.btn.map-nobody__btn { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; white-space: nowrap; }
