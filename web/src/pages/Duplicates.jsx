@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import { mergedParts } from '../components/DuplicatesWords.js';
+import './shifts.css'; // the ops-* pieces (the page column, the back link, the buttons)
 import './duplicates.css';
 
 const WHY = { email: 'Same email', phone: 'Same phone and name', address: 'Same name at the same door', postal: 'Same name and postal code', flag: 'Named together on a donation flag' };

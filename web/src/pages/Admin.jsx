@@ -17,6 +17,8 @@ import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/No
 import Team from './Team.jsx';
 import Services from '../components/Services.jsx';
 import CampaignName from '../components/CampaignName.jsx';
+// The ops-* pieces these screens are built from (the head, the buttons).
+import './shifts.css';
 import './outreach.css';
 import '../editor.css';
 import './admin.css';

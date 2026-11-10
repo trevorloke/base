@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
+import './shifts.css'; // the ops-* pieces (the head, the page column, the buttons)
 import './reports.css';
 import { at } from '../base.js';
 

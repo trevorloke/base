@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { useFieldsList } from '../components/FieldsBits.jsx';
 import { useOnline } from '../components/NoSignal.jsx';
+import './shifts.css'; // the ops-* pieces (the page column, the back link)
 import './membership.css';
 
 const FORM_LANGS = ['English', 'Punjabi', 'Hindi', 'Urdu', 'Mandarin', 'Cantonese', 'Filipino', 'Korean', 'Vietnamese', 'Arabic', 'Farsi', 'Gujarati', 'Spanish', 'French'];
