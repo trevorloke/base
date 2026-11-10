@@ -158,6 +158,12 @@ test('a patch takes the colour of support only as far as people there are rated'
   assert.ok(hue(some).green > hue(fresh).green && hue(some).green < hue(most).green, `a quarter rated: a quarter of the way (${some})`);
   assert.ok(hue(most).green > 25, `mostly supporters: green (${most})`);
   assert.ok(hue(against).red > 40, `mostly opposed: red (${against})`);
+  // Split between yes and no, it says neither loudly; and one answer doesn't colour a block.
+  const split = cellFill(one([['', 20], ['1', 95], ['4B', 85]]), false);
+  assert.ok(hue(split).green < hue(most).green && hue(split).red < hue(against).red, `half yes, half no (${split})`);
+  const oneAnswer = cellFill(one([['', 3], ['4', 1]]), false);
+  const fourAnswers = cellFill(one([['4', 4]]), false);
+  assert.ok(hue(oneAnswer).red < 30 && hue(fourAnswers).red > 60, `one of four asked (${oneAnswer}) beside all four opposed (${fourAnswers})`);
   // The filter's own patches (only one rating kept) count only those people.
   const kept = cellsFrom({ cell, cells: [[1000, -2000, '', 150], [1000, -2000, '1', 50]] }, bandOf, (r) => r === '1');
   assert.deepEqual([kept[0].n, kept[0].rated, kept[0].band], [50, 50, 'support']);

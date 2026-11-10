@@ -2224,7 +2224,7 @@ export default function MapPage() {
                 <FilterGlyph />
                 <span className="map-filter-btn__label"><span className="map-filter-btn__show">Show:</span> {labelOf(filter)}</span>
                 <span className="map-filter-btn__n mono" aria-live="polite">{pillN}</span>
-                {slow && !opening && <span className="map-filter-btn__busy" role="status">Loading…</span>}
+                {slow && !opening && <span className="map-filter-btn__busy" aria-live="polite">Loading…</span>}
               </button>
             )}
             {/* The part of the map on screen was asked for and not answered. */}

@@ -132,9 +132,11 @@ export function cellsFrom(data, bandOfCode, keep = () => true) {
 // A patch's colour. More people, stronger shade: from a slate that still
 // reads on any light map (3 to 1) to ink — on the Dark look the other way,
 // lighter for more. Where people there are rated it takes the colour of the
-// band most of them are in, only as far as they are rated: a patch where a
-// tenth have been asked stays nearly neutral, one fully canvassed is green
-// (or ochre, or red). → [r, g, b, alpha]
+// band most of them are in, as far as the people there are in that band: a
+// patch where a tenth have said yes stays nearly neutral, one where nearly
+// everyone has is green (or ochre, or red); a patch split between yes and no
+// says neither loudly, and one or two answers don't colour a block (a map
+// of single answers reads as confetti). → [r, g, b, alpha]
 const SHADE = {
   light: { few: [100, 110, 134], many: [22, 26, 46] },
   dark: { few: [128, 138, 165], many: [232, 237, 247] },
@@ -145,7 +147,8 @@ export const cellFill = (c, dark) => {
   const ramp = SHADE[dark ? 'dark' : 'light'];
   const s = Math.min(1, Math.sqrt(c.per / FULL_PER_KM2));
   const neutral = mix(ramp.few, ramp.many, s);
-  if (!c.rated) return [...neutral, 0.92];
+  const lead = c.rated ? c[c.band] : 0;
+  if (!lead) return [...neutral, 0.92];
   const band = mix(MARK[c.band], ramp.many, s * 0.35);
-  return [...mix(neutral, band, (c.rated / c.n) ** 0.75), 0.92];
+  return [...mix(neutral, band, (lead / c.n) ** 0.75 * Math.min(1, lead / 3)), 0.92];
 };
