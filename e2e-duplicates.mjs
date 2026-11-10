@@ -127,8 +127,10 @@ check('two that read the same: no "Not Raj Same" choice, Compare in Duplicates',
 await page.click('.ops-needs .ops-item:has-text("Raj Same") a:has-text("Compare in Duplicates")').catch(() => {});
 await page.waitForSelector('.dup-pair', { timeout: 8000 }).catch(() => {});
 const rajPairs = await page.locator('.dup-pair').count();
-check('… which opens the pairs with that donor alone', /\/people\/duplicates\?with=/.test(page.url()) && rajPairs === 2
-  && /Only the pairs with the donor’s record/.test(await page.innerText('body')), `${page.url()} · ${rajPairs} pairs`);
+// The donor with each of the two, and the two with each other: they may
+// pair only with each other (another unit at the door, no postal code).
+check('… which opens the pairs with that donor and the two it names', /\/people\/duplicates\?with=[^,]+,[^,]+,[^,]+$/.test(page.url()) && rajPairs === 3
+  && /Only the pairs with the donor’s record and the records its flag names/.test(await page.innerText('body')), `${page.url()} · ${rajPairs} pairs`);
 await page.screenshot({ path: `${SHOTS}/04-duplicates-with-donor.png` });
 
 // A merge that clears a maybe with a record only the merged one matched
