@@ -106,14 +106,17 @@ export const connect = async (base) => {
     const audience = await audienceId();
     const hooks = await webhooksOf(audience);
     if (hooks.some((h) => here(h, base) && sends(h))) return { ok: true, said: 'Mailchimp already sends unsubscribes and dead addresses here' };
-    // An address made from an earlier key answers nothing now, and one of
-    // ours with the events off is no use: they go, then the right one is made.
-    for (const h of hooks.filter((x) => ours(x, base) && x.id != null)) {
-      await mailchimp('DELETE', `/lists/${audience}/webhooks/${encodeURIComponent(h.id)}`, { timeoutMs: 8000 });
-    }
+    const drop = (h) => mailchimp('DELETE', `/lists/${audience}/webhooks/${encodeURIComponent(h.id)}`, { timeoutMs: 8000 });
+    const mine = hooks.filter((h) => ours(h, base) && h.id != null);
+    // One at the right address with the events off makes room first (an
+    // address is taken once); the right one is made; then any made from an
+    // earlier key, which answers nothing now, goes — so there is never a
+    // moment with a working webhook taken away and none put back.
+    for (const h of mine.filter((x) => here(x, base))) await drop(h);
     const made = await mailchimp('POST', `/lists/${audience}/webhooks`, {
       body: { url: hookUrl(base), events: EVENTS, sources: SOURCES }, idempotencyKey: `base-mc-webhook-${audience}`, timeoutMs: 15_000,
     });
+    for (const h of mine.filter((x) => !here(x, base))) await drop(h).catch(() => {});
     const secret = typeof made?.signing_secret === 'string' && made.signing_secret ? made.signing_secret : null;
     return { ok: true, made: true, said: 'Mailchimp now sends unsubscribes and dead addresses here', ...(secret ? { secret } : {}) };
   } catch (e) {

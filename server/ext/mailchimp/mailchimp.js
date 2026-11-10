@@ -97,31 +97,35 @@ export const mailchimp = async (method, path, { query, body, idempotencyKey, tim
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = null; }
   if (res.ok) return data;
-  if (res.status === 401 || res.status === 403) throw new MailchimpError(REFUSED_KEY, { status: res.status });
+  if (res.status === 401) throw new MailchimpError(REFUSED_KEY, { status: 401 });
   throw new MailchimpError(wordsOf(data, res.status).slice(0, 300), { status: res.status, retryable: res.status === 429 || res.status >= 500 });
 };
 
 // Every row of a paged list (count, offset, total_items), a thousand at a
-// time — Mailchimp's most. `rows` names the array in the answer.
-export const PAGE = 1000;
+// time — Mailchimp's most. `rows` names the array in the answer. It goes by
+// what came back, not by what was asked for: a server that gives fewer to a
+// page than asked is still read to the end (total_items says where that is).
+const PAGE = 1000;
+const MAX_PAGES = 5000;
 export const pages = async (path, rows, query = {}) => {
   const out = [];
-  for (let offset = 0; ; offset += PAGE) {
-    const page = await mailchimp('GET', path, { query: { ...query, count: PAGE, offset } });
+  for (let n = 0; n < MAX_PAGES; n += 1) {
+    const page = await mailchimp('GET', path, { query: { ...query, count: PAGE, offset: out.length } });
     const got = Array.isArray(page?.[rows]) ? page[rows] : [];
     out.push(...got);
-    if (got.length < PAGE || (Number.isFinite(page?.total_items) && out.length >= page.total_items)) return out;
+    const total = Number(page?.total_items);
+    if (!got.length || (Number.isFinite(total) && page?.total_items != null ? out.length >= total : got.length < PAGE)) return out;
   }
+  throw new MailchimpError('Mailchimp’s list never ended');
 };
 
 // ── Which audience ──
 // MAILCHIMP_AUDIENCE_ID, or the account's only one. With several and none
-// named nothing is guessed: `choose` carries them for Check to name.
+// named nothing is guessed (Settings → Services' Check names them).
 export class AudienceError extends MailchimpError {
-  constructor(message, { choose = null, ...rest } = {}) {
-    super(message, rest);
+  constructor(message) {
+    super(message);
     this.name = 'AudienceError';
-    this.choose = choose;
   }
 }
 export const audiences = async () => (await mailchimp('GET', '/lists', {
@@ -132,18 +136,26 @@ let only = null; // { for, id, at }
 const ONLY_MS = 10 * 60_000;
 export const _forgetAudienceForTest = () => { only = null; };
 const who = () => `${apiBase()}|${apiKey()}`;
+// An audience's id goes into the address of every call: letters and digits only.
+const AUDIENCE = /^[A-Za-z0-9_-]{1,64}$/;
 // The audience without asking Mailchimp: the one named, or the only one as
 // last found. null: not known just now.
-export const knownAudience = () => env('MAILCHIMP_AUDIENCE_ID') || (only && only.for === who() && Date.now() - only.at < ONLY_MS ? only.id : null);
+export const knownAudience = () => {
+  const named = env('MAILCHIMP_AUDIENCE_ID');
+  if (named) return AUDIENCE.test(named) ? named : null;
+  return only && only.for === who() && Date.now() - only.at < ONLY_MS ? only.id : null;
+};
 export const audienceId = async () => {
   const known = knownAudience();
   if (known) return known;
+  if (env('MAILCHIMP_AUDIENCE_ID')) throw new AudienceError('MAILCHIMP_AUDIENCE_ID isn’t an audience’s id — Settings → Services → Mailchimp → Check names each audience with its id');
   const lists = await audiences();
-  if (lists.length === 1) {
+  if (lists.length === 1 && AUDIENCE.test(String(lists[0]?.id ?? ''))) {
     only = { for: who(), id: String(lists[0].id), at: Date.now() };
     return only.id;
   }
   only = null;
-  if (!lists.length) throw new AudienceError('The Mailchimp account has no audience yet — make one in Mailchimp first', { choose: [] });
-  throw new AudienceError(`The account has ${lists.length} audiences — a manager sets MAILCHIMP_AUDIENCE_ID to one (Settings → Services → Mailchimp → Check names them)`, { choose: lists });
+  if (!lists.length) throw new AudienceError('The Mailchimp account has no audience yet — make one in Mailchimp first');
+  if (lists.length === 1) throw new AudienceError('Mailchimp named its audience in a way base.win can’t use');
+  throw new AudienceError(`The account has ${lists.length} audiences — a manager sets MAILCHIMP_AUDIENCE_ID to one (Settings → Services → Mailchimp → Check names them)`);
 };

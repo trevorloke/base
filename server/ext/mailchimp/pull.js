@@ -135,7 +135,8 @@ export const pull = async (db, ws, { full = false } = {}) => {
   const state = (await db.query('select * from mailchimp_state where workspace_id = $1', [ws])).rows[0];
   const known = state?.audience_id === audience && state.pulled_through && state.full_at;
   const everything = full || !known || Date.now() - new Date(state.full_at).getTime() > FULL_EVERY_MS;
-  const since = everything ? null : new Date(new Date(state.pulled_through).getTime() - SLACK_MS).toISOString();
+  // As Mailchimp writes a time: 2026-11-10T17:35:00+00:00.
+  const since = everything ? null : new Date(new Date(state.pulled_through).getTime() - SLACK_MS).toISOString().replace(/\.\d{3}Z$/, '+00:00');
   const started = new Date().toISOString();
   const out = { unsubscribed: 0, cleaned: 0 };
   for (const status of ['unsubscribed', 'cleaned']) {

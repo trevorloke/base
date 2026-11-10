@@ -214,11 +214,21 @@ test('a big list goes in parts: each address once, an address Mailchimp refuses 
   const list = await membersList(c);
   // Two addresses to a call, and a part ends after each call.
   _setSliceForTest({ ms: 0, chunk: 2 });
+  // …and Mailchimp gives three rows to a page, whatever is asked for: every page is still read.
+  fake.pageMax(3);
   try {
     ok(await c.action('mailchimp.push', { list_id: list.id }));
     assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 1, failed: 0 });
     let s = (await stateOf(c, list.id)).sync;
     assert.deepEqual([s.status, s.total, s.todo, s.tagged], ['syncing', 7, 5, 2], 'part-way: it says how many are still to go');
+    const waiting = async () => (await db.query("select count(*)::int as n from jobs where workspace_id = $1 and kind = 'mailchimp.sync' and status = 'pending'", [ws])).rows[0].n;
+    assert.equal(await waiting(), 1, 'one job carries it on');
+    // A part that ends while the next is already waiting queues no second one.
+    assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 1, failed: 0 });
+    await db.query("update jobs set status = 'pending' where id = (select id from jobs where workspace_id = $1 and kind = 'mailchimp.sync' and status = 'done' order by done_at desc limit 1)", [ws]);
+    assert.equal(await waiting(), 2);
+    assert.deepEqual(await runDueJobs(db, { workspaceId: ws, limit: 1 }), { ran: 1, failed: 0 });
+    assert.equal(await waiting(), 1, 'never two chains for one sync');
     await run(ws);
     s = (await stateOf(c, list.id)).sync;
     assert.deepEqual([s.status, s.total, s.added, s.tagged, s.skipped, s.todo], ['synced', 7, 6, 6, 1, 0]);
@@ -227,6 +237,12 @@ test('a big list goes in parts: each address once, an address Mailchimp refuses 
   assert.deepEqual(sentTo.sort(), names.map(mail).sort(), 'each address was offered once');
   assert.deepEqual(inTag(), names.filter((w) => w !== 'cal').map(mail));
   assert.equal(fake.member(mail('cal')), null);
+  // The same with a pull: five left in Mailchimp, three to a page — all five are found.
+  for (const w of ['ana', 'ben', 'dee', 'eli', 'fay']) await fake.unsubscribe(mail(w), { send: false });
+  ok(await c.action('mailchimp.pull', {}));
+  await run(ws);
+  assert.equal(ok(await c.get('/api/mailchimp')).pull_note, '5 unsubscribed');
+  assert.equal(ok(await c.get('/api/subscriptions')).subscribed, 2);
 });
 
 test('an address unsubscribed in Mailchimp is never re-added, and is turned off in base.win', async () => {
@@ -450,6 +466,20 @@ test('a 429 halfway leaves a sync the next run completes; a refusal that will no
   const refused = await c.action('mailchimp.push', { list_id: list.id });
   assert.deepEqual([refused.status, refused.json.error], [502, 'Mailchimp refused the key — copy the whole key, with its ending (like -us19)']);
   assert.equal((await run(ws)).ran, 0);
+  // Any other refusal is said in Mailchimp's own words (an account that may not do this, say).
+  on({ MAILCHIMP_AUDIENCE_ID: fake.id });
+  ok(await c.action('mailchimp.push', { list_id: list.id }));
+  fake.fail(403);
+  assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 1, failed: 0 });
+  fake.fail(false);
+  s = (await stateOf(c, list.id)).sync;
+  assert.deepEqual([s.status, s.note], ['failed', 'Mailchimp said: An unexpected internal error has occurred.']);
+  // An audience id that could not be one never reaches an address.
+  on({ MAILCHIMP_AUDIENCE_ID: '../../ping' });
+  fake.calls.length = 0;
+  const odd = await c.action('mailchimp.push', { list_id: list.id });
+  assert.deepEqual([odd.status, fake.calls.length], [409, 0]);
+  assert.match(odd.json.error, /^MAILCHIMP_AUDIENCE_ID isn’t an audience’s id/);
 });
 
 test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and a yes here that is newer than a no there', async () => {

@@ -220,9 +220,14 @@ export const runSyncJob = async (db, job) => {
   if (sync.status === 'queued') await patch(db, sync, "status = 'syncing'");
   try {
     if (await part(db, sync)) {
-      // More to do: the next part, and nothing left of an earlier try's words.
+      // More to do: the next part (unless one is waiting already — a job the
+      // runner took back after ten minutes may be running beside this one),
+      // and nothing left of an earlier try's words.
       await patch(db, sync, 'note = null');
-      await enqueueJob(db, { workspaceId: ws, kind: SYNC_JOB, payload: { sync_id: sync.id } });
+      const waiting = (await db.query(
+        `select 1 from jobs where workspace_id = $1 and kind = $2 and status = 'pending' and payload->>'sync_id' = $3 limit 1`, [ws, SYNC_JOB, sync.id],
+      )).rows.length;
+      if (!waiting) await enqueueJob(db, { workspaceId: ws, kind: SYNC_JOB, payload: { sync_id: sync.id } });
       runJobsSoon();
     }
   } catch (e) {

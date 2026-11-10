@@ -30,6 +30,7 @@
 //   limit({ after, times })   answer 429 — after that many more calls, that many times
 //   fail(code | false)        every call answers that status
 //   slow(ms)                  every call waits that long first (a browser check watching a sync)
+//   pageMax(n)                a list gives at most n rows to a page, whatever was asked for
 //   signing(secret | null)    a webhook made from now on is signed with it (shown once, on create)
 //   probe(fn | null)          saving a webhook first asks fn(url) → status; refused unless 200
 //   calls                     every request: { method, path, query, body, auth }
@@ -49,6 +50,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
   let limited = null; // { after, times }
   let failWith = false;
   let slowMs = 0;
+  let pageCap = 1000;
   let signWith = null;
   let probeWith = null;
   let base = '';
@@ -128,10 +130,11 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
     limit: (v = {}) => { limited = v === false ? null : { after: v.after ?? 0, times: v.times ?? 1 }; },
     fail: (v) => { failWith = v; },
     slow: (ms) => { slowMs = Number(ms) || 0; },
+    pageMax: (v) => { pageCap = Number(v) || 1000; },
     signing: (secret) => { signWith = secret; },
     probe: (fn) => { probeWith = fn; },
     reset: () => {
-      calls.length = 0; refusals.clear(); limited = null; failWith = false; slowMs = 0; signWith = null; probeWith = null;
+      calls.length = 0; refusals.clear(); limited = null; failWith = false; slowMs = 0; pageCap = 1000; signWith = null; probeWith = null;
       for (const a of audiences.values()) { a.members.clear(); a.segments.clear(); a.webhooks.length = 0; }
       for (const id of [...audiences.keys()]) if (id !== first.id) audiences.delete(id);
     },
@@ -142,7 +145,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
   const handle = async (req, url, body) => {
     const parts = url.pathname.replace(/^\/3\.0/, '').split('/').filter(Boolean);
     const q = url.searchParams;
-    const count = Math.min(Number(q.get('count')) || 10, 1000);
+    const count = Math.min(Number(q.get('count')) || 10, pageCap);
     const offset = Number(q.get('offset')) || 0;
     const page = (rows) => rows.slice(offset, offset + count);
     if (!url.pathname.startsWith('/3.0/')) return problem(404, 'Resource Not Found', 'The requested resource could not be found.');

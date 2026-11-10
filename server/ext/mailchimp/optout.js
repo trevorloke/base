@@ -27,8 +27,8 @@ const PER_JOB = 50;
 // A later change to someone already do-not-email carries the tag again and
 // says nothing new: the consent record already has their no from before
 // this write (now() is this write's start; its own rows come after).
-const newlyOff = async (tx, ws, personId) => {
-  const email = lower((await tx.query('select email from persons where id = $1 and workspace_id = $2 and deleted_at is null', [personId, ws])).rows[0]?.email);
+const newlyOff = async (tx, ws, personId, given) => {
+  const email = lower(given || (await tx.query('select email from persons where id = $1 and workspace_id = $2 and deleted_at is null', [personId, ws])).rows[0]?.email);
   if (!email) return null;
   const before = (await tx.query(
     `select granted from consent_events where workspace_id = $1 and person_id = $2 and channel = 'email' and created_at < now()
@@ -52,7 +52,7 @@ export const onEvents = async (tx, meta, events) => {
       emails.add(lower(p.email));
     } else if (e.entityType === 'person' && (e.op === 'create' || e.op === 'update') && Array.isArray(p.tags)
       && (p.tags.includes(NO_EMAIL) || p.tags.includes(NO_CONTACT))) {
-      emails.add(await newlyOff(tx, ws, e.entityId) || '');
+      emails.add(await newlyOff(tx, ws, e.entityId, p.email) || '');
     }
   }
   emails.delete('');
