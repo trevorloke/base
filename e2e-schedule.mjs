@@ -201,6 +201,9 @@ try {
   }
   const electionDay = addDays(MON, 6 * 7 + 5);
   check('set-up: an election day six weeks on', (await D.api('/actions/vote.settings', { on: false, election_day: electionDay })).status === 200);
+  // A shift two months back, for the List's "Past shifts".
+  const bbqDay = addDays(today, -60);
+  check('set-up: a shift two months ago', (await D.api('/actions/shift.create', { title: 'Summer BBQ', starts_at: at(bbqDay, '16:00'), ends_at: at(bbqDay, '18:00') })).status === 200);
   // Texts may go at any hour, so the notices below don't depend on the time of day.
   check('set-up: texting hours open', (await D.api('/actions/texting.settings', { allow_from: 0, allow_until: 24, weekend_from: 0, weekend_until: 24 })).status === 200);
 
@@ -768,6 +771,11 @@ try {
   const eastHeads = await ep.$$eval('.sch-dayhead', (els) => els.map((e) => e.innerText.trim()));
   check('Toronto, the List: a day a heading on the campaign’s calendar, the row 6:30–8:30 am', eastRow.startsWith('6:30–8:30 am') && eastHeads[0] === headOf(mon) && eastHeads[1] === longDay(tue), `${eastRow} | ${eastHeads.slice(0, 2).join(' | ')}`);
   await E.shot('22-toronto-list-1440');
+  await ep.locator('button.ops-more:has-text("Past shifts")').click();
+  await until(async () => /Summer BBQ/.test(await E.text('#ops-past')));
+  const pastWords = await E.text('#ops-past');
+  check('the List is what is coming up: a past shift loads when "Past shifts" is opened (?past=1), at the campaign’s hours', /Summer BBQ/.test(pastWords) && /4–6 pm/.test(pastWords)
+    && !(await E.api('/shifts')).json.shifts.some((x) => x.title === 'Summer BBQ') && (await E.api('/shifts?past=1')).json.shifts.some((x) => x.title === 'Summer BBQ'), pastWords.slice(0, 160));
   await ep.goto(`${ADMIN}/shifts/${tueCards[0].id}`, { waitUntil: 'domcontentloaded' });
   await ep.waitForSelector('.ops-lines .when', { timeout: 10000 });
   check('Toronto, a shift’s page: its day and hours are the campaign’s', (await E.text('.ops-lines .when')) === `${longDay(tue)} · 6:30–8:30 am`, await E.text('.ops-lines .when'));
@@ -1047,7 +1055,18 @@ try {
   await V.shot('53-vol-mainstreeting-390');
   await vctx.close();
 
-  // ── 20. The books still verify ──
+  // ── 20. Today's "Needs you": a shift short of the target someone set — never one nobody gave a number ──
+  const soonDay = addDays(today, 1);
+  const short = await D.api('/actions/shift.createMany', { kind: 'phone_bank', location: 'Campaign office', days: [soonDay], start: '18:00', end: '20:00', need: 4 });
+  const plain = await D.api('/actions/shift.createMany', { kind: 'office', location: 'Campaign office', days: [soonDay], start: '13:00', end: '16:00' });
+  await D.go('/');
+  const needs = page.locator('section[aria-labelledby="today-needs-h"]');
+  await until(async () => /Phone bank — Campaign office/.test(await needs.innerText()), 15000);
+  const needsWords = (await needs.innerText().catch(() => '')).replace(/\s+/g, ' ');
+  check('Today’s "Needs you" lists tomorrow’s phone bank as "0 of 4 — 4 more", and not the office shift with no number', short.status === 200 && plain.status === 200
+    && /Phone bank — Campaign office .*0 of 4 — 4 more/.test(needsWords) && !/Office — Campaign office/.test(needsWords), needsWords.slice(0, 260));
+
+  // ── 21. The books still verify ──
   const v = (await D.api('/audit/verify')).json;
   check('hash chain verifies after the whole journey', v.ok === true && v.checked > 60, JSON.stringify(v));
   check('the address service was asked only for the three points picked', geo.asked.length >= 3 && geo.asked.length <= 6, geo.asked.join(' '));
