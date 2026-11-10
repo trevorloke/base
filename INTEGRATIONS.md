@@ -361,7 +361,9 @@ What happens:
   name is a way to their page); if CallHub refuses the push itself (a key
   that stopped working), it stops with CallHub's words and how far it got,
   and **Carry on** picks up where it stopped (*Send again instead* is
-  beside it, for a fresh phonebook). Nobody is sent twice.
+  beside it, for a fresh phonebook). A push left part-way with nothing
+  behind it — its background job gave up — says *it stopped part-way*
+  and offers **Carry on** alone. Nobody is sent twice.
 - **People not to call** go to a do-not-call list in CallHub named
   `base.win`, numbers only, with each push: people tagged `do-not-contact`
   (no calls, no texts) or `do-not-call` (no calls), and numbers that
@@ -372,12 +374,15 @@ What happens:
   base.win the other way too: when nobody here blocks a number any more
   (the tag taken off again), base.win takes it off CallHub's list, by the
   entry CallHub named for it. Where CallHub never named one, or won't let
-  it go, **Check** says how many are still there — take those off in
-  CallHub. While a push is telling CallHub these numbers its line says so
+  it go, a list's page says how many are still there and whose they are,
+  and **Check** names the first few — take those off in CallHub. While a
+  push is telling CallHub these numbers its line says so
   (*Telling CallHub who not to call first · 150 to go*). A number CallHub
   won't take for that list never stops a push: it is said on the page with
-  CallHub's words and whose number it is, and asked about again with the
-  next push. Only if CallHub takes none of a campaign's numbers at all
+  CallHub's words and whose number it is (a few by name, *Show all* for the
+  rest), and asked about again with the next push; the line goes once
+  there is nothing left to take. Only if CallHub takes none of a
+  campaign's numbers at all
   (five refused in a row before any was ever taken) does the push stop,
   once, with CallHub's words; **Carry on** goes on without them. Whether a
   calling campaign in CallHub honours that list by itself or has to be
@@ -403,10 +408,19 @@ What happens:
   yours to correct. A correction also moves the results already in — only
   the ones it is about — and an open phone bank's number with them (a
   *Talked* that was a No answer comes back by the bank's own rule). Turning
-  a row to *Do not call* asks first (*Tag 6 people do-not-call?*), and
-  putting the row back takes the tag off again, and the number off
-  CallHub's list — never a tag someone set by hand. A push with thousands
-  of results is moved a part at a time, in the background.
+  a row to *Do not call* asks first (*Tag the 6 people with "Answered"
+  do-not-call?*), and putting the row back takes the tag off everyone it
+  tagged, however often each was rung, and their numbers off CallHub's
+  list — never a tag someone set by hand, and never bringing back one the
+  desk took off by hand. A push with thousands of results is moved a part
+  at a time, in the background.
+- **A new push starts with the newest push's table** and support question,
+  so a pick is made once. What is taken back on a push is taken back on the
+  pushes sent since that still carry it — a row that no longer counts as
+  *Do not call*, an answer that no longer rates as it did, a support
+  question dropped — and the saved line says so (*1 list sent since
+  follows too*). Never the other way: a pick that tags people, or an
+  answer newly mapped, is about the one list it was asked on.
 - **Ratings** only ever come from a survey answer someone mapped: pick the
   support question on the push, then which answer is which step of the
   campaign's scale. Until then the answers stay in the note and nobody's
@@ -496,7 +510,8 @@ nothing: the key works, and one of the account's webhooks sends call
 results (`cc.notes`) to this base.win. Then it says how many results have
 arrived, how many were for numbers base.win never sent, how many it could
 not read, and how many numbers are still on CallHub's do-not-call list
-that nobody here blocks any more.
+that nobody here blocks any more — with whose the first few are (a list's
+page names them all).
 
 ## Hosting — Render
 

@@ -325,8 +325,9 @@ than a week after they came off is refused. Contacts are door, phone, text or
 - **Do not call**: the tag `do-not-call` (among the suggested tags) is
   someone who asked not to be phoned. They are never put in a phone bank,
   left off the Calls list for a call, never rung through the campaign's
-  number and never sent to the dialer; texts, email and the door are
-  untouched (`do-not-contact` stops all of them).
+  number and never sent to the dialer, and no screen that reaches voters
+  offers a Call to tap for them; texts, email and the door are untouched
+  (`do-not-contact` stops all of them).
 - **A dialer for a room of callers (CallHub)**: with CallHub connected, a
   list's page and a phone bank's page have **Send to CallHub** — the phone
   numbers, names and cities go to a CallHub phonebook in the background
@@ -334,8 +335,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   person as a phone call, crossing the number off an open phone bank. What
   each of CallHub's results counts as is filled in by pattern and yours to
   correct (a change that would tag people do-not-call or rate them asks
-  first, and putting it back undoes it); a rating comes only from a survey
-  answer someone mapped
+  first, and putting it back undoes it — on the lists sent since that
+  copied it, too); a rating comes only from a survey answer someone mapped
   (`server/ext/callhub`; INTEGRATIONS.md, *Phone dialer — CallHub*, says
   how to set it up and what is not yet confirmed against a real account).
 - **ImagineU** (a tab for every role): the campaign's training. **Courses**
