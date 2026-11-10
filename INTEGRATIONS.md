@@ -21,6 +21,7 @@ is written) and says exactly what is wrong if anything is.
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
 | [Online payments — Stripe](#online-payments--stripe) | gifts once or monthly and membership dues on the website, by card, Apple Pay or Google Pay | when the website takes money (test mode first) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
+| [Connect anything](#connect-anything) | any other tool (Zapier, Make, a Slack channel, the campaign's own): people in with a website key, a ladder step out to a web address | no | none (a website key in; a ladder step out) |
 
 The campaign's website sends people in with a key; the API is
 [below](#the-campaigns-website).
@@ -412,3 +413,104 @@ un-marks anyone; Settings → Services gives its address:
 `…/desk/people/import` on base.win, `…/admin/people/import` at the server's
 own address); **pages out** — the website can link to base.win's public
 lessons (`/learn/…`); every email carries its own unsubscribe page.
+
+## Connect anything
+
+For a tool base.win has no section for — Zapier, Make, a Slack channel, the
+campaign's own script — there is one way in and one way out. Neither needs a
+setting on the server.
+
+**In — the website's API.** Anything that can make an HTTPS call with a key
+can send a person in: `POST /in/v1/people`
+([above](#the-campaigns-website)), with a website key made for that tool
+alone. In Zapier:
+
+1. Action: **Webhooks by Zapier → POST**. URL
+   `https://<public address>/in/v1/people`, payload type `json`.
+2. Data: `first_name`, `last_name`, `email` (and any other field from the
+   table above), each filled from the trigger.
+3. Headers: `Authorization` = `Bearer sbk_…`, `Idempotency-Key` = the
+   trigger's own id, so a retry is never a second person.
+
+Make's *HTTP → Make a request* takes the same three things.
+
+**Out — a ladder's *Send to a web address* step.** Outreach → Ladders → a
+ladder → *Other steps* → **+ Send to a web address**: the address the other
+tool gave (Zapier's *Webhooks by Zapier → Catch Hook*, Make's *Custom
+webhook*, a Slack *incoming webhook*) and a short label (*Zapier*). Ladders
+already start on everything — joined the newsletter, gave, got a tag,
+booked a shift, signed on the website — and whoever reaches the step is
+sent there, once, as one small JSON message:
+
+```json
+{
+  "id": "ladder-5f0c…-1",
+  "event": "tag",
+  "ladder": "Welcome new signers",
+  "step": "Zapier",
+  "at": "2026-11-10T20:00:00.000Z",
+  "campaign": "Imagine Surrey",
+  "text": "Welcome new signers: Asha Example — Got a tag · signed",
+  "person": {
+    "id": "…", "first_name": "Asha", "last_name": "Example",
+    "email": "asha@example.org", "phone": "+16045550142",
+    "postal": "V3T 1V8", "tags": ["signed"]
+  }
+}
+```
+
+- `event` is what started the ladder for them: `newsletter`, `donation`
+  (their first gift), `gift`, `tag`, `rating`, `web`, `shift_booked`,
+  `shift_attended`, `shift_no_show`, `member` or `survey`. `step` is the
+  label. `text` says it in one line: what a chat tool posts (a Slack
+  incoming webhook posts its `text`).
+- **What it never carries:** a rating, a note, an amount, a street address,
+  or a tag that gives money away. `email` is `null` unless a ladder email
+  could go to them (on the newsletter list, not unsubscribed, not
+  do-not-email); `phone` is `null` unless a ladder text could (a number
+  that hasn't replied STOP or asked to stop, not do-not-text, no "no" to
+  texts on the website). About someone marked do-not-contact nothing is
+  sent at all — their log says *Skipped — do not contact*.
+- **Signed.** `Base-Signature: t=<seconds>,v1=<hex>` is the HMAC-SHA256 of
+  `<t>.<the body's exact bytes>` with the campaign's signing secret — the
+  scheme Stripe signs with. The secret is under the step's *More details →
+  Show secret* (`sbw_…`; each look is on the event log). It is made from the
+  server's own secret (`SITE_SECRET`, or the one base.win keeps) and the
+  campaign, never stored, the same every time; changing `SITE_SECRET`
+  changes it. A receiver that checks should also refuse a `t` more than
+  five minutes old. Zapier, Make and Slack don't check: there the address
+  itself is the key, so treat it as one.
+- **Once.** `Idempotency-Key: ladder-<run>-<step>` (the body's `id`) is the
+  same on every try for one person at one step.
+- **Tries.** The address has 5 seconds to answer 2xx. Anything else (a
+  redirect is not followed) is tried again after a minute, then after five
+  more — three in all — and then the person's log on the ladder says
+  *Zapier: Failed · 500 after 3 tries* and the ladder carries on: a failing
+  address never holds anyone up. *Zapier: Sent · 200* is the address's own
+  answer. If the server stopped between the send and noting the answer, it
+  never sends again by itself; the log says *Not sure it went*.
+- **Where it may point.** `https://` only, no name and password in it, and
+  never inside a private network (the server's own, a cloud's metadata
+  address): refused when the step is saved and again, after the name is
+  looked up, at every send — the call goes to the very address that was
+  checked.
+- **Who.** Only the desk adds the step, changes a ladder that has one, or
+  sees the secret — never a volunteer, even one given Outreach.
+
+Checking the signature, in Node (`raw` is the body exactly as received):
+
+```js
+import { createHmac, timingSafeEqual } from 'node:crypto';
+const part = (k) => header.split(',').find((p) => p.startsWith(`${k}=`))?.slice(k.length + 1) || '';
+const want = createHmac('sha256', secret).update(`${part('t')}.`).update(raw).digest('hex');
+const ok = part('v1').length === want.length && timingSafeEqual(Buffer.from(part('v1')), Buffer.from(want))
+  && Math.abs(Date.now() / 1000 - Number(part('t'))) <= 300;
+```
+
+| Setting | | Notes |
+|---|---|---|
+| `LADDER_WEBHOOK_API_BASE` | — | tests only: a stand-in that receives every step's message (`server/test/fake-receiver.js`) |
+
+Not built, on purpose: a Zapier app, webhooks for every event, or a way out
+for anything but a ladder step. A ladder with one step is the way to send
+"someone signed" or "someone gave" to another tool.

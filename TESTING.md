@@ -174,6 +174,16 @@ one tap away under **More**.
   to stop in a reply (*No thanks, stop* — skipped, *asked to stop in a
   reply*, until they text START), and "Reply STOP to opt out" is added;
   replies land in the Inbox.
+  *Other steps* → *+ Send to a web address*: an `https://` address another
+  tool gave (a Zapier catch hook, a Slack incoming webhook) and a label
+  (*Zapier*). `http://` and an address inside a private network
+  (`https://192.168.1.20/…`) are refused in the step. *More details* →
+  *Show secret* is the campaign's signing secret. Tag someone on a "Got a
+  tag" ladder with the step: the other tool gets one message (their email
+  only if they said yes to email), and their log on the ladder says
+  *Zapier: Sent · 200* — or, with the address down, *Didn't go (500) —
+  trying again* (after a minute, then five), then *Failed · 500 after 3
+  tries*, and the ladder carries on (INTEGRATIONS.md, *Connect anything*).
 - **Follow-ups (speed to lead)** — every new volunteer (the website's form,
   the door's or Mainstreeting's *Wants to volunteer*, the membership form's
   *I'd like to volunteer*), every website message and every RSVP from
