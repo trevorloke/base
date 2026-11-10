@@ -468,13 +468,13 @@ sent there, once, as one small JSON message:
   it, so nothing typed into a form posts a link or an @channel there.
 - **What it never carries:** a rating, a note, an amount, a street address,
   or a tag that gives money away (a ladder that starts on one says only
-  *Got a tag* in `text`). `email` is `null` unless a ladder email
-  could go to them (on the newsletter list, not unsubscribed, not
-  do-not-email); `phone` is `null` unless a ladder text could (a number
-  that hasn't replied STOP or asked to stop, not do-not-text, no "no" to
-  texts on the website). About someone marked do-not-contact nothing is
-  sent at all — their log says *Skipped — do not contact*, and their row
-  on the ladder *not sent to Zapier (do not contact)*.
+  *Got a tag* in `text`). `email` is `null` unless a ladder email could go
+  to them (on the newsletter list, not unsubscribed, not do-not-email);
+  `phone` is `null` unless a ladder text could (a number that hasn't
+  replied STOP or asked to stop, not do-not-text, no "no" to texts on the
+  website). About someone marked do-not-contact nothing is sent at all —
+  their log says *Skipped — do not contact*, and their row on the ladder
+  *not sent to Zapier (do not contact)*.
 - **Signed.** `Base-Signature: t=<seconds>,v1=<hex>` is the HMAC-SHA256 of
   `<t>.<the body's exact bytes>` with the campaign's signing secret — the
   scheme Stripe signs with. The secret is under the step's *More details →
@@ -505,11 +505,12 @@ sent there, once, as one small JSON message:
   but a redirect, or none, is tried again after a minute, then after five
   more — three in all — and then the person's log on the ladder says
   *Zapier: Failed · 500 after 3 tries* and the ladder carries on: a
-  failing address never holds anyone up. *Zapier: Sent · 200* is the address's own answer. If the server
-  stopped between the send and noting the answer, it never sends again by
-  itself; the log says *Not sure it went*. Someone taken off the ladder
-  (or reaching its goal) while the address is being called stays *Taken
-  off*: its answer is noted after, and nothing is tried again.
+  failing address never holds anyone up. *Zapier: Sent · 200* is the
+  address's own answer. If the server stopped between the send and noting
+  the answer, it never sends again by itself; the log says *Not sure it
+  went*. Someone taken off the ladder (or reaching its goal) while the
+  address is being called stays *Taken off*: what the address answered is
+  noted after, and nothing is tried again.
 - **A redirect** (any 3xx) is never followed and never tried again — the
   same one would come back: *Zapier: Answered with a redirect (302) — not
   followed*. Give the step the address it points to. (A tool that takes
@@ -528,10 +529,10 @@ sent there, once, as one small JSON message:
   checked.
 - **Who.** Only the desk adds the step, changes a ladder that has one,
   sends a test, or sees or changes the secret — never a volunteer, even
-  one given Outreach. The address
-  is kept with the ladder (and so in the campaign's full export); the event
-  log keeps only the site it goes to (`https://hooks.zapier.com/…`), and a
-  person's log on the ladder only the label and the answer.
+  one given Outreach. The address is kept with the ladder (and so in the
+  campaign's full export); the event log keeps only the site it goes to
+  (`https://hooks.zapier.com/…`), and a person's log on the ladder only
+  the label and the answer.
 
 Checking the signature, in Node (`raw` is the body exactly as received):
 

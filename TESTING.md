@@ -181,12 +181,12 @@ one tap away under **More**.
   *Send a test* sends the address one message about a made-up person (Sam
   Example) and says what it answered, in place (*Sent · 200*); *Show
   secret* is the campaign's signing secret, and *Make a new secret* →
-  *Yes* replaces it at once. Tag someone on a "Got a
-  tag" ladder with the step: the other tool gets one message (their email
-  only if they said yes to email), and their log on the ladder says
-  *Zapier: Sent · 200* — or, with the address down, *Didn't go (500) —
-  trying again* (after a minute, then five), then *Failed · 500 after 3
-  tries*, and the ladder carries on. Someone marked do-not-contact is
+  *Yes* replaces it at once. Tag someone on a "Got a tag" ladder with the
+  step: the other tool gets one message (their email only if they said
+  yes to email), and their log on the ladder says *Zapier: Sent · 200* —
+  or, with the address down, *Didn't go (500) — trying again* (after a
+  minute, then five), then *Failed · 500 after 3 tries*, and the ladder
+  carries on. Someone marked do-not-contact is
   never sent: their row says *not sent to Zapier (do not contact)*. An
   address that answers with a redirect is handed the message once
   (*Answered with a redirect (302) — not followed*); one that gives no
