@@ -370,11 +370,10 @@ What happens:
   campaign in CallHub honours that list by itself or has to be pointed at
   it is not confirmed: look in CallHub before the first night.
 - **Each call's result** comes back as the caller saves it (CallHub's
-  `cc.notes` webhook). It is
-  matched by phone number against the numbers this campaign sent (the
-  newest push first) and becomes one phone call on the person's history:
-  the campaign's name, CallHub's result, the caller's notes and the survey
-  answers. A caller whose CallHub email is their base.win sign-in is
+  `cc.notes` webhook). It is matched by phone number against the numbers
+  this campaign sent (the newest push first) and becomes one phone call on
+  the person's history: the calling campaign's name, CallHub's result, the
+  caller's notes and the survey answers. A caller whose CallHub email is their base.win sign-in is
   credited with the call; anyone else is named in the note. If the person
   is in an open base.win phone bank, the number is crossed off there too (a
   No answer comes back by the bank's own rule). The same result sent twice
