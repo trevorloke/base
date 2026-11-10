@@ -75,9 +75,10 @@ not set up is never quietly swapped for the other one.
 3. **Settings → Services → Email → Sending domain** → **Add domain**. The
    panel lists the DNS records Resend asks for (SPF, DKIM) and one more,
    DMARC — no sender sets that one up, and Gmail, Yahoo and Outlook ask
-   bulk senders for it. Add each at the domain's DNS host, then **Check
-   again** until every line says *In*. (Adding the domain in Resend's own
-   screen does the same; the panel then shows where it stands.)
+   bulk senders for it (the panel offers the least there is, `v=DMARC1;
+   p=none`). Add each at the domain's DNS host, then **Check again** until
+   every line says *In*. (Adding the domain in Resend's own screen does the
+   same; the panel then shows where it stands.)
 4. Bounces and complaints: Resend → **Webhooks** → **Add webhook** with the
    address on the Email row (`https://<public address>/hooks/mail/resend`)
    and the events listed there. Set `RESEND_WEBHOOK_SECRET` to the webhook's
@@ -89,7 +90,9 @@ not set up is never quietly swapped for the other one.
    access to Sender Authentication the panel can show the domain's records).
 2. Set `MAIL_PROVIDER=sendgrid`, `SENDGRID_API_KEY` and `MAIL_FROM`
    (SendGrid has no test sender: without `MAIL_FROM` nothing is sent).
-3. **Sending domain**, as above (SendGrid asks for three CNAME records).
+3. **Sending domain**, as above (SendGrid asks for three CNAME records
+   when the domain is added with its automated security, as base.win adds
+   it).
 4. SendGrid → **Settings → Mail Settings → Event Webhooks**: the address on
    the Email row (`https://<public address>/hooks/mail/sendgrid`), the
    events *delivered*, *bounce*, *dropped*, *deferred* and *spam report*,
@@ -100,11 +103,11 @@ base.win turns SendGrid's own click, open and unsubscribe tracking off in
 every email: it counts its own and has its own unsubscribe pages.
 
 **What comes back.** Every newsletter, press and list email carries
-base.win's own reference, and base.win keeps the sender's id for it. The sender then posts
-what happened to `/hooks/mail/<sender>` — signed (Svix's HMAC for Resend, an
-ECDSA signature for SendGrid; checked over the exact bytes), each event done
-once, and answered at every address of the server, the campaign's website
-domain included:
+base.win's own reference, and base.win keeps the sender's id for it. The
+sender then posts what happened to `/hooks/mail/<sender>` — signed (Svix's
+HMAC for Resend, an ECDSA signature for SendGrid; checked over the exact
+bytes), each event done once, and answered at every address of the server,
+the campaign's website domain included:
 
 - **Delivered** — the send's row says *Delivered 1,180 of 1,200*. Until the
   sender has said something, a send says *sent*, as before.
@@ -156,8 +159,10 @@ in. Each thing missing is one sentence saying what to do. A sending-only key
 can't list domains or webhooks: the check says so and the key is fine.
 
 Built against Resend's published API; confirm on your own account with
-Settings → Services → Check before relying on it. Not confirmed there: every
-value a bounce's type can take (base.win stops an address only on
+Settings → Services → Check before relying on it. Sending through Resend is
+what base.win has always done; its delivery events and its domain calls are
+new here and have not been run against a real account. Not confirmed there:
+every value a bounce's type can take (base.win stops an address only on
 *Permanent*), and that an email to an address on Resend's own suppression
 list is accepted and then reported as *suppressed*.
 

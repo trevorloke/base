@@ -300,7 +300,9 @@ one tap away under **More**.
   sends** says *Delivered 3 of 4 · 1 bounced*, **Subscribers** marks that
   address *can't be emailed*, and the next send counts one fewer. Mark one
   as spam from a mailbox whose provider reports it (Resend says Gmail
-  doesn't): that address is unsubscribed too.
+  doesn't): that address is unsubscribed too. `node e2e-mail.mjs` (PORT,
+  SHOTS) runs the *Sending domain* panel, Check and a send's delivery line
+  in a browser against a stand-in sender.
 - **Settings → Services** (managers) — every outside service: what it's
   for, *Set up* / *Not set up* (naming the settings missing) / *Using the
   free default*. **Check** on each makes one real call: Email says whether

@@ -72,7 +72,8 @@ function Dmarc({ d }) {
 
 export default function SendingDomain({ online }) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: KEY, queryFn: () => apiGet('/mail/domain'), retry: false });
+  // Each look asks the sender: not again for half a minute, and never by itself after a failure.
+  const q = useQuery({ queryKey: KEY, queryFn: () => apiGet('/mail/domain'), retry: false, staleTime: 30_000 });
   const [busy, setBusy] = useState(null); // 'add' | 'check'
   const [said, setSaid] = useState(null);
   const [error, setError] = useState(null);
@@ -147,8 +148,8 @@ export default function SendingDomain({ online }) {
         {d.found === false && d.canManage
           ? <button type="button" className="btn btn-primary ops-tap" disabled={!!busy || !online} onClick={() => run('add')}>{busy === 'add' ? 'Adding…' : 'Add domain'}</button>
           : <button type="button" className={`btn ops-tap${allIn ? '' : ' btn-primary'}`} disabled={!!busy || !online} onClick={() => run('check')}>{busy === 'check' ? 'Checking…' : 'Check again'}</button>}
-        {d.found && lines > 0 && !said && !error && <span className="sd-count">{inNow} of {lines} in</span>}
-        {said && <span className="sd-count" role="status">{said}</span>}
+        {/* Always here, so what a tap did is announced when its words change. */}
+        <span className="sd-count" role="status">{said || (d.found && lines > 0 && !error ? `${inNow} of ${lines} in` : '')}</span>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
     </>,

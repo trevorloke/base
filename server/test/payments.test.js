@@ -549,7 +549,7 @@ test('Settings → Services: Stripe set up, not set up or in test mode, the webh
     let s = await stripeRow();
     assert.equal(s.state, 'test');
     assert.match(s.detail, /^Test mode/);
-    assert.deepEqual(s.webhook, { url: 'https://base.example.org/northshore/stripe/webhook', events: STRIPE_EVENTS });
+    assert.deepEqual(s.webhook, { url: 'https://base.example.org/northshore/stripe/webhook', events: STRIPE_EVENTS, where: 'Stripe: Developers → Webhooks → Add endpoint' });
     assert.ok(!JSON.stringify(s).includes(KEY) && !JSON.stringify(s).includes(SECRET), 'never a key');
     const inbound = ok(await mgr.get('/api/connections')).inbound.find((i) => i.url.endsWith('/stripe/webhook'));
     assert.ok(inbound, 'listed with what comes in');
