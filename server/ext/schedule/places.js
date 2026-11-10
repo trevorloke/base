@@ -7,7 +7,9 @@
 //   'address'  the nearest civic address within ~100 m: "near 8850 King George Blvd"
 //   'door'     the campaign's own nearest door on file within ~300 m (no
 //              outside call): "near 13450 104 Ave"
-//   'pin'      "Pin at 49.1630, −122.8447"
+//   'pin'      "Pin at 49.1630, −122.8447" — its coordinates, which the
+//              screens say as "Pinned place" (shared/shiftkinds.js) until
+//              someone names it
 // The first two ask the address service (lib/geocode.js) — for at most 60
 // points a minute from this server, each call given up on after a few
 // seconds. Whatever goes wrong there, the next rule names the place: naming
@@ -28,7 +30,7 @@
 //       that say it, their words and their made names.
 //   place.remove { id }         off the list; shifts keep their words and pin.
 import { z } from 'zod';
-import { kindOf } from '@starbase/shared/shiftkinds';
+import { kindOf, pinName } from '@starbase/shared/shiftkinds';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
 import { nearestCivic, nearestCorner } from '../../lib/geocode.js';
@@ -53,9 +55,6 @@ const nearestDoor = async (db, ws, { lat, lng }) => {
   return row ? String(row.address).trim().slice(0, 180) : null;
 };
 
-// A real minus sign, as people write coordinates.
-const coord = (n) => n.toFixed(4).replace('-', '−');
-
 export const nameFor = async (db, ws, { lat, lng }) => {
   if (!lookups('places')) {
     const corner = await nearestCorner({ lat, lng });
@@ -65,7 +64,7 @@ export const nameFor = async (db, ws, { lat, lng }) => {
   }
   const door = await nearestDoor(db, ws, { lat, lng }).catch(() => null);
   if (door) return { name: `near ${door}`, source: 'door' };
-  return { name: `Pin at ${coord(lat)}, ${coord(lng)}`, source: 'pin' };
+  return { name: pinName(lat, lng), source: 'pin' };
 };
 
 // A point on Earth from two query values, or null.

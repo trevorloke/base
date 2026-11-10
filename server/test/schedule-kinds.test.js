@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
 import {
-  SHIFT_KINDS, SHIFT_KIND_CODES, kindOf, madeTitle, repeatDays, shiftKind, siteListOf,
+  SHIFT_KINDS, SHIFT_KIND_CODES, isPinName, kindOf, madeTitle, pinName, placeLabel, repeatDays, shiftKind, siteListOf,
 } from '@starbase/shared/shiftkinds';
 import { isClock, isDay } from '@starbase/shared/dayparts';
 
@@ -69,6 +69,23 @@ test('names are made, not typed', () => {
   assert.equal(madeTitle('phone_bank', ''), 'Phone bank', 'no place: just what it is');
   assert.equal(madeTitle('other', 'Campaign office'), 'Shift — Campaign office');
   assert.equal(madeTitle(null, null), 'Shift');
+});
+
+test('a point nothing could name is "Pinned place" on a card, a chip and in a made name — never its coordinates', () => {
+  assert.equal(pinName(49.1451, -122.8599), 'Pin at 49.1451, −122.8599', 'what the place is saved as: its details');
+  assert.ok(isPinName('Pin at 49.1451, −122.8599') && isPinName(' Pin at 49.1630, -122.8447 '));
+  assert.ok(!isPinName('Pin at the corner') && !isPinName('King George Blvd & 88 Ave') && !isPinName('') && !isPinName(null));
+  assert.equal(placeLabel('Pin at 49.1451, −122.8599'), 'Pinned place');
+  assert.equal(placeLabel('  Campaign office '), 'Campaign office', 'a named place is its name');
+  assert.equal(placeLabel(null), '');
+  assert.equal(madeTitle('mainstreet', 'Pin at 49.1451, −122.8599'), 'Mainstreet — Pinned place');
+});
+
+test('no kind brings a number of its own: a suggestion is only ever offered', () => {
+  // The catalogue may suggest a target (the first chip under "We need"); the
+  // server never writes one unasked (schedule-need.test.js, schedule-many.test.js).
+  assert.deepEqual(SHIFT_KINDS.filter((k) => k.need).map((k) => [k.code, k.need]), [['mainstreet', 2], ['burma_shave', 4]]);
+  for (const k of SHIFT_KINDS) assert.ok(!('capacity' in k), `${k.code}: no kind has a limit`);
 });
 
 test('days and repeats: each chosen day, then weekly — n weeks in all, or until a day', () => {

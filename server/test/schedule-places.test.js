@@ -246,6 +246,23 @@ test('renaming a place renames it on the shifts still to come; removing it takes
   assert.equal((await verifyChain(db, ws)).ok, true);
 });
 
+test('a point nothing could name: "Pinned place" in a made name, its coordinates kept as its details; named later, the shifts follow', async () => {
+  const pin = ok(await mgr.get('/api/places')).places.find((p) => p.name === 'Pin at 49.1045, −122.8010');
+  const made = ok(await mgr.action('shift.createMany', { kind: 'mainstreet', place_id: pin.id, days: [DAY], start: '07:00', end: '09:00' })).shifts[0];
+  const shift = async () => ok(await mgr.get(`/api/shifts/${made.id}`)).shift;
+  let s = await shift();
+  assert.deepEqual([s.title, s.location, s.place_lat, s.place_lng, s.need], ['Mainstreet — Pinned place', 'Pin at 49.1045, −122.8010', 49.1045, -122.801, null],
+    'the name says "Pinned place"; where it is stays in the words and the pin; and no number was asked for, so it has none');
+  const moved = ok(await mgr.action('shift.createMany', { kind: 'burma_shave', location: 'Scott Rd & 72 Ave', days: [DAY], start: '06:30', end: '08:30' })).shifts[0];
+  ok(await mgr.action('shift.update', { id: moved.id, place_id: pin.id }));
+  assert.equal(ok(await mgr.get(`/api/shifts/${moved.id}`)).shift.title, 'Burma Shave — Pinned place', 'a made name that follows its place there says the same');
+  // "Name it": the place gets a name, and the shifts to come say it.
+  const r = ok(await mgr.action('place.rename', { id: pin.id, name: 'Scott Road Station' }));
+  assert.ok(r.shifts >= 2);
+  s = await shift();
+  assert.deepEqual([s.title, s.location, s.place_lat], ['Mainstreet — Scott Road Station', 'Scott Road Station', 49.1045]);
+});
+
 test('the address service is asked at most 60 times a minute from here', async () => {
   service = { '/intersections/nearest.json': () => json(corner('King George Blvd and 88 Ave')) };
   let named = 0;

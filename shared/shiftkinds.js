@@ -12,7 +12,9 @@
 //   turfs   whether it carries walk lists (the turf is then its place)
 //   site    where the website lists it when it's public: with the
 //           volunteer openings, or with the events
-//   need    how many people it usually wants — a target, never a limit
+//   need    how many people it usually wants — only ever a suggestion: the
+//           first number offered under "We need". No shift gets a target
+//           unless someone taps one
 // The codes are fixed (reports and ladders can count on them); a shift made
 // before kinds has none and shows as its role implies (kindOf).
 import { addDays } from './dayparts.js';
@@ -41,12 +43,22 @@ const ROLE_KIND = {
 };
 export const kindOf = (shift) => shiftKind(shift?.kind) || shiftKind(ROLE_KIND[shift?.role]) || shiftKind('other');
 
+// A point on the map that nothing could name (no corner, address or door
+// near it) is saved by its coordinates: "Pin at 49.1630, −122.8447". Those
+// stay in the place's details and behind its map link; on a card, a chip
+// and in a made name it is said as "Pinned place" until someone names it.
+const coord = (n) => Number(n).toFixed(4).replace('-', '−'); // a real minus sign, as people write coordinates
+export const PINNED_PLACE = 'Pinned place';
+export const pinName = (lat, lng) => `Pin at ${coord(lat)}, ${coord(lng)}`;
+export const isPinName = (name) => /^Pin at [−-]?\d{1,3}\.\d{4}, [−-]?\d{1,3}\.\d{4}$/.test(String(name ?? '').trim());
+export const placeLabel = (name) => (isPinName(name) ? PINNED_PLACE : String(name ?? '').trim());
+
 // The name a shift is given when nobody types one: "Burma Shave — King
 // George Blvd & 88 Ave", or just "Phone bank" with no place. No weekday in
 // it — the date is always beside it.
 export const madeTitle = (kind, place) => {
   const k = shiftKind(kind) || shiftKind('other');
-  const where = String(place || '').trim();
+  const where = placeLabel(place);
   return (where ? `${k.name || k.label} — ${where}` : (k.name || k.label)).slice(0, 300);
 };
 
