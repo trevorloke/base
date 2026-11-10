@@ -637,7 +637,9 @@ accent, tint, side-…, inverse), and every shade is worked out from one brand
 colour by one rule (`shared/brand-look.js`): the fill is the colour exactly
 as chosen; the text on it, the brand as words (4.5:1) and as an edge or
 focus ring (3:1), its tints and the sidebar are derived, and each pair is
-checked — over 5,000 colours in `server/test/brand-look.test.js`. The older
+checked — over 5,000 colours in `server/test/brand-look.test.js`, and on the
+real screens (`e2e-look.mjs`: both built-in brands, then a yellow, a red, a
+pale pink and near-black, light and dark, each sidebar). The older
 variable names (`--mark`, `--paper`, `--ink`, `--navy`, `--gold`…) stay, as
 aliases of the roles. Rating colours, status colours and the map's pins are
 data: no brand recolours them.
