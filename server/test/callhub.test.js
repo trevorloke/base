@@ -296,6 +296,29 @@ test('people not to call go to a CallHub do-not-call list with the push: once ea
   ids.push = r3.push.id; // the newest push: where results for Ana, Cy and the shared number land
 });
 
+test('a number CallHub was told for texts only is changed to calls too, not left as it was', async () => {
+  // +1 604 555 0140 replied STOP to a text (told as texts only). Now someone on that number asks not to be called.
+  const entry = fake.dnc.find((d) => d.phone_number === '+16045550140');
+  assert.equal(entry.category, 2);
+  fake.uniqueDnc(true); // should CallHub refuse a second entry for a number, the first one must still change
+  try {
+    await mgr.createPerson('Stop Then Call Example', { phone: '604-555-0140', tags: ['do-not-call'] });
+    await drain();
+    assert.equal(entry.category, 3, 'no calls and no texts now');
+    assert.equal(fake.dnc.filter((d) => d.phone_number === '+16045550140').length, 1, 'the same entry, changed');
+    const put = fake.calls.filter((c) => c.method === 'PUT');
+    assert.deepEqual(put.map((c) => [c.path, c.params.category, Boolean(c.idem)]), [[`/v1/dnc_contacts/${entry.id}/`, 3, true]]);
+    assert.equal((await db.query(`select category from callhub_dnc where workspace_id = $1 and phone = '+16045550140'`, [ws])).rows[0].category, 3);
+    // Told once: nothing more goes for it.
+    const n = fake.calls.length;
+    ok(await mgr.action('person.update', { id: P.noel.id, tags: ['do-not-call', 'newton'] }));
+    await drain();
+    assert.equal(fake.calls.filter((c, i) => i >= n && /dnc_contacts/.test(c.path)).length, 0);
+  } finally {
+    fake.uniqueDnc(false);
+  }
+});
+
 test('a result becomes a phone contact with the mapped outcome, the notes and the answers — on the person, never on a guess', async () => {
   const res = await fake.note({
     contact: '+16045550101', first_name: 'Ana', last_name: 'Example', disposition: 'Meaningful conversation', campaign: 'Fall voter ID',

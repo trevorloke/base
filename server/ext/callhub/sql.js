@@ -11,7 +11,9 @@
 //                     when the number went); the first by name is the one
 //                     whose name went and the one results are filed on
 //   callhub_dnc       the numbers sent to CallHub's do-not-call list, so
-//                     none is sent twice (category: 1 calls, 2 texts, 3 both)
+//                     none is sent twice (category: 1 calls, 2 texts, 3 both;
+//                     entry: CallHub's own id for it, when it said — how a
+//                     number told for texts only is changed to calls too)
 //   callhub_results   every result as it came (raw), once: filed on a person
 //                     (contact_id) or kept unfiled for the desk
 export const sql = `
@@ -57,6 +59,7 @@ create table if not exists callhub_dnc (
   workspace_id uuid not null references workspaces(id) on delete cascade,
   phone text not null,
   category int not null,
+  entry text,
   sent_at timestamptz not null default now(),
   primary key (workspace_id, phone)
 );

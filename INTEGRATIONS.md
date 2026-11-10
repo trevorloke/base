@@ -364,7 +364,8 @@ What happens:
   (no calls, no texts) or `do-not-call` (no calls), and numbers that
   replied STOP to a text (no texts). Someone newly tagged `do-not-call` or
   `do-not-contact` does not wait for the next push: once the campaign has
-  sent CallHub anything, a background job tells CallHub by itself. base.win
+  sent CallHub anything, a background job tells CallHub by itself (a number
+  already there for texts only is changed to calls too). base.win
   only ever adds to that list: taking the tag off in base.win does not take
   the number off CallHub's list — do that in CallHub. Whether a calling
   campaign in CallHub honours that list by itself or has to be pointed at

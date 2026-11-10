@@ -9,8 +9,9 @@
 //                         campaign has sent CallHub anything
 //
 // What CallHub was told is remembered (callhub_dnc), so no number is sent
-// twice; a number that must now get less (calls as well as texts) is sent
-// again with both. Numbers only ever leave here: never a name.
+// twice; a number that must now get less (calls as well as texts) has its
+// entry at CallHub changed to both. Numbers only ever leave here: never a
+// name.
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { NO_CALL_TAG, NO_CONTACT_TAG } from '../texting/rules.js';
@@ -32,14 +33,15 @@ export const dncListOf = async () => {
 };
 
 // The numbers CallHub has not been told, or not everything about:
-// [[number, what it must not get — 1 calls, 2 texts, 3 both]].
+// [[number, what it must not get — 1 calls, 2 texts, 3 both — and CallHub's
+// entry for it, when it has one already]].
 export const untoldOf = async (db, ws, blocked = null) => {
   const all = blocked || await notToCall(db, ws);
-  const told = new Map((await db.query('select phone, category from callhub_dnc where workspace_id = $1', [ws])).rows.map((r) => [r.phone, Number(r.category)]));
+  const told = new Map((await db.query('select phone, category, entry from callhub_dnc where workspace_id = $1', [ws])).rows.map((r) => [r.phone, r]));
   const out = [];
   for (const [phone, category] of all) {
-    const both = (told.get(phone) || 0) | category;
-    if (both !== (told.get(phone) || 0)) out.push([phone, both]);
+    const had = Number(told.get(phone)?.category) || 0;
+    if ((had | category) !== had) out.push([phone, had | category, told.get(phone)?.entry || null]);
   }
   return out;
 };
@@ -49,18 +51,36 @@ export const untoldOf = async (db, ws, blocked = null) => {
 // knows how many went). `act` is the caller's write (the push's sender, or
 // the system). A throttle or a refusal is the caller's to handle.
 export const tellCallHub = async (ws, { list, untold, budget, act, tally }) => {
-  for (const [phone, category] of untold) {
+  for (const [phone, category, had] of untold) {
     if (tally.told >= budget) break;
-    try {
-      await callhub('POST', '/dnc_contacts/', { body: { dnc: list, phone_number: phone, category }, idempotencyKey: `base-callhub-dnc-${ws}-${phone}-${category}` });
-    } catch (e) {
-      // Already on CallHub's list: what we wanted.
-      if (!(e instanceof CallHubError && e.httpStatus === 400 && /already|exist|unique|duplicate/i.test(e.message))) throw e;
+    const body = { dnc: list, phone_number: phone, category };
+    const idempotencyKey = `base-callhub-dnc-${ws}-${phone}-${category}`;
+    let entry = had || null;
+    let changed = false;
+    // A number CallHub already has for less (texts only, now calls too):
+    // its own entry is changed. Where CallHub never said which entry it
+    // was, or won't change it, a new one is made as for any other number.
+    if (entry) {
+      try {
+        await callhub('PUT', `/dnc_contacts/${encodeURIComponent(entry)}/`, { body, idempotencyKey });
+        changed = true;
+      } catch (e) {
+        if (!(e instanceof CallHubError) || e.throttled || e.httpStatus === 0 || e.httpStatus >= 500) throw e;
+      }
+    }
+    if (!changed) {
+      try {
+        entry = idOf(await callhub('POST', '/dnc_contacts/', { body, idempotencyKey })) || entry;
+      } catch (e) {
+        // Already on CallHub's list: what we wanted.
+        if (!(e instanceof CallHubError && e.httpStatus === 400 && /already|exist|unique|duplicate/i.test(e.message))) throw e;
+      }
     }
     await act(async (tx) => {
       await tx.query(
-        `insert into callhub_dnc (workspace_id, phone, category) values ($1, $2, $3)
-         on conflict (workspace_id, phone) do update set category = excluded.category, sent_at = now()`, [ws, phone, category],
+        `insert into callhub_dnc (workspace_id, phone, category, entry) values ($1, $2, $3, $4)
+         on conflict (workspace_id, phone) do update set category = excluded.category, entry = coalesce(excluded.entry, callhub_dnc.entry), sent_at = now()`,
+        [ws, phone, category, entry],
       );
     });
     tally.told += 1;
