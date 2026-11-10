@@ -517,9 +517,11 @@ check('on a phone: the builder’s buttons are big enough to tap', small.length 
 const tabs = await page.evaluate(() => {
   const bar = document.querySelector('nav.tabbar');
   const labels = [...bar.querySelectorAll('.tab-label')];
-  return { n: labels.length, fits: bar.scrollWidth <= bar.clientWidth + 1, whole: labels.every((l) => l.scrollWidth <= l.clientWidth + 1), words: labels.map((l) => l.textContent) };
+  return { n: labels.length, fits: bar.scrollWidth <= bar.clientWidth + 1, whole: labels.every((l) => l.scrollWidth <= l.clientWidth + 1), words: labels.map((l) => l.textContent),
+    more: [...bar.querySelectorAll('.tab-more__panel a')].map((a) => a.textContent.trim()), onMore: Boolean(bar.querySelector('.tab-more__btn.active')) };
 });
-check('on a phone: the tab bar shows all nine labels, whole (Website among them)', tabs.n === 9 && tabs.fits && tabs.whole && tabs.words.includes('Website'), JSON.stringify(tabs));
+// A manager's nine places on a phone: four tabs and "More" (Shell.jsx); Website is one of More's.
+check('on a phone: four tabs and More, every label whole; Website is under More, the tab you are on', tabs.n === 5 && tabs.fits && tabs.whole && tabs.words[4] === 'More' && tabs.more.includes('Website') && tabs.onMore, JSON.stringify(tabs));
 await shot('10-builder-phone');
 await page.goto(`${BASE}/admin/website`, { waitUntil: 'domcontentloaded' });
 await page.locator('.wb-live').waitFor();

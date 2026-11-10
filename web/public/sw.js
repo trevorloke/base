@@ -291,8 +291,9 @@ async function syncAssets(html) {
   // so a failed sync never leaves the app with nothing.
   if (!complete) return;
   const keys = await cache.keys();
+  const wanted = (k) => { const u = new URL(k.url); return want.has(u.pathname) || want.has(u.pathname + u.search); };
   await Promise.all(keys
-    .filter((k) => !want.has(new URL(k.url).pathname))
+    .filter((k) => !wanted(k))
     .map((k) => cache.delete(k)));
 }
 

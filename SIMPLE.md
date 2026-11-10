@@ -10,8 +10,10 @@ and never crowds the screen.
 1. **One screen, one job.** Each screen opens on the thing people come to do
    most. The title says it in plain words ("Doors", "Calls", "Shifts").
 
-2. **One yellow button.** Each screen has at most one primary (yellow)
-   action. Everything else is quiet. No more than three buttons in a header.
+2. **One primary button.** Each screen has at most one primary action: the
+   one button in the campaign's colour (it was yellow once, and the checks
+   still call it that). Everything else is quiet. No more than three
+   buttons in a header.
 
 3. **No paragraphs.** Helper text is one short line (≈ 12 words) and only
    where a first-timer would otherwise be stuck. Never explain how the
@@ -49,7 +51,8 @@ and never crowds the screen.
 - **Volunteer** — Today is one big "Start canvassing" (their walk list, or
   the map) plus their next shift. Tabs: Today · Map · Calls · Shifts.
 - **Staff / treasurer / manager** — Today is the campaign at a glance in
-  numbers; tabs: Today · Map · People · Shifts · Money · Signs · Outreach.
+  numbers; tabs: Today · Map · People · Shifts · Money · Signs · Outreach
+  (on a phone: the first four, and *More* for the rest).
 
 ## How we check
 
@@ -58,6 +61,7 @@ a volunteer, on the Imagine Surrey sample campaign:
 
 - **Visible words** (in the page, excluding the nav) — a simpler screen has
   far fewer. Recorded before and after every change.
-- **Yellow buttons** — at most one.
+- **Primary buttons** (“yellow” in the scripts) — at most one.
 - **Sideways scroll at 390 px** — none.
-- **Tap targets on field screens** — at least 48 px.
+- **Tap targets on field screens**, and on any phone — at least 48 px. (A
+  desk with a mouse gets 40 px controls.)

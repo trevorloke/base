@@ -144,7 +144,8 @@ check('What for · Who · Tries, in the rule’s words', kinds.join('|') === 'Pe
 const pressed = await page.$$eval(`${form} .sv-kind[aria-pressed="true"]`, (els) => els.map((e) => e.innerText.trim()));
 check('defaults: Persuasion · All doors · 2 tries', pressed.join('|') === 'Persuasion|All doors|2', pressed.join('|'));
 m = await measure(page, `${form} .sv-kind, ${form} .input, ${form} .btn`);
-check('the form: one yellow "Start the pass", targets ≥ 48px, the line under it', m.yellow === 1 && m.minTap >= 48 && /Start the pass/.test(await page.innerText('.btn-primary'))
+// A desk with a mouse: 40px controls (app.css --ctl); the phone's 48 is checked at 390 below.
+check('the form: one yellow "Start the pass", targets ≥ 40px on a desk, the line under it', m.yellow === 1 && m.minTap >= 40 && /Start the pass/.test(await page.innerText('.btn-primary'))
   && /Doors left on every turf will change when the pass starts\./.test(await D.text()), JSON.stringify(m));
 await D.shot('02-start-form');
 await page.fill(`${form} input`, 'Persuasion · test');
@@ -158,7 +159,7 @@ check('the open pass card: its name, "Persuasion · All doors · 2 tries", start
 check('…and the server has it open, with those numbers', passes1.open?.name === 'Persuasion · test' && passes1.open.kind === 'persuasion' && passes1.open.tries === 2
   && JSON.stringify(passes1.open.stats) === JSON.stringify({ doors_knocked: 0, talked: 0, support_found: 0 }) && passes1.past.length === 0, JSON.stringify(passes1));
 m = await measure(page, '.pass-page .btn');
-check('/passes with a pass open: one yellow (Start a pass), "End this pass" is not yellow, targets ≥ 48px', m.yellow === 1 && m.minTap >= 48
+check('/passes with a pass open: one yellow (Start a pass), "End this pass" is not yellow, targets ≥ 40px on a desk', m.yellow === 1 && m.minTap >= 40
   && !(await page.$('.pass-open .btn-primary')), JSON.stringify(m));
 await D.shot('03-pass-open');
 await D.go('/turfs');

@@ -104,8 +104,9 @@ const helpers = (page, ctx, desk = false) => ({
   go: async (path) => { await page.goto(`${desk ? ADMIN : BASE}${path}`, { waitUntil: 'domcontentloaded' }); await sleep(1200); },
   shot: (n) => page.screenshot({ path: `${SHOTS}/${n}.png` }),
   chip: () => page.$eval('.offline-strip__chip', (el) => el.innerText.replace(/\s+/g, ' ').trim()).catch(() => ''),
-  // SIMPLE.md's checks on what's on screen now (inside `sel`).
-  measure: (sel) => page.evaluate((s) => {
+  // SIMPLE.md's checks on what's on screen now (inside `sel`). `floor`: 48px
+  // wherever a thumb reaches; 40 on a desk with a mouse (app.css --ctl).
+  measure: (sel, floor = 48) => page.evaluate(([s, floor]) => {
     const root = document.querySelector(s) || document.body;
     const vis = (el) => { const r = el.getBoundingClientRect(); const st = getComputedStyle(el); return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'; };
     const words = (root.innerText || '').split(/\s+/).filter(Boolean).length;
@@ -113,9 +114,9 @@ const helpers = (page, ctx, desk = false) => ({
     const overflow = document.documentElement.scrollWidth - window.innerWidth;
     const small = [...root.querySelectorAll('button, a.btn, input, select, textarea')].filter(vis)
       .map((el) => { const r = el.getBoundingClientRect(); return { t: (el.innerText || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 24), h: Math.round(r.height), w: Math.round(r.width) }; })
-      .filter((x) => x.h < 48 || x.w < 44);
+      .filter((x) => x.h < floor || x.w < Math.min(44, floor));
     return { words, yellow, overflow, small };
-  }, sel),
+  }, [sel, floor]),
   copies: () => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('starbase:copy:') || k.startsWith('starbase:field:'))),
   outbox: () => page.evaluate(() => JSON.parse(localStorage.getItem('starbase:outbox:v2') || '[]')),
   swReady: () => page.evaluate(() => navigator.serviceWorker.ready.then(() => Boolean(navigator.serviceWorker.controller))),
@@ -222,6 +223,14 @@ const pinsOffline = await doorsOnMap(page);
 check('offline reload: the map opens with the doors kept on this phone', pinsOffline === 4 && /Offline copy/i.test(t) && !/Turfs didn’t load/.test(t), `pins=${pinsOffline}`);
 const tilesDrawn = await page.$$eval('.leaflet-tile-loaded', (els) => els.filter((i) => i.complete && i.naturalWidth > 0).length).catch(() => 0);
 check('offline: tiles seen before still draw', tilesDrawn > 0, tilesDrawn);
+// The app keeps its face with no signal: the fonts' stylesheet, the font it
+// names and the campaign's logo all come from the worker's keep (sw.js).
+const face = await page.evaluate(async () => {
+  const there = (u) => fetch(u).then((r) => r.ok, () => false);
+  const logo = document.querySelector('.nav img.brand-mark');
+  return { sheet: await there('/fonts/fonts.css'), font: await there('/fonts/inter-latin.woff2'), logo: logo ? logo.complete && logo.naturalWidth > 0 : null, alt: logo?.alt ?? null };
+});
+check('offline: the fonts and the campaign’s logo are still there (its alt text is the campaign’s name)', face.sheet && face.font && face.logo !== false && (face.logo === null || face.alt.length > 0), JSON.stringify(face));
 check('strip on a laptop: offline and "1 saved on this device" (never "this phone")', /Offline/i.test(t) && /^1 saved on this device$/i.test(await D.chip()) && !/this phone/i.test(t), await D.chip());
 
 // Add a door with no signal, at an empty spot inside the turf.
@@ -289,8 +298,8 @@ check('offline sheet: says when it sends, no Send now', /Sends when you’re bac
 const sheetTitle = await page.$eval('.obx-title', (el) => el.innerText.trim()).catch(() => '');
 check('sheet on a laptop: "Saved on this device"; "Sends when…" said once (the strip drops it while the sheet is open)',
   sheetTitle === 'Saved on this device' && ((await D.text()).match(/Sends when you’re back online/g) || []).length === 1, sheetTitle);
-let m = await D.measure('.obx-sheet');
-check('sheet: no yellow button, field-size targets', m.yellow <= 1 && !(await page.$('.obx-sheet .btn-primary')) && m.small.length === 0, JSON.stringify(m));
+let m = await D.measure('.obx-sheet', 40);
+check('sheet: no yellow button, targets ≥ 40px on a desk (the phone’s 48 is checked below)', m.yellow <= 1 && !(await page.$('.obx-sheet .btn-primary')) && m.small.length === 0, JSON.stringify(m));
 console.log(`      sheet (desk, offline): ${m.words} words, ${m.yellow} yellow on screen`);
 await D.shot('1-desk-offline-sheet');
 await page.keyboard.press('Escape');

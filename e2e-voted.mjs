@@ -169,7 +169,8 @@ check('/admin/voted: "Get out the vote", Off, the switch off, what GOTV mode doe
   && /Off\./.test(await page.innerText('.vt-now'))
   && /everyone can mark people as voted/.test(await D.text()) && /GOTV scripts/.test(await D.text()));
 let m = await measure(page, '.vt-page .sv-switch, .vt-page .vt-date, .vt-page .btn, .vt-page .ops-back');
-check('Election day at 1360: one yellow (Save), targets ≥ 48px', m.yellow === 1 && m.minTap >= 48 && /Save/.test(await page.innerText('.btn-primary')), JSON.stringify(m));
+// A desk with a mouse: 40px controls (app.css --ctl); the phone's 48 is checked at 390 below.
+check('Election day at 1360: one yellow (Save), targets ≥ 40px on a desk', m.yellow === 1 && m.minTap >= 40 && /Save/.test(await page.innerText('.btn-primary')), JSON.stringify(m));
 check('Save is off until something changes', await page.$eval('.vt-page .btn-primary', (b) => b.disabled));
 await D.shot('01-election-day-off');
 await page.click('.vt-page .sv-switch');

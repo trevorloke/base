@@ -152,7 +152,8 @@ await page.click('.ops-head button:has-text("Add a field")');
 const sw = await page.getAttribute('form[aria-label="Add field"] .fd-switch', 'aria-checked');
 check('"Volunteers can see this" is off by default', sw === 'false', sw);
 m = await measure(page, 'form[aria-label="Add field"] .sv-kind, form[aria-label="Add field"] .input, form[aria-label="Add field"] .btn, form[aria-label="Add field"] .fd-switch');
-check('add form: one yellow (Add field), targets ≥ 48px', m.yellow === 1 && m.minTap >= 48 && /Add field/i.test(await page.innerText('.btn-primary')), JSON.stringify(m));
+// A desk with a mouse: controls are 40px (app.css --ctl); a phone keeps 48 (the checks at 390 below).
+check('add form: one yellow (Add field), targets ≥ 40px on a desk', m.yellow === 1 && m.minTap >= 40 && /Add field/i.test(await page.innerText('.btn-primary')), JSON.stringify(m));
 const kinds = await page.$$eval('form[aria-label="Add field"] .sv-kind', (els) => els.map((e) => e.innerText.trim()));
 check('seven types: Text · Long text · Yes/No · Pick one · Pick several · Number · Date', kinds.join('|') === 'Text|Long text|Yes/No|Pick one|Pick several|Number|Date', kinds.join('|'));
 await D.shot('02-add-form');
@@ -204,7 +205,7 @@ check('each field, in order', labels.filter((l) => !STANDARD.has(l)).join('|') =
 check('Yes/No and Pick one are tap buttons, not selects', (await spage.$$(`${q} select`)).length === 0
   && (await spage.$$(`${q} .sv-q:has-text("Language at home") .sv-opt`)).length === 3 && (await spage.$$(`${q} .sv-q:has-text("Strata council member") .sv-opt`)).length === 2);
 m = await measure(spage, `${q} .sv-opt, ${q} input, ${q} .fd-save`);
-check('profile at 1360: field targets ≥ 48px, no new yellow', m.minTap >= 48 && m.yellow === before.yellow && m.yellow <= 1, JSON.stringify(m));
+check('profile at 1360: field targets ≥ 40px (a desk with a mouse), no new yellow', m.minTap >= 40 && m.yellow === before.yellow && m.yellow <= 1, JSON.stringify(m));
 check('Save is off until something changes', await spage.$eval(`${q} .fd-save`, (b) => b.disabled));
 await spage.click(`${q} .sv-q:has-text("Language at home") .sv-opt:has-text("Punjabi")`);
 await spage.click(`${q} .sv-q:has-text("Strata council member") .sv-opt:has-text("Yes")`);
@@ -281,7 +282,7 @@ await sleep(400);
 sheet = await spage.innerText('.pp-sheet');
 check('More filters: a group per field — choices, Yes/No, common words', /Language at home/i.test(sheet) && /Strata council member/i.test(sheet) && /Tenant group/i.test(sheet) && /Newton Tenants/i.test(sheet), sheet.slice(-300));
 m = await measure(spage, '.pp-sheet .pp-pick');
-check('filter chips ≥ 48px', m.minTap >= 48, JSON.stringify(m));
+check('filter chips ≥ 40px on a desk (48 on a phone)', m.minTap >= 40, JSON.stringify(m));
 await spage.click('.pp-sheet fieldset:has(legend:text-is("Language at home")) .pp-pick:has-text("Punjabi")');
 await sleep(900);
 const url = new URL(spage.url());

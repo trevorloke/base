@@ -64,8 +64,9 @@ const apiOf = (page) => (path, body) => page.evaluate(async ([p, b]) => {
 }, [path, body]);
 const textOf = async (page, sel = 'main.page') => ((await page.innerText(sel).catch(() => '')) || '').replace(/\s+/g, ' ');
 // SIMPLE.md: primary buttons, sideways scroll, and tap targets under 48px
-// among the screen's own controls.
-const measure = (page) => page.evaluate(() => {
+// among the screen's own controls — 40px on a desk with a mouse (app.css
+// --ctl), where `floor` says so.
+const measure = (page, floor = 48) => page.evaluate((floor) => {
   const vis = (el) => { const r = el.getBoundingClientRect(); const st = getComputedStyle(el); return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'; };
   const root = document.querySelector('.ptw-page') || document.body;
   const yellow = [...document.querySelectorAll('.btn-primary')].filter(vis).length;
@@ -74,9 +75,9 @@ const measure = (page) => page.evaluate(() => {
   const target = (el) => (/^(radio|checkbox)$/.test(el.type) && el.closest('label')) || el;
   const small = [...root.querySelectorAll('button, a.btn, input, select, textarea, .ptw-row__link, .leaflet-bar a, .ops-back')].filter(vis)
     .map((el) => { const r = target(el).getBoundingClientRect(); return { t: (el.innerText || el.getAttribute('aria-label') || el.title || el.tagName).trim().slice(0, 24), h: Math.round(r.height), w: Math.round(r.width) }; })
-    .filter((x) => x.h < 48 || x.w < 44);
+    .filter((x) => x.h < floor || x.w < Math.min(44, floor));
   return { yellow, overflow, small };
-});
+}, floor);
 const addDays = (ymd, n) => { const [y, m, d] = ymd.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
 
 // ── 1. A manager signs up; a made-up list comes in ──
@@ -193,8 +194,8 @@ await page.getByRole('button', { name: 'Chart', exact: true }).click();
 await page.getByRole('button', { name: 'How the score works' }).click();
 const how = await textOf(page, '.ptw-how__body');
 check('"How the score works" opens in place, in plain words', /Up to 60 for supporters still to find/.test(how) && /Up to 30 for persuadables left/.test(how) && /Up to 10 for time since the last knock/.test(how), how.slice(0, 200));
-const m1 = await measure(page);
-check('desktop: one primary, no sideways scroll, no small targets', m1.yellow === 1 && m1.overflow <= 0 && m1.small.length === 0, JSON.stringify(m1));
+const m1 = await measure(page, 40);
+check('desktop: one primary, no sideways scroll, no targets under 40px', m1.yellow === 1 && m1.overflow <= 0 && m1.small.length === 0, JSON.stringify(m1));
 await page.screenshot({ path: `${SHOTS}/1-desktop-new.png`, fullPage: false });
 await page.locator('.ptw-map').scrollIntoViewIfNeeded();
 const tilesIn = await page.waitForFunction(() => document.querySelectorAll('.ptw-map img.leaflet-tile-loaded').length > 0, null, { timeout: 15000 })
