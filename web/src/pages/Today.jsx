@@ -46,6 +46,7 @@ import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { useRequestsCount } from '../components/RequestsCount.js';
 import { MineAllTime } from '../components/FieldReportBits.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
+import { whenText, zoneOf } from '../components/shiftTime.js';
 import './today.css';
 import { at } from '../base.js';
 import { NS } from '../base.js';
@@ -71,9 +72,6 @@ const STEP_ROLES = {
 
 const plural = (n, word, many = `${word}s`) => (n === 1 ? word : many);
 const num = (n) => (Number(n) || 0).toLocaleString('en-CA');
-const fmtWhen = (iso) => new Date(iso).toLocaleString('en-CA', {
-  weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-});
 const DAY = 86_400_000;
 const withinDays = (iso, days) => new Date(iso).getTime() - Date.now() < days * DAY;
 
@@ -411,9 +409,15 @@ function NeedsYou({ b, me }) {
   // Texts waiting to be read: replies to yours, and numbers that wrote in.
   const newTexts = Number(useTextingStatus(me).data?.unread) || 0;
   const flagged = b.flagged ?? [];
-  const shortShifts = (b.shifts ?? [])
+  // Shifts in the next week short of the people they want: by their target
+  // (which never turns anyone away), or by their limit on an older shift —
+  // the server's list (brief.shortShifts). An older server sends none: then
+  // the limit alone, from the next shifts.
+  const shortShifts = (b.shortShifts ?? (b.shifts ?? [])
     .filter((s) => s.capacity && (Number(s.filled) || 0) < s.capacity && withinDays(s.starts_at, 7))
+    .map((s) => ({ ...s, short: s.capacity - (Number(s.filled) || 0) })))
     .slice(0, 2);
+  const tz = zoneOf(me);
   const signs = Number(b.signs?.requested) || 0;
   const shownFlags = flagged.length > 3 ? flagged.slice(0, 2) : flagged;
   const moreFlags = flagged.length - shownFlags.length;
@@ -440,10 +444,10 @@ function NeedsYou({ b, me }) {
             <LinkRow to={`/people?tag=${PROSPECT_TAG}`}
               main={<><strong className="mono">{newVols >= PROSPECT_MAX ? `${PROSPECT_MAX}+` : newVols}</strong> new {plural(newVols, 'volunteer')}</>} />
           )}
-          {shortShifts.map((s) => {
-            const left = s.capacity - (Number(s.filled) || 0);
-            return <WhenRow key={s.id} to={`/shifts/${s.id}`} title={s.title} when={s.starts_at} extra={spotsLeft(left)} warn />;
-          })}
+          {shortShifts.map((s) => (
+            <WhenRow key={s.id} to={`/shifts/${s.id}`} title={s.title} when={s.starts_at} tz={tz} warn
+              extra={s.need ? `${Number(s.filled) || 0} of ${s.need} — ${s.short === 1 ? 'one' : s.short} more` : spotsLeft(s.short)} />
+          ))}
           {signs > 0 && (
             <LinkRow to="/signs" main={<><strong className="mono">{signs}</strong> {plural(signs, 'sign')} to put up</>} />
           )}
@@ -467,8 +471,8 @@ function NeedsYou({ b, me }) {
 // Two-line row: a small kicker, the title, the time. `fill` is a short plain
 // count on the right ("12 going"); `extra` rides on the time line ("5 spots
 // left", amber when `warn`) so a long title keeps the full width. Never a
-// bare "3/8".
-function WhenRow({ to, kicker, title, when, fill, extra, warn }) {
+// bare "3/8". The time is the campaign's (components/shiftTime.js).
+function WhenRow({ to, kicker, title, when, tz, fill, extra, warn }) {
   return (
     <li className="today-need">
       <Link to={to} className="today-row">
@@ -476,7 +480,7 @@ function WhenRow({ to, kicker, title, when, fill, extra, warn }) {
           {kicker && <span className="today-row__kicker">{kicker}</span>}
           <span className="today-row__title">{title}</span>
           <span className="today-row__when">
-            {fmtWhen(when)}
+            {whenText(when, tz)}
             {extra && <> · <span className={`today-row__extra${warn ? ' is-warn' : ''}`}>{extra}</span></>}
           </span>
         </span>
@@ -489,9 +493,9 @@ function WhenRow({ to, kicker, title, when, fill, extra, warn }) {
 
 // Desk: the campaign's next shift. Short shifts are already in "Needs you",
 // so this is just what and when.
-function ShiftRow({ shift }) {
-  if (!shift) return <LinkRow to="/shifts?new=1" main={<span className="muted">No shifts planned</span>} chip="Plan one" />;
-  return <WhenRow to={`/shifts/${shift.id}`} kicker="Next shift" title={shift.title} when={shift.starts_at} />;
+function ShiftRow({ shift, tz }) {
+  if (!shift) return <LinkRow to="/shifts?add=1" main={<span className="muted">No shifts planned</span>} chip="Plan one" />;
+  return <WhenRow to={`/shifts/${shift.id}`} kicker="Next shift" title={shift.title} when={shift.starts_at} tz={tz} />;
 }
 
 // ── Volunteer: which shifts am I on? ──
@@ -538,17 +542,18 @@ function useMyNextShift(me) {
 // someone else's shift dressed up as theirs.
 function VolunteerShiftRow({ shifts, me, turfs }) {
   const { ready, next } = useMyNextShift(me);
+  const tz = zoneOf(me);
   if (!ready) return <li className="today-need today-row--wait" aria-hidden="true" />;
   // The shift's walk lists (brief.shiftTurfs): "Saturday canvass · Newton block".
   const names = (s) => turfNames(turfs?.[s.id] || []);
   if (next) {
-    return <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} extra={names(next) || undefined} />;
+    return <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} tz={tz} extra={names(next) || undefined} />;
   }
   const open = shifts.find((s) => !s.capacity || (Number(s.filled) || 0) < s.capacity);
   if (!open) return <LinkRow to="/shifts" main={<span className="muted">No open shifts</span>} />;
   const left = open.capacity ? open.capacity - (Number(open.filled) || 0) : 0;
   return (
-    <WhenRow to={`/shifts/${open.id}`} kicker="Open shift" title={open.title} when={open.starts_at}
+    <WhenRow to={`/shifts/${open.id}`} kicker="Open shift" title={open.title} when={open.starts_at} tz={tz}
       extra={[left ? spotsLeft(left) : null, names(open)].filter(Boolean).join(' · ') || null} />
   );
 }
@@ -827,7 +832,7 @@ function DeskToday({ b, me, toast }) {
       <section className="today-section" aria-labelledby="today-next-h">
         <h2 className="today-h" id="today-next-h">Coming up</h2>
         <ul className="today-rows">
-          <ShiftRow shift={(b.shifts ?? [])[0]} />
+          <ShiftRow shift={(b.shifts ?? [])[0]} tz={zoneOf(me)} />
         </ul>
       </section>
 

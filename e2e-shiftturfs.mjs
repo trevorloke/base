@@ -17,6 +17,7 @@
 //   BASE=http://127.0.0.1:4450 SHOTS=/tmp/shiftturfs node e2e-shiftturfs.mjs
 import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
+import { addDays, clockOf, dayOf, instantOf } from './shared/dayparts.js';
 
 const BASE = process.env.BASE || 'http://localhost:3200';
 const ADMIN = { toString() { return `${BASE}/admin`; } }; // the desk's pages live in the admin (web/src/mode.js)
@@ -94,20 +95,16 @@ const simple = async (pg, name, sel = null, yellow = 1) => {
   check(`${name}: ${yellow} yellow, no sideways scroll${sel ? ', targets ≥ 48px' : ''}`, mm.yellow === yellow && mm.overflow <= 0 && (mm.minTap == null || mm.minTap >= 47.5), JSON.stringify(mm));
   return mm;
 };
-// Days on the campaign's clock (the browsers run in Vancouver): the next
-// Saturday after today, and the Sunday after it.
-const dayAhead = (n) => new Date(Date.now() + n * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' });
+// Days and hours on the campaign's clock, by the rule the app applies
+// (shared/dayparts.js: B.C. on UTC-7 all year) — not this machine's own
+// time-zone data, which may be older: the next Saturday after today, and
+// the Sunday after it.
+const dayAhead = (n) => addDays(dayOf(new Date()), n);
 const satIn = (() => {
   for (let i = 1; i <= 7; i += 1) if (new Date(`${dayAhead(i)}T12:00:00Z`).getUTCDay() === 6) return i;
   return 7;
 })();
-const at10 = (day) => {
-  // 10:00 in Vancouver for that day, as an ISO timestamp with its offset.
-  const probe = new Date(`${day}T18:00:00Z`);
-  const off = probe.toLocaleString('en-US', { timeZone: 'America/Vancouver', timeZoneName: 'shortOffset' }).match(/GMT([+-]\d+)/)?.[1] || '-8';
-  const h = String(Math.abs(Number(off))).padStart(2, '0');
-  return `${day}T10:00:00${Number(off) < 0 ? '-' : '+'}${h}:00`;
-};
+const at10 = (day) => instantOf(day, '10:00');
 
 // ── 1. A manager, three turfs with doors in them (Example surnames, 555-01xx phones) ──
 const dctx = await browser.newContext({ viewport: { width: 1360, height: 900 }, timezoneId: 'America/Vancouver' });
@@ -148,8 +145,10 @@ await page.waitForSelector('form[aria-label="New shift"]', { timeout: 8000 });
 await page.fill('#shift-title', 'Saturday canvass');
 await page.fill('#shift-starts', `${day}T10:00`);
 await page.fill('#shift-location', 'Newton Rec Centre');
-await page.fill('#shift-capacity', '8');
+check('nothing asks how many people up front: the limit is under More details', (await page.locator('#shift-capacity').count()) === 0 && !/How many/.test(await D.text()));
 await page.click('form[aria-label="New shift"] button:has-text("More details")');
+check('…as "Limit sign-ups to"', (await page.innerText('label[for="shift-capacity"]').catch(() => '')) === 'Limit sign-ups to');
+await page.fill('#shift-capacity', '8');
 await page.waitForSelector('#shift-turfs .st-opt', { timeout: 8000 }).catch(() => {});
 const opts = await page.$$eval('#shift-turfs .st-opt', (els) => els.map((e) => e.innerText.trim()));
 check('More details → Turfs lists the campaign’s turfs', opts.join('|') === 'Newton block|72 Ave east|September turf', opts.join('|'));
@@ -311,8 +310,7 @@ await page.waitForSelector('.ops-moved', { timeout: 8000 }).catch(() => {});
 const moved = await page.innerText('.ops-moved').catch(() => '');
 check('moved: "1 person booked has the old time or place" + Let them know', /It moved/.test(moved) && /Let them know/.test(moved), moved);
 const after = (await D.api(`/shifts/${sunday.id}`)).json.shift;
-check('server: the new place and 11:30', after.location === 'Newton Library'
-  && new Date(after.starts_at).toLocaleTimeString('en-CA', { timeZone: 'America/Vancouver', hour: 'numeric', minute: '2-digit', hour12: false }) === '11:30',
+check('server: the new place and 11:30 on the campaign’s clock', after.location === 'Newton Library' && clockOf(after.starts_at) === '11:30',
   `${after.location} ${after.starts_at}`);
 check('page reads the new place', /Newton Library/.test(await D.text()));
 await page.click('.ops-moved button:has-text("Let them know")');

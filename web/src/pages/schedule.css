@@ -204,6 +204,32 @@
 .sch-more__body { padding-top: var(--s-2); }
 .sch-options { display: inline-flex; align-items: center; min-height: 48px; font-size: 15px; color: var(--text-2); }
 
+/* ── The Shifts list (Shifts.jsx): a day a heading; a row wears its kind's
+   mark and colour, and a volunteer's "Count me in" sits on the row. ── */
+.sch-dayhead { margin: var(--s-5) 0 var(--s-2); font-family: var(--font-sans); font-size: 16px; font-weight: 700; line-height: 1.3; color: var(--text-1); }
+.sch-vday:first-of-type .sch-dayhead { margin-top: var(--s-2); }
+.ops-item.sch-vrow { border-left: 4px solid var(--kind, var(--rule-2)); }
+.sch-vrow__line { display: flex; align-items: center; min-width: 0; }
+.sch-vrow__line > .ops-row { flex: 1 1 auto; width: auto; min-width: 0; padding-left: var(--s-3); }
+.sch-vrow__kind { flex: none; display: inline-flex; color: var(--kind, var(--text-3)); }
+.sch-vrow__kind .sk-icon { width: 22px; height: 22px; }
+/* "6:30–8:30 am · King George Blvd & 88 Ave" — one run of words that wraps where it must. */
+.ops-row__sub.sch-vrow__sub { display: block; font-family: var(--font-sans); font-size: 14px; line-height: 1.35; color: var(--text-2); overflow-wrap: anywhere; }
+.sch-vrow__sub > span + span::before { content: ' · '; color: var(--text-3); }
+.btn.ops-tap.sch-vrow__join { flex: none; margin-right: var(--s-3); padding: 0 12px; white-space: nowrap; }
+.ops-confirm.sch-vrow__ask { padding: var(--s-3) var(--s-4); border-top: 1px solid var(--rule); background: var(--paper-1); }
+.error.sch-vrow__error { margin: 0; padding: 0 var(--s-4) var(--s-3); }
+.btn.ops-tap.sch-older { margin-top: var(--s-3); }
+
+/* A shift's page: its kind, a place that opens a map, the day's tool. */
+.chip.sch-kindchip { display: inline-flex; align-items: center; gap: 4px; }
+.sch-kindchip .sk-icon { width: 14px; height: 14px; color: var(--kind, var(--text-3)); }
+.ops-lines > a.sch-maplink { display: inline-flex; align-items: center; align-self: flex-start; min-height: 48px; }
+.ops-actions.sch-daytool { margin: 0 0 var(--s-3); }
+
+/* "More options": the long form's own name. */
+.sch-formtitle { margin: 0 0 var(--s-3); font-family: var(--font-sans); font-size: 20px; font-weight: 700; line-height: 1.25; }
+
 @media (pointer: coarse), (max-width: 720px) {
   .sch-chip { min-height: 48px; }
   .sch-plus { width: 48px; height: 48px; }

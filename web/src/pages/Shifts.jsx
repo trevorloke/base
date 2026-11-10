@@ -1,11 +1,16 @@
-// Shifts — volunteer scheduling.
-//   /shifts        rows: title, day/time, "5 spots left". Volunteers see their
-//                  own shifts first ("Your shifts", marked "You're on"), then
-//                  the open ones. Past shifts fold away under one quiet toggle.
-//   /shifts?new=1  the long form: what, when, where, how many. Role, end
-//                  time, instructions and link sit under "More details".
-//                  ("New shift" itself is the week's add sheet — by tap,
-//                  /shifts?add=1; this form is its "More options".)
+// Shifts — volunteer scheduling. Every time on these screens is on the
+// campaign's clock (components/shiftTime.js), never the device's.
+//   /shifts        the list, a day a heading: each row wears its kind's mark
+//                  and says what, the hours and where. A volunteer's own
+//                  shifts read "You're on ✓"; an open one has "Count me in"
+//                  on the row itself (asked about first when it overlaps a
+//                  shift they are on — a warning, never a refusal). Past
+//                  shifts fold away under one quiet toggle and load when it
+//                  is opened.
+//   /shifts?new=1  "More options", the long form: what, when, where. Role,
+//                  end time, instructions, link, turfs and "Limit sign-ups
+//                  to" sit under "More details". ("New shift" itself is the
+//                  week's add sheet — by tap, /shifts?add=1.)
 //   /shifts/:id    the shift in plain lines, the spots left, then who's on
 //                  it. Desk: one yellow button under the spots — "+ Add
 //                  volunteer" while spots are open (people holding the shift's
@@ -19,6 +24,9 @@
 //                  shift.leave), or one "Count me in" when it offers shift.join
 //                  (else "Ask your organizer to add you"); the roster is a
 //                  plain list of names — no contact details, nothing to tap.
+//                  A place with a pin opens a map; a Mainstreet shift has
+//                  "Start mainstreeting", which opens Mainstreeting with the
+//                  shift's place filled in.
 //                  While "Notify everyone" asks "Email + text N people?", its
 //                  Send is the one yellow button — "Save — nothing sends"
 //                  when neither email nor text is connected. The result
@@ -59,16 +67,22 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES, SHIFT_STATUSES } from '@starbase/shared/canvass';
+import { dayOf, fromInput, toInput } from '@starbase/shared/dayparts';
+import { kindOf, shortBy } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
 import { queueAction, undoQueued, useOutbox } from '../offline.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { NeedsSignal, NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import ShiftsBoard from './ShiftsBoard.jsx';
 import ShiftCrew from './ShiftCrew.jsx';
+import { Unavailable } from './ScheduleSheet.jsx';
+import { KindIcon, cardWords, kindVars } from '../components/ShiftKind.jsx';
 import { TurfPicker, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import { normalizeLink, safeHref } from '../components/shiftLink.js';
+import { clockText, dayName, longDay, overlaps, stampText, timeRange, zoneOf } from '../components/shiftTime.js';
 import { NOTIFIED_WORD, NotifyChip, notifySummary, outcomeOf, people } from '../components/NotifyWords.jsx';
 import './shifts.css';
+import './schedule.css';
 import { NS } from '../base.js';
 
 // The desk's last choice of List or Week, on this device only.
@@ -87,53 +101,9 @@ const STATUS_WORDS = {
 };
 const statusLabel = (s) => STATUS_WORDS[s] ?? String(s || '').replace(/_/g, ' ');
 
-// ── Time helpers (everything on screen is local time) ──
-const pad = (n) => String(n).padStart(2, '0');
-
-// datetime-local value ("2026-10-21T18:00") → ISO with this device's offset
-// ("2026-10-21T18:00:00-07:00"), so the server stores the moment the organizer meant.
-const localToISO = (value) => {
-  if (!value) return null;
-  const d = new Date(value); // no offset in the string → parsed as local time
-  if (Number.isNaN(d.getTime())) return null;
-  const off = -d.getTimezoneOffset();
-  const sign = off >= 0 ? '+' : '-';
-  const abs = Math.abs(off);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`
-    + `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
-};
-
-const dayKey = (when) => {
-  const d = new Date(when);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-};
-// "10am", "6:30pm"
-const clock = (iso) => {
-  const d = new Date(iso);
-  const h = d.getHours();
-  const m = d.getMinutes();
-  return `${h % 12 || 12}${m ? `:${pad(m)}` : ''}${h < 12 ? 'am' : 'pm'}`;
-};
-const shortDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
-const longDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' });
-const dayName = (iso) => {
-  const now = new Date();
-  if (dayKey(iso) === dayKey(now)) return 'Today';
-  if (dayKey(iso) === dayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1))) return 'Tomorrow';
-  return shortDay(iso);
-};
-const timeRange = (starts, ends) => {
-  if (!ends) return clock(starts);
-  if (dayKey(starts) === dayKey(ends)) return `${clock(starts)}–${clock(ends)}`;
-  return `${clock(starts)} – ${shortDay(ends)} ${clock(ends)}`;
-};
+// ── Time: the campaign's clock (components/shiftTime.js) ──
 const isLive = (s, now) => new Date(s.starts_at) <= now && now < new Date(s.ends_at || s.starts_at);
-const whenLine = (s, now) => (isLive(s, now)
-  ? `Now · until ${clock(s.ends_at)}`
-  : `${dayName(s.starts_at)} · ${timeRange(s.starts_at, s.ends_at)}`);
-const fmtStamp = (iso) => (iso
-  ? new Date(iso).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-  : '');
+const isOver = (s, now) => new Date(s.ends_at || s.starts_at) < now;
 
 // On the shift, holding a spot: booked, confirmed, or checked in ("Here").
 // The server counts room over the same three (actions/field.js).
@@ -339,8 +309,10 @@ export function PersonPicker({
   );
 }
 
-// ── New shift form: four fields, the rest under "More details" ──
-function ShiftForm({ onClose }) {
+// ── "More options": the long form. Three fields, the rest under "More
+// details" — a limit on sign-ups among them: nothing asks how many people.
+// Times are typed and saved on the campaign's clock. ──
+function ShiftForm({ tz, onClose }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [f, setF] = useState({
@@ -355,15 +327,15 @@ function ShiftForm({ onClose }) {
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
-    const starts_at = localToISO(f.starts);
-    const ends_at = localToISO(f.ends);
+    const starts_at = fromInput(f.starts, tz);
+    const ends_at = fromInput(f.ends, tz);
     if (!f.title.trim()) { setError('Give the shift a name'); return; }
     if (!starts_at) { setError('Pick when it starts'); return; }
     if (ends_at && new Date(ends_at) <= new Date(starts_at)) { setMore(true); setError('The end has to be after the start'); return; }
     let capacity;
     if (f.capacity.trim()) {
       capacity = Number(f.capacity);
-      if (!Number.isInteger(capacity) || capacity < 1) { setError('How many: a whole number, 1 or more'); return; }
+      if (!Number.isInteger(capacity) || capacity < 1) { setMore(true); setError('Limit sign-ups to: a whole number, 1 or more'); return; }
     }
     setBusy(true);
     try {
@@ -399,6 +371,7 @@ function ShiftForm({ onClose }) {
 
   return (
     <form className="card ops-form" onSubmit={submit} aria-label="New shift">
+      <h2 className="sch-formtitle">More options</h2>
       <div className="field">
         <label htmlFor="shift-title">What</label>
         <input id="shift-title" className="input" required autoFocus placeholder="Saturday doorknock — Fleetwood"
@@ -413,11 +386,6 @@ function ShiftForm({ onClose }) {
         <label htmlFor="shift-location">Where</label>
         <input id="shift-location" className="input" placeholder="Campaign office"
           value={f.location} onChange={set('location')} />
-      </div>
-      <div className="field">
-        <label htmlFor="shift-capacity">How many people</label>
-        <input id="shift-capacity" className="input mono" type="number" min="1" step="1" inputMode="numeric"
-          placeholder="No limit" value={f.capacity} onChange={set('capacity')} />
       </div>
 
       <button type="button" className="ops-more disclose disclose--inline" aria-expanded={more} aria-controls="shift-more"
@@ -456,6 +424,11 @@ function ShiftForm({ onClose }) {
             <TurfPicker id="shift-turfs" value={turfIds} onChange={setTurfIds} disabled={busy} />
             <span className="ops-meta">Anyone who counts themselves in gets these walk lists</span>
           </div>
+          <div className="field">
+            <label htmlFor="shift-capacity">Limit sign-ups to</label>
+            <input id="shift-capacity" className="input mono" type="number" min="1" step="1" inputMode="numeric"
+              placeholder="No limit" value={f.capacity} onChange={set('capacity')} />
+          </div>
         </div>
       )}
 
@@ -468,22 +441,15 @@ function ShiftForm({ onClose }) {
   );
 }
 
-// ISO from the server → a datetime-local value in this device's time.
-const isoToLocal = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
 const sameMoment = (a, b) => (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null);
 
 // ── Edit a shift (desk): the same fields, filled in; only what changed is
 // sent. Moving it in time or place says so, and offers to tell those booked
 // (shift.notify, which emails and texts the shift as it now stands). ──
-function EditShiftForm({ shift, booked, onClose, onSaved }) {
+function EditShiftForm({ shift, booked, tz, onClose, onSaved }) {
   const [f, setF] = useState({
     title: shift.title || '', role: shift.role || '', location: shift.location || '',
-    starts: isoToLocal(shift.starts_at), ends: isoToLocal(shift.ends_at),
+    starts: toInput(shift.starts_at, tz), ends: toInput(shift.ends_at, tz),
     capacity: shift.capacity ? String(shift.capacity) : '', link: shift.link || '', instructions: shift.instructions || '',
     public: Boolean(shift.public),
   });
@@ -494,15 +460,15 @@ function EditShiftForm({ shift, booked, onClose, onSaved }) {
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
-    const starts_at = localToISO(f.starts);
-    const ends_at = localToISO(f.ends);
+    const starts_at = fromInput(f.starts, tz);
+    const ends_at = fromInput(f.ends, tz);
     if (!f.title.trim()) { setError('Give the shift a name'); return; }
     if (!starts_at) { setError('Pick when it starts'); return; }
     if (ends_at && new Date(ends_at) <= new Date(starts_at)) { setError('The end has to be after the start'); return; }
     let capacity = null;
     if (f.capacity.trim()) {
       capacity = Number(f.capacity);
-      if (!Number.isInteger(capacity) || capacity < 1) { setError('How many: a whole number, 1 or more'); return; }
+      if (!Number.isInteger(capacity) || capacity < 1) { setError('Limit sign-ups to: a whole number, 1 or more'); return; }
     }
     const patch = {};
     if (f.title.trim() !== shift.title) patch.title = f.title.trim();
@@ -548,12 +514,6 @@ function EditShiftForm({ shift, booked, onClose, onSaved }) {
         <input id="edit-shift-location" className="input" value={f.location} onChange={set('location')} />
       </div>
       <div className="field">
-        <label htmlFor="edit-shift-capacity">How many people</label>
-        <input id="edit-shift-capacity" className="input mono" type="number" min={Math.max(1, booked)} step="1" inputMode="numeric"
-          placeholder="No limit" value={f.capacity} onChange={set('capacity')} />
-        {booked > 0 && <span className="ops-meta">{people(booked)} booked</span>}
-      </div>
-      <div className="field">
         <label htmlFor="edit-shift-role">Role</label>
         <select id="edit-shift-role" className="input" value={f.role} onChange={set('role')}>
           <option value="">Any role</option>
@@ -568,6 +528,12 @@ function EditShiftForm({ shift, booked, onClose, onSaved }) {
         <label htmlFor="edit-shift-link">Link</label>
         <input id="edit-shift-link" className="input" type="text" inputMode="url" autoCapitalize="none"
           autoCorrect="off" spellCheck={false} value={f.link} onChange={set('link')} />
+      </div>
+      <div className="field">
+        <label htmlFor="edit-shift-capacity">Limit sign-ups to</label>
+        <input id="edit-shift-capacity" className="input mono" type="number" min={Math.max(1, booked)} step="1" inputMode="numeric"
+          placeholder="No limit" value={f.capacity} onChange={set('capacity')} />
+        {booked > 0 && <span className="ops-meta">{people(booked)} booked</span>}
       </div>
       <label className="ops-check">
         <input type="checkbox" checked={f.public} onChange={(e) => setF((cur) => ({ ...cur, public: e.target.checked }))} />
@@ -608,30 +574,116 @@ function useLegacyMyShifts(me, enabled) {
 }
 
 // ── List ──
-function ShiftRow({ s, now, past = false, mine = false, waiting = false, turfs }) {
-  const full = s.capacity && Number(s.filled) >= s.capacity;
+const sameWords = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+// How a shift stands for people: "5 spots left" / "Full" against a limit;
+// "3 of 4 — one more" against its target (which never turns anyone away);
+// else "3 going".
+const roomText = (s, filled = s.filled) => {
+  const n = Number(filled) || 0;
+  if (s.capacity) return spotsText(n, s.capacity);
+  const short = shortBy({ ...s, filled: n });
+  return short ? `${n} of ${s.need} — ${short === 1 ? 'one' : short} more` : `${n} going`;
+};
+
+// A shift on the list: its kind's mark, what it is, the hours and where
+// (`day`: the day too, for a row not under a day's heading). The row opens
+// the shift; `onJoin` puts a volunteer's "Count me in" on the row itself,
+// and `clash` — a shift of theirs at the same time — is asked about first.
+function ShiftRow({ s, tz, now, past = false, mine = false, waiting = false, turfs, day = false, onJoin = null, busy = false, clash = null, asking = false, onAsk, error = null }) {
+  const full = !!s.capacity && Number(s.filled) >= s.capacity;
   const names = turfNames(turfs);
+  const words = cardWords(s);
+  // A turf that is the place is said once, beside the name.
+  const place = words.place && !sameWords(words.place, names) ? words.place : null;
+  const hours = isLive(s, now) && s.ends_at ? `Now · until ${clockText(s.ends_at, tz)}` : timeRange(s.starts_at, s.ends_at, tz);
+  const join = !past && !mine && !waiting && !full && onJoin;
+  const state = waiting ? <span className="chip obx-chip ops-chip-lg">Not sent yet</span>
+    : mine ? <span className="chip chip-ok ops-chip-lg">You’re on ✓</span>
+      : join ? null : <span className={`chip ops-chip-lg${full ? ' chip-ok' : ''}`}>{roomText(s)}</span>;
   return (
-    <li className="ops-item" data-tone={past ? 'past' : undefined}>
-      <Link to={`/shifts/${s.id}`} className="ops-row">
-        <span className="ops-row__main">
-          <span className="ops-row__name">{s.title}{names && <span className="st-row-turfs"> · {names}</span>}</span>
-          <span className="ops-row__sub">{whenLine(s, now)}</span>
-        </span>
-        <span className="ops-row__end">
-          {waiting
-            ? <span className="chip obx-chip ops-chip-lg">Not sent yet</span>
-            : mine
-              ? <span className="chip chip-ok ops-chip-lg">You’re on ✓</span>
-              : <span className={`chip ops-chip-lg${full ? ' chip-ok' : ''}`}>{spotsText(s.filled, s.capacity)}</span>}
-        </span>
-      </Link>
+    <li className="ops-item sch-vrow" style={kindVars(words.kind)} data-tone={past ? 'past' : undefined} data-shift={s.id} data-kind={words.kind.code}>
+      <div className="sch-vrow__line">
+        <Link to={`/shifts/${s.id}`} className="ops-row">
+          <span className="sch-vrow__kind" title={words.kind.label}><KindIcon kind={words.kind} /></span>
+          <span className="ops-row__main">
+            <span className="ops-row__name">{words.title}{names && <span className="st-row-turfs"> · {names}</span>}</span>
+            <span className="ops-row__sub sch-vrow__sub">
+              <span>{day ? `${dayName(s.starts_at, tz)} · ` : ''}{hours}</span>
+              {place && <span className="sch-vrow__place">{place}</span>}
+              {join && (s.capacity || shortBy(s) > 0) && <span>{roomText(s)}</span>}
+            </span>
+          </span>
+          {state && <span className="ops-row__end">{state}</span>}
+        </Link>
+        {join && (
+          <button type="button" className="btn ops-tap sch-vrow__join" disabled={busy} aria-label={`Count me in: ${s.title}, ${dayName(s.starts_at, tz)}, ${hours}`}
+            onClick={() => (clash ? onAsk(true) : onJoin())}>
+            {busy ? 'Saving…' : 'Count me in'}
+          </button>
+        )}
+      </div>
+      {join && asking && clash && (
+        <div className="ops-confirm sch-vrow__ask" role="group" aria-label="Already on a shift then">
+          <span>You’re on {clash.title} then ({timeRange(clash.starts_at, clash.ends_at, tz)}). Count me in anyway?</span>
+          <button type="button" className="btn ops-solid ops-tap" disabled={busy} onClick={onJoin}>Yes</button>
+          <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => onAsk(false)}>No</button>
+        </div>
+      )}
+      {error && <p className="error sch-vrow__error" role="alert">{error}</p>}
       {!past && <SpotsBar filled={s.filled} capacity={s.capacity} />}
     </li>
   );
 }
 
+// Past shifts: today's that are over come with the list; the days before
+// load when the toggle is opened (GET /shifts?past=1, newest first, a page
+// at a time) — never kept on the phone.
+function PastShifts({ earlier, tz, now, isMine, byShift }) {
+  const [open, setOpen] = useState(false);
+  const first = useQuery({ queryKey: ['shifts', 'past'], queryFn: () => apiGet('/shifts?past=1'), enabled: open, meta: { side: true } });
+  const [more, setMore] = useState({ rows: [], next: undefined, busy: false, error: null });
+  const next = more.next !== undefined ? more.next : first.data?.next ?? null;
+  const loadMore = async () => {
+    setMore((m) => ({ ...m, busy: true, error: null }));
+    try {
+      const r = await apiGet(`/shifts?past=1&cursor=${encodeURIComponent(next)}`);
+      setMore((m) => ({ rows: [...m.rows, ...(r.shifts ?? [])], next: r.next ?? null, busy: false, error: null }));
+    } catch (e) {
+      setMore((m) => ({ ...m, busy: false, error: e.message }));
+    }
+  };
+  // (An older server answers ?past=1 with every shift: only those over, each once.)
+  const seen = new Set(earlier.map((s) => s.id));
+  const older = [...(first.data?.shifts ?? []), ...more.rows].filter((s) => isOver(s, now) && !seen.has(s.id) && seen.add(s.id));
+  const rows = [...earlier, ...older];
+  return (
+    <div className="ops-foot">
+      <button type="button" className="ops-more disclose" aria-expanded={open} aria-controls="ops-past" onClick={() => setOpen((v) => !v)}>
+        Past shifts
+      </button>
+      {open && (
+        <div id="ops-past" className="ops-more-body">
+          {rows.length > 0 && (
+            <ul className="ops-rows">
+              {rows.map((s) => <ShiftRow key={s.id} s={s} tz={tz} now={now} past day mine={isMine(s)} turfs={byShift[s.id]} />)}
+            </ul>
+          )}
+          {first.isPending && <p className="muted sch-state" role="status">{first.fetchStatus === 'paused' ? 'Past shifts load with signal' : 'Loading…'}</p>}
+          {first.isError && <Unavailable what="Past shifts" onRetry={() => first.refetch()} />}
+          {first.isSuccess && rows.length === 0 && <p className="ops-empty">No past shifts.</p>}
+          {more.error && <p className="error" role="alert">{more.error}</p>}
+          {first.isSuccess && next && (
+            <button type="button" className="btn ops-tap sch-older" disabled={more.busy} onClick={loadMore}>{more.busy ? 'Loading…' : 'Show older'}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ShiftList({ canDesk, me }) {
+  const queryClient = useQueryClient();
+  const tz = zoneOf(me);
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const showNew = canDesk && params.get('new') === '1';
@@ -654,7 +706,6 @@ function ShiftList({ canDesk, me }) {
     setView('week');
     setParams((cur) => { const next = new URLSearchParams(cur); next.set('add', '1'); return next; }, { replace: true });
   };
-  const [showPast, setShowPast] = useState(false);
   const shifts = useQuery({ queryKey: ['shifts'], queryFn: () => apiGet('/shifts'), ...phoneCopy(me, 'shifts') });
   useKeepCopy(me, 'shifts', shifts);
   const { byShift } = useShiftTurfs(me);
@@ -664,14 +715,50 @@ function ShiftList({ canDesk, me }) {
   // s.mine is the answer; the email lookup runs only for a server without it.
   const legacy = !canDesk && shifts.isSuccess && all.some((s) => typeof s.mine !== 'boolean');
   const legacyMine = useLegacyMyShifts(me, legacy);
+  // A volunteer's "Count me in" is on the row when the server offers shift.join.
+  const allowed = useQuery({
+    queryKey: ['actions'], queryFn: () => apiGet('/actions'), enabled: !canDesk, staleTime: Infinity, ...phoneCopy(me, 'actions'),
+  });
+  useKeepCopy(me, 'actions', allowed);
+  const canJoin = !canDesk && (allowed.data?.actions ?? []).includes('shift.join');
 
   const now = new Date();
-  const isPast = (s) => new Date(s.ends_at || s.starts_at) < now;
-  const upcoming = all.filter((s) => !isPast(s));
-  const past = all.filter(isPast).reverse(); // most recent first
+  const upcoming = all.filter((s) => !isOver(s, now)).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  const earlier = all.filter((s) => isOver(s, now)).reverse(); // over already today: most recent first
   const isMineShift = (s) => (typeof s.mine === 'boolean' ? s.mine : legacyMine.has(s.id));
-  const yours = upcoming.filter(isMineShift);
-  const others = upcoming.filter((s) => !isMineShift(s));
+  // A day a heading, on the campaign's calendar.
+  const days = [];
+  for (const s of upcoming) {
+    const d = dayOf(s.starts_at, tz);
+    if (days.length === 0 || days[days.length - 1].day !== d) days.push({ day: d, rows: [] });
+    days[days.length - 1].rows.push(s);
+  }
+
+  // ── "Count me in" from the row (shift.join through the outbox, as on the
+  // shift's own page). A shift that overlaps one they are on — or one whose
+  // "Count me in" is still waiting on this phone — is asked about first. ──
+  const [asking, setAsking] = useState(null);
+  const [joining, setJoining] = useState(null);
+  const [joinError, setJoinError] = useState(null); // { id, message }
+  const [said, setSaid] = useState('');
+  const holding = (s) => isMineShift(s) || waitingSelf(outbox.items, s.id)?.name === 'shift.join';
+  const clashFor = (s) => upcoming.find((x) => x.id !== s.id && holding(x) && overlaps(x, s)) || null;
+  const join = async (s) => {
+    setAsking(null);
+    setJoinError(null);
+    setJoining(s.id);
+    try {
+      const r = await queueAction('shift.join', { shift_id: s.id }, { who: s.title });
+      if (r.queued) { setSaid(`${s.title}: saved on this phone — it sends when the signal is back`); return; }
+      setSaid(`You’re on ${s.title}`);
+      for (const k of ['shifts', 'brief', 'person', 'persons', 'shiftturfs', 'turfs']) queryClient.invalidateQueries({ queryKey: [k] });
+      queryClient.invalidateQueries({ queryKey: ['shift', s.id] });
+    } catch (e) {
+      setJoinError({ id: s.id, message: e.message });
+    } finally {
+      setJoining(null);
+    }
+  };
 
   return (
     <div className="ops-page">
@@ -685,7 +772,7 @@ function ShiftList({ canDesk, me }) {
       </div>
       {canDesk && !showNew && !online && <NeedsSignalLine>New shifts need signal</NeedsSignalLine>}
 
-      {showNew && <ShiftForm onClose={() => setParams({})} />}
+      {showNew && <ShiftForm tz={tz} onClose={() => setParams({})} />}
 
       {canDesk && !showNew && (
         <div className="ops-seg ops-filter sb-views" role="group" aria-label="Show">
@@ -704,30 +791,21 @@ function ShiftList({ canDesk, me }) {
       {shifts.isError && !listCopy && <p className="error">{shifts.error.message}</p>}
       {shifts.isSuccess && upcoming.length === 0 && <p className="ops-empty">No shifts coming up.</p>}
 
-      {yours.length > 0 && (
-        <>
-          <span className="eyebrow ops-label">Your shifts</span>
-          <ul className="ops-rows">{yours.map((s) => <ShiftRow key={s.id} s={s} now={now} mine waiting={!!waitingSelf(outbox.items, s.id)} turfs={byShift[s.id]} />)}</ul>
-          {others.length > 0 && <span className="eyebrow ops-label">Open shifts</span>}
-        </>
-      )}
-      {others.length > 0 && (
-        <ul className="ops-rows">{others.map((s) => <ShiftRow key={s.id} s={s} now={now} waiting={!!waitingSelf(outbox.items, s.id)} turfs={byShift[s.id]} />)}</ul>
-      )}
+      <span className="ops-sr" role="status" aria-live="polite">{said}</span>
+      {days.map((g) => (
+        <section key={g.day} className="sch-vday" aria-label={longDay(g.rows[0].starts_at, tz)}>
+          <h2 className="sch-dayhead">{dayName(g.rows[0].starts_at, tz, { long: true })}</h2>
+          <ul className="ops-rows">
+            {g.rows.map((s) => (
+              <ShiftRow key={s.id} s={s} tz={tz} now={now} mine={isMineShift(s)} waiting={!!waitingSelf(outbox.items, s.id)} turfs={byShift[s.id]}
+                onJoin={canJoin ? () => join(s) : null} busy={joining === s.id} clash={canJoin ? clashFor(s) : null}
+                asking={asking === s.id} onAsk={(on) => setAsking(on ? s.id : null)} error={joinError?.id === s.id ? joinError.message : null} />
+            ))}
+          </ul>
+        </section>
+      ))}
 
-      {past.length > 0 && (
-        <div className="ops-foot">
-          <button type="button" className="ops-more disclose" aria-expanded={showPast} aria-controls="ops-past"
-            onClick={() => setShowPast((v) => !v)}>
-            Past shifts · {past.length}
-          </button>
-          {showPast && (
-            <ul id="ops-past" className="ops-rows ops-more-body">
-              {past.map((s) => <ShiftRow key={s.id} s={s} now={now} past mine={isMineShift(s)} turfs={byShift[s.id]} />)}
-            </ul>
-          )}
-        </div>
-      )}
+      {shifts.data && <PastShifts earlier={earlier} tz={tz} now={now} isMine={isMineShift} byShift={byShift} />}
       </>
       )}
     </div>
@@ -735,7 +813,7 @@ function ShiftList({ canDesk, me }) {
 }
 
 // ── Detail: one person on the shift; tap to open ──
-function AssigneeRow({ a, open, onToggle, canDesk, busy, onStatus, onRemove, noSignIn = false }) {
+function AssigneeRow({ a, tz, open, onToggle, canDesk, busy, onStatus, onRemove, noSignIn = false }) {
   const [confirm, setConfirm] = useState(false);
   const bodyId = `as-${a.assignment_id}`;
   const tone = ASSIGN_TONE[a.status];
@@ -775,7 +853,7 @@ function AssigneeRow({ a, open, onToggle, canDesk, busy, onStatus, onRemove, noS
                   when a provider turned it down; "Saved" when nothing was
                   even tried (not connected, or nothing on file). */}
               <span className="ops-meta mono">
-                {NOTIFIED_WORD[outcomeOf(a.notify_email, a.notify_text)]} {fmtStamp(a.notified_at)}
+                {NOTIFIED_WORD[outcomeOf(a.notify_email, a.notify_text)]} {stampText(a.notified_at, tz)}
               </span>
               <NotifyChip channel="email" status={a.notify_email} />
               <NotifyChip channel="text" status={a.notify_text} />
@@ -814,8 +892,12 @@ function NameRow({ a, isMe }) {
   );
 }
 
+// A pin on a map (the phone's own maps app opens it): the same link Signs uses.
+const mapHref = (lat, lng) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
 function ShiftDetail({ id, canDesk, me }) {
   const queryClient = useQueryClient();
+  const tz = zoneOf(me);
   const validId = isUuid(id);
   // Each shift opened is kept on this phone, with what this sign-in may do.
   const shiftQ = useQuery({ queryKey: ['shift', id], queryFn: () => apiGet(`/shifts/${id}`), enabled: validId, ...phoneCopy(me, `shift:${id}`) });
@@ -855,6 +937,10 @@ function ShiftDetail({ id, canDesk, me }) {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState(null);
   const [leaving, setLeaving] = useState(false); // "Can't make it? Yes · No"
+  // A volunteer's other shifts (the list's own read and kept copy): one at
+  // the same time is asked about before "Count me in" — never refused.
+  const mineQ = useQuery({ queryKey: ['shifts'], queryFn: () => apiGet('/shifts'), enabled: !canDesk, ...phoneCopy(me, 'shifts'), meta: { side: true } });
+  const [clashAsk, setClashAsk] = useState(false);
   // Desk: "Edit" opens the form in place; "Call off" asks once.
   const [editing, setEditing] = useState(false);
   const [edited, setEdited] = useState(null); // { moved } after a save
@@ -901,6 +987,7 @@ function ShiftDetail({ id, canDesk, me }) {
   // through the outbox: no signal, it waits on the phone ("Not sent yet").
   const selfAction = async (name) => {
     setJoinError(null);
+    setClashAsk(false);
     setJoining(true);
     try {
       const r = await queueAction(name, { shift_id: id }, { who: shiftQ.data?.shift?.title });
@@ -961,6 +1048,14 @@ function ShiftDetail({ id, canDesk, me }) {
   // Checked in ("Here"): on the shift, past "Can't make it".
   const checkedIn = onIt && active.some((a) => isMine(a) && a.status === 'completed');
   const over = new Date(shift.ends_at || shift.starts_at) < new Date();
+  const kind = kindOf(shift);
+  const pinned = shift.place_lat != null && shift.place_lng != null;
+  // Another shift of theirs at the same time (booked, or waiting on this phone).
+  const clash = canDesk ? null : (mineQ.data?.shifts ?? []).find((x) => x.id !== shift.id
+    && (x.mine || waitingSelf(outbox.items, x.id)?.name === 'shift.join') && !isOver(x, new Date()) && overlaps(x, shift)) || null;
+  // A Mainstreet shift opens Mainstreeting with its place filled in.
+  const mainstreet = kind.code === 'mainstreet' && !over
+    ? `/mainstreet${shift.location ? `?place=${encodeURIComponent(shift.location.slice(0, 120))}` : ''}` : null;
   const offered = allowed.data?.actions ?? [];
   const canJoin = offered.includes('shift.join');
   const canLeave = offered.includes('shift.leave');
@@ -1183,7 +1278,7 @@ function ShiftDetail({ id, canDesk, me }) {
       <div className="ops-page">
         <Link to={backTo} className="ops-back">← Shifts</Link>
         <h1>Edit shift</h1>
-        <EditShiftForm shift={shift} booked={active.length} onClose={() => setEditing(false)}
+        <EditShiftForm shift={shift} booked={active.length} tz={tz} onClose={() => setEditing(false)}
           onSaved={(r) => { setEditing(false); setEdited(r); refresh(); }} />
       </div>
     );
@@ -1236,14 +1331,17 @@ function ShiftDetail({ id, canDesk, me }) {
         </div>
       )}
       <div className="ops-lines">
-        {(shift.role || (canDesk && shift.public)) && (
+        {(shift.kind || shift.role || (canDesk && shift.public)) && (
           <span className="ops-chips">
+            {shift.kind && <span className="chip sch-kindchip" style={kindVars(kind)}><KindIcon kind={kind} />{kind.label}</span>}
             {shift.role && <span className="chip">{roleLabel(shift.role)}</span>}
             {canDesk && shift.public && <span className="chip">On the website</span>}
           </span>
         )}
-        <span className="when">{longDay(shift.starts_at)} · {timeRange(shift.starts_at, shift.ends_at)}</span>
-        {shift.location && <span>{shift.location}</span>}
+        <span className="when">{longDay(shift.starts_at, tz)} · {timeRange(shift.starts_at, shift.ends_at, tz)}</span>
+        {shift.location && (pinned
+          ? <a className="sch-maplink" href={mapHref(shift.place_lat, shift.place_lng)} target="_blank" rel="noopener noreferrer" aria-label={`${shift.location} — open the map`}>{shift.location} <span aria-hidden="true">· Map ↗</span></a>
+          : <span>{shift.location}</span>)}
         {shift.instructions && <span className="note">{shift.instructions}</span>}
         {shift.link && (href
           ? <a href={href} target="_blank" rel="noopener noreferrer">{shift.link.replace(/^https?:\/\//i, '')}</a>
@@ -1287,8 +1385,8 @@ function ShiftDetail({ id, canDesk, me }) {
         </section>
       )}
 
-      <div className="ops-spots" aria-label={shift.capacity ? `${active.length} of ${shift.capacity} spots filled` : `${active.length} going`}>
-        <span className="n">{spotsText(active.length, shift.capacity)}</span>
+      <div className="ops-spots" aria-label={shift.capacity ? `${active.length} of ${shift.capacity} spots filled` : roomText(shift, active.length)}>
+        <span className="n">{roomText(shift, active.length)}</span>
         <SpotsBar filled={active.length} capacity={shift.capacity} />
       </div>
 
@@ -1327,16 +1425,28 @@ function ShiftDetail({ id, canDesk, me }) {
                 </div>
               ))}
             </>
+          ) : over || full ? null : canJoin && clashAsk && clash ? (
+            <div className="ops-confirm" role="group" aria-label="Already on a shift then">
+              <span>You’re on {clash.title} then ({timeRange(clash.starts_at, clash.ends_at, tz)}). Count me in anyway?</span>
+              <button type="button" className="btn btn-primary ops-tap" disabled={joining} onClick={() => selfAction('shift.join')}>
+                {joining ? 'Saving…' : 'Yes'}
+              </button>
+              <button type="button" className="btn btn-quiet ops-tap" disabled={joining} onClick={() => setClashAsk(false)}>No</button>
+            </div>
           ) : over || full ? null : canJoin ? (
             <button type="button" className="btn btn-primary ops-tap ops-wide" disabled={joining}
-              onClick={() => selfAction('shift.join')}>
+              onClick={() => (clash ? setClashAsk(true) : selfAction('shift.join'))}>
               {joining ? 'Saving…' : 'Count me in'}
             </button>
           ) : !allowed.isPending ? (
             <p className="ops-empty">Ask your organizer to add you.</p>
           ) : null}
           {joinError && <p className="error" role="alert">{joinError}</p>}
+          {onIt && mainstreet && <Link className="btn btn-primary ops-tap ops-wide" to={mainstreet}>Start mainstreeting</Link>}
         </section>
+      )}
+      {canDesk && mainstreet && (
+        <div className="ops-actions sch-daytool"><Link className="btn ops-tap" to={mainstreet}>Start mainstreeting</Link></div>
       )}
 
       {canDesk && primary === 'add' && addBlock(true)}
@@ -1344,7 +1454,7 @@ function ShiftDetail({ id, canDesk, me }) {
 
       {/* The crew board: drag people on, and onto its turfs (ShiftCrew.jsx). */}
       {canDesk && (online
-        ? <ShiftCrew shiftId={shift.id} canMap={(me?.areas ?? []).includes('map')} onChanged={refresh} />
+        ? <ShiftCrew shiftId={shift.id} tz={tz} canMap={(me?.areas ?? []).includes('map')} onChanged={refresh} />
         : <NeedsSignalLine>The crew board needs signal</NeedsSignalLine>)}
 
       {canDesk && online && assignees.length > 0 ? (
@@ -1368,6 +1478,7 @@ function ShiftDetail({ id, canDesk, me }) {
             <AssigneeRow
               key={a.assignment_id}
               a={a}
+              tz={tz}
               open={openId === a.assignment_id}
               onToggle={() => setOpenId((cur) => (cur === a.assignment_id ? null : a.assignment_id))}
               canDesk={canDesk}
