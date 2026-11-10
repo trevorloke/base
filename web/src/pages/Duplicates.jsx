@@ -4,8 +4,9 @@
 // — side by side. "Keep this one" merges the other into it (person.merge:
 // everything that pointed at the other moves; blanks are filled; it asks
 // once). "Not the same" keeps the pair away (and a gift flagged as maybe
-// one donor on the two is added up again without the other). ?with=<id>
-// (Donations' Compare in Duplicates): the pairs with that donor's record.
+// one donor on the two is added up again without the other). ?with=<id>[,…]
+// (Donations' Compare in Duplicates): the pairs with that donor's record and
+// the records its flag names.
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -103,7 +104,7 @@ export default function Duplicates() {
       <Link to="/people" className="ops-back">← People</Link>
       <h1>Duplicates</h1>
       <p className="muted">Two records that look like one person. Keep the better one: the other’s contacts, gifts, shifts, lists and answers move to it.</p>
-      {only && <p className="muted">Only the pairs with the donor’s record. <Link to="/people/duplicates">All duplicates</Link></p>}
+      {only && <p className="muted">{only.includes(',') ? 'Only the pairs with the donor’s record and the records its flag names.' : 'Only the pairs with the donor’s record.'} <Link to="/people/duplicates">All duplicates</Link></p>}
       {!online && <NeedsSignalLine>Merging needs signal</NeedsSignalLine>}
       {said && (
         <p className="ops-done" role="status">

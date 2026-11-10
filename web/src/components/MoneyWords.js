@@ -99,6 +99,22 @@ export const apartChoices = (g) => {
   return { choices: [], duplicates: ids.length > 1 };
 };
 
+// Compare in Duplicates: the pairs with the donor's record and with the
+// records its flag names — two of those that look alike may pair only with
+// each other (the finder's door rule wants the same unit).
+export const compareHref = (personId, g) => {
+  const ids = [...new Set([personId, ...sameAsOf(g)].filter(Boolean))].slice(0, 12);
+  return ids.length ? `/people/duplicates?with=${ids.join(',')}` : '/people/duplicates';
+};
+
+// Donations' Over-limit banner after Not the same person on its gift
+// (now: the gift's entry in person.notDuplicate's rechecked): gone when the
+// flag is, else the amount still over — never the amount before.
+export const bannerAfter = (b, giftId, now) => {
+  if (!b || b.giftId !== giftId || !now) return b;
+  return now.flagged ? { ...b, line: overLine(overOf(now)), reason: now.flag_reason } : null;
+};
+
 // What Not the same person did to the gift's flag (its entry in
 // person.notDuplicate's rechecked, if it changed): cleared, or what is left.
 export const apartSaid = (now) => {

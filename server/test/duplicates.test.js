@@ -372,6 +372,61 @@ test('a gift over on its own voided, then Undo: the maybe its void cleared besid
   assert.match((await briefRow(big.id))?.flag_reason ?? '', /^Pat Over is at \$1500\.00/, 'and its own flag as it was');
 });
 
+test('void, a gift that crosses on its own since, then Undo: the cleared maybe isn’t back as a second over-limit row', async () => {
+  const r1 = await mgr.createPerson('Una Later', { postal: 'V3T 9L9' });
+  const r2 = await mgr.createPerson('Una Later', { email: 'una.later@example.org', postal: 'V3T 9L9' });
+  const a = await cheque(r1, 100000, '2026-10-01');
+  const m = await cheque(r2, 50000, '2026-10-02');
+  assert.match(m.flag_reason, /together they are at \$1,500\.00/);
+  ok(await mgr.action('gift.void', { id: a.id }));
+  assert.equal((await giftNow(m.id)).flagged, false, 'cleared by the void');
+  const m3 = await cheque(r2, 100000, '2026-10-03');
+  assert.match(m3.flag_reason, /^Una Later is at \$1500\.00 for 2026/, 'R2 crosses on its own: M3 is the gift that crossed');
+  ok(await mgr.action('gift.restore', { id: a.id }));
+  assert.equal((await giftNow(m.id)).flagged, false, 'M is not flagged over again: the year has its crossing gift, M3');
+  assert.match((await giftNow(m3.id)).flag_reason, /^Una Later is at \$1500\.00 for 2026/, 'M3 keeps it');
+  assert.match((await giftNow(a.id)).flag_reason, /^Possibly the same donor as Una Later \(same postal code\): together they are at \$2,500\.00/, 'A, back, is the maybe');
+});
+
+test('Compare in Duplicates when the records a maybe names look alike: the pairs with them too, not only the donor’s', async () => {
+  const { apartChoices, compareHref } = await import('../../web/src/components/MoneyWords.js');
+  const at = { address: '3 Unit Rd', postal: 'V3T 7U7' };
+  const r1 = await mgr.createPerson('Raj Unit', at);
+  const r2 = await mgr.createPerson('Raj Unit', at);
+  await cheque(r1, 60000, '2026-05-01');
+  await cheque(r2, 60000, '2026-05-02');
+  // The donor at the same door, unit B, with no postal code: the finder's
+  // door rule wants the same unit, and there's no postal code to pair by.
+  const n = await mgr.createPerson('Raj Unit', { address: '3 Unit Rd', unit: 'B', phone: '604-555-0177' });
+  const g = await cheque(n, 40000, '2026-12-31'); // the newest flagged gift: on Today's list of ten
+  assert.deepEqual([...g.maybe_same_donor].sort(), [r1.id, r2.id].sort());
+  const row = await briefRow(g.id);
+  assert.deepEqual(apartChoices(row), { choices: [], duplicates: true });
+  const href = compareHref(n.id, row);
+  assert.equal(href, `/people/duplicates?with=${[n.id, ...row.maybe_same_donor].join(',')}`);
+  const shown = ok(await mgr.get(`/api${href.replace('/people', '')}`)).pairs.map((p) => [p.a.id, p.b.id].sort().join('|'));
+  assert.ok(shown.includes([r1.id, r2.id].sort().join('|')), `the two lookalikes side by side: ${JSON.stringify(shown)}`);
+  assert.equal((await mgr.get(`/api/duplicates?with=${n.id},not-an-id`)).status, 400);
+});
+
+test('Donations’ banner after Not the same person: the amount still over, never the one before', async () => {
+  const { bannerAfter, overLine, overOf } = await import('../../web/src/components/MoneyWords.js');
+  const at = { postal: 'V3W 5B6' };
+  const v = await mgr.createPerson('Aman Banner', { phone: '604-555-0188' });
+  const z = await mgr.createPerson('Aman Banner', at);
+  await cheque(v, 60000, '2026-04-01');
+  await cheque(z, 30000, '2026-04-02');
+  const w = await mgr.createPerson('Aman Banner', { email: 'aman.banner@example.org', phone: '604-555-0188', ...at });
+  const g = await cheque(w, 90000, '2026-04-03');
+  const banner = { name: 'Aman Banner', line: overLine(overOf(g)), reason: g.flag_reason, giftId: g.id };
+  assert.equal(banner.line, 'Maybe $370.30 over the $1,429.70 limit');
+  const r = ok(await mgr.action('person.notDuplicate', { a: w.id, b: z.id }));
+  const now = r.rechecked.find((x) => x.id === g.id);
+  assert.equal(bannerAfter(banner, g.id, now).line, 'Maybe $70.30 over the $1,429.70 limit', 'W and V still together');
+  assert.equal(bannerAfter(banner, 'another-gift', now), banner, 'another gift’s banner is left as it is');
+  assert.equal(bannerAfter(banner, g.id, { ...now, flagged: false }), null, 'cleared: the banner goes');
+});
+
 test('refusals: the same record twice, one already gone, a volunteer; the books verify', async () => {
   const ben = (await db.query("select id from persons where name = 'Ben Example' and deleted_at is null order by created_at")).rows.map((x) => x.id);
   assert.equal((await mgr.action('person.merge', { keep: ben[0], drop: ben[0] })).status, 400);

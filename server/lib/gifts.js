@@ -139,9 +139,10 @@ export const voidGift = async (tx, workspace, id, emit) => {
 };
 
 // A gift back in the books: the gifts whose maybe its void cleared (ids)
-// are checked like a crossing gift and flagged again if over again — as
-// things stand, so a Not the same ruled since still counts. One voided or
-// flagged since is left as it is.
+// are checked again and flagged again if over again — as things stand, so
+// a Not the same ruled since still counts: as a maybe, or over on their
+// own record unless a gift of that year crossed since and carries it. One
+// voided or flagged since is left as it is.
 const flagAgain = async (tx, workspace, ids, emit) => {
   const rows = (await tx.query(
     `select g.id, g.person_id, g.date, g.slate, p.name from gifts g join persons p on p.id = g.person_id
@@ -150,10 +151,25 @@ const flagAgain = async (tx, workspace, ids, emit) => {
     [workspace.id, ids],
   )).rows;
   for (const g of rows) {
-    const { flagReason, sameAs } = await flagIfOver(tx, workspace, { id: g.id, person_id: g.person_id, date: g.date, donorName: g.name, slate: g.slate });
-    if (flagReason) emit('gift', g.id, 'update', { flagged: true, flag_reason: flagReason, ...(sameAs ? { maybe_same_donor: sameAs } : {}) });
+    const flag = await flagOf(tx, workspace, { person_id: g.person_id, date: g.date, donorName: g.name, slate: g.slate });
+    if (!flag.flagReason) continue;
+    // Over on its own record now: the year's crossing gift carries that
+    // flag (one logged while this was out, say) — one row for a donor's
+    // year over the limit, never two.
+    if (!flag.sameAs && await crossedAlready(tx, workspace.id, g)) continue;
+    await setFlag(tx, workspace.id, g.id, flag);
+    emit('gift', g.id, 'update', { flagged: true, flag_reason: flag.flagReason, ...(flag.sameAs ? { maybe_same_donor: flag.sameAs } : {}) });
   }
 };
+// Another live gift of this donor's year and slate flagged over the limit
+// on their own record (not a maybe).
+const crossedAlready = async (tx, workspaceId, g) => Boolean((await tx.query(
+  `select 1 from gifts where workspace_id = $1 and person_id = $2 and id <> $3 and deleted_at is null and flagged
+      and not (coalesce(attrs, '{}'::jsonb) ? 'maybe_same_donor') and coalesce(slate, $4) = coalesce($5, $4)
+      and date >= make_date($6, 1, 1) and date < make_date($6 + 1, 1, 1)
+    limit 1`,
+  [workspaceId, g.person_id, g.id, DEFAULT_SLATE, g.slate, Number(isoDay(g.date).slice(0, 4))],
+)).rows[0]);
 
 export const restoreGift = async (tx, workspace, id, emit) => {
   const gift = (await tx.query(

@@ -10,9 +10,11 @@
 //       persons_same_donor_idx). → { pairs: [{ a, b, why: ['email' |
 //       'phone' | 'address' | 'postal'] }], more } — each side with what the
 //       desk needs to choose (contacts, gifts, shifts, when it was added).
-//       Pairs marked "not the same" stay away. ?with=<person id>: only the
-//       pairs with that record (Donations' Compare in Duplicates, for a
-//       gift's donor), so a voter file's other pairs never crowd them out.
+//       Pairs marked "not the same" stay away. ?with=<person id>[,…]: only
+//       the pairs with those records (Donations' Compare in Duplicates: a
+//       gift's donor and the records its flag names — two of those that
+//       look alike may pair only with each other), so a voter file's other
+//       pairs never crowd them out.
 //   person.merge  { keep, drop }    desk. Everything that points at `drop`
 //       — contacts, gifts and receipts, shifts, signs, lists, answers,
 //       relationships, texts, requests, ladders… — moves to `keep`; where
@@ -353,8 +355,12 @@ api.get('/duplicates', async (c) => {
   if (!DESK.includes(ctx.role)) return c.json({ error: 'the desk only' }, 403);
   const db = c.get('db');
   const ws = ctx.workspaceId;
+  // ?with=<id>[,<id>…]: only the pairs with these records (up to 12).
   const only = c.req.query('with');
-  if (only != null && !z.string().uuid().safeParse(only).success) return c.json({ error: 'with: a person id' }, 400);
+  const withIds = only == null ? null : only.split(',').map((s) => s.trim());
+  if (withIds && (withIds.length > 12 || !withIds.every((id) => z.string().uuid().safeParse(id).success))) {
+    return c.json({ error: 'with: person ids, comma-separated' }, 400);
+  }
   const pairs = (await db.query(
     `with p as (
        select id,
@@ -381,12 +387,12 @@ api.get('/duplicates', async (c) => {
           and ${sameText('a.first_name')} <> '' and ${sameText('a.last_name')} <> '' and length(${samePostal('a.postal')}) >= 6
      )
      select h.a, h.b, array_agg(distinct h.why) as why from hits h
-      where not exists (select 1 from person_not_dupes n where n.workspace_id = $1 and n.a = h.a and n.b = h.b)${only ? `
-        and $2::uuid in (h.a, h.b)` : ''}
+      where not exists (select 1 from person_not_dupes n where n.workspace_id = $1 and n.a = h.a and n.b = h.b)${withIds ? `
+        and (h.a = any($2::uuid[]) or h.b = any($2::uuid[]))` : ''}
       group by h.a, h.b
       order by count(*) desc, h.a, h.b
       limit ${LIMIT + 1}`,
-    only ? [ws, only] : [ws],
+    withIds ? [ws, withIds] : [ws],
   )).rows;
   const more = pairs.length > LIMIT;
   const shown = pairs.slice(0, LIMIT);

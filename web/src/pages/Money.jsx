@@ -40,7 +40,7 @@ import { AddressRow, VoidNoticeAsk, receiptOf, receiptNote } from '../components
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import { usePayments, PaymentNeedRow, OnlineChips, MonthlyDonors, OnlinePayments } from '../components/PaymentsBits.jsx';
 // The over-limit line, and Not the same person's choices and words.
-import { fmtBig, overOf, overLine, apartChoices, apartSaid } from '../components/MoneyWords.js';
+import { fmtBig, overOf, overLine, apartChoices, apartSaid, compareHref, bannerAfter } from '../components/MoneyWords.js';
 import './shifts.css';
 
 // gift.log / gift.void / gift.restore and GET /records/* are desk-only
@@ -327,7 +327,7 @@ const shownNote = (n) => (n && n.trim().toLowerCase() !== 'sample' ? n : null);
 // record it names (apart: MoneyWords.js apartChoices), each asking about
 // that record alone (onApart(its id)); or, for records it can't tell
 // apart, People → Duplicates with the donor's pairs alone.
-function GiftActions({ personId, onVoid, apart, onApart }) {
+function GiftActions({ personId, onVoid, apart, onApart, compare }) {
   const [confirm, setConfirm] = useState(null); // 'void' | one of apart.choices
   if (confirm === 'void') {
     return (
@@ -354,7 +354,7 @@ function GiftActions({ personId, onVoid, apart, onApart }) {
         <button key={c.id} type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm(c)}>{c.label}</button>
       ))}
       {apart?.duplicates && (
-        <Link className="btn btn-quiet ops-tap ops-link" to={personId ? `/people/duplicates?with=${personId}` : '/people/duplicates'}>Compare in Duplicates</Link>
+        <Link className="btn btn-quiet ops-tap ops-link" to={compare || '/people/duplicates'}>Compare in Duplicates</Link>
       )}
       <button type="button" className="btn btn-quiet ops-tap" onClick={() => setConfirm('void')}>Void</button>
     </div>
@@ -391,7 +391,7 @@ function FlaggedRow({ f, personId, onVoid, onApart }) {
               {why && <p id={`${bodyId}-why`} className="ops-meta">{f.flag_reason}</p>}
             </>
           )}
-          <GiftActions personId={personId} onVoid={onVoid} apart={apart} onApart={onApart} />
+          <GiftActions personId={personId} onVoid={onVoid} apart={apart} onApart={onApart} compare={compareHref(personId, f)} />
         </div>
       )}
     </li>
@@ -427,7 +427,7 @@ function GiftRow({ g, slates, open, onToggle, onVoid, online, onApart }) {
           )}
           {g.flagged && <p className="ops-over" title={g.flag_reason || undefined}>{overLine(overOf(g))}</p>}
           <ReceiptsGiftLine giftId={g.id} />
-          <GiftActions personId={g.person_id} onVoid={onVoid} apart={apart} onApart={onApart} />
+          <GiftActions personId={g.person_id} onVoid={onVoid} apart={apart} onApart={onApart} compare={compareHref(g.person_id, g)} />
         </div>
       )}
     </li>
@@ -570,7 +570,7 @@ export default function Money() {
       const r = await action('person.notDuplicate', { a: g.person_id, b: other });
       const now = r?.rechecked?.find((x) => x.id === g.id);
       showToast({ text: apartSaid(now) });
-      if (now && !now.flagged) setBanner((b) => (b?.giftId === g.id ? null : b));
+      setBanner((b) => bannerAfter(b, g.id, now)); // as it stands now: gone, or what's still over
     } catch (e) {
       setError(e.message);
     } finally {

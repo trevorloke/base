@@ -240,7 +240,8 @@ What happens:
   2C3). The treasurer merges the two (People → Duplicates) and refunds, or
   taps *Not the same person* on the flagged gift, one choice for each
   record it names (two that read the same: *Compare in Duplicates*, the
-  donor's pairs alone), or *Not the same* in Duplicates: that pair is
+  pairs with the donor and with the records it names), or *Not the same*
+  in Duplicates: that pair is
   kept apart and the gift is added up again without it, so the flag goes
   or names what is left. Two records marked Not the same are never added
   up together, and a refund or a lost dispute on the other record's gift

@@ -561,12 +561,15 @@ and last name in one postal code as a pair too, to merge or keep apart.
 *Not the same person* on the flagged gift — one choice for each record it
 names ("Not Aman Gill (same phone)"; two that still read the same get
 *Compare in Duplicates* instead, which opens the pairs with that donor's
-record alone) — or *Not the same* there keeps that one pair apart and adds
+record and with the records its flag names) — or *Not the same* there
+keeps that one pair apart and adds
 the gift up again without it: the flag goes, or names what is left (over
 on its own record, the plain over-limit reason).
 A gift that leaves the books (voided, refunded, a dispute lost) is taken
 out of every maybe that added it up the same way, and one restored (the
-desk's Undo) counts in them again — a maybe its void cleared comes back.
+desk's Undo) counts in them again — a maybe its void cleared comes back
+(over on its own record instead, only if no gift of that year has crossed
+since: one over-limit row per donor and year).
 A merge keeps the dropped record's Not the same rulings, and says so when
 it clears a maybe with a record only the dropped one matched, naming it by
 what it shared (its phone, address or postal code) with a link to it.
