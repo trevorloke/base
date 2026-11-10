@@ -1043,6 +1043,21 @@ test('a tag the desk took off by hand is not brought back by a slip on another r
   assert.deepEqual(await tags(), ['do-not-call']);
   ok(await mgr.action('person.update', { id: ben.id, tags: [] }));
   await drain();
+
+  // Two records made one: whose tag it was cannot be told apart any more, so it is nobody's result's —
+  // a row put back never takes it. (Here one record was tagged by hand, the other by the slip.)
+  const kept = await mgr.createPerson('Made One Example', { phone: '672-555-0127', tags: ['do-not-call'] });
+  const other = await mgr.createPerson('Made One Exampl', { phone: '672-555-0128' });
+  const list2 = ok(await mgr.action('list.create', { name: 'Made one list', kind: 'people', person_ids: [other.id] })).list.id;
+  const r2 = ok(await mgr.action('callhub.push', { list_id: list2 }));
+  await drain();
+  await fake.note({ contact: '+16725550128', disposition: 'Answered', campaign: 'Made one', notes: 'talked' });
+  assert.equal(ok(await staff.action('callhub.map', { id: r2.push.id, outcomes: { Answered: 'do_not_call' } })).tagged, 1);
+  ok(await mgr.action('person.merge', { keep: kept.id, drop: other.id }));
+  const after = ok(await staff.action('callhub.map', { id: r2.push.id, outcomes: { Answered: null } }));
+  assert.equal(after.untagged, 0);
+  assert.ok((await person(kept.id)).tags.includes('do-not-call'), 'the tag she asked for by hand stands');
+  await drain();
 });
 
 test('what is taken back on a list is taken back on the lists sent since that copied it — a later list never tags or rates anyone unasked', async () => {
