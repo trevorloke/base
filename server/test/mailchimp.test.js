@@ -741,10 +741,10 @@ test('one address Mailchimp will not change never holds up the others; Settings 
   fake.calls.length = 0;
   assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 0, failed: 1 });
   assert.deepEqual(fake.calls.map((x) => x.method), ['GET', 'PATCH']);
-  // Mailchimp lets go of him: the next try tells it, and nothing is waiting.
+  // Mailchimp lets go of him. Pull now sends it again at once — it does not wait for the job's own next try.
   fake.lock(mail('ben'), false);
-  await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'mailchimp.optout' and status = 'pending'", [ws]);
-  assert.deepEqual(await runDueJobs(db, { workspaceId: ws }), { ran: 1, failed: 0 });
+  ok(await c.action('mailchimp.pull', {}));
+  assert.equal((await run(ws)).failed, 0);
   assert.equal(fake.member(mail('ben')).status, 'unsubscribed');
   st = ok(await c.get('/api/mailchimp'));
   assert.deepEqual([st.waiting, st.waiting_note], [0, null]);

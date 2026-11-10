@@ -21,7 +21,7 @@
 //                    is found then
 //   Pull now, and the start of every sync: everyone, now
 import { runAction } from '../../lib/events.js';
-import { enqueueJob } from '../../lib/jobs.js';
+import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { stillOn, suppress } from '../mail/webhook.js';
 import { emailOff } from '../site/consent.js';
 import { audienceId, lower, mailchimp, mailchimpOn, MailchimpError, memberHash, pages } from './mailchimp.js';
@@ -158,11 +158,14 @@ export const pull = async (db, ws, { full = false } = {}) => {
        pulled_at = excluded.pulled_at, pull_ok = true, pull_note = excluded.pull_note`,
     [ws, audience, started, everything ? started : null, wordsFor(out)],
   );
-  // Mailchimp is answering: an unsubscribe that could not be told to it earlier goes again.
-  await db.query(
+  // Mailchimp is answering: an unsubscribe that could not be told to it
+  // earlier goes again, now — one given up on, and one waiting its turn to
+  // be tried again.
+  const again = await db.query(
     `update jobs set status = 'pending', attempts = 0, run_at = now(), last_error = null, done_at = null
-      where workspace_id = $1 and kind = $2 and status = 'failed'`, [ws, OPTOUT_JOB],
+      where workspace_id = $1 and kind = $2 and (status = 'failed' or (status = 'pending' and attempts > 0))`, [ws, OPTOUT_JOB],
   );
+  if (again.affectedRows) runJobsSoon();
   return out;
 };
 
