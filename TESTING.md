@@ -339,7 +339,9 @@ one tap away under **More**.
   already on file by email (or name and phone, or name and postal code),
   and a ticked box puts them on the newsletter list with the words they
   saw. A shift's **Edit** → **Show on the website** lists it on the site's
-  events, where anyone can sign up (room is checked). Their
+  events and volunteer openings, where anyone can sign up (room is checked
+  when the shift has a limit; a shift with a kind is listed once — an Event
+  with the events, any other kind with the openings). Their
   `/preferences` link turns email and texts off or on in base.win itself.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.

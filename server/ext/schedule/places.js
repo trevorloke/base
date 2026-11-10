@@ -8,9 +8,10 @@
 //   'door'     the campaign's own nearest door on file within ~300 m (no
 //              outside call): "near 13450 104 Ave"
 //   'pin'      "Pin at 49.1630, −122.8447"
-// The first two ask the address service (lib/geocode.js) — at most 60 times
-// a minute from this server, each given up on after a few seconds. Whatever
-// goes wrong there, the next rule names the place: naming never fails.
+// The first two ask the address service (lib/geocode.js) — for at most 60
+// points a minute from this server, each call given up on after a few
+// seconds. Whatever goes wrong there, the next rule names the place: naming
+// never fails.
 //
 // placesFor(db, ws, kind) → { places, words }: the chips for "Where". Saved
 // places, the ones this kind used most first (kind_uses, then uses, then by

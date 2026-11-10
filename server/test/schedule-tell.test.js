@@ -297,8 +297,14 @@ test('who may: the desk tells a week; a volunteer only when granted Shifts, and 
   await runJobs();
   ok(await mgr.action('permission.member.set', { user_id: volId, grant: ['shifts'], deny: [] }));
   const seen = ok(await vol.get(`/api/schedule/notices/${told.batch_id}`), 'granted Shifts');
-  assert.deepEqual(Object.keys(seen.people[0]).sort(), ['email', 'name', 'person_id', 'state', 'text', 'text_note'], 'names and how it went — nothing to reach them by');
+  assert.deepEqual(seen.people.map((p) => [p.name, p.state, p.email, p.text, p.text_note]), [
+    ['Asha Example', 'done', null, null, null], ['Dee Example', 'done', null, null, null], ['Eli Example', 'done', null, null, null],
+  ], 'who was told — not how each can or can’t be reached (as on a shift’s own page)');
   assert.ok(!JSON.stringify(seen).includes('@') && !JSON.stringify(seen).includes('555-01'));
+  const desk = ok(await staff.get(`/api/schedule/notices/${told.batch_id}`)).people;
+  assert.deepEqual(Object.keys(desk[0]).sort(), ['email', 'name', 'person_id', 'state', 'text', 'text_note']);
+  assert.deepEqual(desk.map((p) => [p.name, p.email, p.text]), [['Asha Example', 'sent', 'sent'], ['Dee Example', 'sent', 'sent'], ['Eli Example', 'sent', 'sent']]);
+  assert.ok(!JSON.stringify(desk).includes('@') && !JSON.stringify(desk).includes('555-01'), 'the desk’s copy has no address or number either');
   assert.equal(ok(await vol.get(`/api/schedule/week?week=${MON}`)).reminders.can_set, false);
   ok(await mgr.action('permission.member.set', { user_id: volId, grant: [], deny: [] }));
   assert.equal((await other.get(`/api/schedule/notices/${told.batch_id}`)).status, 404, 'another campaign');
@@ -422,5 +428,21 @@ test('a reminder that runs late keeps to the rules; one that runs on another day
   at('2030-05-11T02:00:00Z');
   const on = ok(await mgr.action('shift.reminders', { on: true }));
   assert.equal(new Date(on.next_at).toISOString(), '2030-05-12T00:00:00.000Z', 'Saturday 5 pm');
+  ok(await mgr.action('shift.reminders', { on: false }));
+});
+
+test('with neither email nor texting connected an evening marks nobody as reminded', async () => {
+  disconnect();
+  emails.length = 0; texts.length = 0;
+  const sat = await shiftOn('2030-05-18', '10:00', '12:00');
+  const on = await book(sat, P.asha);
+  at('2030-05-17T22:00:00Z'); // Friday 3 pm
+  ok(await mgr.action('shift.reminders', { on: true }));
+  at('2030-05-18T01:00:05Z'); // Friday 6 pm
+  await due('2030-05-17');
+  await runJobs();
+  assert.equal((await rows('select reminded_at from shift_assignments where id = $1', [on]))[0].reminded_at, null, 'still to be reminded, once something is connected');
+  assert.equal((await rows(`select count(*)::int as n from shift_notices where workspace_id = $1 and kind = 'reminder' and assignment_ids @> $2::jsonb`, [ws, JSON.stringify([on])]))[0].n, 0);
+  assert.deepEqual(ok(await mgr.get('/api/schedule/week?week=2030-05-18')).providers, { email: false, text: false }, 'and the week says what is missing');
   ok(await mgr.action('shift.reminders', { on: false }));
 });

@@ -141,6 +141,19 @@ pin, and runs the desk's background *Place on map* over a whole list.
 | `nominatim` | OpenStreetMap's Nominatim — light use only | none |
 | `off` | no lookups; pins by hand | — |
 
+**A name for a point** (a shift's place picked on the map,
+`server/ext/schedule`): in B.C., and unless `GEOCODER=off`, the BC Address
+Geocoder is asked for the nearest intersection within 150 m ("King George
+Blvd & 88 Ave"), then the nearest civic address within 100 m ("near 8850
+King George Blvd") — `/intersections/nearest` and `/sites/nearest`, with
+`BC_GEOCODER_KEY` when set, for at most 60 points a minute, each call given
+up on after 4 seconds. Slow, down or an answer that isn't a corner or a
+door: the place is named by the nearest door on file, else by its
+coordinates — the service is never asked inside a write, and no failure
+of it stops a save. These two calls have not been tried against the live
+service yet (it couldn't be reached from where they were built): if names
+come back as coordinates, that is why.
+
 `GEOCODER_FALLBACK=google` keeps the free BC service first and asks Google
 only for what BC can't place. A Google key: Google Cloud → **APIs &
 Services** → enable the **Geocoding API** (and the **Map Tiles API** for

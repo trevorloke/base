@@ -182,7 +182,11 @@ const NOTIFY_CHIP = { sent: 'chip-ok', queued: 'chip-warn', failed: 'chip-danger
 // means the server sent nothing because that channel isn't connected, and
 // nothing sends it later: connect it, then Notify again.
 const NOTIFY_WORDS = {
-  email: { sent: 'Email sent', queued: 'Email not sent', failed: 'Email didn’t send', skipped: 'No email on file' },
+  email: {
+    sent: 'Email sent', queued: 'Email not sent', failed: 'Email didn’t send', skipped: 'No email on file',
+    // A week's notice and the evening reminders leave out do-not-email (ext/schedule).
+    opted_out: 'Opted out of email',
+  },
   text: {
     sent: 'Text sent', queued: 'Text not sent', failed: 'Text didn’t send', skipped: 'No phone on file',
     // The texting rules hold a notice back too (server/ext/texting).
@@ -190,7 +194,10 @@ const NOTIFY_WORDS = {
   },
 };
 const NOTIFY_TITLE = {
-  email: { queued: 'Not sent — email isn’t connected', failed: 'Try again, or reach them another way' },
+  email: {
+    queued: 'Not sent — email isn’t connected', failed: 'Try again, or reach them another way',
+    opted_out: 'They are marked do not email or do not contact',
+  },
   text: {
     queued: 'Not sent — texting isn’t connected', failed: 'Try again, or reach them another way',
     opted_out: 'They replied STOP or are marked do not text', quiet: 'Texts go out only in the campaign’s hours',

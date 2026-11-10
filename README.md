@@ -390,6 +390,30 @@ than a week after they came off is refused. Contacts are door, phone, text or
   offers *Needs a ride to vote*, a request for the drivers. Shift roles
   include Driver, Scrutineer (a voting place), Runner, Poll greeter and Zone
   house captain.
+- **Scheduling, underneath** (`server/ext/schedule`): a shift has a
+  **kind** — Canvass, Phone bank, Mainstreet, Burma Shave, Lit drop, Signs,
+  Event, Office, Other (`shared/shiftkinds.js`) — that brings its usual
+  hours (Burma Shave 6:30–8:30 am, Mainstreet 7–9 am, …), and a **place**
+  saved once and picked again (`GET /api/places`: this kind's most used
+  first). A point tapped on the map is named by the server: the nearest
+  corner, else the nearest address (the BC Address Geocoder), else the
+  nearest door on file, else its coordinates — a geocoder that is slow or
+  down never holds a save. A shift's name is made from the two ("Burma
+  Shave — King George Blvd & 88 Ave") unless one is typed. `shift.createMany`
+  makes every chosen day in one write and can repeat it weekly (200 shifts
+  and 26 weeks a call; a day that already has that kind at that place and
+  time is skipped and said so); `shift.copyWeek` copies a week — the same
+  local times, turfs, target, limit and on-the-website — with its people as
+  plain bookings when asked, never those who declined or didn't show; a
+  repeating slot is changed or ended from one of its shifts
+  (`shift.series.update` / `.cancel`: this one and the following). There is
+  **no maximum** unless one is set: a shift may carry a target (*need*)
+  that never refuses anyone, and Today's brief lists the shifts short of it
+  (`shortShifts`). The shifts list answers what is coming up
+  (`GET /api/shifts`; past ones a page at a time with `?past=1`), and shift
+  times are worked out on the campaign's clock — B.C. on UTC−7 all year from
+  March 2026, by rule (`shared/dayparts.js`), whatever a phone's or a
+  server's own time-zone data says.
 - **Left message**: the phone's *Left lit* (`left_message`) — a voicemail,
   or word left with whoever answered. The Calls card offers it on a call
   (never a text, never at the door). It is not a talk; in a phone bank it
@@ -538,6 +562,20 @@ with one-tap logging; with it, texts and calls go through the campaign's
 number — from Calls, the profile and the door card alike, and shift notices
 keep the same opt-outs and quiet hours (setup and the compliance notes are
 in TESTING.md).
+
+**A week's shifts in one message.** `shift.tellWeek` tells everyone on a
+week's shifts at once: one email and one text a person, listing their own
+shifts still to come (`GET /api/schedule/week` gives the count first). The
+tap only queues it: a background job sends, outside the campaign lock, each
+email with its own key, and keeps how each went — on the notice and on each
+booking, where a shift's page shows it. **Reminders the evening before**
+are off until a manager turns them on (`shift.reminders`). Then everyone
+booked for tomorrow gets one reminder at 6 pm on the campaign's clock (an
+hour before texts stop when they stop by 6, as on weekends), once per
+booking, never someone who can't make it. Both keep the texting rules, and
+leave the email out for *do-not-email* and *do-not-contact*. With neither
+email nor texting connected an evening reminds nobody and marks nobody as
+reminded; with `STARBASE_JOBS=off` notices and reminders wait.
 
 ## Map tiles and offline field mode
 

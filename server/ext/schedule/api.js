@@ -15,7 +15,8 @@
 // GET /schedule/notices/:id    one notice, a person a row: { batch_id, kind,
 //                              week, at, people: [{ person_id, name, state,
 //                              email, text, text_note }] } — how each went,
-//                              never an address or a number (tell.js)
+//                              never an address or a number; a volunteer
+//                              granted Shifts gets the names only (tell.js)
 // The desk's (deskOnlyReads), or a volunteer granted Shifts. Area: shifts
 // (lib/perms.js). Not under /shifts/…: routes/api.js answers /shifts/:id
 // and 404s anything else there before feature routes mount.
@@ -51,6 +52,7 @@ api.get('/schedule/week', async (c) => {
 
 api.get('/schedule/notices/:id', async (c) => {
   const id = c.req.param('id');
-  const found = UUID_RE.test(id) ? await noticeResults(c.get('db'), c.get('ctx').workspaceId, id) : null;
+  const ctx = c.get('ctx');
+  const found = UUID_RE.test(id) ? await noticeResults(c.get('db'), ctx.workspaceId, id, { full: ctx.role !== 'volunteer' }) : null;
   return found ? c.json(found) : c.json({ error: 'not found' }, 404);
 });

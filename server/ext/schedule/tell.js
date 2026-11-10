@@ -13,7 +13,8 @@
 // weekState(db, ctx, day)   the count before a week's notice is sent, how
 //     its last one went, and the reminders' switch (GET /schedule/week).
 // noticeResults(db, ws, batchId)   one notice, a person a row — names and
-//     how each went, never an address or a number (GET /schedule/notices/:id).
+//     how each went, never an address or a number (GET /schedule/notices/:id);
+//     a volunteer granted Shifts gets the names only.
 //
 // The evening before (REMIND_JOB — one per campaign evening, keyed by its
 // day so an evening runs once): at 6 pm on the campaign's clock, or an hour
@@ -22,7 +23,8 @@
 // reminded once (shift_assignments.reminded_at, set in the same write that
 // queues its message); someone who can't make it is never reminded. Each
 // run queues the next three evenings first, so one bad evening never ends
-// them; while the switch is off a run does nothing and queues nothing.
+// them; while the switch is off a run does nothing and queues nothing, and
+// with neither email nor texting connected it marks nobody as reminded.
 //
 // Sending (TELL_JOB) follows the newsletter's phases, never holding the
 // campaign's lock while a provider is called:
@@ -286,6 +288,9 @@ const runRemindJob = async (db, job) => {
   // Run on another day (the server was down at its hour): "tomorrow" would
   // be wrong by now, so nothing is sent.
   if (!isDay(day) || dayOf(t, tz) !== day) return;
+  // Neither email nor texting connected: nobody could be reached, so no
+  // booking is marked as reminded (GET /schedule/week says what is missing).
+  if (!emailConfigured() && !textConfigured()) return;
   const tomorrow = addDays(day, 1);
   const { result: queued } = await runAction(db, { workspaceId: ws, actorId: null, action: REMIND_ACTION }, async (tx, emit) => {
     // Claimed and queued in one write: a booking is reminded once.
@@ -331,7 +336,7 @@ export const tellActions = {
       )).rows[0];
       if (going) throw httpError(409, 'this week’s notice is still going out — give it a minute');
       const bookings = await weekBookings(tx, ws, monday, tzOf(ctx));
-      if (!bookings.length) throw httpError(409, 'nobody is on a shift that week yet');
+      if (!bookings.length) throw httpError(409, 'nobody is on a shift still to come that week');
       // What an older notice never got to send (its job gave up) is closed:
       // this one tells them.
       await tx.query(
@@ -413,7 +418,10 @@ export const weekState = async (db, ctx, day) => {
   };
 };
 
-export const noticeResults = async (db, ws, batchId) => {
+// `full`: with how each person's email and text went. A volunteer (granted
+// Shifts) gets the names only, as on a shift's own page: how someone can or
+// can't be reached is the desk's to know.
+export const noticeResults = async (db, ws, batchId, { full = true } = {}) => {
   const rows = (await db.query(
     `select n.kind, n.week, n.created_at, n.person_id, p.name, n.state, n.email, n.text, n.text_note
        from shift_notices n join persons p on p.id = n.person_id
@@ -423,6 +431,9 @@ export const noticeResults = async (db, ws, batchId) => {
   if (!rows.length) return null;
   return {
     batch_id: batchId, kind: rows[0].kind, week: dateOnly(rows[0].week), at: iso(rows[0].created_at),
-    people: rows.map((r) => ({ person_id: r.person_id, name: r.name, state: r.state, email: r.email, text: r.text, text_note: r.text_note })),
+    people: rows.map((r) => ({
+      person_id: r.person_id, name: r.name, state: r.state,
+      email: full ? r.email : null, text: full ? r.text : null, text_note: full ? r.text_note : null,
+    })),
   };
 };
