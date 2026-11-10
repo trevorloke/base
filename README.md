@@ -410,10 +410,11 @@ than a week after they came off is refused. Contacts are door, phone, text or
   **no maximum** unless one is set: a shift may carry a target (*need*)
   that never refuses anyone, and Today's brief lists the shifts short of it
   (`shortShifts`). The shifts list answers what is coming up
-  (`GET /api/shifts`; past ones a page at a time with `?past=1`), and shift
-  times are worked out on the campaign's clock — B.C. on UTC−7 all year from
-  March 2026, by rule (`shared/dayparts.js`), whatever a phone's or a
-  server's own time-zone data says.
+  (`GET /api/shifts`; past ones a page at a time with `?past=1`). These
+  writes, the week board and every shift notice work out times on the
+  campaign's clock — B.C. on UTC−7 all year from March 2026, by rule
+  (`shared/dayparts.js`), whatever a phone's or a server's own time-zone
+  data says.
 - **Left message**: the phone's *Left lit* (`left_message`) — a voicemail,
   or word left with whoever answered. The Calls card offers it on a call
   (never a text, never at the door). It is not a talk; in a phone bank it
