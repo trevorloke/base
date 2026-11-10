@@ -5,7 +5,7 @@
 // has a noun ("67 people said yes").
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fillIn } from '../ext/ladders/shape.js';
+import { fillIn, STEP_KINDS } from '../ext/ladders/shape.js';
 
 const W = await import('../../web/src/components/LaddersWords.js');
 
@@ -126,4 +126,15 @@ test('a step kind this page doesn’t know is said so and saved as it is, never 
   assert.deepEqual(W.cleanStep({ kind: 'untag', tag: ' old ' }), { kind: 'untag', tag: 'old' });
   assert.deepEqual(W.cleanStep({ kind: 'followup', text: ' Call ' }), { kind: 'followup', text: 'Call' });
   assert.deepEqual(W.cleanStep({ kind: 'text', body: ' Hi ' }), { kind: 'text', body: 'Hi' });
+});
+
+test('with each save the page names the step kinds it has words for: every kind the server has', () => {
+  // The server tells a page that doesn't name a kind to reload before it
+  // saves a Stop over such a step or takes it away (ladders-webhook.test.js).
+  assert.deepEqual([...W.KNOWN_STEPS].sort(), [...STEP_KINDS].sort());
+  const fields = { n: 1, unit: 'days', subject: 'S', body: 'B', tag: 't', text: 'T', url: 'https://hooks.example.org/x', label: 'L' };
+  for (const kind of W.KNOWN_STEPS) {
+    assert.notEqual(W.stepLine({ kind, ...fields }), W.UNKNOWN_STEP, kind);
+    assert.equal(W.cleanStep({ kind, ...fields }).kind, kind);
+  }
 });

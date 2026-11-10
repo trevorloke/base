@@ -38,7 +38,9 @@ import {
   CONNECT_TO, GOAL_HINT, GoalPicker, LadBack, OTHER_STEPS, STEP_KINDS, TriggerPicker, countsLine, fmtWhen, goalOf, logLine,
   stepLine, triggerLine, triggerMissing, whereLine,
 } from '../components/LaddersBits.jsx';
-import { FILLS, cleanStep, emailWho, hookMissing, hookSaid, hookWho, textNamesCampaign, textWho, toCodes, toWords, unfilled } from '../components/LaddersWords.js';
+import {
+  FILLS, KNOWN_STEPS, cleanStep, emailWho, hookMissing, hookSaid, hookWho, textNamesCampaign, textWho, toCodes, toWords, unfilled,
+} from '../components/LaddersWords.js';
 import './shifts.css';
 import './ladders.css';
 import './ladders-webhook.css';
@@ -347,7 +349,8 @@ function StepFields({ s, set, idp, tags }) {
   }
   if (s.kind === 'stop') return <p className="lad-hint">The ladder ends here for them.</p>;
   // A kind this page has no fields for (LaddersWords.js UNKNOWN_STEP): it
-  // can be moved or removed here, and saving hands it back as it is.
+  // can be moved here, and saving hands it back as it is; to take it away
+  // the server asks for a reload first (KNOWN_STEPS).
   return <p className="lad-hint">Reload the page to see and change this step.</p>;
 }
 
@@ -696,7 +699,9 @@ export default function LaddersEdit() {
   }
   const { ladder: l, people, emailConfigured, textConfigured, emailYes, options, campaign } = q.data;
   const steps = l.steps;
-  const saveSteps = (next, at) => run('ladder.update', { id: l.id, steps: next }, null, (message) => setStepError({ at, message }));
+  // knows: the step kinds this page has words for — the server won't let a
+  // page that lacks them save a Stop over such a step, or take it away.
+  const saveSteps = (next, at) => run('ladder.update', { id: l.id, steps: next, knows: KNOWN_STEPS }, null, (message) => setStepError({ at, message }));
   const hasEmail = steps.some((s) => s.kind === 'email');
   const hasText = steps.some((s) => s.kind === 'text');
   const ready = doesSomething(steps);

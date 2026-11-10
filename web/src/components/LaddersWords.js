@@ -21,6 +21,12 @@ export const HOOK_STEP = 'Send to a web address';
 // A step kind this page has no words for: a colleague added one a newer
 // base.win knows, in a tab left open from before it. Said, never guessed at.
 export const UNKNOWN_STEP = 'A step this page doesn’t know — reload';
+// The step kinds this page has words for, sent with every save of a
+// ladder's steps (`knows`). A page that doesn't name a kind is told to
+// reload before it saves a Stop over a step of that kind, or takes it away
+// (the server: ladders/actions.js misread) — the page from before "Send to
+// a web address" showed one as a Stop.
+export const KNOWN_STEPS = ['wait', 'email', 'text', 'tag', 'untag', 'followup', 'stop', 'webhook'];
 
 // One step as one line: "Wait 1 day", "Email · Thanks, [first name]",
 // "Text · Hi [first name], thanks for…" (a long text is cut short).

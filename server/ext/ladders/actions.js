@@ -4,7 +4,11 @@
 //   ladder.create       name + trigger (+ steps, goal); a new ladder starts Off
 //   ladder.update       name, trigger, steps, goal (null: none), "let people
 //                       go through again". Every text step must name the
-//                       campaign (shape.js textProblem).
+//                       campaign (shape.js textProblem). With steps, the
+//                       page says which step kinds it has words for
+//                       (`knows`): one from before a kind existed shows that
+//                       step as a Stop, and is told to reload before it
+//                       writes one over the step or takes it away (misread).
 //   ladder.setActive    On: people who start it from now on are put on it,
 //                       and paused runs pick up at the same step. Off: every
 //                       run holds its place and pending steps are cancelled.
@@ -35,6 +39,7 @@
 // makes one, or changes or turns on a ladder that has one: it hands on
 // emails a volunteer may never see. The address is kept with the ladder; the
 // event log keeps only the site it goes to (forLog).
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
@@ -132,6 +137,27 @@ const lookUpHooks = async (db, ctx, input) => {
   }
 };
 
+// A tab left open from before a step kind existed has no words for it: it
+// shows the step as a Stop, "Save step" on that card sends a Stop in its
+// place and "Remove step" sends the steps without it — an address lost, and
+// a ladder that ends there for everyone after. A release can't change a
+// page already open, so the server knows those two saves when it sees them
+// (one such step turned into a Stop, or gone, and every other step as it
+// was) and says to reload. A page says which kinds it has words for with
+// each save (`knows`); every page has had these seven. Whatever else the
+// older page saves — a step moved, another one changed — hands the step
+// back as it came.
+const FIRST_KINDS = ['wait', 'email', 'text', 'tag', 'untag', 'followup', 'stop'];
+const RELOAD = 'Reload this page — it’s out of date and shows this step wrongly';
+const misread = (cur, next, knows) => {
+  const known = new Set([...FIRST_KINDS, ...(knows || [])]);
+  const restAsItWas = (i, at) => cur.every((s, j) => j === i || isDeepStrictEqual(s, next[at(j)]));
+  return cur.some((s, i) => !known.has(s.kind) && (
+    (next.length === cur.length && next[i].kind === 'stop' && restAsItWas(i, (j) => j))
+    || (next.length === cur.length - 1 && restAsItWas(i, (j) => (j < i ? j : j - 1)))
+  ));
+};
+
 const out = (l) => ({
   id: l.id, name: l.name, trigger: { kind: l.trigger_kind, ref: l.trigger_ref || null },
   steps: parseJson(l.steps, []), active: l.active, reentry: l.reentry, goal: l.goal || null,
@@ -189,6 +215,8 @@ export const actions = {
       reentry: z.boolean().nullish(),
       // A goal, or null to have none; left out, it stays as it is.
       goal: goalSchema.nullable().optional(),
+      // With steps: the step kinds the page that sends them has words for.
+      knows: z.array(z.string().max(40)).max(40).nullish(),
     }),
     before: lookUpHooks,
     handler: async (tx, ctx, input, emit) => {
@@ -203,6 +231,7 @@ export const actions = {
         patch.trigger = { kind: next.trigger_kind, ref: next.trigger_ref };
       }
       if (input.steps) {
+        if (misread(parseJson(cur.steps, []), input.steps, input.knows)) throw httpError(409, RELOAD);
         if (cur.active && !runnable(input.steps)) throw httpError(400, 'a ladder that is on needs a step that does something');
         checkTexts(ctx, input.steps);
         input.steps = checkHooks(ctx, input.steps);

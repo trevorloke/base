@@ -781,6 +781,44 @@ test('"Send a test": one signed message about a made-up person to the address as
   await verified();
 });
 
+test('a page from before the step existed shows it as a Stop: its Save step and Remove step on that card are refused and told to reload; everything else it saves as before', async () => {
+  const hook = { kind: 'webhook', url: 'https://hooks.example.org/catch/oldtab', label: 'Zapier' };
+  const lad = await create({ name: 'Old tab', trigger: { kind: 'tag', ref: 'oldtab' }, steps: [{ kind: 'tag', tag: 'a' }, hook, { kind: 'tag', tag: 'b' }] });
+  const steps = async () => ok(await mgr.get(`/api/ladders/${lad.id}`)).ladder.steps;
+  // What that page sends (main at 405d716): each step as it was read, but
+  // for the card that was saved — and a kind it has no words for it saves
+  // as `{ kind: 'stop' }`. It names no step kinds it knows.
+  const old = (next) => mgr.action('ladder.update', { id: lad.id, steps: next });
+  const RELOAD = 'Reload this page — it’s out of date and shows this step wrongly';
+  const [a, h, b] = await steps();
+  let r = await old([a, { kind: 'stop' }, b]); // Save step on the card it calls "Stop"
+  assert.deepEqual([r.status, r.json.error], [409, RELOAD], 'a Stop is never written over the address');
+  r = await old([a, b]); // Remove step on that card
+  assert.deepEqual([r.status, r.json.error], [409, RELOAD], 'nor is the step taken away');
+  assert.deepEqual(await steps(), [a, h, b], 'the ladder is as it was');
+  // Whatever else that page does hands the step back as it is: moved, another step changed, one added, a real Stop removed.
+  ok(await old([h, a, b]));
+  ok(await old([h, { kind: 'tag', tag: 'a2' }, b]));
+  ok(await old([h, { kind: 'tag', tag: 'a2' }, b, { kind: 'stop' }]));
+  ok(await old([h, { kind: 'tag', tag: 'a2' }, { kind: 'stop' }, { kind: 'stop' }])); // a step it does know, saved as a Stop: its own business
+  ok(await old([h, { kind: 'tag', tag: 'a2' }, { kind: 'stop' }]));
+  assert.deepEqual(await steps(), [h, { kind: 'tag', tag: 'a2' }, { kind: 'stop' }]);
+  // The same when the step is the only one, or the ladder is on.
+  const only = await hookLadder('oldtab-on');
+  r = await mgr.action('ladder.update', { id: only.id, steps: [{ kind: 'stop' }, only.steps[1]] });
+  assert.deepEqual([r.status, r.json.error], [409, RELOAD]);
+  r = await mgr.action('ladder.update', { id: only.id, steps: [only.steps[1]] });
+  assert.deepEqual([r.status, r.json.error], [409, RELOAD]);
+  await off(only);
+  // A page that has words for the step says so with each save (`knows`): it may take the step away.
+  const gone = ok(await mgr.action('ladder.update', { id: lad.id, steps: [{ kind: 'tag', tag: 'a2' }, { kind: 'stop' }], knows: ['wait', 'stop', 'webhook'] })).ladder;
+  assert.deepEqual(gone.steps.map((s) => s.kind), ['tag', 'stop']);
+  // On a ladder with no such step the older page saves as it always did — a Stop in a step's place too.
+  ok(await old([{ kind: 'stop' }, { kind: 'stop' }]));
+  ok(await old([{ kind: 'stop' }]));
+  await verified();
+});
+
 test('what is sent, built by hand: an organization has no first or last name; nothing unlisted rides along', () => {
   const body = JSON.parse(hookBody({
     id: 'ladder-r-2', event: 'gift', ref: null, ladder: 'Thank donors', step: 'Slack', at: '2026-11-10T20:00:00.000Z', campaign: 'Imagine Surrey',
