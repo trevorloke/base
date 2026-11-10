@@ -212,6 +212,9 @@ export const giftRow = (cells, mapping, { order = 'mdy', timeZone, methodMap = n
   const paid = cell('method');
   const method = paid ? methodOf(methodMap, paid) : null;
   if (method) row.method = method;
+  // The file's own word goes too: it — not what it was read as this time —
+  // is part of what makes the gift the same gift when the file comes again.
+  if (paid) row.paid_as = paid.slice(0, 80);
   const to = cell('slate');
   const slate = to ? slateOf(slateMap, slates, to) : null;
   if (slate) row.slate = slate;
@@ -245,9 +248,11 @@ export const fileRows = (records, mapping, opts) => {
   return { rows, unread, repeats: keyed.filter((r) => r.repeat).length, alike: keyed.filter((r) => r.alike).length, badEmails };
 };
 
-// Rows a call at a time: few enough, and small enough, for one request
-// (the server takes 256 KB).
-export const callsOf = (rows, { maxRows = 200, maxBytes = 150_000 } = {}) => {
+// Rows a call at a time: small enough for one request (the server takes
+// 256 KB), and few enough that a call is short — each gift goes through the
+// one gift path, a handful of reads and writes, and nobody else's write to
+// the campaign (a door knock) gets in until the call is done.
+export const callsOf = (rows, { maxRows = 100, maxBytes = 150_000 } = {}) => {
   const out = [];
   let part = [];
   let bytes = 0;

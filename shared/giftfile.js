@@ -123,11 +123,14 @@ const donorWords = ({ name, first, last, email }) => squash(name || [first, last
 // tool's own id when the file has one; without one, donor + amount + date +
 // how it was paid — and, for rows of one file that read alike (two $20 cash
 // gifts on one day), which of them it is (nth: 1, 2, …), so neither is lost
-// and the same file adds nothing the second time.
-export const giftKey = ({ source_id, amount_cents, date, method, nth = 1, ...donor }) => {
+// and the same file adds nothing the second time. How it was paid is the
+// file's own word when the row carries one (paid_as: "Wire"): what a person
+// says an unknown word means can differ from one import to the next, and
+// must not make the same row a new gift.
+export const giftKey = ({ source_id, amount_cents, date, method, paid_as, nth = 1, ...donor }) => {
   const id = String(source_id ?? '').trim();
   if (id) return `id:${id}`;
-  return `row:${donorWords(donor)}|${amount_cents}|${date}|${method || ''}${nth > 1 ? `#${nth}` : ''}`;
+  return `row:${donorWords(donor)}|${amount_cents}|${date}|${squash(paid_as) || method || ''}${nth > 1 ? `#${nth}` : ''}`;
 };
 // A file's rows, each with its key: a row that reads like an earlier one
 // gets nth (and a key of its own); a row whose id an earlier row has is

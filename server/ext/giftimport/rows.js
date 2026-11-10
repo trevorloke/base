@@ -16,6 +16,9 @@ const rowSchema = z.object({
   amount_cents: z.number().nullish(),
   date: text(40),
   method: text(40), slate: text(40),
+  // How it was paid as the file writes it ("Wire"): part of what makes the
+  // gift the same gift the next time, whatever the person says it means.
+  paid_as: text(80),
   source_id: text(200), receipt: text(200),
   // Which of the file's rows that read alike this is (shared/giftfile.js keyRows).
   nth: z.number().int().min(1).max(1_000_000).nullish(),
@@ -24,7 +27,8 @@ const rowSchema = z.object({
 const WORDS = {
   name: 'The name', first: 'The first name', last: 'The last name', email: 'The email', phone: 'The phone number',
   address: 'The address', unit: 'The unit', city: 'The city', postal: 'The postal code', amount_cents: 'The amount',
-  date: 'The date', method: 'How it was paid', slate: 'The slate', source_id: 'Their gift number', receipt: 'Their receipt number',
+  date: 'The date', method: 'How it was paid', paid_as: 'How it was paid', slate: 'The slate',
+  source_id: 'Their gift number', receipt: 'Their receipt number',
 };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DAY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -65,6 +69,6 @@ export const readRow = (raw, { latest }) => {
     row_no: v.row ?? null, donor, amount_cents: v.amount_cents, date: v.date, method, slate,
     import_ref: ref, import_receipt: clean(v.receipt) || null,
   };
-  row.key = giftKey({ source_id: ref, name, first, last, email, amount_cents: row.amount_cents, date: row.date, method, nth: v.nth || 1 });
+  row.key = giftKey({ source_id: ref, name, first, last, email, amount_cents: row.amount_cents, date: row.date, method, paid_as: v.paid_as, nth: v.nth || 1 });
   return { row };
 };

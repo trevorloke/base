@@ -143,11 +143,12 @@ test('columns are matched by what their headings mean; rows are read; the check 
   const mapping = ['source_id', 'name', 'email', 'phone', 'address', 'postal', 'amount', 'date', 'method', 'slate', 'receipt', ''];
   assert.deepEqual(giftRow(a[0].cells, mapping, { slates }).row, {
     name: 'Ana Example', email: 'ana@example.org', phone: '604-555-0101', address: '13450 104 Ave', postal: 'V3T 1V8',
-    source_id: '7001', amount_cents: 125000, date: '2026-03-14', method: 'card', slate: 'council', receipt: 'R-17',
+    source_id: '7001', amount_cents: 125000, date: '2026-03-14', method: 'card', paid_as: 'Visa', slate: 'council', receipt: 'R-17',
   });
   assert.equal(giftRow(a[1].cells, mapping, { slates }).row.slate, 'school', 'a slate by the word it holds');
   assert.equal(giftRow(a[1].cells, mapping, { slates, order: 'dmy' }).row.date, '2026-02-04');
   assert.equal(giftRow(a[1].cells, mapping, { slates, methodMap: { cheque: 'cash' }, slateMap: { 'school board trustees': '' } }).row.method, 'cash', 'what the person says a value means');
+  assert.equal(giftRow(a[1].cells, mapping, { slates, methodMap: { cheque: '' } }).row.paid_as, 'Cheque', 'the file’s own word goes with it, whatever it was read as');
   assert.equal(giftRow(a[1].cells, mapping, { slates, slateMap: { 'school board trustees': '' } }).row.slate, undefined);
   assert.match(giftRow(['1', 'Ana Example', '', '', '', '', 'n/a', '03/14/2026'], mapping).error, /“n\/a” isn’t an amount/);
   assert.match(giftRow(['1', 'Ana Example', '', '', '', '', '5', 'someday'], mapping).error, /“someday” isn’t a date/);
@@ -179,7 +180,7 @@ test('columns are matched by what their headings mean; rows are read; the check 
 
   // Calls stay small: by rows, and by size.
   const many = Array.from({ length: 450 }, (_, i) => ({ row: i, name: 'Ana Example', amount_cents: 100 }));
-  assert.deepEqual(callsOf(many).map((p) => p.length), [200, 200, 50]);
+  assert.deepEqual(callsOf(many).map((p) => p.length), [100, 100, 100, 100, 50]);
   assert.ok(callsOf(many.map((r) => ({ ...r, address: 'x'.repeat(900) }))).every((p) => JSON.stringify(p).length < 200_000));
 
   // The check, added up over two calls: a donor the file takes over the limit across them.
@@ -384,6 +385,25 @@ test('without an id: donor, amount, date and method are the gift — and two tha
   ok(await treas.action('gift.void', { id: mine[1].id }));
   assert.deepEqual(states(await bring(two)), ['already', 'already']);
   assert.equal((await giftsOf(P.ben.id)).filter((g) => Number(g.amount_cents) === 2000 && !g.deleted_at).length, 1);
+});
+
+// How it was paid is part of what makes a gift the same gift — as the file
+// writes it, not as the person read it this time. The screen asks what an
+// unknown word ("Wire") means on every import, and the answer can differ:
+// the same row must still be the same gift.
+test('once only doesn’t hang on what the person says an unknown “Paid by” word means', async () => {
+  const wire = (method) => [row({ first: 'Cy', last: 'Example', address: '77 Pine St', amount_cents: 3300, date: `${yr}-08-01`, method, paid_as: ' Wire ' })];
+  assert.deepEqual(states(await bring(wire(null))), ['new'], 'left as not recorded');
+  assert.deepEqual(states(await bring(wire('etransfer'))), ['already'], 'called an e-transfer the next time: the same gift');
+  assert.deepEqual(states(await check(wire('cheque').map((r) => ({ ...r, paid_as: 'WIRE' })))), ['already'], 'capitals don’t count');
+  assert.equal((await giftsOf(P.cy.id)).filter((g) => Number(g.amount_cents) === 3300).length, 1);
+  // Another word is another way of paying — a second gift, as it would be without the file's word.
+  assert.deepEqual(states(await check(wire(null).map((r) => ({ ...r, paid_as: 'Bank draft' })))), ['new']);
+  // The same holds on the screen's side, where rows that read alike are told apart (shared/giftfile.js).
+  assert.equal(giftKey({ name: 'Cy Example', amount_cents: 3300, date: '2026-08-01', method: null, paid_as: 'Wire' }),
+    giftKey({ name: 'Cy Example', amount_cents: 3300, date: '2026-08-01', method: 'etransfer', paid_as: 'wire' }));
+  assert.equal(giftKey({ name: 'Cy Example', amount_cents: 3300, date: '2026-08-01', method: 'cash' }),
+    'row:cy example|3300|2026-08-01|cash', 'with no word from the file, the method itself');
 });
 
 test('the pile: imported gifts that need a donor, settled by a person', async () => {
