@@ -266,7 +266,7 @@ try {
   // ══ 5. Back to the list, from anywhere ══
   await page.click('.map-fab--list');
   st = await settled((s) => s.view === 'density' && s.zoom < 14);
-  check('“Whole list” goes back to the first view', Math.abs(st.zoom - first.zoom) < 0.01 && numberIn(st.pill) === PEOPLE, JSON.stringify({ zoom: st.zoom, pill: st.pill }));
+  check('“Whole list” goes back to the first view', Math.abs(st.zoom - first.zoom) <= 0.25 && DOORS.every((d) => inside(st.bounds, d)) && numberIn(st.pill) === PEOPLE, JSON.stringify({ zoom: st.zoom, first: first.zoom, pill: st.pill }));
   await ctx.grantPermissions(['geolocation']);
   await ctx.setGeolocation({ latitude: 49.3, longitude: -123.3 }); // out in the strait
   await page.click('.map-fab[aria-label="Locate me"]');

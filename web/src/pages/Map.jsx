@@ -269,6 +269,9 @@ const LONE_PX = 48;
 const TAP_OPENS_ZOOM = 15;
 // The marks' colours, named (the line under the count).
 const KEY = [['unrated', 'Not asked yet'], ['support', 'Yes'], ['undecided', 'Undecided'], ['opposed', 'Opposed']];
+// Its height with its line of words: a big list is fitted before the key is
+// on screen (there are no marks to explain yet), so the fit leaves it room.
+const KEY_ROOM = 60;
 // "Not asked yet" and undecided's darker edge for map.css (pins, bubbles,
 // the filter's dot): the same as the canvas dots'.
 const MARK_VARS = { '--door-unrated': css(MARK.unratedPin), '--door-undecided-edge': css(MARK.undecidedEdge.light) };
@@ -411,7 +414,8 @@ function revealLatLng(map, ll, page) {
 // on top, the sheet on the right on desktop or along the bottom on phones).
 // onlyIfHidden: leave the view alone when every corner is already in sight.
 // inset: extra pixels on every side (room for the pins at the edges).
-function fitTurf(map, ring, page, { onlyIfHidden = false, maxZoom = 17, pad = 0, inset = 0 } = {}) {
+// more: extra pixels at the top (room for a line that isn't on screen yet).
+function fitTurf(map, ring, page, { onlyIfHidden = false, maxZoom = 17, pad = 0, inset = 0, more = 0 } = {}) {
   const size = map.getSize();
   const box = map.getContainer().getBoundingClientRect();
   const topEl = page?.querySelector('.map-top');
@@ -420,7 +424,7 @@ function fitTurf(map, ring, page, { onlyIfHidden = false, maxZoom = 17, pad = 0,
   let top = gap;
   let right = gap;
   let bottom = gap;
-  if (topEl && topEl.offsetParent !== null) top = Math.max(gap, topEl.getBoundingClientRect().bottom - box.top + 8);
+  if (topEl && topEl.offsetParent !== null) top = Math.max(gap, topEl.getBoundingClientRect().bottom - box.top + 8) + more;
   if (sheet) {
     const r = sheet.getBoundingClientRect();
     if (isPhone()) bottom = Math.max(gap, box.bottom - r.top + 8);
@@ -2070,7 +2074,8 @@ export default function MapPage() {
     const own = backToMine ? turfs.filter((t) => validRing(t.polygon)) : EMPTY_LIST;
     if (own.length) { fitMine(map, own); return; }
     const box = listBox();
-    if (box) fitTurf(map, box, pageRef.current, { maxZoom: 16, pad: big ? 0 : 0.15 });
+    const more = pageRef.current?.querySelector('.map-key') ? 0 : KEY_ROOM;
+    if (box) fitTurf(map, box, pageRef.current, { maxZoom: 16, pad: big ? 0 : 0.15, more: big ? more : 0 });
   };
 
   // First data: fit the deep-linked turf, else center on the deep-linked

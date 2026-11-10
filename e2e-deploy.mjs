@@ -5,8 +5,9 @@
 //      answer from the server names the new build, the strip under the nav
 //      says "A new version is ready · Reload", the next link is a full page
 //      load, and the map shows the people on file — never "All 0", never a
-//      blank screen. The worker keeps the build before's files, so a tab
-//      that has not caught up yet still opens a screen it had not opened;
+//      blank screen. The worker keeps the build before's files for a day,
+//      so a tab that has not caught up yet still opens a screen it had not
+//      opened;
 //   2. no service worker (a private window): a screen whose file is gone
 //      (404, not the app's page under a .js name) — the tab reloads itself
 //      once and the screen opens on the new build;
@@ -215,6 +216,18 @@ try {
     st = await until(waiting, (s) => s.build === B && s.h1 === 'People');
     check('Reload brings the new build, on the same screen', st.build === B && st.h1 === 'People' && !st.newVersion, JSON.stringify(st));
   }
+  // A day on (the worker's note of when those files left the build, put back 25 hours): the next page opened lets them go.
+  await fresh.evaluate(async () => {
+    const name = (await caches.keys()).find((n) => /-meta-/.test(n));
+    const meta = await caches.open(name);
+    const since = await (await meta.match('/__starbase/old-files')).json();
+    for (const k of Object.keys(since)) since[k] -= 25 * 3600 * 1000;
+    await meta.put('/__starbase/old-files', new Response(JSON.stringify(since), { headers: { 'content-type': 'application/json' } }));
+  });
+  await fresh.reload({ waitUntil: 'networkidle' });
+  await sleep(2500);
+  const later = await kept(fresh, files);
+  check('…for a day: after it the old build’s files go, the new one’s stay', !later[0] && later[1] && !later[2] && later[3], files.map((f, i) => `${f}:${later[i]}`).join(' '));
   await ctx1.close();
 
   // ══ 2. No service worker: the screen's file is gone ══
