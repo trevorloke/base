@@ -91,6 +91,23 @@ test('brief composes money, flags, activation', async () => {
   assert.equal(brief.json.activation.complete, true);
 });
 
+// Donations' big number is one thing, always: raised this calendar year, as
+// the server adds it up — never a sum of whichever gifts a screen has loaded.
+test('brief says what was raised this year, on the campaign’s calendar', async () => {
+  const c = new Client();
+  await c.signup({ workspaceName: 'This year WS' });
+  const year = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver', year: 'numeric' }).format(new Date()));
+  const donor = await c.createPerson('Yearly Donor');
+  await c.action('gift.log', { person_id: donor.id, amount_cents: 30000, date: `${year - 1}-12-31` });
+  await c.action('gift.log', { person_id: donor.id, amount_cents: 12500, date: `${year}-01-01` });
+  const gone = await c.action('gift.log', { person_id: donor.id, amount_cents: 99900, date: `${year}-01-02` });
+  await c.action('gift.void', { id: gone.json.gift.id });
+  const { money } = (await c.get('/api/brief')).json;
+  assert.equal(money.year, year);
+  assert.equal(money.yearCents, 12500, 'this year’s live gifts only');
+  assert.equal(money.totalCents, 42500, 'all time is still all time');
+});
+
 test('export carries everything: persons, records, and the event log', async () => {
   const ex = await a.get('/api/export');
   assert.equal(ex.status, 200);

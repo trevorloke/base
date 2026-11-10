@@ -18,6 +18,8 @@ import { crossSiteWrite } from '../lib/guard.js';
 import dataRoutes from './data.js';
 import { pointInPolygon, groupDoors, walkOrder } from '../lib/geo.js';
 import { checkCap } from '../lib/cap.js';
+import { campaignDay } from '../lib/gifts.js';
+import { DEFAULT_TZ } from '../lib/org.js';
 import { EXTENSIONS } from '../ext.js';
 import { runHooks } from '../lib/hooks.js';
 import { forViewer, loginEmail } from '../lib/viewer.js';
@@ -789,11 +791,16 @@ app.get('/brief', async (c) => {
   const ctx = c.get('ctx');
   const db = c.get('db');
   const ws = ctx.workspaceId;
+  // year: this calendar year as the campaign's own calendar has it (the year
+  // the limit counts) — Donations' big number, added up here so it is one
+  // thing however many gifts a screen has loaded.
+  const thisYear = Number(campaignDay(new Date(), ctx.workspace.settings?.tz || DEFAULT_TZ).slice(0, 4));
   const money = (await db.query(
     `select coalesce(sum(amount_cents), 0)::bigint as total,
             coalesce(sum(amount_cents) filter (where date >= current_date - 7), 0)::bigint as week,
+            coalesce(sum(amount_cents) filter (where date >= make_date($2::int, 1, 1) and date < make_date($2::int + 1, 1, 1)), 0)::bigint as year,
             count(*)::int as gifts
-     from gifts where workspace_id = $1 and deleted_at is null`, [ws],
+     from gifts where workspace_id = $1 and deleted_at is null`, [ws, thisYear],
   )).rows[0];
   const flagged = (await db.query(
     `select g.id, g.person_id, g.amount_cents, g.date, g.slate, g.flag_reason, g.attrs->'maybe_same_donor' as maybe_same_donor, p.name as donor
@@ -876,7 +883,7 @@ app.get('/brief', async (c) => {
     activation.complete = activation.steps.every((s) => s.done);
   }
   const body = {
-    money: desk ? { totalCents: Number(money.total), weekCents: Number(money.week), gifts: Number(money.gifts) } : null,
+    money: desk ? { totalCents: Number(money.total), weekCents: Number(money.week), yearCents: Number(money.year), year: thisYear, gifts: Number(money.gifts) } : null,
     flagged: desk ? flagged : [],
     people,
     field: {

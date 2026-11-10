@@ -124,7 +124,7 @@ const DATASETS = {
   people: { sql: `select p.first_name, p.middle_name, p.last_name, p.name, p.email, p.phone, p.unit, p.house_number,
       case when p.house_number is not null and p.address like p.house_number || ' %' then substr(p.address, length(p.house_number) + 2) else p.address end as street,
       p.address, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
-      to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.kind, p.created_at, p.id as _id
+      to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.voter_number, p.kind, p.created_at, p.id as _id
     from persons p where p.workspace_id = $1 and p.deleted_at is null order by lower(p.name)`, tags: true, fields: true },
   // Everyone who has been a member: each term, paper or website.
   members: { sql: `select p.first_name, p.last_name, p.email, p.phone, p.address, p.city, p.postal,
