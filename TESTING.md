@@ -632,6 +632,24 @@ one tap away under **More**.
   Disclosure** picks a period (this campaign, or a calendar year) and
   downloads contributors over $100 for a spreadsheet, with an *Over limit*
   column. Sample gifts are never in it.
+- **Donations → More → Import a file** (a manager or the treasurer) — make
+  a small spreadsheet of made-up gifts with another tool's own headings
+  (*Transaction ID, Donor, Donor Email, Amount, Date Received, Payment
+  Method, Receipt #*), two of them to one donor on file adding up past the
+  limit, one from someone not on file. The columns match themselves;
+  **Check** saves nothing and says the gifts, the donors found, the gifts
+  to settle and who it takes over the limit; **Import** puts them on the
+  books. On Donations they wear *Imported* — open one: *Imported — no
+  receipt from base.win · their receipt …* — the later of the two is under
+  **Needs you** as *Over limit*, and **More → Receipts** has no new number.
+  The gift with no donor on file is there too (*1 imported gift needs a
+  donor*): tap it, then pick the record, *Find them on file*, or *Add as a
+  new person*. Import the same file again: *Nothing new*. Back on the
+  import screen, **Take back** (for a day) voids the lot.
+- **Donations → More → Filing dates** — type *Disclosure statement due* and
+  a date three weeks out, **Save dates**: Donations counts the days down
+  under the big number, and Today lists it under *Coming up*. Nothing is
+  there until you type it.
 - **People → More → Enter a membership form** — type a paper form for a
   made-up person: a birth date 25 years ago (*the $5 youth rate applies*),
   *Canadian citizen*, a union local, a campus, *I'd like to volunteer*, *A
@@ -667,7 +685,7 @@ one tap away under **More**.
   volunteer again and, after a reload, nothing a treasurer saw is kept.
 
 ### Import your own lists
-**People → More → Import & export → Import people** (or People → More → Import). A CSV or an **Excel workbook (.xlsx)** both work — save a sheet from Excel or Google Sheets as .xlsx and choose it: its first sheet comes in, columns matched. Try `samples/surrey-import-test.csv` first —
+**People → More → Import & export → Import people** (or People → More → Import). A list with a *Voter ID* column fills each person's voter number (a profile's *More details*), and the same number in a later file finds the same person however the name is spelled. A CSV or an **Excel workbook (.xlsx)** both work — save a sheet from Excel or Google Sheets as .xlsx and choose it: its first sheet comes in, columns matched. Try `samples/surrey-import-test.csv` first —
 fictional people at *public building* addresses (City Hall, rec centres). The
 check step should report **9 new, 1 merged** (Jordan Lee appears twice with
 the same email) and **1 refused** (the row with no name); Robin Kaur's rating

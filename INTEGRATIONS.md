@@ -316,6 +316,20 @@ same write that records the payment.
 Stripe: the key works, and one of them sends every event above to this
 address.
 
+## Donations taken in another tool
+
+No connection and no key: GiverLever and tools like it were not found to
+offer a public API, so their history comes in by file. Export the gifts
+from the other tool as a CSV or Excel file — donor, email, amount, date,
+how it was paid, and its own gift and receipt numbers if it has them — and
+bring it in under **Donations → More → Import a file** (README, *Gifts made
+in another tool*). Its column names don't matter; the import shows how it
+read them before anything is saved. Imported gifts count toward the year's
+limit and the disclosure; base.win makes no receipt for them. New online
+gifts are a different matter: point the website's Donate button at
+base.win's own form (*Online payments — Stripe*, above) and nothing needs
+importing.
+
 ## Hosting — Render
 
 `render.yaml` is a Render Blueprint: `starbase-staging` (deploys every push to
