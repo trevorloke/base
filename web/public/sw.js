@@ -11,11 +11,12 @@
  *               network's: the newest one kept, never an older one.
  *   Map tiles   Tiles you've already looked at, in their own capped cache
  *               (~1500 tiles, oldest out first), so a turf seen with signal
- *               still draws offline. OpenStreetMap by default; the map tells
- *               this worker its provider (GET /api/map/config →
- *               postMessage { type: 'starbase:tiles', url }), kept across
- *               restarts. Only tiles the map itself asked for are kept —
- *               nothing is ever fetched ahead (tile servers' usage rules).
+ *               still draws offline. OpenStreetMap's and CARTO's (the Clean
+ *               look) always; the map tells this worker any other provider
+ *               (GET /api/map/config → postMessage { type: 'starbase:tiles',
+ *               url }), kept across restarts. Only tiles the map itself
+ *               asked for are kept — nothing is ever fetched ahead (tile
+ *               servers' usage rules).
  *               A tile that can't be fetched and was never kept is a failed
  *               tile, as it is without this worker (the map counts them).
  *   Never       /api/* (live data and every write — the outbox in
@@ -62,7 +63,11 @@ const OLD_KEEP_MS = 24 * 3600 * 1000;
 // The server's own pages (unsubscribe, receipts, public lessons, tracking,
 // pictures): straight to the network, never the app shell.
 const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files)(?:\/|$)/;
-const isTileHost = (host) => host === 'tile.openstreetmap.org' || host.endsWith('.tile.openstreetmap.org');
+// OpenStreetMap's tiles and CARTO's (the map's Clean look, the one it opens
+// on): kept from the first tile, without waiting for the map to say which it
+// draws — a worker just installed hears that a moment after its first tiles.
+const isTileHost = (host) => host === 'tile.openstreetmap.org' || host.endsWith('.tile.openstreetmap.org')
+  || host === 'basemaps.cartocdn.com' || host.endsWith('.basemaps.cartocdn.com');
 
 // The configured provider, from a template like
 // https://{s}.tiles.example/streets/{z}/{x}/{y}.png?key=… → its host ({s} any
@@ -76,13 +81,16 @@ const matcherFor = (template) => {
   return { host, path: m[2] };
 };
 let tileMatcher; // undefined: not read yet; null: OpenStreetMap only
+// (What the map says while the note is being read wins: the note may be
+// older, or not written yet.)
 const loadMatcher = () => {
   if (tileMatcher !== undefined) return Promise.resolve(tileMatcher);
+  const read = (m) => { if (tileMatcher === undefined) tileMatcher = m; return tileMatcher; };
   return caches.open(META)
     .then((c) => c.match(TILE_CONFIG_KEY))
     .then((r) => (r ? r.json() : null))
-    .then((cfg) => { tileMatcher = cfg?.url ? matcherFor(cfg.url) : null; return tileMatcher; })
-    .catch(() => { tileMatcher = null; return null; });
+    .then((cfg) => read(cfg?.url ? matcherFor(cfg.url) : null))
+    .catch(() => read(null));
 };
 const isConfiguredTile = (url, m) => Boolean(m && m.host.test(url.hostname) && url.pathname.startsWith(m.path));
 
