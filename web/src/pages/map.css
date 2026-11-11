@@ -407,7 +407,10 @@
 .map-fopt[data-band='signs'] .map-fopt__dot { border-radius: 2px; background: #ffffff; border: 2px solid #161a2e; }
 /* Field rule: words wrap, never cut — and never in the middle of one
    ("Unra-ted" beside a whole voter list's count): the name keeps its line,
-   and a count too long to sit beside it goes under it. */
+   and a count too long to sit beside it goes under it. The dot and the name
+   are one piece, so a name that needs its own line takes its dot with it
+   (the dot sat alone on a line above "Strong yes (1)"). */
+.map-fopt__name { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .map-fopt__label { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; line-height: 1.2; }
 .map-fsheet__grid + .map-fsheet__sub { margin-top: var(--s-3); }
 .map-fopt__n { margin-left: auto; font-size: 13px; color: var(--text-3); }
@@ -1069,9 +1072,17 @@
 
 /* ── The map's check (managers): what the map is drawn from, line by line.
    The line that applies is flagged with a mark and words, not colour alone. ── */
-/* (Over its scrim, as the Show sheet is over its own.) */
+/* (Over its scrim, as the Show sheet is over its own.) On a phone it may
+   take the map's whole height — a screenshot of it is the point, and its
+   last lines were a scroll away — and the lines that apply come first. */
 .map-sheet.map-check { z-index: 5; }
-@media (max-width: 720px) { .map-sheet.map-check { z-index: 950; } }
+@media (max-width: 720px) {
+  .map-sheet.map-check {
+    z-index: 950;
+    max-height: calc(100vh - var(--nav-h, 49px) - var(--tabbar-h, 34px) - var(--s-2));
+    max-height: calc(100dvh - var(--nav-h, 49px) - var(--tabbar-h, 34px) - var(--s-2));
+  }
+}
 .btn.map-fsheet__check { display: inline-flex; align-items: center; min-height: 48px; margin: var(--s-2) 0 0 calc(-1 * var(--s-3)); padding: 0 var(--s-3); }
 .map-check__body { padding: var(--s-3) var(--s-4) var(--s-4); }
 .map-check__lead { margin: 0 0 var(--s-3); font-size: 13px; line-height: 1.4; color: var(--text-3); }

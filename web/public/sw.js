@@ -132,6 +132,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
 
   if (isTileHost(url.hostname)) {
+    // (The map asking whether the provider answers at all asks with
+    // no-store: the network's answer, never a tile kept here.)
+    if (req.cache === 'no-store') return;
     event.respondWith(tile(event, url));
     return;
   }

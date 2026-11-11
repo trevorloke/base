@@ -153,7 +153,8 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    says *Placing addresses · 12,400 of 150,000*, and it carries on with the
    page closed. If address lookup stops answering it pauses and tries again
    by itself (15 minutes later, then less often); the map says *Placing
-   addresses paused*. Addresses the geocoder can't place are set aside for a
+   addresses paused*. A run an older release paused gets its next try when
+   this release starts. Addresses the geocoder can't place are set aside for a
    pin by hand (drag on the map). Someone with no address at all is never
    put on the map.
 3. Open the map on a phone as a volunteer: tap a house, rate the door, see
@@ -205,8 +206,10 @@ and set it on both environments:
 To tell it took: **Map → Show → Map check** names the street map in use and
 counts the tiles that loaded and failed, and the foot of the Show sheet says
 *Map tiles: …*. If a provider stops answering, the map says so: it switches
-once by itself to the other free provider where there is one, then shows
-*The street map isn’t loading* with one tap to try the other or try again.
+once by itself to the other free provider where there is one and it
+answers (with weak signal neither does, and the streets the phone kept stay
+drawn), then shows *The street map isn’t loading* with one tap to try the
+other or try again.
 With a provider of the campaign's own there is no second one to fall back
 on — so test it on staging, on a phone, before the week it matters.
 

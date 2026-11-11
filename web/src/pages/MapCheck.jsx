@@ -24,7 +24,10 @@ export default function MapCheck({ facts, onClose }) {
     const t = setInterval(() => setPage(facts()), 1000);
     return () => clearInterval(t);
   }, [facts]);
-  const lines = q.data ? checkLines(q.data, page, { clock: timeOfDay }) : null;
+  // The lines that apply come first: a screenshot must show the trouble,
+  // and on a phone the whole check can be taller than the screen.
+  const all = q.data ? checkLines(q.data, page, { clock: timeOfDay }) : null;
+  const lines = all && [...all.filter((l) => l.warn), ...all.filter((l) => !l.warn)];
 
   return (
     <aside className="map-sheet map-check" aria-label="Map check">

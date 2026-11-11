@@ -22,10 +22,14 @@
 //     after a finger drag the picture is still one sheet (its tiles lap: no
 //     line of the street map between two of them);
 //   · layout: the map fills its place in a browser without :has() or dvh, on
-//     a phone held sideways, and the Show sheet scrolls inside the map;
+//     a phone held sideways, and the Show sheet scrolls inside the map, each
+//     choice's dot beside its name;
 //   · the street map says when it isn't loading: one switch to the other
-//     provider by itself, then "The street map isn’t loading" with one tap;
-//     with the service worker in control a failed tile is a failure;
+//     provider by itself — only if that one answers — then "The street map
+//     isn’t loading" with one tap; with the service worker in control a
+//     failed tile is a failure; with weak signal the streets it kept still
+//     draw (no switch to a provider it never kept), and when signal comes
+//     back the person's own pick is theirs again once it answers;
 //   · turfs come as outlines at once; a turf's counts load when its sheet
 //     opens ("Loading…", never "No doors" on the way);
 //   · an import that leaves addresses without a pin starts the placing run
@@ -458,6 +462,18 @@ try {
       return { label: label.innerText, lines, countInside: nb.right <= o.right + 0.5 && nb.left >= o.left && nb.bottom <= o.bottom + 0.5, height: Math.round(o.height) };
     });
     check('“Unrated” beside “300,049” is one word on one line, the count whole', word.label === 'Unrated' && word.lines === 1 && word.countInside && word.height >= 48, JSON.stringify(word));
+    // Each choice's dot stays beside its name, whatever the count beside it
+    // ("Strong yes (1)" beside a whole list's 27,282: the dot sat on a line of its own above it).
+    const beside = await desk.pg.evaluate(() => [...document.querySelectorAll('.map-fsheet .map-fopt')].map((opt) => {
+      const n = opt.querySelector('.map-fopt__n');
+      if (n) n.textContent = '27,282';
+      const label = opt.querySelector('.map-fopt__label');
+      const [d, l] = [opt.querySelector('.map-fopt__dot').getBoundingClientRect(), label.getBoundingClientRect()];
+      const mid = d.top + d.height / 2;
+      return { label: label.innerText.trim(), beside: mid >= l.top && mid <= l.bottom && d.right <= l.left + 0.5 && l.left - d.right <= 16 };
+    }));
+    const apart = beside.filter((x) => !x.beside).map((x) => x.label);
+    check('each choice’s dot sits beside its name, whatever the count (it sat alone above “Strong yes (1)”)', beside.length >= 8 && apart.length === 0, JSON.stringify({ apart, of: beside.length }));
     await desk.lctx.close();
     const laptop = await openAt(1280, 720, '/admin/map');
     sh = await sheetIn(laptop.pg);
@@ -604,6 +620,85 @@ try {
     await t.pg.screenshot({ path: `${SHOTS}/8-street-map-not-loading-service-worker.png` });
     check('under the service worker a tile that fails is a failure: none “loaded”, and the map says so',
       controlled && ts.loaded === 0 && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || ''), JSON.stringify({ controlled, ...ts }));
+    await t.tctx.close();
+
+    // Weak signal in the field: the phone says it is online, but the tile
+    // hosts don't answer. The street map the worker kept is the one to keep
+    // drawing — no switch to a provider whose streets were never kept:
+    // panned away and back, the kept streets draw; with no signal at all,
+    // too. (The switch threw them away for the rest of the page's life.)
+    t = await tiled({ serviceWorkers: 'allow' });
+    await t.pg.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+    const ruled = await t.pg.evaluate(() => navigator.serviceWorker.ready.then(() => new Promise((resolve) => {
+      if (navigator.serviceWorker.controller) resolve(true);
+      else { navigator.serviceWorker.addEventListener('controllerchange', () => resolve(true)); setTimeout(() => resolve(Boolean(navigator.serviceWorker.controller)), 8000); }
+    }))).catch(() => false);
+    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    // The street map's tiles on screen: how many, how many drawn, from where.
+    const onScreen = () => t.pg.evaluate(() => {
+      const el = document.querySelector('.map-canvas');
+      const box = el.getBoundingClientRect();
+      const vis = [...el.querySelectorAll('.leaflet-tile-pane img.leaflet-tile')].filter((i) => {
+        const r = i.getBoundingClientRect();
+        return r.right > box.left + 1 && r.left < box.right - 1 && r.bottom > box.top + 1 && r.top < box.bottom - 1;
+      });
+      const drawn = vis.filter((i) => i.classList.contains('leaflet-tile-loaded') && i.complete && i.naturalWidth > 0);
+      return { n: vis.length, drawn: drawn.length, hosts: [...new Set(vis.map((i) => new URL(i.src).hostname.replace(/^[a-d]\./, '')))] };
+    }).catch(() => ({}));
+    let kept = {};
+    for (let i = 0; i < 40 && !(kept.n >= 4 && kept.drawn === kept.n); i += 1) { await sleep(250); kept = await onScreen(); }
+    await sleep(2500); // (the worker keeps what came)
+    t.net.up.clean = false;
+    t.net.up.base = false;
+    // Three screens east, into streets this browser never looked at, and
+    // back: the map's own keys (Shift+arrow, 240 px a press), exact both ways.
+    await t.pg.focus('.map-canvas');
+    const pan = async (key, times) => {
+      for (let i = 0; i < times; i += 1) {
+        const was = await t.pg.evaluate(() => document.querySelector('.map-canvas').dataset.bounds);
+        await t.pg.keyboard.press(`Shift+${key}`);
+        await t.pg.waitForFunction((b) => document.querySelector('.map-canvas').dataset.bounds !== b, was, { timeout: 3000 }).catch(() => {});
+        await sleep(350);
+      }
+    };
+    await pan('ArrowRight', 15);
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 20000);
+    await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-away.png` });
+    check('weak signal (online, the tile hosts not answering): no switch — the other provider doesn’t answer either — and the map says its street map isn’t loading',
+      ruled && ts.look === 'clean' && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || '') && /Try Muted/.test(ts.note || ''), JSON.stringify({ ruled, ...ts }));
+    await pan('ArrowLeft', 15);
+    await sleep(3000);
+    const back = await onScreen();
+    ts = await tileState(t.pg);
+    await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-back.png` });
+    check('…back over the streets this browser kept, every tile on screen draws (the switch had thrown them away)',
+      kept.n >= 4 && back.n === kept.n && back.drawn === back.n && back.hosts.join() === 'basemaps.cartocdn.com' && ts.look === 'clean', JSON.stringify({ kept, back, look: ts.look, note: ts.note }));
+    await t.tctx.setOffline(true);
+    await pan('ArrowRight', 1);
+    await pan('ArrowLeft', 1);
+    await sleep(2000);
+    const off = await onScreen();
+    await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-offline.png` });
+    check('…and with no signal at all, still every one', off.n === kept.n && off.drawn === off.n && off.hosts.join() === 'basemaps.cartocdn.com', JSON.stringify(off));
+    await t.tctx.close();
+
+    // A switch made by itself lasts while the signal does: when signal comes
+    // back, the person's own pick is asked first — still refusing, the map
+    // stays on the one that answers (no flip back and forth); answering, it
+    // goes back to their pick.
+    t = await tiled();
+    t.net.up.clean = false;
+    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok');
+    const noSignalFor = async (ms) => { await t.tctx.setOffline(true); await sleep(ms); await t.tctx.setOffline(false); };
+    await noSignalFor(800);
+    ts = await tilesUntil(t.pg, () => false, 5000);
+    check('signal back while their own pick’s provider still refuses: the map stays on the street map that answers',
+      ts.look === 'muted' && ts.tiles === 'ok' && !/isn’t loading/.test(ts.said || ''), JSON.stringify(ts));
+    t.net.up.clean = true;
+    await noSignalFor(800);
+    ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && s.tiles === 'ok' && s.loaded > 0);
+    check('…and once it answers: back to their own pick, Clean, by itself', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && ts.pick === null && !ts.note, JSON.stringify(ts));
     await t.tctx.close();
   }
 
@@ -797,6 +892,26 @@ try {
     check('troubles are flagged line by line: people waiting for a pin, a paused placing run, a street map that isn’t loading, an older page',
       flagged === 'build,offmap,placing,tiles' && /277,628/.test(lines.offmap.value) && /Paused/.test(lines.placing.value) && /tries again/.test(lines.placing.value)
         && /isn’t loading/.test(lines.tiles.value) && /older than the server/i.test(lines.build.value), JSON.stringify(Object.values(lines).map((l) => `${l.warn ? '!' : ' '}${l.label}: ${l.value}`)));
+    // On a phone one screenshot must show them too: the flagged lines first,
+    // each whole on screen with nothing scrolled (the last lines were a scroll away).
+    await bp.keyboard.press('Escape');
+    await bp.setViewportSize({ width: 390, height: 844 });
+    await sleep(400);
+    lines = await openCheck(bp);
+    await bp.screenshot({ path: `${SHOTS}/11-map-check-troubles-390.png` });
+    const seen = await bp.evaluate(() => {
+      const sheet = document.querySelector('.map-check');
+      const box = sheet.getBoundingClientRect();
+      const rows = [...sheet.querySelectorAll('.map-check__row')];
+      const firstCalm = rows.findIndex((r) => !r.classList.contains('is-warn'));
+      return {
+        scrolled: sheet.scrollTop, top: Math.round(box.top), bottom: Math.round(box.bottom), shown: sheet.clientHeight, tall: sheet.scrollHeight,
+        flaggedFirst: rows.every((r, i) => r.classList.contains('is-warn') === (firstCalm < 0 || i < firstCalm)),
+        flaggedInView: rows.filter((r) => r.classList.contains('is-warn')).every((r) => { const b = r.getBoundingClientRect(); return b.top >= box.top && b.bottom <= box.bottom + 0.5; }),
+      };
+    });
+    check('…and on a phone one screenshot shows them all: the flagged lines first, each on screen with nothing scrolled',
+      Object.values(lines).filter((l) => l.warn).length === 4 && seen.scrolled === 0 && seen.flaggedFirst && seen.flaggedInView, JSON.stringify(seen));
     await bad.close();
 
     // On a phone, in the field app (a manager is shown a volunteer's screens there; the check is still theirs).
@@ -812,6 +927,8 @@ try {
       return { left: Math.round(r.left), right: Math.round(r.right), sideways: document.documentElement.scrollWidth - window.innerWidth, close: Math.round(document.querySelector('.map-check .mapsheet-close').getBoundingClientRect().height) };
     });
     check('on a phone: the same lines, nothing scrolls sideways, a full-size ✕', Object.keys(lines).length >= 8 && fit.left >= 0 && fit.right <= 390 && fit.sideways <= 0 && fit.close >= 48, JSON.stringify({ lines: Object.keys(lines), ...fit }));
+    const allIn = await pp.evaluate(() => { const s = document.querySelector('.map-check'); return { tall: s.scrollHeight, shown: s.clientHeight }; });
+    check('…every line of it on the screen at once, “Checked” and all (one screenshot)', allIn.tall <= allIn.shown + 1, JSON.stringify(allIn));
     await pc.close();
   }
 

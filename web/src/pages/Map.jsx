@@ -43,7 +43,7 @@ import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, placingPoll, rowsBudget, tileHealth, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, placingPoll, rowsBudget, tileAt, tileHealth, viewBox } from './mapView.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
@@ -112,8 +112,20 @@ const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch
 // When the street map isn't loading, the map tries its other provider by
 // itself — once in a page's life ({ from: the look that was picked, to: the
 // one it went to }); after that the switch is the person's tap. While their
-// pick is still the one that failed, the map keeps to the other.
+// pick is still the one that failed, the map keeps to the other — until
+// signal comes back after none and their pick's provider answers again.
 let fellBack = null;
+// Does a street map's provider answer now? One of its tiles, asked of the
+// network itself — no-store, which the service worker passes through, so a
+// tile it kept is no answer — within a few seconds.
+const PROBE_MS = 4000;
+const answers = (url) => {
+  const stop = typeof AbortController === 'function' ? new AbortController() : null;
+  const t = setTimeout(() => stop?.abort(), PROBE_MS);
+  return fetch(url, { mode: 'cors', credentials: 'omit', cache: 'no-store', signal: stop?.signal })
+    .then((r) => r.ok, () => false)
+    .finally(() => clearTimeout(t));
+};
 // Where a tile address points, in a word a person (or a screenshot) can
 // read: its host — never the whole address, which may carry a key. '' for
 // the server's own tiles.
@@ -916,8 +928,10 @@ function FilterOpt({ f, filter, onFilter, counts, autoFocus }) {
       autoFocus={autoFocus}
       onClick={() => onFilter(f.key)}
     >
-      <span className="map-fopt__dot" aria-hidden="true" />
-      <span className="map-fopt__label">{f.short || f.label}</span>
+      <span className="map-fopt__name">
+        <span className="map-fopt__dot" aria-hidden="true" />
+        <span className="map-fopt__label">{f.short || f.label}</span>
+      </span>
       <span className="map-fopt__n mono">{counts[f.key] === null ? '' : num(counts[f.key] ?? 0)}</span>
     </button>
   );
@@ -1355,28 +1369,59 @@ export default function MapPage() {
 
   // The street map isn't loading, and there is signal: once, the map tries
   // its other provider by itself and says so (a line under the count for a
-  // few seconds — not the toast, which is for what the person just did).
-  // After that — or where there is no other — it says "The street map isn’t
-  // loading" and the tap is theirs.
-  const willSwitch = Boolean(street.down && online && !fellBack && otherLook);
+  // few seconds — not the toast, which is for what the person just did) —
+  // if that provider answers. With weak signal neither does (the phone says
+  // it is online; the tile hosts don't answer), and going to the other would
+  // leave undrawn the streets this phone kept, which are the first one's:
+  // the map stays. After that — or where there is no other — it says "The
+  // street map isn’t loading" and the tap is theirs.
+  const otherUrl = otherLook ? otherLook.url || baseUrl : null;
+  const [asked, setAsked] = useState(null); // the other provider asked: { url, answered: null (waiting) | false }
+  const willSwitch = Boolean(street.down && online && !fellBack && otherUrl && !(asked?.url === otherUrl && asked.answered === false));
   const [switchedTo, setSwitchedTo] = useState(null);
   useEffect(() => {
-    if (!willSwitch) return;
-    fellBack = { from: viewPick, to: otherLook.key };
-    setAutoView(otherLook.key);
-    setSwitchedTo(otherLook.label);
-  }, [willSwitch, otherLook, viewPick]);
+    if (!willSwitch) return undefined;
+    let live = true;
+    const map = mapRef.current;
+    setAsked({ url: otherUrl, answered: null });
+    (map ? answers(tileAt(otherUrl, map.getCenter(), map.getZoom(), otherLook.maxZoom || baseTiles?.maxZoom)) : Promise.resolve(false)).then((ok) => {
+      if (!live) return;
+      if (!ok) { setAsked({ url: otherUrl, answered: false }); return; }
+      fellBack = { from: viewPick, to: otherLook.key };
+      setStreet({ down: false, any: false }); // (the new layer's own tiles say how it goes)
+      setAutoView(otherLook.key);
+      setSwitchedTo(otherLook.label);
+    });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [willSwitch, otherUrl]);
+  // Loading again: a later failure asks the other provider afresh.
+  useEffect(() => { if (!street.down) setAsked(null); }, [street.down]);
   useEffect(() => {
     if (!switchedTo) return undefined;
     const t = setTimeout(() => setSwitchedTo(null), 8000);
     return () => clearTimeout(t);
   }, [switchedTo]);
   // Signal is back: the street map is asked for again (the tiles that failed
-  // without it would stay blank until the map moved).
+  // without it would stay blank until the map moved) — and if the map went
+  // to the other provider by itself, the person's own pick is asked first:
+  // answering, it is theirs again (its streets are the ones this phone kept).
   const hadSignal = useRef(online);
+  const pickTiles = views.find((v) => v.key === viewPick) || baseTiles;
   useEffect(() => {
-    if (online && !hadSignal.current) setTilesTry((n) => n + 1);
+    if (online && !hadSignal.current) {
+      setTilesTry((n) => n + 1);
+      setAsked(null);
+      const went = fellBack;
+      const map = mapRef.current;
+      if (autoView && went && pickTiles?.url && map) {
+        answers(tileAt(pickTiles.url, map.getCenter(), map.getZoom(), pickTiles.maxZoom)).then((ok) => {
+          if (ok && fellBack === went) { fellBack = null; setAutoView(null); }
+        });
+      }
+    }
     hadSignal.current = online;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online]);
   const offlineWalk = useMemo(() => (noSignal ? cachedWalkLists(me)[0] || null : null), [noSignal, me]);
 

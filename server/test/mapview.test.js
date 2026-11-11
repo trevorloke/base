@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
   dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
-  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate,
+  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -235,6 +235,25 @@ test('the street map isn’t loading: most of a view’s tiles failed, or not on
   quick.late(TILE_WAIT_MS + 5);
   assert.equal(quick.get().down, false);
   assert.equal(TILE_WAIT_MS, 6000);
+});
+
+// Before the map goes to its other provider by itself, it asks that one for
+// one tile — the one under the middle of the view — and goes only if it
+// answers (with weak signal neither answers, and going would leave the
+// streets this phone kept undrawn).
+test('one tile of a street map, the one under a point, its address filled in as the map fills it', () => {
+  const osm = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const carto = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  const hall = { lat: 49.1913, lng: -122.849 };
+  assert.equal(tileAt(osm, hall, 15), 'https://tile.openstreetmap.org/15/5202/11226.png');
+  assert.equal(tileAt(carto, hall, 15), 'https://a.basemaps.cartocdn.com/light_all/15/5202/11226.png');
+  // A quarter zoom draws the nearest whole zoom's tiles; never past the provider's last zoom.
+  assert.deepEqual([tileAt(osm, hall, 15.25), tileAt(osm, hall, 14.75)], [tileAt(osm, hall, 15), tileAt(osm, hall, 15)]);
+  assert.equal(tileAt(osm, hall, 20.5, 19), 'https://tile.openstreetmap.org/19/83232/179626.png');
+  // Round the world and past the poles: still a tile that exists.
+  assert.equal(tileAt(osm, { lat: hall.lat, lng: hall.lng + 360 }, 15), tileAt(osm, hall, 15));
+  assert.deepEqual([tileAt(osm, { lat: 85.5, lng: 179.9999 }, 3), tileAt(osm, { lat: -86, lng: -180 }, 3)],
+    ['https://tile.openstreetmap.org/3/7/0.png', 'https://tile.openstreetmap.org/3/0/7.png']);
 });
 
 // ── The map's check, for managers ──

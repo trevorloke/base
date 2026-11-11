@@ -561,15 +561,19 @@ one tap away under **More**.
   street map wasn’t loading — switched to Muted* and the streets are there.
   Block `tile.openstreetmap.org` too and move the map: *The street map isn’t
   loading · Try Clean* stays under the count; unblock, tap it, the streets
-  load and the line goes.
+  load and the line goes. Weak signal: on a phone that has looked at a turf,
+  block both hosts and pan away — *The street map isn’t loading · Try
+  Muted*, and no switch (the other doesn't answer either); pan back and the
+  turf's streets are still there, and in airplane mode too.
 - **Map, many turfs** — outlines and names show at once however many turfs
   there are; tap one and its sheet opens with *Loading…* where *64 doors
   left* then appears.
 - **Map → filter button → Map check** (managers) — one sheet: on file, on
   the map, not on map (and why), the placing run, outside your area, turfs,
   the street map and its tiles, this page against the server, the map's
-  size. Whatever is wrong is flagged; send a screenshot of it with any
-  report that the map looks empty.
+  size. Whatever is wrong is flagged, and comes first; send a screenshot of
+  it with any report that the map looks empty (on a phone it fits one
+  screen).
 - **Map on an older or odder screen** — a phone held sideways: nothing to
   scroll past the map. A laptop: the Show sheet scrolls inside the map to
   its last line.
@@ -744,7 +748,9 @@ doors appear as it goes (tap it for **Stop**, or come back to Import). Everyone 
 on the map is copied without a lookup. If the geocoder stops answering, the
 run pauses with the reason and tries again by itself (after 15 minutes, then
 less and less often) — the map says *Placing addresses paused*, and tapping
-it says when the next try is; **Try now** does it at once. Addresses it
+it says when the next try is; **Try now** does it at once. (A minute past
+that time and still paused, it says the try *was due* at that time: it
+didn't run — **Try now**.) Addresses it
 can't find end up under **Not on map** for a pin by hand. Someone with no
 address at all is never put on the map; the Map check counts them.
 

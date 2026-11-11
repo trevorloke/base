@@ -472,8 +472,11 @@ counts as an outage (nobody's tries are spent), backs off
 rounds pauses the run with the reason. A paused run tries again by itself:
 one round after 15 minutes (`GEOCODE_RETRY_MS`), then after twice as long
 each time lookups still don't answer, up to six hours (**Carry on** does it
-now, **Stop** calls it off). `GET /api/geocode/status` reports progress and,
-while paused, when the next try is (`retryAt`); the page shows the progress
+now, **Stop** calls it off). A paused run with no try to come — paused by an
+older release, or its try never ran — gets one when the server starts.
+`GET /api/geocode/status` reports progress and, while paused, when the next
+try is (`retryAt`); a minute past that time and still paused, the map and
+the Map check say it *was due to try again*. The page shows the progress
 and works out the time left. The desk's map shows the run without opening
 anything — *Placing addresses · 12,400 of 150,000* where *Not on map* was,
 *Placing addresses paused* while it waits to try again — and draws what it
@@ -571,12 +574,18 @@ address ignored*).
 tiles: a view where most of them failed, or six seconds with not one, and —
 once in a page's life — it switches to its other provider by itself (the
 *Clean* look's CARTO ↔ the standard tiles) with a line under the count
-saying it did (*The street map wasn’t loading — switched to Muted*); if
-that doesn't load either, or there is no second provider (a campaign's own,
+saying it did (*The street map wasn’t loading — switched to Muted*), but
+only if that provider answers (one tile asked of it first): with weak
+signal neither does, and the street map the phone kept stays drawn. If the
+other doesn't answer, or there is no second provider (a campaign's own,
 Google's), *The street map isn’t loading* stays under the count with one
 tap: *Try Clean* / *Try Muted*, or *Try again*. The person's own choice of
-look is only changed by their tap. Behind the tiles is the app's paper, not
-grey. Choose the provider before election week:
+look is only changed by their tap; after a switch by itself, their pick is
+asked again when signal comes back, and is theirs again once it answers.
+Behind the tiles is the app's paper, not grey. A big list's answers for a
+view (`/api/map/density`, `/api/map/doors?bbox`) come gzipped — the
+far-out picture of a rated city list is a megabyte of numbers, about a
+fifth of that over the wire. Choose the provider before election week:
 [GOING-LIVE.md](GOING-LIVE.md), section 5.
 
 **The map's look** is each person's own (Show → *Map*, kept on that

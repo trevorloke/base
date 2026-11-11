@@ -181,6 +181,22 @@ export const tileHealth = () => {
   };
 };
 
+// One tile of a street map: the one under a point at a zoom (the nearest
+// whole zoom, never past the provider's last), its address filled in as the
+// map fills it ({s} its first host, {r} the plain one). Before the map goes
+// to its other provider by itself it asks that one for this tile, and goes
+// only if it answers: with weak signal neither does, and going would leave
+// undrawn the streets this phone kept (Map.jsx).
+export const tileAt = (template, { lat, lng }, zoom, maxZoom = 19) => {
+  const z = Math.max(0, Math.min(Math.round(zoom), maxZoom));
+  const n = 2 ** z;
+  const whole = (v) => Math.min(n - 1, Math.max(0, Math.floor(v)));
+  const sin = Math.sin((Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI) / 180);
+  const x = whole(((((lng + 180) % 360) + 360) % 360 / 360) * n);
+  const y = whole((0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * n);
+  return String(template).replace(/\{s\}/g, 'a').replace(/\{z\}/g, z).replace(/\{x\}/g, x).replace(/\{y\}/g, y).replace(/\{r\}/g, '');
+};
+
 // "3:40 pm", on the reader's own clock: when a paused placing run tries
 // again (always a time of day — it may be after midnight).
 export const timeOfDay = (iso) => {
