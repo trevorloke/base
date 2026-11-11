@@ -45,7 +45,7 @@ api.get('/admin/permissions', async (c) => {
     const areas = AREA_KEYS.filter((k) => { const d = decide(perms, k); return d === null ? BASE[m.role].includes(k) : d; });
     return { id: m.id, name: m.name, email: m.email, role: m.role, grant: own.grant || [], deny: own.deny || [], areas };
   });
-  // Training is called what this deployment calls it (lib/brand.js).
-  const areas = AREAS.map((a) => (a.key === 'learn' ? { ...a, label: learnName() } : a));
+  // Training is called what the campaign calls it (Settings → Brand, lib/brand.js).
+  const areas = AREAS.map((a) => (a.key === 'learn' ? { ...a, label: learnName(settings) } : a));
   return c.json({ areas, base: BASE, roles, members, doors: settings.permissions?.volunteerDoors === 'turfs' ? 'turfs' : 'all' });
 });

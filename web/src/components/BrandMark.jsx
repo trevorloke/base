@@ -13,8 +13,9 @@ export const HAS_LOGO = Boolean(BRAND.logo);
 
 export default function BrandMark({ name, side = false }) {
   if (!BRAND.logo) return name ? <span className="brand-mono" aria-hidden="true">{initials(name)}</span> : null;
-  // A coloured or dark sidebar is dark in both schemes.
-  const darkGround = side && BRAND.sidebar !== 'light';
+  // A dark sidebar, or one in a brand colour that takes white text, is dark
+  // in both schemes (a saved brand says which: sideDark, server/lib/brand.js).
+  const darkGround = side && (typeof BRAND.sideDark === 'boolean' ? BRAND.sideDark : BRAND.sidebar !== 'light');
   const cls = `brand-logo${BRAND.logoDark ? ' has-dark' : ''}${darkGround && !BRAND.logoDark ? ' on-chip' : ''}`;
   return (
     <picture className={cls}>

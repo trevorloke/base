@@ -51,7 +51,7 @@ publicRoutes.get('/learn/:ws', async (c) => {
      where ${PUBLIC} order by s.position nulls last, l.position, lower(l.title)`, [ws.id],
   )).rows;
   const items = rows.map((l) => `<li><a href="/learn/${esc(ws.slug)}/${l.id}"><b>${esc(l.title)}</b></a> <span class="muted">· ${KIND_WORD[l.kind] || ''}${l.section ? ` · ${esc(l.section)}` : ''}</span>${l.body ? `<br><span class="muted">${esc(markdownText(l.body, 140))}</span>` : ''}</li>`).join('');
-  return page(c, db, ws, learnName(), `<h1>${esc(learnName())}</h1><p>What ${esc(ws.name)} is about, and how to help.</p>${items ? `<ul class="learn-list">${items}</ul>` : '<p class="muted">Nothing here yet.</p>'}`);
+  return page(c, db, ws, learnName(ws.settings), `<h1>${esc(learnName(ws.settings))}</h1><p>What ${esc(ws.name)} is about, and how to help.</p>${items ? `<ul class="learn-list">${items}</ul>` : '<p class="muted">Nothing here yet.</p>'}`);
 });
 
 publicRoutes.get('/learn/:ws/:id', async (c) => {
@@ -68,7 +68,7 @@ publicRoutes.get('/learn/:ws/:id', async (c) => {
       where p.workspace_id = $1 and p.lesson_id = $2 order by p.position`, [ws.id, l.id],
   )).rows;
   const more = parts.map((pt) => `<section class="learn-part">${pt.title ? `<h2>${esc(pt.title)}</h2>` : ''}${media({ ...pt, title: pt.title || l.title })}${pt.body ? `<div class="prose">${renderMarkdown(pt.body)}</div>` : ''}</section>`).join('');
-  return page(c, db, ws, l.title, `<p><a href="/learn/${esc(ws.slug)}">← ${esc(learnName())}</a></p><h1>${esc(l.title)}</h1>${media(l)}<div class="prose">${renderMarkdown(l.body || '')}</div>${more}`);
+  return page(c, db, ws, l.title, `<p><a href="/learn/${esc(ws.slug)}">← ${esc(learnName(ws.settings))}</a></p><h1>${esc(l.title)}</h1>${media(l)}<div class="prose">${renderMarkdown(l.body || '')}</div>${more}`);
 });
 
 publicRoutes.get('/learn-files/:id', async (c) => {
