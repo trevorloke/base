@@ -164,6 +164,14 @@ const personRow = (r) => ({
   socials: parseJson(r.socials, {}),
 });
 
+// ?reach=call|text: only the people the one place (lib/reach.js) says may
+// be called (a phone bank's rule) or texted (a list's text's) — so a call
+// list, its count and every send agree. Anything else names nobody.
+const REACH_SQL = { call: () => mayReach('call', 'bank', person('p', '$1')), text: () => mayReach('text', 'list', person('p', '$1')) };
+const reachSql = (want) => (!want ? '' : REACH_SQL[want] ? ` and ${REACH_SQL[want]()}` : ' and false');
+// A person's place in the name order, for ?after= and ?until= ($n: their id).
+const byName = (n) => `(select lower(a.name), a.id from persons a where a.id = $${n} and a.workspace_id = $1)`;
+
 app.get('/persons', async (c) => {
   const ctx = c.get('ctx');
   const limit = Math.min(Number(c.req.query('limit')) || 25, 2000);
@@ -173,19 +181,23 @@ app.get('/persons', async (c) => {
   params[3] = limit + 1;
   // ?after=<a person's id>: the people after them, by name — the next part
   // of a call list longer than one load (found through the name index, so
-  // the last part of a city's list is as quick as the first).
-  const after = c.req.query('after');
+  // the last part of a city's list is as quick as the first). ?until=<id>:
+  // up to them and no further — a part already loaded, asked for again,
+  // keeps its place even when someone new joins the list before it.
   let from = '';
-  if (after && UUID_RE.test(after)) {
-    params.push(after);
-    from = ` and (lower(p.name), p.id) > (select lower(a.name), a.id from persons a where a.id = $${params.length} and a.workspace_id = $1)`;
-  } else if (after) from = ' and false';
+  for (const [key, op] of [['after', '>'], ['until', '<=']]) {
+    const id = c.req.query(key);
+    if (!id) continue;
+    if (!UUID_RE.test(id)) { from += ' and false'; continue; }
+    params.push(id);
+    from += ` and (lower(p.name), p.id) ${op} ${byName(params.length)}`;
+  }
   // note: their own words from the volunteer form (attrs.note), so the call
   // card needs no per-person fetch. Nothing else from attrs is exposed.
   const { rows } = await c.get('db').query(
     `select p.id, p.kind, p.name, p.first_name, p.middle_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
             p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note
-     from persons p where ${where}${from}
+     from persons p where ${where}${reachSql(c.req.query('reach'))}${from}
      order by lower(p.name), p.id limit $4`,
     params,
   );
@@ -194,12 +206,12 @@ app.get('/persons', async (c) => {
 
 // How many people a People query names — the real number, however long the
 // list (the rows above stop at their limit). Asked for apart from the rows,
-// so a slow count never holds up the names.
+// so a slow count never holds up the names. Takes ?reach= as the rows do.
 app.get('/persons/count', async (c) => {
   const ctx = c.get('ctx');
   const { where, params } = await personsWhere(c.get('db'), ctx, c.req.query());
   params[3] = 1;
-  const { rows } = await c.get('db').query(`select count(*)::int as total from persons p where ${where}`, params);
+  const { rows } = await c.get('db').query(`select count(*)::int as total from persons p where ${where}${reachSql(c.req.query('reach'))}`, params);
   return c.json({ total: rows[0].total });
 });
 

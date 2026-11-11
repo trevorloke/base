@@ -92,6 +92,50 @@ test('the Calls read takes a list and moves on past its first 300', async () => 
   assert.deepEqual(ok(await vic.get(`/api/persons?list=${ids.bulkList}&limit=5`)).persons, []);
 });
 
+test('Calls asks only for who may be called (or texted), counts the same, and a part already loaded keeps its place', async () => {
+  const q = `list=${ids.bulkList}&has=phone`;
+  // The one place decides: the do-not-contact one is out of the rows and the count alike.
+  assert.equal(ok(await mgr.get(`/api/persons/count?${q}&reach=call`)).total, 5100);
+  const first = ok(await mgr.get(`/api/persons?${q}&reach=call&limit=300`));
+  assert.equal(first.more, true);
+  const nocall = (await db.query("select id from persons where workspace_id = $1 and name = 'Bulk Nocall Example'", [ws])).rows[0].id;
+  let seen = 0;
+  let after = '';
+  for (;;) {
+    const page = ok(await mgr.get(`/api/persons?${q}&reach=call&limit=2000${after ? `&after=${after}` : ''}`));
+    assert.ok(!page.persons.some((p) => p.id === nocall));
+    seen += page.persons.length;
+    if (!page.more) break;
+    after = page.persons.at(-1).id;
+  }
+  assert.equal(seen, 5100);
+  // A text: a number that replied STOP is out, whoever carries it (no tag needed).
+  const stopped = first.persons[0];
+  await db.query(`insert into texting_optouts (id, workspace_id, phone, opted_out) values ($1, $2, $3, true)`, [randomUUID(), ws, `+1${stopped.phone.replace(/\D/g, '')}`]);
+  const texts = ok(await mgr.get(`/api/persons?${q}&reach=text&limit=300`)).persons;
+  assert.ok(!texts.some((p) => p.id === stopped.id), 'STOP: not on the text list');
+  assert.ok(ok(await mgr.get(`/api/persons?${q}&reach=call&limit=300`)).persons.some((p) => p.id === stopped.id), '…still on the call list');
+  assert.equal(ok(await mgr.get(`/api/persons/count?${q}&reach=text`)).total, 5099);
+  // A reach it doesn't know, or a bad place to stop: nobody, never everybody.
+  assert.deepEqual(ok(await mgr.get(`/api/persons?${q}&reach=fax`)).persons, []);
+  assert.equal(ok(await mgr.get(`/api/persons/count?${q}&reach=fax`)).total, 0);
+  assert.deepEqual(ok(await mgr.get(`/api/persons?${q}&until=nope`)).persons, []);
+  // ?until=: the first part asked again — someone new on the list before its
+  // last name comes in, and nobody at its end is pushed out.
+  const last = first.persons.at(-1);
+  const joiner = await mgr.createPerson('Bulk 00000 Example', { phone: '604-555-0998', tags: ['bulk'] });
+  const again = ok(await mgr.get(`/api/persons?${q}&reach=call&until=${last.id}&limit=2000`)).persons;
+  assert.equal(again.length, 301);
+  assert.equal(again[0].id, joiner.id);
+  assert.equal(again.at(-1).id, last.id, 'it still ends where it ended');
+  const next = ok(await mgr.get(`/api/persons?${q}&reach=call&after=${last.id}&limit=300`)).persons;
+  assert.ok(next.length === 300 && !next.some((p) => again.some((a) => a.id === p.id)), 'the next part starts after it: nobody twice, nobody missed');
+  // A volunteer's calls follow the same rule: the do-not-contact one is never theirs to call.
+  const theirs = ok(await vic.get('/api/persons?tag=bulk&has=phone&reach=call&limit=2000'));
+  assert.ok(theirs.more && !theirs.persons.some((p) => p.id === nocall));
+  assert.equal(ok(await vic.get('/api/persons/count?tag=bulk&has=phone&reach=call')).total, 5101, 'the 5,100 and the one who joined');
+});
+
 test('someone who leaves the list leaves the calls not yet made; a call already logged stays; someone back on it comes back', async () => {
   const mk = async (key, name, phone) => { P[key] = await mgr.createPerson(name, { phone, tags: ['gotv'] }); };
   await mk('ana', 'Ana Gotv Example', '604-555-0201');
