@@ -148,7 +148,8 @@ Blvd & 88 Ave"), then the nearest civic address within 100 m ("near 8850
 King George Blvd") — `/intersections/nearest` and `/sites/nearest`, with
 `BC_GEOCODER_KEY` when set, for at most 60 points a minute, each call given
 up on after 4 seconds. Slow, down or an answer that isn't a corner or a
-door: the place is named by the nearest door on file, else by its
+door: the place is named by the nearest door on file (asked by the desk;
+a volunteer granted Shifts gets the next rule), else by its
 coordinates — the service is never asked inside a write, and no failure
 of it stops a save. These two calls have not been tried against the live
 service yet (it couldn't be reached from where they were built): if names

@@ -1,12 +1,14 @@
 // Places a shift happens at — the reads, and the name for a point picked on
 // the map.
 //
-// nameFor(db, ws, { lat, lng }) → { name, source, address? }, by the first
-// rule that answers:
+// nameFor(db, ws, { lat, lng }, { doors }) → { name, source, address? }, by
+// the first rule that answers:
 //   'corner'   the nearest intersection within ~150 m: "King George Blvd & 88 Ave"
 //   'address'  the nearest civic address within ~100 m: "near 8850 King George Blvd"
 //   'door'     the campaign's own nearest door on file within ~300 m (no
-//              outside call): "near 13450 104 Ave"
+//              outside call): "near 13450 104 Ave" — for the desk only
+//              (`doors`): a volunteer granted Shifts has their doors scoped
+//              to their own turfs, so their point falls to its pin
 //   'pin'      "Pin at 49.1630, −122.8447" — its coordinates, which the
 //              screens say as "Pinned place" (shared/shiftkinds.js) until
 //              someone names it
@@ -55,14 +57,14 @@ const nearestDoor = async (db, ws, { lat, lng }) => {
   return row ? String(row.address).trim().slice(0, 180) : null;
 };
 
-export const nameFor = async (db, ws, { lat, lng }) => {
+export const nameFor = async (db, ws, { lat, lng }, { doors = false } = {}) => {
   if (!lookups('places')) {
     const corner = await nearestCorner({ lat, lng });
     if (corner) return { name: corner.name, source: 'corner' };
     const civic = await nearestCivic({ lat, lng });
     if (civic) return { name: `near ${civic.name}`, address: civic.address, source: 'address' };
   }
-  const door = await nearestDoor(db, ws, { lat, lng }).catch(() => null);
+  const door = doors ? await nearestDoor(db, ws, { lat, lng }).catch(() => null) : null;
   if (door) return { name: `near ${door}`, source: 'door' };
   return { name: pinName(lat, lng), source: 'pin' };
 };
@@ -137,7 +139,8 @@ export const placeActions = {
       source: z.enum(['map', 'typed', 'used']).optional(),
     }).refine((v) => (v.lat === undefined) === (v.lng === undefined), 'a point is a lat and a lng')
       .refine((v) => v.name !== undefined || v.lat !== undefined, 'a name, or a point on the map'),
-    before: (db, ctx, input) => (input.name === undefined ? nameFor(db, ctx.workspaceId, { lat: input.lat, lng: input.lng }) : null),
+    before: (db, ctx, input) => (input.name === undefined
+      ? nameFor(db, ctx.workspaceId, { lat: input.lat, lng: input.lng }, { doors: ctx.role !== 'volunteer' }) : null),
     handler: async (tx, ctx, input, emit, suggested) => {
       const ws = ctx.workspaceId;
       const name = input.name ?? suggested?.name;

@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { verifyChain } from '../lib/events.js';
 import { _setNearestMsForTest } from '../lib/geocode.js';
+import { pinName } from '@starbase/shared/shiftkinds';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
@@ -156,6 +157,15 @@ test('who may: the desk and a volunteer granted Shifts; never another campaign',
   ok(await mgr.action('permission.member.set', { user_id: volId, grant: ['shifts'], deny: [] }));
   const made = ok(await vol.action('place.save', { name: 'Newton Exchange' }), 'granted Shifts');
   assert.ok(ok(await vol.get('/api/places')).places.some((p) => p.id === made.place.id));
+  // The nearest door on file is the desk's to know: a volunteer's point
+  // (granted Shifts, their own doors scoped to their turfs) falls to its pin.
+  const door = { lat: 49.19065, lng: -122.84665 };
+  const q = `/api/places/name?lat=${door.lat}&lng=${door.lng}`;
+  assert.deepEqual(ok(await mgr.get(q)), { name: 'near 13450 104 Ave', source: 'door' }, 'the desk');
+  assert.deepEqual(ok(await vol.get(q)), { name: pinName(door.lat, door.lng), source: 'pin' }, 'never an address on file');
+  const pinned = ok(await vol.action('place.save', { ...door, source: 'map' })).place;
+  assert.equal(pinned.name, pinName(door.lat, door.lng), 'nor by saving the point');
+  ok(await mgr.action('place.remove', { id: pinned.id }));
   ok(await mgr.action('permission.member.set', { user_id: volId, grant: [], deny: [] }));
   assert.deepEqual(ok(await other.get('/api/places')).places, [], 'another campaign has its own list');
   assert.equal((await other.action('place.rename', { id: made.place.id, name: 'Theirs now' })).status, 404);

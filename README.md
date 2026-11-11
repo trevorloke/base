@@ -432,7 +432,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   saved once and picked again (`GET /api/places`: this kind's most used
   first). A point tapped on the map is named by the server: the nearest
   corner, else the nearest address (the BC Address Geocoder), else the
-  nearest door on file, else its coordinates (said as *Pinned place* on
+  nearest door on file (for the desk only), else its coordinates (said as *Pinned place* on
   every screen and in made names until someone names it; an email or text
   gives its map link instead, the website *See the map*) — a geocoder that
   is slow or down never holds a save. A shift's name is made from the two ("Burma

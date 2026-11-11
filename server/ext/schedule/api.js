@@ -4,7 +4,8 @@
 //                              places, this kind's most used first, then
 //                              the words already on shifts (places.js)
 // GET /places/name?lat=&lng=   a name for a point tapped on the map:
-//                              { name, source, address? } (places.js nameFor)
+//                              { name, source, address? } (places.js nameFor;
+//                              a door on file only for the desk)
 // GET /schedule/week?week=<day>  "Tell everyone on this week's shifts",
 //                              before it is sent and after: { week, people,
 //                              shifts, providers: { email, text }, jobs,
@@ -40,7 +41,8 @@ api.get('/places', async (c) => {
 api.get('/places/name', async (c) => {
   const point = pointOf(c.req.query('lat'), c.req.query('lng'));
   if (!point) return c.json({ error: 'lat and lng: a point on the map' }, 400);
-  return c.json(await nameFor(c.get('db'), c.get('ctx').workspaceId, point));
+  const ctx = c.get('ctx');
+  return c.json(await nameFor(c.get('db'), ctx.workspaceId, point, { doors: ctx.role !== 'volunteer' }));
 });
 
 api.get('/schedule/week', async (c) => {
