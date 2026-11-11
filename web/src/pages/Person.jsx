@@ -29,7 +29,7 @@ import { useOutbox, applyOutboxToProfile, pendingAbout, logContact, holdNote } f
 import { useOnline } from '../components/NoSignal.jsx';
 import {
   TagEditor, Icon, useAction, fmtWhen, fmtShort, telHref, smsHref, textBody,
-  canDesk, invalidatePersonData, isDnc, tagWord, RatingTag, noSignal,
+  canDesk, invalidatePersonData, isDnc, tagWord, noSignal,
 } from './People.jsx';
 import QuickDetails from '../components/QuickDetails.jsx';
 import './people.css';
@@ -38,6 +38,7 @@ import {
 } from '../components/TextingCard.jsx';
 import { KnowsNudge, PersonKnows, usePersonKnows } from '../components/RelationshipsBits.jsx';
 import NameFields from '../components/NameFields.jsx';
+import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
 
 const TIER_LABEL = {
   superstar: DONOR_TIERS.superstar.label,
@@ -114,8 +115,9 @@ const platformLabel = (p) => PLATFORM_LABEL[p] || p.charAt(0).toUpperCase() + p.
 // ─────────────────────────────────────────────────────────────────────────────
 function Section({ title, count, open, onToggle, children }) {
   const id = useId();
+  // Its own address on the page ("pf-gifts"): History's entries lead here.
   return (
-    <section className="pf-sec">
+    <section className="pf-sec" id={`pf-${String(title).toLowerCase().replace(/[^a-z]+/g, '-')}`}>
       <h2 style={{ margin: 0, fontSize: 'inherit' }}>
         <button type="button" className="pf-sec__btn disclose" aria-expanded={open} aria-controls={id} onClick={onToggle}>
           <span className="pf-sec__title">{title}</span>
@@ -864,25 +866,13 @@ function Gifts({ person, gifts, totals, slates = FALLBACK_SLATES }) {
   );
 }
 
-function History({ contacts }) {
-  if (contacts.length === 0) return <p className="pf-empty">No contacts yet.</p>;
-  return (
-    <ul className="timeline">
-      {contacts.map((c) => (
-        <li key={c.id}>
-          <span className="when">{fmtWhen(c.created_at)}</span>
-          <span className="what">
-            <span className="chip">{CHANNEL_LABEL[c.channel] || c.channel}</span>
-            {c.pending && <span className="chip obx-copy ds-pending">Not sent yet</span>}
-            {c.rating ? <RatingTag code={c.rating} /> : <span>{OUTCOME_LABEL[c.outcome] || c.outcome}</span>}
-            {c.by_name && <span className="by">{c.by_name}</span>}
-            {c.note && <span className="note">{c.note}</span>}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+// History is components/PersonTimeline.jsx: one list of everything. A
+// contact still on this device goes to it in a row's words, as History has
+// always said them ("Door · No answer", the note under it).
+const waitingRow = (c) => ({
+  id: c.id, at: c.created_at, pending: true, label: CHANNEL_LABEL[c.channel] || c.channel,
+  title: OUTCOME_LABEL[c.outcome] || c.outcome, rating: c.rating || null, detail: c.note || null,
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The screen
@@ -908,6 +898,7 @@ export default function Person() {
   const answers = usePersonAnswers(id, desk); // survey answers (desk only)
   const fields = usePersonFields(id); // profile fields (a volunteer gets only theirs)
   const knows = usePersonKnows(id, desk); // who they know (desk only)
+  const history = usePersonTimeline(id, desk); // History: everything, newest first (desk only)
   // What's saved on this device and not sent yet (a rating, a note, tags) is
   // shown as it will be, and said once under the name.
   const outbox = useOutbox();
@@ -924,6 +915,14 @@ export default function Person() {
   const onLog = (ch) => {
     setChannel(ch);
     ratingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  // An entry in History that leads to a section here ("#gifts"): open it,
+  // bring it into view, and put the keyboard on its heading.
+  const openSection = (key) => {
+    setOpen((o) => ({ ...o, [key]: true }));
+    const sec = document.getElementById(`pf-${key}`);
+    sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    sec?.querySelector('.pf-sec__btn')?.focus({ preventScroll: true });
   };
 
   if (profile.isLoading) return <p className="muted">Loading…</p>;
@@ -954,6 +953,8 @@ export default function Person() {
     person, gifts = [], totals = [], contacts = [], roles = [], signs = [], shifts = [], donor = null, household = [],
   } = applyOutboxToProfile(profile.data, outbox.items);
   const waiting = pendingAbout(outbox.items, person.id);
+  // Contacts still on this device: History shows them first, "Not sent yet".
+  const notSent = contacts.filter((c) => c.pending).map(waitingRow);
   const tags = Array.isArray(person.tags) ? person.tags : [];
   const thisYear = totals.find((t) => String(t.year) === String(new Date().getFullYear()));
   const last = contacts[0];
@@ -1034,8 +1035,8 @@ export default function Person() {
           </Section>
         )}
         {desk && (
-          <Section title="History" count={contacts.length || ''} open={!!open.history} onToggle={toggle('history')}>
-            <History contacts={contacts} />
+          <Section title="History" count={timelineCount(history, notSent.length)} open={!!open.history} onToggle={toggle('history')}>
+            <PersonTimeline key={person.id} personId={person.id} name={person.name} all={history} pending={notSent} onSection={openSection} />
           </Section>
         )}
         {/* Texts through the campaign's number with this person (desk). */}

@@ -73,6 +73,9 @@ function planFor(key, me) {
     case 'person':
       if (typeof k1 !== 'string') return null;
       if (key.length === 2) return { ...q(`person:${k1}`, money), moneyIn: 'person' };
+      // The profile's History (ext/timeline), as far as it was loaded: each
+      // chip's own list. A desk's holds gifts: this tab only, like the profile.
+      if (key.length === 4 && k2 === 'timeline' && typeof key[3] === 'string') return q(`person:${k1}:timeline:${key[3]}`, money);
       // The profile's More details and Knows, read with it.
       return key.length === 3 && (k2 === 'fields' || k2 === 'knows') ? q(`person:${k1}:${k2}`, money) : null;
     // A search isn't kept (each one typed would be another copy, pushing the
