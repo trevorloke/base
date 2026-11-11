@@ -291,7 +291,8 @@ Set it up:
    (`…-us19`: that is the server the account lives on).
 2. Set `MAILCHIMP_API_KEY` to it. An account with more than one audience
    also needs `MAILCHIMP_AUDIENCE_ID`: **Check** names each audience with
-   its id so you can pick.
+   its id so you can pick. Until then a list's **Send to Mailchimp** says
+   a manager has to choose one, without naming the setting.
 3. **Settings → Services → Mailchimp** → **Check**: *The key works ·
    audience “…” · 4,212 subscribed — but Mailchimp isn’t sending
    unsubscribes here yet: tap Connect*.
