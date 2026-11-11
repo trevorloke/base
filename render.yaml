@@ -43,8 +43,9 @@ services:
         fromDatabase:
           name: starbase-staging-db
           property: connectionString
-      # Staging wears base.win's own look and a made-up campaign name, so it can
-      # be shown to anyone (server/lib/brand.js). The rules below — limits,
+      # Staging starts in base.win's own look with a made-up campaign name, so
+      # it can be shown to anyone (server/lib/brand.js; a brand a manager saves
+      # in Settings → Brand wins over it). The rules below — limits,
       # time zone, city, slates — are the client's, so staging tests what
       # production does.
       - key: STARBASE_BRAND
@@ -93,7 +94,8 @@ services:
         fromDatabase:
           name: starbase-db
           property: connectionString
-      # The client: Imagine Surrey's own look (Surrey Navy, Marigold, the star).
+      # The client: it starts in Imagine Surrey's own look (Surrey Navy,
+      # marigold, its wordmark); a brand a manager saves in Settings → Brand wins.
       - key: STARBASE_BRAND
         value: imagine-surrey
       - key: STARBASE_ORG_NAME

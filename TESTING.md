@@ -344,6 +344,16 @@ one tap away under **More**.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
 
+- **The campaign's brand** (underneath Settings → Brand) — a manager's
+  saved brand is what every page wears: the app's page signed in or out,
+  the installed app's name and icons, the unsubscribe, receipt and lesson
+  pages, a newsletter's links and the logo over it, and a new website
+  until it has its own look. Server tests: `server/test/brand-save.test.js`
+  (saving, the pictures and their limits, who may),
+  `server/test/brand.test.js` (the page, the manifest, the public pages,
+  emails), `server/test/brand-look.test.js` (any colour reads) and
+  `server/test/site-follow.test.js` (the website and the brand).
+
 - **Website (the admin)** — **Website** in the desk's menu (managers, or
   whoever a manager grants the Website area). **Overview**: live or not,
   where it is (**View site**), this week's sign-ups. **Pages → New page**:

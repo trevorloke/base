@@ -68,9 +68,10 @@ Every outside service, its settings and where each key comes from is in
 (`STARBASE_ORG_NAME`, `_JURISDICTION`, `_TZ`, `_CITY`, `_SLATES`) are in
 `render.yaml` already; change them there for another client. So is the
 brand: staging is `STARBASE_BRAND=base` with the name *Demo Campaign*, so it
-can be shown to anyone; production is `imagine-surrey`. A campaign already
-set up keeps the name it was given: a manager renames it in **Settings →
-Campaign**.
+can be shown to anyone; production is `imagine-surrey`. That is the look each
+starts from: once a manager saves the campaign's own in **Settings → Brand**,
+that one stays, whatever the setting says. A campaign already set up keeps
+the name it was given: a manager renames it in **Settings → Campaign**.
 `STARBASE_CANDIDATES` is not: until it's set, a new rating scale starts with
 the candidates the code ships with (`shared/scale.js`).
 

@@ -190,7 +190,24 @@ so the page says it on the form that was sent), or to the checkout.
   roles:     [string],                                                  // the volunteer roles base.win offers
 }
 ```
-`site` = `{ theme (checked), nav, footer, announcement, seo, org, social }`.
+`site` = `{ theme (checked), nav, footer, announcement, seo, org, social, icon }`.
+`icon`: the campaign's mark as app icons (`{ icon, touch }`, its own
+`/media/<id>.png` files; Settings → Brand) — the page's `<link rel="icon">`
+and touch icon, on the app's address and the campaign's domain alike.
+
+**Following the campaign's brand.** `theme.follow` (true for a new generic
+website; a website made before it existed, Imagine Surrey's among them, has
+no such key and keeps its own look): the site wears the campaign's brand
+(`server/lib/brand.js`, Settings → Brand) in place of the stored colours —
+`store.js themeFromBrand`: the brand colour and the text on it, the second
+colour as the accent, the brand as words for links, the brand on the
+action buttons, the app's neutral page and panels, the heading face and
+corners, the logo in the title bar and the logo for dark backgrounds in the
+footer — worked out by the app's rule, so every `PAIRS` pair reads. The
+stored colours stay for when it stops following. `GET /api/site` answers
+`brand_theme` (what the brand makes, where "Give the website its own look"
+starts); `site.settings.save` changes `follow` only when its theme says so.
+A brand save clears the kept pages.
 
 ## Rendering
 
@@ -603,7 +620,7 @@ Writes are actions (`POST /api/actions/:name`):
 
 | action | input → answer |
 |---|---|
-| `site.settings.save` | `{ theme?, nav?, footer?, announcement?, seo?, org?, social?, domains? }` — each section sent replaces it → `{ saved, updated_at }` |
+| `site.settings.save` | `{ theme?, nav?, footer?, announcement?, seo?, org?, social?, domains? }` — each section sent replaces it (a theme without `follow` keeps following as it was) → `{ saved, updated_at }` |
 | `site.page.create` | `{ title, slug?, description?, modules?, show_in_nav? }` → `{ page }` (a draft; slug from the title when not given) |
 | `site.page.save` | `{ id, title?, slug?, description?, image?, modules?, show_in_nav?, nav_order?, updated_at? }` → `{ page }` (the draft, `checkModules` loose; `image`: the share picture, below; `updated_at` as opened: someone else's save since → 409) |
 | `site.page.publish` | `{ id }` → `{ page }` (`checkModules` strict, and the petitions it shows must exist; the error names the module) |
