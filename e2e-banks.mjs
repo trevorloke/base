@@ -111,6 +111,76 @@ await page.waitForSelector('.bk-table', { timeout: 8000 });
 const statuses = await page.$$eval('.bk-table tbody tr td:nth-of-type(4)', (els) => els.map((e) => e.innerText.trim()));
 check('the desk sees "call back …" on both, with the try counted on the No answer', statuses.filter((x) => /^call back /.test(x)).length === 2 && statuses.some((x) => /1 try/.test(x)), statuses.join(' | '));
 check('the No answer setting reads back', (await page.inputValue('section[aria-label="No answer"] select >> nth=0')) === '2');
+
+// ── Call this list: a List feeds a phone bank ──
+// Four on the list; Gus asked not to be called, so three can be.
+for (const [n, ph, tags] of [['Dee', '44', ['call-list']], ['Eve', '45', ['call-list']], ['Fay', '46', ['call-list']], ['Gus', '47', ['call-list', 'do-not-contact']]]) {
+  await api('/actions/person.create', { name: `${n} Example`, phone: `604-555-01${ph}`, tags });
+}
+const callList = (await api('/actions/list.create', { name: 'Call these people', kind: 'filter', filter: { tag: 'call-list' } })).json.list;
+await page.goto(`${ADMIN}/lists`, { waitUntil: 'domcontentloaded' });
+const row = page.locator('.ops-item', { has: page.locator('.au-row__name', { hasText: 'Call these people' }) });
+await row.locator('.au-go a:has-text("Call")').waitFor({ timeout: 8000 });
+await page.waitForFunction(() => /4 people · 3 can be reached/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
+const rowText = (await row.innerText()).replace(/\s+/g, ' ');
+check('Lists: the row says "4 people · 3 can be reached" and Call says 3', /4 people · 3 can be reached/.test(rowText) && /Call\s*3\b/.test(rowText), rowText);
+await row.locator('.au-go a:has-text("Call")').click();
+await page.waitForURL(/\/banks\/new\?list=/, { timeout: 8000 });
+await page.waitForFunction(() => /3 of 4 on it can be called/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
+let t = (await page.innerText('main')).replace(/\s+/g, ' ');
+check('Call → New phone bank, from the list: "3 of 4 on it can be called", named after it',
+  /3 of 4 on it can be called/.test(t) && (await page.inputValue('.bk-form select')) === callList.id
+  && (await page.inputValue('.bk-form input[placeholder^="Undecided"]')) === 'Call these people'
+  && (await page.getAttribute('.au-from button:has-text("From a list")', 'aria-pressed')) === 'true', t.slice(0, 240));
+const mNew = await page.evaluate(() => ({ yellow: [...document.querySelectorAll('.btn-primary')].filter((el) => el.getBoundingClientRect().width > 0).length, overflow: document.documentElement.scrollWidth - window.innerWidth }));
+check('…one yellow, no sideways scroll', mNew.yellow === 1 && mNew.overflow <= 0, JSON.stringify(mNew));
+await page.screenshot({ path: `${SHOTS}/02-call-this-list.png` });
+await page.click('.bk-form button[type="submit"]:has-text("Make the bank with 3 numbers")');
+await page.waitForURL(/\/banks\/[0-9a-f-]{36}$/, { timeout: 8000 }).catch(() => {});
+const listBankId = page.url().split('/').pop();
+let lb = (await api(`/banks/${listBankId}`)).json?.bank;
+check('the bank: three numbers, made from the list', lb?.total === 3 && lb.list_id === callList.id && lb.list_name === 'Call these people', JSON.stringify(lb && { total: lb.total, list: lb.list_name }));
+// Dee leaves the list (her tag is taken off): she leaves the calls not made yet.
+const dee = (await api('/persons?q=Dee%20Example&limit=1')).json.persons[0];
+await api('/actions/person.update', { id: dee.id, tags: [] });
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.au-banklist', { timeout: 8000 });
+t = (await page.innerText('main')).replace(/\s+/g, ' ');
+const deeRow = (await page.innerText(`.bk-table tbody tr:has-text("Dee Example")`).catch(() => '')).replace(/\s+/g, ' ');
+lb = (await api(`/banks/${listBankId}`)).json?.bank;
+check('Dee leaves the list: "From the list Call these people · 1 left the list…", her row says so, two still to hand out',
+  /From the list Call these people · 1 left the list/.test(t) && /left the list/.test(deeRow) && lb.gone === 1 && lb.open === 2, `${t.slice(0, 200)} · ${deeRow}`);
+// Hal joins it: Add who joined since brings him in.
+await api('/actions/person.create', { name: 'Hal Example', phone: '604-555-0148', tags: ['call-list'] });
+await page.click('.au-banklist button:has-text("Add who joined since")');
+await page.waitForSelector('.au-banklist .ops-done', { timeout: 8000 }).catch(() => {});
+const topped = await page.innerText('.au-banklist .ops-done').catch(() => '');
+lb = (await api(`/banks/${listBankId}`)).json?.bank;
+check('Hal joins: "Add who joined since" → "✓ 1 more to call — on the list since"; four numbers', /1 more to call/.test(topped) && lb.total === 4 && lb.open === 3, `${topped} · ${lb.total}/${lb.open}`);
+await page.screenshot({ path: `${SHOTS}/03-bank-from-list.png`, fullPage: true });
+
+// ── Calls with ?list=: past the first 300 ──
+const many = Array.from({ length: 305 }, (_, i) => ({ name: `Many ${String(i + 1).padStart(3, '0')} Example`, phone: `604-555-01${String(i % 100).padStart(2, '0')}` }));
+check('305 people on one list come in', (await api('/data/import', { rows: many, tag: 'many' })).json?.created === 305);
+const manyList = (await api('/actions/list.create', { name: 'Many to call', kind: 'filter', filter: { tag: 'many' } })).json.list;
+await page.goto(`${ADMIN}/calls?list=${manyList.id}&channel=phone`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.cl-progress', { timeout: 10000 });
+await page.waitForFunction(() => /305 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
+check('Calls with the list: "305 to call" — the true number, not the first 300', /305 to call/.test(await page.innerText('.cl-progress')), await page.innerText('.cl-progress'));
+// The first 290 by name called already in this sitting: the next part comes in by itself.
+const first300 = (await api(`/persons?list=${manyList.id}&has=phone&reach=call&limit=300`)).json.persons;
+await page.evaluate((ids) => sessionStorage.setItem('starbase.calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'no_answer' }])))), first300.slice(0, 290).map((p) => p.id));
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.cl-progress', { timeout: 10000 });
+await page.waitForFunction(() => /\b15 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
+await page.click('.cl-next__btn').catch(() => {});
+const upNext = [(await page.innerText('.cl-card .cl-name').catch(() => '')).trim(),
+  ...await page.$$eval('.cl-next__list li span:first-child', (els) => els.map((e) => e.innerText.trim())).catch(() => [])];
+check('290 done: "15 to call", and the list goes on past 300 (Many 301–305 are on it)',
+  /\b15 to call/.test(await page.innerText('.cl-progress')) && [301, 302, 303, 304, 305].every((n) => upNext.includes(`Many ${n} Example`)) && !/Start over/.test(await page.innerText('main')),
+  `${await page.innerText('.cl-progress')} · ${upNext.join(', ')}`);
+await page.screenshot({ path: `${SHOTS}/04-calls-past-300.png` });
+await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();

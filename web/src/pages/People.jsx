@@ -1080,12 +1080,14 @@ function CallsScreen() {
   useKeepCopy(me, copyName, persons);
   const listCopy = showingCopy(persons);
   const seed = me?.user?.id || '';
-  const laterRows = later.map((r) => r.data?.persons ?? []);
+  // Every part loaded, once each. (One stamp for the parts: a hook's list of
+  // dependencies must keep its length, and the parts grow.)
+  const laterStamp = later.map((r) => r.dataUpdatedAt || 0).join(',');
   const list = useMemo(() => {
     if (!persons.data?.persons) return undefined;
     const seen = new Set();
-    return [persons.data.persons, ...laterRows].flat().filter((p) => (seen.has(p.id) ? false : seen.add(p.id)));
-  }, [persons.data, ...laterRows]); // eslint-disable-line react-hooks/exhaustive-deps
+    return [persons.data.persons, ...later.map((r) => r.data?.persons ?? [])].flat().filter((p) => (seen.has(p.id) ? false : seen.add(p.id)));
+  }, [persons.data, laterStamp]); // eslint-disable-line react-hooks/exhaustive-deps
   // The newest part: are there more after it, and where it ends.
   const last = ends.length ? later[ends.length - 1] : persons;
   const lastRows = ends.length ? last?.data?.persons : persons.data?.persons;
