@@ -36,12 +36,12 @@
 }
 @media (hover: hover) { .au-row__name:hover { text-decoration: underline; text-underline-offset: 3px; } }
 .au-go { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.au-go .btn.ops-tap { padding: 0 14px; font-size: 14px; }
+.au-go .btn.ops-tap { padding: 0 14px; font-size: 14px; min-width: 88px; }
 .au-n { font-variant-numeric: tabular-nums; font-weight: 500; color: var(--text-3); }
 @media (max-width: 720px) {
   .au-row { padding: var(--s-3); }
   .au-go { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .au-go .btn.ops-tap { padding: 0 6px; flex-direction: column; gap: 0; line-height: 1.2; }
+  .au-go .btn.ops-tap { padding: 0 6px; min-width: 0; flex-direction: column; gap: 0; line-height: 1.2; }
   .au-go .au-n { font-size: 12px; }
 }
 
@@ -64,7 +64,8 @@
 /* The rules a list's form keeps under "More rules", and the sheet's inline fields */
 .au-rules { margin: 0 0 var(--s-3); }
 .au-rules__body { padding-top: var(--s-2); }
-.au-rules__body > .field { flex: 1 1 200px; }
+/* Doubled to win over app.css's .form-row > .field (it loads later): one to a row on a phone */
+.au-rules .au-rules__body > .field { flex: 1 1 220px; }
 .au-inline { margin: var(--s-2) 0 0; max-width: 260px; }
 .pp-group .form-row > .field { flex: 1 1 200px; margin-bottom: 0; }
 .pp-sheet .au-inline .input, .pp-group .form-row .input, .au-rules .input { min-height: 48px; }

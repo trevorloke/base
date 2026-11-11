@@ -961,6 +961,7 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
             {/* Where the senders' rules differ (server lib/reach.js), said where the choice is made. */}
             {!isNews && <span className="au-rule">This goes to everyone on the list who hasn’t said no; the newsletter goes only to subscribers.</span>}
             {!isNews && chosen && counts.get(chosen.id)?.isError && <span className="error" role="alert"><Unavailable onRetry={counts.get(chosen.id).refetch} /></span>}
+            {isNews && subs.isError && subscribed == null && <span className="error" role="alert"><Unavailable onRetry={() => subs.refetch()} /></span>}
             <span className="ops-meta">
               The newsletter: everyone who signed up. A list: a saved filter or hand-picked people (<Link to="/lists">Lists</Link>).
               Do-not-email, do-not-contact and unsubscribed addresses are left out.

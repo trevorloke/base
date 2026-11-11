@@ -9,7 +9,9 @@
 // at once; the desk's card counts doors knocked · talked · yes and ends the
 // pass (asks in place), after which every knocked door is done the old way;
 // a get-out-the-vote pass for supporters turns Today's button to "Get out
-// the vote →" and lists only the supporters' doors. Every claim on a screen
+// the vote →" and lists only the supporters' doors; Walk this list: a list's
+// Walk opens the pass form with it picked, and the walk is only its doors
+// (a volunteer never learns its name). Every claim on a screen
 // is checked against the API; each new screen is measured (yellow buttons,
 // sideways scroll, 48px targets).
 //

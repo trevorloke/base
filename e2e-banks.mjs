@@ -4,7 +4,10 @@
 // it on Calls: a No answer says "back on your list <time>" and the number
 // leaves the list for now; the bank line counts it ("1 to call back");
 // "Call back…" → This evening does the same at 6; the desk's bank page shows
-// both as "call back …". Measured at 390.
+// both as "call back …". Measured at 390. Call this list: a list's Call
+// opens New phone bank from it ("3 of 4 on it can be called"), the bank
+// says who left the list and takes in who joined since; Calls on a list of
+// 305 says "305 to call" and goes on past its first 300.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
 //   BASE=http://127.0.0.1:4132 SHOTS=/tmp/banks node e2e-banks.mjs
