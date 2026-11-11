@@ -40,6 +40,8 @@ function Row({ s, online }) {
         {s.webhook && <Webhook w={s.webhook} />}
         {s.connect && <ServiceConnect connect={s.connect} online={online} onDone={() => setRes(null)} />}
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
+        {/* Something for the manager to do at the service: said apart, not in the line that says what works. */}
+        {res?.todo && <p className="sv2-detail sv2-todo" role="status">{res.todo}</p>}
       </div>
       {s.checkable && (
         <button type="button" className="btn ops-tap sv2-check" disabled={busy || !online} onClick={check}>{busy ? 'Checking…' : 'Check'}</button>

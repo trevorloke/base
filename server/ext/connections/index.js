@@ -7,9 +7,11 @@
 //                                    missing: [ENV…], set: [ENV…], detail,
 //                                    checkable }], inbound: [{ name, url, how }],
 //                                    publicUrl }
-//   POST /api/connections/check    { key } → { ok, said } — one real call to
-//                                    the service (8 s at most); nothing is
-//                                    sent to anyone, nothing is written.
+//   POST /api/connections/check    { key } → { ok, said, todo? } — one real
+//                                    call to the service (8 s at most);
+//                                    nothing is sent to anyone, nothing is
+//                                    written. todo: something the manager
+//                                    must do at the service, said apart.
 //
 // Keys and tokens are never in an answer: only which settings are present.
 import { Hono } from 'hono';

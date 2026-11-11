@@ -424,7 +424,8 @@ What happens:
   so a pick is made once. What is taken back on a push is taken back on the
   pushes sent since that still carry it — a row that no longer counts as
   *Do not call*, an answer that no longer rates as it did, a support
-  question dropped — and the saved line says so (*1 list sent since
+  question dropped — and the question before it says so (*… — here and
+  on the 1 list sent since*), as does the saved line (*1 list sent since
   follows too*). Never the other way: a pick that tags people, or an
   answer newly mapped, is about the one list it was asked on.
 - **Ratings** only ever come from a survey answer someone mapped: pick the
@@ -514,10 +515,11 @@ texting (TESTING.md).
 **Check:** Services → Phone dialer asks CallHub two things and writes
 nothing: the key works, and one of the account's webhooks sends call
 results (`cc.notes`) to this base.win. Then it says how many results have
-arrived, how many were for numbers base.win never sent, how many it could
-not read, and how many numbers are still on CallHub's do-not-call list
-that nobody here blocks any more — with whose the first few are (a list's
-page names them all).
+arrived, how many were for numbers base.win never sent and how many it
+could not read. On a line of its own, since it is yours to do in CallHub:
+how many numbers are still on CallHub's do-not-call list that nobody here
+blocks any more — with whose the first few are (a list's page names them
+all).
 
 ## Hosting — Render
 

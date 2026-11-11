@@ -13,7 +13,9 @@
 // change moves the results already in too, and putting it back undoes it
 // (on the lists sent since that copied it as well); one that would tag
 // people do-not-call or rate them asks first, in place, naming the result —
-// and so does taking a row off "Do not call", which lets people be called again.
+// and so does taking a row off "Do not call", which lets people be called
+// again (saying how many lists sent since follow). Once saved, the keyboard
+// is back on the row's select; anyone a put-back leaves do-not-call is named.
 // Under everything: the do-not-call numbers CallHub would not take, and
 // the ones it still holds though nobody here blocks them now — with whose
 // they are, so someone can put it right in CallHub.
@@ -119,7 +121,17 @@ function Results({ p, online, onChanged }) {
     if (p.moving) setWasMoving(true);
     else if (wasMoving) { setWasMoving(false); setSaid('Saved · the results already in have all moved'); }
   }, [p.moving, wasMoving]);
-  const save = async (input) => {
+  // The select a save came from (it is disabled while saving, and a Yes that
+  // was pressed is gone): the keyboard goes back to it once the save is done.
+  const back = useRef(null);
+  useEffect(() => {
+    if (busy || !back.current) return;
+    const el = document.getElementById(back.current);
+    back.current = null;
+    if (el && (!document.activeElement || document.activeElement === document.body)) el.focus();
+  }, [busy]);
+  const save = async (input, at = null) => {
+    back.current = at && `${uid}-${at}`;
     setBusy(true); setError(null); setSaid(null); setStayed(null); setAsk(null);
     try {
       const r = await action('callhub.map', { id: p.id, ...input });
@@ -134,29 +146,31 @@ function Results({ p, online, onChanged }) {
   const questions = picked && !p.questions.some((q) => q.question === picked) ? [...p.questions, { question: picked, answers: [] }] : p.questions;
   const rates = Boolean(support?.answers.some((a) => a.rating));
 
+  // What is taken back here is taken back on the lists sent since that still carry it: the question says on how many.
+  const alsoSince = (n) => (n ? ` — here and on the ${num(n)} ${plural(n, 'list')} sent since` : '');
   const pickOutcome = (d, i, value) => {
     const input = { outcomes: { [d.disposition]: value === d.suggested ? null : value } };
     // Off "Do not call" lets the people it tagged be called again — on the
     // lists sent since that copied the row, too — so it asks first as well:
     // one arrow key on the focused select is not enough.
     if (d.outcome === 'do_not_call' && value !== 'do_not_call') {
-      setAsk({ at: `d${i}`, input, words: `Stop counting “${d.disposition || 'No result given'}” as do not call? Whoever it tagged can be called again.` });
+      setAsk({ at: `d${i}`, input, words: `Stop counting “${d.disposition || 'No result given'}” as do not call? Whoever it tagged can be called again${alsoSince(d.later)}.` });
       return;
     }
-    if (value !== 'do_not_call') { save(input); return; }
+    if (value !== 'do_not_call') { save(input, `d${i}`); return; }
     // The question names the result it is about: it is read on its own, not only under its row.
     const who = d.people ? `the ${num(d.people)} ${plural(d.people, 'person', 'people')}` : 'everyone';
     const result = d.disposition ? `with “${d.disposition}”` : 'with no result given';
-    setAsk({ at: `d${i}`, input, words: `Tag ${who} ${result} do-not-call? They leave every call list.` });
+    setAsk({ at: `d${i}`, input, words: <>Tag {who} {result} {DNC}? They leave every call list.</> });
   };
   const pickQuestion = (value) => {
     const input = { rating: value ? { question: value, answers: {} } : null };
-    if (!rates) { save(input); return; }
-    setAsk({ at: 'q', input, words: 'Stop rating people from this question? The ratings its answers gave are taken back.' });
+    if (!rates) { save(input, 'q'); return; }
+    setAsk({ at: 'q', input, words: `Stop rating people from this question? The ratings its answers gave are taken back${alsoSince(p.rating?.later)}.` });
   };
   const pickRating = (a, i, value) => {
     const input = { rating: { question: picked, answers: { [a.answer]: value || null } } };
-    if (!value) { save(input); return; }
+    if (!value) { save(input, `a${i}`); return; }
     setAsk({ at: `a${i}`, input, words: `Rate everyone who answered “${a.answer}” as ${ratingText(scale, value)}?` });
   };
   // No — by its button or by Escape: nothing changes, and the keyboard is back on the select.
@@ -164,7 +178,7 @@ function Results({ p, online, onChanged }) {
   const confirm = (at) => ask?.at === at && (
     <span className="ops-confirm ch-confirm" role="alert" ref={askRef} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); sayNo(at); } }}>
       <span>{ask.words}</span>
-      <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={() => save(ask.input)}>Yes</button>
+      <button type="button" className="btn ops-tap" disabled={busy || !online} onClick={() => save(ask.input, at)}>Yes</button>
       <button type="button" className="btn btn-quiet ops-tap" autoFocus onClick={() => sayNo(at)}>No</button>
     </span>
   );

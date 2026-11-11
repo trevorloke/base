@@ -47,11 +47,23 @@ api.get('/callhub/preview', async (c) => {
   }
 });
 
+// The lists sent since this push (actions.js takenBack): a row put back here,
+// or the support question dropped, is put back on each one that still
+// carries it as it is here — the question before it says on how many.
+const sentSince = async (db, ws, id) => (await db.query(
+  `select outcomes, rating_map from callhub_pushes
+    where workspace_id = $1 and id <> $2 and created_at > (select created_at from callhub_pushes where id = $2)`, [ws, id],
+)).rows.map((r) => ({ outcomes: parseJ(r.outcomes, {}), rating: parseJ(r.rating_map, null) }));
+const sameAnswers = (a = {}, b = {}) => Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => a[k] === b[k]);
+
 // A push's results, counted: each of CallHub's results with what it counts
 // as (auto: by the pattern table, not the desk's own word; suggested: what
 // the pattern table says; people: how many people have that result — who a
-// change to the row is about), and each survey question seen with its answers
-// and the rating an answer is mapped to (support: the question that rates).
+// change to the row is about; later: for a "do not call" row, how many lists
+// sent since would follow it being put back), and each survey question seen
+// with its answers and the rating an answer is mapped to (support: the
+// question that rates; rating.later: how many lists sent since would follow
+// it being dropped).
 const resultsOf = async (db, ws, push) => {
   const own = parseJ(push.outcomes, {});
   const map = parseJ(push.rating_map, null);
@@ -96,6 +108,11 @@ const resultsOf = async (db, ws, push) => {
       }
     }
   }
+  const rates = Boolean(map?.question) && Object.keys(map.answers || {}).length > 0;
+  const since = [...byResult.values()].some((r) => r.outcome === 'do_not_call') || rates ? await sentSince(db, ws, push.id) : [];
+  for (const [key, row] of byResult) {
+    row.later = row.outcome === 'do_not_call' ? since.filter((l) => (l.outcomes[key] ?? null) === (own[key] ?? null)).length : 0;
+  }
   const byCount = (x, y) => y.n - x.n || String(x.disposition ?? x.answer).localeCompare(String(y.disposition ?? y.answer), 'en', { sensitivity: 'base' });
   return {
     results,
@@ -103,7 +120,10 @@ const resultsOf = async (db, ws, push) => {
     questions: [...questions.values()].slice(0, 12).map((q) => ({
       question: q.question, support: Boolean(map?.question) && map.question === norm(q.question), answers: [...q.answers.values()].sort(byCount).slice(0, 12),
     })),
-    rating: map?.question ? { question: map.label || map.question } : null,
+    rating: map?.question ? {
+      question: map.label || map.question,
+      later: rates ? since.filter((l) => l.rating?.question === map.question && sameAnswers(l.rating.answers, map.answers)).length : 0,
+    } : null,
   };
 };
 

@@ -73,7 +73,8 @@ export const checkCallHub = async (db, ws, base) => {
   // held: numbers still on CallHub's do-not-call list that nobody here
   // blocks any more, and that base.win could not take off itself — with
   // whose they are (the first few; a list's page names them all), so the
-  // instruction can be followed.
+  // instruction can be followed. It is the manager's to do (todo), said
+  // apart from what works, not in the same line.
   const numbers = await heldNumbers(db, ws);
   const held = numbers.length;
   const whose = held ? await whoseNumbers(db, ws, numbers) : [];
@@ -81,7 +82,8 @@ export const checkCallHub = async (db, ws, base) => {
   const names = whose.length ? `: ${whose.slice(0, WHO_NAMED).map((p) => p.name).join(', ')}${rest > 0 ? ` and ${rest.toLocaleString('en-CA')} more (a list’s page names them all)` : ''}` : '';
   return {
     ok: true,
-    said: `The key works · results come back here${results ? ` · ${plural(results, 'result')} so far` : ''}${n.unfiled ? ` · ${n.unfiled.toLocaleString('en-CA')} for numbers base.win never sent` : ''}${n.unread ? ` · ${n.unread.toLocaleString('en-CA')} base.win couldn’t read (kept as they came)` : ''}${held ? ` · CallHub’s do-not-call list still has ${plural(held, 'number')} nobody here blocks now — take ${held === 1 ? 'it' : 'them'} off in CallHub${names}` : ''}`,
+    said: `The key works · results come back here${results ? ` · ${plural(results, 'result')} so far` : ''}${n.unfiled ? ` · ${n.unfiled.toLocaleString('en-CA')} for numbers base.win never sent` : ''}${n.unread ? ` · ${n.unread.toLocaleString('en-CA')} base.win couldn’t read (kept as they came)` : ''}`,
+    ...(held ? { todo: `CallHub’s do-not-call list still has ${plural(held, 'number')} nobody here blocks now. Take ${held === 1 ? 'it' : 'them'} off in CallHub${names}` } : {}),
   };
 };
 

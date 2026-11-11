@@ -316,15 +316,24 @@ if ((await rowSays(voicemail)) !== 'Do not call') { // (before the question exis
   await page.click(`${ch} .ch-push .disclose`);
   await page.waitForSelector(`${voicemail} select`, { timeout: 10000 });
 }
-await page.selectOption(`${voicemail} select`, 'left_message');
+// By keyboard this time: "l" picks Left message, the question opens on No, Shift+Tab is Yes.
+await page.focus(`${voicemail} select`);
+await page.keyboard.press('l');
 await page.waitForSelector(`${voicemail} .ch-confirm`, { timeout: 5000 }).catch(() => {});
 check('put back by a pick: the same question, and nothing changes before Yes', (await text(page, `${voicemail} .ch-confirm`)).startsWith('Stop counting “Left voicemail” as do not call?') && await tagged(P.eli), '');
 await page.locator(voicemail).scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOTS}/11-put-back-ask-1440.png` });
-if (await page.$(`${voicemail} .ch-confirm`)) await page.click(`${voicemail} .ch-confirm button:has-text("Yes")`);
+await page.keyboard.press('Shift+Tab');
+const onYes = await page.evaluate(() => document.activeElement?.textContent);
+await page.keyboard.press('Enter');
 await page.waitForFunction((s) => /no longer do-not-call/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
 check('put back: “Saved · 1 result already in moved too · 1 person is no longer do-not-call”',
   (await text(page, `${ch} .ch-results [role="status"]`)) === 'Saved · 1 result already in moved too · 1 person is no longer do-not-call' && !(await tagged(P.eli)), await text(page, `${ch} .ch-results [role="status"]`));
+// (Polled through Playwright: the row's selector uses :has-text, which the page's own querySelector doesn't know.)
+const onSelect = () => page.locator(`${voicemail} select`).evaluate((el) => document.activeElement === el).catch(() => false);
+for (let i = 0; i < 20 && !(await onSelect()); i += 1) await sleep(250);
+check('Yes by keyboard: once saved the keyboard is back on the row’s select, not at the top of the page',
+  onYes === 'Yes' && await onSelect(), `${onYes} → ${await page.evaluate(() => document.activeElement?.tagName)}`);
 for (let i = 0; i < 20 && fake.dnc.some((d) => d.phone_number === '+16045550105'); i += 1) await sleep(500);
 check('…and the number comes off CallHub’s do-not-call list again', !fake.dnc.some((d) => d.phone_number === '+16045550105'), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
 await page.screenshot({ path: `${SHOTS}/11-put-back-1440.png`, fullPage: true });
@@ -528,6 +537,18 @@ await page.click(`${ch} .ch-push .disclose`);
 await page.waitForSelector(`${rangOut} select`, { timeout: 10000 });
 await page.selectOption(`${rangOut} select`, 'contacted');
 await page.waitForSelector(`${rangOut} .ch-confirm`, { timeout: 5000 }).catch(() => {});
+const sinceAsk = await text(page, `${rangOut} .ch-confirm`);
+check('the put-back question says the list sent since follows: “… can be called again — here and on the 1 list sent since.”',
+  sinceAsk === 'Stop counting “Rang out” as do not call? Whoever it tagged can be called again — here and on the 1 list sent since. Yes No', sinceAsk);
+await page.locator(rangOut).scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${SHOTS}/12-put-back-ask-since-1440.png` });
+await page.setViewportSize({ width: 390, height: 844 });
+await sleep(400);
+await page.locator(`${rangOut} .ch-confirm`).evaluate((el) => el.scrollIntoView({ block: 'center' })).catch(() => {});
+await page.screenshot({ path: `${SHOTS}/12-put-back-ask-since-390.png` });
+m = await measure(page, ch);
+check('…the question at 390 wide: no sideways scroll, Yes and No ≥ 48px', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+await page.setViewportSize({ width: 1440, height: 900 });
 if (await page.$(`${rangOut} .ch-confirm`)) await page.click(`${rangOut} .ch-confirm button:has-text("Yes")`);
 await page.waitForFunction((sel) => /no longer do-not-call/.test(document.querySelector(sel)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
 const followed = await text(page, `${ch} .ch-results [role="status"]`);
@@ -624,12 +645,26 @@ check('numbers CallHub still holds that nobody here blocks: how many, what to do
 await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector(row, { timeout: 10000 });
 await page.click(`${row} .sv2-check`);
-await page.locator(`${row} .sv2-row__main > .sv2-said`).filter({ hasText: 'nobody here blocks' }).waitFor({ timeout: 10000 }).catch(() => {});
+await page.waitForSelector(`${row} .sv2-todo`, { timeout: 10000 }).catch(() => {});
 const checkSaid = await text(page, `${row} .sv2-row__main > .sv2-said`);
-check('Check says the same, naming them: “… take them off in CallHub: Quiet0 Example, Quiet1 Example”',
-  / · CallHub’s do-not-call list still has 2 numbers nobody here blocks now — take them off in CallHub: Quiet0 Example, Quiet1 Example$/.test(checkSaid), checkSaid);
+const checkTodo = await text(page, `${row} .sv2-todo`);
+// (Through Playwright: the row's selector uses :text-is, which the page's own querySelector doesn't know.)
+const colourOf = (s) => page.locator(s).first().evaluate((el) => getComputedStyle(el).color).catch(() => null);
+const colours = [await colourOf(`${row} .sv2-row__main > .sv2-said`), await colourOf(`${row} .sv2-todo`)];
+check('Check says what works in its green line, and what to do in CallHub on a line of its own, naming them',
+  /^✓ The key works · results come back here/.test(checkSaid) && !/blocks|take them off/.test(checkSaid)
+  && checkTodo === 'CallHub’s do-not-call list still has 2 numbers nobody here blocks now. Take them off in CallHub: Quiet0 Example, Quiet1 Example'
+  && colours[1] && colours[0] !== colours[1], `${checkSaid} | ${checkTodo} | ${colours.join(' ')}`);
 await page.locator(row).scrollIntoViewIfNeeded();
 await page.screenshot({ path: `${SHOTS}/14-held-check-1440.png` });
+await phone.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
+await phone.waitForSelector(row, { timeout: 10000 });
+await phone.tap(`${row} .sv2-check`);
+await phone.waitForSelector(`${row} .sv2-todo`, { timeout: 10000 }).catch(() => {});
+await phone.locator(`${row} .sv2-todo`).evaluate((el) => el.scrollIntoView({ block: 'center' })).catch(() => {});
+await phone.screenshot({ path: `${SHOTS}/14-held-check-390.png` });
+m = await measure(phone, row);
+check('…at 390: no sideways scroll, Check and Connect ≥ 48px', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
 fake.keepDnc(false);
 
 // ── Off: no button at all ──

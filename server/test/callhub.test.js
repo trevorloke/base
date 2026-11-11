@@ -528,15 +528,15 @@ test('the outcome table is filled by pattern and correctable; a correction also 
   let [p] = await pushesOf(`bank=${ok(await mgr.get('/api/banks')).banks.find((b) => b.name === 'Whalley calls').id}`);
   assert.equal(p.results, 3);
   assert.deepEqual(p.dispositions, [
-    { disposition: 'Call back later', n: 2, people: 2, outcome: 'contacted', auto: true, suggested: 'contacted' },
-    { disposition: 'Supporter', n: 1, people: 1, outcome: 'contacted', auto: true, suggested: 'contacted' },
+    { disposition: 'Call back later', n: 2, people: 2, outcome: 'contacted', auto: true, suggested: 'contacted', later: 0 },
+    { disposition: 'Supporter', n: 1, people: 1, outcome: 'contacted', auto: true, suggested: 'contacted', later: 0 },
   ]);
   assert.equal((await staff.action('callhub.map', { id: p.id, outcomes: { 'Call back later': 'talked' } })).status, 400, 'an outcome base.win has');
   assert.equal((await vol.action('callhub.map', { id: p.id, outcomes: { 'Call back later': 'no_answer' } })).status, 403);
   const fixed = ok(await staff.action('callhub.map', { id: p.id, outcomes: { 'call back LATER ': 'no_answer' } }));
   assert.equal(fixed.changed, 2, 'the two already filed');
   [p] = await pushesOf(`bank=${ok(await mgr.get('/api/banks')).banks.find((b) => b.name === 'Whalley calls').id}`);
-  assert.deepEqual(p.dispositions[0], { disposition: 'Call back later', n: 2, people: 2, outcome: 'no_answer', auto: false, suggested: 'contacted' });
+  assert.deepEqual(p.dispositions[0], { disposition: 'Call back later', n: 2, people: 2, outcome: 'no_answer', auto: false, suggested: 'contacted', later: 0 });
   const ben = (await contactsOf(P.ben.id)).filter((c) => /Whalley/.test(c.note || ''));
   assert.deepEqual(ben.map((c) => c.outcome).sort(), ['contacted', 'no_answer']);
   // …and the next one with that result follows the correction.
@@ -1143,6 +1143,8 @@ test('what is taken back on a list is taken back on the lists sent since that co
   const answered = (n, extra = {}) => fake.note({ contact: `+167255501${n}`, disposition: 'Answered', campaign: 'Copy', notes: `talked ${n}`, ...extra });
   const isTagged = async (p) => (await person(p.id)).tags.includes('do-not-call');
   const rowOf = async (l) => { const row = (await pushesOf(`list=${l.list}`))[0].dispositions.find((x) => x.disposition === 'Answered'); return [row.outcome, row.auto]; };
+  // How many lists sent since would follow if the row were put back here.
+  const laterOf = async (l) => (await pushesOf(`list=${l.list}`))[0].dispositions.find((x) => x.disposition === 'Answered').later;
   const map = async (l, input) => ok(await staff.action('callhub.map', { id: l.id, ...input }));
 
   // "Answered" slips to Do not call on the first list (asked: Yes). A second list is sent
@@ -1153,7 +1155,8 @@ test('what is taken back on a list is taken back on the lists sent since that co
   const second = await send('Copy second', b);
   await answered('07');
   assert.deepEqual([await rowOf(second), await isTagged(b)], [['do_not_call', false], true]);
-  // The first is put back: the list that still carries the copy follows.
+  // The first is put back: the list that still carries the copy follows — and the question before it says so.
+  assert.equal(await laterOf(first), 1);
   const back = await map(first, { outcomes: { Answered: null } });
   assert.deepEqual([back.untagged, back.later], [1, 1]);
   assert.deepEqual(await rowOf(second), ['contacted', true], 'its table at once');
@@ -1171,6 +1174,7 @@ test('what is taken back on a list is taken back on the lists sent since that co
   await answered('09');
   assert.equal(await isTagged(own), true);
   assert.deepEqual([(await map(fourth, { outcomes: { Answered: 'refused' } })).untagged, await isTagged(own)], [1, false]);
+  assert.equal(await laterOf(third), 0, 'the list sent since picked its own: the question says nothing follows');
   const again = await map(third, { outcomes: { Answered: null } });
   assert.deepEqual([again.untagged, again.later], [1, 0]);
   assert.deepEqual(await rowOf(fourth), ['refused', false]);
@@ -1193,7 +1197,8 @@ test('what is taken back on a list is taken back on the lists sent since that co
   assert.deepEqual([fixed.rated, fixed.later], [1, 1]);
   await drain();
   assert.deepEqual(await ratings(), ['1', '1']);
-  // …and taken away there, it is taken away on the copy: the ratings its answers gave go back.
+  // …and taken away there, it is taken away on the copy: the ratings its answers gave go back (the question says so first).
+  assert.equal((await pushesOf(`list=${fourth.list}`))[0].rating.later, 1);
   assert.equal((await map(fourth, { rating: null })).later, 1);
   await drain();
   assert.deepEqual(await ratings(), [null, null]);
@@ -1394,7 +1399,8 @@ test('“CallHub wouldn’t take …” goes once there is nothing left to take:
     // …and the refusal is forgotten, so no later push or Check brings it up.
     assert.deepEqual(await row(), { category: 2, refused: null, refused_note: null });
     assert.deepEqual([atCallHub(), await line()], [[2], null]);
-    assert.doesNotMatch(ok(await mgr.post('/api/connections/check', { key: 'callhub' })).said, /nobody here blocks/);
+    const quiet = ok(await mgr.post('/api/connections/check', { key: 'callhub' }));
+    assert.deepEqual([quiet.todo, /nobody here blocks/.test(quiet.said)], [undefined, false]);
   } finally {
     fake.rejectDnc(false);
   }
@@ -1461,8 +1467,9 @@ test('a number CallHub won’t let go, or never named, stays on its list: nothin
   const b = await mgr.createPerson('Held B Example', { phone: '604-555-0147', tags: ['do-not-call'] });
   await drain();
   assert.equal(fake.dnc.filter((d) => ['+16045550146', '+16045550147'].includes(d.phone_number)).length, 2);
-  const check = async () => ok(await mgr.post('/api/connections/check', { key: 'callhub' })).said;
-  assert.doesNotMatch(await check(), /nobody here blocks/);
+  // What works is Check's line; what the desk must do in CallHub is said apart from it (todo), never in the same green line.
+  const check = async () => ok(await mgr.post('/api/connections/check', { key: 'callhub' }));
+  assert.deepEqual([(await check()).todo, /nobody here blocks/.test((await check()).said)], [undefined, false]);
   // CallHub never said which entry the first one was; and it refuses to delete the second.
   await db.query(`update callhub_dnc set entry = null where workspace_id = $1 and phone = '+16045550146'`, [ws]);
   const realFetch = globalThis.fetch;
@@ -1479,7 +1486,9 @@ test('a number CallHub won’t let go, or never named, stays on its list: nothin
     ok(await mgr.action('person.update', { id: b.id, tags: [] }));
     await drain();
     assert.equal(deletes, 1, 'asked once for the one CallHub named');
-    assert.match(await check(), / · CallHub’s do-not-call list still has 2 numbers nobody here blocks now — take them off in CallHub: Held A Example, Held B Example$/);
+    const told = await check();
+    assert.deepEqual([told.ok, /nobody here blocks|take them off/.test(told.said), told.todo],
+      [true, false, 'CallHub’s do-not-call list still has 2 numbers nobody here blocks now. Take them off in CallHub: Held A Example, Held B Example']);
     // …and any list’s page names whose they are, each a way to the person.
     assert.deepEqual(ok(await staff.get(`/api/callhub/pushes?list=${ids.list}`)).held, { n: 2, people: [{ id: a.id, name: 'Held A Example' }, { id: b.id, name: 'Held B Example' }], more: 0 });
     // Not asked again each time someone's tags change; no job gave up; a push still goes.
@@ -1512,7 +1521,7 @@ test('a number CallHub won’t let go, or never named, stays on its list: nothin
     for (const m of many) ok(await mgr.action('person.update', { id: m.id, tags: [] }));
     await drain();
     assert.equal(deletes, 5, 'five asked, three left unasked');
-    assert.match(await check(), /still has 10 numbers nobody here blocks now — take them off in CallHub: Held A Example, Held B Example, Kept0 Example and 7 more \(a list’s page names them all\)$/);
+    assert.equal((await check()).todo, 'CallHub’s do-not-call list still has 10 numbers nobody here blocks now. Take them off in CallHub: Held A Example, Held B Example, Kept0 Example and 7 more (a list’s page names them all)');
     assert.deepEqual(ok(await staff.get(`/api/callhub/pushes?list=${ids.list}`)).held.people.map((x) => x.name),
       ['Held A Example', 'Held B Example', ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `Kept${i} Example`)]);
     assert.equal((await db.query(`select count(*)::int as n from jobs where workspace_id = $1 and kind = 'callhub.dnc' and status in ('failed', 'pending')`, [ws])).rows[0].n, 0);
@@ -1524,7 +1533,7 @@ test('a number CallHub won’t let go, or never named, stays on its list: nothin
   ok(await mgr.action('callhub.push', { list_id: again }));
   await drain();
   assert.ok(!fake.dnc.some((d) => d.phone_number === '+16045550147' || d.phone_number.startsWith('+1778555011')));
-  assert.match(await check(), / · CallHub’s do-not-call list still has 1 number nobody here blocks now — take it off in CallHub: Held A Example$/);
+  assert.equal((await check()).todo, 'CallHub’s do-not-call list still has 1 number nobody here blocks now. Take it off in CallHub: Held A Example');
   // (Tidy: the stand-in still has it; base.win's record of it goes so later counts are their own.)
   await db.query(`delete from callhub_dnc where workspace_id = $1 and phone = '+16045550146'`, [ws]);
   assert.equal(ok(await staff.get(`/api/callhub/pushes?list=${ids.list}`)).held, null);
