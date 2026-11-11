@@ -5,9 +5,15 @@
 //   nearest readable colour for its text). Then the type (heading and body
 //   fonts), the corners, the logo. A live sample beside it: the title bar,
 //   text and a link, the buttons, a soft panel and a band, in these colours.
-//   One yellow "Save the look" (live on the site at once — there's no draft
+//   One primary, "Save the look" (live on the site at once — there's no draft
 //   of the theme); the server checks the contrast again (site.settings.save).
+//   A website can instead follow the campaign's brand (Settings → Brand;
+//   theme.follow — a new website does until it is given its own look): then
+//   this screen says so and shows the sample, with "Give the website its own
+//   look" (starts from what it wears now). A website with its own look has
+//   "Use the campaign's brand".
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useOutletContext } from 'react-router-dom';
 import { COLOR_KEYS, FONTS, FONT_BY_VALUE, RADII, SKINS } from '@starbase/shared/site/theme';
 import { action } from '../api.js';
 import { at } from '../base.js';
@@ -19,6 +25,7 @@ import { colorWords, hexOf, pairsOf, ratioWords, readableInk } from '../componen
 import './shifts.css';
 import '../editor.css';
 import './website.css';
+import './website-follow.css';
 
 // A theme as the server keeps it, with every key there (a skin's for any missing).
 const full = (t) => {
@@ -91,6 +98,7 @@ function Sample({ t, org }) {
 }
 
 export default function WebsiteTheme() {
+  const { me } = useOutletContext() || {};
   const q = useSite();
   const refresh = useSiteRefresh();
   const online = useOnline();
@@ -98,6 +106,11 @@ export default function WebsiteTheme() {
   const [t, setT] = useState(null);
   const [saved, setSaved] = useState(null);
   const [state, setState] = useState(null);
+  // Following the campaign's brand: as the server has it, until changed here.
+  const [follow, setFollow] = useState(null);
+  const [asking, setAsking] = useState(false);
+  const [switching, setSwitching] = useState(false);
+  const following = follow ?? (q.data?.settings?.theme?.follow === true);
   useEffect(() => {
     if (q.data?.settings && !t) {
       const f = full(q.data.settings.theme);
@@ -134,12 +147,33 @@ export default function WebsiteTheme() {
     }
   };
 
+  // To the campaign's brand and back. Both are live on the site at once.
+  const switchTo = async (on) => {
+    setSwitching(true);
+    setState(null);
+    try {
+      // Its own look starts from what the site wears now: the brand's.
+      const own = on ? saved : full(q.data.brand_theme);
+      await action('site.settings.save', { theme: { ...own, follow: on } });
+      setT(own);
+      setSaved(own);
+      setFollow(on);
+      setAsking(false);
+      say(on ? 'The website now wears the campaign’s brand' : 'The website has its own look — change it here');
+      refresh(['site']);
+    } catch (e) {
+      setState({ state: 'error', text: e.message });
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   const org = q.data?.settings?.org?.shortName || q.data?.settings?.org?.name || '';
   return (
     <div className="wb-page wb-page--wide">
       <div className="ops-head">
         <h1>Theme</h1>
-        {t && (
+        {t && !following && (
           <div className="ops-head__actions">
             <SaveState state={state} />
             <button type="button" className="btn btn-primary ops-tap" onClick={save}
@@ -153,7 +187,23 @@ export default function WebsiteTheme() {
       {noSignal(q) && <NoSignal />}
       {q.isPending && !noSignal(q) && <p className="muted">Loading…</p>}
       {q.isError && !noSignal(q) && <p className="error" role="alert">{q.error.message}</p>}
-      {t && (
+      {t && following && (
+        <>
+          <section className="card wb-follow" aria-labelledby="wb-th-follow">
+            <h2 id="wb-th-follow" className="wb-card-h">Following the campaign’s brand</h2>
+            <p className="wb-help">The website wears the logo, colours, type and corners set under {me?.role === 'manager' ? <Link to="/settings/brand">Settings → Brand</Link> : 'Settings → Brand (a manager’s)'}. Change them there and the website follows.</p>
+            <SaveState state={state} />
+            <button type="button" className="btn wb-tap" disabled={!online || switching} onClick={() => switchTo(false)}>
+              {switching ? 'Working…' : 'Give the website its own look'}
+            </button>
+            <p className="wb-field__hint">It starts from what the website wears now; then every colour is yours to change here.</p>
+          </section>
+          <div className="wb-theme__sample wb-theme__sample--alone">
+            <Sample t={full(q.data.brand_theme)} org={org} />
+          </div>
+        </>
+      )}
+      {t && !following && (
         <>
           {failing.length > 0 && (
             <div className="wb-alert" role="alert">
@@ -183,6 +233,16 @@ export default function WebsiteTheme() {
                   ))}
                 </div>
                 <p className="wb-field__hint">Picking one sets its colours, type and corners; your logo stays.</p>
+                {!asking && (
+                  <button type="button" className="btn wb-tap wb-follow__use" disabled={!online || switching} onClick={() => setAsking(true)}>Use the campaign’s brand</button>
+                )}
+                {asking && (
+                  <div className="wb-follow__ask" role="group" aria-label="Use the campaign’s brand">
+                    <span>The website takes the logo, colours, type and corners from Settings → Brand at once{dirty ? ', and what you changed here is not saved' : ''}.</span>
+                    <button type="button" className="btn wb-tap" disabled={!online || switching} onClick={() => switchTo(true)}>{switching ? 'Working…' : 'Yes, use it'}</button>
+                    <button type="button" className="btn btn-quiet wb-tap" disabled={switching} onClick={() => setAsking(false)}>No</button>
+                  </div>
+                )}
               </section>
 
               <section className="card" aria-labelledby="wb-th-colors">

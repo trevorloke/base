@@ -1,0 +1,11 @@
+/* Website → Theme: a website that follows the campaign's brand
+   (WebsiteTheme.jsx), and the way to and from it. */
+.wb-follow { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); max-width: 640px; margin-bottom: var(--s-5); }
+.wb-follow .wb-help, .wb-follow .wb-field__hint { margin: 0; }
+.wb-follow__use { margin-top: var(--s-3); }
+.wb-follow__ask {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); padding: var(--s-3);
+  background: var(--panel); border-radius: var(--r-ctrl); font-size: 14px; color: var(--text);
+}
+.wb-follow__ask > span { flex: 1 1 100%; }
+.wb-theme__sample--alone { position: static; max-width: 380px; }
