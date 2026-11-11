@@ -1,11 +1,11 @@
 // Who is on a list, and who of them can be reached. One WHERE for a saved
 // filter (lib/audience.js personsWhere) or the members of a hand-picked
-// list, then the reach: 'email' keeps people with an address who may be
-// emailed (not do-not-email, not do-not-contact, not unsubscribed from the
-// newsletter list), one row per address; 'phone' keeps people with a number
-// that can be texted (not do-not-text, not do-not-contact, not opted out),
-// one row per number.
-import { personsWhere } from '../../lib/audience.js';
+// list, then the reach — who may be emailed, texted or called is decided in
+// one place (lib/reach.js), the same for a list's numbers, a send's
+// recipients and a phone bank: 'email' one row per address, 'phone' (a
+// text) one row per number, 'call' everyone with a number.
+import { personsWhere, joinWhere } from '../../lib/audience.js';
+import { mayReach, person, emailKey, last10 } from '../../lib/reach.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const parseJ = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v ?? d); } catch { return d; } };
@@ -16,7 +16,13 @@ export const loadList = async (db, ws, id) => {
   return row ? { ...row, filter: parseJ(row.filter, {}) } : null;
 };
 
+// A list is the desk's: who it names never depends on who is looking. A
+// volunteer's call list or walk list narrowed by one reads it as the desk does.
+export const asDesk = (ctx) => (ctx.role === 'volunteer' ? { ...ctx, role: 'staff' } : ctx);
+
 // The WHERE (alias p) and params for a list, or for a filter on its own.
+// ctx.listTrail: the lists being read on the way here ("is on another
+// list" — ext/lists/index.js), so a list that names itself ends.
 export const whereFor = async (db, ctx, { list = null, filter = null }) => {
   if (list && list.kind === 'people') {
     return {
@@ -24,18 +30,25 @@ export const whereFor = async (db, ctx, { list = null, filter = null }) => {
       params: [ctx.workspaceId, list.id],
     };
   }
-  const { where, params } = await personsWhere(db, ctx, list ? list.filter : (filter || {}));
+  const inner = list ? { ...ctx, listTrail: [...(ctx.listTrail || []), list.id] } : ctx;
+  const { where, params } = await personsWhere(db, inner, list ? list.filter : (filter || {}));
   params[3] = 100000;
   return { where, params };
 };
 
+// "This person (alias p) is on the list, as things stand" — SQL for inside
+// another query over persons p; its params are added to `params`.
+export const onListSql = async (db, ctx, list, params) => `(${joinWhere(params, await whereFor(db, asDesk(ctx), { list }))})`;
+
+// $1 is the campaign in every WHERE above. Asked for as each query is
+// written, so the one place's answer is always today's.
+const P = person('p', '$1');
 const REACH = {
-  email: `and p.email is not null and trim(p.email) <> ''
-    and not (p.tags @> '"do-not-email"'::jsonb) and not (p.tags @> '"do-not-contact"'::jsonb)
-    and not exists (select 1 from subscriptions s where s.workspace_id = p.workspace_id and s.email = lower(p.email) and s.status = 'unsubscribed')`,
-  phone: `and p.phone is not null and trim(p.phone) <> ''
-    and not (p.tags @> '"do-not-text"'::jsonb) and not (p.tags @> '"do-not-contact"'::jsonb)`,
+  email: () => mayReach('email', 'list', P),
+  phone: () => mayReach('text', 'list', P),
+  call: () => mayReach('call', 'bank', P),
 };
+export const REACHES = Object.keys(REACH);
 
 // Everyone a list names (the people rows), or only those with the reach.
 export const peopleOf = async (db, ctx, { list = null, filter = null, reach = null, limit = 100000, offset = 0, q = '' }) => {
@@ -43,7 +56,7 @@ export const peopleOf = async (db, ctx, { list = null, filter = null, reach = nu
   let where = w.where;
   const params = [...w.params];
   if (q) { params.push(`%${q.replace(/[%_\\]/g, (m) => '\\' + m)}%`); where += ` and (p.name ilike $${params.length} or p.email ilike $${params.length} or p.phone ilike $${params.length})`; }
-  if (reach) where += ` ${REACH[reach]}`;
+  if (reach) where += ` and ${REACH[reach]()}`;
   params.push(limit, offset);
   const { rows } = await db.query(
     `select p.id, p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal, p.rating, p.tags, p.created_at, count(*) over()::int as total
@@ -53,28 +66,65 @@ export const peopleOf = async (db, ctx, { list = null, filter = null, reach = nu
   return { people: rows.map((r) => ({ ...r, tags: parseJ(r.tags, []) })), total: rows[0]?.total ?? 0 };
 };
 
-// How many a list names, and how many of them can be emailed or texted.
+// How many a list names; how many emails and texts a send to it would be
+// (one per address, one per number); how many people can be called; and how
+// many can be reached at all, by any of the three. Each person is read once.
 export const countsOf = async (db, ctx, { list = null, filter = null }) => {
   const { where, params } = await whereFor(db, ctx, { list, filter });
   const r = (await db.query(
     `select count(*)::int as total,
-       (count(distinct lower(p.email)) filter (where true ${REACH.email}))::int as with_email,
-       (count(distinct p.phone) filter (where true ${REACH.phone}))::int as with_phone
-     from persons p where ${where}`, params,
+       (count(distinct ${emailKey('x.email')}) filter (where x.e))::int as with_email,
+       (count(distinct ${last10('x.phone')}) filter (where x.t))::int as with_phone,
+       (count(*) filter (where x.c))::int as with_call,
+       (count(*) filter (where x.e or x.t or x.c))::int as reachable
+     from (select p.email, p.phone, ${REACH.email()} as e, ${REACH.phone()} as t, ${REACH.call()} as c
+             from persons p where ${where} offset 0) x`, params,
   )).rows[0];
-  return { total: r.total, with_email: r.with_email, with_phone: r.with_phone };
+  return { total: r.total, with_email: r.with_email, with_phone: r.with_phone, with_call: r.with_call, reachable: r.reachable };
+};
+
+// A list's numbers, kept for a minute (STARBASE_LIST_COUNTS_MS; 0 under the
+// test runner): the Lists screen and a send's "To" picker read every list,
+// and counting each on every load is slow on a city's voter file. A kept
+// count is dropped when the list itself changes (its updated_at: the
+// filter, or people put on or taken off) and when many people change at
+// once (peopleChanged: an import, a merge). One list's own page counts now.
+const keepMs = () => Number(process.env.STARBASE_LIST_COUNTS_MS ?? (process.env.NODE_TEST_CONTEXT ? 0 : 60_000)) || 0;
+const SETTLE_MS = 5000; // a change is noted before its write commits
+const kept = new Map();      // list id → { at, stamp, counts }
+const counting = new Map();  // list id + stamp → the count under way
+const changedAt = new Map(); // campaign → when its people last changed in bulk
+const stampOf = (list) => String(new Date(list.updated_at).getTime());
+export const peopleChanged = (ws) => { changedAt.set(ws, Date.now()); };
+export const keptCounts = (ctx, list) => {
+  const e = kept.get(list.id);
+  if (!e || e.stamp !== stampOf(list) || Date.now() - e.at >= keepMs()) return null;
+  const changed = changedAt.get(ctx.workspaceId);
+  return changed && e.at < changed + SETTLE_MS ? null : e.counts;
+};
+export const listCounts = (db, ctx, list, { fresh = false } = {}) => {
+  const hit = fresh ? null : keptCounts(ctx, list);
+  if (hit) return Promise.resolve(hit);
+  const key = `${list.id}:${stampOf(list)}`;
+  if (!counting.has(key)) {
+    counting.set(key, countsOf(db, ctx, { list }).then((counts) => {
+      kept.set(list.id, { at: Date.now(), stamp: stampOf(list), counts });
+      if (kept.size > 2000) for (const [id, e] of kept) if (Date.now() - e.at > keepMs()) kept.delete(id);
+      return counts;
+    }).finally(() => counting.delete(key)));
+  }
+  return counting.get(key);
 };
 
 // The recipients of a send: one per address or number, the first person
-// (by name) to carry it. Texts also leave out numbers that replied STOP.
+// (by name) to carry it.
 export const recipientsOf = async (db, ctx, { list = null, filter = null, reach }) => {
   const { where, params } = await whereFor(db, ctx, { list, filter });
+  const key = reach === 'email' ? emailKey('p.email') : last10('p.phone');
   const { rows } = await db.query(
-    `select distinct on (${reach === 'email' ? 'lower(p.email)' : 'p.phone'}) p.id, p.name, p.email, p.phone
-     from persons p where ${where} ${REACH[reach]}
-     ${reach === 'phone' ? `and not exists (select 1 from texting_optouts o where o.workspace_id = p.workspace_id and o.opted_out
-        and right(regexp_replace(o.phone, '\\D', '', 'g'), 10) = right(regexp_replace(regexp_replace(coalesce(p.phone, ''), '\\s*(ext\\.?|x|#).*$', '', 'i'), '\\D', '', 'g'), 10))` : ''}
-     order by ${reach === 'email' ? 'lower(p.email)' : 'p.phone'}, lower(p.name), p.id`,
+    `select distinct on (${key}) p.id, p.name, p.email, p.phone
+     from persons p where ${where} and ${REACH[reach]()}
+     order by ${key}, lower(p.name), p.id`,
     params,
   );
   return rows;

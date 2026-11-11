@@ -2,7 +2,9 @@
 // saved list (ext/lists) and a send's audience (an email or text blast).
 //   personsWhere(db, ctx, query) → { where, params }  (alias p)
 //     query: { q, tag, rating, role, has, …a feature's own (?field=;
-//              ?knocked= ?outcome= ?turf= ?postal= ?notag= — ext/cuts) }
+//              ?knocked= ?outcome= ?turf= ?postal= ?notag= — ext/cuts;
+//              ?gave= ?member= ?answer= ?shift= ?since= — ext/audience;
+//              ?list= ?notlist= — ext/lists) }
 // A volunteer's search, tag and has=email never match on what they may not
 // see (viewer.js); the desk's does. Features add their own filters by the
 // personsWhere hook, on the same params.
@@ -82,10 +84,27 @@ export const personsWhere = async (db, ctx, query = {}) => {
   return { where, params };
 };
 
+// One WHERE inside another query: its $n moved up by `by`, so its params
+// can follow the ones already there. A $ inside a quoted string (a regular
+// expression's end-of-line) is left alone.
+export const shiftParams = (sql, by) => String(sql).split(/('(?:[^']|'')*')/)
+  .map((part, i) => (i % 2 ? part : part.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + by}`))).join('');
+// Appends a WHERE's params to `params` and answers it renumbered to match.
+export const joinWhere = (params, { where, params: more }) => {
+  const by = params.length;
+  params.push(...more);
+  return shiftParams(where, by);
+};
+
 // The filter a saved list or a send keeps: only the keys the query knows.
 // knocked, outcome, turf, postal, notag: the field cuts (ext/cuts); web:
-// did on the website (ext/webdid).
-export const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web'];
+// did on the website (ext/webdid); gave, member, answer, shift, since: what
+// they gave, joined, answered and came to (ext/audience); list, notlist: on
+// another list or not (ext/lists).
+export const FILTER_KEYS = [
+  'q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web',
+  'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist',
+];
 export const cleanFilter = (f) => {
   const out = {};
   for (const k of FILTER_KEYS) if (f && typeof f[k] === 'string' && f[k].trim()) out[k] = f[k].trim().slice(0, 400);

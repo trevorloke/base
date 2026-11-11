@@ -1,7 +1,10 @@
-// bank.create   { name, script?, person_ids[] }       desk: a bank from a list of people (those with a phone, not do-not-contact)
+// bank.create   { name, script?, person_ids[] | list_id }   desk: a bank from people picked by hand, or from a List
+//                                                     (ext/lists) — everyone on it who can be called, however many;
+//                                                     who leaves the list later leaves the calls not yet made (numbers.js)
 // bank.update   { id, name?, script?, closed? }       desk
 // bank.remove   { id }                                desk: void (nothing else moves)
 // bank.add      { id, person_ids[] }                  desk: more numbers
+// bank.topup    { id }                                desk: a bank made from a list takes in whoever has joined the list since
 // bank.assign   { id, user_id | team_id, count? }     desk: hand the next numbers to one caller, or split them across a team
 // bank.release  { id, user_id?, person_id? }          desk: take unfinished numbers back (one person's, or one number)
 // bank.done     { id, person_id, outcome? }           anyone: cross a number off without a call (wrong number, asked not to call)
@@ -11,12 +14,15 @@
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
+import { mayReach, person } from '../../lib/reach.js';
+import { loadList, whereFor } from '../lists/audience.js';
+import { addFromList, bankCounts, stillOn } from './numbers.js';
 
 const DESK = ['manager', 'staff', 'treasurer'];
 const ALL = ['manager', 'treasurer', 'staff', 'volunteer'];
 const uuid = () => z.uuid();
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
-const NO_CONTACT = 'do-not-contact';
+// Numbers picked by hand come 5,000 to a call; a bank made from a list has no such limit.
 const MAX_NUMBERS = 5000;
 // How a No answer comes back: after this many hours (0: never), up to this many calls.
 const RETRY = { retry_hours: z.number().int().min(0).max(72).optional(), max_tries: z.number().int().min(1).max(5).optional() };
@@ -26,11 +32,11 @@ const bankOf = async (tx, ws, id) => {
   if (!b) throw httpError(404, 'phone bank not found');
   return b;
 };
-// The people who can be called: on the list, with a phone, not do-not-contact.
+// The people who can be called (lib/reach.js decides: a phone, not do-not-contact).
 const callable = async (tx, ws, ids) => (await tx.query(
-  `select id from persons where workspace_id = $1 and id = any($2::uuid[]) and deleted_at is null
-     and coalesce(phone, '') <> '' and not (tags @> $3::jsonb)`,
-  [ws, ids, JSON.stringify([NO_CONTACT])],
+  `select p.id from persons p where p.workspace_id = $1 and p.id = any($2::uuid[]) and p.deleted_at is null
+     and ${mayReach('call', 'bank', person('p', '$1'))}`,
+  [ws, ids],
 )).rows.map((r) => r.id);
 const addNumbers = async (tx, ws, bankId, personIds) => {
   const ok = await callable(tx, ws, [...new Set(personIds)]);
@@ -45,26 +51,44 @@ const addNumbers = async (tx, ws, bankId, personIds) => {
   }
   return { added, skipped: personIds.length - ok.length };
 };
-const counts = async (tx, bankId) => (await tx.query(
-  `select count(*)::int as total, count(assigned_to)::int as assigned, count(done_at)::int as done,
-          count(*) filter (where assigned_to is null and done_at is null)::int as open
-     from call_bank_numbers where bank_id = $1`, [bankId],
-)).rows[0];
+// The bank's numbers as they stand (numbers.js): open leaves out anyone no longer to call.
+const counts = async (tx, ctx, bank) => {
+  const { gone, ...c } = await bankCounts(tx, ctx, bank);
+  return bank.list_id ? { ...c, gone } : c;
+};
 
 export const actions = {
   'bank.create': {
     roles: DESK,
-    input: z.object({ name: z.string().max(120), script: z.string().max(20_000).nullish(), person_ids: z.array(uuid()).max(MAX_NUMBERS), ...RETRY }),
+    input: z.object({
+      name: z.string().max(120), script: z.string().max(20_000).nullish(),
+      person_ids: z.array(uuid()).max(MAX_NUMBERS).optional(), list_id: uuid().optional(), ...RETRY,
+    }).refine((v) => !(v.list_id && v.person_ids?.length), 'a list, or people picked by hand — not both'),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
       const name = clean(input.name);
       if (!name) throw httpError(400, 'a phone bank needs a name');
+      const list = input.list_id ? await loadList(tx, ws, input.list_id) : null;
+      if (input.list_id && !list) throw httpError(404, 'list not found');
       const id = newId();
-      await tx.query('insert into call_banks (id, workspace_id, name, script, created_by, retry_hours, max_tries) values ($1, $2, $3, $4, $5, $6, $7)',
-        [id, ws, name, input.script || null, ctx.user.id, input.retry_hours ?? 4, input.max_tries ?? 3]);
-      const { added, skipped } = await addNumbers(tx, ws, id, input.person_ids);
-      emit('call_bank', id, 'create', { name, numbers: added });
-      return { bank: { id, name, script: input.script || null, retry_hours: input.retry_hours ?? 4, max_tries: input.max_tries ?? 3, ...(await counts(tx, id)) }, added, skipped };
+      await tx.query('insert into call_banks (id, workspace_id, name, script, created_by, retry_hours, max_tries, list_id) values ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [id, ws, name, input.script || null, ctx.user.id, input.retry_hours ?? 4, input.max_tries ?? 3, list?.id || null]);
+      const bank = { id, list_id: list?.id || null };
+      let added; let skipped;
+      if (list) {
+        // The server reads the list itself: everyone on it who can be called, however many.
+        added = await addFromList(tx, ctx, bank, list);
+        const { where, params } = await whereFor(tx, ctx, { list });
+        skipped = (await tx.query(`select count(*)::int as n from persons p where ${where}`, params)).rows[0].n - added;
+      } else ({ added, skipped } = await addNumbers(tx, ws, id, input.person_ids || []));
+      emit('call_bank', id, 'create', { name, numbers: added, ...(list ? { list_id: list.id, list_name: list.name } : {}) });
+      return {
+        bank: {
+          id, name, script: input.script || null, retry_hours: input.retry_hours ?? 4, max_tries: input.max_tries ?? 3,
+          list_id: bank.list_id, list_name: list?.name || null, ...(await counts(tx, ctx, bank)),
+        },
+        added, skipped,
+      };
     },
   },
   'bank.update': {
@@ -101,7 +125,21 @@ export const actions = {
       const b = await bankOf(tx, ctx.workspaceId, input.id);
       const { added, skipped } = await addNumbers(tx, ctx.workspaceId, b.id, input.person_ids);
       emit('call_bank', b.id, 'update', { added });
-      return { added, skipped, ...(await counts(tx, b.id)) };
+      return { added, skipped, ...(await counts(tx, ctx, b)) };
+    },
+  },
+  // Whoever has joined the bank's list since it was made (or last topped
+  // up) and can be called: added after the numbers already there.
+  'bank.topup': {
+    roles: DESK,
+    input: z.object({ id: uuid() }),
+    handler: async (tx, ctx, input, emit) => {
+      const b = await bankOf(tx, ctx.workspaceId, input.id);
+      const list = b.list_id ? await loadList(tx, ctx.workspaceId, b.list_id) : null;
+      if (!list) throw httpError(409, b.list_id ? 'the list this phone bank was made from is gone' : 'this phone bank wasn’t made from a list');
+      const added = await addFromList(tx, ctx, b, list);
+      if (added) emit('call_bank', b.id, 'update', { added, list_id: list.id });
+      return { added, ...(await counts(tx, ctx, b)) };
     },
   },
   'bank.assign': {
@@ -123,8 +161,12 @@ export const actions = {
         callers = (await tx.query('select user_id from team_members where team_id = $1 order by created_at', [input.team_id])).rows.map((r) => r.user_id);
         if (!callers.length) throw httpError(400, 'nobody is on that team yet');
       }
+      // Only numbers still to call are handed out (numbers.js: off the list, or do-not-contact since, stay behind).
+      const params = [b.id];
+      const still = await stillOn(tx, ctx, b, params);
       const open = (await tx.query(
-        'select person_id from call_bank_numbers where bank_id = $1 and assigned_to is null and done_at is null order by position', [b.id],
+        `select n.person_id from call_bank_numbers n join persons p on p.id = n.person_id
+          where n.bank_id = $1 and n.assigned_to is null and n.done_at is null and ${still} order by n.position`, params,
       )).rows.map((r) => r.person_id);
       const take = Math.min(open.length, input.count ?? open.length);
       const given = {};
@@ -134,7 +176,7 @@ export const actions = {
         given[who] = (given[who] || 0) + 1;
       }
       emit('call_bank', b.id, 'update', { assigned: take, to: Object.keys(given) });
-      return { handed: take, given, ...(await counts(tx, b.id)) };
+      return { handed: take, given, ...(await counts(tx, ctx, b)) };
     },
   },
   'bank.release': {
@@ -149,7 +191,7 @@ export const actions = {
       );
       const released = r.affectedRows ?? r.rowCount ?? 0;
       emit('call_bank', b.id, 'update', { released });
-      return { released, ...(await counts(tx, b.id)) };
+      return { released, ...(await counts(tx, ctx, b)) };
     },
   },
   'bank.done': {

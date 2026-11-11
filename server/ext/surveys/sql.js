@@ -53,4 +53,7 @@ create table if not exists survey_responses (
 );
 create index if not exists survey_responses_survey_idx on survey_responses (workspace_id, survey_id, person_id, question_id, created_at);
 create index if not exists survey_responses_person_idx on survey_responses (workspace_id, person_id, created_at);
+-- "Answered this question this way" as a People filter (ext/audience): who
+-- answered one question, found from the question.
+create index if not exists survey_responses_question_idx on survey_responses (workspace_id, question_id, person_id, created_at);
 `;

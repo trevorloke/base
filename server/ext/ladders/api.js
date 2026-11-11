@@ -14,6 +14,7 @@
 //   GET /persons/:id/ladders        a person's level and their ladders
 import { Hono } from 'hono';
 import { emailConfigured, textConfigured } from '../../lib/notify.js';
+import { mayReach, address } from '../../lib/reach.js';
 import { TRIGGERS, GOALS, parseJson } from './shape.js';
 import { levelFor, levelCounts } from './levels.js';
 import { WEB_KINDS, WEB_WORDS, campaignOf, campaignWords, campaignsOf } from '../webdid/words.js';
@@ -244,7 +245,7 @@ api.get('/ladders/:id', async (c) => {
   const counts = (await runCounts(db, ctx.workspaceId, l.id))[l.id];
   // Email steps go only to these: addresses on the list as subscribed.
   const emailYes = (await db.query(
-    "select count(*)::int as n from subscriptions where workspace_id = $1 and status = 'subscribed'", [ctx.workspaceId],
+    `select count(*)::int as n from subscriptions n where n.workspace_id = $1 and ${mayReach('email', 'newsletter', address('n.email'))}`, [ctx.workspaceId],
   )).rows[0].n;
   return c.json({
     ladder: {

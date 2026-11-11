@@ -13,7 +13,8 @@
 import { runAction, newId } from '../../lib/events.js';
 import { textConfigured } from '../../lib/notify.js';
 import { sendSms, publicBase } from './twilio.js';
-import { settingsFor, quietState, isOptedOut, askedToStop, applyOptOut, tzOf } from './store.js';
+import { settingsFor, quietState, applyOptOut, tzOf } from './store.js';
+import { whyNot } from '../../lib/reach.js';
 import { withFooter, localMinutes, now as clock } from './rules.js';
 import { askedRow, outcomeOf, recordOutcome, NO_TEXT_PROVIDER, DELIVER_ACTION } from '../abtests/send.js';
 
@@ -62,14 +63,15 @@ export const deliverTexts = async (db, ctx, blast, { actorId = null, budgetMs = 
         // Opted out since the tap (STOP, or the desk's tag): never texted.
         const tags = r.person_id ? (await tx.query('select tags from persons where id = $1', [r.person_id])).rows[0]?.tags : null;
         const list = typeof tags === 'string' ? JSON.parse(tags) : (tags || []);
-        // A reply asking to stop in words ("please stop texting me") counts
-        // too: nobody reads the thread before a list send goes out (as for a
-        // ladder's text step); START takes it back.
-        const optedOut = list.includes('do-not-text') || list.includes('do-not-contact') || await isOptedOut(tx, workspaceId, r.phone);
-        const askedStop = !optedOut && await askedToStop(tx, workspaceId, r.phone);
-        if (optedOut || askedStop) {
+        // Who may be texted is decided in one place (lib/reach.js), asked
+        // again here for the number on the send and the person's tags as
+        // they are now. A reply asking to stop in words ("please stop
+        // texting me") counts too: nobody reads the thread before a list
+        // send goes out (as for a ladder's text step); START takes it back.
+        const why = await whyNot(tx, 'text', 'list', { workspaceId, phone: r.phone, tags: list, personId: r.person_id });
+        if (why) {
           await tx.query(`update blast_recipients set status = 'failed', send_asked_at = null, send_tries = send_tries + 1 where id = $1 and workspace_id = $2`, [r.id, workspaceId]);
-          emit('blast_recipient', r.id, 'update', { blast_id: blast.id, status: 'failed', reason: askedStop ? 'asked to stop' : 'opted out' });
+          emit('blast_recipient', r.id, 'update', { blast_id: blast.id, status: 'failed', reason: why === 'asked_to_stop' ? 'asked to stop' : 'opted out' });
           run.failed += 1;
           continue;
         }

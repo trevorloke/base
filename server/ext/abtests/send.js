@@ -31,6 +31,7 @@ import { markdownPlain, renderMarkdown } from '@starbase/shared/markdown';
 import { loadAttachments } from './attach.js';
 import { deliverTexts } from '../texting/blast.js';
 import { brand } from '../../lib/brand.js';
+import { whyNot } from '../../lib/reach.js';
 
 export const AB_MIN = 50;
 export const AB_PCTS = [10, 20, 30];
@@ -387,11 +388,13 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
       for (const r of rows) {
         let unsubscribeUrl = blast.kind === 'eblast' ? `${ctx.publicUrl || ''}/bu/${r.id}` : null;
         if (blast.kind === 'newsletter') {
-          const sub = (await tx.query(
-            'select id, status from subscriptions where workspace_id = $1 and email = $2',
+          // Still someone the newsletter may go to (lib/reach.js)? Off the
+          // list since the tap: taken off the send, never emailed.
+          const sub = await whyNot(tx, 'email', 'newsletter', { workspaceId, email: r.email }) ? null : (await tx.query(
+            'select id from subscriptions where workspace_id = $1 and email = $2',
             [workspaceId, String(r.email).toLowerCase()],
           )).rows[0];
-          if (!sub || sub.status !== 'subscribed') {
+          if (!sub) {
             await tx.query('delete from blast_recipients where id = $1 and workspace_id = $2', [r.id, workspaceId]);
             gone += 1;
             continue;

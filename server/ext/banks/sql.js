@@ -35,4 +35,8 @@ alter table call_banks add column if not exists retry_hours int not null default
 alter table call_banks add column if not exists max_tries int not null default 3;
 alter table call_bank_numbers add column if not exists tries int not null default 0;
 alter table call_bank_numbers add column if not exists next_at timestamptz;
+-- A bank made from a list (ext/lists) keeps which one: someone who leaves
+-- the list leaves the calls not yet made (numbers.js). No foreign key: the
+-- lists table is a later feature's, and a deleted list is only marked so.
+alter table call_banks add column if not exists list_id uuid;
 `;

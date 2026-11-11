@@ -13,6 +13,9 @@
 //   KINDS / WHO               the choices, with their words
 //   TERMINAL                  outcomes that finish a door in any pass
 //   inUniverse(person, pass)  is this person someone the pass wants knocked
+//                             (a pass that walks a List — pass.list_id — wants
+//                             only the people on it: person.pass_listed, set
+//                             by the server's walk list)
 //   inPass(door, pass)        a door is listed when anyone there is in the universe
 //   doorState(door, pass)     'open' · 'again' · 'done'
 //   passLine(pass)            "Persuasion · All doors · 2 tries"
@@ -51,6 +54,9 @@ export const TERMINAL = ['contacted', 'refused', 'moved', 'inaccessible'];
 export const inUniverse = (person, pass) => {
   if (!pass) return true;
   if (pass.kind === 'gotv' && person.voted_at) return false;
+  // A sweep of one list: someone the list doesn't name (or added on this
+  // phone a moment ago) isn't who it is for.
+  if (pass.list_id && !person.pass_listed) return false;
   const band = bandOf(person.rating);
   switch (pass.who) {
     case 'all': return true;
@@ -82,6 +88,14 @@ export const doorState = (door, pass) => {
 export const kindLabel = (code) => KINDS.find((k) => k.code === code)?.label || String(code ?? '');
 export const whoLabel = (code) => WHO.find((w) => w.code === code)?.label || String(code ?? '');
 
-export const passLine = (pass) => (pass
-  ? `${kindLabel(pass.kind)} · ${whoLabel(pass.who)} · ${pass.tries} ${pass.tries === 1 ? 'try' : 'tries'}`
-  : 'No pass open');
+// "Persuasion · All doors · 2 tries"; a pass that walks a list says the list
+// ("Get out the vote · List: Supporters not voted · 3 tries"), and who as
+// well when it narrows the list further.
+export const passLine = (pass) => {
+  if (!pass) return 'No pass open';
+  const who = [
+    pass.list_id ? `List: ${pass.list_name || 'a list'}` : null,
+    !pass.list_id || pass.who !== 'all' ? whoLabel(pass.who) : null,
+  ].filter(Boolean).join(' · ');
+  return `${kindLabel(pass.kind)} · ${who} · ${pass.tries} ${pass.tries === 1 ? 'try' : 'tries'}`;
+};
