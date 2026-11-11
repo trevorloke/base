@@ -298,6 +298,15 @@ test('a big list goes in parts: each address once, an address Mailchimp refuses 
   } finally { _setSliceForTest(null); }
   const sentTo = fake.calls.filter((x) => x.method === 'POST' && x.path === `/lists/${fake.id}`).flatMap((x) => x.body.members.map((m) => m.email_address));
   assert.deepEqual(sentTo.sort(), names.map(mail).sort(), 'each address was offered once');
+  // The tag is read once for the whole sync, however many parts it takes (each part keeps it up to date):
+  // re-read for every part, a big list would spend most of its calls reading.
+  const tagReads = () => fake.calls.filter((x) => x.method === 'GET' && /\/segments\/\d+\/members$/.test(x.path)).length;
+  assert.equal(tagReads(), 1, 'one read (the tag was still empty), for four parts');
+  // Sync again reads it afresh, once: something may have changed there since.
+  fake.calls.length = 0;
+  fake.pageMax(1000);
+  await push(c, ws, list.id);
+  assert.equal(tagReads(), 1);
   assert.deepEqual(inTag(), names.filter((w) => w !== 'cal').map(mail));
   assert.equal(fake.member(mail('cal')), null);
   // The same with a pull: five left in Mailchimp, three to a page — all five are found.

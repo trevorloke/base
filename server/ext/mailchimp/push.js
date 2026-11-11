@@ -140,6 +140,7 @@ export const startSync = async (tx, ctx, emit, { list_id: listId, everyone = fal
 const patch = (db, sync, sets, params = []) => db.query(`update mailchimp_syncs set ${sets} where id = $1 and workspace_id = $2`, [sync.id, sync.workspace_id, ...params]);
 // The sync's end, on the event log as the system: how many, or why not.
 const finish = (db, sync, status, payload, note = null) => runAction(db, { workspaceId: sync.workspace_id, actorId: null, action: PUSH_ACTION }, async (tx, emit) => {
+  kept.delete(runOf(sync));
   await tx.query(
     `update mailchimp_syncs set status = $3, note = $4, cursor = null, todo = 0, synced_at = case when $3 = 'synced' then now() else synced_at end
       where id = $1 and workspace_id = $2`, [sync.id, sync.workspace_id, status, note],
@@ -169,6 +170,19 @@ const segmentOf = async (db, sync, gone = '') => {
 // whoever left must still be found here to be taken out of the tag (or seen
 // to be in it already). A tag deleted in Mailchimp is made again.
 const EVERYONE = { include_unsubscribed: true, include_cleaned: true, include_transactional: true };
+// What is in the tag is read once for each run of a sync, then kept here and
+// brought up to date by the run's own adds and removes: a big list goes in
+// many parts, and reading the whole tag again for each part would spend more
+// calls than the sync itself. In memory only — after a restart it is read
+// again — and dropped when the run ends (a few at most at once).
+const kept = new Map(); // `${sync id}:${run}` → { segment, have }
+const runOf = (sync) => `${sync.id}:${new Date(sync.created_at).getTime()}`;
+const keep = (sync, tag) => {
+  kept.delete(runOf(sync));
+  kept.set(runOf(sync), tag);
+  while (kept.size > 20) kept.delete(kept.keys().next().value);
+  return tag;
+};
 const inTag = async (db, sync) => {
   const read = async (segment) => new Set((await pages(`/lists/${sync.audience_id}/segments/${segment}/members`, 'members', { ...EVERYONE, fields: 'members.email_address,total_items' }))
     .map((m) => lower(m?.email_address)).filter(Boolean));
@@ -193,8 +207,9 @@ const emailsIn = (errors) => errors.flatMap((e) => [e?.email_address, ...(Array.
 const wordsOf = (e) => [e?.error, e?.field_message, e?.error_code].find((v) => typeof v === 'string' && v.trim())?.trim().slice(0, 300) || null;
 
 // New addresses into the audience, then into the tag. → what to count once
-// the sync is past them: { tagged, skipped, why } — why: Mailchimp's words
-// about the first address it would not take, when there is one.
+// the sync is past them: { tagged, skipped, why, into } — why: Mailchimp's
+// words about the first address it would not take, when there is one; into:
+// the addresses now in the tag.
 // skip_merge_validation: an audience may insist on a field of its own for
 // every new member (a postal code, a last name). Only the address and the
 // two names ever go, so Mailchimp is asked to take a member without it —
@@ -218,14 +233,18 @@ const addPart = async (db, sync, segment, part) => {
   // What Mailchimp took (or already had) goes into the tag.
   const toTag = part.filter((p) => !no.has(p.email)).map((p) => p.as);
   const why = wordsOf(refused[0]);
-  if (!toTag.length) return { tagged: 0, skipped, why };
+  if (!toTag.length) return { tagged: 0, skipped, why, into: [] };
   const tagged = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, {
     body: { members_to_add: toTag }, idempotencyKey: keyOf(sync, 'tag', segment, ...toTag.map(lower)), timeoutMs: 60_000,
   });
   // In the audience, and the tag would not take them: not taken either.
   const untagged = Array.isArray(tagged?.errors) ? tagged.errors : [];
-  const missed = emailsIn(untagged).length;
-  return { tagged: num(tagged?.total_added, toTag.length - missed), skipped: skipped + missed, why: why || (missed ? wordsOf(untagged[0]) : null) };
+  const out = new Set(emailsIn(untagged));
+  const missed = out.size;
+  return {
+    tagged: num(tagged?.total_added, toTag.length - missed), skipped: skipped + missed, why: why || (missed ? wordsOf(untagged[0]) : null),
+    into: toTag.map(lower).filter((e) => !out.has(e)),
+  };
 };
 
 // One part of a sync. → true when there is more to do.
@@ -244,7 +263,7 @@ const part = async (db, sync) => {
   if (!list) { await stop(db, sync, 'The list was deleted'); return false; }
   const want = await whoGoes(db, ws, list, sync.consent);
   const wanted = new Set(want.map((p) => p.email));
-  const { segment, have } = await inTag(db, sync);
+  const { segment, have } = kept.get(runOf(sync)) || keep(sync, await inTag(db, sync));
   // In address order, past where the last part got to.
   const toAdd = want.filter((p) => !have.has(p.email) && !(cursor.add && p.email <= cursor.add));
   const toRemove = [...have].filter((e) => !wanted.has(e) && !(cursor.remove && e <= cursor.remove)).sort();
@@ -254,6 +273,7 @@ const part = async (db, sync) => {
   while (toAdd.length) {
     const some = toAdd.splice(0, chunkSize);
     const did = await addPart(db, sync, segment, some);
+    for (const e of did.into) have.add(e);
     cursor.add = some.at(-1).email;
     // Counted in the same write that moves past them: a part tried again
     // (Mailchimp said "too many" half-way) never counts a refusal twice.
@@ -264,6 +284,7 @@ const part = async (db, sync) => {
   while (toRemove.length) {
     const some = toRemove.splice(0, chunkSize);
     const res = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, { body: { members_to_remove: some }, idempotencyKey: keyOf(sync, 'untag', segment, ...some), timeoutMs: 60_000 });
+    for (const e of some) have.delete(e);
     cursor.remove = some.at(-1);
     await patch(db, sync, 'removed = removed + $3, todo = $4, cursor = $5::jsonb', [num(res?.total_removed, some.length), left(), JSON.stringify(cursor)]);
     if (left() && Date.now() >= until) return true;
