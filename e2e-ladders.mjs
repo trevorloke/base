@@ -32,7 +32,8 @@
 // To also watch the step deliver — a test about a made-up person, one
 // signed message each, an email only for who said yes, "Zapier: Sent · 200"
 // on the run's log, do-not-contact never sent, a redirect handed it once,
-// someone taken off mid-send, a failing address tried again — run a
+// someone taken off mid-send, a failing address tried again, one that has
+// stopped answering left alone while whoever reaches it waits — run a
 // stand-in receiver and point both at it:
 //
 //   PORT=4104 node server/test/fake-receiver.js &
@@ -694,6 +695,36 @@ if (!HOOKS) {
   const jlog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
   check('his log: "Zapier: Didn’t go (500) — trying again"', jlog.some((x) => /^Zapier: Didn’t go \(500\) — trying again/.test(x)), jlog.join(' | '));
   await D.shot('13d-web-address-retry');
+  // An address that stops answering (three calls in a row, five seconds
+  // each) is left alone for five minutes: whoever reaches the step
+  // meanwhile isn't called and loses no try — the row and the log say they wait.
+  await fetch(`${HOOKS}/__hang`, { method: 'POST', body: JSON.stringify({ times: 3 }) });
+  const hung = [];
+  for (const n of ['Pia', 'Quin', 'Rae']) hung.push((await D.api('/actions/person.create', { name: `${n} Example`, tags: ['new-signer'] })).json.person);
+  const peopleNow = async () => (await D.api(`/ladders/${told.id}`)).json.people;
+  await until(async () => (await peopleNow()).filter((p) => hung.some((h) => h.id === p.person.id) && p.wait === 'retry').length === 3, 30000);
+  const sol = (await D.api('/actions/person.create', { name: 'Sol Example', tags: ['new-signer'] })).json.person;
+  const solHeld = await until(async () => (await peopleNow()).find((p) => p.person.id === sol.id && p.wait === 'quiet'), 8000);
+  check('an address that stopped answering isn’t called for whoever reaches the step meanwhile, and none of their tries is used up',
+    !!solHeld && solHeld.log.filter((e) => e.kind === 'webhook').map((e) => `${e.result}/${e.reason}`).join() === 'waiting/not_answering'
+    && !(await received()).some((x) => x.body.person.id === sol.id), JSON.stringify(solHeld?.log));
+  await D.go(`/ladders/${told.id}`);
+  t = await D.text();
+  check('his row: "Waiting — the web address isn’t answering"', /Sol Example Waiting — the web address isn’t answering/.test(t), t.slice(t.indexOf('Sol Example'), t.indexOf('Sol Example') + 80));
+  await page.locator('.lad-sec .ops-row', { hasText: 'Sol Example' }).click();
+  await sleep(300);
+  const slog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
+  check('his log: "Zapier: Waiting — the address isn’t answering"', slog.some((x) => /^Zapier: Waiting — the address isn’t answering/.test(x)), slog.join(' | '));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await sleep(300);
+  await page.locator('.lad-sec .ops-row', { hasText: 'Sol Example' }).scrollIntoViewIfNeeded();
+  await D.shot('13g-web-address-waiting');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await sleep(300);
+  await simple(page, 'a ladder’s people, one waiting for a quiet address (phone)');
+  await page.locator('.lad-sec .ops-row', { hasText: 'Sol Example' }).scrollIntoViewIfNeeded();
+  await D.shot('13h-web-address-waiting-phone');
+  await page.setViewportSize({ width: 1360, height: 900 });
   await D.api('/actions/ladder.setActive', { id: told.id, active: false });
 }
 
