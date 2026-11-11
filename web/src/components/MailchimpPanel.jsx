@@ -78,14 +78,15 @@ export default function MailchimpPanel({ online, onChanged }) {
   const pulling = busy === 'pull' || busy === 'yes' || (Boolean(d?.pulling) && !idle);
   // The first pull from this audience, counted and waiting for a yes.
   const first = d?.first?.unsubscribed != null ? d.first : null;
+  // While nobody has said yes, a pull only counts — and says so.
+  const counting = pulling && Boolean(d?.first) && busy !== 'yes';
   let line;
   let stopped = false; // the line is the one about a pull that stopped
   if (q.isLoading) line = 'Loading…';
   else if (q.isError) {
     line = noSignal(q) ? <NoSignal /> : <>Unavailable — <button type="button" className="btn-link mcp-retry" onClick={() => q.refetch()}>Try again</button></>;
   } else if (idle && busy !== 'pull' && busy !== 'yes') line = 'Waiting · background work is off on this server';
-  // While nobody has said yes, a pull only counts — and says so.
-  else if (pulling && d?.first && busy !== 'yes') line = 'Counting who left in Mailchimp…';
+  else if (counting) line = 'Counting who left in Mailchimp…';
   else if (pulling) line = 'Pulling…';
   else if (d.pull_ok === false) { stopped = true; line = `The last pull stopped: ${d.pull_note || 'no answer from Mailchimp'}`; }
   else if (d.pulled_at) line = `Last pulled ${whenWord(d.pulled_at)} · ${d.pull_note || 'Nothing new'}`;
@@ -95,7 +96,7 @@ export default function MailchimpPanel({ online, onChanged }) {
     <div className="mcp">
       <div className="mcp-acts">
         <button type="button" className="btn ops-tap" disabled={!!busy || !online} onClick={connect}>{busy === 'connect' ? 'Connecting…' : 'Connect'}</button>
-        <button type="button" className="btn ops-tap" disabled={!!busy || pulling || idle || !online || q.isLoading} onClick={() => pull()}>{pulling ? 'Pulling…' : 'Pull now'}</button>
+        <button type="button" className="btn ops-tap" disabled={!!busy || pulling || idle || !online || q.isLoading} onClick={() => pull()}>{counting ? 'Counting…' : pulling ? 'Pulling…' : 'Pull now'}</button>
       </div>
       <p className="sv2-for">Connect tells Mailchimp to send unsubscribes here. Pull now reads them at once.</p>
       {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
