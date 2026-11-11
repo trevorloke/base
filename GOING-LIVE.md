@@ -117,7 +117,10 @@ Mailchimp: nothing to paste into Mailchimp by hand. With the key set,
 **Settings → Services → Mailchimp** → **Check**, then **Connect** (it gives
 Mailchimp the address unsubscribes come back to, built from
 `STARBASE_PUBLIC_URL`, and shows a signing secret once, for
-`MAILCHIMP_WEBHOOK_SECRET`), then **Pull now**. It was built against
+`MAILCHIMP_WEBHOOK_SECRET`). It then asks before the first pull — the
+audience's name and how many on file it would turn off for good: make sure
+it is the audience the campaign's emails go to, and tap **Turn their email
+off here**. It was built against
 Mailchimp's published API and has not been run against a real account:
 before the first real list, try it on one of your own team's addresses
 (INTEGRATIONS.md has the steps and what is not confirmed).

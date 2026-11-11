@@ -15,11 +15,18 @@
 // Mailchimp, 1 dead address.") — the count before the tap could not know.
 // An address Mailchimp would not take is counted with Mailchimp's own words
 // for why.
+// The first send to an audience starts the first pull from it, which turns
+// off here everyone on file who ever left there, for good: so Send first
+// answers with a question (FirstPull) — counted in the background, "Counting
+// who unsubscribed in Mailchimp…" meanwhile — and only "Turn their email off
+// here" sends. "Not now" sends nothing. With nobody here to turn off there
+// is nothing to ask, and the list goes on its way.
 // It sits in the page's row of buttons; what it opens takes the row's whole
 // width underneath (send-to-mailchimp.css).
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
+import FirstPull from './FirstPull.jsx';
 import { useOnline } from './NoSignal.jsx';
 import './send-to-mailchimp.css';
 
@@ -97,18 +104,21 @@ export default function SendToMailchimp({ listId }) {
   const on = useQuery({ queryKey: ['integrations'], queryFn: () => apiGet('/integrations'), staleTime: 5 * 60_000, retry: false });
   const isOn = Boolean(on.data?.mailchimp);
   const key = ['mailchimp', 'list', listId];
+  const [asking, setAsking] = useState(false);
+  const [everyone, setEveryone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  // Sent, and answered with the question about the first pull: { all } — the
+  // choice made, kept for the yes (the question itself is the list's answer, `first`).
+  const [door, setDoor] = useState(null);
   const state = useQuery({
     queryKey: key,
     queryFn: () => apiGet(`/lists/${listId}/mailchimp`),
     enabled: isOn,
     retry: false,
-    // While it is on its way, every few seconds.
-    refetchInterval: (q) => (active(q.state.data?.sync) ? 3000 : false),
+    // While it is on its way, every few seconds; while the first pull is counted, more often.
+    refetchInterval: (q) => (door && q.state.data?.first?.counting ? 1500 : active(q.state.data?.sync) ? 3000 : false),
   });
-  const [asking, setAsking] = useState(false);
-  const [everyone, setEveryone] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
   // How many would go: asked each time the question opens, never kept.
   const ask = useQuery({
     queryKey: [...key, 'counts'],
@@ -118,20 +128,45 @@ export default function SendToMailchimp({ listId }) {
     gcTime: 0,
     retry: false,
   });
-  // Nothing at all unless Mailchimp is on (and still on, as this list's own answer has it).
-  if (!isOn || state.data?.on === false) return null;
-  const s = state.data?.sync || null;
-  const going = active(s);
-  const send = async (all) => {
+  // agree: the audience the question named — the yes to the first pull from it.
+  const send = async (all, agree = null) => {
     setBusy(true); setError(null);
     try {
-      await action('mailchimp.push', { list_id: listId, everyone: all });
-      setAsking(false);
+      const r = await action('mailchimp.push', { list_id: listId, everyone: all, ...(agree ? { agree } : {}) });
+      if (r.first) {
+        // Nothing went: the question first (the list's own answer carries it,
+        // read again below, before `busy` ends).
+        setDoor({ all });
+        setAsking(true);
+      } else {
+        setDoor(null);
+        setAsking(false);
+      }
       await queryClient.invalidateQueries({ queryKey: key });
     } catch (e) { setError(errorText(e)); }
     setBusy(false);
   };
-  const open = () => { setError(null); setEveryone(s?.consent === 'all'); setAsking(true); };
+  const first = door ? state.data?.first : undefined;
+  // Counted, and nobody here to turn off (or someone said yes meanwhile): it goes as asked.
+  useEffect(() => {
+    if (door && first === null && !busy) send(door.all);
+  }, [door, first, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A sync that turned people off here changes the page's own numbers ("3 by
+  // email"): read again when it ends.
+  const last = state.data?.sync;
+  const wasGoing = useRef(false);
+  useEffect(() => {
+    const now = active(last);
+    if (wasGoing.current && !now && (Number(last?.pulled_unsubscribed) || Number(last?.pulled_cleaned))) queryClient.invalidateQueries({ queryKey: ['lists'] });
+    wasGoing.current = now;
+  }, [last?.id, last?.status, last?.stalled]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Nothing at all unless Mailchimp is on (and still on, as this list's own answer has it).
+  if (!isOn || state.data?.on === false) return null;
+  const s = state.data?.sync || null;
+  const going = active(s);
+  const open = () => { setError(null); setDoor(null); setEveryone(s?.consent === 'all'); setAsking(true); };
+  const away = () => { setAsking(false); setDoor(null); setError(null); };
   const counts = ask.data?.counts;
   const n = counts ? (everyone ? counts.everyone : counts.subscribed) : 0;
   // The block under the buttons is only there when it has something to say.
@@ -140,7 +175,7 @@ export default function SendToMailchimp({ listId }) {
     <>
       {state.data && !going && (
         <button type="button" className="btn btn-quiet ops-tap" aria-expanded={asking} disabled={!online && !asking}
-          onClick={() => (asking ? setAsking(false) : open())}>
+          onClick={() => (asking ? away() : open())}>
           {s ? 'Sync again' : 'Send to Mailchimp'}
         </button>
       )}
@@ -149,7 +184,25 @@ export default function SendToMailchimp({ listId }) {
           {state.isError && !state.data ? (
             <p className="mc-line" role="status">Mailchimp: Unavailable — <button type="button" className="btn-link mc-retry" onClick={() => state.refetch()}>Try again</button></p>
           ) : !state.data ? <p className="mc-line" role="status">Mailchimp: Loading…</p> : null}
-          {asking && (
+          {asking && door && (
+            <div className="mc-ask mc-first">
+              {first?.unsubscribed != null ? (
+                <FirstPull first={first} busy={busy} online={online} onYes={() => send(door.all, first.audience)} onNotNow={away} yesClass="btn ops-solid ops-tap" />
+              ) : (
+                <>
+                  <p className="mc-line" role="status">
+                    {!state.data.running ? <><strong>Waiting</strong> · background work is off on this server</>
+                      : busy || first?.counting || first === null ? 'Counting who unsubscribed in Mailchimp…'
+                        : <>Mailchimp didn’t answer — <button type="button" className="btn-link mc-retry" disabled={busy} onClick={() => send(door.all)}>Try again</button></>}
+                  </p>
+                  <div className="ops-actions">
+                    <button type="button" className="btn btn-quiet ops-tap" onClick={away}>Not now</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {asking && !door && (
             <div className="mc-ask">
               {ask.isError ? (
                 <p className="mc-line" role="status">Unavailable — <button type="button" className="btn-link mc-retry" onClick={() => ask.refetch()}>Try again</button></p>
@@ -169,7 +222,7 @@ export default function SendToMailchimp({ listId }) {
               <div className="ops-actions">
                 {/* Nothing to send is nothing to do — unless it was sent before: then the tag is emptied. */}
                 <button type="button" className="btn ops-solid ops-tap" disabled={busy || !online || !counts || (!n && !s)} onClick={() => send(everyone)}>{busy ? 'Sending…' : 'Send'}</button>
-                <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => { setAsking(false); setError(null); }}>Cancel</button>
+                <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={away}>Cancel</button>
               </div>
             </div>
           )}

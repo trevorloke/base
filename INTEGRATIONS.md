@@ -257,10 +257,20 @@ What happens:
   Connect gives it to Mailchimp), and when `MAILCHIMP_WEBHOOK_SECRET` is set
   each delivery must also carry Mailchimp's signature.
 
-Before you connect: the first pull turns off, here, everyone on file who has
-unsubscribed in that Mailchimp audience. That is the point — and the desk
-cannot put them back; only they can. So be sure the audience is the one the
-campaign's emails really go to.
+**The first pull asks first.** The first pull from an audience turns off,
+here, everyone on file who ever unsubscribed in it — that is the point — and
+the desk cannot put them back; only they can. So it never runs by itself:
+Connect, the first **Pull now**, the nightly pull and the first **Send to
+Mailchimp** only count it, and ask — *Audience ‘…’ · 1,240 people here
+unsubscribed there · 85 dead addresses*, with **Turn their email off here**
+and **Not now**. Nothing is turned off, and no list is sent, until someone
+says yes for that audience (a manager on Settings → Services, or whoever
+sends a list); the yes is on the event log with what they were shown. *Not
+now* changes nothing. When nobody on file would be turned off there is
+nothing to ask. Another audience (`MAILCHIMP_AUDIENCE_ID` changed) asks
+again. Someone who unsubscribes in Mailchimp after Connect is turned off
+here at once, by the webhook, yes or no: that no is new. After the yes,
+pulls run by themselves.
 
 Set it up:
 
@@ -282,8 +292,9 @@ Set it up:
    `MAILCHIMP_WEBHOOK_SECRET`. (Connect again later shows no secret —
    Mailchimp gives it once. For a new one, delete the webhook in Mailchimp,
    under the audience's settings, and Connect again.)
-5. **Check** again: *… · unsubscribes come back here*. Then **Pull now**
-   once, for everyone who left before today.
+5. **Check** again: *… · unsubscribes come back here*. Then answer the
+   question under the buttons — is that the audience the campaign's emails
+   really go to? — with **Turn their email off here**.
 
 | Setting | Default | For |
 |---|---|---|

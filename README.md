@@ -557,9 +557,12 @@ both: unsubscribed and cleaned come back (Mailchimp's webhook at `POST
 /hooks/mailchimp/<key>` — the address's last part is made from the API key,
 and it answers on the campaign's website domain too — plus a nightly pull
 and *Pull now*), and an unsubscribe, a do-not-email tag or a dead address
-here unsubscribes the member there. **Settings → Services → Mailchimp** has
-*Check*, *Connect* and *Pull now*. INTEGRATIONS.md has the setup and what is
-not confirmed against a real account.
+here unsubscribes the member there. The first pull from an audience turns
+off here everyone on file who ever left it, so it asks first — the audience
+and how many — and does nothing until someone taps *Turn their email off
+here*. **Settings → Services → Mailchimp** has *Check*, *Connect* and *Pull
+now*. INTEGRATIONS.md has the setup and what is not confirmed against a real
+account.
 
 | Setting | For |
 |---|---|

@@ -7,10 +7,16 @@
 //   Pull now   read who left and whose address died, now (mailchimp.pull):
 //              the work is done in the background and the line under the
 //              buttons says what it found (GET /api/mailchimp).
+// The first pull from an audience turns off here everyone on file who ever
+// left there, for good: Connect and Pull now only count it, and the row
+// asks (FirstPull) — "Turn their email off here" is the yes (mailchimp.pull
+// with agree); "Not now" puts the question away until Pull now is tapped
+// again or the page is opened again.
 // onChanged: Connect worked — the row drops what an earlier Check said.
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
+import FirstPull from './FirstPull.jsx';
 import { NoSignal, noSignal } from './NoSignal.jsx';
 import './mailchimp-panel.css';
 
@@ -33,26 +39,30 @@ export default function MailchimpPanel({ online, onChanged }) {
     // While a pull is under way, every couple of seconds.
     refetchInterval: (x) => (x.state.data?.pulling && x.state.data?.running ? 2000 : false),
   });
-  const [busy, setBusy] = useState(null); // 'connect' | 'pull'
+  const [busy, setBusy] = useState(null); // 'connect' | 'pull' | 'yes'
   const [res, setRes] = useState(null); // what Connect said: { ok, said }
   const [secret, setSecret] = useState(null); // shown once
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(null);
+  const [notNow, setNotNow] = useState(false); // the question put away for now
 
   const connect = async () => {
-    setBusy('connect'); setRes(null); setError(null); setCopied(false);
+    setBusy('connect'); setRes(null); setError(null); setCopied(false); setNotNow(false);
     try {
       const r = await action('mailchimp.connect', {});
       setRes({ ok: r.ok, said: r.said });
       if (r.secret) setSecret(r.secret);
       if (r.ok) onChanged?.();
+      // Connect starts counting what the first pull would do: watched from here.
+      await queryClient.invalidateQueries({ queryKey: KEY });
     } catch (e) { setRes({ ok: false, said: e.message }); }
     setBusy(null);
   };
-  const pull = async () => {
-    setBusy('pull'); setError(null);
+  // agree: the audience the question named — the yes to the first pull from it.
+  const pull = async (agree) => {
+    setBusy(agree ? 'yes' : 'pull'); setError(null); setNotNow(false);
     try {
-      await action('mailchimp.pull', {});
+      await action('mailchimp.pull', agree ? { agree } : {});
       await queryClient.invalidateQueries({ queryKey: KEY });
     } catch (e) { setError(e.message); }
     setBusy(null);
@@ -65,13 +75,17 @@ export default function MailchimpPanel({ online, onChanged }) {
   // A pull asked for on a server whose background work is off: nothing here
   // will do it, so nothing says "Pulling…".
   const idle = Boolean(d?.pulling) && !d?.running;
-  const pulling = busy === 'pull' || (Boolean(d?.pulling) && !idle);
+  const pulling = busy === 'pull' || busy === 'yes' || (Boolean(d?.pulling) && !idle);
+  // The first pull from this audience, counted and waiting for a yes.
+  const first = d?.first?.unsubscribed != null ? d.first : null;
   let line;
   let stopped = false; // the line is the one about a pull that stopped
   if (q.isLoading) line = 'Loading…';
   else if (q.isError) {
     line = noSignal(q) ? <NoSignal /> : <>Unavailable — <button type="button" className="btn-link mcp-retry" onClick={() => q.refetch()}>Try again</button></>;
-  } else if (idle && busy !== 'pull') line = 'Waiting · background work is off on this server';
+  } else if (idle && busy !== 'pull' && busy !== 'yes') line = 'Waiting · background work is off on this server';
+  // While nobody has said yes, a pull only counts — and says so.
+  else if (pulling && d?.first && busy !== 'yes') line = 'Counting who left in Mailchimp…';
   else if (pulling) line = 'Pulling…';
   else if (d.pull_ok === false) { stopped = true; line = `The last pull stopped: ${d.pull_note || 'no answer from Mailchimp'}`; }
   else if (d.pulled_at) line = `Last pulled ${whenWord(d.pulled_at)} · ${d.pull_note || 'Nothing new'}`;
@@ -81,7 +95,7 @@ export default function MailchimpPanel({ online, onChanged }) {
     <div className="mcp">
       <div className="mcp-acts">
         <button type="button" className="btn ops-tap" disabled={!!busy || !online} onClick={connect}>{busy === 'connect' ? 'Connecting…' : 'Connect'}</button>
-        <button type="button" className="btn ops-tap" disabled={!!busy || pulling || idle || !online || q.isLoading} onClick={pull}>{pulling ? 'Pulling…' : 'Pull now'}</button>
+        <button type="button" className="btn ops-tap" disabled={!!busy || pulling || idle || !online || q.isLoading} onClick={() => pull()}>{pulling ? 'Pulling…' : 'Pull now'}</button>
       </div>
       <p className="sv2-for">Connect tells Mailchimp to send unsubscribes here. Pull now reads them at once.</p>
       {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
@@ -95,6 +109,9 @@ export default function MailchimpPanel({ online, onChanged }) {
             <button type="button" className="btn btn-quiet ops-tap" onClick={() => setSecret(null)}>Done</button>
           </div>
         </div>
+      )}
+      {first && !notNow && !pulling && (
+        <FirstPull first={first} busy={busy === 'yes'} online={online} onYes={() => pull(first.audience)} onNotNow={() => setNotNow(true)} />
       )}
       <p className={`sv2-detail mcp-pull${stopped ? ' is-stopped' : ''}`} role="status" aria-live="polite">{line}</p>
       {d?.waiting > 0 && (
