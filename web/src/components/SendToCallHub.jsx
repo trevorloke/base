@@ -408,13 +408,13 @@ export default function SendToCallHub({ kind, id }) {
       )}
       {nt && (
         <p className="ops-meta ch-nottaken">
-          CallHub wouldn’t take {num(nt.n)} do-not-call {plural(nt.n, 'number')}{nt.note ? `: “${nt.note}”` : ''}
+          CallHub wouldn’t take {num(nt.n)} {DNC} {plural(nt.n, 'number')}{nt.note ? `: “${nt.note}”` : ''}
           <Names people={nt.people} more={nt.more || 0} />
         </p>
       )}
       {held && (
         <p className="ops-meta ch-nottaken ch-held">
-          CallHub’s do-not-call list still has {num(held.n)} {plural(held.n, 'number')} nobody here blocks now. Take {plural(held.n, 'it', 'them')} off in CallHub
+          CallHub’s {DNC} list still has {num(held.n)} {plural(held.n, 'number')} nobody here blocks now. Take {plural(held.n, 'it', 'them')} off in CallHub
           <Names people={held.people} more={held.more || 0} />
         </p>
       )}
