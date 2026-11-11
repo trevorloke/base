@@ -558,9 +558,10 @@ both: unsubscribed and cleaned come back (Mailchimp's webhook at `POST
 and it answers on the campaign's website domain too — plus a nightly pull
 and *Pull now*), and an unsubscribe, a do-not-email tag or a dead address
 here unsubscribes the member there. The first pull from an audience turns
-off here everyone on file who ever left it, so it asks first — the audience
-and how many — and does nothing until someone taps *Turn their email off
-here*. **Settings → Services → Mailchimp** has *Check*, *Connect* and *Pull
+off here everyone on file who ever left it, so until someone taps *Turn
+their email off here* it only counts, and asks — the audience and how many
+people — whenever a count finds someone; the yes is for the numbers it
+showed. **Settings → Services → Mailchimp** has *Check*, *Connect* and *Pull
 now*. INTEGRATIONS.md has the setup and what is not confirmed against a real
 account.
 

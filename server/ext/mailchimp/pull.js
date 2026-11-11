@@ -132,7 +132,7 @@ export const takeIn = async (db, ws, members) => {
   return out;
 };
 
-const plural = (n, one, many) => `${n.toLocaleString('en-CA')} ${n === 1 ? one : many}`;
+export const plural = (n, one, many) => `${n.toLocaleString('en-CA')} ${n === 1 ? one : many}`;
 const wordsFor = (out) => [
   out.unsubscribed ? `${out.unsubscribed.toLocaleString('en-CA')} unsubscribed` : null,
   out.cleaned ? plural(out.cleaned, 'dead address', 'dead addresses') : null,

@@ -15,18 +15,20 @@
 // Mailchimp, 1 dead address.") — the count before the tap could not know.
 // An address Mailchimp would not take is counted with Mailchimp's own words
 // for why.
-// The first send to an audience starts the first pull from it, which turns
-// off here everyone on file who ever left there, for good: so Send first
-// answers with a question (FirstPull) — counted in the background, "Counting
-// who unsubscribed in Mailchimp…" meanwhile — and only "Turn their email off
-// here" sends. "Not now" sends nothing. With nobody here to turn off there
-// is nothing to ask, and the list goes on its way.
+// Until someone says yes to the first pull from the audience — which turns
+// off here everyone on file who ever left there, for good — Send first
+// answers with a question (FirstPull), counted afresh in the background each
+// time ("Counting who unsubscribed in Mailchimp…" meanwhile), and only "Turn
+// their email off here" sends: the yes, for the numbers it showed (a count
+// that has changed since is refused, and the question is read again). "Not
+// now" sends nothing. A count with nobody here to turn off asks nothing: the
+// list goes on its way by itself, saying that count is what it saw.
 // It sits in the page's row of buttons; what it opens takes the row's whole
 // width underneath (send-to-mailchimp.css).
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
-import FirstPull from './FirstPull.jsx';
+import FirstPull, { asks } from './FirstPull.jsx';
 import { useOnline } from './NoSignal.jsx';
 import './send-to-mailchimp.css';
 
@@ -108,8 +110,10 @@ export default function SendToMailchimp({ listId }) {
   const [everyone, setEveryone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  // Sent, and answered with the question about the first pull: { all } — the
-  // choice made, kept for the yes (the question itself is the list's answer, `first`).
+  // Sent, and answered with the question about the first pull: { all, since }
+  // — the choice made, kept for the yes, and when the count before this tap's
+  // was made, so the new one is known when it is in (the question itself is
+  // the list's answer, `first`).
   const [door, setDoor] = useState(null);
   const state = useQuery({
     queryKey: key,
@@ -128,33 +132,41 @@ export default function SendToMailchimp({ listId }) {
     gcTime: 0,
     retry: false,
   });
-  // agree: the audience the question named — the yes to the first pull from it.
-  // auto: sent again by itself (below); a tap of the person's own starts afresh.
+  // shown: the question as it was shown — the yes to the first pull from its
+  // audience, for its numbers (or, when it showed nobody to turn off, going on
+  // without one). auto: sent again by itself (below); a tap of the person's
+  // own starts afresh.
   const resent = useRef(false);
-  const send = async (all, agree = null, auto = false) => {
+  const send = async (all, shown = null, auto = false) => {
     if (!auto) resent.current = false;
     setBusy(true); setError(null);
     try {
-      const r = await action('mailchimp.push', { list_id: listId, everyone: all, ...(agree ? { agree } : {}) });
+      const yes = shown ? { agree: shown.audience, shown: { unsubscribed: shown.unsubscribed, cleaned: shown.cleaned } } : {};
+      const r = await action('mailchimp.push', { list_id: listId, everyone: all, ...yes });
       if (r.first) {
-        // Nothing went: the question first (the list's own answer carries it,
-        // read again below, before `busy` ends).
-        setDoor({ all });
+        // Nothing went: the question first, counted afresh (the list's own
+        // answer carries it, read again below, before `busy` ends).
+        setDoor({ all, since: r.first.counted_at ?? null });
         setAsking(true);
       } else {
         setDoor(null);
         setAsking(false);
       }
-      await queryClient.invalidateQueries({ queryKey: key });
     } catch (e) { setError(errorText(e)); }
+    // Read again either way: after a refusal ("the count has changed"), the count as it stands.
+    await queryClient.invalidateQueries({ queryKey: key });
     setBusy(false);
   };
   const first = door ? state.data?.first : undefined;
+  // This tap's count is in: a newer one than before it — or someone said yes
+  // meanwhile (null). Not in, and not counting: Mailchimp didn't answer.
+  const counted = Boolean(door) && first !== undefined
+    && (first === null || (!first.counting && Boolean(first.counted_at) && first.counted_at !== door.since));
   // Counted, and nobody here to turn off (or someone said yes meanwhile): it
   // goes as asked — once for each tap, whatever the answer then says.
   useEffect(() => {
-    if (door && first === null && !busy && !resent.current) { resent.current = true; send(door.all, null, true); }
-  }, [door, first, busy]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (counted && !asks(first) && !busy && !resent.current) { resent.current = true; send(door.all, first, true); }
+  }, [counted, first, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   // A sync that turned people off here changes the page's own numbers ("3 by
   // email"): read again when it ends.
   const last = state.data?.sync;
@@ -190,13 +202,13 @@ export default function SendToMailchimp({ listId }) {
           ) : !state.data ? <p className="mc-line" role="status">Mailchimp: Loading…</p> : null}
           {asking && door && (
             <div className="mc-ask mc-first">
-              {first?.unsubscribed != null ? (
-                <FirstPull first={first} busy={busy} online={online} onYes={() => send(door.all, first.audience)} onNotNow={away} yesClass="btn ops-solid ops-tap" />
+              {counted && asks(first) ? (
+                <FirstPull first={first} busy={busy} online={online} onYes={() => send(door.all, first)} onNotNow={away} yesClass="btn ops-solid ops-tap" />
               ) : (
                 <>
                   <p className="mc-line" role="status">
                     {!state.data.running ? <><strong>Waiting</strong> · background work is off on this server</>
-                      : busy || first?.counting || first === null ? 'Counting who unsubscribed in Mailchimp…'
+                      : busy || first?.counting || counted ? 'Counting who unsubscribed in Mailchimp…'
                         : <>Mailchimp didn’t answer — <button type="button" className="btn-link mc-retry" disabled={busy} onClick={() => send(door.all)}>Try again</button></>}
                   </p>
                   <div className="ops-actions">

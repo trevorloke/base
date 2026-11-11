@@ -8,15 +8,18 @@
 //              the work is done in the background and the line under the
 //              buttons says what it found (GET /api/mailchimp).
 // The first pull from an audience turns off here everyone on file who ever
-// left there, for good: Connect and Pull now only count it, and the row
-// asks (FirstPull) — "Turn their email off here" is the yes (mailchimp.pull
-// with agree); "Not now" puts the question away until Pull now is tapped
-// again or the page is opened again.
+// left there, for good: until someone says yes, Connect, Pull now and the
+// nightly pull only count it, and the row asks (FirstPull) whenever the
+// count finds someone — with when it was counted; Pull now counts again.
+// "Turn their email off here" is the yes, for the numbers shown
+// (mailchimp.pull with agree and shown: a count that has changed since is
+// refused, and the row reads it again); "Not now" puts the question away
+// until Pull now is tapped again or the page is opened again.
 // onChanged: Connect worked — the row drops what an earlier Check said.
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
-import FirstPull from './FirstPull.jsx';
+import FirstPull, { asks } from './FirstPull.jsx';
 import { NoSignal, noSignal } from './NoSignal.jsx';
 import './mailchimp-panel.css';
 
@@ -58,13 +61,14 @@ export default function MailchimpPanel({ online, onChanged }) {
     } catch (e) { setRes({ ok: false, said: e.message }); }
     setBusy(null);
   };
-  // agree: the audience the question named — the yes to the first pull from it.
-  const pull = async (agree) => {
-    setBusy(agree ? 'yes' : 'pull'); setError(null); setNotNow(false);
+  // yes: the question as shown — the yes to the first pull from its audience, for its numbers.
+  const pull = async (yes = null) => {
+    setBusy(yes ? 'yes' : 'pull'); setError(null); setNotNow(false);
     try {
-      await action('mailchimp.pull', agree ? { agree } : {});
-      await queryClient.invalidateQueries({ queryKey: KEY });
+      await action('mailchimp.pull', yes ? { agree: yes.audience, shown: { unsubscribed: yes.unsubscribed, cleaned: yes.cleaned } } : {});
     } catch (e) { setError(e.message); }
+    // Read again either way: after a refusal ("the count has changed"), the count as it stands.
+    await queryClient.invalidateQueries({ queryKey: KEY });
     setBusy(null);
   };
   const copy = async () => {
@@ -76,8 +80,8 @@ export default function MailchimpPanel({ online, onChanged }) {
   // will do it, so nothing says "Pulling…".
   const idle = Boolean(d?.pulling) && !d?.running;
   const pulling = busy === 'pull' || busy === 'yes' || (Boolean(d?.pulling) && !idle);
-  // The first pull from this audience, counted and waiting for a yes.
-  const first = d?.first?.unsubscribed != null ? d.first : null;
+  // The first pull from this audience, counted, with someone to ask about, and waiting for a yes.
+  const first = asks(d?.first) ? d.first : null;
   // While nobody has said yes, a pull only counts — and says so.
   const counting = pulling && Boolean(d?.first) && busy !== 'yes';
   let line;
@@ -112,7 +116,7 @@ export default function MailchimpPanel({ online, onChanged }) {
         </div>
       )}
       {first && !notNow && !pulling && (
-        <FirstPull first={first} busy={busy === 'yes'} online={online} onYes={() => pull(first.audience)} onNotNow={() => setNotNow(true)} />
+        <FirstPull first={first} busy={busy === 'yes'} online={online} onYes={() => pull(first)} onNotNow={() => setNotNow(true)} />
       )}
       <p className={`sv2-detail mcp-pull${stopped ? ' is-stopped' : ''}`} role="status" aria-live="polite">{line}</p>
       {d?.waiting > 0 && (

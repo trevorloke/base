@@ -22,8 +22,12 @@
 //     background work is off, both screens say "Waiting"; a sync whose own
 //     pull finds people who had left in Mailchimp says how many it turned
 //     off here, and an address Mailchimp will not take is counted with
-//     Mailchimp's words for why; the first send to another audience asks
-//     first ("Not now" sends nothing), and the yes sends.
+//     Mailchimp's words for why; the first send to another audience counts
+//     first ("Counting who unsubscribed in Mailchimp…"), and with nobody on
+//     file to turn off it goes by itself and opens nothing — then, once two
+//     who left that audience long ago are on file (one address, two
+//     people), the next send asks ("Not now" sends nothing), and the yes
+//     sends.
 // Every number on screen is checked against the API and against what the
 // stand-in holds; the books verify.
 //
@@ -244,9 +248,9 @@ check('…and what Check said before is gone (it is no longer true)', (await pag
 await page.locator(`${ROW} .sv2-fresh button:has-text("Copy")`).click();
 const copied = await page.evaluate(() => navigator.clipboard.readText()).catch((e) => `clipboard: ${e.message}`);
 check('Copy puts the secret on the clipboard', copied === SECRET, copied);
-// Connect also counts what the first pull would do here — and asks before doing it.
-const FIRST_Q = 'Audience ‘Sample Campaign’ · 1 person here unsubscribed there · 1 dead address Only they can turn their email back on. Turn their email off here Not now';
-const askedOnConnect = await until(async () => (await words(page.locator(`${ROW} .fp`))) === FIRST_Q, 15000);
+// Connect also counts what the first pull would do here — and asks before doing it, saying when it counted.
+const FIRST_Q = /^Audience ‘Sample Campaign’ · 1 person here unsubscribed there · 1 dead address Only they can turn their email back on\. Counted \d{1,2}:\d\d [ap]\.m\. Turn their email off here Not now$/;
+const askedOnConnect = await until(async () => FIRST_Q.test(await words(page.locator(`${ROW} .fp`))), 15000);
 check('Connect counts what the first pull would turn off here, and asks: "Audience ‘Sample Campaign’ · 1 person here unsubscribed there · 1 dead address"', askedOnConnect
   && (await page.locator(`${ROW} .fp [role="status"]`).count()) === 1, await words(page.locator(`${ROW} .mcp`)));
 await shot(row, '03-connected-secret-1440');
@@ -284,7 +288,7 @@ await page.screenshot({ path: `${SHOTS}/03-services-page-1440.png`, fullPage: tr
 // ── 4. The first pull asks first: Not now turns nobody off; the first Pull now asks again; the yes pulls ──
 row = await openServices(page);
 m = await measure(page.locator(ROW));
-check('the question stays on the row until someone answers it — no yellow button, every button ≥ 48px', (await words(page.locator(`${ROW} .fp`))) === FIRST_Q
+check('the question stays on the row until someone answers it — no yellow button, every button ≥ 48px', FIRST_Q.test(await words(page.locator(`${ROW} .fp`)))
   && m.primary.length === 0 && m.minTap >= 48, JSON.stringify(m));
 await shot(row, '04-first-ask-1440');
 // Not now, by keyboard.
@@ -297,7 +301,7 @@ check('Not now: the question is put away, nobody is turned off, the line still "
 // The first Pull now (on the phone): counted again, and the same question — nothing is done yet.
 prow = await openServices(phone);
 await phone.locator(`${ROW} button:has-text("Pull now")`).tap();
-const askedOnPull = await until(async () => (await words(phone.locator(`${ROW} .fp`))) === FIRST_Q, 15000);
+const askedOnPull = await until(async () => FIRST_Q.test(await words(phone.locator(`${ROW} .fp`))), 15000);
 pm = await measure(phone.locator(ROW));
 subs = (await api('/subscriptions')).json;
 check('the first Pull now (on the phone): the same question — no sideways scroll, every button ≥ 48px, no yellow button; still nobody turned off', askedOnPull
@@ -465,7 +469,8 @@ await phone.locator('.mc-ask button:has-text("Send")').waitFor({ timeout: 10000 
 await until(async () => !(await phone.locator('.mc-ask button:has-text("Send")').isDisabled()), 8000);
 await phone.locator('.mc-ask button:has-text("Send")').tap();
 const STOPPED = 'Stopped: Mailchimp refused the key — copy the whole key, with its ending (like -us19) Try again';
-const stoppedOk = await until(async () => /^Stopped: /.test(await words(phone.locator('.mc-status'))), 20000);
+// The whole line: the sync stops within moments of the tap, while the tap's own button may still read "Starting…".
+const stoppedOk = await until(async () => (await words(phone.locator('.mc-status'))) === STOPPED, 20000);
 status = await words(phone.locator('.mc-status'));
 pm = await measure(phone.locator('.ls-tools'));
 check('a refused key: "Stopped: Mailchimp refused the key — …" and Try again; never the key itself', stoppedOk && status === STOPPED
@@ -588,46 +593,66 @@ pm = await measure(phone.locator('.ls-tools'));
 check('at 390: the same lines, wrapped — no sideways scroll, every button ≥ 48px', (await words(phone.locator('.mc-status'))) === status && fits(pm), `${await words(phone.locator('.mc-status'))} · ${JSON.stringify(pm)}`);
 await shot(plp, '15-list-turned-off-390');
 
-// ── 14. The first send to another audience asks first: Not now sends nothing; the yes sends ──
-// The campaign moves to another audience, where Dee and Ida left long ago; Mailchimp takes Jon now.
+// ── 14. Another audience: a count of nobody asks nothing and opens nothing; the first count that finds someone asks ──
+// The campaign moves to another audience, where a household left long ago (Kim and Lou Example share one
+// address) — and nobody here has them on file yet. Mailchimp takes Jon now.
+const HOME = 'home@example.org';
+const doorSaid = async () => ((await api('/events?since=0&limit=2000')).json?.events || []).filter((e) => e.entity_type === 'mailchimp' && e.payload?.first_pull && e.payload.audience === 'aud0002');
 await set({ audiences: [{ id: 'aud0002', name: 'Sample supporters' }], refuse: [{ email: addr('Jon'), words: false }], env: { MAILCHIMP_AUDIENCE_ID: 'aud0002' },
-  add: [{ email: addr('Dee'), status: 'unsubscribed', changed: longAgo, audienceId: 'aud0002' }, { email: addr('Ida'), status: 'unsubscribed', changed: longAgo, audienceId: 'aud0002' }] });
+  add: [{ email: HOME, status: 'unsubscribed', changed: longAgo, audienceId: 'aud0002' }] });
 lp = await openList(page);
 await page.locator('.ls-tools button:has-text("Sync again")').click();
 await until(async () => /to send$/.test(await words(page.locator('.mc-ask .mc-line[role="status"]'))), 8000);
+await set({ slow: 1500 }); // the count, held long enough to be seen
 await page.locator('.mc-ask button:has-text("Send")').click();
-const SECOND_Q = 'Audience ‘Sample supporters’ · 2 people here unsubscribed there Only they can turn their email back on. Turn their email off here Not now';
-const askedOnSend = await until(async () => (await words(page.locator('.mc-first'))) === SECOND_Q, 20000);
+const sawCounting = await until(async () => (await words(page.locator('.mc-first'))) === 'Counting who unsubscribed in Mailchimp… Not now', 10000);
+check('Send to an audience nobody has said yes to: counted first — "Counting who unsubscribed in Mailchimp…", announced', sawCounting
+  && (await page.locator('.mc-first [role="status"]').count()) === 1, await words(page.locator('.mc')));
+await shot(lp, '16-list-counting-1440');
+await set({ slow: 0 });
+const wentOn = await until(async () => /^In Mailchimp · 3 addresses/.test(await words(page.locator('.mc-status'))), 20000);
+let firstNow = (await api('/mailchimp')).json.first;
+check('…nobody on file to turn off: no question, and it goes by itself — but nothing opens: nobody has said yes', wentOn && (await page.locator('.mc-first').count()) === 0
+  && JSON.stringify((await mc(TAG, 'aud0002')).tag) === JSON.stringify(['Dee', 'Ida', 'Jon'].map(addr)) && (await doorSaid()).length === 0
+  && firstNow?.audience === 'aud0002' && firstNow.unsubscribed === 0 && firstNow.cleaned === 0, `${await words(page.locator('.mc'))} · ${JSON.stringify(firstNow)}`);
+// The household comes in on file afterwards: the next send asks.
+const household = [];
+for (const w of ['Kim', 'Lou']) household.push((await act('person.create', { name: `${w} Example`, email: HOME, tags: ['member'] })).json.person.id);
+const householdOff = async () => (await Promise.all(household.map(async (id) => JSON.stringify((await api(`/persons/${id}`)).json?.person?.tags || []).includes('do-not-email')))).filter(Boolean).length;
+await page.locator('.ls-tools button:has-text("Sync again")').click();
+await until(async () => /to send$/.test(await words(page.locator('.mc-ask .mc-line[role="status"]'))), 8000);
+await page.locator('.mc-ask button:has-text("Send")').click();
+const SECOND_Q = /^Audience ‘Sample supporters’ · 2 people here unsubscribed there Only they can turn their email back on\. Counted \d{1,2}:\d\d [ap]\.m\. Turn their email off here Not now$/;
+const askedOnSend = await until(async () => SECOND_Q.test(await words(page.locator('.mc-first'))), 20000);
 m = await measure(page.locator('.ls-tools'));
-check('the first send to another audience: nothing goes — the question, its name and how many it would turn off here; the one yellow button is still Email this list', askedOnSend
-  && m.primary.join('|') === 'Email this list' && m.minTap >= 48 && (await mc(TAG, 'aud0002')).tag === null, `${await words(page.locator('.mc'))} · ${JSON.stringify(m)}`);
+check('the first count that finds someone asks: nothing goes — the audience, how many people here it would turn off (two on one address are two), when it counted; the one yellow button is still Email this list', askedOnSend
+  && m.primary.join('|') === 'Email this list' && m.minTap >= 48 && JSON.stringify((await mc(TAG, 'aud0002')).tag) === JSON.stringify(['Dee', 'Ida', 'Jon'].map(addr)), `${await words(page.locator('.mc'))} · ${JSON.stringify(m)}`);
 await shot(lp, '16-list-first-ask-1440');
 await page.locator('.mc-first button:has-text("Not now")').click();
-subs = (await api('/subscriptions')).json;
 st = await mc(TAG, 'aud0002');
-check('Not now: nothing sent, nobody turned off; the line is the last sync’s, as it was', (await page.locator('.mc-ask').count()) === 0 && st.tag === null && st.members.length === 2
-  && subs.subscriptions.find((x) => x.email === addr('Dee'))?.status === 'subscribed' && /^In Mailchimp · 2 addresses/.test(await words(page.locator('.mc-status'))), await words(page.locator('.mc')));
-// On the phone: Sync again → Send → the same question at once (it is counted) → the yes, by tap.
+check('Not now: nothing sent, nobody turned off; the line is the last sync’s, as it was', (await page.locator('.mc-ask').count()) === 0 && JSON.stringify(st.tag) === JSON.stringify(['Dee', 'Ida', 'Jon'].map(addr))
+  && (await householdOff()) === 0 && (await doorSaid()).length === 0 && /^In Mailchimp · 3 addresses/.test(await words(page.locator('.mc-status'))), await words(page.locator('.mc')));
+// On the phone: Sync again → Send → counted again → the same question → the yes, by tap.
 plp = await openList(phone);
 await phone.locator('.ls-tools button:has-text("Sync again")').tap();
 await until(async () => /to send$/.test(await words(phone.locator('.mc-ask .mc-line[role="status"]'))), 8000);
 await phone.locator('.mc-ask button:has-text("Send")').tap();
-await until(async () => (await words(phone.locator('.mc-first'))) === SECOND_Q, 15000);
+await until(async () => SECOND_Q.test(await words(phone.locator('.mc-first'))), 15000);
 pm = await measure(phone.locator('.ls-tools'));
-check('at 390: the same question — no sideways scroll, every button ≥ 48px, one yellow button', (await words(phone.locator('.mc-first'))) === SECOND_Q && fits(pm)
+check('at 390: the same question — no sideways scroll, every button ≥ 48px, one yellow button', SECOND_Q.test(await words(phone.locator('.mc-first'))) && fits(pm)
   && pm.primary.join('|') === 'Email this list', JSON.stringify(pm));
 await shot(plp, '16-list-first-ask-390');
 await phone.locator('.mc-first button:has-text("Turn their email off here")').tap();
 const SECOND_OFF = 'Email turned off here too: 2 who unsubscribed in Mailchimp.';
 await until(async () => (await words(phone.locator('.mc-status'))).includes(SECOND_OFF), 20000);
 status = await words(phone.locator('.mc-status'));
-subs = (await api('/subscriptions')).json;
 st = await mc(TAG, 'aud0002');
-check('Turn their email off here: it sends — "In Mailchimp · 1 address", and who it turned off here', /^In Mailchimp · 1 address · tag “base\.win: Members” Synced /.test(status)
-  && status.endsWith(SECOND_OFF) && JSON.stringify(st.tag) === JSON.stringify([addr('Jon')]) && subs.subscriptions.find((x) => x.email === addr('Dee'))?.status === 'unsubscribed', `${status} · ${JSON.stringify(st.tag)}`);
-// …and the page's own numbers follow: Dee and Ida can't be emailed here now.
-const recounted = await until(async () => / 1 by email · /.test(await words(phone.locator('.ls-page'))), 10000);
-check('…the list’s own line reads again: "1 by email"', recounted, (await words(phone.locator('.ls-page'))).slice(0, 120));
+const said2 = (await doorSaid()).map((e) => [e.payload.first_pull, e.payload.unsubscribed, Boolean(e.actor_id)].join('|'));
+check('Turn their email off here: it sends — "In Mailchimp · 3 addresses", and the two it turned off here; the yes on the log is a person’s, to 2', /^In Mailchimp · 3 addresses · tag “base\.win: Members” Synced /.test(status)
+  && status.endsWith(SECOND_OFF) && JSON.stringify(st.tag) === JSON.stringify(['Dee', 'Ida', 'Jon'].map(addr)) && (await householdOff()) === 2 && said2.join(',') === 'yes|2|true', `${status} · ${JSON.stringify(st.tag)} · ${said2}`);
+// …and the page's own numbers follow: the household's address can't be emailed here now.
+const recounted = await until(async () => / 3 by email · /.test(await words(phone.locator('.ls-page'))), 10000);
+check('…the list’s own line reads again: "3 by email"', recounted, (await words(phone.locator('.ls-page'))).slice(0, 120));
 await shot(plp, '16-list-first-sent-390');
 
 check('the books verify', (await api('/audit/verify')).json?.ok === true);

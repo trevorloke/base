@@ -260,17 +260,25 @@ What happens:
 **The first pull asks first.** The first pull from an audience turns off,
 here, everyone on file who ever unsubscribed in it — that is the point — and
 the desk cannot put them back; only they can. So it never runs by itself:
-Connect, the first **Pull now**, the nightly pull and the first **Send to
-Mailchimp** only count it, and ask — *Audience ‘…’ · 1,240 people here
-unsubscribed there · 85 dead addresses*, with **Turn their email off here**
-and **Not now**. Nothing is turned off, and no list is sent, until someone
-says yes for that audience (a manager on Settings → Services, or whoever
-sends a list); the yes is on the event log with what they were shown. *Not
-now* changes nothing. When nobody on file would be turned off there is
-nothing to ask. Another audience (`MAILCHIMP_AUDIENCE_ID` changed) asks
-again. Someone who unsubscribes in Mailchimp after Connect is turned off
-here at once, by the webhook, yes or no: that no is new. After the yes,
-pulls run by themselves.
+until a person says yes for that audience, Connect, **Pull now**, the
+nightly pull and **Send to Mailchimp** only count it (a send counts afresh
+each time), and ask whenever the count finds someone — *Audience ‘…’ ·
+1,240 people here unsubscribed there · 85 dead addresses. Counted 3:42
+p.m.*, with **Turn their email off here** and **Not now**. It counts people,
+not addresses: two records sharing one address are two. Nothing is turned
+off, and no list is sent, until someone says yes (a manager on Settings →
+Services, or whoever sends a list); the yes is on the event log with what
+they were shown, and it is for those numbers: a yes to a count that has
+changed since is refused (look again), and the first pull after the yes
+counts again — if it would turn off more (the supporter file came in
+meanwhile), it turns off nobody and asks again. *Not now* changes nothing.
+When a count finds nobody on file to turn off there is nothing to ask: a
+list goes, turning nobody off — and nothing opens, so the first count that
+does find someone (the file came in after Connect) still asks. Another
+audience (`MAILCHIMP_AUDIENCE_ID` changed) asks again. Someone who
+unsubscribes in Mailchimp after Connect is turned off here at once, by the
+webhook, yes or no: that no is new. Once the first pull after the yes is
+done, pulls run by themselves.
 
 Set it up:
 

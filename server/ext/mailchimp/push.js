@@ -33,7 +33,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { loadList, recipientsOf } from '../lists/audience.js';
 import { keyFor, lower, mailchimp, mailchimpOn, MailchimpError, pages } from './mailchimp.js';
-import { firstOf, pull, PULL_JOB, queueDays, sayYes } from './pull.js';
+import { firstOf, plural, pull, PULL_JOB, queueDays, sayYes } from './pull.js';
 
 export const PUSH_ACTION = 'mailchimp.push';
 export const SYNC_JOB = 'mailchimp.sync';
@@ -248,7 +248,6 @@ const addPart = async (db, sync, segment, part) => {
 // came back (pull.js) — the audience in use is another one now, a yes was
 // shown fewer than its pull counted, or someone came in since the count
 // that showed nobody. Try again asks the question, counted afresh.
-const plural = (n, one, many) => `${n.toLocaleString('en-CA')} ${n === 1 ? one : many}`;
 const askedWords = (asked, sync) => {
   if (asked.audience !== sync.audience_id) return 'Mailchimp’s audience has changed since — tap Try again';
   const who = [
