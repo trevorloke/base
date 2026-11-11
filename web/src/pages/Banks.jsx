@@ -413,7 +413,7 @@ function Bank({ id }) {
                   <td>{n.rating ? <RatingChip code={n.rating} who brief /> : <span className="muted">·</span>}</td>
                   <td>{n.caller || <span className="muted">—</span>}</td>
                   <td>{n.done_at ? <span className="chip chip-ok">{n.outcome || 'done'}</span>
-                    : n.still === false ? <span className="muted">{bank.list_id ? 'left the list' : 'can’t be called now'}</span>
+                    : n.still === false ? <span className="muted">{bank.list_id ? 'left the list or can’t be called now' : 'can’t be called now'}</span>
                     : n.next_at && new Date(n.next_at) > new Date() ? `call back ${backAt(n.next_at)}${n.tries ? ` · ${n.tries} ${n.tries === 1 ? 'try' : 'tries'}` : ''}`
                       : n.assigned_to ? 'to call' : <span className="muted">not handed out</span>}</td>
                   <td className="bk-table__acts">

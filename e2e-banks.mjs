@@ -152,7 +152,7 @@ t = (await page.innerText('main')).replace(/\s+/g, ' ');
 const deeRow = (await page.innerText(`.bk-table tbody tr:has-text("Dee Example")`).catch(() => '')).replace(/\s+/g, ' ');
 lb = (await api(`/banks/${listBankId}`)).json?.bank;
 check('Dee leaves the list: "From the list Call these people · 1 left the list…", her row says so, two still to hand out',
-  /From the list Call these people · 1 left the list/.test(t) && /left the list/.test(deeRow) && lb.gone === 1 && lb.open === 2, `${t.slice(0, 200)} · ${deeRow}`);
+  /From the list Call these people · 1 left the list or can’t be called now/.test(t) && /left the list or can’t be called now/.test(deeRow) && lb.gone === 1 && lb.open === 2, `${t.slice(0, 200)} · ${deeRow}`);
 // Hal joins it: Add who joined since brings him in.
 await api('/actions/person.create', { name: 'Hal Example', phone: '604-555-0148', tags: ['call-list'] });
 await page.click('.au-banklist button:has-text("Add who joined since")');
