@@ -10,6 +10,7 @@
 //     and the row says what it found; with Mailchimp down the pull says it
 //     stopped, in Mailchimp's words; an unsubscribe here that Mailchimp will
 //     not take is counted as waiting, with why, and Pull now sends it again;
+//     a yes whose pull counted more brings the question back, saying why;
 //   · a list's page: "Send to Mailchimp" beside Download CSV only when
 //     Mailchimp is on; the question before sending (how many go — the
 //     newsletter's subscribers, or with one tick everyone who can be
@@ -19,7 +20,8 @@
 //     out of the tag; "too many" from Mailchimp reads "trying again soon"
 //     and carries on by itself; a refused key reads "Stopped: … Try again";
 //     a read that fails reads "Unavailable — Try again"; on a server whose
-//     background work is off, both screens say "Waiting"; a sync whose own
+//     background work is off, both screens say "Waiting"; a sync the first
+//     pull's question stopped says why, with Try again; a sync whose own
 //     pull finds people who had left in Mailchimp says how many it turned
 //     off here, and an address Mailchimp will not take is counted with
 //     Mailchimp's words for why; the first send to another audience counts
@@ -248,8 +250,10 @@ check('…and what Check said before is gone (it is no longer true)', (await pag
 await page.locator(`${ROW} .sv2-fresh button:has-text("Copy")`).click();
 const copied = await page.evaluate(() => navigator.clipboard.readText()).catch((e) => `clipboard: ${e.message}`);
 check('Copy puts the secret on the clipboard', copied === SECRET, copied);
-// Connect also counts what the first pull would do here — and asks before doing it, saying when it counted.
-const FIRST_Q = /^Audience ‘Sample Campaign’ · 1 person here unsubscribed there · 1 dead address Only they can turn their email back on\. Counted \d{1,2}:\d\d [ap]\.m\. Turn their email off here Not now$/;
+// Connect also counts what the first pull would do here — and asks before doing it, saying when it counted
+// ("Counted 3:42 p.m.", or "Counted Nov 10, 11:59 p.m." once midnight has passed since).
+const COUNTED = String.raw`Counted (?:[A-Z][a-z]{2} \d{1,2}, )?\d{1,2}:\d\d [ap]\.m\.`;
+const FIRST_Q = new RegExp(`^Audience ‘Sample Campaign’ · 1 person here unsubscribed there · 1 dead address Only they can turn their email back on\\. ${COUNTED} Turn their email off here Not now$`);
 const askedOnConnect = await until(async () => FIRST_Q.test(await words(page.locator(`${ROW} .fp`))), 15000);
 check('Connect counts what the first pull would turn off here, and asks: "Audience ‘Sample Campaign’ · 1 person here unsubscribed there · 1 dead address"', askedOnConnect
   && (await page.locator(`${ROW} .fp [role="status"]`).count()) === 1, await words(page.locator(`${ROW} .mcp`)));
@@ -534,6 +538,21 @@ for (const [p, size] of [[page, '1440'], [phone, '390']]) {
   await shot(r, `13-jobs-off-services-${size}`);
   await p.unroute(PANEL);
 }
+// A sync the first pull's question stopped before anything went (someone came in on file after a count
+// that found nobody): it says so in its own words, with Try again. (Put in place of this server's answer.)
+const DOOR_NOTE = '3 people here unsubscribed in Mailchimp since it was counted, so nothing was sent — tap Try again';
+const doorList = json({ on: true, running: true, first: { audience: 'aud0001', name: 'Sample Campaign', unsubscribed: 3, cleaned: 0, counted_at: new Date().toISOString(), counting: false },
+  sync: { id: list.id, list_id: list.id, status: 'failed', consent: 'all', tag: TAG, total: 0, added: 0, tagged: 0, removed: 0, skipped: 0, todo: 0, note: DOOR_NOTE, synced_at: null, created_at: new Date().toISOString(), by: 'Marco Example', stalled: false, pulled_unsubscribed: 0, pulled_cleaned: 0 } });
+for (const [p, size] of [[page, '1440'], [phone, '390']]) {
+  await p.route(READ, doorList);
+  const l = await openList(p);
+  await p.locator('.mc-status').waitFor({ timeout: 10000 }).catch(() => {});
+  const pmDoor = await measure(p.locator('.ls-tools'));
+  check(`a sync the first pull's question stopped (${size}): "Stopped: ${DOOR_NOTE}", Try again beside it — no sideways scroll, every button ≥ 48px`, (await words(p.locator('.mc-status'))) === `Stopped: ${DOOR_NOTE} Try again`
+    && (await p.locator('.mc-line[data-status="stopped"]').count()) === 1 && fits(pmDoor) && pmDoor.minTap >= 48, `${await words(p.locator('.mc-status'))} · ${JSON.stringify(pmDoor)}`);
+  await shot(l, `13-door-stopped-${size}`);
+  await p.unroute(READ);
+}
 
 // ── 12. An unsubscribe here reaches Mailchimp — and one it will not take is said, and sent again ──
 subs = (await api('/subscriptions')).json;
@@ -622,7 +641,7 @@ const householdOff = async () => (await Promise.all(household.map(async (id) => 
 await page.locator('.ls-tools button:has-text("Sync again")').click();
 await until(async () => /to send$/.test(await words(page.locator('.mc-ask .mc-line[role="status"]'))), 8000);
 await page.locator('.mc-ask button:has-text("Send")').click();
-const SECOND_Q = /^Audience ‘Sample supporters’ · 2 people here unsubscribed there Only they can turn their email back on\. Counted \d{1,2}:\d\d [ap]\.m\. Turn their email off here Not now$/;
+const SECOND_Q = new RegExp(`^Audience ‘Sample supporters’ · 2 people here unsubscribed there Only they can turn their email back on\\. ${COUNTED} Turn their email off here Not now$`);
 const askedOnSend = await until(async () => SECOND_Q.test(await words(page.locator('.mc-first'))), 20000);
 m = await measure(page.locator('.ls-tools'));
 check('the first count that finds someone asks: nothing goes — the audience, how many people here it would turn off (two on one address are two), when it counted; the one yellow button is still Email this list', askedOnSend
@@ -654,6 +673,28 @@ check('Turn their email off here: it sends — "In Mailchimp · 3 addresses", an
 const recounted = await until(async () => / 3 by email · /.test(await words(phone.locator('.ls-page'))), 10000);
 check('…the list’s own line reads again: "3 by email"', recounted, (await words(phone.locator('.ls-page'))).slice(0, 120));
 await shot(plp, '16-list-first-sent-390');
+
+// ── 15. Settings → Services: a yes whose pull counted more brings the question back, and says why ──
+// (Put in place of this server's answers: the count is 2 when the manager says yes, and 3 once the pull
+// after the yes has counted again — someone came in on file meanwhile.)
+const AGAIN = 'The count has changed since you said yes — look again.';
+for (const [p, size] of [[page, '1440'], [phone, '390']]) {
+  let saidYes = false;
+  const question = (n) => ({ audience: 'aud0002', name: 'Sample supporters', unsubscribed: n, cleaned: 0, counted_at: new Date().toISOString(), counting: false });
+  await p.route(PANEL, (r) => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ on: true, running: true, pulling: false, pulled_at: null, pull_ok: null, pull_note: null, waiting: 0, waiting_note: null, first: question(saidYes ? 3 : 2) }) }));
+  await p.route('**/api/actions/mailchimp.pull', (r) => { saidYes = true; return r.fulfill({ status: 200, contentType: 'application/json', body: '{"queued":true}' }); });
+  const r = await openServices(p);
+  const yesBtn = p.locator(`${ROW} .fp button:has-text("Turn their email off here")`);
+  if (size === '390') await yesBtn.tap(); else await yesBtn.click();
+  const back = await until(async () => / 3 people here unsubscribed there /.test(` ${await words(p.locator(`${ROW} .fp`))} `), 10000);
+  const pmAgain = await measure(p.locator(ROW));
+  check(`a yes whose pull counted more (${size}): the question is back with the new number, saying why — "${AGAIN}"`, back
+    && (await words(p.locator(`${ROW} .mcp-again[role="status"]`))) === AGAIN && fits(pmAgain) && pmAgain.primary.length === 0, `${await words(p.locator(`${ROW} .mcp`))} · ${JSON.stringify(pmAgain)}`);
+  await shot(r, `17-services-asked-again-${size}`);
+  await p.unroute(PANEL);
+  await p.unroute('**/api/actions/mailchimp.pull');
+}
 
 check('the books verify', (await api('/audit/verify')).json?.ok === true);
 check('no page errors', errors.length === 0, errors.join(' | '));

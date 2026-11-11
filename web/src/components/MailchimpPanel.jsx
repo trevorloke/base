@@ -48,6 +48,7 @@ export default function MailchimpPanel({ online, onChanged }) {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(null);
   const [notNow, setNotNow] = useState(false); // the question put away for now
+  const [yesTo, setYesTo] = useState(null); // the numbers the last yes here was for
 
   const connect = async () => {
     setBusy('connect'); setRes(null); setError(null); setCopied(false); setNotNow(false);
@@ -64,9 +65,10 @@ export default function MailchimpPanel({ online, onChanged }) {
   // yes: the question as shown — the yes to the first pull from its audience, for its numbers.
   const pull = async (yes = null) => {
     setBusy(yes ? 'yes' : 'pull'); setError(null); setNotNow(false);
+    setYesTo(yes ? { unsubscribed: yes.unsubscribed, cleaned: yes.cleaned } : null);
     try {
       await action('mailchimp.pull', yes ? { agree: yes.audience, shown: { unsubscribed: yes.unsubscribed, cleaned: yes.cleaned } } : {});
-    } catch (e) { setError(e.message); }
+    } catch (e) { setError(e.message); setYesTo(null); }
     // Read again either way: after a refusal ("the count has changed"), the count as it stands.
     await queryClient.invalidateQueries({ queryKey: KEY });
     setBusy(null);
@@ -82,6 +84,8 @@ export default function MailchimpPanel({ online, onChanged }) {
   const pulling = busy === 'pull' || busy === 'yes' || (Boolean(d?.pulling) && !idle);
   // The first pull from this audience, counted, with someone to ask about, and waiting for a yes.
   const first = asks(d?.first) ? d.first : null;
+  // Back after a yes here, with other numbers: the pull counted again first and found more.
+  const again = Boolean(first && yesTo) && (first.unsubscribed !== yesTo.unsubscribed || first.cleaned !== yesTo.cleaned);
   // While nobody has said yes, a pull only counts — and says so.
   const counting = pulling && Boolean(d?.first) && busy !== 'yes';
   let line;
@@ -116,7 +120,10 @@ export default function MailchimpPanel({ online, onChanged }) {
         </div>
       )}
       {first && !notNow && !pulling && (
-        <FirstPull first={first} busy={busy === 'yes'} online={online} onYes={() => pull(first)} onNotNow={() => setNotNow(true)} />
+        <>
+          {again && <p className="sv2-detail mcp-again" role="status">The count has changed since you said yes — look again.</p>}
+          <FirstPull first={first} busy={busy === 'yes'} online={online} onYes={() => pull(first)} onNotNow={() => setNotNow(true)} />
+        </>
       )}
       <p className={`sv2-detail mcp-pull${stopped ? ' is-stopped' : ''}`} role="status" aria-live="polite">{line}</p>
       {d?.waiting > 0 && (
