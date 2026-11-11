@@ -427,6 +427,17 @@ try {
   check('10–1 and 2–5 on one day: two shifts, named for the turf', (await go.innerText()).trim() === 'Add 2 shifts'
     && (await D.text('.sch-summary')) === `Canvass — Newton block · ${wd(sat)}, ${md(sat)} · 10 am–1 pm and 2–5 pm`, await D.text('.sch-summary'));
   await D.shot('07-add-canvass-turf-1440');
+  // A signal blip with the sheet open: the week and every choice stay; adding waits for the signal.
+  await desk.setOffline(true);
+  await until(async () => /No signal/.test(await D.text('.sch-sheet__foot')));
+  check('a signal blip: the week and the sheet stay, every choice with them — "Add 2 shifts" waits for the signal',
+    (await page.locator('.sch-day').count()) === 7 && await go.isDisabled() && (await go.innerText()).trim() === 'Add 2 shifts'
+    && await pressed(chip('Newton block')) && await pressed(chip('2–5 pm')) && /No signal — your choices stay/.test(await D.text('.sch-sheet__foot')),
+    await D.text('.sch-sheet__foot'));
+  await D.shot('07b-add-no-signal-1440');
+  await desk.setOffline(false);
+  await until(async () => !(await go.isDisabled()));
+  check('…and the signal back: the same sheet, ready to add', !(await go.isDisabled()) && (await go.innerText()).trim() === 'Add 2 shifts' && !/No signal/.test(await D.text('.sch-sheet__foot')));
   await go.click();
   await sheetGone();
   await until(async () => (await page.locator('.sch-card').count()) === 9);
@@ -792,6 +803,25 @@ try {
   await until(async () => (await page.locator('.sch-card').count()) === 9);
   const third = await board(addDays(MON, 14));
   check('just the shifts: nine, nobody on them', third.shifts.length === 9 && third.assignments.length === 0 && (await page.locator('.sch-card').count()) === 9, `${third.shifts.length}/${third.assignments.length}`);
+  // Back closes a sheet — the add sheet, a card's — and never leaves the week.
+  const weekHere = page.url();
+  await plus(addDays(MON, 16)).click();
+  await page.waitForSelector('.sch-sheet .sch-tile', { timeout: 8000 });
+  await page.evaluate(() => history.back());
+  await sheetGone();
+  check('Back with the add sheet open closes it — the week stays', (await page.locator('.sch-sheet').count()) === 0 && page.url() === weekHere && (await page.locator('.sch-card').count()) === 9, page.url());
+  await page.locator('.sch-card__head').first().click();
+  await page.waitForSelector('.sch-sheet', { timeout: 8000 });
+  await page.evaluate(() => history.back());
+  await sheetGone();
+  check('…and with a card’s sheet open', (await page.locator('.sch-sheet').count()) === 0 && page.url() === weekHere && (await page.locator('.sch-card').count()) === 9, page.url());
+  await page.locator('.sch-card__head').first().click();
+  await page.waitForSelector('.sch-sheet', { timeout: 8000 });
+  await page.locator('.sch-sheet .sch-x').click();
+  await sheetGone();
+  await page.evaluate(() => history.back());
+  await until(async () => page.url() !== weekHere);
+  check('closed with ✕, the sheet leaves no step behind: Back goes on to where the week came from', page.url() !== weekHere && (await page.locator('.sch-sheet').count()) === 0, page.url());
 
   // ── 16. This week: a day that is over has no "+" ──
   await D.go('/shifts');
@@ -978,6 +1008,15 @@ try {
   await mp.locator('.sb-hand button:has-text("Done")').tap();
   k = await M.keys();
   check('phone: "Done" puts the name down — and no key was pressed, no keyboard came up', (await mp.locator('.sb-hand').count()) === 0 && k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
+  // The phone's Back button with a sheet open closes the sheet, not Shifts.
+  const phoneWeek = mp.url();
+  for (const [open, what] of [[() => mp.locator('.sch-plus').tap(), 'the add sheet'], [() => mp.locator('.sch-peoplebtn').tap(), 'People']]) {
+    await open();
+    await mp.waitForSelector('.sch-sheet', { timeout: 8000 });
+    await mp.evaluate(() => history.back());
+    await until(async () => (await mp.locator('.sch-sheet').count()) === 0);
+    check(`phone: Back with ${what} open closes it — still on the week`, (await mp.locator('.sch-sheet').count()) === 0 && mp.url() === phoneWeek && (await mp.locator('.sch-day').count()) === 1, mp.url());
+  }
   await mobile.close();
 
   // A narrow window with a mouse: a card dragged onto another day's button in the strip moves there.
@@ -1130,6 +1169,26 @@ try {
   const needsWords = (await needs.innerText().catch(() => '')).replace(/\s+/g, ' ');
   check('Today’s "Needs you" lists tomorrow’s phone bank as "0 of 4 — 4 more", and not the office shift with no number', short.status === 200 && plain.status === 200
     && /Phone bank — Campaign office .*0 of 4 — 4 more/.test(needsWords) && !/Office — Campaign office/.test(needsWords), needsWords.slice(0, 260));
+
+  // ── 20b. More than 500 coming up: the List says so, and loads the rest when asked ──
+  const farMon = addDays(MON, 7 * 30);
+  const farDays = Array.from({ length: 7 }, (_, i) => addDays(farMon, i));
+  let lastFar = null;
+  for (const [start, end] of [['06:00', '07:00'], ['09:00', '10:00'], ['12:00', '13:00']]) {
+    const r = await D.api('/actions/shift.createMany', { kind: 'office', location: 'Campaign office', days: farDays, start, end, repeat: { weeks: 26 } });
+    lastFar = r.json?.shifts?.at(-1) ?? lastFar;
+  }
+  const firstPage = (await D.api('/shifts')).json;
+  await D.go('/shifts');
+  await page.locator('.sb-views button:has-text("List")').click();
+  await page.waitForSelector('.sch-vrow', { timeout: 15000 });
+  const laterBtn = page.locator('button:has-text("Show later shifts")');
+  check('over 500 coming up: the List says there are more — "Show later shifts" — rather than stop without a word', firstPage.shifts.length >= 500 && Boolean(firstPage.next)
+    && (await laterBtn.count()) === 1 && (await page.locator(`.sch-vrow[data-shift="${lastFar?.id}"]`).count()) === 0, `${firstPage.shifts.length} · ${firstPage.next}`);
+  await laterBtn.click();
+  await until(async () => (await page.locator(`.sch-vrow[data-shift="${lastFar.id}"]`).count()) === 1, 15000);
+  check('…and one tap shows them, to the last', (await page.locator(`.sch-vrow[data-shift="${lastFar.id}"]`).count()) === 1 && (await laterBtn.count()) === 0);
+  await page.locator('.sb-views button:has-text("Week")').click();
 
   // ── 21. The books still verify ──
   const v = (await D.api('/audit/verify')).json;

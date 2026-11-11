@@ -23,6 +23,7 @@ import { Link } from 'react-router-dom';
 import { dayOf } from '@starbase/shared/dayparts';
 import { kindOf } from '@starbase/shared/shiftkinds';
 import { action } from '../api.js';
+import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { NotifyChip, notifySummary } from '../components/NotifyWords.jsx';
 import { turfNames } from '../components/ShiftTurfs.jsx';
 import NeedChips from './ScheduleNeed.jsx';
@@ -77,7 +78,9 @@ export default function ScheduleShift({
   const patch = { ...moves, ...(need !== need0 ? { need } : {}) };
   const dirty = Object.keys(patch).length > 0;
 
-  // One write at a time — a second tap before the buttons grey out is dropped.
+  // One write at a time — a second tap before the buttons grey out is
+  // dropped. With no signal every write waits (the choices made here stay).
+  const online = useOnline();
   const running = useRef(false);
   const run = async (fn) => {
     if (running.current) return;
@@ -136,7 +139,8 @@ export default function ScheduleShift({
   const foot = over ? null : (
     <>
       {error && <p className="error" role="alert">{error}</p>}
-      <button type="button" className="btn btn-primary ops-tap sch-go" disabled={busy || !dirty} onClick={save}>
+      {!online && <NeedsSignal className="sch-note">No signal — changes wait for it</NeedsSignal>}
+      <button type="button" className="btn btn-primary ops-tap sch-go" disabled={busy || !dirty || !online} onClick={save}>
         {busy && dirty ? 'Saving…' : following ? 'Save this and the following' : 'Save'}
       </button>
     </>
@@ -204,7 +208,7 @@ export default function ScheduleShift({
             </button>
           )}
           {!over && (
-            <button type="button" className="btn ops-tap sch-toggle" aria-pressed={onSite} disabled={busy} onClick={toggleSite}>
+            <button type="button" className="btn ops-tap sch-toggle" aria-pressed={onSite} disabled={busy || !online} onClick={toggleSite}>
               On the website
             </button>
           )}
@@ -224,7 +228,7 @@ export default function ScheduleShift({
             </span>
             {nothingSends
               ? <Link className="btn ops-tap" to="/outreach/connect?connect=1">Connect</Link>
-              : <button type="button" className="btn ops-solid ops-tap" disabled={busy} onClick={tellThem}>{busy ? 'Sending…' : 'Send'}</button>}
+              : <button type="button" className="btn ops-solid ops-tap" disabled={busy || !online} onClick={tellThem}>{busy ? 'Sending…' : 'Send'}</button>}
             <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => setAsk(null)}>Cancel</button>
           </div>
         )}
@@ -237,7 +241,7 @@ export default function ScheduleShift({
                 ? 'Call off this one and the following ones nobody is on?'
                 : `Call off this shift?${on.length ? ` ${peopleWords(on.length)} booked won’t be told — tell them first.` : ''}`}
             </span>
-            <button type="button" className="btn ops-danger ops-tap" disabled={busy} onClick={callOff}>{busy ? 'Calling off…' : 'Call it off'}</button>
+            <button type="button" className="btn ops-danger ops-tap" disabled={busy || !online} onClick={callOff}>{busy ? 'Calling off…' : 'Call it off'}</button>
             <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => setAsk(null)}>Keep it</button>
           </div>
         )}

@@ -515,7 +515,13 @@ one tap away under **More**.
   manager's); *Copy to next week* asks *With the same people?*. Go a week
   further: an empty week offers **Copy last week**. On a phone it is one
   day at a time, the sheets come up from the bottom, and **People** opens
-  the list as a sheet.
+  the list as a sheet; **Back** closes a sheet, not the week. Lose the
+  signal with a sheet open: the sheet keeps every choice and waits (*No
+  signal — your choices stay*). A point nothing could name reads *Pinned
+  place* — on its card, its own page (with *Name it*) and the website (*See
+  the map*), never its coordinates; its Mainstreeting asks *Where are
+  you?*. With more than 500 shifts ahead the List ends in **Show later
+  shifts**.
   `PORT=4900 SHOTS=/tmp/schedule node e2e-schedule.mjs` runs all of it in a
   browser — a desk at 1440×900 and 1280×800, a laptop on Toronto time, a
   phone, and a volunteer's phone (its own server, a stand-in address

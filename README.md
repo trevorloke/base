@@ -418,8 +418,11 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Remind people the evening before* (a switch, off until a manager turns
   it on) and *Copy to next week*; an empty week offers *Copy last week*.
   Each copy asks *With the same people?*. A week that hasn't loaded says
-  *Loading…*, one that can't says *Unavailable — Try again*.
-  The **List** (a volunteer's whole Shifts tab) is grouped by day; a row
+  *Loading…*, one that can't says *Unavailable — Try again*. **Back**
+  closes a sheet, not the week, and a sheet keeps its choices through a
+  lost signal (it waits for the signal to save).
+  The **List** (a volunteer's whole Shifts tab; past 500 shifts ahead it
+  ends in *Show later shifts*) is grouped by day; a row
   wears its kind's mark and says the hours and the place, with *Count me
   in* on the row itself — asked about first when it overlaps a shift they
   are on, never refused. A place with a pin opens a map, and a Mainstreet

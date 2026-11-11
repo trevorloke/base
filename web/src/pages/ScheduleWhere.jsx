@@ -19,6 +19,7 @@ import { Suspense, lazy, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PINNED_PLACE, isPinName, placeLabel } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
+import { useOnline } from '../components/NoSignal.jsx';
 import { DEFAULT_TILES } from '../components/tiles.js';
 import { Unavailable } from './ScheduleSheet.jsx';
 
@@ -64,10 +65,12 @@ export const whereName = (v) => v.place?.name || v.words || v.turfs.map((t) => t
 const pinCoords = (name) => String(name || '').trim().replace(/^Pin at /, '');
 
 // "Name it": the optional name for a place nothing could name. Only this
-// asks for the keyboard, and only after its own tap. `bare`: just the
-// button (a shift's page already says "Pinned place" beside its map link).
-export function NameIt({ place, onNamed, bare = false, disabled = false }) {
+// asks for the keyboard, and only after its own tap; saving needs signal.
+// `bare`: just the button (a shift's page already says "Pinned place"
+// beside its map link).
+export function NameIt({ place, onNamed, bare = false }) {
   const queryClient = useQueryClient();
+  const disabled = !useOnline();
   const [typed, setTyped] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);

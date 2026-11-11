@@ -28,6 +28,7 @@ import {
   MAX_SHIFTS, MAX_WEEKS, SHIFT_KINDS, madeTitle, repeatDays, shiftKind,
 } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
+import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { KindIcon, kindVars } from '../components/ShiftKind.jsx';
 import { normalizeLink } from '../components/shiftLink.js';
 import NeedChips from './ScheduleNeed.jsx';
@@ -100,6 +101,8 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
       repeatInput?.weeks ? 'every week for 4 weeks' : repeatInput ? `every week until ${dayWords(electionDay).md}` : null].filter(Boolean).join(' · ')
     : null;
 
+  // A signal blip keeps every choice made here; adding waits for the signal.
+  const online = useOnline();
   const submit = async () => {
     const capacity = wholeOf(f.capacity);
     if (Number.isNaN(capacity)) { setMore(true); setError('Limit sign-ups to: a whole number, 1 or more'); return; }
@@ -134,7 +137,8 @@ export default function ScheduleAdd({ me, days, today, day = null, onClose, onAd
       {summary && <p className="sch-summary" aria-live="polite">{summary}</p>}
       {tooMany && <p className="sch-note" role="status">That would make {count.toLocaleString('en-CA')} shifts — {MAX_SHIFTS} at most at a time.</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      <button type="button" className="btn btn-primary ops-tap sch-go" disabled={busy || !kind || count === 0 || tooMany} onClick={submit}>
+      {!online && <NeedsSignal className="sch-note">No signal — your choices stay; add when it’s back</NeedsSignal>}
+      <button type="button" className="btn btn-primary ops-tap sch-go" disabled={busy || !kind || count === 0 || tooMany || !online} onClick={submit}>
         {busy ? 'Adding…' : count > 0 ? `Add ${plural(count, 'shift')}` : 'Add shifts'}
       </button>
     </>

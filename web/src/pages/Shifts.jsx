@@ -695,11 +695,16 @@ function ShiftList({ canDesk, me }) {
   // …and so does one followed while the List is showing (the command bar's
   // "New shift" from the Shifts screen itself).
   useEffect(() => { if (canDesk && (params.get('week') || params.get('add'))) setView('week'); }, [params, canDesk]);
-  // The board needs signal (it's live, not kept on the phone): with none,
-  // the list and its offline copy show instead, and the board comes back
-  // with the signal. The saved choice stays as it was.
+  // The board needs signal to load (it's live, not kept on the phone):
+  // opened with none, the list and its offline copy show instead, and the
+  // board comes with the signal. Once it is on screen a signal blip leaves
+  // it there — an open sheet's choices and a name in hand with it — with
+  // every change waiting for the signal. The saved choice stays as it was.
   const online = useOnline();
-  const week = canDesk && !showNew && online && view === 'week';
+  const wantWeek = canDesk && !showNew && view === 'week';
+  const [boardUp, setBoardUp] = useState(false);
+  useEffect(() => { if (!wantWeek) setBoardUp(false); else if (online) setBoardUp(true); }, [wantWeek, online]);
+  const week = wantWeek && (online || boardUp);
   const pickView = (v) => {
     setView(v);
     saveView(v);
@@ -708,16 +713,32 @@ function ShiftList({ canDesk, me }) {
   // "New shift" is the week's add sheet (ScheduleAdd.jsx): the week opens
   // with it. While any sheet is open there, its button is the main one.
   const [sheetOpen, setSheetOpen] = useState(false);
+  // (A step in the browser's history, as the week's "+" is: Back closes it.)
   const newShift = () => {
     setView('week');
-    setParams((cur) => { const next = new URLSearchParams(cur); next.set('add', '1'); return next; }, { replace: true });
+    setParams((cur) => { const next = new URLSearchParams(cur); next.set('add', '1'); return next; }, { state: { sheet: 'add' } });
   };
   const shifts = useQuery({ queryKey: ['shifts'], queryFn: () => apiGet('/shifts'), ...phoneCopy(me, 'shifts') });
   useKeepCopy(me, 'shifts', shifts);
   const { byShift } = useShiftTurfs(me);
   const listCopy = showingCopy(shifts);
   const outbox = useOutbox();
-  const all = shifts.data?.shifts ?? [];
+  // Past the first page (500 coming up), a page more at a time when asked
+  // (the server's `next`), as "Show older" does for past shifts — never kept
+  // on the phone. A row in both is the first page's: it is the freshest.
+  const [later, setLater] = useState({ rows: [], next: undefined, busy: false, error: null });
+  const laterNext = later.next !== undefined ? later.next : shifts.data?.next ?? null;
+  const loadLater = async () => {
+    setLater((l) => ({ ...l, busy: true, error: null }));
+    try {
+      const r = await apiGet(`/shifts?cursor=${encodeURIComponent(laterNext)}`);
+      setLater((l) => ({ rows: [...l.rows, ...(r.shifts ?? [])], next: r.next ?? null, busy: false, error: null }));
+    } catch (e) {
+      setLater((l) => ({ ...l, busy: false, error: e.message }));
+    }
+  };
+  const seenIds = new Set();
+  const all = [...(shifts.data?.shifts ?? []), ...later.rows].filter((s) => !seenIds.has(s.id) && seenIds.add(s.id));
   // s.mine is the answer; the email lookup runs only for a server without it.
   const legacy = !canDesk && shifts.isSuccess && all.some((s) => typeof s.mine !== 'boolean');
   const legacyMine = useLegacyMyShifts(me, legacy);
@@ -811,6 +832,12 @@ function ShiftList({ canDesk, me }) {
         </section>
       ))}
 
+      {later.error && <p className="error" role="alert">{later.error}</p>}
+      {shifts.isSuccess && laterNext && (
+        <button type="button" className="btn ops-tap sch-older" disabled={later.busy || !online} onClick={loadLater}>
+          {later.busy ? 'Loading…' : 'Show later shifts'}
+        </button>
+      )}
       {shifts.data && <PastShifts earlier={earlier} tz={tz} now={now} isMine={isMineShift} byShift={byShift} />}
       </>
       )}
@@ -1351,7 +1378,7 @@ function ShiftDetail({ id, canDesk, me }) {
           ? <a className="sch-maplink" href={mapUrl(pin)} target="_blank" rel="noopener noreferrer" aria-label={`${placeLabel(shift.location)} — open the map`}>{placeLabel(shift.location)} <span aria-hidden="true">· Map ↗</span></a>
           : <span>{shift.location}</span>)}
         {canDesk && unnamed && shift.place_id && !over && (
-          <NameIt bare key={shift.place_id} place={{ id: shift.place_id, name: shift.location }} disabled={!online} onNamed={refresh} />
+          <NameIt bare key={shift.place_id} place={{ id: shift.place_id, name: shift.location }} onNamed={refresh} />
         )}
         {shift.instructions && <span className="note">{shift.instructions}</span>}
         {shift.link && (href

@@ -31,9 +31,12 @@
 //
 // Honest states: a week that hasn't loaded says "Loading…" and one that
 // can't says "Unavailable — Try again" — never a week of empty days.
-// Needs signal: offline the list shows instead (Shifts.jsx).
+// Needs signal to load: opened offline the list shows instead (Shifts.jsx);
+// once on screen a lost signal leaves it — an open sheet and a name in hand
+// with it — and every change waits for the signal. A sheet is a step in the
+// browser's history: Back closes it.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   WEEK_PARTS, addDays, clockOf, dayOf, instantOf, isDay, safeZone, weekBounds, weekPartOf, weekStart,
@@ -210,10 +213,23 @@ export default function ShiftsBoard({ me, onSheet }) {
   };
   useEffect(() => () => clearTimeout(noteTimer.current), []);
 
+  // Back closes a sheet, never the week: opening one is a step in the
+  // browser's history (the same address, marked with the sheet), and every
+  // way of closing it takes that step back off. A sheet that came with the
+  // address (a link with ?add=, a reload) has no step of its own: closing
+  // it just drops ?add=.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const navType = useNavigationType();
+  const step = location.state?.sheet || null;
+  const stepIn = (sheet) => { if (step !== sheet) navigate({ pathname: location.pathname, search: location.search }, { state: { sheet } }); };
+  const stepOut = (sheet, close) => { if (step === sheet) navigate(-1); else close(); };
   // The add sheet is in the address (?add=<day>, or ?add=1 from "New
-  // shift"), so the page's own button and a link can open it.
+  // shift"), so the page's own button and a link can open it. (Opened, it
+  // stays through a signal blip; it waits for the signal to add.)
   const addParam = params.get('add');
-  const adding = addParam != null && online;
+  const adding = addParam != null;
+  const openAdd = (d) => setParams((cur) => { const next = new URLSearchParams(cur); next.set('add', d); return next; }, { state: { sheet: 'add' } });
   const addDay = isDay(addParam) && days.includes(addParam) ? addParam : (narrow ? shownDay : days.includes(today) ? today : null);
   // A card's sheet waits for its turfs: it changes them from what they are
   // (and leaves them alone when they can't be read).
@@ -226,6 +242,15 @@ export default function ShiftsBoard({ me, onSheet }) {
   // Nothing can be added to a week that is over: "New shift" there is this week's.
   useEffect(() => { if (adding && days[6] < today) setParam('week', null); }, [adding, monday]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onSheet?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Back (or Forward) to an entry without a sheet's step: that sheet closes.
+  useEffect(() => {
+    if (navType !== 'POP') return;
+    if (step !== 'card') setOpen(null);
+    if (step !== 'people') setPeopleOpen(false);
+  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openCard = (o) => { setOpen(o); stepIn('card'); };
+  const closeCard = () => stepOut('card', () => setOpen(null));
+  const showPeople = (on) => (on ? (setPeopleOpen(true), stepIn('people')) : stepOut('people', () => setPeopleOpen(false)));
 
   const refresh = (shiftIds = []) => {
     queryClient.invalidateQueries({ queryKey: ['shifts'] });
@@ -363,7 +388,7 @@ export default function ShiftsBoard({ me, onSheet }) {
       const moved = { ...shift, ...onDay(shift, day, tz) };
       say({
         text: `${cardWords(shift).title} moved to ${w.wd}, ${w.md}${n ? ` — ${peopleWords(n)} ${n === 1 ? 'has' : 'have'} the old day` : ''}`,
-        act: back ? null : n ? { label: 'Tell them', run: () => setOpen({ id: shift.id, tell: true }) }
+        act: back ? null : n ? { label: 'Tell them', run: () => openCard({ id: shift.id, tell: true }) }
           : { label: 'Undo', run: () => moveShift(moved, was, { back: true }) },
       });
     } catch (e) {
@@ -493,7 +518,7 @@ export default function ShiftsBoard({ me, onSheet }) {
   const taps = useRef(Promise.resolve());
   const tapShift = (s) => {
     if (swallowClick.current) return;
-    if (!picked) { setError(null); setOpen({ id: s.id, tell: false }); return; }
+    if (!picked) { setError(null); openCard({ id: s.id, tell: false }); return; }
     const item = picked;
     taps.current = taps.current
       .then(() => new Promise((r) => { setTimeout(r, 0); }))
@@ -510,7 +535,7 @@ export default function ShiftsBoard({ me, onSheet }) {
   const hot = (key) => (dragging && overKey === key ? '' : undefined);
 
   // ── What the sheets and the week's "More" hand back ──
-  const closeAdd = () => setParam('add', null);
+  const closeAdd = () => stepOut('add', () => setParam('add', null));
   const added = (res) => {
     closeAdd();
     const n = res.shifts.length;
@@ -528,10 +553,10 @@ export default function ShiftsBoard({ me, onSheet }) {
     refreshAll();
     if (r.quiet) return;
     const id = open?.id;
-    setOpen(null);
-    say({ text: r.text, act: r.tell && id ? { label: 'Tell them', run: () => setOpen({ id, tell: true }) } : null });
+    closeCard();
+    say({ text: r.text, act: r.tell && id ? { label: 'Tell them', run: () => openCard({ id, tell: true }) } : null });
   };
-  const gone = (r) => { setOpen(null); say({ text: r.text }); refreshAll(); };
+  const gone = (r) => { closeCard(); say({ text: r.text }); refreshAll(); };
   const copied = (r) => {
     refreshAll();
     setMore(false);
@@ -601,7 +626,7 @@ export default function ShiftsBoard({ me, onSheet }) {
           <span className="sch-day__name">{narrow ? <><b>{w.long.split(',')[0]}</b> {w.md}</> : <><b>{w.wd}</b> {w.num}</>}</span>
           {!past && (
             <button type="button" className="sch-plus" aria-label={`Add a shift on ${w.long}`} title="Add a shift" disabled={!online}
-              onClick={() => { setError(null); setParam('add', d); }}>
+              onClick={() => { setError(null); openAdd(d); }}>
               +
             </button>
           )}
@@ -624,8 +649,8 @@ export default function ShiftsBoard({ me, onSheet }) {
   const peopleEl = (
     <People narrow={narrow} people={peopleAll} loaded={board.data !== undefined} weekCount={weekCount}
       inHand={picked && !picked.from ? picked.person.id : null} taking={Boolean(dragging?.from)} hot={hot} online={online}
-      open={peopleOpen} onOpen={setPeopleOpen} props={dragProps}
-      onTap={(item) => { setPeopleOpen(false); tapPerson(item); }} />
+      open={peopleOpen} onOpen={showPeople} props={dragProps}
+      onTap={(item) => { showPeople(false); tapPerson(item); }} />
   );
 
   return (
@@ -728,7 +753,7 @@ export default function ShiftsBoard({ me, onSheet }) {
         <ScheduleShift key={`${open.id}:${open.tell}`} me={me} shift={openShift} on={onShift.get(open.id) ?? []}
           turfs={turfsReady ? (turfsByShift[open.id] ?? []) : null}
           days={days} today={today} tz={tz} tell={open.tell} providers={week.data?.providers ?? null}
-          onClose={() => setOpen(null)} onChanged={changed} onGone={gone} />
+          onClose={closeCard} onChanged={changed} onGone={gone} />
       )}
     </div>
   );
