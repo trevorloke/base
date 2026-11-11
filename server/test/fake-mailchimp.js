@@ -42,6 +42,8 @@
 //   limit({ after, times })   answer 429 — after that many more calls, that many times
 //   fail(code | false)        every call answers that status
 //   slow(ms)                  every call waits that long first (a browser check watching a sync)
+//   hold()                    the next call (only that one) waits until release() — { reached,
+//                             release }: reached resolves once it has come in (a race, made exact)
 //   pageMax(n)                a list gives at most n rows to a page, whatever was asked for
 //   signing(secret | null)    a webhook made from now on is signed with it (shown once, on create)
 //   probe(fn | null)          saving a webhook first asks fn(url) → status; refused unless 200
@@ -66,6 +68,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
   let limited = null; // { after, times }
   let failWith = false;
   let slowMs = 0;
+  let holding = null; // the next call waits on it: { arrived, gate }
   let pageCap = 1000;
   let signWith = null;
   let probeWith = null;
@@ -149,11 +152,19 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
     limit: (v = {}) => { limited = v === false ? null : { after: v.after ?? 0, times: v.times ?? 1 }; },
     fail: (v) => { failWith = v; },
     slow: (ms) => { slowMs = Number(ms) || 0; },
+    hold: () => {
+      let release;
+      let arrived;
+      const gate = new Promise((r) => { release = r; });
+      const reached = new Promise((r) => { arrived = r; });
+      holding = { arrived, gate };
+      return { reached, release: () => release() };
+    },
     pageMax: (v) => { pageCap = Number(v) || 1000; },
     signing: (secret) => { signWith = secret; },
     probe: (fn) => { probeWith = fn; },
     reset: () => {
-      calls.length = 0; refusals.clear(); untaggable.clear(); locked.clear(); required = null; limited = null; failWith = false; slowMs = 0; pageCap = 1000; signWith = null; probeWith = null;
+      calls.length = 0; refusals.clear(); untaggable.clear(); locked.clear(); required = null; limited = null; failWith = false; slowMs = 0; holding = null; pageCap = 1000; signWith = null; probeWith = null;
       for (const a of audiences.values()) { a.members.clear(); a.segments.clear(); a.webhooks.length = 0; }
       for (const id of [...audiences.keys()]) if (id !== first.id) audiences.delete(id);
     },
@@ -292,6 +303,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
         const basic = /^Basic (.+)$/.exec(auth);
         const given = basic ? Buffer.from(basic[1], 'base64').toString('utf8').split(':').slice(1).join(':') : (/^Bearer (.+)$/.exec(auth)?.[1] || '');
         if (!given || (apiKey && given !== apiKey)) return send(problem(401, 'API Key Invalid', "Your API key may be invalid, or you've attempted to access the wrong datacenter."));
+        if (holding) { const h = holding; holding = null; h.arrived(); await h.gate; }
         if (slowMs) await new Promise((r) => { setTimeout(r, slowMs); });
         if (failWith) return send(problem(failWith, 'Internal Server Error', 'An unexpected internal error has occurred.'));
         if (limited) {

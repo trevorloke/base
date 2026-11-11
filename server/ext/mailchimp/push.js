@@ -246,15 +246,15 @@ const addPart = async (db, sync, segment, part) => {
 
 // Why the sync's own pull stopped it before anything went: the question
 // came back (pull.js) — the audience in use is another one now, a yes was
-// shown fewer than its pull counted, or someone came in since the count
-// that showed nobody. Try again asks the question, counted afresh.
+// shown fewer than its pull counted, or someone came in on file after a
+// count that found nobody (the list went by itself: the person who sent it
+// saw no count). Try again asks the question, counted afresh.
 const askedWords = (asked, sync) => {
   if (asked.audience !== sync.audience_id) return 'Mailchimp’s audience has changed since — tap Try again';
-  const who = [
-    asked.unsubscribed ? `${plural(asked.unsubscribed, 'person', 'people')} here unsubscribed in Mailchimp` : null,
-    asked.cleaned ? plural(asked.cleaned, 'dead address', 'dead addresses') : null,
-  ].filter(Boolean).join(' · ');
-  return `${who}${asked.more ? ', more than the question said,' : ' since it was counted,'} so nothing was sent — tap Try again`;
+  const left = asked.unsubscribed ? `${plural(asked.unsubscribed, 'person', 'people')} here unsubscribed in Mailchimp` : null;
+  const dead = asked.cleaned
+    ? `${plural(asked.cleaned, 'address', 'addresses')} here ${asked.cleaned === 1 ? 'is' : 'are'} dead ${left ? 'there' : 'in Mailchimp'}` : null;
+  return `${[left, dead].filter(Boolean).join(' and ')}${asked.more ? ', more than the question said' : ''}, so nothing was sent — tap Try again`;
 };
 
 // One part of a sync. → true when there is more to do.
@@ -264,8 +264,13 @@ const part = async (db, sync) => {
   if (!cursor.pulled) {
     const gone = await pull(db, ws, { full: true });
     // The first pull from the audience asked instead (nobody has said yes
-    // to what it would turn off now): nothing goes.
-    if (gone.asked) { await stop(db, sync, askedWords(gone.asked, sync)); return false; }
+    // to what it would turn off now): nothing goes. What was new it took in
+    // all the same, and the list's line says so.
+    if (gone.asked) {
+      await patch(db, sync, 'pulled_unsubscribed = $3, pulled_cleaned = $4', [gone.unsubscribed, gone.cleaned]);
+      await stop(db, sync, askedWords(gone.asked, sync));
+      return false;
+    }
     cursor.pulled = true;
     await patch(db, sync, 'pulled_unsubscribed = $3, pulled_cleaned = $4, cursor = $5::jsonb', [gone.unsubscribed, gone.cleaned, JSON.stringify(cursor)]);
   }

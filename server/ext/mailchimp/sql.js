@@ -24,7 +24,9 @@
 // until the first pull after it is done (it counts again, and asks again
 // when it would turn off more), then null: later pulls run as built. Until
 // then a pull only counts: ask_for, ask_name, ask_unsubscribed, ask_cleaned
-// — the question's words — and asked_at, when it was counted.
+// — the question's words — and asked_at, when it was counted. A no
+// Mailchimp dates after first_counted_at (when the first count of ask_for
+// began) is new, as a webhook brings it: taken in without a yes.
 export const sql = `
 create table if not exists mailchimp_syncs (
   id uuid primary key,
@@ -69,4 +71,5 @@ alter table mailchimp_state add column if not exists ask_cleaned int;
 alter table mailchimp_state add column if not exists asked_at timestamptz;
 alter table mailchimp_state add column if not exists agreed_unsubscribed int;
 alter table mailchimp_state add column if not exists agreed_cleaned int;
+alter table mailchimp_state add column if not exists first_counted_at timestamptz;
 `;
