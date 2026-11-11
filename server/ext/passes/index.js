@@ -5,7 +5,8 @@
 // every located person in the polygon is on the list. A PASS is a campaign-
 // wide sweep with a purpose (Persuasion · Get out the vote · Lit drop ·
 // Find out who's who), a universe (All doors · Not rated yet · Undecided or
-// not rated · Yes (1–2) · Everyone but opposed) and a try rule (1–5
+// not rated · Yes (1–2) · Everyone but opposed — and/or one List, ext/lists:
+// only the people on it, as it stands at each load) and a try rule (1–5
 // not-homes before a door is given up). While one is open, "doors left" on
 // every turf means doors in the universe not yet finished IN THIS PASS: a
 // "No answer" keeps the door on the list ("Try again · 1 of 2") until the
