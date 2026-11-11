@@ -33,7 +33,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { loadList, recipientsOf } from '../lists/audience.js';
 import { keyFor, lower, mailchimp, mailchimpOn, MailchimpError, pages } from './mailchimp.js';
-import { agreeTo, firstOf, pull, PULL_JOB, queueDays } from './pull.js';
+import { firstOf, pull, PULL_JOB, queueDays, sayYes } from './pull.js';
 
 export const PUSH_ACTION = 'mailchimp.push';
 export const SYNC_JOB = 'mailchimp.sync';
@@ -85,28 +85,25 @@ export const countsFor = async (db, ws, list) => {
 };
 
 // ── The tap ──
-export const STILL_COUNTING = 'Still counting who unsubscribed in Mailchimp — try again in a moment';
 // Inside the action's write. `audience` was found before it (never a call
 // to Mailchimp while the campaign's lock is held).
-// The first pull from an audience waits for a yes (pull.js, firstOf), and a
-// sync starts with a pull: until someone says yes (`agree`) nothing is sent,
-// and the answer is the question — { first }, counted by a job when it
-// hasn't been yet. → { sync } or { first }
-export const startSync = async (tx, ctx, emit, { list_id: listId, everyone = false, audience, agree = null }) => {
+// The first pull from an audience waits for a person's yes (pull.js), and a
+// sync starts with a pull: while nobody has said yes, a tap is answered with
+// the question — { first } — counted afresh by a job first, so the numbers
+// it shows are today's. `agree` (the audience) with `shown` (the numbers the
+// question showed) is the yes — or, when it showed nobody to turn off, the
+// tap that goes on without one. → { sync } or { first }
+export const startSync = async (tx, ctx, emit, { list_id: listId, everyone = false, audience, agree = null, shown = null }) => {
   const ws = ctx.workspaceId;
   const list = (await tx.query('select id, name from lists where id = $1 and workspace_id = $2 and deleted_at is null', [listId, ws])).rows[0];
   if (!list) throw httpError(404, 'list not found');
-  const first = await firstOf(tx, ws, audience);
-  if (first && !agree) {
-    if (first.unsubscribed == null && !first.counting) {
-      await enqueueJob(tx, { workspaceId: ws, kind: PULL_JOB, payload: { full: true } });
-      first.counting = true;
+  if (agree) await sayYes(tx, emit, ws, audience, shown);
+  else {
+    const first = await firstOf(tx, ws, audience);
+    if (first) {
+      if (!first.counting) await enqueueJob(tx, { workspaceId: ws, kind: PULL_JOB, payload: { full: true } });
+      return { first: { ...first, counting: true } };
     }
-    return { first };
-  }
-  if (first) {
-    if (first.unsubscribed == null) throw httpError(409, STILL_COUNTING);
-    await agreeTo(tx, emit, ws, audience, first);
   }
   const consent = everyone ? 'all' : 'subscribed';
   const cur = (await tx.query('select * from mailchimp_syncs where workspace_id = $1 and list_id = $2 and audience_id = $3 for update', [ws, list.id, audience])).rows[0];
@@ -247,15 +244,29 @@ const addPart = async (db, sync, segment, part) => {
   };
 };
 
+// Why the sync's own pull stopped it before anything went: the question
+// came back (pull.js) — the audience in use is another one now, a yes was
+// shown fewer than its pull counted, or someone came in since the count
+// that showed nobody. Try again asks the question, counted afresh.
+const plural = (n, one, many) => `${n.toLocaleString('en-CA')} ${n === 1 ? one : many}`;
+const askedWords = (asked, sync) => {
+  if (asked.audience !== sync.audience_id) return 'Mailchimp’s audience has changed since — tap Try again';
+  const who = [
+    asked.unsubscribed ? `${plural(asked.unsubscribed, 'person', 'people')} here unsubscribed in Mailchimp` : null,
+    asked.cleaned ? plural(asked.cleaned, 'dead address', 'dead addresses') : null,
+  ].filter(Boolean).join(' · ');
+  return `${who}${asked.more ? ', more than the question said,' : ' since it was counted,'} so nothing was sent — tap Try again`;
+};
+
 // One part of a sync. → true when there is more to do.
 const part = async (db, sync) => {
   const ws = sync.workspace_id;
   const cursor = parseJ(sync.cursor, {}) || {};
   if (!cursor.pulled) {
     const gone = await pull(db, ws, { full: true });
-    // Nobody has said yes to the first pull from the audience in use (it
-    // changed since the tap): nothing goes. Try again asks the question.
-    if (gone.asked) { await stop(db, sync, 'Mailchimp’s audience has changed since — tap Try again'); return false; }
+    // The first pull from the audience asked instead (nobody has said yes
+    // to what it would turn off now): nothing goes.
+    if (gone.asked) { await stop(db, sync, askedWords(gone.asked, sync)); return false; }
     cursor.pulled = true;
     await patch(db, sync, 'pulled_unsubscribed = $3, pulled_cleaned = $4, cursor = $5::jsonb', [gone.unsubscribed, gone.cleaned, JSON.stringify(cursor)]);
   }

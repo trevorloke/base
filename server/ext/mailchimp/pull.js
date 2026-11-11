@@ -20,9 +20,10 @@
 //                    or cleaned — someone added here after they left there
 //                    is found then
 //   Pull now, and the start of every sync: everyone, now
-// The first pull from an audience waits for a yes (firstOf, below): it
-// turns off here everyone on file who ever left there, and nobody here can
-// turn that back. Until someone says yes a pull only counts.
+// The first pull from an audience waits for a person's yes (firstOf,
+// below): it turns off here everyone on file who ever left there, and
+// nobody here can turn that back. Until someone says yes a pull only counts.
+import { httpError } from '../../actions/util.js';
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { stillOn, suppress } from '../mail/webhook.js';
@@ -80,10 +81,15 @@ const latestOwnYes = async (tx, ws, email) => (await tx.query(
     where workspace_id = $1 and channel = 'email' and granted and wording is not null and address = $2`, [ws, email],
 )).rows[0]?.at || null;
 const after = (a, b) => new Date(a).getTime() > new Date(b).getTime();
+// How many people an address's no turns off here (`e`: the address, in SQL):
+// everyone on file with it whose email is on — a household shares one — or,
+// with no such record, the one who subscribed.
+const PEOPLE = (e) => `greatest(1, (select count(*) from persons p where p.workspace_id = $1 and lower(p.email) = ${e}
+                                   and p.deleted_at is null and not (p.tags @> '"do-not-email"'::jsonb)))`;
 
 // What Mailchimp says about one address, taken here (inside a write; every
-// check is made again under the campaign's lock). → 'unsubscribed' |
-// 'cleaned' | null (nothing to do)
+// check is made again under the campaign's lock). → [what, how many]:
+// ['unsubscribed', people turned off] | ['cleaned', 1] | null (nothing to do)
 const takeMember = async (tx, emit, ws, m) => {
   if (m.status === 'unsubscribed') {
     if (!(await stillOn(tx, ws, m.email))) return null;
@@ -92,21 +98,23 @@ const takeMember = async (tx, emit, ws, m) => {
     const who = (await tx.query(
       'select id from persons where workspace_id = $1 and lower(email) = $2 and deleted_at is null order by created_at, id limit 1', [ws, m.email],
     )).rows[0];
+    const people = (await tx.query(`select ${PEOPLE('$2')}::int as n`, [ws, m.email])).rows[0].n;
     await emailOff(tx, ws, { personId: who?.id || null, email: m.email, source: 'mailchimp-unsubscribe' }, emit);
-    return 'unsubscribed';
+    return ['unsubscribed', people];
   }
   if (m.status === 'cleaned') {
     const cur = (await tx.query('select lifted_at from email_suppressions where workspace_id = $1 and email = $2', [ws, m.email])).rows[0];
     // The desk put the address back after Mailchimp cleaned it: the desk's word stands.
     if (cur?.lifted_at && m.changedAt && !after(m.changedAt, cur.lifted_at)) return null;
     const changed = await suppress(tx, emit, ws, { email: m.email, reason: 'bounce', source: 'mailchimp', detail: 'Mailchimp cleaned it: it bounced for good there' });
-    return changed ? 'cleaned' : null;
+    return changed ? ['cleaned', 1] : null;
   }
   return null;
 };
 
 // Members as Mailchimp has them, taken in: first narrowed to the addresses
-// a change could matter for (two reads), then a few to a write.
+// a change could matter for (two reads), then a few to a write. → how many
+// were turned off here: { unsubscribed (people), cleaned (addresses) }
 export const takeIn = async (db, ws, members) => {
   const by = new Map(members.filter((m) => m.email).map((m) => [m.email, m]));
   const of = (status) => [...by.values()].filter((m) => m.status === status).map((m) => m.email);
@@ -119,7 +127,7 @@ export const takeIn = async (db, ws, members) => {
       for (const m of part) did.push(await takeMember(tx, emit, ws, m));
       return did;
     });
-    for (const d of result) if (d) out[d] += 1;
+    for (const d of result) if (d) out[d[0]] += d[1];
   }
   return out;
 };
@@ -134,24 +142,32 @@ const said = (db, ws, ok, note) => db.query(
    on conflict (workspace_id) do update set pull_ok = excluded.pull_ok, pull_note = excluded.pull_note`, [ws, ok, String(note).slice(0, 300)],
 );
 
-// ── The first pull from an audience: a door, opened by a yes ──
+// ── The first pull from an audience: a door, opened only by a person ──
 // It would turn email off here for everyone on file who left that audience,
 // however long ago, and set aside every address that died there. Only they
 // can turn their email back on, so until someone says yes for this audience
-// (Settings → Services, or a list's "Send to Mailchimp") a pull only counts:
-// the audience's name, and how many on file it would turn off. When that is
-// nobody there is nothing to ask, and the door is opened as the system.
+// (Settings → Services, or a list's "Send to Mailchimp") every pull counts
+// first — the audience's name, and how many on file it would turn off — and
+// takes nothing in. When that is nobody there is nothing to ask, and the
+// door stays shut all the same: the file may come in tomorrow, so the next
+// pull counts again and asks the first time it would turn someone off.
+// A yes is for the numbers it was shown: the first pull after it counts
+// again, and asks again rather than turn off more (an import since). Once
+// that pull is done, later pulls run as built.
 // A webhook is not a pull: it is about one person who has just left there,
 // and is taken in as always.
+export const STILL_COUNTING = 'Still counting who unsubscribed in Mailchimp — try again in a moment';
+export const COUNT_CHANGED = 'The count has changed since — look again';
 
 // What the first pull from the audience in use would do, while nobody has
-// said yes to it: { audience, name, unsubscribed, cleaned, counting } — the
-// name and the numbers once counted (null before), counting while a pull is
-// under way — or null: its door is open. `audience`: the one in use, when
-// known (an action has just asked); else the one named or last found, or
-// failing that the last one counted.
+// said yes to it: { audience, name, unsubscribed, cleaned, counted_at,
+// counting } — the numbers once counted (null before) and when, the name
+// when there is someone to ask about, counting while a pull is under way —
+// or null: someone has said yes. `audience`: the one in use, when known (an
+// action has just asked); else the one named or last found, or failing that
+// the last one counted.
 export const firstOf = async (q, ws, audience = knownAudience()) => {
-  const s = (await q.query('select agreed_for, ask_for, ask_name, ask_unsubscribed, ask_cleaned from mailchimp_state where workspace_id = $1', [ws])).rows[0];
+  const s = (await q.query('select agreed_for, ask_for, ask_name, ask_unsubscribed, ask_cleaned, asked_at from mailchimp_state where workspace_id = $1', [ws])).rows[0];
   const id = audience || s?.ask_for || s?.agreed_for || null;
   if (id && s?.agreed_for === id) return null;
   const counted = Boolean(id) && s?.ask_for === id;
@@ -160,23 +176,35 @@ export const firstOf = async (q, ws, audience = knownAudience()) => {
     name: counted ? s.ask_name : null,
     unsubscribed: counted ? s.ask_unsubscribed : null,
     cleaned: counted ? s.ask_cleaned : null,
+    counted_at: counted && s.asked_at ? new Date(s.asked_at).toISOString() : null,
     counting: await pulling(q, ws),
   };
 };
 
-// A person's yes to the first pull from `audience` (inside their write),
-// kept, and on the log with the words they were shown (`first`).
-export const agreeTo = async (tx, emit, ws, audience, first) => {
+// A person's yes to the first pull from `audience` (inside their write), for
+// the numbers the question showed them (`shown`; a screen that sends none
+// means the count as it stands). A yes to anything but the count as it
+// stands is refused — look again; a question about nobody has no yes, and
+// the door stays shut. Kept, and on the log with what they were shown.
+export const sayYes = async (tx, emit, ws, audience, shown = null) => {
+  const first = await firstOf(tx, ws, audience);
+  if (!first) return; // someone has said yes already
+  if (first.unsubscribed == null) throw httpError(409, STILL_COUNTING);
+  if (shown && (shown.unsubscribed !== first.unsubscribed || shown.cleaned !== first.cleaned)) throw httpError(409, COUNT_CHANGED);
+  if (!first.unsubscribed && !first.cleaned) return;
   await tx.query(
-    `insert into mailchimp_state (workspace_id, agreed_for) values ($1, $2)
-     on conflict (workspace_id) do update set agreed_for = excluded.agreed_for`, [ws, audience],
+    `insert into mailchimp_state (workspace_id, agreed_for, agreed_unsubscribed, agreed_cleaned) values ($1, $2, $3, $4)
+     on conflict (workspace_id) do update set agreed_for = excluded.agreed_for,
+       agreed_unsubscribed = excluded.agreed_unsubscribed, agreed_cleaned = excluded.agreed_cleaned`,
+    [ws, audience, first.unsubscribed, first.cleaned],
   );
   emit('mailchimp', ws, 'update', { first_pull: 'yes', audience, name: first.name, unsubscribed: first.unsubscribed, cleaned: first.cleaned });
 };
 
-// How many addresses held here taking these members in would turn off: the
-// checks takeMember makes (still on here, and no newer yes of their own; held
-// here, and not set aside already or put back by the desk since) in two reads.
+// What taking these members in would turn off here: the checks takeMember
+// makes (still on here, and no newer yes of their own; held here, and not
+// set aside already or put back by the desk since), in two reads. →
+// { unsubscribed (people), cleaned (addresses), emails (the addresses) }
 const isoOf = (v) => (v && Number.isFinite(Date.parse(v)) ? new Date(v).toISOString() : v ? new Date(0).toISOString() : null);
 const COUNT_OFF = {
   unsubscribed: `(exists (select 1 from subscriptions s where s.workspace_id = $1 and s.email = e and s.status <> 'unsubscribed')
@@ -189,46 +217,62 @@ const COUNT_OFF = {
                                      and (x.lifted_at is null or (changed is not null and changed <= x.lifted_at)))`,
 };
 const wouldTurnOff = async (db, ws, members) => {
-  const out = { unsubscribed: 0, cleaned: 0 };
+  const out = { unsubscribed: 0, cleaned: 0, emails: new Set() };
   for (const status of ['unsubscribed', 'cleaned']) {
     const rows = members.filter((m) => m.status === status);
     if (!rows.length) continue;
-    out[status] = (await db.query(
-      `select count(distinct e)::int as n from unnest($2::text[], $3::timestamptz[]) as m(e, changed) where ${COUNT_OFF[status]}`,
+    const { rows: off } = await db.query(
+      `select e, ${status === 'unsubscribed' ? PEOPLE('e') : '1'}::int as n
+         from (select e, max(changed) as changed from unnest($2::text[], $3::timestamptz[]) as x(e, changed) group by e) m
+        where ${COUNT_OFF[status]}`,
       [ws, rows.map((m) => m.email), rows.map((m) => isoOf(m.changedAt))],
-    )).rows[0].n;
+    );
+    for (const r of off) { out[status] += r.n; out.emails.add(r.e); }
   }
   return out;
 };
 
-// The door closed: count, and keep the question — unless there is nobody to
-// ask about. → true: asked (nothing taken in); false: go on.
-const askFirst = async (db, ws, audience, members) => {
-  const would = await wouldTurnOff(db, ws, members);
-  if (!would.unsubscribed && !would.cleaned) {
-    await runAction(db, { workspaceId: ws, actorId: null, action: PULL_ACTION }, async (tx, emit) => {
-      // Two counts at once (Connect and Pull now): opened, and said, once.
-      if ((await tx.query('select agreed_for from mailchimp_state where workspace_id = $1', [ws])).rows[0]?.agreed_for === audience) return;
-      await tx.query(
-        `insert into mailchimp_state (workspace_id, agreed_for) values ($1, $2)
-         on conflict (workspace_id) do update set agreed_for = excluded.agreed_for`, [ws, audience],
-      );
-      emit('mailchimp', ws, 'update', { first_pull: 'nobody here to turn off', audience });
-    });
-    return false;
+// The door shut, or a yes whose first pull is still to come: what this pull
+// would turn off is counted before anything is taken in, and kept — the
+// question's words. → the question to ask, { unsubscribed, cleaned, more,
+// audience } (more: a yes was shown fewer), or null: go on.
+const askFirst = async (db, ws, audience, state, would) => {
+  const agreed = state?.agreed_for === audience;
+  if (agreed && would.unsubscribed <= (state.agreed_unsubscribed ?? 0) && would.cleaned <= (state.agreed_cleaned ?? 0)) return null;
+  const any = Boolean(would.unsubscribed || would.cleaned);
+  let name = null;
+  if (any) {
+    const a = await mailchimp('GET', `/lists/${audience}`, { query: { fields: 'id,name' }, timeoutMs: 10_000 });
+    name = typeof a?.name === 'string' && a.name.trim() ? a.name.trim().slice(0, 200) : audience;
   }
-  const a = await mailchimp('GET', `/lists/${audience}`, { query: { fields: 'id,name' }, timeoutMs: 10_000 });
-  const name = typeof a?.name === 'string' && a.name.trim() ? a.name.trim().slice(0, 200) : audience;
   // Mailchimp answered: an earlier "the last pull stopped" is no longer so.
-  await db.query(
-    `insert into mailchimp_state (workspace_id, ask_for, ask_name, ask_unsubscribed, ask_cleaned) values ($1, $2, $3, $4, $5)
+  const keep = (q) => q.query(
+    `insert into mailchimp_state (workspace_id, ask_for, ask_name, ask_unsubscribed, ask_cleaned, asked_at) values ($1, $2, $3, $4, $5, now())
      on conflict (workspace_id) do update set ask_for = excluded.ask_for, ask_name = excluded.ask_name,
-       ask_unsubscribed = excluded.ask_unsubscribed, ask_cleaned = excluded.ask_cleaned,
+       ask_unsubscribed = excluded.ask_unsubscribed, ask_cleaned = excluded.ask_cleaned, asked_at = excluded.asked_at,
        pull_ok = nullif(mailchimp_state.pull_ok, false),
        pull_note = case when mailchimp_state.pull_ok = false then null else mailchimp_state.pull_note end`,
     [ws, audience, name, would.unsubscribed, would.cleaned],
   );
-  return true;
+  if (!agreed) {
+    await keep(db);
+    return any ? { unsubscribed: would.unsubscribed, cleaned: would.cleaned, more: false, audience } : null;
+  }
+  // More than the yes was shown: it is set aside, and the question is asked
+  // again with the new numbers — on the log, as the system.
+  await runAction(db, { workspaceId: ws, actorId: null, action: PULL_ACTION }, async (tx, emit) => {
+    const s = (await tx.query('select agreed_for, agreed_unsubscribed, agreed_cleaned from mailchimp_state where workspace_id = $1', [ws])).rows[0];
+    await keep(tx);
+    // Two pulls at once: set aside, and said, once — and a door the other one
+    // has opened meanwhile stays open.
+    if (s?.agreed_for !== audience || s.agreed_unsubscribed == null) return;
+    await tx.query('update mailchimp_state set agreed_for = null, agreed_unsubscribed = null, agreed_cleaned = null where workspace_id = $1', [ws]);
+    emit('mailchimp', ws, 'update', {
+      first_pull: 'asked again', audience,
+      shown: { unsubscribed: s.agreed_unsubscribed, cleaned: s.agreed_cleaned }, counted: { unsubscribed: would.unsubscribed, cleaned: would.cleaned },
+    });
+  });
+  return { unsubscribed: would.unsubscribed, cleaned: would.cleaned, more: true, audience };
 };
 
 // Mailchimp is answering: an unsubscribe that could not be told to it
@@ -243,12 +287,14 @@ const tellAgain = async (db, ws) => {
 };
 
 // Read who left and whose address died, and take it in. → { unsubscribed,
-// cleaned }: how many addresses were turned off here — and asked: true when
-// it was the first pull from this audience, and it only counted.
+// cleaned }: how many were turned off here — and asked (askFirst) when the
+// door asked instead, and nothing was taken in.
 export const pull = async (db, ws, { full = false } = {}) => {
   const audience = await audienceId();
   const state = (await db.query('select * from mailchimp_state where workspace_id = $1', [ws])).rows[0];
-  const open = state?.agreed_for === audience;
+  // Someone said yes for this audience; open once the first pull after it is done.
+  const agreed = state?.agreed_for === audience;
+  const open = agreed && state.agreed_unsubscribed == null && state.agreed_cleaned == null;
   const known = open && state?.audience_id === audience && state.pulled_through && state.full_at;
   const everything = full || !known || Date.now() - new Date(state.full_at).getTime() > FULL_EVERY_MS;
   // As Mailchimp writes a time: 2026-11-10T17:35:00+00:00.
@@ -261,17 +307,30 @@ export const pull = async (db, ws, { full = false } = {}) => {
     });
     left.push(...rows.map((m) => memberOf(m, status)).filter((m) => m.status === status));
   }
-  if (!open && await askFirst(db, ws, audience, left)) {
-    await tellAgain(db, ws);
-    return { unsubscribed: 0, cleaned: 0, asked: true };
+  let take = left;
+  if (!open) {
+    const would = await wouldTurnOff(db, ws, left);
+    const asked = await askFirst(db, ws, audience, state, would);
+    if (asked) {
+      await tellAgain(db, ws);
+      return { unsubscribed: 0, cleaned: 0, asked };
+    }
+    // The first pull after a yes takes in only who was counted: never more
+    // than the yes was shown (someone who came in meanwhile waits for the
+    // next pull). With the door shut, and nobody to turn off, nothing at all.
+    take = agreed ? left.filter((m) => would.emails.has(m.email)) : [];
   }
-  const out = await takeIn(db, ws, left);
+  const out = await takeIn(db, ws, take);
+  // The first pull after a yes is done (agreed_* back to null): from now on
+  // pulls run as built.
   await db.query(
     `insert into mailchimp_state (workspace_id, audience_id, pulled_through, full_at, pulled_at, pull_ok, pull_note)
      values ($1, $2, $3, $4, now(), true, $5)
      on conflict (workspace_id) do update set audience_id = excluded.audience_id, pulled_through = excluded.pulled_through,
        full_at = coalesce(excluded.full_at, case when mailchimp_state.audience_id = excluded.audience_id then mailchimp_state.full_at end),
-       pulled_at = excluded.pulled_at, pull_ok = true, pull_note = excluded.pull_note`,
+       pulled_at = excluded.pulled_at, pull_ok = true, pull_note = excluded.pull_note,
+       agreed_unsubscribed = case when mailchimp_state.agreed_for = excluded.audience_id then null else mailchimp_state.agreed_unsubscribed end,
+       agreed_cleaned = case when mailchimp_state.agreed_for = excluded.audience_id then null else mailchimp_state.agreed_cleaned end`,
     [ws, audience, started, everything ? started : null, wordsFor(out)],
   );
   await tellAgain(db, ws);
