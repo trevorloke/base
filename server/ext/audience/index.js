@@ -54,7 +54,12 @@ export const todayOf = (ctx, now = new Date()) => {
   const g = (t) => p.find((x) => x.type === t).value;
   return `${g('year')}-${g('month')}-${g('day')}`;
 };
-const isDay = (s) => YMD.test(s) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+// A real day on the calendar (a month 13 is not one; nor is a year the database can't hold).
+const isDay = (s) => {
+  if (!YMD.test(s) || s < '1900-01-01') return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
 
 const GIFT = 'from gifts g where g.workspace_id = p.workspace_id and g.person_id = p.id and g.deleted_at is null';
 const TERM = 'from member_terms t where t.workspace_id = p.workspace_id and t.person_id = p.id and t.voided_at is null';

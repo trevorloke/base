@@ -105,6 +105,10 @@ export const FILTER_KEYS = [
   'q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web',
   'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist',
 ];
+// The rules only the desk sorts people by (ext/audience, ext/lists). For a
+// volunteer they match nobody; a volunteer given the People area may not
+// save one in a list either (ext/lists/actions.js).
+export const DESK_RULES = ['gave', 'member', 'answer', 'shift', 'list', 'notlist'];
 export const cleanFilter = (f) => {
   const out = {};
   for (const k of FILTER_KEYS) if (f && typeof f[k] === 'string' && f[k].trim()) out[k] = f[k].trim().slice(0, 400);

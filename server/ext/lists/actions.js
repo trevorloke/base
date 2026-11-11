@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
-import { cleanFilter, joinWhere } from '../../lib/audience.js';
+import { DESK_RULES, cleanFilter, joinWhere } from '../../lib/audience.js';
 import { loadList, whereFor } from './audience.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -24,6 +24,14 @@ const loadMine = async (tx, ws, id) => {
 const ownPeople = async (tx, ws, list) => (await tx.query(
   'select id from persons where workspace_id = $1 and deleted_at is null and id = any($2::uuid[])', [ws, list],
 )).rows.map((r) => r.id);
+// A volunteer given the People area may make lists — never one that sorts
+// people by what only the desk may know (gifts, memberships, answers,
+// shifts, the desk's own lists), whoever reads it later.
+const deskRulesOnly = (ctx, filter) => {
+  if (ctx.role === 'volunteer' && DESK_RULES.some((k) => filter?.[k])) {
+    throw httpError(403, 'only the desk can make a list by gifts, memberships, answers, shifts or another list');
+  }
+};
 // Who is on a hand-picked list changed: its numbers are counted again (audience.js listCounts).
 const touch = (tx, ws, id) => tx.query('update lists set updated_at = now() where id = $1 and workspace_id = $2', [id, ws]);
 
@@ -41,6 +49,7 @@ export const actions = {
       const ws = ctx.workspaceId;
       const id = newId();
       const filter = input.kind === 'filter' ? cleanFilter(input.filter || {}) : {};
+      deskRulesOnly(ctx, filter);
       await tx.query(
         'insert into lists (id, workspace_id, name, kind, filter, note, created_by) values ($1, $2, $3, $4, $5, $6, $7)',
         [id, ws, input.name, input.kind, JSON.stringify(filter), input.note || null, ctx.user.id],
@@ -71,9 +80,12 @@ export const actions = {
     }).refine((v) => !(v.list_id && v.filter), 'a filter or a list, not both'),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
+      // A copy of a list is a read of it: lists are the desk's to read.
+      if (input.list_id && ctx.role === 'volunteer') throw httpError(403, 'only the desk can copy a list');
       const from = input.list_id ? await loadList(tx, ws, input.list_id) : null;
       if (input.list_id && !from) throw httpError(404, 'list not found');
       const filter = from ? null : cleanFilter(input.filter || {});
+      deskRulesOnly(ctx, filter);
       const id = newId();
       await tx.query(
         `insert into lists (id, workspace_id, name, kind, filter, note, created_by) values ($1, $2, $3, 'people', '{}', $4, $5)`,
@@ -98,6 +110,7 @@ export const actions = {
     handler: async (tx, ctx, input, emit) => {
       const cur = await loadMine(tx, ctx.workspaceId, input.id);
       const filter = input.filter !== undefined && cur.kind === 'filter' ? cleanFilter(input.filter) : (typeof cur.filter === 'string' ? JSON.parse(cur.filter) : cur.filter);
+      if (input.filter !== undefined) deskRulesOnly(ctx, filter);
       await tx.query(
         'update lists set name = $3, filter = $4, note = $5, updated_at = now() where id = $1 and workspace_id = $2',
         [cur.id, ctx.workspaceId, input.name ?? cur.name, JSON.stringify(filter), input.note === undefined ? cur.note : input.note],

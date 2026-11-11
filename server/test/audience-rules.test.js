@@ -137,7 +137,10 @@ test('since: added on or after a day, in the campaign’s own calendar', async (
   assert.deepEqual(await who(`since=${day(-3)}`), ['Cy', 'Dee', 'Eve', 'Fay']);
   assert.deepEqual(await who(`since=${day(-30)}`), ['Ana', 'Ben', 'Cy', 'Dee', 'Eve', 'Fay']);
   assert.deepEqual(await who(`since=${day(1)}`), []);
-  for (const bad of ['since=yesterday', 'since=2026-02-30', 'since=20261001']) assert.deepEqual(await who(bad), [], bad);
+  for (const bad of ['since=yesterday', 'since=2026-02-30', 'since=20261001', 'since=2026-13-01', 'since=2026-00-10', 'since=0000-00-00', 'since=0000-01-01', 'since=2026-01-99']) {
+    assert.deepEqual(await who(bad), [], bad);
+    assert.equal(ok(await mgr.get(`/api/persons/count?tag=rules&${bad}`)).total, 0, `${bad}: counted, not an error`);
+  }
 });
 
 test('list and notlist: on another list as it stands, or not — a filter can stand on other lists', async () => {
@@ -188,6 +191,51 @@ test('a volunteer never sorts people by money, memberships, answers, attendance 
   assert.deepEqual(await who(`answer=${anyQ}:any`, vol), []);
   assert.equal((await who(`since=${day(-3)}`, vol)).length, 4, 'when someone was added is no secret');
   assert.equal((await vol.get('/api/lists')).status, 403);
+});
+
+// A manager can give a volunteer the People area (and Map): they may then
+// make lists, banks and passes — and still never learn who gave, who is a
+// member, what anyone answered or who came to a shift by way of one.
+test('a volunteer given People and Map still never reads the desk’s rules through a list, a phone bank or a sweep', async () => {
+  const me = ok(await vol.get('/api/auth/me')).user;
+  const donors = (await mgr.get('/api/lists')).json.lists.find((l) => l.name === 'Gave this year');
+  ok(await mgr.action('permission.member.set', { user_id: me.id, grant: ['people', 'map'] }));
+  try {
+    // A list by a plain rule is theirs to make now…
+    const plain = ok(await vol.action('list.create', { name: 'Vic’s rules list', kind: 'filter', filter: { tag: 'rules' } })).list;
+    // …one by money, memberships, answers, attendance or another list never is.
+    const anyQ = (await db.query('select id from survey_questions where workspace_id = $1 limit 1', [ws])).rows[0].id;
+    const deskRules = [{ gave: 'year' }, { gave: 'min:5000' }, { member: 'now' }, { answer: `${anyQ}:any` }, { shift: 'came:30' }, { list: donors.id }, { notlist: donors.id }];
+    for (const filter of deskRules) {
+      const what = JSON.stringify(filter);
+      assert.equal((await vol.action('list.create', { name: 'x', kind: 'filter', filter: { tag: 'rules', ...filter } })).status, 403, `list.create ${what}`);
+      assert.equal((await vol.action('list.update', { id: plain.id, filter })).status, 403, `list.update ${what}`);
+      assert.equal((await vol.action('list.snapshot', { name: 'x', filter })).status, 403, `list.snapshot ${what}`);
+    }
+    assert.equal((await vol.action('list.snapshot', { name: 'x', list_id: donors.id })).status, 403, 'a copy of the desk’s list');
+    // A phone bank or a sweep from a list is the desk’s to make: handed to
+    // themselves, it would read the list out to them.
+    assert.equal((await vol.action('bank.create', { name: 'Donors to call', list_id: donors.id })).status, 403);
+    assert.equal((await vol.action('bank.create', { name: 'Mine to call', list_id: plain.id })).status, 403);
+    const byHand = ok(await vol.action('bank.create', { name: 'By hand', person_ids: [P.ana.id] })).bank;
+    assert.equal(byHand.total, 1, 'people picked by hand still make a bank');
+    const desks = ok(await mgr.action('bank.create', { name: 'Thank the donors', list_id: donors.id })).bank;
+    assert.equal((await vol.action('bank.topup', { id: desks.id })).status, 403);
+    assert.equal((await vol.action('pass.start', { name: 'Donor doors', kind: 'persuasion', list_id: donors.id })).status, 403);
+    const pass = ok(await vol.action('pass.start', { name: 'Every door', kind: 'persuasion' })).pass;
+    assert.equal((await vol.action('pass.update', { id: pass.id, list_id: donors.id })).status, 403);
+    ok(await vol.action('pass.update', { id: pass.id, name: 'Every door, twice', list_id: null }));
+    ok(await mgr.action('pass.end', { id: pass.id }));
+    // What the desk makes and hands them is theirs to call, as before.
+    ok(await mgr.action('bank.assign', { id: desks.id, user_id: me.id }));
+    assert.deepEqual(ok(await vol.get(`/api/banks/${desks.id}/mine`)).persons.map((p) => p.name.split(' ')[0]), ['Ana', 'Ben', 'Eve']);
+    ok(await mgr.action('bank.remove', { id: desks.id }));
+    ok(await mgr.action('bank.remove', { id: byHand.id }));
+    ok(await mgr.action('list.delete', { id: plain.id }));
+  } finally {
+    await mgr.action('permission.member.set', { user_id: me.id, grant: [] });
+  }
+  assert.equal((await vol.action('list.create', { name: 'x', kind: 'filter', filter: { tag: 'rules' } })).status, 403, 'the grant taken back');
 });
 
 test('a saved filter keeps the new rules; unknown keys are dropped; placeholders move without touching quoted text', () => {

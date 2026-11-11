@@ -1,6 +1,6 @@
 // pass.start · pass.end · pass.update — desk roles (a volunteer given Map &
 // turfs may run them too: lib/perms.js mayRun). Every change is an event on
-// the canvass_pass entity.
+// the canvass_pass entity. A pass on a list is the desk's alone.
 //
 //   pass.start   ends the open pass (if any) and starts the new one in one
 //                transaction — the one-open-pass index never trips. Answers
@@ -20,9 +20,12 @@ import { loadList } from '../lists/audience.js';
 const DESK = ['manager', 'treasurer', 'staff'];
 const COLS = 'id, name, kind, who, list_id, tries, started_at, ended_at, created_by, created_at';
 // The list a pass is to walk, checked; its name rides on the answer.
-const listFor = async (tx, ws, id) => {
+// Pointing a pass at a list is the desk's, whatever a volunteer has been
+// given: the walk lists would read the list out to them.
+const listFor = async (tx, ctx, id) => {
   if (!id) return null;
-  const list = await loadList(tx, ws, id);
+  if (ctx.role === 'volunteer') throw httpError(403, 'only the desk can point a pass at a list');
+  const list = await loadList(tx, ctx.workspaceId, id);
   if (!list) throw httpError(404, 'list not found');
   return list;
 };
@@ -61,7 +64,7 @@ export const actions = {
       tries: tries().default(2),
     }),
     handler: async (tx, ctx, input, emit) => {
-      const list = await listFor(tx, ctx.workspaceId, input.list_id);
+      const list = await listFor(tx, ctx, input.list_id);
       const open = await openPass(tx, ctx.workspaceId);
       if (open) await endPass(tx, ctx.workspaceId, open.id, emit);
       const id = newId();
@@ -102,7 +105,7 @@ export const actions = {
     handler: async (tx, ctx, { id, ...patch }, emit) => {
       const cur = await openOrThrow(tx, ctx.workspaceId, id);
       // A list is checked when it is picked; one left as it was is not looked up again.
-      const picked = await listFor(tx, ctx.workspaceId, patch.list_id);
+      const picked = await listFor(tx, ctx, patch.list_id);
       const listId = patch.list_id === undefined ? cur.list_id : (picked?.id || null);
       const next = { name: patch.name ?? cur.name, who: patch.who ?? cur.who, tries: patch.tries ?? cur.tries };
       await tx.query(

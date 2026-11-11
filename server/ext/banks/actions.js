@@ -5,6 +5,7 @@
 // bank.remove   { id }                                desk: void (nothing else moves)
 // bank.add      { id, person_ids[] }                  desk: more numbers
 // bank.topup    { id }                                desk: a bank made from a list takes in whoever has joined the list since
+//                                                     (from a list: the desk's alone, never a volunteer given the People area)
 // bank.assign   { id, user_id | team_id, count? }     desk: hand the next numbers to one caller, or split them across a team
 // bank.release  { id, user_id?, person_id? }          desk: take unfinished numbers back (one person's, or one number)
 // bank.done     { id, person_id, outcome? }           anyone: cross a number off without a call (wrong number, asked not to call)
@@ -31,6 +32,12 @@ const bankOf = async (tx, ws, id) => {
   const b = (await tx.query('select * from call_banks where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
   if (!b) throw httpError(404, 'phone bank not found');
   return b;
+};
+// A bank made from a list reads the list as the desk does (numbers.js), so
+// making one — or taking in who joined since — is the desk's, whatever a
+// volunteer has been given: handed to themselves, it would read the list out.
+const deskReadsLists = (ctx) => {
+  if (ctx.role === 'volunteer') throw httpError(403, 'only the desk can make a phone bank from a list');
 };
 // The people who can be called (lib/reach.js decides: a phone, not do-not-contact).
 const callable = async (tx, ws, ids) => (await tx.query(
@@ -68,6 +75,7 @@ export const actions = {
       const ws = ctx.workspaceId;
       const name = clean(input.name);
       if (!name) throw httpError(400, 'a phone bank needs a name');
+      if (input.list_id) deskReadsLists(ctx);
       const list = input.list_id ? await loadList(tx, ws, input.list_id) : null;
       if (input.list_id && !list) throw httpError(404, 'list not found');
       const id = newId();
@@ -134,6 +142,7 @@ export const actions = {
     roles: DESK,
     input: z.object({ id: uuid() }),
     handler: async (tx, ctx, input, emit) => {
+      deskReadsLists(ctx);
       const b = await bankOf(tx, ctx.workspaceId, input.id);
       const list = b.list_id ? await loadList(tx, ctx.workspaceId, b.list_id) : null;
       if (!list) throw httpError(409, b.list_id ? 'the list this phone bank was made from is gone' : 'this phone bank wasn’t made from a list');
