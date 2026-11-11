@@ -1026,6 +1026,13 @@ test('Settings → Services: the Mailchimp row, Check and Connect — and who ma
   for (const [who, path] of [[staff, '/api/mailchimp'], [vol, '/api/mailchimp'], [vol, `/api/lists/${list.id}/mailchimp`], [vol, '/api/integrations']]) assert.equal((await who.get(path)).status, 403, path);
   for (const name of ['mailchimp.connect', 'mailchimp.pull']) assert.equal((await staff.action(name, {})).status, 403, name);
   assert.equal((await vol.action('mailchimp.push', { list_id: list.id })).status, 403);
+  // A volunteer granted People works in that area, and still can't send a list to Mailchimp — only the
+  // desk can, as only the desk can download it.
+  const volId = ok(await mgr.get('/api/members')).members.find((m) => m.role === 'volunteer').id;
+  ok(await mgr.action('permission.member.set', { user_id: volId, grant: ['people'], deny: [] }));
+  r = await vol.action('mailchimp.push', { list_id: list.id });
+  assert.deepEqual([r.status, (await vol.get(`/api/lists/${list.id}/export.csv`)).status], [403, 403], JSON.stringify(r.json));
+  assert.equal((await db.query("select count(*)::int as n from jobs where workspace_id = $1 and kind = 'mailchimp.sync'", [ws])).rows[0].n, 0, 'nothing was started');
   assert.equal((await staff.post('/api/connections/check', { key: 'mailchimp' })).status, 403);
   assert.equal((await staff.action('mailchimp.push', { list_id: list.id })).status, 200);
   assert.equal((await mgr.action('mailchimp.push', { list_id: '11111111-1111-4111-8111-111111111111' })).status, 404);

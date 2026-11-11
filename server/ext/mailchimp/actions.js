@@ -23,7 +23,11 @@ export const actions = {
     area: 'people',
     input: z.object({ list_id: z.uuid(), everyone: z.boolean().optional() }),
     // Which audience is asked before the write (the account's only one, when none is named).
-    before: async () => {
+    before: async (db, ctx) => {
+      // The desk only, as for downloading the list: a volunteer granted People
+      // works in that area (the area's deny still stops staff), but never sends
+      // the campaign's addresses out of it.
+      if (!DESK.includes(ctx.role)) throw httpError(403, `role '${ctx.role}' may not perform mailchimp.push`);
       if (!mailchimpOn()) throw httpError(409, 'Mailchimp isn’t connected here');
       try {
         return { audience: await audienceId() };
