@@ -19,7 +19,7 @@
 export { sql } from './sql.js';
 export { actions } from './actions.js';
 export { api } from './api.js';
-import { loadList, onListSql, peopleChanged } from './audience.js';
+import { loadList, onListSql, peopleChanged, listsChanged } from './audience.js';
 
 const str = (v) => String(v ?? '').trim().slice(0, 60);
 const MAX_DEPTH = 4; // a list on a list on a list… and no further
@@ -43,11 +43,28 @@ const personsWhere = async (db, ctx, query, w) => {
   if (unread.yes) w.where += ' and false';
 };
 
-// Many people changed at once (an import, a merge, the sample campaign):
-// every list's kept numbers are counted again (audience.js).
+// The kept numbers (audience.js) are counted again at once when people
+// change in a way a list can read: an edit or a tag, a gift, a membership,
+// the newsletter, a STOP, a shift, an import or a merge — so the desk sees
+// its own changes. The field's steady stream (door and phone logs, voted
+// marks, places on the map) waits for the minute, as Path to win's numbers
+// do. Any list changing recounts the lists that stand on other lists.
 const BULK = /^(import\.|sample\.|person\.merge)/;
-const events = async (tx, meta) => {
-  if (BULK.test(String(meta.action || ''))) peopleChanged(meta.workspaceId);
+const STREAM = new Set(['contact.log', 'vote.mark', 'person.geocode']);
+const PEOPLE = new Set([
+  'person', 'gift', 'membership', 'subscription', 'texting_optout', 'shift_assignment', 'person_field_value',
+  'volunteer_role', 'site_action', 'survey_response', 'turf',
+]);
+const events = async (tx, meta, evs = []) => {
+  const action = String(meta.action || '');
+  const people = BULK.test(action) || (!STREAM.has(action) && evs.some((e) => PEOPLE.has(e.entityType)));
+  const lists = evs.some((e) => e.entityType === 'list');
+  if (!people && !lists) return;
+  // This write's events come next in the campaign's books: runAction holds
+  // the campaign's row, so no other write lands in between.
+  const seq = Number((await tx.query('select event_seq from workspaces where id = $1', [meta.workspaceId])).rows[0].event_seq) + 1;
+  if (people) peopleChanged(meta.workspaceId, seq);
+  if (lists) listsChanged(meta.workspaceId, seq);
 };
 
 export const hooks = { personsWhere, events };

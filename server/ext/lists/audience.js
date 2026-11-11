@@ -69,51 +69,75 @@ export const peopleOf = async (db, ctx, { list = null, filter = null, reach = nu
 // How many a list names; how many emails and texts a send to it would be
 // (one per address, one per number); how many people can be called; and how
 // many can be reached at all, by any of the three. Each person is read once.
-export const countsOf = async (db, ctx, { list = null, filter = null }) => {
+// seq: how far the campaign's books had got when the count read them (the
+// same snapshot — $1 is the campaign in every WHERE above).
+const countsAt = async (db, ctx, { list = null, filter = null }) => {
   const { where, params } = await whereFor(db, ctx, { list, filter });
   const r = (await db.query(
     `select count(*)::int as total,
        (count(distinct ${emailKey('x.email')}) filter (where x.e))::int as with_email,
        (count(distinct ${last10('x.phone')}) filter (where x.t))::int as with_phone,
        (count(*) filter (where x.c))::int as with_call,
-       (count(*) filter (where x.e or x.t or x.c))::int as reachable
+       (count(*) filter (where x.e or x.t or x.c))::int as reachable,
+       (select w.event_seq from workspaces w where w.id = $1)::text as seq
      from (select p.email, p.phone, ${REACH.email()} as e, ${REACH.phone()} as t, ${REACH.call()} as c
              from persons p where ${where} offset 0) x`, params,
   )).rows[0];
-  return { total: r.total, with_email: r.with_email, with_phone: r.with_phone, with_call: r.with_call, reachable: r.reachable };
+  return {
+    counts: { total: r.total, with_email: r.with_email, with_phone: r.with_phone, with_call: r.with_call, reachable: r.reachable },
+    seq: Number(r.seq),
+  };
 };
+export const countsOf = async (db, ctx, opts) => (await countsAt(db, ctx, opts)).counts;
 
 // A list's numbers, kept for a minute (STARBASE_LIST_COUNTS_MS; 0 under the
 // test runner): the Lists screen and a send's "To" picker read every list,
 // and counting each on every load is slow on a city's voter file. A kept
 // count is dropped when the list itself changes (its updated_at: the
-// filter, or people put on or taken off) and when many people change at
-// once (peopleChanged: an import, a merge). One list's own page counts now.
+// filter, or people put on or taken off), when people change in a way a
+// list can read (peopleChanged — ext/lists/index.js says which writes), and,
+// for a list that stands on other lists, when any list changes
+// (listsChanged). Each change is noted with the place its write takes in
+// the campaign's books (the first event it writes): a count that read the
+// books before that place missed it, however long the write took to land.
+// One list's own page counts now.
 const keepMs = () => Number(process.env.STARBASE_LIST_COUNTS_MS ?? (process.env.NODE_TEST_CONTEXT ? 0 : 60_000)) || 0;
-const SETTLE_MS = 5000; // a change is noted before its write commits
-const kept = new Map();      // list id → { at, stamp, counts }
-const counting = new Map();  // list id + stamp → the count under way
-const changedAt = new Map(); // campaign → when its people last changed in bulk
+const kept = new Map();      // list id → { at, seq, stamp, counts }
+const counting = new Map();  // list id + stamp → the count under way ({ counts, seq })
+const peopleSeq = new Map(); // campaign → the place in its books of the last change to its people
+const listsSeq = new Map();  // campaign → the same, for a change to any of its lists
 const stampOf = (list) => String(new Date(list.updated_at).getTime());
-export const peopleChanged = (ws) => { changedAt.set(ws, Date.now()); };
+const onOtherLists = (list) => list.kind === 'filter' && Boolean(list.filter?.list || list.filter?.notlist);
+export const peopleChanged = (ws, seq) => { peopleSeq.set(ws, Math.max(peopleSeq.get(ws) || 0, seq)); };
+export const listsChanged = (ws, seq) => { listsSeq.set(ws, Math.max(listsSeq.get(ws) || 0, seq)); };
+const missed = (ctx, list, seq) => (peopleSeq.get(ctx.workspaceId) || 0) > seq
+  || (onOtherLists(list) && (listsSeq.get(ctx.workspaceId) || 0) > seq);
 export const keptCounts = (ctx, list) => {
   const e = kept.get(list.id);
-  if (!e || e.stamp !== stampOf(list) || Date.now() - e.at >= keepMs()) return null;
-  const changed = changedAt.get(ctx.workspaceId);
-  return changed && e.at < changed + SETTLE_MS ? null : e.counts;
+  if (!e || e.stamp !== stampOf(list) || Date.now() - e.at >= keepMs() || missed(ctx, list, e.seq)) return null;
+  return e.counts;
 };
-export const listCounts = (db, ctx, list, { fresh = false } = {}) => {
-  const hit = fresh ? null : keptCounts(ctx, list);
-  if (hit) return Promise.resolve(hit);
-  const key = `${list.id}:${stampOf(list)}`;
+const countNow = (db, ctx, list) => {
+  const stamp = stampOf(list);
+  const key = `${list.id}:${stamp}`;
   if (!counting.has(key)) {
-    counting.set(key, countsOf(db, ctx, { list }).then((counts) => {
-      kept.set(list.id, { at: Date.now(), stamp: stampOf(list), counts });
-      if (kept.size > 2000) for (const [id, e] of kept) if (Date.now() - e.at > keepMs()) kept.delete(id);
-      return counts;
+    const at = Date.now();
+    counting.set(key, countsAt(db, ctx, { list }).then((r) => {
+      const e = kept.get(list.id);
+      if (!e || e.stamp !== stamp || e.seq <= r.seq) kept.set(list.id, { at, seq: r.seq, stamp, counts: r.counts });
+      if (kept.size > 2000) for (const [id, k] of kept) if (Date.now() - k.at > keepMs()) kept.delete(id);
+      return r;
     }).finally(() => counting.delete(key)));
   }
   return counting.get(key);
+};
+export const listCounts = async (db, ctx, list, { fresh = false } = {}) => {
+  const hit = fresh ? null : keptCounts(ctx, list);
+  if (hit) return hit;
+  let r = await countNow(db, ctx, list);
+  // A count already under way may have read the books before a change landed: once more.
+  if (missed(ctx, list, r.seq)) r = await countNow(db, ctx, list);
+  return r.counts;
 };
 
 // The recipients of a send: one per address or number, the first person

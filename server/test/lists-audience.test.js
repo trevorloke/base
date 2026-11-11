@@ -81,7 +81,7 @@ test('a list’s numbers: people · by email · by text · by phone · reachable
   assert.equal((await mgr.get(`/api/lists/${randomUUID()}/counts`)).status, 404);
 });
 
-test('counts are kept for a minute, counted again when the list or its people change, and never hold up the names', async () => {
+test('counts are kept for a minute, counted again when the list or its people change (the field’s stream waits the minute), and never hold up the names', async () => {
   process.env.STARBASE_LIST_COUNTS_MS = '60000';
   const seen = [];
   const real = db.query.bind(db);
@@ -112,26 +112,36 @@ test('counts are kept for a minute, counted again when the list or its people ch
     assert.equal(cold, lists - 1, 'every list but the one already kept');
     ok(await mgr.get('/api/lists'));
     assert.equal(counting(), cold, 'a second load counts nothing');
-    // Someone's tags change: the kept number stands for its minute…
+    // The desk changes someone's tags: counted again at once.
     ok(await mgr.action('person.update', { id: P.ben.id, tags: ['former'] }));
-    assert.deepEqual(ok(await mgr.get(`/api/lists/${live.id}/counts`)).counts, first);
-    // …but one list's own page, and a send's "To", count now.
-    assert.equal(ok(await mgr.get(`/api/lists/${live.id}`)).counts.total, first.total - 1);
-    assert.equal(ok(await mgr.get(`/api/lists/${live.id}/counts`)).counts.total, first.total - 1, 'and what they counted is what is kept');
+    assert.equal(ok(await mgr.get(`/api/lists/${live.id}/counts`)).counts.total, first.total - 1, 'the desk sees its own change');
     ok(await mgr.action('person.update', { id: P.ben.id, tags: ['member'] }));
-    assert.equal(ok(await mgr.get(`/api/lists/${live.id}/counts?fresh=1`)).counts.total, first.total);
+    assert.deepEqual(ok(await mgr.get(`/api/lists/${live.id}/counts`)).counts, first);
+    // The field's stream — a knock that rates someone — waits for the minute…
+    const ones = ok(await mgr.action('list.create', { name: 'Members rated 1', kind: 'filter', filter: { tag: 'member', rating: '1' } })).list;
+    assert.equal(ok(await mgr.get(`/api/lists/${ones.id}/counts`)).counts.total, 0);
+    ok(await mgr.action('contact.log', { person_id: P.ben.id, channel: 'door', outcome: 'contacted', rating: '1' }));
+    assert.equal(ok(await mgr.get(`/api/lists/${ones.id}/counts`)).counts.total, 0, 'kept for its minute');
+    // …but one list's own page counts now, and what it counted is kept.
+    assert.equal(ok(await mgr.get(`/api/lists/${ones.id}`)).counts.total, 1);
+    assert.equal(ok(await mgr.get(`/api/lists/${ones.id}/counts`)).counts.total, 1);
+    assert.equal(ok(await mgr.get(`/api/lists/${ones.id}/counts?fresh=1`)).counts.total, 1);
     // The list itself changes — its filter, or who is on a hand-picked one: counted again at once.
     ok(await mgr.action('list.update', { id: live.id, filter: { tag: 'volunteer' } }));
     assert.equal(ok(await mgr.get(`/api/lists/${live.id}/counts`)).counts.total, 1);
     ok(await mgr.action('list.update', { id: live.id, filter: { tag: 'member' } }));
     const picked = ok(await mgr.action('list.create', { name: 'Picked', kind: 'people', person_ids: [P.ana.id] })).list;
+    const onPicked = ok(await mgr.action('list.create', { name: 'Picked members', kind: 'filter', filter: { list: picked.id, tag: 'member' } })).list;
     assert.equal(ok(await mgr.get(`/api/lists/${picked.id}/counts`)).counts.total, 1);
+    assert.equal(ok(await mgr.get(`/api/lists/${onPicked.id}/counts`)).counts.total, 0, 'Ana is no member now');
     await new Promise((r) => { setTimeout(r, 5); });
     ok(await mgr.action('list.add', { id: picked.id, person_ids: [P.ben.id, P.dee.id] }));
     assert.equal(ok(await mgr.get(`/api/lists/${picked.id}/counts`)).counts.total, 3);
+    assert.equal(ok(await mgr.get(`/api/lists/${onPicked.id}/counts`)).counts.total, 2, 'a list on a list follows it');
     await new Promise((r) => { setTimeout(r, 5); });
     ok(await mgr.action('list.remove', { id: picked.id, person_ids: [P.ben.id] }));
     assert.equal(ok(await mgr.get(`/api/lists/${picked.id}/counts`)).counts.total, 2);
+    assert.equal(ok(await mgr.get(`/api/lists/${onPicked.id}/counts`)).counts.total, 1);
     // Many people at once (an import): every list is counted again.
     assert.equal(ok(await mgr.get(`/api/lists/${live.id}/counts`)).counts.total, 3);
     const imp = await mgr.post('/api/data/import', { rows: [{ name: 'Gil Imported Example', tags: 'member' }] });
