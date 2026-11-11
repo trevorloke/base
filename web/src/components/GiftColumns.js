@@ -1,4 +1,4 @@
-// Donations → Import a file (pages/ImportGifts.jsx): which column of a gift
+// Donations → Import donations (pages/ImportGifts.jsx): which column of a gift
 // file is what, one row of it as the server takes it, and what the check
 // adds up to. No tool's export is assumed: a column is matched by what its
 // heading means ("Donor", "Contributor name", "Date received", "Payment

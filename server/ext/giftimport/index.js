@@ -1,5 +1,5 @@
 // Gifts made in another tool, brought in from its spreadsheet (Donations →
-// More → Import a file), so the year's contribution limit, the donor tiers,
+// More → Import donations), so the year's contribution limit, the donor tiers,
 // next year's lapsed list and the disclosure all see them.
 //
 // The screen reads the file and the person matches its columns (no tool's

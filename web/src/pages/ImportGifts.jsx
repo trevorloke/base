@@ -1,4 +1,4 @@
-// Donations → More → Import a file (/money/import) — gifts made in another
+// Donations → More → Import donations (/money/import) — gifts made in another
 // tool, brought in from its spreadsheet, so the year's limit, the donor
 // tiers, next year's lapsed list and the disclosure all see them. Three
 // steps, one button each, the way People → Import works (its file reader
@@ -64,7 +64,7 @@ const Head = () => (
   <div className="page-head imp-head">
     <div>
       <Link to="/money" className="eyebrow imp-back">← Donations</Link>
-      <h1>Import gifts</h1>
+      <h1>Import donations</h1>
     </div>
   </div>
 );

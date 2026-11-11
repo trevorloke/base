@@ -5,7 +5,7 @@
 //         saved until it's checked, and the same file twice adds no one
 //         twice (People → Import). A voted file goes the same way (a Voted
 //         column). Gifts made in another tool come in from its file under
-//         Donations (Import gifts). The website sends sign-ups itself
+//         Donations (Import donations). The website sends sign-ups itself
 //         (Settings → Services).
 //   Out:  each table as a spreadsheet (/api/export/<name>.csv — the
 //         People one reads straight back in), and everything as one JSON
@@ -52,7 +52,7 @@ export default function DataPage() {
               <strong>Gifts made in another tool</strong>
               <span className="muted">A CSV or Excel file of donations taken elsewhere. They count toward the year’s limit; no receipt is made or emailed, and the same file twice adds nothing twice.</span>
             </div>
-            {canGifts ? <Link className="btn ops-tap" to="/money/import">Import gifts</Link> : <span className="ops-meta">A manager or the treasurer brings it in.</span>}
+            {canGifts ? <Link className="btn ops-tap" to="/money/import">Import donations</Link> : <span className="ops-meta">A manager or the treasurer brings it in.</span>}
           </li>
           <li className="card dt-item">
             <div className="dt-item__main">

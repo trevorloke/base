@@ -12,6 +12,7 @@ const isDesk = (me) => Boolean(me?.role) && me.role !== 'volunteer';
 const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data'] : []));
 export const allowed = (me, item) => {
   if (item.manager && me?.role !== 'manager') return false;
+  if (item.roles && !item.roles.includes(me?.role)) return false;
   if (item.desk && !isDesk(me)) return false;
   return !item.area || me?.role === 'manager' || areasOf(me).includes(item.area);
 };
@@ -48,7 +49,8 @@ export const SCREENS = [
   { label: 'Passes', to: '/passes', area: 'map', words: 'sweep pass universe' },
   { label: 'Receipts', to: '/money/receipts', area: 'money', words: 'tax receipt donation' },
   // Never the word "gift" here: typed, the bar lists screens before jobs, and "gift" + Enter must stay Log a gift.
-  { label: 'Import donations', to: '/money/import', area: 'money', desk: true, words: 'file csv spreadsheet excel another tool upload' },
+  // The financial agent's people bring a file in (Donations → More offers it to them alone).
+  { label: 'Import donations', to: '/money/import', area: 'money', roles: ['manager', 'treasurer'], words: 'file csv spreadsheet excel another tool upload' },
   { label: 'Stewardship', to: '/money/stewardship', area: 'money', words: 'thank donors lapsed top donors' },
   { label: 'Ladders', to: '/ladders', area: 'outreach', words: 'automatic emails automation engagement' },
   { label: 'Follow-ups', to: '/follow-ups', area: 'outreach', words: 'follow up ladder' },

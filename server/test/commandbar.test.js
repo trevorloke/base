@@ -30,6 +30,11 @@ test('staff without Donations: no gift, no form, no money screens; no settings',
   assert.ok(labels(screens).includes('Your profile'));
 });
 
+test('Import donations is offered to managers and the treasurer only, as Donations → More offers it', () => {
+  const offered = (role) => labels(commandsFor({ role, areas: ['people', 'money', 'data'] }, NAV).screens).includes('Import donations');
+  assert.deepEqual(['manager', 'treasurer', 'staff', 'volunteer'].map(offered), [true, true, false, false], 'staff would find a page that only says who may');
+});
+
 test('a volunteer given Outreach: its jobs are the desk’s — no jobs, and only what the area opens', () => {
   const vol = { role: 'volunteer', areas: ['outreach'] };
   const { actions, screens } = commandsFor(vol, [{ to: '/outreach', label: 'Outreach' }]);

@@ -1618,7 +1618,7 @@ function ImportFlow() {
   );
 }
 
-// The pieces Donations → Import a file shares (pages/ImportGifts.jsx): how a
+// The pieces Donations → Import donations shares (pages/ImportGifts.jsx): how a
 // file is read, and the steps’ small parts. (Which column is what is its
 // own: components/GiftColumns.js.)
 export {

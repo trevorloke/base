@@ -152,8 +152,8 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    on the map).
 3. Open the map on a phone as a volunteer: tap a house, rate the door, see
    it save; turn on airplane mode, do it again, turn it off, watch it send.
-4. Gifts taken in another tool this year: **Donations → More → Import a
-   file** (a manager or the treasurer), before the first gift is taken
+4. Gifts taken in another tool this year: **Donations → More → Import
+   donations** (a manager or the treasurer), before the first gift is taken
    here, so the year's contribution limit counts them. Take refunded
    payments out of the file (with a payment status column they're left out
    for you). Check first: a gift already typed in here by

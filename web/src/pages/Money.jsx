@@ -753,7 +753,7 @@ export default function Money() {
           <div id="money-more" className="ops-more-body">
             <div className="ops-actions mny-more">
               <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/receipts">Receipts</Link>
-              {canAgent && <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/import">Import a file</Link>}
+              {canAgent && <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/import">Import donations</Link>}
             </div>
             {canAgent && (
               <>

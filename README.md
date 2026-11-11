@@ -204,7 +204,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Next steps* — one per donor with a date (*Coffee after the debate*), the
   due ones first. *Lapsed* — gave in an earlier year, not yet this one.
   *Top donors this year* — and when each was last thanked.
-- **Gifts made in another tool** (Donations → More → *Import a file*, or
+- **Gifts made in another tool** (Donations → More → *Import donations*, or
   Import & export; managers and the treasurer): a CSV or Excel file of
   donations taken elsewhere. No tool's column names are assumed — a column
   is matched by what its heading means, then by its values, and you correct
@@ -429,7 +429,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   voter file, or another tool's export (Mailchimp, NationBuilder, VAN and
   the like): the columns match themselves, nothing is saved until the
   check, and the same file twice adds no one twice; a voted file the same
-  way; gifts made in another tool, from its file (*Import gifts*); the
+  way; gifts made in another tool, from its file (*Import donations*); the
   website's sign-ups through its key. **Out:** each table as a
   spreadsheet — people (with *voted* and the voter number, and it reads
   straight back in), contacts, gifts (which came from a file, and the other

@@ -11,7 +11,7 @@
 // the person says otherwise; the profile shows it under More details.
 //
 // Gifts made in another tool come in from its file (Import & export →
-// Import gifts, or Donations → More → Import a file): the columns of a file
+// Import donations, or Donations → More → Import donations): the columns of a file
 // base.win has never seen match themselves; the check saves nothing and
 // says the gifts, the donors found, the gifts to settle, what can't come in
 // and who the file takes over the year's limit; the import puts them on the
@@ -349,10 +349,10 @@ const giftFile = [
 ].join('\n');
 await page.goto(`${ADMIN}/data`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.dt-page h1', { timeout: 8000 });
-await page.click('a:has-text("Import gifts")');
+await page.click('a:has-text("Import donations")');
 await page.waitForURL(`${ADMIN}/money/import`, { timeout: 8000 }).catch(() => {});
 await page.waitForSelector('#gi-file', { state: 'attached', timeout: 8000 });
-await simple(page, 'Import gifts, choose a file (1360)');
+await simple(page, 'Import donations, choose a file (1360)');
 await page.click('button:has-text("Paste text")');
 await page.fill('#gi-paste', giftFile);
 await page.click('button:has-text("Use this text")');
@@ -361,7 +361,7 @@ const gmap = await page.$$eval('.imp-map__select', (els) => els.map((e) => e.opt
 check('a gift file’s columns match themselves, by what their headings mean',
   gmap.join('|') === 'Their number for the gift|Donor’s full name|Email|Phone|Street address|Postal code|Amount|Date of the gift|Paid by|Their receipt number', gmap.join('|'));
 check('with two slates and no column for one, it says where every gift goes', /No column says which slate, so every gift goes to City council\./.test((await page.innerText('.gi-slate-note').catch(() => '')).replace(/\s+/g, ' ')), await page.innerText('.gi-slate-note').catch(() => '(none)'));
-await simple(page, 'Import gifts, match columns (1360)');
+await simple(page, 'Import donations, match columns (1360)');
 await page.screenshot({ path: `${SHOTS}/06-gifts-match-columns.png`, fullPage: true });
 await page.click('button:has-text("Check 6 rows")');
 await page.waitForSelector('.imp-result', { timeout: 15000 }).catch(() => {});
@@ -445,7 +445,7 @@ check('…settled as quietly as they came in: still two receipts in all', (await
 // The same file again adds nothing, and says so.
 await page.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
 await page.getByRole('button', { name: 'More', exact: true }).click();
-await page.getByRole('link', { name: 'Import a file' }).click();
+await page.getByRole('link', { name: 'Import donations' }).click();
 await page.waitForSelector('#gi-file', { state: 'attached', timeout: 8000 });
 await page.click('button:has-text("Paste text")');
 await page.fill('#gi-paste', giftFile);
@@ -471,7 +471,7 @@ await gp.click('button:has-text("Use this text")');
 await gp.waitForSelector('.imp-map__row', { timeout: 8000 });
 const ask = (await gp.innerText('.gi-ask').catch(() => '')).replace(/\s+/g, ' ');
 check('a date that could be read two ways is asked about, with both readings', new RegExp(`03/04/${yr} in this file is`).test(ask) && /Mar 4/.test(ask) && /Apr 3/.test(ask), ask);
-await simple(gp, 'Import gifts, match columns (390)');
+await simple(gp, 'Import donations, match columns (390)');
 await gp.screenshot({ path: `${SHOTS}/11-gifts-match-phone.png`, fullPage: true });
 await gp.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
 await gp.waitForSelector('.ops-hero .n', { timeout: 10000 }).catch(() => {});
@@ -537,7 +537,7 @@ const stAsk = (await page.locator('section.imp-rmap[aria-label="Which come in"]'
 check('a Payment Status column is matched, and a word it doesn’t know is asked: "On hold", opened, 1 to say',
   stMap.at(-1) === 'Payment status' && (await page.getByRole('button', { name: 'Which come in · 1 to say' }).getAttribute('aria-expanded').catch(() => '')) === 'true' && /On hold 1 row/.test(stAsk),
   `${stMap.join('|')} · ${stAsk.slice(0, 160)}`);
-await simple(page, 'Import gifts, a payment status (1360)');
+await simple(page, 'Import donations, a payment status (1360)');
 await page.click('button:has-text("Check 3 rows")');
 await page.waitForSelector('.imp-result', { timeout: 15000 }).catch(() => {});
 await sleep(400);

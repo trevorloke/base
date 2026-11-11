@@ -322,7 +322,7 @@ No connection and no key: GiverLever and tools like it were not found to
 offer a public API, so their history comes in by file. Export the gifts
 from the other tool as a CSV or Excel file — donor, email, amount, date,
 how it was paid, and its own gift and receipt numbers if it has them — and
-bring it in under **Donations → More → Import a file** (README, *Gifts made
+bring it in under **Donations → More → Import donations** (README, *Gifts made
 in another tool*). Its column names don't matter; the import shows how it
 read them before anything is saved. Imported gifts count toward the year's
 limit and the disclosure; base.win makes no receipt for them. New online

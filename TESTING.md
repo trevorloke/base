@@ -632,7 +632,7 @@ one tap away under **More**.
   Disclosure** picks a period (this campaign, or a calendar year) and
   downloads contributors over $100 for a spreadsheet, with an *Over limit*
   column. Sample gifts are never in it.
-- **Donations → More → Import a file** (a manager or the treasurer) — make
+- **Donations → More → Import donations** (a manager or the treasurer) — make
   a small spreadsheet of made-up gifts with another tool's own headings
   (*Transaction ID, Donor, Donor Email, Amount, Date Received, Payment
   Method, Receipt #*), two of them to one donor on file adding up past the
