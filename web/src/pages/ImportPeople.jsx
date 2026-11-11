@@ -643,8 +643,10 @@ function InvalidList({ invalid, intro }) {
 
 // Rows the check found (by email, or by name with phone or street) on someone
 // with another voter number: a list numbered afresh, or a number typed wrong.
-// The person says what they are; a new answer checks again. A row with the
-// same email is that person whatever the answer (routes/data.js).
+// The person says what they are; a new answer checks again — with the
+// question left where it is, so an answer picked by keyboard keeps its place
+// and the next arrow key goes on from it. A row with the same email is that
+// person whatever the answer (routes/data.js).
 const OTHER_ANSWERS = [
   ['keep', 'Yes — keep the numbers on file'],
   ['take', 'Yes — use this file’s numbers'],
@@ -732,14 +734,15 @@ function ImportFlow() {
   const pastBody = past && pastOk ? { past: { year: pastY, field_tags: pastFieldCols.filter(tagsField).map((c) => c.id) } } : {};
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [tag, setTag] = useState('');
-  const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, otherNumbers, others, parts, error }
+  const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, otherNumbers, others, parts, error, again }
+  const checkRun = useRef(0); // the check under way: an older one, overtaken by a new answer, says nothing more
   // Rows found on someone with another voter number: 'keep' theirs, 'take'
   // the file's, or 'new' people (found by name only). Asked after the check.
   const [otherNumber, setOtherNumber] = useState('keep');
   // Step 3 — import (then place on the map)
   const [imp, setImp] = useState(null); // { phase, sent, total, created, merged, unchanged, invalid, error, resumeAt }
 
-  const busy = Boolean(reading) || check?.phase === 'running' || imp?.phase === 'running';
+  const busy = Boolean(reading) || check?.phase === 'running' || Boolean(check?.again) || imp?.phase === 'running';
   const locked = busy || imp?.phase === 'done' || imp?.phase === 'error';
 
   // Don't lose a half-sent import to a stray tab close.
@@ -1025,13 +1028,19 @@ function ImportFlow() {
   ].filter(Boolean);
 
   // ── Check (dry run: nothing is saved) ──
-  // numbers: the answer about other voter numbers (a new answer checks again).
-  const runCheck = async (numbers = otherNumber) => {
+  // numbers: the answer about other voter numbers. A new answer checks again
+  // (again): the last check stays on screen, its counts giving way to
+  // "Checking…", so the question — and the keyboard's place in it — stays put.
+  const runCheck = async (numbers = otherNumber, { again = false } = {}) => {
     const acc = { ...ZERO, invalid: [], matches: [], otherNumbers: 0, others: [] };
     const parts = Math.ceil(total / CHECK_CHUNK);
-    setCheck({ phase: 'running', done: 0, total, parts, ...acc });
+    const run = (checkRun.current += 1);
+    const show = (next) => { if (run === checkRun.current) setCheck(next); };
+    const going = (done) => show(again ? (c) => c && { ...c, again: { done, total } } : { phase: 'running', done, total, parts, ...acc });
+    going(0);
     try {
       for (let start = 0; start < total; start += CHECK_CHUNK) {
+        if (run !== checkRun.current) return; // a newer answer is being checked
         const part = partAt(start, CHECK_CHUNK);
         const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true, otherNumber: numbers, ...pastBody });
         acc.created += r.created || 0;
@@ -1047,11 +1056,11 @@ function ImportFlow() {
         for (const x of r.other_number_rows || []) {
           if (acc.others.length < 50) acc.others.push({ ...x, row: part[x.row - 1]?.row ?? x.row });
         }
-        setCheck({ phase: 'running', done: start + part.length, total, parts, ...acc });
+        going(start + part.length);
       }
-      setCheck({ phase: 'done', done: total, total, parts, ...acc });
+      show({ phase: 'done', done: total, total, parts, ...acc });
     } catch (e) {
-      setCheck({ phase: 'error', done: 0, total, parts, ...acc, error: errText(e) });
+      show({ phase: 'error', done: 0, total, parts, ...acc, error: errText(e) });
     }
   };
 
@@ -1179,7 +1188,7 @@ function ImportFlow() {
               {tagClean ? <> · <span className="chip imp-chip">{tagWord(tagClean)}</span></> : null}
             </p>
             {!imp && (
-              <button type="button" className="btn btn-quiet imp-tap" onClick={() => setCheck(null)}>Change</button>
+              <button type="button" className="btn btn-quiet imp-tap" onClick={() => { checkRun.current += 1; setCheck(null); }}>Change</button>
             )}
           </div>
         ) : (
@@ -1508,20 +1517,24 @@ function ImportFlow() {
           <>
             {!imp && (
               <div className="imp-result" role="status">
-                <Counts
-                  items={[
-                    ['New', check.created, 'ok'],
-                    ['Update', check.merged],
-                    ['Same', check.unchanged],
-                    ['Can’t import', check.invalid.length, check.invalid.length ? 'danger' : null],
-                  ]}
-                />
+                {check.again ? (
+                  <p className="imp-line mono">Checking {fmtN(check.again.done)} of {fmtN(check.again.total)}…</p>
+                ) : (
+                  <Counts
+                    items={[
+                      ['New', check.created, 'ok'],
+                      ['Update', check.merged],
+                      ['Same', check.unchanged],
+                      ['Can’t import', check.invalid.length, check.invalid.length ? 'danger' : null],
+                    ]}
+                  />
+                )}
                 {check.parts > 1 && <p className="imp-hint imp-hint--sm">Checked in parts — a few far-apart repeats may count as new.</p>}
                 {check.otherNumbers > 0 && (
                   <OtherNumbers count={check.otherNumbers} rows={check.others} answer={otherNumber}
-                    onAnswer={(v) => { setOtherNumber(v); runCheck(v); }} />
+                    onAnswer={(v) => { setOtherNumber(v); runCheck(v, { again: true }); }} />
                 )}
-                {check.matches.length > 0 && (
+                {!check.again && check.matches.length > 0 && (
                   <Reveal label="See matches">
                     <p className="imp-hint imp-hint--sm">
                       {otherNumber === 'take' && check.otherNumbers > 0
@@ -1541,13 +1554,15 @@ function ImportFlow() {
                     </ul>
                   </Reveal>
                 )}
-                <InvalidList
-                  invalid={check.invalid}
-                  intro={`${plural(check.invalid.length, 'row', 'rows')} can’t be imported. Fix ${check.invalid.length === 1 ? 'it' : 'them'} in the spreadsheet.`}
-                />
-                {nothingToDo && <p className="imp-line">Everyone is already up to date.</p>}
-                {nothingValid && <p className="imp-line">Nothing to import yet. Fix the rows above, or change a column.</p>}
-                {!nothingNew && (
+                {!check.again && (
+                  <InvalidList
+                    invalid={check.invalid}
+                    intro={`${plural(check.invalid.length, 'row', 'rows')} can’t be imported. Fix ${check.invalid.length === 1 ? 'it' : 'them'} in the spreadsheet.`}
+                  />
+                )}
+                {!check.again && nothingToDo && <p className="imp-line">Everyone is already up to date.</p>}
+                {!check.again && nothingValid && <p className="imp-line">Nothing to import yet. Fix the rows above, or change a column.</p>}
+                {!check.again && !nothingNew && (
                   <div className="imp-actions">
                     <button type="button" className="btn btn-primary imp-tap" onClick={() => runImport(0)}>
                       Import {plural(willWrite, 'person', 'people')}
