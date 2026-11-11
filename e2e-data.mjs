@@ -298,6 +298,19 @@ await page.waitForSelector('.pf-sec__btn:has-text("More details")', { timeout: 8
 await page.click('.pf-sec__btn:has-text("More details")').catch(() => {});
 await page.waitForSelector('form[aria-label="Voter number"] input', { timeout: 8000 }).catch(() => {});
 check('her profile: the voter number under More details', (await page.inputValue('form[aria-label="Voter number"] input').catch(() => '')) === 'A123456');
+// One Save on the section (the campaign's fields'): a number typed here is
+// saved when you leave the box, or press Enter — never dropped.
+const vnBox = 'form[aria-label="Voter number"] input';
+const vnOnFile = async () => (await api(`/persons/${veras[0]?.id}/voter-number`)).json?.voter_number;
+await page.fill(vnBox, 'a12-3457');
+await page.keyboard.press('Tab');
+await page.waitForFunction(() => /Saved/.test(document.querySelector('form[aria-label="Voter number"] [role="status"]')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
+check('a number typed on the profile is saved on leaving the box, with no Save of its own',
+  await vnOnFile() === 'A123457' && await page.locator('form[aria-label="Voter number"] button').count() === 0, await vnOnFile());
+await page.fill(vnBox, 'A123456');
+await page.keyboard.press('Enter');
+await page.waitForFunction(() => /Saved/.test(document.querySelector('form[aria-label="Voter number"] [role="status"]')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
+check('…and on Enter', await vnOnFile() === 'A123456', await vnOnFile());
 
 // ── Gifts made in another tool, from its file ──
 const act = (name, body) => page.evaluate(async ([n, b]) => {

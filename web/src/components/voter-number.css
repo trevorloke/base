@@ -1,4 +1,4 @@
-/* A profile's voter number, under More details: one input and its Save. */
+/* A profile's voter number, under More details: one input that saves itself, and what it says. */
 /* First under More details; a rule below it when the campaign's own fields follow. */
 .vn-form {
   display: flex;
@@ -13,7 +13,8 @@
 .vn-field { flex: 0 1 260px; min-width: 0; margin-bottom: 0; }
 .input.vn-input { min-height: 48px; }
 .btn.vn-btn { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; }
-.vn-said { align-self: center; font-size: 14px; color: var(--ok); }
+.vn-said { align-self: flex-end; min-height: 48px; display: inline-flex; align-items: center; font-size: 14px; color: var(--text-2); }
+.vn-said.is-ok { color: var(--ok); }
 .vn-error { flex-basis: 100%; margin: 0; }
 .vn-line { margin: 0 0 var(--s-3); }
 .vn-down { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; font-size: 15px; color: var(--text-2); }
