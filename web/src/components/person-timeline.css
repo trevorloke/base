@@ -37,7 +37,16 @@
   overflow-wrap: anywhere;
 }
 .ptl-link:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
-@media (pointer: coarse), (max-width: 720px) { .ptl-link { display: inline-flex; align-items: center; min-height: 48px; } }
+/* Fingers: 48px to tap, reaching above and below the words, so a row with
+   a link is no taller than one without. */
+@media (pointer: coarse), (max-width: 720px) {
+  .ptl-link {
+    padding-block: 13px;
+    padding-block: max(0px, calc((48px - 1lh) / 2));
+    margin-block: -13px;
+    margin-block: min(0px, calc((1lh - 48px) / 2));
+  }
+}
 
 /* Long words (a subject, what someone wrote) wrap inside the row. */
 .timeline.ptl .what { min-width: 0; }
