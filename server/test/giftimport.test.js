@@ -112,7 +112,7 @@ test('the cells of a gift file are read one way', () => {
 // names are assumed — a column is matched by what its heading means, then
 // by its values, and a row is read into what the server takes.
 test('columns are matched by what their headings mean; rows are read; the check is added up', async () => {
-  const { guessGiftMapping, giftRow, fileRows, callsOf, newTally, addToTally, overLimit, slateOf } = await import('../../web/src/components/GiftColumns.js');
+  const { guessGiftMapping, giftRow, fileRows, callsOf, newTally, addToTally, tallyOf, overLimit, slateOf } = await import('../../web/src/components/GiftColumns.js');
   const slates = [{ code: 'council', label: 'Council' }, { code: 'school', label: 'School board' }];
   const recs = (rows) => rows.map((cells, i) => ({ cells, row: i + 2 }));
   // One export's words…
@@ -206,6 +206,36 @@ test('columns are matched by what their headings mean; rows are read; the check 
   assert.deepEqual(overLimit(t), [{ person_id: 'p1', name: 'Ana Example', year: 2026, slate: 'council', total_cents: 110000, cap_cents: 100000 }]);
   assert.deepEqual(t.invalid, [{ row: 5, text: 'The date is in the future.' }]);
   assert.equal(t.matches[0].differs, true, 'a match under another name is listed first');
+  // Gifts that look typed in here already: counted whether they come in or are left out.
+  addToTally(t, { results: [
+    { state: 'new', person_id: 'p2', person_name: 'Ben Example', by: 'phone', year: 2026, slate: 'council', amount_cents: 1000, typed: true },
+    { state: 'typed', person_id: 'p2', person_name: 'Ben Example', amount_cents: 2000, date: '2026-03-02' },
+  ] }, [{ row: 8, name: 'Ben Example', amount_cents: 1000, date: '2026-03-01' }, { row: 9, name: 'Ben Example', amount_cents: 2000, date: '2026-03-02' }]);
+  assert.deepEqual([t.fresh, t.cents, t.typed, t.typedLeft], [4, 88500, 2, 1], 'one came in, one was left out');
+  assert.deepEqual(t.typedRows, [
+    { row: 8, donor: 'Ben Example', person: 'Ben Example', amount_cents: 1000, date: '2026-03-01', left: false },
+    { row: 9, donor: 'Ben Example', person: 'Ben Example', amount_cents: 2000, date: '2026-03-02', left: true },
+  ]);
+  // Ticking "Leave those out" counts the same answers again, with no second
+  // check: a row that looks typed in leaves the gifts, the total, the donors
+  // found and the limit.
+  const answers = [{ res: { results: [
+    { state: 'new', person_id: 'p3', person_name: 'Cy Example', by: 'email', year: 2026, slate: 'council', amount_cents: 70000, typed: true },
+    { state: 'new', person_id: 'p3', person_name: 'Cy Example', by: 'email', year: 2026, slate: 'council', amount_cents: 20000 },
+    { state: 'new', person_id: 'p4', person_name: 'Di Example', by: 'email', year: 2026, slate: 'council', amount_cents: 5000, typed: true },
+  ], donors: [
+    { person_id: 'p3', name: 'Cy Example', year: 2026, slate: 'council', on_file_cents: 70000, cap_cents: 100000 },
+    { person_id: 'p4', name: 'Di Example', year: 2026, slate: 'council', on_file_cents: 5000, cap_cents: 100000 },
+  ] }, part: [
+    { row: 2, name: 'Cy Example', amount_cents: 70000, date: '2026-03-01' }, { row: 3, name: 'Cy Example', amount_cents: 20000, date: '2026-04-01' },
+    { row: 4, name: 'Di Example', amount_cents: 5000, date: '2026-03-01' },
+  ] }];
+  const both = tallyOf(answers);
+  assert.deepEqual([both.fresh, both.cents, both.people.size, both.typed, both.typedLeft, overLimit(both).length], [3, 95000, 2, 2, 0, 1],
+    'a gift typed in and in the file is counted twice: Cy would be over');
+  const left = tallyOf(answers, { leave: true });
+  assert.deepEqual([left.fresh, left.cents, left.people.size, left.typed, left.typedLeft, overLimit(left).length], [1, 20000, 1, 2, 2, 0],
+    'left out, each is counted once');
 });
 
 test('the check saves nothing and says what would happen', async () => {
@@ -223,7 +253,7 @@ test('the check saves nothing and says what would happen', async () => {
   ]);
   assert.equal(r.dry_run, true);
   assert.deepEqual(states(r), ['new', 'new', 'new', 'waiting', 'waiting', 'invalid', 'invalid', 'invalid', 'invalid']);
-  assert.deepEqual(r.counts, { new: 3, waiting: 2, already: 0, invalid: 4 });
+  assert.deepEqual(r.counts, { new: 3, waiting: 2, already: 0, invalid: 4, typed: 0 });
   assert.equal(r.results[0].person_id, P.ana.id);
   assert.equal(r.results[0].by, 'email');
   assert.equal(r.results[2].person_id, P.ben.id);
@@ -481,6 +511,38 @@ test('a gift left out is listed under the pile, and brought back to wait again w
   assert.deepEqual(states(await check([row({ name: 'Left Out', amount_cents: 100, source_id: 'GL-22' })])), ['already'], 'still the same gift');
   // Out again, as the tests after this one expect.
   ok(await staff.action('gift.importSettle', { ids: [out.id], leave_out: true }));
+});
+
+// A gift typed in here by hand (or given online) that the file has too: the
+// check points to it — the same donor, amount and day as a gift on the books
+// not brought in from a file — and, asked to, leaves those rows out. One gift
+// on the books answers for one row only.
+test('a gift already typed in here: pointed out in the check, and left out when asked', async () => {
+  const gus = await person('Gus', 'Typed', { email: mail('gus') });
+  ok(await treas.action('gift.log', { person_id: gus.id, amount_cents: 25000, date: `${yr}-05-01`, method: 'cheque' }));
+  const rows = [
+    row({ first: 'Gus', last: 'Typed', email: mail('gus'), amount_cents: 25000, date: `${yr}-05-01`, source_id: 'GL-170' }),
+    row({ first: 'Gus', last: 'Typed', email: mail('gus'), amount_cents: 25000, date: `${yr}-05-01`, source_id: 'GL-171' }),
+    row({ first: 'Gus', last: 'Typed', email: mail('gus'), amount_cents: 10000, date: `${yr}-06-01`, source_id: 'GL-172' }),
+  ];
+  const dry = await check(rows);
+  assert.deepEqual(states(dry), ['new', 'new', 'new']);
+  assert.deepEqual(dry.results.map((r) => !!r.typed), [true, false, false], 'one typed gift, one row');
+  assert.equal(dry.counts.typed, 1);
+  const leave = { import_id: randomUUID(), file_name: 'gifts.csv', rows, leave_typed: true };
+  const dryLeft = ok(await treas.action('gift.import', { ...leave, dry_run: true }));
+  assert.deepEqual(states(dryLeft), ['typed', 'new', 'new']);
+  assert.deepEqual([dryLeft.counts.typed, dryLeft.counts.new], [1, 2]);
+  const r = ok(await treas.action('gift.import', leave));
+  assert.deepEqual(states(r), ['typed', 'new', 'new']);
+  assert.deepEqual((await giftsOf(gus.id)).map((g) => [Number(g.amount_cents), g.attrs?.source === 'import']),
+    [[25000, false], [25000, true], [10000, true]], 'the typed gift stays the one of its kind; the second that day comes in');
+  // The file again: the two that came in are here; the one left out is pointed out again.
+  const again = await check(rows);
+  assert.deepEqual(states(again), ['new', 'already', 'already']);
+  assert.equal(again.results[0].typed, true);
+  // A gift brought in from a file is never taken for one typed in.
+  assert.equal((await check([row({ first: 'Gus', last: 'Typed', email: mail('gus'), amount_cents: 10000, date: `${yr}-06-01`, source_id: 'GL-173' })])).results[0].typed, undefined);
 });
 
 // The other tool's export may list the newest gift first. The gifts of one

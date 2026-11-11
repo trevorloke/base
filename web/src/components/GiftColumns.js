@@ -275,19 +275,31 @@ export const callsOf = (rows, { maxRows = 100, maxBytes = 150_000 } = {}) => {
 // gifts would come in, on how many donors, how many wait for a donor, how
 // many are here already, what can't come in — and who the file would take
 // over the limit: what each matched donor has on file for a year on a
-// slate, plus this file's gifts for it.
+// slate, plus this file's gifts for it — and the gifts that look typed in
+// here already (typed: coming in or not; typedLeft: left out, as asked).
+// leave: count those rows as left out (the import then sends leave_typed).
 export const newTally = () => ({
   fresh: 0, waiting: 0, already: 0, cents: 0, invalid: [], matches: [], differs: 0,
-  people: new Set(), years: new Map(),
+  people: new Set(), years: new Map(), typed: 0, typedLeft: 0, typedRows: [],
 });
 const MATCHES_KEPT = 60;
-export const addToTally = (t, res, part) => {
+const donorWords = (sent) => sent.name || [sent.first, sent.last].filter(Boolean).join(' ') || sent.email || '';
+const keepTyped = (t, sent, r, left) => {
+  t.typed += 1;
+  if (left) t.typedLeft += 1;
+  if (t.typedRows.length < MATCHES_KEPT) {
+    t.typedRows.push({ row: sent.row ?? null, donor: donorWords(sent), person: r.person_name, amount_cents: Number(r.amount_cents ?? sent.amount_cents) || 0, date: sent.date ?? r.date ?? null, left });
+  }
+};
+export const addToTally = (t, res, part, { leave = false } = {}) => {
   (res.results || []).forEach((r, i) => {
     const sent = part[i] || {};
     if (r.state === 'invalid') t.invalid.push({ row: sent.row ?? null, text: r.error });
     else if (r.state === 'already' || r.state === 'resent') t.already += 1;
+    else if (r.state === 'typed' || (leave && r.state === 'new' && r.typed)) keepTyped(t, sent, r, true);
     else if (r.state === 'waiting') { t.waiting += 1; t.cents += Number(sent.amount_cents) || 0; }
     else if (r.state === 'new') {
+      if (r.typed) keepTyped(t, sent, r, false);
       t.fresh += 1;
       t.cents += Number(r.amount_cents) || 0;
       t.people.add(r.person_id);
@@ -296,7 +308,7 @@ export const addToTally = (t, res, part) => {
       const y = t.years.get(k) || { person_id: r.person_id, name: r.person_name, year: r.year, slate: r.slate, file_cents: 0, on_file_cents: 0, cap_cents: null };
       y.file_cents += Number(r.amount_cents) || 0;
       t.years.set(k, y);
-      const m = { row: sent.row ?? null, donor: sent.name || [sent.first, sent.last].filter(Boolean).join(' ') || sent.email || '', person: r.person_name, by: r.by, differs: !!r.name_differs };
+      const m = { row: sent.row ?? null, donor: donorWords(sent), person: r.person_name, by: r.by, differs: !!r.name_differs };
       // Those under another name first: they are the ones to look at.
       if (m.differs) t.matches.unshift(m); else if (t.matches.length < MATCHES_KEPT) t.matches.push(m);
       if (t.matches.length > MATCHES_KEPT) t.matches.length = MATCHES_KEPT;
@@ -308,6 +320,9 @@ export const addToTally = (t, res, part) => {
   }
   return t;
 };
+// The check's answers ([{ res, part }], one a call) added up: the same answers
+// count both ways, so "Leave those out" needs no second check.
+export const tallyOf = (answers, opts) => answers.reduce((t, a) => addToTally(t, a.res, a.part, opts), newTally());
 // The donors this file would take over a year's limit (or further over):
 // [{ name, year, slate, total_cents, cap_cents }], the furthest over first.
 export const overLimit = (t) => [...t.years.values()]

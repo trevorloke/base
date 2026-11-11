@@ -226,11 +226,13 @@ than a week after they came off is refused. Contacts are door, phone, text or
   person or leave it out (listed at the pile's foot, *Left out · 3*, to
   bring back whenever). The gift's number in the other tool — or, without
   one, donor, amount, date and how it was paid, as the file writes it — is
-  kept on it, so the same file twice adds nothing. That is all the import
-  knows: a gift already typed in here by hand and also in the file would
-  come in a second time, so void the typed one or take its row out; and a
-  refunded payment the file still lists comes in as a gift — take those
-  rows out first. An import can be taken back whole for a day.
+  kept on it, so the same file twice adds nothing. A row with the same
+  donor, amount and day as a gift already on the books another way (typed
+  at the desk, given online) is pointed out in the check (*1 row looks like
+  a gift already typed in here*), with *Leave it out*; one gift on the
+  books answers for one row. A refunded payment the file still lists comes
+  in as a gift — take those rows out first. An import can be taken back
+  whole for a day.
 - **Filing dates** (Donations → More → *Filing dates*, managers and the
   treasurer): two dates the financial agent types in, each a name and a day
   (*Disclosure statement due*). Donations counts down to each under the big

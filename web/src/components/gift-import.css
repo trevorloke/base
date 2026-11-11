@@ -118,3 +118,16 @@
 .gw-out__list { margin-top: var(--s-2); }
 .gw-out__who { font-weight: 600; }
 .gw-out .btn.gw-out__back { margin-left: auto; }
+
+/* The check: rows that look like a gift already typed in here, and "Leave those out". */
+.gi-typed {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3);
+  border-left: 3px solid var(--warn);
+  background: var(--paper-0);
+  border-radius: 0 var(--r-ctrl) var(--r-ctrl) 0;
+}
+.gi-typed__lead { margin: 0 0 var(--s-1); font-size: 16px; font-weight: 600; }
+.gi-typed .imp-hint { margin: 0; }
+.gi-typed__leave { display: flex; align-items: center; gap: var(--s-2); min-height: 48px; font-size: 15px; cursor: pointer; }
+.gi-typed__leave input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--mark); }

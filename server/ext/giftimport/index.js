@@ -22,7 +22,9 @@
 //                  text, and the screens mark it "Imported".
 //   once only      each gift keeps a key (shared/giftfile.js): the other
 //                  tool's id, or donor + amount + date + method. The same
-//                  file again adds nothing, and says so.
+//                  file again adds nothing, and says so. A row with the
+//                  donor, amount and day of a gift on the books another way
+//                  (typed at the desk) is pointed out, and left out if asked.
 //   taken back     for a day, an import can be taken back whole: its gifts
 //                  are voided through the one void path.
 //

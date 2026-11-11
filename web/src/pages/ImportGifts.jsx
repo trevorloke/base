@@ -27,7 +27,7 @@ import { action, fmtMoney } from '../api.js';
 import { newClientId } from '../offline.js';
 import { readXlsx, toCsv } from '../components/xlsx.js';
 import {
-  GIFT_FIELDS, SKIP, SCI_RE, guessGiftMapping, giftRow, fileRows, callsOf, newTally, addToTally, overLimit,
+  GIFT_FIELDS, SKIP, SCI_RE, guessGiftMapping, giftRow, fileRows, callsOf, tallyOf, overLimit,
   valuesIn, methodOf, slateOf, columnValues,
 } from '../components/GiftColumns.js';
 import { ImportsList, giftWord, invalidateGifts } from '../components/GiftImportBits.jsx';
@@ -139,7 +139,10 @@ function Flow({ me }) {
   const [methodMap, setMethodMap] = useState({}); // a Paid by value (lower-cased) → a method ('' not recorded), by choice
   const [slateMap, setSlateMap] = useState({}); // a Slate value → a slate ('' the first one), by choice
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
-  const [check, setCheck] = useState(null); // { phase, done, total, tally, error }
+  const [check, setCheck] = useState(null); // { phase, done, total, answers: [{ res, part }], error }
+  // Rows that look like a gift already typed in here: left out when ticked
+  // (asked in the check; the same answers are counted again).
+  const [leaveTyped, setLeaveTyped] = useState(false);
   // Step 3 — the import
   const [imp, setImp] = useState(null); // { phase, sent, total, fresh, waiting, already, flagged, invalid, totals, error, resumeAt }
   const run = useRef(null); // the import under way: its id and its calls, the same on a retry
@@ -174,6 +177,7 @@ function Flow({ me }) {
     setMethodMap({});
     setSlateMap({});
     setOrderPick('mdy');
+    setLeaveTyped(false);
     fresh();
   };
   const setHeader = (on) => {
@@ -226,7 +230,7 @@ function Flow({ me }) {
     try { await loadText(pasteText, 'Pasted text'); } finally { setReading(null); }
     setPasteOpen(false);
   };
-  const startOver = () => { setSource(null); setMapping([]); setMethodMap({}); setSlateMap({}); setLoadError(null); setPasteText(''); fresh(); };
+  const startOver = () => { setSource(null); setMapping([]); setMethodMap({}); setSlateMap({}); setLeaveTyped(false); setLoadError(null); setPasteText(''); fresh(); };
 
   const setField = (col, key) => {
     let bump = null;
@@ -286,18 +290,18 @@ function Flow({ me }) {
   const runCheck = async () => {
     const parts = callsOf(file.rows);
     const sum = file.rows.length;
-    const tally = newTally();
+    const answers = [];
     const id = newClientId(); // no import is made by a check
     setCheck({ phase: 'running', done: 0, total: sum });
     try {
       let done = 0;
       for (const part of parts) {
         const res = await action('gift.import', { import_id: id, file_name: source.name, rows: part, dry_run: true });
-        addToTally(tally, res, part);
+        answers.push({ res, part });
         done += part.length;
         setCheck({ phase: 'running', done, total: sum });
       }
-      setCheck({ phase: 'done', done: sum, total: sum, tally });
+      setCheck({ phase: 'done', done: sum, total: sum, answers });
     } catch (e) {
       setCheck({ phase: 'error', done: 0, total: sum, error: errText(e) });
     }
@@ -306,18 +310,22 @@ function Flow({ me }) {
   // ── Import: a call at a time, all under one import ──
   const runImport = async (from = 0) => {
     if (from === 0) {
-      run.current = { id: newClientId(), parts: callsOf(file.rows), acc: { fresh: 0, waiting: 0, already: 0, flagged: 0, invalid: [], totals: null } };
+      run.current = {
+        id: newClientId(), parts: callsOf(file.rows), leave: leaveTyped,
+        acc: { fresh: 0, waiting: 0, already: 0, flagged: 0, typedIn: 0, typedLeft: 0, invalid: [], totals: null },
+      };
     }
-    const { id, parts, acc } = run.current;
+    const { id, parts, acc, leave } = run.current;
     const sum = parts.reduce((n, p) => n + p.length, 0);
     const sentBefore = (i) => parts.slice(0, i).reduce((n, p) => n + p.length, 0);
     setImp({ phase: 'running', sent: sentBefore(from), total: sum, ...acc });
     let i = from;
     try {
       for (; i < parts.length; i += 1) {
-        const res = await action('gift.import', { import_id: id, file_name: source.name, rows: parts[i] });
+        const res = await action('gift.import', { import_id: id, file_name: source.name, rows: parts[i], leave_typed: leave });
         (res.results || []).forEach((r, k) => {
-          if (r.state === 'new') { acc.fresh += 1; if (r.flagged) acc.flagged += 1; }
+          if (r.state === 'new') { acc.fresh += 1; if (r.flagged) acc.flagged += 1; if (r.typed) acc.typedIn += 1; }
+          else if (r.state === 'typed') acc.typedLeft += 1;
           else if (r.state === 'waiting') acc.waiting += 1;
           else if (r.state === 'already') acc.already += 1;
           else if (r.state === 'invalid') acc.invalid.push({ row: parts[i][k]?.row ?? null, text: r.error });
@@ -334,7 +342,7 @@ function Flow({ me }) {
   };
 
   const checked = check?.phase === 'done';
-  const t = checked ? check.tally : null;
+  const t = useMemo(() => (checked ? tallyOf(check.answers, { leave: leaveTyped }) : null), [checked, check, leaveTyped]);
   const willBring = t ? t.fresh + t.waiting : 0;
   const cantImport = t ? [...file.unread, ...t.invalid].sort((a, b) => (a.row ?? 0) - (b.row ?? 0)) : [];
   const over = t ? overLimit(t) : [];
@@ -522,7 +530,7 @@ function Flow({ me }) {
               </div>
             ) : (
               <div className="imp-actions">
-                <button type="button" className="btn btn-primary imp-tap" onClick={runCheck} disabled={!ready || busy || locked || file.rows.length === 0}>
+                <button type="button" className="btn btn-primary imp-tap" onClick={() => runCheck()} disabled={!ready || busy || locked || file.rows.length === 0}>
                   Check {plural(total, 'row', 'rows')}
                 </button>
                 <span className="imp-line imp-line--inline">{fmtN(usedCount)} of {fmtN(source.headers.length)} columns</span>
@@ -562,6 +570,27 @@ function Flow({ me }) {
                     <p className="imp-hint imp-hint--sm">Their gifts still come in, flagged — Donations lists them under Needs you.</p>
                   </div>
                 )}
+                {t.typed > 0 && (
+                  <div className="gi-typed">
+                    <p className="gi-typed__lead">{plural(t.typed, 'row looks like a gift', 'rows look like gifts')} already typed in here</p>
+                    <p className="imp-hint imp-hint--sm">The same donor, amount and day as a gift on the books.</p>
+                    <label className="gi-typed__leave">
+                      <input type="checkbox" checked={leaveTyped} onChange={(e) => setLeaveTyped(e.target.checked)} />
+                      <span>Leave {t.typed === 1 ? 'it' : 'those'} out</span>
+                    </label>
+                    <Reveal label="See them">
+                      {t.typed > t.typedRows.length && <p className="imp-hint imp-hint--sm">First {fmtN(t.typedRows.length)} of {fmtN(t.typed)}.</p>}
+                      <ul className="imp-matches__list">
+                        {t.typedRows.map((x, i) => (
+                          <li key={`${x.row}-${i}`}>
+                            <span className="mono muted">Row {fmtN(x.row)}</span> {x.donor || '—'} → <strong>{x.person}</strong>
+                            <span className="muted"> · {fmtMoney(x.amount_cents)} · {dayWords(x.date)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </Reveal>
+                  </div>
+                )}
                 {t.waiting > 0 && <p className="imp-hint imp-hint--sm">{plural(t.waiting, 'gift has', 'gifts have')} no sure donor on file. {t.waiting === 1 ? 'It waits' : 'They wait'} under Donations → Needs you for you to pick.</p>}
                 {file.repeats > 0 && <p className="imp-map__note is-warn gi-note">{plural(file.repeats, 'row repeats', 'rows repeat')} a gift number from earlier in the file — left out as the same gift.</p>}
                 {file.alike > 0 && <p className="imp-hint imp-hint--sm">{plural(file.alike, 'row reads', 'rows read')} like an earlier one (same donor, amount and day) — each comes in as its own gift.</p>}
@@ -581,8 +610,8 @@ function Flow({ me }) {
                 )}
                 <InvalidList invalid={cantImport}
                   intro={`${plural(cantImport.length, 'row', 'rows')} can’t come in. Fix ${cantImport.length === 1 ? 'it' : 'them'} in the spreadsheet and import the file again — nothing is added twice.`} />
-                {willBring === 0 && t.already > 0 && <p className="imp-line">Nothing new — every gift in this file is already here.</p>}
-                {willBring === 0 && t.already === 0 && <p className="imp-line">Nothing to import yet. Fix the rows above, or change a column.</p>}
+                {willBring === 0 && t.already + t.typedLeft > 0 && <p className="imp-line">Nothing new — every gift in this file is already here.</p>}
+                {willBring === 0 && t.already + t.typedLeft === 0 && <p className="imp-line">Nothing to import yet. Fix the rows above, or change a column.</p>}
                 {willBring > 0 && (
                   <div className="imp-actions">
                     <button type="button" className="btn btn-primary imp-tap" onClick={() => runImport(0)}>Import {giftWord(willBring)}</button>
@@ -614,6 +643,8 @@ function Flow({ me }) {
                       )}
                       {(held?.flagged ?? imp.flagged) > 0 && <li>{plural(held?.flagged ?? imp.flagged, 'gift is', 'gifts are')} over the year’s limit — under Needs you on Donations</li>}
                       {imp.already > 0 && <li>{plural(imp.already, 'was', 'were')} already here</li>}
+                      {imp.typedLeft > 0 && <li>{plural(imp.typedLeft, 'was', 'were')} left out: already typed in here</li>}
+                      {imp.typedIn > 0 && <li>{plural(imp.typedIn, 'looked like a gift', 'looked like gifts')} already typed in here — {imp.typedIn === 1 ? 'it' : 'they'} came in too</li>}
                       <li>No receipts were made or emailed: the other tool did that.</li>
                     </ul>
                     <InvalidList invalid={imp.invalid}

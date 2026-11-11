@@ -644,7 +644,10 @@ one tap away under **More**.
   **Needs you** as *Over limit*, and **More → Receipts** has no new number.
   The gift with no donor on file is there too (*1 imported gift needs a
   donor*): tap it, then pick the record, *Find them on file*, or *Add as a
-  new person*. Import the same file again: *Nothing new*. Back on the
+  new person*. Import the same file again: *Nothing new*. Log one of a
+  new file's gifts at the desk first (same donor, amount and day): its
+  check says *1 row looks like a gift already typed in here*, and ticking
+  *Leave it out* takes it off the gifts and the total at once. Back on the
   import screen, **Take back** (for a day) voids the lot.
 - **Donations → More → Filing dates** — type *Disclosure statement due* and
   a date three weeks out, **Save dates**: Donations counts the days down

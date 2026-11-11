@@ -155,8 +155,8 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
 4. Gifts taken in another tool this year: **Donations → More → Import a
    file** (a manager or the treasurer), before the first gift is taken
    here, so the year's contribution limit counts them. Take refunded
-   payments out of the file, and any gift already typed in here by hand
-   (it would come in twice). Check first; the gifts with no sure donor
+   payments out of the file. Check first: a gift already typed in here by
+   hand is pointed out, to leave out; the gifts with no sure donor
    wait under **Needs you** to be settled. Then the financial agent types
    their filing dates under **Donations → More → Filing dates** — base.win
    knows none.
