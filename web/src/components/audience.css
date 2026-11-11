@@ -61,8 +61,10 @@
 /* The rules a list's form keeps under "More rules", and the sheet's inline fields */
 .au-rules { margin: 0 0 var(--s-3); }
 .au-rules__body { padding-top: var(--s-2); }
-/* Doubled to win over app.css's .form-row > .field (it loads later): one to a row on a phone */
-.au-rules .au-rules__body > .field { flex: 1 1 220px; }
+/* Weighted to win over app.css's .form-row > .field and lists.css's
+   .ls-filter .form-row .field, whatever order they load in: one to a row
+   on a phone, three at a desk, and a long choice is never cut off */
+.au-rules .au-rules__body.form-row > .field { flex: 1 1 220px; }
 .au-inline { margin: var(--s-2) 0 0; max-width: 260px; }
 .pp-group .form-row > .field { flex: 1 1 200px; margin-bottom: 0; }
 .pp-sheet .au-inline .input, .pp-group .form-row .input, .au-rules .input { min-height: 48px; }

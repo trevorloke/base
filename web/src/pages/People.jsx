@@ -352,6 +352,7 @@ const addRules = (qs, f) => { for (const k of RULE_KEYS) if (f[k]) qs.set(k, f[k
 // The server didn't answer (no signal, or it's down behind its proxy) —
 // not the same as an answer that says something went wrong.
 const noReply = (err) => !(err instanceof ApiError) || [0, 502, 503, 504].includes(err.status);
+const noSignalNow = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 // Rating filter: three bands + Unrated on the first look; who an opposed
 // voter backs ("Voting for…") under More. The value goes to the server as is.
@@ -778,9 +779,11 @@ function PeopleList() {
   // The count: the server's total, Loading…, or Unavailable. With no answer
   // at all (no signal, or the server down) it can only be what's on screen.
   const plain = (k) => (k === 1 ? 'person' : 'people');
+  // (A screen loaded with no signal at all never hears an "offline" event:
+  // the browser's own word counts too.)
   const count = total.data ? <><strong className="mono">{fmt(total.data.total)}</strong> {plain(total.data.total)}</>
     : total.isError && !noReply(total.error) ? <Unavailable onRetry={() => total.refetch()} />
-      : (total.fetchStatus === 'paused' || total.isError) && persons.data && !stale
+      : (noSignalNow() || total.fetchStatus === 'paused' || total.isError) && persons.data && !stale
         ? <><strong className="mono">{rows.length >= LIMIT ? `${fmt(LIMIT)}+` : fmt(rows.length)}</strong> {plain(rows.length)}{partial ? ' in the kept list' : ''}</>
         : LOADING;
   // No list at all (no answer, nothing kept): no count, no empty table — the error line says it.
@@ -1344,7 +1347,7 @@ function CallsScreen() {
         // The next part didn't come: say so, and offer it again.
         <p className="error" role="alert">
           {noReply(last.error)
-            ? <>{typeof navigator !== 'undefined' && navigator.onLine === false ? 'No signal' : 'No answer'} — the rest of your list loads when you’re back online · <button type="button" className="btn au-retry" onClick={() => last.refetch()}>Try again</button></>
+            ? <>{noSignalNow() ? 'No signal' : 'No answer'} — the rest of your list loads when you’re back online · <button type="button" className="btn au-retry" onClick={() => last.refetch()}>Try again</button></>
             : <Unavailable onRetry={() => last.refetch()} />}
         </p>
       ) : !current && (pending || more) ? (
@@ -1365,7 +1368,8 @@ function CallsScreen() {
           <div className="cl-progress">
             <span>
               {toCall != null ? <><strong className="mono">{fmt(toCall)}</strong> to {noun}</>
-                : total.isError ? <Unavailable onRetry={() => total.refetch()} /> : LOADING}
+                : noSignalNow() || total.fetchStatus === 'paused' ? <><strong className="mono">{fmt(queue.length)}</strong> to {noun} · more when you’re back online</>
+                  : total.isError ? <Unavailable onRetry={() => total.refetch()} /> : LOADING}
             </span>
             <div className="cl-bar" role="progressbar" aria-label={`${fmt(calledHere)} of ${fmt(calledHere + (toCall ?? queue.length))} done`}
               aria-valuemin={0} aria-valuemax={calledHere + (toCall ?? queue.length)} aria-valuenow={calledHere}>
