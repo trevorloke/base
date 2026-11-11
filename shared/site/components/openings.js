@@ -131,8 +131,9 @@ export function Openings({ uid, variant = 'shifts', action, hidden = {}, items =
   const rsvp = (item, primary) => html`<${Rsvp} uid=${uid} item=${item} action=${action} hidden=${hidden} me=${me} setMe=${setMe}
     state=${states[item.id]} setState=${setState} primary=${primary} />`;
 
-  const whereLine = (it) => (it.where ? html`<p className="event-where">
-    ${it.map ? html`<a href=${it.map} target="_blank" rel="noopener noreferrer"><${Icon} name="pin" size=${16} />${it.where}<span className="visually-hidden"> (map, opens in a new tab)</span></a>` : it.where}
+  // A place with no words of its own (a pin nobody has named) is its map.
+  const whereLine = (it) => (it.where || it.map ? html`<p className="event-where">
+    ${it.map ? html`<a href=${it.map} target="_blank" rel="noopener noreferrer"><${Icon} name="pin" size=${16} />${it.where || 'See the map'}<span className="visually-hidden"> (map, opens in a new tab)</span></a>` : it.where}
   </p>` : null);
 
   return html`<div className=${cx('openings', `openings--${variant}`)}>

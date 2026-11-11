@@ -44,6 +44,7 @@
 // person who tapped, a reminder's by nobody (the system).
 import { z } from 'zod';
 import { addDays, dayOf, fmtIn, instantOf, isDay, weekStart, weekdayIndex } from '@starbase/shared/dayparts';
+import { pinPoint, whereWords } from '@starbase/shared/shiftkinds';
 import { httpError } from '../../actions/util.js';
 import { newId, runAction } from '../../lib/events.js';
 import { runHooks } from '../../lib/hooks.js';
@@ -86,16 +87,19 @@ export const noticeWords = ({ kind, shifts, workspaceName, tz = DEFAULT_TZ, this
     : thisWeek || !week ? 'Your shifts this week'
       : `Your shifts for the week of ${fmtIn(instantOf(week, '12:00', tz), tz, { month: 'long', day: 'numeric' })}`;
   const subject = kind !== 'reminder' ? head : n === 1 ? `Tomorrow: ${shifts[0].title}` : `Tomorrow: your ${n} shifts`;
+  // A place nobody has named is its map, never its coordinates as words.
   const block = (s) => [
     s.title,
     fmtIn(s.starts_at, tz, LONG) + (s.ends_at ? ` – ${fmtIn(s.ends_at, tz, TIME)}` : ''),
-    s.location ? `Where: ${s.location}` : null,
+    s.location ? `Where: ${whereWords(s.location)}` : null,
     s.instructions ? `Instructions: ${s.instructions}` : null,
     s.link ? `Details: ${s.link}` : null,
   ].filter(Boolean).join('\n');
   // A made name already says where ("Burma Shave — King George Blvd & 88 Ave").
   const line = (s) => {
-    const where = s.location && !String(s.title).toLowerCase().includes(String(s.location).toLowerCase()) ? `, ${s.location}` : '';
+    const where = !s.location ? ''
+      : pinPoint(s.location) ? `, ${whereWords(s.location)}`
+        : !String(s.title).toLowerCase().includes(String(s.location).toLowerCase()) ? `, ${s.location}` : '';
     return `${fmtIn(s.starts_at, tz, SHORT)}: ${s.title}${where}`;
   };
   const lines = shifts.slice(0, TEXT_LINES).map(line);

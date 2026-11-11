@@ -45,13 +45,27 @@ export const kindOf = (shift) => shiftKind(shift?.kind) || shiftKind(ROLE_KIND[s
 
 // A point on the map that nothing could name (no corner, address or door
 // near it) is saved by its coordinates: "Pin at 49.1630, −122.8447". Those
-// stay in the place's details and behind its map link; on a card, a chip
-// and in a made name it is said as "Pinned place" until someone names it.
+// stay in the place's details and behind its map link; wherever a shift's
+// place is shown it is said as "Pinned place" until someone names it, and
+// a message read away from the app (an email, a text) gives its map.
 const coord = (n) => Number(n).toFixed(4).replace('-', '−'); // a real minus sign, as people write coordinates
 export const PINNED_PLACE = 'Pinned place';
 export const pinName = (lat, lng) => `Pin at ${coord(lat)}, ${coord(lng)}`;
 export const isPinName = (name) => /^Pin at [−-]?\d{1,3}\.\d{4}, [−-]?\d{1,3}\.\d{4}$/.test(String(name ?? '').trim());
 export const placeLabel = (name) => (isPinName(name) ? PINNED_PLACE : String(name ?? '').trim());
+// Where a pin's words say it is: { lat, lng }, or null for any other words.
+export const pinPoint = (name) => {
+  if (!isPinName(name)) return null;
+  const [lat, lng] = String(name).trim().slice('Pin at '.length).split(', ').map((x) => Number(x.replace('−', '-')));
+  return { lat, lng };
+};
+// A shift's place in a message: its words, or for a pin nobody has named a
+// map to tap (the one the app's own map links open).
+export const mapUrl = ({ lat, lng }) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+export const whereWords = (name) => {
+  const pin = pinPoint(name);
+  return pin ? `see the map — ${mapUrl(pin)}` : String(name ?? '').trim();
+};
 
 // The name a shift is given when nobody types one: "Burma Shave — King
 // George Blvd & 88 Ave", or just "Phone bank" with no place. No weekday in

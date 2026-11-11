@@ -57,7 +57,7 @@
   justify-content: space-between;
   gap: var(--s-2);
   max-width: 230px;
-  min-height: 40px;
+  min-height: 44px;
   padding: var(--s-1) var(--s-3);
   font: inherit;
   font-size: 14px;
@@ -143,8 +143,9 @@
 .sb-cap { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-2); }
 .sb-cap[data-full] { color: var(--ok); }
 
-/* Name chips: tap/drag the name to move; × takes them off */
-.sb-chips { list-style: none; margin: 0; padding: 0 var(--s-1) var(--s-1); display: flex; flex-wrap: wrap; gap: 3px; }
+/* Name chips: tap/drag the name to move; × takes them off. The name and
+   its × are each a full 44px target with a mouse too (48px to a finger). */
+.sb-chips { list-style: none; margin: 0; padding: 0 var(--s-1) var(--s-1); display: flex; flex-wrap: wrap; gap: 4px; }
 .sb-chip {
   display: inline-flex;
   align-items: stretch;
@@ -160,9 +161,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 3px 4px 3px 9px;
+  min-height: 44px;
+  padding: 0 4px 0 12px;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-1);
   background: none;
   border: 0;
@@ -175,9 +177,10 @@
 .sb-chip__name[aria-pressed='true'] { background: var(--mark); color: var(--mark-ink); }
 .sb-chip__x {
   flex: none;
-  width: 24px;
+  width: 44px;
+  min-height: 44px;
   padding: 0;
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1;
   color: var(--text-3);
   background: none;

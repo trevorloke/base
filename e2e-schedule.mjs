@@ -10,11 +10,13 @@
 // — with not one key pressed and no text field ever focused. No shift is
 // given a number nobody asked for: a card says who is on it, and "3 of 4"
 // only once a target is tapped under More. A point nothing could name reads
-// "Pinned place", with "Name it". A card's sheet moves a shift to another
+// "Pinned place" — on its card, its chip and its own page, never its
+// coordinates — with "Name it". A card's sheet moves a shift to another
 // day, changes its hours, tells the people on it, puts it on the website,
 // calls it off, and changes or ends "this and the following" of a repeating
 // slot; a card dragged to another day moves, with Undo. A name tapped in
-// the people strip stays in hand from card to card; someone who signed up on
+// the people strip stays in hand from card to card (a person's chip and its
+// × a full 44px with a mouse too); someone who signed up on
 // the website is there. "More" tells everyone on the week's shifts (the
 // count first), turns the evening reminders on and off, and copies the week
 // to the next; an empty week offers "Copy last week". At 1440×900 and at
@@ -25,7 +27,8 @@
 // targets, no sideways scroll. Last, a volunteer on a phone: the list a day
 // a heading, "Count me in" on the row, a warning that never refuses, the
 // place's map, and a Mainstreet shift that opens Mainstreeting with its
-// place filled in. Every claim on a screen is checked against the API, and
+// place filled in — or, at a point nobody has named, asks where. Every
+// claim on a screen is checked against the API, and
 // the books verify.
 //
 //   (cd web && npm run build)
@@ -394,6 +397,23 @@ try {
   const pinned = (await D.api(`/shifts/${tueCards[1].id}`)).json.shift;
   check('server: its name says "Pinned place"; the coordinates stay its words and its pin; no target', pinned.title === 'Mainstreet — Pinned place' && /^Pin at 49\.\d{4}, −122\.\d{4}$/.test(pinned.location)
     && Math.abs(pinned.place_lat - 49.15) < 0.05 && pinned.need === null, JSON.stringify([pinned.title, pinned.location, pinned.place_lat, pinned.need]));
+  // Its own page (another tab, so the week stays as it is) says the same: the coordinates only behind the map link.
+  const pp = await desk.newPage();
+  const PP = wire(pp, 'desk-shift');
+  await pp.goto(`${ADMIN}/shifts/${tueCards[1].id}`, { waitUntil: 'domcontentloaded' });
+  await pp.waitForSelector('.ops-lines .sch-maplink', { timeout: 10000 });
+  const pinHref = await pp.locator('.sch-maplink').getAttribute('href');
+  check('the shift’s page: "Pinned place · Map ↗" — its coordinates only in the map link — and "Name it" for the desk',
+    (await PP.text('.sch-maplink')) === 'Pinned place · Map ↗' && /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=49\.\d+,-122\.\d+$/.test(pinHref || '')
+    && !/Pin at|49\.\d{4}, /.test(await PP.text('main.page')) && (await pp.locator('.ops-lines .sch-pinned button:has-text("Name it")').count()) === 1,
+    `${await PP.text('.ops-lines')} | ${pinHref}`);
+  check('…and its Mainstreeting asks where, never handed the coordinates', (await pp.locator('a:has-text("Start mainstreeting")').getAttribute('href')) === '/admin/mainstreet?ask=1',
+    await pp.locator('a:has-text("Start mainstreeting")').getAttribute('href'));
+  await PP.shot('05c-shift-page-pinned-1440');
+  await pp.locator('.ops-lines .sch-pinned button:has-text("Name it")').click();
+  check('"Name it" there is one tap to the name; Cancel puts it away', await pp.evaluate(() => document.activeElement?.id === 'sch-pin-name'));
+  await pp.locator('.ops-lines .sch-pinned button:has-text("Cancel")').click();
+  await pp.close();
 
   // ── 6. A morning and an afternoon canvass on Saturday: the turf is the place ──
   await plus(sat).click();
@@ -588,6 +608,10 @@ try {
   await page.locator(`.sch-card[data-shift="${monCards[0].id}"] .sch-card__head`).click();
   await until(async () => (await cards(mon))[0].people.length === 1);
   check('tap a card: Asha is on Monday’s Burma Shave — the card says "1 on"', (await cards(mon))[0].people.join() === 'Asha E.' && (await cards(mon))[0].count === '1 on', JSON.stringify(await cards(mon)));
+  // At a desk too, with a mouse: a person's chip and its × are a full 44px target each, and so is a name in the strip.
+  const deskChip = await page.evaluate(() => { const b = (sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }; return { name: b('.sch-card .sb-chip__name'), x: b('.sch-card .sb-chip__x'), person: b('.sb-person') }; });
+  check('1440, a mouse: a person’s chip and its × are at least 44px, and a name in the strip', deskChip.name[0] >= 44 && deskChip.name[1] >= 44 && deskChip.x[0] >= 44 && deskChip.x[1] >= 44 && deskChip.person[1] >= 44,
+    JSON.stringify(deskChip));
   check('…and the name is still in hand', await pressed(ashaBtn) && (await page.locator('.sb-hand').count()) === 1 && (await page.locator('.sch-sheet').count()) === 0);
   await page.locator(`.sch-card[data-shift="${tueCards[0].id}"] .sch-card__head`).click();
   await until(async () => (await cards(tue))[0].people.length === 1);
@@ -1073,6 +1097,27 @@ try {
   check('a Mainstreet shift opens Mainstreeting with its place filled in — "Where are you?" is not asked', new URL(vp.url()).pathname === '/mainstreet'
     && /^at Newton Exchange/i.test(await V.text('.ms-where')) && (await vp.locator('#ms-place').count()) === 0, `${vp.url()} ${await V.text('.ms-where')}`);
   await V.shot('53-vol-mainstreeting-390');
+  // A Mainstreet at a point nobody has named: "Pinned place" on the row and its page, never the
+  // coordinates — and Mainstreeting asks where, rather than keep the last shift's place.
+  const spot = (await D.api('/actions/place.save', { name: 'Pin at 49.2000, −122.9000', lat: 49.2, lng: -122.9, source: 'map' })).json.place;
+  const pinMs = (await D.api('/actions/shift.createMany', { kind: 'mainstreet', place_id: spot.id, days: [wed], start: '07:00', end: '09:00' })).json.shifts[0];
+  await vp.goto(`${BASE}/shifts`, { waitUntil: 'domcontentloaded' });
+  await vp.waitForSelector(`.sch-vrow[data-shift="${pinMs.id}"]`, { timeout: 10000 });
+  const pinRow = (await vrow(pinMs.id).innerText()).replace(/\s+/g, ' ').trim();
+  check('a row at a point nobody has named says "Pinned place"', pinRow === 'Mainstreet 7–9 am · Pinned place Count me in', pinRow);
+  await vrow(pinMs.id).locator('.sch-vrow__join').tap();
+  await until(async () => /You’re on ✓/.test(await vrow(pinMs.id).innerText()));
+  await vrow(pinMs.id).locator('.ops-row').tap();
+  await vp.waitForSelector('.ops-lines .sch-maplink', { timeout: 10000 });
+  check('its page: "Pinned place · Map ↗", the coordinates only in the link — and no "Name it" on a volunteer’s phone',
+    (await V.text('.sch-maplink')) === 'Pinned place · Map ↗' && /query=49\.2,-122\.9$/.test(await vp.locator('.sch-maplink').getAttribute('href'))
+    && !/Pin at|49\.2000/.test(await V.text('main.page')) && (await vp.locator('button:has-text("Name it")').count()) === 0, await V.text('.ops-lines'));
+  await V.shot('54-vol-pinned-shift-390');
+  await vp.locator('a:has-text("Start mainstreeting")').tap();
+  await vp.waitForSelector('#ms-place', { timeout: 10000 });
+  check('…and Mainstreeting asks "Where are you?" — not the last shift’s place, never the coordinates', (await vp.inputValue('#ms-place')) === ''
+    && /Where are you\?/.test(await V.text('main.page')) && !/Newton Exchange|Pin at/.test(await V.text('main.page')), (await V.text('main.page')).slice(0, 200));
+  await V.shot('55-vol-mainstreeting-asks-390');
   await vctx.close();
 
   // ── 20. Today's "Needs you": a shift short of the target someone set — never one nobody gave a number ──

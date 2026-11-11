@@ -5,7 +5,9 @@
 //              upcoming shifts the desk made public that are events (the
 //              Event kind: shared/shiftkinds.js); spots_left null when
 //              there's no limit (booked = assigned or confirmed, as the app
-//              counts); lat/lng: the pin of its saved place, when it has one
+//              counts); lat/lng: the pin of its saved place, when it has one.
+//              A place nobody has named has no words ('') — only its pin:
+//              the card says "See the map", never its coordinates
 //   shifts     the same rows for every other kind — the volunteer openings.
 //              A shift made before kinds has none and is in both lists, as
 //              it always was
@@ -16,7 +18,7 @@
 //
 // A few small indexed reads; the page cache (cache.js) keeps the drawn page.
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
-import { SHIFT_KIND_CODES, SITE_KINDS } from '@starbase/shared/shiftkinds';
+import { SHIFT_KIND_CODES, SITE_KINDS, pinPoint } from '@starbase/shared/shiftkinds';
 import { capFor } from '../../lib/cap.js';
 import { paymentsReady } from './payments.js';
 
@@ -53,11 +55,16 @@ export const loadEvents = async (q, ws, limit = 24, list = 'event') => (await q.
     where s.workspace_id = $1 and s.deleted_at is null and s.public and coalesce(s.ends_at, s.starts_at) >= now()
       and (s.kind is null or s.kind = any($3::text[]) or not (s.kind = any($4::text[])))
     order by s.starts_at, s.id limit $2`, [ws.id, limit, SITE_KINDS[list] || SITE_KINDS.event, SHIFT_KIND_CODES],
-)).rows.map((s) => ({
-  id: s.id, title: s.title, starts_at: iso(s.starts_at), ends_at: iso(s.ends_at), location: s.location || '',
-  spots_left: s.capacity ? Math.max(0, s.capacity - s.booked) : null,
-  lat: s.lat == null ? null : Number(s.lat), lng: s.lng == null ? null : Number(s.lng),
-}));
+)).rows.map((s) => {
+  // Words that are only a pin's coordinates: no words, the pin (its place's,
+  // else the words' own) gives the card its map.
+  const pin = pinPoint(s.location);
+  return {
+    id: s.id, title: s.title, starts_at: iso(s.starts_at), ends_at: iso(s.ends_at), location: pin ? '' : s.location || '',
+    spots_left: s.capacity ? Math.max(0, s.capacity - s.booked) : null,
+    lat: s.lat == null ? pin?.lat ?? null : Number(s.lat), lng: s.lng == null ? pin?.lng ?? null : Number(s.lng),
+  };
+});
 
 export const loadData = async (q, ws, { posts = 24 } = {}) => {
   const [postRows, events, shifts, members, sigs, campaigns, limits, ready] = [

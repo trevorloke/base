@@ -12,6 +12,7 @@ import { verifyChain } from '../lib/events.js';
 import { runDueJobs } from '../lib/jobs.js';
 import { _setClockForTest } from '../ext/texting/rules.js';
 import { _setPerRunForTest, noticeWords, remindAt } from '../ext/schedule/tell.js';
+import { shiftMessage } from '../lib/notify.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const TZ = 'America/Vancouver';
@@ -148,6 +149,23 @@ test('the words: a week’s shifts in order on the campaign’s clock; a reminde
   const long = noticeWords({ kind: 'week', shifts: many, workspaceName: 'X', tz: TZ, thisWeek: true }).text;
   assert.match(long, /Shift 8\n\+ 3 more — ask us for the full list\n— X$/);
   assert.ok(long.length <= 1000);
+});
+
+test('a place nothing could name: a message gives its map — never its coordinates as words', () => {
+  const pinned = { title: 'Mainstreet — Pinned place', starts_at: '2030-05-07T14:00:00Z', ends_at: '2030-05-07T16:00:00Z', location: 'Pin at 49.1451, −122.8599' };
+  const map = 'https://www.google.com/maps/search/?api=1&query=49.1451,-122.8599';
+  const week = noticeWords({ kind: 'week', shifts: [pinned], workspaceName: 'Imagine Example', tz: TZ, thisWeek: true });
+  assert.ok(week.email.includes(`\nWhere: see the map — ${map}\n`), week.email);
+  assert.equal(week.text.split('\n')[1], `Tue, May 7, 7:00 a.m.: Mainstreet — Pinned place, see the map — ${map}`);
+  const reminder = noticeWords({ kind: 'reminder', shifts: [pinned], workspaceName: 'Imagine Example', tz: TZ });
+  // A shift's own notice ("Notify everyone", "Tell them" on a card) says the same.
+  const one = shiftMessage(pinned, 'Imagine Example', TZ);
+  assert.ok(one.includes(`\nWhere: see the map — ${map}\n`), one);
+  for (const words of [week.email, week.text, reminder.email, reminder.text, one]) {
+    assert.doesNotMatch(words, /Pin at|49\.1451, /, 'the coordinates are only inside the map link');
+  }
+  // A named place is its words, as before.
+  assert.match(shiftMessage({ ...pinned, location: 'Newton Exchange' }, 'X', TZ), /\nWhere: Newton Exchange\n/);
 });
 
 test('“Tell everyone on this week’s shifts”: the count first; the write only queues; a job sends, outside any write', async () => {

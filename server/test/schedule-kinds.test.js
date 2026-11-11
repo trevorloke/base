@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { VOLUNTEER_ROLE_CODES } from '@starbase/shared/canvass';
 import {
-  SHIFT_KINDS, SHIFT_KIND_CODES, isPinName, kindOf, madeTitle, pinName, placeLabel, repeatDays, shiftKind, siteListOf,
+  SHIFT_KINDS, SHIFT_KIND_CODES, isPinName, kindOf, madeTitle, pinName, pinPoint, placeLabel, repeatDays, shiftKind, siteListOf, whereWords,
 } from '@starbase/shared/shiftkinds';
 import { isClock, isDay } from '@starbase/shared/dayparts';
 
@@ -79,6 +79,12 @@ test('a point nothing could name is "Pinned place" on a card, a chip and in a ma
   assert.equal(placeLabel('  Campaign office '), 'Campaign office', 'a named place is its name');
   assert.equal(placeLabel(null), '');
   assert.equal(madeTitle('mainstreet', 'Pin at 49.1451, −122.8599'), 'Mainstreet — Pinned place');
+  // Where it is, read back from its words; and in a message, its map.
+  assert.deepEqual(pinPoint('Pin at 49.1451, −122.8599'), { lat: 49.1451, lng: -122.8599 });
+  assert.deepEqual(pinPoint(pinName(-33.8688, 151.2093)), { lat: -33.8688, lng: 151.2093 });
+  assert.equal(pinPoint('Campaign office'), null);
+  assert.equal(whereWords('Pin at 49.1451, −122.8599'), 'see the map — https://www.google.com/maps/search/?api=1&query=49.1451,-122.8599');
+  assert.equal(whereWords(' Campaign office '), 'Campaign office', 'a named place is its words');
 });
 
 test('no kind brings a number of its own: a suggestion is only ever offered', () => {

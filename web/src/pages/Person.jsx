@@ -19,6 +19,7 @@ import {
 } from '@starbase/shared/canvass';
 import { ratingByCode } from '@starbase/shared/scale';
 import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
+import { placeLabel } from '@starbase/shared/shiftkinds';
 import RatingButtons, { OutcomeButtons, RatingChip, focusRating, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { PersonAnswers, answersTail, usePersonAnswers, useSurvey } from '../components/SurveyQuestions.jsx';
 import { apiGet, fmtMoney, fmtDate, noAnswer } from '../api.js';
@@ -815,7 +816,7 @@ function Shifts({ shifts }) {
           <span>
             <Link to={`/shifts/${s.id}`}>{s.title}</Link>
             <br />
-            <span className="muted mono" style={{ fontSize: 12 }}>{fmtWhen(s.starts_at)}{s.location ? ` · ${s.location}` : ''}</span>
+            <span className="muted mono" style={{ fontSize: 12 }}>{fmtWhen(s.starts_at)}{s.location ? ` · ${placeLabel(s.location)}` : ''}</span>
           </span>
           <span className={STATUS_CHIP[s.status] || 'chip'}>{String(s.status || '').replace('_', ' ')}</span>
         </li>

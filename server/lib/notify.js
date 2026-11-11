@@ -10,6 +10,7 @@
 
 import { DEFAULT_TZ } from './org.js';
 import { fmtIn } from '@starbase/shared/dayparts';
+import { whereWords } from '@starbase/shared/shiftkinds';
 export const emailConfigured = () => !!process.env.RESEND_API_KEY;
 export const textConfigured = () =>
   !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
@@ -94,13 +95,14 @@ export const sendText = async ({ to, body }) => {
 // Times render in the campaign's zone, never the server's (a UTC host would
 // otherwise tell Surrey volunteers the wrong hour) — on the shared clock
 // (shared/dayparts.js), so a server with old time-zone rules says the same
-// hour the screens do.
+// hour the screens do. A place nobody has named is a map link, never its
+// coordinates as words (shared/shiftkinds.js).
 export const shiftMessage = (shift, workspaceName, timeZone = DEFAULT_TZ) => {
   const when = fmtIn(shift.starts_at, timeZone, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const lines = [
     `You're scheduled: ${shift.title}`,
     when + (shift.ends_at ? ` – ${fmtIn(shift.ends_at, timeZone, { hour: 'numeric', minute: '2-digit' })}` : ''),
-    shift.location ? `Where: ${shift.location}` : null,
+    shift.location ? `Where: ${whereWords(shift.location)}` : null,
     shift.instructions ? `Instructions: ${shift.instructions}` : null,
     shift.link ? `Details: ${shift.link}` : null,
     `— ${workspaceName}`,

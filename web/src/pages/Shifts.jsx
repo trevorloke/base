@@ -68,7 +68,7 @@ import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchP
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES, SHIFT_STATUSES } from '@starbase/shared/canvass';
 import { dayOf, fromInput, toInput } from '@starbase/shared/dayparts';
-import { kindOf, shortBy } from '@starbase/shared/shiftkinds';
+import { isPinName, kindOf, mapUrl, pinPoint, placeLabel, shortBy } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
 import { queueAction, undoQueued, useOutbox } from '../offline.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
@@ -76,6 +76,7 @@ import { NeedsSignal, NeedsSignalLine, useOnline } from '../components/NoSignal.
 import ShiftsBoard from './ShiftsBoard.jsx';
 import ShiftCrew from './ShiftCrew.jsx';
 import { Unavailable } from './ScheduleSheet.jsx';
+import { NameIt } from './ScheduleWhere.jsx';
 import { KindIcon, cardWords, kindVars } from '../components/ShiftKind.jsx';
 import { TurfPicker, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import { normalizeLink, safeHref } from '../components/shiftLink.js';
@@ -897,9 +898,6 @@ function NameRow({ a, isMe }) {
   );
 }
 
-// A pin on a map (the phone's own maps app opens it): the same link Signs uses.
-const mapHref = (lat, lng) => `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-
 function ShiftDetail({ id, canDesk, me }) {
   const queryClient = useQueryClient();
   const tz = zoneOf(me);
@@ -1054,13 +1052,18 @@ function ShiftDetail({ id, canDesk, me }) {
   const checkedIn = onIt && active.some((a) => isMine(a) && a.status === 'completed');
   const over = new Date(shift.ends_at || shift.starts_at) < new Date();
   const kind = kindOf(shift);
-  const pinned = shift.place_lat != null && shift.place_lng != null;
+  // Its pin (its saved place's, else the words of a pin nobody has named):
+  // the place opens the phone's own maps app — the link Signs uses too.
+  const pin = shift.place_lat != null && shift.place_lng != null ? { lat: shift.place_lat, lng: shift.place_lng } : pinPoint(shift.location);
+  const unnamed = isPinName(shift.location);
   // Another shift of theirs at the same time (booked, or waiting on this phone).
   const clash = canDesk ? null : (mineQ.data?.shifts ?? []).find((x) => x.id !== shift.id
     && (x.mine || waitingSelf(outbox.items, x.id)?.name === 'shift.join') && !isOver(x, new Date()) && overlaps(x, shift)) || null;
-  // A Mainstreet shift opens Mainstreeting with its place filled in.
+  // A Mainstreet shift opens Mainstreeting with its place filled in — or,
+  // at a point nobody has named, asking "Where are you?" (never the
+  // coordinates, nor the place kept on the phone from another day).
   const mainstreet = kind.code === 'mainstreet' && !over
-    ? `/mainstreet${shift.location ? `?place=${encodeURIComponent(shift.location.slice(0, 120))}` : ''}` : null;
+    ? `/mainstreet${!shift.location ? '' : unnamed ? '?ask=1' : `?place=${encodeURIComponent(shift.location.slice(0, 120))}`}` : null;
   const offered = allowed.data?.actions ?? [];
   const canJoin = offered.includes('shift.join');
   const canLeave = offered.includes('shift.leave');
@@ -1344,9 +1347,12 @@ function ShiftDetail({ id, canDesk, me }) {
           </span>
         )}
         <span className="when">{longDay(shift.starts_at, tz)} · {timeRange(shift.starts_at, shift.ends_at, tz)}</span>
-        {shift.location && (pinned
-          ? <a className="sch-maplink" href={mapHref(shift.place_lat, shift.place_lng)} target="_blank" rel="noopener noreferrer" aria-label={`${shift.location} — open the map`}>{shift.location} <span aria-hidden="true">· Map ↗</span></a>
+        {shift.location && (pin
+          ? <a className="sch-maplink" href={mapUrl(pin)} target="_blank" rel="noopener noreferrer" aria-label={`${placeLabel(shift.location)} — open the map`}>{placeLabel(shift.location)} <span aria-hidden="true">· Map ↗</span></a>
           : <span>{shift.location}</span>)}
+        {canDesk && unnamed && shift.place_id && !over && (
+          <NameIt bare key={shift.place_id} place={{ id: shift.place_id, name: shift.location }} disabled={!online} onNamed={refresh} />
+        )}
         {shift.instructions && <span className="note">{shift.instructions}</span>}
         {shift.link && (href
           ? <a href={href} target="_blank" rel="noopener noreferrer">{shift.link.replace(/^https?:\/\//i, '')}</a>

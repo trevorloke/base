@@ -64,8 +64,9 @@ export const whereName = (v) => v.place?.name || v.words || v.turfs.map((t) => t
 const pinCoords = (name) => String(name || '').trim().replace(/^Pin at /, '');
 
 // "Name it": the optional name for a place nothing could name. Only this
-// asks for the keyboard, and only after its own tap.
-function NameIt({ place, onNamed }) {
+// asks for the keyboard, and only after its own tap. `bare`: just the
+// button (a shift's page already says "Pinned place" beside its map link).
+export function NameIt({ place, onNamed, bare = false, disabled = false }) {
   const queryClient = useQueryClient();
   const [typed, setTyped] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -86,18 +87,18 @@ function NameIt({ place, onNamed }) {
     <div className="sch-pinned" role="group" aria-label="Pinned place">
       {typed === null ? (
         <>
-          <span className="sch-note">{PINNED_PLACE} · {pinCoords(place.name)}</span>
-          <button type="button" className="btn btn-quiet ops-tap" onClick={() => setTyped('')}>Name it</button>
+          {!bare && <span className="sch-note">{PINNED_PLACE} · {pinCoords(place.name)}</span>}
+          <button type="button" className="btn btn-quiet ops-tap" disabled={disabled} onClick={() => setTyped('')}>Name it</button>
         </>
       ) : (
         <>
           <div className="field sch-rename">
             <label htmlFor="sch-pin-name">Name</label>
             <input id="sch-pin-name" className="input" autoFocus maxLength={200} placeholder="What people call it" value={typed}
-              onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim() && !busy) save(); }} />
+              onChange={(e) => setTyped(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && typed.trim() && !busy && !disabled) save(); }} />
           </div>
           <div className="ops-actions">
-            <button type="button" className="btn ops-solid ops-tap" disabled={busy || !typed.trim()} onClick={save}>{busy ? 'Saving…' : 'Save name'}</button>
+            <button type="button" className="btn ops-solid ops-tap" disabled={busy || disabled || !typed.trim()} onClick={save}>{busy ? 'Saving…' : 'Save name'}</button>
             <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={() => { setTyped(null); setError(null); }}>Cancel</button>
           </div>
           {error && <p className="error" role="alert">{error}</p>}

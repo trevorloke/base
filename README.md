@@ -405,7 +405,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   link, *We need* (a target by tap — what the kind usually wants is only
   the first number offered), *Limit sign-ups to* and *Show on the website*
   sit under *More*, with the long form as *More options*. A point nothing
-  could name reads *Pinned place*, with *Name it*. Tap a card to change its
+  could name reads *Pinned place* — on its card, its chip and its own page,
+  with *Name it* — never its coordinates. Tap a card to change its
   day, time or place, *Tell them*, put it *On the website* or *Call off* —
   for a repeating slot, *This one* or *This and the following* — or drag it
   to another day (*Undo*). **People** are a strip across the top of the
@@ -423,7 +424,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   in* on the row itself — asked about first when it overlaps a shift they
   are on, never refused. A place with a pin opens a map, and a Mainstreet
   shift has *Start mainstreeting*, which opens Mainstreeting with its place
-  filled in.
+  filled in (at a point nobody has named yet it asks *Where are you?*).
 - **Scheduling, underneath** (`server/ext/schedule`): a shift has a
   **kind** — Canvass, Phone bank, Mainstreet, Burma Shave, Lit drop, Signs,
   Event, Office, Other (`shared/shiftkinds.js`) — that brings its usual
@@ -432,8 +433,9 @@ than a week after they came off is refused. Contacts are door, phone, text or
   first). A point tapped on the map is named by the server: the nearest
   corner, else the nearest address (the BC Address Geocoder), else the
   nearest door on file, else its coordinates (said as *Pinned place* on
-  cards, chips and made names until someone names it) — a geocoder that is
-  slow or down never holds a save. A shift's name is made from the two ("Burma
+  every screen and in made names until someone names it; an email or text
+  gives its map link instead, the website *See the map*) — a geocoder that
+  is slow or down never holds a save. A shift's name is made from the two ("Burma
   Shave — King George Blvd & 88 Ave") unless one is typed. `shift.createMany`
   makes every chosen day in one write — at one time or several (`slots`) —
   and can repeat it weekly (200 shifts and 26 weeks a call; a day that

@@ -198,7 +198,9 @@ under `events` only, any other kind under `shifts` only — a 6:30 am Burma
 Shave is not the home page's "Next event". A shift made before kinds has
 none and is in both, as it always was. Each list is its own two dozen.
 `lat`/`lng` are the pin of the shift's saved place (a point picked on the
-map), null for words alone: a card with a pin links to a map.
+map), null for words alone: a card with a pin links to a map. A point
+nobody has named has no words (`location` is `''`, never its
+coordinates): its card's link says "See the map".
 
 ## Rendering
 

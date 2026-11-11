@@ -70,6 +70,17 @@ test('the pages: Volunteer shows the openings, Events the events, and the home p
   assert.doesNotMatch(home, /Burma Shave/, 'the next event is not a 6:30 am sign wave');
 });
 
+test('a place nothing could name: the card says "See the map" — its coordinates only inside the link', async () => {
+  const spot = ok(await mgr.action('place.save', { name: 'Pin at 49.0200, −123.2500', lat: 49.02, lng: -123.25, source: 'map' })).place;
+  made.spot = ok(await mgr.action('shift.createMany', { kind: 'mainstreet', place_id: spot.id, days: [ahead(1)], start: '07:00', end: '09:00', public: true })).shifts[0];
+  const row = (await loadData(db, await siteWorkspace(db, ws))).shifts.find((e) => e.id === made.spot.id);
+  assert.deepEqual([row.title, row.location, row.lat, row.lng], ['Mainstreet — Pinned place', '', 49.02, -123.25], 'no words for where — the pin is');
+  const volunteer = (await hit('/site/volunteer')).text;
+  assert.match(volunteer, /Mainstreet — Pinned place/);
+  assert.match(volunteer, /<a href="https:\/\/www\.openstreetmap\.org\/\?mlat=49\.02000&amp;mlon=-123\.25000#map=16\/49\.02000\/-123\.25000"[^>]*>(<svg[\s\S]*?<\/svg>)?See the map/, 'the link says “See the map”');
+  assert.doesNotMatch(volunteer, /Pin at|49\.0200, /, 'never the coordinates as its name');
+});
+
 test('signing up works from either list, and a kind changed later moves the shift', async () => {
   ok(await send('rsvp', { first_name: 'Ana', email: 'ana.site@example.org', shift_id: made.wave.id }));
   ok(await send('rsvp', { first_name: 'Ana', email: 'ana.site@example.org', shift_id: made.picnic.id }));
