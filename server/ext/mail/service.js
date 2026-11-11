@@ -33,8 +33,11 @@ export const emailService = (base) => {
     state: missing.length ? 'missing' : 'ready',
     detail: has('MAIL_FROM') ? `From ${env('MAIL_FROM')}` : p.noFrom,
     // Once it can send: where its delivery events go, and its domain's records.
+    // `hook`, not `webhook` (the name Stripe's row uses for the same block):
+    // a page cached from before this row had one prints Stripe's own sentence
+    // over whatever comes as `webhook`. Under another name it shows nothing.
     ...(activeProvider() === p ? {
-      webhook: { url: hookUrl(base, p), events: p.hook.events, where: p.hook.where, ...(hookOn(p) ? {} : { note: p.hook.secret }) },
+      hook: { url: hookUrl(base, p), events: p.hook.events, where: p.hook.where, ...(hookOn(p) ? {} : { note: p.hook.secret }) },
       domainPanel: true,
     } : {}),
   };

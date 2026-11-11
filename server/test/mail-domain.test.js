@@ -62,15 +62,18 @@ test('the Email row follows the sender: its name, the settings it needs, where i
   // Nothing set: Resend, as before; no webhook or domain to show yet.
   let row = await emailRow();
   assert.deepEqual([row.name, row.state, row.missing], ['Email (Resend)', 'missing', ['RESEND_API_KEY', 'MAIL_FROM']]);
-  assert.equal(row.webhook, undefined);
+  assert.deepEqual([row.hook, row.webhook], [undefined, undefined]);
   assert.equal(row.domainPanel, undefined);
   // Resend, set up.
   useResend();
   row = await emailRow();
   assert.deepEqual([row.name, row.state, row.missing, row.domainPanel], ['Email (Resend)', 'ready', [], true]);
-  assert.deepEqual(row.webhook, { url: HOOK, events: EVENTS, where: 'Resend: Webhooks → Add webhook', note: 'Then set RESEND_WEBHOOK_SECRET to the webhook’s signing secret.' });
+  assert.deepEqual(row.hook, { url: HOOK, events: EVENTS, where: 'Resend: Webhooks → Add webhook', note: 'Then set RESEND_WEBHOOK_SECRET to the webhook’s signing secret.' });
+  // Never under `webhook`: a page cached from before this row had one prints Stripe's own sentence
+  // ("in Stripe: Developers → Webhooks → Add endpoint") over whatever comes under that name.
+  assert.equal(row.webhook, undefined, 'an old cached page shows nothing here, not Stripe’s instructions over the email address');
   process.env.RESEND_WEBHOOK_SECRET = 'whsec_c2V0';
-  assert.equal((await emailRow()).webhook.note, undefined, 'the secret is in: nothing more to say');
+  assert.equal((await emailRow()).hook.note, undefined, 'the secret is in: nothing more to say');
   // SendGrid, named: its own settings, its own address.
   env({ MAIL_PROVIDER: 'sendgrid' });
   row = await emailRow();
@@ -79,10 +82,11 @@ test('the Email row follows the sender: its name, the settings it needs, where i
   useSendgrid();
   row = await emailRow();
   assert.deepEqual([row.name, row.state, row.domainPanel], ['Email (SendGrid)', 'ready', true]);
-  assert.equal(row.webhook.url, 'https://base.example/hooks/mail/sendgrid');
-  assert.deepEqual(row.webhook.events, ['delivered', 'bounce', 'dropped', 'deferred', 'spamreport']);
-  assert.equal(row.webhook.where, 'SendGrid: Settings → Mail Settings → Event Webhooks');
-  assert.match(row.webhook.note, /SENDGRID_WEBHOOK_PUBLIC_KEY/);
+  assert.equal(row.hook.url, 'https://base.example/hooks/mail/sendgrid');
+  assert.deepEqual(row.hook.events, ['delivered', 'bounce', 'dropped', 'deferred', 'spamreport']);
+  assert.equal(row.hook.where, 'SendGrid: Settings → Mail Settings → Event Webhooks');
+  assert.match(row.hook.note, /SENDGRID_WEBHOOK_PUBLIC_KEY/);
+  assert.equal(row.webhook, undefined);
   // Only SendGrid's key set, no MAIL_PROVIDER: it is the one with a key.
   env({ SENDGRID_API_KEY: 'SG.domain_secret' });
   row = await emailRow();

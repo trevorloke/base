@@ -42,6 +42,8 @@ function Row({ s, online }) {
         )}
         {s.domainPanel && <SendingDomain online={online} />}
         {s.panel === 'mailchimp' && <MailchimpPanel online={online} onChanged={() => setRes(null)} />}
+        {/* The email sender's block comes as `hook`: a page cached from before it existed prints Stripe's sentence over any `webhook`. */}
+        {s.hook && <Webhook w={s.hook} />}
         {s.webhook && <Webhook w={s.webhook} />}
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
       </div>
@@ -52,9 +54,9 @@ function Row({ s, online }) {
   );
 }
 
-// A service that calls back (Stripe, the email sender): the address to
-// paste into it, where there (w.where), the events to tick, and what to set
-// here afterwards (w.note), when there is something.
+// A service that calls back (Stripe: s.webhook; the email sender: s.hook):
+// the address to paste into it, where there (w.where), the events to tick,
+// and what to set here afterwards (w.note), when there is something.
 function Webhook({ w }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
