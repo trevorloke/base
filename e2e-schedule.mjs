@@ -12,7 +12,8 @@
 // only once a target is tapped under More. A point nothing could name reads
 // "Pinned place" — on its card, its chip and its own page, never its
 // coordinates — with "Name it". A card's sheet moves a shift to another
-// day, changes its hours, tells the people on it, puts it on the website,
+// day, changes its hours, tells the people on it (and closing the sheet
+// "Tell them" opened from the toast leaves the week up), puts it on the website,
 // calls it off, and changes or ends "this and the following" of a repeating
 // slot; a card dragged to another day moves, with Undo. A name tapped in
 // the people strip stays in hand from card to card (a person's chip and its
@@ -676,6 +677,34 @@ try {
   await page.waitForSelector('.sch-sheet .sch-ask', { timeout: 8000 });
   check('"Tell them" asks first', /Email and text 1 person this shift as it is now\?/.test(await D.text('.sch-ask')), await D.text('.sch-ask'));
   await D.shot('13-card-tell-1440');
+  // Closing the sheet that toast opened — by ✕, then by Back — leaves the manager on the week.
+  const onWeek = async () => new URL(page.url()).pathname === '/admin/shifts' && new URL(page.url()).searchParams.get('week') === MON
+    && (await page.locator('.sch-day').count()) === 7 && (await page.locator('.sch-sheet').count()) === 0;
+  await page.locator('.sch-sheet .sch-x').click();
+  await sheetGone();
+  check('"Tell them" from the toast, then ✕: the sheet closes and the week is still there', await onWeek(), page.url());
+  await openCard(monCards[0].id);
+  await chip('6:30–8:30 am').click();
+  await go.click();
+  await sheetGone();
+  await page.locator('.sb-toast button:has-text("Tell them")').click();
+  await page.waitForSelector('.sch-sheet .sch-ask', { timeout: 8000 });
+  await page.goBack();
+  await sheetGone();
+  check('…and from the toast, then Back: the week, not the page before it', await onWeek(), page.url());
+  await page.goForward();
+  await page.waitForSelector('.sch-sheet .sch-ask', { timeout: 8000 }).catch(() => {});
+  check('…Forward opens it again, still asking', await page.locator('.sch-sheet .sch-ask').count() === 1);
+  await page.keyboard.press('Escape');
+  await sheetGone();
+  check('…Escape closes it: the week', await onWeek(), page.url());
+  await openCard(monCards[0].id);
+  await chip('4–6 pm').click();
+  await go.click();
+  await sheetGone();
+  await openCard(monCards[0].id);
+  await page.locator('.sch-sheet .sch-tools button:has-text("Tell them")').click();
+  await page.waitForSelector('.sch-sheet .sch-ask', { timeout: 8000 });
   const sentBefore = texts.length;
   await page.locator('.sch-ask button:has-text("Send")').click();
   await until(async () => (await page.locator('.sch-tools .ops-done').count()) === 1);
@@ -878,6 +907,34 @@ try {
   await sheetGone();
   const lateNow = (await D.api(`/shifts/${late.id}`)).json.shift;
   check('…"9 pm", Save: 9–10:30 pm that day', iso(lateNow.starts_at) === at(lateDay, '21:00') && iso(lateNow.ends_at) === at(lateDay, '22:30'), `${lateNow.starts_at} ${lateNow.ends_at}`);
+  // An evening event that ends at midnight: a length tapped by mistake can be taken back.
+  const gala = (await D.api('/actions/shift.create', { title: 'Volunteer night', kind: 'event', location: 'Campaign office',
+    starts_at: at(addDays(lateDay, 1), '22:00'), ends_at: at(addDays(lateDay, 2), '00:00') })).json.shift;
+  await D.go(`/shifts?week=${lateWeek}`);
+  await page.waitForSelector(`.sch-card[data-shift="${gala.id}"]`, { timeout: 10000 });
+  await openCard(gala.id);
+  check('10 pm to midnight: its sheet opens on "10 pm" and "2 h"; Save waits for a change', await pressed(startChip('10 pm')) && await pressed(lengthChip('2 h')) && await go.isDisabled(), await D.text('.sch-sheet .sch-when'));
+  await lengthChip('1 h').click();
+  check('…"1 h" tapped: Save is ready, and its own "2 h" can still be tapped', await pressed(lengthChip('1 h')) && !(await go.isDisabled()) && !(await lengthChip('2 h').isDisabled()));
+  await lengthChip('2 h').click({ timeout: 5000 }).catch(() => {});
+  check('…"2 h" again: its own hours are back, nothing to save', await pressed(lengthChip('2 h')) && !(await pressed(lengthChip('1 h'))) && await go.isDisabled());
+  await page.locator('.sch-sheet .sch-x').click();
+  await sheetGone();
+  const galaNow = (await D.api(`/shifts/${gala.id}`)).json.shift;
+  check('…closed unsaved: still 10 pm to midnight', iso(galaNow.starts_at) === at(addDays(lateDay, 1), '22:00') && iso(galaNow.ends_at) === at(addDays(lateDay, 2), '00:00'), `${galaNow.starts_at} ${galaNow.ends_at}`);
+  // A shift with no end: a length tapped by mistake comes off again.
+  const open = (await D.api('/actions/shift.create', { title: 'Sign crew', kind: 'signs', location: 'Campaign office', starts_at: at(addDays(lateDay, -2), '11:00') })).json.shift;
+  await D.go(`/shifts?week=${lateWeek}`);
+  await page.waitForSelector(`.sch-card[data-shift="${open.id}"]`, { timeout: 10000 });
+  await openCard(open.id);
+  const noLength = async () => (await page.locator('.sch-sheet [aria-label="How long"] .sch-chip[aria-pressed="true"]').count()) === 0;
+  check('11 am with no end: its sheet opens on "11 am" and no length; Save waits for a change', await pressed(startChip('11 am')) && await noLength() && await go.isDisabled(), await D.text('.sch-sheet .sch-when'));
+  await lengthChip('2 h').click();
+  check('…"2 h" tapped: Save is ready', await pressed(lengthChip('2 h')) && !(await go.isDisabled()));
+  await lengthChip('2 h').click();
+  check('…"2 h" again: no end, as it was, nothing to save', await noLength() && await go.isDisabled());
+  await page.locator('.sch-sheet .sch-x').click();
+  await sheetGone();
 
   // ── 17. A laptop on Toronto time shows the campaign's hours ──
   const east = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, timezoneId: 'America/Toronto', locale: 'en-CA', storageState: await desk.storageState() });

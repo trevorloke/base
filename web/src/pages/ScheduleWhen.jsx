@@ -94,6 +94,15 @@ export default function When({ kind, value, onChange, many = false, own = null }
   // past midnight; its own start puts its own hours back.
   const pickStart = (c) => setOther(ownOpen && c === ownOpen.start && c !== other.start ? ownOpen
     : { start: c, minutes: shown && !addClock(c, shown) ? 60 : shown });
+  // Its own length at its own start is its own hours again — the way back
+  // from a length tapped by mistake, even where it runs to midnight or past.
+  // A shift with no end has no chip to go back to: there the chosen length,
+  // tapped again, comes off.
+  const ownLength = (m) => !!ownOpen && other?.start === ownOpen.start && m === ownMinutes;
+  const pickLength = (m) => {
+    if (shown !== m) setOther(ownLength(m) ? ownOpen : { minutes: m });
+    else if (own && !ownMinutes) setOther({ minutes: null });
+  };
 
   return (
     <div className="sch-when">
@@ -124,8 +133,8 @@ export default function When({ kind, value, onChange, many = false, own = null }
           <div className="sch-chips" role="group" aria-label="How long">
             {lengths.map(([m, words]) => (
               <button key={m} type="button" className="sch-chip" aria-pressed={shown === m}
-                disabled={!!other.start && !addClock(other.start, m) && shown !== m}
-                onClick={() => { if (shown !== m) setOther({ minutes: m }); }}>
+                disabled={!!other.start && !addClock(other.start, m) && shown !== m && !ownLength(m)}
+                onClick={() => pickLength(m)}>
                 {words}
               </button>
             ))}

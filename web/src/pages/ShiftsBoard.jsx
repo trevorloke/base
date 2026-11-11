@@ -238,10 +238,26 @@ export default function ShiftsBoard({ me, onSheet }) {
   const location = useLocation();
   const navigate = useNavigate();
   const step = location.state?.sheet || null;
+  // A toast's button is made on one screen and tapped on another ("Saved ·
+  // Tell them": made with the sheet open, tapped once it has closed), so
+  // both ways ask which step the browser is on now, not which it was on
+  // when the button was made — or opening would take the week's own place
+  // in the history, and closing would then leave Shifts.
+  const stepNow = useRef(step);
+  stepNow.current = step;
   // (Another card while one is open takes its step's place.)
   const stepIn = (sheet, extra) => navigate({ pathname: location.pathname, search: location.search },
-    { state: { sheet, ...extra }, replace: step === sheet });
-  const stepOut = (sheet, close) => { if (step === sheet) navigate(-1); else close?.(); };
+    { state: { sheet, ...extra }, replace: stepNow.current === sheet });
+  // (A step is taken back once: ✕ tapped twice, or Escape held, would
+  // otherwise go back twice — off the week.)
+  const leaving = useRef(false);
+  useEffect(() => { leaving.current = false; }, [location.key]);
+  const stepOut = (sheet, close) => {
+    if (stepNow.current !== sheet) { close?.(); return; }
+    if (leaving.current) return;
+    leaving.current = true;
+    navigate(-1);
+  };
   // The card whose sheet is open: { id, tell } (tell: straight to "Tell
   // them"); and the phone's "People" sheet.
   const open = step === 'card' && location.state.id ? { id: location.state.id, tell: !!location.state.tell } : null;
