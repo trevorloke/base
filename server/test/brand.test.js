@@ -33,6 +33,7 @@ after(() => setEnv(saved));
 
 const INDEX = readFileSync(new URL('../../web/index.html', import.meta.url), 'utf8');
 const MANIFEST = JSON.parse(readFileSync(new URL('../../web/public/manifest.webmanifest', import.meta.url), 'utf8'));
+const FONTS_CSS = readFileSync(new URL('../../web/public/fonts/fonts.css', import.meta.url), 'utf8');
 const blockOf = (html) => /<style id="brand">([^<]*)<\/style>/.exec(html)?.[1] ?? null;
 const dataOf = (html) => { const m = /<script id="brand-data">window\.__BRAND__=([^<]*)<\/script>/.exec(html); return m ? JSON.parse(m[1]) : null; };
 
@@ -121,6 +122,12 @@ test('a saved brand: its shades before the stylesheets, its data for script, its
   assert.match(page, /status-bar-style" content="default"/, 'dark status-bar text on a yellow bar');
   assert.match(page, /<title>Riverside — base\.win<\/title>/);
   assert.match(page, /apple-mobile-web-app-title" content="Riverside"/);
+  // Its heading face, the website's Montserrat: asked for early, so the
+  // service worker keeps it for no signal (Inter and Barlow are the app's own).
+  const MONT = '<link rel="preload" as="font" type="font/woff2" href="/site-assets/fonts/montserrat-latin.woff2" crossorigin data-brand />';
+  assert.ok(page.includes(MONT) && page.indexOf(MONT) < page.indexOf('<link rel="stylesheet"'), 'Montserrat asked for before the stylesheets');
+  assert.ok(FONTS_CSS.includes("url('/site-assets/fonts/montserrat-latin.woff2')"), 'the file the app declares');
+  assert.doesNotMatch(brandHtml(INDEX, brandFor({ brand: { ...SAVED, heading: 'barlow-condensed' } }, 'base')), /as="font"/);
   assert.equal(brandHtml(page, b), page, 'branded once, never twice');
   assert.equal(brandHtml(page, brandFor({}, 'base')), brandHtml(INDEX, brandFor({}, 'base')), 'back to the preset leaves nothing behind');
 

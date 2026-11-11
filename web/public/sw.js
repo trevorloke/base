@@ -8,7 +8,8 @@
  *               offline too, and files from older builds are dropped.
  *   Its face    The fonts (/fonts/*) and the campaign's own pictures — the
  *               logo the page asks for early (<link … data-brand>, written
- *               by server/lib/brand.js) — are kept with the build, so the
+ *               by server/lib/brand.js; so is a heading face from the
+ *               website's folder) — are kept with the build, so the
  *               app opens with no signal looking like itself. They are not
  *               named by their content, so they are fetched again whenever
  *               the page changes (a new build, a new brand).
@@ -157,7 +158,9 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   const path = inside(url.pathname);
-  if (path.startsWith('/assets/') || path.startsWith('/fonts/')) {
+  // The fonts include a heading face the app takes from the website's own
+  // folder (Montserrat, when the campaign's brand asks for it).
+  if (path.startsWith('/assets/') || path.startsWith('/fonts/') || path.startsWith('/site-assets/fonts/')) {
     event.respondWith(asset(req));
     return;
   }

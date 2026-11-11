@@ -217,7 +217,9 @@ const forScript = (b) => ({
 // What goes into the page's head for a brand: its shades (none when they are
 // app.css's own), a saved brand's data, and its logo asked for early — which
 // is also how the service worker learns which pictures to keep for no
-// signal (sw.js).
+// signal (sw.js). So is a heading face from outside the app's /fonts/: the
+// website's Montserrat (web/public/fonts/fonts.css declares it).
+const MONTSERRAT = '/site-assets/fonts/montserrat-latin.woff2';
 const brandHead = (b) => {
   const out = [];
   if (b.css !== BASE_CSS) out.push(`<style id="brand">${b.css}</style>`);
@@ -225,6 +227,7 @@ const brandHead = (b) => {
   // On a dark sidebar both logos are on screen whatever the scheme.
   if (b.logo) out.push(`<link rel="preload" as="image" href="${attr(b.logo)}" data-brand${b.logoDark && !b.sideDark ? ' media="(prefers-color-scheme: light)"' : ''} />`);
   if (b.logoDark) out.push(`<link rel="preload" as="image" href="${attr(b.logoDark)}" data-brand${b.sideDark ? '' : ' media="(prefers-color-scheme: dark)"'} />`);
+  if (b.heading === 'montserrat') out.push(`<link rel="preload" as="font" type="font/woff2" href="${MONTSERRAT}" crossorigin data-brand />`);
   return out.join('');
 };
 
@@ -241,7 +244,7 @@ export const brandHtml = (html, brand = presetBrand()) => {
   let out = html.replace(/<html\b([^>]*)>/i, (m, rest) => `<html${rest.replace(/\sdata-brand="[^"]*"/i, '')} data-brand="${attr(b.key)}">`);
   // Branded once, never twice.
   out = out.replace(/<style id="brand">[^<]*<\/style>/gi, '').replace(/<script id="brand-data">[^<]*<\/script>/gi, '')
-    .replace(/<link rel="preload" as="image"[^>]*\sdata-brand[^>]*>/gi, '');
+    .replace(/<link rel="preload" as="(?:image|font)"[^>]*\sdata-brand[^>]*>/gi, '');
   out = put(out, /<title>[^<]*<\/title>/i, `<title>${attr(b.title || APP_NAME)}</title>`);
   out = put(out, /<meta\s+name="apple-mobile-web-app-title"\s+content="[^"]*"\s*\/?>/i,
     `<meta name="apple-mobile-web-app-title" content="${attr(b.shortName || APP_NAME)}" />`);

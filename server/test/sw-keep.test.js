@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { brandHtml } from '../lib/brand.js';
+import { brandHtml, brandFor } from '../lib/brand.js';
 import { rewriters } from '../lib/mount.js';
 import { BRANDS } from '@starbase/shared/brand';
 
@@ -43,10 +43,18 @@ const worker = (base, net) => {
     if (body === null) return new Response('<!doctype html><div id="root"></div>', { status: 200, headers: { 'content-type': 'text/html' } }); // the app's page, for a file that is not there
     return new Response(body, { status: 200, headers: { 'content-type': /\.css$/.test(path) ? 'text/css' : 'application/octet-stream' } });
   };
-  const self = { registration: { scope: `${ORIGIN}${base}/` }, location: { origin: ORIGIN }, addEventListener() {}, skipWaiting: async () => {}, clients: { claim: async () => {} } };
+  const on = {};
+  const self = { registration: { scope: `${ORIGIN}${base}/` }, location: { origin: ORIGIN }, addEventListener(type, fn) { on[type] = fn; }, skipWaiting: async () => {}, clients: { claim: async () => {} } };
   const api = new Function('self', 'caches', 'fetch', `${SW}\nreturn { refsIn, syncAssets, ASSETS };`)(self, caches, fetch);
   const kept = async () => [...(stores.get(api.ASSETS)?.keys() || [])].map((u) => new URL(u).pathname).sort();
-  return { ...api, asked, kept, stores };
+  // A request the page makes, through the worker's own fetch handler: its
+  // answer, or null when the worker leaves it to the network.
+  const answer = async (path) => {
+    let res = null;
+    on.fetch({ request: new Request(`${ORIGIN}${path}`), respondWith: (r) => { res = r; }, waitUntil() {} });
+    return res && (await res).text();
+  };
+  return { ...api, asked, kept, stores, answer };
 };
 
 const page = (base, brand) => {
@@ -117,4 +125,18 @@ test('fonts and logos are kept with the build, asked for again when the page cha
   net.set('/fonts/inter-latin.woff2', null);
   await w.syncAssets(html.replace('index-a1.js', 'index-e5.js'));
   assert.equal(await text('/fonts/inter-latin.woff2'), 'FONT-2', 'the page in a font’s place is not kept; the font already here stands');
+});
+
+test('a brand whose headings are Montserrat (the website’s file): the page names it, the worker keeps it and answers it with no signal', async () => {
+  const mont = brandFor({ brand: { v: 1, color: '#0f766e', heading: 'montserrat' } }, 'base');
+  const FONT = '/site-assets/fonts/montserrat-latin.woff2';
+  assert.ok(worker('', new Map()).refsIn(page('', mont)).includes(FONT));
+  assert.ok(worker('/imaginesurrey', new Map()).refsIn(page('/imaginesurrey', mont)).includes(`/imaginesurrey${FONT}`), 'under a client’s path, the client’s');
+  assert.ok(!worker('', new Map()).refsIn(page('', BRANDS.base)).includes(FONT), 'Inter headings: not fetched');
+  const net = new Map([['/assets/index-a1.js', 'x'], ['/assets/index-b2.css', '.a{}'], ['/fonts/fonts.css', ''], [FONT, 'MONT-1']]);
+  const w = worker('', net);
+  await w.syncAssets(page('', mont));
+  assert.ok((await w.kept()).includes(FONT));
+  net.clear(); // no signal
+  assert.equal(await w.answer(FONT), 'MONT-1', 'from what the worker kept');
 });

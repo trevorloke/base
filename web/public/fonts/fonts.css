@@ -70,7 +70,8 @@
 }
 /* Montserrat, a heading face a campaign can choose (Settings → Brand): the
    website's own file (shared/site/fonts, served at /site-assets/fonts/),
-   fetched only when a heading asks for it. */
+   fetched only when a heading asks for it — then the app's page asks for it
+   early and the service worker keeps it (server/lib/brand.js). */
 @font-face {
   font-family: 'Montserrat';
   font-style: normal;
