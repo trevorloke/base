@@ -88,30 +88,39 @@
 .walk-empty, .walk-gone { padding: var(--s-4) 0; display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); }
 .walk-empty p, .walk-gone p { margin: 0; font-size: 16px; }
 
-/* Doors: a row each — address big, names small, done tick */
+/* Doors: one grouped list, a row each — address big, names small, done
+   tick — with a hairline between two doors (not a card per door). */
 .walk { --dock-clear: calc(56px + var(--s-3) + var(--s-4)); /* docked bar + its gap + air */ }
-.walk-doors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.walk-doors {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
+  background: var(--paper-0); border: 1px solid var(--rule); border-radius: var(--r-card);
+}
 /* Room under the last door, so it (and its open buttons) can scroll clear
    of the docked Next door bar. The page already pads for the tab bar. */
-.walk.has-next .walk-doors { padding-bottom: var(--dock-clear); }
+.walk.has-next .walk-doors { margin-bottom: var(--dock-clear); }
 /* A door is open: room for it (the last one too) to sit clear of the toast. */
-.walk.has-open .walk-doors { padding-bottom: calc(var(--dock-clear) + 56px); }
+.walk.has-open .walk-doors { margin-bottom: calc(var(--dock-clear) + 56px); }
 .walk-door {
   background: var(--paper-0);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-card);
+  border-top: 1px solid var(--rule);
   scroll-margin-top: var(--s-3);
   /* clear the tab bar, the docked bar and a toast raised over it */
   scroll-margin-bottom: calc(var(--tabbar-h, 0px) + var(--dock-clear) + 56px);
 }
 /* "Voting for?" scrolls itself into view: keep it clear of the same bars. */
 .walk .rb-who { scroll-margin-bottom: calc(var(--tabbar-h, 0px) + var(--dock-clear)); }
+/* The first and last doors round off with the list, so a done door's ground
+   and the edges below stay inside its corners. */
+.walk-door:first-child { border-top: 0; border-top-left-radius: calc(var(--r-card) - 1px); border-top-right-radius: calc(var(--r-card) - 1px); }
+.walk-door:last-child { border-bottom-left-radius: calc(var(--r-card) - 1px); border-bottom-right-radius: calc(var(--r-card) - 1px); }
 .walk-door:focus { outline: none; }
-.walk-door:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
-/* The next door: an ink edge — the yellow is only the Next door button above it. */
-.walk-door.is-next { border-color: var(--mark); box-shadow: inset 3px 0 0 var(--mark); }
+.walk-door:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+/* The next door, and an open one: an edge in the brand's words drawn inside
+   the row (the rows share their hairlines), and the next one a bar too — the
+   filled colour is only the Next door button above it. */
+.walk-door.is-next { box-shadow: inset 0 0 0 1px var(--mark), inset 3px 0 0 var(--mark); }
 .walk-door.is-done { background: var(--paper); }
-.walk-door.is-open { border-color: var(--mark); }
+.walk-door.is-open { box-shadow: inset 0 0 0 1px var(--mark); }
 .walk-door__h { margin: 0; font-size: inherit; }
 .walk-door__head {
   display: flex;
@@ -128,7 +137,11 @@
   cursor: pointer;
   touch-action: manipulation;
 }
-@media (hover: hover) { .walk-door__head:hover { background: var(--paper-1); } }
+/* Hover is a shade over the row, so the next door's edge still shows through
+   it; the head rounds off with the first and last rows. */
+@media (hover: hover) { .walk-door__head:hover { background: color-mix(in srgb, var(--text) 5%, transparent); } }
+.walk-door:first-child > .walk-door__h > .walk-door__head { border-top-left-radius: calc(var(--r-card) - 1px); border-top-right-radius: calc(var(--r-card) - 1px); }
+.walk-door:last-child:not(.is-open) > .walk-door__h > .walk-door__head { border-bottom-left-radius: calc(var(--r-card) - 1px); border-bottom-right-radius: calc(var(--r-card) - 1px); }
 .walk-door__head:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
 .walk-check {
   flex: 0 0 auto;
