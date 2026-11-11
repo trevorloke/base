@@ -225,28 +225,31 @@ const asBrand = (b) => (b?.css ? b : derived({ ...presetBrand(b?.key || 'base'),
 // index.html as built → the campaign's: the mark on <html>, the shades, the
 // tab's icon and title, the home-screen icon and name, the browser's bar
 // colours. b: the campaign's brand (campaignBrand, brandFor) or a preset.
+// Each piece goes in by a function, never as a replacement string, which
+// would read a name's "$'" or "$`" as "copy the page here".
 export const brandHtml = (html, brand = presetBrand()) => {
   const b = asBrand(brand);
+  const put = (s, re, piece) => s.replace(re, () => piece);
   let out = html.replace(/<html\b([^>]*)>/i, (m, rest) => `<html${rest.replace(/\sdata-brand="[^"]*"/i, '')} data-brand="${attr(b.key)}">`);
   // Branded once, never twice.
   out = out.replace(/<style id="brand">[^<]*<\/style>/gi, '').replace(/<script id="brand-data">[^<]*<\/script>/gi, '')
     .replace(/<link rel="preload" as="image"[^>]*\sdata-brand[^>]*>/gi, '');
-  out = out.replace(/<title>[^<]*<\/title>/i, `<title>${attr(b.title || APP_NAME)}</title>`);
-  out = out.replace(/<meta\s+name="apple-mobile-web-app-title"\s+content="[^"]*"\s*\/?>/i,
+  out = put(out, /<title>[^<]*<\/title>/i, `<title>${attr(b.title || APP_NAME)}</title>`);
+  out = put(out, /<meta\s+name="apple-mobile-web-app-title"\s+content="[^"]*"\s*\/?>/i,
     `<meta name="apple-mobile-web-app-title" content="${attr(b.shortName || APP_NAME)}" />`);
-  out = out.replace(/<link\s+rel="icon"[^>]*>/i, `<link rel="icon" href="${attr(b.icon.href)}" type="${attr(b.icon.type)}" />`);
-  out = out.replace(/<link\s+rel="apple-touch-icon"[^>]*>/i, `<link rel="apple-touch-icon" href="${attr(b.touchIcon)}" />`);
-  out = out.replace(/<meta\s+name="theme-color"\s+content="[^"]*"\s+media="\(prefers-color-scheme:\s*light\)"\s*\/?>/i,
+  out = put(out, /<link\s+rel="icon"[^>]*>/i, `<link rel="icon" href="${attr(b.icon.href)}" type="${attr(b.icon.type)}" />`);
+  out = put(out, /<link\s+rel="apple-touch-icon"[^>]*>/i, `<link rel="apple-touch-icon" href="${attr(b.touchIcon)}" />`);
+  out = put(out, /<meta\s+name="theme-color"\s+content="[^"]*"\s+media="\(prefers-color-scheme:\s*light\)"\s*\/?>/i,
     `<meta name="theme-color" content="${attr(b.theme)}" media="(prefers-color-scheme: light)" />`);
-  out = out.replace(/<meta\s+name="theme-color"\s+content="[^"]*"\s+media="\(prefers-color-scheme:\s*dark\)"\s*\/?>/i,
+  out = put(out, /<meta\s+name="theme-color"\s+content="[^"]*"\s+media="\(prefers-color-scheme:\s*dark\)"\s*\/?>/i,
     `<meta name="theme-color" content="${attr(b.themeDark)}" media="(prefers-color-scheme: dark)" />`);
   // A light top bar wants dark status-bar text on an installed iPhone app.
-  out = out.replace(/<meta\s+name="apple-mobile-web-app-status-bar-style"\s+content="[^"]*"\s*\/?>/i,
+  out = put(out, /<meta\s+name="apple-mobile-web-app-status-bar-style"\s+content="[^"]*"\s*\/?>/i,
     `<meta name="apple-mobile-web-app-status-bar-style" content="${b.sideDark ? 'black' : 'default'}" />`);
   const head = brandHead(b);
   if (!head) return out;
   // Before the first stylesheet; a page with none, before </head>.
-  return /<link\s+rel="stylesheet"/i.test(out) ? out.replace(/<link\s+rel="stylesheet"/i, (m) => `${head}${m}`) : out.replace(/<\/head>/i, `${head}</head>`);
+  return /<link\s+rel="stylesheet"/i.test(out) ? out.replace(/<link\s+rel="stylesheet"/i, (m) => `${head}${m}`) : out.replace(/<\/head>/i, (m) => `${head}${m}`);
 };
 
 // The install manifest: the bar colours, the icons, and what the installed

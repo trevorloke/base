@@ -43,7 +43,8 @@ export const PUBLIC_CSS = `
   .camp{margin:0 0 24px;padding-bottom:14px;border-bottom:3px solid var(--edge)}
   .camp-logo{display:block;margin:0 0 10px}
   .camp-logo img{display:block;height:auto;width:auto;max-width:100%;max-height:48px}
-  @media(prefers-color-scheme:dark){.camp-logo.on-light img{background:var(--chip);padding:6px 8px;border-radius:var(--r-ctrl)}}
+  .camp-logo .for-dark{display:none}
+  @media screen and (prefers-color-scheme:dark){.camp-logo.has-dark .for-light{display:none}.camp-logo.has-dark .for-dark{display:block}.camp-logo.on-light img{background:var(--chip);padding:6px 8px;border-radius:var(--r-ctrl)}}
   .camp-name{font:600 22px/1.2 var(--heading);margin:0;color:var(--ink);overflow-wrap:anywhere}
   h1{font:600 26px/1.2 var(--heading);letter-spacing:-0.02em;margin:0 0 12px;overflow-wrap:anywhere}
   h2{font:600 20px/1.25 var(--heading);margin:22px 0 8px}
@@ -111,12 +112,15 @@ export const publicHead = (brand, title, { noindex = false } = {}) => `<meta cha
 <link rel="stylesheet" href="/fonts/fonts.css"><style>${publicLook(brand)}</style>`;
 
 // The campaign on top: its logo (in dark mode the version for dark grounds,
-// or the logo on a light chip) over its name. The name is said in words
-// beside it, so the picture itself is silent.
+// or the logo on a light chip; on paper always the logo) over its name. The
+// name is said in words beside it, so the picture itself is silent. Two
+// plain pictures rather than a <picture> source: lib/mount.js puts a
+// client's path in front of a src, never of a srcset.
 export const campHtml = (brand, name) => {
   if (!name) return '';
+  const img = (cls, src) => `<img class="${cls}" src="${esc(src)}" alt="">`;
   const logo = brand.publicLogo
-    ? `<span class="camp-logo${brand.publicLogoDark ? '' : ' on-light'}"><picture>${brand.publicLogoDark ? `<source srcset="${esc(brand.publicLogoDark)}" media="(prefers-color-scheme: dark)">` : ''}<img src="${esc(brand.publicLogo)}" alt=""></picture></span>`
+    ? `<span class="camp-logo${brand.publicLogoDark ? ' has-dark' : ' on-light'}">${img('for-light', brand.publicLogo)}${brand.publicLogoDark ? img('for-dark', brand.publicLogoDark) : ''}</span>`
     : '';
   return `<div class="camp">${logo}<p class="camp-name">${esc(name)}</p></div>`;
 };

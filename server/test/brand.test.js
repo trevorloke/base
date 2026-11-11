@@ -164,6 +164,24 @@ test('nothing a saved brand holds can put markup, script or CSS into the page', 
   assert.match(page, /<link rel="icon" href="\/base-mark\.svg"/, 'icons that aren’t ids: base.win’s own');
 });
 
+test('a name with $ in it is words: it never copies the page’s own markup into the page', () => {
+  const esc = (s) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  // With the stylesheet the built page has, and without one (the block then goes before </head>).
+  const bare = INDEX.replace(/<link rel="stylesheet"[^>]*>/g, '');
+  for (const words of ["Team $' 2026", 'Team $` 2026', 'Team $& 2026', 'Ca$$h for $1 $<x>']) {
+    const b = brandFor({ brand: { v: 1, color: '#d81b1e', shortName: words, learn: words } }, 'base');
+    for (const html of [INDEX, bare]) {
+      const page = brandHtml(html, b);
+      assert.equal((page.match(/<title>/g) || []).length, 1, `${words}: one title`);
+      assert.equal((page.match(/<!doctype/gi) || []).length, 1, `${words}: one page`);
+      assert.equal((page.match(/<script type="module"/g) || []).length, 1, `${words}: the app once`);
+      assert.equal(/<title>([^<]*)<\/title>/.exec(page)[1], `${esc(words)} — base.win`, words);
+      assert.match(page, new RegExp(`apple-mobile-web-app-title" content="${esc(words).replace(/[$^*+?()[\]{}|.\\]/g, '\\$&')}"`), words);
+      assert.deepEqual([dataOf(page).shortName, dataOf(page).learn], [words, words], `${words}: as typed, in the data`);
+    }
+  }
+});
+
 test('under a client’s path: the icons and the logo are the client’s; the shades and the script’s data need no address', () => {
   const b = brandFor({ brand: SAVED }, 'base');
   const page = rewriters('/riverside').html(brandHtml(INDEX, b));
@@ -326,7 +344,11 @@ test('the app’s public pages wear the campaign’s brand: unsubscribe, a recei
     const { status, html } = await get(path);
     assert.equal(status, 200, `${what}: ${html.slice(0, 200)}`);
     wears(what, html);
-    assert.match(html, new RegExp(`<div class="camp"><span class="camp-logo"><picture><source srcset="/media/${dark}\\.webp" media="\\(prefers-color-scheme: dark\\)"><img src="/media/${logo}\\.png" alt=""></picture></span><p class="camp-name">Riverside Forward</p></div>`), `${what}: the logo over the campaign’s name`);
+    assert.match(html, new RegExp(`<div class="camp"><span class="camp-logo has-dark"><img class="for-light" src="/media/${logo}\\.png" alt=""><img class="for-dark" src="/media/${dark}\\.webp" alt=""></span><p class="camp-name">Riverside Forward</p></div>`), `${what}: the logo over the campaign’s name`);
+    // Under a client's path (lib/mount.js) both logos are the client's.
+    const under = rewriters('/riverside').html(html);
+    for (const [id, type] of [[logo, 'png'], [dark, 'webp']]) assert.match(under, new RegExp(` src="/riverside/media/${id}\\.${type}"`), `${what}: ${type} under the client’s path`);
+    assert.doesNotMatch(under, /="\/media\//, `${what}: no picture left at the root`);
   }
   // The receipt's facts are as they were.
   const r = (await get(`/r/${token}`)).html;
@@ -339,7 +361,7 @@ test('the app’s public pages wear the campaign’s brand: unsubscribe, a recei
   }
   // No logo for dark grounds: in dark mode the logo sits on a light chip.
   assert.equal((await mgr.action('brand.save', { color: '#d81b1e', logo: { id: logo } })).status, 200);
-  assert.match((await get(`/u/${subId}`)).html, new RegExp(`<span class="camp-logo on-light"><picture><img src="/media/${logo}\\.png" alt=""></picture></span>`));
+  assert.match((await get(`/u/${subId}`)).html, new RegExp(`<span class="camp-logo on-light"><img class="for-light" src="/media/${logo}\\.png" alt=""></span>`));
   // No logo at all: the name alone.
   assert.equal((await mgr.action('brand.reset', {})).status, 200);
   assert.match((await get(`/u/${subId}`)).html, /<div class="camp"><p class="camp-name">Riverside Forward<\/p><\/div>/);
