@@ -190,6 +190,29 @@ export const timeOfDay = (iso) => {
   return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
 };
 
+// A paused run still paused a minute past the time it was to try again:
+// that try didn't run (the server's job runner was off, or the try failed
+// for good) — nothing is coming, and saying "tries again at" a time gone
+// by would be untrue.
+export const RETRY_LATE_MS = 60_000;
+export const retryLate = (iso, now = Date.now()) => {
+  const at = Date.parse(iso);
+  return Number.isFinite(at) && at < now - RETRY_LATE_MS;
+};
+
+// How often the map looks at the placing run (desk, while anyone waits for
+// a pin): every few seconds while it runs; just after a paused run is due
+// to try again; else now and then, to notice one started elsewhere (an
+// import, another tab) — and a try that never came is no reason to ask
+// every two seconds. → ms
+export const placingPoll = (st, now = Date.now()) => {
+  if (st?.state === 'running') return 4000;
+  if (st?.state === 'paused' && st.retryAt && !retryLate(st.retryAt, now)) {
+    return Math.min(60_000, Math.max(2000, Date.parse(st.retryAt) - now + 1500));
+  }
+  return 30_000;
+};
+
 // ── The map's check, for managers ──
 // GET /api/map/check (ext/mapcheck) and what only the page knows, as lines to
 // read — and to screenshot: each way a map can look empty has a line of its
@@ -201,7 +224,7 @@ export const timeOfDay = (iso) => {
 //   → [{ key, label, value, note, warn }]
 const enCA = (n) => Number(n || 0).toLocaleString('en-CA');
 const PROVIDER = { 'basemaps.cartocdn.com': 'CARTO', 'tile.openstreetmap.org': 'OpenStreetMap' };
-export const checkLines = (c, page, { num = enCA, clock = (iso) => iso } = {}) => {
+export const checkLines = (c, page, { num = enCA, clock = (iso) => iso, now = Date.now() } = {}) => {
   const p = c.people;
   const g = c.placing;
   const lines = [];
@@ -218,7 +241,14 @@ export const checkLines = (c, page, { num = enCA, clock = (iso) => iso } = {}) =
   let run;
   if (g.off) run = ['Turned off', { note: g.remaining ? `${waiting} — addresses are not looked up on this server; drop pins by hand` : null, warn: g.remaining > 0 }];
   else if (g.state === 'running') run = [`Running · ${num(placed)} of ${num(placed + g.missed + g.remaining)}`, {}];
-  else if (g.state === 'paused') run = [`Paused${g.retryAt ? ` — tries again at ${clock(g.retryAt)}` : ''}`, { note: `Address lookup isn’t answering${g.lastError ? ` (${g.lastError})` : ''}`, warn: true }];
+  else if (g.state === 'paused') {
+    // When it tries again by itself — or, long past that time, that it didn't
+    // (and with no job runner on this server, nothing will).
+    const why = `Address lookup isn’t answering${g.lastError ? ` (${g.lastError})` : ''}`;
+    if (!g.jobs) run = ['Paused', { note: `${why} — background jobs are off on this server; “Look up addresses” works while its page stays open`, warn: true }];
+    else if (g.retryAt && retryLate(g.retryAt, now)) run = [`Paused — was due to try again at ${clock(g.retryAt)}`, { note: `${why} — its try didn’t run: tap “Not on map”, then “Try now”`, warn: true }];
+    else run = [`Paused${g.retryAt ? ` — tries again at ${clock(g.retryAt)}` : ''}`, { note: why, warn: true }];
+  }
   else if (g.remaining > 0 && !g.jobs) run = ['Not running', { note: `${waiting} — background jobs are off on this server; “Look up addresses” works while its page stays open`, warn: true }];
   else if (g.remaining > 0) run = [g.state === 'stopped' ? 'Stopped' : 'Not running', { note: `${waiting} — tap “Not on map”, then “Look up addresses”`, warn: true }];
   else run = ['Nothing waiting', {}];

@@ -8,6 +8,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { runDueJobs, startJobRunner, stopJobRunner } from '../lib/jobs.js';
+// What the server runs as it starts (the extension's tables, and the runs it looks after).
+import { sql as geocodingSql } from '../ext/geocoding/index.js';
 
 let mgr;
 let ws;
@@ -214,6 +216,41 @@ test('Stop calls the next try off; Carry on before it leaves it nothing to do', 
   const after = (await mgr.get('/api/geocode/status')).json;
   assert.deepEqual([after.state, after.located, after.remaining], ['done', done.located, 0]);
   delete process.env.GEOCODE_RETRY_MS;
+});
+
+// A run the release before this one paused had no try to come: it waited for
+// someone to tap Carry on. When the server starts it gets one — as does a
+// paused run whose try never ran (no job runner then, or the try failed for
+// good) — and nothing more on the next start.
+test('a paused run with no try to come gets one when the server starts; nobody has to tap Carry on', async () => {
+  answer = () => null;
+  for (let i = 0; i < 2; i++) await mgr.createPerson(`Legacy ${i}`, { address: `${65000 + i} 64 Ave` });
+  const pausedLike = async (retryAt) => {
+    await db.query("update jobs set status = 'cancelled' where workspace_id = $1 and kind = 'geocode.run' and status in ('pending', 'running')", [ws]);
+    await db.query("update geocode_runs set state = 'paused', retry_at = $2, last_error = 'geocoder 503' where workspace_id = $1", [ws, retryAt]);
+  };
+  const retries = async () => (await db.query(
+    "select run_at from jobs where workspace_id = $1 and kind = 'geocode.run' and status = 'pending' and payload->>'retry' = 'true'", [ws],
+  )).rows;
+  for (const [why, retryAt] of [['paused by the release before', null], ['its try never ran', new Date(Date.now() - 3600_000).toISOString()]]) {
+    await pausedLike(retryAt);
+    await db.exec(geocodingSql); // the server starts
+    const s = (await mgr.get('/api/geocode/status')).json;
+    const wait = Date.parse(s.retryAt) - Date.now();
+    assert.equal(s.state, 'paused', why);
+    assert.ok(wait > 14 * 60_000 && wait <= 15 * 60_000, `${why}: it tries again by itself in ${wait} ms`);
+    const queued = await retries();
+    assert.equal(queued.length, 1, `${why}: its try is queued`);
+    assert.equal(new Date(queued[0].run_at).getTime(), Date.parse(s.retryAt), `${why}: for the time it says`);
+    await db.exec(geocodingSql); // and starts again
+    assert.equal((await retries()).length, 1, `${why}: another start queues nothing more`);
+    assert.equal((await mgr.get('/api/geocode/status')).json.retryAt, s.retryAt);
+  }
+  // Its time comes: it carries on by itself.
+  await db.query("update jobs set run_at = now() where workspace_id = $1 and kind = 'geocode.run' and status = 'pending'", [ws]);
+  await runDueJobs(db, { workspaceId: ws });
+  const done = await waitFor((x) => x.state === 'done');
+  assert.deepEqual([done.remaining, done.retryAt], [0, null]);
 });
 
 test('an import that leaves addresses without a pin starts the run by itself; nobody presses anything', async () => {

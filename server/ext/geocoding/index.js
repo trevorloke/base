@@ -21,10 +21,12 @@
 // A paused run tries again by itself: one round after 15 minutes, then after
 // twice as long each time lookups still don't answer, up to six hours (the
 // status says when: retryAt) — nobody has to come back and tap Carry on,
-// though Carry on does it now and Stop calls it off. A round where every
-// lookup failed spends nobody's tries — a short outage must not set good
-// addresses aside. Each job works for at most ROUND_BUDGET_MS and then
-// queues the next, so other jobs (ladder emails, A/B winners) keep moving.
+// though Carry on does it now and Stop calls it off. A paused run with no
+// try to come (paused by an older release, or its try never ran) gets one
+// when the server starts. A round where every lookup failed spends nobody's
+// tries — a short outage must not set good addresses aside. Each job works
+// for at most ROUND_BUDGET_MS and then queues the next, so other jobs (ladder
+// emails, A/B winners) keep moving.
 //
 // An import that leaves people with an address and no pin starts the run by
 // itself, in the import's own write (hooks.events below): nobody has to come
@@ -49,6 +51,25 @@ const backoffMs = () => (process.env.GEOCODE_BACKOFF_MS != null ? Number(process
 // Wait before a paused run tries again, doubling while it still gets no answer.
 const retryMs = () => (Number(process.env.GEOCODE_RETRY_MS) > 0 ? Number(process.env.GEOCODE_RETRY_MS) : 15 * 60_000);
 const RETRY_MAX_MS = 6 * 3600_000;
+const lookupOff = () => (process.env.GEOCODER || '').toLowerCase() === 'off';
+
+// As the server starts: a paused run with no try to come gets one,
+// GEOCODE_RETRY_MS from now — paused by the release before this one (it
+// waited for someone to tap Carry on), or its try never ran (no job runner
+// then, or the try failed for good). Not where lookup is off, nor where no
+// job runner will run it (STARBASE_JOBS=off: the page looks up batches).
+const retryStranded = () => (lookupOff() || process.env.STARBASE_JOBS === 'off' ? '' : `
+with stranded as (
+  update geocode_runs r set retry_at = now() + interval '${Math.round(retryMs())} milliseconds', updated_at = now()
+  where r.state = 'paused' and (r.retry_at is null or (r.retry_at < now() - interval '1 minute' and not exists (
+    select 1 from jobs j where j.workspace_id = r.workspace_id and j.kind = '${KIND}' and j.status in ('pending', 'running'))))
+  returning r.workspace_id, r.retry_at
+)
+insert into jobs (id, workspace_id, kind, run_at, payload, key)
+select gen_random_uuid(), workspace_id, '${KIND}', retry_at, '{"retry":true}'::jsonb, '${KIND}:retry:' || (extract(epoch from retry_at) * 1000)::bigint
+from stranded
+on conflict (workspace_id, key) where key is not null do nothing;
+`);
 
 export const sql = `
 create table if not exists geocode_runs (
@@ -69,7 +90,7 @@ alter table geocode_runs add column if not exists retry_at timestamptz;
 -- The people still waiting for a pin, oldest first: what every round reads.
 create index if not exists persons_ws_geopending_idx on persons (workspace_id, created_at)
   where deleted_at is null and address is not null and lat is null;
-`;
+${retryStranded()}`;
 
 const PENDING = `workspace_id = $1 and deleted_at is null and address is not null and lat is null
   and coalesce(attrs->'geocode'->>'status', '') not in ('nomatch', 'weak', 'failed')`;
@@ -253,8 +274,6 @@ export const jobs = {
 };
 
 export const deskOnlyReads = ['/geocode/status'];
-
-const lookupOff = () => (process.env.GEOCODER || '').toLowerCase() === 'off';
 
 // Start the run, or carry it on, in the caller's transaction — the job that
 // does the work is queued with it. false: it is running already. userId:

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
   dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
-  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay,
+  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -286,7 +286,7 @@ test('…and each trouble is flagged in its own line, so one screenshot says whi
   assert.equal(said(l).placing.value, 'Running · 12,400 of 150,000');
   assert.deepEqual(flagged(l), ['offmap']);
   // Paused because lookups aren't answering: why, and when it tries again by itself.
-  l = checkLines({ ...unplaced, placing: { ...unplaced.placing, state: 'paused', lastError: 'geocoder 503', retryAt: '2026-11-10T23:40:00.000Z' } }, PAGE, { clock });
+  l = checkLines({ ...unplaced, placing: { ...unplaced.placing, state: 'paused', lastError: 'geocoder 503', retryAt: '2026-11-10T23:40:00.000Z' } }, PAGE, { clock, now: Date.parse('2026-11-10T23:25:00.000Z') });
   assert.deepEqual([said(l).placing.value, said(l).placing.note, said(l).placing.warn], ['Paused — tries again at 3:40 pm', 'Address lookup isn’t answering (geocoder 503)', true]);
   // (The time is a time of day on the reader's own clock, whatever the day.)
   const at = new Date(2026, 10, 11, 0, 5);
@@ -315,4 +315,28 @@ test('…and each trouble is flagged in its own line, so one screenshot says whi
   // A map with no room on screen (a browser that gave it no height).
   l = checkLines(CHECK, { ...PAGE, size: { x: 390, y: 0 } });
   assert.deepEqual([flagged(l), said(l).screen.value], [['screen'], '390 × 0 px · zoom 12.25']);
+});
+
+test('a paused run long past its time to try again — that try never ran — says so, and is looked at now and then', () => {
+  const at = '2026-11-10T23:40:00.000Z';
+  const t = Date.parse(at);
+  // Before its time the map looks just after it; a minute past, still looking for it…
+  assert.equal(placingPoll({ state: 'paused', retryAt: at }, t - 10 * 60_000), 60_000);
+  assert.equal(placingPoll({ state: 'paused', retryAt: at }, t - 30_000), 31_500);
+  assert.equal(placingPoll({ state: 'paused', retryAt: at }, t + 20_000), 2000);
+  // …long past it, now and then — every open desk map asked every 2 seconds.
+  assert.equal(placingPoll({ state: 'paused', retryAt: at }, t + 2 * 60_000), 30_000);
+  assert.deepEqual([placingPoll({ state: 'running' }, t), placingPoll({ state: 'paused', retryAt: null }, t), placingPoll(null, t)], [4000, 30_000, 30_000]);
+  assert.deepEqual([retryLate(at, t + 59_000), retryLate(at, t + 61_000), retryLate(null, t), retryLate('nonsense', t)], [false, true, false, false]);
+  // The check says when it was due, and what to do — not a time gone by as if to come.
+  const clock = () => '3:40 pm';
+  const paused = { ...CHECK, people: { total: 300052, onMap: 22424, waiting: 277625, noAddress: 3 },
+    placing: { ...CHECK.placing, state: 'paused', located: 0, copied: 0, lastError: 'geocoder 503', retryAt: at, remaining: 277625 } };
+  let l = said(checkLines(paused, PAGE, { clock, now: t + 2 * 3600_000 }));
+  assert.deepEqual([l.placing.value, l.placing.note, l.placing.warn],
+    ['Paused — was due to try again at 3:40 pm', 'Address lookup isn’t answering (geocoder 503) — its try didn’t run: tap “Not on map”, then “Try now”', true]);
+  // With no background jobs on this server nothing will try by itself: said so.
+  l = said(checkLines({ ...paused, placing: { ...paused.placing, jobs: false } }, PAGE, { clock, now: t - 60_000 }));
+  assert.equal(l.placing.value, 'Paused');
+  assert.match(l.placing.note, /background jobs are off on this server/);
 });

@@ -43,7 +43,7 @@ import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, rowsBudget, tileHealth, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, placingPoll, rowsBudget, tileHealth, viewBox } from './mapView.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
@@ -154,15 +154,6 @@ const EMPTY_DRAFT = { points: [], naming: false };
 const TURFS_WHOLE = { key: ['turfs'], path: '/turfs', copy: 'turfs' };
 const TURFS_OUTLINE = { key: ['turfs', 'outline'], path: '/turfs?outline=1', copy: 'turfOutlines' };
 const turfCountsKey = (id) => ['turfs', 'counts', id];
-// How often the placing run is looked at from the map (desk, while anyone
-// waits for a pin): every few seconds while it runs; when a paused run is
-// due to try again; else now and then, to notice one started elsewhere (an
-// import, another tab).
-const placingPoll = (st) => {
-  if (st?.state === 'running') return 4000;
-  if (st?.state === 'paused' && st.retryAt) return Math.min(60_000, Math.max(2000, Date.parse(st.retryAt) - Date.now() + 1500));
-  return 30_000;
-};
 // While it runs, what it has placed so far is drawn this often.
 const PLACING_REFRESH_MS = 15_000;
 const readTurfsPref = () => { try { return localStorage.getItem(TURFS_PREF) !== '0'; } catch { return true; } };
