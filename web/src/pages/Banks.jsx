@@ -204,14 +204,14 @@ function NewBank() {
                 {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
               {names.isError && <p className="error" role="alert"><Unavailable onRetry={() => names.refetch()} /></p>}
-              {names.isSuccess && !lists.length && <p className="ops-meta">No lists yet — <Link to="/lists/new">make one</Link>, or pick people.</p>}
+              {names.isSuccess && !lists.length && <p className="ops-meta">No lists yet — <Link className="au-tap" to="/lists/new">make one</Link>, or pick people.</p>}
               {chosen && (
                 <p className="bk-count" role="status">
                   {listCount?.counts ? <><strong className="mono">{num(listCount.counts.with_call)}</strong> of {num(listCount.counts.total)} on it can be called</>
                     : listCount?.isError ? <Unavailable onRetry={listCount.refetch} /> : LOADING}
                 </p>
               )}
-              {chosen && <p className="ops-meta">Whoever leaves the list leaves the calls not made yet. Or <Link to={`/calls?list=${chosen.id}&channel=phone`}>call them yourself</Link>.</p>}
+              {chosen && <p className="ops-meta">Whoever leaves the list leaves the calls not made yet. Or <Link className="au-tap" to={`/calls?list=${chosen.id}&channel=phone`}>call them yourself</Link>.</p>}
             </div>
           )}
           {from === 'hand' && (
@@ -320,7 +320,7 @@ function Bank({ id }) {
         // Made from a List: who left it since is out of the calls not made yet.
         <div className="ops-actions au-banklist">
           <span>
-            {bank.list_name ? <>From the list <Link to={`/lists/${bank.list_id}`}>{bank.list_name}</Link></> : 'From a list that was deleted — the numbers stay'}
+            {bank.list_name ? <>From the list <Link className="au-tap" to={`/lists/${bank.list_id}`}>{bank.list_name}</Link></> : 'From a list that was deleted — the numbers stay'}
             {bank.gone > 0 && <> · <strong className="mono">{num(bank.gone)}</strong> left the list or can’t be called now</>}
           </span>
           {bank.list_name && !bank.closed && <button type="button" className="btn ops-tap" disabled={busy} onClick={topUp}>Add who joined since</button>}

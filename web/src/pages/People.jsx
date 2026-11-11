@@ -776,10 +776,11 @@ function PeopleList() {
   const offline = noSignal(persons) || (persons.isPlaceholderData && persons.fetchStatus === 'paused');
   // Searched with no signal over a kept list the server had cut off: there may be more.
   const partial = keptPartial(persons.data);
-  // The count: the server's total, Loading…, or Unavailable. With no answer
-  // at all (no signal, or the server down) it can only be what's on screen —
-  // at once when the names themselves are a kept copy, not after the count
-  // has tried twice.
+  // The count: the server's total, Loading…, or Unavailable. With no signal,
+  // or when the names themselves are a kept copy, it can only be what's on
+  // screen — at once, not after the count has tried twice. Names that came
+  // fresh with a count that didn't (a proxy's 502 on a slow count) are
+  // never counted off the screen: Unavailable.
   const fromCopy = keptCopy(persons.data);
   // The names came fresh again after a count that got no answer: count again.
   const namesAt = persons.dataUpdatedAt;
@@ -791,9 +792,9 @@ function PeopleList() {
   // the browser's own word counts too.)
   const count = total.data ? <><strong className="mono">{fmt(total.data.total)}</strong> {plain(total.data.total)}</>
     : total.isError && !noReply(total.error) ? <Unavailable onRetry={() => total.refetch()} />
-      : (noSignalNow() || total.fetchStatus === 'paused' || total.isError || fromCopy) && persons.data && !stale
+      : (noSignalNow() || total.fetchStatus === 'paused' || fromCopy) && persons.data && !stale
         ? <><strong className="mono">{rows.length >= LIMIT ? `${fmt(LIMIT)}+` : fmt(rows.length)}</strong> {plain(rows.length)}{partial ? ' in the kept list' : ''}</>
-        : LOADING;
+        : total.isError ? <Unavailable onRetry={() => total.refetch()} /> : LOADING;
   // No list at all (no answer, nothing kept): no count, no empty table — the error line says it.
   const failed = persons.isError && !persons.data;
   // The filter as it stands, for a list (Save as a list, or as they are now).
@@ -1165,10 +1166,25 @@ function CallsScreen() {
       return cur.length === ends.length && !cur.includes(end) ? { key: listKey, ends: [...cur, end] } : p;
     });
   }, [more, lastRows, queue.length, listKey, ends.length]);
+  // A phone bank's list comes 500 at a time (bank.left: how many are to
+  // call in all). As it runs low it is asked for again: the calls logged are
+  // crossed off on the server, and the next numbers come in behind them.
+  // Asked once per call logged — calls still waiting to send change nothing.
+  const bankMore = Boolean(bankId && bank && !persons.isPlaceholderData && (bank.left ?? 0) > (persons.data?.persons?.length ?? 0));
+  const bankAsked = useRef('');
+  const refetchBank = persons.refetch;
+  useEffect(() => {
+    if (!bankMore || queue.length >= 20 || persons.isFetching || noSignalNow()) return;
+    const key = `${bankId}:${queue.length}:${rows[0]?.id || ''}`;
+    if (bankAsked.current === key) return;
+    bankAsked.current = key;
+    refetchBank();
+  }, [bankMore, queue.length, persons.isFetching, bankId, rows, refetchBank]);
   // How many are left: the ones loaded and not done yet, and everyone not
   // loaded yet (the server's count, by the same rule) — or Loading….
   const notLoaded = more || pending;
-  const toCall = notLoaded ? (total.data ? queue.length + Math.max(0, total.data.total - (list?.length ?? 0)) : null) : queue.length;
+  const toCall = bankId ? Math.max(queue.length, (bank?.left ?? 0) - calledHere)
+    : notLoaded ? (total.data ? queue.length + Math.max(0, total.data.total - (list?.length ?? 0)) : null) : queue.length;
   // The card stays on whoever is up (a reply arriving doesn't swap it).
   useEffect(() => { if (current && current.id !== currentId) setCurrentId(current.id); }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Opened from a profile or the door card (?person=): that person's card,
@@ -1326,8 +1342,8 @@ function CallsScreen() {
         <div className="cl-bank">
           <p className="cl-bank__line">
             <Link to={desk ? '/banks' : '/banks'}>← {desk ? 'Phone banks' : 'Your call lists'}</Link>
-            {bank && <span className="muted"> · {bank.done} of {bank.total} done</span>}
-            {bank?.later > 0 && <span className="muted"> · {bank.later} to call back{bank.next_at ? ` (next ${backWord(bank.next_at)})` : ''}</span>}
+            {bank && <span className="muted"> · {fmt(bank.done)} of {fmt(bank.total)} done</span>}
+            {bank?.later > 0 && <span className="muted"> · {fmt(bank.later)} to call back{bank.next_at ? ` (next ${backWord(bank.next_at)})` : ''}</span>}
           </p>
           {bank?.script && (
             <>
@@ -1361,6 +1377,13 @@ function CallsScreen() {
         </p>
       ) : !current && (pending || more) ? (
         <p className="muted" role="status">{LOADING}</p>
+      ) : !current && bankMore ? (
+        // Every number loaded is called; more are waiting on the server.
+        persons.isFetching ? <p className="muted" role="status">{LOADING}</p> : (
+          <p className="muted" role="status">
+            <strong className="mono">{fmt(toCall)}</strong> more to call · <button type="button" className="btn au-retry" onClick={() => persons.refetch()}>Load them</button>
+          </p>
+        )
       ) : rows.length === 0 && !current ? (
         <div className="pp-empty">
           {/* Everyone here has a text from the campaign: replies come to the Inbox. */}

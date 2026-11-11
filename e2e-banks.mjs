@@ -8,7 +8,9 @@
 // opens New phone bank from it ("3 of 4 on it can be called"), the bank
 // says who left the list and takes in who joined since; Lists ask for their
 // numbers three at a time, also coming back once they've gone stale; Calls
-// on a list of 305 says "305 to call" and goes on past its first 300.
+// on a list of 305 says "305 to call" and goes on past its first 300; a
+// bank of 540 handed to one caller comes 500 at a time ("540 to call",
+// "40 more to call · Load them"); a list an open bank calls can't be deleted.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
 //   BASE=http://127.0.0.1:4132 SHOTS=/tmp/banks node e2e-banks.mjs
@@ -224,6 +226,54 @@ check('290 done: "15 to call", and the list goes on past 300 (Many 301–305 are
   `${await page.innerText('.cl-progress')} · ${upNext.join(', ')}`);
 await page.screenshot({ path: `${SHOTS}/04-calls-past-300.png` });
 await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
+
+// ── A big bank handed to one caller: their list comes 500 at a time ──
+const big = Array.from({ length: 540 }, (_, i) => ({ name: `Big ${String(i + 1).padStart(3, '0')} Example`, phone: `604-555-01${String(i % 100).padStart(2, '0')}` }));
+check('540 more people come in', (await api('/data/import', { rows: big, tag: 'big' })).json?.created === 540);
+const bigList = (await api('/actions/list.create', { name: 'Big to call', kind: 'filter', filter: { tag: 'big' } })).json.list;
+const bigBank = (await api('/actions/bank.create', { name: 'Big bank', list_id: bigList.id })).json.bank;
+const meId = (await api('/auth/me')).json.user.id;
+const handed = (await api('/actions/bank.assign', { id: bigBank.id, user_id: meId, count: 5400 })).json;
+check('Hand out, with more typed than there are: all 540 handed over, no "Too big"', handed?.handed === 540, JSON.stringify(handed).slice(0, 160));
+let mineAsked = 0;
+page.on('request', (r) => { if (r.url().includes(`/api/banks/${bigBank.id}/mine`)) mineAsked += 1; });
+await page.goto(`${ADMIN}/calls?bank=${bigBank.id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForFunction(() => /540 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+check('Calls on the bank: "540 to call" and "0 of 540 done" — the whole bank, though 500 are loaded',
+  /540 to call/.test(await page.innerText('.cl-progress').catch(() => '')) && /0 of 540 done/.test(await page.innerText('.cl-bank__line')),
+  `${await page.innerText('.cl-progress').catch(() => '')} · ${await page.innerText('.cl-bank__line')}`);
+// Every number loaded is called on this phone, and none has reached the
+// server yet: the screen says how many are still waiting, and asks once.
+const loaded = (await api(`/banks/${bigBank.id}/mine`)).json.persons;
+await page.evaluate((ids) => sessionStorage.setItem('starbase.calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'contacted' }])))), loaded.map((p) => p.id));
+mineAsked = 0;
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForFunction(() => /40 more to call/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+await sleep(1500);
+const waitingText = await page.innerText('main');
+check('all 500 loaded are done here: "40 more to call · Load them", never "All done" — asked again once, not in a loop',
+  loaded.length === 500 && /40 more to call/.test(waitingText) && /Load them/.test(waitingText) && !/All done|Start over/.test(waitingText) && mineAsked >= 2 && mineAsked <= 3,
+  `${waitingText.replace(/\s+/g, ' ').slice(-120)} · asked ${mineAsked}`);
+await page.screenshot({ path: `${SHOTS}/05-bank-more-waiting.png` });
+// The calls reach the server (crossed off there): Load them brings the next numbers.
+for (let i = 0; i < loaded.length; i += 20) {
+  await Promise.all(loaded.slice(i, i + 20).map((p) => api('/actions/bank.done', { id: bigBank.id, person_id: p.id, outcome: 'contacted' })));
+}
+await page.click('main button:has-text("Load them")').catch(() => {});
+await page.waitForFunction(() => /\b40 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+check('…Load them: the next 40 come in — "40 to call", "500 of 540 done", Big 501 is up',
+  /\b40 to call/.test(await page.innerText('.cl-progress').catch(() => '')) && /500 of 540 done/.test(await page.innerText('.cl-bank__line'))
+    && (await page.innerText('.cl-card .cl-name').catch(() => '')).trim() === 'Big 501 Example',
+  `${await page.innerText('.cl-progress').catch(() => '')} · ${await page.innerText('.cl-bank__line')} · ${await page.innerText('.cl-card .cl-name').catch(() => '')}`);
+await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
+// The list can't be deleted from under an open bank: the screen says which bank.
+await page.goto(`${ADMIN}/lists/${bigList.id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.ls-tools', { timeout: 10000 });
+await page.click('.ls-tools button:has-text("Delete")');
+await page.click('.ls-tools .ops-confirm button:has-text("Yes")');
+await page.waitForSelector('.ls-page p.error', { timeout: 8000 }).catch(() => {});
+const refusedText = await page.innerText('.ls-page p.error').catch(() => '');
+check('Delete a list an open bank calls: refused, in words ("…“Big bank” calls this list — close it first")', /“Big bank” calls this list — close it first/.test(refusedText) && /\/lists\/[0-9a-f-]{36}$/.test(page.url()), refusedText);
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();

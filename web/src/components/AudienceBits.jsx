@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
 import { useOnline } from './NoSignal.jsx';
+import '../pages/shifts.css';
 import './audience.css';
 
 export const fmt = (n) => (Number(n) || 0).toLocaleString('en-CA');

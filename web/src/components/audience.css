@@ -74,6 +74,7 @@
 /* "Save these people as they are now" */
 .au-snap { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-2) 0 var(--s-3); padding: var(--s-3); border: var(--border); border-radius: var(--r-card); background: var(--paper-0); max-width: 520px; }
 .au-snap .field { margin: 0; }
+.au-snap .input { min-height: 48px; }
 .au-snap__note { margin: 0; }
 .ops-actions > .au-snap { flex-basis: 100%; }
 .au-snap__link {
@@ -106,6 +107,12 @@
 .au-banklist { margin: 0 0 var(--s-3); font-size: 15px; color: var(--text-2); }
 .au-banklist .ops-done { margin: 0; }
 .au-pager { margin-top: var(--s-2); }
+
+/* A link inside a sentence (“call them yourself”): a 48px tap on a phone; the
+   extra reach sits in its margin, so the line keeps its height */
+@media (pointer: coarse), (max-width: 720px) {
+  .au-tap { display: inline-flex; align-items: center; min-height: 48px; margin: -14px 0; vertical-align: middle; }
+}
 
 /* Who a send reaches, where two senders differ */
 .au-rule { display: block; margin-top: var(--s-1); font-size: 13px; color: var(--text-2); }
