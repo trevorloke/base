@@ -32,6 +32,8 @@
   min-height: 32px;
 }
 @media (hover: hover) { .au-row__name:hover { text-decoration: underline; text-underline-offset: 3px; } }
+/* On a phone the name is a 48px tap; the extra reach sits in its margin, so the row doesn't grow */
+@media (pointer: coarse), (max-width: 720px) { .au-row__name { min-height: 48px; margin: -8px 0; } }
 .au-go { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .au-go .btn.ops-tap { padding: 0 14px; font-size: 14px; min-width: 88px; }
 .au-n { font-variant-numeric: tabular-nums; font-weight: 500; color: var(--text-3); }
