@@ -9,6 +9,12 @@
 // pass), "In Mailchimp · 212 addresses · tag “base.win: Members”", or
 // "Stopped: Mailchimp said … · Try again". Once sent, the button reads
 // "Sync again". A read that fails says "Unavailable — Try again".
+// Every sync first reads who has left in Mailchimp and turns their email off
+// here: the question says so before the tap, and the line says how many it
+// was afterwards ("Email turned off here too: 2 who unsubscribed in
+// Mailchimp, 1 dead address.") — the count before the tap could not know.
+// An address Mailchimp would not take is counted with Mailchimp's own words
+// for why.
 // It sits in the page's row of buttons; what it opens takes the row's whole
 // width underneath (send-to-mailchimp.css).
 import { useState } from 'react';
@@ -29,9 +35,33 @@ const whenWord = (iso) => {
 };
 const active = (s) => Boolean(s) && (s.status === 'queued' || s.status === 'syncing') && !s.stalled;
 const stopped = (s) => Boolean(s) && (s.status === 'failed' || s.stalled);
+// What this sync's own pull turned off here, in one sentence — null when nothing.
+const turnedOff = (s) => {
+  const left = Number(s.pulled_unsubscribed) || 0;
+  const dead = Number(s.pulled_cleaned) || 0;
+  if (!left && !dead) return null;
+  const who = [
+    left ? `${num(left)} who unsubscribed in Mailchimp` : null,
+    dead ? `${num(dead)} dead ${plural(dead, 'address', 'addresses')}${left ? '' : ' in Mailchimp'}` : null,
+  ].filter(Boolean).join(', ');
+  return `Email turned off here too: ${who}.`;
+};
+// "(Mailchimp said: …)" after the count of addresses it would not take: its words about the first.
+const whyNot = (s) => (s.skipped_why ? ` (Mailchimp said${s.skipped > 1 ? ' of the first' : ''}: ${s.skipped_why})` : '');
 
-// How the last sync stands, in one line (and one quiet line of detail).
+// How the last sync stands, in one line (and one quiet line of detail) — and,
+// however it stands, what its own pull turned off here: that is done even
+// when the sync then stops.
 function Status({ s, running }) {
+  const off = turnedOff(s);
+  return (
+    <>
+      <Standing s={s} running={running} />
+      {off && <p className="ops-meta mc-off">{off}</p>}
+    </>
+  );
+}
+function Standing({ s, running }) {
   if (stopped(s)) return <p className="mc-line" data-status="stopped"><strong>Stopped</strong>: {s.note || 'it stopped part-way'}</p>;
   if (active(s)) {
     if (!running) return <p className="mc-line"><strong>Waiting</strong> · background work is off on this server</p>;
@@ -47,7 +77,7 @@ function Status({ s, running }) {
     s.consent === 'all' ? 'everyone who can be emailed' : 'newsletter subscribers only',
     s.added ? `${num(s.added)} new to your audience` : null,
     s.removed ? `${num(s.removed)} taken out of the tag` : null,
-    s.skipped ? `${num(s.skipped)} Mailchimp wouldn’t take` : null,
+    s.skipped ? `${num(s.skipped)} Mailchimp wouldn’t take${whyNot(s)}` : null,
     s.by ? `sent by ${s.by}` : null,
   ].filter(Boolean).join(' · ');
   return (
@@ -133,6 +163,7 @@ export default function SendToMailchimp({ listId }) {
                     <span>Everyone on this list who can be emailed ({num(counts.everyone)}); they agreed to hear from us by email</span>
                   </label>
                   <p className="ops-meta">Only email, first and last name go. Nobody already in your audience is changed.</p>
+                  <p className="ops-meta">Anyone who unsubscribed in Mailchimp is turned off here too — only they can rejoin.</p>
                 </>
               )}
               <div className="ops-actions">

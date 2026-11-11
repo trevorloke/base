@@ -154,10 +154,13 @@ test('the default sends only the subscribed — email, first and last name, neve
     assert.deepEqual(Object.keys(m.merge_fields).sort(), ['FNAME', 'LNAME']);
     assert.equal(m.status, 'subscribed');
   }
-  const traffic = JSON.stringify(fake.calls);
+  // (What was said to Mailchimp: each call's query and body. A call's key and a member's place in an
+  // address are 32 random-looking characters, where a run of digits means nothing.)
+  const traffic = JSON.stringify(fake.calls.map((x) => [x.query, x.body]));
   for (const secret of ['rating-code-xyz', 'vip-donor', '"member"', '123 Example', '555-0142', '5550142', ana.id]) {
     assert.ok(!traffic.includes(secret), `${secret} never leaves base.win`);
   }
+  assert.ok(fake.calls.every((x) => !x.path.includes(ana.id)), 'nor is anyone named in an address by who they are here');
   // Mailchimp is called with the key as the password (Basic), never in an address.
   assert.ok(fake.calls.every((x) => x.auth.startsWith('Basic ') && !JSON.stringify([x.path, x.query]).includes(KEY)));
 
@@ -288,6 +291,7 @@ test('a big list goes in parts: each address once, an address Mailchimp refuses 
     await run(ws);
     s = (await stateOf(c, list.id)).sync;
     assert.deepEqual([s.status, s.total, s.added, s.tagged, s.skipped, s.todo], ['synced', 7, 6, 6, 1, 0]);
+    assert.equal(s.skipped_why, `${mail('cal')} looks fake or invalid, please enter a real email address.`, 'and why, in Mailchimp’s own words');
   } finally { _setSliceForTest(null); }
   const sentTo = fake.calls.filter((x) => x.method === 'POST' && x.path === `/lists/${fake.id}`).flatMap((x) => x.body.members.map((m) => m.email_address));
   assert.deepEqual(sentTo.sort(), names.map(mail).sort(), 'each address was offered once');
@@ -783,6 +787,71 @@ test('an address Mailchimp refuses is counted once, however often its part of th
   const tagCalls = fake.calls.filter((x) => x.method === 'POST' && /\/segments\/\d+$/.test(x.path));
   assert.deepEqual([tagCalls.length, new Set(tagCalls.map((x) => x.key)).size], [2, 1]);
   keysAreTrue();
+
+  // Why it would not take him is kept with the count, in Mailchimp's own words — the first refusal's, when there are several.
+  const CAL_SAID = `${mail('cal')} looks fake or invalid, please enter a real email address.`;
+  assert.equal(s.skipped_why, CAL_SAID);
+  for (const w of ['dee', 'eli']) await person(c, w);
+  await subscribe(c, 'dee', 'eli');
+  fake.refuse(mail('dee'), 'has signed up to a lot of lists very recently; we’re not allowing more signups for now');
+  // …and a member it takes into the audience but will not put in a tag is one it would not take, too.
+  fake.untaggable(mail('eli'), 'This contact can’t be added to a tag.');
+  await push(c, ws, list.id);
+  s = (await stateOf(c, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.added, s.tagged, s.skipped, s.skipped_why], ['synced', 5, 1, 0, 3, CAL_SAID]);
+  assert.deepEqual(inTag(), [mail('ana'), mail('ben')]);
+  // Only the tag's refusal is left: its words are the ones kept.
+  fake.refuse(mail('cal'), false);
+  fake.refuse(mail('dee'), false);
+  await push(c, ws, list.id);
+  s = (await stateOf(c, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.added, s.tagged, s.skipped, s.skipped_why], ['synced', 5, 2, 2, 1, 'This contact can’t be added to a tag.']);
+  // Nothing refused any more: nothing is said about it.
+  fake.untaggable(mail('eli'), false);
+  await push(c, ws, list.id);
+  s = (await stateOf(c, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.tagged, s.skipped, s.skipped_why], ['synced', 5, 1, 0, null]);
+  assert.deepEqual(inTag(), ['ana', 'ben', 'cal', 'dee', 'eli'].map(mail));
+});
+
+test('a send says who its own pull turned off here: the first one finds everyone who had left in Mailchimp', async () => {
+  const { c: mgr, ws } = await campaign('First');
+  const staff = await join(mgr, 'staff', 'staff-first');
+  const names = ['ana', 'ben', 'cal', 'dee', 'eli'];
+  for (const w of names) await person(mgr, w);
+  await mgr.createPerson('Fay Example', { email: mail('fay') }); // on file, not on this list
+  await subscribe(mgr, ...names, 'fay');
+  const list = await membersList(mgr);
+  // In Mailchimp from before base.win was connected to it: Ana and Fay left long ago, Ben's address died there.
+  const longAgo = new Date(Date.now() - 300 * 86400e3);
+  fake.add(mail('ana'), { status: 'unsubscribed', changed: longAgo });
+  fake.add(mail('fay'), { status: 'unsubscribed', changed: longAgo });
+  fake.add(mail('ben'), { status: 'cleaned', changed: longAgo });
+
+  // A staff member sends the list, with no pull before it: the question counts five…
+  assert.deepEqual((await stateOf(staff, list.id, true)).counts, { subscribed: 5, everyone: 5 });
+  ok(await staff.action('mailchimp.push', { list_id: list.id }));
+  await run(ws);
+  // …three go — and the list's own answer says why: what this sync's pull turned off here, all of it
+  // (Fay is not on the list: her email is off here now all the same).
+  let s = (await stateOf(staff, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.added, s.tagged, s.skipped], ['synced', 3, 3, 3, 0]);
+  assert.deepEqual([s.pulled_unsubscribed, s.pulled_cleaned], [2, 1]);
+  assert.equal(ok(await mgr.get('/api/mailchimp')).pull_note, '2 unsubscribed · 1 dead address', 'the same as Settings → Services says');
+  assert.equal(ok(await mgr.get('/api/subscriptions')).emailable, 3);
+  // While one is on its way the numbers are the new sync's, from nothing…
+  ok(await staff.action('mailchimp.push', { list_id: list.id }));
+  s = (await stateOf(staff, list.id)).sync;
+  assert.deepEqual([s.status, s.pulled_unsubscribed, s.pulled_cleaned], ['queued', 0, 0]);
+  // …and the next sync's pull finds nothing new, and says nothing.
+  await run(ws);
+  s = (await stateOf(staff, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.pulled_unsubscribed, s.pulled_cleaned], ['synced', 3, 0, 0]);
+  // Someone leaves in Mailchimp and its webhook never arrives: the next sync finds one.
+  await fake.unsubscribe(mail('cal'), { send: false });
+  await push(staff, ws, list.id);
+  s = (await stateOf(staff, list.id)).sync;
+  assert.deepEqual([s.status, s.total, s.removed, s.pulled_unsubscribed, s.pulled_cleaned], ['synced', 2, 1, 1, 0]);
 });
 
 test('one address Mailchimp will not change never holds up the others; Settings → Services says who is waiting, and why', async () => {

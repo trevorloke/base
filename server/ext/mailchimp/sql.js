@@ -6,10 +6,12 @@
 // newsletter list (the default), 'all' everyone on the list who can be
 // emailed. The numbers are the last sync's: total (addresses the list
 // sends), added (new to the audience), tagged (put in the tag), removed
-// (taken out of the tag), skipped (addresses Mailchimp would not take). While
-// one is on its way: todo (still to go) and cursor (how far it got, so a
-// retry or the next part carries on from there and no address is offered
-// twice in one sync).
+// (taken out of the tag), skipped (addresses Mailchimp would not take, with
+// its own words about the first of them in skipped_why), and what the sync's
+// own pull turned off here before it sent anyone: pulled_unsubscribed,
+// pulled_cleaned. While one is on its way: todo (still to go) and cursor
+// (how far it got, so a retry or the next part carries on from there and no
+// address is offered twice in one sync).
 //
 // mailchimp_state — one per campaign, nothing secret: which audience the
 // pulls were about, when the last one started (pulled_through: the next
@@ -38,6 +40,9 @@ create table if not exists mailchimp_syncs (
   synced_at timestamptz,
   unique (workspace_id, list_id, audience_id)
 );
+alter table mailchimp_syncs add column if not exists skipped_why text;
+alter table mailchimp_syncs add column if not exists pulled_unsubscribed int not null default 0;
+alter table mailchimp_syncs add column if not exists pulled_cleaned int not null default 0;
 
 create table if not exists mailchimp_state (
   workspace_id uuid primary key references workspaces(id) on delete cascade,

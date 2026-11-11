@@ -11,7 +11,9 @@
 // The job brings the tag into line, so running it twice changes nothing and
 // one that dies part-way is finished by the next run:
 //   1. pull first (pull.js, everyone): whoever left in Mailchimp is off
-//      here before "who goes" is worked out, so they are never offered again
+//      here before "who goes" is worked out, so they are never offered
+//      again — and how many that was is kept on the sync, for the list's
+//      line: the question before the tap could not know
 //   2. new addresses join the audience, 500 to a call, update_existing
 //      false: a member already there is never changed, and nobody
 //      unsubscribed there is ever put back
@@ -47,6 +49,7 @@ const parseJ = (v, d) => { try { return (typeof v === 'string' ? JSON.parse(v) :
 export const syncOut = (s) => ({
   id: s.id, list_id: s.list_id, status: s.status, consent: s.consent, tag: s.tag,
   total: s.total, added: s.added, tagged: s.tagged, removed: s.removed, skipped: s.skipped, todo: s.todo,
+  skipped_why: s.skipped_why ?? null, pulled_unsubscribed: s.pulled_unsubscribed ?? 0, pulled_cleaned: s.pulled_cleaned ?? 0,
   note: s.note, synced_at: s.synced_at, created_at: s.created_at,
 });
 // A job still to run, or running, for this sync.
@@ -105,7 +108,8 @@ export const startSync = async (tx, ctx, emit, { list_id: listId, everyone = fal
     `insert into mailchimp_syncs (id, workspace_id, list_id, audience_id, tag, consent, status, created_by)
      values ($1, $2, $3, $4, $5, $6, 'queued', $7)
      on conflict (id) do update set consent = excluded.consent, status = 'queued', created_by = excluded.created_by, created_at = now(),
-       added = 0, tagged = 0, removed = 0, skipped = 0, todo = 0, cursor = null, note = null
+       added = 0, tagged = 0, removed = 0, skipped = 0, todo = 0, cursor = null, note = null,
+       skipped_why = null, pulled_unsubscribed = 0, pulled_cleaned = 0
      returning *`,
     [id, ws, list.id, audience, tag, consent, ctx.user.id],
   )).rows[0];
@@ -168,9 +172,12 @@ const num = (v, otherwise) => (Number.isFinite(Number(v)) && v !== null && v !==
 const alreadyThere = (e) => e?.error_code === 'ERROR_CONTACT_EXISTS' || /already (a |an? existing )?(list )?member|already exists/i.test(String(e?.error || ''));
 const refusedBy = (res) => (Array.isArray(res?.errors) ? res.errors : []).filter((e) => !alreadyThere(e));
 const emailsIn = (errors) => errors.flatMap((e) => [e?.email_address, ...(Array.isArray(e?.email_addresses) ? e.email_addresses : [])]).map(lower).filter(Boolean);
+// Mailchimp's own words for one refusal, as it gave them.
+const wordsOf = (e) => [e?.error, e?.field_message, e?.error_code].find((v) => typeof v === 'string' && v.trim())?.trim().slice(0, 300) || null;
 
 // New addresses into the audience, then into the tag. → what to count once
-// the sync is past them: { tagged, skipped }.
+// the sync is past them: { tagged, skipped, why } — why: Mailchimp's words
+// about the first address it would not take, when there is one.
 // skip_merge_validation: an audience may insist on a field of its own for
 // every new member (a postal code, a last name). Only the address and the
 // two names ever go, so Mailchimp is asked to take a member without it —
@@ -193,23 +200,25 @@ const addPart = async (db, sync, segment, part) => {
   const skipped = Math.max(refused.length, no.size);
   // What Mailchimp took (or already had) goes into the tag.
   const toTag = part.filter((p) => !no.has(p.email)).map((p) => p.as);
-  if (!toTag.length) return { tagged: 0, skipped };
+  const why = wordsOf(refused[0]);
+  if (!toTag.length) return { tagged: 0, skipped, why };
   const tagged = await mailchimp('POST', `/lists/${sync.audience_id}/segments/${segment}`, {
     body: { members_to_add: toTag }, idempotencyKey: keyOf(sync, 'tag', segment, ...toTag.map(lower)), timeoutMs: 60_000,
   });
-  const missed = emailsIn(Array.isArray(tagged?.errors) ? tagged.errors : []).length;
-  return { tagged: num(tagged?.total_added, toTag.length - missed), skipped: skipped + missed };
+  // In the audience, and the tag would not take them: not taken either.
+  const untagged = Array.isArray(tagged?.errors) ? tagged.errors : [];
+  const missed = emailsIn(untagged).length;
+  return { tagged: num(tagged?.total_added, toTag.length - missed), skipped: skipped + missed, why: why || (missed ? wordsOf(untagged[0]) : null) };
 };
 
 // One part of a sync. → true when there is more to do.
 const part = async (db, sync) => {
   const ws = sync.workspace_id;
   const cursor = parseJ(sync.cursor, {}) || {};
-  const keep = () => patch(db, sync, 'cursor = $3::jsonb', [JSON.stringify(cursor)]);
   if (!cursor.pulled) {
-    await pull(db, ws, { full: true });
+    const gone = await pull(db, ws, { full: true });
     cursor.pulled = true;
-    await keep();
+    await patch(db, sync, 'pulled_unsubscribed = $3, pulled_cleaned = $4, cursor = $5::jsonb', [gone.unsubscribed, gone.cleaned, JSON.stringify(cursor)]);
   }
   const list = await loadList(db, ws, sync.list_id);
   if (!list) { await stop(db, sync, 'The list was deleted'); return false; }
@@ -228,7 +237,8 @@ const part = async (db, sync) => {
     cursor.add = some.at(-1).email;
     // Counted in the same write that moves past them: a part tried again
     // (Mailchimp said "too many" half-way) never counts a refusal twice.
-    await patch(db, sync, 'tagged = tagged + $3, skipped = skipped + $4, todo = $5, cursor = $6::jsonb', [did.tagged, did.skipped, left(), JSON.stringify(cursor)]);
+    await patch(db, sync, 'tagged = tagged + $3, skipped = skipped + $4, skipped_why = coalesce(skipped_why, $7), todo = $5, cursor = $6::jsonb',
+      [did.tagged, did.skipped, left(), JSON.stringify(cursor), did.why]);
     if (left() && Date.now() >= until) return true;
   }
   while (toRemove.length) {

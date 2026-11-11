@@ -17,7 +17,10 @@
 //     out of the tag; "too many" from Mailchimp reads "trying again soon"
 //     and carries on by itself; a refused key reads "Stopped: … Try again";
 //     a read that fails reads "Unavailable — Try again"; on a server whose
-//     background work is off, both screens say "Waiting".
+//     background work is off, both screens say "Waiting"; a sync whose own
+//     pull finds people who had left in Mailchimp says how many it turned
+//     off here, and an address Mailchimp will not take is counted with
+//     Mailchimp's words for why.
 // Every number on screen is checked against the API and against what the
 // stand-in holds; the books verify.
 //
@@ -70,6 +73,7 @@ createServer(async (req, res) => {
     if ('slice' in j) _setSliceForTest(j.slice);
     for (const m of j.add || []) fake.add(m.email, m);
     for (const l of j.lock || []) fake.lock(l.email, l.words);
+    for (const r of j.refuse || []) fake.refuse(r.email, r.words);
     if (j.dropHooks) fake.webhooks().length = 0; // someone deleted the webhook in Mailchimp
     return res.end('ok');
   }
@@ -85,7 +89,7 @@ createServer(async (req, res) => {
     return res.end(JSON.stringify({
       id: fake.id, members: fake.members().map((m) => [m.email_address, m.status, m.merge_fields]), tag: fake.tagged(j.tag),
       webhooks: fake.webhooks().map((w) => ({ url: w.url, events: w.events, sources: w.sources })),
-      calls: fake.calls.map((x) => ({ method: x.method, path: x.path, body: x.body, key: x.key })),
+      calls: fake.calls.map((x) => ({ method: x.method, path: x.path, query: x.query, body: x.body, key: x.key })),
     }));
   }
   res.end('ok');
@@ -311,8 +315,8 @@ await page.locator('.ls-tools button:has-text("Send to Mailchimp")').focus();
 await page.keyboard.press('Enter');
 await page.locator('.mc-ask .ops-check').waitFor({ timeout: 10000 }).catch(() => {});
 let ask = await words(page.locator('.mc-ask'));
-const QUESTION = '4 addresses to send · newsletter subscribers only Everyone on this list who can be emailed (6); they agreed to hear from us by email Only email, first and last name go. Nobody already in your audience is changed. Send Cancel';
-check('the question: "4 addresses to send · newsletter subscribers only", the tick with how many it would be, what goes', ask.startsWith(QUESTION), ask);
+const QUESTION = '4 addresses to send · newsletter subscribers only Everyone on this list who can be emailed (6); they agreed to hear from us by email Only email, first and last name go. Nobody already in your audience is changed. Anyone who unsubscribed in Mailchimp is turned off here too — only they can rejoin. Send Cancel';
+check('the question: "4 addresses to send · newsletter subscribers only", the tick with how many it would be, what goes — and what the sync does here', ask.startsWith(QUESTION), ask);
 const counts = (await api(`/lists/${list.id}/mailchimp?counts=1`)).json.counts;
 check('…the numbers the API counted', counts.subscribed === 4 && counts.everyone === 6, JSON.stringify(counts));
 await shot(lp, '05-list-ask-1440');
@@ -350,8 +354,10 @@ st = await mc();
 const sync = (await api(`/lists/${list.id}/mailchimp`)).json.sync;
 check('…what Mailchimp holds: the four subscribed, by first and last name, in the tag', JSON.stringify(st.tag) === JSON.stringify(['Ana', 'Ben', 'Cal', 'Dee'].map(addr))
   && st.members.some(([e, s, f]) => e === addr('Ana') && s === 'subscribed' && f.FNAME === 'Ana' && f.LNAME === 'Example') && sync.total === 4 && sync.added === 4 && sync.tagged === 4, JSON.stringify([st.tag, sync]));
-const traffic = JSON.stringify(st.calls);
-check('…and nothing else left base.win: no phone, no street, no tag', !/555|Example Street|vip-donor|"member"/.test(traffic));
+// Only what was said to Mailchimp (each call's body and query), and whole values: a call's key and a
+// member's address in a path are random-looking hex, where three digits in a row mean nothing.
+const saidToMailchimp = JSON.stringify(st.calls.map((c) => [c.query, c.body]));
+check('…and nothing else left base.win: no phone, no street, no tag', st.calls.length > 5 && !/555-0142|5550142|Example Street|vip-donor|"member"/.test(saidToMailchimp));
 await shot(lp, '07-list-synced-1440');
 
 // ── 6. The phone: the same line; Sync again remembers the choice ──
@@ -513,6 +519,37 @@ check('nothing base.win sent ever said "subscribed" about someone already there'
   && st.calls.filter((c) => c.method === 'POST' && c.path === '/lists/aud0001').every((c) => c.body.update_existing === false));
 const writes = st.calls.filter((c) => c.method !== 'GET');
 check('every write to Mailchimp carried its own key', writes.length > 10 && writes.every((c) => /^base-mc-[a-z]+-[0-9a-f]{32}$/.test(c.key || '')), `${writes.length} writes`);
+
+// ── 13. A sync finds people who had left in Mailchimp, and an address Mailchimp will not take ──
+// Gus unsubscribed in Mailchimp and Hal's address died there, and neither webhook arrived. Jon is new
+// on the list; Mailchimp refuses his address. The question can only count who can be emailed here now.
+await act('person.create', { name: 'Jon Example', email: addr('Jon'), tags: ['member'] });
+await set({ refuse: [{ email: addr('Jon') }] });
+await post('/unsubscribe', { email: addr('Gus'), send: false });
+await post('/clean', { email: addr('Hal'), send: false });
+lp = await openList(page);
+await page.locator('.ls-tools button:has-text("Sync again")').click();
+await until(async () => /to send$/.test(await words(page.locator('.mc-ask .mc-line[role="status"]'))), 8000);
+const askedFor = await words(page.locator('.mc-ask .mc-line[role="status"]'));
+await page.locator('.mc-ask button:has-text("Send")').click();
+const TURNED_OFF = 'Email turned off here too: 1 who unsubscribed in Mailchimp, 1 dead address.';
+const NOT_TAKEN = '1 Mailchimp wouldn’t take (Mailchimp said: jon@example.org looks fake or invalid, please enter a real email address.)';
+await until(async () => (await words(page.locator('.mc-status'))).includes(TURNED_OFF), 20000);
+status = await words(page.locator('.mc-status'));
+check('the question counted 5; the line says 2 went, and why: who the sync turned off here, and who Mailchimp would not take — in its words', askedFor === '5 addresses to send'
+  && status.startsWith('In Mailchimp · 2 addresses · tag “base.win: Members” Synced ') && status.includes(` · 4 taken out of the tag · ${NOT_TAKEN} · sent by Marco Example ${TURNED_OFF}`), `${askedFor} → ${status}`);
+const last = (await api(`/lists/${list.id}/mailchimp`)).json.sync;
+subs = (await api('/subscriptions')).json;
+st = await mc();
+check('…as the API has it, and as Mailchimp holds it: Gus and Hal are off here, Jon is not in the audience', last.total === 3 && last.skipped === 1 && last.pulled_unsubscribed === 1 && last.pulled_cleaned === 1
+  && JSON.stringify(st.tag) === JSON.stringify(['Dee', 'Ida'].map(addr)) && !st.members.some(([e]) => e === addr('Jon'))
+  && (await api(`/lists/${list.id}/mailchimp?counts=1`)).json.counts.everyone === 3, JSON.stringify([last, st.tag]));
+await shot(lp, '15-list-turned-off-1440');
+plp = await openList(phone);
+await phone.locator('.mc-status').waitFor({ timeout: 10000 }).catch(() => {});
+pm = await measure(phone.locator('.ls-tools'));
+check('at 390: the same lines, wrapped — no sideways scroll, every button ≥ 48px', (await words(phone.locator('.mc-status'))) === status && fits(pm), `${await words(phone.locator('.mc-status'))} · ${JSON.stringify(pm)}`);
+await shot(plp, '15-list-turned-off-390');
 
 check('the books verify', (await api('/audit/verify')).json?.ok === true);
 check('no page errors', errors.length === 0, errors.join(' | '));

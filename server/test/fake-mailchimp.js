@@ -31,7 +31,9 @@
 //                             they left, or the address bounced for good — and
 //                             the webhook says so (send: false: it never arrives)
 //   hook(type, data, { sign, signWith, path })   any webhook, forged ones too
-//   refuse(email, words)      batch subscribe refuses this address
+//   refuse(email, words)      batch subscribe refuses this address (words false: it takes it again)
+//   untaggable(email, words)  a tag will not take this member: the answer names the address
+//                             under errors, as it does one that is not in the audience
 //   requireMerge(field | null)  the audience insists on a merge field: an add or a change to a
 //                             member without it is refused unless skip_merge_validation=true
 //                             (the parameter is the client library's; the refusal's words are
@@ -57,6 +59,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
   const calls = [];
   const audiences = new Map();
   const refusals = new Map();
+  const untaggable = new Map();
   const locked = new Map();
   let required = null;
   let n = 0;
@@ -139,7 +142,8 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
       const headers = { ...headersFor(raw, sign), ...(json ? { 'content-type': 'application/json' } : {}) };
       return post(raw, headers, url);
     },
-    refuse: (email, words = 'looks fake or invalid, please enter a real email address.') => { refusals.set(lower(email), words); },
+    refuse: (email, words = 'looks fake or invalid, please enter a real email address.') => { if (words === false) refusals.delete(lower(email)); else refusals.set(lower(email), words); },
+    untaggable: (email, words = 'This contact can’t be added to a tag.') => { if (words === false) untaggable.delete(lower(email)); else untaggable.set(lower(email), words); },
     requireMerge: (field) => { required = field || null; },
     lock: (email, words = 'This member can’t be changed just now.') => { if (words === false) locked.delete(lower(email)); else locked.set(lower(email), words); },
     limit: (v = {}) => { limited = v === false ? null : { after: v.after ?? 0, times: v.times ?? 1 }; },
@@ -149,7 +153,7 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
     signing: (secret) => { signWith = secret; },
     probe: (fn) => { probeWith = fn; },
     reset: () => {
-      calls.length = 0; refusals.clear(); locked.clear(); required = null; limited = null; failWith = false; slowMs = 0; pageCap = 1000; signWith = null; probeWith = null;
+      calls.length = 0; refusals.clear(); untaggable.clear(); locked.clear(); required = null; limited = null; failWith = false; slowMs = 0; pageCap = 1000; signWith = null; probeWith = null;
       for (const a of audiences.values()) { a.members.clear(); a.segments.clear(); a.webhooks.length = 0; }
       for (const id of [...audiences.keys()]) if (id !== first.id) audiences.delete(id);
     },
@@ -243,12 +247,13 @@ export const startFakeMailchimp = async ({ port = 0, apiKey = null, deliver = nu
         const out = { members_added: [], members_removed: [], errors: [] };
         const missing = [];
         for (const e of add) {
-          if (!a.members.has(md5(e))) missing.push(e);
+          if (untaggable.has(lower(e))) out.errors.push({ email_addresses: [e], error: untaggable.get(lower(e)) });
+          else if (!a.members.has(md5(e))) missing.push(e);
           else if (!s.members.has(lower(e))) { s.members.add(lower(e)); out.members_added.push({ email_address: e }); }
         }
         for (const e of remove) if (s.members.delete(lower(e))) out.members_removed.push({ email_address: e });
         if (missing.length) out.errors.push({ email_addresses: missing, error: 'Email addresses do not exist on the list' });
-        return [{ ...out, total_added: out.members_added.length, total_removed: out.members_removed.length, error_count: missing.length }, 200];
+        return [{ ...out, total_added: out.members_added.length, total_removed: out.members_removed.length, error_count: out.errors.reduce((sum, x) => sum + x.email_addresses.length, 0) }, 200];
       }
     }
 
