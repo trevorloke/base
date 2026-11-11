@@ -147,9 +147,11 @@ export default function SendToMailchimp({ listId }) {
     setBusy(false);
   };
   const first = door ? state.data?.first : undefined;
-  // Counted, and nobody here to turn off (or someone said yes meanwhile): it goes as asked.
+  // Counted, and nobody here to turn off (or someone said yes meanwhile): it
+  // goes as asked — once for each tap, whatever the answer then says.
+  const resent = useRef(false);
   useEffect(() => {
-    if (door && first === null && !busy) send(door.all);
+    if (door && first === null && !busy && !resent.current) { resent.current = true; send(door.all); }
   }, [door, first, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   // A sync that turned people off here changes the page's own numbers ("3 by
   // email"): read again when it ends.
@@ -165,7 +167,7 @@ export default function SendToMailchimp({ listId }) {
   if (!isOn || state.data?.on === false) return null;
   const s = state.data?.sync || null;
   const going = active(s);
-  const open = () => { setError(null); setDoor(null); setEveryone(s?.consent === 'all'); setAsking(true); };
+  const open = () => { setError(null); setDoor(null); resent.current = false; setEveryone(s?.consent === 'all'); setAsking(true); };
   const away = () => { setAsking(false); setDoor(null); setError(null); };
   const counts = ask.data?.counts;
   const n = counts ? (everyone ? counts.everyone : counts.subscribed) : 0;

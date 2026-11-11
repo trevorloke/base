@@ -307,7 +307,10 @@ one tap away under **More**.
 - **Mailchimp** (optional — `MAILCHIMP_API_KEY`; INTEGRATIONS.md) —
   Settings → Services: **Check** names the audience and says Mailchimp isn't
   sending unsubscribes here yet; **Connect**, copy the signing secret it
-  shows once into `MAILCHIMP_WEBHOOK_SECRET`, and **Check** passes. On a
+  shows once into `MAILCHIMP_WEBHOOK_SECRET`, and **Check** passes. The row
+  then asks before the first pull — *Audience ‘…’ · N people here
+  unsubscribed there* — check the audience is the campaign's, and tap
+  **Turn their email off here** (*Not now* turns nobody off). On a
   list of your own team's addresses: **Send to Mailchimp** says how many go
   (only the newsletter's subscribers unless you tick *Everyone…*), then
   *In Mailchimp · 3 addresses · tag “base.win: …”* — look for the tag in

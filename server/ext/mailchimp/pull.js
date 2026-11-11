@@ -207,6 +207,8 @@ const askFirst = async (db, ws, audience, members) => {
   const would = await wouldTurnOff(db, ws, members);
   if (!would.unsubscribed && !would.cleaned) {
     await runAction(db, { workspaceId: ws, actorId: null, action: PULL_ACTION }, async (tx, emit) => {
+      // Two counts at once (Connect and Pull now): opened, and said, once.
+      if ((await tx.query('select agreed_for from mailchimp_state where workspace_id = $1', [ws])).rows[0]?.agreed_for === audience) return;
       await tx.query(
         `insert into mailchimp_state (workspace_id, agreed_for) values ($1, $2)
          on conflict (workspace_id) do update set agreed_for = excluded.agreed_for`, [ws, audience],
