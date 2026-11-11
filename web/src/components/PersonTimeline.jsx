@@ -63,23 +63,25 @@ const whenWords = (e) => {
 };
 
 // What happened, as a link when it leads somewhere: another screen, or one
-// of this profile's own sections ("#gifts").
-function Words({ e, from, onSection }) {
-  if (!e.link) return <span>{e.title}</span>;
-  if (e.link.startsWith('#')) {
-    return <button type="button" className="ptl-link" onClick={() => onSection?.(e.link.slice(1))}>{e.title}</button>;
+// of this profile's own sections ("#gifts") while that section is on the
+// page — words otherwise, never a link that goes nowhere.
+function Words({ e, from, sections, onSection }) {
+  const section = e.link?.startsWith('#') ? e.link.slice(1) : null;
+  if (!e.link || (section && !sections.includes(section))) return <span>{e.title}</span>;
+  if (section) {
+    return <button type="button" className="ptl-link" onClick={() => onSection?.(section)}>{e.title}</button>;
   }
   return <Link className="ptl-link" to={e.link} state={{ from }}>{e.title}</Link>;
 }
 
-function Row({ e, from, onSection }) {
+function Row({ e, from, sections = [], onSection }) {
   return (
     <li>
       <span className="when">{whenWords(e)}</span>
       <span className="what">
         <span className="chip">{e.label}</span>
         {e.pending && <span className="chip obx-copy ds-pending">Not sent yet</span>}
-        {e.rating ? <RatingTag code={e.rating} /> : <Words e={e} from={from} onSection={onSection} />}
+        {e.rating ? <RatingTag code={e.rating} /> : <Words e={e} from={from} sections={sections} onSection={onSection} />}
         {e.by && <span className="by">{e.by}</span>}
         {e.detail && <span className="note">{e.detail}</span>}
       </span>
@@ -89,8 +91,10 @@ function Row({ e, from, onSection }) {
 
 // all: usePersonTimeline's query for the whole list (Person.jsx holds it).
 // pending: contacts waiting on this device, already in a row's words.
+// sections: the profile's sections on the page now (Answers and Ladders
+// wait on reads of their own, and no signal keeps neither).
 // onSection(key): open that section of the profile and go to it.
-export function PersonTimeline({ personId, name, all, pending = [], onSection }) {
+export function PersonTimeline({ personId, name, all, pending = [], sections = [], onSection }) {
   const [group, setGroup] = useState('all');
   const [said, setSaid] = useState('');
   const narrowed = usePersonTimeline(personId, group !== 'all', group);
@@ -139,12 +143,12 @@ export function PersonTimeline({ personId, name, all, pending = [], onSection })
       {(waiting.length > 0 || (!failed && entries.length > 0)) && (
         <ul className="timeline ptl">
           {waiting.map((e) => <Row key={e.id} e={e} />)}
-          {!failed && entries.map((e) => <Row key={e.id} e={e} from={from} onSection={onSection} />)}
+          {!failed && entries.map((e) => <Row key={e.id} e={e} from={from} sections={sections} onSection={onSection} />)}
         </ul>
       )}
       {failed ? (
         <p className="ptl-state" role="alert">
-          Unavailable — <button type="button" className="btn btn-quiet pp-btn" onClick={() => q.refetch()}>Try again</button>
+          Unavailable — <button type="button" className="btn pp-btn" onClick={() => q.refetch()}>Try again</button>
         </p>
       ) : noSignal(q) ? <NoSignal />
         : !q.data ? <p className="ptl-state muted" role="status">Loading…</p>
@@ -152,7 +156,7 @@ export function PersonTimeline({ personId, name, all, pending = [], onSection })
             : null}
       {!failed && q.hasNextPage && (moreFailed && !q.isFetchingNextPage ? (
         <p className="ptl-state" role="alert">
-          Unavailable — <button type="button" className="btn btn-quiet pp-btn" onClick={more}>Try again</button>
+          Unavailable — <button type="button" className="btn pp-btn" onClick={more}>Try again</button>
         </p>
       ) : online ? (
         <div className="pf-row-acts">

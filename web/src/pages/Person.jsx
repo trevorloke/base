@@ -955,6 +955,11 @@ export default function Person() {
   const waiting = pendingAbout(outbox.items, person.id);
   // Contacts still on this device: History shows them first, "Not sent yet".
   const notSent = contacts.filter((c) => c.pending).map(waitingRow);
+  // Ladders and Answers come with reads of their own (none with no signal):
+  // History leads to a section only while it's on the page.
+  const showLadders = desk && (ladders.data?.runs?.length > 0 || ladders.data?.followups?.length > 0);
+  const showAnswers = desk && answers.data?.answers?.length > 0;
+  const linkedSections = ['signs', 'gifts', ...(showLadders ? ['ladders'] : []), ...(showAnswers ? ['answers'] : [])];
   const tags = Array.isArray(person.tags) ? person.tags : [];
   const thisYear = totals.find((t) => String(t.year) === String(new Date().getFullYear()));
   const last = contacts[0];
@@ -1024,19 +1029,20 @@ export default function Person() {
             <Gifts slates={slatesOf(me)} person={person} gifts={gifts} totals={totals} />
           </Section>
         )}
-        {desk && (ladders.data?.runs?.length > 0 || ladders.data?.followups?.length > 0) && (
+        {showLadders && (
           <Section title="Ladders" count={ladders.data.runs.filter((r) => r.status !== 'done').length || ''} open={!!open.ladders} onToggle={toggle('ladders')}>
             <PersonLadders data={ladders.data} name={person.name} />
           </Section>
         )}
-        {desk && answers.data?.answers?.length > 0 && (
+        {showAnswers && (
           <Section title="Answers" count={answers.data.answers.length} open={!!open.answers} onToggle={toggle('answers')}>
             <PersonAnswers query={answers} />
           </Section>
         )}
         {desk && (
           <Section title="History" count={timelineCount(history, notSent.length)} open={!!open.history} onToggle={toggle('history')}>
-            <PersonTimeline key={person.id} personId={person.id} name={person.name} all={history} pending={notSent} onSection={openSection} />
+            <PersonTimeline key={person.id} personId={person.id} name={person.name} all={history} pending={notSent}
+              sections={linkedSections} onSection={openSection} />
           </Section>
         )}
         {/* Texts through the campaign's number with this person (desk). */}

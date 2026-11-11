@@ -496,10 +496,11 @@ one tap away under **More**.
   the email service reports them), website forms, gifts, memberships,
   shifts, answers, signs, voted, *Unsubscribed from email*, *Replied STOP*.
   The chips narrow it (*Doors & calls · Messages · Website · Money ·
-  Shifts*); a gift or an answer opens its section here, a shift or a text
-  its own screen; *Load more* brings the next 50. Staff denied Donations see
-  no Money chip; a slow or failed read says *Loading…* or *Unavailable — Try
-  again*, never an empty history.
+  Shifts*); a gift on the books or an answer opens its section here, a
+  shift or a text its own screen (a voided or refunded gift, or an answer
+  with no signal, is plain words: nothing here to open); *Load more* brings
+  the next 50. Staff denied Donations see no Money chip; a slow or failed
+  read says *Loading…* or *Unavailable — Try again*, never an empty history.
 - **Shifts** — **New shift** (what, when, where, how many; role,
   instructions and link under *More details*), **Add volunteer**, then
   **Notify everyone** (email + text). Without email/text connected the
