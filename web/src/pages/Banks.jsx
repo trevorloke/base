@@ -200,7 +200,7 @@ function NewBank() {
               <label htmlFor={`${id}-l`} className="ws-label">List</label>
               <select id={`${id}-l`} className="input" value={listId} required onChange={(e) => setListId(e.target.value)}>
                 <option value="">Choose a list…</option>
-                {listId && !chosen && <option value={listId}>{names.isPending ? LOADING : 'A list that isn’t here any more'}</option>}
+                {listId && !chosen && <option value={listId}>{names.isPending ? LOADING : names.isError ? 'The list you picked' : 'A list that isn’t here any more'}</option>}
                 {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
               {names.isError && <p className="error" role="alert"><Unavailable onRetry={() => names.refetch()} /></p>}

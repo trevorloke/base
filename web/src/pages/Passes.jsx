@@ -89,7 +89,7 @@ function StartForm({ open, busy, online, onSubmit, onCancel, list = '' }) {
         <label htmlFor={`${uid}-list`}>List to walk</label>
         <select id={`${uid}-list`} className="input" value={listId} onChange={(e) => setListId(e.target.value)}>
           <option value="">None — every door</option>
-          {listId && !lists.some((l) => l.id === listId) && <option value={listId}>{names.isPending ? LOADING : 'A list that isn’t here any more'}</option>}
+          {listId && !lists.some((l) => l.id === listId) && <option value={listId}>{names.isPending ? LOADING : names.isError ? 'The list you picked' : 'A list that isn’t here any more'}</option>}
           {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
         {names.isError && <span className="error" role="alert"><Unavailable onRetry={() => names.refetch()} /></span>}

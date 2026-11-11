@@ -191,8 +191,10 @@ export function RuleGroups({ chip, f, update }) {
           <div className="form-row">
             <div className="field">
               <label htmlFor={`${id}-q`}>Question</label>
-              <select id={`${id}-q`} className="input" value={q ? qid : ''} onChange={(e) => update({ answer: e.target.value ? `${e.target.value}:any` : null })}>
+              <select id={`${id}-q`} className="input" value={f.answer ? qid : ''} onChange={(e) => update({ answer: e.target.value ? `${e.target.value}:any` : null })}>
                 <option value="">Any question</option>
+                {/* A rule whose question hasn't loaded (or is gone) still shows as picked. */}
+                {f.answer && !q && <option value={qid}>{answerWord(f.answer, questions)}</option>}
                 {questions.map((x) => <option key={x.id} value={x.id}>{short(x.text, 60)}</option>)}
               </select>
             </div>
@@ -300,9 +302,10 @@ export function RuleFields({ value, onChange, exclude = null }) {
             <>
               <div className="field">
                 <label htmlFor={`${id}-q`}>Survey question</label>
-                <select id={`${id}-q`} className="input" value={q ? qid : ''} onChange={(e) => set('answer')(e.target.value ? `${e.target.value}:any` : '')}>
+                <select id={`${id}-q`} className="input" value={value.answer ? qid : ''} onChange={(e) => set('answer')(e.target.value ? `${e.target.value}:any` : '')}>
                   <option value="">Any question</option>
-                  {value.answer && !q && <option value="">{answerWord(value.answer, questions)}</option>}
+                  {/* A rule whose question hasn't loaded (or is gone) still shows as picked. */}
+                  {value.answer && !q && <option value={qid}>{answerWord(value.answer, questions)}</option>}
                   {questions.map((x) => <option key={x.id} value={x.id}>{short(x.text, 60)}</option>)}
                 </select>
               </div>
