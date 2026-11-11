@@ -42,6 +42,9 @@ const whenWord = (iso) => {
   const today = d.toDateString() === new Date().toDateString();
   return d.toLocaleString('en-CA', today ? { hour: 'numeric', minute: '2-digit' } : { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 };
+// A server whose background work is off (STARBASE_JOBS=off): said in the
+// words the app uses when something isn't set up (MailchimpPanel says the same).
+const WORK_OFF = 'background work is turned off — ask whoever set up base.win to turn it on';
 const active = (s) => Boolean(s) && (s.status === 'queued' || s.status === 'syncing') && !s.stalled;
 const stopped = (s) => Boolean(s) && (s.status === 'failed' || s.stalled);
 // What this sync's own pull turned off here, in one sentence — null when nothing.
@@ -73,7 +76,7 @@ function Status({ s, running }) {
 function Standing({ s, running }) {
   if (stopped(s)) return <p className="mc-line" data-status="stopped"><strong>Stopped</strong>: {s.note || 'it stopped part-way'}</p>;
   if (active(s)) {
-    if (!running) return <p className="mc-line"><strong>Waiting</strong> · background work is off on this server</p>;
+    if (!running) return <p className="mc-line"><strong>Waiting</strong> · {WORK_OFF}</p>;
     return (
       <p className="mc-line">
         <strong>Syncing with Mailchimp</strong>{s.todo > 0 ? ` · ${num(s.todo)} to go` : ''}{s.note ? ` · trying again soon (${s.note})` : ''}
@@ -207,7 +210,7 @@ export default function SendToMailchimp({ listId }) {
               ) : (
                 <>
                   <p className="mc-line" role="status">
-                    {!state.data.running ? <><strong>Waiting</strong> · background work is off on this server</>
+                    {!state.data.running ? <><strong>Waiting</strong> · {WORK_OFF}</>
                       : busy || first?.counting || counted ? 'Counting who unsubscribed in Mailchimp…'
                         : <>Mailchimp didn’t answer — <button type="button" className="btn-link mc-retry" disabled={busy} onClick={() => send(door.all)}>Try again</button></>}
                   </p>
@@ -237,7 +240,8 @@ export default function SendToMailchimp({ listId }) {
               )}
               <div className="ops-actions">
                 {/* Nothing to send is nothing to do — unless it was sent before: then the tag is emptied. */}
-                <button type="button" className="btn ops-solid ops-tap" disabled={busy || !online || !counts || (!n && !s)} onClick={() => send(everyone)}>{busy ? 'Sending…' : 'Send'}</button>
+                {/* Its whole name: "Send" alone could be read as the page's "Email this list". */}
+                <button type="button" className="btn ops-solid ops-tap" disabled={busy || !online || !counts || (!n && !s)} onClick={() => send(everyone)}>{busy ? 'Sending…' : 'Send to Mailchimp'}</button>
                 <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={away}>Cancel</button>
               </div>
             </div>

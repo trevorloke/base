@@ -95,7 +95,7 @@ export default function MailchimpPanel({ online, onChanged }) {
   if (q.isLoading) line = 'Loading…';
   else if (q.isError) {
     line = noSignal(q) ? <NoSignal /> : <>Unavailable — <button type="button" className="btn-link mcp-retry" onClick={() => q.refetch()}>Try again</button></>;
-  } else if (idle && busy !== 'pull' && busy !== 'yes') line = 'Waiting · background work is off on this server';
+  } else if (idle && busy !== 'pull' && busy !== 'yes') line = 'Waiting · background work is turned off — ask whoever set up base.win to turn it on';
   else if (counting) line = 'Counting who unsubscribed in Mailchimp…';
   else if (pulling) line = 'Pulling…';
   else if (d.pull_ok === false) { stopped = true; line = `The last pull stopped: ${d.pull_note || 'no answer from Mailchimp'}`; }

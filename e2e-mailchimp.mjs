@@ -228,7 +228,7 @@ await set({ env: mailchimpOn, add: [{ email: 'older@example.org' }, { email: 're
 row = await openServices(page);
 w = await words(row);
 let m = await measure(page.locator(ROW));
-check('set up: "Set up", the honest line, Connect and Pull now, "Not pulled yet"', /^Mailchimp Set up /.test(w) && /Built against Mailchimp’s published API: press Check on your own account before relying on it\./.test(w)
+check('set up: "Set up", the honest line, Connect and Pull now, "Not pulled yet"', /^Mailchimp Set up /.test(w) && /Press Check before relying on it: it tries your own Mailchimp account\./.test(w)
   && /Connect Pull now Connect tells Mailchimp to send unsubscribes here\. Pull now reads them at once\. Not pulled yet/.test(w), w);
 check('…no yellow button on the screen, every button ≥ 48px', m.primary.length === 0 && m.minTap >= 48, JSON.stringify(m));
 const NOT_CONNECTED = '✕ The key works · audience “Sample Campaign” · 2 subscribed — but Mailchimp isn’t sending unsubscribes here yet: tap Connect';
@@ -391,7 +391,7 @@ await page.locator('.ls-tools button:has-text("Send to Mailchimp")').focus();
 await page.keyboard.press('Enter');
 await page.locator('.mc-ask .ops-check').waitFor({ timeout: 10000 }).catch(() => {});
 let ask = await words(page.locator('.mc-ask'));
-const QUESTION = '4 addresses to send · newsletter subscribers only Everyone on this list who can be emailed (6); they agreed to hear from us by email Only email, first and last name go. Nobody already in your audience is changed. Anyone who unsubscribed in Mailchimp is turned off here too — only they can rejoin. Send Cancel';
+const QUESTION = '4 addresses to send · newsletter subscribers only Everyone on this list who can be emailed (6); they agreed to hear from us by email Only email, first and last name go. Nobody already in your audience is changed. Anyone who unsubscribed in Mailchimp is turned off here too — only they can rejoin. Send to Mailchimp Cancel';
 check('the question: "4 addresses to send · newsletter subscribers only", the tick with how many it would be, what goes — and what the sync does here', ask.startsWith(QUESTION), ask);
 const counts = (await api(`/lists/${list.id}/mailchimp?counts=1`)).json.counts;
 check('…the numbers the API counted', counts.subscribed === 4 && counts.everyone === 6, JSON.stringify(counts));
@@ -399,7 +399,7 @@ await shot(lp, '05-list-ask-1440');
 await phone.locator('.ls-tools button:has-text("Send to Mailchimp")').tap();
 await phone.locator('.mc-ask .ops-check').waitFor({ timeout: 10000 }).catch(() => {});
 pm = await measure(phone.locator('.ls-tools'));
-check('at 390: the same question — the tick a 48px row, Send and Cancel ≥ 48px, no sideways scroll', (await words(phone.locator('.mc-ask'))).startsWith(QUESTION) && fits(pm), JSON.stringify(pm));
+check('at 390: the same question — the tick a 48px row, Send to Mailchimp and Cancel ≥ 48px, no sideways scroll', (await words(phone.locator('.mc-ask'))).startsWith(QUESTION) && fits(pm), JSON.stringify(pm));
 await shot(plp, '05-list-ask-390');
 await phone.locator('.mc-ask button:has-text("Cancel")').tap();
 check('Cancel (on the phone): the question is away, nothing was sent', (await phone.locator('.mc-ask').count()) === 0 && (await mc()).tag === null);
@@ -547,7 +547,7 @@ check('Try again (by keyboard): the line is back, and Sync again with it', again
 // ── 11. A server whose background work is off (STARBASE_JOBS=off): "Waiting" — never "Syncing…" or "Pulling…" for ever ──
 // (This server's is on: what it would answer then is put in its place.)
 const json = (o) => (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
-const WAITING_OFF = 'Waiting · background work is off on this server';
+const WAITING_OFF = 'Waiting · background work is turned off — ask whoever set up base.win to turn it on';
 const offList = json({ on: true, running: false, sync: { id: list.id, list_id: list.id, status: 'queued', consent: 'subscribed', tag: TAG, total: 0, added: 0, tagged: 0, removed: 0, skipped: 0, todo: 0, note: null, synced_at: null, created_at: new Date().toISOString(), by: 'Marco Example', stalled: false } });
 const PANEL = '**/api/mailchimp';
 // (An earlier pull had stopped, too: the line is still about the waiting, and not in the colour of a problem.)
