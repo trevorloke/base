@@ -7,7 +7,8 @@ import { SKINS } from '@starbase/shared/site/theme';
 export default (ws) => {
   const name = String(ws?.name || '').trim() || 'Our campaign';
   return {
-    theme: SKINS.base,
+    // A new website wears the campaign's brand until it is given its own look.
+    theme: { ...SKINS.base, follow: true },
     settings: {
       nav: {
         menu: [

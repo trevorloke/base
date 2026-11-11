@@ -8,7 +8,8 @@
 // this server — one campaign per deployment (lib/org.js).
 import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
-import { brandKey } from '../../lib/brand.js';
+import { brandKey, brandFor } from '../../lib/brand.js';
+import { deriveLook } from '@starbase/shared/brand-look';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { checkTheme } from '@starbase/shared/site/theme';
 import { SECTION_KEYS, sectionOf, hostOf, consentWording, tagOf } from './shape.js';
@@ -200,12 +201,44 @@ export const menuPages = async (q, workspaceId) => (await q.query(
     order by nav_order, created_at`, [workspaceId],
 )).rows;
 
+// The website's theme as the campaign's brand makes it (lib/brand.js, the
+// shades by shared/brand-look.js): the brand colour and the text on it, the
+// second colour as the accent, the brand as words for links, the brand for
+// the buttons that ask for something, the app's neutral grounds, its
+// heading face and corners, and its logo (the site's own when the brand has
+// none). What a website that follows the brand wears, and what "Give the
+// website its own look" starts from.
+export const themeFromBrand = (brand, own, name = '') => {
+  const l = deriveLook(brand, 'light');
+  const { theme } = checkTheme({
+    ...own,
+    colors: {
+      brand: l.accent, brandInk: l.accentInk, accent: l.second, accentInk: l.secondInk,
+      ink: l.text, paper: l.card, surface: l.panel, line: l.line, link: l.accentWords,
+      action: l.accent, actionInk: l.accentInk,
+    },
+    fonts: { heading: l.heading, body: 'inter' },
+    radius: l.corners,
+    logo: brand.publicLogo ? { url: brand.publicLogo, alt: name } : own?.logo,
+    pop: false,
+    follow: own?.follow === true,
+  }, brandKey());
+  return theme;
+};
+
 // What the renderer gets as `site` (SITE.md): the theme checked, the menu
 // with the pages that ask to be in it, and the consent boxes' words. The
 // nav in the renderer's own words (SITE.md "Rendering": items, bar, cta):
 // Settings' menu is the Menu's items, its links the title bar's.
-export const siteOf = (settings, pages = []) => {
-  const { theme } = checkTheme(settings.theme, brandKey());
+// campaign: the workspace ({ name, settings }) — a website that follows the
+// campaign's brand wears it (and the logo for dark backgrounds in its dark
+// footer), and every website gets the campaign's mark as its icon.
+export const siteOf = (settings, pages = [], campaign = null) => {
+  const own = checkTheme(settings.theme, brandKey()).theme;
+  const brand = campaign ? brandFor(parseJ(campaign.settings, {})) : null;
+  const following = Boolean(own.follow && brand);
+  const theme = following ? themeFromBrand(brand, own, campaign.name || '') : own;
+  const footer = following && brand.publicLogoDark ? { ...settings.footer, logo: { url: brand.publicLogoDark, alt: campaign.name || '' } } : settings.footer;
   const listed = new Set(settings.nav.menu.map((l) => l.href));
   const extra = pages
     .map((p) => ({ label: p.title, href: p.slug === 'home' ? '/' : `/${p.slug}` }))
@@ -213,7 +246,8 @@ export const siteOf = (settings, pages = []) => {
   return {
     theme,
     nav: { items: [...settings.nav.menu, ...extra], bar: settings.nav.links, cta: settings.nav.cta },
-    footer: settings.footer,
+    footer,
+    icon: brand?.siteIcon || null,
     announcement: settings.announcement,
     seo: settings.seo,
     org: settings.org,

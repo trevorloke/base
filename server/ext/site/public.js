@@ -215,7 +215,7 @@ const draw = async (c, site, { kind, page = null, post = null, campaign = null, 
   let hit = fullKey ? cacheGet(fullKey) : null;
   if (!hit) {
     const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24 });
-    const out = renderSite({ kind, site: siteOf(settings, await menuPages(site.db, site.ws.id)), page, post, campaign, data, ctx });
+    const out = renderSite({ kind, site: siteOf(settings, await menuPages(site.db, site.ws.id), site.ws), page, post, campaign, data, ctx });
     hit = { status: status || out.status || 200, html: out.html, csp: cspFor(out.html, { preview: ctx.preview }) };
     if (fullKey && hit.status === 200) cachePut(fullKey, hit);
   }
@@ -246,7 +246,7 @@ const NEWS_PAGE = { id: null, slug: 'news', title: 'News', description: '', modu
 // ── Plain pages of the site's own (preferences, unsubscribe, a link that
 // expired): the campaign's name and colours, one column, one button. ──
 const plainPage = (site, settings, { title, body, status = 200 }) => {
-  const s = siteOf(settings);
+  const s = siteOf(settings, [], site.ws);
   const org = s.org.name || site.ws.name;
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>${esc(title)} · ${esc(org)}</title>

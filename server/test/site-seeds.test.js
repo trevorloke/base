@@ -74,6 +74,7 @@ test('Imagine Surrey: the pages, the petitions, the menu and details as the webs
   assert.equal(s.social.accounts[0].handle, '@imagine.surrey');
   assert.equal(s.theme.skin, 'imagine-surrey');
   assert.equal(s.theme.colors.brand, '#003979');
+  assert.equal(s.theme.follow, false, 'imaginesurrey.ca’s own look, not the app’s brand');
   assert.deepEqual(checkTheme(s.theme).problems, [], 'readable');
 
   const tracker = ok(await mgr.get(`/api/site/pages/${site.pages.find((p) => p.slug === 'tracker').id}`)).page.published;
@@ -125,6 +126,7 @@ test('any other campaign: a clean generic site, with its own name and nothing ma
     assert.deepEqual(site.pages.map((p) => p.slug), ['home', 'donate', 'volunteer', 'news', 'privacy']);
     assert.equal(site.settings.org.name, 'Riverside Neighbours');
     assert.equal(site.settings.theme.skin, 'base');
+    assert.equal(site.settings.theme.follow, true, 'a new website wears the campaign’s brand until it has its own look');
     assert.deepEqual(site.counts.campaigns, 0);
     const home = ok(await other.get(`/api/site/pages/${site.pages[0].id}`)).page.published;
     assert.deepEqual(home.modules.map((m) => m.kind), ['hero', 'columns', 'newsletter', 'donate', 'volunteer']);

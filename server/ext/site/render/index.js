@@ -78,6 +78,7 @@ export function renderSite({ kind = 'page', site, page: rawPage, post, campaign,
     + (head.published ? prop('article:published_time', head.published) : '')
     + meta('twitter:card', head.image ? 'summary_large_image' : 'summary')
     + meta('theme-color', head.themeColor)
+    + (rc.site.icon ? `<link rel="icon" href="${esc(rc.img(rc.site.icon.icon))}" type="image/png"><link rel="apple-touch-icon" href="${esc(rc.img(rc.site.icon.touch))}">` : '')
     + head.fonts.map((f) => `<link rel="preload" href="${esc(f)}" as="font" type="font/woff2" crossorigin>`).join('')
     + `<link rel="stylesheet" href="${esc(assetUrl(rc.loc.assets, 'site.css'))}">`
     + `<style>${themeCss(t)}</style>`

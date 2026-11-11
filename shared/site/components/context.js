@@ -12,6 +12,12 @@ const links = (list) => arr(list)
   .map((l) => ({ label: str(l?.label).trim(), href: str(l?.href).trim(), bar: l?.bar === true }))
   .filter((l) => l.label && safeUrl(l.href));
 
+const ICON = /^\/media\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$/;
+const siteIcon = (icon) => {
+  const i = obj(icon);
+  return ICON.test(str(i.icon)) ? { icon: i.icon, touch: ICON.test(str(i.touch)) ? i.touch : i.icon } : null;
+};
+
 export function normalizeSite(site) {
   const s = obj(site);
   const { theme } = checkTheme(s.theme);
@@ -37,6 +43,9 @@ export function normalizeSite(site) {
   return {
     theme,
     consent,
+    // The site's icon: the campaign's mark as its app icons (server/lib/brand.js
+    // siteIcon) — only the campaign's own uploaded PNGs.
+    icon: siteIcon(s.icon),
     org: {
       name,
       shortName: str(org0.short_name || org0.shortName).trim() || name,

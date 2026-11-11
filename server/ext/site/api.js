@@ -3,7 +3,8 @@
 import { Hono } from 'hono';
 import { areasFor } from '../../lib/perms.js';
 import { here } from '../../lib/mount.js';
-import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace, appHosts, usedHosts } from './store.js';
+import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace, appHosts, usedHosts, themeFromBrand } from './store.js';
+import { brandFor } from '../../lib/brand.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
 
@@ -46,8 +47,13 @@ api.get('/site', async (c) => {
   )).rows.map((r) => [r.kind, r.n]));
   // SITE_HOSTS answer for the campaign the site is by default (store.js).
   const hosts = envHosts().length && (await siteWorkspace(db))?.id === ws ? envHosts() : [];
+  const campaign = c.get('ctx').workspace;
   return c.json({
     settings,
+    // The theme the campaign's brand makes (Settings → Brand): what the site
+    // wears while settings.theme.follow is on, and where "Give the website
+    // its own look" starts.
+    brand_theme: themeFromBrand(brandFor(campaign.settings), settings.theme, campaign.name),
     pages,
     counts: {
       pages: pages.length, published: pages.filter((p) => p.status === 'published').length,
