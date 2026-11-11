@@ -2064,7 +2064,8 @@ export default function MapPage() {
     // said (weak signal: the hosts don't refuse, they never answer). So six
     // seconds after the map last moved, tiles still out and not one street
     // drawn on screen: it isn't loading. Streets this phone kept, drawn,
-    // with their neighbours still out, are not that.
+    // with their neighbours still out, are not that — back over them, the
+    // look takes it back.
     let moved = null;
     const streetsOnScreen = () => {
       const box = map.getContainer().getBoundingClientRect();
@@ -2073,7 +2074,7 @@ export default function MapPage() {
         return img.naturalWidth > 0 && r.right > box.left + 1 && r.left < box.right - 1 && r.bottom > box.top + 1 && r.top < box.bottom - 1;
       });
     };
-    const look = () => { if (layer.isLoading() && !streetsOnScreen()) { health.blank(); tell(); } };
+    const look = () => { if (layer.isLoading()) { health.screen(streetsOnScreen()); tell(); } };
     const onMoved = () => { clearTimeout(moved); if (layer.isLoading()) moved = setTimeout(look, TILE_WAIT_MS + 20); };
     map.on('moveend zoomend', onMoved);
     layer.addTo(map);

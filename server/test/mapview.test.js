@@ -247,15 +247,33 @@ test('the street map isn’t loading: most of a view’s tiles failed, or not on
   // The map is moved on, into streets where nothing answers: six seconds
   // there with tiles still out and not one street on screen (Map.jsx looks)
   // is the street map not loading, whatever came for the view before.
-  hung.blank();
+  hung.screen(false);
   assert.deepEqual(hung.get(), { loaded: 3, failed: 0, down: true });
-  // …and when they all answer after all, it is loading.
+  // Back over streets the phone kept, drawn: the next look takes it back
+  // (the note goes by itself, as it does when the hosts refuse)…
+  hung.screen(true);
+  assert.equal(hung.get().down, false);
+  // …and away again, it is said again; when they all answer after all, it is loading.
+  hung.screen(false);
+  assert.equal(hung.get().down, true);
   for (let i = 0; i < 9; i += 1) hung.tile(true);
   hung.done();
   assert.equal(hung.get().down, false);
   // With no tiles out (the view done), a blank screen says nothing about the provider.
-  hung.blank();
+  hung.screen(false);
   assert.equal(hung.get().down, false);
+  // Streets on screen take back only what a look at the screen said: a view
+  // most of whose tiles failed so far stays "not loading" over kept streets
+  // (it is the view's own count, and ends with the view).
+  const most = tileHealth();
+  most.batch(0);
+  most.tile(true);
+  most.tile(false);
+  most.tile(false);
+  most.late(TILE_WAIT_MS + 5);
+  assert.equal(most.get().down, true);
+  most.screen(true);
+  assert.equal(most.get().down, true);
 });
 
 // Before the map goes to its other provider by itself, it asks that one for

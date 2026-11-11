@@ -573,7 +573,8 @@ address ignored*).
 **When the street map isn't loading** the map says so. It listens to its
 tiles: a view where most of them failed, or six seconds with not one (or,
 six seconds after the map last moved, tiles still out and not one street on
-screen — a host that never answers keeps the earlier view open), and —
+screen — a host that never answers keeps the earlier view open; back over
+streets the phone kept, that is taken back), and —
 once in a page's life — it switches to its other provider by itself (the
 *Clean* look's CARTO ↔ the standard tiles) with a line under the count
 saying it did (*The street map wasn’t loading — switched to Muted*), but

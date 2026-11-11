@@ -168,20 +168,26 @@ export const cellFill = (c, dark) => {
 // check shows them).
 // One tile that never answers keeps Leaflet's go open, though, and the views
 // moved to meanwhile are not asked about at all: so six seconds after each
-// move Map.jsx looks at the screen itself, and with tiles still out and not
-// one street drawn on it says so (blank).
+// move Map.jsx looks at the screen itself (screen), and with tiles still out
+// and not one street drawn on it, it isn't loading — until a later look
+// finds streets there again (the ones the phone kept: back over them the
+// note goes by itself, as it does when the hosts refuse).
 export const TILE_WAIT_MS = 6000;
 export const tileHealth = () => {
   let ok = 0; let bad = 0;         // this view's tiles
   let loaded = 0; let failed = 0;
   let since = null;                // when this view's tiles were asked for; null once they are all in
   let down = false;
+  let blank = false;               // down by a look at the screen, not by the tiles' own count
   return {
     batch(now) { ok = 0; bad = 0; since = now; },
     tile(good) { if (good) { ok += 1; loaded += 1; } else { bad += 1; failed += 1; } },
-    done() { if (ok + bad) down = bad > ok; since = null; },
-    late(now) { if (since != null && now - since >= TILE_WAIT_MS) down = ok === 0 || bad > ok; },
-    blank() { if (since != null) down = true; },
+    done() { if (ok + bad) { down = bad > ok; blank = false; } since = null; },
+    late(now) { if (since != null && now - since >= TILE_WAIT_MS) { down = ok === 0 || bad > ok; blank = false; } },
+    screen(streets) {
+      if (since == null) return;
+      if (!streets) { down = true; blank = true; } else if (blank) { down = false; blank = false; }
+    },
     get: () => ({ loaded, failed, down }),
   };
 };

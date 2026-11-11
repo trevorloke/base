@@ -568,7 +568,8 @@ one tap away under **More**.
   (the other doesn't answer either); tap it, pan back, and the turf's
   streets are still there, and in airplane mode too (and the look is still
   *Clean*). (Hosts that never answer, rather than refuse, are said the same
-  way, six seconds after the map last moved over blank streets.)
+  way, six seconds after the map last moved over blank streets — and the
+  line goes by itself back over the streets the phone kept.)
 - **Map, many turfs** — outlines and names show at once however many turfs
   there are; tap one and its sheet opens with *Loading…* where *64 doors
   left* then appears.

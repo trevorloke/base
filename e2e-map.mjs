@@ -703,30 +703,6 @@ try {
       }
     };
 
-    // Weak signal as it usually is — tiles that never answer, not refusals —
-    // and it goes while a view is loading: three of its tiles come, the rest
-    // never do. One tile that never answers keeps Leaflet's batch open, and
-    // the six-second look was the batch's: six seconds in some had come and
-    // none had failed, and the views moved to after that had no look at all
-    // — blank streets, and the map said nothing.
-    t = await tiled();
-    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
-    ts = await tilesUntil(t.pg, (s) => s.tiles === 'ok' && s.loaded > 0);
-    await sleep(2000); // (the first view's tiles all in)
-    t.net.up.clean = 'hang';
-    t.net.some.clean = 3;
-    t.net.up.base = 'hang';
-    await pan(t.pg, 'ArrowRight', 4);
-    await sleep(7500);
-    const part = await tileState(t.pg);
-    await pan(t.pg, 'ArrowRight', 12);
-    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 20000);
-    await t.pg.screenshot({ path: `${SHOTS}/8-never-answers-new-streets.png` });
-    check('the signal goes while a view is loading (three of its tiles come, the rest never answer), then new streets where nothing answers: the map says its street map isn’t loading, one tap to try again',
-      part.tiles === 'ok' && !part.note && ts.look === 'clean' && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && ts.pick === null,
-      JSON.stringify({ part: { tiles: part.tiles, note: part.note }, ...ts, asked: t.net.asked }));
-    await t.tctx.close();
-
     // In the field, with the service worker keeping the streets looked at:
     // the map opened with signal on Clean (CARTO), its tiles on screen kept.
     const keptStreets = async () => {
@@ -827,6 +803,35 @@ try {
     const backF = await t.onScreen();
     await t.pg.screenshot({ path: `${SHOTS}/8-flicker-back.png` });
     check('…back over the streets this browser kept, every tile draws', allKept(keptF, backF), JSON.stringify({ kept: keptF, back: backF }));
+    await t.tctx.close();
+
+    // Weak signal as it usually is — tiles that never answer, not refusals —
+    // and it goes while a view is loading: three of its tiles come, the rest
+    // never do. One tile that never answers keeps Leaflet's go of asking
+    // open, and the six-second look was that go's: six seconds in some had
+    // come and none had failed, and the views moved to after that had no look
+    // at all — blank streets, and the map said nothing. Back over the
+    // streets this browser kept, they are drawn and the note goes by itself.
+    t = await keptStreets();
+    const keptG = t.kept;
+    t.net.up.clean = 'hang';
+    t.net.some.clean = 3;
+    t.net.up.base = 'hang';
+    await t.pan('ArrowRight', 4);
+    await sleep(7500);
+    const part = await tileState(t.pg);
+    await t.pan('ArrowRight', 12);
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 20000);
+    await t.pg.screenshot({ path: `${SHOTS}/8-never-answers-new-streets.png` });
+    check('the signal goes while a view is loading (three of its tiles come, the rest never answer), then new streets where nothing answers: the map says its street map isn’t loading, one tap to try again',
+      part.tiles === 'ok' && !part.note && ts.look === 'clean' && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && ts.pick === null,
+      JSON.stringify({ part: { tiles: part.tiles, note: part.note }, ...ts, asked: t.net.asked }));
+    await t.pan('ArrowLeft', 16);
+    ts = await tilesUntil(t.pg, (s) => !s.note && s.tiles === 'ok', 15000);
+    const backG = await t.onScreen();
+    await t.pg.screenshot({ path: `${SHOTS}/8-never-answers-kept.png` });
+    check('…back over the streets this browser kept (nothing answering still): every one drawn, and the note goes by itself',
+      allKept(keptG, backG) && ts.look === 'clean' && ts.tiles === 'ok' && !ts.note && ts.pick === null, JSON.stringify({ kept: keptG, back: backG, look: ts.look, tiles: ts.tiles, note: ts.note }));
     await t.tctx.close();
 
     // The same after a switch by itself, with tiles that never answer: the
