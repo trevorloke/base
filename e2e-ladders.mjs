@@ -722,7 +722,9 @@ if (!HOOKS) {
   await page.setViewportSize({ width: 390, height: 844 });
   await sleep(300);
   await simple(page, 'a ladder’s people, one waiting for a quiet address (phone)');
-  await page.locator('.lad-sec .ops-row', { hasText: 'Sol Example' }).scrollIntoViewIfNeeded();
+  // Centred: at 390 px the row starts just inside the window, under the tab bar.
+  await page.locator('.lad-sec .ops-row', { hasText: 'Sol Example' }).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await sleep(200);
   await D.shot('13h-web-address-waiting-phone');
   await page.setViewportSize({ width: 1360, height: 900 });
   await D.api('/actions/ladder.setActive', { id: told.id, active: false });
