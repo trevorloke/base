@@ -666,6 +666,22 @@ if (!HOOKS) {
   llog = (await page.locator('.lad-log li').allInnerTexts()).map((x) => x.replace(/\s+/g, ' '));
   check('his log: "Taken off", then what the address answered — no "trying again"', llog.some((x) => /^Taken off/.test(x)) && llog.some((x) => /^Zapier: Failed · 500/.test(x)) && !llog.some((x) => /trying again/.test(x)), llog.join(' | '));
   await D.shot('13f-web-address-rows');
+  // An address that is slow to answer holds nothing behind it: while it is
+  // being called, another ladder's step runs (the job runner isn't made to wait).
+  const quick = (await D.api('/actions/ladder.create', { name: 'Quick tag', trigger: { kind: 'tag', ref: 'quick-one' }, steps: [{ kind: 'tag', tag: 'quick-done' }] })).json.ladder;
+  await D.api('/actions/ladder.setActive', { id: quick.id, active: true });
+  await fetch(`${HOOKS}/__hold`, { method: 'POST', body: JSON.stringify({ times: 1 }) });
+  const ned = (await D.api('/actions/person.create', { name: 'Ned Example', tags: ['new-signer'] })).json.person;
+  await until(async () => (await received()).some((x) => x.body.person.id === ned.id)); // the address has it, and says nothing yet
+  const olaAt = Date.now();
+  const ola = (await D.api('/actions/person.create', { name: 'Ola Example', tags: ['quick-one'] })).json.person;
+  const olaDone = await until(async () => (await D.api(`/persons/${ola.id}`)).json.person.tags.includes('quick-done'), 3500);
+  const nedNow = (await D.api(`/ladders/${told.id}`)).json.people.find((p) => p.person.id === ned.id);
+  check('while a slow address is being called, another ladder’s step runs — the runner doesn’t wait for the answer', !!olaDone && nedNow?.wait === 'sending',
+    `${olaDone ? `ran after ${Date.now() - olaAt} ms` : 'not within 3.5 s'} · Ned: ${nedNow?.wait}`);
+  await fetch(`${HOOKS}/__release`, { method: 'POST', body: JSON.stringify({ status: 200 }) });
+  await until(async () => (await D.api(`/ladders/${told.id}`)).json.people.find((p) => p.person.id === ned.id)?.status === 'done');
+  await D.api('/actions/ladder.setActive', { id: quick.id, active: false });
   // An address that is down: the first failure is said at once (the next tries are a minute, then five, away).
   await fetch(`${HOOKS}/__answer`, { method: 'POST', body: JSON.stringify({ status: 500, times: 1 }) });
   const jun = (await D.api('/actions/person.create', { name: 'Jun Example', tags: ['new-signer'] })).json.person;
@@ -679,6 +695,22 @@ if (!HOOKS) {
   check('his log: "Zapier: Didn’t go (500) — trying again"', jlog.some((x) => /^Zapier: Didn’t go \(500\) — trying again/.test(x)), jlog.join(' | '));
   await D.shot('13d-web-address-retry');
   await D.api('/actions/ladder.setActive', { id: told.id, active: false });
+}
+
+// A tab left open from before this step shows it as a Stop. What its "Save
+// step" and "Remove step" on that card would send (a Stop in the step's
+// place, or the steps without it, and no word on which kinds it knows) is
+// refused, in words that page shows as they are.
+const RELOAD = 'Reload this page — it’s out of date and shows this step wrongly';
+const asSaved = (await D.api(`/ladders/${told.id}`)).json.ladder.steps;
+const hookAt = asSaved.findIndex((x) => x.kind === 'webhook');
+if (hookAt >= 0) {
+  const stopOver = await D.api('/actions/ladder.update', { id: told.id, steps: asSaved.map((x, i) => (i === hookAt ? { kind: 'stop' } : x)) });
+  const takenOut = await D.api('/actions/ladder.update', { id: told.id, steps: asSaved.filter((_, i) => i !== hookAt) });
+  const still = (await D.api(`/ladders/${told.id}`)).json.ladder.steps;
+  check('a page from before this step can’t save a Stop over it or take it away: it is told to reload',
+    stopOver.status === 409 && stopOver.json.error === RELOAD && takenOut.status === 409 && takenOut.json.error === RELOAD
+    && JSON.stringify(still) === JSON.stringify(asSaved), `${stopOver.status} ${takenOut.status} ${stopOver.json?.error || ''}`);
 }
 
 // A step kind this page doesn't know (a tab left open from before a release
@@ -702,6 +734,8 @@ const [saving] = await Promise.all([
 ]);
 const savedSteps = saving?.postDataJSON()?.steps || [];
 check('saving its card hands it back exactly as it is', JSON.stringify(savedSteps.at(-1)) === JSON.stringify(later) && !savedSteps.some((x) => x.kind === 'stop'), JSON.stringify(savedSteps.at(-1)));
+const knows = saving?.postDataJSON()?.knows || [];
+check('each save names the step kinds the page has words for (not the one it doesn’t know)', knows.includes('webhook') && knows.includes('stop') && !knows.includes('call'), JSON.stringify(knows));
 await page.unroute(`**/api/ladders/${told.id}`);
 
 // ── 13. The books still verify ──
