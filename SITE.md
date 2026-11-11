@@ -207,7 +207,10 @@ footer — worked out by the app's rule, so every `PAIRS` pair reads. The
 stored colours stay for when it stops following. `GET /api/site` answers
 `brand_theme` (what the brand makes, where "Give the website its own look"
 starts); `site.settings.save` changes `follow` only when its theme says so.
-A brand save clears the kept pages.
+A brand save clears the kept pages. On Website → Theme a following site
+says so and shows the sample, with **Give the website its own look**; one
+with its own look has **Use the campaign's brand** (asked once: it is live
+at once).
 
 ## Rendering
 

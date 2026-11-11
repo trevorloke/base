@@ -329,7 +329,7 @@ export default function BrandSettings({ me }) {
           </select>
         </div>
 
-        <button type="button" className="btn btn-quiet ot-btn-tap bs-more" aria-expanded={more} aria-controls="bs-more" onClick={() => setMore((m) => !m)}>More</button>
+        <button type="button" className="btn btn-quiet disclose disclose--inline bs-more" aria-expanded={more} aria-controls="bs-more" onClick={() => setMore((m) => !m)}>More</button>
         <div id="bs-more" hidden={!more}>
           <div className="field bs-field">
             <label htmlFor="bs-learn">What training is called</label>

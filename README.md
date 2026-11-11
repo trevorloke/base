@@ -640,8 +640,9 @@ colour by one rule (`shared/brand-look.js`): the fill is the colour exactly
 as chosen; the text on it, the brand as words (4.5:1) and as an edge or
 focus ring (3:1), its tints and the sidebar are derived, and each pair is
 checked — over 5,000 colours in `server/test/brand-look.test.js`, and on the
-real screens (`e2e-look.mjs`: both built-in brands, then a yellow, a red, a
-pale pink and near-black, light and dark, each sidebar). The older
+real screens (`e2e-look.mjs`: both built-in brands, then a manager's saved
+brand — a yellow, a red, a pale pink, near-black and Imagine Surrey's navy,
+each with every sidebar and an uploaded logo, light and dark). The older
 variable names (`--mark`, `--paper`, `--ink`, `--navy`, `--gold`…) stay, as
 aliases of the roles. Rating colours, status colours and the map's pins are
 data: no brand recolours them.
@@ -669,6 +670,21 @@ takes a JPG, PNG or WebP within each picture's limits, its type and size
 read from the file itself (the browser turns an SVG into a PNG first: an
 SVG is never stored); `brand.reset` goes back to the brand the campaign
 started from. Any colour is saved: its shades are worked out readable.
+
+The screen (`web/src/components/BrandSettings.jsx`, a tab beside Campaign)
+shows a live sample beside the form — the desk and the phone, in light and
+in dark, drawn from the same shades — and says what only a person can
+decide (`brand-notes.js`): a pale colour gets dark text on its buttons, the
+colour darkens where it is words, it sits close to a rating's colour, or
+most of a logo can't be seen where it will sit (counted from its pixels on
+each ground: a warning with the remedy, never a refusal). Pictures are made
+ready in the browser (`brand-pictures.js`): an SVG is drawn to a PNG, a
+logo is shrunk to 1,024 px and 512 KB, the mark is padded square and the
+four app icons are drawn from it. **Save** is live at once (there is no
+draft: the sample is the preview). A campaign still on a built-in brand
+keeps that brand's logo — the first save uploads it as the campaign's own.
+**Use the website's colours and logo** fills the form from Website → Theme
+(a website with its own look); **Back to …'s look** is `brand.reset`.
 
 The server writes the brand into the app's page ahead of the stylesheets,
 so it never paints in another look — signed out too, so sign-in wears it:
