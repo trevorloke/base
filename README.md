@@ -561,7 +561,9 @@ here unsubscribes the member there. The first pull from an audience turns
 off here everyone on file who ever left it, so until someone taps *Turn
 their email off here* it only counts, and asks — the audience and how many
 people — whenever a count finds someone; the yes is for the numbers it
-showed. **Settings → Services → Mailchimp** has *Check*, *Connect* and *Pull
+showed. Someone who leaves there after the first count is turned off here
+all the same, by the webhook or the next pull. **Settings → Services →
+Mailchimp** has *Check*, *Connect* and *Pull
 now*. INTEGRATIONS.md has the setup and what is not confirmed against a real
 account.
 

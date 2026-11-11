@@ -265,20 +265,24 @@ nightly pull and **Send to Mailchimp** only count it (a send counts afresh
 each time), and ask whenever the count finds someone — *Audience ‘…’ ·
 1,240 people here unsubscribed there · 85 dead addresses. Counted 3:42
 p.m.*, with **Turn their email off here** and **Not now**. It counts people,
-not addresses: two records sharing one address are two. Nothing is turned
-off, and no list is sent, until someone says yes (a manager on Settings →
-Services, or whoever sends a list); the yes is on the event log with what
-they were shown, and it is for those numbers: a yes to a count that has
-changed since is refused (look again), and the first pull after the yes
-counts again — if it would turn off more (the supporter file came in
-meanwhile), it turns off nobody and asks again. *Not now* changes nothing.
-When a count finds nobody on file to turn off there is nothing to ask: a
-list goes, turning nobody off — and nothing opens, so the first count that
-does find someone (the file came in after Connect) still asks. Another
-audience (`MAILCHIMP_AUDIENCE_ID` changed) asks again. Someone who
-unsubscribes in Mailchimp after Connect is turned off here at once, by the
-webhook, yes or no: that no is new. Once the first pull after the yes is
-done, pulls run by themselves.
+not addresses: two records sharing one address are two. None of them is
+turned off, and no list is sent, until someone says yes (a manager on
+Settings → Services, or whoever sends a list); the yes is on the event log
+with what they were shown, and it is for those numbers: a yes to a count
+that has changed since is refused (look again), and the first pull after
+the yes — one that began after it — counts again: if it would turn off
+more (the supporter file came in meanwhile), it turns off nobody and asks
+again. *Not now* changes nothing. When a count finds nobody on file to turn
+off there is nothing to ask: a list goes, turning nobody off — and nothing
+opens, so the first count that does find someone (the file came in after
+Connect) still asks. Another audience (`MAILCHIMP_AUDIENCE_ID` changed)
+asks again. What waits for the yes is the past: someone who unsubscribes in
+Mailchimp, or whose address dies there, after the audience was first
+counted is turned off here yes or no — that no is new — at once by the
+webhook, or by the next pull (the nightly one, Pull now, a sync's) if the
+webhook never arrives; the line under the buttons says so (*Last pulled
+2:17 a.m. · 1 unsubscribed*). Once the first pull after the yes is done,
+pulls run by themselves.
 
 Set it up:
 
@@ -358,6 +362,11 @@ in without a field the audience usually requires. Not confirmed there:
   among those *Mailchimp wouldn’t take*);
 - that Mailchimp reads an `Idempotency-Key` (one is sent with every write;
   each write is also safe to repeat by its nature);
+- that a member's `last_changed` is when they left or their address died
+  (base.win reads it so: until someone says yes to the first pull, a no
+  dated after the audience was first counted is taken in without asking —
+  and an edit to that member in Mailchimp since, an import that updates
+  them say, would make an older no look new);
 - whether Mailchimp sends a webhook again after a failure (the nightly pull
   is the net either way).
 
