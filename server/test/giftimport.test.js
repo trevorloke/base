@@ -462,6 +462,27 @@ test('the pile: imported gifts that need a donor, settled by a person', async ()
   assert.deepEqual(states(await check([row({ name: 'Left Out', amount_cents: 100, source_id: 'GL-22' })])), ['already']);
 });
 
+// Left out by mistake is never lost: it is listed at the foot of the pile and
+// brought back to wait again — long after its import could be taken back.
+test('a gift left out is listed under the pile, and brought back to wait again whenever', async () => {
+  const pile = ok(await staff.get('/api/gifts/imports/waiting'));
+  assert.equal(pile.left_out.gifts, 1);
+  const out = pile.left_out.items[0];
+  assert.deepEqual([out.donor.name, out.amount_cents, out.file_name], ['Left Out', 100, 'gifts.csv']);
+  await db.query(`update gift_imports set created_at = now() - interval '30 days'
+    where id = (select import_id from gift_import_rows where id = $1)`, [out.id]);
+  assert.equal((await vol.action('gift.importBringBack', { ids: [out.id] })).status, 403);
+  assert.equal(ok(await staff.action('gift.importBringBack', { ids: [out.id] })).brought_back, 1);
+  assert.equal((await staff.action('gift.importBringBack', { ids: [out.id] })).status, 409, 'once');
+  const now = ok(await staff.get('/api/gifts/imports/waiting'));
+  assert.equal(now.left_out.gifts, 0);
+  assert.deepEqual(now.groups.map((g) => [g.donor.name, g.cents]), [['Left Out', 100]]);
+  assert.deepEqual(ok(await staff.get('/api/brief')).giftsWaiting, { gifts: 1, cents: 100 });
+  assert.deepEqual(states(await check([row({ name: 'Left Out', amount_cents: 100, source_id: 'GL-22' })])), ['already'], 'still the same gift');
+  // Out again, as the tests after this one expect.
+  ok(await staff.action('gift.importSettle', { ids: [out.id], leave_out: true }));
+});
+
 // The other tool's export may list the newest gift first. The gifts of one
 // call go on the books in the order they were given, so the one flagged is
 // the one that crossed the limit on its day — not whichever came last in the file.

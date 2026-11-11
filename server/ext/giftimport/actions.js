@@ -1,5 +1,5 @@
-// gift.import · gift.importSettle · gift.importUndo — the gift import's
-// writes (index.js says what each is for).
+// gift.import · gift.importSettle · gift.importBringBack · gift.importUndo —
+// the gift import's writes (index.js says what each is for).
 //
 // Every gift goes through lib/gifts.js logGift, the one gift path: the
 // year's limit is checked with the gift in it, and the gift that takes a
@@ -229,6 +229,25 @@ export const actions = {
         gifts.push({ id: gift.id, flagged: !!gift.flagged, flag_reason: gift.flag_reason || null });
       }
       return { settled: rows.length, person, gifts };
+    },
+  },
+
+  // Gifts left out (by mistake, perhaps) wait again for a donor — however
+  // long ago, and after their import can no longer be taken back. They keep
+  // their key all the while, so the file coming in again never doubles them.
+  // ids: rows that were left out. → { brought_back }
+  'gift.importBringBack': {
+    roles: MONEY_ROLES,
+    input: z.object({ ids: z.array(uuid()).min(1).max(CALL_ROWS) }),
+    handler: async (tx, ctx, input, emit) => {
+      const back = (await tx.query(
+        `update gift_import_rows set status = 'waiting', settled_by = null, settled_at = null
+          where workspace_id = $1 and id = any($2::uuid[]) and status = 'left_out' returning id`,
+        [ctx.workspaceId, input.ids],
+      )).rows;
+      if (!back.length) throw httpError(409, 'Already back in the pile — nothing left to do here.');
+      for (const r of back) emit('gift_import_row', r.id, 'update', { status: 'waiting', brought_back: true });
+      return { brought_back: back.length };
     },
   },
 

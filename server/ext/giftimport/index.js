@@ -10,8 +10,8 @@
 //                  with the same phone, postal code or street (match.js) —
 //                  one sure record, or the gift waits in a pile under
 //                  Donations → Needs you for a person to pick the donor,
-//                  make a new person, or leave it out. Nothing lands on a
-//                  guess.
+//                  make a new person, or leave it out (listed at the pile's
+//                  foot, to bring back whenever). Nothing lands on a guess.
 //   the gift       through the one gift path (lib/gifts.js logGift): the
 //                  limit is checked and the gift that crosses it flagged,
 //                  as for a gift typed at the desk.
@@ -29,7 +29,7 @@
 //   sql.js      gift_imports · gift_import_rows (the pile) · two indexes on gifts
 //   rows.js     one row of the file, checked
 //   match.js    whose gift it is
-//   actions.js  gift.import · gift.importSettle · gift.importUndo
+//   actions.js  gift.import · gift.importSettle · gift.importBringBack · gift.importUndo
 //   api.js      GET /gifts/imports · /gifts/imports/waiting (money roles);
 //               the brief's giftsWaiting (Donations → Needs you)
 import { briefWaiting } from './api.js';

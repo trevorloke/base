@@ -7,7 +7,7 @@
 //   and postal code"),
 //   finds someone else by name,
 //   adds them as a new person (from what the file says), or
-//   leaves the gifts out.
+//   leaves the gifts out (listed at the foot, "Left out · 3", to bring back).
 // Each asks first, in place, and says which record — two it could be often
 // share a name ("Put 2 gifts on Dee Twin (2 Main St · V3S 1A1)? Yes · No").
 // The gifts then go through the one gift path: the year's limit is checked,
@@ -189,6 +189,53 @@ function Waiting({ group, index, onSettled, online }) {
   );
 }
 
+// The pile's foot: gifts left out — by mistake, perhaps — each with Bring
+// back, which only puts it back in the pile above (so nothing asks first).
+function LeftOut({ out, online, onBack }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(null); // the gift being brought back
+  const [error, setError] = useState(null);
+  if (!out?.gifts) return null;
+  const back = async (g) => {
+    setBusy(g.id);
+    setError(null);
+    try {
+      await action('gift.importBringBack', { ids: [g.id] });
+      await onBack(`✓ ${fmtMoney(g.amount_cents)} from ${whoIs(g.donor)} is back — it waits for a donor above`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <section className="gw-out">
+      <button type="button" className="disclose" aria-expanded={open} aria-controls="gw-out-list" onClick={() => setOpen((v) => !v)}>
+        Left out · {out.gifts.toLocaleString('en-CA')}
+      </button>
+      {open && (
+        <div id="gw-out-list">
+          <ul className="gw-gifts gw-out__list">
+            {out.items.map((g) => (
+              <li key={g.id}>
+                <span className="gw-out__who">{whoIs(g.donor)}</span>
+                <span className="mono">{fmtMoney(g.amount_cents)}</span>
+                <span>{day(g.date)}</span>
+                <span className="ops-meta">{g.file_name}{g.row ? ` · row ${g.row}` : ''}</span>
+                <button type="button" className="btn ops-tap gw-out__back" disabled={!!busy || !online} onClick={() => back(g)}>
+                  {busy === g.id ? 'Bringing back…' : 'Bring back'}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {out.gifts > out.items.length && <p className="ops-meta">The latest {out.items.length} of {out.gifts.toLocaleString('en-CA')}.</p>}
+          {error && <p className="error" role="alert">{error}</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function GiftsWaiting() {
   const { me } = useOutletContext() ?? {};
   const queryClient = useQueryClient();
@@ -228,6 +275,7 @@ export default function GiftsWaiting() {
                 {pile.data?.more && <p className="ops-meta">These are the first 300 gifts. The rest follow once these have a donor.</p>}
               </>
             )}
+      {pile.data && <LeftOut out={pile.data.left_out} online={online} onBack={onSettled} />}
     </div>
   );
 }

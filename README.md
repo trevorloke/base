@@ -223,7 +223,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   with the same phone, postal code or street; no sure record, or more than
   one, and the gift waits under **Needs you** (*12 imported gifts need a
   donor*) for a person to pick the record, find someone else, add a new
-  person or leave it out. The gift's number in the other tool — or, without
+  person or leave it out (listed at the pile's foot, *Left out · 3*, to
+  bring back whenever). The gift's number in the other tool — or, without
   one, donor, amount, date and how it was paid, as the file writes it — is
   kept on it, so the same file twice adds nothing. That is all the import
   knows: a gift already typed in here by hand and also in the file would

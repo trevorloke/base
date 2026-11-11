@@ -112,3 +112,9 @@
 .gw-cand__why { font-size: 13px; font-weight: 400; color: var(--text-3); overflow-wrap: anywhere; white-space: normal; }
 .gw-find { display: flex; flex-direction: column; gap: var(--s-2); }
 .gw-find .field { margin-bottom: 0; }
+
+/* The pile's foot: gifts left out, each with Bring back. */
+.gw-out { margin-top: var(--s-6); }
+.gw-out__list { margin-top: var(--s-2); }
+.gw-out__who { font-weight: 600; }
+.gw-out .btn.gw-out__back { margin-left: auto; }

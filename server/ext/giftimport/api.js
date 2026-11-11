@@ -8,7 +8,9 @@
 //                                whether this person may bring one in
 //   GET /gifts/imports/waiting   the pile, a donor at a time as the file
 //                                names them: their gifts, and the records
-//                                they could be (as things stand now)
+//                                they could be (as things stand now) — and
+//                                the gifts left out, latest first, to bring
+//                                back (gift.importBringBack)
 import { Hono } from 'hono';
 import { decide, mayRun } from '../../lib/perms.js';
 import { actions, MONEY_ROLES } from './actions.js';
@@ -26,6 +28,7 @@ api.use('/gifts/imports/*', deskOnly);
 const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 const dayOf = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d ?? '').slice(0, 10));
 const PILE_MAX = 300;
+const OUT_MAX = 100;
 const squash = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 // Rows that name one donor the same way are that donor's gifts.
 const donorKey = (d) => [squash(d.name), squash(d.email), String(d.phone || '').replace(/\D+/g, ''), squash(d.address), squash(d.postal).replace(/[^a-z0-9]/g, '')].join('|');
@@ -86,6 +89,18 @@ api.get('/gifts/imports/waiting', async (c) => {
   const list = [...groups.values()];
   // Who each could be, as the records stand now (a merge since, a new email).
   const found = await findDonors(db, ctx.workspaceId, list.map((g, i) => ({ i, donor: g.donor })));
+  // Left out — by mistake, perhaps: listed so it can be brought back.
+  const outAll = (await db.query(
+    `select count(*)::int as n, coalesce(sum(amount_cents), 0)::bigint as cents from gift_import_rows
+      where workspace_id = $1 and status = 'left_out'`,
+    [ctx.workspaceId],
+  )).rows[0];
+  const out = outAll.n ? (await db.query(
+    `select r.id, r.row_no, r.donor, r.amount_cents, r.date, r.method, i.file_name
+       from gift_import_rows r join gift_imports i on i.id = r.import_id
+      where r.workspace_id = $1 and r.status = 'left_out' order by r.settled_at desc nulls last, r.id limit ${OUT_MAX}`,
+    [ctx.workspaceId],
+  )).rows : [];
   return c.json({
     groups: list.map((g, i) => {
       const m = found.get(i);
@@ -94,6 +109,13 @@ api.get('/gifts/imports/waiting', async (c) => {
       return { ...g, gifts: g.gifts.sort((a, b) => a.date.localeCompare(b.date)), candidates };
     }),
     more: rows.length > PILE_MAX,
+    left_out: {
+      gifts: outAll.n, cents: Number(outAll.cents),
+      items: out.map((r) => ({
+        id: r.id, row: r.row_no, donor: parseJ(r.donor, {}), amount_cents: Number(r.amount_cents), date: dayOf(r.date),
+        method: r.method || null, file_name: r.file_name || null,
+      })),
+    },
   });
 });
 
