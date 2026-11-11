@@ -21,7 +21,7 @@ import { queuedText } from '../components/queued.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { ApiError, apiGet, action, noAnswer } from '../api.js';
 import { noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
-import { keptPartial } from '../components/KeptCopies.js';
+import { keptCopy, keptPartial } from '../components/KeptCopies.js';
 import { FieldFilterChip, FieldFilterGroups } from '../components/FieldsBits.jsx';
 import QuickDetails from '../components/QuickDetails.jsx';
 import './people.css';
@@ -777,13 +777,21 @@ function PeopleList() {
   // Searched with no signal over a kept list the server had cut off: there may be more.
   const partial = keptPartial(persons.data);
   // The count: the server's total, Loading…, or Unavailable. With no answer
-  // at all (no signal, or the server down) it can only be what's on screen.
+  // at all (no signal, or the server down) it can only be what's on screen —
+  // at once when the names themselves are a kept copy, not after the count
+  // has tried twice.
+  const fromCopy = keptCopy(persons.data);
+  // The names came fresh again after a count that got no answer: count again.
+  const namesAt = persons.dataUpdatedAt;
+  useEffect(() => {
+    if (total.isError && persons.isSuccess && !fromCopy && !persons.isPlaceholderData) total.refetch();
+  }, [namesAt]); // eslint-disable-line react-hooks/exhaustive-deps
   const plain = (k) => (k === 1 ? 'person' : 'people');
   // (A screen loaded with no signal at all never hears an "offline" event:
   // the browser's own word counts too.)
   const count = total.data ? <><strong className="mono">{fmt(total.data.total)}</strong> {plain(total.data.total)}</>
     : total.isError && !noReply(total.error) ? <Unavailable onRetry={() => total.refetch()} />
-      : (noSignalNow() || total.fetchStatus === 'paused' || total.isError) && persons.data && !stale
+      : (noSignalNow() || total.fetchStatus === 'paused' || total.isError || fromCopy) && persons.data && !stale
         ? <><strong className="mono">{rows.length >= LIMIT ? `${fmt(LIMIT)}+` : fmt(rows.length)}</strong> {plain(rows.length)}{partial ? ' in the kept list' : ''}</>
         : LOADING;
   // No list at all (no answer, nothing kept): no count, no empty table — the error line says it.

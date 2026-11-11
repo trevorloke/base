@@ -52,6 +52,8 @@ const isDeskRole = (role) => Boolean(role) && role !== 'volunteer';
 const keptAt = new WeakMap();
 const partial = new WeakSet();
 export const keptPartial = (data) => Boolean(data) && partial.has(data);
+// The data on screen is a copy (the server gave no answer for it).
+export const keptCopy = (data) => Boolean(data) && keptAt.has(data);
 
 // What a query's copy is called and where it lives, or null (not kept).
 // Shifts keep the names the field already uses (pages/Shifts.jsx), so Today
