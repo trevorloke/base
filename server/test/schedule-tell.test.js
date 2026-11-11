@@ -482,6 +482,39 @@ test('a reminder that runs late keeps to the rules; one that runs on another day
   ok(await mgr.action('shift.reminders', { on: false }));
 });
 
+test('a second tap while the first notice is still sending — everyone already claimed — is refused: nobody is told twice', async () => {
+  connect();
+  emails.length = 0; texts.length = 0;
+  at('2030-06-02T19:00:00Z'); // Sunday noon, the day before the week of June 3
+  const s = await shiftOn('2030-06-04', '06:30', '08:30');
+  for (const p of [P.asha, P.ben, P.dee]) await book(s, p);
+  const first = ok(await mgr.action('shift.tellWeek', { week: '2030-06-03' }));
+  // A slow provider: the job has claimed all three (fewer than a batch) and
+  // waits on the first email — so not one row is still 'asked'.
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  onEmail = async () => { await gate; return new Response('{}', { status: 200 }); };
+  let sending = null;
+  try {
+    sending = runJobs();
+    for (let i = 0; i < 1000 && !emails.length; i += 1) await new Promise((r) => setTimeout(r, 5));
+    assert.deepEqual((await noticesOf(first.batch_id)).map((n) => n.state), ['sending', 'sending', 'sending'], 'all claimed, none waiting');
+    const again = await mgr.action('shift.tellWeek', { week: '2030-06-03' });
+    assert.equal(again.status, 409, 'a second tap mid-send is refused');
+    assert.match(again.json.error, /still going out/);
+  } finally {
+    release();
+    await sending;
+    onEmail = () => new Response('{}', { status: 200 });
+  }
+  await runJobs();
+  assert.deepEqual(emails.map((m) => m.to[0]).sort(), [P.asha.email, P.ben.email, P.dee.email].sort(), 'each emailed once');
+  assert.deepEqual(texts.map((m) => m.To).sort(), ['+16045550151', '+16045550154'], 'each texted once');
+  // Once it has gone, another tap is a new notice.
+  ok(await mgr.action('shift.tellWeek', { week: '2030-06-03' }));
+  await runJobs();
+});
+
 test('with neither email nor texting connected an evening marks nobody as reminded', async () => {
   disconnect();
   emails.length = 0; texts.length = 0;

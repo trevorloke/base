@@ -122,6 +122,8 @@ function TellWeek({ monday, tz, week, online }) {
       await queryClient.invalidateQueries({ queryKey: weekKey(monday) });
     } catch (e) {
       setError(e.message);
+      // Refused while another device's notice is going out: show how that one goes.
+      queryClient.invalidateQueries({ queryKey: weekKey(monday) });
     } finally {
       setBusy(false);
     }

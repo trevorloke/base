@@ -333,10 +333,11 @@ export const tellActions = {
       const ws = ctx.workspaceId;
       const monday = weekStart(input.week);
       // Two taps must not tell everyone twice: while the last notice for
-      // this week still has people waiting and a job to send them, wait.
+      // this week still has people waiting or mid-send (a short list is
+      // claimed whole at once) and a job sending them, wait.
       const going = (await tx.query(
         `select 1 from shift_notices n
-          where n.workspace_id = $1 and n.kind = 'week' and n.week = $2::date and n.state = 'asked'
+          where n.workspace_id = $1 and n.kind = 'week' and n.week = $2::date and n.state in ('asked', 'sending')
             and exists (select 1 from jobs j where j.workspace_id = n.workspace_id and j.kind = $3 and j.status in ('pending', 'running')
                          and j.payload->>'batch_id' = n.batch_id::text)
           limit 1`,
