@@ -95,6 +95,8 @@
   list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
   background: var(--paper-0); border: 1px solid var(--rule); border-radius: var(--r-card);
 }
+/* A Show pill with no doors under it: no empty box. */
+.walk-doors:empty { display: none; }
 /* Room under the last door, so it (and its open buttons) can scroll clear
    of the docked Next door bar. The page already pads for the tab bar. */
 .walk.has-next .walk-doors { margin-bottom: var(--dock-clear); }
