@@ -97,6 +97,34 @@ test('a manager: every source once, newest first, in the screens’ words', asyn
   assert.deepEqual([of('merge').by, of('merge').detail, of('merge').group, of('merge').label], ['Avery Chen', 'With the record for Dev Exampel', 'other', 'Merged']);
 });
 
+test('an entry leads to Gifts only when Gifts lists its gift: never one voided, refunded or never booked', async () => {
+  const links = async () => ok(await all(mgr, S.dev.id, '&group=money')).entries.map((e) => [e.title, e.link]);
+  // The profile's Gifts lists the gifts on the books: the cheque. The cash
+  // voided and the card refunded are off it, so their entries lead nowhere.
+  assert.deepEqual(await links(), [
+    ['Renewed · 4 years', null], ['Membership ended', null], ['Refunded · $200.00', null], ['$200.00 · Card · void', null],
+    ['Voided · $50.00', null], ['$50.00 · Cash · void', null], ['$100.00 · Cheque', '#gifts'], ['Joined · 1 year', null],
+  ]);
+  // A payment whose gift is still on the books (its dispute still open)
+  // leads to it; one over the limit, never booked as a gift, doesn't.
+  const disputed = randomUUID();
+  const over = randomUUID();
+  await db.query(
+    `insert into stripe_payments (id, workspace_id, person_id, gift_id, kind, cadence, amount_cents, paid_at, paid_on, status, over_limit)
+     values ($1, $2, $3, $4, 'donation', 'once', 10000, now() - interval '2 days', current_date - 2, 'disputed', false),
+            ($5, $2, $3, null, 'donation', 'once', 150000, now() - interval '2 days', current_date - 2, 'over_limit', true)`,
+    [disputed, ws, S.dev.id, S.cheque.id, over],
+  );
+  try {
+    const pay = ok(await all(mgr, S.dev.id, '&group=money')).entries.filter((e) => e.id.startsWith('pay:'));
+    assert.deepEqual(Object.fromEntries(pay.map((e) => [e.title, e.link])), {
+      'Disputed · $100.00': '#gifts', 'Over the limit — refunding · $1,500.00': null, 'Refunded · $200.00': null,
+    });
+  } finally {
+    await db.query('delete from stripe_payments where id = any($1::uuid[])', [[disputed, over]]);
+  }
+});
+
 test('the desk’s other roles see what a manager sees', async () => {
   assert.deepEqual(line(await all(staff.client)), S.expected);
   assert.deepEqual(line(await all(treasurer.client)), S.expected);
@@ -185,6 +213,15 @@ test('pages: a cursor walks the whole history once, whatever the page size', asy
   }
   assert.equal((await mgr.get(`/api/persons/${S.dev.id}/timeline?before=nonsense`)).status, 400);
   assert.equal(ok(await mgr.get(`/api/persons/${S.dev.id}/timeline`)).entries.length, S.expected.length, '50 a page unless asked');
+  // A cursor made by hand whose time the database can't read back (a year
+  // outside 0001–9999, or not the time a page gives) is refused like any
+  // other bad cursor, never a 500; the years it can read, it reads.
+  const page = (at) => mgr.get(`/api/persons/${S.dev.id}/timeline?before=${encodeURIComponent(`${at}~x`)}`);
+  for (const at of ['+010000-01-01T00:00:00Z', '-000001-01-01T00:00:00Z', '+275760-01-01T00:00:00Z', '0000-01-01T00:00:00Z', '9999-12-31T23:59:59-01:00', 'Nov 11 2026']) {
+    assert.equal((await page(at)).status, 400, at);
+  }
+  assert.deepEqual(ok(await page('0001-01-01T00:00:00.000Z')).entries, []);
+  assert.equal(ok(await page('9999-12-31T23:59:59.999Z')).entries.length, S.expected.length);
 });
 
 test('the chips: each group alone, in order, and All holds them all', async () => {

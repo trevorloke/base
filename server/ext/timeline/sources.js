@@ -248,7 +248,8 @@ const web = async (db, q) => (await rowsOf(db, `
 // A gift keyed in on its own day shows at the time it was logged; one
 // dated another day shows on that day (noon, said as the day alone). A
 // gift voided by a card refund has the refund's entry (payments), not a
-// second one here.
+// second one here. Only a gift still on the books leads to the profile's
+// Gifts: that list leaves out the ones taken off.
 const METHOD = { card: 'Card', etransfer: 'E-transfer', cheque: 'Cheque', cash: 'Cash', pad: 'Pre-authorized debit', 'in-kind': 'In-kind' };
 const gifts = async (db, q) => (await rowsOf(db, `
   select ${ms('x.at')} as at, 'gift:' || g.id::text || x.tail as key, x.what, x.day,
@@ -268,24 +269,27 @@ const gifts = async (db, q) => (await rowsOf(db, `
     ) x(what, tail, at, day)
    where g.workspace_id = $1 and g.person_id = $2`, q, q.tz,
 )).map((r) => (r.what === 'void'
-  ? entry(r, 'money', 'gift_void', 'Gift', `Voided · ${money(r.amount_cents)}`, { link: '#gifts' })
+  ? entry(r, 'money', 'gift_void', 'Gift', `Voided · ${money(r.amount_cents)}`)
   : entry(r, 'money', 'gift', 'Gift', line(
     money(r.amount_cents), METHOD[r.method] || r.method, r.cadence === 'monthly' && 'monthly',
     r.slate && r.slate !== DEFAULT_SLATE && slateLabel(r.slate), r.source === 'online' && 'online',
     r.void ? 'void' : r.flagged && 'flagged',
-  ), { detail: r.note || null, link: '#gifts', ...(r.day ? { day: true } : {}) })));
+  ), { detail: r.note || null, link: r.void ? null : '#gifts', ...(r.day ? { day: true } : {}) })));
 
 // ── An online payment that isn't simply paid: refunded, disputed… ──
 // When it came to stand as it does: the log's event for that status (the
-// row's own time moves again with a "Got it").
+// row's own time moves again with a "Got it"). It leads to Gifts while its
+// gift is there: not once a refund or a lost dispute has voided it, nor
+// when it never was one (over the limit, no donor).
 const PAYMENT_KIND = {
   refunded: 'refund', partly_refunded: 'refund', over_limit: 'refund', refund_failed: 'refund_failed',
   disputed: 'dispute', dispute_lost: 'dispute',
 };
 const payments = async (db, q) => (await rowsOf(db, `
   select ${ms('coalesce(ev.at, sp.updated_at)')} as at, 'pay:' || sp.id::text as key,
-         sp.status, sp.over_limit, sp.kind, sp.amount_cents, sp.refunded_cents
+         sp.status, sp.over_limit, sp.kind, sp.amount_cents, sp.refunded_cents, g.id is not null as booked
     from stripe_payments sp
+    left join gifts g on g.id = sp.gift_id and g.workspace_id = sp.workspace_id and g.person_id = sp.person_id and g.deleted_at is null
     left join lateral (
       select max(e.server_ts) as at from events e
        where e.workspace_id = sp.workspace_id and e.entity_type = 'payment' and e.entity_id = sp.id and e.payload->>'status' = sp.status
@@ -294,7 +298,7 @@ const payments = async (db, q) => (await rowsOf(db, `
 )).map((r) => entry(r, 'money', PAYMENT_KIND[r.status] || 'payment', 'Gift', line(
   paymentWord(r),
   r.status === 'partly_refunded' ? `${money(r.refunded_cents)} of ${money(r.amount_cents)}` : money(r.amount_cents),
-), { detail: r.kind === 'membership' ? 'Membership dues, paid online' : 'Paid online', link: '#gifts' }));
+), { detail: r.kind === 'membership' ? 'Membership dues, paid online' : 'Paid online', link: r.booked ? '#gifts' : null }));
 
 // ── Memberships: joined or renewed, and a term that ended with none after it ──
 const members = async (db, q) => (await rowsOf(db, `

@@ -29,13 +29,17 @@ const viewerOf = (ctx) => {
 // them (sources.js page: byte order).
 const newestFirst = (a, b) => (b.at - a.at) || (a.key < b.key ? 1 : a.key > b.key ? -1 : 0);
 
-// A cursor is the last entry shown: "<its time>~<its key>".
+// A cursor is the last entry shown: "<its time>~<its key>", the time as a
+// page writes it. One made by hand that the database couldn't read back
+// (a year outside 0001–9999, which a JS date allows) is a bad cursor.
 const cursorOf = (e) => `${e.at.toISOString()}~${e.key}`;
 const readCursor = (raw) => {
   const cut = String(raw).indexOf('~');
-  const at = new Date(String(raw).slice(0, cut));
+  const when = String(raw).slice(0, cut);
+  const at = new Date(when);
+  const year = at.getUTCFullYear();
   const key = String(raw).slice(cut + 1);
-  if (cut < 1 || Number.isNaN(at.getTime()) || !/^[\x21-\x7e]{1,200}$/.test(key)) return null;
+  if (cut < 1 || !/^\d{4}-\d{2}-\d{2}T/.test(when) || !(year >= 1 && year <= 9999) || !/^[\x21-\x7e]{1,200}$/.test(key)) return null;
   return { at: at.toISOString(), key };
 };
 
