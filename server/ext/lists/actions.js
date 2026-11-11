@@ -131,6 +131,13 @@ export const actions = {
         'select name from canvass_passes where workspace_id = $1 and ended_at is null and list_id = $2', [ctx.workspaceId, cur.id],
       )).rows[0];
       if (walking) throw httpError(409, `The pass “${walking.name}” walks this list — end the pass first`);
+      // An open phone bank made from it leaves out whoever has left the list
+      // (ext/banks): gone, they would all be back on the callers' lists.
+      const calling = (await tx.query(
+        'select name from call_banks where workspace_id = $1 and deleted_at is null and closed_at is null and list_id = $2 order by created_at limit 1',
+        [ctx.workspaceId, cur.id],
+      )).rows[0];
+      if (calling) throw httpError(409, `The phone bank “${calling.name}” calls this list — close it first`);
       await tx.query('update lists set deleted_at = now(), updated_at = now() where id = $1 and workspace_id = $2', [cur.id, ctx.workspaceId]);
       emit('list', cur.id, 'void', {});
       return { id: cur.id };

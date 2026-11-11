@@ -166,6 +166,27 @@ test(`${PEOPLE.toLocaleString('en-CA')} people: each rule’s count comes back q
   assert.ok(listCounts.with_phone > 0 && listCounts.with_email > 0 && listCounts.reachable <= PEOPLE);
 });
 
+test('a phone bank from a list of tens of thousands is made, handed out and read by its caller quickly', async () => {
+  const me = ok(await mgr.get('/api/auth/me')).user.id;
+  let t = performance.now();
+  const made = ok(await mgr.action('bank.create', { name: 'Everyone rated 1', list_id: ids.ones }));
+  console.log(`  a bank of ${made.added.toLocaleString('en-CA')} from a list: ${Math.round(performance.now() - t)} ms`);
+  assert.ok(made.added > PEOPLE / 10, `${made.added} numbers`);
+  // The box left empty: all of them, to one caller, in one write.
+  t = performance.now();
+  const given = ok(await mgr.action('bank.assign', { id: made.bank.id, user_id: me }));
+  const ms = performance.now() - t;
+  console.log(`  handing out ${given.handed.toLocaleString('en-CA')}: ${Math.round(ms)} ms`);
+  assert.deepEqual([given.handed, given.open, given.given[me]], [made.added, 0, made.added]);
+  assert.ok(ms < COUNT_MS, `handing out took ${Math.round(ms)} ms`);
+  // Their list: the first 500 to call and how many in all.
+  t = performance.now();
+  const mine = ok(await mgr.get(`/api/banks/${made.bank.id}/mine`));
+  console.log(`  the caller's list: ${Math.round(performance.now() - t)} ms`);
+  assert.deepEqual([mine.persons.length, mine.bank.left, mine.bank.total], [Math.min(500, made.added), made.added, made.added]);
+  ok(await mgr.action('bank.remove', { id: made.bank.id }));
+});
+
 test('a snapshot of the whole file is one write', async () => {
   const t0 = performance.now();
   const snap = ok(await mgr.action('list.snapshot', { name: `Everyone on ${new Date().toISOString().slice(0, 10)}`, filter: {} }));

@@ -2,7 +2,8 @@
 // GET /banks/mine       anyone: the banks with numbers handed to me, how many are left
 // GET /banks/:id        desk: one bank — its counts, who has what, and its numbers
 //                       (?limit, ?offset: 2,000 at a time), each done or not, still to call or not
-// GET /banks/:id/mine   anyone: my numbers in this bank that are left, as people (the Calls screen's list)
+// GET /banks/:id/mine   anyone: my numbers in this bank that are left, as people (the Calls screen's list) —
+//                       the first 500 to call now; bank.left says how many in all
 // "Left" and "still to call" are as things stand (numbers.js): someone who
 // can no longer be called — or, in a bank made from a list, has left the
 // list — is off the caller's list and out of their count at once.
@@ -20,6 +21,8 @@ const isDesk = (ctx) => ctx.role !== 'volunteer';
 const COUNTS = `count(n.person_id)::int as total, count(n.assigned_to)::int as assigned, count(n.done_at)::int as done,
   count(*) filter (where n.assigned_to is null and n.done_at is null)::int as open`;
 const NUMBERS_PAGE = 2000;
+// A caller's list comes this many at a time: enough for a long sitting, light enough for a phone to keep.
+const MINE_PAGE = 500;
 
 api.get('/banks', async (c) => {
   const ctx = c.get('ctx'); const db = c.get('db'); const ws = ctx.workspaceId;
@@ -107,26 +110,33 @@ api.get('/banks/:id/mine', async (c) => {
   if (!b) return c.json({ error: 'not found' }, 404);
   const params = [id, ctx.user.id];
   const still = await stillOn(db, ctx, b, params);
-  // Done numbers stay in the count; one not done shows only while it is still to call.
+  // Done numbers stay in the count; one not done counts only while it is
+  // still to call. A number to call back is counted under "later", with the
+  // soonest time, until its time has come.
+  const due = '(n.next_at is null or n.next_at <= now())';
+  const n = (await db.query(
+    `select (count(*) filter (where n.done_at is not null or x.still))::int as total, count(n.done_at)::int as done,
+            (count(*) filter (where n.done_at is null and x.still and ${due}))::int as left,
+            (count(*) filter (where n.done_at is null and x.still and not ${due}))::int as later,
+            min(n.next_at) filter (where n.done_at is null and x.still and not ${due}) as next_at
+       from call_bank_numbers n join persons p on p.id = n.person_id
+       cross join lateral (select ${still} as still) x
+      where n.bank_id = $1 and n.assigned_to = $2`, params,
+  )).rows[0];
+  // The people to call now, in the bank's order: the first MINE_PAGE of
+  // them. Each call logged crosses one off, and the next comes in behind.
   const rows = (await db.query(
     `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal, p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at,
-            p.attrs->>'note' as note, n.done_at, n.position, n.next_at, n.tries
+            p.attrs->>'note' as note, n.tries
        from call_bank_numbers n join persons p on p.id = n.person_id
-      where n.bank_id = $1 and n.assigned_to = $2 and (n.done_at is not null or ${still}) order by n.position`, params,
+      where n.bank_id = $1 and n.assigned_to = $2 and n.done_at is null and ${due} and ${still}
+      order by n.position, p.id limit ${MINE_PAGE}`, params,
   )).rows;
-  // A number to call back shows once its time has come; until then it is
-  // counted under "later", with the soonest time.
-  const now = Date.now();
-  const due = (r) => !r.next_at || new Date(r.next_at).getTime() <= now;
-  const open = rows.filter((r) => !r.done_at);
-  const later = open.filter((r) => !due(r));
-  const persons = open.filter(due)
-    .map(({ done_at, position, next_at, ...p }) => ({ ...p, tags: parseJ(p.tags, []), socials: parseJ(p.socials, {}) })).map(forViewer(ctx));
-  const nextAt = later.map((r) => new Date(r.next_at).getTime()).sort((x, y) => x - y)[0];
+  const persons = rows.map((p) => ({ ...p, tags: parseJ(p.tags, []), socials: parseJ(p.socials, {}) })).map(forViewer(ctx));
   return c.json({
     bank: {
-      id: b.id, name: b.name, script: b.script, closed: !!b.closed_at, total: rows.length, done: rows.filter((r) => r.done_at).length,
-      later: later.length, next_at: nextAt ? new Date(nextAt).toISOString() : null, retry_hours: b.retry_hours, max_tries: b.max_tries,
+      id: b.id, name: b.name, script: b.script, closed: !!b.closed_at, total: n.total, done: n.done, left: n.left,
+      later: n.later, next_at: n.next_at ? new Date(n.next_at).toISOString() : null, retry_hours: b.retry_hours, max_tries: b.max_tries,
     },
     persons,
   });

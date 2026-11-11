@@ -25,6 +25,8 @@ const uuid = () => z.uuid();
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 // Numbers picked by hand come 5,000 to a call; a bank made from a list has no such limit.
 const MAX_NUMBERS = 5000;
+// How many to hand out: any number — more than are left hands out what is left.
+const MAX_HAND = 100_000_000;
 // How a No answer comes back: after this many hours (0: never), up to this many calls.
 const RETRY = { retry_hours: z.number().int().min(0).max(72).optional(), max_tries: z.number().int().min(1).max(5).optional() };
 
@@ -153,7 +155,7 @@ export const actions = {
   },
   'bank.assign': {
     roles: DESK,
-    input: z.object({ id: uuid(), user_id: uuid().optional(), team_id: uuid().optional(), count: z.number().int().min(1).max(MAX_NUMBERS).optional() })
+    input: z.object({ id: uuid(), user_id: uuid().optional(), team_id: uuid().optional(), count: z.number().int().min(1).max(MAX_HAND).optional() })
       .refine((v) => !!v.user_id !== !!v.team_id, 'a caller or a team'),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
@@ -170,20 +172,28 @@ export const actions = {
         callers = (await tx.query('select user_id from team_members where team_id = $1 order by created_at', [input.team_id])).rows.map((r) => r.user_id);
         if (!callers.length) throw httpError(400, 'nobody is on that team yet');
       }
-      // Only numbers still to call are handed out (numbers.js: off the list, or do-not-contact since, stay behind).
+      // Only numbers still to call are handed out (numbers.js: off the list, or
+      // do-not-contact since, stay behind) — in the bank's order, in turn across
+      // the callers, and in one statement however many there are.
       const params = [b.id];
       const still = await stillOn(tx, ctx, b, params);
-      const open = (await tx.query(
-        `select n.person_id from call_bank_numbers n join persons p on p.id = n.person_id
-          where n.bank_id = $1 and n.assigned_to is null and n.done_at is null and ${still} order by n.position`, params,
-      )).rows.map((r) => r.person_id);
-      const take = Math.min(open.length, input.count ?? open.length);
-      const given = {};
-      for (let i = 0; i < take; i++) {
-        const who = callers[i % callers.length];
-        await tx.query('update call_bank_numbers set assigned_to = $3, assigned_at = now() where bank_id = $1 and person_id = $2', [b.id, open[i], who]);
-        given[who] = (given[who] || 0) + 1;
-      }
+      params.push(callers, input.count ?? null);
+      const who = `$${params.length - 1}::uuid[]`;
+      const rows = (await tx.query(
+        `with next as (
+           select n.person_id, row_number() over (order by n.position, n.person_id) as rn
+             from call_bank_numbers n join persons p on p.id = n.person_id
+            where n.bank_id = $1 and n.assigned_to is null and n.done_at is null and ${still}
+            order by n.position, n.person_id limit $${params.length}::int),
+         handed as (
+           update call_bank_numbers n set assigned_to = c.user_id, assigned_at = now()
+             from next join unnest(${who}) with ordinality c(user_id, i) on c.i = 1 + (next.rn - 1) % cardinality(${who})
+            where n.bank_id = $1 and n.person_id = next.person_id
+           returning n.assigned_to)
+         select assigned_to as user_id, count(*)::int as n from handed group by assigned_to`, params,
+      )).rows;
+      const given = Object.fromEntries(rows.map((r) => [r.user_id, r.n]));
+      const take = rows.reduce((sum, r) => sum + r.n, 0);
       emit('call_bank', b.id, 'update', { assigned: take, to: Object.keys(given) });
       return { handed: take, given, ...(await counts(tx, ctx, b)) };
     },

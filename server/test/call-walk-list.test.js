@@ -5,7 +5,8 @@
 //     a call); someone who leaves the list (voted, re-rated, do-not-contact)
 //     leaves the calls not yet made, at once and with no write — a call
 //     already logged stays logged; someone who joins it later comes in on a
-//     top-up; the bank keeps its numbers if the list is deleted;
+//     top-up; the list can't be deleted while an open bank calls it, and a
+//     closed bank keeps its numbers when it is;
 //   · the Calls read takes ?list= and moves on past its first load (?after=);
 //   · a sweep (pass) that walks a list: only doors with someone on it, as
 //     the list stands at each load; who narrows it further; the list can't
@@ -136,6 +137,34 @@ test('Calls asks only for who may be called (or texted), counts the same, and a 
   assert.equal(ok(await vic.get('/api/persons/count?tag=bulk&has=phone&reach=call')).total, 5101, 'the 5,100 and the one who joined');
 });
 
+test('handing out a big bank is one write: any count, in the bank’s order, in turn across a team; a caller’s list comes 500 at a time', async () => {
+  const bank = ok(await mgr.get('/api/banks')).banks.find((b) => b.name === 'Bulk calls');
+  const me = ok(await mgr.get('/api/auth/me')).user.id;
+  // More than the 5,000 one call once took, to one caller.
+  const first = ok(await mgr.action('bank.assign', { id: bank.id, user_id: ids.vic, count: 5050 }));
+  assert.deepEqual([first.handed, first.given, first.open], [5050, { [ids.vic]: 5050 }, 50]);
+  // The rest to a team of two, in turn, starting with whoever joined the team first.
+  const team = ok(await mgr.action('team.create', { name: 'Bulk callers' })).team;
+  ok(await mgr.action('team.member.add', { team_id: team.id, user_id: ids.vic }));
+  ok(await mgr.action('team.member.add', { team_id: team.id, user_id: me }));
+  const rest = ok(await mgr.action('bank.assign', { id: bank.id, team_id: team.id }));
+  assert.deepEqual([rest.handed, rest.given, rest.open, rest.assigned], [50, { [ids.vic]: 25, [me]: 25 }, 0, 5100]);
+  const edge = ok(await mgr.get(`/api/banks/${bank.id}?offset=5048&limit=6`)).numbers;
+  assert.deepEqual(edge.map((n) => n.assigned_to), [ids.vic, ids.vic, ids.vic, me, ids.vic, me], 'in the bank’s order');
+  assert.equal(ok(await mgr.action('bank.assign', { id: bank.id, user_id: me })).handed, 0, 'nothing left to hand out');
+  // Vic's list: the first 500 to call, and how many in all — never five thousand people to a phone.
+  const mine = ok(await vic.get(`/api/banks/${bank.id}/mine`));
+  assert.deepEqual([mine.persons.length, mine.bank.total, mine.bank.done, mine.bank.left], [500, 5075, 0, 5075]);
+  assert.equal(mine.persons[0].name, 'Bulk 00001 Example');
+  // A call logged: that number is crossed off, and the next one comes in at the end.
+  ok(await vic.action('contact.log', { person_id: mine.persons[0].id, channel: 'phone', outcome: 'contacted' }));
+  const next = ok(await vic.get(`/api/banks/${bank.id}/mine`));
+  assert.deepEqual([next.persons.length, next.bank.total, next.bank.done, next.bank.left], [500, 5075, 1, 5074]);
+  assert.deepEqual([next.persons[0].id, next.persons[498].id], [mine.persons[1].id, mine.persons[499].id]);
+  assert.equal(ok(await vic.get('/api/banks/mine')).banks.find((b) => b.id === bank.id).left, 5074);
+  ok(await mgr.action('bank.release', { id: bank.id }));
+});
+
 test('someone who leaves the list leaves the calls not yet made; a call already logged stays; someone back on it comes back', async () => {
   const mk = async (key, name, phone) => { P[key] = await mgr.createPerson(name, { phone, tags: ['gotv'] }); };
   await mk('ana', 'Ana Gotv Example', '604-555-0201');
@@ -191,7 +220,13 @@ test('someone who joins the list later comes in on a top-up; only numbers still 
   const byHand = (await mgr.get('/api/banks')).json.banks.find((b) => b.name === 'By hand');
   assert.equal((await mgr.action('bank.topup', { id: byHand.id })).status, 409, 'a bank picked by hand has no list to follow');
   assert.equal((await vic.action('bank.topup', { id: ids.gotvBank })).status, 403);
-  // The list is deleted: the bank keeps the numbers it has.
+  // An open bank calls the list: it can't be deleted from under it — everyone who had left would be back on the calls.
+  const refused = await mgr.action('list.delete', { id: ids.gotvList });
+  assert.equal(refused.status, 409);
+  assert.match(refused.json.error, /“Get out the vote calls” calls this list — close it first/);
+  assert.deepEqual(ok(await vic.get(`/api/banks/${ids.gotvBank}/mine`)).persons.map((p) => p.name.split(' ')[0]), ['Ana', 'Eve', 'Fay']);
+  // Closed, the calling is over: the list can go, and the bank keeps the numbers it has.
+  ok(await mgr.action('bank.update', { id: ids.gotvBank, closed: true }));
   ok(await mgr.action('list.delete', { id: ids.gotvList }));
   assert.deepEqual(ok(await vic.get(`/api/banks/${ids.gotvBank}/mine`)).persons.map((p) => p.name.split(' ')[0]), ['Ana', 'Eve', 'Fay']);
   assert.equal((await mgr.action('bank.topup', { id: ids.gotvBank })).status, 409);

@@ -4,8 +4,9 @@
 //     whatever that place says tomorrow), and is still on file;
 //   · in a bank made from a list, they are still on the list. Someone who
 //     votes, opts out or is rated off it leaves the calls not yet made, at
-//     once and with no write; a call already logged stays logged. If the
-//     list itself is deleted, the bank keeps the numbers it has.
+//     once and with no write; a call already logged stays logged. The list
+//     can't be deleted while the bank is open (ext/lists list.delete); a
+//     closed bank whose list is deleted keeps the numbers it has.
 //
 //   stillOn(db, ctx, bank, params)      SQL (persons p), its params added
 //   bankCounts(db, ctx, bank)           { total, assigned, done, open, gone }
