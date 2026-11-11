@@ -219,6 +219,28 @@ export const forgetHolders = (tx, ws, personIds) => tx.query(
   'update callhub_results set tagged = false where workspace_id = $1 and tagged and person_id = any($2::uuid[])', [ws, personIds],
 );
 
+// Two records about to be made one (the personMerging hook, before
+// anything moves — while whose result is whose can still be told). A
+// call's hold goes with its result to the record kept, so a row put back
+// still takes off the tag a call put on, whichever record that was. But a
+// tag either record carries with no result holding it was set by hand: on
+// the record kept it stays the desk's, so the calls of both let go of
+// theirs — a row put back never takes it.
+export const onMerging = async (tx, ctx, { keep, drop }) => {
+  const ws = ctx.workspaceId;
+  const both = [keep, drop];
+  const holding = new Set((await tx.query(
+    `select distinct person_id from callhub_results where workspace_id = $1 and tagged and mapped = 'do_not_call' and person_id = any($2::uuid[])`,
+    [ws, both.map((p) => p.id)],
+  )).rows.map((r) => r.person_id));
+  if (!holding.size) return;
+  const has = (p) => tagsOf(p).includes(NO_CALL_TAG);
+  const byHand = both.some((p) => has(p) && !holding.has(p.id));
+  // A hold on a record without the tag holds nothing (it came off some way not seen): it goes too.
+  const off = both.filter((p) => holding.has(p.id) && (byHand || !has(p))).map((p) => p.id);
+  if (off.length) await forgetHolders(tx, ws, off);
+};
+
 // A result counts as "do not call". → 'new' (it put the tag on), 'shared'
 // (the tag was on already, held by another result — or by one that let go
 // of it in this same save: `released`), or null (on already, by hand).

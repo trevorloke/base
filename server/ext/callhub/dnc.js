@@ -295,13 +295,12 @@ const marks = (e) => e.payload.tags.some((t) => t === NO_CALL_TAG || t === NO_CO
 // leaves without the do-not-call tag: no call's result holds that tag for
 // them any more (results.js), so a tag the desk took off by hand is never
 // brought back, or taken for a result's, by a later change to a push's
-// table. The same for a record made from two: whose tag it was can no
-// longer be told apart, so it is nobody's result's — only a person takes
-// it off. A fault here never costs the write itself (a savepoint, skipped
-// as a whole).
+// table. (A record made from two settled its calls' holds before anything
+// moved: results.js onMerging.) A fault here never costs the write itself
+// (a savepoint, skipped as a whole).
 export const onEvents = async (tx, meta, events) => {
   const edits = events.filter(tagEdit);
-  const off = edits.filter((e) => e.op === 'update' && (e.payload.merged || !e.payload.tags.includes(NO_CALL_TAG))).map((e) => e.entityId);
+  const off = edits.filter((e) => e.op === 'update' && !e.payload.tags.includes(NO_CALL_TAG)).map((e) => e.entityId);
   if (!edits.length || (!off.length && !callhubOn())) return;
   await tx.query('savepoint callhub_dnc_hook');
   try {

@@ -19,7 +19,9 @@
 //       settle the flag are always there.
 //   person.merge  { keep, drop }    desk. Everything that points at `drop`
 //       — contacts, gifts and receipts, shifts, signs, lists, answers,
-//       relationships, texts, requests, ladders… — moves to `keep`; where
+//       relationships, texts, requests, ladders… — moves to `keep` (a
+//       feature first settles what it could not tell apart afterwards:
+//       the personMerging hook, lib/hooks.js); where
 //       `keep` already has the same thing (both on one shift, one list),
 //       keep's stays. Keep's blanks are filled from drop (email, phone,
 //       address, pin…), tags are joined, and drop leaves the list (deleted,
@@ -46,6 +48,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { flagIfOver, maybesAbout, recheckMaybes } from '../../lib/gifts.js';
+import { runHooks } from '../../lib/hooks.js';
 import { DEFAULT_SLATE } from '@starbase/shared/canvass';
 import { sameText, samePhone, samePostal, sharesOf, sharedWords } from './same.js';
 
@@ -228,6 +231,8 @@ export const actions = {
       const keep = both.find((p) => p.id === input.keep);
       const drop = both.find((p) => p.id === input.drop);
       if (!keep || !drop) throw httpError(404, 'one of them is gone — reload');
+      // What a feature must settle while the two can still be told apart (lib/hooks.js).
+      await runHooks('personMerging', tx, ctx, { keep, drop });
 
       // Keep's record: its own values stand; blanks come from drop.
       const filled = {};

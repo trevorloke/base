@@ -32,7 +32,7 @@ import { registerIntegration } from '../integrations/index.js';
 import { callhubOn } from './callhub.js';
 import { DNC_JOB, onEvents, runDncJob } from './dnc.js';
 import { PUSH_JOB, runPushJob } from './push.js';
-import { REFILE_JOB, runRefileJob } from './results.js';
+import { onMerging, REFILE_JOB, runRefileJob } from './results.js';
 
 export { sql } from './sql.js';
 export { actions } from './actions.js';
@@ -40,7 +40,8 @@ export { api } from './api.js';
 export { publicRoutes } from './webhook.js';
 
 export const jobs = { [PUSH_JOB]: runPushJob, [DNC_JOB]: runDncJob, [REFILE_JOB]: runRefileJob };
-export const hooks = { events: onEvents };
+// personMerging: two records made one keep each call's hold on a tag (results.js).
+export const hooks = { events: onEvents, personMerging: onMerging };
 // In the full export: what was sent where, and every result as it came.
 export const exportTables = ['callhub_pushes', 'callhub_contacts', 'callhub_dnc', 'callhub_results'];
 export const deskOnlyReads = [/^\/api\/callhub(\/|$)/];

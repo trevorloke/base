@@ -1060,6 +1060,67 @@ test('a tag the desk took off by hand is not brought back by a slip on another r
   await drain();
 });
 
+test('two records made one: a call’s hold on the tag goes with it — a row put back takes the tag off whichever record was kept, never one either had by hand', async () => {
+  const tags = async (id) => (await person(id)).tags;
+  const atCallHub = (n) => fake.dnc.some((d) => d.phone_number === n);
+  // A call on one record (or both) slips to "Do not call"; then the desk merges the two; then the row is put back.
+  const slip = async (label, rung) => {
+    const list = ok(await mgr.action('list.create', { name: `${label} list`, kind: 'people', person_ids: rung.map((p) => p.id) })).list.id;
+    const r = ok(await mgr.action('callhub.push', { list_id: list }));
+    await drain();
+    for (const p of rung) await fake.note({ contact: `+1${p.phone.replace(/\D/g, '')}`, disposition: 'Answered', campaign: label, notes: 'talked' });
+    for (const p of rung) assert.deepEqual(await tags(p.id), [], 'not tagged before the slip');
+    const m = ok(await staff.action('callhub.map', { id: r.push.id, outcomes: { Answered: 'do_not_call' } }));
+    await drain();
+    return { push: r.push.id, tagged: m.tagged };
+  };
+  const putBack = async (push) => {
+    const back = ok(await staff.action('callhub.map', { id: push, outcomes: { Answered: null } }));
+    await drain();
+    return back;
+  };
+
+  // The slipped record is the one kept; the duplicate had no tags.
+  const kept = await mgr.createPerson('Kept Slip Example', { phone: '236-555-0110' });
+  const keptTwin = await mgr.createPerson('Kept Slip Exampl', { phone: '236-555-0111' });
+  const a = await slip('Kept slip', [kept]);
+  assert.equal(a.tagged, 1);
+  assert.ok(atCallHub('+12365550110'));
+  ok(await mgr.action('person.merge', { keep: kept.id, drop: keptTwin.id }));
+  assert.equal((await putBack(a.push)).untagged, 1, 'the slip’s tag comes off the record kept');
+  assert.deepEqual(await tags(kept.id), []);
+  assert.ok(!atCallHub('+12365550110'), 'and her number off CallHub’s list');
+
+  // The slipped record is the one merged away: its call's hold moves with it.
+  const gone = await mgr.createPerson('Gone Slip Example', { phone: '236-555-0112' });
+  const stays = await mgr.createPerson('Gone Slip Exampl', { phone: '236-555-0113' });
+  const b = await slip('Gone slip', [gone]);
+  ok(await mgr.action('person.merge', { keep: stays.id, drop: gone.id }));
+  assert.deepEqual(await tags(stays.id), ['do-not-call'], 'the record kept carries the tag the call put on');
+  assert.equal((await putBack(b.push)).untagged, 1);
+  assert.deepEqual(await tags(stays.id), []);
+  assert.ok(!atCallHub('+12365550112') && !atCallHub('+12365550113'));
+
+  // Both records rung, both slipped: one person now, untagged once.
+  const one = await mgr.createPerson('Both Rung Example', { phone: '236-555-0114' });
+  const two = await mgr.createPerson('Both Rung Exampl', { phone: '236-555-0115' });
+  const c = await slip('Both rung', [one, two]);
+  assert.equal(c.tagged, 2);
+  ok(await mgr.action('person.merge', { keep: one.id, drop: two.id }));
+  assert.equal((await putBack(c.push)).untagged, 1);
+  assert.deepEqual(await tags(one.id), []);
+
+  // The duplicate was tagged by hand: that tag is the desk's, on the record kept too.
+  const asked = await mgr.createPerson('Asked Before Example', { phone: '236-555-0116' });
+  const askedTwin = await mgr.createPerson('Asked Before Exampl', { phone: '236-555-0117', tags: ['do-not-call'] });
+  const d = await slip('Asked before', [asked]);
+  ok(await mgr.action('person.merge', { keep: asked.id, drop: askedTwin.id }));
+  assert.equal((await putBack(d.push)).untagged, 0, 'a tag either record had by hand is never the table’s to take');
+  assert.deepEqual(await tags(asked.id), ['do-not-call']);
+  ok(await mgr.action('person.update', { id: asked.id, tags: [] }));
+  await drain();
+});
+
 test('what is taken back on a list is taken back on the lists sent since that copied it — a later list never tags or rates anyone unasked', async () => {
   const mk = async (name, n) => mgr.createPerson(name, { phone: `672-555-01${n}` });
   const [a, b, c, own, d, e] = [await mk('Copy A Example', '06'), await mk('Copy B Example', '07'), await mk('Copy C Example', '08'),

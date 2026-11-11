@@ -412,8 +412,10 @@ What happens:
   do-not-call?*), and so does putting it back (*Stop counting "Answered"
   as do not call?* — a slip of one arrow key on the row is caught too);
   **Yes** takes the tag off everyone it tagged, however often each was
-  rung, and their numbers off CallHub's list — never a tag someone set by
-  hand, and never bringing back one the desk took off by hand. A push with
+  rung (and from the record kept, when the one it tagged was merged with
+  a duplicate since), and their numbers off CallHub's list — never a tag
+  someone set by hand (on either record, when two were made one), and
+  never bringing back one the desk took off by hand. A push with
   thousands of results is moved a part at a time, in the background.
 - **A new push starts with the newest push's table** and support question,
   so a pick is made once. What is taken back on a push is taken back on the
