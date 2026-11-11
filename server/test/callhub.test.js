@@ -916,8 +916,11 @@ test('a row slipped to “Do not call” and put back: the tag comes off again, 
   assert.deepEqual(atCallHub(), [true, true, true]);
   assert.equal(ok(await mgr.get(`/api/callhub/preview?list=${list}`)).numbers, 0);
   // …and putting the row back undoes it: the table takes off what the table put on.
+  assert.equal(slip.stay_hand, null);
   const back = ok(await staff.action('callhub.map', { id: r.push.id, outcomes: { Answered: null } }));
   assert.deepEqual([back.changed, back.tagged, back.untagged], [3, 0, 2]);
+  // Whoever the row is about and keeps the tag is named, so the desk can look: hers was set by hand.
+  assert.deepEqual([back.stay_hand, back.stay_call], [{ n: 1, people: [{ id: people[2].id, name: 'Slip2 Example' }], more: 0 }, null]);
   await drain();
   assert.deepEqual(await tagged(), [false, false, true], 'the tag set by hand stays');
   assert.deepEqual(atCallHub(), [false, false, true], 'CallHub’s do-not-call list follows');
@@ -1005,6 +1008,8 @@ test('a row put back takes the tag off everyone it tagged — also someone rung 
   assert.deepEqual(await tagged(), [true, true, false]);
   const swap = await map({ 'Remove sign request': 'contacted', 'No Answer': 'do_not_call' });
   assert.deepEqual([swap.tagged, swap.untagged], [1, 0], 'only the third is new');
+  assert.deepEqual([swap.stay_hand, swap.stay_call?.people.map((p) => p.name)], [null, ['Twice0 Example', 'Twice1 Example']],
+    'the two the row put back was about keep the tag: another call says so now');
   assert.deepEqual(await tagged(), [true, true, true]);
   assert.equal((await map({ 'No Answer': null })).untagged, 3);
   assert.deepEqual(await tagged(), [false, false, false]);
@@ -1040,6 +1045,7 @@ test('a tag the desk took off by hand is not brought back by a slip on another r
   ok(await staff.action('callhub.map', { id: r.push.id, outcomes: { Answered: 'do_not_call' } }));
   const undo = ok(await staff.action('callhub.map', { id: r.push.id, outcomes: { Answered: null } }));
   assert.equal(undo.untagged, 0);
+  assert.deepEqual([undo.stay_hand?.people.map((p) => p.name), undo.stay_call], [['Hand Off Example'], null]);
   assert.deepEqual(await tags(), ['do-not-call']);
   ok(await mgr.action('person.update', { id: ben.id, tags: [] }));
   await drain();
@@ -1056,6 +1062,7 @@ test('a tag the desk took off by hand is not brought back by a slip on another r
   ok(await mgr.action('person.merge', { keep: kept.id, drop: other.id }));
   const after = ok(await staff.action('callhub.map', { id: r2.push.id, outcomes: { Answered: null } }));
   assert.equal(after.untagged, 0);
+  assert.deepEqual(after.stay_hand?.people.map((p) => p.name), ['Made One Example'], 'and the line says she stays do-not-call');
   assert.ok((await person(kept.id)).tags.includes('do-not-call'), 'the tag she asked for by hand stands');
   await drain();
 });
@@ -1115,7 +1122,9 @@ test('two records made one: a call’s hold on the tag goes with it — a row pu
   const askedTwin = await mgr.createPerson('Asked Before Exampl', { phone: '236-555-0117', tags: ['do-not-call'] });
   const d = await slip('Asked before', [asked]);
   ok(await mgr.action('person.merge', { keep: asked.id, drop: askedTwin.id }));
-  assert.equal((await putBack(d.push)).untagged, 0, 'a tag either record had by hand is never the table’s to take');
+  const dBack = await putBack(d.push);
+  assert.equal(dBack.untagged, 0, 'a tag either record had by hand is never the table’s to take');
+  assert.deepEqual(dBack.stay_hand, { n: 1, people: [{ id: asked.id, name: 'Asked Before Example' }], more: 0 }, 'and the line names her');
   assert.deepEqual(await tags(asked.id), ['do-not-call']);
   ok(await mgr.action('person.update', { id: asked.id, tags: [] }));
   await drain();

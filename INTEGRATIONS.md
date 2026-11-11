@@ -415,7 +415,10 @@ What happens:
   rung (and from the record kept, when the one it tagged was merged with
   a duplicate since), and their numbers off CallHub's list — never a tag
   someone set by hand (on either record, when two were made one), and
-  never bringing back one the desk took off by hand. A push with
+  never bringing back one the desk took off by hand. Anyone it leaves
+  do-not-call all the same is named on the saved line, so the desk can
+  look (*1 person stays do-not-call, tagged by hand — Ida Example*; or
+  *another call says so*). A push with
   thousands of results is moved a part at a time, in the background.
 - **A new push starts with the newest push's table** and support question,
   so a pick is made once. What is taken back on a push is taken back on the

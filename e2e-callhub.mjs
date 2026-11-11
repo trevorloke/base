@@ -15,7 +15,8 @@
 // them asks first, in place, naming the result; "No" (or Escape) changes
 // nothing, and putting a row back — which asks too, even after one arrow
 // key — takes the tag (and CallHub's entry) off again — on a list sent
-// since that copied the row too. A phone bank is sent
+// since that copied the row too — and names anyone it leaves tagged (by
+// hand, or by another call). A phone bank is sent
 // the same way; a number CallHub calls is crossed off there. A refusal stops
 // the push with CallHub's words, Carry on finishes it, and "Send again" is
 // only offered quietly beside it (not at all on a push left part-way). The
@@ -524,6 +525,32 @@ check('…and the later list follows by itself: its row reads Talked again, and 
 const only = (await api('/actions/callhub.map', { id: firstPush.id, outcomes: { 'Rang out': 'do_not_call' } })).json;
 check('a pick that tags stays on its own list', only.tagged === 1 && only.later === 0 && (await tagged(ida)) && !(await tagged(jay)), JSON.stringify({ tagged: only.tagged, later: only.later }));
 await api('/actions/callhub.map', { id: firstPush.id, outcomes: { 'Rang out': null } });
+// A row put back that leaves someone tagged — here by hand, before the slip — says so, by name, so the desk can look.
+await api('/actions/person.update', { id: ida, tags: ['do-not-call'] });
+await api('/actions/callhub.map', { id: firstPush.id, outcomes: { 'Rang out': 'do_not_call' } });
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForFunction((sel) => /result back/.test(document.querySelector(sel)?.innerText || ''), ch, { timeout: 10000 }).catch(() => {});
+await page.click(`${ch} .ch-push .disclose`);
+await page.waitForSelector(`${rangOut} select`, { timeout: 10000 });
+await page.selectOption(`${rangOut} select`, 'contacted');
+await page.waitForSelector(`${rangOut} .ch-confirm`, { timeout: 5000 }).catch(() => {});
+if (await page.$(`${rangOut} .ch-confirm`)) await page.click(`${rangOut} .ch-confirm button:has-text("Yes")`);
+await page.waitForFunction((sel) => /stays do-not-call/.test(document.querySelector(sel)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
+const stayLine = await text(page, `${ch} .ch-results [role="status"]`);
+check('a row put back that leaves someone tagged by hand names her: “Saved · 1 result already in moved too · 1 person stays do-not-call, tagged by hand — Ida Example”',
+  stayLine === 'Saved · 1 result already in moved too · 1 person stays do-not-call, tagged by hand — Ida Example' && (await tagged(ida))
+  && (await page.$$eval(`${ch} .ch-results [role="status"] a[href$="/people/${ida}"]`, (els) => els.length)) === 1, stayLine);
+await page.locator(`${ch} .ch-results [role="status"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+await page.screenshot({ path: `${SHOTS}/12-put-back-stays-1440.png` });
+await page.setViewportSize({ width: 390, height: 844 });
+await sleep(400);
+await page.locator(`${ch} .ch-results [role="status"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+await page.screenshot({ path: `${SHOTS}/12-put-back-stays-390.png` });
+m = await measure(page, ch);
+check('…at 390 wide: no sideways scroll', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+await page.setViewportSize({ width: 1440, height: 900 });
+await api('/actions/person.update', { id: ida, tags: [] });
+for (let i = 0; i < 30 && fake.dnc.some((d) => d.phone_number === '+16045550131'); i += 1) await sleep(500);
 
 // ── Do-not-call numbers CallHub won't take, and ones it won't let go: said, with whose they are ──
 fake.rejectDnc('all');

@@ -17,7 +17,7 @@
 // Under everything: the do-not-call numbers CallHub would not take, and
 // the ones it still holds though nobody here blocks them now — with whose
 // they are, so someone can put it right in CallHub.
-import { useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { offeredCodes, ratingText } from '@starbase/shared/scale';
@@ -48,18 +48,26 @@ const SEEN = 'base.callhub.on';
 const seenOn = () => { try { return localStorage.getItem(SEEN) === '1'; } catch { return false; } };
 const rememberOn = (on) => { try { if (on) localStorage.setItem(SEEN, '1'); else localStorage.removeItem(SEEN); } catch { /* a per-device nicety */ } };
 
+// "do-not-call" kept on one line: a phone's narrow column would break it at a hyphen.
+const DNC = <span className="ch-nobreak">do-not-call</span>;
+const joined = (parts) => parts.filter(Boolean).map((x, i) => <Fragment key={i}>{i > 0 && ' · '}{x}</Fragment>);
 // What a save did, in one line: what moved, who was tagged or rated — or no longer.
-const savedLine = (r) => [
+const savedLine = (r) => joined([
   'Saved',
   r.changed && `${num(r.changed)} ${plural(r.changed, 'result')} already in moved too`,
-  r.tagged && `${num(r.tagged)} ${plural(r.tagged, 'person', 'people')} tagged do-not-call`,
-  r.untagged && `${num(r.untagged)} ${plural(r.untagged, 'person is', 'people are')} no longer do-not-call`,
+  r.tagged && <>{num(r.tagged)} {plural(r.tagged, 'person', 'people')} tagged {DNC}</>,
+  r.untagged && <>{num(r.untagged)} {plural(r.untagged, 'person is', 'people are')} no longer {DNC}</>,
   r.rated && `${num(r.rated)} ${plural(r.rated, 'person', 'people')} rated`,
   r.unrated && `${num(r.unrated)} ${plural(r.unrated, 'rating')} taken back`,
   r.more && 'the rest follow by themselves',
   // What was taken back here was copied into the lists sent since: they follow.
   r.later && `${num(r.later)} ${plural(r.later, 'list')} sent since ${plural(r.later, 'follows', 'follow')} too`,
-].filter(Boolean).join(' · ');
+]);
+// Whoever a row put back is about and is still do-not-call, by name, so the
+// desk can look: tagged by hand (no call's result holds it), or another of
+// their calls still says so.
+const stays = (s, why) => s && <>{num(s.n)} {plural(s.n, 'person stays', 'people stay')} {DNC}, {why}<Names people={s.people} more={s.more} /></>;
+const staysLine = (r) => joined([stays(r.stay_hand, 'tagged by hand'), stays(r.stay_call, 'another call says so')]);
 
 function Unavailable({ onRetry }) {
   return <p className="ch-line" role="status">Unavailable — <button type="button" className="btn-link" onClick={onRetry}>Try again</button></p>;
@@ -92,7 +100,10 @@ function Results({ p, online, onChanged }) {
   const scale = useScale();
   const uid = useId();
   const [busy, setBusy] = useState(false);
+  // What the last save did (its line), and who it left do-not-call all the
+  // same — kept on its own, so it stays said while a big push's rest moves.
   const [said, setSaid] = useState(null);
+  const [stayed, setStayed] = useState(null);
   const [error, setError] = useState(null);
   // A pick that would tag, untag or rate people already called waits here for a Yes: { at, words, input }.
   const [ask, setAsk] = useState(null);
@@ -109,9 +120,11 @@ function Results({ p, online, onChanged }) {
     else if (wasMoving) { setWasMoving(false); setSaid('Saved · the results already in have all moved'); }
   }, [p.moving, wasMoving]);
   const save = async (input) => {
-    setBusy(true); setError(null); setSaid(null); setAsk(null);
+    setBusy(true); setError(null); setSaid(null); setStayed(null); setAsk(null);
     try {
-      setSaid(savedLine(await action('callhub.map', { id: p.id, ...input })));
+      const r = await action('callhub.map', { id: p.id, ...input });
+      setSaid(savedLine(r));
+      if (r.stay_hand || r.stay_call) setStayed(staysLine(r));
       onChanged();
     } catch (e) { setError(errorText(e)); }
     setBusy(false);
@@ -201,6 +214,7 @@ function Results({ p, online, onChanged }) {
       )}
       <p className="ops-meta" role="status" aria-live="polite">
         {busy ? 'Saving…' : p.moving ? 'Moving the results already in…' : said || 'A change also moves the results already in. Putting it back undoes it.'}
+        {!busy && stayed && <> · {stayed}</>}
       </p>
       {error && <p className="error" role="alert">{error}</p>}
     </div>

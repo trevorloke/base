@@ -409,8 +409,10 @@ export const keepUnread = async (db, raw, type = '') => {
 //     no longer is (settleRating)
 // At most `refileBatch` results in one write, so a push with thousands of
 // results never holds the campaign's other writes up: more says there is a
-// rest (runRefileJob does it).
-// → { changed, tagged, untagged, rated, unrated, more }
+// rest (runRefileJob does it). Whoever a row put back is about and keeps the
+// tag all the same is said, so the desk can look: stay_hand (no call holds
+// it — set by hand) and stay_call (another call's result still says so).
+// → { changed, tagged, untagged, rated, unrated, more, stay_hand: [person id], stay_call: [person id] }
 let refileBatch = 500;
 export const _setRefileBatchForTest = (n) => { refileBatch = n; };
 export const REFILE_JOB = 'callhub.refile';
@@ -430,9 +432,10 @@ export const refile = async (tx, emit, ws, push) => {
        from callhub_results r join contacts c on c.id = r.contact_id and c.workspace_id = r.workspace_id
       where r.workspace_id = $1 and r.push_id = $2 order by c.created_at, c.id`, [ws, push.id],
   )).rows;
-  const tally = { changed: 0, tagged: 0, untagged: 0, rated: 0, unrated: 0, more: false };
+  const tally = { changed: 0, tagged: 0, untagged: 0, rated: 0, unrated: 0, more: false, stay_hand: [], stay_call: [] };
   const rerate = new Set();
   const released = new Set(); // people a result of theirs held the tag for, and no longer does
+  const putBack = new Set(); // people a result of theirs no longer counts as "do not call" for
   let done = 0;
   for (const c of rows) {
     const was = c.mapped || c.outcome;
@@ -459,6 +462,7 @@ export const refile = async (tx, emit, ws, push) => {
       if (mark === 'new') tally.tagged += 1;
     } else if (was === 'do_not_call' && mapped !== 'do_not_call') {
       if (tagged) released.add(c.person_id);
+      putBack.add(c.person_id);
       tagged = false;
     }
     await tx.query('update callhub_results set mapped = $2, tagged = $3 where id = $1', [c.result_id, mapped, tagged]);
@@ -475,6 +479,15 @@ export const refile = async (tx, emit, ws, push) => {
   for (const personId of released) {
     if (!(await held(tx, ws, personId)) && await unmarkNoCall(tx, emit, ws, personId)) tally.untagged += 1;
   }
+  // Whoever a row put back is about and is still do-not-call: by whose word.
+  const still = putBack.size ? (await tx.query(
+    'select id from persons where workspace_id = $1 and id = any($2::uuid[]) and deleted_at is null and tags @> $3::jsonb',
+    [ws, [...putBack], JSON.stringify([NO_CALL_TAG])],
+  )).rows.map((r) => r.id) : [];
+  const holding = still.length ? new Set((await tx.query(
+    `select distinct person_id from callhub_results where workspace_id = $1 and tagged and mapped = 'do_not_call' and person_id = any($2::uuid[])`, [ws, still],
+  )).rows.map((r) => r.person_id)) : new Set();
+  for (const personId of still) (holding.has(personId) ? tally.stay_call : tally.stay_hand).push(personId);
   for (const personId of rerate) {
     const how = await settleRating(tx, ws, personId);
     if (how) tally[how] += 1;

@@ -9,9 +9,12 @@
 //                              or null (no question rates anyone)
 //                  What is already in follows (results.js refile): only what the change is about,
 //                  and putting a row back undoes it. → { push, changed, tagged, untagged, rated,
-//                  unrated, more, later } — people newly tagged do-not-call or no longer, people an
-//                  answer now rates or no longer; more: a big push's rest follows in the background;
-//                  later: how many lists sent since carried what was taken back here, and follow.
+//                  unrated, more, later, stay_hand, stay_call } — people newly tagged do-not-call or
+//                  no longer, people an answer now rates or no longer; more: a big push's rest
+//                  follows in the background; later: how many lists sent since carried what was
+//                  taken back here, and follow; stay_hand / stay_call: whoever a row put back is
+//                  about and is still do-not-call — tagged by hand, or another call says so —
+//                  { n, people: [{ id, name }], more } or null, so the desk can look.
 // callhub.connect  {}                       managers: give CallHub the address results come back to
 import { z } from 'zod';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
@@ -24,6 +27,15 @@ import { connect } from './service.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 const parseJ = (v, d) => { try { return (typeof v === 'string' ? JSON.parse(v) : v) ?? d; } catch { return d; } };
+// People named for the desk (the line shows a few, the rest on a tap): up to this many.
+const NAMED = 100;
+const named = async (tx, ws, ids) => {
+  if (!ids.length) return null;
+  const people = (await tx.query(
+    `select id, name from persons where workspace_id = $1 and id = any($2::uuid[]) order by lower(name), id limit ${NAMED}`, [ws, ids],
+  )).rows.map((r) => ({ id: r.id, name: r.name }));
+  return { n: ids.length, people, more: Math.max(0, ids.length - people.length) };
+};
 // The job starts now rather than on the runner's next look.
 const startNow = async (db, ctx, result) => { runJobsSoon(); return { result }; };
 
@@ -135,7 +147,7 @@ export const actions = {
         'update callhub_pushes set outcomes = $3::jsonb, rating_map = $4::jsonb where id = $1 and workspace_id = $2 returning *',
         [push.id, ws, JSON.stringify(outcomes), rating ? JSON.stringify(rating) : null],
       )).rows[0];
-      const moved = await refile(tx, emit, ws, row);
+      const { stay_hand: byHand, stay_call: byCall, ...moved } = await refile(tx, emit, ws, row);
       if (moved.more) await refileRest(tx, ws, push.id, ctx.user.id);
       emit('callhub_push', push.id, 'update', { corrections: Object.keys(outcomes).length, rating_question: rating?.label || null, refiled: moved.changed });
       // The lists sent since that still carry what was taken back here: their
@@ -159,7 +171,7 @@ export const actions = {
         emit('callhub_push', p.id, 'update', { corrections: Object.keys(next.outcomes).length, rating_question: next.rating?.label || null, follows: push.id });
         later += 1;
       }
-      return { push: pushOut(row), ...moved, later };
+      return { push: pushOut(row), ...moved, later, stay_hand: await named(tx, ws, byHand), stay_call: await named(tx, ws, byCall) };
     },
     after: startNow,
   },
