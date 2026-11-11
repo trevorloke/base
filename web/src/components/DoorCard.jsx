@@ -45,7 +45,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { apiGet, ApiError } from '../api.js';
 import { holdNote, logContact, queueAction, undoQueued, useOutbox } from '../offline.js';
 import { isOffline, queuedChip, queuedSaid, queuedText } from './queued.js';
-import { SIGN_KINDS, noCalls } from '@starbase/shared/canvass';
+import { SIGN_KINDS, noCalls, noCallsWord } from '@starbase/shared/canvass';
 import RatingButtons, { More, OutcomeButtons, OUTCOME_LABEL, PersonTabs, focusRating, ratingText, useScale } from './RatingButtons.jsx';
 import QuickDetails from './QuickDetails.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from './SurveyQuestions.jsx';
@@ -681,7 +681,7 @@ export default function DoorCard({ door, selectedId, onSelect, onClose, toast, m
           <div className="door-more__row">
             {sel.phone ? (
               <>
-                {noCalls(sel) ? <span className="chip chip-danger">Do not call</span> : on.voice === false
+                {noCalls(sel) ? <span className="chip chip-danger">{noCallsWord(sel)}</span> : on.voice === false
                   ? <a className="btn door-act" href={telHref(sel.phone)} onClick={() => startReach(sel, 'phone')}>Call</a>
                   : <Link className="btn door-act" to={callsCard(sel, 'phone')}>Call</Link>}
                 {!noTexts(sel) && (on.sms === false

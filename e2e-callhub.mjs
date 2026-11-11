@@ -362,10 +362,21 @@ await phone.goto(`${ADMIN}/people/${P.gus}`, { waitUntil: 'domcontentloaded' });
 await phone.waitForSelector('.pf-meta', { timeout: 10000 });
 check('…his profile says “Do not call” by his name, and offers no Call to tap', /Do not call/.test(await text(phone, '.pf-meta')) && !(await phone.$('.pf-acts .pf-act:has-text("Call")')) && !(await phone.$('a[href^="tel:"]')), await text(phone, '.pf-meta'));
 await phone.screenshot({ path: `${SHOTS}/08-person-do-not-call-390.png` });
-// The same wherever the desk would otherwise dial with one tap: his follow-up, his request, the People list.
+// do-not-contact (no calls, no texts, no email) is no Call either: Dee's profile, tagged from the start.
+await phone.goto(`${ADMIN}/people/${P.dee}`, { waitUntil: 'domcontentloaded' });
+await phone.waitForSelector('.pf-meta', { timeout: 10000 });
+const deeMeta = await text(phone, '.pf-meta');
+check('Dee (do-not-contact): her profile says “Do not contact” — not “Do not call” beside it — and offers no Call to tap',
+  /Do not contact/.test(deeMeta) && !/Do not call/.test(deeMeta) && !(await phone.$('.pf-acts .pf-act:has-text("Call")')) && !(await phone.$('a[href^="tel:"]')), deeMeta);
+await phone.screenshot({ path: `${SHOTS}/08-person-do-not-contact-390.png` });
+// The same wherever the desk would otherwise dial with one tap: his follow-up, his request, the People list —
+// and Nora's, tagged do-not-contact after she asked to help.
 await api('/actions/request.ask', { person_id: P.gus, kind: 'volunteer', note: 'Wants to help on weekends' });
 await api('/actions/request.ask', { person_id: P.hana, kind: 'volunteer', note: 'Wants to help' });
-const dials = (p, sel) => p.$$eval(sel, (els) => els.map((el) => `${(el.querySelector('a[href*="/people/"]')?.innerText || '?').trim()}: ${el.querySelector('a[href^="tel:"]') ? 'Call' : 'no Call'}${/Do not call/.test(el.innerText) ? ' · Do not call' : ''}`).sort());
+const nora = (await api('/actions/person.create', { name: 'Nora Example', city: 'Surrey', phone: '604-555-0109', tags: ['newton'] })).json.person.id;
+await api('/actions/request.ask', { person_id: nora, kind: 'volunteer', note: 'Wants to help at events' });
+await api('/actions/person.update', { id: nora, tags: ['newton', 'do-not-contact'] });
+const dials = (p, sel) => p.$$eval(sel, (els) => els.map((el) => `${(el.querySelector('a[href*="/people/"]')?.innerText || '?').trim()}: ${el.querySelector('a[href^="tel:"]') ? 'Call' : 'no Call'}${(el.innerText.match(/Do not (call|contact)/) || []).map((w) => ` · ${w}`)[0] || ''}`).sort());
 for (const [p, n] of [[page, '1440'], [phone, '390']]) {
   await p.goto(`${ADMIN}/follow-ups`, { waitUntil: 'domcontentloaded' });
   await p.waitForSelector('.lad-fu', { timeout: 15000 }).catch(() => {});
@@ -373,37 +384,47 @@ for (const [p, n] of [[page, '1440'], [phone, '390']]) {
   await p.screenshot({ path: `${SHOTS}/08-follow-ups-do-not-call-${n}.png` });
 }
 const fuRows = await dials(phone, '.lad-fu');
-check('the desk’s Follow-ups: Gus’s card says “Do not call” and has no Call; Hana’s still has one',
-  JSON.stringify(fuRows) === JSON.stringify(['Gus Example: no Call · Do not call', 'Hana Example: Call']) && JSON.stringify(await dials(page, '.lad-fu')) === JSON.stringify(fuRows), fuRows.join(' | '));
+check('the desk’s Follow-ups: Gus’s card says “Do not call”, Nora’s “Do not contact”, and neither has a Call; Hana’s still has one',
+  JSON.stringify(fuRows) === JSON.stringify(['Gus Example: no Call · Do not call', 'Hana Example: Call', 'Nora Example: no Call · Do not contact'])
+  && JSON.stringify(await dials(page, '.lad-fu')) === JSON.stringify(fuRows), fuRows.join(' | '));
 m = await measure(phone, '.lad-fu');
 check('…at 390: no sideways scroll, nothing to tap under 48px', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
 await page.goto(`${ADMIN}/requests`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.rq-row', { timeout: 15000 }).catch(() => {});
 const rqRows = await dials(page, '.rq-row');
-check('Requests from the doors: the same', JSON.stringify(rqRows) === JSON.stringify(['Gus Example: no Call · Do not call', 'Hana Example: Call']), rqRows.join(' | '));
+check('Requests from the doors: the same', JSON.stringify(rqRows) === JSON.stringify(['Gus Example: no Call · Do not call', 'Hana Example: Call', 'Nora Example: no Call · Do not contact']), rqRows.join(' | '));
 await page.screenshot({ path: `${SHOTS}/08-requests-do-not-call-1440.png` });
 await page.goto(`${ADMIN}/people`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.pp-table__name', { timeout: 15000 }).catch(() => {});
 const listed = await page.$$eval('.pp-table tbody tr', (rows) => Object.fromEntries(rows.map((r) => [r.querySelector('.pp-table__name a')?.innerText.trim(), Boolean(r.querySelector('a[href^="tel:"]'))])));
-check('the People list at the desk: Gus’s and Noel’s numbers are shown, not links to dial; Hana’s is one',
-  listed['Gus Example'] === false && listed['Noel Example'] === false && listed['Hana Example'] === true, JSON.stringify(listed).slice(0, 240));
+check('the People list at the desk: Gus’s, Noel’s, Dee’s and Nora’s numbers are shown, not links to dial; Hana’s is one',
+  listed['Gus Example'] === false && listed['Noel Example'] === false && listed['Dee Example'] === false && listed['Nora Example'] === false
+  && listed['Hana Example'] === true, JSON.stringify(listed).slice(0, 240));
 // A door's card and a walk list: there the canvasser's own phone would dial.
 await pctx.route(/tile\.openstreetmap\.org/, (route) => route.fulfill({ status: 200, contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e8eef2"/></svg>' }));
 const doorQuiet = (await api('/actions/person.create', { name: 'Door Quiet Example', phone: '604-555-0133', address: '12390 72 Ave', city: 'Surrey', lat: 49.1331, lng: -122.8495, tags: ['do-not-call'] })).json.person.id;
 const doorOpen = (await api('/actions/person.create', { name: 'Door Open Example', phone: '604-555-0134', address: '7120 124 St', city: 'Surrey', lat: 49.131, lng: -122.852 })).json.person.id;
+const doorNever = (await api('/actions/person.create', { name: 'Door Never Example', phone: '604-555-0135', address: '12480 76 Ave', city: 'Surrey', lat: 49.1345, lng: -122.8455, tags: ['do-not-contact'] })).json.person.id;
 const onDoor = async (id) => {
   await phone.goto(`${ADMIN}/map?person=${id}`, { waitUntil: 'domcontentloaded' });
   await phone.waitForSelector('aside.door-card', { timeout: 15000 }).catch(() => {});
   await phone.click('aside.door-card .fk-more__btn').catch(() => {});
   await phone.waitForSelector('aside.door-card .door-more__row', { timeout: 10000 }).catch(() => {});
   const card = phone.locator('aside.door-card');
-  return { call: await card.getByRole('link', { name: 'Call', exact: true }).count(), tel: await card.locator('a[href^="tel:"]').count(), text: await card.getByRole('link', { name: 'Text', exact: true }).count(), says: /Do not call/.test(await text(phone, 'aside.door-card')) };
+  return {
+    call: await card.getByRole('link', { name: 'Call', exact: true }).count(), tel: await card.locator('a[href^="tel:"]').count(), text: await card.getByRole('link', { name: 'Text', exact: true }).count(),
+    says: /Do not call/.test(await text(phone, 'aside.door-card')), where: await text(phone, 'aside.door-card .door-more__row'),
+  };
 };
 const quietDoor = await onDoor(doorQuiet);
 await phone.screenshot({ path: `${SHOTS}/08-door-do-not-call-390.png` });
 const openDoorCard = await onDoor(doorOpen);
 check('a door’s card: “Do not call” where Call would be (Text stays); a neighbour’s card still has Call',
   quietDoor.call === 0 && quietDoor.tel === 0 && quietDoor.text === 1 && quietDoor.says && openDoorCard.call === 1 && !openDoorCard.says, JSON.stringify([quietDoor, openDoorCard]));
+const neverDoor = await onDoor(doorNever);
+await phone.screenshot({ path: `${SHOTS}/08-door-do-not-contact-390.png` });
+check('a do-not-contact door’s card: “Do not contact” where Call and Text would be, nothing to dial',
+  neverDoor.call === 0 && neverDoor.tel === 0 && neverDoor.text === 0 && /^Do not contact\b/.test(neverDoor.where) && !/Do not call/.test(neverDoor.where), JSON.stringify(neverDoor));
 const turf = (await api('/actions/turf.create', { name: 'Newton East', polygon: [[49.125, -122.860], [49.140, -122.860], [49.140, -122.838], [49.125, -122.838]] })).json.turf;
 await phone.goto(`${BASE}/turfs/${turf.id}`, { waitUntil: 'domcontentloaded' });
 await phone.waitForSelector('.walk-door', { timeout: 15000 }).catch(() => {});
@@ -419,9 +440,13 @@ const onWalk = async (addr) => {
 const walkQuiet = await onWalk('12390 72 Ave').catch((e) => String(e.message).slice(0, 120));
 await phone.screenshot({ path: `${SHOTS}/08-walk-do-not-call-390.png` });
 const walkOpen = await onWalk('7120 124 St').catch((e) => String(e.message).slice(0, 120));
-check('a walk list: no Call for her door; the neighbour’s has one', walkQuiet === 0 && walkOpen === 1, JSON.stringify([walkQuiet, walkOpen]));
+const walkNever = await onWalk('12480 76 Ave').catch((e) => String(e.message).slice(0, 120));
+await phone.screenshot({ path: `${SHOTS}/08-walk-do-not-contact-390.png` });
+check('a walk list: no Call for her door, nor for the do-not-contact one; the neighbour’s has one', walkQuiet === 0 && walkNever === 0 && walkOpen === 1, JSON.stringify([walkQuiet, walkNever, walkOpen]));
 await sleep(2500);
 check('…and his number went to CallHub’s do-not-call list by itself', fake.dnc.some((d) => d.phone_number === '+16045550107' && d.category === 1), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
+// Nora's and the do-not-contact door's numbers go the same way (no calls, no texts): settled before CallHub is made to refuse anything below.
+for (let i = 0; i < 30 && !['+16045550109', '+16045550135'].every((n) => fake.dnc.some((d) => d.phone_number === n && d.category === 3)); i += 1) await sleep(500);
 const zoe = (await api(`/persons/${P.zoe}`)).json.contacts;
 check('the shared number’s call is on Alex (first by name), not on Zoe', zoe.length === 0 && (await api(`/persons/${P.alex}`)).json.contacts.length === 1, String(zoe.length));
 

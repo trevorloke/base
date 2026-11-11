@@ -10,7 +10,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { noCalls } from '@starbase/shared/canvass';
+import { noCalls, noCallsWord } from '@starbase/shared/canvass';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { KIND_WORDS } from '../components/RequestAsk.jsx';
@@ -54,7 +54,7 @@ function Row({ r, online, busy, onDone, onReopen, confirming, setConfirming }) {
           <span className="ops-row__name">
             <Link to={`/people/${r.person.id}`} className="rq-who">{r.person.name}</Link>
             <span className="rq-kind-word"> · {KIND_WORDS[r.kind] || KIND_WORDS.other}</span>
-            {!done && noCalls(r.person) && <> <span className="chip chip-danger">Do not call</span></>}
+            {!done && noCalls(r.person) && <> <span className="chip chip-danger">{noCallsWord(r.person)}</span></>}
           </span>
           {r.note && <span className="rq-said">“{r.note}”</span>}
           <span className="ops-row__sub">

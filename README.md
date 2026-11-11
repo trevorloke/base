@@ -327,7 +327,7 @@ than a week after they came off is refused. Contacts are door, phone, text or
   left off the Calls list for a call, never rung through the campaign's
   number and never sent to the dialer, and no screen that reaches voters
   offers a Call to tap for them; texts, email and the door are untouched
-  (`do-not-contact` stops all of them).
+  (`do-not-contact` stops all of them, and offers no Call either).
 - **A dialer for a room of callers (CallHub)**: with CallHub connected, a
   list's page and a phone bank's page have **Send to CallHub** — the phone
   numbers, names and cities go to a CallHub phonebook in the background

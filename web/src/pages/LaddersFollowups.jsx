@@ -15,7 +15,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { noCalls } from '@starbase/shared/canvass';
+import { noCalls, noCallsWord } from '@starbase/shared/canvass';
 import { action, apiGet } from '../api.js';
 import { NoSignal, noSignal } from '../components/NoSignal.jsx';
 import { LadBack, fmtWhen } from '../components/LaddersBits.jsx';
@@ -72,7 +72,7 @@ function Row({ f, onDone, onHand, busy, members, now }) {
         <span className="ops-row__main">
           <span className="ops-row__name">
             {lead ? <Link className="lad-fu__who" to={`/people/${f.person.id}`}>{f.person.name}</Link> : f.text}
-            {open && noCalls(f.person) && <> <span className="chip chip-danger">Do not call</span></>}
+            {open && noCalls(f.person) && <> <span className="chip chip-danger">{noCallsWord(f.person)}</span></>}
           </span>
           <span className="ops-row__sub">
             {lead ? <span>{f.text}</span> : <Link to={`/people/${f.person.id}`}>{f.person.name}</Link>}
