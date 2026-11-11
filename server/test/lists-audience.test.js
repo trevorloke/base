@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
+import { keptCounts, loadList, peopleChanged } from '../ext/lists/audience.js';
 
 let db, mgr, vol, ws;
 const P = {};
@@ -195,6 +196,29 @@ test('People’s real total, and a call list that carries on past its first load
   // A volunteer's count follows the same rules as their list.
   assert.equal(ok(await vol.get('/api/persons/count?tag=donor-prospect')).total, 0);
   assert.ok(ok(await vol.get('/api/persons/count')).total >= 4);
+});
+
+test('a count that read the books before a change landed is never kept as fresh', async () => {
+  process.env.STARBASE_LIST_COUNTS_MS = '60000';
+  try {
+    const { id } = (await mgr.get('/api/lists')).json.lists.find((l) => l.name === 'Members');
+    const books = async () => Number((await db.query('select event_seq from workspaces where id = $1', [ws])).rows[0].event_seq);
+    const at = await books();
+    ok(await mgr.get(`/api/lists/${id}/counts?fresh=1`));
+    assert.ok(keptCounts({ workspaceId: ws }, await loadList(db, ws, id)), 'kept once counted');
+    // A write that changes people is under way: noted (inside its transaction), not yet in the books.
+    peopleChanged(ws, at + 1);
+    assert.equal(keptCounts({ workspaceId: ws }, await loadList(db, ws, id)), null, 'what was kept may have missed it');
+    ok(await mgr.get(`/api/lists/${id}/counts`));
+    assert.equal(keptCounts({ workspaceId: ws }, await loadList(db, ws, id)), null, 'counted before it landed: not kept as fresh');
+    // It lands (any write moves the books on): the next count is kept again.
+    ok(await mgr.action('subscription.add', { email: mail('landed') }));
+    assert.ok((await books()) > at);
+    ok(await mgr.get(`/api/lists/${id}/counts`));
+    assert.ok(keptCounts({ workspaceId: ws }, await loadList(db, ws, id)), 'kept again');
+  } finally {
+    process.env.STARBASE_LIST_COUNTS_MS = '0';
+  }
 });
 
 test('the list as a spreadsheet still downloads', async () => {
