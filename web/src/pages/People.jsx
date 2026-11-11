@@ -845,8 +845,9 @@ function PeopleList() {
         extra={f.field ? <FieldFilterChip value={f.field} onRemove={() => update({ field: null })} /> : null} />
 
       {!offline && !failed && (
-        <div className="pp-count" aria-live="polite">
-          {count}
+        <div className="pp-count">
+          {/* Only the count is read out as it changes, never the form beside it. */}
+          <span aria-live="polite">{count}</span>
           {desk && anyFilter && !partial && ' '}
           {desk && anyFilter && !partial && (
             <Link className="pp-savelist" to={`/lists/new?${new URLSearchParams(asFilter)}`}>

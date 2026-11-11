@@ -955,7 +955,7 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
           <div className="field">
             <label htmlFor="em-to">To</label>
             <select id="em-to" className="input" value={to} onChange={(e) => setTo(e.target.value)}>
-              <option value="newsletter">Newsletter subscribers — {subscribed ?? '…'}</option>
+              <option value="newsletter">Newsletter subscribers — {subscribed != null ? fmt(subscribed) : subs.isError ? 'Unavailable' : LOADING}</option>
               {all.map((l) => <option key={l.id} value={l.id}>{l.name} — {howMany(l)}</option>)}
             </select>
             {/* Where the senders' rules differ (server lib/reach.js), said where the choice is made. */}

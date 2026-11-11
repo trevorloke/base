@@ -6,8 +6,9 @@
 // "Call back…" → This evening does the same at 6; the desk's bank page shows
 // both as "call back …". Measured at 390. Call this list: a list's Call
 // opens New phone bank from it ("3 of 4 on it can be called"), the bank
-// says who left the list and takes in who joined since; Calls on a list of
-// 305 says "305 to call" and goes on past its first 300.
+// says who left the list and takes in who joined since; Lists ask for their
+// numbers three at a time, also coming back once they've gone stale; Calls
+// on a list of 305 says "305 to call" and goes on past its first 300.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
 //   BASE=http://127.0.0.1:4132 SHOTS=/tmp/banks node e2e-banks.mjs
@@ -161,6 +162,45 @@ const topped = await page.innerText('.au-banklist .ops-done').catch(() => '');
 lb = (await api(`/banks/${listBankId}`)).json?.bank;
 check('Hal joins: "Add who joined since" → "✓ 1 more to call — on the list since"; four numbers', /1 more to call/.test(topped) && lb.total === 4 && lb.open === 3, `${topped} · ${lb.total}/${lb.open}`);
 await page.screenshot({ path: `${SHOTS}/03-bank-from-list.png`, fullPage: true });
+
+// ── Lists ask the server for their numbers three at a time: on a first look,
+// and coming back once they've gone stale (a minute on, by the page's clock) ──
+for (let i = 1; i <= 8; i += 1) await api('/actions/list.create', { name: `Count me ${i}`, kind: 'filter', filter: { tag: 'call-list' } });
+const lpage = await dctx.newPage();
+lpage.on('pageerror', (e) => errors.push(`lists: ${e.message}`));
+await lpage.clock.install();
+let inFlight = 0;
+let most = 0;
+let asked = 0;
+await lpage.route(/\/api\/lists\/[0-9a-f-]+\/counts/, async (route) => {
+  inFlight += 1; asked += 1; most = Math.max(most, inFlight);
+  try {
+    const response = await route.fetch();
+    await sleep(300);
+    await route.fulfill({ response });
+  } catch { await route.abort().catch(() => {}); } finally { inFlight -= 1; }
+});
+const allCounted = () => lpage.waitForFunction(() => {
+  const rows = [...document.querySelectorAll('.au-row')];
+  return rows.length >= 9 && rows.every((r) => /can be reached/.test(r.innerText));
+}, null, { timeout: 15000 }).then(() => true, () => false);
+await lpage.goto(`${ADMIN}/lists`, { waitUntil: 'domcontentloaded' });
+const firstLook = await allCounted();
+check('Lists: every row counted, never more than 3 counts asked at once', firstLook && most >= 1 && most <= 3, `counted ${firstLook} · at once ${most} · asked ${asked}`);
+most = 0; asked = 0;
+await lpage.clock.setSystemTime(new Date(Date.now() + 65_000));
+await lpage.click('.au-row__name >> nth=0');
+await lpage.waitForSelector('.au-figs', { timeout: 8000 }).catch(() => {});
+await lpage.click('.ops-back');
+await lpage.waitForSelector('.au-row', { timeout: 8000 }).catch(() => {});
+const again = await allCounted();
+// Every list's numbers are asked for again, a few at a time, until none is on its way.
+const settled = async (ms = 12000) => {
+  for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (asked >= 9 && inFlight === 0) return true;
+  return false;
+};
+check('…back on Lists a minute on: all 9 stale ones asked for again, still 3 at a time', again && (await settled()) && most <= 3, `counted ${again} · at once ${most} · asked ${asked}`);
+await lpage.close();
 
 // ── Calls with ?list=: past the first 300 ──
 const many = Array.from({ length: 305 }, (_, i) => ({ name: `Many ${String(i + 1).padStart(3, '0')} Example`, phone: `604-555-01${String(i % 100).padStart(2, '0')}` }));

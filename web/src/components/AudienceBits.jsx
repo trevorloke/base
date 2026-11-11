@@ -19,7 +19,7 @@
 //   <RuleFields value onChange exclude />  a list's rule builder, under More rules
 //   <SnapshotForm input count defaultName />  "Save these people as they are
 //                         now": a name, then one action (list.snapshot)
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet } from '../api.js';
@@ -43,28 +43,44 @@ export const useListNames = (enabled = true) => useQuery({
 });
 
 // A city's lists are counted on the server one by one, each kept a minute:
-// asked for a few at a time, so thirty lists never ask thirty counts at once.
+// asked for a few at a time, so thirty lists never ask thirty counts at once
+// — on a first look, or coming back once the numbers have gone stale (a
+// list turned on asks the server again then, so it waits its turn too).
 const AT_ONCE = 3;
+const KEEP_MS = 60_000;
 const countKey = (id) => ['lists', 'counts', id];
 export function useListCounts(lists, first = null) {
   const queryClient = useQueryClient();
+  // The lists turned on since this screen opened stay on; only a count on
+  // its way holds a place (one that failed, or went stale, waits quietly).
+  const asked = useRef(new Set());
   const ordered = useMemo(() => {
     const all = lists || [];
     return first ? [...all.filter((l) => l.id === first), ...all.filter((l) => l.id !== first)] : all;
   }, [lists, first]);
-  let waiting = 0;
+  const states = ordered.map((l) => queryClient.getQueryState(countKey(l.id)));
+  let busy = ordered.filter((l, i) => asked.current.has(l.id) && (states[i]?.fetchStatus === 'fetching' || states[i]?.status === 'pending')).length;
   const results = useQueries({
-    queries: ordered.map((l) => {
-      const s = queryClient.getQueryState(countKey(l.id));
-      const settled = Boolean(l.counts) || (s && s.status !== 'pending');
-      const enabled = settled || waiting < AT_ONCE;
-      if (!settled && enabled) waiting += 1;
+    queries: ordered.map((l, i) => {
+      const s = states[i];
+      let enabled = asked.current.has(l.id);
+      if (!enabled) {
+        // Fresh numbers (or ones that came with the names) ask nothing when turned on.
+        const fresh = (!s && Boolean(l.counts)) || (s?.status === 'success' && !s.isInvalidated && Date.now() - s.dataUpdatedAt < KEEP_MS);
+        enabled = fresh || busy < AT_ONCE;
+        if (enabled && !fresh) busy += 1;
+        if (enabled) asked.current.add(l.id);
+      }
       return {
         queryKey: countKey(l.id),
         queryFn: () => apiGet(`/lists/${l.id}/counts`).then((r) => r.counts),
         ...(l.counts ? { initialData: l.counts } : {}),
         enabled,
-        staleTime: 60_000,
+        staleTime: KEEP_MS,
+        // Back online, a list's numbers come when it's looked at again — never all at once.
+        refetchOnReconnect: false,
+        // A count that comes back the same still frees its place for the next one.
+        notifyOnChangeProps: ['data', 'error', 'status', 'fetchStatus'],
         retry: 1,
       };
     }),
@@ -327,6 +343,10 @@ export function SnapshotForm({ input, count = null, defaultName = 'People', clas
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  // Cancel puts the keyboard back on the button that opened the form.
+  const opener = useRef(null);
+  const [closed, setClosed] = useState(false);
+  useEffect(() => { if (closed && !open) { opener.current?.focus(); setClosed(false); } }, [closed, open]);
   const save = async (e) => {
     e.preventDefault();
     setBusy(true);
@@ -345,7 +365,7 @@ export function SnapshotForm({ input, count = null, defaultName = 'People', clas
   if (!open && count === 0) return null;
   if (!open) {
     return (
-      <button type="button" className={`${link ? 'au-snap__link' : 'btn btn-quiet ops-tap'} ${className}`} disabled={!online}
+      <button type="button" ref={opener} className={`${link ? 'au-snap__link' : 'btn btn-quiet ops-tap'} ${className}`} disabled={!online}
         onClick={() => { setName(`${defaultName} — ${today()}`); setOpen(true); }}>
         Save these people as they are now
       </button>
@@ -363,7 +383,7 @@ export function SnapshotForm({ input, count = null, defaultName = 'People', clas
       {error && <p className="error" role="alert">{error}</p>}
       <div className="ops-actions">
         <button type="submit" className="btn ops-tap" disabled={busy || !online || !name.trim()}>{busy ? 'Saving…' : 'Save'}</button>
-        <button type="button" className="btn btn-quiet ops-tap" onClick={() => setOpen(false)}>Cancel</button>
+        <button type="button" className="btn btn-quiet ops-tap" onClick={() => { setOpen(false); setClosed(true); }}>Cancel</button>
       </div>
     </form>
   );

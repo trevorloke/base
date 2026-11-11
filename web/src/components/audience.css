@@ -90,6 +90,8 @@
 .au-snap__link:disabled { opacity: 0.5; cursor: default; }
 .au-snap__link:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
 @media (pointer: coarse), (max-width: 720px) { .au-snap__link { min-height: 48px; } }
+/* On a phone it takes its own row under the count, flush with it */
+@media (max-width: 720px) { .pp-count .au-snap__link { display: flex; margin-left: 0; } }
 .pp-count .au-snap { margin-top: var(--s-2); }
 
 /* A new phone bank: from a list, or people picked by hand */
