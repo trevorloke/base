@@ -559,12 +559,14 @@ one tap away under **More**.
 - **Map, the street map not loading** — block `basemaps.cartocdn.com` in
   the browser's network tools and reload: within a moment a line says *The
   street map wasn’t loading — switched to Muted* and the streets are there.
-  Block `tile.openstreetmap.org` too and move the map: *The street map isn’t
-  loading · Try Clean* stays under the count; unblock, tap it, the streets
-  load and the line goes. Weak signal: on a phone that has looked at a turf,
-  block both hosts and pan away — *The street map isn’t loading · Try
-  Muted*, and no switch (the other doesn't answer either); pan back and the
-  turf's streets are still there, and in airplane mode too.
+  Block `tile.openstreetmap.org` too and move the map: it goes back to
+  *Clean* by itself and *The street map isn’t loading · Try again* stays
+  under the count; unblock CARTO, tap it, the streets load and the line
+  goes. Weak signal: on a phone that has looked at a turf, block both hosts
+  and pan away — *The street map isn’t loading · Try again*, and no switch
+  (the other doesn't answer either); tap it, pan back, and the turf's
+  streets are still there, and in airplane mode too (and the look is still
+  *Clean*).
 - **Map, many turfs** — outlines and names show at once however many turfs
   there are; tap one and its sheet opens with *Loading…* where *64 doors
   left* then appears.

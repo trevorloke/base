@@ -197,6 +197,36 @@ export const tileAt = (template, { lat, lng }, zoom, maxZoom = 19) => {
   return String(template).replace(/\{s\}/g, 'a').replace(/\{z\}/g, z).replace(/\{x\}/g, x).replace(/\{y\}/g, y).replace(/\{r\}/g, '');
 };
 
+// What the map does when its street map isn't loading (Map.jsx), from:
+//   down      this look's street map isn't loading, and the phone says it has signal
+//   onAuto    the map is on a look it went to by itself (or one tapped from
+//             the note whose streets haven't come yet), not the person's pick
+//   other     there is a street map from another provider (a campaign's own
+//             provider, or Google's, has none)
+//   asked     that one, asked for one tile: null (not yet), 'asking', 'yes'
+//             (it answered) or 'no' (not in a few seconds)
+//   switched  the map has gone to the other by itself once already this visit
+// The streets a phone keeps are its pick's. With weak signal the phone says
+// it is online and no tile host answers: going to the other provider would
+// leave those streets undrawn, so nothing goes there unless it has just
+// answered — and on a look the map went to by itself, not loading either is
+// the signal: back to the pick.
+//   'back'       to the person's own pick
+//   'ask'        ask the other provider for one tile first
+//   'switch'     go to it, once, and say so
+//   'try-other'  "The street map isn’t loading", one tap to the other (it just answered)
+//   'try-again'  "The street map isn’t loading", one tap to ask this one again
+//   null         nothing to do or say (loading, or still asking)
+export const streetMove = ({ down, onAuto, other, asked, switched }) => {
+  if (!down) return null;
+  if (onAuto) return 'back';
+  if (!other) return 'try-again';
+  if (!asked) return 'ask';
+  if (asked === 'asking') return null;
+  if (asked === 'yes') return switched ? 'try-other' : 'switch';
+  return 'try-again';
+};
+
 // "3:40 pm", on the reader's own clock: when a paused placing run tries
 // again (always a time of day — it may be after midnight).
 export const timeOfDay = (iso) => {

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   viewBox, rowsBudget, DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM,
   dotsFrom, dotRadius, dotOnScreen, ringedAt, MARK, cellOf, cellsFrom, cellFill, drawnFor, inBox,
-  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt,
+  tileHealth, TILE_WAIT_MS, checkLines, timeOfDay, placingPoll, retryLate, tileAt, streetMove,
 } from '../../web/src/pages/mapView.js';
 import { bandOf } from '@starbase/shared/scale';
 
@@ -254,6 +254,34 @@ test('one tile of a street map, the one under a point, its address filled in as 
   assert.equal(tileAt(osm, { lat: hall.lat, lng: hall.lng + 360 }, 15), tileAt(osm, hall, 15));
   assert.deepEqual([tileAt(osm, { lat: 85.5, lng: 179.9999 }, 3), tileAt(osm, { lat: -86, lng: -180 }, 3)],
     ['https://tile.openstreetmap.org/3/7/0.png', 'https://tile.openstreetmap.org/3/0/7.png']);
+});
+
+// What the map does when its street map isn't loading. The streets a phone
+// keeps are those of the look the person picked: whatever the map does by
+// itself, it must not leave them undrawn on a turf in weak signal.
+test('the street map isn’t loading: the other provider is asked first, and a switch is offered only to one that answered', () => {
+  const pick = { down: true, onAuto: false, other: true, switched: false };
+  assert.equal(streetMove({ ...pick, down: false }), null, 'loading: nothing to do or say');
+  // A provider down, the other fine: asked, then gone to once by itself.
+  assert.equal(streetMove({ ...pick, asked: null }), 'ask');
+  assert.equal(streetMove({ ...pick, asked: 'asking' }), null, 'nothing said while it is asked');
+  assert.equal(streetMove({ ...pick, asked: 'yes' }), 'switch');
+  // Weak signal: the other didn't answer either. Going to it would leave the
+  // kept streets undrawn — so neither the map nor its one tap goes there.
+  assert.equal(streetMove({ ...pick, asked: 'no' }), 'try-again', 'one tap to ask this one again, never “Try Muted”');
+  // A campaign's own provider has no other.
+  assert.equal(streetMove({ ...pick, other: false, asked: null }), 'try-again');
+  // The map has gone somewhere by itself once already: the person's tap after that.
+  assert.equal(streetMove({ ...pick, switched: true, asked: 'yes' }), 'try-other');
+  assert.equal(streetMove({ ...pick, switched: true, asked: 'no' }), 'try-again');
+});
+
+test('on the look the map went to by itself, its streets not loading either is the signal: back to the person’s pick', () => {
+  // A flicker let the other provider's one tile through; then the signal
+  // went. The pick's streets are the ones this phone kept.
+  assert.equal(streetMove({ down: true, onAuto: true, other: true, asked: null, switched: true }), 'back');
+  assert.equal(streetMove({ down: true, onAuto: true, other: true, asked: 'yes', switched: true }), 'back', 'whatever was asked before');
+  assert.equal(streetMove({ down: false, onAuto: true, other: true, asked: null, switched: true }), null, 'loading there: it stays');
 });
 
 // ── The map's check, for managers ──

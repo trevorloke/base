@@ -173,7 +173,9 @@ volunteers, CARTO's free basemaps are not meant for heavy or commercial use
 read them before relying on either (GOING-LIVE.md, section 5). When one
 stops answering, the map switches to the other once by itself — if the
 other answers — and then says *The street map isn’t loading*; with a
-provider of the campaign's own there is no second one to switch to. Before election week, either:
+provider of the campaign's own there is no second one to switch to. The
+service worker keeps both free providers' tiles as they are looked at
+(never ahead). Before election week, either:
 
 - **Google Maps:** `GOOGLE_MAPS_TILES=1` with `GOOGLE_MAPS_SERVER_KEY` (Map
   Tiles API enabled, above); `GOOGLE_MAPS_TILE_TYPE` roadmap | satellite |

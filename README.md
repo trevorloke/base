@@ -579,9 +579,13 @@ only if that provider answers (one tile asked of it first): with weak
 signal neither does, and the street map the phone kept stays drawn. If the
 other doesn't answer, or there is no second provider (a campaign's own,
 Google's), *The street map isn’t loading* stays under the count with one
-tap: *Try Clean* / *Try Muted*, or *Try again*. The person's own choice of
-look is only changed by their tap; after a switch by itself, their pick is
-asked again when signal comes back, and is theirs again once it answers.
+tap: *Try again*, or *Try Clean* / *Try Muted* only when that provider has
+just answered. The person's own choice of look is only changed by their
+tap, and a look tapped there only once its streets come. The streets a
+phone keeps are its pick's, so the pick is what the map goes back to: when
+the look it switched to stops loading too (that is the signal, not a
+provider), with no signal at all, and when the pick answers again — asked
+every minute, and when signal comes back.
 Behind the tiles is the app's paper, not grey. A big list's answers for a
 view (`/api/map/density`, `/api/map/doors?bbox`) come gzipped — the
 far-out picture of a rated city list is a megabyte of numbers, about a

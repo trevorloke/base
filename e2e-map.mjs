@@ -26,10 +26,12 @@
 //     choice's dot beside its name;
 //   · the street map says when it isn't loading: one switch to the other
 //     provider by itself — only if that one answers — then "The street map
-//     isn’t loading" with one tap; with the service worker in control a
-//     failed tile is a failure; with weak signal the streets it kept still
-//     draw (no switch to a provider it never kept), and when signal comes
-//     back the person's own pick is theirs again once it answers;
+//     isn’t loading" with one tap (to the other only if it has just
+//     answered; a look tapped is theirs once its streets come); with the
+//     service worker in control a failed tile is a failure; with weak
+//     signal, or a flicker, the streets it kept still draw (back to the
+//     person's pick by itself — drawn too with no signal), and their pick
+//     is theirs again once it answers (asked every minute);
 //   · turfs come as outlines at once; a turf's counts load when its sheet
 //     opens ("Loading…", never "No doors" on the way);
 //   · an import that leaves addresses without a pin starts the placing run
@@ -510,14 +512,18 @@ try {
   // ══ 8. The street map says when it isn't loading ══
   if (want('tiles')) {
     // Which tile host answers is the test: clean is CARTO (the look the map
-    // opens on), base is OpenStreetMap (Standard, Muted, Dark).
+    // opens on), base is OpenStreetMap (Standard, Muted, Dark). up 'asked':
+    // a flicker — the one tile the map asks for itself (a fetch) gets
+    // through, the map's own tiles (images) don't (no service worker only:
+    // under one, every tile is a fetch).
     const tiled = async (opts = {}) => {
       const tctx = await context(opts, { tiles: false });
       const net = { up: { clean: true, base: true, own: true }, hold: { clean: 0, base: 0, own: 0 }, asked: { clean: 0, base: 0, own: 0 } };
       const answer = (who) => async (route) => {
         net.asked[who] += 1;
         if (net.hold[who]) await sleep(net.hold[who]);
-        await (net.up[who] ? route.fulfill(standIn) : route.abort('connectionrefused')).catch(() => {});
+        const up = net.up[who] === true || (net.up[who] === 'asked' && route.request().resourceType() === 'fetch');
+        await (up ? route.fulfill(standIn) : route.abort('connectionrefused')).catch(() => {});
       };
       await tctx.route(/basemaps\.cartocdn\.com/, answer('clean'));
       await tctx.route(/tile\.openstreetmap\.org/, answer('base'));
@@ -559,21 +565,44 @@ try {
       ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && ts.said === 'The street map wasn’t loading — switched to Muted', JSON.stringify(ts));
     check('…the ground behind the tiles is the app’s paper, not Leaflet’s grey; the person’s own choice of look is untouched',
       ts.ground === 'rgb(232, 235, 243)' && ts.pick === null, JSON.stringify({ ground: ts.ground, pick: ts.pick }));
-    // The other refuses too: said, with one tap to the other provider — no more switching by itself.
+    // The other refuses too: that is the signal, not a provider — back to
+    // their own pick by itself (its streets are the ones a phone keeps), and
+    // said, with one tap to ask again: not to the other, which has just not
+    // answered.
     t.net.up.base = false;
-    const askedClean = t.net.asked.clean;
     await t.pg.click('.leaflet-control-zoom-in');
     ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''));
     await sleep(1200);
     ts = { ...ts, ...(await tileState(t.pg)) };
     await t.pg.screenshot({ path: `${SHOTS}/8-street-map-not-loading.png` });
-    check('the other refuses too: “The street map isn’t loading”, one tap to the other provider — and no second switch by itself',
-      /^The street map isn’t loading/.test(ts.note || '') && /Try Clean/.test(ts.note || '') && ts.look === 'muted' && ts.tiles === 'down' && t.net.asked.clean === askedClean,
-      JSON.stringify({ ...ts, askedClean: [askedClean, t.net.asked.clean] }));
+    check('the other refuses too: back to their own pick by itself, and “The street map isn’t loading” with one tap to try again — not to the other, which has just not answered',
+      /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && ts.look === 'clean' && ts.tiles === 'down' && ts.pick === null, JSON.stringify(ts));
     t.net.up.clean = true;
     await t.pg.click('.map-tilenote button');
     ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && s.tiles === 'ok' && !s.note);
-    check('one tap: the other provider’s map loads, the note goes, and that look is now their choice', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && ts.pick === 'clean', JSON.stringify(ts));
+    check('one tap: their street map is asked again, it loads and the note goes', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && ts.pick === null, JSON.stringify(ts));
+    // Their pick refuses again and the other answers: the map has gone
+    // somewhere by itself once already, so the switch is their tap — and the
+    // look they tap is theirs once its streets come.
+    t.net.up.clean = false;
+    t.net.up.base = true;
+    await t.pg.click('.leaflet-control-zoom-in');
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''));
+    check('their pick refuses again, the other answers: no second switch by itself — one tap to the other', ts.look === 'clean' && /Try Muted/.test(ts.note || ''), JSON.stringify(ts));
+    await t.pg.click('.map-tilenote button');
+    ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok' && s.pick === 'muted' && !s.note);
+    check('…tapped: its streets come, and that look is their choice from now on', ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && ts.pick === 'muted', JSON.stringify(ts));
+    // A look tapped whose streets then don't come (a flicker let the map's
+    // one tile through) is not their choice: back to the pick.
+    t.net.up.base = false;
+    t.net.up.clean = 'asked';
+    await t.pg.click('.leaflet-control-zoom-out');
+    ts = await tilesUntil(t.pg, (s) => /Try Clean/.test(s.note || ''));
+    await t.pg.click('.map-tilenote button');
+    await sleep(1500);
+    ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && /isn’t loading/.test(s.note || ''), 15000);
+    check('a look tapped whose streets don’t come after all: back to their pick, which stays their choice',
+      ts.look === 'muted' && ts.pick === 'muted' && /isn’t loading/.test(ts.note || ''), JSON.stringify(ts));
     await t.tctx.close();
 
     // Nothing at all after six seconds (a host that never answers): the same switch.
@@ -622,64 +651,114 @@ try {
       controlled && ts.loaded === 0 && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || ''), JSON.stringify({ controlled, ...ts }));
     await t.tctx.close();
 
-    // Weak signal in the field: the phone says it is online, but the tile
-    // hosts don't answer. The street map the worker kept is the one to keep
-    // drawing — no switch to a provider whose streets were never kept:
-    // panned away and back, the kept streets draw; with no signal at all,
-    // too. (The switch threw them away for the rest of the page's life.)
-    t = await tiled({ serviceWorkers: 'allow' });
-    await t.pg.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
-    const ruled = await t.pg.evaluate(() => navigator.serviceWorker.ready.then(() => new Promise((resolve) => {
-      if (navigator.serviceWorker.controller) resolve(true);
-      else { navigator.serviceWorker.addEventListener('controllerchange', () => resolve(true)); setTimeout(() => resolve(Boolean(navigator.serviceWorker.controller)), 8000); }
-    }))).catch(() => false);
-    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
-    // The street map's tiles on screen: how many, how many drawn, from where.
-    const onScreen = () => t.pg.evaluate(() => {
-      const el = document.querySelector('.map-canvas');
-      const box = el.getBoundingClientRect();
-      const vis = [...el.querySelectorAll('.leaflet-tile-pane img.leaflet-tile')].filter((i) => {
-        const r = i.getBoundingClientRect();
-        return r.right > box.left + 1 && r.left < box.right - 1 && r.bottom > box.top + 1 && r.top < box.bottom - 1;
-      });
-      const drawn = vis.filter((i) => i.classList.contains('leaflet-tile-loaded') && i.complete && i.naturalWidth > 0);
-      return { n: vis.length, drawn: drawn.length, hosts: [...new Set(vis.map((i) => new URL(i.src).hostname.replace(/^[a-d]\./, '')))] };
-    }).catch(() => ({}));
-    let kept = {};
-    for (let i = 0; i < 40 && !(kept.n >= 4 && kept.drawn === kept.n); i += 1) { await sleep(250); kept = await onScreen(); }
-    await sleep(2500); // (the worker keeps what came)
+    // In the field, with the service worker keeping the streets looked at:
+    // the map opened with signal on Clean (CARTO), its tiles on screen kept.
+    const keptStreets = async () => {
+      const k = await tiled({ serviceWorkers: 'allow' });
+      await k.pg.goto(`${BASE}/admin/`, { waitUntil: 'domcontentloaded' });
+      k.ruled = await k.pg.evaluate(() => navigator.serviceWorker.ready.then(() => new Promise((resolve) => {
+        if (navigator.serviceWorker.controller) resolve(true);
+        else { navigator.serviceWorker.addEventListener('controllerchange', () => resolve(true)); setTimeout(() => resolve(Boolean(navigator.serviceWorker.controller)), 8000); }
+      }))).catch(() => false);
+      await k.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+      // The street map's tiles on screen: how many, how many drawn, from where.
+      k.onScreen = () => k.pg.evaluate(() => {
+        const el = document.querySelector('.map-canvas');
+        const box = el.getBoundingClientRect();
+        const vis = [...el.querySelectorAll('.leaflet-tile-pane img.leaflet-tile')].filter((i) => {
+          const r = i.getBoundingClientRect();
+          return r.right > box.left + 1 && r.left < box.right - 1 && r.bottom > box.top + 1 && r.top < box.bottom - 1;
+        });
+        const drawn = vis.filter((i) => i.classList.contains('leaflet-tile-loaded') && i.complete && i.naturalWidth > 0);
+        return { n: vis.length, drawn: drawn.length, hosts: [...new Set(vis.map((i) => new URL(i.src).hostname.replace(/^[a-d]\./, '')))] };
+      }).catch(() => ({}));
+      // Screens away, into streets this browser never looked at, and back:
+      // the map's own keys (Shift+arrow, 240 px a press), exact both ways.
+      k.pan = async (key, times) => {
+        await k.pg.focus('.map-canvas');
+        for (let i = 0; i < times; i += 1) {
+          const was = await k.pg.evaluate(() => document.querySelector('.map-canvas').dataset.bounds);
+          await k.pg.keyboard.press(`Shift+${key}`);
+          await k.pg.waitForFunction((b) => document.querySelector('.map-canvas').dataset.bounds !== b, was, { timeout: 3000 }).catch(() => {});
+          await sleep(350);
+        }
+      };
+      k.kept = {};
+      for (let i = 0; i < 40 && !(k.kept.n >= 4 && k.kept.drawn === k.kept.n); i += 1) { await sleep(250); k.kept = await k.onScreen(); }
+      await sleep(2500); // (the worker keeps what came)
+      return k;
+    };
+    // Every street kept on screen drawn, from the kept look's provider.
+    const allKept = (kept, now) => kept.n >= 4 && now.n === kept.n && now.drawn === now.n && now.hosts.join() === 'basemaps.cartocdn.com';
+
+    // Weak signal: the phone says it is online, but the tile hosts don't
+    // answer. The street map the worker kept is the one to keep drawing — no
+    // switch to a provider whose streets were never kept, by itself or by
+    // the note's one tap: panned away and back, the kept streets draw; with
+    // no signal at all, too. (The switch threw them away for the rest of the
+    // page's life; so did a tap on "Try Muted", and it was saved as their look.)
+    t = await keptStreets();
+    const { kept } = t;
     t.net.up.clean = false;
     t.net.up.base = false;
-    // Three screens east, into streets this browser never looked at, and
-    // back: the map's own keys (Shift+arrow, 240 px a press), exact both ways.
-    await t.pg.focus('.map-canvas');
-    const pan = async (key, times) => {
-      for (let i = 0; i < times; i += 1) {
-        const was = await t.pg.evaluate(() => document.querySelector('.map-canvas').dataset.bounds);
-        await t.pg.keyboard.press(`Shift+${key}`);
-        await t.pg.waitForFunction((b) => document.querySelector('.map-canvas').dataset.bounds !== b, was, { timeout: 3000 }).catch(() => {});
-        await sleep(350);
-      }
-    };
-    await pan('ArrowRight', 15);
+    await t.pan('ArrowRight', 15);
     ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 20000);
     await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-away.png` });
-    check('weak signal (online, the tile hosts not answering): no switch — the other provider doesn’t answer either — and the map says its street map isn’t loading',
-      ruled && ts.look === 'clean' && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || '') && /Try Muted/.test(ts.note || ''), JSON.stringify({ ruled, ...ts }));
-    await pan('ArrowLeft', 15);
+    check('weak signal (online, the tile hosts not answering): no switch — the other provider doesn’t answer either — and the map says its street map isn’t loading, one tap to try again',
+      t.ruled && ts.look === 'clean' && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || ''), JSON.stringify({ ruled: t.ruled, ...ts }));
+    await t.pg.click('.map-tilenote button');
+    await sleep(1500);
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 15000);
+    check('…the tap asks this street map again: still Clean, and nothing saved as their look', ts.look === 'clean' && ts.pick === null && /Try again/.test(ts.note || ''), JSON.stringify(ts));
+    await t.pan('ArrowLeft', 15);
     await sleep(3000);
-    const back = await onScreen();
+    const back = await t.onScreen();
     ts = await tileState(t.pg);
     await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-back.png` });
     check('…back over the streets this browser kept, every tile on screen draws (the switch had thrown them away)',
-      kept.n >= 4 && back.n === kept.n && back.drawn === back.n && back.hosts.join() === 'basemaps.cartocdn.com' && ts.look === 'clean', JSON.stringify({ kept, back, look: ts.look, note: ts.note }));
+      allKept(kept, back) && ts.look === 'clean', JSON.stringify({ kept, back, look: ts.look, note: ts.note }));
     await t.tctx.setOffline(true);
-    await pan('ArrowRight', 1);
-    await pan('ArrowLeft', 1);
+    await t.pan('ArrowRight', 1);
+    await t.pan('ArrowLeft', 1);
     await sleep(2000);
-    const off = await onScreen();
+    const off = await t.onScreen();
     await t.pg.screenshot({ path: `${SHOTS}/8-weak-signal-offline.png` });
-    check('…and with no signal at all, still every one', off.n === kept.n && off.drawn === off.n && off.hosts.join() === 'basemaps.cartocdn.com', JSON.stringify(off));
+    check('…and with no signal at all, still every one', allKept(kept, off), JSON.stringify(off));
+    await t.tctx.close();
+
+    // A flicker: while the map pans into new streets its own provider's
+    // tiles fail, but the one tile it asks of the other gets through — so it
+    // goes there by itself. With no signal the person's pick is drawn (its
+    // streets are the ones this browser kept); signal back with their pick
+    // still refusing, the one that answers; and when the signal goes weak
+    // there too, back to the pick by itself, the kept streets drawn.
+    t = await keptStreets();
+    const keptF = t.kept;
+    t.net.up.clean = false;
+    await t.pan('ArrowRight', 15);
+    ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok', 20000);
+    check('a flicker (the look’s own tiles fail, the other provider’s one tile gets through): it goes there by itself',
+      ts.look === 'muted' && ts.tiles === 'ok' && /switched to Muted/.test(ts.said || ''), JSON.stringify(ts));
+    await t.tctx.setOffline(true);
+    await t.pan('ArrowLeft', 15);
+    await sleep(2500);
+    const offF = await t.onScreen();
+    ts = await tileState(t.pg);
+    await t.pg.screenshot({ path: `${SHOTS}/8-flicker-offline.png` });
+    check('…no signal: their own pick is drawn, and every street this browser kept with it', ts.look === 'clean' && allKept(keptF, offF), JSON.stringify({ look: ts.look, kept: keptF, off: offF }));
+    await t.tctx.setOffline(false);
+    ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok', 12000);
+    check('…signal back, their pick still refusing: the street map that answers', ts.look === 'muted' && ts.tiles === 'ok', JSON.stringify(ts));
+    t.net.up.base = false;
+    await t.pan('ArrowUp', 15);
+    ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && /isn’t loading/.test(s.note || ''), 20000);
+    check('…then weak signal there too: back to their pick by itself, “The street map isn’t loading”, one tap to try again',
+      ts.look === 'clean' && /Try again/.test(ts.note || '') && ts.pick === null, JSON.stringify(ts));
+    await t.pan('ArrowDown', 15);
+    await sleep(3000);
+    const backF = await t.onScreen();
+    await t.pg.screenshot({ path: `${SHOTS}/8-flicker-back.png` });
+    check('…back over the streets this browser kept, every tile draws', allKept(keptF, backF), JSON.stringify({ kept: keptF, back: backF }));
     await t.tctx.close();
 
     // A switch made by itself lasts while the signal does: when signal comes
@@ -699,6 +778,22 @@ try {
     await noSignalFor(800);
     ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && s.tiles === 'ok' && s.loaded > 0);
     check('…and once it answers: back to their own pick, Clean, by itself', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && ts.pick === null && !ts.note, JSON.stringify(ts));
+    await t.tctx.close();
+
+    // …nor does the map wait for the signal to drop: on the street map it
+    // went to by itself, their pick is asked again every minute.
+    t = await tiled();
+    await t.tctx.clock.install();
+    t.net.up.clean = false;
+    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok');
+    t.net.up.clean = true;
+    await t.pg.clock.fastForward(30_000);
+    const halfway = (await tilesUntil(t.pg, () => false, 1500)).look;
+    await t.pg.clock.fastForward(31_000);
+    ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && s.tiles === 'ok' && s.loaded > 0, 10000);
+    check('on the street map it went to by itself, their pick is asked again every minute: answering, back to it',
+      halfway === 'muted' && ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && ts.pick === null && !ts.note, JSON.stringify({ halfway, ...ts }));
     await t.tctx.close();
   }
 

@@ -43,7 +43,7 @@ import { More, useScale } from '../components/RatingButtons.jsx';
 import GeocodeButton from '../components/GeocodeButton.jsx';
 import { DEFAULT_TILES, safeAttribution } from '../components/tiles.js';
 import { DotLayer, DensityLayer, cellAt, nearest } from './mapDots.js';
-import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, placingPoll, rowsBudget, tileAt, tileHealth, viewBox } from './mapView.js';
+import { DOT_ZOOM, LONE_PIN_ZOOM, PIN_ZOOM, MARK, TILE_WAIT_MS, css, cellOf, cellsFrom, dotsFrom, drawnFor, inBox, placingPoll, rowsBudget, streetMove, tileAt, tileHealth, viewBox } from './mapView.js';
 import { useSharePref } from '../components/ShareLocation.js';
 import { cachedWalkLists, useOnline } from './Turfs.jsx';
 import './map.css';
@@ -109,16 +109,21 @@ const SHADES = [{ key: 'standard', label: 'Standard' }, { key: 'muted', label: '
 // choice made is kept.
 const readViewPref = () => { try { return localStorage.getItem(VIEW_PREF) || 'clean'; } catch { return 'clean'; } };
 const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch { /* storage blocked */ } };
-// When the street map isn't loading, the map tries its other provider by
+// When the street map isn't loading, the map may go to its other provider by
 // itself — once in a page's life ({ from: the look that was picked, to: the
-// one it went to }); after that the switch is the person's tap. While their
-// pick is still the one that failed, the map keeps to the other — until
-// signal comes back after none and their pick's provider answers again.
+// one it went to }; from is null once it is back on the pick); after that
+// the switch is the person's tap. While their pick is still the one that
+// failed, the map keeps to the other — until their pick's provider answers
+// again, or the other isn't loading either.
 let fellBack = null;
 // Does a street map's provider answer now? One of its tiles, asked of the
 // network itself — no-store, which the service worker passes through, so a
 // tile it kept is no answer — within a few seconds.
 const PROBE_MS = 4000;
+// On a look the map went to by itself, how often it asks again whether the
+// person's own pick answers (a provider's hiccup is often over in a minute).
+const PICK_AGAIN_MS = 60_000;
+const NOT_SEEN = { url: null, down: false, any: false }; // a tile layer that hasn't said yet
 const answers = (url) => {
   const stop = typeof AbortController === 'function' ? new AbortController() : null;
   const t = setTimeout(() => stop?.abort(), PROBE_MS);
@@ -1307,18 +1312,28 @@ export default function MapPage() {
   const views = tilesQ.data?.views ?? EMPTY_LIST;
   const [viewPick, setViewPick] = useState(readViewPref);
   // The look the map went to by itself because the picked one's street map
-  // wasn't loading (this visit only: the pick itself is not changed).
+  // wasn't loading (this visit only: the pick itself is not changed) — or
+  // one tapped from "The street map isn’t loading" (tapped: theirs once its
+  // streets come; not loading either, the map goes back to the pick).
   const [autoView, setAutoView] = useState(() => (fellBack?.from && fellBack.from === readViewPref() ? fellBack.to : null));
-  const setView = (v) => { setViewPick(v); writeViewPref(v); setAutoView(null); if (fellBack) fellBack.from = null; };
-  const lookPick = autoView || viewPick;
+  const [tapped, setTapped] = useState(false);
+  // With no signal the pick is drawn: its streets are the ones this phone
+  // keeps. Signal back, it stays until it has been asked again (below).
+  const online = useOnline();
+  const [holdPick, setHoldPick] = useState(!online);
+  const setView = (v) => { setViewPick(v); writeViewPref(v); setAutoView(null); setTapped(false); if (fellBack) fellBack.from = null; };
+  const drawnAuto = autoView && online && !holdPick ? autoView : null;
+  const lookPick = drawnAuto || viewPick;
   // A provider look this server no longer offers falls back to Standard.
   const providerView = views.find((v) => v.key === lookPick) || null;
   // Clean comes from the server; where it isn't offered (Google tiles, the
   // campaign's own provider), Muted.
   const view = providerView || SHADES.some((s) => s.key === lookPick) ? lookPick : lookPick === 'clean' ? 'muted' : 'standard';
   const tiles = providerView ? { url: providerView.url, attribution: providerView.attribution, maxZoom: providerView.maxZoom } : baseTiles;
-  // Is the street map loading? (The tile layer's own events, below.)
-  const [street, setStreet] = useState({ down: false, any: false });
+  // Is the street map loading? (The tile layer's own events, below — the
+  // layer drawn now: what the one before it said is no answer.)
+  const [streetSeen, setStreet] = useState(NOT_SEEN);
+  const street = streetSeen.url === tiles?.url ? streetSeen : NOT_SEEN;
   const streetRef = useRef({ loaded: 0, failed: 0, down: false }); // every tile since the layer was added
   const [tilesTry, setTilesTry] = useState(0); // "Try again": the layer is made afresh
   // The look whose street map comes from the other provider (the campaign's
@@ -1364,65 +1379,96 @@ export default function MapPage() {
 
   // No signal and no doors in memory: say so, and point at the walk list
   // kept on this phone (it opens offline). A server refusal is not this.
-  const online = useOnline();
   const noSignal = !doorsQ.data && (doorsQ.fetchStatus === 'paused' || (doorsQ.isError && (!online || !doorsQ.error?.status)));
 
-  // The street map isn't loading, and there is signal: once, the map tries
-  // its other provider by itself and says so (a line under the count for a
-  // few seconds — not the toast, which is for what the person just did) —
-  // if that provider answers. With weak signal neither does (the phone says
-  // it is online; the tile hosts don't answer), and going to the other would
-  // leave undrawn the streets this phone kept, which are the first one's:
-  // the map stays. After that — or where there is no other — it says "The
-  // street map isn’t loading" and the tap is theirs.
+  // The street map isn't loading, and there is signal (mapView.js
+  // streetMove): the map asks its other provider for one tile, and if it
+  // answers goes there by itself, once, and says so (a line under the count
+  // for a few seconds — not the toast, which is for what the person just
+  // did). With weak signal it doesn't answer either (the phone says it is
+  // online; the tile hosts don't answer), and going there would leave
+  // undrawn the streets this phone kept, which are the pick's: the map
+  // stays, and says "The street map isn’t loading · Try again". On a look it
+  // went to by itself, not loading either is the signal: back to the pick.
   const otherUrl = otherLook ? otherLook.url || baseUrl : null;
-  const [asked, setAsked] = useState(null); // the other provider asked: { url, answered: null (waiting) | false }
-  const willSwitch = Boolean(street.down && online && !fellBack && otherUrl && !(asked?.url === otherUrl && asked.answered === false));
+  const [asked, setAsked] = useState(null); // the other provider asked for one tile: { url, answer: 'asking' | 'yes' | 'no' }
+  const askNo = useRef(0); // (an answer to an ask made before the last change is no answer)
+  const move = streetMove({
+    down: street.down && online && !holdPick,
+    onAuto: Boolean(drawnAuto),
+    other: Boolean(otherUrl),
+    asked: asked?.url === otherUrl ? asked.answer : null,
+    switched: Boolean(fellBack),
+  });
   const [switchedTo, setSwitchedTo] = useState(null);
+  // Back on the person's own pick (for the rest of the visit: the map has
+  // gone somewhere by itself once already).
+  const backToPick = () => { if (fellBack) fellBack.from = null; setAutoView(null); setTapped(false); setSwitchedTo(null); };
   useEffect(() => {
-    if (!willSwitch) return undefined;
-    let live = true;
-    const map = mapRef.current;
-    setAsked({ url: otherUrl, answered: null });
-    (map ? answers(tileAt(otherUrl, map.getCenter(), map.getZoom(), otherLook.maxZoom || baseTiles?.maxZoom)) : Promise.resolve(false)).then((ok) => {
-      if (!live) return;
-      if (!ok) { setAsked({ url: otherUrl, answered: false }); return; }
+    if (move === 'ask') {
+      const n = ++askNo.current;
+      const url = otherUrl;
+      const map = mapRef.current;
+      setAsked({ url, answer: 'asking' });
+      (map ? answers(tileAt(url, map.getCenter(), map.getZoom(), otherLook.maxZoom || baseTiles?.maxZoom)) : Promise.resolve(false))
+        .then((ok) => { if (askNo.current === n) setAsked({ url, answer: ok ? 'yes' : 'no' }); });
+    } else if (move === 'switch') {
       fellBack = { from: viewPick, to: otherLook.key };
-      setStreet({ down: false, any: false }); // (the new layer's own tiles say how it goes)
       setAutoView(otherLook.key);
       setSwitchedTo(otherLook.label);
-    });
-    return () => { live = false; };
+    } else if (move === 'back') backToPick();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [willSwitch, otherUrl]);
-  // Loading again: a later failure asks the other provider afresh.
-  useEffect(() => { if (!street.down) setAsked(null); }, [street.down]);
+  }, [move]);
+  // Loading again, or another layer: a later failure asks afresh.
+  useEffect(() => { if (!street.down) { askNo.current += 1; setAsked(null); } }, [street.down]);
+  // A look tapped from the note is theirs once its streets come.
+  useEffect(() => {
+    if (tapped && drawnAuto && street.any) setView(drawnAuto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tapped, drawnAuto, street.any]);
   useEffect(() => {
     if (!switchedTo) return undefined;
     const t = setTimeout(() => setSwitchedTo(null), 8000);
     return () => clearTimeout(t);
   }, [switchedTo]);
-  // Signal is back: the street map is asked for again (the tiles that failed
-  // without it would stay blank until the map moved) — and if the map went
-  // to the other provider by itself, the person's own pick is asked first:
-  // answering, it is theirs again (its streets are the ones this phone kept).
+  // No signal: the pick is drawn (a look tapped and not yet loaded is let
+  // go). Signal back: the street map is asked for again (the tiles that
+  // failed without it would stay blank until the map moved) — and if the map
+  // had gone to the other provider by itself, the pick is asked first, still
+  // drawn meanwhile: answering, it is theirs again; not, the map goes back to
+  // the one that answers. On that one, the pick is asked every minute too.
   const hadSignal = useRef(online);
+  const signalNo = useRef(0);
   const pickTiles = views.find((v) => v.key === viewPick) || baseTiles;
+  const pickAnswers = () => {
+    const map = mapRef.current;
+    return pickTiles?.url && map ? answers(tileAt(pickTiles.url, map.getCenter(), map.getZoom(), pickTiles.maxZoom)) : Promise.resolve(false);
+  };
   useEffect(() => {
-    if (online && !hadSignal.current) {
-      setTilesTry((n) => n + 1);
+    const n = ++signalNo.current;
+    if (!online) {
+      if (tapped) { setAutoView(null); setTapped(false); } else if (autoView) setHoldPick(true);
+    } else if (!hadSignal.current) {
+      setTilesTry((k) => k + 1);
+      askNo.current += 1;
       setAsked(null);
-      const went = fellBack;
-      const map = mapRef.current;
-      if (autoView && went && pickTiles?.url && map) {
-        answers(tileAt(pickTiles.url, map.getCenter(), map.getZoom(), pickTiles.maxZoom)).then((ok) => {
-          if (ok && fellBack === went) { fellBack = null; setAutoView(null); setSwitchedTo(null); }
+      if (autoView && !tapped) {
+        pickAnswers().then((ok) => {
+          if (signalNo.current !== n) return;
+          if (ok) backToPick();
+          setHoldPick(false);
         });
-      }
+      } else setHoldPick(false);
     }
     hadSignal.current = online;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [online]);
+  useEffect(() => {
+    if (!drawnAuto || tapped) return undefined;
+    const t = setInterval(() => { pickAnswers().then((ok) => { if (ok) backToPick(); }); }, PICK_AGAIN_MS);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawnAuto, tapped]);
   const offlineWalk = useMemo(() => (noSignal ? cachedWalkLists(me)[0] || null : null), [noSignal, me]);
 
   // A volunteer's own doors: inside any turf they walk (the walk list's doors).
@@ -1996,7 +2042,7 @@ export default function MapPage() {
       const down = h.down && navigator.onLine !== false;
       streetRef.current = { ...h, down };
       const next = `${down}|${h.loaded > 0}`;
-      if (next !== shown) { shown = next; setStreet({ down, any: h.loaded > 0 }); }
+      if (next !== shown) { shown = next; setStreet({ url: tileUrl, down, any: h.loaded > 0 }); }
     };
     tell();
     layer.on('loading', () => {
@@ -2507,14 +2553,15 @@ export default function MapPage() {
             <button type="button" className="btn map-hint__x" onClick={hideHint} aria-label="Dismiss" title="Dismiss">✕</button>
           </div>
         )}
-        {/* The street map isn't loading (and the map has already tried its
-            other provider by itself, or has none): one line, one tap. Or it
-            has just switched by itself: said for a few seconds. */}
-        {street.down && online && !willSwitch && !mode ? (
+        {/* The street map isn't loading (and the map isn't about to go to its
+            other provider by itself): one line, one tap — to the other only
+            if it has just answered, else to ask this one again. Or it has
+            just switched by itself: said for a few seconds. */}
+        {(move === 'try-other' || move === 'try-again') && !mode ? (
           <div className="map-tilenote" role="status">
             <span>The street map isn’t loading</span>
-            {otherLook
-              ? <button type="button" className="btn map-tilenote__btn" onClick={() => { setSwitchedTo(null); setView(otherLook.key); }}>Try {otherLook.label}</button>
+            {move === 'try-other'
+              ? <button type="button" className="btn map-tilenote__btn" onClick={() => { setSwitchedTo(null); setAutoView(otherLook.key); setTapped(true); }}>Try {otherLook.label}</button>
               : <button type="button" className="btn map-tilenote__btn" onClick={() => setTilesTry((n) => n + 1)}>Try again</button>}
           </div>
         ) : switchedTo && !mode ? (

@@ -208,8 +208,11 @@ counts the tiles that loaded and failed, and the foot of the Show sheet says
 *Map tiles: …*. If a provider stops answering, the map says so: it switches
 once by itself to the other free provider where there is one and it
 answers (with weak signal neither does, and the streets the phone kept stay
-drawn), then shows *The street map isn’t loading* with one tap to try the
-other or try again.
+drawn), then shows *The street map isn’t loading* with one tap to try
+again (or to try the other, when it has just answered). The phone goes
+back to the look the person picked — the one whose streets it keeps — as
+soon as the other stops loading too, with no signal, or once the pick
+answers again.
 With a provider of the campaign's own there is no second one to fall back
 on — so test it on staging, on a phone, before the week it matters.
 
