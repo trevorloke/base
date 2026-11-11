@@ -815,8 +815,8 @@ Built conservatively; the campaign should confirm these rules with counsel
   their profile, Follow-ups (Today's card and the desk's list), Requests
   from the doors, My people, a door's card and a walk list offer no Call
   to tap; the People list shows the number without a link. (Not yet on a
-  shift's crew board, the Volunteers roster or Stewardship: a volunteer's
-  or a donor's number can still be tapped there.) A CallHub result that
+  shift's sign-ups or crew board, the Volunteers roster or Stewardship: a
+  volunteer's or a donor's number can still be tapped there.) A CallHub result that
   reads "do not call" tags them. The CRTC expects a
   campaign to keep and honour its own do-not-call list — **confirm what a
   dialer needs with counsel** before a calling night.
