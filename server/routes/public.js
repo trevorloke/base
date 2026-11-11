@@ -12,6 +12,7 @@ import { Hono } from 'hono';
 import { getDb } from '../db/client.js';
 import { runAction } from '../lib/events.js';
 import { page, esc, settingsOf } from '../lib/publicpage.js';
+import { campaignBrand } from '../lib/brand.js';
 
 const app = new Hono();
 
@@ -21,8 +22,9 @@ const publicAction = async (db, ws, action, handler) =>
   (await runAction(db, { workspaceId: ws.id, actorId: null, action }, handler)).result;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const badUnsubscribe = (c) => c.html(page(null, 'Unsubscribe',
-  `<h1>This unsubscribe link isn't valid — reply to the email to be removed.</h1>`), 404);
+// A link that names no campaign still wears the campaign's look.
+const badUnsubscribe = async (c) => c.html(page(null, 'Unsubscribe',
+  `<h1>This unsubscribe link isn't valid — reply to the email to be removed.</h1>`, { brand: await campaignBrand() }), 404);
 
 // The link in every newsletter. Opening it only asks (mail scanners open
 // links by themselves); the one button — or a mail app's one-click

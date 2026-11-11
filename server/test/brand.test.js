@@ -15,6 +15,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { freshDb, Client } from './helpers.js';
 import { brandKey, brandFor, brandHtml, brandManifest, brandPages, campaignBrand, forgetBrand, learnName } from '../lib/brand.js';
@@ -293,6 +294,55 @@ test('a saved logo is served to anyone at its /brand and /media addresses (sign-
     assert.equal(res.status, 200, path);
     assert.equal(res.headers.get('content-type'), 'image/webp', path);
   }
+});
+
+test('the app’s public pages wear the campaign’s brand: unsubscribe, a receipt, a ladder’s unsubscribe, public lessons', async () => {
+  setEnv({ STARBASE_BRAND: 'base' });
+  const logo = await uploaded('logo', png(640, 128));
+  const dark = await uploaded('logoDark', webp(640, 128), 'image/webp');
+  const saved = await mgr.action('brand.save', { color: '#d81b1e', heading: 'barlow-condensed', corners: 'square', logo: { id: logo }, logo_dark: { id: dark } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.json));
+  const { app } = await import('../index.js');
+  const get = async (path) => { const r = await app.request(path); return { status: r.status, html: await r.text() }; };
+  const ws = (await mgr.get('/api/auth/me')).json.workspace;
+  const subId = randomUUID();
+  await db.query("insert into subscriptions (id, workspace_id, email) values ($1, $2, 'reader@example.org')", [subId, ws.id]);
+  const person = await mgr.createPerson('Dana Example', { email: 'dana@example.org', address: '12 Example St' });
+  const gift = await mgr.action('gift.log', { person_id: person.id, amount_cents: 5000, date: '2026-10-01' });
+  assert.equal(gift.status, 200, JSON.stringify(gift.json));
+  const receipt = (await mgr.get(`/api/receipts/gift/${gift.json.gift.id}`)).json.receipt;
+  const token = (await db.query('select token from receipts where id = $1', [receipt.id])).rows[0].token;
+  const ladder = randomUUID();
+  const run = randomUUID();
+  await db.query("insert into ladders (id, workspace_id, name, trigger_kind) values ($1, $2, 'Welcome', 'manual')", [ladder, ws.id]);
+  await db.query('insert into ladder_runs (id, workspace_id, ladder_id, person_id) values ($1, $2, $3, $4)', [run, ws.id, ladder, person.id]);
+  const wears = (what, html) => {
+    assert.match(html, /--mark:#d81b1e;--mark-ink:#ffffff;/, `${what}: the brand colour fills the button`);
+    assert.match(html, /--r-ctrl:6px;[^]*--heading:'Barlow Condensed'/, `${what}: its corners and heading face`);
+    assert.match(html, /<link rel="stylesheet" href="\/fonts\/fonts\.css">/, `${what}: the app’s faces`);
+    assert.doesNotMatch(html, /Georgia|#f2c40f|#6d4aff|#7d5fff|text-transform:uppercase|ui-monospace/, `${what}: none of the old palettes`);
+  };
+  for (const [what, path] of [['unsubscribe', `/u/${subId}`], ['receipt', `/r/${token}`], ['ladder unsubscribe', `/lu/${run}`], ['lessons', `/learn/${ws.slug}`]]) {
+    const { status, html } = await get(path);
+    assert.equal(status, 200, `${what}: ${html.slice(0, 200)}`);
+    wears(what, html);
+    assert.match(html, new RegExp(`<div class="camp"><span class="camp-logo"><picture><source srcset="/media/${dark}\\.webp" media="\\(prefers-color-scheme: dark\\)"><img src="/media/${logo}\\.png" alt=""></picture></span><p class="camp-name">Riverside Forward</p></div>`), `${what}: the logo over the campaign’s name`);
+  }
+  // The receipt's facts are as they were.
+  const r = (await get(`/r/${token}`)).html;
+  for (const words of ['Contribution receipt', receipt.number, 'Dana Example', '$50.00', 'Print']) assert.ok(r.includes(words), words);
+  // A link that names no campaign wears the campaign's look too.
+  for (const path of [`/u/${randomUUID()}`, `/lu/${randomUUID()}`, `/r/${'0'.repeat(48)}`]) {
+    const { status, html } = await get(path);
+    assert.equal(status, 404, path);
+    wears(path, html);
+  }
+  // No logo for dark grounds: in dark mode the logo sits on a light chip.
+  assert.equal((await mgr.action('brand.save', { color: '#d81b1e', logo: { id: logo } })).status, 200);
+  assert.match((await get(`/u/${subId}`)).html, new RegExp(`<span class="camp-logo on-light"><picture><img src="/media/${logo}\\.png" alt=""></picture></span>`));
+  // No logo at all: the name alone.
+  assert.equal((await mgr.action('brand.reset', {})).status, 200);
+  assert.match((await get(`/u/${subId}`)).html, /<div class="camp"><p class="camp-name">Riverside Forward<\/p><\/div>/);
 });
 
 test('Settings → Campaign: a manager renames the campaign in one step; nobody else can', async () => {

@@ -297,15 +297,18 @@ async function syncAssets(html) {
     .map((k) => cache.delete(k)));
 }
 
+// Shown only when nothing of the app is kept yet (its first open had no
+// signal), so it can't know the campaign's colours: the app's own neutral
+// grounds (shared/brand-look.js), sentence case, one button.
 function offlinePage() {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>base.win — offline</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5fa;color:#161a2e;
-font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding:24px;box-sizing:border-box}main{max-width:340px}
-p.e{font:600 12px system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#5d6481}
-button{font:600 15px system-ui,sans-serif;background:#6d4aff;
-color:#fff;border:0;border-radius:10px;padding:12px 18px;min-height:44px;cursor:pointer}
-@media (prefers-color-scheme:dark){body{background:#0d1226;color:#e8eaf6}p.e{color:#9aa1c2}}</style></head>
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>base.win — offline</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fafafb;color:#14161a;
+font:16px/1.5 'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding:24px 16px;box-sizing:border-box}main{max-width:340px}
+p{color:#656669;margin:0 0 16px}p.e{font-size:13px;font-weight:500}h1{font-size:22px;font-weight:600;letter-spacing:-0.02em;margin:0 0 8px}
+button{font:600 16px/1.2 'Inter',system-ui,sans-serif;background:#1b1d22;color:#fff;border:0;border-radius:8px;padding:12px 18px;min-height:48px;cursor:pointer}
+button:focus-visible{outline:2px solid #14161a;outline-offset:2px}
+@media (prefers-color-scheme:dark){body{background:#0f1012;color:#f4f5f6}p{color:#97989a}button{background:#f4f5f6;color:#14161a}button:focus-visible{outline-color:#f4f5f6}}</style></head>
 <body><main><p class="e">base.win · offline</p><h1>No signal yet</h1>
 <p>Open base.win once with signal and it will work offline after that.</p>
 <button type="button" onclick="location.reload()">Try again</button></main></body></html>`;
