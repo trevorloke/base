@@ -6,3 +6,13 @@
 .mcp .btn-link.mcp-retry { min-height: 48px; padding: 0 4px; }
 /* The last pull stopped: said as a problem, like a Check that failed. */
 .mcp .mcp-pull.is-stopped { color: var(--danger); }
+/* On a phone the row's own panel (its buttons, the question, the line) and the
+   lines above it take the row's whole width; Check stays beside the name and
+   what the row is for. Otherwise Check's column squeezes the question. */
+@media (max-width: 720px) {
+  .sv2-row:has(> .sv2-row__main > .mcp) { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s-3); row-gap: 0; }
+  .sv2-row:has(> .sv2-row__main > .mcp) > .sv2-row__main { display: contents; }
+  .sv2-row:has(> .sv2-row__main > .mcp) > .sv2-row__main > * { grid-column: 1 / -1; }
+  .sv2-row:has(> .sv2-row__main > .mcp) > .sv2-row__main > :is(.sv2-row__head, .sv2-for) { grid-column: 1; }
+  .sv2-row:has(> .sv2-row__main > .mcp) > .sv2-check { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
+}

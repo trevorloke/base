@@ -6,8 +6,11 @@
 //     webhook and shows the signing secret once, with Copy; Check then says
 //     unsubscribes come back here; the first pull asks first — the audience
 //     and how many on file it would turn off — and "Not now" turns nobody
-//     off; the first Pull now asks again; "Turn their email off here" pulls
-//     and the row says what it found; with Mailchimp down the pull says it
+//     off; the first Pull now counts again ("Counting who unsubscribed in
+//     Mailchimp…") and asks again, while someone who left there after the
+//     first count, their webhook lost, is turned off all the same (on a
+//     phone the question has the row's whole width); "Turn their email off
+//     here" pulls and the row says what it found; with Mailchimp down the pull says it
 //     stopped, in Mailchimp's words; an unsubscribe here that Mailchimp will
 //     not take is counted as waiting, with why, and Pull now sends it again;
 //     a yes whose pull counted more brings the question back, saying why;
@@ -302,18 +305,46 @@ let subs = (await api('/subscriptions')).json;
 check('Not now: the question is put away, nobody is turned off, the line still "Not pulled yet"', (await page.locator(`${ROW} .fp`).count()) === 0
   && subs.subscriptions.find((x) => x.email === addr('Fay'))?.status === 'subscribed' && subs.emailable === 6
   && (await words(page.locator(`${ROW} .mcp-pull`))) === 'Not pulled yet', `${subs.emailable} · ${await words(page.locator(`${ROW} .mcp-pull`))}`);
-// The first Pull now (on the phone): counted again, and the same question — nothing is done yet.
+// Kai (on file, on no list, not on the newsletter) unsubscribes in Mailchimp after it was first counted, and
+// the webhook never arrives: that no is new, and the next pull takes it in — yes or no.
+const kai = (await act('person.create', { name: 'Kai Example', email: addr('Kai') })).json.person.id;
+await set({ add: [{ email: addr('Kai') }] });
+await post('/unsubscribe', { email: addr('Kai'), send: false });
+// The first Pull now (on the phone): counted again — in the words a list's Send uses — and the same
+// question; of what it asks about, nothing is done yet.
 prow = await openServices(phone);
+await set({ slow: 1500 }); // the count, held long enough to be seen
 await phone.locator(`${ROW} button:has-text("Pull now")`).tap();
+const COUNTING = 'Counting who unsubscribed in Mailchimp…';
+const sawRowCounting = await until(async () => (await words(phone.locator(`${ROW} .mcp-pull[role="status"]`))) === COUNTING, 10000);
+const countingButton = await words(phone.locator(`${ROW} .mcp-acts button`).nth(1));
+await set({ slow: 0 });
+check(`the first Pull now (on the phone) counts first: "${COUNTING}", announced — as a list's Send says it — and the button reads "Counting…"`, sawRowCounting
+  && countingButton === 'Counting…', `${await words(phone.locator(`${ROW} .mcp`))} · ${countingButton}`);
 const askedOnPull = await until(async () => FIRST_Q.test(await words(phone.locator(`${ROW} .fp`))), 15000);
 pm = await measure(phone.locator(ROW));
 subs = (await api('/subscriptions')).json;
 check('the first Pull now (on the phone): the same question — no sideways scroll, every button ≥ 48px, no yellow button; still nobody turned off', askedOnPull
   && fits(pm) && pm.primary.length === 0 && subs.emailable === 6, `${await words(phone.locator(`${ROW} .mcp`))} · ${JSON.stringify(pm)}`);
+const kaiOff = JSON.stringify((await api(`/persons/${kai}`)).json?.person?.tags || []).includes('do-not-email');
+const kaiLine = await words(phone.locator(`${ROW} .mcp-pull`));
+check('…but Kai’s no is new: it was taken in all the same — "Last pulled … · 1 unsubscribed" under the question, and Kai is do-not-email', kaiOff
+  && /^Last pulled \d{1,2}:\d\d [ap]\.?m\.? · 1 unsubscribed$/.test(kaiLine), `${kaiLine} · ${kaiOff}`);
+// At 390 the question has the row's whole width; Check stays beside the name.
+const lay = await phone.locator(ROW).evaluate((row) => {
+  const at = (q) => row.querySelector(q)?.getBoundingClientRect();
+  const r = row.getBoundingClientRect(); const fp = at('.fp'); const check = at('.sv2-check'); const name = at('.sv2-name');
+  return { row: Math.round(r.width), fp: Math.round(fp?.width ?? 0), checkBesideName: check.left >= name.right && check.top < fp.top };
+});
+check('at 390 the question takes the row’s whole width, and Check stays beside the name', lay.fp >= lay.row - 1 && lay.checkBesideName, JSON.stringify(lay));
 await shot(prow, '04-first-ask-390');
+row = await openServices(page);
+check('at 1440 the same: the question, and under it "Last pulled … · 1 unsubscribed"', FIRST_Q.test(await words(page.locator(`${ROW} .fp`)))
+  && (await words(page.locator(`${ROW} .mcp-pull`))) === kaiLine, await words(page.locator(`${ROW} .mcp`)));
+await shot(row, '04-first-ask-new-no-1440');
 // The yes, by tap.
 await phone.locator(`${ROW} .fp button:has-text("Turn their email off here")`).tap();
-const pulled = await until(async () => /Last pulled/.test(await words(phone.locator(`${ROW} .mcp-pull`))));
+const pulled = await until(async () => / · 1 unsubscribed · 1 dead address$/.test(await words(phone.locator(`${ROW} .mcp-pull`))));
 let pw = await words(phone.locator(`${ROW} .mcp-pull`));
 check('Turn their email off here (on the phone): "Last pulled … · 1 unsubscribed · 1 dead address", and the question is gone', pulled
   && /^Last pulled \d{1,2}:\d\d [ap]\.?m\.? · 1 unsubscribed · 1 dead address$/.test(pw) && (await phone.locator(`${ROW} .fp`).count()) === 0, pw);
@@ -539,8 +570,9 @@ for (const [p, size] of [[page, '1440'], [phone, '390']]) {
   await p.unroute(PANEL);
 }
 // A sync the first pull's question stopped before anything went (someone came in on file after a count
-// that found nobody): it says so in its own words, with Try again. (Put in place of this server's answer.)
-const DOOR_NOTE = '3 people here unsubscribed in Mailchimp since it was counted, so nothing was sent — tap Try again';
+// that found nobody, so the list went by itself and nobody saw a count): it says so in its own words,
+// with Try again. (Put in place of this server's answer.)
+const DOOR_NOTE = '3 people here unsubscribed in Mailchimp, so nothing was sent — tap Try again';
 const doorList = json({ on: true, running: true, first: { audience: 'aud0001', name: 'Sample Campaign', unsubscribed: 3, cleaned: 0, counted_at: new Date().toISOString(), counting: false },
   sync: { id: list.id, list_id: list.id, status: 'failed', consent: 'all', tag: TAG, total: 0, added: 0, tagged: 0, removed: 0, skipped: 0, todo: 0, note: DOOR_NOTE, synced_at: null, created_at: new Date().toISOString(), by: 'Marco Example', stalled: false, pulled_unsubscribed: 0, pulled_cleaned: 0 } });
 for (const [p, size] of [[page, '1440'], [phone, '390']]) {

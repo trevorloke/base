@@ -11,6 +11,8 @@
 // left there, for good: until someone says yes, Connect, Pull now and the
 // nightly pull only count it, and the row asks (FirstPull) whenever the
 // count finds someone — with when it was counted; Pull now counts again.
+// (Someone who leaves there after the first count is turned off here all
+// the same, as the webhook does it: the line says so.)
 // "Turn their email off here" is the yes, for the numbers shown
 // (mailchimp.pull with agree and shown: a count that has changed since is
 // refused, and the row reads it again); "Not now" puts the question away
@@ -94,7 +96,7 @@ export default function MailchimpPanel({ online, onChanged }) {
   else if (q.isError) {
     line = noSignal(q) ? <NoSignal /> : <>Unavailable — <button type="button" className="btn-link mcp-retry" onClick={() => q.refetch()}>Try again</button></>;
   } else if (idle && busy !== 'pull' && busy !== 'yes') line = 'Waiting · background work is off on this server';
-  else if (counting) line = 'Counting who left in Mailchimp…';
+  else if (counting) line = 'Counting who unsubscribed in Mailchimp…';
   else if (pulling) line = 'Pulling…';
   else if (d.pull_ok === false) { stopped = true; line = `The last pull stopped: ${d.pull_note || 'no answer from Mailchimp'}`; }
   else if (d.pulled_at) line = `Last pulled ${whenWord(d.pulled_at)} · ${d.pull_note || 'Nothing new'}`;
