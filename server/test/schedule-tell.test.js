@@ -261,7 +261,8 @@ test('“Tell everyone on this week’s shifts”: the count first; the write on
   // On the log: the tap's rows by the person who tapped, each result after.
   const events = await rows(`select action, op, actor_id, payload from events where workspace_id = $1 and entity_type = 'shift_notice' and payload->>'batch_id' = $2 order by seq`, [ws, r.batch_id]);
   assert.deepEqual(events.map((e) => [e.action, e.op]), Array(4).fill(['shift.tellWeek', 'create']));
-  assert.ok(!JSON.stringify(events).includes('@') && !JSON.stringify(events).includes('555'), 'no address or number on the log');
+  // (A number as it is kept or as it is dialled — not a bare "555", which an id can hold by chance.)
+  assert.ok(!JSON.stringify(events).includes('@') && !/555-?01\d\d/.test(JSON.stringify(events)), 'no address or number on the log');
   assert.equal((await verifyChain(db, ws)).ok, true);
 });
 
