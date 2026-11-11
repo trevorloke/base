@@ -20,11 +20,14 @@
 //                    or cleaned — someone added here after they left there
 //                    is found then
 //   Pull now, and the start of every sync: everyone, now
+// The first pull from an audience waits for a yes (firstOf, below): it
+// turns off here everyone on file who ever left there, and nobody here can
+// turn that back. Until someone says yes a pull only counts.
 import { runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { stillOn, suppress } from '../mail/webhook.js';
 import { emailOff } from '../site/consent.js';
-import { audienceId, lower, mailchimp, mailchimpOn, MailchimpError, memberHash, pages } from './mailchimp.js';
+import { audienceId, knownAudience, lower, mailchimp, mailchimpOn, MailchimpError, memberHash, pages } from './mailchimp.js';
 
 export const PULL_ACTION = 'mailchimp.pull';
 export const PULL_JOB = 'mailchimp.pull';
@@ -131,25 +134,136 @@ const said = (db, ws, ok, note) => db.query(
    on conflict (workspace_id) do update set pull_ok = excluded.pull_ok, pull_note = excluded.pull_note`, [ws, ok, String(note).slice(0, 300)],
 );
 
+// ── The first pull from an audience: a door, opened by a yes ──
+// It would turn email off here for everyone on file who left that audience,
+// however long ago, and set aside every address that died there. Only they
+// can turn their email back on, so until someone says yes for this audience
+// (Settings → Services, or a list's "Send to Mailchimp") a pull only counts:
+// the audience's name, and how many on file it would turn off. When that is
+// nobody there is nothing to ask, and the door is opened as the system.
+// A webhook is not a pull: it is about one person who has just left there,
+// and is taken in as always.
+
+// What the first pull from the audience in use would do, while nobody has
+// said yes to it: { audience, name, unsubscribed, cleaned, counting } — the
+// name and the numbers once counted (null before), counting while a pull is
+// under way — or null: its door is open. `audience`: the one in use, when
+// known (an action has just asked); else the one named or last found, or
+// failing that the last one counted.
+export const firstOf = async (q, ws, audience = knownAudience()) => {
+  const s = (await q.query('select agreed_for, ask_for, ask_name, ask_unsubscribed, ask_cleaned from mailchimp_state where workspace_id = $1', [ws])).rows[0];
+  const id = audience || s?.ask_for || s?.agreed_for || null;
+  if (id && s?.agreed_for === id) return null;
+  const counted = Boolean(id) && s?.ask_for === id;
+  return {
+    audience: id,
+    name: counted ? s.ask_name : null,
+    unsubscribed: counted ? s.ask_unsubscribed : null,
+    cleaned: counted ? s.ask_cleaned : null,
+    counting: await pulling(q, ws),
+  };
+};
+
+// A person's yes to the first pull from `audience` (inside their write),
+// kept, and on the log with the words they were shown (`first`).
+export const agreeTo = async (tx, emit, ws, audience, first) => {
+  await tx.query(
+    `insert into mailchimp_state (workspace_id, agreed_for) values ($1, $2)
+     on conflict (workspace_id) do update set agreed_for = excluded.agreed_for`, [ws, audience],
+  );
+  emit('mailchimp', ws, 'update', { first_pull: 'yes', audience, name: first.name, unsubscribed: first.unsubscribed, cleaned: first.cleaned });
+};
+
+// How many addresses held here taking these members in would turn off: the
+// checks takeMember makes (still on here, and no newer yes of their own; held
+// here, and not set aside already or put back by the desk since) in two reads.
+const isoOf = (v) => (v && Number.isFinite(Date.parse(v)) ? new Date(v).toISOString() : v ? new Date(0).toISOString() : null);
+const COUNT_OFF = {
+  unsubscribed: `(exists (select 1 from subscriptions s where s.workspace_id = $1 and s.email = e and s.status <> 'unsubscribed')
+       or (not exists (select 1 from subscriptions s where s.workspace_id = $1 and s.email = e)
+           and exists (select 1 from persons p where p.workspace_id = $1 and lower(p.email) = e and p.deleted_at is null
+                         and not (p.tags @> '"do-not-email"'::jsonb))))
+     and not exists (select 1 from consent_events c where c.workspace_id = $1 and c.channel = 'email' and c.granted
+                       and c.wording is not null and c.address = e and changed is not null and c.created_at >= changed)`,
+  cleaned: `${HELD} and not exists (select 1 from email_suppressions x where x.workspace_id = $1 and x.email = e
+                                     and (x.lifted_at is null or (changed is not null and changed <= x.lifted_at)))`,
+};
+const wouldTurnOff = async (db, ws, members) => {
+  const out = { unsubscribed: 0, cleaned: 0 };
+  for (const status of ['unsubscribed', 'cleaned']) {
+    const rows = members.filter((m) => m.status === status);
+    if (!rows.length) continue;
+    out[status] = (await db.query(
+      `select count(distinct e)::int as n from unnest($2::text[], $3::timestamptz[]) as m(e, changed) where ${COUNT_OFF[status]}`,
+      [ws, rows.map((m) => m.email), rows.map((m) => isoOf(m.changedAt))],
+    )).rows[0].n;
+  }
+  return out;
+};
+
+// The door closed: count, and keep the question — unless there is nobody to
+// ask about. → true: asked (nothing taken in); false: go on.
+const askFirst = async (db, ws, audience, members) => {
+  const would = await wouldTurnOff(db, ws, members);
+  if (!would.unsubscribed && !would.cleaned) {
+    await runAction(db, { workspaceId: ws, actorId: null, action: PULL_ACTION }, async (tx, emit) => {
+      await tx.query(
+        `insert into mailchimp_state (workspace_id, agreed_for) values ($1, $2)
+         on conflict (workspace_id) do update set agreed_for = excluded.agreed_for`, [ws, audience],
+      );
+      emit('mailchimp', ws, 'update', { first_pull: 'nobody here to turn off', audience });
+    });
+    return false;
+  }
+  const a = await mailchimp('GET', `/lists/${audience}`, { query: { fields: 'id,name' }, timeoutMs: 10_000 });
+  const name = typeof a?.name === 'string' && a.name.trim() ? a.name.trim().slice(0, 200) : audience;
+  // Mailchimp answered: an earlier "the last pull stopped" is no longer so.
+  await db.query(
+    `insert into mailchimp_state (workspace_id, ask_for, ask_name, ask_unsubscribed, ask_cleaned) values ($1, $2, $3, $4, $5)
+     on conflict (workspace_id) do update set ask_for = excluded.ask_for, ask_name = excluded.ask_name,
+       ask_unsubscribed = excluded.ask_unsubscribed, ask_cleaned = excluded.ask_cleaned,
+       pull_ok = nullif(mailchimp_state.pull_ok, false),
+       pull_note = case when mailchimp_state.pull_ok = false then null else mailchimp_state.pull_note end`,
+    [ws, audience, name, would.unsubscribed, would.cleaned],
+  );
+  return true;
+};
+
+// Mailchimp is answering: an unsubscribe that could not be told to it
+// earlier goes again, now — one given up on, and one waiting its turn to be
+// tried again.
+const tellAgain = async (db, ws) => {
+  const again = await db.query(
+    `update jobs set status = 'pending', attempts = 0, run_at = now(), last_error = null, done_at = null
+      where workspace_id = $1 and kind = $2 and (status = 'failed' or (status = 'pending' and attempts > 0))`, [ws, OPTOUT_JOB],
+  );
+  if (again.affectedRows) runJobsSoon();
+};
+
 // Read who left and whose address died, and take it in. → { unsubscribed,
-// cleaned }: how many addresses were turned off here.
+// cleaned }: how many addresses were turned off here — and asked: true when
+// it was the first pull from this audience, and it only counted.
 export const pull = async (db, ws, { full = false } = {}) => {
   const audience = await audienceId();
   const state = (await db.query('select * from mailchimp_state where workspace_id = $1', [ws])).rows[0];
-  const known = state?.audience_id === audience && state.pulled_through && state.full_at;
+  const open = state?.agreed_for === audience;
+  const known = open && state?.audience_id === audience && state.pulled_through && state.full_at;
   const everything = full || !known || Date.now() - new Date(state.full_at).getTime() > FULL_EVERY_MS;
   // As Mailchimp writes a time: 2026-11-10T17:35:00+00:00.
   const since = everything ? null : new Date(new Date(state.pulled_through).getTime() - SLACK_MS).toISOString().replace(/\.\d{3}Z$/, '+00:00');
   const started = new Date().toISOString();
-  const out = { unsubscribed: 0, cleaned: 0 };
+  const left = [];
   for (const status of ['unsubscribed', 'cleaned']) {
     const rows = await pages(`/lists/${audience}/members`, 'members', {
       status, since_last_changed: since, fields: 'members.email_address,members.status,members.last_changed,total_items',
     });
-    const got = await takeIn(db, ws, rows.map((m) => memberOf(m, status)).filter((m) => m.status === status));
-    out.unsubscribed += got.unsubscribed;
-    out.cleaned += got.cleaned;
+    left.push(...rows.map((m) => memberOf(m, status)).filter((m) => m.status === status));
   }
+  if (!open && await askFirst(db, ws, audience, left)) {
+    await tellAgain(db, ws);
+    return { unsubscribed: 0, cleaned: 0, asked: true };
+  }
+  const out = await takeIn(db, ws, left);
   await db.query(
     `insert into mailchimp_state (workspace_id, audience_id, pulled_through, full_at, pulled_at, pull_ok, pull_note)
      values ($1, $2, $3, $4, now(), true, $5)
@@ -158,14 +272,7 @@ export const pull = async (db, ws, { full = false } = {}) => {
        pulled_at = excluded.pulled_at, pull_ok = true, pull_note = excluded.pull_note`,
     [ws, audience, started, everything ? started : null, wordsFor(out)],
   );
-  // Mailchimp is answering: an unsubscribe that could not be told to it
-  // earlier goes again, now — one given up on, and one waiting its turn to
-  // be tried again.
-  const again = await db.query(
-    `update jobs set status = 'pending', attempts = 0, run_at = now(), last_error = null, done_at = null
-      where workspace_id = $1 and kind = $2 and (status = 'failed' or (status = 'pending' and attempts > 0))`, [ws, OPTOUT_JOB],
-  );
-  if (again.affectedRows) runJobsSoon();
+  await tellAgain(db, ws);
   return out;
 };
 

@@ -4,12 +4,14 @@
 // GET /mailchimp                         managers: what the last pull said, whether one is under way, and how many
 //                                        unsubscribes Mailchimp has not been told yet — with its own words for why
 //                                        (Settings → Services)
+// Both carry `first` while nobody has said yes to the first pull from the audience in use (pull.js, firstOf): the
+// audience's name and how many on file it would turn off — the question both screens ask. null once it is open.
 import { Hono } from 'hono';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { loadList } from '../lists/audience.js';
 import { mailchimpOn } from './mailchimp.js';
 import { optoutsWaiting, optoutsWhy } from './optout.js';
-import { pulling } from './pull.js';
+import { firstOf, pulling } from './pull.js';
 import { countsFor, jobLive, syncOut } from './push.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -21,7 +23,7 @@ api.get('/lists/:id/mailchimp', async (c) => {
   const list = await loadList(db, ws, c.req.param('id'));
   if (!list) return c.json({ error: 'not found' }, 404);
   // running: whether this server does background work at all (STARBASE_JOBS=off: a sync waits).
-  const out = { on: mailchimpOn(), running: jobRunnerOn(), sync: null };
+  const out = { on: mailchimpOn(), running: jobRunnerOn(), sync: null, first: null };
   // The newest: after a change of audience, the one sent to the audience in use now.
   const row = (await db.query(
     `select s.*, u.name as by from mailchimp_syncs s left join users u on u.id = s.created_by
@@ -32,6 +34,7 @@ api.get('/lists/:id/mailchimp', async (c) => {
     const stalled = ['queued', 'syncing'].includes(row.status) && !(await jobLive(db, ws, row.id));
     out.sync = { ...syncOut(row), by: row.by || null, stalled };
   }
+  if (out.on) out.first = await firstOf(db, ws);
   if (out.on && c.req.query('counts')) out.counts = await countsFor(db, ws, list);
   return c.json(out);
 });
@@ -43,6 +46,7 @@ api.get('/mailchimp', async (c) => {
   const waiting = await optoutsWaiting(db, ws);
   return c.json({
     on: mailchimpOn(),
+    first: mailchimpOn() ? await firstOf(db, ws) : null,
     running: jobRunnerOn(),
     pulling: await pulling(db, ws),
     pulled_at: s?.pulled_at || null,

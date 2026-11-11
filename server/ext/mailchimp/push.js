@@ -33,7 +33,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import { loadList, recipientsOf } from '../lists/audience.js';
 import { keyFor, lower, mailchimp, mailchimpOn, MailchimpError, pages } from './mailchimp.js';
-import { pull, queueDays } from './pull.js';
+import { agreeTo, firstOf, pull, PULL_JOB, queueDays } from './pull.js';
 
 export const PUSH_ACTION = 'mailchimp.push';
 export const SYNC_JOB = 'mailchimp.sync';
@@ -85,12 +85,29 @@ export const countsFor = async (db, ws, list) => {
 };
 
 // ── The tap ──
+export const STILL_COUNTING = 'Still counting who unsubscribed in Mailchimp — try again in a moment';
 // Inside the action's write. `audience` was found before it (never a call
 // to Mailchimp while the campaign's lock is held).
-export const startSync = async (tx, ctx, emit, { list_id: listId, everyone = false, audience }) => {
+// The first pull from an audience waits for a yes (pull.js, firstOf), and a
+// sync starts with a pull: until someone says yes (`agree`) nothing is sent,
+// and the answer is the question — { first }, counted by a job when it
+// hasn't been yet. → { sync } or { first }
+export const startSync = async (tx, ctx, emit, { list_id: listId, everyone = false, audience, agree = null }) => {
   const ws = ctx.workspaceId;
   const list = (await tx.query('select id, name from lists where id = $1 and workspace_id = $2 and deleted_at is null', [listId, ws])).rows[0];
   if (!list) throw httpError(404, 'list not found');
+  const first = await firstOf(tx, ws, audience);
+  if (first && !agree) {
+    if (first.unsubscribed == null && !first.counting) {
+      await enqueueJob(tx, { workspaceId: ws, kind: PULL_JOB, payload: { full: true } });
+      first.counting = true;
+    }
+    return { first };
+  }
+  if (first) {
+    if (first.unsubscribed == null) throw httpError(409, STILL_COUNTING);
+    await agreeTo(tx, emit, ws, audience, first);
+  }
   const consent = everyone ? 'all' : 'subscribed';
   const cur = (await tx.query('select * from mailchimp_syncs where workspace_id = $1 and list_id = $2 and audience_id = $3 for update', [ws, list.id, audience])).rows[0];
   // Still on its way: this tap is that one — never two jobs filling one tag.
@@ -217,6 +234,9 @@ const part = async (db, sync) => {
   const cursor = parseJ(sync.cursor, {}) || {};
   if (!cursor.pulled) {
     const gone = await pull(db, ws, { full: true });
+    // Nobody has said yes to the first pull from the audience in use (it
+    // changed since the tap): nothing goes. Try again asks the question.
+    if (gone.asked) { await stop(db, sync, 'Mailchimp’s audience has changed since — tap Try again'); return false; }
     cursor.pulled = true;
     await patch(db, sync, 'pulled_unsubscribed = $3, pulled_cleaned = $4, cursor = $5::jsonb', [gone.unsubscribed, gone.cleaned, JSON.stringify(cursor)]);
   }

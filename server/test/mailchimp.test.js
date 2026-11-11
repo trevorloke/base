@@ -53,12 +53,15 @@ after(async () => {
 
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };
 // A campaign of its own for each test (they share one database, and one stand-in Mailchimp, emptied first).
-const campaign = async (name) => {
+// The first pull from an audience waits for a yes; a test about something else starts past it, as if
+// someone had said yes to the stand-in's audience (`asks: true` keeps the question to come).
+const campaign = async (name, { asks = false } = {}) => {
   fake.reset();
   on();
   const c = new Client();
   const r = await c.signup({ workspaceName: `${name} ${tag}`, email: mail(`mgr-${name.toLowerCase().replace(/\W+/g, '')}`), jurisdiction: 'bc-municipal' });
   assert.equal(r.status, 201, JSON.stringify(r.json));
+  if (!asks) await db.query('insert into mailchimp_state (workspace_id, agreed_for) values ($1, $2)', [r.json.workspace.id, fake.id]);
   return { c, ws: r.json.workspace.id };
 };
 const join = async (mgr, role, who) => {
@@ -631,7 +634,7 @@ test('a 429 halfway leaves a sync the next run completes; a refusal that will no
 });
 
 test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and a yes here that is newer than a no there', async () => {
-  const { c, ws } = await campaign('Pull');
+  const { c, ws } = await campaign('Pull', { asks: true });
   for (const w of ['ana', 'ben', 'cal', 'dee', 'gil']) await person(c, w);
   await subscribe(c, 'ana', 'ben', 'dee', 'gil');
   const list = await membersList(c);
@@ -654,6 +657,16 @@ test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and 
   assert.equal(ok(await c.action('mailchimp.pull', {})).queued, true);
   assert.equal(ok(await c.get('/api/mailchimp')).pulling, true);
   assert.deepEqual(await run(ws), { ran: 1, failed: 0 });
+  // The first pull from an audience turns off here everyone on file who ever left there, and nobody here
+  // can turn that back: it only counts, and asks — the audience, and how many on file it would turn off.
+  st = ok(await c.get('/api/mailchimp'));
+  assert.deepEqual([st.first, st.pulled_at], [{ audience: fake.id, name: 'Sample Campaign', unsubscribed: 2, cleaned: 1, counting: false }, null]);
+  assert.deepEqual([await suppressions(ws), (await subOf(ws, 'ben')).status, (await subOf(ws, 'gil')).status], [[], 'subscribed', 'subscribed'], 'nobody is turned off before a yes');
+  assert.deepEqual(writes(), []);
+  // The yes, for the audience it was counted for: now it is done — what it counted is what it does.
+  fake.calls.length = 0;
+  ok(await c.action('mailchimp.pull', { agree: fake.id }));
+  assert.deepEqual(await run(ws), { ran: 1, failed: 0 });
 
   assert.deepEqual(await suppressions(ws), [{ email: mail('cal'), reason: 'bounce', source: 'mailchimp' }]);
   assert.equal((await subOf(ws, 'ben')).status, 'unsubscribed');
@@ -662,8 +675,11 @@ test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and 
   assert.equal((await db.query('select count(*)::int as n from consent_events where workspace_id = $1 and address = $2', [ws, mail('nobody')])).rows[0].n, 0, 'nothing is kept about an address nobody here holds');
   assert.equal(await withEmail(), 2, 'the list counts neither');
   st = ok(await c.get('/api/mailchimp'));
-  assert.deepEqual([st.pulling, st.pull_ok, st.pull_note], [false, true, '2 unsubscribed · 1 dead address']);
+  assert.deepEqual([st.pulling, st.pull_ok, st.pull_note, st.first], [false, true, '2 unsubscribed · 1 dead address', null]);
   assert.ok(st.pulled_at);
+  const yes = (await logged(c)).filter((e) => e.entity_type === 'mailchimp');
+  assert.deepEqual(yes.map((e) => [e.action, e.payload, Boolean(e.actor_id)]), [['mailchimp.pull', { first_pull: 'yes', audience: fake.id, name: 'Sample Campaign', unsubscribed: 2, cleaned: 1 }, true]],
+    'the yes is on the log: who gave it, for which audience, and what they were shown');
   // Neither change is told back to Mailchimp.
   assert.deepEqual(writes(), []);
   const firstPull = fake.calls.filter((x) => x.path === `/lists/${fake.id}/members`);
@@ -710,6 +726,120 @@ test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and 
   assert.match(st.pull_note, /^Mailchimp said: /);
   fake.fail(false);
   assert.equal(ok(await c.get('/api/audit/verify')).ok, true);
+});
+
+test('the first pull asks first: Connect and the daily pull only count; a yes for that audience opens it; later pulls run as built', async () => {
+  const { c: mgr, ws } = await campaign('Door', { asks: true });
+  const staff = await join(mgr, 'staff', 'staff-door');
+  const people = {};
+  for (const w of ['ana', 'ben', 'cal', 'dee', 'eli', 'gus']) people[w] = await person(mgr, w);
+  await subscribe(mgr, 'ana', 'ben', 'cal', 'eli', 'gus');
+  const list = await membersList(mgr);
+  // In Mailchimp from before base.win was connected to it: Ana and Dee left long ago (Dee never joined
+  // the newsletter here), Cal's address died there, and someone nobody here knows left too.
+  const longAgo = new Date(Date.now() - 300 * 86400e3);
+  for (const w of ['ana', 'dee', 'stranger']) fake.add(mail(w), { status: 'unsubscribed', changed: longAgo });
+  fake.add(mail('cal'), { status: 'cleaned', changed: longAgo });
+  for (const w of ['ben', 'eli', 'gus']) fake.add(mail(w));
+  const tagsOf = async (w) => (await db.query('select tags from persons where id = $1', [people[w].id])).rows[0].tags;
+  const nothingYet = async () => {
+    assert.deepEqual([(await subOf(ws, 'ana')).status, (await subOf(ws, 'ben')).status, await suppressions(ws), (await tagsOf('dee')).includes('do-not-email')],
+      ['subscribed', 'subscribed', [], false], 'nobody is turned off before a yes');
+  };
+
+  // Not counted yet.
+  assert.deepEqual(ok(await mgr.get('/api/mailchimp')).first, { audience: null, name: null, unsubscribed: null, cleaned: null, counting: false });
+  // Connect: the webhook is made, and what the first pull would do is counted at once — only counted.
+  ok(await mgr.action('mailchimp.connect', {}));
+  assert.equal(ok(await mgr.get('/api/mailchimp')).first.counting, true);
+  await run(ws);
+  const FIRST = { audience: fake.id, name: 'Sample Campaign', unsubscribed: 2, cleaned: 1, counting: false };
+  let st = ok(await mgr.get('/api/mailchimp'));
+  assert.deepEqual([st.first, st.pulled_at, st.pull_note], [FIRST, null, null]);
+  await nothingYet();
+  // A list's page has the same question for the desk.
+  assert.deepEqual((await stateOf(staff, list.id)).first, FIRST);
+  // Someone leaving there now is not the past: Eli unsubscribes in Mailchimp, its webhook says so, and her
+  // email is off here at once — she has just said no.
+  await fake.unsubscribe(mail('eli'));
+  await run(ws);
+  assert.equal((await subOf(ws, 'eli')).status, 'unsubscribed');
+  await nothingYet();
+
+  // Pull now and the daily pull count again (someone else left there meanwhile), and turn nobody off.
+  fake.add(mail('ben'), { status: 'unsubscribed', changed: longAgo });
+  ok(await mgr.action('mailchimp.pull', {}));
+  await run(ws);
+  assert.deepEqual(ok(await mgr.get('/api/mailchimp')).first, { ...FIRST, unsubscribed: 3 }, 'counted afresh');
+  const day = (n) => new Date(Date.now() + n * 86400e3).toISOString().slice(0, 10);
+  await db.query('update jobs set run_at = now() where workspace_id = $1 and key = $2', [ws, `mailchimp.pull:${day(1)}`]);
+  fake.calls.length = 0;
+  assert.deepEqual(await run(ws), { ran: 1, failed: 0 });
+  assert.deepEqual(fake.calls.filter((x) => x.path === `/lists/${fake.id}/members`).map((x) => [x.query.status, x.query.since_last_changed]),
+    [['unsubscribed', undefined], ['cleaned', undefined]], 'the daily pull reads them all, and counts');
+  assert.deepEqual(ok(await mgr.get('/api/mailchimp')).first, { ...FIRST, unsubscribed: 3 });
+  await nothingYet();
+  assert.deepEqual(writes(), []);
+
+  // The yes: a manager's here (staff give it by sending a list), and only for the audience counted.
+  assert.equal((await staff.action('mailchimp.pull', { agree: fake.id })).status, 403);
+  let r = await mgr.action('mailchimp.pull', { agree: 'aud-not-this-one' });
+  assert.deepEqual([r.status, r.json.error], [409, 'Mailchimp’s audience has changed since — look again']);
+  await run(ws);
+  await nothingYet();
+  ok(await mgr.action('mailchimp.pull', { agree: fake.id }));
+  await run(ws);
+  st = ok(await mgr.get('/api/mailchimp'));
+  assert.deepEqual([st.first, st.pull_note], [null, '3 unsubscribed · 1 dead address'], 'what it counted is what it did');
+  assert.deepEqual([(await subOf(ws, 'ana')).status, (await subOf(ws, 'ben')).status, (await tagsOf('dee')).includes('do-not-email')], ['unsubscribed', 'unsubscribed', true]);
+  assert.deepEqual(await suppressions(ws), [{ email: mail('cal'), reason: 'bounce', source: 'mailchimp' }]);
+  assert.equal((await stateOf(staff, list.id)).first, null);
+  const yes = (await logged(mgr)).filter((e) => e.entity_type === 'mailchimp' && e.payload.first_pull);
+  assert.deepEqual(yes.map((e) => [e.action, e.payload, Boolean(e.actor_id)]), [['mailchimp.pull', { first_pull: 'yes', audience: fake.id, name: 'Sample Campaign', unsubscribed: 3, cleaned: 1 }, true]]);
+  // A yes said twice is one yes.
+  ok(await mgr.action('mailchimp.pull', { agree: fake.id }));
+  await run(ws);
+  assert.equal((await logged(mgr)).filter((e) => e.entity_type === 'mailchimp' && e.payload.first_pull).length, 1);
+
+  // Later pulls run as built: Gus leaves there with no webhook, and the next pull turns him off, no question.
+  await fake.unsubscribe(mail('gus'), { send: false });
+  ok(await mgr.action('mailchimp.pull', {}));
+  await run(ws);
+  st = ok(await mgr.get('/api/mailchimp'));
+  assert.deepEqual([st.first, st.pull_note, (await subOf(ws, 'gus')).status], [null, '1 unsubscribed', 'unsubscribed']);
+
+  // Another audience is another door: a yes for the first one is no yes for it.
+  await person(mgr, 'fay');
+  await subscribe(mgr, 'fay');
+  fake.audience('aud0002', 'Old list');
+  fake.add(mail('fay'), { status: 'unsubscribed', changed: longAgo, audienceId: 'aud0002' });
+  on({ MAILCHIMP_AUDIENCE_ID: 'aud0002' });
+  ok(await mgr.action('mailchimp.pull', {}));
+  await run(ws);
+  assert.deepEqual(ok(await mgr.get('/api/mailchimp')).first, { audience: 'aud0002', name: 'Old list', unsubscribed: 1, cleaned: 0, counting: false });
+  assert.equal((await subOf(ws, 'fay')).status, 'subscribed');
+  assert.equal((await mgr.action('mailchimp.pull', { agree: fake.id })).status, 409);
+  on();
+  assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
+});
+
+test('with nobody on file to turn off, the first pull asks nothing', async () => {
+  const { c, ws } = await campaign('Nobody', { asks: true });
+  for (const w of ['ana', 'ben']) await person(c, w);
+  await subscribe(c, 'ana', 'ben');
+  // Who left Mailchimp is nobody this campaign holds.
+  fake.add(mail('stranger'), { status: 'unsubscribed' });
+  fake.add(mail('ana'));
+  ok(await c.action('mailchimp.connect', {}));
+  await run(ws);
+  const st = ok(await c.get('/api/mailchimp'));
+  assert.deepEqual([st.first, st.pull_ok, st.pull_note], [null, true, 'Nothing new'], 'the first pull ran: there was nothing to ask');
+  const opened = (await logged(c)).filter((e) => e.entity_type === 'mailchimp' && e.payload.first_pull);
+  assert.deepEqual(opened.map((e) => [e.action, e.payload, e.actor_id]), [['mailchimp.pull', { first_pull: 'nobody here to turn off', audience: fake.id }, null]]);
+  // A list goes at the first tap.
+  const list = await membersList(c);
+  const r = await push(c, ws, list.id);
+  assert.deepEqual([r.first, r.sync.status, (await stateOf(c, list.id)).sync.status], [undefined, 'queued', 'synced']);
 });
 
 test('an address changed in Mailchimp is noted on the log, once — and only when Mailchimp says so itself', async () => {
@@ -814,8 +944,8 @@ test('an address Mailchimp refuses is counted once, however often its part of th
   assert.deepEqual(inTag(), ['ana', 'ben', 'cal', 'dee', 'eli'].map(mail));
 });
 
-test('a send says who its own pull turned off here: the first one finds everyone who had left in Mailchimp', async () => {
-  const { c: mgr, ws } = await campaign('First');
+test('the first send asks first, then says who its own pull turned off here: everyone who had left in Mailchimp', async () => {
+  const { c: mgr, ws } = await campaign('First', { asks: true });
   const staff = await join(mgr, 'staff', 'staff-first');
   const names = ['ana', 'ben', 'cal', 'dee', 'eli'];
   for (const w of names) await person(mgr, w);
@@ -830,9 +960,26 @@ test('a send says who its own pull turned off here: the first one finds everyone
 
   // A staff member sends the list, with no pull before it: the question counts five…
   assert.deepEqual((await stateOf(staff, list.id, true)).counts, { subscribed: 5, everyone: 5 });
-  ok(await staff.action('mailchimp.push', { list_id: list.id }));
+  // …and nothing goes yet. A sync starts with a pull, and the first pull from an audience turns off here
+  // everyone on file who ever left there, for good: the answer is a question, counted first.
+  let r = ok(await staff.action('mailchimp.push', { list_id: list.id }));
+  assert.deepEqual([r.sync, r.first], [undefined, { audience: fake.id, name: null, unsubscribed: null, cleaned: null, counting: true }]);
+  assert.equal((await staff.action('mailchimp.push', { list_id: list.id, agree: fake.id })).status, 409, 'no yes before it is counted');
   await run(ws);
-  // …three go — and the list's own answer says why: what this sync's pull turned off here, all of it
+  const FIRST = { audience: fake.id, name: 'Sample Campaign', unsubscribed: 2, cleaned: 1, counting: false };
+  const asked = await stateOf(staff, list.id, true);
+  assert.deepEqual([asked.first, asked.sync, asked.counts], [FIRST, null, { subscribed: 5, everyone: 5 }], 'nobody turned off, nothing sent');
+  assert.deepEqual([fake.tagged(TAG), writes()], [null, []]);
+  // Tapped again, the same question at once (it is counted), and still nothing goes.
+  r = ok(await staff.action('mailchimp.push', { list_id: list.id }));
+  assert.deepEqual([r.first, (await run(ws)).ran], [FIRST, 0]);
+  // "Turn their email off here": the yes, for this audience — and the list goes.
+  r = ok(await staff.action('mailchimp.push', { list_id: list.id, agree: fake.id }));
+  assert.equal(r.sync.status, 'queued');
+  await run(ws);
+  const yes = (await logged(mgr)).filter((e) => e.entity_type === 'mailchimp' && e.payload.first_pull);
+  assert.deepEqual(yes.map((e) => [e.action, e.payload, Boolean(e.actor_id)]), [['mailchimp.push', { first_pull: 'yes', audience: fake.id, name: 'Sample Campaign', unsubscribed: 2, cleaned: 1 }, true]]);
+  // Three go — and the list's own answer says why: what this sync's pull turned off here, all of it
   // (Fay is not on the list: her email is off here now all the same).
   let s = (await stateOf(staff, list.id)).sync;
   assert.deepEqual([s.status, s.total, s.added, s.tagged, s.skipped], ['synced', 3, 3, 3, 0]);
@@ -904,7 +1051,7 @@ test('one address Mailchimp will not change never holds up the others; Settings 
 });
 
 test('Settings → Services: the Mailchimp row, Check and Connect — and who may do what', async () => {
-  const { c: mgr, ws } = await campaign('Services');
+  const { c: mgr, ws } = await campaign('Services', { asks: true });
   const staff = await join(mgr, 'staff', 'staff-services');
   const vol = await join(mgr, 'volunteer', 'vol-services');
   const rowOf = async () => ok(await mgr.get('/api/connections')).services.find((s) => s.key === 'mailchimp');
@@ -923,7 +1070,7 @@ test('Settings → Services: the Mailchimp row, Check and Connect — and who ma
   assert.deepEqual(await check(), { key: 'mailchimp', ok: false, said: 'MAILCHIMP_API_KEY isn’t set' });
   let r = await staff.action('mailchimp.push', { list_id: list.id });
   assert.deepEqual([r.status, r.json.error], [409, 'Mailchimp isn’t connected here']);
-  assert.deepEqual((await stateOf(staff, list.id)), { on: false, running: false, sync: null });
+  assert.deepEqual((await stateOf(staff, list.id)), { on: false, running: false, sync: null, first: null });
   const off = ok(await mgr.action('mailchimp.connect', {}));
   assert.deepEqual([off.ok, off.said], [false, 'MAILCHIMP_API_KEY isn’t set']);
   // A key without its server ("-us19") can't be used: said, not guessed.
@@ -974,7 +1121,8 @@ test('Settings → Services: the Mailchimp row, Check and Connect — and who ma
     { subscribe: false, unsubscribe: true, profile: false, cleaned: true, upemail: true, campaign: false }, { user: true, admin: true, api: false }]]);
   const log = await mine(mgr, 'mailchimp.connect');
   assert.deepEqual(log.map((e) => [e.entity_type, e.op, e.payload, Boolean(e.actor_id)]), [['mailchimp', 'update', { webhook: 'connected' }, true]]);
-  assert.equal((await pullJobs(ws)).filter((j) => j.status === 'pending').length, 3, 'the daily pull starts with it');
+  const pending = (await pullJobs(ws)).filter((j) => j.status === 'pending');
+  assert.deepEqual([pending.filter((j) => j.key).length, pending.filter((j) => !j.key).length], [3, 1], 'the daily pull starts with it, and the first pull is counted at once');
   answers.push(await check());
   assert.deepEqual(answers.at(-1), { key: 'mailchimp', ok: true, said: 'The key works · audience “Sample Campaign” · 2 subscribed · unsubscribes come back here' });
   // Again: already there, nothing written, no secret (Mailchimp shows it once).

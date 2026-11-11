@@ -112,8 +112,8 @@ export const checkMailchimp = async (db, ws, base) => {
   }
 };
 
-// → { ok, said, made?, secret? } — never throws. Nothing is written when
-// Mailchimp already sends unsubscribes here.
+// → { ok, said, audience?, made?, secret? } — never throws. Nothing is
+// written when Mailchimp already sends unsubscribes here.
 export const connect = async (base) => {
   if (!apiKey()) return { ok: false, said: 'MAILCHIMP_API_KEY isn’t set' };
   if (!mailchimpOn()) return { ok: false, said: NO_SERVER };
@@ -123,7 +123,7 @@ export const connect = async (base) => {
   try {
     const audience = await audienceId();
     const hooks = await webhooksOf(audience);
-    if (hooks.some((h) => here(h, base) && sends(h))) return { ok: true, said: 'Mailchimp already sends unsubscribes and dead addresses here' };
+    if (hooks.some((h) => here(h, base) && sends(h))) return { ok: true, audience, said: 'Mailchimp already sends unsubscribes and dead addresses here' };
     const drop = (h) => mailchimp('DELETE', `/lists/${audience}/webhooks/${encodeURIComponent(h.id)}`, { idempotencyKey: keyFor('unhook', audience, h.id), timeoutMs: 8000 });
     const mine = hooks.filter((h) => ours(h, base) && h.id != null);
     // One at the right address with the events off makes room first (an
@@ -138,7 +138,7 @@ export const connect = async (base) => {
     });
     for (const h of mine.filter((x) => !here(x, base))) await drop(h).catch(() => {});
     const secret = typeof made?.signing_secret === 'string' && made.signing_secret ? made.signing_secret : null;
-    return { ok: true, made: true, said: 'Mailchimp now sends unsubscribes and dead addresses here', ...(secret ? { secret } : {}) };
+    return { ok: true, made: true, audience, said: 'Mailchimp now sends unsubscribes and dead addresses here', ...(secret ? { secret } : {}) };
   } catch (e) {
     return { ok: false, said: e instanceof AudienceError ? e.message : words(e) };
   }

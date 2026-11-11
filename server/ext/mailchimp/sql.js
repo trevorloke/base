@@ -17,6 +17,11 @@
 // pulls were about, when the last one started (pulled_through: the next
 // daily pull asks only for what changed since, less an hour), when
 // everything was last read (full_at), and what the last pull said.
+// The first pull from an audience turns email off here for everyone on file
+// who left there, and nobody here can turn it back on, so it waits for a
+// yes: agreed_for is the audience someone said yes to (or the one where
+// nobody here would have been turned off). Until then a pull only counts:
+// ask_for, ask_name, ask_unsubscribed, ask_cleaned — the question's words.
 export const sql = `
 create table if not exists mailchimp_syncs (
   id uuid primary key,
@@ -53,4 +58,9 @@ create table if not exists mailchimp_state (
   pull_ok boolean,
   pull_note text
 );
+alter table mailchimp_state add column if not exists agreed_for text;
+alter table mailchimp_state add column if not exists ask_for text;
+alter table mailchimp_state add column if not exists ask_name text;
+alter table mailchimp_state add column if not exists ask_unsubscribed int;
+alter table mailchimp_state add column if not exists ask_cleaned int;
 `;
