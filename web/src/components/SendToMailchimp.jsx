@@ -129,7 +129,10 @@ export default function SendToMailchimp({ listId }) {
     retry: false,
   });
   // agree: the audience the question named — the yes to the first pull from it.
-  const send = async (all, agree = null) => {
+  // auto: sent again by itself (below); a tap of the person's own starts afresh.
+  const resent = useRef(false);
+  const send = async (all, agree = null, auto = false) => {
+    if (!auto) resent.current = false;
     setBusy(true); setError(null);
     try {
       const r = await action('mailchimp.push', { list_id: listId, everyone: all, ...(agree ? { agree } : {}) });
@@ -149,9 +152,8 @@ export default function SendToMailchimp({ listId }) {
   const first = door ? state.data?.first : undefined;
   // Counted, and nobody here to turn off (or someone said yes meanwhile): it
   // goes as asked — once for each tap, whatever the answer then says.
-  const resent = useRef(false);
   useEffect(() => {
-    if (door && first === null && !busy && !resent.current) { resent.current = true; send(door.all); }
+    if (door && first === null && !busy && !resent.current) { resent.current = true; send(door.all, null, true); }
   }, [door, first, busy]); // eslint-disable-line react-hooks/exhaustive-deps
   // A sync that turned people off here changes the page's own numbers ("3 by
   // email"): read again when it ends.
@@ -167,7 +169,7 @@ export default function SendToMailchimp({ listId }) {
   if (!isOn || state.data?.on === false) return null;
   const s = state.data?.sync || null;
   const going = active(s);
-  const open = () => { setError(null); setDoor(null); resent.current = false; setEveryone(s?.consent === 'all'); setAsking(true); };
+  const open = () => { setError(null); setDoor(null); setEveryone(s?.consent === 'all'); setAsking(true); };
   const away = () => { setAsking(false); setDoor(null); setError(null); };
   const counts = ask.data?.counts;
   const n = counts ? (everyone ? counts.everyone : counts.subscribed) : 0;
