@@ -55,7 +55,8 @@ const EXACT = [
   ['postal', /^(postal|postalcode|postcode|zip|zipcode|billingpostalcode|billingpostal|billingzip|donorpostalcode|pc)$/],
   ['method', /^(method|paymentmethod|paymenttype|paidby|paymentmode|tender|howpaid|paidvia|methodofpayment)$/],
   ['method', /^(gateway|paymentgateway|processor)$/],
-  ['status', /^(status|paymentstatus|donationstatus|giftstatus|transactionstatus|chargestatus|orderstatus|state|paymentstate|outcome|result)$/],
+  ['status', /^(status|paymentstatus|donationstatus|giftstatus|transactionstatus|chargestatus|orderstatus|paymentstate)$/],
+  ['status', /^(state|outcome|result)$/],
   ['slate', /^(slate|designation|designations|donationdesignation|designationname|designatedto|directedto|fund|fundname|allocation)$/],
   ['receipt', /^(receipt|receiptnumber|receiptno|receiptnum|receiptid|taxreceipt|taxreceiptnumber|officialreceipt|officialreceiptnumber)$/],
   ['source_id', /^(donationid|giftid|contributionid|transactionid|txnid|donationnumber|giftnumber)$/],
@@ -113,6 +114,11 @@ const LOOKS = {
   // A "State" of BC, a "Result" of 3: not a payment's.
   status: (vals) => share(vals, (v) => statusWord(v) !== null) >= 0.6,
 };
+// A heading that says payment status outright: the column is that whatever
+// its words. No export was seen, so the other tool's word for a good payment
+// ("Posted") may be one not known here — it is asked about, and a refunded
+// row still stays out.
+const STATUS_SAID = /^(status|paymentstatus|donationstatus|giftstatus|transactionstatus|chargestatus|orderstatus|paymentstate)$/;
 // Money written as money ("$50.00", "49.99"): a column of bare whole numbers
 // could as well be an id or a count.
 const moneyish = (v) => readAmount(v) !== null && /[$.,]/.test(v);
@@ -135,9 +141,11 @@ export const guessGiftMapping = (headers, records, { slates = [], noHeader = fal
     // A whole name beside first and last names is someone else's: a campaign's, a form's.
     if (key === 'name' && loose && (taken.has('first') || taken.has('last'))) return;
     const looks = LOOKS[key];
-    // Amounts, dates and statuses must read as such even under the plainest
-    // heading; the rest only when the heading merely hints.
-    if (looks && values[i].length && (loose || key === 'amount' || key === 'date' || key === 'status') && !looks(values[i])) return;
+    // Amounts and dates must read as such even under the plainest heading —
+    // and a status under one that could mean something else ("State"); the
+    // rest only when the heading merely hints.
+    const mustLook = loose || key === 'amount' || key === 'date' || (key === 'status' && !STATUS_SAID.test(norm[i]));
+    if (looks && values[i].length && mustLook && !looks(values[i])) return;
     out[i] = key;
     taken.add(key);
   };
@@ -297,6 +305,20 @@ export const callsOf = (rows, { maxRows = 100, maxBytes = 150_000 } = {}) => {
   }
   if (part.length) out.push(part);
   return out;
+};
+
+// A gift on the books answers for one row only (the server's typedTwins) —
+// across calls too: each answer names the gift that answered for a row
+// (typed_gift), and those go with the next call (typed_used). Rows go
+// oldest first, so only a gift of the next call's first day or later can
+// still be met.
+const USED_MAX = 1000;
+export const usedFor = (used, part) => {
+  const from = part[0]?.date ?? '';
+  return used.filter((u) => u.day >= from).map((u) => u.id).slice(-USED_MAX);
+};
+export const keepUsed = (used, res, part) => {
+  (res.results || []).forEach((r, i) => { if (r.typed_gift) used.push({ id: r.typed_gift, day: part[i]?.date ?? '' }); });
 };
 
 // ── What the check adds up to ──

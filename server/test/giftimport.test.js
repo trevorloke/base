@@ -195,6 +195,20 @@ test('columns are matched by what their headings mean; rows are read; the check 
     'left out by its status before anything else is read');
   assert.deepEqual(fileRows(st, stMap, { statusMap: { 'on hold': 'in', completed: '' } }).unread, [{ row: 4, text: 'No amount.' }], 'what the person says a word means');
   assert.deepEqual(['Paid', 'succeeded', 'Refunded', 'FAILED', 'Charged back', 'Partially refunded'].map((v) => statusOf(null, v)), [true, true, false, false, false, null]);
+  // The other tool's word for a good payment may be one base.win has never
+  // met ("Posted"): under a heading that says Payment Status outright the
+  // column is the status whatever its words — the unknown ones are asked
+  // about, and the refunded row stays out.
+  const posted = recs([...Array.from({ length: 9 }, (_, i) => [`Donor ${i} Example`, '$50.00', '2026-03-01', 'Posted']), ['Ben Example', '$50.00', '2026-03-01', 'Refunded']]);
+  const postedMap = guessGiftMapping(['Donor', 'Amount', 'Date', 'Payment Status'], posted, {});
+  assert.deepEqual(postedMap, ['name', 'amount', 'date', 'status'], 'matched whatever its words');
+  assert.deepEqual([fileRows(posted, postedMap, {}).rows.length, fileRows(posted, postedMap, {}).unpaid.length], [0, 10], 'a word it doesn’t know is out until said');
+  const said = fileRows(posted, postedMap, { statusMap: { posted: 'in' } });
+  assert.deepEqual([said.rows.length, said.unpaid], [9, [{ row: 11, status: 'Refunded' }]], 'the refunded row is left out');
+  assert.deepEqual(guessGiftMapping(['Donor', 'Amount', 'Date', 'Result'], recs([['Ana Example', '20', '2026-03-01', '3'], ['Ben Example', '30', '2026-03-02', '4']]), {}),
+    ['name', 'amount', 'date', ''], 'a Result of 3 is still not a payment status');
+  assert.deepEqual(guessGiftMapping(['Donor', 'Amount', 'Date', 'Membership status'], recs([['Ana Example', '20', '2026-03-01', 'Active'], ['Ben Example', '30', '2026-03-02', 'Lapsed']]), {}),
+    ['name', 'amount', 'date', ''], 'a heading that only ends in status still needs words it knows');
 
   // Calls stay small: by rows, and by size.
   const many = Array.from({ length: 450 }, (_, i) => ({ row: i, name: 'Ana Example', amount_cents: 100 }));
@@ -513,6 +527,9 @@ test('a gift left out is listed under the pile, and brought back to wait again w
   assert.equal(pile.left_out.gifts, 1);
   const out = pile.left_out.items[0];
   assert.deepEqual([out.donor.name, out.amount_cents, out.file_name], ['Left Out', 100, 'gifts.csv']);
+  // Donations is told too (its More leads here): a way in that needs nothing else to be waiting.
+  assert.deepEqual(ok(await staff.get('/api/brief')).giftsLeftOut, { gifts: 1, cents: 100 });
+  assert.equal(ok(await vol.get('/api/brief')).giftsLeftOut, undefined, 'a volunteer’s brief has none');
   await db.query(`update gift_imports set created_at = now() - interval '30 days'
     where id = (select import_id from gift_import_rows where id = $1)`, [out.id]);
   assert.equal((await vol.action('gift.importBringBack', { ids: [out.id] })).status, 403);
@@ -520,6 +537,7 @@ test('a gift left out is listed under the pile, and brought back to wait again w
   assert.equal((await staff.action('gift.importBringBack', { ids: [out.id] })).status, 409, 'once');
   const now = ok(await staff.get('/api/gifts/imports/waiting'));
   assert.equal(now.left_out.gifts, 0);
+  assert.deepEqual(ok(await staff.get('/api/brief')).giftsLeftOut, { gifts: 0, cents: 0 });
   assert.deepEqual(now.groups.map((g) => [g.donor.name, g.cents]), [['Left Out', 100]]);
   assert.deepEqual(ok(await staff.get('/api/brief')).giftsWaiting, { gifts: 1, cents: 100 });
   assert.deepEqual(states(await check([row({ name: 'Left Out', amount_cents: 100, source_id: 'GL-22' })])), ['already'], 'still the same gift');
@@ -557,6 +575,43 @@ test('a gift already typed in here: pointed out in the check, and left out when 
   assert.equal(again.results[0].typed, true);
   // A gift brought in from a file is never taken for one typed in.
   assert.equal((await check([row({ first: 'Gus', last: 'Typed', email: mail('gus'), amount_cents: 10000, date: `${yr}-06-01`, source_id: 'GL-173' })])).results[0].typed, undefined);
+});
+
+// A big file comes in a call at a time, and two rows alike can fall either
+// side of a call's end. The gift that answered for a row goes with the next
+// call (typed_used), so it never answers twice: the second row comes in.
+test('a typed-in gift answers for one row only, across calls too', async () => {
+  const { fileRows, callsOf, tallyOf, usedFor, keepUsed } = await import('../../web/src/components/GiftColumns.js');
+  const hal = await person('Hal', 'Twice', { email: mail('hal') });
+  ok(await treas.action('gift.log', { person_id: hal.id, amount_cents: 5000, date: `${yr}-03-01`, method: 'cheque' }));
+  const cells = ['Hal Twice', mail('hal'), '$50.00', `${yr}-03-01`, 'Cheque'];
+  const file = fileRows([{ row: 2, cells }, { row: 3, cells }], ['name', 'email', 'amount', 'date', 'method'], {});
+  const parts = callsOf(file.rows, { maxRows: 1 });
+  assert.equal(parts.length, 2, 'the two rows fall in two calls');
+  // The check, as the screen runs it.
+  const answers = [];
+  const used = [];
+  for (const part of parts) {
+    const res = ok(await treas.action('gift.import', { import_id: randomUUID(), file_name: 'twice.csv', rows: part, dry_run: true, typed_used: usedFor(used, part) }));
+    keepUsed(used, res, part);
+    answers.push({ res, part });
+  }
+  assert.deepEqual(answers.map((a) => !!a.res.results[0].typed), [true, false], 'one typed gift, one row');
+  const left = tallyOf(answers, { leave: true });
+  assert.deepEqual([left.fresh, left.typedLeft], [1, 1]);
+  // The import, with Leave those out.
+  const id = randomUUID();
+  const usedNow = [];
+  const came = [];
+  for (const part of parts) {
+    const res = ok(await treas.action('gift.import', { import_id: id, file_name: 'twice.csv', rows: part, leave_typed: true, typed_used: usedFor(usedNow, part) }));
+    keepUsed(usedNow, res, part);
+    came.push(res.results[0].state);
+  }
+  assert.deepEqual(came, ['typed', 'new']);
+  assert.deepEqual((await giftsOf(hal.id)).map((g) => g.attrs?.source === 'import'), [false, true], 'two gifts that day, as the file has');
+  // Only what a later row could still meet goes along: a gift of an earlier day is done with.
+  assert.deepEqual(usedFor([{ id: 'a', day: '2026-02-28' }, { id: 'b', day: '2026-03-01' }], [{ date: '2026-03-01' }]), ['b']);
 });
 
 // The other tool's export may list the newest gift first. The gifts of one

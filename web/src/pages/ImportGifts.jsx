@@ -30,7 +30,7 @@ import { newClientId } from '../offline.js';
 import { readXlsx, toCsv } from '../components/xlsx.js';
 import {
   GIFT_FIELDS, SKIP, SCI_RE, guessGiftMapping, giftRow, fileRows, callsOf, tallyOf, overLimit,
-  valuesIn, methodOf, slateOf, statusOf, columnValues,
+  valuesIn, methodOf, slateOf, statusOf, columnValues, usedFor, keepUsed,
 } from '../components/GiftColumns.js';
 import { ImportsList, giftWord, invalidateGifts } from '../components/GiftImportBits.jsx';
 import {
@@ -301,12 +301,14 @@ function Flow({ me }) {
     const parts = callsOf(file.rows);
     const sum = file.rows.length;
     const answers = [];
+    const used = []; // the gifts on the books that answered for a row so far: each answers once
     const id = newClientId(); // no import is made by a check
     setCheck({ phase: 'running', done: 0, total: sum });
     try {
       let done = 0;
       for (const part of parts) {
-        const res = await action('gift.import', { import_id: id, file_name: source.name, rows: part, dry_run: true });
+        const res = await action('gift.import', { import_id: id, file_name: source.name, rows: part, dry_run: true, typed_used: usedFor(used, part) });
+        keepUsed(used, res, part);
         answers.push({ res, part });
         done += part.length;
         setCheck({ phase: 'running', done, total: sum });
@@ -321,18 +323,19 @@ function Flow({ me }) {
   const runImport = async (from = 0) => {
     if (from === 0) {
       run.current = {
-        id: newClientId(), parts: callsOf(file.rows), leave: leaveTyped,
+        id: newClientId(), parts: callsOf(file.rows), leave: leaveTyped, used: [],
         acc: { fresh: 0, waiting: 0, already: 0, flagged: 0, typedIn: 0, typedLeft: 0, invalid: [], totals: null },
       };
     }
-    const { id, parts, acc, leave } = run.current;
+    const { id, parts, acc, leave, used } = run.current;
     const sum = parts.reduce((n, p) => n + p.length, 0);
     const sentBefore = (i) => parts.slice(0, i).reduce((n, p) => n + p.length, 0);
     setImp({ phase: 'running', sent: sentBefore(from), total: sum, ...acc });
     let i = from;
     try {
       for (; i < parts.length; i += 1) {
-        const res = await action('gift.import', { import_id: id, file_name: source.name, rows: parts[i], leave_typed: leave });
+        const res = await action('gift.import', { import_id: id, file_name: source.name, rows: parts[i], leave_typed: leave, typed_used: usedFor(used, parts[i]) });
+        keepUsed(used, res, parts[i]);
         (res.results || []).forEach((r, k) => {
           if (r.state === 'new') { acc.fresh += 1; if (r.flagged) acc.flagged += 1; if (r.typed) acc.typedIn += 1; }
           else if (r.state === 'typed') acc.typedLeft += 1;

@@ -7,13 +7,14 @@
 //   and postal code"),
 //   finds someone else by name,
 //   adds them as a new person (from what the file says), or
-//   leaves the gifts out (listed at the foot, "Left out · 3", to bring back).
+//   leaves the gifts out (listed at the foot, "Left out · 3", to bring back —
+//   Donations → More leads straight to that list, opened).
 // Each asks first, in place, and says which record — two it could be often
 // share a name ("Put 2 gifts on Dee Twin (2 Main St · V3S 1A1)? Yes · No").
 // The gifts then go through the one gift path: the year's limit is checked,
 // and one that takes the donor over is said here and listed under Needs you.
-import { useState } from 'react';
-import { Link, Navigate, useOutletContext } from 'react-router-dom';
+import { useRef, useState } from 'react';
+import { Link, Navigate, useLocation, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { action, apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
@@ -191,8 +192,8 @@ function Waiting({ group, index, onSettled, online }) {
 
 // The pile's foot: gifts left out — by mistake, perhaps — each with Bring
 // back, which only puts it back in the pile above (so nothing asks first).
-function LeftOut({ out, online, onBack }) {
-  const [open, setOpen] = useState(false);
+function LeftOut({ out, online, onBack, startOpen }) {
+  const [open, setOpen] = useState(startOpen);
   const [busy, setBusy] = useState(null); // the gift being brought back
   const [error, setError] = useState(null);
   if (!out?.gifts) return null;
@@ -242,19 +243,24 @@ export default function GiftsWaiting() {
   const canMoney = MONEY_ROLES.includes(me?.role);
   const online = useOnline();
   const [said, setSaid] = useState(null);
+  const saidRef = useRef(null);
+  const wantsLeftOut = useLocation().hash === '#left-out'; // from Donations → More
   const pile = useQuery({ queryKey: ['giftimports', 'waiting'], queryFn: () => apiGet('/gifts/imports/waiting'), enabled: canMoney });
   if (!canMoney) return <Navigate to="/money" replace />;
 
   const groups = pile.data?.groups ?? [];
   const gifts = groups.reduce((n, g) => n + g.gifts.length, 0);
   const onSettled = (text) => { setSaid(text); return invalidateGifts(queryClient); };
+  // A gift brought back leaves the foot's list for the pile above: the
+  // keyboard's place goes with it, to the line that says so.
+  const onBack = async (text) => { await onSettled(text); saidRef.current?.focus(); };
 
   return (
     <div className="ops-page">
       <Link to="/money" className="ops-back">← Donations</Link>
       <div className="ops-head"><h1>Gifts that need a donor</h1></div>
       {!online && <NeedsSignalLine>Picking a donor needs signal</NeedsSignalLine>}
-      {said && <p className="ops-done" role="status">{said}</p>}
+      {said && <p className="ops-done gw-said" role="status" tabIndex={-1} ref={saidRef}>{said}</p>}
 
       {noSignal(pile) ? <NoSignal />
         : pile.isPending ? <p className="ops-meta" role="status">Loading…</p>
@@ -275,7 +281,7 @@ export default function GiftsWaiting() {
                 {pile.data?.more && <p className="ops-meta">These are the first 300 gifts. The rest follow once these have a donor.</p>}
               </>
             )}
-      {pile.data && <LeftOut out={pile.data.left_out} online={online} onBack={onSettled} />}
+      {pile.data && <LeftOut out={pile.data.left_out} online={online} onBack={onBack} startOpen={wantsLeftOut} />}
     </div>
   );
 }

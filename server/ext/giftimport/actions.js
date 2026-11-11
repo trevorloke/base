@@ -56,10 +56,11 @@ const keysHeld = async (tx, wsId, keys) => {
 
 // Gifts on the books another way (typed at the desk, given online) with a
 // row's donor, amount and day: most likely the very gift the row is. Each
-// answers for one row (two $50s that day, one typed in: one). One join for
-// the whole call — gifts have no index by donor. rows: [{ i, person_id,
-// amount_cents, date }] → Map: the row's index → that gift's id.
-const typedTwins = async (tx, wsId, rows) => {
+// answers for one row (two $50s that day, one typed in: one) — in an
+// earlier call of the same file too: used are the gifts that answered there.
+// One join for the whole call — gifts have no index by donor. rows: [{ i,
+// person_id, amount_cents, date }] → Map: the row's index → that gift's id.
+const typedTwins = async (tx, wsId, rows, used = []) => {
   const twins = new Map();
   if (!rows.length) return twins;
   const found = (await tx.query(
@@ -71,7 +72,9 @@ const typedTwins = async (tx, wsId, rows) => {
     [wsId, rows.map((r) => r.person_id), rows.map((r) => r.amount_cents), rows.map((r) => r.date)],
   )).rows;
   const pool = new Map();
+  const spent = new Set(used);
   for (const g of found) {
+    if (spent.has(g.id)) continue;
     const k = `${g.person_id}|${Number(g.amount_cents)}|${g.day}`;
     if (!pool.has(k)) pool.set(k, []);
     pool.get(k).push(g.id);
@@ -139,10 +142,13 @@ export const actions = {
   // rows: up to CALL_ROWS of the file's rows, in order; a big file comes in
   // several calls under one import_id. dry_run: the same decisions, nothing
   // saved. leave_typed: leave out the rows that look like a gift already on
-  // the books another way (typedTwins). → { results: one per row, in order —
+  // the books another way (typedTwins). typed_used: the gifts that answered
+  // for a row in the file's earlier calls (each answer's typed_gift), so one
+  // never answers twice. → { results: one per row, in order —
   // { state: 'new', person_id, person_name, by, name_differs, year, slate,
-  // amount_cents, flagged?, typed? } · { state: 'typed', person_name, … }
-  // (left out: typed in here already) · { state: 'waiting', candidates } ·
+  // amount_cents, flagged?, typed?, typed_gift? } · { state: 'typed',
+  // person_name, typed_gift, … } (left out: typed in here already) ·
+  // { state: 'waiting', candidates } ·
   // { state: 'already' } (here from an earlier import) · { state: 'resent' }
   // (here from this one: the call came twice) · { state: 'invalid', error }
   // — and counts (typed: the rows that look typed in, left out or not). The check also
@@ -157,6 +163,7 @@ export const actions = {
       rows: z.array(z.record(z.string(), z.unknown())).min(1).max(CALL_ROWS),
       dry_run: z.boolean().default(false),
       leave_typed: z.boolean().default(false),
+      typed_used: z.array(uuid()).max(1000).default([]),
     }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspace;
@@ -187,14 +194,14 @@ export const actions = {
       // on its day, not whichever came last in the file.
       const inOrder = [...todo].sort((a, b) => a.date.localeCompare(b.date) || a.i - b.i);
       const twins = await typedTwins(tx, ws.id, inOrder.filter((r) => found.get(r.i).person)
-        .map((r) => ({ i: r.i, person_id: found.get(r.i).person.id, amount_cents: r.amount_cents, date: r.date })));
+        .map((r) => ({ i: r.i, person_id: found.get(r.i).person.id, amount_cents: r.amount_cents, date: r.date })), input.typed_used);
       const leave = (r) => input.leave_typed && twins.has(r.i);
       // A file that adds nothing leaves no import behind.
       if (!dry && todo.some((r) => !leave(r))) await startImport(tx, ctx, input, emit);
       for (const r of inOrder) {
         const m = found.get(r.i);
         if (leave(r)) {
-          results[r.i] = { state: 'typed', person_id: m.person.id, person_name: m.person.name, amount_cents: r.amount_cents, date: r.date };
+          results[r.i] = { state: 'typed', person_id: m.person.id, person_name: m.person.name, amount_cents: r.amount_cents, date: r.date, typed_gift: twins.get(r.i) };
           continue;
         }
         if (!m.person) {
@@ -212,7 +219,7 @@ export const actions = {
         const out = {
           state: 'new', person_id: m.person.id, person_name: m.person.name, by: m.by, name_differs: m.name_differs,
           year: Number(r.date.slice(0, 4)), slate: r.slate || DEFAULT_SLATE, amount_cents: r.amount_cents,
-          ...(twins.has(r.i) ? { typed: true } : {}),
+          ...(twins.has(r.i) ? { typed: true, typed_gift: twins.get(r.i) } : {}),
         };
         results[r.i] = out;
         if (dry) continue;

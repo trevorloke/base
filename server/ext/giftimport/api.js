@@ -124,13 +124,16 @@ export const deskOnlyReads = [/^\/api\/gifts\/imports(\/.*)?$/];
 // Donations → Needs you (GET /api/brief; money roles not kept out of
 // Donations): how many gifts from a file wait for a donor, and how much — on
 // the read the screen already makes, so the pile is never a block that goes
-// missing by itself.
+// missing by itself. And how many were left out (giftsLeftOut): Donations →
+// More leads to them, since the pile's row is gone once nothing waits.
 export const briefWaiting = async (db, ctx, brief) => {
   if (!MONEY_ROLES.includes(ctx.role) || decide(ctx.perms, 'money') === false) return;
-  const w = (await db.query(
-    `select count(*)::int as n, coalesce(sum(amount_cents), 0)::bigint as cents from gift_import_rows
-      where workspace_id = $1 and status = 'waiting'`,
+  const rows = (await db.query(
+    `select status, count(*)::int as n, coalesce(sum(amount_cents), 0)::bigint as cents from gift_import_rows
+      where workspace_id = $1 and status in ('waiting', 'left_out') group by status`,
     [ctx.workspaceId],
-  )).rows[0];
-  brief.giftsWaiting = { gifts: w.n, cents: Number(w.cents) };
+  )).rows;
+  const of = (status) => { const r = rows.find((x) => x.status === status); return { gifts: r?.n ?? 0, cents: Number(r?.cents ?? 0) }; };
+  brief.giftsWaiting = of('waiting');
+  brief.giftsLeftOut = of('left_out');
 };

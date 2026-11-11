@@ -515,6 +515,7 @@ export default function Money() {
   const weekCents = brief.data?.money?.weekCents ?? 0;
   // Gifts from a file that wait for a donor (ext/giftimport), on the brief.
   const pile = brief.data?.giftsWaiting;
+  const leftOut = Number(brief.data?.giftsLeftOut?.gifts) || 0;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['records', 'gift'] });
@@ -754,6 +755,12 @@ export default function Money() {
             <div className="ops-actions mny-more">
               <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/receipts">Receipts</Link>
               {canAgent && <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/import">Import donations</Link>}
+              {/* The pile's row under Needs you is gone once nothing waits: the way back to a gift left out by mistake. */}
+              {leftOut > 0 && (
+                <Link className="btn btn-quiet ops-tap rc-moneylink" to="/money/import/waiting#left-out">
+                  {leftOut.toLocaleString('en-CA')} imported {leftOut === 1 ? 'gift' : 'gifts'} left out
+                </Link>
+              )}
             </div>
             {canAgent && (
               <>
