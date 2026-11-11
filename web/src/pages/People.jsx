@@ -859,7 +859,7 @@ function PeopleList() {
       {/* A load that got no answer says so; one the server answered with an error is Unavailable. */}
       {persons.isError && !offline && (
         <p className="error" role="alert">
-          {noReply(persons.error) ? <>No answer — check your signal · <button type="button" className="au-retry" onClick={() => persons.refetch()}>Try again</button></>
+          {noReply(persons.error) ? <>No answer — check your signal · <button type="button" className="btn au-retry" onClick={() => persons.refetch()}>Try again</button></>
             : <Unavailable onRetry={() => persons.refetch()} />}
         </p>
       )}
@@ -1344,7 +1344,7 @@ function CallsScreen() {
         // The next part didn't come: say so, and offer it again.
         <p className="error" role="alert">
           {noReply(last.error)
-            ? <>{typeof navigator !== 'undefined' && navigator.onLine === false ? 'No signal' : 'No answer'} — the rest of your list loads when you’re back online · <button type="button" className="au-retry" onClick={() => last.refetch()}>Try again</button></>
+            ? <>{typeof navigator !== 'undefined' && navigator.onLine === false ? 'No signal' : 'No answer'} — the rest of your list loads when you’re back online · <button type="button" className="btn au-retry" onClick={() => last.refetch()}>Try again</button></>
             : <Unavailable onRetry={() => last.refetch()} />}
         </p>
       ) : !current && (pending || more) ? (

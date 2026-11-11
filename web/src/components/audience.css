@@ -4,21 +4,18 @@
    keeps. Built on the ops-* rows (pages/shifts.css), .btn and .input; every
    tap is 48px on a phone. */
 
-/* "Unavailable — Try again" */
+/* "Unavailable — Try again": Try again is a quiet bordered button, in the line */
 .au-off { color: var(--text-2); }
-.au-retry {
-  font: inherit;
-  color: var(--text-1);
-  background: none;
-  border: 0;
-  padding: 0 2px;
+.btn.au-retry {
+  display: inline-flex;
+  align-items: center;
   min-height: 32px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
+  padding: 0 10px;
+  margin: 2px 0;
+  font-size: 13px;
+  vertical-align: middle;
 }
-.au-retry:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
-@media (pointer: coarse), (max-width: 720px) { .au-retry { min-height: 48px; } }
+@media (pointer: coarse), (max-width: 720px) { .btn.au-retry { min-height: 48px; padding: 0 14px; } }
 
 /* A list's row: its name (opens it), what it is and how many, then its four ways out */
 .au-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); padding: var(--s-3) var(--s-4); }

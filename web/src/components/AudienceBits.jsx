@@ -32,7 +32,7 @@ export const LOADING = 'Loading…';
 export function Unavailable({ onRetry, children = 'Unavailable' }) {
   return (
     <span className="au-off">
-      {children} — <button type="button" className="au-retry" onClick={() => onRetry?.()}>Try again</button>
+      {children} — <button type="button" className="btn au-retry" onClick={() => onRetry?.()}>Try again</button>
     </span>
   );
 }
