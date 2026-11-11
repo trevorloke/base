@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { freshDb, Client } from './helpers.js';
 import { personsWhere } from '../lib/audience.js';
+import { todayOf } from '../ext/audience/index.js';
 
 const PEOPLE = Number(process.env.AUDIENCE_PEOPLE) || 300_000;
 // Generous for a slow test machine and the in-memory database (an embedded
@@ -20,7 +21,8 @@ const COUNT_MS = Number(process.env.AUDIENCE_COUNT_MS) || 15_000;
 let db, mgr, ws, ctx;
 const ids = {};
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)?.slice(0, 300)); return r.json; };
-const year = new Date().getUTCFullYear();
+// This year in the campaign's own calendar, as the rules count it.
+const year = Number(todayOf({}).slice(0, 4));
 
 before(async () => {
   db = await freshDb();
