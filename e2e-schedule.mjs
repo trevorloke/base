@@ -219,7 +219,7 @@ try {
     title: el.querySelector('.sch-card__title')?.innerText.trim(), place: el.querySelector('.sch-card__place')?.innerText.trim() || null,
     time: el.querySelector('.sch-card__time')?.innerText.trim(), count: el.querySelector('.sb-cap')?.innerText.trim() ?? null,
     part: (() => { let n = el.closest('.sch-list')?.previousElementSibling; return n?.innerText.trim() || null; })(),
-    turfs: [...el.querySelectorAll('.st-chip')].map((c) => c.innerText.trim()), people: [...el.querySelectorAll('.sb-chip__name')].map((c) => c.innerText.trim()),
+    turfs: [...el.querySelectorAll('.st-chip')].map((c) => c.innerText.trim()), people: [...el.querySelectorAll('.sb-chip__name')].map((c) => c.innerText.replace(/\s+/g, ' ').trim()),
   })));
   const toast = async () => (await page.locator('.sb-toast').innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
   const plus = (day) => page.locator(`.sch-day[data-day="${day}"] .sch-plus`);
@@ -614,7 +614,8 @@ try {
   await D.watchKeys();
   const ashaBtn = page.locator('.sb-person:has-text("Asha Example")');
   await ashaBtn.click();
-  check('a name tapped is in hand: "Asha Example — tap each shift"', (await D.text('.sb-hand')).startsWith('Asha Example — tap each shift') && await pressed(ashaBtn), await D.text('.sb-hand'));
+  check('a name tapped is in hand: "Asha Example", and under it "Tap each shift to put Asha on it"', (await D.text('.sb-hand b')) === 'Asha Example'
+    && (await D.text('.sb-hand__said')) === 'Tap each shift to put Asha on it' && await pressed(ashaBtn), await D.text('.sb-hand'));
   await D.shot('12b-name-in-hand-1440');
   await page.locator(`.sch-card[data-shift="${monCards[0].id}"] .sch-card__head`).click();
   await until(async () => (await cards(mon))[0].people.length === 1);
@@ -629,9 +630,10 @@ try {
   const ashaOn = (await board()).assignments.filter((a) => a.person_id === P.asha.id).map((a) => a.shift_id).sort();
   check('the next card takes her too: two bookings in three taps', ashaOn.join() === [monCards[0].id, tueCards[0].id].sort().join() && (await cards(tue))[0].people.join() === 'Asha E.', ashaOn.join());
   await page.locator(`.sch-card[data-shift="${tueCards[0].id}"] .sch-card__head`).click();
-  await until(async () => /already on/.test(await toast()));
-  check('a card she is already on says so — nothing is doubled, the name stays in hand', /^Asha is already on Burma Shave/.test(await toast()) && await pressed(ashaBtn)
-    && (await board()).assignments.filter((a) => a.person_id === P.asha.id).length === 2, await toast());
+  await until(async () => /already on/.test(await D.text('.sb-hand__said')));
+  check('a card she is already on says so — under her name in hand, not in a toast over a card; nothing is doubled', /^Asha is already on Burma Shave/.test(await D.text('.sb-hand__said'))
+    && (await D.text('.sb-hand b')) === 'Asha Example' && (await page.locator('.sb-toast').count()) === 0 && await pressed(ashaBtn)
+    && (await board()).assignments.filter((a) => a.person_id === P.asha.id).length === 2, await D.text('.sb-hand'));
   await page.locator('.sb-hand button:has-text("Done")').click();
   check('"Done" puts the name down', (await page.locator('.sb-hand').count()) === 0 && !(await pressed(ashaBtn)));
   // Or drag: a name from the strip onto a card; her chip dragged back onto the strip comes off.
@@ -916,6 +918,30 @@ try {
   check('1280×800: every card’s kind reads on one line; one main button, no sideways scroll', (await wrappedKinds(midp)).length === 0 && mm.yellow.join('|') === 'New shift' && mm.overflow <= 0,
     `wrapped: ${(await wrappedKinds(midp)).join(', ')} ${JSON.stringify(mm)}`);
   await midp.screenshot({ path: `${SHOTS}/21-week-1280.png` });
+  // Long names on a card at 1280: the first name gives way, the initial stays — two Kristophers still read apart.
+  const longWeek = addDays(MON, 7 * 10);
+  const longShift = (await D.api('/actions/shift.createMany', { kind: 'burma_shave', location: 'King George Blvd & 88 Ave', days: [longWeek], start: '06:30', end: '08:30' })).json.shifts[0];
+  for (const name of ['Bo Example', 'Maximiliano Example', 'Kristopher Example', 'Kristopher Bexample']) {
+    const who = (await D.api('/actions/person.create', { name, phone: '604-555-0119' })).json.person;
+    await D.api('/actions/shift.assign', { shift_id: longShift.id, person_id: who.id });
+  }
+  await midp.goto(`${ADMIN}/shifts?week=${longWeek}`, { waitUntil: 'domcontentloaded' });
+  await midp.waitForSelector(`.sch-card[data-shift="${longShift.id}"] .sb-chip`, { timeout: 10000 });
+  await sleep(300);
+  const longChips = await midp.$$eval(`.sch-card[data-shift="${longShift.id}"] .sb-chip`, (els) => els.map((li) => {
+    const b = li.querySelector('.sb-chip__name'); const f = b.querySelector('.sb-chip__first'); const i = b.querySelector('.sb-chip__init');
+    const br = b.getBoundingClientRect(); const ir = i?.getBoundingClientRect(); const x = li.querySelector('.sb-chip__x').getBoundingClientRect();
+    return {
+      said: b.innerText.replace(/\s+/g, ' ').trim(), initial: i ? i.innerText.trim() : null, whole: b.scrollWidth <= b.clientWidth,
+      initialShown: !!ir && ir.width > 0 && ir.right <= br.right + 0.5 && ir.right <= x.left + 0.5, firstCut: f.scrollWidth > f.clientWidth,
+      x: [Math.round(x.width), Math.round(x.height)],
+    };
+  }));
+  const longOnes = longChips.filter((c) => c.said !== 'Bo E.');
+  check('1280: a long name on a card keeps its initial beside a 44px × ("Kristo… E." and "Kristo… B." still read apart); a short one is never cut', longChips.length === 4
+    && longOnes.length === 3 && longOnes.every((c) => c.whole && c.initialShown && /^[EB]\.$/.test(c.initial) && c.x[0] >= 44 && c.x[1] >= 44) && longOnes.some((c) => c.firstCut)
+    && longChips.some((c) => c.said === 'Bo E.' && !c.firstCut && c.initialShown), JSON.stringify(longChips));
+  await midp.locator(`.sch-card[data-shift="${longShift.id}"]`).screenshot({ path: `${SHOTS}/21b-long-names-1280.png` });
   await mid.close();
 
   // ── 18. A phone (390×844): one day, the sheets from the bottom ──
@@ -1013,10 +1039,17 @@ try {
   await M.shot('37-people-sheet-390');
   await mp.locator('.sch-sheet .sb-person:has-text("Ben Example")').tap();
   await until(async () => (await mp.locator('.sch-sheet').count()) === 0);
-  check('phone: tap a name — the sheet goes, the name is in hand over the week', (await M.text('.sb-hand')).startsWith('Ben Example — tap each shift'), await M.text('.sb-hand'));
+  check('phone: tap a name — the sheet goes, the name is in hand over the week: "Tap each shift to put Ben on it"', (await M.text('.sb-hand b')) === 'Ben Example'
+    && (await M.text('.sb-hand__said')) === 'Tap each shift to put Ben on it', await M.text('.sb-hand'));
   await mp.locator(`.sb-day[data-day="${W4}"]`).tap();
+  const handHigh = () => mp.evaluate(() => Math.round(document.querySelector('.sb-hand').getBoundingClientRect().height));
+  const handBefore = await handHigh();
   await mp.locator('.sch-card__head').nth(1).tap();
   await until(async () => (await mp.locator('.sch-card .sb-chip').count()) === 1);
+  await until(async () => /^Ben added to /.test(await M.text('.sb-hand__said')));
+  const handAfter = await handHigh();
+  check('phone, a name in hand: what the tap did is said under the name — no toast over the next card, and the bar keeps its height', /^Ben added to /.test(await M.text('.sb-hand__said'))
+    && (await mp.locator('.sb-toast').count()) === 0 && handAfter === handBefore, `${await M.text('.sb-hand')} | toasts: ${await mp.locator('.sb-toast').count()} | bar ${handBefore} → ${handAfter}`);
   await mp.locator(`.sb-day[data-day="${addDays(W4, 2)}"]`).tap();
   await until(async () => (await mp.locator('.sch-day').getAttribute('data-day')) === addDays(W4, 2));
   await mp.locator('.sch-card__head').first().tap();
@@ -1234,7 +1267,7 @@ try {
   await page.waitForSelector(`.sch-card[data-shift="${sooner.id}"]`, { timeout: 10000 });
   await page.locator('.sb-person:has-text("Ben Example")').click();
   await page.locator(`.sch-card[data-shift="${sooner.id}"] .sch-card__head`).click();
-  await until(async () => /^Ben added to Signs/.test(await toast()));
+  await until(async () => /^Ben added to Signs/.test(await D.text('.sb-hand__said')));
   await page.locator('.sb-hand button:has-text("Done")').click();
   await page.locator('.sb-views button:has-text("List")').click();
   await page.waitForSelector(`.sch-vrow[data-shift="${sooner.id}"]`, { timeout: 15000 });

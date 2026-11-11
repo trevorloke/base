@@ -506,8 +506,10 @@ one tap away under **More**.
   chip. Tap a card: another day and **Save** moves it (or drag the card to
   another day — *Undo*); with someone on it the week says who has the old
   time, with **Tell them**. Tap a name in the strip of people: it stays in
-  hand (*… — tap each shift*) while you tap card after card; **Done** puts
-  it down. Someone who filled in the website's volunteer form is there,
+  hand (*Tap each shift to put … on it*, then under the name what each tap
+  did — no toast over the next card) while you tap card after card;
+  **Done** puts it down. A long name on a card keeps its initial
+  (*Kristo… E.*). Someone who filled in the website's volunteer form is there,
   marked *Asked*. *Every week for 4 weeks* makes a repeating slot:
   its card offers *This one · This and the following*. **More**: *Tell
   everyone on this week's shifts* shows the count first, then *Details* a

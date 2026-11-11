@@ -103,6 +103,16 @@
 .sb-shift__meta.sch-card__meta { font-size: 12px; }
 .sch-card__time { white-space: nowrap; }
 .sb-cap[data-short] { color: var(--warn); }
+/* A person's chip: where "Kristopher E." doesn't fit beside its 44px ×, the
+   first name gives way and the initial stays ("Kristo… E."); a name that
+   fits is never cut. */
+.sb-chip__name { display: inline-flex; align-items: center; }
+.sb-chip__first { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sb-chip__init { flex: none; margin-left: 0.3em; }
+
+/* With a name in hand: one line under it — what to do, then what the last
+   tap did (a toast would sit over the next card). */
+.sb-hand > .sb-hand__said { flex: 1 1 100%; font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Sheets: a panel at the right on a desk, up from the bottom on a phone ── */
 /* (touch-action: a finger on the scrim doesn't scroll the week behind it.) */

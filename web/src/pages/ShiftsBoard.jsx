@@ -55,11 +55,18 @@ import './shifts-board.css';
 import './schedule.css';
 
 const firstName = (name) => String(name || '').split(' ')[0];
-// "Sam O." — chips are small; the full name is in the label.
-const shortName = (name) => {
+// "Sam O." — chips are small; the full name is in the label. Where even that
+// is too long for the card, the first name gives way and the initial stays
+// ("Kristo… E."), so two people of the same first name still read apart.
+function ChipName({ name }) {
   const parts = String(name || '').trim().split(/\s+/);
-  return parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : parts[0];
-};
+  return (
+    <>
+      <span className="sb-chip__first">{parts[0]}</span>
+      {parts.length > 1 && <span className="sb-chip__init">{parts[parts.length - 1][0]}.</span>}
+    </>
+  );
+}
 
 // For "already on a shift then": a shift with no end counts as an hour.
 const span = (s) => {
@@ -201,9 +208,21 @@ export default function ShiftsBoard({ me, onSheet }) {
   const [note, setNote] = useState(null); // { text, act?: { label, run } }
   const [error, setError] = useState(null);
   const [more, setMore] = useState(false);
+  // With a name from the strip in hand, what each tap did is said in the
+  // hand bar ({ text, n }) — a toast would sit over the next card to tap.
+  const [handNote, setHandNote] = useState(null);
+  const inHand = useRef(false);
+  inHand.current = Boolean(picked && !picked.from);
+  useEffect(() => { setHandNote(null); }, [picked?.person.id, picked?.from?.assignmentId]);
   const noteTimer = useRef(null);
   const say = (n) => {
     clearTimeout(noteTimer.current);
+    if (n && !n.act && inHand.current) {
+      setNote(null);
+      setHandNote((h) => ({ text: n.text, n: (h?.n ?? 0) + 1 }));
+      return;
+    }
+    setHandNote(null);
     setNote(n);
     if (n) noteTimer.current = setTimeout(() => setNote(null), n.act ? 9000 : 6000);
   };
@@ -597,7 +616,7 @@ export default function ShiftsBoard({ me, onSheet }) {
                 <li key={a.id} className="sb-chip" data-temp={temp ? '' : undefined}>
                   <button type="button" className="sb-chip__name" {...dragProps(item)} disabled={!online || temp}
                     aria-label={`${a.name} — move`} title={a.name}>
-                    {shortName(a.name)}
+                    <ChipName name={a.name} />
                   </button>
                   <button type="button" className="sb-chip__x" aria-label={`Take ${a.name} off ${s.title}`}
                     disabled={!online || busy || temp} onClick={() => remove(item)}>×</button>
@@ -689,12 +708,20 @@ export default function ShiftsBoard({ me, onSheet }) {
         <div className="sb-board">
           {picked && (
             <div className="sb-hand" role="status">
-              <span><b>{picked.person.name}</b> — {picked.from ? 'tap the shift to move to' : 'tap each shift'}</span>
+              <span><b>{picked.person.name}</b>{picked.from ? ' — tap the shift to move to' : ''}</span>
               {picked.from && (
                 <button type="button" className="btn btn-quiet sb-hand__btn" disabled={busy}
                   onClick={() => remove(picked)}>Take off</button>
               )}
               <button type="button" className="btn btn-quiet sb-hand__btn" onClick={() => setPicked(null)}>{picked.from ? 'Cancel' : 'Done'}</button>
+              {/* A name from the strip: one line under it, first what to do,
+                  then what each tap did. It is there from the start, so the
+                  bar never grows and the cards never move under the finger. */}
+              {!picked.from && (
+                <span key={handNote?.n ?? 0} className="sb-hand__said">
+                  {handNote?.text ?? `Tap each shift to put ${firstName(picked.person.name)} on it`}
+                </span>
+              )}
             </div>
           )}
 
