@@ -144,16 +144,20 @@ export const fromInput = (value, tz) => {
   const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(String(value || ''));
   return m ? zonedISO(m[1], Number(m[2]), tz, Number(m[3])) : null;
 };
-// A moment in words (Intl's, en-CA: "Monday, November 16 at 6:30 a.m.") on
-// the clock of `tz`. opts are Intl.DateTimeFormat's, without timeZone or
-// timeZoneName. Under the B.C. rule the moment is first put on the
-// campaign's wall clock and written as that, so old rules can't shift it.
-export const fmtIn = (when, tz, opts, locale = 'en-CA') => {
+// What Intl is handed to write a moment on the clock of `tz`: [moment,
+// zone]. Under the B.C. rule the moment is first put on the campaign's wall
+// clock and written as UTC, so old rules can't shift it.
+export const onClock = (when, tz) => {
   const d = when instanceof Date ? when : new Date(when);
   const zone = safeZone(tz);
-  return bcByRule(zone, d.getTime())
-    ? new Intl.DateTimeFormat(locale, { ...opts, timeZone: 'UTC' }).format(new Date(d.getTime() + BC_OFFSET_MS))
-    : new Intl.DateTimeFormat(locale, { ...opts, timeZone: zone }).format(d);
+  return bcByRule(zone, d.getTime()) ? [new Date(d.getTime() + BC_OFFSET_MS), 'UTC'] : [d, zone];
+};
+// A moment in words (Intl's, en-CA: "Monday, November 16 at 6:30 a.m.") on
+// the clock of `tz`. opts are Intl.DateTimeFormat's, without timeZone or
+// timeZoneName.
+export const fmtIn = (when, tz, opts, locale = 'en-CA') => {
+  const [d, zone] = onClock(when, tz);
+  return new Intl.DateTimeFormat(locale, { ...opts, timeZone: zone }).format(d);
 };
 
 // ── The week screen's day lists ──

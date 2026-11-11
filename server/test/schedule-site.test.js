@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { addDays, dayOf, instantOf } from '@starbase/shared/dayparts';
 
 const { hit, send, ok, campaign } = await import('./site-helpers.js');
+const { when, dateOnly } = await import('../../shared/site/components/util.js');
 const { loadData } = await import('../ext/site/loaders.js');
 const { siteWorkspace } = await import('../ext/site/store.js');
 
@@ -79,6 +80,36 @@ test('a place nothing could name: the card says "See the map" — its coordinate
   assert.match(volunteer, /Mainstreet — Pinned place/);
   assert.match(volunteer, /<a href="https:\/\/www\.openstreetmap\.org\/\?mlat=49\.02000&amp;mlon=-123\.25000#map=16\/49\.02000\/-123\.25000"[^>]*>(<svg[\s\S]*?<\/svg>)?See the map/, 'the link says “See the map”');
   assert.doesNotMatch(volunteer, /Pin at|49\.0200, /, 'never the coordinates as its name');
+});
+
+// A runtime whose time-zone rules predate B.C.'s change still falls back on
+// Nov 1, 2026 — exactly what Los Angeles does. So "old rules" here is
+// Vancouver read as LA (as in schedule-clock.test.js); production's image
+// (node:22-alpine, unpinned) may well be one.
+const RealFormat = Intl.DateTimeFormat;
+const withOldRules = (fn) => {
+  Intl.DateTimeFormat = function OldRules(locale, opts = {}) {
+    return new RealFormat(locale, opts.timeZone === TZ ? { ...opts, timeZone: 'America/Los_Angeles' } : opts);
+  };
+  try { return fn(); } finally { Intl.DateTimeFormat = RealFormat; }
+};
+
+test('the website says a shift’s hours on the campaign’s clock, even where the server’s time-zone rules are old', () => {
+  // 6:30–8:30 am in Surrey on Monday Nov 16, 2026 (UTC-7: B.C. no longer falls back).
+  const stale = withOldRules(() => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hour: 'numeric', hourCycle: 'h23' }).format(new Date('2026-11-16T13:30:00Z')));
+  assert.equal(stale, '05', 'the stand-in really is an hour off');
+  const w = withOldRules(() => when('2026-11-16T13:30:00Z', '2026-11-16T15:30:00Z', TZ));
+  assert.deepEqual([w.date, w.short, w.day, w.mon], ['Monday, November 16', 'Mon, Nov 16', '16', 'Nov']);
+  assert.match(w.time, /^6:30–8:30\s?a\.m\.$/, 'the hours the app and the emails say');
+  // Half past midnight on the 17th is the 17th, not 11:30 pm the day before.
+  const late = withOldRules(() => when('2026-11-17T07:30:00Z', null, TZ));
+  assert.deepEqual([late.date, late.day], ['Tuesday, November 17', '17']);
+  assert.match(late.time, /^12:30\s?a\.m\.$/);
+  assert.equal(withOldRules(() => dateOnly('2026-11-17T07:30:00Z', TZ)), 'November 17, 2026', 'a post’s date too');
+  // Before the change every copy of the rules agrees: summer time as it was.
+  assert.match(withOldRules(() => when('2025-07-02T13:30:00Z', '2025-07-02T15:30:00Z', TZ)).time, /^6:30–8:30\s?a\.m\.$/);
+  // Another zone is the runtime's own.
+  assert.match(when('2026-11-16T13:30:00Z', '2026-11-16T15:30:00Z', 'America/Toronto').time, /^8:30–10:30\s?a\.m\.$/);
 });
 
 test('signing up works from either list, and a kind changed later moves the shift', async () => {

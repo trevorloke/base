@@ -286,7 +286,9 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
   `/media/`; the server gives it the client's path under `BASE_PATH`, so an
   absolute `og:image` of an upload is right past `lib/mount.js` too.
 - `timeZone` *(added)* — for dates; default `site.org.time_zone`, else
-  `America/Vancouver`.
+  `America/Vancouver` — written on the clock the app keeps
+  (`shared/dayparts.js`: B.C. on UTC−7 by rule), so a server with old
+  time-zone data still says a 6:30 shift starts at 6:30.
 
 Forms as drawn: `<form method="post" action="{root}api/forms/<kind>">` with
 SITE.md's names and nothing else. Tick boxes send `true`. The newsletter
