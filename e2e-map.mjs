@@ -1070,7 +1070,9 @@ try {
         };
       });
       const words = (s) => document.querySelector(s)?.innerText.replace(/\s+/g, ' ').trim() || null;
-      return { note: words('.error.map-error'), retry: words('.map-retry'), pill: words('.map-filter-btn'), buttons };
+      // (A tap on the line itself reaches what is under it: a door.)
+      const mid = n && document.elementFromPoint((n.l + n.r) / 2, (n.t + n.b) / 2);
+      return { note: words('.error.map-error'), retry: words('.map-retry'), pill: words('.map-filter-btn'), through: Boolean(mid && !mid.closest('.error.map-error')), buttons };
     });
     const blocked = (k) => k.buttons.filter((b) => b.under || !b.tap).map((b) => b.name);
     // Opened with signal (the phone keeps the doors), then again with none.
@@ -1097,6 +1099,7 @@ try {
     check('a volunteer’s phone reopened with no answer, on their turf: one line says it shows the doors it kept — clear of the zoom buttons and “My turf”, each still a tap away',
       k.note === 'No signal — showing the doors already loaded' && /My turf/.test(k.pill || '') && k.buttons.some((b) => b.name === 'My turf') && blocked(k).length === 0,
       JSON.stringify({ ...k, blocked: blocked(k) }));
+    check('…a tap on the line reaches the door under it', k.through, JSON.stringify({ through: k.through }));
     check('…and on “My turf” (their own doors, whole) no “Unavailable — Try again” for the list’s answers, which aren’t drawn there', k.retry === null, JSON.stringify({ retry: k.retry, pill: k.pill }));
     // On "All" those answers are the map: their not coming is said.
     await vp.goto(`${BASE}/map?show=all`, { waitUntil: 'domcontentloaded' });
@@ -1105,15 +1108,16 @@ try {
     check('…on “All” they are the map: “Unavailable — Try again”', k.retry === 'Unavailable — Try again' && /^Show: All/.test(k.pill || ''), JSON.stringify({ retry: k.retry, pill: k.pill }));
     await vc.close();
 
-    // A manager on a phone ("Whole list", Locate me, "+ Door") and at a desk.
-    for (const [w, h, path] of [[390, 844, '/map'], [1440, 900, '/admin/map']]) {
+    // A manager in the field app on a phone ("Whole list", Locate me), and at a desk (and "+ Door").
+    for (const [w, h, path, corner] of [[390, 844, '/map', ['Whole list', 'Locate me']], [1440, 900, '/admin/map', ['Whole list', 'Locate me', 'Add a door']]]) {
       const mc = await context(w <= 720 ? { viewport: { width: w, height: h }, isMobile: true, hasTouch: true } : {});
       const mp = await mc.newPage();
       mp.on('pageerror', (e) => errors.push(`[kept ${w}] ${e.message}`));
       k = await keptThenNone(mc, mp, path);
       await mp.screenshot({ path: `${SHOTS}/12-kept-${w}x${h}.png` });
-      check(`${w}×${h}, the doors kept and no answer: the line clear of the zoom buttons, “Whole list”, Locate me and “+ Door”`,
-        k.note === 'No signal — showing the doors already loaded' && k.buttons.length >= 5 && blocked(k).length === 0, JSON.stringify({ ...k, blocked: blocked(k) }));
+      check(`${w}×${h}, the doors kept and no answer: the line clear of the zoom buttons and ${corner.join(', ')}`,
+        k.note === 'No signal — showing the doors already loaded' && corner.every((c) => k.buttons.some((b) => b.name === c)) && blocked(k).length === 0,
+        JSON.stringify({ ...k, blocked: blocked(k) }));
       await mc.close();
     }
   }
