@@ -75,7 +75,7 @@ function planFor(key, me) {
       if (key.length === 2) return { ...q(`person:${k1}`, money), moneyIn: 'person' };
       // The profile's History (ext/timeline), as far as it was loaded: each
       // chip's own list. A desk's holds gifts: this tab only, like the profile.
-      if (key.length === 4 && k2 === 'timeline' && typeof key[3] === 'string') return q(`person:${k1}:timeline:${key[3]}`, money);
+      if (key.length === 4 && k2 === 'timeline' && typeof key[3] === 'string') return { ...q(`person:${k1}:timeline:${key[3]}`, money), moneyIn: 'timeline' };
       // The profile's More details and Knows, read with it.
       return key.length === 3 && (k2 === 'fields' || k2 === 'knows') ? q(`person:${k1}:${k2}`, money) : null;
     // A search isn't kept (each one typed would be another copy, pushing the
@@ -165,6 +165,8 @@ function derivePersons(me, plan, qs) {
 const MONEY_IN = {
   brief: (d) => d?.money != null || (Array.isArray(d?.flagged) && d.flagged.length > 0),
   person: (d) => d?.donor != null || (Array.isArray(d?.gifts) && d.gifts.length > 0) || (Array.isArray(d?.totals) && d.totals.length > 0),
+  // History's pages: the server gives the Money chip only to whoever may see money.
+  timeline: (d) => Array.isArray(d?.pages) && d.pages.some((p) => Array.isArray(p?.groups) && p.groups.includes('money')),
 };
 const tierOf = (plan, data) => (plan.moneyIn && MONEY_IN[plan.moneyIn](data) ? 'session' : plan.tier);
 const otherTier = (tier) => (tier === 'session' ? 'local' : 'session');

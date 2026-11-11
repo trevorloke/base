@@ -199,14 +199,17 @@ const ladderEmails = async (db, q) => (await rowsOf(db, `
 }));
 
 // ── Yes and no to email and texts ──
+// The email service's own doors (ext/mail, ext/mailchimp, where they are
+// set up) say where it came from: a spam complaint ends the yes too.
 const UNSUBSCRIBED = new Set(['unsubscribe-link', 'blast-unsubscribe', 'ladder-unsubscribe', 'preferences']);
+const EMAIL_NO = { complaint: 'Off the email list — marked as spam', 'mailchimp-unsubscribe': 'Unsubscribed in Mailchimp', 'desk-removed': 'Taken off the email list' };
 const consentWords = (r) => {
   if (r.channel === 'sms') {
     if (r.granted) return r.source === 'text-start' ? 'Replied START' : 'Said yes to texts';
     return r.source === 'text-stop' ? 'Replied STOP' : r.source === 'preferences' ? 'Turned texts off' : 'Marked do not text';
   }
   if (r.granted) return r.source === 'desk-added' ? 'Added to the email list' : 'Said yes to email';
-  return UNSUBSCRIBED.has(r.source) ? 'Unsubscribed from email' : r.source === 'desk-removed' ? 'Taken off the email list' : 'Marked do not email';
+  return UNSUBSCRIBED.has(r.source) ? 'Unsubscribed from email' : EMAIL_NO[r.source] || 'Marked do not email';
 };
 const consent = async (db, q) => (await rowsOf(db, `
   select ${ms('c.created_at')} as at, 'consent:' || c.id::text as key, c.channel, c.granted, c.source, c.wording
@@ -353,7 +356,7 @@ const merges = async (db, q) => (await rowsOf(db, `
     left join users u on u.id = e.actor_id
    where e.workspace_id = $1 and e.entity_type = 'person' and e.entity_id = $2
      and e.action = 'person.merge' and e.op = 'update' and e.payload ? 'merged'`, q,
-)).map((r) => entry(r, 'other', 'merge', 'Record', 'Two records made one', {
+)).map((r) => entry(r, 'other', 'merge', 'Merged', 'Two records made one', {
   detail: r.other ? `With the record for ${r.other}` : null, by: r.by_name || null,
 }));
 

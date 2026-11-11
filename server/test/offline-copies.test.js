@@ -209,6 +209,12 @@ test('a profile’s History is kept beside the profile: a desk’s in this tab o
   await sleep(900);
   assert.ok(has(local, vol, 'q:volunteer:person:p1:timeline:all'));
   assert.ok(!has(session, vol, 'q:volunteer:person:p1:timeline:all'));
+  // Made treasurer before this tab knows: the answer has money in it — this tab only.
+  qc.removeQueries({ queryKey: all });
+  await qc.fetchInfiniteQuery({ ...pages(all), queryFn: async () => page });
+  await sleep(900);
+  assert.ok(has(session, vol, 'q:volunteer:person:p1:timeline:all'), 'money in it: this tab only');
+  assert.ok(!has(local, vol, 'q:volunteer:person:p1:timeline:all'), 'never left in the browser beside it');
   qc.clear();
 });
 

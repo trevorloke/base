@@ -94,7 +94,7 @@ test('a manager: every source once, newest first, in the screens’ words', asyn
   // Shifts link to the shift; a merge says who did it.
   assert.deepEqual([of('shift_came').link, of('shift_came').group, of('shift_came').label], [`/shifts/${S.cameTo.id}`, 'shifts', 'Shift']);
   assert.match(of('shift_booked', 'Booked · Phone night').detail, /^\w{3}, \w{3} \d{1,2} · Newton Library$/);
-  assert.deepEqual([of('merge').by, of('merge').detail, of('merge').group, of('merge').label], ['Avery Chen', 'With the record for Dev Exampel', 'other', 'Record']);
+  assert.deepEqual([of('merge').by, of('merge').detail, of('merge').group, of('merge').label], ['Avery Chen', 'With the record for Dev Exampel', 'other', 'Merged']);
 });
 
 test('the desk’s other roles see what a manager sees', async () => {
@@ -209,14 +209,19 @@ test('bounced and marked as spam: shown once the email service’s columns exist
       where table_schema = current_schema() and table_name = 'blast_recipients' and column_name in ('bounced_at', 'complained_at')`,
   )).rows.length;
   const emailKinds = async () => kinds(ok(await all(mgr, S.dev.id, '&group=messages'))).filter((k) => k.startsWith('email'));
-  if (await cols() === 0) {
-    // As main is today: no such columns, and the history reads as before.
-    assert.deepEqual(await emailKinds(), ['email', 'email_click', 'email_open']);
-    await db.exec(`alter table blast_recipients add column if not exists bounced_at timestamptz;
-                   alter table blast_recipients add column if not exists bounce_detail text;
-                   alter table blast_recipients add column if not exists complained_at timestamptz;`);
-    forgetEmailColumns();
-  }
+  // Without the columns (a campaign whose email service doesn't report back;
+  // where that feature adds them at boot, they are taken away for this part).
+  await db.exec(`alter table blast_recipients drop column if exists bounced_at;
+                 alter table blast_recipients drop column if exists bounce_detail;
+                 alter table blast_recipients drop column if exists complained_at;`);
+  forgetEmailColumns();
+  assert.equal(await cols(), 0);
+  assert.deepEqual(await emailKinds(), ['email', 'email_click', 'email_open'], 'the history reads as it did');
+  // With them, as the email service's feature adds them.
+  await db.exec(`alter table blast_recipients add column if not exists bounced_at timestamptz;
+                 alter table blast_recipients add column if not exists bounce_detail text;
+                 alter table blast_recipients add column if not exists complained_at timestamptz;`);
+  forgetEmailColumns();
   assert.equal(await cols(), 2);
   // The columns are there and empty: nothing new to say.
   assert.deepEqual(await emailKinds(), ['email', 'email_click', 'email_open']);
@@ -235,6 +240,21 @@ test('bounced and marked as spam: shown once the email service’s columns exist
   assert.ok(ids.indexOf('email_spam') < ids.indexOf('email_click') && ids.indexOf('email_bounce') < ids.lastIndexOf('email'));
   assert.ok(!ok(await all(vol.client)).entries.some((e) => e.kind.startsWith('email')), 'still never a volunteer’s');
   await db.query('update blast_recipients set bounced_at = null, bounce_detail = null, complained_at = null where workspace_id = $1', [ws]);
+  // The email service's own doors to "no" say where it came from (a spam
+  // complaint ends the yes; an unsubscribe in Mailchimp comes back).
+  const { runAction } = await import('../lib/events.js');
+  const { recordConsent } = await import('../ext/site/consent.js');
+  const wordsFor = async (source) => {
+    const { result: id } = await runAction(db, { workspaceId: ws, actorId: null, action: 'test.consent' }, (tx, emit) => recordConsent(
+      tx, ws, { personId: S.dev.id, channel: 'email', granted: false, source, address: 'dev@example.org' }, emit,
+    ));
+    const found = ok(await all(mgr, S.dev.id, '&group=messages')).entries.find((e) => e.id === `consent:${id}`);
+    await db.query('delete from consent_events where id = $1', [id]);
+    return found && [found.label, found.title];
+  };
+  assert.deepEqual(await wordsFor('complaint'), ['Email', 'Off the email list — marked as spam']);
+  assert.deepEqual(await wordsFor('mailchimp-unsubscribe'), ['Email', 'Unsubscribed in Mailchimp']);
+  assert.deepEqual(await wordsFor('desk-removed'), ['Email', 'Taken off the email list']);
 });
 
 test('one person’s rows come through an index, never a walk over everyone’s', async () => {
