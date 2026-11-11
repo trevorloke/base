@@ -166,10 +166,13 @@ export const learnName = (settings) => brandFor(settings).learn;
 // the preset) rather than an app that won't open.
 const BRAND_TTL_MS = 60_000;
 const SLOW_MS = 2_000;
-let known = null; // { brand, at }
+let known = null; // { brand, at }: the copy kept for a minute
+let lastSeen = null; // the brand last read, for a database slow to answer
 let reading = null;
 let generation = 0;
-export const forgetBrand = () => { known = null; generation += 1; };
+// After a save: the copy goes, and so does a read already under way (it may
+// have taken the row before the save), so the next page reads afresh.
+export const forgetBrand = () => { known = null; reading = null; generation += 1; };
 const readBrand = async () => {
   const db = await getDb();
   const row = (await db.query('select settings from workspaces order by created_at, id limit 1')).rows[0];
@@ -178,12 +181,15 @@ const readBrand = async () => {
 };
 export const campaignBrand = async () => {
   if (known && Date.now() - known.at < BRAND_TTL_MS) return known.brand;
-  const fallback = () => known?.brand || presetBrand();
+  const fallback = () => lastSeen || presetBrand();
   if (!reading) {
     const gen = generation;
-    reading = readBrand()
-      .then((b) => { if (gen === generation) known = { brand: b, at: Date.now() }; return b; })
-      .finally(() => { reading = null; });
+    const read = readBrand().then((b) => {
+      if (gen === generation) { known = { brand: b, at: Date.now() }; lastSeen = b; }
+      return b;
+    });
+    reading = read;
+    read.catch(() => {}).finally(() => { if (reading === read) reading = null; });
   }
   let timer;
   const slow = new Promise((resolve) => { timer = setTimeout(resolve, SLOW_MS); timer.unref?.(); });

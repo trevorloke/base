@@ -267,6 +267,38 @@ test('on the way out, signed out: the preset until a manager saves; the saved br
   assert.doesNotMatch(await (await app.request('/u/x')).text(), /data-brand|brand-data/, 'only the app’s own page');
 });
 
+test('a save while the brand is being read: the next page reads afresh; a database slow to answer gets the brand last seen', async () => {
+  setEnv({ STARBASE_BRAND: 'base' });
+  const READ = /^select settings from workspaces order by/;
+  const query = db.query;
+  assert.equal((await mgr.action('brand.save', { color: '#0f766e' })).status, 200);
+  assert.equal((await campaignBrand()).color, '#0f766e');
+  forgetBrand();
+  // A read that takes the row before the save and answers after it.
+  let release;
+  const held = new Promise((r) => { release = r; });
+  db.query = async (sql, params) => { const res = await query(sql, params); if (READ.test(sql)) await held; return res; };
+  try {
+    const asked = campaignBrand();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal((await mgr.action('brand.save', { color: '#d81b1e' })).status, 200);
+    const next = campaignBrand();
+    release();
+    assert.equal((await asked).color, '#0f766e', 'asked before the save');
+    assert.equal((await next).color, '#d81b1e', 'asked after it: the new brand, not the read already under way');
+  } finally { db.query = query; release(); }
+  // A database that doesn't answer in time (2 s): the brand last seen, not base.win's preset.
+  forgetBrand();
+  let free;
+  const stuck = new Promise((r) => { free = r; });
+  db.query = async (sql, params) => { if (READ.test(sql)) await stuck; return query(sql, params); };
+  const awake = setInterval(() => {}, 200); // the wait's own timer doesn't hold the process open
+  try {
+    assert.equal((await campaignBrand()).color, '#d81b1e');
+  } finally { clearInterval(awake); db.query = query; free(); }
+  assert.equal((await mgr.action('brand.reset', {})).json.reset, true, 'as the tests after this one expect it: nothing saved');
+});
+
 test('training is called what the campaign calls it: Permissions, the public lessons', async () => {
   setEnv({ STARBASE_BRAND: 'base' });
   assert.equal(learnName({}), 'Training');
