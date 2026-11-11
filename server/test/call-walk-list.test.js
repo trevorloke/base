@@ -1,0 +1,222 @@
+// Call this list, walk this list — a List feeds the phones and the doors,
+// not only email and text:
+//   · a phone bank made from a list: the server reads the list itself, so
+//     there is no cap on how many (a bank picked by hand still takes 5,000
+//     a call); someone who leaves the list (voted, re-rated, do-not-contact)
+//     leaves the calls not yet made, at once and with no write — a call
+//     already logged stays logged; someone who joins it later comes in on a
+//     top-up; the bank keeps its numbers if the list is deleted;
+//   · the Calls read takes ?list= and moves on past its first load (?after=);
+//   · a sweep (pass) that walks a list: only doors with someone on it, as
+//     the list stands at each load; who narrows it further; the list can't
+//     be deleted while the open pass walks it; a volunteer gets the doors,
+//     never the list's name.
+// test:pg-safe: unique emails per run, everything scoped to this campaign.
+import { test, before } from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { freshDb, Client } from './helpers.js';
+import { passLine } from '@starbase/shared/passes';
+
+let db, mgr, vic, ws;
+const ids = {};
+const P = {};
+const tag = Math.random().toString(36).slice(2, 8);
+const mail = (who) => `${who}.cwl.${tag}@example.org`;
+const ok = (r, msg = '') => { assert.equal(r.status, 200, `${msg} ${JSON.stringify(r.json)}`); return r.json; };
+const lat = 49.1327; const lng = -122.855;
+
+before(async () => {
+  db = await freshDb();
+  mgr = new Client();
+  ws = (await mgr.signup({ workspaceName: 'Imagine Surrey', email: mail('manager'), jurisdiction: 'bc-municipal' })).json.workspace.id;
+  const inv = await mgr.action('member.invite', { email: mail('vic'), role: 'volunteer' });
+  vic = new Client();
+  ids.vic = ok(await vic.post('/api/auth/join', { token: inv.json.joinUrl.split('/join/')[1], name: 'Vic Example', password: 'cwl-pass-2026' })).user.id;
+});
+
+// ── Call this list ──
+
+test('a bank made from a list takes everyone on it who can be called — past the 5,000 a bank picked by hand may take', async () => {
+  // 5,100 people on one list (a city's lists are bigger than any snapshot).
+  await db.query(
+    `insert into persons (id, workspace_id, name, phone, tags)
+     select gen_random_uuid(), $1, 'Bulk ' || lpad(g::text, 5, '0') || ' Example', '604-555-' || lpad((g % 10000)::text, 4, '0'), '["bulk"]'::jsonb
+       from generate_series(1, 5100) g`, [ws],
+  );
+  await mgr.createPerson('Bulk Nophone Example', { tags: ['bulk'] });
+  await mgr.createPerson('Bulk Nocall Example', { phone: '604-555-0999', tags: ['bulk', 'do-not-contact'] });
+  const list = ok(await mgr.action('list.create', { name: 'Everyone bulk', kind: 'filter', filter: { tag: 'bulk' } })).list;
+  ids.bulkList = list.id;
+  const made = ok(await mgr.action('bank.create', { name: 'Bulk calls', list_id: list.id }));
+  assert.equal(made.added, 5100);
+  assert.equal(made.skipped, 2, 'no phone, and do-not-contact');
+  assert.deepEqual([made.bank.total, made.bank.open, made.bank.gone, made.bank.list_name], [5100, 5100, 0, 'Everyone bulk']);
+  // By hand, 5,000 ids a call is still the limit.
+  const many = (await db.query("select id from persons where workspace_id = $1 and tags @> '\"bulk\"' order by name limit 5001", [ws])).rows.map((r) => r.id);
+  assert.equal((await mgr.action('bank.create', { name: 'Too many by hand', person_ids: many })).status, 400);
+  assert.equal(ok(await mgr.action('bank.create', { name: 'By hand', person_ids: many.slice(0, 3) })).added, 3, 'the hand-picked form still works');
+  // A list, or people picked by hand — not both; a list that isn't this campaign's.
+  assert.equal((await mgr.action('bank.create', { name: 'x', list_id: list.id, person_ids: many.slice(0, 1) })).status, 400);
+  assert.equal((await mgr.action('bank.create', { name: 'x', list_id: randomUUID() })).status, 404);
+  assert.equal((await vic.action('bank.create', { name: 'x', list_id: list.id })).status, 403);
+  // The desk's bank page: the counts are the whole bank; its numbers come 2,000 at a time.
+  const page1 = ok(await mgr.get(`/api/banks/${made.bank.id}`));
+  assert.equal(page1.bank.total, 5100);
+  assert.equal(page1.bank.list_name, 'Everyone bulk');
+  assert.equal(page1.numbers.length, 2000);
+  const page3 = ok(await mgr.get(`/api/banks/${made.bank.id}?offset=4000`));
+  assert.equal(page3.numbers.length, 1100);
+  assert.equal(page3.numbers.at(-1).name, 'Bulk 05100 Example', 'in the list’s order, by name');
+  assert.ok(page3.numbers.every((n) => n.still === true));
+  const listed = ok(await mgr.get('/api/banks')).banks.find((b) => b.id === made.bank.id);
+  assert.deepEqual([listed.total, listed.list_name], [5100, 'Everyone bulk']);
+});
+
+test('the Calls read takes a list and moves on past its first 300', async () => {
+  assert.equal(ok(await mgr.get(`/api/persons/count?list=${ids.bulkList}&has=phone`)).total, 5101, 'every one with a phone, do-not-contact too: Calls shows the chip');
+  const seen = new Set();
+  let after = '';
+  let loads = 0;
+  for (;;) {
+    const page = ok(await mgr.get(`/api/persons?list=${ids.bulkList}&has=phone&limit=300${after ? `&after=${after}` : ''}`));
+    loads += 1;
+    for (const p of page.persons) seen.add(p.id);
+    if (loads === 1) assert.deepEqual([page.persons.length, page.more], [300, true], 'the first load says more are coming');
+    if (!page.more) break;
+    after = page.persons.at(-1).id;
+  }
+  assert.equal(seen.size, 5101, 'everyone, once each');
+  assert.equal(loads, 18);
+  // A volunteer never sorts people by the desk's lists.
+  assert.deepEqual(ok(await vic.get(`/api/persons?list=${ids.bulkList}&limit=5`)).persons, []);
+});
+
+test('someone who leaves the list leaves the calls not yet made; a call already logged stays; someone back on it comes back', async () => {
+  const mk = async (key, name, phone) => { P[key] = await mgr.createPerson(name, { phone, tags: ['gotv'] }); };
+  await mk('ana', 'Ana Gotv Example', '604-555-0201');
+  await mk('ben', 'Ben Gotv Example', '604-555-0202');
+  await mk('cy', 'Cy Gotv Example', '604-555-0203');
+  await mk('dee', 'Dee Gotv Example', '604-555-0204');
+  await mk('eve', 'Eve Gotv Example', '604-555-0205');
+  for (const k of ['ana', 'ben', 'cy', 'dee', 'eve']) ok(await mgr.action('contact.log', { person_id: P[k].id, channel: 'door', outcome: 'contacted', rating: '1' }));
+  const list = ok(await mgr.action('list.create', { name: 'Supporters not voted', kind: 'filter', filter: { tag: 'gotv', rating: '1,2', voted: 'no' } })).list;
+  ids.gotvList = list.id;
+  const bank = ok(await mgr.action('bank.create', { name: 'Get out the vote calls', list_id: list.id })).bank;
+  ids.gotvBank = bank.id;
+  assert.equal(bank.total, 5);
+  ok(await mgr.action('bank.assign', { id: bank.id, user_id: ids.vic }));
+  const names = async () => ok(await vic.get(`/api/banks/${bank.id}/mine`)).persons.map((p) => p.name.split(' ')[0]);
+  assert.deepEqual(await names(), ['Ana', 'Ben', 'Cy', 'Dee', 'Eve']);
+  // Dee is called first; then the day goes on.
+  ok(await vic.action('contact.log', { person_id: P.dee.id, channel: 'phone', outcome: 'contacted' }));
+  ok(await mgr.action('vote.mark', { person_id: P.ana.id }));                                          // Ana voted
+  ok(await mgr.action('contact.log', { person_id: P.ben.id, channel: 'door', outcome: 'contacted', rating: '4' })); // Ben re-rated at the door
+  ok(await mgr.action('person.update', { id: P.cy.id, tags: ['gotv', 'do-not-contact'] }));          // Cy asked not to be called
+  ok(await mgr.action('vote.mark', { person_id: P.dee.id }));                                          // Dee voted after the call
+  assert.deepEqual(await names(), ['Eve'], 'off the caller’s list at once');
+  const mineAll = ok(await vic.get(`/api/banks/${bank.id}/mine`)).bank;
+  assert.deepEqual([mineAll.total, mineAll.done], [2, 1], 'Dee’s call stays counted; the three who left are out of the count');
+  assert.equal(ok(await vic.get('/api/banks/mine')).banks.find((b) => b.id === bank.id).left, 1);
+  const desk = ok(await mgr.get(`/api/banks/${bank.id}`));
+  assert.deepEqual([desk.bank.total, desk.bank.done, desk.bank.gone, desk.bank.open], [5, 1, 3, 0]);
+  const dee = desk.numbers.find((n) => n.person_id === P.dee.id);
+  assert.equal(dee.outcome, 'contacted', 'the call is still on the record');
+  assert.deepEqual(desk.numbers.filter((n) => !n.still).map((n) => n.name.split(' ')[0]).sort(), ['Ana', 'Ben', 'Cy', 'Dee']);
+  assert.deepEqual(desk.bank.callers.map((c) => [c.name, c.total, c.done]), [['Vic Example', 2, 1]]);
+  // Ana's vote is taken back (marked by mistake): she is on the list again, so on the calls again.
+  ok(await mgr.action('vote.mark', { person_id: P.ana.id, voted: false }));
+  assert.deepEqual(await names(), ['Ana', 'Eve']);
+});
+
+test('someone who joins the list later comes in on a top-up; only numbers still to call are handed out', async () => {
+  const fay = await mgr.createPerson('Fay Gotv Example', { phone: '604-555-0206', tags: ['gotv'] });
+  ok(await mgr.action('contact.log', { person_id: fay.id, channel: 'door', outcome: 'contacted', rating: '2' }));
+  ok(await mgr.action('bank.release', { id: ids.gotvBank, user_id: ids.vic }));
+  const up = ok(await mgr.action('bank.topup', { id: ids.gotvBank }));
+  assert.equal(up.added, 1);
+  assert.equal(up.total, 6);
+  assert.equal(ok(await mgr.action('bank.topup', { id: ids.gotvBank })).added, 0, 'nobody new: nothing added twice');
+  // Ben (re-rated) and Cy (do-not-contact) stay behind; Ana, Eve and Fay are handed out.
+  const given = ok(await mgr.action('bank.assign', { id: ids.gotvBank, user_id: ids.vic }));
+  assert.equal(given.handed, 3);
+  assert.deepEqual(ok(await vic.get(`/api/banks/${ids.gotvBank}/mine`)).persons.map((p) => p.name.split(' ')[0]), ['Ana', 'Eve', 'Fay']);
+  const byHand = (await mgr.get('/api/banks')).json.banks.find((b) => b.name === 'By hand');
+  assert.equal((await mgr.action('bank.topup', { id: byHand.id })).status, 409, 'a bank picked by hand has no list to follow');
+  assert.equal((await vic.action('bank.topup', { id: ids.gotvBank })).status, 403);
+  // The list is deleted: the bank keeps the numbers it has.
+  ok(await mgr.action('list.delete', { id: ids.gotvList }));
+  assert.deepEqual(ok(await vic.get(`/api/banks/${ids.gotvBank}/mine`)).persons.map((p) => p.name.split(' ')[0]), ['Ana', 'Eve', 'Fay']);
+  assert.equal((await mgr.action('bank.topup', { id: ids.gotvBank })).status, 409);
+  assert.equal(ok(await mgr.get(`/api/banks/${ids.gotvBank}`)).bank.list_name, null);
+  assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
+});
+
+// ── Walk this list ──
+
+test('a sweep that walks a list: only doors with someone on it, as the list stands at each load', async () => {
+  const mk = async (key, name, address, dLng, tags) => { P[key] = await mgr.createPerson(name, { address, lat, lng: lng + dLng, tags }); };
+  await mk('wa', 'Wanda Walk Example', '13213 72 Ave', 0.0000, ['walk']);
+  await mk('wb', 'Wes Walk Example', '13225 72 Ave', 0.0003, []);
+  await mk('wc', 'Win Walk Example', '13224 72 Ave', 0.0003, ['walk']);
+  await mk('wd', 'Wyn Walk Example', '13212 72 Ave', 0.0000, []);
+  await mk('we', 'Wil Walk Example', '13212 72 Ave', 0.0000, ['walk']); // a second person at Wyn's door
+  const turf = ok(await mgr.action('turf.create', {
+    name: 'Newton block', polygon: [[lat + 0.001, lng - 0.001], [lat + 0.001, lng + 0.002], [lat - 0.001, lng + 0.002], [lat - 0.001, lng - 0.001]],
+  })).turf;
+  ok(await mgr.action('turf.assign', { turf_id: turf.id, user_id: ids.vic }));
+  const list = ok(await mgr.action('list.create', { name: 'Walk these', kind: 'filter', filter: { tag: 'walk' } })).list;
+  const walk = async (c = mgr) => ok(await c.get(`/api/turfs/${turf.id}/walk`));
+  const doors = async (c = mgr) => (await walk(c)).doors.map((d) => d.address);
+  const turfRow = async (c = mgr) => ok(await c.get('/api/turfs')).turfs.find((t) => t.id === turf.id);
+  assert.equal((await turfRow()).doors, 4, 'no pass: every door');
+  assert.equal((await mgr.action('pass.start', { name: 'x', kind: 'persuasion', list_id: randomUUID() })).status, 404);
+  const pass = ok(await mgr.action('pass.start', { name: 'Walk the list', kind: 'persuasion', list_id: list.id, tries: 2 })).pass;
+  assert.deepEqual([pass.list_id, pass.list_name], [list.id, 'Walk these']);
+  assert.deepEqual(await doors(), ['13213 72 Ave', '13224 72 Ave', '13212 72 Ave'], 'Wes’s door: nobody there is on the list');
+  assert.equal((await turfRow()).doors, 3);
+  // The volunteer walks the same doors, and never learns the list's name.
+  assert.deepEqual(await doors(vic), ['13213 72 Ave', '13224 72 Ave', '13212 72 Ave']);
+  const wyn = (await walk(vic)).doors.find((d) => d.address === '13212 72 Ave');
+  assert.deepEqual(wyn.persons.map((p) => [p.name.split(' ')[0], p.pass_listed]).sort(), [['Wil', true], ['Wyn', false]]);
+  const theirs = ok(await vic.get('/api/passes')).open;
+  assert.equal(theirs.list_id, list.id);
+  assert.equal(theirs.list_name, undefined);
+  assert.equal(ok(await mgr.get('/api/passes')).open.list_name, 'Walk these');
+  assert.equal(passLine({ ...pass, list_name: 'Walk these' }), 'Persuasion · List: Walk these · 2 tries');
+  // Wanda's door: no answer — it comes back. Then she leaves the list, and her door leaves the walk.
+  ok(await mgr.action('contact.log', { person_id: P.wa.id, channel: 'door', outcome: 'no_answer' }));
+  assert.equal((await walk()).doors.find((d) => d.address === '13213 72 Ave').state, 'again');
+  ok(await mgr.action('person.update', { id: P.wa.id, tags: [] }));
+  ok(await mgr.action('person.update', { id: P.wb.id, tags: ['walk'] }));
+  assert.deepEqual(await doors(), ['13225 72 Ave', '13224 72 Ave', '13212 72 Ave'], 'Wes joined, Wanda left');
+  assert.equal(ok(await mgr.get('/api/passes')).open.stats.doors_knocked, 1, 'the knock stays on the record');
+  // Who narrows the list further: only supporters on it.
+  ok(await mgr.action('contact.log', { person_id: P.wc.id, channel: 'door', outcome: 'contacted', rating: '1' }));
+  const narrowed = ok(await mgr.action('pass.update', { id: pass.id, who: 'support' })).pass;
+  assert.equal(passLine(narrowed), 'Persuasion · List: Walk these · Yes (1–2) · 2 tries');
+  assert.deepEqual(await doors(), ['13224 72 Ave']);
+  // Every door again (the list taken off the pass), then a hand-picked list.
+  ok(await mgr.action('pass.update', { id: pass.id, who: 'all', list_id: null }));
+  assert.equal((await turfRow()).doors, 4);
+  const picked = ok(await mgr.action('list.create', { name: 'Picked doors', kind: 'people', person_ids: [P.wd.id] })).list;
+  ok(await mgr.action('pass.update', { id: pass.id, list_id: picked.id }));
+  assert.deepEqual(await doors(), ['13212 72 Ave']);
+  // The open pass walks it: the list can't be deleted until the pass ends.
+  const del = await mgr.action('list.delete', { id: picked.id });
+  assert.equal(del.status, 409);
+  assert.match(del.json.error, /Walk the list/);
+  ok(await mgr.action('pass.end', { id: pass.id }));
+  ok(await mgr.action('list.delete', { id: picked.id }));
+  assert.equal((await turfRow()).doors, 4, 'no pass open: every door');
+});
+
+test('a get-out-the-vote sweep of a list leaves a door once everyone on the list there has voted', async () => {
+  const list = (await mgr.get('/api/lists')).json.lists.find((l) => l.name === 'Walk these');
+  ok(await mgr.action('pass.start', { name: 'GOTV walk', kind: 'gotv', list_id: list.id }));
+  const turf = (await mgr.get('/api/turfs')).json.turfs.find((t) => t.name === 'Newton block');
+  const doors = async () => ok(await mgr.get(`/api/turfs/${turf.id}/walk`)).doors.map((d) => d.address);
+  assert.deepEqual(await doors(), ['13225 72 Ave', '13224 72 Ave', '13212 72 Ave']);
+  ok(await mgr.action('vote.mark', { person_id: P.we.id }));
+  assert.deepEqual(await doors(), ['13225 72 Ave', '13224 72 Ave'], 'Wil voted; Wyn is not on the list');
+});

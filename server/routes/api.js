@@ -22,7 +22,7 @@ import { EXTENSIONS } from '../ext.js';
 import { runHooks } from '../lib/hooks.js';
 import { forViewer, loginEmail } from '../lib/viewer.js';
 import { personsWhere, joinWhere } from '../lib/audience.js';
-import { mayReach, address } from '../lib/reach.js';
+import { mayReach, address, person } from '../lib/reach.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
 import { goingRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
@@ -753,8 +753,10 @@ app.get('/blasts', async (c) => {
      where b.workspace_id = $1 order by b.created_at desc limit 200`,
     [ctx.workspaceId],
   );
+  // Who a press release goes to (field.js blast.send; lib/reach.js decides).
   const media = (await c.get('db').query(
-    `select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null and email is not null and tags @> '"media"'::jsonb`,
+    `select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null and p.tags @> '"media"'::jsonb
+       and ${mayReach('email', 'press', person('p', '$1'))}`,
     [ctx.workspaceId],
   )).rows[0].n;
   const files = await attachmentsOf(c.get('db'), ctx.workspaceId);

@@ -45,9 +45,10 @@ const digits = (phone) => `regexp_replace(${dial(phone)}, '\\D', '', 'g')`;
 export const last10 = (phone) => `right(${digits(phone)}, 10)`;
 const plus = (phone) => `btrim(${dial(phone)}) like '+%'`;
 // A number that can be dialled: ten digits (area code 2–9), eleven with the
-// 1, or + and 8 to 15 digits.
-export const dialable = (phone) => `(case when ${plus(phone)} then length(${digits(phone)}) between 8 and 15
-  else (length(${digits(phone)}) = 10 and ${digits(phone)} ~ '^[2-9]') or (length(${digits(phone)}) = 11 and ${digits(phone)} like '1%') end)`;
+// 1, or + and 8 to 15 digits — read straight off the number as dialled, so
+// each row is read once (a city's voter file is 300,000 of them).
+export const dialable = (phone) => `(case when ${dial(phone)} ~ '^ *\\+' then ${dial(phone)} ~ '^ *\\+\\D*(\\d\\D*){8,15}$'
+  else ${dial(phone)} ~ '^\\D*([2-9]\\D*(\\d\\D*){9}|1\\D*(\\d\\D*){10})$' end)`;
 export const e164Sql = (phone) => `(case when not ${dialable(phone)} then null when ${plus(phone)} then '+' || ${digits(phone)}
   when length(${digits(phone)}) = 10 then '+1' || ${digits(phone)} else '+' || ${digits(phone)} end)`;
 export const emailKey = (email) => `lower(btrim(coalesce(${email}, '')))`;
