@@ -726,15 +726,23 @@ function ShiftList({ canDesk, me }) {
   // Past the first page (500 coming up), a page more at a time when asked
   // (the server's `next`), as "Show older" does for past shifts — never kept
   // on the phone. A row in both is the first page's: it is the freshest.
-  const [later, setLater] = useState({ rows: [], next: undefined, busy: false, error: null });
-  const laterNext = later.next !== undefined ? later.next : shifts.data?.next ?? null;
+  // The later pages hang off the first page's last row (`from`): when a
+  // fresh read moves that edge (a shift added or called off sooner), they
+  // are dropped and "Show later shifts" reads on from the new edge — or a
+  // row would fall between the two and go missing without a word.
+  const edge = shifts.data?.next ?? null;
+  const [laterRead, setLater] = useState({ from: null, rows: [], next: undefined, busy: false, error: null });
+  const later = laterRead.from === edge ? laterRead : { from: edge, rows: [], next: undefined, busy: false, error: null };
+  const laterNext = later.next !== undefined ? later.next : edge;
   const loadLater = async () => {
-    setLater((l) => ({ ...l, busy: true, error: null }));
+    const from = edge;
+    const cursor = laterNext;
+    setLater({ ...later, busy: true, error: null });
     try {
-      const r = await apiGet(`/shifts?cursor=${encodeURIComponent(laterNext)}`);
-      setLater((l) => ({ rows: [...l.rows, ...(r.shifts ?? [])], next: r.next ?? null, busy: false, error: null }));
+      const r = await apiGet(`/shifts?cursor=${encodeURIComponent(cursor)}`);
+      setLater((l) => (l.from !== from ? l : { from, rows: [...l.rows, ...(r.shifts ?? [])], next: r.next ?? null, busy: false, error: null }));
     } catch (e) {
-      setLater((l) => ({ ...l, busy: false, error: e.message }));
+      setLater((l) => (l.from !== from ? l : { ...l, busy: false, error: e.message }));
     }
   };
   const seenIds = new Set();

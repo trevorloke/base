@@ -20,6 +20,7 @@ import {
 import { ratingByCode } from '@starbase/shared/scale';
 import { SLATES as FALLBACK_SLATES, slateLabel } from '@starbase/shared/canvass';
 import { placeLabel } from '@starbase/shared/shiftkinds';
+import { whenText, zoneOf } from '../components/shiftTime.js';
 import RatingButtons, { OutcomeButtons, RatingChip, focusRating, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { PersonAnswers, answersTail, usePersonAnswers, useSurvey } from '../components/SurveyQuestions.jsx';
 import { apiGet, fmtMoney, fmtDate, noAnswer } from '../api.js';
@@ -805,7 +806,8 @@ function Signs({ person, signs, refresh, desk }) {
   );
 }
 
-function Shifts({ shifts }) {
+// A shift's time on the campaign's clock (tz), as every shift screen says it.
+function Shifts({ shifts, tz }) {
   if (shifts.length === 0) {
     return <p className="pf-empty">None. <Link to="/shifts">See shifts</Link></p>;
   }
@@ -816,7 +818,7 @@ function Shifts({ shifts }) {
           <span>
             <Link to={`/shifts/${s.id}`}>{s.title}</Link>
             <br />
-            <span className="muted mono" style={{ fontSize: 12 }}>{fmtWhen(s.starts_at)}{s.location ? ` · ${placeLabel(s.location)}` : ''}</span>
+            <span className="muted mono" style={{ fontSize: 12 }}>{whenText(s.starts_at, tz)}{s.location ? ` · ${placeLabel(s.location)}` : ''}</span>
           </span>
           <span className={STATUS_CHIP[s.status] || 'chip'}>{String(s.status || '').replace('_', ' ')}</span>
         </li>
@@ -1015,7 +1017,7 @@ export default function Person() {
         {/* Shifts and the full history are desk views; volunteers have Shifts and the line above. */}
         {desk && (
           <Section title="Shifts" count={shifts.length || ''} open={!!open.shifts} onToggle={toggle('shifts')}>
-            <Shifts shifts={shifts} />
+            <Shifts shifts={shifts} tz={zoneOf(me)} />
           </Section>
         )}
         {desk && (

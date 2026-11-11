@@ -13,20 +13,20 @@ import RatingButtons, { ratingText, useScale } from './RatingButtons.jsx';
 import { TextingCallButton, noTexts } from './TextingCard.jsx';
 import { queuedText } from './queued.js';
 import { Icon, firstName, invalidatePersonData, isDnc, smsHref, telHref, textBody, useAction } from '../pages/People.jsx';
+import { whenText, zoneOf } from './shiftTime.js';
 import '../pages/people.css';
 import '../pages/relationships.css';
 
 const WAYS = { phone: 'Call', text: 'Text', in_person: 'In person' };
 const LOGGED = { phone: 'Call', text: 'Text', in_person: 'In person' };
-const fmtWhen = (ts) => new Date(ts).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 // One thing they did, in full: the line (unless the row already says it),
-// then what they said.
-function Did({ d, said: saidOnRow }) {
+// then what they said. A shift's time is on the campaign's clock (tz).
+function Did({ d, said: saidOnRow, tz }) {
   const bits = [
     d.roles?.length ? d.roles.join(', ') : null,
     d.availability ? `Free: ${d.availability}` : null,
-    d.shift?.starts_at ? fmtWhen(d.shift.starts_at) : null,
+    d.shift?.starts_at ? whenText(d.shift.starts_at, tz) : null,
   ].filter(Boolean);
   const said = d.message || d.note;
   if (saidOnRow && !bits.length && !said) return null;
@@ -73,7 +73,7 @@ export default function FollowupReach({ f, me, onLogged }) {
       {f.did?.length > 0 && (
         <ul className="fu-dids">
           {/* One thing: the row says what it was, here only what they said. */}
-          {f.did.map((d, i) => <Did key={i} d={d} said={f.did.length === 1 && d.words === f.text} />)}
+          {f.did.map((d, i) => <Did key={i} d={d} said={f.did.length === 1 && d.words === f.text} tz={zoneOf(me)} />)}
         </ul>
       )}
       {isDnc(p) ? (

@@ -36,7 +36,7 @@
 // with it — and every change waits for the signal. A sheet is a step in the
 // browser's history: Back closes it.
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useNavigationType, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import {
   WEEK_PARTS, addDays, clockOf, dayOf, instantOf, isDay, safeZone, weekBounds, weekPartOf, weekStart,
@@ -194,8 +194,6 @@ export default function ShiftsBoard({ me, onSheet }) {
   // from the people strip stays in hand from card to card; a chip picked up
   // off a card (from) is one move. ──
   const [picked, setPicked] = useState(null);
-  // The phone's "People" sheet.
-  const [peopleOpen, setPeopleOpen] = useState(false);
   const [dragging, setDragging] = useState(null);
   const [overKey, setOverKey] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -203,8 +201,6 @@ export default function ShiftsBoard({ me, onSheet }) {
   const [note, setNote] = useState(null); // { text, act?: { label, run } }
   const [error, setError] = useState(null);
   const [more, setMore] = useState(false);
-  // The card whose sheet is open: { id, tell } (tell: straight to "Tell them").
-  const [open, setOpen] = useState(null);
   const noteTimer = useRef(null);
   const say = (n) => {
     clearTimeout(noteTimer.current);
@@ -214,16 +210,23 @@ export default function ShiftsBoard({ me, onSheet }) {
   useEffect(() => () => clearTimeout(noteTimer.current), []);
 
   // Back closes a sheet, never the week: opening one is a step in the
-  // browser's history (the same address, marked with the sheet), and every
-  // way of closing it takes that step back off. A sheet that came with the
-  // address (a link with ?add=, a reload) has no step of its own: closing
-  // it just drops ?add=.
+  // browser's history (the same address, marked with the sheet — and for a
+  // card, which one), and every way of closing it takes that step back off.
+  // Which sheet is open is read off the entry the browser is on, so Back or
+  // Forward — even pressed the moment a sheet opens — can't leave one open
+  // with its step gone. A sheet that came with the address (a link with
+  // ?add=, a reload) has no step of its own: closing it just drops ?add=.
   const location = useLocation();
   const navigate = useNavigate();
-  const navType = useNavigationType();
   const step = location.state?.sheet || null;
-  const stepIn = (sheet) => { if (step !== sheet) navigate({ pathname: location.pathname, search: location.search }, { state: { sheet } }); };
-  const stepOut = (sheet, close) => { if (step === sheet) navigate(-1); else close(); };
+  // (Another card while one is open takes its step's place.)
+  const stepIn = (sheet, extra) => navigate({ pathname: location.pathname, search: location.search },
+    { state: { sheet, ...extra }, replace: step === sheet });
+  const stepOut = (sheet, close) => { if (step === sheet) navigate(-1); else close?.(); };
+  // The card whose sheet is open: { id, tell } (tell: straight to "Tell
+  // them"); and the phone's "People" sheet.
+  const open = step === 'card' && location.state.id ? { id: location.state.id, tell: !!location.state.tell } : null;
+  const peopleOpen = step === 'people';
   // The add sheet is in the address (?add=<day>, or ?add=1 from "New
   // shift"), so the page's own button and a link can open it. (Opened, it
   // stays through a signal blip; it waits for the signal to add.)
@@ -242,15 +245,9 @@ export default function ShiftsBoard({ me, onSheet }) {
   // Nothing can be added to a week that is over: "New shift" there is this week's.
   useEffect(() => { if (adding && days[6] < today) setParam('week', null); }, [adding, monday]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onSheet?.(false), []); // eslint-disable-line react-hooks/exhaustive-deps
-  // Back (or Forward) to an entry without a sheet's step: that sheet closes.
-  useEffect(() => {
-    if (navType !== 'POP') return;
-    if (step !== 'card') setOpen(null);
-    if (step !== 'people') setPeopleOpen(false);
-  }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
-  const openCard = (o) => { setOpen(o); stepIn('card'); };
-  const closeCard = () => stepOut('card', () => setOpen(null));
-  const showPeople = (on) => (on ? (setPeopleOpen(true), stepIn('people')) : stepOut('people', () => setPeopleOpen(false)));
+  const openCard = (o) => stepIn('card', { id: o.id, tell: !!o.tell });
+  const closeCard = () => stepOut('card');
+  const showPeople = (on) => (on ? stepIn('people') : stepOut('people'));
 
   const refresh = (shiftIds = []) => {
     queryClient.invalidateQueries({ queryKey: ['shifts'] });

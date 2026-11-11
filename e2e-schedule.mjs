@@ -652,6 +652,8 @@ try {
   await until(async () => (await page.locator(`.sch-card[data-shift="${satCards[0].id}"] .sb-chip:not([data-temp])`).count()) === 1);
   await dragOnto(page.locator(`.sch-card[data-shift="${satCards[0].id}"] .sb-chip__name`), page.locator('.sb-tray'));
   await until(async () => (await cards(sat))[0].people.length === 0);
+  // (The chip goes at once; the toast says so once the server has answered.)
+  await until(async () => /^Dee off/.test(await toast()));
   check('her chip dragged back onto the strip comes off the shift, with Undo', (await cards(sat))[0].people.length === 0 && /^Dee off Canvass/.test(await toast())
     && (await page.locator('.sb-toast button:has-text("Undo")').count()) === 1 && !(await board()).assignments.some((a) => a.person_id === P.dee.id), await toast());
   k = await D.keys();
@@ -815,6 +817,16 @@ try {
   await page.evaluate(() => history.back());
   await sheetGone();
   check('…and with a card’s sheet open', (await page.locator('.sch-sheet').count()) === 0 && page.url() === weekHere && (await page.locator('.sch-card').count()) === 9, page.url());
+  // …and pressed the moment a card is clicked, before its sheet has shown.
+  let cardLeft = 0;
+  for (let i = 0; i < 3 && !cardLeft; i += 1) {
+    await page.locator('.sch-card__head').first().click();
+    await page.evaluate(() => history.back());
+    await sleep(400);
+    cardLeft = await page.locator('.sch-sheet').count();
+  }
+  check('…even the moment a card is clicked (three times over): no sheet left open, the week stays', !cardLeft && page.url() === weekHere, `${cardLeft ? 'left open' : ''} ${page.url()}`);
+  if (cardLeft) await page.locator('.sch-sheet .sch-x').click();
   await page.locator('.sch-card__head').first().click();
   await page.waitForSelector('.sch-sheet', { timeout: 8000 });
   await page.locator('.sch-sheet .sch-x').click();
@@ -880,6 +892,17 @@ try {
   await ashaRow.locator('.ops-row').click();
   await until(async () => /4 pm/.test(await ashaRow.innerText()));
   check('…and her shifts at the campaign’s hours: 4 pm, 6:30 am', /· 4 pm/.test(await ashaRow.innerText()) && /· 6:30 am/.test(await ashaRow.innerText()), (await ashaRow.innerText()).replace(/\s+/g, ' ').slice(0, 260));
+  // Her own page lists them on the same clock (Toronto would read 9:30).
+  await ep.goto(`${ADMIN}/people/${P.asha.id}`, { waitUntil: 'domcontentloaded' });
+  const ashaShifts = ep.locator('section.pf-sec:has(.pf-sec__title:text-is("Shifts"))');
+  await ashaShifts.locator('.pf-sec__btn').click({ timeout: 10000 });
+  await until(async () => /Burma Shave/.test(await ashaShifts.innerText()));
+  const shiftLine = async (id) => (await ashaShifts.locator(`li:has(a[href$="/shifts/${id}"])`).innerText().catch(() => '')).replace(/\s+/g, ' ');
+  const ashaMon = await shiftLine(monCards[0].id);
+  const ashaTue = await shiftLine(tueCards[0].id);
+  check('Toronto, a person’s page: her shifts on the campaign’s clock — Monday’s (moved) 4:00 p.m., Tuesday’s 6:30 a.m.',
+    ashaMon.includes(`${shortDay(mon)}, 4:00 p.m.`) && ashaTue.includes(`${shortDay(tue)}, 6:30 a.m.`), `${ashaMon} | ${ashaTue}`);
+  await E.shot('22b-toronto-person-1440');
   await east.close();
 
   // A smaller desk (1280×800): the days still have the room.
@@ -1017,6 +1040,17 @@ try {
     await until(async () => (await mp.locator('.sch-sheet').count()) === 0);
     check(`phone: Back with ${what} open closes it — still on the week`, (await mp.locator('.sch-sheet').count()) === 0 && mp.url() === phoneWeek && (await mp.locator('.sch-day').count()) === 1, mp.url());
   }
+  // …even pressed the moment People is tapped, before the sheet has shown
+  // (the step and the Back can reach the screen as one): nothing is left open.
+  let leftOpen = 0;
+  for (let i = 0; i < 4 && !leftOpen; i += 1) {
+    await mp.locator('.sch-peoplebtn').tap();
+    await mp.evaluate(() => history.back());
+    await sleep(400);
+    leftOpen = await mp.locator('.sch-sheet').count();
+  }
+  check('phone: Back the moment People is tapped (four times over) — no sheet left open, still on the week', !leftOpen && mp.url() === phoneWeek, `${leftOpen ? 'left open' : ''} ${mp.url()}`);
+  if (leftOpen) await mp.locator('.sch-sheet .sch-x').tap();
   await mobile.close();
 
   // A narrow window with a mouse: a card dragged onto another day's button in the strip moves there.
@@ -1183,11 +1217,33 @@ try {
   await page.locator('.sb-views button:has-text("List")').click();
   await page.waitForSelector('.sch-vrow', { timeout: 15000 });
   const laterBtn = page.locator('button:has-text("Show later shifts")');
+  // (The List may first show the copy it kept from before these were made.)
+  await until(async () => (await laterBtn.count()) === 1, 15000);
   check('over 500 coming up: the List says there are more — "Show later shifts" — rather than stop without a word', firstPage.shifts.length >= 500 && Boolean(firstPage.next)
     && (await laterBtn.count()) === 1 && (await page.locator(`.sch-vrow[data-shift="${lastFar?.id}"]`).count()) === 0, `${firstPage.shifts.length} · ${firstPage.next}`);
   await laterBtn.click();
   await until(async () => (await page.locator(`.sch-vrow[data-shift="${lastFar.id}"]`).count()) === 1, 15000);
   check('…and one tap shows them, to the last', (await page.locator(`.sch-vrow[data-shift="${lastFar.id}"]`).count()) === 1 && (await laterBtn.count()) === 0);
+  // A shift added sooner moves the first page's edge when the List reads it
+  // again (here after a change on the week): the row that was its last is
+  // still listed, and so is the very last — nothing falls between the pages.
+  const edgeId = firstPage.next.split(',')[1];
+  const sooner = (await D.api('/actions/shift.createMany', { kind: 'signs', location: 'Campaign office', days: [fri], start: '09:00', end: '12:00' })).json.shifts[0];
+  await page.locator('.sb-views button:has-text("Week")').click();
+  await page.locator('.sb-nav[aria-label="Next week"]').click();
+  await page.waitForSelector(`.sch-card[data-shift="${sooner.id}"]`, { timeout: 10000 });
+  await page.locator('.sb-person:has-text("Ben Example")').click();
+  await page.locator(`.sch-card[data-shift="${sooner.id}"] .sch-card__head`).click();
+  await until(async () => /^Ben added to Signs/.test(await toast()));
+  await page.locator('.sb-hand button:has-text("Done")').click();
+  await page.locator('.sb-views button:has-text("List")').click();
+  await page.waitForSelector(`.sch-vrow[data-shift="${sooner.id}"]`, { timeout: 15000 });
+  const rowThere = async (id) => (await page.locator(`.sch-vrow[data-shift="${id}"]`).count()) === 1;
+  const offeredAgain = (await laterBtn.count()) === 1;
+  if (offeredAgain) await laterBtn.click();
+  await until(async () => await rowThere(edgeId) && await rowThere(lastFar.id), 15000);
+  check('a shift added sooner and the List read again: the row that was 500th is still listed ("Show later shifts" offered again), and so is the last',
+    await rowThere(edgeId) && await rowThere(lastFar.id), `offered again: ${offeredAgain} · edge row: ${await rowThere(edgeId)} · last: ${await rowThere(lastFar.id)} · rows: ${await page.locator('.sch-vrow').count()}`);
   await page.locator('.sb-views button:has-text("Week")').click();
 
   // ── 21. The books still verify ──

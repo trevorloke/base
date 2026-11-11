@@ -310,6 +310,8 @@ const sum = await page.locator('.vl-sum').innerText();
 const roster = (await D.api('/volunteers')).json;
 check('the roster’s line matches the server', sum.startsWith(`${roster.counts.all} volunteers · ${roster.counts.active} active`) && /1 asked to volunteer/.test(sum), sum);
 await page.locator('.vl-shows').getByRole('button', { name: /^Asked to volunteer/ }).click();
+// (The filter is in the address, which the list follows a moment later.)
+await until(async () => JSON.stringify(await page.locator('.vl-item .ops-row__name').allInnerTexts()) === '["Newbie Example"]');
 const askedRows = await page.locator('.vl-item .ops-row__name').allInnerTexts();
 check('Asked to volunteer: Newbie', JSON.stringify(askedRows) === '["Newbie Example"]', askedRows.join(', '));
 await page.locator('.vl-item', { hasText: 'Newbie Example' }).locator('.ops-row').click();
@@ -325,6 +327,7 @@ await page.locator('.ops-done', { hasText: 'On Saturday canvass' }).waitFor({ ti
 check('"✓ On Saturday canvass — their “Wants to volunteer” is done"', /On Saturday canvass — their “Wants to volunteer” is done/.test(await page.locator('.vl-item', { hasText: 'Newbie Example' }).innerText()));
 check('the server has Newbie on the crew', !!(await placed(newbie.id)));
 await page.locator('.vl-shows').getByRole('button', { name: /^Lapsed/ }).click();
+await until(async () => (await page.locator('.vl-item .ops-row__name').allInnerTexts()).includes('Lapsed Example'));
 check('Lapsed: the summer volunteer', (await page.locator('.vl-item .ops-row__name').allInnerTexts()).includes('Lapsed Example'));
 
 // ── 8. A phone ──
