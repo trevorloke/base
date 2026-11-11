@@ -1072,7 +1072,12 @@ try {
       const words = (s) => document.querySelector(s)?.innerText.replace(/\s+/g, ' ').trim() || null;
       // (A tap on the line itself reaches what is under it: a door.)
       const mid = n && document.elementFromPoint((n.l + n.r) / 2, (n.t + n.b) / 2);
-      return { note: words('.error.map-error'), retry: words('.map-retry'), pill: words('.map-filter-btn'), through: Boolean(mid && !mid.closest('.error.map-error')), buttons };
+      const sheet = document.querySelector('.map-sheet');
+      const s = sheet && rect(sheet);
+      return {
+        note: words('.error.map-error'), retry: words('.map-retry'), pill: words('.map-filter-btn'), through: Boolean(mid && !mid.closest('.error.map-error')),
+        sheet: s ? words('.map-sheet .mapsheet-title') : null, underSheet: Boolean(n && s && s.l < n.r && n.l < s.r && s.t < n.b && n.t < s.b), buttons,
+      };
     });
     const blocked = (k) => k.buttons.filter((b) => b.under || !b.tap).map((b) => b.name);
     // Opened with signal (the phone keeps the doors), then again with none.
@@ -1120,6 +1125,17 @@ try {
         JSON.stringify({ ...k, blocked: blocked(k) }));
       await mc.close();
     }
+    // A laptop with a turf's sheet open: the corner buttons move beside the
+    // sheet, towards the zoom buttons — the line stays clear of both, and of the sheet.
+    const lc = await context({ viewport: { width: 1024, height: 768 } });
+    const lp = await lc.newPage();
+    lp.on('pageerror', (e) => errors.push(`[kept 1024] ${e.message}`));
+    k = await keptThenNone(lc, lp, `/admin/map?turf=${turf.id}`);
+    await lp.screenshot({ path: `${SHOTS}/12-kept-sheet-1024x768.png` });
+    check('1024×768 with a turf’s sheet open: the line clear of the zoom buttons, the buttons beside the sheet, and the sheet',
+      k.note === 'No signal — showing the doors already loaded' && k.sheet === 'Kept block' && !k.underSheet && k.buttons.length >= 5 && blocked(k).length === 0,
+      JSON.stringify({ ...k, blocked: blocked(k) }));
+    await lc.close();
   }
 
   check('no page errors', errors.length === 0, errors.join(' | '));

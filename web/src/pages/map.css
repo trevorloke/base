@@ -576,6 +576,9 @@
 @media (min-width: 721px) {
   .map-page.has-sheet .map-top { right: calc(var(--s-2) + 388px); }
   .map-page.has-sheet .map-fabs { right: calc(var(--s-3) + 388px); }
+  /* (The buttons beside the sheet can reach the zoom buttons' side: the
+     doors' line goes above them, short of the sheet.) */
+  .map-page.has-sheet .error.map-error { bottom: 164px; max-width: calc(100% - 472px); }
 }
 @media (max-width: 720px) {
   .map-sheet, .map-fsheet {
