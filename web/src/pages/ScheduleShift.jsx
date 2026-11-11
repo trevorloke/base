@@ -51,6 +51,9 @@ export default function ScheduleShift({
   const canMap = (me?.areas ?? []).includes('map') && turfs !== null;
   const day0 = dayOf(shift.starts_at, tz);
   const at0 = shiftClock(shift, tz);
+  // …and how long it really runs, for the Time chips (an 11 pm shift that
+  // ends after midnight has no end on its day, but it has a length).
+  const own = { ...at0, minutes: shift.ends_at ? Math.round((new Date(shift.ends_at) - new Date(shift.starts_at)) / 60000) : null };
   const over = new Date(shift.ends_at || shift.starts_at) < new Date();
   const [where0] = useState(() => whereOf(shift, turfs ?? []));
   const [scope, setScope] = useState('one');
@@ -181,7 +184,7 @@ export default function ScheduleShift({
 
           <section className="sch-sec" aria-label="Time">
             <h3 className="sch-label">Time</h3>
-            <When kind={kind} value={when} onChange={setWhen} />
+            <When kind={kind} value={when} onChange={setWhen} own={own} />
           </section>
 
           <section className="sch-sec" aria-label="Place">

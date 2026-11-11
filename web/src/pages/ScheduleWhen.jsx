@@ -10,6 +10,10 @@
 //           has no end
 //   many    several may be chosen at once (the add sheet: a morning and an
 //           afternoon); otherwise exactly one (a shift being changed)
+//   own     a shift being changed: its own { start, end, minutes } — kept
+//           among the chips even where the half-hour grid has none (an
+//           11 pm start, 5:45 am, four and a quarter hours); minutes is
+//           how long it really runs, past midnight or not
 //
 //   timesOf(value)        → [{ start, end }] soonest first, each start once
 //   whenFor(kind, shift?) → the value a sheet opens with
@@ -21,6 +25,20 @@ const keyOf = (s) => `${s.start}-${s.end}`;
 const LENGTHS = [[60, '1 h'], [90, '1½ h'], [120, '2 h'], [180, '3 h']];
 // Every half hour from 6:00 am to 9:30 pm.
 const STARTS = Array.from({ length: 32 }, (_, i) => `${pad(6 + Math.floor(i / 2))}:${i % 2 ? '30' : '00'}`);
+// Minutes from one clock time to a later one on the same day.
+const span = (start, end) => {
+  const [h, m] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return (eh * 60 + em) - (h * 60 + m);
+};
+// A length the four chips don't have: "4 h", "2½ h", "45 min", "4 h 15 min".
+const lengthWords = (minutes) => {
+  const h = Math.floor(minutes / 60);
+  const r = minutes % 60;
+  if (!h) return `${r} min`;
+  if (!r) return `${h} h`;
+  return r === 30 ? `${h}½ h` : `${h} h ${r} min`;
+};
 
 export const timesOf = (value) => {
   const byStart = new Map();
@@ -43,14 +61,12 @@ export const whenFor = (kind, at = null) => {
   if (at) {
     const usual = kind.slots.find((s) => s.start === at.start && s.end === at.end);
     if (usual) return { slots: [keyOf(usual)], other: null };
-    const [h, m] = at.start.split(':').map(Number);
-    const [eh, em] = (at.end || '').split(':').map(Number);
-    return { slots: [], other: { start: at.start, minutes: at.end ? (eh * 60 + em) - (h * 60 + m) : null } };
+    return { slots: [], other: { start: at.start, minutes: at.end ? span(at.start, at.end) : null } };
   }
   return kind.slots.length ? { slots: [keyOf(kind.slots[0])], other: null } : { slots: [], other: { start: null, minutes: kind.minutes } };
 };
 
-export default function When({ kind, value, onChange, many = false }) {
+export default function When({ kind, value, onChange, many = false, own = null }) {
   const other = value.other;
   const [part, setPart] = useState(() => weekPartOf(other?.start || '06:00'));
   const pickUsual = (key) => {
@@ -64,7 +80,20 @@ export default function When({ kind, value, onChange, many = false }) {
     else if (many || kind.slots.length) onChange({ slots: value.slots.length || many ? value.slots : [keyOf(kind.slots[0])], other: null });
   };
   const setOther = (patch) => onChange({ ...value, other: { ...other, ...patch } });
-  const starts = STARTS.filter((c) => weekPartOf(c) === part);
+  // Its own start and length are chips too, whatever they are.
+  const ownMinutes = own?.minutes > 0 ? own.minutes : null;
+  const starts = (own?.start && !STARTS.includes(own.start) ? [...STARTS, own.start].sort() : STARTS).filter((c) => weekPartOf(c) === part);
+  const lengths = ownMinutes && !LENGTHS.some(([m]) => m === ownMinutes)
+    ? [...LENGTHS, [ownMinutes, lengthWords(ownMinutes)]].sort((a, b) => a[0] - b[0]) : LENGTHS;
+  // Still on its own hours. One that runs past midnight has no end the taps
+  // can make (minutes null), so its real length is the one shown chosen.
+  const ownOpen = own ? whenFor(kind, own).other : null;
+  const onOwn = !!ownOpen && other?.start === ownOpen.start && other.minutes === ownOpen.minutes;
+  const shown = other?.minutes ?? (onOwn ? ownMinutes : null);
+  // Another start keeps the length shown, or an hour where that would run
+  // past midnight; its own start puts its own hours back.
+  const pickStart = (c) => setOther(ownOpen && c === ownOpen.start && c !== other.start ? ownOpen
+    : { start: c, minutes: shown && !addClock(c, shown) ? 60 : shown });
 
   return (
     <div className="sch-when">
@@ -87,16 +116,16 @@ export default function When({ kind, value, onChange, many = false }) {
           </div>
           <div className="sch-chips" role="group" aria-label="Starts at">
             {starts.map((c) => (
-              <button key={c} type="button" className="sch-chip" aria-pressed={other.start === c}
-                onClick={() => setOther({ start: c, minutes: other.minutes && !addClock(c, other.minutes) ? 60 : other.minutes })}>
+              <button key={c} type="button" className="sch-chip" aria-pressed={other.start === c} onClick={() => pickStart(c)}>
                 {spanWords(c)}
               </button>
             ))}
           </div>
           <div className="sch-chips" role="group" aria-label="How long">
-            {LENGTHS.map(([m, words]) => (
-              <button key={m} type="button" className="sch-chip" aria-pressed={other.minutes === m}
-                disabled={!!other.start && !addClock(other.start, m)} onClick={() => setOther({ minutes: m })}>
+            {lengths.map(([m, words]) => (
+              <button key={m} type="button" className="sch-chip" aria-pressed={shown === m}
+                disabled={!!other.start && !addClock(other.start, m) && shown !== m}
+                onClick={() => { if (shown !== m) setOther({ minutes: m }); }}>
                 {words}
               </button>
             ))}

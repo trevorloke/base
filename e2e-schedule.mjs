@@ -409,6 +409,8 @@ try {
     `${await PP.text('.ops-lines')} | ${pinHref}`);
   check('…and its Mainstreeting asks where, never handed the coordinates', (await pp.locator('a:has-text("Start mainstreeting")').getAttribute('href')) === '/admin/mainstreet?ask=1',
     await pp.locator('a:has-text("Start mainstreeting")').getAttribute('href'));
+  const nobody = await pp.evaluate(() => { const n = document.querySelector('.ops-spots .n'); return { text: n.innerText.trim(), size: parseFloat(getComputedStyle(n).fontSize) }; });
+  check('nobody on it yet: "Nobody yet" is said at the size of a heading, not as the page’s big figure', nobody.text === 'Nobody yet' && nobody.size <= 20, JSON.stringify(nobody));
   await PP.shot('05c-shift-page-pinned-1440');
   await pp.locator('.ops-lines .sch-pinned button:has-text("Name it")').click();
   check('"Name it" there is one tap to the name; Cancel puts it away', await pp.evaluate(() => document.activeElement?.id === 'sch-pin-name'));
@@ -441,10 +443,11 @@ try {
   await go.click();
   await sheetGone();
   await until(async () => (await page.locator('.sch-card').count()) === 9);
+  await until(async () => (await cards(sat)).every((c) => c.turfs.length === 1));
   const satCards = await cards(sat);
-  check('Saturday: a morning and an afternoon canvass, each with its turf chip',
+  check('Saturday: a morning and an afternoon canvass, each with its turf chip — the turf is the place, said once',
     satCards.map((c) => `${c.title}/${c.place}/${c.time}/${c.part}/${c.turfs.join('+')}`).join(' | ')
-    === 'Canvass/Newton block/10 am–1 pm/Morning/Newton block | Canvass/Newton block/2–5 pm/Afternoon/Newton block', JSON.stringify(satCards));
+    === 'Canvass/null/10 am–1 pm/Morning/Newton block | Canvass/null/2–5 pm/Afternoon/Newton block', JSON.stringify(satCards));
   const carried = (await D.api('/shiftturfs')).json.shifts;
   check('server: both carry the walk list', satCards.every((c) => (carried[c.id] || []).map((t) => t.name).join() === 'Newton block'));
 
@@ -844,6 +847,38 @@ try {
   check('this week: a "+" on today and after, none on a day that is over', (await page.locator('.sch-day .sch-plus').count()) === thisWeek.filter((d) => d >= today).length
     && (await page.locator('.sch-day[data-past] .sch-plus').count()) === 0);
 
+  // ── 16b. Times the tap grid can't make (the long form's 11 pm to 12:30 am; 10:15 am for 4¼ hours): a card's sheet opens on them ──
+  const lateWeek = addDays(MON, 7 * 11);
+  const lateDay = addDays(lateWeek, 4);
+  const late = (await D.api('/actions/shift.create', { title: 'Phone bank — Campaign office', kind: 'phone_bank', location: 'Campaign office',
+    starts_at: at(lateDay, '23:00'), ends_at: at(addDays(lateDay, 1), '00:30') })).json.shift;
+  const odd = (await D.api('/actions/shift.create', { title: 'Canvass — Newton Rec Centre', kind: 'canvass', location: 'Newton Rec Centre',
+    starts_at: at(addDays(lateDay, -1), '10:15'), ends_at: at(addDays(lateDay, -1), '14:30') })).json.shift;
+  await D.go(`/shifts?week=${lateWeek}`);
+  await page.waitForSelector(`.sch-card[data-shift="${late.id}"]`, { timeout: 10000 });
+  const startChip = (words) => page.locator(`.sch-sheet [aria-label="Starts at"] .sch-chip:text-is("${words}")`);
+  const lengthChip = (words) => page.locator(`.sch-sheet [aria-label="How long"] .sch-chip:text-is("${words}")`);
+  await openCard(odd.id);
+  check('10:15 am for 4¼ hours: its sheet opens on "10:15 am" and "4 h 15 min", both pressed; Save waits for a change',
+    await pressed(chip('Another time')) && await pressed(startChip('10:15 am')) && await pressed(lengthChip('4 h 15 min'))
+    && !(await lengthChip('4 h 15 min').isDisabled()) && await go.isDisabled(), await D.text('.sch-sheet .sch-when'));
+  await page.locator('.sch-sheet .sch-x').click();
+  await sheetGone();
+  await openCard(late.id);
+  check('11 pm to 12:30 am: its sheet opens on "11 pm" and "1½ h", both pressed (the only length offered there: nothing made by tap runs past midnight); Save waits for a change',
+    await pressed(chip('Another time')) && await pressed(startChip('11 pm')) && await pressed(lengthChip('1½ h'))
+    && await lengthChip('1 h').isDisabled() && await go.isDisabled(), await D.text('.sch-sheet .sch-when'));
+  await D.shot('16b-late-shift-sheet-1440');
+  await startChip('9 pm').click();
+  check('…"9 pm": the hour and a half comes with it', await pressed(lengthChip('1½ h')) && !(await go.isDisabled()));
+  await startChip('11 pm').click({ timeout: 5000 }).catch(() => {});
+  check('…"11 pm" again: its own hours are back, nothing to save', await pressed(lengthChip('1½ h')) && await go.isDisabled());
+  await startChip('9 pm').click();
+  await go.click();
+  await sheetGone();
+  const lateNow = (await D.api(`/shifts/${late.id}`)).json.shift;
+  check('…"9 pm", Save: 9–10:30 pm that day', iso(lateNow.starts_at) === at(lateDay, '21:00') && iso(lateNow.ends_at) === at(lateDay, '22:30'), `${lateNow.starts_at} ${lateNow.ends_at}`);
+
   // ── 17. A laptop on Toronto time shows the campaign's hours ──
   const east = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, timezoneId: 'America/Toronto', locale: 'en-CA', storageState: await desk.storageState() });
   const ep = await east.newPage();
@@ -988,6 +1023,13 @@ try {
   check('phone: the strip marks the days that have shifts', (await mp.locator('.sb-day .sb-day__dot').count()) === 5);
   mm = await measure(mp, '.sch-plus, .sb-week .btn, .sb-day, .sch-card__head, .sch-peoplebtn');
   check('phone, a day with shifts: one main button, no sideways scroll, 48px targets', mm.yellow.join('|') === 'New shift' && mm.overflow <= 0 && mm.minTap >= 47.5, JSON.stringify(mm));
+  const row = await mp.evaluate(() => {
+    const r = (sel) => document.querySelector(sel).getBoundingClientRect();
+    const week = r('.sb-week'); const ppl = r('.sch-peoplebtn'); const more = r('.sch-week__more'); const back = r('.sb-nav[aria-label="Last week"]');
+    return { pplLeft: Math.round(ppl.left - week.left), gap: Math.round(more.left - ppl.right), sameRow: Math.abs(ppl.top - more.top) < 2, under: ppl.top >= back.bottom - 1, moreRight: Math.round(week.right - more.right) };
+  });
+  check('phone: "People" and "More" are a row of their own under the dates — People from the left edge, no empty stretch beside them', row.sameRow && row.under && row.pplLeft <= 1
+    && row.gap <= 16 && row.moreRight <= 1, JSON.stringify(row));
   await M.shot('33-week-day-390', true);
 
   // A card's sheet on the phone; pick on the map there too.

@@ -78,7 +78,7 @@ import ShiftCrew from './ShiftCrew.jsx';
 import { Unavailable } from './ScheduleSheet.jsx';
 import { NameIt } from './ScheduleWhere.jsx';
 import { KindIcon, cardWords, kindVars } from '../components/ShiftKind.jsx';
-import { TurfPicker, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
+import { TurfPicker, turfIsPlace, turfNames, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import { normalizeLink, safeHref } from '../components/shiftLink.js';
 import { clockText, dayName, longDay, overlaps, stampText, timeRange, zoneOf } from '../components/shiftTime.js';
 import { NOTIFIED_WORD, NotifyChip, notifySummary, outcomeOf, people } from '../components/NotifyWords.jsx';
@@ -575,16 +575,16 @@ function useLegacyMyShifts(me, enabled) {
 }
 
 // ── List ──
-const sameWords = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 // How a shift stands for people: "5 spots left" / "Full" against a limit;
 // "3 of 4 — one more" against its target (which never turns anyone away);
 // else who is going — "3 going", "Nobody yet". No number unless one was set.
+const NOBODY = 'Nobody yet';
 const roomText = (s, filled = s.filled) => {
   const n = Number(filled) || 0;
   if (s.capacity) return spotsText(n, s.capacity);
   const short = shortBy({ ...s, filled: n });
   if (short) return `${n} of ${s.need} — ${short === 1 ? 'one' : short} more`;
-  return n ? `${n} going` : 'Nobody yet';
+  return n ? `${n} going` : NOBODY;
 };
 
 // A shift on the list: its kind's mark, what it is, the hours and where
@@ -596,7 +596,7 @@ function ShiftRow({ s, tz, now, past = false, mine = false, waiting = false, tur
   const names = turfNames(turfs);
   const words = cardWords(s);
   // A turf that is the place is said once, beside the name.
-  const place = words.place && !sameWords(words.place, names) ? words.place : null;
+  const place = words.place && !turfIsPlace(words.place, turfs) ? words.place : null;
   const hours = isLive(s, now) && s.ends_at ? `Now · until ${clockText(s.ends_at, tz)}` : timeRange(s.starts_at, s.ends_at, tz);
   const join = !past && !mine && !waiting && !full && onJoin;
   // Nobody on it and no number set: the row has nothing to count.
@@ -1074,6 +1074,7 @@ function ShiftDetail({ id, canDesk, me }) {
 
   const { shift, assignees } = shiftQ.data;
   const active = assignees.filter((a) => HOLDS_SPOT.includes(a.status));
+  const room = roomText(shift, active.length);
   const full = !!shift.capacity && active.length >= shift.capacity;
   const href = safeHref(shift.link);
   const myEmail = String(me?.user?.email || '').toLowerCase();
@@ -1431,8 +1432,9 @@ function ShiftDetail({ id, canDesk, me }) {
         </section>
       )}
 
-      <div className="ops-spots" aria-label={shift.capacity ? `${active.length} of ${shift.capacity} spots filled` : roomText(shift, active.length)}>
-        <span className="n">{roomText(shift, active.length)}</span>
+      <div className="ops-spots" aria-label={shift.capacity ? `${active.length} of ${shift.capacity} spots filled` : room}>
+        {/* "Nobody yet" is said, not shouted: the big figure is for a count. */}
+        <span className="n" data-none={room === NOBODY ? '' : undefined}>{room}</span>
         <SpotsBar filled={active.length} capacity={shift.capacity} />
       </div>
 

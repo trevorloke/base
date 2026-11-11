@@ -215,9 +215,10 @@
 .sch-pinned .field, .sch-pinned .ops-actions, .sch-pinned .error { flex: 1 1 100%; margin: 0; }
 .sch-named { display: flex; flex-direction: column; gap: 2px; }
 
-/* The phone's "People": one button in the week's row, beside "More". */
-.sb-week.sch-week .sch-peoplebtn ~ .sch-week__more { margin-left: var(--s-1); }
-.sb-week.sch-week .sch-peoplebtn { margin-left: auto; }
+/* The phone's "People" and "More": a row of their own under the dates,
+   "People" the width of it (no empty stretch beside them). */
+.sch-week__tools { flex: 1 1 100%; display: flex; gap: var(--s-2); }
+.sch-week__tools .sch-peoplebtn { flex: 1 1 auto; }
 
 /* More: what is typed or rare. */
 .disclose.sch-more { margin-top: var(--s-2); }
@@ -245,6 +246,9 @@
 .sch-kindchip .sk-icon { width: 14px; height: 14px; color: var(--kind, var(--text-3)); }
 .ops-lines > a.sch-maplink { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 48px; }
 .ops-actions.sch-daytool { margin: 0 0 var(--s-3); }
+
+/* A shift nobody is on yet: said plainly, not as a big figure. */
+.ops-spots .n[data-none] { font-size: 20px; color: var(--text-2); }
 
 /* "More options": the long form's own name. */
 .sch-formtitle { margin: 0 0 var(--s-3); font-family: var(--font-sans); font-size: 20px; font-weight: 700; line-height: 1.25; }

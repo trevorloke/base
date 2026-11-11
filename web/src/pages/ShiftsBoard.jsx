@@ -44,7 +44,7 @@ import {
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
 import { KindIcon, cardWords, kindVars } from '../components/ShiftKind.jsx';
-import { TurfChips, useShiftTurfs } from '../components/ShiftTurfs.jsx';
+import { TurfChips, turfIsPlace, useShiftTurfs } from '../components/ShiftTurfs.jsx';
 import ScheduleAdd from './ScheduleAdd.jsx';
 import People from './SchedulePeople.jsx';
 import ScheduleShift from './ScheduleShift.jsx';
@@ -586,6 +586,9 @@ export default function ShiftsBoard({ me, onSheet }) {
     const full = !!s.capacity && filled >= s.capacity;
     const short = !full && !!s.need && filled < s.need;
     const words = cardWords(s);
+    const turfs = turfsByShift[s.id];
+    // A turf that is the place is said once, by its chip.
+    const place = words.place && !turfIsPlace(words.place, turfs) ? words.place : null;
     const over = new Date(s.ends_at || s.starts_at) < new Date();
     // Who is on it: "2 on" — "3 of 4" only once someone set a target (or an
     // older shift has a limit); nothing at all while nobody is.
@@ -600,13 +603,13 @@ export default function ShiftsBoard({ me, onSheet }) {
           onPointerDown={over ? undefined : grab({ shift: s })} onContextMenu={(e) => e.preventDefault()} onClick={() => tapShift(s)}>
           <span className="sch-card__kind"><KindIcon kind={words.kind} /></span>
           <span className="sb-shift__title sch-card__title">{words.title}</span>
-          {words.place && <span className="sch-card__place">{words.place}</span>}
+          {place && <span className="sch-card__place">{place}</span>}
           <span className="sb-shift__meta sch-card__meta">
             <span className="sch-card__time">{shiftSpan(s, tz)}</span>
             {count && <span className="sb-cap" data-full={full ? '' : undefined} data-short={short ? '' : undefined}>{count}</span>}
           </span>
         </button>
-        <TurfChips turfs={turfsByShift[s.id]} label={`Turfs for ${s.title}`} card />
+        <TurfChips turfs={turfs} label={`Turfs for ${s.title}`} card />
         {chips.length > 0 && (
           <ul className="sb-chips" aria-label={`On ${s.title}`}>
             {chips.map((a) => {
@@ -668,6 +671,12 @@ export default function ShiftsBoard({ me, onSheet }) {
       open={peopleOpen} onOpen={showPeople} props={dragProps}
       onTap={(item) => { showPeople(false); tapPerson(item); }} />
   );
+  const moreBtn = (
+    <button type="button" className="btn btn-quiet sb-today sch-week__more" aria-expanded={more} aria-controls={moreId}
+      onClick={() => setMore((v) => !v)}>
+      More
+    </button>
+  );
 
   return (
     <div className="sb sch" data-dragging={dragging ? '' : undefined}>
@@ -678,11 +687,8 @@ export default function ShiftsBoard({ me, onSheet }) {
         {monday !== thisWeek && (
           <button type="button" className="btn btn-quiet sb-today" onClick={() => { setPhoneDay(null); goWeek(thisWeek); }}>This week</button>
         )}
-        {narrow && peopleEl}
-        <button type="button" className="btn btn-quiet sb-today sch-week__more" aria-expanded={more} aria-controls={moreId}
-          onClick={() => setMore((v) => !v)}>
-          More
-        </button>
+        {/* A phone: "People" and "More" a row of their own under the dates. */}
+        {narrow ? <div className="sch-week__tools">{peopleEl}{moreBtn}</div> : moreBtn}
       </div>
 
       {more && (

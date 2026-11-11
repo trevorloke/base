@@ -503,9 +503,11 @@ one tap away under **More**.
   corner, nothing typed, and no number on them (*More → We need* sets a
   target by tap: then *0 of 4*). **+** on Saturday: *Canvass*, a turf,
   *2–5 pm* as well: a morning and an afternoon canvass, each with its turf
-  chip. Tap a card: another day and **Save** moves it (or drag the card to
-  another day — *Undo*); with someone on it the week says who has the old
-  time, with **Tell them**. Tap a name in the strip of people: it stays in
+  chip (the turf is the place, said once). Tap a card: another day and
+  **Save** moves it (or drag the card to another day — *Undo*); with
+  someone on it the week says who has the old time, with **Tell them**. A
+  shift the long form made at 11 pm opens its sheet on *11 pm* and its own
+  length, both chosen. Tap a name in the strip of people: it stays in
   hand (*Tap each shift to put … on it*, then under the name what each tap
   did — no toast over the next card) while you tap card after card;
   **Done** puts it down. A long name on a card keeps its initial

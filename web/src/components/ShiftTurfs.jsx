@@ -20,6 +20,9 @@ import { phoneCopy, useKeepCopy } from './OfflineCache.js';
 import './shiftturfs.css';
 
 export const turfNames = (list) => (Array.isArray(list) ? list.map((t) => t.name).filter(Boolean).join(', ') : '');
+// A canvass whose place is its turf ("Canvass — Newton block" on Newton
+// block): the turf says where, once.
+export const turfIsPlace = (place, list) => Boolean(place) && String(place).trim().toLowerCase() === turfNames(list).trim().toLowerCase();
 
 const NO_TURFS = {};
 export function useShiftTurfs(me, { side = false } = {}) {
