@@ -2560,7 +2560,8 @@ export default function MapPage() {
         {/* The street map isn't loading (and the map isn't about to go to its
             other provider by itself): one line, one tap — to the other only
             if it has just answered, else to ask this one again. Or it has
-            just switched by itself: said for a few seconds. */}
+            just switched by itself: said for a few seconds, while that look
+            is the one drawn (not while the pick is, with no signal). */}
         {(move === 'try-other' || move === 'try-again') && !mode ? (
           <div className="map-tilenote" role="status">
             <span>The street map isn’t loading</span>
@@ -2568,7 +2569,7 @@ export default function MapPage() {
               ? <button type="button" className="btn map-tilenote__btn" onClick={() => { setSwitchedTo(null); setAutoView(otherLook.key); setTapped(true); }}>Try {otherLook.label}</button>
               : <button type="button" className="btn map-tilenote__btn" onClick={() => setTilesTry((n) => n + 1)}>Try again</button>}
           </div>
-        ) : switchedTo && !mode ? (
+        ) : switchedTo && drawnAuto && !mode ? (
           <div className="map-tilenote map-tilenote--done" role="status">The street map wasn’t loading — switched to {switchedTo}</div>
         ) : null}
         {showKey && !mode && <MapKey squares={patches} dark={view === 'dark'} words={keyWords} />}

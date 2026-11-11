@@ -737,9 +737,10 @@ try {
     const keptF = t.kept;
     t.net.up.clean = false;
     await t.pan('ArrowRight', 15);
+    // (Its "switched" line, said for eight seconds from the first press, may be gone by the last.)
     ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok', 20000);
     check('a flicker (the look’s own tiles fail, the other provider’s one tile gets through): it goes there by itself',
-      ts.look === 'muted' && ts.tiles === 'ok' && /switched to Muted/.test(ts.said || ''), JSON.stringify(ts));
+      ts.look === 'muted' && ts.tiles === 'ok' && ts.pick === null, JSON.stringify(ts));
     await t.tctx.setOffline(true);
     await t.pan('ArrowLeft', 15);
     await sleep(2500);
@@ -777,7 +778,10 @@ try {
       ts.look === 'muted' && ts.tiles === 'ok' && !/isn’t loading/.test(ts.said || ''), JSON.stringify(ts));
     t.net.up.clean = true;
     await noSignalFor(800);
+    // (Their pick is drawn while it is asked: past the ask, it must still be.)
     ts = await tilesUntil(t.pg, (s) => s.look === 'clean' && s.tiles === 'ok' && s.loaded > 0);
+    await sleep(5000);
+    ts = { ...ts, ...(await tileState(t.pg)) };
     check('…and once it answers: back to their own pick, Clean, by itself', ts.look === 'clean' && ts.tiles === 'ok' && ts.loaded > 0 && ts.pick === null && !ts.note, JSON.stringify(ts));
     await t.tctx.close();
 

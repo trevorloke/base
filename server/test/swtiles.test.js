@@ -46,13 +46,14 @@ const worker = () => {
     skipWaiting: async () => {},
   };
   vm.runInContext(SOURCE, vm.createContext({ self, caches, fetch, Response, Headers, URL, setTimeout, clearTimeout, console }));
-  // One request from the page: what the worker answered with (null: it let
-  // the browser fetch it, untouched), once everything it set going is done.
-  const ask = (url, { cache: mode = 'default' } = {}) => {
+  // One request from the page — a picture (a map tile), or from a script
+  // (destination '') — and what the worker answered with (null: it let the
+  // browser fetch it, untouched), once everything it set going is done.
+  const ask = (url, { cache: mode = 'default', destination = 'image' } = {}) => {
     const waits = [];
     let answer = null;
     on.fetch({
-      request: { method: 'GET', url, destination: 'image', mode: 'cors', cache: mode },
+      request: { method: 'GET', url, destination, mode: 'cors', cache: mode },
       respondWith: (p) => { answer = Promise.resolve(p); },
       waitUntil: (p) => { waits.push(p); },
     });
@@ -110,10 +111,16 @@ test('a provider the map names while the worker is still reading what it was tol
   assert.equal(w.ask('https://img.example/photo.png').answered(), false);
 });
 
-test('asked with no-store (“does this provider answer now?”), a tile goes to the network — never a kept copy', async () => {
+test('asked by the map itself (“does this provider answer now?”), a tile goes to the network — never a kept copy', async () => {
   const w = worker();
   for (const tile of ['https://a.basemaps.cartocdn.com/light_all/15/5202/11226.png', 'https://tile.openstreetmap.org/15/5202/11226.png']) {
     await w.ask(tile).done();
-    assert.equal(w.ask(tile, { cache: 'no-store' }).answered(), false, `${new URL(tile).hostname}: left to the browser`);
+    const host = new URL(tile).hostname;
+    assert.equal(w.ask(tile, { cache: 'no-store', destination: '' }).answered(), false, `${host}: left to the browser`);
+    // A browser with its cache switched off (developer tools) hands the
+    // worker 'reload' for every request: the script's ask still goes through.
+    assert.equal(w.ask(tile, { cache: 'reload', destination: '' }).answered(), false, `${host}, cache off: left to the browser`);
+    // The map's own tiles, the same: kept and answered.
+    assert.equal(w.ask(tile, { cache: 'reload' }).answered(), true, `${host}: a tile on the map is answered`);
   }
 });

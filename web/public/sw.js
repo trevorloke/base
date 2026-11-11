@@ -140,9 +140,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
 
   if (isTileHost(url.hostname)) {
-    // (The map asking whether the provider answers at all asks with
-    // no-store: the network's answer, never a tile kept here.)
-    if (req.cache === 'no-store') return;
+    // (The map asking whether the provider answers at all asks from a
+    // script, not as a picture, and with no-store: the network's answer,
+    // never a tile kept here. Either says so: a browser whose cache is
+    // switched off — developer tools — hands this worker 'reload' instead.)
+    if (req.cache === 'no-store' || req.destination === '') return;
     event.respondWith(tile(event, url));
     return;
   }
