@@ -73,6 +73,12 @@ await pp.waitForURL(/\/admin\/money$/, { timeout: 8000 });
 await pp.waitForSelector('.tab-more__btn.active', { timeout: 5000 }).catch(() => {});
 check('a place under More opens, the sheet closes, and More is the tab you are on', (await pp.getAttribute('.tab-more__btn', 'aria-expanded')) === 'false'
   && await pp.locator('.tab-more__panel').isHidden() && /\bactive\b/.test(await pp.getAttribute('.tab-more__btn', 'class')), await pp.getAttribute('.tab-more__btn', 'class'));
+// A screen's own "More" (Donations has one) stays the one button called
+// exactly that: the tab says its label inside a longer name.
+await pp.getByRole('button', { name: 'More', exact: true }).first().waitFor({ timeout: 8000 }).catch(() => {});
+const mores = await pp.getByRole('button', { name: 'More', exact: true }).count();
+const tabNamed = await pp.locator('.tabbar').getByRole('button', { name: 'More places', exact: true }).count();
+check('on a phone a screen’s own More is the only button called “More”; the tab is “More places”', mores === 1 && tabNamed === 1, JSON.stringify({ mores, tabNamed }));
 await pp.screenshot({ path: `${SHOTS}/02-desk-phone.png` });
 const manifest = await (await ctx.request.get(`${BASE}/manifest.webmanifest`)).json();
 check('installed, it is called base.win', manifest.name === 'base.win' && manifest.short_name === 'base.win', JSON.stringify([manifest.name, manifest.short_name]));

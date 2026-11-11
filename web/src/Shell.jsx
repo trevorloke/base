@@ -112,10 +112,12 @@ function MoreTab({ items, badge }) {
     return () => document.removeEventListener('pointerdown', onDown);
   }, [open]);
   const here = items.some((n) => onPlace(pathname, n));
+  // Named "More places", its label inside a longer name: many screens have a
+  // "More" of their own, and that one stays the only button called just "More".
   return (
     <div className="tab-more" ref={wrapRef}
       onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); btnRef.current?.focus(); } }}>
-      <button type="button" ref={btnRef} className={`tab-more__btn${here ? ' active' : ''}`} aria-expanded={open} aria-controls={panelId}
+      <button type="button" ref={btnRef} className={`tab-more__btn${here ? ' active' : ''}`} aria-label="More places" aria-expanded={open} aria-controls={panelId}
         onClick={() => setOpen((v) => !v)}>
         <span className="tab-iconwrap"><Icon name="more" /></span>
         <span className="tab-label">More</span>
