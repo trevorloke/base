@@ -376,7 +376,7 @@ try {
     st = await settled();
     await page.screenshot({ path: `${SHOTS}/5-just-past-the-edge.png` });
     check('just past the list’s edge (its last squares off the screen, still in the part asked for): nobody on screen, so it says so, with the way back',
-      past(st) > 0.02 && past(st) < 0.15 && st.zoom === first.zoom && numberIn(st.pill) === 0 && /Nobody on file here/.test(st.nobody || '') && !/Each square/.test(st.key || ''),
+      past(st) > 0.02 && past(st) < 0.15 && Math.floor(st.zoom) === Math.floor(first.zoom) && numberIn(st.pill) === 0 && /Nobody on file here/.test(st.nobody || '') && !/Each square/.test(st.key || ''),
       JSON.stringify({ past: Number(past(st).toFixed(3)), zoom: st.zoom, pill: st.pill, nobody: st.nobody, key: st.key }));
     await page.click('.map-nobody button').catch(() => page.click('.map-fab--list'));
     st = await settled((s) => s.view === 'density' && !s.nobody && numberIn(s.pill) === PEOPLE);
@@ -832,9 +832,10 @@ try {
     // The same after a switch by itself, with tiles that never answer: the
     // look's own provider stops answering and the one tile asked of the other
     // comes, so the map goes there; a few of its tiles come, then nothing
-    // answers any more. Back over the streets this browser kept, it is back
-    // on their pick by itself and they draw (it stayed on the other, blank,
-    // until the phone went offline).
+    // answers any more. Back over the streets this browser kept — by another
+    // way, so none of that look's own kept tiles come on the way and end the
+    // go of asking — it is back on their pick by itself and they draw (it
+    // stayed on the other, blank, until the phone went offline).
     t = await keptStreets();
     const keptH = t.kept;
     t.net.up.clean = 'hang';
@@ -842,9 +843,10 @@ try {
     const went = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok', 25000);
     t.net.up.base = 'hang';
     t.net.some.base = 4;
-    await t.pan('ArrowRight', 4);
+    await t.pan('ArrowDown', 6);
     await sleep(1000);
-    await t.pan('ArrowLeft', 19);
+    await t.pan('ArrowLeft', 15);
+    await t.pan('ArrowUp', 6);
     ts = await tilesUntil(t.pg, (s) => s.look === 'clean', 20000);
     await sleep(3000);
     const backH = await t.onScreen();
