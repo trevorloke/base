@@ -642,7 +642,8 @@ test('a 429 halfway leaves a sync the next run completes; a refusal that will no
   fake.calls.length = 0;
   const odd = await c.action('mailchimp.push', { list_id: list.id });
   assert.deepEqual([odd.status, fake.calls.length], [409, 0]);
-  assert.match(odd.json.error, /^MAILCHIMP_AUDIENCE_ID isn’t an audience’s id/);
+  // Said so whoever tapped can act on it: who chooses, and where — never a setting's name (Check names it, for a manager).
+  assert.equal(odd.json.error, 'The audience set for base.win isn’t a Mailchimp audience — a manager chooses one (Settings → Services → Mailchimp → Check names them)');
 });
 
 test('cleaned in Mailchimp is a dead address here; Pull now, the daily job, and a yes here that is newer than a no there', async () => {
@@ -1358,7 +1359,8 @@ test('Settings → Services: the Mailchimp row, Check and Connect — and who ma
   on();
   row = await rowOf();
   assert.deepEqual([row.state, row.missing, row.set, row.panel], ['ready', [], ['MAILCHIMP_API_KEY'], 'mailchimp']);
-  assert.match(row.detail, /^Built against Mailchimp’s published API/);
+  // The honest line, in a manager's words (INTEGRATIONS.md says why: built against Mailchimp's published API).
+  assert.equal(row.detail, 'Press Check before relying on it: it tries your own Mailchimp account.');
   assert.equal(ok(await staff.get('/api/integrations')).mailchimp, true);
   const coming = ok(await mgr.get('/api/connections')).inbound.find((i) => /Mailchimp/.test(i.name));
   assert.equal(coming.url, `${PUBLIC}/hooks/mailchimp/…`, 'the address is listed without its last part');
@@ -1370,8 +1372,9 @@ test('Settings → Services: the Mailchimp row, Check and Connect — and who ma
   fake.audience('aud0002', 'Old list');
   answers.push(await check());
   assert.deepEqual(answers.at(-1), { key: 'mailchimp', ok: false, said: `The key works, but the account has 2 audiences — set MAILCHIMP_AUDIENCE_ID to one: “Sample Campaign” (${fake.id}) · “Old list” (aud0002)` });
+  // A staff member's Send is told who chooses, and where — never a setting's name they cannot change.
   r = await staff.action('mailchimp.push', { list_id: list.id });
-  assert.deepEqual([r.status, r.json.error], [409, `The account has 2 audiences — a manager sets MAILCHIMP_AUDIENCE_ID to one (Settings → Services → Mailchimp → Check names them)`]);
+  assert.deepEqual([r.status, r.json.error], [409, 'Mailchimp has 2 audiences and none is chosen for base.win — a manager chooses one (Settings → Services → Mailchimp → Check names them)']);
   process.env.MAILCHIMP_AUDIENCE_ID = 'no-such-audience';
   assert.deepEqual(await check(), { key: 'mailchimp', ok: false, said: 'The key works, but there’s no audience “no-such-audience” on this account — check MAILCHIMP_AUDIENCE_ID' });
   on({ MAILCHIMP_AUDIENCE_ID: fake.id });

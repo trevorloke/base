@@ -126,13 +126,17 @@ export const pages = async (path, rows, query = {}) => {
 
 // ── Which audience ──
 // MAILCHIMP_AUDIENCE_ID, or the account's only one. With several and none
-// named nothing is guessed (Settings → Services' Check names them).
+// named nothing is guessed (Settings → Services' Check names them). Why
+// there is none is said to whoever tapped — a staff member's Send too — so
+// it names who chooses and where, never the setting (Check names it, for a
+// manager).
 export class AudienceError extends MailchimpError {
   constructor(message) {
     super(message);
     this.name = 'AudienceError';
   }
 }
+const CHOOSE = 'a manager chooses one (Settings → Services → Mailchimp → Check names them)';
 export const audiences = async () => (await mailchimp('GET', '/lists', {
   query: { count: 20, fields: 'lists.id,lists.name,lists.stats.member_count,total_items' }, timeoutMs: 8000,
 }))?.lists || [];
@@ -153,7 +157,7 @@ export const knownAudience = () => {
 export const audienceId = async () => {
   const known = knownAudience();
   if (known) return known;
-  if (env('MAILCHIMP_AUDIENCE_ID')) throw new AudienceError('MAILCHIMP_AUDIENCE_ID isn’t an audience’s id — Settings → Services → Mailchimp → Check names each audience with its id');
+  if (env('MAILCHIMP_AUDIENCE_ID')) throw new AudienceError(`The audience set for base.win isn’t a Mailchimp audience — ${CHOOSE}`);
   const lists = await audiences();
   if (lists.length === 1 && AUDIENCE.test(String(lists[0]?.id ?? ''))) {
     only = { for: who(), id: String(lists[0].id), at: Date.now() };
@@ -162,5 +166,5 @@ export const audienceId = async () => {
   only = null;
   if (!lists.length) throw new AudienceError('The Mailchimp account has no audience yet — make one in Mailchimp first');
   if (lists.length === 1) throw new AudienceError('Mailchimp named its audience in a way base.win can’t use');
-  throw new AudienceError(`The account has ${lists.length} audiences — a manager sets MAILCHIMP_AUDIENCE_ID to one (Settings → Services → Mailchimp → Check names them)`);
+  throw new AudienceError(`Mailchimp has ${lists.length} audiences and none is chosen for base.win — ${CHOOSE}`);
 };

@@ -13,8 +13,10 @@ import { deliveries } from './webhook.js';
 
 const NEEDS = ['MAILCHIMP_API_KEY'];
 const env = (k) => String(process.env[k] || '').trim();
-// What could not be confirmed is said where the manager sets it up.
-export const UNCONFIRMED = 'Built against Mailchimp’s published API: press Check on your own account before relying on it.';
+// What could not be confirmed is said where the manager sets it up, in their
+// words: base.win was built against Mailchimp's published API, never tried
+// on a real account (INTEGRATIONS.md) — Check tries theirs.
+export const UNCONFIRMED = 'Press Check before relying on it: it tries your own Mailchimp account.';
 const NO_SERVER = 'MAILCHIMP_API_KEY doesn’t end in its server (like -us19): copy the whole key';
 // The webhook base.win asks for: who left, whose address died, whose address
 // changed — and never its own changes echoed back (sources.api off).
