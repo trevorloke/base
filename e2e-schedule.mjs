@@ -370,6 +370,8 @@ try {
   await tile('Mainstreet').click();
   await page.waitForSelector('.sch-sheet .sch-daychip', { timeout: 8000 });
   check('Mainstreet’s usual hours: 7–9 am chosen (4:30–6:30 pm offered)', await pressed(chip('7–9 am')) && (await chip('4:30–6:30 pm').count()) === 1);
+  // (The places are read again after the add; the chip is there once they are.)
+  await until(async () => (await chip('King George Blvd & 88 Ave').count()) === 1);
   check('a place used before is a chip', (await chip('King George Blvd & 88 Ave').count()) === 1 && !(await pressed(chip('King George Blvd & 88 Ave'))));
   geo.mode = 'down';
   await chip('Pick on the map').click();
