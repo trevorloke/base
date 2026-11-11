@@ -871,17 +871,19 @@ try {
     // Each trouble is flagged in its own line — one screenshot says which.
     const bad = await context({}, { tiles: false });
     await bad.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.abort('connectionrefused'));
-    await bad.route('**/api/map/check', async (route) => {
+    // (retryAt: when the paused run tries again — in a while, or long gone by.)
+    const troubles = (retryIn) => async (route) => {
       const res = await route.fetch();
       const body = await res.json();
       await route.fulfill({ response: res, json: {
         ...body,
         people: { total: 300052, onMap: 22424, waiting: 277625, noAddress: 3 },
         area: { ...body.area, inside: 22422, outside: 2 },
-        placing: { ...body.placing, state: 'paused', located: 22000, copied: 424, missed: 0, remaining: 277625, lastError: 'geocoder 503', retryAt: new Date(Date.now() + 15 * 60000).toISOString() },
+        placing: { ...body.placing, state: 'paused', located: 22000, copied: 424, missed: 0, remaining: 277625, lastError: 'geocoder 503', retryAt: new Date(Date.now() + retryIn).toISOString() },
         build: 'index-NEWER000.js',
       } });
-    });
+    };
+    await bad.route('**/api/map/check', troubles(15 * 60000));
     const bp = await bad.newPage();
     bp.on('pageerror', (e) => errors.push(`[check troubles] ${e.message}`));
     await bp.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
@@ -893,8 +895,12 @@ try {
       flagged === 'build,offmap,placing,tiles' && /277,628/.test(lines.offmap.value) && /Paused/.test(lines.placing.value) && /tries again/.test(lines.placing.value)
         && /isn’t loading/.test(lines.tiles.value) && /older than the server/i.test(lines.build.value), JSON.stringify(Object.values(lines).map((l) => `${l.warn ? '!' : ' '}${l.label}: ${l.value}`)));
     // On a phone one screenshot must show them too: the flagged lines first,
-    // each whole on screen with nothing scrolled (the last lines were a scroll away).
+    // each whole on screen with nothing scrolled (the last lines were a scroll
+    // away). And a paused run long past its time to try again says its try
+    // was due then — not "tries again at" a time gone by.
     await bp.keyboard.press('Escape');
+    await bad.unroute('**/api/map/check');
+    await bad.route('**/api/map/check', troubles(-2 * 3600_000));
     await bp.setViewportSize({ width: 390, height: 844 });
     await sleep(400);
     lines = await openCheck(bp);
@@ -912,6 +918,8 @@ try {
     });
     check('…and on a phone one screenshot shows them all: the flagged lines first, each on screen with nothing scrolled',
       Object.values(lines).filter((l) => l.warn).length === 4 && seen.scrolled === 0 && seen.flaggedFirst && seen.flaggedInView, JSON.stringify(seen));
+    check('…a paused run long past its time says its try was due then, not that it “tries again” at a time gone by',
+      /^Paused — was due to try again at \d{1,2}:\d\d [ap]m$/.test(lines.placing.value), lines.placing.value);
     await bad.close();
 
     // On a phone, in the field app (a manager is shown a volunteer's screens there; the check is still theirs).

@@ -1416,7 +1416,7 @@ export default function MapPage() {
       const map = mapRef.current;
       if (autoView && went && pickTiles?.url && map) {
         answers(tileAt(pickTiles.url, map.getCenter(), map.getZoom(), pickTiles.maxZoom)).then((ok) => {
-          if (ok && fellBack === went) { fellBack = null; setAutoView(null); }
+          if (ok && fellBack === went) { fellBack = null; setAutoView(null); setSwitchedTo(null); }
         });
       }
     }
