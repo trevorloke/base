@@ -309,8 +309,8 @@ one tap away under **More**.
   made and save a result: the call is on that person's history, and the
   list says *1 result back*; *What each result counts as* opens the table.
   Turn a row to *Do not call*: it asks first, naming the result; **Yes**
-  tags those people, and putting the row back takes the tag off again —
-  and, a few seconds later, the numbers off CallHub's `base.win`
+  tags those people, and putting the row back (it asks too) takes the tag
+  off again — and, a few seconds later, the numbers off CallHub's `base.win`
   do-not-call list (on a list sent meanwhile, too: *1 list sent since
   follows too*).
   It has not been run against a real CallHub account yet — this is that

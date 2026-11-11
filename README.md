@@ -334,9 +334,10 @@ than a week after they came off is refused. Contacts are door, phone, text or
   ("Sending · 850 of 2,000"), and every call's result comes back onto the
   person as a phone call, crossing the number off an open phone bank. What
   each of CallHub's results counts as is filled in by pattern and yours to
-  correct (a change that would tag people do-not-call or rate them asks
-  first, and putting it back undoes it — on the lists sent since that
-  copied it, too); a rating comes only from a survey answer someone mapped
+  correct (a change that would tag people do-not-call, take that tag off
+  again or rate them asks first, and putting it back undoes it — on the
+  lists sent since that copied it, too); a rating comes only from a survey
+  answer someone mapped
   (`server/ext/callhub`; INTEGRATIONS.md, *Phone dialer — CallHub*, says
   how to set it up and what is not yet confirmed against a real account).
 - **ImagineU** (a tab for every role): the campaign's training. **Courses**

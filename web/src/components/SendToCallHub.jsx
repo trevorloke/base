@@ -12,7 +12,8 @@
 // question whose answers rate people — none until someone picks it. A
 // change moves the results already in too, and putting it back undoes it
 // (on the lists sent since that copied it as well); one that would tag
-// people do-not-call or rate them asks first, in place, naming the result.
+// people do-not-call or rate them asks first, in place, naming the result —
+// and so does taking a row off "Do not call", which lets people be called again.
 // Under everything: the do-not-call numbers CallHub would not take, and
 // the ones it still holds though nobody here blocks them now — with whose
 // they are, so someone can put it right in CallHub.
@@ -93,7 +94,7 @@ function Results({ p, online, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [said, setSaid] = useState(null);
   const [error, setError] = useState(null);
-  // A pick that would tag or rate people already called waits here for a Yes: { at, words, input }.
+  // A pick that would tag, untag or rate people already called waits here for a Yes: { at, words, input }.
   const [ask, setAsk] = useState(null);
   // The question is brought clear of the phone's bottom bar, once, when it appears.
   const askRef = useRef(null);
@@ -122,6 +123,13 @@ function Results({ p, online, onChanged }) {
 
   const pickOutcome = (d, i, value) => {
     const input = { outcomes: { [d.disposition]: value === d.suggested ? null : value } };
+    // Off "Do not call" lets the people it tagged be called again — on the
+    // lists sent since that copied the row, too — so it asks first as well:
+    // one arrow key on the focused select is not enough.
+    if (d.outcome === 'do_not_call' && value !== 'do_not_call') {
+      setAsk({ at: `d${i}`, input, words: `Stop counting “${d.disposition || 'No result given'}” as do not call? Whoever it tagged can be called again.` });
+      return;
+    }
     if (value !== 'do_not_call') { save(input); return; }
     // The question names the result it is about: it is read on its own, not only under its row.
     const who = d.people ? `the ${num(d.people)} ${plural(d.people, 'person', 'people')}` : 'everyone';

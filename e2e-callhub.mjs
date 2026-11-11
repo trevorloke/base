@@ -13,8 +13,9 @@
 // pattern and correctable, and a rating comes only from the question and
 // answers someone picks. A pick that would tag people do-not-call or rate
 // them asks first, in place, naming the result; "No" (or Escape) changes
-// nothing, and putting a row back takes the tag (and CallHub's entry) off
-// again — on a list sent since that copied the row too. A phone bank is sent
+// nothing, and putting a row back — which asks too, even after one arrow
+// key — takes the tag (and CallHub's entry) off again — on a list sent
+// since that copied the row too. A phone bank is sent
 // the same way; a number CallHub calls is crossed off there. A refusal stops
 // the push with CallHub's words, Carry on finishes it, and "Send again" is
 // only offered quietly beside it (not at all on a push left part-way). The
@@ -285,7 +286,41 @@ check('Yes: “Saved · 1 result already in moved too · 1 person tagged do-not-
   (await text(page, `${ch} .ch-results [role="status"]`)) === 'Saved · 1 result already in moved too · 1 person tagged do-not-call' && await tagged(P.eli), await text(page, `${ch} .ch-results [role="status"]`));
 for (let i = 0; i < 20 && !fake.dnc.some((d) => d.phone_number === '+16045550105'); i += 1) await sleep(500);
 check('…and CallHub is told', fake.dnc.some((d) => d.phone_number === '+16045550105' && d.category === 1), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
+// Away from it lets people be called again (on the lists sent since that copied it, too): a slip —
+// one arrow key on the focused select — asks first as well, and No leaves everyone as they were.
+const rowSays = (row) => page.$eval(`${row} select`, (el) => el.selectedOptions[0].innerText);
+// The question on a phone first (left unanswered there).
+await phone.goto(`${ADMIN}/lists/${listId}`, { waitUntil: 'domcontentloaded' });
+await phone.waitForFunction((s) => /results back/.test(document.querySelector(s)?.innerText || ''), ch, { timeout: 10000 }).catch(() => {});
+await phone.tap(`${ch} .ch-push .disclose`);
+await phone.waitForSelector(`${voicemail} select`, { timeout: 10000 });
+await phone.selectOption(`${voicemail} select`, 'left_message');
+await phone.waitForSelector(`${voicemail} .ch-confirm`, { timeout: 5000 }).catch(() => {});
+await phone.locator(`${voicemail} .ch-confirm`).scrollIntoViewIfNeeded().catch(() => {});
+await phone.screenshot({ path: `${SHOTS}/11-put-back-ask-390.png` });
+m = await measure(phone, ch);
+check('the put-back question at 390: no sideways scroll, Yes and No ≥ 48px', Boolean(await phone.$(`${voicemail} .ch-confirm`)) && m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
+await page.focus(`${voicemail} select`);
+await page.keyboard.press('ArrowUp');
+await page.waitForSelector(`${voicemail} .ch-confirm`, { timeout: 5000 }).catch(() => {});
+const slipAsk = await text(page, `${voicemail} .ch-confirm`);
+await page.keyboard.press('Enter'); // focus is on No
+await page.waitForSelector(`${voicemail} .ch-confirm`, { state: 'detached', timeout: 10000 }).catch(() => {});
+check('one arrow key away from “Do not call” asks first: “Stop counting “Left voicemail” as do not call? Whoever it tagged can be called again.” — No leaves Eli tagged',
+  slipAsk === 'Stop counting “Left voicemail” as do not call? Whoever it tagged can be called again. Yes No' && await tagged(P.eli) && (await rowSays(voicemail)) === 'Do not call', slipAsk || await rowSays(voicemail));
+if ((await rowSays(voicemail)) !== 'Do not call') { // (before the question existed the slip saved at once: undone, so the run goes on)
+  await api('/actions/callhub.map', { id: (await api(`/callhub/pushes?list=${listId}`)).json.pushes[0].id, outcomes: { 'Left voicemail': 'do_not_call' } });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction((s) => /results back/.test(document.querySelector(s)?.innerText || ''), ch, { timeout: 10000 }).catch(() => {});
+  await page.click(`${ch} .ch-push .disclose`);
+  await page.waitForSelector(`${voicemail} select`, { timeout: 10000 });
+}
 await page.selectOption(`${voicemail} select`, 'left_message');
+await page.waitForSelector(`${voicemail} .ch-confirm`, { timeout: 5000 }).catch(() => {});
+check('put back by a pick: the same question, and nothing changes before Yes', (await text(page, `${voicemail} .ch-confirm`)).startsWith('Stop counting “Left voicemail” as do not call?') && await tagged(P.eli), '');
+await page.locator(voicemail).scrollIntoViewIfNeeded();
+await page.screenshot({ path: `${SHOTS}/11-put-back-ask-1440.png` });
+if (await page.$(`${voicemail} .ch-confirm`)) await page.click(`${voicemail} .ch-confirm button:has-text("Yes")`);
 await page.waitForFunction((s) => /no longer do-not-call/.test(document.querySelector(s)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
 check('put back: “Saved · 1 result already in moved too · 1 person is no longer do-not-call”',
   (await text(page, `${ch} .ch-results [role="status"]`)) === 'Saved · 1 result already in moved too · 1 person is no longer do-not-call' && !(await tagged(P.eli)), await text(page, `${ch} .ch-results [role="status"]`));
@@ -466,6 +501,8 @@ await page.waitForFunction((sel) => /result back/.test(document.querySelector(se
 await page.click(`${ch} .ch-push .disclose`);
 await page.waitForSelector(`${rangOut} select`, { timeout: 10000 });
 await page.selectOption(`${rangOut} select`, 'contacted');
+await page.waitForSelector(`${rangOut} .ch-confirm`, { timeout: 5000 }).catch(() => {});
+if (await page.$(`${rangOut} .ch-confirm`)) await page.click(`${rangOut} .ch-confirm button:has-text("Yes")`);
 await page.waitForFunction((sel) => /no longer do-not-call/.test(document.querySelector(sel)?.innerText || ''), `${ch} .ch-results [role="status"]`, { timeout: 10000 }).catch(() => {});
 const followed = await text(page, `${ch} .ch-results [role="status"]`);
 check('put back on the first list: “Saved · 1 result already in moved too · 1 person is no longer do-not-call · 1 list sent since follows too”',

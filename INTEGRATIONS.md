@@ -409,11 +409,12 @@ What happens:
   the ones it is about — and an open phone bank's number with them (a
   *Talked* that was a No answer comes back by the bank's own rule). Turning
   a row to *Do not call* asks first (*Tag the 6 people with "Answered"
-  do-not-call?*), and putting the row back takes the tag off everyone it
-  tagged, however often each was rung, and their numbers off CallHub's
-  list — never a tag someone set by hand, and never bringing back one the
-  desk took off by hand. A push with thousands of results is moved a part
-  at a time, in the background.
+  do-not-call?*), and so does putting it back (*Stop counting "Answered"
+  as do not call?* — a slip of one arrow key on the row is caught too);
+  **Yes** takes the tag off everyone it tagged, however often each was
+  rung, and their numbers off CallHub's list — never a tag someone set by
+  hand, and never bringing back one the desk took off by hand. A push with
+  thousands of results is moved a part at a time, in the background.
 - **A new push starts with the newest push's table** and support question,
   so a pick is made once. What is taken back on a push is taken back on the
   pushes sent since that still carry it — a row that no longer counts as
