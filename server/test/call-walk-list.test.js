@@ -124,6 +124,9 @@ test('someone who leaves the list leaves the calls not yet made; a call already 
   assert.equal(dee.outcome, 'contacted', 'the call is still on the record');
   assert.deepEqual(desk.numbers.filter((n) => !n.still).map((n) => n.name.split(' ')[0]).sort(), ['Ana', 'Ben', 'Cy', 'Dee']);
   assert.deepEqual(desk.bank.callers.map((c) => [c.name, c.total, c.done]), [['Vic Example', 2, 1]]);
+  const row = ok(await mgr.get('/api/banks')).banks.find((b) => b.id === bank.id);
+  assert.deepEqual([row.total, row.done, row.open, row.gone, row.callers.map((c) => [c.total, c.done])], [5, 1, 0, 3, [[2, 1]]],
+    'the list of banks says what the bank’s page says');
   // Ana's vote is taken back (marked by mistake): she is on the list again, so on the calls again.
   ok(await mgr.action('vote.mark', { person_id: P.ana.id, voted: false }));
   assert.deepEqual(await names(), ['Ana', 'Eve']);

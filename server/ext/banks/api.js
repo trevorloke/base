@@ -8,14 +8,15 @@
 // list — is off the caller's list and out of their count at once.
 import { Hono } from 'hono';
 import { forViewer } from '../../lib/viewer.js';
-import { bankCounts, stillOn } from './numbers.js';
+import { bankCounts, callersOf, stillOn } from './numbers.js';
 
 export const api = new Hono();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const parseJ = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : (v ?? d); } catch { return d; } };
 const isDesk = (ctx) => ctx.role !== 'volunteer';
 // The list of banks reads the numbers as stored — one quick read for all of
-// them. A bank's own page says who has left its list since.
+// them — and then, for an open bank made from a list, as things stand (the
+// same numbers as its own page: someone who left the list isn't to call).
 const COUNTS = `count(n.person_id)::int as total, count(n.assigned_to)::int as assigned, count(n.done_at)::int as done,
   count(*) filter (where n.assigned_to is null and n.done_at is null)::int as open`;
 const NUMBERS_PAGE = 2000;
@@ -34,7 +35,13 @@ api.get('/banks', async (c) => {
        from call_bank_numbers n join users u on u.id = n.assigned_to where n.workspace_id = $1 and n.assigned_to is not null
       group by n.bank_id, n.assigned_to, u.name order by lower(u.name)`, [ws],
   )).rows;
-  return c.json({ banks: banks.map((b) => ({ ...b, closed: !!b.closed_at, callers: callers.filter((x) => x.bank_id === b.id).map(({ bank_id, ...x }) => x) })) });
+  const out = [];
+  for (const b of banks) {
+    const row = { ...b, closed: !!b.closed_at, callers: callers.filter((x) => x.bank_id === b.id).map(({ bank_id, ...x }) => x) };
+    if (b.list_id && !b.closed_at) Object.assign(row, await bankCounts(db, ctx, b), { callers: await callersOf(db, ctx, b) });
+    out.push(row);
+  }
+  return c.json({ banks: out });
 });
 
 // My numbers in one bank: how many in all (done, or still to call) and how many done.
@@ -87,11 +94,7 @@ api.get('/banks/:id', async (c) => {
       where n.bank_id = $1 order by n.position, n.person_id limit $${page.length - 1} offset $${page.length}`, page,
   )).rows.map((n) => ({ ...n, still: !!n.still }));
   // Who has what: a caller's total is what they have done and what is still theirs to call.
-  const callers = (await db.query(
-    `select n.assigned_to as user_id, u.name, (count(*) filter (where n.done_at is not null or ${still}))::int as total, count(n.done_at)::int as done
-       from call_bank_numbers n join persons p on p.id = n.person_id join users u on u.id = n.assigned_to
-      where n.bank_id = $1 group by n.assigned_to, u.name`, params,
-  )).rows.sort((a, z) => a.name.localeCompare(z.name));
+  const callers = await callersOf(db, ctx, b);
   const { deleted_at: _gone, ...bank } = b;
   return c.json({ bank: { ...bank, ...counts, closed: !!b.closed_at, callers }, numbers, limit, offset });
 });

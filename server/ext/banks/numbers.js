@@ -9,6 +9,8 @@
 //
 //   stillOn(db, ctx, bank, params)      SQL (persons p), its params added
 //   bankCounts(db, ctx, bank)           { total, assigned, done, open, gone }
+//   callersOf(db, ctx, bank)            [{ user_id, name, total, done }] — a
+//                                       caller's total: done, or still theirs to call
 //   addFromList(tx, ctx, bank, list)    everyone on the list who can be
 //                                       called and isn't in the bank yet,
 //                                       after the numbers already there
@@ -37,6 +39,16 @@ export const bankCounts = async (db, ctx, bank) => {
        cross join lateral (select ${still} as still) x
       where n.bank_id = $1`, params,
   )).rows[0];
+};
+
+export const callersOf = async (db, ctx, bank) => {
+  const params = [bank.id];
+  const still = await stillOn(db, ctx, bank, params);
+  return (await db.query(
+    `select n.assigned_to as user_id, u.name, (count(*) filter (where n.done_at is not null or ${still}))::int as total, count(n.done_at)::int as done
+       from call_bank_numbers n join persons p on p.id = n.person_id join users u on u.id = n.assigned_to
+      where n.bank_id = $1 group by n.assigned_to, u.name`, params,
+  )).rows.sort((a, z) => a.name.localeCompare(z.name));
 };
 
 export const addFromList = async (tx, ctx, bank, list) => {
