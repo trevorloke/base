@@ -4,7 +4,8 @@
 // mailchimp.connect  {}                                      managers: give Mailchimp the address unsubscribes come back to
 // The first pull from an audience waits for a person's yes (pull.js,
 // firstOf): until then Pull now and Send only count what it would turn off
-// here, and say so (Send counts afresh each time). `agree` (the audience's
+// here, and say so (Send counts afresh each time) — a no newer than the
+// audience's first count aside, which any pull takes in. `agree` (the audience's
 // id, as the question showed it) with `shown` (its numbers) is the yes —
 // refused when the count has changed since. Connect starts the count, so the
 // question is there as soon as it is connected.
