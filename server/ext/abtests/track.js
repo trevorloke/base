@@ -21,6 +21,8 @@ import { getDb } from '../../db/client.js';
 import { newId, runAction } from '../../lib/events.js';
 import { TOKEN_RE } from './send.js';
 import { serveMedia } from './media.js';
+import { page } from '../../lib/publicpage.js';
+import { campaignBrand } from '../../lib/brand.js';
 
 export const publicRoutes = new Hono();
 // A picture in a message's body, for every mail app that opens it.
@@ -91,9 +93,8 @@ publicRoutes.get('/o/:file', async (c) => {
   return c.body(GIF, 200, { 'Content-Type': 'image/gif', 'Cache-Control': NO_STORE, Pragma: 'no-cache' });
 });
 
-const notFound = (c) => c.html(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Link not found</title>
-<style>body{margin:0;background:#f4f5fa;color:#161a2e;font:17px/1.55 system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif}main{max-width:520px;margin:0 auto;padding:28px 16px}h1{font-size:26px;font-weight:800;margin:0}@media(prefers-color-scheme:dark){body{background:#0d1226;color:#e8eaf6}}</style>
-</head><body><main><h1>Link not found.</h1></main></body></html>`, 404, { 'Cache-Control': NO_STORE });
+// A link that names no send still wears the campaign's look (lib/publicpage.js).
+const notFound = async (c) => c.html(page(null, 'Link not found', '<h1>Link not found.</h1>', { brand: await campaignBrand() }), 404, { 'Cache-Control': NO_STORE });
 
 publicRoutes.get('/c/:token/:n', async (c) => {
   const token = c.req.param('token') || '';

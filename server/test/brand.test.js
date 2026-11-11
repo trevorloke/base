@@ -396,7 +396,7 @@ test('the app’s public pages wear the campaign’s brand: unsubscribe, a recei
   const r = (await get(`/r/${token}`)).html;
   for (const words of ['Contribution receipt', receipt.number, 'Dana Example', '$50.00', 'Print']) assert.ok(r.includes(words), words);
   // A link that names no campaign wears the campaign's look too.
-  for (const path of [`/u/${randomUUID()}`, `/lu/${randomUUID()}`, `/r/${'0'.repeat(48)}`]) {
+  for (const path of [`/u/${randomUUID()}`, `/lu/${randomUUID()}`, `/r/${'0'.repeat(48)}`, '/c/not-a-token/1']) {
     const { status, html } = await get(path);
     assert.equal(status, 404, path);
     wears(path, html);
