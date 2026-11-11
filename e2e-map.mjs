@@ -514,16 +514,16 @@ try {
     // Which tile host answers is the test: clean is CARTO (the look the map
     // opens on), base is OpenStreetMap (Standard, Muted, Dark). up 'asked':
     // a flicker — the one tile the map asks for itself (a fetch) gets
-    // through, the map's own tiles (images) don't (no service worker only:
-    // under one, every tile is a fetch).
+    // through, and `through` of the map's own tiles (images), no more (no
+    // service worker only: under one, every tile is a fetch).
     const tiled = async (opts = {}) => {
       const tctx = await context(opts, { tiles: false });
-      const net = { up: { clean: true, base: true, own: true }, hold: { clean: 0, base: 0, own: 0 }, asked: { clean: 0, base: 0, own: 0 } };
+      const net = { up: { clean: true, base: true, own: true }, hold: { clean: 0, base: 0, own: 0 }, asked: { clean: 0, base: 0, own: 0 }, through: { clean: 0, base: 0, own: 0 } };
       const answer = (who) => async (route) => {
         net.asked[who] += 1;
         if (net.hold[who]) await sleep(net.hold[who]);
-        const up = net.up[who] === true || (net.up[who] === 'asked' && route.request().resourceType() === 'fetch');
-        await (up ? route.fulfill(standIn) : route.abort('connectionrefused')).catch(() => {});
+        const flicker = net.up[who] === 'asked' && (route.request().resourceType() === 'fetch' || (net.through[who] > 0 && net.through[who]--));
+        await (net.up[who] === true || flicker ? route.fulfill(standIn) : route.abort('connectionrefused')).catch(() => {});
       };
       await tctx.route(/basemaps\.cartocdn\.com/, answer('clean'));
       await tctx.route(/tile\.openstreetmap\.org/, answer('base'));
@@ -593,11 +593,12 @@ try {
     ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok' && s.pick === 'muted' && !s.note);
     check('…tapped: its streets come, and that look is their choice from now on', ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && !ts.note && ts.pick === 'muted', JSON.stringify(ts));
     // A look tapped whose streets then don't come (a flicker let the map's
-    // one tile through) is not their choice: back to the pick.
+    // one tile through, and one of the view's) is not their choice: back to the pick.
     t.net.up.base = false;
     t.net.up.clean = 'asked';
     await t.pg.click('.leaflet-control-zoom-out');
     ts = await tilesUntil(t.pg, (s) => /Try Clean/.test(s.note || ''));
+    t.net.through.clean = 1;
     await t.pg.click('.map-tilenote button');
     await sleep(1500);
     ts = await tilesUntil(t.pg, (s) => s.look === 'muted' && /isn’t loading/.test(s.note || ''), 15000);

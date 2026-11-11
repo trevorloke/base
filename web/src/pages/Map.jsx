@@ -123,7 +123,7 @@ const PROBE_MS = 4000;
 // On a look the map went to by itself, how often it asks again whether the
 // person's own pick answers (a provider's hiccup is often over in a minute).
 const PICK_AGAIN_MS = 60_000;
-const NOT_SEEN = { url: null, down: false, any: false }; // a tile layer that hasn't said yet
+const NOT_SEEN = { url: null, down: false, any: false, settled: false }; // a tile layer that hasn't said yet
 const answers = (url) => {
   const stop = typeof AbortController === 'function' ? new AbortController() : null;
   const t = setTimeout(() => stop?.abort(), PROBE_MS);
@@ -1421,11 +1421,13 @@ export default function MapPage() {
   }, [move]);
   // Loading again, or another layer: a later failure asks afresh.
   useEffect(() => { if (!street.down) { askNo.current += 1; setAsked(null); } }, [street.down]);
-  // A look tapped from the note is theirs once its streets come.
+  // A look tapped from the note is theirs once its streets come: a whole
+  // view of them, most loaded (one tile through a flicker is not that).
+  const tappedCame = Boolean(tapped && drawnAuto && street.settled && street.any && !street.down);
   useEffect(() => {
-    if (tapped && drawnAuto && street.any) setView(drawnAuto);
+    if (tappedCame) setView(drawnAuto);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tapped, drawnAuto, street.any]);
+  }, [tappedCame]);
   useEffect(() => {
     if (!switchedTo) return undefined;
     const t = setTimeout(() => setSwitchedTo(null), 8000);
@@ -2037,22 +2039,24 @@ export default function MapPage() {
     const health = tileHealth();
     let timer = null;
     let shown = '';
+    let settled = false; // a whole view's tiles in (or failed)
     const tell = () => {
       const h = health.get();
       const down = h.down && navigator.onLine !== false;
       streetRef.current = { ...h, down };
-      const next = `${down}|${h.loaded > 0}`;
-      if (next !== shown) { shown = next; setStreet({ url: tileUrl, down, any: h.loaded > 0 }); }
+      const next = `${down}|${h.loaded > 0}|${settled}`;
+      if (next !== shown) { shown = next; setStreet({ url: tileUrl, down, any: h.loaded > 0, settled }); }
     };
     tell();
     layer.on('loading', () => {
+      settled = false;
       health.batch(Date.now());
       clearTimeout(timer);
       timer = setTimeout(() => { health.late(Date.now()); tell(); }, TILE_WAIT_MS + 20);
     });
     layer.on('tileload', () => { health.tile(true); tell(); });
     layer.on('tileerror', () => { health.tile(false); });
-    layer.on('load', () => { clearTimeout(timer); health.done(); tell(); });
+    layer.on('load', () => { clearTimeout(timer); health.done(); settled = true; tell(); });
     layer.addTo(map);
     map.setMaxZoom(tileMax || 19);
     return () => { clearTimeout(timer); layer.remove(); };
