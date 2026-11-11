@@ -20,6 +20,7 @@ export const GIFT_FIELDS = [
   { key: 'amount', label: 'Amount' },
   { key: 'date', label: 'Date of the gift' },
   { key: 'method', label: 'Paid by' },
+  { key: 'status', label: 'Payment status' },
   { key: 'slate', label: 'Slate' },
   { key: 'source_id', label: 'Their number for the gift' },
   { key: 'receipt', label: 'Their receipt number' },
@@ -54,6 +55,7 @@ const EXACT = [
   ['postal', /^(postal|postalcode|postcode|zip|zipcode|billingpostalcode|billingpostal|billingzip|donorpostalcode|pc)$/],
   ['method', /^(method|paymentmethod|paymenttype|paidby|paymentmode|tender|howpaid|paidvia|methodofpayment)$/],
   ['method', /^(gateway|paymentgateway|processor)$/],
+  ['status', /^(status|paymentstatus|donationstatus|giftstatus|transactionstatus|chargestatus|orderstatus|state|paymentstate|outcome|result)$/],
   ['slate', /^(slate|designation|designations|donationdesignation|designationname|designatedto|directedto|fund|fundname|allocation)$/],
   ['receipt', /^(receipt|receiptnumber|receiptno|receiptnum|receiptid|taxreceipt|taxreceiptnumber|officialreceipt|officialreceiptnumber)$/],
   ['source_id', /^(donationid|giftid|contributionid|transactionid|txnid|donationnumber|giftnumber)$/],
@@ -75,6 +77,7 @@ const CONTAINS = [
   ['slate', /designation|slate/],
   ['receipt', /receipt/],
   ['source_id', /(donation|gift|contribution|transaction|payment|order|charge|reference|confirmation|entry|record)(id|number|no|ref|code)$/],
+  ['status', /status$/],
   ['name', /donor|contributor|supporter|fullname/],
 ];
 
@@ -88,6 +91,16 @@ export const columnValues = (records, i, limit = 200) => {
   return out;
 };
 const share = (values, test) => (values.length ? values.filter(test).length / values.length : 0);
+// What a payment status says: it went through (true: the gift comes in), or
+// it didn't (false: refunded, failed, pending… left out). Any other word is
+// null: asked about, and left out until the person says it comes in.
+const STATUS_IN = /^(paid|succeeded|success|successful|complete|completed|approved|captured|settled|received|processed|confirmed|cleared|deposited|accepted)$/;
+const STATUS_OUT = /^(refunded|refund|fullyrefunded|failed|failure|declined|denied|rejected|pending|processing|incomplete|unpaid|cancelled|canceled|voided|void|disputed|chargeback|chargedback|reversed|returned|bounced|nsf|abandoned|expired)$/;
+const statusWord = (v) => {
+  const k = String(v ?? '').toLowerCase().replace(/[^a-z]+/g, '');
+  if (STATUS_IN.test(k)) return true;
+  return STATUS_OUT.test(k) ? false : null;
+};
 const isDate = (v) => readGiftDate(v) !== null || readGiftDate(v, { order: 'dmy' }) !== null;
 // What a column's values must look like to be taken for a field.
 const LOOKS = {
@@ -97,6 +110,8 @@ const LOOKS = {
   amount: (vals) => share(vals, (v) => readAmount(v) !== null) >= 0.6,
   date: (vals) => share(vals, isDate) >= 0.6,
   name: (vals) => share(vals, (v) => NAME_RE.test(v)) >= 0.6 && share(vals, (v) => EMAIL_RE.test(v)) < 0.2,
+  // A "State" of BC, a "Result" of 3: not a payment's.
+  status: (vals) => share(vals, (v) => statusWord(v) !== null) >= 0.6,
 };
 // Money written as money ("$50.00", "49.99"): a column of bare whole numbers
 // could as well be an id or a count.
@@ -120,9 +135,9 @@ export const guessGiftMapping = (headers, records, { slates = [], noHeader = fal
     // A whole name beside first and last names is someone else's: a campaign's, a form's.
     if (key === 'name' && loose && (taken.has('first') || taken.has('last'))) return;
     const looks = LOOKS[key];
-    // Amounts and dates must read as such even under the plainest heading;
-    // the rest only when the heading merely hints.
-    if (looks && values[i].length && (loose || key === 'amount' || key === 'date') && !looks(values[i])) return;
+    // Amounts, dates and statuses must read as such even under the plainest
+    // heading; the rest only when the heading merely hints.
+    if (looks && values[i].length && (loose || key === 'amount' || key === 'date' || key === 'status') && !looks(values[i])) return;
     out[i] = key;
     taken.add(key);
   };
@@ -167,6 +182,14 @@ export const methodOf = (methodMap, value) => {
   if (methodMap && Object.hasOwn(methodMap, k)) return methodMap[k] || null;
   return readMethod(value);
 };
+// Whether a value in the Payment status column comes in: what the person
+// picked for it (statusMap: the value, lower-cased → 'in', or '' left out),
+// else its own word (statusWord). → true, false, or null (not known: out).
+export const statusOf = (statusMap, value) => {
+  const k = String(value).toLowerCase();
+  if (statusMap && Object.hasOwn(statusMap, k)) return statusMap[k] === 'in';
+  return statusWord(value);
+};
 // Which slate a value in the Slate column names: the person's pick, else a
 // slate whose name or code it is, else the one slate a word of whose name
 // it holds ("School board trustees"). A value that fits two slates ("City
@@ -185,13 +208,16 @@ export const slateOf = (slateMap, slates, value) => {
   return fits.length === 1 ? fits[0].code : null;
 };
 
-// One record of the file → { row } as the server takes it, or { error }:
-// why this row can't be read, in plain words. badEmail: its email cell
-// isn't an address ("n/a", "none") and was left out — the gift still comes
-// in, matched by the donor's name.
+// One record of the file → { row } as the server takes it, { error }: why
+// this row can't be read, in plain words, or { out }: the payment status of
+// a row left out (refunded, failed… or a word not said to come in).
+// badEmail: its email cell isn't an address ("n/a", "none") and was left
+// out — the gift still comes in, matched by the donor's name.
 //   order: which number of 03/04/2026 is the month ('mdy' | 'dmy')
-export const giftRow = (cells, mapping, { order = 'mdy', timeZone, methodMap = null, slateMap = null, slates = [] } = {}) => {
+export const giftRow = (cells, mapping, { order = 'mdy', timeZone, methodMap = null, slateMap = null, statusMap = null, slates = [] } = {}) => {
   const cell = (key) => { const i = mapping.indexOf(key); return i < 0 ? '' : String(cells[i] ?? '').trim(); };
+  const status = cell('status');
+  if (status && statusOf(statusMap, status) !== true) return { out: status };
   const row = {};
   for (const k of ['first', 'last', 'address', 'unit', 'city', 'postal', 'receipt']) { const v = cell(k); if (v) row[k] = v; }
   const email = cell('email');
@@ -229,8 +255,9 @@ export const giftRow = (cells, mapping, { order = 'mdy', timeZone, methodMap = n
 // which of the rows that read alike it is (shared/giftfile.js keyRows) — in
 // the order the gifts were given, oldest first (a file may list the newest
 // first), so the gift flagged for a limit is the one that crossed it.
-// → { rows, unread: [{ row, text }], repeats, alike, badEmails }
+// → { rows, unread: [{ row, text }], unpaid: [{ row, status }], repeats, alike, badEmails }
 //   unread     rows this screen can't read (no amount, no date…)
+//   unpaid     rows left out by their payment status
 //   repeats    rows whose gift number an earlier row has: that gift again,
 //              left out
 //   alike      rows that read like an earlier one with no gift number to
@@ -239,9 +266,11 @@ export const giftRow = (cells, mapping, { order = 'mdy', timeZone, methodMap = n
 export const fileRows = (records, mapping, opts) => {
   const read = [];
   const unread = [];
+  const unpaid = [];
   let badEmails = 0;
   for (const r of records) {
     const g = giftRow(r.cells, mapping, opts);
+    if (g.out) { unpaid.push({ row: r.row, status: g.out }); continue; }
     if (g.error) { unread.push({ row: r.row, text: g.error }); continue; }
     if (g.badEmail) badEmails += 1;
     read.push({ ...g.row, row: r.row });
@@ -249,7 +278,7 @@ export const fileRows = (records, mapping, opts) => {
   const keyed = keyRows(read);
   const rows = keyed.filter((r) => !r.repeat).map(({ key: _k, repeat: _r, alike: _a, nth, ...r }) => (nth > 1 ? { ...r, nth } : r))
     .sort((a, b) => a.date.localeCompare(b.date)); // stable: rows of one day stay as the file has them
-  return { rows, unread, repeats: keyed.filter((r) => r.repeat).length, alike: keyed.filter((r) => r.alike).length, badEmails };
+  return { rows, unread, unpaid, repeats: keyed.filter((r) => r.repeat).length, alike: keyed.filter((r) => r.alike).length, badEmails };
 };
 
 // Rows a call at a time: small enough for one request (the server takes

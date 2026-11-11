@@ -230,8 +230,11 @@ than a week after they came off is refused. Contacts are door, phone, text or
   donor, amount and day as a gift already on the books another way (typed
   at the desk, given online) is pointed out in the check (*1 row looks like
   a gift already typed in here*), with *Leave it out*; one gift on the
-  books answers for one row. A refunded payment the file still lists comes
-  in as a gift — take those rows out first. An import can be taken back
+  books answers for one row. A *Payment status* column brings in only the
+  payments that went through: refunded, failed or pending ones are left
+  out, and a word it doesn't know is asked about. Without one, take
+  refunded payments out of the file first; a gift refunded after it came
+  in stays on the books until it is voided. An import can be taken back
   whole for a day.
 - **Filing dates** (Donations → More → *Filing dates*, managers and the
   treasurer): two dates the financial agent types in, each a name and a day

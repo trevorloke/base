@@ -112,7 +112,7 @@ test('the cells of a gift file are read one way', () => {
 // names are assumed — a column is matched by what its heading means, then
 // by its values, and a row is read into what the server takes.
 test('columns are matched by what their headings mean; rows are read; the check is added up', async () => {
-  const { guessGiftMapping, giftRow, fileRows, callsOf, newTally, addToTally, tallyOf, overLimit, slateOf } = await import('../../web/src/components/GiftColumns.js');
+  const { guessGiftMapping, giftRow, fileRows, callsOf, newTally, addToTally, tallyOf, overLimit, slateOf, statusOf } = await import('../../web/src/components/GiftColumns.js');
   const slates = [{ code: 'council', label: 'Council' }, { code: 'school', label: 'School board' }];
   const recs = (rows) => rows.map((cells, i) => ({ cells, row: i + 2 }));
   // One export's words…
@@ -181,6 +181,20 @@ test('columns are matched by what their headings mean; rows are read; the check 
   // An email cell that isn't an address ("n/a") is left out, and counted: the gift still comes in.
   const noMail = fileRows(recs([['', 'Ana Example', 'n/a', '', '', '', '20', '2026-03-01'], ['', 'Ben Example', 'ben@example.org', '', '', '', '20', '2026-03-01']]), mapping, {});
   assert.deepEqual([noMail.rows.map((r) => r.email), noMail.badEmails], [[undefined, 'ben@example.org'], 1]);
+
+  // A payment status: only a payment that went through is a gift. A refunded
+  // or failed one is left out, and so is a word it doesn't know until the
+  // person says it comes in.
+  const st = recs([['Ana Example', '20', '2026-03-01', 'Completed'], ['Ben Example', '30', '2026-03-02', 'Refunded'], ['Cy Example', '', '2026-03-03', 'On hold']]);
+  const stMap = guessGiftMapping(['Donor', 'Amount', 'Date', 'Payment Status'], st, {});
+  assert.deepEqual(stMap, ['name', 'amount', 'date', 'status']);
+  assert.deepEqual(guessGiftMapping(['Donor', 'Amount', 'Date', 'State'], recs([['Ana Example', '20', '2026-03-01', 'BC'], ['Ben Example', '30', '2026-03-02', 'BC']]), {}),
+    ['name', 'amount', 'date', ''], 'a province is not a payment status');
+  const sf = fileRows(st, stMap, {});
+  assert.deepEqual([sf.rows.map((r) => r.row), sf.unpaid, sf.unread], [[2], [{ row: 3, status: 'Refunded' }, { row: 4, status: 'On hold' }], []],
+    'left out by its status before anything else is read');
+  assert.deepEqual(fileRows(st, stMap, { statusMap: { 'on hold': 'in', completed: '' } }).unread, [{ row: 4, text: 'No amount.' }], 'what the person says a word means');
+  assert.deepEqual(['Paid', 'succeeded', 'Refunded', 'FAILED', 'Charged back', 'Partially refunded'].map((v) => statusOf(null, v)), [true, true, false, false, false, null]);
 
   // Calls stay small: by rows, and by size.
   const many = Array.from({ length: 450 }, (_, i) => ({ row: i, name: 'Ana Example', amount_cents: 100 }));

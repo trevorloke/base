@@ -21,8 +21,10 @@
 // adds nothing; the import is taken back whole. A file with no gift numbers
 // and a way of paying base.win doesn't know ("Wire") adds nothing the second
 // time either, whatever the word is said to mean; a slate it can't read is
-// asked about the same way. The financial agent's
-// filing date is typed in and counted down on Donations and on Today.
+// asked about the same way. A payment status column brings in only what went
+// through (a refunded row is left out; "On hold" is asked about). The
+// financial agent's filing date is typed in and counted down on Donations
+// and on Today.
 // Donations says how it stands: Loading… while its reads are out,
 // Unavailable — Try again when they failed.
 //
@@ -523,6 +525,25 @@ const wireAgain = (await page.innerText('.imp-result').catch(() => '')).replace(
 const wireGifts = (await api('/records/gift?limit=50')).json.records.filter((g) => Number(g.amount_cents) === 1500);
 check('the same file again, “Wire” now called an e-transfer: still the same gift — 0 gifts, 1 already here',
   /Gifts 0/i.test(wireAgain) && /Already here 1/i.test(wireAgain) && wireGifts.length === 1 && wireGifts[0].method === null, `${wireAgain.slice(0, 120)} | ${wireGifts.length}`);
+
+// A payment status: only a payment that went through comes in. A refunded
+// one is left out, and a word it doesn't know ("On hold") is asked about.
+await pasteGifts(['Donor,Email,Amount,Date,Payment Status',
+  `Ana Example,ana.${tag}@example.org,12.00,${yr}-01-21,Completed`,
+  `Ana Example,ana.${tag}@example.org,13.00,${yr}-01-22,Refunded`,
+  `Ana Example,ana.${tag}@example.org,14.00,${yr}-01-23,On hold`].join('\n'));
+const stMap = await page.$$eval('.imp-map__select', (els) => els.map((e) => e.options[e.selectedIndex].text));
+const stAsk = (await page.locator('section.imp-rmap[aria-label="Which come in"]').innerText().catch(() => '')).replace(/\s+/g, ' ');
+check('a Payment Status column is matched, and a word it doesn’t know is asked: "On hold", opened, 1 to say',
+  stMap.at(-1) === 'Payment status' && (await page.getByRole('button', { name: 'Which come in · 1 to say' }).getAttribute('aria-expanded').catch(() => '')) === 'true' && /On hold 1 row/.test(stAsk),
+  `${stMap.join('|')} · ${stAsk.slice(0, 160)}`);
+await simple(page, 'Import gifts, a payment status (1360)');
+await page.click('button:has-text("Check 3 rows")');
+await page.waitForSelector('.imp-result', { timeout: 15000 }).catch(() => {});
+await sleep(400);
+const stCheck = (await page.innerText('.imp-result').catch(() => '')).replace(/\s+/g, ' ');
+check('…the check: 1 gift ($12.00), and 2 rows left out by their payment status',
+  /Gifts 1 \$12\.00/i.test(stCheck) && /2 rows are left out by their payment status \((On hold · Refunded|Refunded · On hold)\)\./.test(stCheck), stCheck.slice(0, 260));
 
 // ── The financial agent's filing date: typed in, counted down ──
 const due = (() => { const [y, m, d] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }).split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + 12)).toISOString().slice(0, 10); })();

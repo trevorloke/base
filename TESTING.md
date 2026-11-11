@@ -647,8 +647,11 @@ one tap away under **More**.
   new person*. Import the same file again: *Nothing new*. Log one of a
   new file's gifts at the desk first (same donor, amount and day): its
   check says *1 row looks like a gift already typed in here*, and ticking
-  *Leave it out* takes it off the gifts and the total at once. Back on the
-  import screen, **Take back** (for a day) voids the lot.
+  *Leave it out* takes it off the gifts and the total at once. Add a
+  *Payment Status* column (*Completed*, *Refunded*, *On hold*): *Which come
+  in* opens with *On hold* to say, and the check leaves the refunded and
+  on-hold rows out by their status. Back on the import screen, **Take
+  back** (for a day) voids the lot.
 - **Donations → More → Filing dates** — type *Disclosure statement due* and
   a date three weeks out, **Save dates**: Donations counts the days down
   under the big number, and Today lists it under *Coming up*. Nothing is

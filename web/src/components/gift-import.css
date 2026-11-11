@@ -52,6 +52,11 @@
 .gi-note { margin: var(--s-2) 0 0; }
 
 .gi-rmap-hint { margin: 0 0 var(--s-2); }
+/* On a phone, each of the file's words sits whole above its choice. */
+@media (max-width: 560px) {
+  .gi-rmap .imp-rmap__row { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); padding: var(--s-2) 0; }
+  .gi-rmap .imp-rmap__word { white-space: normal; overflow-wrap: anywhere; }
+}
 /* With more than one slate and no column for it: where every gift will go. */
 .gi-slate-note { font-size: 14px; }
 

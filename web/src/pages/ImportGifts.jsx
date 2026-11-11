@@ -7,7 +7,9 @@
 //   2 Match columns    each column → what it is. No tool's column names are
 //                      assumed: components/GiftColumns.js matches a heading
 //                      by what it means, then by the values, and the person
-//                      corrects it. Then Check — a dry run, nothing saved.
+//                      corrects it. A Payment status column brings in only
+//                      what went through (its words asked about, like Paid
+//                      by's). Then Check — a dry run, nothing saved.
 //   3 Import           what the check found: the gifts and their total, the
 //                      donors found, the gifts that need a donor, what is
 //                      already here, what can't come in — and anyone the
@@ -28,7 +30,7 @@ import { newClientId } from '../offline.js';
 import { readXlsx, toCsv } from '../components/xlsx.js';
 import {
   GIFT_FIELDS, SKIP, SCI_RE, guessGiftMapping, giftRow, fileRows, callsOf, tallyOf, overLimit,
-  valuesIn, methodOf, slateOf, columnValues,
+  valuesIn, methodOf, slateOf, statusOf, columnValues,
 } from '../components/GiftColumns.js';
 import { ImportsList, giftWord, invalidateGifts } from '../components/GiftImportBits.jsx';
 import {
@@ -97,7 +99,7 @@ function Count({ label, value, note, tone }) {
 // first, each with a choice (the same rows People → Import uses for ratings).
 function Meanings({ title, hint, values, current, own, options, none, onPick, disabled, say }) {
   return (
-    <section className="imp-rmap" aria-label={title}>
+    <section className="imp-rmap gi-rmap" aria-label={title}>
       <p className="imp-hint imp-hint--sm gi-rmap-hint">{hint}</p>
       <ul className="imp-rmap__list">
         {values.map(({ value, n }) => {
@@ -138,6 +140,7 @@ function Flow({ me }) {
   const [orderPick, setOrderPick] = useState('mdy'); // 03/04/2026: which number is the month, when the file can't say
   const [methodMap, setMethodMap] = useState({}); // a Paid by value (lower-cased) → a method ('' not recorded), by choice
   const [slateMap, setSlateMap] = useState({}); // a Slate value → a slate ('' the first one), by choice
+  const [statusMap, setStatusMap] = useState({}); // a Payment status value → 'in' ('' left out), by choice
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [check, setCheck] = useState(null); // { phase, done, total, answers: [{ res, part }], error }
   // Rows that look like a gift already typed in here: left out when ticked
@@ -176,6 +179,7 @@ function Flow({ me }) {
     setMapping(guess(shaped, t.header));
     setMethodMap({});
     setSlateMap({});
+    setStatusMap({});
     setOrderPick('mdy');
     setLeaveTyped(false);
     fresh();
@@ -230,7 +234,7 @@ function Flow({ me }) {
     try { await loadText(pasteText, 'Pasted text'); } finally { setReading(null); }
     setPasteOpen(false);
   };
-  const startOver = () => { setSource(null); setMapping([]); setMethodMap({}); setSlateMap({}); setLeaveTyped(false); setLoadError(null); setPasteText(''); fresh(); };
+  const startOver = () => { setSource(null); setMapping([]); setMethodMap({}); setSlateMap({}); setStatusMap({}); setLeaveTyped(false); setLoadError(null); setPasteText(''); fresh(); };
 
   const setField = (col, key) => {
     let bump = null;
@@ -250,6 +254,7 @@ function Flow({ me }) {
   const dateCol = col('date');
   const methodCol = col('method');
   const slateCol = slates.length > 1 ? col('slate') : -1;
+  const statusCol = col('status');
   // Which number of 03/04/2026 is the month: what the column itself says, else the person's pick.
   const orderSeen = useMemo(() => (source && dateCol >= 0 ? dateOrderOf(source.records.map((r) => r.cells[dateCol])) : null), [source, dateCol]);
   const order = orderSeen === 'mdy' || orderSeen === 'dmy' ? orderSeen : orderPick;
@@ -259,16 +264,21 @@ function Flow({ me }) {
     const v = columnValues(source.records, dateCol, 2000).find((x) => readGiftDate(x, { order: 'mdy' }) && readGiftDate(x, { order: 'dmy' }));
     return v ? { value: v.split(/[ ,T]/)[0], mdy: dayWords(readGiftDate(v, { order: 'mdy' })), dmy: dayWords(readGiftDate(v, { order: 'dmy' })) } : null;
   }, [askOrder, source, dateCol]);
-  const opts = useMemo(() => ({ order, timeZone, methodMap, slateMap, slates }), [order, timeZone, methodMap, slateMap, slates]);
-  // The whole file as the rows to send, and what can't be read here.
-  const file = useMemo(() => (source ? fileRows(source.records, mapping, opts) : { rows: [], unread: [], repeats: 0, alike: 0 }), [source, mapping, opts]);
+  const opts = useMemo(() => ({ order, timeZone, methodMap, slateMap, statusMap, slates }), [order, timeZone, methodMap, slateMap, statusMap, slates]);
+  // The whole file as the rows to send, what can't be read here, and what its payment status leaves out.
+  const file = useMemo(() => (source ? fileRows(source.records, mapping, opts) : { rows: [], unread: [], unpaid: [], repeats: 0, alike: 0 }), [source, mapping, opts]);
   const examples = useMemo(() => (source ? source.headers.map((_, i) => columnValues(source.records, i, 3)) : []), [source]);
   const preview = useMemo(() => (source ? source.records.slice(0, 5).map((r) => ({ at: r.row, ...giftRow(r.cells, mapping, opts) })) : []), [source, mapping, opts]);
   const methodValues = useMemo(() => (source ? valuesIn(source.records, methodCol) : []), [source, methodCol]);
   const slateValues = useMemo(() => (source ? valuesIn(source.records, slateCol) : []), [source, slateCol]);
+  const statusValues = useMemo(() => (source ? valuesIn(source.records, statusCol) : []), [source, statusCol]);
   const unknownMethods = methodValues.filter(({ value }) => !Object.hasOwn(methodMap, value.toLowerCase()) && !methodOf(null, value)).length;
   // A value in the Slate column that names no slate would go to the first one unasked: the limit is per slate, so it is asked.
   const unknownSlates = slateValues.filter(({ value }) => !Object.hasOwn(slateMap, value.toLowerCase()) && !slateOf(null, slates, value)).length;
+  // A payment status it doesn't know is left out until the person says it comes in: asked.
+  const unknownStatuses = statusValues.filter(({ value }) => !Object.hasOwn(statusMap, value.toLowerCase()) && statusOf(null, value) === null).length;
+  // The words that left rows out, most common first ("Refunded · Failed").
+  const unpaidWords = useMemo(() => valuesIn(file.unpaid.map((u) => ({ cells: [u.status] })), 0, 4).map((v) => v.value).join(' · '), [file]);
   // Numbers Excel cut short ("1.6047E+10"), by column: how many.
   const sciByCol = useMemo(() => {
     const out = {};
@@ -478,6 +488,14 @@ function Flow({ me }) {
                   options={METHODS} none="Not recorded" say={(v) => `How “${v}” was paid`} onPick={setMeaning(setMethodMap)} />
               </Reveal>
             )}
+            {statusValues.length > 0 && (
+              <Reveal label={`Which come in${unknownStatuses ? ` · ${fmtN(unknownStatuses)} to say` : ''}`} defaultOpen={unknownStatuses > 0}>
+                <Meanings title="Which come in" disabled={locked} values={statusValues}
+                  hint="Only a payment that went through is a gift. One left out isn’t brought in."
+                  current={(v) => (statusOf(statusMap, v) ? 'in' : '')} own={(v) => Object.hasOwn(statusMap, v.toLowerCase())}
+                  options={[['in', 'Comes in']]} none="Left out" say={(v) => `Whether “${v}” comes in`} onPick={setMeaning(setStatusMap)} />
+              </Reveal>
+            )}
             {slateValues.length > 0 && (
               <Reveal label={`Which slate each is to${unknownSlates ? ` · ${fmtN(unknownSlates)} to say` : ''}`} defaultOpen={unknownSlates > 0}>
                 <Meanings title="Which slate each is to" disabled={locked} values={slateValues}
@@ -507,7 +525,7 @@ function Flow({ me }) {
                       {preview.map((p) => (
                         <tr key={p.at}>
                           <td className="mono muted">{p.at}</td>
-                          {p.error ? <td colSpan={4}><span className="danger-text">{p.error}</span></td> : (
+                          {p.out ? <td colSpan={4}><span className="muted">Left out — {p.out}</span></td> : p.error ? <td colSpan={4}><span className="danger-text">{p.error}</span></td> : (
                             <>
                               <td>{p.row.name || [p.row.first, p.row.last].filter(Boolean).join(' ') || p.row.email || <span className="danger-text">no donor</span>}</td>
                               <td className="mono">{fmtMoney(p.row.amount_cents)}</td>
@@ -536,7 +554,13 @@ function Flow({ me }) {
                 <span className="imp-line imp-line--inline">{fmtN(usedCount)} of {fmtN(source.headers.length)} columns</span>
               </div>
             )}
-            {ready && file.rows.length === 0 && <p className="imp-line">No row here reads as a gift yet — check the Amount and Date columns.</p>}
+            {ready && file.rows.length === 0 && (
+              <p className="imp-line">
+                {file.unpaid.length > 0 && file.unread.length === 0
+                  ? 'Every row is left out by its payment status — say which come in above.'
+                  : 'No row here reads as a gift yet — check the Amount and Date columns.'}
+              </p>
+            )}
             {check?.phase === 'error' && <p className="error" role="alert">The check didn’t finish. {check.error}</p>}
           </>
         ))}
@@ -591,6 +615,9 @@ function Flow({ me }) {
                     </Reveal>
                   </div>
                 )}
+                {file.unpaid.length > 0 && (
+                  <p className="imp-hint imp-hint--sm">{plural(file.unpaid.length, 'row is', 'rows are')} left out by {file.unpaid.length === 1 ? 'its' : 'their'} payment status ({unpaidWords}).</p>
+                )}
                 {t.waiting > 0 && <p className="imp-hint imp-hint--sm">{plural(t.waiting, 'gift has', 'gifts have')} no sure donor on file. {t.waiting === 1 ? 'It waits' : 'They wait'} under Donations → Needs you for you to pick.</p>}
                 {file.repeats > 0 && <p className="imp-map__note is-warn gi-note">{plural(file.repeats, 'row repeats', 'rows repeat')} a gift number from earlier in the file — left out as the same gift.</p>}
                 {file.alike > 0 && <p className="imp-hint imp-hint--sm">{plural(file.alike, 'row reads', 'rows read')} like an earlier one (same donor, amount and day) — each comes in as its own gift.</p>}
@@ -644,6 +671,7 @@ function Flow({ me }) {
                       {(held?.flagged ?? imp.flagged) > 0 && <li>{plural(held?.flagged ?? imp.flagged, 'gift is', 'gifts are')} over the year’s limit — under Needs you on Donations</li>}
                       {imp.already > 0 && <li>{plural(imp.already, 'was', 'were')} already here</li>}
                       {imp.typedLeft > 0 && <li>{plural(imp.typedLeft, 'was', 'were')} left out: already typed in here</li>}
+                      {file.unpaid.length > 0 && <li>{plural(file.unpaid.length, 'was', 'were')} left out by payment status ({unpaidWords})</li>}
                       {imp.typedIn > 0 && <li>{plural(imp.typedIn, 'looked like a gift', 'looked like gifts')} already typed in here — {imp.typedIn === 1 ? 'it' : 'they'} came in too</li>}
                       <li>No receipts were made or emailed: the other tool did that.</li>
                     </ul>
