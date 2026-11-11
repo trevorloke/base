@@ -101,9 +101,6 @@ const savedBrand = (s, key) => {
   const app = (p) => (p ? `/brand/${p.id}.${p.type}` : null);
   const pub = (p) => (p ? `/media/${p.id}.${p.type}` : null);
   const shortName = plainWords(s.shortName, 30) || APP_NAME;
-  // No mark: the icons of the look it started from, as its colour and
-  // training's name fall back to that look (Imagine Surrey keeps its star).
-  const own = start;
   return derived({
     key: BRANDS[key] ? key : 'base',
     saved: true,
@@ -125,13 +122,15 @@ const savedBrand = (s, key) => {
     publicLogoDark: pub(logoDark),
     // Mail apps draw PNG and JPG; many don't draw WebP.
     emailLogo: logo && logo.type !== 'webp' ? pub(logo) : null,
-    icon: icons ? { href: `/brand/${icons.i192}.png`, type: 'image/png' } : own.icon,
-    touchIcon: icons ? `/brand/${icons.touch}.png` : own.touchIcon,
+    // No mark: the icons of the look it started from, as its colour and
+    // training's name fall back to that look (Imagine Surrey keeps its star).
+    icon: icons ? { href: `/brand/${icons.i192}.png`, type: 'image/png' } : start.icon,
+    touchIcon: icons ? `/brand/${icons.touch}.png` : start.touchIcon,
     icons: icons ? [
       { src: `/brand/${icons.i192}.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
       { src: `/brand/${icons.i512}.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
       { src: `/brand/${icons.maskable}.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-    ] : own.icons,
+    ] : start.icons,
     siteIcon: icons ? { icon: `/media/${icons.i192}.png`, touch: `/media/${icons.touch}.png` } : null,
     sitePlaceholder: start.sitePlaceholder,
     sampleLede: start.sampleLede,
