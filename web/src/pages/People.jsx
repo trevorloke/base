@@ -11,7 +11,7 @@
 // Ratings always render with the shared RatingChip / ratingSay words.
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link, Navigate, useOutletContext } from 'react-router-dom';
-import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES, SUGGESTED_TAGS } from '@starbase/shared/canvass';
 import { bandOf, codesInBand, offTail, ratingByCode } from '@starbase/shared/scale';
 import RatingButtons, { RatingChip, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
@@ -1034,26 +1034,68 @@ function CallsScreen() {
   // A phone bank (?bank=): the numbers handed to you that are left, in the
   // bank's order; a logged call crosses one off on the server.
   const bankId = /^[0-9a-f-]{36}$/i.test(params.get('bank') || '') ? params.get('bank') : null;
-  const qs = new URLSearchParams({ q: f.q, limit: String(LIMIT), has: 'phone' });
+  // reach: only who the one place (server lib/reach.js) says may be called —
+  // or texted — so the list, its count and every send agree. A list (?list=)
+  // is one more filter: the desk's lists; a volunteer's match nobody.
+  const qs = new URLSearchParams({ q: f.q, limit: String(LIMIT), has: 'phone', reach: channel === 'text' ? 'text' : 'call' });
   if (f.tag) qs.set('tag', f.tag);
   if (f.rating) qs.set('rating', ratingQuery(scale, f.rating));
   if (f.role) qs.set('role', f.role);
   if (f.field) qs.set('field', f.field);
   addCuts(qs, f);
+  addRules(qs, f);
+  const listKey = qs.toString();
+  // A long list comes in parts, by name: the next part loads as the one on
+  // screen runs low, so Calls never stops at its first 300. ends[i] is where
+  // part i ended once the next was asked for: asked again, part i stops
+  // there (?until=), so someone new on the list never pushes anyone out.
+  const [parts, setParts] = useState({ key: listKey, ends: [] });
+  const ends = parts.key === listKey ? parts.ends : [];
+  const endsRef = useRef(ends);
+  endsRef.current = ends;
+  const partUrl = (i) => {
+    const p = new URLSearchParams(listKey);
+    const end = endsRef.current[i];
+    if (i > 0) p.set('after', endsRef.current[i - 1]);
+    if (end) { p.set('until', end); p.set('limit', '2000'); }
+    return `/persons?${p}`;
+  };
   // The list is kept on this phone, so losing signal mid-list loses nothing.
   const copyName = bankId ? `bank:${bankId}` : `calls:${qs}`;
   const persons = useQuery({
-    queryKey: bankId ? ['banks', bankId, 'mine'] : ['persons', 'list', qs.toString()],
-    queryFn: () => (bankId ? apiGet(`/banks/${bankId}/mine`) : apiGet(`/persons?${qs}`)),
+    queryKey: bankId ? ['banks', bankId, 'mine'] : ['persons', 'list', listKey],
+    queryFn: () => (bankId ? apiGet(`/banks/${bankId}/mine`) : apiGet(partUrl(0))),
     placeholderData: keepPreviousData,
     ...phoneCopy(me, copyName),
+  });
+  // The parts after the first, each read once: a part already called
+  // through is never asked for again.
+  const later = useQueries({
+    queries: (bankId ? [] : ends).map((end, i) => ({
+      queryKey: ['calls', 'part', listKey, end], queryFn: () => apiGet(partUrl(i + 1)), staleTime: Infinity, retry: 1,
+    })),
   });
   const bank = bankId ? persons.data?.bank : null;
   const [scriptOpen, setScriptOpen] = useState(false);
   useKeepCopy(me, copyName, persons);
   const listCopy = showingCopy(persons);
   const seed = me?.user?.id || '';
-  const list = persons.data?.persons;
+  const laterRows = later.map((r) => r.data?.persons ?? []);
+  const list = useMemo(() => {
+    if (!persons.data?.persons) return undefined;
+    const seen = new Set();
+    return [persons.data.persons, ...laterRows].flat().filter((p) => (seen.has(p.id) ? false : seen.add(p.id)));
+  }, [persons.data, ...laterRows]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The newest part: are there more after it, and where it ends.
+  const last = ends.length ? later[ends.length - 1] : persons;
+  const lastRows = ends.length ? last?.data?.persons : persons.data?.persons;
+  const more = !bankId && Boolean(last?.data?.more) && !persons.isPlaceholderData;
+  // How many in all, for a list longer than what's loaded (the same rule, counted).
+  const countQs = new URLSearchParams(listKey);
+  countQs.delete('limit');
+  const total = useQuery({
+    queryKey: ['persons', 'count', countQs.toString()], queryFn: () => apiGet(`/persons/count?${countQs}`), enabled: more, meta: { side: true }, retry: 1,
+  });
   // Text mode also skips anyone who opted out of texts (replied STOP).
   const reachable = useMemo(
     () => (list ?? []).filter((p) => p.phone && !isDnc(p) && !(channel === 'text' && noTexts(p))),
@@ -1098,6 +1140,21 @@ function CallsScreen() {
   const at = current ? queue.indexOf(current) : -1; // -1: a held person outside the list
   const calledHere = rows.length - queue.length;
   const mine = (current && picked[current.id]) || null;
+  // The newest part is on its way (or didn't come); the list on screen runs
+  // low: the next part is asked for, starting after the last name loaded.
+  const pending = !bankId && ends.length > 0 && !last?.data;
+  useEffect(() => {
+    if (!more || !lastRows?.length || queue.length >= 20) return;
+    const end = lastRows.at(-1).id;
+    setParts((p) => {
+      const cur = p.key === listKey ? p.ends : [];
+      return cur.length === ends.length && !cur.includes(end) ? { key: listKey, ends: [...cur, end] } : p;
+    });
+  }, [more, lastRows, queue.length, listKey, ends.length]);
+  // How many are left: the ones loaded and not done yet, and everyone not
+  // loaded yet (the server's count, by the same rule) — or Loading….
+  const notLoaded = more || pending;
+  const toCall = notLoaded ? (total.data ? queue.length + Math.max(0, total.data.total - (list?.length ?? 0)) : null) : queue.length;
   // The card stays on whoever is up (a reply arriving doesn't swap it).
   useEffect(() => { if (current && current.id !== currentId) setCurrentId(current.id); }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // Opened from a profile or the door card (?person=): that person's card,
@@ -1234,7 +1291,7 @@ function CallsScreen() {
     update({ channel: c === 'text' ? 'text' : null, person: null });
   };
 
-  const filterChips = <FilterChips f={f} update={update} keys={['rating', 'tag', 'role', 'q']}
+  const filterChips = <FilterChips f={f} update={update} keys={['rating', 'tag', 'role', 'q']} desk={desk}
     extra={f.field ? <FieldFilterChip value={f.field} desk={desk} onRemove={() => update({ field: null })} /> : null} />;
 
   return (
@@ -1281,7 +1338,16 @@ function CallsScreen() {
         <p className="pp-offline" role="status">No signal — your list loads when you’re back online.</p>
       ) : persons.isLoading || (channel === 'text' && texting.isLoading) || (smsOn && textQueue.isLoading) ? (
         <p className="muted">Loading…</p>
-      ) : persons.isError && !list && !current ? null : rows.length === 0 && !current ? (
+      ) : persons.isError && !list && !current ? null : !current && pending && (last?.isError || last?.fetchStatus === 'paused') ? (
+        // The next part didn't come: say so, and offer it again.
+        <p className="error" role="alert">
+          {noReply(last.error)
+            ? <>{typeof navigator !== 'undefined' && navigator.onLine === false ? 'No signal' : 'No answer'} — the rest of your list loads when you’re back online · <button type="button" className="au-retry" onClick={() => last.refetch()}>Try again</button></>
+            : <Unavailable onRetry={() => last.refetch()} />}
+        </p>
+      ) : !current && (pending || more) ? (
+        <p className="muted" role="status">{LOADING}</p>
+      ) : rows.length === 0 && !current ? (
         <div className="pp-empty">
           {/* Everyone here has a text from the campaign: replies come to the Inbox. */}
           <p>{bankId ? (bank?.total ? 'All done — every number on your list is called.' : 'No numbers on your list.') : reachable.length > 0 ? `No one left to ${noun}.` : `No one to ${noun} yet.`}</p>
@@ -1289,16 +1355,19 @@ function CallsScreen() {
         </div>
       ) : !current ? (
         <div className="pp-empty cl-alldone">
-          <p className="cl-big"><strong className="mono">{calledHere}</strong> done</p>
+          <p className="cl-big"><strong className="mono">{fmt(calledHere)}</strong> done</p>
           <button type="button" className="btn pp-btn" onClick={startOver}>Start over</button>
         </div>
       ) : (
         <>
           <div className="cl-progress">
-            <span><strong className="mono">{queue.length}</strong> to {noun}</span>
-            <div className="cl-bar" role="progressbar" aria-label={`${calledHere} of ${rows.length} done`}
-              aria-valuemin={0} aria-valuemax={rows.length} aria-valuenow={calledHere}>
-              <div className="cl-bar__fill" style={{ width: `${rows.length ? Math.round((calledHere / rows.length) * 100) : 0}%` }} />
+            <span>
+              {toCall != null ? <><strong className="mono">{fmt(toCall)}</strong> to {noun}</>
+                : total.isError ? <Unavailable onRetry={() => total.refetch()} /> : LOADING}
+            </span>
+            <div className="cl-bar" role="progressbar" aria-label={`${fmt(calledHere)} of ${fmt(calledHere + (toCall ?? queue.length))} done`}
+              aria-valuemin={0} aria-valuemax={calledHere + (toCall ?? queue.length)} aria-valuenow={calledHere}>
+              <div className="cl-bar__fill" style={{ width: `${calledHere + (toCall ?? queue.length) ? Math.round((calledHere / (calledHere + (toCall ?? queue.length))) * 100) : 0}%` }} />
             </div>
           </div>
 
@@ -1324,7 +1393,9 @@ function CallsScreen() {
                 )}
                 <QuickDetails key={`qd-${current.id}`} person={current} me={me} toast={(m) => showToast(m, current)}
                   onSaved={(next) => {
-                    queryClient.setQueryData(bankId ? ['banks', bankId, 'mine'] : ['persons', 'list', qs.toString()], (d) => (d?.persons ? { ...d, persons: d.persons.map((p) => (p.id === next.id ? { ...p, ...next } : p)) } : d));
+                    const patch = (d) => (d?.persons ? { ...d, persons: d.persons.map((p) => (p.id === next.id ? { ...p, ...next } : p)) } : d);
+                    queryClient.setQueryData(bankId ? ['banks', bankId, 'mine'] : ['persons', 'list', listKey], patch);
+                    if (!bankId) for (const end of ends) queryClient.setQueryData(['calls', 'part', listKey, end], patch);
                     if (held?.id === next.id) setHeld({ ...held, ...next });
                     invalidatePersonData(queryClient);
                   }} />

@@ -92,6 +92,17 @@
 @media (pointer: coarse), (max-width: 720px) { .au-snap__link { min-height: 48px; } }
 .pp-count .au-snap { margin-top: var(--s-2); }
 
+/* A new phone bank: from a list, or people picked by hand */
+.au-from { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.au-from .btn[aria-pressed='true'] { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
+.au-from__list { display: flex; flex-direction: column; gap: 4px; max-width: 520px; }
+.au-from__list .input { min-height: 48px; }
+.au-from__list .ops-meta { margin: var(--s-1) 0 0; }
+/* A bank made from a list: where from, who left it, Add who joined since */
+.au-banklist { margin: 0 0 var(--s-3); font-size: 15px; color: var(--text-2); }
+.au-banklist .ops-done { margin: 0; }
+.au-pager { margin-top: var(--s-2); }
+
 /* Who a send reaches, where two senders differ */
 .au-rule { display: block; margin-top: var(--s-1); font-size: 13px; color: var(--text-2); }
 

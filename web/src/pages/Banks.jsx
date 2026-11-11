@@ -1,16 +1,19 @@
-// Phone banks (ext/banks). The desk: every bank, a new one from the people
-// list (a search, a rating, a tag — everyone with a phone who matches), its
+// Phone banks (ext/banks). The desk: every bank, a new one — from a List
+// (Call this list: everyone on it who may be called, however many; whoever
+// leaves the list leaves the calls not yet made) or picked from the people
+// list (a search, a rating, a tag — everyone with a phone who matches) — its
 // numbers handed to a caller or split across a team, who has what and how
 // far they are, numbers taken back, the bank closed. A volunteer here sees
 // their own call lists; each opens on Calls (/calls?bank=…), where a logged
 // call crosses the number off.
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { codesInBand } from '@starbase/shared/scale';
 import { ApiError, action, apiGet } from '../api.js';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { useWebDid, webChoices } from '../components/FieldCuts.jsx';
+import { LOADING, Unavailable, useListCounts, useListNames } from '../components/AudienceBits.jsx';
 import './dashboard.css';
 import './banks.css';
 import '../editor.css';
@@ -97,7 +100,7 @@ function List() {
                 <span className="bk-row__main">
                   <span className="bk-row__name">{b.name}{b.closed && <span className="chip">Closed</span>}</span>
                   <span className="bk-row__sub">
-                    {num(b.total)} {plural(b.total, 'number')} · {num(b.done)} done · {num(b.open)} not handed out
+                    {num(b.total)} {plural(b.total, 'number')} · {num(b.done)} done · {num(b.open)} not handed out{b.list_name && <> · from {b.list_name}</>}
                     {b.callers.length > 0 && <> · {b.callers.map((c) => `${c.name} ${c.done}/${c.total}`).join(', ')}</>}
                   </span>
                 </span>
@@ -138,13 +141,24 @@ function RetryFields({ value, onChange, idPrefix, disabled = false }) {
 
 function NewBank() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const scale = useScale();
-  const [name, setName] = useState('');
+  const [typedName, setName] = useState(null);
   const [script, setScript] = useState('');
   const [retry, setRetry] = useState({ retry_hours: 4, max_tries: 3 });
   const [f, setF] = useState({ q: '', band: '', tag: '', web: '' });
   const id = useId();
   const { run, busy, error } = useSaver();
+  // Who to call: a List (Call this list — arrives with ?list=), or people
+  // picked here by hand. A campaign with lists starts on a list.
+  const names = useListNames();
+  const lists = names.data?.lists ?? [];
+  const [listId, setListId] = useState(params.get('list') || '');
+  const [picked, setFrom] = useState(params.get('list') ? 'list' : null);
+  const from = picked ?? (names.isPending ? null : lists.length ? 'list' : 'hand');
+  const chosen = lists.find((l) => l.id === listId) || null;
+  const listCount = useListCounts(chosen ? [chosen] : []).get(chosen?.id);
+  const name = typedName ?? (from === 'list' && chosen ? chosen.name : '');
   // What they did on the website (ext/webdid): offered once it has people.
   const web = webChoices(useWebDid());
   const qs = useMemo(() => {
@@ -156,11 +170,14 @@ function NewBank() {
     else if (f.band) p.set('rating', codesInBand(scale, f.band).join(','));
     return p.toString();
   }, [f, scale]);
-  const people = useQuery({ queryKey: ['persons', 'list', qs], queryFn: () => apiGet(`/persons?${qs}`), staleTime: 15_000 });
+  const people = useQuery({ queryKey: ['persons', 'list', qs], queryFn: () => apiGet(`/persons?${qs}`), staleTime: 15_000, enabled: from === 'hand' });
   const callable = useMemo(() => (people.data?.persons || []).filter((p) => p.phone && !(p.tags || []).includes('do-not-contact')), [people.data]);
+  // How many numbers the bank will start with: a list's "can be called", or the people picked.
+  const startWith = from === 'list' ? (listCount?.counts?.with_call ?? null) : callable.length;
   const submit = async (e) => {
     e.preventDefault();
-    const r = await run('bank.create', { name, script: script || null, person_ids: callable.map((p) => p.id), ...retry });
+    const who = from === 'list' ? { list_id: listId } : { person_ids: callable.map((p) => p.id) };
+    const r = await run('bank.create', { name, script: script || null, ...who, ...retry });
     if (r) navigate(`/banks/${r.bank.id}`, { replace: true });
   };
   return (
@@ -172,6 +189,32 @@ function NewBank() {
         <input id={`${id}-n`} className="input" value={name} maxLength={120} required autoFocus placeholder="Undecided in Newton — week of Nov 3" onChange={(e) => setName(e.target.value)} />
         <fieldset className="bk-who">
           <legend className="ws-label">Who to call</legend>
+          <div className="au-from" role="group" aria-label="Who to call">
+            <button type="button" className="btn ops-tap" aria-pressed={from === 'list'} onClick={() => setFrom('list')}>From a list</button>
+            <button type="button" className="btn ops-tap" aria-pressed={from === 'hand'} onClick={() => setFrom('hand')}>Pick people</button>
+          </div>
+          {from === null && <p className="bk-count" role="status">{LOADING}</p>}
+          {from === 'list' && (
+            <div className="au-from__list">
+              <label htmlFor={`${id}-l`} className="ws-label">List</label>
+              <select id={`${id}-l`} className="input" value={listId} required onChange={(e) => setListId(e.target.value)}>
+                <option value="">Choose a list…</option>
+                {listId && !chosen && <option value={listId}>{names.isPending ? LOADING : 'A list that isn’t here any more'}</option>}
+                {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+              {names.isError && <p className="error" role="alert"><Unavailable onRetry={() => names.refetch()} /></p>}
+              {names.isSuccess && !lists.length && <p className="ops-meta">No lists yet — <Link to="/lists/new">make one</Link>, or pick people.</p>}
+              {chosen && (
+                <p className="bk-count" role="status">
+                  {listCount?.counts ? <><strong className="mono">{num(listCount.counts.with_call)}</strong> of {num(listCount.counts.total)} on it can be called</>
+                    : listCount?.isError ? <Unavailable onRetry={listCount.refetch} /> : LOADING}
+                </p>
+              )}
+              {chosen && <p className="ops-meta">Whoever leaves the list leaves the calls not made yet. Or <Link to={`/calls?list=${chosen.id}&channel=phone`}>call them yourself</Link>.</p>}
+            </div>
+          )}
+          {from === 'hand' && (
+          <>
           <div className="bk-who__row">
             <div><label htmlFor={`${id}-b`} className="ws-label">Rating</label>
               <select id={`${id}-b`} className="input" value={f.band} onChange={(e) => setF({ ...f, band: e.target.value })}>{BANDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
@@ -187,14 +230,19 @@ function NewBank() {
             <div className="bk-who__grow"><label htmlFor={`${id}-q`} className="ws-label">Search (name, street, phone)</label>
               <input id={`${id}-q`} className="input" value={f.q} placeholder="104 Ave" onChange={(e) => setF({ ...f, q: e.target.value })} /></div>
           </div>
+          {/* A read that failed is never "0 people". */}
+          {people.isError && !people.data ? <p className="error" role="alert"><Unavailable onRetry={() => people.refetch()} /></p> : (
           <p className="bk-count" role="status">
             {people.isFetching && !people.data ? 'Counting…' : <><strong className="mono">{num(callable.length)}</strong> {plural(callable.length, 'person', 'people')} with a phone{callable.length >= 2000 ? ' (the first 2,000)' : ''}{people.data && people.data.persons.length > callable.length ? ` — ${people.data.persons.length - callable.length} do-not-contact left out` : ''}</>}
           </p>
+          )}
           {callable.length > 0 && (
             <ul className="bk-sample">
               {callable.slice(0, 5).map((p) => <li key={p.id}>{p.name} <span className="muted">· {p.phone}</span> {p.rating && <RatingChip code={p.rating} who brief />}</li>)}
               {callable.length > 5 && <li className="muted">…and {num(callable.length - 5)} more</li>}
             </ul>
+          )}
+          </>
           )}
         </fieldset>
         <RetryFields value={retry} onChange={setRetry} idPrefix={`${id}-r`} />
@@ -203,7 +251,9 @@ function NewBank() {
           placeholder={'Hi, this is ___ with the campaign. We’re calling neighbours about the election on…'} onChange={(e) => setScript(e.target.value)} />
         {error && <p className="error" role="alert">{error}</p>}
         <div className="lu-form__acts">
-          <button type="submit" className="btn btn-primary" disabled={busy || !name.trim() || !callable.length}>Make the bank with {num(callable.length)} {plural(callable.length, 'number')}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy || !name.trim() || !from || (from === 'list' ? !chosen || startWith === 0 : !callable.length)}>
+            {startWith == null ? 'Make the bank' : `Make the bank with ${num(startWith)} ${plural(startWith, 'number')}`}
+          </button>
           <Link className="btn btn-quiet" to="/banks">Cancel</Link>
         </div>
       </form>
@@ -212,9 +262,12 @@ function NewBank() {
 }
 
 // ── One bank: hand out, take back, watch ──
+// The numbers come 2,000 at a time (GET /banks/:id?offset=).
+const PAGE = 2000;
 function Bank({ id }) {
   const navigate = useNavigate();
-  const q = useQuery({ queryKey: ['banks', id], queryFn: () => apiGet(`/banks/${id}`), refetchInterval: 30_000 });
+  const [offset, setOffset] = useState(0);
+  const q = useQuery({ queryKey: ['banks', id, offset], queryFn: () => apiGet(`/banks/${id}?offset=${offset}`), refetchInterval: 30_000, placeholderData: (prev) => prev });
   const members = useQuery({ queryKey: ['members'], queryFn: () => apiGet('/members'), staleTime: 60_000 });
   const teams = useQuery({ queryKey: ['teams'], queryFn: () => apiGet('/teams'), staleTime: 60_000 });
   const { run, busy, error } = useSaver([['banks'], ['banks', id]]);
@@ -223,12 +276,20 @@ function Bank({ id }) {
   const [showAll, setShowAll] = useState(false);
   const [editScript, setEditScript] = useState(null);
   const [ask, setAsk] = useState(false);
+  const [topped, setTopped] = useState(null);
   const fid = useId();
   useEffect(() => { if (q.data && editScript === null) setEditScript(null); }, [q.data]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (q.isError && !q.data) return <div className="bk"><p className="error" role="alert">{q.error.status === 404 ? 'That phone bank isn’t here.' : q.error.message}</p><Link className="btn" to="/banks">Phone banks</Link></div>;
+  if (q.isError && !q.data) return <div className="bk"><p className="error" role="alert">{q.error.status === 404 ? 'That phone bank isn’t here.' : <Unavailable onRetry={() => q.refetch()} />}</p><Link className="btn" to="/banks">Phone banks</Link></div>;
   if (!q.data) return <p className="muted">Loading…</p>;
   const { bank, numbers } = q.data;
-  const open = numbers.filter((n) => !n.assigned_to && !n.done_at).length;
+  // Not handed out and still to call, as the server counts it: someone who
+  // left the list (or may no longer be called) isn't waiting to be handed out.
+  const open = bank.open ?? numbers.filter((n) => !n.assigned_to && !n.done_at).length;
+  const topUp = async () => {
+    setTopped(null);
+    const r = await run('bank.topup', { id });
+    if (r) setTopped(r.added ? `✓ ${num(r.added)} more to call — on the list since` : '✓ No one new on the list');
+  };
   const handOut = async (e) => {
     e.preventDefault();
     if (!to) return;
@@ -253,6 +314,18 @@ function Bank({ id }) {
           ) : <button type="button" className="btn btn-quiet" onClick={() => setAsk(true)}>Remove</button>}
         </div>
       </div>
+
+      {bank.list_id && (
+        // Made from a List: who left it since is out of the calls not made yet.
+        <div className="ops-actions au-banklist">
+          <span>
+            {bank.list_name ? <>From the list <Link to={`/lists/${bank.list_id}`}>{bank.list_name}</Link></> : 'From a list that was deleted — the numbers stay'}
+            {bank.gone > 0 && <> · <strong className="mono">{num(bank.gone)}</strong> left the list or can’t be called now</>}
+          </span>
+          {bank.list_name && !bank.closed && <button type="button" className="btn ops-tap" disabled={busy} onClick={topUp}>Add who joined since</button>}
+          {topped && <span className="ops-done" role="status">{topped}</span>}
+        </div>
+      )}
 
       <div className="dash-figs bk-figs" role="list">
         {[['Numbers', bank.total], ['Handed out', bank.assigned], ['Done', bank.done], ['Not handed out', open]].map(([l, n]) => (
@@ -339,6 +412,7 @@ function Bank({ id }) {
                   <td>{n.rating ? <RatingChip code={n.rating} who brief /> : <span className="muted">·</span>}</td>
                   <td>{n.caller || <span className="muted">—</span>}</td>
                   <td>{n.done_at ? <span className="chip chip-ok">{n.outcome || 'done'}</span>
+                    : n.still === false ? <span className="muted">{bank.list_id ? 'left the list' : 'can’t be called now'}</span>
                     : n.next_at && new Date(n.next_at) > new Date() ? `call back ${backAt(n.next_at)}${n.tries ? ` · ${n.tries} ${n.tries === 1 ? 'try' : 'tries'}` : ''}`
                       : n.assigned_to ? 'to call' : <span className="muted">not handed out</span>}</td>
                   <td className="bk-table__acts">
@@ -351,6 +425,14 @@ function Bank({ id }) {
           </table>
         </div>
         {numbers.length > shown.length && <button type="button" className="btn btn-quiet" onClick={() => setShowAll(true)}>Show all {num(numbers.length)}</button>}
+        {/* A bank bigger than one page: 2,000 numbers at a time. */}
+        {(offset > 0 || bank.total > offset + numbers.length) && (showAll || numbers.length <= shown.length) && (
+          <div className="ops-actions au-pager">
+            <span className="ops-meta">{num(offset + 1)}–{num(offset + numbers.length)} of {num(bank.total)}</span>
+            {offset > 0 && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setOffset(Math.max(0, offset - PAGE))}>Previous {num(PAGE)}</button>}
+            {bank.total > offset + numbers.length && <button type="button" className="btn btn-quiet ops-tap" onClick={() => { setOffset(offset + PAGE); setShowAll(true); }}>Next {num(Math.min(PAGE, bank.total - offset - numbers.length))}</button>}
+          </div>
+        )}
       </section>
     </div>
   );
