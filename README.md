@@ -558,7 +558,10 @@ differ, as they always have: an email to a list goes to everyone on it who
 hasn't said no; the newsletter and a ladder's emails go only to people who
 said yes. Whether a send to a list should need a yes too is the
 campaign's call, and its counsel's — the code only keeps the rules as they
-are, in one place.
+are, in one place. The screen says so where the choice is made: an email
+*To* a list reads "This goes to everyone on the list who hasn't said no;
+the newsletter goes only to subscribers." Calls asks the same place who
+may be called or texted (`GET /persons?reach=call|text`).
 
 | Channel | Never, whoever sends | And for some senders |
 |---|---|---|
