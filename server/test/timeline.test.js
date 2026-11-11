@@ -277,11 +277,39 @@ test('one person’s rows come through an index, never a walk over everyone’s'
   }
 });
 
-test('a person with thousands of contacts, among many people’s: the first page stays quick', async () => {
-  const busy = ok(await mgr.action('person.create', { name: 'Busy Example' })).person;
+// Each big table's read must find the one person (or the one row it joins
+// to) through its index: an index condition on these, never the campaign
+// alone and never a walk over the table.
+const STRAIGHT_TO = {
+  persons: /\bid = /, contacts: /person_id = /, survey_responses: /person_id = /, signs: /person_id = /, events: /entity_id = /,
+  voted_marks: /person_id = /, texting_conversations: /person_id = /, texting_messages: /conversation_id = /,
+  blast_recipients: /person_id = |lower\(/, ladder_runs: /person_id = /, consent_events: /person_id = /, site_actions: /person_id = /,
+  gifts: /person_id = |\bid = /, stripe_payments: /person_id = |gift_id = /, member_terms: /person_id = /, shift_assignments: /person_id = /,
+};
+// The plan's scans: [{ table, index, cond }] (a seq scan has no index).
+const scansOf = (plan) => {
+  const lines = plan.split('\n');
+  const out = [];
+  let heap = null;
+  lines.forEach((l, i) => {
+    const seq = l.match(/Seq Scan on (\w+)/);
+    if (seq) out.push({ table: seq[1], index: null, cond: '' });
+    heap = l.match(/Bitmap Heap Scan on (\w+)/)?.[1] ?? heap;
+    const ix = l.match(/Index (?:Only )?Scan(?: Backward)? using (\w+) on (\w+)/) || l.match(/Bitmap Index Scan on (\w+)()/);
+    if (!ix) return;
+    const rest = lines.slice(i + 1);
+    const next = rest.findIndex((x) => /^\s*->\s/.test(x));
+    const cond = (next === -1 ? rest : rest.slice(0, next)).find((x) => /Index Cond:/.test(x)) || '';
+    out.push({ table: ix[2] || heap, index: ix[1], cond });
+  });
+  return out;
+};
+
+test('a person with thousands of contacts, among 20,000 people with histories of their own: quick, and each read goes straight to them', async () => {
+  const busy = { ...ok(await mgr.action('person.create', { name: 'Busy Example', email: 'busy@example.org' })).person, email: 'busy@example.org' };
   // 20,000 other people with three contacts each, and 5,000 on this one.
   await db.query(
-    `insert into persons (id, workspace_id, name) select gen_random_uuid(), $1, 'Voter ' || g || ' Example' from generate_series(1, 20000) g`, [ws],
+    `insert into persons (id, workspace_id, name, email) select gen_random_uuid(), $1, 'Voter ' || g || ' Example', 'voter' || g || '@example.org' from generate_series(1, 20000) g`, [ws],
   );
   await db.query(
     `insert into contacts (id, workspace_id, person_id, channel, outcome, created_at)
@@ -293,31 +321,113 @@ test('a person with thousands of contacts, among many people’s: the first page
      select gen_random_uuid(), $1, $2, case when g % 2 = 0 then 'door' else 'phone' end, 'no_answer', 'Try ' || g, now() - make_interval(mins => g)
        from generate_series(1, 5000) g`, [ws, busy.id],
   );
-  await db.query('analyze contacts');
+  // Everyone else's gifts, signs (each on the log), shifts, emails (to a
+  // list, and the newsletter's to an address), forms, yes and no, texts,
+  // answers, ladders, memberships, voted marks, refunds and log events —
+  // and one of each for them.
+  const voters = `select id, email, row_number() over (order by name) as n from persons where workspace_id = $1 and name like 'Voter %'`;
+  const seq0 = Number((await db.query('select coalesce(max(seq), 0) + 1000000 as s from events where workspace_id = $1', [ws])).rows[0].s);
+  for (const sql of [
+    `insert into gifts (id, workspace_id, person_id, amount_cents, date, method, cadence)
+       select gen_random_uuid(), $1, v.id, 5000, current_date - 30, 'cheque', 'one-time' from (${voters}) v where v.n % 10 = 0
+       union all select gen_random_uuid(), $1, $2, 2500, current_date - 3, 'cash', 'one-time'`,
+    `insert into signs (id, workspace_id, person_id, kind, status)
+       select gen_random_uuid(), $1, v.id, 'lawn', 'installed' from (${voters}) v where v.n % 10 = 1
+       union all select gen_random_uuid(), $1, $2, 'lawn', 'installed'`,
+    `insert into events (workspace_id, seq, action, entity_type, entity_id, op, payload, payload_hash, hash)
+       select $1, ${seq0} + row_number() over (), case when k = 0 then 'sign.place' else 'sign.update' end, 'sign', s.id,
+              case when k = 0 then 'create' else 'update' end, case when k = 0 then '{}'::jsonb else '{"status":"installed"}'::jsonb end, 'x', 'x'
+         from signs s join persons p on p.id = s.person_id cross join (values (0), (1)) v(k)
+        where s.workspace_id = $1 and (p.name like 'Voter %' or p.id = $2)`,
+    `insert into events (workspace_id, seq, action, entity_type, entity_id, op, payload, payload_hash, hash)
+       select $1, ${seq0} + 100000 + v.n, 'person.update', 'person', v.id, 'update', '{}', 'x', 'x' from (${voters}) v where $2::uuid is not null`,
+    `insert into shifts (id, workspace_id, title, starts_at) select gen_random_uuid(), $1, 'Shift ' || g, now() - make_interval(days => g) from generate_series(1, 10) g where $2::uuid is not null`,
+    `insert into shift_assignments (id, workspace_id, shift_id, person_id, status)
+       select gen_random_uuid(), $1, s.id, v.id, 'completed' from (${voters}) v cross join (select id from shifts where workspace_id = $1 and title like 'Shift %') s where v.n % 100 = 2
+       union all select gen_random_uuid(), $1, (select id from shifts where workspace_id = $1 and title = 'Shift 1'), $2, 'completed'`,
+    `insert into blasts (id, workspace_id, kind, subject, body, status, sent_at)
+       select gen_random_uuid(), $1, k, 'Bulk ' || k, 'Hello', 'sent', now() - interval '20 days' from unnest(array['eblast', 'eblast', 'newsletter']) k where $2::uuid is not null`,
+    `insert into blast_recipients (id, workspace_id, blast_id, email, person_id, status, sent_at)
+       select gen_random_uuid(), $1, b.id, v.email, v.id, 'sent', now() - interval '20 days'
+         from (select id from blasts where workspace_id = $1 and subject = 'Bulk eblast') b cross join (${voters}) v where v.n % 2 = 0
+       union all select gen_random_uuid(), $1, b.id, 'busy@example.org', $2, 'sent', now() - interval '20 days' from blasts b where b.workspace_id = $1 and b.subject = 'Bulk eblast'`,
+    `insert into blast_recipients (id, workspace_id, blast_id, email, status, sent_at)
+       select gen_random_uuid(), $1, b.id, v.email, 'sent', now() - interval '10 days'
+         from (select id from blasts where workspace_id = $1 and subject = 'Bulk newsletter') b cross join (${voters}) v where v.n % 4 = 3 and $2::uuid is not null
+       union all select gen_random_uuid(), $1, b.id, 'busy@example.org', 'sent', now() - interval '10 days' from blasts b where b.workspace_id = $1 and b.subject = 'Bulk newsletter'`,
+    `insert into site_actions (id, workspace_id, person_id, kind, payload)
+       select gen_random_uuid(), $1, v.id, 'petition', '{}'::jsonb from (${voters}) v where v.n % 10 = 4
+       union all select gen_random_uuid(), $1, $2, 'contact', '{"message":"Hello"}'::jsonb`,
+    `insert into consent_events (id, workspace_id, person_id, channel, granted, source)
+       select gen_random_uuid(), $1, v.id, 'email', true, 'website-newsletter' from (${voters}) v where v.n % 10 = 5
+       union all select gen_random_uuid(), $1, $2, 'sms', false, 'text-stop'`,
+    `insert into texting_conversations (id, workspace_id, person_id, phone)
+       select gen_random_uuid(), $1, v.id, '+16045550100' from (${voters}) v where v.n % 20 = 6
+       union all select gen_random_uuid(), $1, $2, '+16045550199'`,
+    `insert into texting_messages (id, workspace_id, conversation_id, direction, phone, body, status)
+       select gen_random_uuid(), $1, c.id, 'out', c.phone, 'Hi ' || k, 'delivered' from texting_conversations c cross join generate_series(1, 3) k
+        where c.workspace_id = $1 and $2::uuid is not null and c.phone in ('+16045550100', '+16045550199')`,
+    `insert into voted_marks (id, workspace_id, person_id, source)
+       select gen_random_uuid(), $1, v.id, 'door' from (${voters}) v where v.n % 10 = 7
+       union all select gen_random_uuid(), $1, $2, 'desk'`,
+    `insert into member_terms (id, workspace_id, person_id, term_years, starts_on, ends_on, source)
+       select gen_random_uuid(), $1, v.id, 1, current_date - 400, current_date - 35, 'paper' from (${voters}) v where v.n % 20 = 8
+       union all select gen_random_uuid(), $1, $2, 4, current_date - 30, current_date + 1400, 'website'`,
+    `insert into stripe_payments (id, workspace_id, person_id, kind, cadence, amount_cents, paid_at, paid_on, status, refunded_cents)
+       select gen_random_uuid(), $1, v.id, 'donation', 'once', 2000, now() - interval '9 days', current_date - 9, 'refunded', 2000 from (${voters}) v where v.n % 50 = 9
+       union all select gen_random_uuid(), $1, $2, 'donation', 'once', 2000, now() - interval '9 days', current_date - 9, 'refunded', 2000`,
+    `insert into events (workspace_id, seq, action, entity_type, entity_id, op, payload, payload_hash, hash)
+       select $1, ${seq0} + 200000 + row_number() over (), 'payment.refunded', 'payment', sp.id, 'update', '{"status":"refunded"}', 'x', 'x'
+         from stripe_payments sp join persons p on p.id = sp.person_id where sp.workspace_id = $1 and (p.name like 'Voter %' or p.id = $2)`,
+    `with s as (insert into surveys (id, workspace_id, name) values (gen_random_uuid(), $1, 'Bulk survey') returning id),
+          q as (insert into survey_questions (id, workspace_id, survey_id, kind, text) select gen_random_uuid(), $1, s.id, 'yesno', 'Sign?' from s returning id, survey_id)
+     insert into survey_responses (id, workspace_id, survey_id, question_id, contact_id, person_id, value)
+       select gen_random_uuid(), $1, q.survey_id, q.id, c.id, c.person_id, 'true' from q
+         cross join (select distinct on (c.person_id) c.id, c.person_id from contacts c join persons p on p.id = c.person_id
+                      where c.workspace_id = $1 and (p.name like 'Voter %' or p.id = $2) order by c.person_id, c.created_at) c`,
+    `with l as (insert into ladders (id, workspace_id, name, trigger_kind, steps) values (gen_random_uuid(), $1, 'Bulk ladder', 'newsletter', '[{"kind":"email","subject":"Hello"}]') returning id)
+     insert into ladder_runs (id, workspace_id, ladder_id, person_id, status, log)
+       select gen_random_uuid(), $1, l.id, v.id, 'done', '[{"step":0,"kind":"email","result":"sent","at":"2026-10-01T17:00:00.000Z"}]'
+         from l cross join (select id from (${voters}) v where v.n % 20 = 10 union all select $2::uuid) v`,
+  ]) await db.query(sql, [ws, busy.id]);
+  await db.query('analyze');
   const t0 = performance.now();
   const first = ok(await mgr.get(`/api/persons/${busy.id}/timeline`));
   const firstMs = performance.now() - t0;
   assert.equal(first.entries.length, 50);
-  assert.deepEqual(first.entries.slice(0, 3).map((e) => e.detail), ['Try 1', 'Try 2', 'Try 3']);
+  // Their knocks and calls ("Try 1" the newest) among everything else, and
+  // the next page carries on from the last one shown.
+  const tries = (j) => j.entries.filter((e) => /^Try \d+$/.test(e.detail || '')).map((e) => Number(e.detail.slice(4)));
+  assert.deepEqual(tries(first).slice(0, 3), [1, 2, 3]);
   const t1 = performance.now();
   const second = ok(await mgr.get(`/api/persons/${busy.id}/timeline?before=${encodeURIComponent(first.next)}`));
   const secondMs = performance.now() - t1;
-  assert.deepEqual(second.entries.slice(0, 2).map((e) => e.detail), ['Try 51', 'Try 52']);
+  assert.equal(second.entries.length, 50);
+  assert.deepEqual(tries(second).slice(0, 2), [tries(first).at(-1) + 1, tries(first).at(-1) + 2]);
   console.log(`  5,000 contacts on one person: first page ${Math.round(firstMs)} ms, next page ${Math.round(secondMs)} ms`);
   // Generous for the in-memory database (several times slower than a hosted one).
   const budget = Number(process.env.TIMELINE_MS) || 1500;
   assert.ok(firstMs < budget && secondMs < budget, `first ${Math.round(firstMs)} ms, next ${Math.round(secondMs)} ms`);
-  // The read itself, as the database chooses to run it with nothing forced:
-  // this person's contacts through their own index, never everyone's.
+  // Every source's read, as the database chooses to run it with nothing
+  // forced: each big table through an index straight to this person (or to
+  // the one row a join needs), never everyone's.
   const { SOURCES } = await import('../ext/timeline/sources.js');
-  let sent = null;
-  await SOURCES.find((s) => s.key === 'contacts').read(
-    { query: (sql, params) => { sent = { sql, params }; return db.query(sql, params); } },
-    { ws, person: busy, viewer: { desk: true }, before: null, limit: 51, tz: 'America/Vancouver', campaign: '' },
-  );
-  const plan = (await db.query(`explain ${sent.sql}`, sent.params)).rows.map((r) => Object.values(r)[0]).join('\n');
-  assert.match(plan, /contacts_ws_person_idx/, plan);
-  assert.doesNotMatch(plan, /Seq Scan on contacts/, plan);
+  const viewer = { desk: true, money: true, outreach: true, userId: mgrId };
+  const found = {};
+  for (const s of SOURCES) {
+    let sent = null;
+    const got = await s.read(
+      { query: (sql, params) => { if (!/information_schema/.test(sql)) sent = { sql, params }; return db.query(sql, params); } },
+      { ws, person: busy, viewer, before: null, limit: 51, tz: 'America/Vancouver', campaign: '' },
+    );
+    found[s.key] = got.length;
+    const plan = (await db.query(`explain ${sent.sql}`, sent.params)).rows.map((r) => Object.values(r)[0]).join('\n');
+    for (const scan of scansOf(plan).filter((x) => STRAIGHT_TO[x.table])) {
+      assert.ok(scan.index && STRAIGHT_TO[scan.table].test(scan.cond), `${s.key}: ${scan.table} ${scan.index ? `by ${scan.index} on ${scan.cond.trim()}` : 'walked'}\n${plan}`);
+    }
+  }
+  assert.match(JSON.stringify(found), /"contacts":51/);
+  assert.ok(Object.entries(found).filter(([k]) => k !== 'merges').every(([, n]) => n > 0), `one of each for them: ${JSON.stringify(found)}`);
 });
 
 test('the indexes this feature adds are there', async () => {
