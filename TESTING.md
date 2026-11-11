@@ -212,7 +212,9 @@ one tap away under **More**.
   in. Calls on the list itself (*call them yourself*) goes on past its
   first 300. On the bank: *Hand out* three
   numbers to a volunteer (or a team — split evenly), watch *Callers* fill;
-  *Take back* unfinished ones; *Close*. On the volunteer's phone, Calls
+  *Take back* unfinished ones; *Close*. While the bank is open, deleting
+  its list is refused (*The phone bank “…” calls this list — close it
+  first*). On the volunteer's phone, Calls
   says *Your call lists 1*; tapping through opens the bank on the Calls
   card with the script; each call they log crosses a number off, *Skip*
   (on the bank page) crosses one off without a call.
