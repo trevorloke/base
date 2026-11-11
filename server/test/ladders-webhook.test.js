@@ -542,7 +542,7 @@ test('a ladder that starts on a money tag never names it, in the one line either
   await off(lad);
 });
 
-test('an address that stops answering is left alone for five minutes: whoever reaches the step meanwhile is told at once and tried again on the usual clock', async () => {
+test('an address that stops answering is left alone for five minutes: whoever reaches the step meanwhile waits for them to end with no try used up, and the first call after decides for everyone waiting', async () => {
   const url = 'https://hooks.example.org/catch/quiet';
   const lad = await hookLadder('quiet', { url });
   const early = [];
@@ -556,27 +556,87 @@ test('an address that stops answering is left alone for five minutes: whoever re
   }
   assert.equal(notAnswering(url), true);
   const called = got('quiet').length;
-  // The fourth isn't made to wait out the same silence — nor is any other job queued behind them.
+  const said = async (p) => hookLog(await runOf(lad.id, p.id)).map((e) => [e.result, e.reason, e.why || e.status, e.tries]);
+  const nextTry = async (p) => {
+    const [j] = (await db.query(
+      "select run_at, payload from jobs where workspace_id = $1 and kind = 'ladder.step' and status = 'pending' and payload->>'run_id' = $2",
+      [ws, (await rowOf(lad.id, p.id)).id],
+    )).rows;
+    return { at: new Date(j.run_at).getTime(), attempt: Number(j.payload.attempt) || 0 };
+  };
+  const WAITING = ['waiting', 'not_answering', null, null];
+
+  // Dot reaches the step meanwhile: the address isn't called and none of
+  // his tries is used up — he waits for the five minutes to end, said once.
   const dot = await mgr.createPerson('Dot Example', { tags: ['quiet'] });
   await runJobs();
   assert.equal(got('quiet').length, called, 'the address isn’t called');
   let run = await runOf(lad.id, dot.id);
-  assert.deepEqual(hookLog(run).map((e) => [e.result, e.reason, e.why, e.tries]), [['failed', 'will_retry', 'not_answering', 1]]);
-  assert.deepEqual([run.status, run.wait], ['active', 'retry'], 'tried again on the usual clock');
-  // A minute on it is still being left alone …
+  assert.deepEqual(await said(dot), [WAITING]);
+  assert.deepEqual([run.status, run.wait], ['active', 'quiet'], 'held until it may go');
+  let next = await nextTry(dot);
+  const until = _silentForTest.get(url).until;
+  assert.equal(next.attempt, 0, 'his first try is still to come');
+  assert.ok(next.at >= until && next.at - until < 5000, 'when the five minutes end');
+
+  // A minute on, the others' second tries: not made, and not counted.
   await fastForward(); await runJobs();
   assert.equal(got('quiet').length, called);
-  // … after five it is called again — and it is back: everyone's third try lands.
+  for (const p of early) {
+    assert.deepEqual(await said(p), [['failed', 'will_retry', 'timeout', 1], WAITING], p.name);
+    assert.equal((await runOf(lad.id, p.id)).wait, 'quiet');
+    next = await nextTry(p);
+    assert.equal(next.attempt, 1, `${p.name}: the second try is still to come`);
+  }
+  assert.deepEqual(await said(dot), [WAITING], 'said once');
+
+  // The five minutes end and the address is still silent: one call finds
+  // out, and everyone else waits five more — still with no try used up.
+  const four = [...early, dot];
+  const fails = async () => (await Promise.all(four.map(said))).flat().filter((e) => e[0] === 'failed').length;
+  _silentForTest.get(url).until = Date.now() - 1;
+  hooks.hang(1);
+  _setTimeoutForTest(300);
+  try { await fastForward(); await runJobs(); } finally { _setTimeoutForTest(null); hooks.asUsual(); }
+  assert.equal(got('quiet').length, called + 1, 'one call');
+  assert.equal(notAnswering(url), true, 'left alone again');
+  assert.equal(await fails(), 4, 'that one try made, and counted');
+
+  // The address is back by the end of those five: the first call is
+  // answered, and everyone waiting is sent — each on a try really made.
   _silentForTest.get(url).until = Date.now() - 1;
   await fastForward(); await runJobs();
-  assert.equal(got('quiet').length, called + 4, 'one each');
-  for (const p of [...early, dot]) {
+  assert.equal(got('quiet').length, called + 1 + 4, 'one each');
+  for (const p of four) {
     run = await runOf(lad.id, p.id);
-    assert.equal(run.status, 'done');
-    assert.deepEqual(hookLog(run).map((e) => e.result), ['failed', 'failed', 'sent'], p.name);
+    assert.equal(run.status, 'done', p.name);
+    const log = await said(p);
+    assert.deepEqual(log.at(-1), ['sent', null, 200, null], p.name);
+    // Every failed line is a call that was made, counted as it was made.
+    const failed = log.filter((e) => e[0] === 'failed');
+    assert.deepEqual(failed.map((e) => [e[2], e[3]]), failed.map((_, i) => ['timeout', i + 1]), p.name);
+    assert.ok((await tagsOf(p.id)).includes('after-quiet'), p.name);
   }
-  assert.deepEqual(hookLog(await runOf(lad.id, early[0].id)).map((e) => e.why || e.status), ['timeout', 'not_answering', 200]);
   assert.equal(notAnswering(url), false, 'an answer clears it');
+
+  // Half an hour after reaching the step it ends there: an address that
+  // never comes back still lets the ladder go on — said as it is, with no
+  // try that wasn't made.
+  _silentForTest.set(url, { misses: 3, until: Date.now() + 5 * 60_000 });
+  const fay = await mgr.createPerson('Fay Example', { tags: ['quiet'] });
+  await runJobs();
+  assert.deepEqual(await said(fay), [WAITING]);
+  await db.query(
+    "update jobs set payload = jsonb_set(payload, '{at}', to_jsonb($2::text)) where workspace_id = $1 and status = 'pending' and payload->>'run_id' = $3",
+    [ws, new Date(Date.now() - 31 * 60_000).toISOString(), (await rowOf(lad.id, fay.id)).id],
+  );
+  const before = got('quiet').length;
+  await fastForward(); await runJobs();
+  assert.equal(got('quiet').length, before, 'no call');
+  assert.deepEqual(await said(fay), [WAITING, ['failed', 'gave_up', 'not_answering', 0]]);
+  assert.equal((await runOf(lad.id, fay.id)).status, 'done');
+  assert.ok((await tagsOf(fay.id)).includes('after-quiet'), 'the ladder carries on');
+  _silentForTest.clear();
 
   // Only silence counts, and only in a row: any answer at all — a 500 too — starts the count again.
   const slow = 'https://hooks.example.org/catch/slow';

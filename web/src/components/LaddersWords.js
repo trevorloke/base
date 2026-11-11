@@ -101,6 +101,8 @@ export const hookSaid = (e) => {
   const what = e.status || HOOK_WHY[e.why] || 'no answer';
   if (e.result === 'sent') return `Sent · ${e.status}`;
   if (e.result === 'sending') return 'Sending';
+  // Left alone while it isn't answering: no call made, no try used up.
+  if (e.result === 'waiting') return `Waiting — ${HOOK_WHY.not_answering}`;
   if (e.result === 'unsure') return 'Not sure it went';
   if (e.result === 'skipped') return 'Skipped — do not contact';
   if (e.reason === 'redirect') return `Answered with a redirect (${e.status}) — not followed`;

@@ -95,6 +95,8 @@ export const whereLine = (run, emailConfigured, textConfigured) => {
   if (run.status === 'paused') return `Paused · step ${run.step + 1} of ${run.steps}`;
   if (run.wait === 'email') return emailConfigured ? 'Email connected — sends within the hour' : 'Waiting — email isn’t connected';
   if (run.wait === 'text') return textConfigured ? 'Texting connected — sends within the hour' : 'Waiting — texting isn’t connected';
+  // Held until it may go: a web address that has stopped answering, or a text outside texting hours.
+  if (run.wait === 'quiet' && run.stepKind === 'webhook') return 'Waiting — the web address isn’t answering';
   if (run.wait === 'quiet') return run.next_at ? `Waiting for texting hours · ${fmtWhen(run.next_at)}` : 'Waiting for texting hours';
   if (run.wait === 'retry') return run.stepKind === 'webhook' ? 'The web address didn’t take it — trying again' : 'Email didn’t go — trying again';
   if (run.wait === 'sending') return run.stepKind === 'text' ? 'Sending text' : run.stepKind === 'webhook' ? 'Sending to the web address' : 'Sending email';

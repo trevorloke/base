@@ -61,8 +61,11 @@
 // runner isn't made to wait for an address: the step is handed back to it,
 // whatever is queued behind goes on at once, and the steps for one address
 // go one at a time in a line of their own (runStepJob). An address that has
-// stopped answering is left alone for five minutes (webhook.js): a try in
-// that time fails at once, so nobody in its line waits out the silence.
+// stopped answering is left alone for five minutes (webhook.js), so nobody
+// in its line waits out the silence: whoever reaches the step meanwhile
+// waits for the five minutes to end, with no try used up ("Waiting — the
+// address isn't answering"), and half an hour after reaching the step it
+// ends there as failed.
 //
 // An answer that comes in after the run has ended (someone taken off, or
 // their goal reached, while the email or the address was being called) is
@@ -84,7 +87,7 @@ import { hasTable } from '../webdid/words.js';
 import {
   parseJson, tagsOf, sameTag, isDnc, noEmail, noText, fillIn, waitMs,
 } from './shape.js';
-import { answerEntry, hookBody, notAnswering, postHook, secretNo, signingSecret } from './webhook.js';
+import { answerEntry, hookBody, postHook, secretNo, signingSecret, silentUntil } from './webhook.js';
 
 export const JOB = 'ladder.step';
 export const STEP_ACTION = 'ladder.step';
@@ -93,6 +96,8 @@ const EMAIL_TRIES = 3;
 const HOOK_TRIES = 3;
 // After a try at a web address that failed: again in a minute, then in five.
 const HOOK_BACKOFF = [60_000, 5 * 60_000];
+// How long someone may wait for an address that has stopped answering.
+const HOOK_WAIT_MAX = 30 * 60_000;
 const LOG_KEEP = 50;
 // Writes that never start a ladder.
 const QUIET_ACTIONS = new Set(['sample.load', 'sample.clear', 'import.persons']);
@@ -706,12 +711,31 @@ const STEPS = {
       await record(c, { kind: 'webhook', label: s.label, result: 'skipped', reason: 'do_not_contact' });
       return next(c);
     }
+    // When they reached this step — a later try says the same, under the
+    // same key.
+    const when = at || new Date().toISOString();
+    // An address that has stopped answering is left alone (webhook.js): it
+    // isn't called and no try is used up. The same try is held until the
+    // five minutes end (said once), when the first call finds out for
+    // everyone waiting. Half an hour after reaching the step it ends there,
+    // so an address that never comes back holds nobody for ever.
+    const quietUntil = silentUntil(s.url);
+    if (quietUntil) {
+      if (Date.now() - (Date.parse(when) || 0) >= HOOK_WAIT_MAX) {
+        await record(c, { kind: 'webhook', label: s.label, result: 'failed', reason: 'gave_up', why: 'not_answering', tries: attempt });
+        return next(c);
+      }
+      if (run.wait !== 'quiet') {
+        await tx.query("update ladder_runs set wait = 'quiet', next_at = null, updated_at = now() where id = $1", [run.id]);
+        await record(c, { kind: 'webhook', label: s.label, result: 'waiting', reason: 'not_answering' });
+      }
+      await again(c, quietUntil + 1000 - Date.now(), { attempt, at: when });
+      return { waiting: 'quiet' };
+    }
     // What started the ladder for them (the run's own note: the ladder's
-    // trigger may have been changed since), and when they reached this
-    // step — a later try says the same, under the same key.
+    // trigger may have been changed since).
     const [event, ...ref] = String(run.trigger_note || c.ladder.trigger_kind).split(':');
     const key = `ladder-${run.id}-${c.step}`;
-    const when = at || new Date().toISOString();
     const body = hookBody({
       id: key, event, ref: ref.join(':') || null, ladder: c.ladder.name, step: s.label, at: when, campaign: c.ladder.campaign,
       person,
@@ -853,10 +877,7 @@ const deliverText = async (db, ws, send) => {
 // says what the address answered ("Sent · 200") and moves the run on — or
 // schedules the next try.
 const deliverHook = async (db, ws, post) => {
-  // An address that has stopped answering isn't called (webhook.js): this
-  // try fails at once, and nobody behind it in the line waits.
-  const res = notAnswering(post.url) ? { ok: false, why: 'not_answering' }
-    : await postHook({ url: post.url, body: post.body, key: post.key, secret: await signingSecret(ws, post.secretNo) });
+  const res = await postHook({ url: post.url, body: post.body, key: post.key, secret: await signingSecret(ws, post.secretNo) });
   await act(db, ws, async (tx, emit) => {
     const run = (await tx.query(
       'select * from ladder_runs where id = $1 and workspace_id = $2 for update', [post.run_id, ws],

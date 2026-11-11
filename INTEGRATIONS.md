@@ -501,7 +501,9 @@ sent there, once, as one small JSON message:
   anyone's log; the event log notes that a test went, and to which site.
 - **Once.** `Idempotency-Key: ladder-<run>-<step>` (the body's `id`) is the
   same on every try for one person at one step.
-- **Tries.** The address has 5 seconds to answer 2xx. Any other answer
+- **Tries.** The address has 5 seconds to answer 2xx, and is handed one
+  message at a time; while it takes its time, everything else base.win
+  sends (other addresses, emails, receipts) goes on. Any other answer
   but a redirect, or none, is tried again after a minute, then after five
   more — three in all — and then the person's log on the ladder says
   *Zapier: Failed · 500 after 3 tries* and the ladder carries on: a
@@ -517,11 +519,14 @@ sent there, once, as one small JSON message:
   the message and then redirects, as a Google Apps Script web app does,
   has it once; the log line still says so.)
 - **An address that stops answering** — three calls in a row with no
-  answer — is left alone for five minutes, so nobody behind it, and no
-  other send, waits out its silence: whoever reaches the step meanwhile is
-  logged *Didn't go (the address isn't answering) — trying again* and
-  tried on the same clock, by when it may be back. Any answer, a 500 too,
-  clears it.
+  answer — is left alone for five minutes, so nobody waits out its
+  silence. Whoever reaches the step meanwhile isn't called and loses none
+  of their three tries: their log says *Zapier: Waiting — the address
+  isn't answering*, and their try waits for the five minutes to end, when
+  the first call finds out for everyone waiting (no answer: five more).
+  Half an hour after reaching the step it ends there — *Failed · the
+  address isn't answering* — and the ladder carries on. Any answer, a 500
+  too, clears it.
 - **Where it may point.** `https://` only, no name and password in it, and
   never inside a private network (the server's own, a cloud's metadata
   address): refused when the step is saved and again, after the name is

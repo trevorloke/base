@@ -75,7 +75,8 @@ test('"Send to a web address": the card names where it goes, never the whole add
   assert.equal(W.hookMissing({ url: 'https://hooks.example.org/x', label: '  ' }), 'Add a label');
   assert.equal(W.hookMissing(step), null);
 
-  const line = (e) => W.hookLogLine({ kind: 'webhook', label: 'Zapier', ...e });
+  const hook0 = (e) => ({ kind: 'webhook', label: 'Zapier', ...e });
+  const line = (e) => W.hookLogLine(hook0(e));
   assert.equal(line({ result: 'sent', status: 200 }), 'Zapier: Sent · 200');
   assert.equal(line({ result: 'failed', reason: 'gave_up', status: 500, tries: 3 }), 'Zapier: Failed · 500 after 3 tries');
   assert.equal(line({ result: 'failed', reason: 'will_retry', status: 503, tries: 1 }), 'Zapier: Didn’t go (503) — trying again');
@@ -88,10 +89,16 @@ test('"Send to a web address": the card names where it goes, never the whole add
   assert.equal(line({ result: 'unsure' }), 'Zapier: Not sure it went');
   assert.equal(line({ result: 'sending' }), 'Zapier: Sending');
   assert.equal(W.hookLogLine({ kind: 'webhook', result: 'sent', status: 204 }), 'Web address: Sent · 204');
-  // A redirect is never followed or tried again; an address that has stopped answering isn't called.
+  // A redirect is never followed or tried again.
   assert.equal(line({ result: 'failed', reason: 'redirect', status: 302, tries: 1 }), 'Zapier: Answered with a redirect (302) — not followed');
-  assert.equal(line({ result: 'failed', reason: 'will_retry', why: 'not_answering', tries: 1 }), 'Zapier: Didn’t go (the address isn’t answering) — trying again');
-  assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'not_answering', tries: 3 }), 'Zapier: Failed · the address isn’t answering after 3 tries');
+  // An address that has stopped answering isn't called: the person waits,
+  // no try used up; after half an hour of it, failed — counting only the
+  // calls really made.
+  assert.equal(line({ result: 'waiting', reason: 'not_answering' }), 'Zapier: Waiting — the address isn’t answering');
+  assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'not_answering', tries: 0 }), 'Zapier: Failed · the address isn’t answering');
+  assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'not_answering', tries: 2 }), 'Zapier: Failed · the address isn’t answering after 2 tries');
+  assert.equal(W.hookRowNote([hook0({ result: 'waiting', reason: 'not_answering' })]), null, 'waiting is not "not sent"');
+  assert.equal(W.hookRowNote([hook0({ result: 'waiting', reason: 'not_answering' }), hook0({ result: 'failed', reason: 'gave_up', why: 'not_answering', tries: 0 })]), 'not sent to Zapier');
   // One try and no other (someone taken off while the address was being called; a test): no count.
   assert.equal(line({ result: 'failed', reason: 'gave_up', status: 500, tries: 1 }), 'Zapier: Failed · 500');
   assert.equal(line({ result: 'failed', reason: 'gave_up', why: 'timeout', tries: 1 }), 'Zapier: Failed · no answer');

@@ -190,9 +190,11 @@ one tap away under **More**.
   never sent: their row says *not sent to Zapier (do not contact)*. An
   address that answers with a redirect is handed the message once
   (*Answered with a redirect (302) — not followed*); one that gives no
-  answer three times running is left alone for five minutes (*the address
-  isn't answering*). Take someone off while the address is being called:
-  their row still says *Taken off* (INTEGRATIONS.md, *Connect anything*).
+  answer three times running is left alone for five minutes, and whoever
+  reaches the step meanwhile waits for them to end with no try used up
+  (*Waiting — the web address isn't answering*). Take someone off while
+  the address is being called: their row still says *Taken off*
+  (INTEGRATIONS.md, *Connect anything*).
   Settings → Services → *Going out* leads here.
 - **Follow-ups (speed to lead)** — every new volunteer (the website's form,
   the door's or Mainstreeting's *Wants to volunteer*, the membership form's

@@ -255,17 +255,23 @@ const sendOnce = async ({ url, body, secret, key, timeoutMs = hookTimeoutMs }) =
 // that waits out its five seconds holds up whoever is next in line for it
 // — and, once the line is long, the job runner and all it has queued:
 // other ladders, receipts, thank-you emails. After three calls in a row
-// with no answer the address is left alone for five minutes: the engine
-// tells whoever reaches the step meanwhile at once ("the address isn't
-// answering") and tries them again on the usual clock — by then it may be
-// back. Any answer at all, a 500 too, clears it. Kept in this server's
-// memory: a restart starts the count again.
+// with no answer the address is left alone for five minutes: whoever
+// reaches the step meanwhile isn't called, and waits for the five minutes
+// to end with none of their tries used up (engine.js) — the first call
+// then finds out for everyone waiting. Any answer at all, a 500 too,
+// clears it. Kept in this server's memory: a restart starts the count again.
 const SILENT_AFTER = 3;
 const SILENT_MS = 5 * 60_000;
 const SILENT_KEEP = 500;
 const silent = new Map(); // address → { misses, until }
 export const _silentForTest = silent;
-export const notAnswering = (url) => (silent.get(url)?.until || 0) > Date.now();
+// When an address that has stopped answering may be called again (ms), or
+// 0 when it may be called now.
+export const silentUntil = (url) => {
+  const until = silent.get(url)?.until || 0;
+  return until > Date.now() ? until : 0;
+};
+export const notAnswering = (url) => silentUntil(url) > 0;
 const heard = (url, res) => {
   const misses = res.why === 'timeout' ? (silent.get(url)?.misses || 0) + 1 : 0;
   silent.delete(url);

@@ -52,7 +52,8 @@ create table if not exists ladder_runs (
 );
 -- The waits a run may be in: a Wait step ('time'), an email or text step
 -- waiting for its provider ('email', 'text'), a retry, a send in flight
--- ('sending'), or a text held until the hours texts may go ('quiet').
+-- ('sending'), or a step held until it may go ('quiet': a text until the
+-- hours texts may go, a web address that has stopped answering).
 -- Databases from before 'sending' (ladder_runs_wait_check) or before texts
 -- (lruns_wait_ok) carry an older check: it is swapped once.
 do $$ begin
