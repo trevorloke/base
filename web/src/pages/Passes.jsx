@@ -9,16 +9,19 @@
 //   The open pass: its name, its line, the day it started, "N doors knocked ·
 //   N talked · N yes", and "End this pass" (asks in place). The one yellow
 //   button starts a pass — the form: a suggested name ("Persuasion ·
-//   October"), What for, Who, Tries 1–5 (2) — and says that doors left on
-//   every turf will change; starting one ends the open one. Past passes sit
-//   below with their numbers. With no signal: the title and the No signal
-//   line; starting or ending needs signal.
+//   October"), What for, Who, a List to walk (Walk this list: only doors
+//   with someone on it, as it stands at each load — a list's Walk button
+//   opens the form with it picked, /passes?new=1&list=…), Tries 1–5 (2) —
+//   and says that doors left on every turf will change; starting one ends
+//   the open one. Past passes sit below with their numbers. With no signal:
+//   the title and the No signal line; starting or ending needs signal.
 import { useId, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { KINDS, WHO, TRIES_MAX, kindLabel, passLine } from '@starbase/shared/passes';
 import { action, apiGet } from '../api.js';
 import { NeedsSignalLine, NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
+import { LOADING, useListNames } from '../components/AudienceBits.jsx';
 import './shifts.css';
 import './surveys.css';
 import './passes.css';
@@ -53,19 +56,23 @@ function Picks({ id, label, items, value, onPick, className = 'sv-kinds' }) {
 }
 
 // The form: a name suggested from the kind and the month, until it's typed over.
-function StartForm({ open, busy, online, onSubmit, onCancel }) {
+// list: the List to walk, picked already when the form came from one.
+function StartForm({ open, busy, online, onSubmit, onCancel, list = '' }) {
   const uid = useId();
   const [kind, setKind] = useState('persuasion');
   const [who, setWho] = useState('all');
   const [tries, setTries] = useState(2);
   const [typed, setTyped] = useState(null);
   const [error, setError] = useState(null);
+  const [listId, setListId] = useState(list);
+  const names = useListNames();
+  const lists = names.data?.lists ?? [];
   const name = typed ?? suggestName(kind);
   const submit = async (e) => {
     e.preventDefault();
     if (!name.trim()) { setError('Give the pass a name'); return; }
     setError(null);
-    const err = await onSubmit({ name: name.trim(), kind, who, tries });
+    const err = await onSubmit({ name: name.trim(), kind, who, tries, ...(listId ? { list_id: listId } : {}) });
     if (err) setError(err);
   };
   return (
@@ -78,9 +85,17 @@ function StartForm({ open, busy, online, onSubmit, onCancel }) {
       </div>
       <Picks id={`${uid}-kind`} label="What for" items={KINDS} value={kind} onPick={setKind} />
       <Picks id={`${uid}-who`} label="Who" items={WHO} value={who} onPick={setWho} />
+      <div className="field">
+        <label htmlFor={`${uid}-list`}>List to walk</label>
+        <select id={`${uid}-list`} className="input" value={listId} onChange={(e) => setListId(e.target.value)}>
+          <option value="">None — every door</option>
+          {listId && !lists.some((l) => l.id === listId) && <option value={listId}>{names.isPending ? LOADING : 'A list that isn’t here any more'}</option>}
+          {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+      </div>
       <Picks id={`${uid}-tries`} label="Tries" items={TRIES.map((n) => ({ code: n, label: String(n) }))} value={tries} onPick={setTries} className="pass-tries" />
       <p className="muted pass-form__note">
-        Doors left on every turf will change when the pass starts.{open ? ` This ends “${open.name}”.` : ''}
+        Doors left on every turf will change when the pass starts.{listId ? ' Only doors with someone on the list are walked.' : ''}{open ? ` This ends “${open.name}”.` : ''}
       </p>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="ops-actions">
@@ -117,7 +132,11 @@ export default function Passes() {
   const { me } = useOutletContext() ?? {};
   const queryClient = useQueryClient();
   const q = useQuery({ queryKey: ['passes'], queryFn: () => apiGet('/passes'), enabled: Boolean(me?.user?.id) });
-  const [adding, setAdding] = useState(false);
+  // Walk this list (a list's Walk button): the form opens with that list picked.
+  const [params, setParams] = useSearchParams();
+  const fromList = /^[0-9a-f-]{36}$/i.test(params.get('list') || '') ? params.get('list') : '';
+  const [adding, setAddingNow] = useState(params.get('new') === '1');
+  const setAdding = (on) => { setAddingNow(on); if (!on && (params.get('new') || params.get('list'))) setParams({}, { replace: true }); };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [said, setSaid] = useState(null);
@@ -173,7 +192,7 @@ export default function Passes() {
       {!online && <NeedsSignalLine>Starting or ending a pass needs signal</NeedsSignalLine>}
       {said && <p className="ops-done" role="status">{said}</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      {adding && <StartForm open={open} busy={busy} online={online} onSubmit={start} onCancel={() => setAdding(false)} />}
+      {adding && <StartForm open={open} busy={busy} online={online} onSubmit={start} onCancel={() => setAdding(false)} list={fromList} />}
       {open ? (
         <OpenPass pass={open} busy={busy} online={online} onEnd={end} />
       ) : (
