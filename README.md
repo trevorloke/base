@@ -224,15 +224,18 @@ than a week after they came off is refused. Contacts are door, phone, text or
   one, and the gift waits under **Needs you** (*12 imported gifts need a
   donor*) for a person to pick the record, find someone else, add a new
   person or leave it out (listed at the pile's foot, *Left out · 3*, to
-  bring back whenever). The gift's number in the other tool — or, without
+  bring back whenever; Donations → More leads there — *3 imported gifts
+  left out* — once nothing else waits). The gift's number in the other tool — or, without
   one, donor, amount, date and how it was paid, as the file writes it — is
   kept on it, so the same file twice adds nothing. A row with the same
   donor, amount and day as a gift already on the books another way (typed
   at the desk, given online) is pointed out in the check (*1 row looks like
   a gift already typed in here*), with *Leave it out*; one gift on the
-  books answers for one row. A *Payment status* column brings in only the
-  payments that went through: refunded, failed or pending ones are left
-  out, and a word it doesn't know is asked about. Without one, take
+  books answers for one row, however many calls the file comes in by. A
+  *Payment status* column brings in only the payments that went through:
+  refunded, failed or pending ones are left out, and a word it doesn't
+  know (the other tool's *Posted*, say) is asked about and left out until
+  you say it comes in. Without one, take
   refunded payments out of the file first; a gift refunded after it came
   in stays on the books until it is voided. An import can be taken back
   whole for a day.

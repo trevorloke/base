@@ -8,7 +8,8 @@
 // A list with a Voter ID column fills each person's voter number, and the
 // same number under another spelling is the same person (no second record);
 // a list numbered afresh is asked about, and is the people on file unless
-// the person says otherwise; the profile shows it under More details.
+// the person says otherwise (by keyboard too: the question keeps its place
+// while the check runs again); the profile shows it under More details.
 //
 // Gifts made in another tool come in from its file (Import & export →
 // Import donations, or Donations → More → Import donations): the columns of a file
@@ -18,7 +19,9 @@
 // books without using a receipt number; Donations marks them Imported and
 // lists "2 imported gifts need a donor" under Needs you; the pile settles
 // one on a record it could be and one on a new person; the same file again
-// adds nothing; the import is taken back whole. A file with no gift numbers
+// adds nothing; the import is taken back whole. A gift left out with
+// nothing else waiting is reached from Donations → More and brought back by
+// keyboard, the focus going to the line that says so. A file with no gift numbers
 // and a way of paying base.win doesn't know ("Wire") adds nothing the second
 // time either, whatever the word is said to mean; a slate it can't read is
 // asked about the same way. A payment status column brings in only what went
@@ -295,6 +298,16 @@ check('…“No”: checked again, one new person', /New 1/i.test(await counts()
 await page.click('.vn-other__pick:has-text("Yes — keep the numbers on file")');
 await countsAre(/New 0/);
 check('…“Yes”: the Vera on file again, nothing to import', /New 0/i.test(await counts()) && /already up to date/i.test(await page.innerText('.imp-result').catch(() => '')), await counts());
+// By keyboard: two arrow keys from the first answer reach the third. The
+// question stays where it is while the check runs again, so the second key
+// goes on from the first.
+await page.focus('.vn-other input[value="keep"]');
+await page.keyboard.press('ArrowDown');
+await page.keyboard.press('ArrowDown');
+await countsAre(/New 1/);
+const vnKeys = await page.evaluate(() => ({ on: document.querySelector('.vn-other input:checked')?.value, focus: document.activeElement?.value }));
+check('…by keyboard: two arrow keys down reach “No”, the focus still on it — checked again, one new person',
+  vnKeys.on === 'new' && vnKeys.focus === 'new' && /New 1/i.test(await counts()), `${JSON.stringify(vnKeys)} | ${await counts()}`);
 await page.goto(`${ADMIN}/people/${veras[0]?.id}`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.pf-sec__btn:has-text("More details")', { timeout: 8000 }).catch(() => {});
 await page.click('.pf-sec__btn:has-text("More details")').catch(() => {});
@@ -492,6 +505,40 @@ const live = (await api('/records/gift?limit=50')).json.records.filter((g) => g.
 check('"✓ Taken back — 5 gifts off the books": none of them is on the books, and nothing waits',
   /✓ Taken back — 5 gifts off the books/.test(await page.innerText('.gi-file__said').catch(() => '')) && live.length === 0 && (await api('/brief')).json.flagged.length === 0, `${live.length}`);
 await page.screenshot({ path: `${SHOTS}/12-gifts-taken-back.png`, fullPage: true });
+
+// Left out by mistake, with nothing else waiting: Donations → More leads to
+// the list, and Bring back puts the gift back in the pile — by keyboard, the
+// focus going to the line that says so.
+const leftRow = await act('gift.import', { import_id: crypto.randomUUID(), file_name: 'wrong.csv', rows: [{ row: 2, name: 'Wrong Row', amount_cents: 2000, date: `${yr}-01-06`, method: 'cash' }] });
+await page.goto(`${ADMIN}/money/import/waiting`, { waitUntil: 'domcontentloaded' });
+await page.click('.ops-row:has-text("Wrong Row")');
+await page.click('button:has-text("Leave out")');
+await page.click('.ops-confirm button:has-text("Yes")');
+await page.waitForSelector('.ops-empty', { timeout: 8000 }).catch(() => {});
+await page.goto(`${ADMIN}/money`, { waitUntil: 'domcontentloaded' });
+await page.getByRole('button', { name: 'More', exact: true }).click();
+const outLink = page.getByRole('link', { name: '1 imported gift left out' });
+check('a gift left out, nothing waiting: Donations → More says "1 imported gift left out"',
+  leftRow.json?.results?.[0]?.state === 'waiting' && (await outLink.count()) === 1 && (await page.locator('.ops-needs a:has-text("need a donor"), .ops-needs a:has-text("needs a donor")').count()) === 0,
+  JSON.stringify(leftRow.json?.results));
+await outLink.click().catch(() => {});
+await page.waitForSelector('#gw-out-list', { timeout: 8000 }).catch(() => {});
+const outList = (await page.innerText('#gw-out-list').catch(() => '')).replace(/\s+/g, ' ');
+check('…it opens the pile with Left out shown: Wrong Row, $20.00, Bring back', /Wrong Row/.test(outList) && /\$20\.00/.test(outList) && /Bring back/.test(outList), outList.slice(0, 160));
+await page.screenshot({ path: `${SHOTS}/12b-left-out.png`, fullPage: true });
+await page.focus('.gw-out__back').catch(() => {});
+await page.keyboard.press('Enter');
+await page.waitForSelector('.ops-rows .ops-row:has-text("Wrong Row")', { timeout: 8000 }).catch(() => {});
+await sleep(300);
+const backSaid = (await page.innerText('.ops-done').catch(() => '')).replace(/\s+/g, ' ');
+const backBrief = (await api('/brief')).json;
+check('Bring back by Enter: the gift waits again, said in words — and the focus is on that line, not lost',
+  /✓ \$20\.00 from Wrong Row is back/.test(backSaid) && await page.evaluate(() => document.activeElement?.classList.contains('ops-done'))
+  && backBrief.giftsWaiting.gifts === 1 && backBrief.giftsLeftOut.gifts === 0, `${backSaid} | ${JSON.stringify([backBrief.giftsWaiting, backBrief.giftsLeftOut])}`);
+// Taken back, so what follows starts from nothing waiting.
+const wrongImp = (await api('/gifts/imports')).json.imports.find((i) => i.file_name === 'wrong.csv');
+await act('gift.importUndo', { id: wrongImp?.id });
+check('…and that import taken back: nothing waits, nothing left out', (await api('/brief')).json.giftsWaiting.gifts === 0 && (await api('/brief')).json.giftsLeftOut.gifts === 0);
 
 // A file with no gift numbers and a way of paying base.win doesn't know
 // ("Wire"): the screen asks what it means on every import — and whatever

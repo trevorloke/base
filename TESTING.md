@@ -650,8 +650,10 @@ one tap away under **More**.
   *Leave it out* takes it off the gifts and the total at once. Add a
   *Payment Status* column (*Completed*, *Refunded*, *On hold*): *Which come
   in* opens with *On hold* to say, and the check leaves the refunded and
-  on-hold rows out by their status. Back on the import screen, **Take
-  back** (for a day) voids the lot.
+  on-hold rows out by their status. Leave a waiting gift out on the pile:
+  Donations → More now says *1 imported gift left out*, which opens the
+  pile's *Left out* list with **Bring back**. Back on the import screen,
+  **Take back** (for a day) voids the lot.
 - **Donations → More → Filing dates** — type *Disclosure statement due* and
   a date three weeks out, **Save dates**: Donations counts the days down
   under the big number, and Today lists it under *Coming up*. Nothing is
@@ -691,7 +693,7 @@ one tap away under **More**.
   volunteer again and, after a reload, nothing a treasurer saw is kept.
 
 ### Import your own lists
-**People → More → Import & export → Import people** (or People → More → Import). A list with a *Voter ID* column fills each person's voter number (a profile's *More details*), and the same number in a later file finds the same person however the name is spelled. A later list that numbers the same people afresh is asked about in the check (*N rows match someone on file with another voter number*): they stay the people on file unless you say to take the file's numbers or to add them as new people. A CSV or an **Excel workbook (.xlsx)** both work — save a sheet from Excel or Google Sheets as .xlsx and choose it: its first sheet comes in, columns matched. Try `samples/surrey-import-test.csv` first —
+**People → More → Import & export → Import people** (or People → More → Import). A list with a *Voter ID* column fills each person's voter number (a profile's *More details*), and the same number in a later file finds the same person however the name is spelled. A later list that numbers the same people afresh is asked about in the check (*N rows match someone on file with another voter number*): they stay the people on file unless you say to take the file's numbers or to add them as new people (the arrow keys move between the answers; each one checks again with the question left in place). A CSV or an **Excel workbook (.xlsx)** both work — save a sheet from Excel or Google Sheets as .xlsx and choose it: its first sheet comes in, columns matched. Try `samples/surrey-import-test.csv` first —
 fictional people at *public building* addresses (City Hall, rec centres). The
 check step should report **9 new, 1 merged** (Jordan Lee appears twice with
 the same email) and **1 refused** (the row with no name); Robin Kaur's rating
