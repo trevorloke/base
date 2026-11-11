@@ -1583,6 +1583,63 @@ test('a change to a big push’s table moves a first part at once and the rest b
   }
 });
 
+test('a row put back names who stays do-not-call only when they do: never someone a list that follows, or a big push’s rest, still lets go', async () => {
+  const mk = async (name, n) => mgr.createPerson(name, { phone: `672-555-01${n}` });
+  const [both, hand, twice, late] = [await mk('Stay Both Example', '30'), await mk('Stay Hand Example', '31'), await mk('Stay Twice Example', '32'), await mk('Stay Late Example', '33')];
+  const send = async (name, people) => {
+    const list = ok(await mgr.action('list.create', { name, kind: 'people', person_ids: people.map((p) => p.id) })).list.id;
+    const r = ok(await mgr.action('callhub.push', { list_id: list }));
+    await drain();
+    return { list, id: r.push.id };
+  };
+  // Each call its own (the same delivery twice is one call).
+  let calls = 0;
+  const called = (n, disposition) => fake.note({ contact: `+167255501${n}`, disposition, campaign: 'Stays', notes: `call ${calls += 1} to ${n}` });
+  const isTagged = async (p) => (await person(p.id)).tags.includes('do-not-call');
+  const map = async (l, outcomes) => ok(await staff.action('callhub.map', { id: l.id, outcomes }));
+  const names = (s) => s?.people.map((p) => p.name) ?? null;
+
+  // Both was on two lists and rung on each; Hand on the first, and tagged by hand afterwards.
+  // "Picked up" slips to Do not call on the first list, and on the second as well.
+  const first = await send('Stays first', [both, hand]);
+  await called('30', 'Picked up');
+  await called('31', 'Picked up');
+  const second = await send('Stays second', [both]);
+  await called('30', 'Picked up');
+  ok(await mgr.action('person.update', { id: hand.id, tags: ['do-not-call'] }));
+  assert.equal((await map(first, { 'Picked up': 'do_not_call' })).tagged, 1);
+  await map(second, { 'Picked up': 'do_not_call' });
+  // Put back on the first: the second follows (the question said so), and lets Both go once its result has moved.
+  const back = await map(first, { 'Picked up': null });
+  assert.equal(back.later, 1);
+  assert.deepEqual([names(back.stay_call), names(back.stay_hand)], [null, ['Stay Hand Example']],
+    'not “another call says so” for Both: that call is on the list that follows');
+  await drain();
+  assert.deepEqual([await isTagged(both), await isTagged(hand)], [false, true]);
+
+  // A big push, a part at a time: the line is about everyone the row is about, not the first part only.
+  const third = await send('Stays third', [twice, late]);
+  await called('32', 'Spoke at length');
+  await called('32', 'Spoke at length');
+  await called('33', 'Spoke at length');
+  ok(await mgr.action('person.update', { id: late.id, tags: ['do-not-call'] }));
+  assert.equal((await map(third, { 'Spoke at length': 'do_not_call' })).tagged, 1);
+  const { _setRefileBatchForTest } = await import('../ext/callhub/results.js');
+  _setRefileBatchForTest(1);
+  try {
+    const big = await map(third, { 'Spoke at length': null });
+    assert.equal(big.more, true);
+    assert.deepEqual([names(big.stay_call), names(big.stay_hand)], [null, ['Stay Late Example']],
+      'Twice’s second call is in the rest, which lets go; Late, in the rest, is tagged by hand');
+    await drain();
+  } finally {
+    _setRefileBatchForTest(500);
+  }
+  assert.deepEqual([await isTagged(twice), await isTagged(late)], [false, true]);
+  for (const p of [hand, late]) ok(await mgr.action('person.update', { id: p.id, tags: [] }));
+  await drain();
+});
+
 test('who may: the desk only, and never someone a manager took People away from', async () => {
   for (const path of [`/api/callhub/pushes?list=${ids.list}`, `/api/callhub/preview?list=${ids.list}`]) {
     assert.equal((await vol.get(path)).status, 403, path);

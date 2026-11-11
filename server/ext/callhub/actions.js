@@ -22,7 +22,7 @@ import { httpError } from '../../actions/util.js';
 import { runJobsSoon } from '../../lib/jobs.js';
 import { loadScale, ratingRefusal } from '../scale/rules.js';
 import { preparePush, pushOut, resumePush, startPush } from './push.js';
-import { MAP_OUTCOMES, norm, outcomeFor, refile, refileRest } from './results.js';
+import { MAP_OUTCOMES, norm, outcomeFor, refile, refileRest, whoStays } from './results.js';
 import { connect } from './service.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -147,7 +147,7 @@ export const actions = {
         'update callhub_pushes set outcomes = $3::jsonb, rating_map = $4::jsonb where id = $1 and workspace_id = $2 returning *',
         [push.id, ws, JSON.stringify(outcomes), rating ? JSON.stringify(rating) : null],
       )).rows[0];
-      const { stay_hand: byHand, stay_call: byCall, ...moved } = await refile(tx, emit, ws, row);
+      const moved = await refile(tx, emit, ws, row);
       if (moved.more) await refileRest(tx, ws, push.id, ctx.user.id);
       emit('callhub_push', push.id, 'update', { corrections: Object.keys(outcomes).length, rating_question: rating?.label || null, refiled: moved.changed });
       // The lists sent since that still carry what was taken back here: their
@@ -171,7 +171,13 @@ export const actions = {
         emit('callhub_push', p.id, 'update', { corrections: Object.keys(next.outcomes).length, rating_question: next.rating?.label || null, follows: push.id });
         later += 1;
       }
-      return { push: pushOut(row), ...moved, later, stay_hand: await named(tx, ws, byHand), stay_call: await named(tx, ws, byCall) };
+      // Whoever the rows put back here are about and is do-not-call all the
+      // same: asked now that the lists that follow have their tables, so a
+      // call they let go of in the background is not "another call says so".
+      const back = [...new Set(Object.keys(input.outcomes || {}).map(norm))]
+        .filter((k) => outcomeFor(k, was.outcomes) === 'do_not_call' && outcomeFor(k, outcomes) !== 'do_not_call');
+      const stays = await whoStays(tx, ws, push.id, back);
+      return { push: pushOut(row), ...moved, later, stay_hand: await named(tx, ws, stays.stay_hand), stay_call: await named(tx, ws, stays.stay_call) };
     },
     after: startNow,
   },
