@@ -108,7 +108,7 @@ const RULES = () => [
   ['answer', { answer: `${ids.question}:Transit` }, /survey_responses_question_idx/],
   ['shift=came:30', { shift: 'came:30' }, /sassign_ws_person_idx|sassign_ws_shift_idx|shift_assignments_shift_id_person_id_key/],
   ['shift=missed:30', { shift: 'missed:30' }, /sassign_ws_person_idx|sassign_ws_shift_idx|shift_assignments_shift_id_person_id_key/],
-  ['since', { since: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10) }, /persons_ws_created_idx/],
+  ['since', { since: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10) }, /persons_created_brin_idx/],
   ['list (a saved filter)', { list: ids.ones }, /persons_/],
   ['notlist (a saved filter)', { notlist: ids.ones }, /persons_/],
   ['list (hand-picked)', { list: ids.picked }, /list_members_pkey/],

@@ -21,7 +21,11 @@
 // "exists" on the person's own rows (a look-up from the person, or a join
 // the planner starts from the small table), and min: as one pass over the
 // gifts. The indexes on the core's tables are below; the surveys' is in
-// ext/surveys/sql.js; memberships already have theirs.
+// ext/surveys/sql.js; memberships already have theirs. When someone was
+// added is a block-range index: people are added in time order, it costs
+// little to keep, and it is never a way to read people in order (an
+// ordinary one on created_at was: other look-ups then walked the whole
+// campaign through it).
 //
 //   GET /audience/choices   desk: what the rule builder offers that the
 //       screens can't know — { year, questions: [{ id, text, kind, options,
@@ -33,7 +37,7 @@ import { fromLocal } from '../../lib/tzsql.js';
 export const sql = `
 create index if not exists gifts_ws_person_date_idx on gifts (workspace_id, person_id, date) where deleted_at is null;
 create index if not exists sassign_ws_person_idx on shift_assignments (workspace_id, person_id);
-create index if not exists persons_ws_created_idx on persons (workspace_id, created_at) where deleted_at is null;
+create index if not exists persons_created_brin_idx on persons using brin (created_at) where deleted_at is null;
 `;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
