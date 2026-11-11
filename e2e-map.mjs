@@ -17,7 +17,8 @@
 //   · where the people fit they come whole: a door with room around it has
 //     its pin at zoom 17, every door at 18;
 //   · "Whole list" goes back; an empty part of the map says "Nobody on file
-//     here · Back to your list";
+//     here · Back to your list" — as soon as nobody is on screen, just past
+//     the list's edge too;
 //   · on a 390 px phone the first view fits, nothing scrolls sideways, and
 //     after a finger drag the picture is still one sheet (its tiles lap: no
 //     line of the street map between two of them);
@@ -31,7 +32,9 @@
 //     service worker in control a failed tile is a failure; with weak
 //     signal, or a flicker, the streets it kept still draw (back to the
 //     person's pick by itself — drawn too with no signal), and their pick
-//     is theirs again once it answers (asked every minute);
+//     is theirs again once it answers (asked every minute); tiles that never
+//     answer (the signal gone while a view was loading) are said too, view
+//     by view;
 //   · turfs come as outlines at once; a turf's counts load when its sheet
 //     opens ("Loading…", never "No doors" on the way);
 //   · an import that leaves addresses without a pin starts the placing run
@@ -40,7 +43,9 @@
 //   · the Map check (managers) says which trouble a map has, in one screen;
 //   · a phone reopened with no answer shows the doors it kept, and the line
 //     that says so lies clear of the zoom and corner buttons; on "My turf"
-//     no "Unavailable" for the list's answers, which aren't drawn there.
+//     no "Unavailable" for the list's answers, which aren't drawn there; a
+//     manager's big list, which keeps no doors, says "Unavailable — Try
+//     again" alone.
 //
 //   (cd web && npm run build) && node e2e-map.mjs        (its own server on :4948, the stand-in lookup on :4949)
 //   ONLY=tiles,check node e2e-map.mjs                    just those parts: list · layout · tiles · turfs · placing · check · kept
@@ -349,6 +354,32 @@ try {
     await page.click('.map-nobody button');
     st = await settled((s) => s.view === 'density' && !s.nobody && numberIn(s.pill) === PEOPLE);
     check('“Back to your list” goes back', !st.nobody && numberIn(st.pill) === PEOPLE, JSON.stringify({ zoom: st.zoom, pill: st.pill }));
+    // Just past the list's edge: its last squares have only just left the
+    // screen, and the part asked for — the screen and some — still holds
+    // them. Nobody is on screen, and that is what the note goes by ("0
+    // people" over an empty map, the key still explaining squares, and no
+    // way back said).
+    const edge = (Math.floor(Math.max(...DOORS.map((d) => d.lng)) / dlng) + 1) * dlng; // the east side of the list's last square
+    const past = (s) => (s.bounds[1] - edge) / (s.bounds[3] - s.bounds[1]); // how far past it the screen starts, in screens
+    for (let i = 0; i < 8 && Math.abs(past(st) - 0.1) > 0.03; i += 1) {
+      const dx = Math.max(-500, Math.min(500, (0.1 - past(st)) * st.box.w));
+      const [x, y] = [st.box.x + st.box.w / 2, st.box.y + st.box.h / 2];
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x - dx, y, { steps: 6 });
+      await sleep(150); // (let go standing still: the map doesn't glide on)
+      await page.mouse.up();
+      await sleep(400);
+      st = await mapState();
+    }
+    await sleep(900);
+    st = await settled();
+    await page.screenshot({ path: `${SHOTS}/5-just-past-the-edge.png` });
+    check('just past the list’s edge (its last squares off the screen, still in the part asked for): nobody on screen, so it says so, with the way back',
+      past(st) > 0.02 && past(st) < 0.15 && st.zoom === first.zoom && numberIn(st.pill) === 0 && /Nobody on file here/.test(st.nobody || '') && !/Each square/.test(st.key || ''),
+      JSON.stringify({ past: Number(past(st).toFixed(3)), zoom: st.zoom, pill: st.pill, nobody: st.nobody, key: st.key }));
+    await page.click('.map-nobody button').catch(() => page.click('.map-fab--list'));
+    st = await settled((s) => s.view === 'density' && !s.nobody && numberIn(s.pill) === PEOPLE);
 
     // ══ 6. A phone ══
     const pctx = await context({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -518,12 +549,18 @@ try {
     // opens on), base is OpenStreetMap (Standard, Muted, Dark). up 'asked':
     // a flicker — the one tile the map asks for itself (a fetch) gets
     // through, and `through` of the map's own tiles (images), no more (no
-    // service worker only: under one, every tile is a fetch).
+    // service worker only: under one, every tile is a fetch). up 'hang':
+    // never answered, not refused (weak signal as it usually is) — after
+    // `some` more tiles, which come.
     const tiled = async (opts = {}) => {
       const tctx = await context(opts, { tiles: false });
-      const net = { up: { clean: true, base: true, own: true }, hold: { clean: 0, base: 0, own: 0 }, asked: { clean: 0, base: 0, own: 0 }, through: { clean: 0, base: 0, own: 0 } };
+      const net = { up: { clean: true, base: true, own: true }, hold: { clean: 0, base: 0, own: 0 }, asked: { clean: 0, base: 0, own: 0 }, through: { clean: 0, base: 0, own: 0 }, some: { clean: 0, base: 0, own: 0 } };
       const answer = (who) => async (route) => {
         net.asked[who] += 1;
+        if (net.up[who] === 'hang') {
+          if (net.some[who] > 0) { net.some[who] -= 1; await route.fulfill(standIn).catch(() => {}); }
+          return;
+        }
         if (net.hold[who]) await sleep(net.hold[who]);
         const flicker = net.up[who] === 'asked' && (route.request().resourceType() === 'fetch' || (net.through[who] > 0 && net.through[who]--));
         await (net.up[who] === true || flicker ? route.fulfill(standIn) : route.abort('connectionrefused')).catch(() => {});
@@ -655,6 +692,41 @@ try {
       controlled && ts.loaded === 0 && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || ''), JSON.stringify({ controlled, ...ts }));
     await t.tctx.close();
 
+    // The map's own keys (Shift+arrow, 240 px a press): exact both ways.
+    const pan = async (pg, key, times) => {
+      await pg.focus('.map-canvas');
+      for (let i = 0; i < times; i += 1) {
+        const was = await pg.evaluate(() => document.querySelector('.map-canvas').dataset.bounds);
+        await pg.keyboard.press(`Shift+${key}`);
+        await pg.waitForFunction((b) => document.querySelector('.map-canvas').dataset.bounds !== b, was, { timeout: 3000 }).catch(() => {});
+        await sleep(350);
+      }
+    };
+
+    // Weak signal as it usually is — tiles that never answer, not refusals —
+    // and it goes while a view is loading: three of its tiles come, the rest
+    // never do. One tile that never answers keeps Leaflet's batch open, and
+    // the six-second look was the batch's: six seconds in some had come and
+    // none had failed, and the views moved to after that had no look at all
+    // — blank streets, and the map said nothing.
+    t = await tiled();
+    await t.pg.goto(`${BASE}/admin/map`, { waitUntil: 'domcontentloaded' });
+    ts = await tilesUntil(t.pg, (s) => s.tiles === 'ok' && s.loaded > 0);
+    await sleep(2000); // (the first view's tiles all in)
+    t.net.up.clean = 'hang';
+    t.net.some.clean = 3;
+    t.net.up.base = 'hang';
+    await pan(t.pg, 'ArrowRight', 4);
+    await sleep(7500);
+    const part = await tileState(t.pg);
+    await pan(t.pg, 'ArrowRight', 12);
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 20000);
+    await t.pg.screenshot({ path: `${SHOTS}/8-never-answers-new-streets.png` });
+    check('the signal goes while a view is loading (three of its tiles come, the rest never answer), then new streets where nothing answers: the map says its street map isn’t loading, one tap to try again',
+      part.tiles === 'ok' && !part.note && ts.look === 'clean' && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && ts.pick === null,
+      JSON.stringify({ part: { tiles: part.tiles, note: part.note }, ...ts, asked: t.net.asked }));
+    await t.tctx.close();
+
     // In the field, with the service worker keeping the streets looked at:
     // the map opened with signal on Clean (CARTO), its tiles on screen kept.
     const keptStreets = async () => {
@@ -676,17 +748,8 @@ try {
         const drawn = vis.filter((i) => i.classList.contains('leaflet-tile-loaded') && i.complete && i.naturalWidth > 0);
         return { n: vis.length, drawn: drawn.length, hosts: [...new Set(vis.map((i) => new URL(i.src).hostname.replace(/^[a-d]\./, '')))] };
       }).catch(() => ({}));
-      // Screens away, into streets this browser never looked at, and back:
-      // the map's own keys (Shift+arrow, 240 px a press), exact both ways.
-      k.pan = async (key, times) => {
-        await k.pg.focus('.map-canvas');
-        for (let i = 0; i < times; i += 1) {
-          const was = await k.pg.evaluate(() => document.querySelector('.map-canvas').dataset.bounds);
-          await k.pg.keyboard.press(`Shift+${key}`);
-          await k.pg.waitForFunction((b) => document.querySelector('.map-canvas').dataset.bounds !== b, was, { timeout: 3000 }).catch(() => {});
-          await sleep(350);
-        }
-      };
+      // Screens away, into streets this browser never looked at, and back.
+      k.pan = (key, times) => pan(k.pg, key, times);
       k.kept = {};
       for (let i = 0; i < 40 && !(k.kept.n >= 4 && k.kept.drawn === k.kept.n); i += 1) { await sleep(250); k.kept = await k.onScreen(); }
       await sleep(2500); // (the worker keeps what came)
@@ -764,6 +827,32 @@ try {
     const backF = await t.onScreen();
     await t.pg.screenshot({ path: `${SHOTS}/8-flicker-back.png` });
     check('…back over the streets this browser kept, every tile draws', allKept(keptF, backF), JSON.stringify({ kept: keptF, back: backF }));
+    await t.tctx.close();
+
+    // The same after a switch by itself, with tiles that never answer: the
+    // look's own provider stops answering and the one tile asked of the other
+    // comes, so the map goes there; a few of its tiles come, then nothing
+    // answers any more. Back over the streets this browser kept, it is back
+    // on their pick by itself and they draw (it stayed on the other, blank,
+    // until the phone went offline).
+    t = await keptStreets();
+    const keptH = t.kept;
+    t.net.up.clean = 'hang';
+    await t.pan('ArrowRight', 15);
+    const went = await tilesUntil(t.pg, (s) => s.look === 'muted' && s.tiles === 'ok', 25000);
+    t.net.up.base = 'hang';
+    t.net.some.base = 4;
+    await t.pan('ArrowRight', 4);
+    await sleep(1000);
+    await t.pan('ArrowLeft', 19);
+    ts = await tilesUntil(t.pg, (s) => s.look === 'clean', 20000);
+    await sleep(3000);
+    const backH = await t.onScreen();
+    ts = { ...ts, ...(await tileState(t.pg)) };
+    await t.pg.screenshot({ path: `${SHOTS}/8-never-answers-back.png` });
+    check('…after a switch by itself, the same there (a few tiles come, then nothing answers): back over the streets this browser kept, their pick again by itself, every tile drawn and no note',
+      went.look === 'muted' && ts.look === 'clean' && allKept(keptH, backH) && !ts.note && ts.pick === null,
+      JSON.stringify({ went: went.look, look: ts.look, note: ts.note, kept: keptH, back: backH }));
     await t.tctx.close();
 
     // A switch made by itself lasts while the signal does: when signal comes
@@ -1050,12 +1139,18 @@ try {
     // buttons in the corner ("My turf", "Whole list", Locate me, "+ Door"),
     // each still a tap away (it lay over "−" and "My turf"). On "My turf" a
     // volunteer sees their own doors, whole: the list's answers for the view
-    // aren't drawn there, so their not coming is no "Unavailable".
+    // aren't drawn there, so their not coming is no "Unavailable". And the
+    // line is said only over doors in fact drawn: a big list's doors come by
+    // the view, a manager's phone keeps none, and there "Unavailable — Try
+    // again" says it alone (the line stood over an empty map).
     const ring = (s, w, n, e) => [[s, w], [s, e], [n, e], [n, w]];
     const turf = (await post('/actions/turf.create', { name: 'Kept block', polygon: ring(49.1298, -122.8503, 49.132, -122.8469) })).turf;
     const invite = await post('/actions/member.invite', { email: `walker+${Date.now().toString(36)}@example.org`, role: 'volunteer' });
     // The map's reads, unanswered (no signal, and the phone doesn't know it).
     const noAnswer = (c) => c.route(/\/api\/map\/(doors|density)/, (route) => route.abort('internetdisconnected'));
+    // …or refused by the server, which the same line says in the server's words.
+    const REFUSAL = 'The list isn’t answering — try again in a minute';
+    const refused = (c) => c.route(/\/api\/map\/(doors|density)/, (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: REFUSAL }) }));
     const corners = (pg) => pg.evaluate(() => {
       const rect = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
       const line = document.querySelector('.error.map-error');
@@ -1076,17 +1171,18 @@ try {
       const s = sheet && rect(sheet);
       return {
         note: words('.error.map-error'), retry: words('.map-retry'), pill: words('.map-filter-btn'), through: Boolean(mid && !mid.closest('.error.map-error')),
+        doors: Number(document.querySelector('.map-canvas')?.dataset.doors),
         sheet: s ? words('.map-sheet .mapsheet-title') : null, underSheet: Boolean(n && s && s.l < n.r && n.l < s.r && s.t < n.b && n.t < s.b), buttons,
       };
     });
     const blocked = (k) => k.buttons.filter((b) => b.under || !b.tap).map((b) => b.name);
     // Opened with signal (the phone keeps the doors), then again with none.
-    const keptThenNone = async (c, pg, path) => {
+    const keptThenNone = async (c, pg, path, { none = noAnswer, says = '.error.map-error' } = {}) => {
       await pg.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded' });
       await pg.waitForFunction(() => Object.keys(localStorage).some((k) => k.endsWith(':doors')), null, { timeout: 15000 }).catch(() => {});
-      await noAnswer(c);
+      await none(c);
       await pg.reload({ waitUntil: 'domcontentloaded' });
-      await pg.waitForSelector('.error.map-error', { timeout: 15000 }).catch(() => {});
+      await pg.waitForSelector(says, { timeout: 15000 }).catch(() => {});
       await sleep(1000);
       return corners(pg);
     };
@@ -1110,18 +1206,28 @@ try {
     await vp.goto(`${BASE}/map?show=all`, { waitUntil: 'domcontentloaded' });
     await vp.waitForSelector('.map-retry', { timeout: 15000 }).catch(() => {});
     k = await corners(vp);
-    check('…on “All” they are the map: “Unavailable — Try again”', k.retry === 'Unavailable — Try again' && /^Show: All/.test(k.pill || ''), JSON.stringify({ retry: k.retry, pill: k.pill }));
+    check('…on “All” they are the map: “Unavailable — Try again” (and their own doors, kept, still drawn and said)',
+      k.retry === 'Unavailable — Try again' && /^Show: All/.test(k.pill || '') && k.doors > 0 && k.note === 'No signal — showing the doors already loaded', JSON.stringify({ retry: k.retry, pill: k.pill, doors: k.doors, note: k.note }));
     await vc.close();
 
     // A manager in the field app on a phone ("Whole list", Locate me), and at a desk (and "+ Door").
+    // No answer: a big list keeps no doors on a manager's phone, so no line
+    // says it is showing them — "Unavailable — Try again" says it alone.
+    // Refused by the server: the line (the server's words) lies clear of the
+    // same buttons.
     for (const [w, h, path, corner] of [[390, 844, '/map', ['Whole list', 'Locate me']], [1440, 900, '/admin/map', ['Whole list', 'Locate me', 'Add a door']]]) {
       const mc = await context(w <= 720 ? { viewport: { width: w, height: h }, isMobile: true, hasTouch: true } : {});
       const mp = await mc.newPage();
       mp.on('pageerror', (e) => errors.push(`[kept ${w}] ${e.message}`));
-      k = await keptThenNone(mc, mp, path);
+      k = await keptThenNone(mc, mp, path, { says: '.map-retry' });
       await mp.screenshot({ path: `${SHOTS}/12-kept-${w}x${h}.png` });
-      check(`${w}×${h}, the doors kept and no answer: the line clear of the zoom buttons and ${corner.join(', ')}`,
-        k.note === 'No signal — showing the doors already loaded' && corner.every((c) => k.buttons.some((b) => b.name === c)) && blocked(k).length === 0,
+      check(`${w}×${h}, a manager’s big list (no doors kept) and no answer: “Unavailable — Try again” says it alone — no line about doors over a map with none`,
+        k.retry === 'Unavailable — Try again' && k.note === null && k.doors === 0 && /^Show: All/.test(k.pill || ''),
+        JSON.stringify({ retry: k.retry, note: k.note, doors: k.doors, pill: k.pill }));
+      k = await keptThenNone(mc, mp, path, { none: refused });
+      await mp.screenshot({ path: `${SHOTS}/12-refused-${w}x${h}.png` });
+      check(`${w}×${h}, refused by the server: the line says so in its words, clear of the zoom buttons and ${corner.join(', ')}`,
+        k.note === REFUSAL && corner.every((c) => k.buttons.some((b) => b.name === c)) && blocked(k).length === 0,
         JSON.stringify({ ...k, blocked: blocked(k) }));
       await mc.close();
     }
@@ -1130,10 +1236,10 @@ try {
     const lc = await context({ viewport: { width: 1024, height: 768 } });
     const lp = await lc.newPage();
     lp.on('pageerror', (e) => errors.push(`[kept 1024] ${e.message}`));
-    k = await keptThenNone(lc, lp, `/admin/map?turf=${turf.id}`);
-    await lp.screenshot({ path: `${SHOTS}/12-kept-sheet-1024x768.png` });
+    k = await keptThenNone(lc, lp, `/admin/map?turf=${turf.id}`, { none: refused });
+    await lp.screenshot({ path: `${SHOTS}/12-refused-sheet-1024x768.png` });
     check('1024×768 with a turf’s sheet open: the line clear of the zoom buttons, the buttons beside the sheet, and the sheet',
-      k.note === 'No signal — showing the doors already loaded' && k.sheet === 'Kept block' && !k.underSheet && k.buttons.length >= 5 && blocked(k).length === 0,
+      k.note === REFUSAL && k.sheet === 'Kept block' && !k.underSheet && k.buttons.length >= 5 && blocked(k).length === 0,
       JSON.stringify({ ...k, blocked: blocked(k) }));
     await lc.close();
   }

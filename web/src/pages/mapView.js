@@ -166,6 +166,10 @@ export const cellFill = (c, dark) => {
 // most come says it is loading again. Map.jsx feeds it the layer's events;
 // loaded and failed count every tile since the layer was added (the map's
 // check shows them).
+// One tile that never answers keeps Leaflet's go open, though, and the views
+// moved to meanwhile are not asked about at all: so six seconds after each
+// move Map.jsx looks at the screen itself, and with tiles still out and not
+// one street drawn on it says so (blank).
 export const TILE_WAIT_MS = 6000;
 export const tileHealth = () => {
   let ok = 0; let bad = 0;         // this view's tiles
@@ -177,6 +181,7 @@ export const tileHealth = () => {
     tile(good) { if (good) { ok += 1; loaded += 1; } else { bad += 1; failed += 1; } },
     done() { if (ok + bad) down = bad > ok; since = null; },
     late(now) { if (since != null && now - since >= TILE_WAIT_MS) down = ok === 0 || bad > ok; },
+    blank() { if (since != null) down = true; },
     get: () => ({ loaded, failed, down }),
   };
 };

@@ -2056,10 +2056,29 @@ export default function MapPage() {
     });
     layer.on('tileload', () => { health.tile(true); tell(); });
     layer.on('tileerror', () => { health.tile(false); });
-    layer.on('load', () => { clearTimeout(timer); health.done(); settled = true; tell(); });
+    layer.on('load', () => { clearTimeout(timer); clearTimeout(moved); health.done(); settled = true; tell(); });
+    // The six-second look is each view's own, not only Leaflet's go of
+    // asking: one tile that never answers keeps a go open ('loading' comes
+    // again only once every tile asked for has loaded or failed), and the
+    // views moved to meanwhile had no look at all — blank streets, nothing
+    // said (weak signal: the hosts don't refuse, they never answer). So six
+    // seconds after the map last moved, tiles still out and not one street
+    // drawn on screen: it isn't loading. Streets this phone kept, drawn,
+    // with their neighbours still out, are not that.
+    let moved = null;
+    const streetsOnScreen = () => {
+      const box = map.getContainer().getBoundingClientRect();
+      return [...(layer.getContainer()?.querySelectorAll('img.leaflet-tile-loaded') || [])].some((img) => {
+        const r = img.getBoundingClientRect();
+        return img.naturalWidth > 0 && r.right > box.left + 1 && r.left < box.right - 1 && r.bottom > box.top + 1 && r.top < box.bottom - 1;
+      });
+    };
+    const look = () => { if (layer.isLoading() && !streetsOnScreen()) { health.blank(); tell(); } };
+    const onMoved = () => { clearTimeout(moved); if (layer.isLoading()) moved = setTimeout(look, TILE_WAIT_MS + 20); };
+    map.on('moveend zoomend', onMoved);
     layer.addTo(map);
     map.setMaxZoom(tileMax || 19);
-    return () => { clearTimeout(timer); layer.remove(); };
+    return () => { clearTimeout(timer); clearTimeout(moved); map.off('moveend zoomend', onMoved); layer.remove(); };
   }, [tileUrl, tileMax, tileCredit, tilesTry]);
 
   // Turf polygons. Hidden by the Turfs chip, except a selected turf always shows.
@@ -2289,10 +2308,18 @@ export default function MapPage() {
   // A map request out for more than a moment says so beside the count; what
   // was drawn stays until its answer is in.
   const slow = useSlow(Boolean(byView && (viewQ.isFetching || densQ.isFetching)) || doorQ.isFetching || spotBusy);
-  // A big list, and nobody at all in the part asked for (the screen and
-  // some): say so, with the way back.
-  const nobodyHere = Boolean(byView && fresh && !viewQ.isFetching && !densQ.isFetching
-    && (fresh.kind === 'density' ? !(fresh.density.cells || []).length : fresh.view.count === 0));
+  // A big list, and nobody on screen — this view's own answer in, nothing
+  // on its way: say so, with the way back. (By the screen, as the count is:
+  // the part asked for is the screen and some, and just past the list's
+  // edge it still held the list's last squares — "0 people", and no note.)
+  const nobodyHere = Boolean(byView && fresh && seen && !viewQ.isFetching && !densQ.isFetching
+    && (fresh.kind === 'density' ? counts.all === 0
+      : !doors.some((d) => inBox(seen.box, d)) && !leanFree.some((d) => inBox(seen.box, d))));
+  // "No signal — showing the doors already loaded" is said over doors in
+  // fact drawn (a list loaded whole, a volunteer's own turf). A big list's
+  // doors come by the view and a manager's phone keeps none: there
+  // "Unavailable — Try again" says it alone, not this over an empty map.
+  const keptDrawn = visible.length > 0 || leanShown.length > 0;
   // The key under the count, once there are marks to explain.
   const showKey = Boolean(doorsQ.data) && !noSignal && (big ? Boolean(drawn) : doors.length > 0);
   // (On "My turf" a volunteer sees their own doors, not the list's patches.)
@@ -2636,7 +2663,7 @@ export default function MapPage() {
             <Link className="btn btn-primary map-empty__btn" to={`/turfs/${offlineWalk.id}`}>Open walk list</Link>
           )}
         </div>
-      ) : doorsQ.isError ? (
+      ) : doorsQ.isError && (doorsQ.error?.status || keptDrawn) ? (
         <p className="error map-error">{doorsQ.error?.status ? doorsQ.error.message : 'No signal — showing the doors already loaded'}</p>
       ) : turfsQ.isError && !turfsQ.data ? (
         <p className="error map-error">Turfs didn’t load</p>

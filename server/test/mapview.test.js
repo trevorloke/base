@@ -235,6 +235,27 @@ test('the street map isn’t loading: most of a view’s tiles failed, or not on
   quick.late(TILE_WAIT_MS + 5);
   assert.equal(quick.get().down, false);
   assert.equal(TILE_WAIT_MS, 6000);
+
+  // The signal goes while a view is loading: three of its tiles come, the
+  // rest never answer — so the view is never "done", and six seconds in
+  // some had come and none had failed.
+  const hung = tileHealth();
+  hung.batch(0);
+  for (let i = 0; i < 3; i += 1) hung.tile(true);
+  hung.late(TILE_WAIT_MS + 5);
+  assert.equal(hung.get().down, false);
+  // The map is moved on, into streets where nothing answers: six seconds
+  // there with tiles still out and not one street on screen (Map.jsx looks)
+  // is the street map not loading, whatever came for the view before.
+  hung.blank();
+  assert.deepEqual(hung.get(), { loaded: 3, failed: 0, down: true });
+  // …and when they all answer after all, it is loading.
+  for (let i = 0; i < 9; i += 1) hung.tile(true);
+  hung.done();
+  assert.equal(hung.get().down, false);
+  // With no tiles out (the view done), a blank screen says nothing about the provider.
+  hung.blank();
+  assert.equal(hung.get().down, false);
 });
 
 // Before the map goes to its other provider by itself, it asks that one for

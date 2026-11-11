@@ -552,7 +552,8 @@ one tap away under **More**.
   counts what is on screen (*300,049 people*); from zoom 14 every door is a
   dot (*1,211 doors*), and a tap on one opens it. Zooming never empties the
   map: what was drawn stays until the next answer is in. **Whole list** goes
-  back; over open water it says *Nobody on file here · Back to your list*.
+  back; over open water — and as soon as the list's last squares leave the
+  screen — it says *Nobody on file here · Back to your list*.
   (`node e2e-map.mjs` runs a big list in miniature through all of this in a
   browser, and through the next four; `ONLY=tiles,check node e2e-map.mjs`
   runs parts of it.)
@@ -566,7 +567,8 @@ one tap away under **More**.
   and pan away — *The street map isn’t loading · Try again*, and no switch
   (the other doesn't answer either); tap it, pan back, and the turf's
   streets are still there, and in airplane mode too (and the look is still
-  *Clean*).
+  *Clean*). (Hosts that never answer, rather than refuse, are said the same
+  way, six seconds after the map last moved over blank streets.)
 - **Map, many turfs** — outlines and names show at once however many turfs
   there are; tap one and its sheet opens with *Loading…* where *64 doors
   left* then appears.
@@ -574,7 +576,9 @@ one tap away under **More**.
   on your turf with signal, then go into airplane mode and reopen the app:
   your doors are there, *No signal — showing the doors already loaded* sits
   above *My turf* and the zoom buttons (each still a tap away), and there is
-  no *Unavailable — Try again* on *My turf*.
+  no *Unavailable — Try again* on *My turf*. A manager's whole voter file
+  keeps no doors on the phone: there *Unavailable — Try again* says it
+  alone.
 - **Map → filter button → Map check** (managers) — one sheet: on file, on
   the map, not on map (and why), the placing run, outside your area, turfs,
   the street map and its tiles, this page against the server, the map's
