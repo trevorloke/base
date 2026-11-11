@@ -59,6 +59,39 @@ export const PUBLIC_CSS = `
   footer a{color:var(--ink2)}
 `;
 const CSS = `${PUBLIC_CSS}
+  form{margin-top:8px}
+  label,legend{display:block;font-size:16px;font-weight:600;color:var(--ink);margin:18px 0 6px;padding:0}
+  fieldset{border:0;margin:18px 0 0;padding:0;min-width:0}
+  legend{margin:0 0 6px}
+  input,textarea,select{display:block;width:100%;min-height:52px;font:inherit;font-size:16px;padding:12px 14px;border:1px solid var(--field);background:var(--card);color:var(--ink);border-radius:var(--r-ctrl)}
+  textarea{min-height:100px}
+  input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--edge);outline-offset:2px}
+  .checks{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .amounts{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:360px){.checks{grid-template-columns:1fr}.amounts{grid-template-columns:1fr 1fr}}
+  .check{display:flex;gap:12px;align-items:center;min-height:52px;margin:8px 0;padding:10px 14px;border:1px solid var(--field);border-radius:var(--r-ctrl);background:var(--card);font-size:16px;font-weight:400;line-height:1.3;cursor:pointer}
+  .checks .check{margin:0}
+  .check input{width:24px;height:24px;min-height:0;flex:none;margin:0;padding:0;accent-color:var(--mark)}
+  .check:has(input:checked){border-color:var(--edge);box-shadow:inset 0 0 0 1px var(--edge)}
+  .amounts .check{font-size:18px;font-weight:600}
+  .attest{align-items:flex-start}
+  .attest input{margin-top:1px}
+  .roles{display:grid;gap:8px}
+  .role .check{margin:0}
+  .gl{display:block;font-size:14px;color:var(--ink2)}
+  .rd{display:none;margin:6px 0 4px 38px}
+  .rd label{margin:0 0 4px;font-size:15px}
+  .role:has(input[name=roles]:checked) .rd{display:block}
+  @supports not selector(:has(a)){.rd{display:block}}
+  details{margin-top:8px}
+  summary{display:flex;align-items:center;min-height:52px;padding:10px 14px;border:1px dashed var(--field);border-radius:var(--r-ctrl);font-size:16px;font-weight:600;cursor:pointer;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:'+';font-weight:600;font-size:20px;line-height:1;margin-right:12px}
+  details[open] summary::before{content:'−'}
+  details[open] summary{margin-bottom:8px}
+  summary:focus-visible{outline:2px solid var(--edge);outline-offset:2px}
+  .big{font-size:18px;font-weight:600;color:var(--ink)}
+  .when{font-size:18px;font-weight:600;color:var(--ink);margin:0 0 4px}
   .prose{color:var(--ink)}
   .prose p,.prose li{color:var(--ink)}
   .prose img{max-width:100%;height:auto;border-radius:var(--r-ctrl)}

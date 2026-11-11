@@ -150,6 +150,9 @@ export const brandFor = (settings, key = brandKey()) => {
   }
   return resolved.get(id);
 };
+// The preset alone, for code with no campaign's settings at hand (prefer
+// brandFor(settings): it is the saved brand when there is one).
+export const brand = () => presetBrand();
 // What the campaign's training is called (the Learn area): "ImagineU" for
 // Imagine Surrey's look, "Training" for base.win's, or what a manager set.
 export const learnName = (settings) => brandFor(settings).learn;

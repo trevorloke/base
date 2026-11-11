@@ -25,7 +25,8 @@ export const app = new Hono();
 // uploads (a CSV import's 2,000 rows; a picture, as base64). Hono buffers a
 // body before parsing, so without this a few big requests could take all
 // the memory — no sign-in needed.
-const BODY_MAX = { '/api/data/import': 16 * 1024 * 1024, '/api/actions/learn.asset.upload': 17 * 1024 * 1024, '/api/actions/blast.attach': 7 * 1024 * 1024, '/api/actions/blast.picture': 4 * 1024 * 1024, '/api/actions/site.picture': 4 * 1024 * 1024, '/api/actions/brand.picture': 4 * 1024 * 1024 };
+const BODY_MAX = { '/api/data/import': 16 * 1024 * 1024, '/api/actions/learn.asset.upload': 17 * 1024 * 1024, '/api/actions/blast.attach': 7 * 1024 * 1024, '/api/actions/blast.picture': 4 * 1024 * 1024, '/api/actions/site.picture': 4 * 1024 * 1024 };
+BODY_MAX['/api/actions/brand.picture'] = 4 * 1024 * 1024; // the campaign's logo, mark or an app icon (ext/brand)
 app.use('*', (c, next) => bodyLimit({
   maxSize: BODY_MAX[c.req.path] || 256 * 1024,
   onError: (cc) => cc.json({ error: 'request too large' }, 413),
