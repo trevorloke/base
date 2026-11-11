@@ -168,6 +168,26 @@ test('a place nothing could name: a message gives its map — never its coordina
   assert.match(shiftMessage({ ...pinned, location: 'Newton Exchange' }, 'X', TZ), /\nWhere: Newton Exchange\n/);
 });
 
+test('a week of pinned places is built to a text’s length — no link cut, the rest counted, the sign-off kept', () => {
+  // Nine Signs shifts at points nobody named: each line carries its map link.
+  const nine = Array.from({ length: 9 }, (_, i) => ({
+    title: 'Signs — Pinned place', starts_at: `2030-05-0${6 + (i % 3)}T${16 + Math.floor(i / 3)}:00:00Z`, ends_at: null,
+    location: `Pin at 49.14${String(i).padStart(2, '0')}, −122.85${String(i).padStart(2, '0')}`,
+  }));
+  const text = noticeWords({ kind: 'week', shifts: nine, workspaceName: 'Imagine Example', tz: TZ, thisWeek: true }).text;
+  const lines = text.split('\n');
+  assert.ok(text.length <= 1000, `${text.length} characters`);
+  assert.equal(lines[0], 'Your shifts this week:');
+  assert.equal(lines.at(-1), '— Imagine Example', 'the sign-off survives');
+  const shown = lines.slice(1, -2);
+  assert.ok(shown.length >= 1 && shown.length < 9, `${shown.length} shifts listed`);
+  for (const l of shown) assert.match(l, /, see the map — https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=49\.14\d*,-122\.85\d*$/, 'every link whole');
+  assert.equal(lines.at(-2), `+ ${9 - shown.length} more — ask us for the full list`, 'what didn’t fit is counted, never dropped without a word');
+  // Eight that fit in a text are all there, as before; a ninth is "+ 1 more".
+  const short = nine.map((s) => ({ ...s, location: 'Campaign office', title: 'Signs — Campaign office' }));
+  assert.match(noticeWords({ kind: 'week', shifts: short, workspaceName: 'X', tz: TZ, thisWeek: true }).text, /Campaign office\n\+ 1 more — ask us for the full list\n— X$/);
+});
+
 test('“Tell everyone on this week’s shifts”: the count first; the write only queues; a job sends, outside any write', async () => {
   at('2030-05-05T19:00:00Z'); // Sunday noon in Surrey, the day before the week
   const mon = await shiftOn('2030-05-06', '06:30', '08:30');

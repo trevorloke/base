@@ -102,12 +102,17 @@ export const noticeWords = ({ kind, shifts, workspaceName, tz = DEFAULT_TZ, this
         : !String(s.title).toLowerCase().includes(String(s.location).toLowerCase()) ? `, ${s.location}` : '';
     return `${fmtIn(s.starts_at, tz, SHORT)}: ${s.title}${where}`;
   };
-  const lines = shifts.slice(0, TEXT_LINES).map(line);
-  if (n > TEXT_LINES) lines.push(`+ ${n - TEXT_LINES} more — ask us for the full list`);
+  // The text is built to its length rather than cut: a shift's line goes in
+  // whole (its map link with it) or not at all, what doesn't fit is counted
+  // in "+ N more", and the sign-off always ends it.
+  const textOf = (k) => [`${head}:`, ...shifts.slice(0, k).map(line),
+    ...(k < n ? [`+ ${n - k} more — ask us for the full list`] : []), `— ${workspaceName}`].join('\n');
+  let k = Math.min(n, TEXT_LINES);
+  while (k > 0 && textOf(k).length > MAX_BODY) k -= 1;
   return {
     subject,
     email: [`${head}:`, ...shifts.map(block), `— ${workspaceName}`].join('\n\n'),
-    text: [`${head}:`, ...lines, `— ${workspaceName}`].join('\n').slice(0, MAX_BODY),
+    text: textOf(k).slice(0, MAX_BODY),
   };
 };
 
