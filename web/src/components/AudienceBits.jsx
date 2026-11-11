@@ -341,6 +341,8 @@ export function SnapshotForm({ input, count = null, defaultName = 'People', clas
       setBusy(false);
     }
   };
+  // Nobody matches right now: nothing to keep.
+  if (!open && count === 0) return null;
   if (!open) {
     return (
       <button type="button" className={`${link ? 'au-snap__link' : 'btn btn-quiet ops-tap'} ${className}`} disabled={!online}

@@ -123,8 +123,9 @@ function FilterFields({ value, onChange, exclude = null }) {
   );
 }
 
+// Counted once the typing settles: a city's file isn't counted on every key.
 function usePreview(filter, on) {
-  const key = qs(filter);
+  const key = useSettled(qs(filter));
   return useQuery({ queryKey: ['lists', 'preview', key], queryFn: () => apiGet(`/lists/preview?${key}`), enabled: on, retry: 1 });
 }
 
@@ -339,7 +340,7 @@ function AllLists() {
               <div className="au-row">
                 <span className="au-row__main">
                   <Link className="au-row__name" to={`/lists/${l.id}`}>{l.name}</Link>
-                  <span className="ops-row__sub" aria-live="polite"><span>{l.kind === 'filter' ? 'Saved filter' : 'Hand-picked'}</span><RowNumbers c={c} /></span>
+                  <span className="ops-row__sub"><span>{l.kind === 'filter' ? 'Saved filter' : 'Hand-picked'}</span><RowNumbers c={c} /></span>
                 </span>
                 <Ways id={l.id} name={l.name} counts={c?.counts} />
               </div>
