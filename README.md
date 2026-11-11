@@ -559,8 +559,9 @@ are, in one place.
 | **Text** | do-not-contact; do-not-text; no number, or one that can't be dialled; a number that replied STOP | As it goes out (a list's text, a ladder's): a number that asked to stop in words ("please stop texting me"), until it texts START. **A ladder**: also someone whose last word on a website form was no to texts, and a number a teammate is texting now |
 | **Call** (a phone bank) | no number; do-not-contact | — |
 
-A do-not tag counts whatever its capitals. One email goes to an address,
-and one text to a number, however many people share it. A new reason — an
+A do-not tag counts whatever its capitals. An email or a text to a list
+goes once to an address or a number, however many people on it share it
+(and a list's numbers count it so). A new reason — an
 address that bounced, a do-not-call tag — is one line in its channel, and
 every send, count and phone bank follows it.
 
