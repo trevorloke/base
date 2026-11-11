@@ -570,6 +570,11 @@ one tap away under **More**.
 - **Map, many turfs** — outlines and names show at once however many turfs
   there are; tap one and its sheet opens with *Loading…* where *64 doors
   left* then appears.
+- **Map, reopened with no signal** — as a volunteer on a phone, open the map
+  on your turf with signal, then go into airplane mode and reopen the app:
+  your doors are there, *No signal — showing the doors already loaded* sits
+  above *My turf* and the zoom buttons (each still a tap away), and there is
+  no *Unavailable — Try again* on *My turf*.
 - **Map → filter button → Map check** (managers) — one sheet: on file, on
   the map, not on map (and why), the placing run, outside your area, turfs,
   the street map and its tiles, this page against the server, the map's

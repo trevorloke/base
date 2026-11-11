@@ -534,7 +534,10 @@
 .map-fab:disabled { opacity: 0.6; cursor: default; }
 .map-fab:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 
-.error.map-error { position: absolute; left: var(--s-3); bottom: var(--s-6); z-index: 2; background: var(--paper-0); padding: var(--s-2) var(--s-3); border: 1px solid var(--danger); border-radius: var(--r-ctrl); }
+/* The doors didn't come (no signal: the ones already loaded): one line along
+   the bottom beside the zoom buttons, not over them, and short of the buttons
+   in the other corner — on a phone above both corners (below). */
+.error.map-error { position: absolute; left: calc(var(--s-3) + 60px); bottom: var(--s-6); max-width: calc(100% - 288px); margin: 0; z-index: 2; background: var(--paper-0); padding: var(--s-2) var(--s-3); border: 1px solid var(--danger); border-radius: var(--r-ctrl); }
 /* No signal, no doors loaded: one line + the walk list kept on the phone */
 .card.map-offline { top: 40%; }
 .card.map-empty {
@@ -1040,10 +1043,15 @@
   box-shadow: var(--shadow-2); font-size: 14px; font-weight: 600;
 }
 .btn.map-nobody__btn { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; white-space: nowrap; }
+/* With the doors' line there too, these sit above it. */
+.error.map-error ~ .map-zoomnote, .error.map-error ~ .map-nobody { bottom: calc(var(--tabbar-h, 0px) + 80px); }
 /* Phones: the notes along the bottom sit above the buttons in the corner
-   ("Whole list" reaches the middle of a narrow screen). */
+   ("Whole list" reaches the middle of a narrow screen) — the doors' line
+   too, in the middle (it lay over "−" and "My turf"). */
 @media (max-width: 720px) {
   .map-zoomnote, .map-nobody { bottom: 164px; }
+  .error.map-error { left: 50%; bottom: 164px; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px); }
+  .error.map-error ~ .map-zoomnote, .error.map-error ~ .map-nobody { bottom: 212px; }
 }
 
 /* The street map isn't loading: one line and one tap (the other provider,

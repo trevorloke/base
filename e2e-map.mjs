@@ -37,10 +37,13 @@
 //   · an import that leaves addresses without a pin starts the placing run
 //     by itself (a stand-in address lookup on :4949), the map shows its
 //     progress, and after a pause it tries again with nobody tapping;
-//   · the Map check (managers) says which trouble a map has, in one screen.
+//   · the Map check (managers) says which trouble a map has, in one screen;
+//   · a phone reopened with no answer shows the doors it kept, and the line
+//     that says so lies clear of the zoom and corner buttons; on "My turf"
+//     no "Unavailable" for the list's answers, which aren't drawn there.
 //
 //   (cd web && npm run build) && node e2e-map.mjs        (its own server on :4948, the stand-in lookup on :4949)
-//   ONLY=tiles,check node e2e-map.mjs                    just those parts: list · layout · tiles · turfs · placing · check
+//   ONLY=tiles,check node e2e-map.mjs                    just those parts: list · layout · tiles · turfs · placing · check · kept
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
@@ -215,7 +218,7 @@ const zoomBy = async (sel, times = 1) => {
   }
 };
 
-// ONLY=layout,tiles node e2e-map.mjs runs just those parts (list · layout · tiles · turfs · placing · check).
+// ONLY=layout,tiles node e2e-map.mjs runs just those parts (list · layout · tiles · turfs · placing · check · kept).
 const ONLY = new Set(String(process.env.ONLY || '').split(',').map((x) => x.trim()).filter(Boolean));
 const want = (part) => !ONLY.size || ONLY.has(part);
 
@@ -1038,6 +1041,81 @@ try {
     const allIn = await pp.evaluate(() => { const s = document.querySelector('.map-check'); return { tall: s.scrollHeight, shown: s.clientHeight }; });
     check('…every line of it on the screen at once, “Checked” and all (one screenshot)', allIn.tall <= allIn.shown + 1, JSON.stringify(allIn));
     await pc.close();
+  }
+
+  // ══ 12. The doors a phone kept, and no answer ══
+  if (want('kept')) {
+    // A phone that has lost its signal reopens the map from what it kept: one
+    // line along the bottom says so — clear of the zoom buttons and the
+    // buttons in the corner ("My turf", "Whole list", Locate me, "+ Door"),
+    // each still a tap away (it lay over "−" and "My turf"). On "My turf" a
+    // volunteer sees their own doors, whole: the list's answers for the view
+    // aren't drawn there, so their not coming is no "Unavailable".
+    const ring = (s, w, n, e) => [[s, w], [s, e], [n, e], [n, w]];
+    const turf = (await post('/actions/turf.create', { name: 'Kept block', polygon: ring(49.1298, -122.8503, 49.132, -122.8469) })).turf;
+    const invite = await post('/actions/member.invite', { email: `walker+${Date.now().toString(36)}@example.org`, role: 'volunteer' });
+    // The map's reads, unanswered (no signal, and the phone doesn't know it).
+    const noAnswer = (c) => c.route(/\/api\/map\/(doors|density)/, (route) => route.abort('internetdisconnected'));
+    const corners = (pg) => pg.evaluate(() => {
+      const rect = (el) => { const b = el.getBoundingClientRect(); return { l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+      const line = document.querySelector('.error.map-error');
+      const n = line && rect(line);
+      const buttons = [...document.querySelectorAll('.leaflet-control-zoom a, .map-fabs button')].map((btn) => {
+        const b = rect(btn);
+        const hit = document.elementFromPoint((b.l + b.r) / 2, (b.t + b.b) / 2);
+        return {
+          name: (btn.getAttribute('aria-label') || btn.title || btn.innerText || '').trim(),
+          under: Boolean(n && b.l < n.r && n.l < b.r && b.t < n.b && n.t < b.b),
+          tap: Boolean(hit && (hit === btn || btn.contains(hit))),
+        };
+      });
+      const words = (s) => document.querySelector(s)?.innerText.replace(/\s+/g, ' ').trim() || null;
+      return { note: words('.error.map-error'), retry: words('.map-retry'), pill: words('.map-filter-btn'), buttons };
+    });
+    const blocked = (k) => k.buttons.filter((b) => b.under || !b.tap).map((b) => b.name);
+    // Opened with signal (the phone keeps the doors), then again with none.
+    const keptThenNone = async (c, pg, path) => {
+      await pg.goto(`${BASE}${path}`, { waitUntil: 'domcontentloaded' });
+      await pg.waitForFunction(() => Object.keys(localStorage).some((k) => k.endsWith(':doors')), null, { timeout: 15000 }).catch(() => {});
+      await noAnswer(c);
+      await pg.reload({ waitUntil: 'domcontentloaded' });
+      await pg.waitForSelector('.error.map-error', { timeout: 15000 }).catch(() => {});
+      await sleep(1000);
+      return corners(pg);
+    };
+
+    // A volunteer, on a phone, on their turf.
+    const vc = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, timezoneId: 'America/Vancouver', serviceWorkers: 'block' });
+    await vc.route(/tile\.openstreetmap\.org|basemaps\.cartocdn\.com/, (route) => route.fulfill(standIn));
+    const joined = await vc.request.post(`${BASE}/api/auth/join`, { data: { token: invite.joinUrl.split('/').pop(), name: 'Walker Example', password: 'knock-knock-2026' } });
+    if (!joined.ok()) throw new Error(`join ${joined.status()} ${await joined.text()}`);
+    await post('/actions/turf.assign', { turf_id: turf.id, user_id: (await joined.json()).user.id });
+    const vp = await vc.newPage();
+    vp.on('pageerror', (e) => errors.push(`[kept] ${e.message}`));
+    let k = await keptThenNone(vc, vp, '/map');
+    await vp.screenshot({ path: `${SHOTS}/12-kept-my-turf-390x844.png` });
+    check('a volunteer’s phone reopened with no answer, on their turf: one line says it shows the doors it kept — clear of the zoom buttons and “My turf”, each still a tap away',
+      k.note === 'No signal — showing the doors already loaded' && /My turf/.test(k.pill || '') && k.buttons.some((b) => b.name === 'My turf') && blocked(k).length === 0,
+      JSON.stringify({ ...k, blocked: blocked(k) }));
+    check('…and on “My turf” (their own doors, whole) no “Unavailable — Try again” for the list’s answers, which aren’t drawn there', k.retry === null, JSON.stringify({ retry: k.retry, pill: k.pill }));
+    // On "All" those answers are the map: their not coming is said.
+    await vp.goto(`${BASE}/map?show=all`, { waitUntil: 'domcontentloaded' });
+    await vp.waitForSelector('.map-retry', { timeout: 15000 }).catch(() => {});
+    k = await corners(vp);
+    check('…on “All” they are the map: “Unavailable — Try again”', k.retry === 'Unavailable — Try again' && /^Show: All/.test(k.pill || ''), JSON.stringify({ retry: k.retry, pill: k.pill }));
+    await vc.close();
+
+    // A manager on a phone ("Whole list", Locate me, "+ Door") and at a desk.
+    for (const [w, h, path] of [[390, 844, '/map'], [1440, 900, '/admin/map']]) {
+      const mc = await context(w <= 720 ? { viewport: { width: w, height: h }, isMobile: true, hasTouch: true } : {});
+      const mp = await mc.newPage();
+      mp.on('pageerror', (e) => errors.push(`[kept ${w}] ${e.message}`));
+      k = await keptThenNone(mc, mp, path);
+      await mp.screenshot({ path: `${SHOTS}/12-kept-${w}x${h}.png` });
+      check(`${w}×${h}, the doors kept and no answer: the line clear of the zoom buttons, “Whole list”, Locate me and “+ Door”`,
+        k.note === 'No signal — showing the doors already loaded' && k.buttons.length >= 5 && blocked(k).length === 0, JSON.stringify({ ...k, blocked: blocked(k) }));
+      await mc.close();
+    }
   }
 
   check('no page errors', errors.length === 0, errors.join(' | '));

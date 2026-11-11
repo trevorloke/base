@@ -620,7 +620,9 @@ support only as far as the people there are rated. Under the count a key
 names the colours and says what a mark is (*Each square is a block — zoom
 in for doors*); the count says *people* or *doors* and counts what is on
 screen. While an answer is on its way what was drawn stays, with *Loading…*
-beside the count; one that doesn't come says *Unavailable — Try again*.
+beside the count; one that doesn't come says *Unavailable — Try again* (not
+on *My turf*: a volunteer's own doors come whole, and the list's answers
+aren't drawn there).
 
 The map opens on the campaign's own list: where its people are inside the
 campaign's area (`STARBASE_GEO_BOUNDS`) when most of them are, else the

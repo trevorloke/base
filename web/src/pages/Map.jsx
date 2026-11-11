@@ -2504,11 +2504,13 @@ export default function MapPage() {
                 {slow && !opening && <span className="map-filter-btn__busy" aria-live="polite">Loading…</span>}
               </button>
             )}
-            {/* The part of the map on screen was asked for and not answered. */}
-            {(viewFailed || doorFailed) && !noSignal && (
+            {/* The part of the map on screen was asked for and not answered.
+                (On "My turf" the list's answers aren't drawn — a volunteer's
+                own doors come whole — so theirs is no "Unavailable".) */}
+            {((viewFailed && byView) || doorFailed) && !noSignal && (
               <button
                 type="button" className="map-chip map-retry"
-                onClick={() => { if (doorFailed) doorQ.refetch(); if (viewFailed) (wantsPatches ? densQ : viewQ).refetch(); }}
+                onClick={() => { if (doorFailed) doorQ.refetch(); if (viewFailed && byView) (wantsPatches ? densQ : viewQ).refetch(); }}
               >
                 Unavailable — Try again
               </button>
