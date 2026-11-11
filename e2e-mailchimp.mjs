@@ -595,7 +595,9 @@ const askedFor = await words(page.locator('.mc-ask .mc-line[role="status"]'));
 await page.locator('.mc-ask button:has-text("Send")').click();
 const TURNED_OFF = 'Email turned off here too: 1 who unsubscribed in Mailchimp, 1 dead address.';
 const NOT_TAKEN = '1 Mailchimp wouldn’t take (Mailchimp said: jon@example.org looks fake or invalid, please enter a real email address.)';
-await until(async () => (await words(page.locator('.mc-status'))).includes(TURNED_OFF), 20000);
+// The finished line: what the sync's own pull turned off shows as soon as that pull is done, while it still syncs.
+const finished = (w, off) => w.startsWith('In Mailchimp · ') && w.includes(off);
+await until(async () => finished(await words(page.locator('.mc-status')), TURNED_OFF), 20000);
 status = await words(page.locator('.mc-status'));
 check('the question counted 5; the line says 2 went, and why: who the sync turned off here, and who Mailchimp would not take — in its words', askedFor === '5 addresses to send'
   && status.startsWith('In Mailchimp · 2 addresses · tag “base.win: Members” Synced ') && status.includes(` · 4 taken out of the tag · ${NOT_TAKEN} · sent by Marco Example ${TURNED_OFF}`), `${askedFor} → ${status}`);
@@ -663,7 +665,7 @@ check('at 390: the same question — no sideways scroll, every button ≥ 48px, 
 await shot(plp, '16-list-first-ask-390');
 await phone.locator('.mc-first button:has-text("Turn their email off here")').tap();
 const SECOND_OFF = 'Email turned off here too: 2 who unsubscribed in Mailchimp.';
-await until(async () => (await words(phone.locator('.mc-status'))).includes(SECOND_OFF), 20000);
+await until(async () => finished(await words(phone.locator('.mc-status')), SECOND_OFF), 20000);
 status = await words(phone.locator('.mc-status'));
 st = await mc(TAG, 'aud0002');
 const said2 = (await doorSaid()).map((e) => [e.payload.first_pull, e.payload.unsubscribed, Boolean(e.actor_id)].join('|'));
