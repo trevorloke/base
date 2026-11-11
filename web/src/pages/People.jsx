@@ -19,7 +19,7 @@ import { queueAction } from '../offline.js';
 import SurveyQuestions, { answersSaid, answersTail, useSurvey } from '../components/SurveyQuestions.jsx';
 import { queuedText } from '../components/queued.js';
 import { phoneCopy, showingCopy, useKeepCopy } from '../components/OfflineCache.js';
-import { apiGet, action, noAnswer } from '../api.js';
+import { ApiError, apiGet, action, noAnswer } from '../api.js';
 import { noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx';
 import { keptPartial } from '../components/KeptCopies.js';
 import { FieldFilterChip, FieldFilterGroups } from '../components/FieldsBits.jsx';
@@ -34,6 +34,9 @@ import AddressField, { lookupAddress } from '../components/AddressField.jsx';
 import { CUT_KEYS, CutGroups, addCuts, cutChips, useTurfs, useWebDid } from '../components/FieldCuts.jsx';
 import ScriptLine, { useScripts } from '../components/ScriptLine.jsx';
 import NameFields from '../components/NameFields.jsx';
+import {
+  LOADING, RULE_KEYS, RuleGroups, SnapshotForm, Unavailable, fmt, ruleChips, rulesPicked, useAudienceChoices, useListNames,
+} from '../components/AudienceBits.jsx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared widgets + helpers (also used by Person.jsx)
@@ -340,8 +343,15 @@ export function MoreMenu({ items, label = 'More' }) {
 // Filters: read from / write to the URL
 // ─────────────────────────────────────────────────────────────────────────────
 const HAS_LABEL = { phone: 'Has phone', email: 'Has email', location: 'On map', instagram: 'Has Instagram', x: 'Has X', tiktok: 'Has TikTok', reddit: 'Has Reddit' };
-// field: <field id>:<value> (profile fields); the field cuts (FieldCuts.jsx).
-const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'field', ...CUT_KEYS];
+// field: <field id>:<value> (profile fields); the field cuts (FieldCuts.jsx);
+// what they gave, joined, answered and came to, another list, added since
+// (AudienceBits.jsx RULE_KEYS — the desk's: for a volunteer they match nobody).
+const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'field', ...CUT_KEYS, ...RULE_KEYS];
+const MORE_KEYS = [...CUT_KEYS, ...RULE_KEYS];
+const addRules = (qs, f) => { for (const k of RULE_KEYS) if (f[k]) qs.set(k, f[k]); return qs; };
+// The server didn't answer (no signal, or it's down behind its proxy) —
+// not the same as an answer that says something went wrong.
+const noReply = (err) => !(err instanceof ApiError) || [0, 502, 503, 504].includes(err.status);
 
 // Rating filter: three bands + Unrated on the first look; who an opposed
 // voter backs ("Voting for…") under More. The value goes to the server as is.
@@ -387,7 +397,7 @@ function useFilters() {
     role: params.get('role') || '',
     has: params.get('has') || '',
     field: params.get('field') || '',
-    ...Object.fromEntries(CUT_KEYS.map((k) => [k, params.get(k) || ''])),
+    ...Object.fromEntries(MORE_KEYS.map((k) => [k, params.get(k) || ''])),
   };
   // Patch the URL in place; empty values drop the key.
   const update = (patch, { replace = true } = {}) => {
@@ -410,11 +420,16 @@ const carry = (f, extra = {}) => {
   return s ? `?${s}` : '';
 };
 
-// Active filters as removable chips (search lives in its own box).
-function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra = null }) {
+// Active filters as removable chips (search lives in its own box). The
+// desk's lists and survey questions name their chips; a volunteer's Calls
+// never asks for them.
+function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra = null, desk = true }) {
   const scale = useScale();
   const turfs = useTurfs();
   const web = useWebDid();
+  const asked = desk && RULE_KEYS.some((k) => f[k]);
+  const lists = useListNames(asked && Boolean(f.list || f.notlist)).data?.lists;
+  const choices = useAudienceChoices(asked && Boolean(f.answer)).data;
   const roleLabel = VOLUNTEER_ROLES.find((r) => r.code === f.role)?.label || f.role;
   const chips = [
     keys.includes('rating') && f.rating && {
@@ -427,6 +442,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
     keys.includes('has') && f.has && HAS_LABEL[f.has] && { key: 'has', label: HAS_LABEL[f.has], name: HAS_LABEL[f.has] },
     keys.includes('q') && f.q && { key: 'q', label: `“${f.q}”`, name: `search ${f.q}` },
     ...cutChips(f, turfs, web).map((c) => ({ ...c, name: c.label })),
+    ...ruleChips(f, lists, choices).map((c) => ({ ...c, name: c.label })),
   ].filter(Boolean);
   if (!chips.length && !extra) return null;
   return (
@@ -456,7 +472,7 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
       if (e.key === 'Escape') { onClose(); return; }
       // On phones the sheet is modal: Tab cycles inside it.
       if (e.key !== 'Tab' || !phone || !sheetRef.current) return;
-      const els = [...sheetRef.current.querySelectorAll('button:not([disabled])')];
+      const els = [...sheetRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled])')];
       if (!els.length) return;
       const firstEl = els[0];
       const lastEl = els[els.length - 1];
@@ -466,11 +482,11 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose, phone]);
-  const anyPicked = Boolean(f.rating || f.tag || f.role || f.has || f.field || CUT_KEYS.some((k) => f[k]));
+  const anyPicked = Boolean(f.rating || f.tag || f.role || f.has || f.field || MORE_KEYS.some((k) => f[k]));
   // Who they vote for and volunteer roles are the long lists: one tap away,
   // open if one is picked. Tags in use sit on the first level.
   const whoPicked = who.some((c) => c.code === f.rating);
-  const cutsPicked = CUT_KEYS.filter((k) => f[k]).length;
+  const cutsPicked = CUT_KEYS.filter((k) => f[k]).length + rulesPicked(f);
   const [moreOpen, setMoreOpen] = useState(Boolean(f.role || whoPicked || f.field || cutsPicked));
   const morePicked = [whoPicked, f.role, f.field].filter(Boolean).length + cutsPicked;
   const moreId = useId();
@@ -491,7 +507,7 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
           <h2 id={titleId} ref={titleRef} tabIndex={-1}>Filter</h2>
           {anyPicked && (
             <button type="button" className="btn btn-quiet pp-btn"
-              onClick={() => update({ rating: null, tag: null, role: null, has: null, field: null, ...Object.fromEntries(CUT_KEYS.map((k) => [k, null])) })}>
+              onClick={() => update({ rating: null, tag: null, role: null, has: null, field: null, ...Object.fromEntries(MORE_KEYS.map((k) => [k, null])) })}>
               Clear
             </button>
           )}
@@ -539,6 +555,7 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
               </fieldset>
               <FieldFilterGroups chip={chip} />
               <CutGroups chip={chip} f={f} update={update} turfs={turfs} />
+              <RuleGroups chip={chip} f={f} update={update} />
             </div>
           )}
         </div>
@@ -707,6 +724,7 @@ function PeopleList() {
   if (f.has) qs.set('has', f.has);
   if (f.field) qs.set('field', f.field);
   addCuts(qs, f);
+  addRules(qs, f);
   const qsKey = qs.toString();
 
   const persons = useQuery({
@@ -714,7 +732,16 @@ function PeopleList() {
     queryFn: () => apiGet(`/persons?${qs}`),
     placeholderData: keepPreviousData,
   });
+  // The real total, asked for apart from the names: counting a city's file
+  // takes longer than reading its first names, and never holds them up.
+  const countQs = new URLSearchParams(qs);
+  countQs.delete('limit');
+  const total = useQuery({
+    queryKey: ['persons', 'count', countQs.toString()], queryFn: () => apiGet(`/persons/count?${countQs}`), meta: { side: true }, retry: 1,
+  });
   const rows = persons.data?.persons ?? [];
+  // The last filter's people while this one's load: dimmed, and never counted as this one's.
+  const stale = persons.isPlaceholderData;
   const n = page.key === qsKey ? page.n : PAGE;
   const shown = rows.slice(0, n);
 
@@ -729,7 +756,7 @@ function PeopleList() {
     ...[...seen].filter((t) => !SUGGESTED_TAGS.includes(t)).sort((a, b) => tagWord(a).localeCompare(tagWord(b))),
   ];
 
-  const picked = [f.rating, f.tag, f.role, f.has, f.field, ...CUT_KEYS.map((k) => f[k])].filter(Boolean).length;
+  const picked = [f.rating, f.tag, f.role, f.has, f.field, ...MORE_KEYS.map((k) => f[k])].filter(Boolean).length;
   const anyFilter = Boolean(picked || f.q);
   const closeFilter = useCallback(() => { setFilterOpen(false); filterBtn.current?.focus(); }, []);
 
@@ -748,9 +775,18 @@ function PeopleList() {
   const offline = noSignal(persons) || (persons.isPlaceholderData && persons.fetchStatus === 'paused');
   // Searched with no signal over a kept list the server had cut off: there may be more.
   const partial = keptPartial(persons.data);
-  const count = persons.isLoading ? '…' : rows.length >= LIMIT ? `${LIMIT}+` : String(rows.length);
+  // The count: the server's total, Loading…, or Unavailable. With no answer
+  // at all (no signal, or the server down) it can only be what's on screen.
+  const plain = (k) => (k === 1 ? 'person' : 'people');
+  const count = total.data ? <><strong className="mono">{fmt(total.data.total)}</strong> {plain(total.data.total)}</>
+    : total.isError && !noReply(total.error) ? <Unavailable onRetry={() => total.refetch()} />
+      : (total.fetchStatus === 'paused' || total.isError) && persons.data && !stale
+        ? <><strong className="mono">{rows.length >= LIMIT ? `${fmt(LIMIT)}+` : fmt(rows.length)}</strong> {plain(rows.length)}{partial ? ' in the kept list' : ''}</>
+        : LOADING;
   // No list at all (no answer, nothing kept): no count, no empty table — the error line says it.
   const failed = persons.isError && !persons.data;
+  // The filter as it stands, for a list (Save as a list, or as they are now).
+  const asFilter = Object.fromEntries(Object.entries(f).filter(([k, v]) => v && ['q', 'tag', 'rating', 'role', 'has', 'field', ...MORE_KEYS].includes(k)));
   // The profile's back link returns to this list, filters and all.
   const back = { from: { to: `/people${carry(f, { has: f.has })}`, label: 'People' } };
 
@@ -806,26 +842,35 @@ function PeopleList() {
         extra={f.field ? <FieldFilterChip value={f.field} onRemove={() => update({ field: null })} /> : null} />
 
       {!offline && !failed && (
-        <p className="pp-count">
-          <strong className="mono">{count}</strong> {rows.length === 1 ? 'person' : 'people'}{partial ? ' in the kept list' : ''}
+        <div className="pp-count" aria-live="polite">
+          {count}
           {desk && anyFilter && !partial && ' '}
           {desk && anyFilter && !partial && (
-            <Link className="pp-savelist" to={`/lists/new?${new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([k, v]) => v && ['q', 'tag', 'rating', 'role', 'has', 'field', ...CUT_KEYS].includes(k))))}`}>
+            <Link className="pp-savelist" to={`/lists/new?${new URLSearchParams(asFilter)}`}>
               Save as a list
             </Link>
           )}
+          {desk && anyFilter && !partial && (
+            <SnapshotForm link input={{ filter: Object.fromEntries(countQs) }} count={total.data?.total ?? null} defaultName="People" />
+          )}
+        </div>
+      )}
+
+      {/* A load that got no answer says so; one the server answered with an error is Unavailable. */}
+      {persons.isError && !offline && (
+        <p className="error" role="alert">
+          {noReply(persons.error) ? <>No answer — check your signal · <button type="button" className="au-retry" onClick={() => persons.refetch()}>Try again</button></>
+            : <Unavailable onRetry={() => persons.refetch()} />}
         </p>
       )}
 
-      {persons.isError && !offline && <p className="error">{noAnswer(persons.error) ? 'No answer — check your signal' : persons.error.message}</p>}
-
       {offline ? (
         <p className="pp-offline" role="status">No signal — the list loads when you’re back online.</p>
-      ) : failed ? null : rows.length === 0 && !persons.isLoading && !persons.isError ? (
+      ) : failed ? null : rows.length === 0 && !persons.isLoading && !persons.isError && !stale ? (
         <div className="pp-empty">
           <p>{partial ? 'No one in the kept list matches.' : anyFilter ? 'No one matches.' : 'No people yet.'}</p>
           {anyFilter ? (
-            <button type="button" className="btn pp-btn" onClick={() => update({ q: null, tag: null, rating: null, role: null, has: null, field: null })}>
+            <button type="button" className="btn pp-btn" onClick={() => update({ q: null, tag: null, rating: null, role: null, has: null, field: null, ...Object.fromEntries(MORE_KEYS.map((k) => [k, null])) })}>
               Clear filters
             </button>
           ) : desk && !showNew ? (
@@ -833,7 +878,7 @@ function PeopleList() {
           ) : null}
         </div>
       ) : phone ? (
-        <ul className="pp-list">
+        <ul className={`pp-list${stale ? ' au-stale' : ''}`} aria-busy={stale || undefined}>
           {shown.map((p) => (
             <li key={p.id}>
               <Link className="pp-row" to={`/people/${p.id}`} state={back}>
@@ -847,7 +892,7 @@ function PeopleList() {
           ))}
         </ul>
       ) : (
-        <table className="table pp-table">
+        <table className={`table pp-table${stale ? ' au-stale' : ''}`} aria-busy={stale || undefined}>
           <thead>
             <tr>
               <th>Name</th>

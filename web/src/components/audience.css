@@ -1,0 +1,99 @@
+/* One audience (components/AudienceBits.jsx) — a list's numbers and its four
+   ways out (Email · Text · Call · Walk), the rules People and a list gained,
+   "Save these people as they are now", and the honest states every number
+   keeps. Built on the ops-* rows (pages/shifts.css), .btn and .input; every
+   tap is 48px on a phone. */
+
+/* "Unavailable — Try again" */
+.au-off { color: var(--text-2); }
+.au-retry {
+  font: inherit;
+  color: var(--text-1);
+  background: none;
+  border: 0;
+  padding: 0 2px;
+  min-height: 32px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.au-retry:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+@media (pointer: coarse), (max-width: 720px) { .au-retry { min-height: 48px; } }
+
+/* A list's row: its name (opens it), what it is and how many, then its four ways out */
+.au-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); padding: var(--s-3) var(--s-4); }
+.au-row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 260px; }
+.au-row__name {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+}
+@media (hover: hover) { .au-row__name:hover { text-decoration: underline; text-underline-offset: 3px; } }
+.au-go { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.au-go .btn.ops-tap { padding: 0 14px; font-size: 14px; }
+.au-n { font-variant-numeric: tabular-nums; font-weight: 500; color: var(--text-3); }
+@media (max-width: 720px) {
+  .au-row { padding: var(--s-3); }
+  .au-go { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .au-go .btn.ops-tap { padding: 0 6px; flex-direction: column; gap: 0; line-height: 1.2; }
+  .au-go .au-n { font-size: 12px; }
+}
+
+/* A list's own page: its numbers, each a number with a short label */
+.au-figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--s-2);
+  margin: 0 0 var(--s-3);
+  padding: 0;
+  list-style: none;
+}
+.au-fig { display: flex; flex-direction: column; gap: 2px; padding: var(--s-2) var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); }
+.au-fig__n { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.au-fig__label { font-size: 13px; color: var(--text-3); }
+.au-figs-state { margin: 0 0 var(--s-3); font-size: 15px; color: var(--text-2); }
+.au-go--page { margin: 0 0 var(--s-3); }
+@media (max-width: 720px) { .au-go--page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* The rules a list's form keeps under "More rules", and the sheet's inline fields */
+.au-rules { margin: 0 0 var(--s-3); }
+.au-rules__body { padding-top: var(--s-2); }
+.au-rules__body > .field { flex: 1 1 200px; }
+.au-inline { margin: var(--s-2) 0 0; max-width: 260px; }
+.pp-group .form-row > .field { flex: 1 1 200px; margin-bottom: 0; }
+.pp-sheet .au-inline .input, .pp-group .form-row .input, .au-rules .input { min-height: 48px; }
+
+/* "Save these people as they are now" */
+.au-snap { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-2) 0 var(--s-3); padding: var(--s-3); border: var(--border); border-radius: var(--r-card); background: var(--paper-0); max-width: 520px; }
+.au-snap .field { margin: 0; }
+.au-snap__note { margin: 0; }
+.ops-actions > .au-snap { flex-basis: 100%; }
+.au-snap__link {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin-left: var(--s-3);
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.au-snap__link:disabled { opacity: 0.5; cursor: default; }
+.au-snap__link:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+@media (pointer: coarse), (max-width: 720px) { .au-snap__link { min-height: 48px; } }
+.pp-count .au-snap { margin-top: var(--s-2); }
+
+/* Who a send reaches, where two senders differ */
+.au-rule { display: block; margin-top: var(--s-1); font-size: 13px; color: var(--text-2); }
+
+/* People while a new filter loads: the last answer, dimmed, never as if it were this one's */
+.au-stale { opacity: 0.5; transition: opacity 0.15s; }
