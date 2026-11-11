@@ -20,8 +20,8 @@ const page = (brand, title, inner) => `<!doctype html><html lang="en"><head>${pu
   main{max-width:560px}
   h1{font-size:24px;margin:0 0 16px}
   .void{border:3px solid var(--bad);border-radius:var(--r-card);color:var(--bad);font:800 22px/1.2 'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;letter-spacing:.2em;text-align:center;padding:10px;margin:0 0 16px}
-  dl{display:grid;grid-template-columns:max-content 1fr;gap:10px 16px;margin:0 0 20px;padding:18px;border:1px solid var(--rule);border-radius:var(--r-card);background:var(--card)}
-  dt{font-size:14px;font-weight:500;line-height:1.7;color:var(--ink2)}
+  dl{display:grid;grid-template-columns:max-content 1fr;align-items:baseline;gap:10px 16px;margin:0 0 20px;padding:18px;border:1px solid var(--rule);border-radius:var(--r-card);background:var(--card)}
+  dt{font-size:14px;font-weight:500;color:var(--ink2)}
   dd{margin:0;overflow-wrap:anywhere}
   .n{font-weight:700;font-size:18px;font-variant-numeric:tabular-nums}
   p{margin:0 0 10px;color:var(--ink)}

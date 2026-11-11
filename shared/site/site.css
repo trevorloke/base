@@ -676,6 +676,9 @@ html[data-heading="serif"] .display {
   height: 68px;
   width: auto;
   max-width: 100%;
+  /* A wide wordmark on a narrow phone shrinks whole, never squashed. */
+  object-fit: contain;
+  object-position: left center;
 }
 .wordmark {
   font-family: var(--font-heading);
