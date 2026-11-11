@@ -41,8 +41,12 @@ const nameOnly = (p) => !p.email && !p.phone && !p.address;
 // none of the three matches a person of the same name who has none either.
 // Anything else is new — so importing the same file again doubles no one.
 // A voter number (ext/voternumber) comes before all of them when the row and
-// a person on file both have one: the same number is that person, and a
-// person with another number is never the row's match.
+// a person on file both have one: the same number is that person. A row found
+// the old way on someone with another number (a list numbered afresh, a
+// number typed wrong) is counted for the check, and otherNumber says what it
+// is: that person, keeping their number (as before there were numbers) or
+// taking the file's — or, found by name, someone new. Never by email: an
+// email is one person's.
 const rowSchema = z.object({
   name: z.string().max(300).nullish(),
   first: z.string().max(150).nullish(),
@@ -99,6 +103,9 @@ const importInput = z.object({
     year: z.number().int().min(1950).max(2100),
     field_tags: z.array(z.uuid()).max(40).default([]),
   }).nullish(),
+  // A row found on someone with another voter number: keep theirs, take the
+  // file's, or (found by name) a new person. See the rules above.
+  otherNumber: z.enum(['keep', 'take', 'new']).default('keep'),
 });
 
 // A 1/0 column: 1, yes, y, true, x (any case) say yes.
@@ -259,7 +266,7 @@ app.post('/import', async (c) => {
   const ctx = c.get('ctx');
   const parsed = importInput.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0].message }, 400);
-  const { rows, tag, dryRun, past } = parsed.data;
+  const { rows, tag, dryRun, past, otherNumber } = parsed.data;
 
   // Features' own columns (ext/fields: a person's profile fields), checked
   // with the row — a cell that doesn't fit refuses it — and filled after it.
@@ -382,23 +389,36 @@ app.post('/import', async (c) => {
     existing.forEach(index);
 
     let created = 0; let merged = 0; let unchanged = 0;
+    let otherNumbers = 0; const otherRows = [];
     const decisions = [];
     for (const r of clean) {
-      // A voter number on both sides settles it: the same number is the
-      // same person, and someone with another number is someone else —
-      // whatever name, email, phone or door they share.
-      const mine = (p) => (p && r.voter_number && p.voter_number && p.voter_number !== r.voter_number ? null : p);
-      const match = (r.voter_number && byVoter.get(r.voter_number))
-        || mine(r.email && byEmail.get(r.email))
-        || mine(r.phone && byNamePhone.get(`${nameKey(r.name)}|${digits(r.phone)}`))
-        || mine(r.address && byNameAddr.get(`${nameKey(r.name)}|${lower(r.address)}|${lower(r.unit)}`))
-        || mine(nameOnly(r) && byName.get(nameKey(r.name)));
+      // The same voter number is the same person. Without one in common the
+      // row is found as before there were numbers; found on someone with
+      // another number, it is counted, and otherNumber decides.
+      const byNumber = r.voter_number && byVoter.get(r.voter_number);
+      const email = !byNumber && r.email && byEmail.get(r.email);
+      const named = byNumber || email ? [] : [
+        r.phone && byNamePhone.get(`${nameKey(r.name)}|${digits(r.phone)}`),
+        r.address && byNameAddr.get(`${nameKey(r.name)}|${lower(r.address)}|${lower(r.unit)}`),
+        nameOnly(r) && byName.get(nameKey(r.name)),
+      ].filter(Boolean);
+      const differs = (p) => !!(p && r.voter_number && p.voter_number && p.voter_number !== r.voter_number);
+      const found = byNumber || email || named[0];
+      if (differs(found)) {
+        otherNumbers += 1;
+        if (otherRows.length < 50) {
+          otherRows.push({ row: r.index + 1, name: r.name, person: found.name, on_file: found.voter_number, in_file: r.voter_number, email: !!email });
+        }
+      }
+      const match = byNumber || email || (otherNumber === 'new' ? named.find((p) => !differs(p)) : named[0]);
       if (match) {
-        // Merge: fill blanks, union tags — never overwrite what's on file.
+        // Merge: fill blanks, union tags — never overwrite what's on file
+        // (but a voter number, when the person said to take the file's).
         const patch = {};
         for (const k of ['email', 'phone', 'address', 'unit', 'city', 'postal', 'house_number', 'voter_number']) {
           if (!match[k] && r[k]) patch[k] = r[k];
         }
+        if (otherNumber === 'take' && differs(match)) patch.voter_number = r.voter_number;
         const tags = [...new Set([...(match.tags || []), ...r.tags])].slice(0, 50);
         if (tags.length !== (match.tags || []).length) patch.tags = tags;
         if (!match.rating && r.rating) patch.rating = r.rating;
@@ -424,6 +444,8 @@ app.post('/import', async (c) => {
              next.lat ?? null, next.lng ?? null, next.house_number || null, next.voter_number || null],
           );
           emit('person', match.id, 'update', { ...patch, source: 'import' });
+          // A number given up finds them no more.
+          if (patch.voter_number && match.voter_number && byVoter.get(match.voter_number) === match) byVoter.delete(match.voter_number);
           Object.assign(match, patch);
           // The lookups key on name, email, phone and address: only a change
           // to those moves this person in them (a house number read off an
@@ -458,7 +480,7 @@ app.post('/import', async (c) => {
     }
     // What the features held back for a batch (a new person's profile fields).
     if (write) for (const x of extras) if (x.finish) await x.finish(tx);
-    return { created, merged, unchanged, decisions };
+    return { created, merged, unchanged, decisions, other_numbers: otherNumbers, other_number_rows: otherRows };
   };
 
   if (dryRun) {

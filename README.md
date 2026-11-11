@@ -243,11 +243,15 @@ than a week after they came off is refused. Contacts are door, phone, text or
 - **Voter number** (a profile's *More details*, the desk): the number a list
   of electors gives each voter. People → Import fills it from a *Voter ID*
   column and matches on it first — the same number is the same person
-  however the name and address are written, and two numbers are two people
-  (three or more letters and digits with a digit among them: a yes/no or 1/0
-  column is never read as one, and rows that share a number are pointed out
-  before the check); it is in the People spreadsheet and the full export, a
-  merge keeps it, and a volunteer never receives it.
+  however the name and address are written (three or more letters and
+  digits with a digit among them: a yes/no or 1/0 column is never read as
+  one, and rows that share a number are pointed out before the check). A
+  row found by email, or by name with phone or street, on someone with
+  another number — a list numbered afresh, a number typed wrong — is
+  counted in the check, which asks: the same people, keeping the numbers on
+  file (as it does unless told) or taking the file's, or new people (never
+  for a row with the same email). It is in the People spreadsheet and the
+  full export, a merge keeps it, and a volunteer never receives it.
 - **Membership form** (People → More → *Enter a membership form*, the desk
   that handles money): the paper membership form, box for box and in its
   order. Name, gender, birth date, email, mobile, address; citizen or

@@ -7,7 +7,8 @@
 //
 // A list with a Voter ID column fills each person's voter number, and the
 // same number under another spelling is the same person (no second record);
-// the profile shows it under More details.
+// a list numbered afresh is asked about, and is the people on file unless
+// the person says otherwise; the profile shows it under More details.
 //
 // Gifts made in another tool come in from its file (Import & export →
 // Import gifts, or Donations → More → Import a file): the columns of a file
@@ -269,6 +270,29 @@ const veras = (await api('/persons?q=Elector')).json.persons;
 const vnum = veras[0] ? (await api(`/persons/${veras[0].id}/voter-number`)).json : null;
 check('one Vera Elector, with the number (letters and digits) and the phone filled in', veras.length === 1 && vnum?.voter_number === 'A123456' && veras[0].phone === '604-555-0143',
   JSON.stringify([veras.map((v) => [v.name, v.phone]), vnum]));
+// A list numbered afresh: her name and street with another number. The
+// check asks whether she is the same person, and each answer checks again.
+await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
+await page.click('button:has-text("Paste text")');
+await page.fill('#imp-paste', ['First Name\tSurname\tVoter ID\tStreet Address', 'Vera\tElector\tC-000001\t7 Elm St'].join('\n'));
+await page.click('button:has-text("Use this text")');
+await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+await page.click('button:has-text("Check 1 row")');
+await page.waitForSelector('.vn-other', { timeout: 8000 }).catch(() => {});
+const counts = async () => (await page.innerText('.imp-result .imp-counts').catch(() => '')).replace(/\s+/g, ' ');
+const countsAre = (re) => page.waitForFunction((src) => new RegExp(src, 'i').test((document.querySelector('.imp-result .imp-counts')?.innerText || '').replace(/\s+/g, ' ')),
+  re.source, { timeout: 8000 }).catch(() => {});
+const other = (await page.innerText('.vn-other').catch(() => '')).replace(/\s+/g, ' ');
+check('another number on her name and street: the check asks, and she is the Vera on file unless told otherwise',
+  /1 row matches someone on file with another voter number\. The same person\?/.test(other) && await page.isChecked('.vn-other input[value="keep"]').catch(() => false)
+  && /New 0/i.test(await counts()), `${other.slice(0, 140)} | ${await counts()}`);
+await page.screenshot({ path: `${SHOTS}/05b-another-voter-number.png`, fullPage: true });
+await page.click('.vn-other__pick:has-text("No — add them as new people")');
+await countsAre(/New 1/);
+check('…“No”: checked again, one new person', /New 1/i.test(await counts()) && await page.isChecked('.vn-other input[value="new"]').catch(() => false), await counts());
+await page.click('.vn-other__pick:has-text("Yes — keep the numbers on file")');
+await countsAre(/New 0/);
+check('…“Yes”: the Vera on file again, nothing to import', /New 0/i.test(await counts()) && /already up to date/i.test(await page.innerText('.imp-result').catch(() => '')), await counts());
 await page.goto(`${ADMIN}/people/${veras[0]?.id}`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.pf-sec__btn:has-text("More details")', { timeout: 8000 }).catch(() => {});
 await page.click('.pf-sec__btn:has-text("More details")').catch(() => {});

@@ -1,17 +1,21 @@
 // A voter number on a person — the number a list of electors gives each
 // voter, when it has one. With it a file can name its people for sure:
 // "John Smith, 13450 104 Ave" and "SMITH, Jon, 13450 104 Avenue" are one
-// record when both carry the same number, and a father and son of one name
-// at one door are two.
+// record when both carry the same number.
 //
 //   persons.voter_number   text, kept as its letters and digits, in
 //                          capitals (voterNumber), indexed per campaign
 //
 //   People → Import        a Voter number column fills it — and the import
-//                          matches on it first, before name and address,
-//                          when both the row and a person on file have one
-//                          (routes/data.js). A person with a different
-//                          number is never the row's match.
+//                          matches on it first, before email, name and
+//                          address, when both the row and a person on file
+//                          have one (routes/data.js). A row found the old
+//                          way on someone with another number (a list
+//                          numbered afresh, a number typed wrong) is counted
+//                          in the check, and the person says: the same
+//                          people, keeping their numbers or taking the
+//                          file's, or new people (a father and son of one
+//                          name at one door; never a row with their email).
 //   person.voterNumber     { id, voter_number } desk: set, change or clear
 //                          it on a profile (More details)
 //   GET /persons/:id/voter-number   desk → { voter_number }

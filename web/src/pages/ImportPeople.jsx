@@ -19,6 +19,7 @@ import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { invalidatePersonData, tagWord } from './People.jsx';
 import { FIELD_KEY, fieldCell, useImportFields } from '../components/FieldsBits.jsx';
 import './import.css';
+import '../components/voter-number.css';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 const CHECK_CHUNK = 2000; // server max per call
@@ -640,6 +641,44 @@ function InvalidList({ invalid, intro }) {
   );
 }
 
+// Rows the check found (by email, or by name with phone or street) on someone
+// with another voter number: a list numbered afresh, or a number typed wrong.
+// The person says what they are; a new answer checks again. A row with the
+// same email is that person whatever the answer (routes/data.js).
+const OTHER_ANSWERS = [
+  ['keep', 'Yes — keep the numbers on file'],
+  ['take', 'Yes — use this file’s numbers'],
+  ['new', 'No — add them as new people'],
+];
+function OtherNumbers({ count, rows, answer, onAnswer }) {
+  return (
+    <fieldset className="vn-other">
+      <legend className="vn-other__head">
+        {plural(count, 'row matches', 'rows match')} someone on file with another voter number. {count === 1 ? 'The same person?' : 'The same people?'}
+      </legend>
+      {OTHER_ANSWERS.map(([v, words]) => (
+        <label key={v} className={`vn-other__pick${answer === v ? ' is-on' : ''}`}>
+          <input type="radio" name="vn-other" value={v} checked={answer === v} onChange={() => onAnswer(v)} />
+          <span>{words}</span>
+        </label>
+      ))}
+      {answer === 'new' && <p className="imp-hint imp-hint--sm">A row with the same email stays the same person.</p>}
+      <Reveal label="See them">
+        <ul className="imp-matches__list">
+          {rows.map((x) => (
+            <li key={x.row}>
+              <span className="mono muted">Row {fmtN(x.row)}</span> {x.name}
+              {x.person && x.person !== x.name ? <span className="muted"> · on file as {x.person}</span> : null}
+              <span className="muted"> — <span className="mono vn-num">{x.on_file}</span> on file · <span className="mono vn-num">{x.in_file}</span> here</span>
+            </li>
+          ))}
+        </ul>
+        {count > rows.length && <p className="imp-hint imp-hint--sm">First {fmtN(rows.length)} of {fmtN(count)}.</p>}
+      </Reveal>
+    </fieldset>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The screen: 1 Choose a file · 2 Match columns (then check) · 3 Import
 // ─────────────────────────────────────────────────────────────────────────────
@@ -693,7 +732,10 @@ function ImportFlow() {
   const pastBody = past && pastOk ? { past: { year: pastY, field_tags: pastFieldCols.filter(tagsField).map((c) => c.id) } } : {};
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [tag, setTag] = useState('');
-  const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, parts, error }
+  const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, otherNumbers, others, parts, error }
+  // Rows found on someone with another voter number: 'keep' theirs, 'take'
+  // the file's, or 'new' people (found by name only). Asked after the check.
+  const [otherNumber, setOtherNumber] = useState('keep');
   // Step 3 — import (then place on the map)
   const [imp, setImp] = useState(null); // { phase, sent, total, created, merged, unchanged, invalid, error, resumeAt }
 
@@ -708,7 +750,7 @@ function ImportFlow() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [imp?.phase]);
 
-  const resetAfterSource = () => { setCheck(null); setImp(null); setBumped(null); };
+  const resetAfterSource = () => { setCheck(null); setImp(null); setBumped(null); setOtherNumber('keep'); };
 
   const loadText = async (text, name, size = text.length) => {
     const what = `Reading ${fmtMB(size)}…`;
@@ -983,14 +1025,15 @@ function ImportFlow() {
   ].filter(Boolean);
 
   // ── Check (dry run: nothing is saved) ──
-  const runCheck = async () => {
-    const acc = { ...ZERO, invalid: [], matches: [] };
+  // numbers: the answer about other voter numbers (a new answer checks again).
+  const runCheck = async (numbers = otherNumber) => {
+    const acc = { ...ZERO, invalid: [], matches: [], otherNumbers: 0, others: [] };
     const parts = Math.ceil(total / CHECK_CHUNK);
     setCheck({ phase: 'running', done: 0, total, parts, ...acc });
     try {
       for (let start = 0; start < total; start += CHECK_CHUNK) {
         const part = partAt(start, CHECK_CHUNK);
-        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true, ...pastBody });
+        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true, otherNumber: numbers, ...pastBody });
         acc.created += r.created || 0;
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
@@ -999,6 +1042,10 @@ function ImportFlow() {
           if (d.action === 'merged' && acc.matches.length < 50) {
             acc.matches.push({ ...d, row: part[d.row - 1]?.row ?? d.row });
           }
+        }
+        acc.otherNumbers += r.other_numbers || 0;
+        for (const x of r.other_number_rows || []) {
+          if (acc.others.length < 50) acc.others.push({ ...x, row: part[x.row - 1]?.row ?? x.row });
         }
         setCheck({ phase: 'running', done: start + part.length, total, parts, ...acc });
       }
@@ -1018,7 +1065,7 @@ function ImportFlow() {
     try {
       for (; start < total; start += IMPORT_CHUNK) {
         const part = partAt(start, IMPORT_CHUNK);
-        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, ...pastBody });
+        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, otherNumber, ...pastBody });
         acc.created += r.created || 0;
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
@@ -1444,7 +1491,7 @@ function ImportFlow() {
               </div>
             ) : (
               <div className="imp-actions">
-                <button type="button" className="btn btn-primary imp-tap" onClick={runCheck} disabled={!hasName || !pastOk || busy || locked}>
+                <button type="button" className="btn btn-primary imp-tap" onClick={() => runCheck()} disabled={!hasName || !pastOk || busy || locked}>
                   Check {plural(total, 'row', 'rows')}
                 </button>
                 <span className="imp-line imp-line--inline">{fmtN(usedCount)} of {fmtN(source.headers.length)} columns</span>
@@ -1470,9 +1517,17 @@ function ImportFlow() {
                   ]}
                 />
                 {check.parts > 1 && <p className="imp-hint imp-hint--sm">Checked in parts — a few far-apart repeats may count as new.</p>}
+                {check.otherNumbers > 0 && (
+                  <OtherNumbers count={check.otherNumbers} rows={check.others} answer={otherNumber}
+                    onAnswer={(v) => { setOtherNumber(v); runCheck(v); }} />
+                )}
                 {check.matches.length > 0 && (
                   <Reveal label="See matches">
-                    <p className="imp-hint imp-hint--sm">Blanks get filled. Nothing is overwritten.</p>
+                    <p className="imp-hint imp-hint--sm">
+                      {otherNumber === 'take' && check.otherNumbers > 0
+                        ? 'Blanks get filled and voter numbers replaced. Nothing else is overwritten.'
+                        : 'Blanks get filled. Nothing is overwritten.'}
+                    </p>
                     {check.merged > check.matches.length && (
                       <p className="imp-hint imp-hint--sm">First {fmtN(check.matches.length)} of {fmtN(check.merged)}.</p>
                     )}

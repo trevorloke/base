@@ -17,3 +17,14 @@
 .vn-error { flex-basis: 100%; margin: 0; }
 .vn-line { margin: 0 0 var(--s-3); }
 .vn-down { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; font-size: 15px; color: var(--text-2); }
+
+/* People → Import's check: rows found on someone with another voter number, and the question. */
+.vn-other { border: var(--border); border-radius: var(--r-card); background: var(--paper-0); margin: var(--s-3) 0; padding: var(--s-3); min-width: 0; }
+/* Floated, the legend sits inside the box like any line, not on its border. */
+.vn-other__head { float: left; width: 100%; padding: 0; margin: 0 0 var(--s-2); font-size: 15px; font-weight: 600; color: var(--text-1); }
+.vn-other__pick { clear: both; display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-2); border-radius: var(--r-card); font-size: 15px; cursor: pointer; }
+.vn-other__pick.is-on { background: var(--mark-soft); }
+.vn-other__pick input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--mark); }
+.vn-other .imp-hint { margin: 0; }
+.vn-other .imp-matches__list li .vn-num { font-size: 13px; margin: 0; }
+.vn-other .imp-reveal { margin-top: var(--s-1); }

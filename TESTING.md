@@ -685,7 +685,7 @@ one tap away under **More**.
   volunteer again and, after a reload, nothing a treasurer saw is kept.
 
 ### Import your own lists
-**People → More → Import & export → Import people** (or People → More → Import). A list with a *Voter ID* column fills each person's voter number (a profile's *More details*), and the same number in a later file finds the same person however the name is spelled. A CSV or an **Excel workbook (.xlsx)** both work — save a sheet from Excel or Google Sheets as .xlsx and choose it: its first sheet comes in, columns matched. Try `samples/surrey-import-test.csv` first —
+**People → More → Import & export → Import people** (or People → More → Import). A list with a *Voter ID* column fills each person's voter number (a profile's *More details*), and the same number in a later file finds the same person however the name is spelled. A later list that numbers the same people afresh is asked about in the check (*N rows match someone on file with another voter number*): they stay the people on file unless you say to take the file's numbers or to add them as new people. A CSV or an **Excel workbook (.xlsx)** both work — save a sheet from Excel or Google Sheets as .xlsx and choose it: its first sheet comes in, columns matched. Try `samples/surrey-import-test.csv` first —
 fictional people at *public building* addresses (City Hall, rec centres). The
 check step should report **9 new, 1 merged** (Jordan Lee appears twice with
 the same email) and **1 refused** (the row with no name); Robin Kaur's rating

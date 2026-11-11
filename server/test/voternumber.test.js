@@ -1,8 +1,9 @@
 // A voter number on a person (ext/voternumber): one text column, as a list
 // of electors carries one. People → Import fills it, and matches on it
-// before name and address when both sides have one — never joining two
-// people whose numbers differ; the desk reads and sets it on a profile; it
-// is in the exports and survives a merge; a volunteer never receives it.
+// before email, name and address when both sides have one; a row found the
+// old way on someone with another number is counted, and the person says
+// what it is. The desk reads and sets it on a profile; it is in the exports
+// and survives a merge; a volunteer never receives it.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
@@ -58,20 +59,74 @@ test('the same number is the same person, however the name and address are writt
   assert.equal((await people()).length, 4, 'no second record');
 });
 
-test('two numbers are two people, whatever else they share', async () => {
-  // The same name at the same door (a father and a son), and a shared email.
-  const r = await imp([
-    { first: 'Pat', last: 'Example', address: '9 Oak Ave', voter_number: 'AB-222' },
-    { name: 'Alex Example', email: mail('sam'), voter_number: '444' },
+// A list numbered afresh (another year's, another office's) or a number typed
+// wrong on a profile: the row still finds its person by email, or by name
+// with phone or street, as before there were numbers. The check counts those
+// rows, and the person says what they are (otherNumber): the same people,
+// keeping the numbers on file (the default) or taking the file's; or, for a
+// match by name, someone new. An email is one person's whatever is chosen.
+test('a list numbered afresh: the same people, said in the check, never a second record', async () => {
+  await imp([
+    { first: 'Vera', last: 'Elector', address: '7 Elm St', email: mail('vera'), voter_number: 'A123456' },
+    { first: 'Omar', last: 'Elector', address: '9 Oak St', voter_number: 'B555555' },
   ]);
-  assert.deepEqual(acts(r), ['created', 'created']);
+  const next = [
+    { first: 'Vera', last: 'Elector', address: '7 Elm St', email: mail('vera'), phone: '604-555-0150', voter_number: 'C000001' },
+    { first: 'Omar', last: 'Elector', address: '9 Oak St', phone: '604-555-0151', voter_number: 'C000002' },
+  ];
+  const dry = await imp(next, { dryRun: true });
+  assert.deepEqual(acts(dry), ['merged', 'merged'], 'found by email, and by name and street');
+  assert.equal(dry.other_numbers, 2);
+  assert.deepEqual(dry.other_number_rows.map((x) => [x.row, x.name, x.on_file, x.in_file, x.email]),
+    [[1, 'Vera Elector', 'A123456', 'C000001', true], [2, 'Omar Elector', 'B555555', 'C000002', false]]);
+  const r = await imp(next);
+  assert.deepEqual(acts(r), ['merged', 'merged']);
+  assert.equal(r.other_numbers, 2);
+  assert.deepEqual(r.decisions.map((d) => d.fields), [['phone'], ['phone']], 'blanks filled; the numbers on file kept');
+  assert.deepEqual((await people()).filter((p) => p.name.endsWith(' Elector')).map((p) => [p.name, p.voter_number, p.phone]),
+    [['Omar Elector', 'B555555', '604-555-0151'], ['Vera Elector', 'A123456', '604-555-0150']]);
+});
+
+test('told to, the file’s numbers replace the ones on file: a number typed wrong is put right', async () => {
+  const pat = (await byName('Pat Example'))[0];
+  ok(await mgr.action('person.voterNumber', { id: pat.id, voter_number: 'AB-112' })); // typed wrong at the desk
+  const rows = [
+    { first: 'Pat', last: 'Example', address: '9 Oak Ave', voter_number: 'AB-111' },
+    { name: 'Sam Example', email: mail('sam'), voter_number: '444' },
+  ];
+  assert.deepEqual(acts(await imp(rows, { dryRun: true })), ['unchanged', 'unchanged'], 'unless told, the numbers on file stay');
+  assert.deepEqual(acts(await imp(rows, { dryRun: true, otherNumber: 'take' })), ['merged', 'merged']);
+  assert.equal((await byName('Pat Example'))[0].voter_number, 'AB112', 'a check changes nothing');
+  const r = await imp(rows, { otherNumber: 'take' });
+  assert.deepEqual(r.decisions.map((d) => [d.action, d.fields]), [['merged', ['voter_number']], ['merged', ['voter_number']]]);
+  assert.deepEqual([(await byName('Pat Example'))[0].voter_number, (await byName('Sam Example'))[0].voter_number], ['AB111', '444']);
+  // From then on the number finds them however the name is written; the old one finds no one.
+  assert.deepEqual(acts(await imp([{ name: 'EXAMPLE, Pat', voter_number: 'ab111', phone: '604-555-0122' }])), ['merged']);
+  assert.deepEqual(acts(await imp([{ name: 'S. Example', voter_number: '333', address: '1 Nowhere Rd' }], { dryRun: true })), ['created']);
+  assert.equal((await byName('Pat Example')).length, 1);
+});
+
+test('told they are other people, a name match with another number is someone new; a shared email never is', async () => {
+  const before = (await people()).length;
+  // A father and son of one name at one door, each with their own number.
+  const son = [{ first: 'Pat', last: 'Example', address: '9 Oak Ave', voter_number: 'AB-222' }];
+  assert.deepEqual(acts(await imp(son, { dryRun: true })), ['unchanged'], 'unless told, the Pat on file');
+  const dry = await imp(son, { dryRun: true, otherNumber: 'new' });
+  assert.deepEqual(acts(dry), ['created']);
+  assert.equal(dry.other_numbers, 1, 'still counted, so the question stays on screen');
+  assert.deepEqual(acts(await imp(son, { otherNumber: 'new' })), ['created']);
   assert.deepEqual((await byName('Pat Example')).map((p) => p.voter_number).sort(), ['AB111', 'AB222']);
-  assert.equal((await byName('Sam Example'))[0].voter_number, '333', 'the record on file keeps its own');
-  // …and each is then found again by its own number.
+  // Alex with Sam's email: Sam, whatever is chosen.
+  const alex = await imp([{ name: 'Alex Example', email: mail('sam'), voter_number: '888' }], { otherNumber: 'new' });
+  assert.deepEqual(acts(alex), ['unchanged']);
+  assert.deepEqual(alex.other_number_rows.map((x) => x.email), [true]);
+  assert.equal((await byName('Sam Example'))[0].voter_number, '444');
+  // Each Pat is then found by their own number, whatever is chosen.
   assert.deepEqual(acts(await imp([
     { first: 'Pat', last: 'Example', address: '9 Oak Ave', voter_number: 'AB-222' },
     { first: 'Pat', last: 'Example', address: '9 Oak Ave', voter_number: 'ab 111' },
   ])), ['unchanged', 'unchanged']);
+  assert.equal((await people()).length, before + 1);
 });
 
 test('one side without a number: matched as before, and the number fills the blank', async () => {
