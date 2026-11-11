@@ -136,10 +136,13 @@ test('a saved brand: its shades before the stylesheets, its data for script, its
   assert.equal(dataOf(navy).sideDark, true);
   assert.match(navy, new RegExp(`href="/brand/${ID(2)}\\.webp" data-brand />`));
   assert.match(navy, /status-bar-style" content="black"/);
-  // No mark: base.win's own icons; base.win under the icon unless named.
+  // No mark: the icons of the look it started from (Imagine Surrey keeps its
+  // star when its manager changes only a colour); base.win under the icon
+  // unless named.
   const plain = brandFor({ brand: { v: 1, color: '#0f766e' } }, 'imagine-surrey');
-  assert.deepEqual([plain.icon.href, plain.title, plain.shortName, plain.learn, plain.logo], ['/base-mark.svg', 'base.win', 'base.win', 'ImagineU', null]);
-  assert.deepEqual(brandManifest(MANIFEST, plain).icons, MANIFEST.icons);
+  assert.deepEqual([plain.icon.href, plain.touchIcon, plain.title, plain.shortName, plain.learn, plain.logo], ['/star.png', '/apple-touch-icon.png', 'base.win', 'base.win', 'ImagineU', null]);
+  assert.deepEqual(brandManifest(MANIFEST, plain).icons, BRANDS['imagine-surrey'].icons);
+  assert.deepEqual(brandManifest(MANIFEST, brandFor({ brand: { v: 1, color: '#0f766e' } }, 'base')).icons, MANIFEST.icons, 'base.win’s own, started from base.win’s');
   assert.equal(dataOf(brandHtml(INDEX, plain)).logo, null, 'no logo: the campaign’s initials stand in');
 });
 
@@ -161,7 +164,7 @@ test('nothing a saved brand holds can put markup, script or CSS into the page', 
   assert.match(page, /\\u003c\/script\\u003e\\u003cscript\\u003e/, 'escaped where the page reads them');
   assert.deepEqual([data.sidebar, data.corners, data.heading, data.logo, data.logoDark, data.mark, data.second], ['light', 'soft', 'inter', null, null, null, null]);
   assert.match(page, /<title>&quot;&gt;&lt;img src=x onerror=alert\(1\)&gt; — base\.win<\/title>/);
-  assert.match(page, /<link rel="icon" href="\/base-mark\.svg"/, 'icons that aren’t ids: base.win’s own');
+  assert.match(page, /<link rel="icon" href="\/star\.png"/, 'icons that aren’t ids: the look it started from’s own');
 });
 
 test('a name with $ in it is words: it never copies the page’s own markup into the page', () => {

@@ -101,7 +101,9 @@ const savedBrand = (s, key) => {
   const app = (p) => (p ? `/brand/${p.id}.${p.type}` : null);
   const pub = (p) => (p ? `/media/${p.id}.${p.type}` : null);
   const shortName = plainWords(s.shortName, 30) || APP_NAME;
-  const own = BRANDS.base; // no mark: base.win's own icons
+  // No mark: the icons of the look it started from, as its colour and
+  // training's name fall back to that look (Imagine Surrey keeps its star).
+  const own = start;
   return derived({
     key: BRANDS[key] ? key : 'base',
     saved: true,

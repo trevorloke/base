@@ -660,8 +660,9 @@ Once a manager saves the campaign's own brand (**Settings → Brand**;
 `server/ext/brand`), that is the look, whatever `STARBASE_BRAND` says: one
 colour and maybe a second, the sidebar (light, the brand colour or dark),
 corners, the heading face, a logo, a logo for dark backgrounds, a square
-mark and the app icons made from it, what training is called and the name
-under the home-screen icon (base.win until it's changed). It is kept in
+mark and the app icons made from it (without one, the icons of the brand it
+started from), what training is called and the name under the home-screen
+icon (base.win until it's changed). It is kept in
 the campaign's settings (`workspaces.settings.brand`); `brand.save` is the
 manager's and its event carries picture ids, never bytes; `brand.picture`
 takes a JPG, PNG or WebP within each picture's limits, its type and size
