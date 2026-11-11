@@ -16,10 +16,14 @@ export default function BrandMark({ name, side = false }) {
   // A dark sidebar, or one in a brand colour that takes white text, is dark
   // in both schemes (a saved brand says which: sideDark, server/lib/brand.js).
   const darkGround = side && (typeof BRAND.sideDark === 'boolean' ? BRAND.sideDark : BRAND.sidebar !== 'light');
-  const cls = `brand-logo${BRAND.logoDark ? ' has-dark' : ''}${darkGround && !BRAND.logoDark ? ' on-chip' : ''}`;
+  // A pale brand colour on the sidebar is a light ground in both schemes:
+  // the logo for dark backgrounds never goes there.
+  const paleSide = side && BRAND.sidebar === 'brand' && BRAND.sideDark === false;
+  const swaps = BRAND.logoDark && !darkGround && !paleSide;
+  const cls = `brand-logo${swaps || (darkGround && BRAND.logoDark) ? ' has-dark' : ''}${darkGround && !BRAND.logoDark ? ' on-chip' : ''}`;
   return (
     <picture className={cls}>
-      {BRAND.logoDark && !darkGround && <source srcSet={at(BRAND.logoDark)} media="(prefers-color-scheme: dark)" />}
+      {swaps && <source srcSet={at(BRAND.logoDark)} media="(prefers-color-scheme: dark)" />}
       <img className="brand-mark" src={at(darkGround && BRAND.logoDark ? BRAND.logoDark : BRAND.logo)} alt={name || ''} />
     </picture>
   );
