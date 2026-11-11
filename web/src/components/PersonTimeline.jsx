@@ -45,9 +45,10 @@ export const usePersonTimeline = (id, on, group = 'all') => useInfiniteQuery({
 
 const entriesOf = (q) => (q.data?.pages ?? []).flatMap((p) => p?.entries ?? []);
 
-// "38" once it's known; "50+" while there is more to load.
+// "38" once it's known; "50+" while there is more to load. Nothing while it
+// loads or when it couldn't be read again (the section says which).
 export const timelineCount = (q, waiting = 0) => {
-  if (!q.data) return '';
+  if (!q.data || q.isRefetchError) return '';
   const n = entriesOf(q).length + waiting;
   return n ? `${n.toLocaleString('en-CA')}${q.hasNextPage ? '+' : ''}` : '';
 };
@@ -112,7 +113,12 @@ export function PersonTimeline({ personId, name, all, pending = [], onSection })
     if (now > before) setSaid(`${(now - before).toLocaleString('en-CA')} more loaded`);
   };
 
-  const failed = q.isError && !noSignal(q);
+  // The list couldn't be read (or read again: refused now, or the server
+  // failed): it isn't shown — Loading… again while Try again asks. A next
+  // page that didn't come leaves what's loaded where it is, and its button
+  // says so.
+  const failed = q.isError && !q.isFetching && !q.isFetchNextPageError && !noSignal(q);
+  const moreFailed = q.isFetchNextPageError;
   const empty = Boolean(q.data) && !failed && entries.length === 0 && waiting.length === 0;
   return (
     <>
@@ -138,7 +144,11 @@ export function PersonTimeline({ personId, name, all, pending = [], onSection })
         : !q.data ? <p className="ptl-state muted" role="status">Loading…</p>
           : empty ? <p className="pf-empty">{group === 'all' ? 'No history yet.' : `Nothing under ${GROUP_LABEL[group]} yet.`}</p>
             : null}
-      {!failed && q.hasNextPage && (online ? (
+      {!failed && q.hasNextPage && (moreFailed && !q.isFetchingNextPage ? (
+        <p className="ptl-state" role="alert">
+          Unavailable — <button type="button" className="btn btn-quiet pp-btn" onClick={more}>Try again</button>
+        </p>
+      ) : online ? (
         <div className="pf-row-acts">
           <button type="button" className="btn pp-btn" disabled={q.isFetchingNextPage} onClick={more}>
             {q.isFetchingNextPage ? 'Loading…' : 'Load more'}
