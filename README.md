@@ -46,13 +46,13 @@ button, no paragraphs, everything else one tap away.
 | Screen | What it is |
 |---|---|
 | **Today** | Managers: the **dashboard** — every team's contacts, the chart over time, and the map of who is out where. Desk: three big numbers (doors · support · raised) and *Needs you* (with the requests from the doors canvassers sent with *Ask the office*); under *More*, **GOTV & voting days** — GOTV mode, and how many supporters have voted, by band and by turf. While GOTV mode is on, everyone's Today opens with the day's job: *N of M supporters have voted · K to go*, *Call who hasn't voted* and *Map: who hasn't voted*. Volunteers: one big *Start canvassing* and their next shift. Everyone: **Follow up** — the new volunteers, website messages and new RSVPs handed to them (speed to lead: whoever knows them, else their turf's organizer, else a manager), each with a 24-hour clock, one tap to call or text, closed by logging how it went |
-| **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. *Show* filters by band, by 1s or 2s on their own, and by each opponent on the Voting-for list (*Voting Locke*); its **Signs** chips show signs up and sign requests together (requests a pale flag, a billboard a bigger one) and narrow them by status and kind. Turfs and walk lists; **passes** — a sweep over every turf with a purpose (persuasion, get out the vote, lit drop, find out who's who), a universe (who to knock: a rating band, and/or a List — `pass.start`/`pass.update` with `list_id`: only doors with someone on it, as the list stands at each load; the list can't be deleted while the open pass walks it) and a try rule, so a *No answer* door comes back (*Try again · 1 of 2*) until it's given up. With GOTV mode on, every door card, walk-list door and Calls card has a one-tap *Voted ✓* (offline too, sent once), and a get-out-the-vote pass drops a door once everyone there has voted; a voted file from the campaign's website comes in through People → Import |
+| **Map** | Field mode. Houses as clickable pins; tap a door → rate, log, request a sign, call/text. *Show* filters by band, by 1s or 2s on their own, and by each opponent on the Voting-for list (*Voting Locke*); its **Signs** chips show signs up and sign requests together (requests a pale flag, a billboard a bigger one) and narrow them by status and kind. Turfs and walk lists; **passes** — a sweep over every turf with a purpose (persuasion, get out the vote, lit drop, find out who's who), a universe (who to knock: a rating band, and/or a List — *List to walk* on the pass's form, or a list's *Walk*: only doors with someone on it, as the list stands at each load; the list can't be deleted while the open pass walks it) and a try rule, so a *No answer* door comes back (*Try again · 1 of 2*) until it's given up. With GOTV mode on, every door card, walk-list door and Calls card has a one-tap *Voted ✓* (offline too, sent once), and a get-out-the-vote pass drops a door once everyone there has voted; a voted file from the campaign's website comes in through People → Import |
 | **Scripts** | What to say at the door and on the phone (`/scripts`, desk): shown as *Script* above the rating buttons on the walk list, the door card and Calls, the voter's and the canvasser's first names filled in, kept on the phone |
-| **People** | Everyone, filterable by rating / tag / role / the campaign's own fields, and by the field's cuts (never knocked or not in 7–30 days, the last outcome, a turf, a postal code, without a tag, what they did on the website), what they gave (this year · before but not this year · never · at least $X in one year), a membership (running · lapsed), their latest answer to a survey question, a shift they came to or missed in the last N days, being on another list or not, and added since a day — saved lists, sends, phone banks, passes and Calls keep them all; a volunteer never filters by money, memberships, answers, attendance or the desk's lists (those match nobody for them). The count is the real total, however many (`GET /persons/count`, asked for apart from the names); profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time (its read, `GET /persons`, also takes a List — `?list=` — and the next part of a long list — `?after=`, with `more`); **My people** is each volunteer's own circle |
+| **People** | Everyone, filterable by rating / tag / role / the campaign's own fields, and by the field's cuts (never knocked or not in 7–30 days, the last outcome, a turf, a postal code, without a tag, what they did on the website), what they gave (this year · before but not this year · never · at least $X in one year), a membership (running · lapsed), their latest answer to a survey question, a shift they came to or missed in the last N days, being on another list or not, and added since a day — saved lists, sends, phone banks, passes and Calls keep them all; a volunteer never filters by money, memberships, answers, attendance or the desk's lists (those match nobody for them). The count is the real total, however many (`GET /persons/count`, asked for apart from the names; while a new filter loads the last one's rows are dimmed and the count says *Loading…*). Beside *Save as a list* (which keeps the rule), *Save these people as they are now* makes a hand-picked list of exactly who matches that moment. Profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time — any filter, or a List (`/calls?list=`) — asking only for who may be called or texted (`?reach=call|text`, the one place's rule), and goes on past its first 300: the next part loads as the last runs low (`?after=`; a part already loaded is asked for again only up to where it ended, `?until=`, so nobody is pushed out), and *N to call* is the true number left; **My people** is each volunteer's own circle |
 | **Shifts** | Schedule volunteers, assign by role, notify by email + text with instructions and a link; volunteers tap *Count me in*; a shift can carry turfs; *Count me in* puts the walk list on your phone; the desk can *Edit* a shift (moved in time or place → *Let them know*) or *Call off* one, which takes back the walk lists it gave. Each shift has a **crew board**: drag volunteers on from a tray (free or busy then, asked to volunteer, new), onto its turfs — each person gets only their turf's walk list — or *No walk list*; team lead and driver; *Here* / *No-show* on the day; *Split the rest evenly*. **Shifts → Volunteers** is the roster: asked to volunteer, new, active, lapsed, by role; call, text and *Put on a shift* in a tap |
 | **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers — the only money base.win tracks |
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
-| **Lists** | Saved filters (a tag, a rating band, a role, has an email…, any People filter) and hand-picked lists of people: the one audience for an email or a text, a phone bank (`bank.create` with `list_id`), a pass (`list_id` on the pass), a CSV, a report. Each list has its numbers — people · can be emailed · texted · called · reachable by any of the three (*Who may be emailed, texted or called*) — kept a minute (`STARBASE_LIST_COUNTS_MS`) and counted again at once when the list changes, or people change in a way a list can read (an edit or a tag, a gift, a membership, the newsletter, a STOP, an import or a merge; a list on another list follows it) — the field's stream of door and phone logs and voted marks waits for the minute; the names never wait for them (`GET /lists?counts=later`, then `GET /lists/:id/counts`). People's *Save as a list* keeps the rule; `list.snapshot` keeps exactly who a filter or a list names at that moment, as a hand-picked list — up to the whole file |
+| **Lists** | Saved filters (a tag, a rating band, a role, has an email…, any People filter — the new rules under *More rules*) and hand-picked lists of people: the one audience for an email or a text, a phone bank (`bank.create` with `list_id`), a pass (`list_id` on the pass), a CSV, a report. Each row has **Email · Text · Call · Walk** — a send to the list, a new phone bank from it, a pass that walks it — each with how many it reaches, and a list's page has the same four with its five numbers. Each list has its numbers — people · can be emailed · texted · called · reachable by any of the three (*Who may be emailed, texted or called*) — kept a minute (`STARBASE_LIST_COUNTS_MS`) and counted again at once when the list changes, or people change in a way a list can read (an edit or a tag, a gift, a membership, the newsletter, a STOP, an import or a merge; a list on another list follows it) — the field's stream of door and phone logs and voted marks waits for the minute; the names never wait for them (`GET /lists?counts=later`, then `GET /lists/:id/counts`). People's *Save as a list* keeps the rule; *Save these people as they are now* (on People and on a list's page; `list.snapshot`) keeps exactly who a filter or a list names at that moment, as a hand-picked list — up to the whole file. Every number is the number, *Loading…* or *Unavailable — Try again* |
 | **Reports** | The campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export; Field, by turf (coverage, talks, support found, not-homes; by canvasser; CSV) |
 | **Website** | The campaign's public site (managers, and whoever is granted the Website area): pages built from sections (hero, text, petition, donate, events, news…) that are added from a catalogue, dragged into order, hidden, edited in plain forms and published — the draft saves itself, *Preview* shows it, *Publish* says exactly which section needs a look; the theme (colours checked for contrast as they're picked, fonts, corners, logo); the menu, footer, announcement bar, search and sharing; news posts; petitions and pledges with their signatures. SITE.md has how it fits together |
 | **Path to win** | Today → More (desk; the Data area). Each race's win number — typed in, or worked out from eligible voters × expected turnout × share needed, the campaign's own numbers (managers set them) — and the supporters to find for it; supporters found (rated 1 or 2) against that, the pace a week to election day (GOTV's, else one set here) beside the last 4 weeks', a 12-week trend from the ratings, and the turfs ranked by a score out of 100 whose parts are shown (supporters still to find = doors not yet knocked × supporters per 100 doors knocked; persuadables left; time since the last knock), on a map coloured by priority and in a list — tap one to open it on the main map. Counted in SQL, kept a minute (`STARBASE_PTW_CACHE_MS`) |
@@ -315,11 +315,13 @@ than a week after they came off is refused. Contacts are door, phone, text or
   add an email only where there is none (they never see one on file — the
   card says *On file*), the desk may change any.
 - **Phone banks** (People → More, or Calls → Phone banks): a named list of
-  numbers to call, with a script — made from a List (`list_id`: the server
-  reads the list itself, however many; someone who leaves it — voted,
-  re-rated, do-not-contact — leaves the calls not yet made at once, a call
-  already logged stays; `bank.topup` brings in whoever joined since), or
-  from the people list by hand (a rating, a tag, a search; 5,000 at a time).
+  numbers to call, with a script — made from a List (*From a list*, or a
+  list's *Call*: the server reads the list itself, however many; someone
+  who leaves it — voted, re-rated, do-not-contact — leaves the calls not
+  yet made at once, a call already logged stays; the bank's page says how
+  many left, and *Add who joined since* — `bank.topup` — brings them in),
+  or from the people list by hand (*Pick people*: a rating, a tag, a
+  search; 5,000 at a time). A bank's numbers show 2,000 at a time.
   Only people who may be called are in it (a number, never do-not-contact).
   The desk hands numbers to a caller, or splits them across a team, takes
   unfinished ones back, closes the bank. A caller's *Your call lists* (on
@@ -390,7 +392,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Get out the vote*: door and phone) are said instead of the usual ones;
   Today opens on the supporters who still have to vote, the desk's map on
   *Yes, not voted*; People and Calls filter *Voted: Not voted yet*
-  (`voted=no`, also on lists, blasts and phone banks); and *Ask the office*
+  (`voted=no`, also in a saved list — and so in its email or text, the
+  phone bank made from it and a pass that walks it); and *Ask the office*
   offers *Needs a ride to vote*, a request for the drivers. Shift roles
   include Driver, Scrutineer (a voting place), Runner, Poll greeter and Zone
   house captain.
@@ -406,20 +409,24 @@ than a week after they came off is refused. Contacts are door, phone, text or
 |---|---|---|
 | **Ecanvasser** | map canvass, door cards, household grouping, ratings, no-answer outcomes, signs at the door, place-on-map, call/text lists, turf cutting & assignment, walk lists, survey builder (door and calls), custom person fields, offline field mode, offline desk (each sign-in's last copy of every screen, money and donor lists in the tab only; ratings, notes and tags queued; one outbox across tabs) | — |
 | **Action Builder** | assessments (= the rating scale, its words and Voting-for list edited per campaign), tags, roles, relational notes, relationship graph (My people, Knows with a nudge, Most connected, brought in by), event-logged every touch | — |
-| **Action Network** | newsletter list + unsubscribe, press list + releases, email blasts and texts to lists, ladders of engagement, A/B subject lines with open/click tracking | the website's RSVPs and online donations (sign-ups, petitions and volunteers come in through `/in/v1/people`) |
+| **Action Network** | newsletter list + unsubscribe, press list + releases, email blasts and texts to lists, ladders of engagement, A/B subject lines with open/click tracking; the website's own forms, RSVPs (to a public shift) and online donations | events to RSVP to apart from shifts |
 
 ## Public pages
 
-The campaign's website lives elsewhere. Its server sends sign-ups,
-petition signatures, volunteers and newsletter opt-ins in through
-`POST /in/v1/people` with a website key a manager makes under Settings →
-Services (`server/ext/intake`; the fields and answers are in
-INTEGRATIONS.md, *The campaign's website*): matched only by the same
-email (a visitor's typing never lands on someone else's record), never back
-on the newsletter for someone who left it, a volunteer or a message filed
-as a request under *Needs you*; the answer is only the person's id. Donations and RSVPs aren't
-taken that way. base.win's own public pages are the ones every email needs,
-no login:
+The campaign's website is base.win's own (the **Website** area; SITE.md):
+served at `/site/` and on the campaign's own domain, each of its forms —
+newsletter, petition, pledge, volunteer, RSVP, contact, join, donate —
+makes a person and a typed action in one write. A website still kept
+somewhere else can send sign-ups, petition signatures, volunteers and
+newsletter opt-ins in through `POST /in/v1/people` with a website key a
+manager makes under Settings → Services (`server/ext/intake`; the fields
+and answers are in INTEGRATIONS.md, *The campaign's website*): matched
+only by the same email (a visitor's typing never lands on someone else's
+record), never back on the newsletter for someone who left it, a
+volunteer or a message filed as a request under *Needs you*; the answer
+is only the person's id. Donations and RSVPs aren't taken that way. Beside
+the website, base.win's public pages are the ones every email needs, no
+login:
 
 - `/u/:subscriptionId` — unsubscribe from the newsletter (the link asks; one
   tap on *Unsubscribe* does it, so mail scanners never unsubscribe anyone)

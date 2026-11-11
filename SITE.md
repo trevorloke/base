@@ -103,8 +103,9 @@ referral. `join` and `donate` return `{ checkout_url }` from
 asked only after that write has committed ("Payments readiness" below).
 
 The `site_action` event is the hook for the rest of base.win
-(`lib/hooks.js` `events`): follow-ups (speed to lead), ladders, People and
-Map filters ("did on the website: …").
+(`lib/hooks.js` `events`): follow-ups (speed to lead), ladders, and People's
+filter ("did on the website: …") — so a list, a send, a phone bank, a pass
+and Calls can say it too. The map has no such filter yet.
 
 ### What reacts to a site action (added with speed to lead and ladders)
 

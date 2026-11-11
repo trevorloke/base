@@ -28,8 +28,8 @@ BC campaign will need in 2030.
    RSVP, volunteer form, message, gift and membership becomes a person and a
    typed action in base.win the moment it happens: matched to who's already
    on file, placed on the map, consent recorded (CASL / PIPA), the referrer
-   credited, and usable as a People and Map filter ("signed the SkyTrain
-   petition").
+   credited, and usable as a People filter — so in a list, a send, a phone
+   bank or a pass ("signed the SkyTrain petition").
 4. **Online money, built in (Stripe).** Donations (once or monthly) and
    memberships paid by card, Apple Pay or Google Pay. The contribution limit
    is checked before checkout and again when the payment lands (refunded if
