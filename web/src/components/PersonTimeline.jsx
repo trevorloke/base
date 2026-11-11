@@ -102,15 +102,21 @@ export function PersonTimeline({ personId, name, all, pending = [], onSection })
   const waiting = group === 'all' || group === 'field' ? pending : [];
   const from = { to: `/people/${personId}`, label: String(name || '').trim().split(/\s+/)[0] || 'Back' };
 
+  // The chip whose next page got no answer (the server restarting: what's
+  // loaded stays, KeptCopies.js), so its button says so.
+  const [missed, setMissed] = useState(null);
+
   const pick = (g) => {
     setGroup(g);
     setSaid(`Showing ${GROUP_LABEL[g].toLowerCase()}`);
   };
   const more = async () => {
+    setMissed(null);
     const before = entries.length;
     const r = await q.fetchNextPage();
-    const now = (r.data?.pages ?? []).flatMap((p) => p?.entries ?? []).length;
+    const now = entriesOf(r).length;
     if (now > before) setSaid(`${(now - before).toLocaleString('en-CA')} more loaded`);
+    else if (r.hasNextPage && !r.isError) setMissed(group);
   };
 
   // The list couldn't be read (or read again: refused now, or the server
@@ -118,7 +124,7 @@ export function PersonTimeline({ personId, name, all, pending = [], onSection })
   // page that didn't come leaves what's loaded where it is, and its button
   // says so.
   const failed = q.isError && !q.isFetching && !q.isFetchNextPageError && !noSignal(q);
-  const moreFailed = q.isFetchNextPageError;
+  const moreFailed = q.isFetchNextPageError || missed === group;
   const empty = Boolean(q.data) && !failed && entries.length === 0 && waiting.length === 0;
   return (
     <>
