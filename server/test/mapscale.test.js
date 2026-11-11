@@ -14,7 +14,9 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 import { freshDb, Client } from './helpers.js';
+import { app } from '../index.js';
 
 let mgr, vol, volId, db, ws;
 const ok = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };
@@ -74,6 +76,25 @@ test('from further out: a count per patch, by rating, adding up to everyone in v
   assert.ok(coarse.cell[0] > 0.00001 && (1 / coarse.cell[0]) * (1 / coarse.cell[1]) <= 150000, `too fine for the area: coarsened to ${coarse.cell}`);
   assert.equal(coarse.cells.reduce((n, c) => n + c[3], 0), 60, '…and still everyone');
   assert.equal((await mgr.get('/api/map/density')).status, 400);
+});
+
+// The far-out picture of a quarter-rated city list was about a megabyte for
+// one desk view: a view's answers come compressed to a browser that says it
+// takes it (all of them do), and as they were to one that doesn't.
+test('a view’s answers come compressed to a browser that takes it — the same answer, a fraction of the bytes', async () => {
+  process.env.STARBASE_MAP_ALL = '20';
+  const ask = (path, gzip) => app.request(path, { headers: { cookie: mgr.cookie, ...(gzip ? { 'accept-encoding': 'gzip, deflate, br' } : {}) } });
+  for (const path of ['/api/map/density?bbox=49.09,-122.86,49.12,-122.84&cell=0.0005,0.0005', '/api/map/doors?bbox=49.0995,-122.8505,49.1095,-122.8445&dots=1']) {
+    const plain = await ask(path, false);
+    assert.equal(plain.headers.get('content-encoding'), null, `${path}: plain to a browser that doesn’t say it takes gzip`);
+    const body = await plain.text();
+    const packed = await ask(path, true);
+    assert.equal(packed.status, 200);
+    assert.equal(packed.headers.get('content-encoding'), 'gzip', path);
+    const bytes = Buffer.from(await packed.arrayBuffer());
+    assert.equal(gunzipSync(bytes).toString(), body, `${path}: the same answer`);
+    assert.ok(bytes.length * 2 < body.length, `${path}: ${bytes.length} bytes for ${body.length}`);
+  }
 });
 
 test('over the cap, a view is counted first and answers with no rows', async () => {

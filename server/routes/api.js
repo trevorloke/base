@@ -5,6 +5,7 @@
 import { mayRun, decide, areaOfPath } from '../lib/perms.js';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
+import { compress } from 'hono/compress';
 import { getDb } from '../db/client.js';
 import { loadContext, SESSION_COOKIE } from '../lib/auth.js';
 import { openWhileSettingUp, SETUP_FIRST } from '../lib/twostep.js';
@@ -339,6 +340,14 @@ const listBounds = async (db, ws, total) => {
   const bounds = [b.s, b.w, b.n2, b.e].map(Number);
   return bounds.every(Number.isFinite) ? { bounds, fit: area ? 'area' : 'spread' } : {};
 };
+
+// A big list's answers for one view are the biggest the app sends — the
+// far-out picture of a rated city list is about a megabyte of numbers — and
+// they compress about tenfold: gzip for a browser that says it takes it
+// (every one does).
+const gzip = compress();
+app.use('/map/density', gzip);
+app.use('/map/doors', (c, next) => (c.req.query('bbox') ? gzip(c, next) : next()));
 
 app.get('/map/doors', async (c) => {
   const ctx = c.get('ctx');
