@@ -1,7 +1,8 @@
 // The `t=…,v1=…` signature: what Stripe puts on a webhook (base.win checks
-// it, ext/payments), and what base.win puts on what a ladder sends to a web
-// address (ext/ladders/webhook.js), so whoever receives it can check it the
-// same way.
+// it, ext/payments), what Mailchimp's unsubscribes carry once the campaign
+// has set their signing secret (ext/mailchimp), and what base.win puts on
+// what a ladder sends to a web address (ext/ladders/webhook.js), so whoever
+// receives it can check it the same way.
 //
 //   <Name>-Signature: t=<seconds>,v1=<hex HMAC-SHA256 of "<t>.<raw body>">[,v1=…]
 //
@@ -41,3 +42,15 @@ export const verifySignature = (raw, header, secrets, { toleranceS = TOLERANCE_S
 // stand-in Stripe sign with it too).
 export const signPayload = (raw, secret, t = Math.floor(Date.now() / 1000)) =>
   `t=${t},v1=${hmacHex(secret, t, Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw), 'utf8'))}`;
+
+// Where a service signs nothing (CallHub), or not until its secret is set
+// (Mailchimp), the lock is the address itself: its last part is 32 hex
+// characters made from the service's API key (HMAC-SHA256 over a fixed
+// label). One secret to set, nothing stored, and a new key is a new address.
+export const pathKeyOf = (apiKey, label) => (apiKey ? createHmac('sha256', apiKey).update(label).digest('hex').slice(0, 32) : '');
+// Compared whole, in the same time, so a guess learns nothing.
+export const pathKeyIs = (given, want) => {
+  const a = Buffer.from(String(want ?? ''));
+  const b = Buffer.from(String(given ?? ''));
+  return a.length > 0 && b.length === a.length && timingSafeEqual(b, a);
+};

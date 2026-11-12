@@ -51,7 +51,7 @@
 //                             its Idempotency-Key header
 import http from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
-import { signPayload } from '../ext/payments/stripe.js';
+import { signPayload } from '../lib/signature.js';
 
 const md5 = (s) => createHash('md5').update(String(s).trim().toLowerCase()).digest('hex');
 const lower = (s) => String(s ?? '').trim().toLowerCase();

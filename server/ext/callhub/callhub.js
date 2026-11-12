@@ -12,7 +12,7 @@
 // Built from CallHub's published documentation, which could not be opened
 // while this was written (INTEGRATIONS.md lists what is unconfirmed): the
 // calls are the documented ones, and what comes back is read tolerantly.
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { pathKeyIs, pathKeyOf } from '../../lib/signature.js';
 
 const env = (k) => String(process.env[k] || '').trim();
 export const apiKey = () => env('CALLHUB_API_KEY');
@@ -29,15 +29,11 @@ export const apiBase = () => {
 // One secret to set, nothing stored, and a new key is a new address (Check
 // then says to connect again). Never in an answer or on the log.
 const LABEL = 'base.win callhub results v1';
-export const pathKey = () => (apiKey() ? createHmac('sha256', apiKey()).update(LABEL).digest('hex').slice(0, 32) : '');
+export const pathKey = () => pathKeyOf(apiKey(), LABEL);
 export const HOOK_PREFIX = '/hooks/callhub/';
 export const hookUrl = (base) => `${String(base || '').replace(/\/+$/, '')}${HOOK_PREFIX}${pathKey()}`;
-// Compared whole, in the same time, so a guess learns nothing.
-export const pathKeyMatches = (given) => {
-  const want = Buffer.from(pathKey());
-  const got = Buffer.from(String(given ?? ''));
-  return want.length > 0 && got.length === want.length && timingSafeEqual(got, want);
-};
+// Compared whole, in the same time, so a guess learns nothing (lib/signature.js).
+export const pathKeyMatches = (given) => pathKeyIs(given, pathKey());
 
 // throttled: CallHub said to slow down (429, or its "Request was
 // throttled"); retryAfter: in how many seconds it will take the next call,

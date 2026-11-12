@@ -21,8 +21,8 @@ import { Hono } from 'hono';
 import { getDb } from '../../db/client.js';
 import { clientIp, makeLimiter } from '../../lib/guard.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
+import { verifySignature } from '../../lib/signature.js';
 import { holders } from '../mail/webhook.js';
-import { verifySignature } from '../payments/stripe.js';
 import { HOOK_PREFIX, knownAudience, lower, mailchimpOn, pathKeyMatches, webhookSecrets } from './mailchimp.js';
 import { MEMBER_JOB } from './pull.js';
 

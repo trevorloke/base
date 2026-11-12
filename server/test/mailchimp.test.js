@@ -13,7 +13,7 @@ import { app } from '../index.js';
 import { runAction } from '../lib/events.js';
 import { enqueueJob, runDueJobs } from '../lib/jobs.js';
 import { startFakeMailchimp } from './fake-mailchimp.js';
-import { signPayload } from '../ext/payments/stripe.js';
+import { signPayload } from '../lib/signature.js';
 import { _forgetAudienceForTest, pathKey } from '../ext/mailchimp/mailchimp.js';
 import { _setSliceForTest } from '../ext/mailchimp/push.js';
 import { pull } from '../ext/mailchimp/pull.js';

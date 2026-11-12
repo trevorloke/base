@@ -14,7 +14,8 @@
 // this was written (INTEGRATIONS.md lists what is unconfirmed): the calls
 // are the documented ones, what comes back is read tolerantly, and every
 // write is one that is safe to repeat.
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { pathKeyIs, pathKeyOf } from '../../lib/signature.js';
 
 const env = (k) => String(process.env[k] || '').trim();
 export const apiKey = () => env('MAILCHIMP_API_KEY');
@@ -44,15 +45,11 @@ export const keyFor = (what, ...said) => `base-mc-${what}-${createHash('sha256')
 // nothing stored, and a new key is a new address (Check then says to connect
 // again). Given to Mailchimp only: never in an answer or on the log.
 const LABEL = 'base.win mailchimp webhook v1';
-export const pathKey = () => (apiKey() ? createHmac('sha256', apiKey()).update(LABEL).digest('hex').slice(0, 32) : '');
+export const pathKey = () => pathKeyOf(apiKey(), LABEL);
 export const HOOK_PREFIX = '/hooks/mailchimp/';
 export const hookUrl = (base) => `${String(base || '').replace(/\/+$/, '')}${HOOK_PREFIX}${pathKey()}`;
-// Compared whole, in the same time, so a guess learns nothing.
-export const pathKeyMatches = (given) => {
-  const want = Buffer.from(pathKey());
-  const got = Buffer.from(String(given ?? ''));
-  return want.length > 0 && got.length === want.length && timingSafeEqual(got, want);
-};
+// Compared whole, in the same time, so a guess learns nothing (lib/signature.js).
+export const pathKeyMatches = (given) => pathKeyIs(given, pathKey());
 
 // retryable: worth another try later — Mailchimp said "too many" (429), had
 // a fault of its own (5xx), or never answered. Anything else will not
