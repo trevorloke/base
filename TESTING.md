@@ -483,7 +483,9 @@ one tap away under **More**.
   the privacy line under the form; sign there with `?utm_source=flyer` and
   the overview counts 1 from "flyer"; People with `web=site:` finds them.
   Take it offline ("Coming soon"), delete it ("This website has closed",
-  410, even at /login). Staff with Website see no Go live and no ⋯. Tests:
+  410, even at /login). Staff with Website see no Go live and no ⋯. On a
+  phone, scroll a draft's overview to the end and open ⋯: Delete is clear
+  of the tabs, and so is "Delete this website?". Tests:
   `server/test/site-microsites.test.js`; in a browser, with Chromium
   sending dougdidnt.test here: `e2e-microsites.mjs`.
 
