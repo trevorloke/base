@@ -17,17 +17,18 @@
 .bs-more { margin-bottom: var(--s-3); }
 .bs-check { max-width: 420px; }
 
-/* A picture: what is there now, on the ground it will sit on. */
+/* A picture: what is there now, on the ground it will sit on — white for
+   the logo and the mark (in dark mode the logo sits on a white chip), dark
+   for the logo for dark backgrounds, whatever the device's scheme. */
 .bs-pic { display: flex; gap: var(--s-4); align-items: flex-start; margin-bottom: var(--s-4); }
 .bs-pic__well {
   flex: none; display: flex; align-items: center; justify-content: center;
   width: 132px; height: 72px; padding: var(--s-2);
-  background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-ctrl);
+  background: white; border: 1px solid var(--line-strong); border-radius: var(--r-ctrl);
 }
-/* Dark whatever the device's scheme: the ground this logo is for. */
 .bs-pic__well--dark { background: color-mix(in srgb, black 86%, white); border-color: transparent; }
 .bs-pic__well img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
-.bs-pic__none { font-size: 13px; color: var(--quiet); }
+.bs-pic__none { font-size: 13px; color: color-mix(in srgb, black 62%, white); }
 .bs-pic__well--dark .bs-pic__none { color: color-mix(in srgb, white 72%, black); }
 .bs-pic__words { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .bs-pic__label { font-size: 15px; font-weight: 600; color: var(--text); }
