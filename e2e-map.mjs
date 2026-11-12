@@ -889,6 +889,9 @@ try {
     ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 14000);
     const slowSaid = ts.note;
     ts = await tilesUntil(t.pg, (s) => !s.note && s.tiles === 'ok', 16000);
+    // (It goes once most of the screen is drawn; the last of them a moment after.)
+    await sleep(5000);
+    ts = { ...ts, ...(await tileState(t.pg)) };
     const slowOn = await t.onScreen();
     await t.pg.screenshot({ path: `${SHOTS}/8-slow-signal-came.png` });
     check('a slow signal (six seconds and not one tile of the new streets, then they come, all but one that never answers): said — and the note goes by itself over the streets drawn',
