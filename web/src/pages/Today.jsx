@@ -849,7 +849,8 @@ function CandidateToday({ b, me }) {
         </Link>
       </section>
 
-      <ul className="today-rows today-next">
+      {/* No rows at all: no empty box either. */}
+      {(!ready || next || week > 0 || Number(b.myPeople) > 0) && <ul className="today-rows today-next">
         {!ready && <li className="today-need today-row--wait" aria-hidden="true" />}
         {ready && next && (
           <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} tz={tz}
@@ -862,7 +863,7 @@ function CandidateToday({ b, me }) {
           <LinkRow to="/my-people" state={FROM_TODAY}
             main={<>My people · <strong className="mono">{num(b.myPeople)}</strong></>} />
         )}
-      </ul>
+      </ul>}
 
       <YourRace home={home} />
 
