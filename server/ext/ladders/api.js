@@ -129,7 +129,8 @@ const followupRow = (r) => ({
   assigned: r.assigned_to ? { id: r.assigned_to, name: r.assigned_name || 'Someone who left' } : null,
   contacted_at: r.contacted_at || null,
   done_by_name: r.done_by_name || null,
-  person: { id: r.person_id, name: r.person_name, phone: r.person_phone },
+  // tags: so the list offers no Call for someone tagged do-not-call.
+  person: { id: r.person_id, name: r.person_name, phone: r.person_phone, tags: parseJson(r.person_tags, []) },
   ladder: r.ladder_id ? { id: r.ladder_id, name: r.ladder_name } : null,
 });
 
@@ -156,7 +157,7 @@ api.get('/ladders/followups', async (c) => {
   let mine = '';
   if (who === 'none') mine = ' and f.assigned_to is null';
   else if (UUID_ANY.test(who)) { params.push(who); mine = ` and f.assigned_to = $${params.length}`; }
-  const sel = `select f.*, p.name as person_name, p.phone as person_phone, l.name as ladder_name,
+  const sel = `select f.*, p.name as person_name, p.phone as person_phone, p.tags as person_tags, l.name as ladder_name,
       a.name as assigned_name, d.name as done_by_name
     from ladder_followups f join persons p on p.id = f.person_id and p.deleted_at is null
     left join ladders l on l.id = f.ladder_id

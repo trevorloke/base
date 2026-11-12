@@ -22,6 +22,7 @@
 #   GOOGLE_MAPS_TILES=1, GOOGLE_MAPS_TILE_TYPE          Google map tiles
 #   STARBASE_TILE_URL, _ATTRIBUTION, _MAX_ZOOM          another tile provider
 #   TWILIO_VOICE=off                                    texting without calls
+#   CALLHUB_API_KEY, CALLHUB_API_BASE                   the phone dialer (CallHub): call lists out, results back
 #   STARBASE_CANDIDATES, STARBASE_PROVINCE, STARBASE_GEO_BOUNDS   the campaign
 #   APP_HOSTS                                           the app's other addresses, never the website's
 # Once set: Settings → Services in the admin checks each one.

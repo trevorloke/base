@@ -12,7 +12,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import RatingButtons, { ratingText, useScale } from './RatingButtons.jsx';
 import { TextingCallButton, noTexts } from './TextingCard.jsx';
 import { queuedText } from './queued.js';
-import { Icon, firstName, invalidatePersonData, isDnc, smsHref, telHref, textBody, useAction } from '../pages/People.jsx';
+import { Icon, firstName, invalidatePersonData, isDnc, noCalls, smsHref, telHref, textBody, useAction } from '../pages/People.jsx';
 import { whenText, zoneOf } from './shiftTime.js';
 import '../pages/people.css';
 import '../pages/relationships.css';
@@ -49,7 +49,7 @@ export default function FollowupReach({ f, me, onLogged }) {
     queryClient.invalidateQueries({ queryKey: ['ladders'] }),
     invalidatePersonData(queryClient),
   ]));
-  const ways = [p.phone && 'phone', p.phone && !noTexts(p) && 'text', 'in_person'].filter(Boolean);
+  const ways = [p.phone && !noCalls(p) && 'phone', p.phone && !noTexts(p) && 'text', 'in_person'].filter(Boolean);
   const [way, setWay] = useState(ways[0]);
   const howId = useId();
   const wentId = useId();
@@ -80,6 +80,7 @@ export default function FollowupReach({ f, me, onLogged }) {
         <p><span className="chip chip-danger">Do not contact</span></p>
       ) : (
         <>
+          {noCalls(p) && <p><span className="chip chip-danger">Do not call</span></p>}
           {p.phone && <p className="fu-phone mono">{p.phone}</p>}
           {ways.length > 1 && (
             <div className="rel-how">

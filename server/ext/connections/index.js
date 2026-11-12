@@ -7,9 +7,11 @@
 //                                    missing: [ENV…], set: [ENV…], detail,
 //                                    checkable }], inbound: [{ name, url, how }],
 //                                    publicUrl }
-//   POST /api/connections/check    { key } → { ok, said } — one real call to
-//                                    the service (8 s at most); nothing is
-//                                    sent to anyone, nothing is written.
+//   POST /api/connections/check    { key } → { ok, said, todo? } — one real
+//                                    call to the service (8 s at most);
+//                                    nothing is sent to anyone, nothing is
+//                                    written. todo: something the manager
+//                                    must do at the service, said apart.
 //
 // Keys and tokens are never in an answer: only which settings are present.
 import { Hono } from 'hono';
@@ -25,6 +27,8 @@ import { mailchimpService, mailchimpInbound, checkMailchimp } from '../mailchimp
 // Online payments (ext/payments): its row carries the webhook address and
 // the events to tick in Stripe, and state 'test' in test mode.
 import { stripeService, checkStripe, webhookUrl } from '../payments/service.js';
+// The dialer (ext/callhub): its row carries a Connect action beside Check.
+import { callhubService, callhubInbound, checkCallHub } from '../callhub/service.js';
 
 const MANAGER = 'manager';
 const TIMEOUT_MS = 8000;
@@ -94,6 +98,7 @@ export const services = (base = publicUrl()) => {
     }),
     mailchimpService(),
     stripeService(base),
+    callhubService(),
     // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
     // one in the database — it works, but a copy of the database would
     // give the authenticator keys away.
@@ -119,6 +124,7 @@ const inbound = (base, desk) => [
   { name: 'The website — people in', url: `${base}/in/v1/people`, how: 'From the website’s server with a website key (below): sign-ups, petitions, volunteers, the newsletter' },
   { name: 'Lists and voted files', url: `${desk}/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
   { name: 'Stripe — payments, refunds, disputes', url: webhookUrl(base), how: 'Set by hand: Stripe → Developers → Webhooks → Add endpoint, with the events under Online payments (above)' },
+  callhubInbound(base),
 ];
 // This Base's own address as the outside world reaches it: the public
 // address, else the one this page was opened at (with the client's path).
@@ -138,6 +144,7 @@ const within = (p) => Promise.race([p, new Promise((_, rej) => { setTimeout(() =
 // One real call per service; never a send, never a write.
 const CHECKS = {
   stripe: (db, ws, base) => checkStripe(base),
+  callhub: checkCallHub,
   database: async (db, ws) => {
     await db.query('select 1');
     const n = (await db.query('select count(*)::int as n from persons where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;

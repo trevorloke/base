@@ -3,9 +3,19 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
-import { RATING_CODES } from '@starbase/shared/canvass';
+import { RATING_CODES, noCalls, noCallsWord } from '@starbase/shared/canvass';
 
 let c;
+
+test('no Call to tap for someone who asked not to be phoned — or not to be contacted at all', () => {
+  assert.equal(noCalls({ tags: ['do-not-call'] }), true);
+  assert.equal(noCalls({ tags: ['newton', 'do-not-contact'] }), true);
+  assert.equal(noCalls({ tags: ['do-not-text', 'newton'] }), false);
+  assert.equal(noCalls({ tags: null }), false);
+  assert.equal(noCalls(null), false);
+  // What a screen shows where the Call would be: do-not-contact is more than calls.
+  assert.deepEqual([noCallsWord({ tags: ['do-not-call'] }), noCallsWord({ tags: ['do-not-call', 'do-not-contact'] })], ['Do not call', 'Do not contact']);
+});
 
 before(async () => {
   await freshDb();

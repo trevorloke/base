@@ -15,6 +15,7 @@ import { action, apiGet, apiPost } from '../api.js';
 import SendingDomain from './SendingDomain.jsx';
 import MailchimpPanel from './MailchimpPanel.jsx';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
+import ServiceConnect from './ServiceConnect.jsx';
 import './services.css';
 
 const STATE_WORD = { ready: 'Set up', missing: 'Not set up', default: 'Using the free default', test: 'Test mode' };
@@ -45,7 +46,10 @@ function Row({ s, online }) {
         {/* The email sender's block comes as `hook`: a page cached from before it existed prints Stripe's sentence over any `webhook`. */}
         {s.hook && <Webhook w={s.hook} />}
         {s.webhook && <Webhook w={s.webhook} />}
+        {s.connect && <ServiceConnect connect={s.connect} online={online} onDone={() => setRes(null)} />}
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
+        {/* Something for the manager to do at the service: said apart, not in the line that says what works. */}
+        {res?.todo && <p className="sv2-detail sv2-todo" role="status">{res.todo}</p>}
       </div>
       {s.checkable && (
         <button type="button" className="btn ops-tap sv2-check" disabled={busy || !online} onClick={check}>{busy ? 'Checking…' : 'Check'}</button>

@@ -22,6 +22,7 @@ is written) and says exactly what is wrong if anything is.
 | [GitHub Actions](#github-actions) | tests, and promoting staging to production | yes | none |
 | [The campaign's website](#the-campaigns-website) | sign-ups, petitions, volunteers, newsletter opt-ins in | when the website is ready | a website key (Settings → Services) |
 | [Online payments — Stripe](#online-payments--stripe) | gifts once or monthly and membership dues on the website, by card, Apple Pay or Google Pay | when the website takes money (test mode first) | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` |
+| [Phone dialer — CallHub](#phone-dialer--callhub) | a list or a phone bank sent to CallHub's dialer; each call's result back on the person | no (only if the campaign calls through CallHub) | `CALLHUB_API_KEY`, `CALLHUB_API_BASE` |
 
 The campaign's website sends people in with a key; the API is
 [below](#the-campaigns-website).
@@ -388,6 +389,8 @@ for a person, but a ladder sends with nobody reading), the campaign named,
 "Reply STOP to opt out" added — filed in the Inbox as
 the campaign's own conversation). Without it, Call and Text open the
 phone's own dialer and messages, a ladder's text waits, and nothing is lost.
+A call is never placed through the campaign's number to someone tagged
+`do-not-contact` or `do-not-call`.
 
 1. Twilio → buy a Canadian number with SMS and voice. Register it for
    messaging as Twilio requires. For a Canadian campaign that means a
@@ -643,6 +646,208 @@ same write that records the payment.
 **Check:** Services → Online payments reads the webhook endpoints back from
 Stripe: the key works, and one of them sends every event above to this
 address.
+
+## Phone dialer — CallHub
+
+[callhub.io](https://callhub.io). base.win's own phone bank is one
+volunteer, one number, one tap. CallHub is a dialer for a room of callers.
+With it connected the campaign keeps choosing who to call in base.win — a
+list or a phone bank — sends it to CallHub, and sees every call's result on
+the person. The calling campaign itself (its script, its survey, its
+callers, the number it shows) is made in CallHub, on the phonebook base.win
+sent. base.win calls CallHub with plain HTTPS (no SDK, `server/ext/callhub`).
+
+**Built from CallHub's published documentation. Before your first calling
+night: press Check, then make one test call and see its result arrive on
+the person.** CallHub's documentation could not be opened while this was
+built (the build ran where `developer.callhub.io` could not be reached):
+what is here follows its reference pages as search results quote them, and
+two third-party clients. Nothing has been run against a real CallHub
+account. *What is not confirmed*, below, lists exactly what; the Settings →
+Services row says the same.
+
+What happens:
+
+- **Send to CallHub** (a list's page, a phone bank's page — managers, staff
+  and treasurers; the button is there only when CallHub is set up). It asks
+  first: how many numbers go, for how many people, how many are left out.
+  Who goes:
+  everyone on the list (a phone bank: its numbers still to call) with a
+  number that can be dialled, **never** someone tagged `do-not-contact` or
+  `do-not-call`, and never a number one of them shares. One CallHub contact
+  per number: where several people share a number, the first by name is
+  the one sent, and the one results are filed on. **Only the phone number,
+  first and last name and city leave base.win** — never a rating, a tag, a
+  note, an email or a street.
+- **In the background**, a job makes a phonebook in CallHub named for the
+  list and the time ("Undecided in Newton — Nov 10, 9:55 am") and adds one
+  contact a second. The line on the page says how far it is ("Sending ·
+  850 of 2,000", then "Sent"). CallHub's documented limit is 3,600
+  contacts a day: a bigger list says so and carries on by itself the next
+  day, as it does when CallHub says to slow down. A number CallHub won't
+  take is left out and counted, with CallHub's words and whose it was (the
+  name is a way to their page); if CallHub refuses the push itself (a key
+  that stopped working), it stops with CallHub's words and how far it got,
+  and **Carry on** picks up where it stopped (*Send again instead* is
+  beside it, for a fresh phonebook). A push left part-way with nothing
+  behind it — its background job gave up — says *it stopped part-way*
+  and offers **Carry on** alone. Nobody is sent twice.
+- **People not to call** go to a do-not-call list in CallHub named
+  `base.win`, numbers only, with each push: people tagged `do-not-contact`
+  (no calls, no texts) or `do-not-call` (no calls), and numbers that
+  replied STOP to a text (no texts). Someone newly tagged `do-not-call` or
+  `do-not-contact` does not wait for the next push: once the campaign has
+  sent CallHub anything, a background job tells CallHub by itself (a number
+  already there for texts only is changed to calls too). The list follows
+  base.win the other way too: when nobody here blocks a number any more
+  (the tag taken off again), base.win takes it off CallHub's list, by the
+  entry CallHub named for it. Where CallHub never named one, or won't let
+  it go, a list's page says how many are still there and whose they are,
+  and **Check** names the first few — take those off in CallHub. While a
+  push is telling CallHub these numbers its line says so
+  (*Telling CallHub who not to call first · 150 to go*). A number CallHub
+  won't take for that list never stops a push: it is said on the page with
+  CallHub's words and whose number it is (a few by name, *Show all* for the
+  rest), and asked about again with the next push; the line goes once
+  there is nothing left to take. Only if CallHub takes none of a
+  campaign's numbers at all
+  (five refused in a row before any was ever taken) does the push stop,
+  once, with CallHub's words; **Carry on** goes on without them. Whether a
+  calling campaign in CallHub honours that list by itself or has to be
+  pointed at it is not confirmed: look in CallHub before the first night.
+- **Each call's result** comes back as the caller saves it (CallHub's
+  `cc.notes` webhook). It is matched by phone number against the numbers
+  this campaign sent (the newest push first) and becomes one phone call on
+  the person's history: the calling campaign's name, CallHub's result, the
+  caller's notes and the survey answers (the number is looked for under
+  the result's `contact`, then its `mobile`). A caller whose CallHub email
+  is their base.win sign-in is credited with the call; anyone else is named
+  in the note. If the person is in an open base.win phone bank, the number
+  is crossed off there too (a No answer comes back by the bank's own
+  rule). The same result sent twice is one call. A result for a number
+  base.win never sent is kept, unfiled — it never lands on a guess and
+  never makes a person.
+- **What each result counts as**: CallHub's results are the account's own
+  words, so each push has a short table — filled in by pattern (*No
+  answer*, *Busy* → No answer; *Voicemail*, *Left message* → Left message;
+  *Wrong number*, *Disconnected* → Wrong number; *Refused*, *Not
+  interested* → Refused; *Do not call*, *Remove* → Refused, and the person
+  is tagged `do-not-call`; *Moved* → Moved; anything else → Talked) and
+  yours to correct. A correction also moves the results already in — only
+  the ones it is about — and an open phone bank's number with them (a
+  *Talked* that was a No answer comes back by the bank's own rule). Turning
+  a row to *Do not call* asks first (*Tag the 6 people with "Answered"
+  do-not-call?*), and so does putting it back (*Stop counting "Answered"
+  as do not call?* — a slip of one arrow key on the row is caught too);
+  **Yes** takes the tag off everyone it tagged, however often each was
+  rung (and from the record kept, when the one it tagged was merged with
+  a duplicate since), and their numbers off CallHub's list — never a tag
+  someone set by hand (on either record, when two were made one), and
+  never bringing back one the desk took off by hand. Anyone it leaves
+  do-not-call all the same is named on the saved line, so the desk can
+  look (*1 person stays do-not-call, tagged by hand — Ida Example*; or
+  *another call says so*). A push with
+  thousands of results is moved a part at a time, in the background.
+- **A new push starts with the newest push's table** and support question,
+  so a pick is made once. What is taken back on a push is taken back on the
+  pushes sent since that still carry it — a row that no longer counts as
+  *Do not call*, an answer that no longer rates as it did, a support
+  question dropped — and the question before it says so (*… — here and
+  on the 1 list sent since*), as does the saved line (*1 list sent since
+  follows too*). Never the other way: a pick that tags people, or an
+  answer newly mapped, is about the one list it was asked on.
+- **Ratings** only ever come from a survey answer someone mapped: pick the
+  support question on the push, then which answer is which step of the
+  campaign's scale. Until then the answers stay in the note and nobody's
+  rating moves. A rating is never guessed, and a newer rating (a knock
+  since) is never overwritten by an older call. Mapping an answer asks
+  first, and can be taken back: when an answer stops rating (*Doesn't
+  rate*, or another question, or none) the people it rated are back to what
+  they were before the call, unless something else has rated them since.
+
+**Set it up — on staging first:**
+
+1. The API key from the account's settings in CallHub. It goes in the
+   host's environment only (Render → the service → **Environment**):
+   `CALLHUB_API_KEY` — never in the repo, a chat or an email. If the
+   account's API is on another host (CallHub's own docs show
+   `https://api-[region].callhub.io`; `api-na1.callhub.io` is one), set
+   `CALLHUB_API_BASE` to it.
+2. **Settings → Services → Phone dialer (CallHub)** → **Check**: the key
+   works. Then **Connect**: base.win gives CallHub the address to send each
+   call's result to (it needs `STARBASE_PUBLIC_URL`). **Check** again: *The
+   key works · results come back here*.
+3. On a small list of your own team's numbers: **Send to CallHub**. In
+   CallHub, make a call-center campaign on the phonebook base.win made, and
+   see that it leaves out the numbers on the `base.win` do-not-call list.
+4. Make two test calls: save one with a note typed, one with only a result.
+   Each should be on that person's history in base.win within seconds, and
+   the list's page should say *2 results back*. If one is not, press
+   **Check**: it says whether results arrived for numbers base.win never
+   sent, or in a shape base.win could not read (those are kept as they
+   came, for whoever fixes it).
+5. Under **What each result counts as**, look over the table; if the survey
+   has a support question, pick it and say what each answer means.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `CALLHUB_API_KEY` | — | the account's API key; without it the row says *Not set up*, there is no Send to CallHub button, and the results address answers 503 |
+| `CALLHUB_API_BASE` | `https://api.callhub.io` | the API's address for this account, when it is on another host; also how the tests point at a stand-in |
+
+**The results address** (`POST /hooks/callhub/<key>`, no sign-in; it also
+answers on the campaign's website domain). Nothing documents a signature on
+CallHub's deliveries, so the lock is the address itself: its last part is 32
+characters made from the API key, compared whole before anything is read,
+never shown on a screen and never on the log. A new API key is a new
+address: Check then says to Connect again, and Connect takes the old one
+away. What a delivery can do is bounded all the same: it can only land on
+someone whose number this campaign itself sent, once, and it never makes a
+person. Each result is kept as it came (`callhub_results`, in the full
+export). A failure answers 500, so a sender that retries sends it again.
+
+**What is not confirmed** (it needs one evening with a real account):
+
+1. The shape of a result as CallHub really sends it. base.win reads JSON or
+   a form, with the fields at the top level or inside `data`, the caller as
+   `agent.email` however it is nested, and the survey as a list or as text.
+   A delivery it cannot read is kept as it came and counted by Check.
+2. Whether a result comes for every call. CallHub's reference describes
+   `cc.notes` as sent "when an agent adds a note"; a call saved with a
+   result and no note may or may not send one (step 4 finds out).
+3. Whether CallHub signs or retries its deliveries. No signature is checked
+   (none is documented); the address is the lock.
+4. The API's host for the campaign's account (`CALLHUB_API_BASE`).
+5. How CallHub treats a number that is already a contact when it is added
+   to a second phonebook, and whether it refuses numbers it thinks invalid
+   (those are left out and counted).
+6. Whether a result carries any id for the call. None is documented, so
+   the same campaign, number, caller, result, notes and recording within
+   fifteen minutes is taken to be the same call.
+7. Whether a calling campaign honours the `base.win` do-not-call list by
+   itself or has to be pointed at it (step 3).
+8. Whether CallHub lets a number be taken off its do-not-call list through
+   the API, and whether it refuses numbers there that it thinks invalid.
+   Both are handled as documented; what CallHub would not take, or would
+   not let go, is said on the page and by Check.
+
+Not built yet: a large list by file (CallHub's bulk import), and reading a
+calling campaign's full export afterwards as the audit. CallHub's texting
+and voice broadcast are not used: base.win has its own texting, and two
+systems texting one voter is how a STOP gets missed.
+
+Political calls have rules of their own (the CRTC: a campaign must keep and
+honour its own do-not-call list and say who is calling; automatic dialers
+have more). Confirm them with counsel before a calling night, as for
+texting (TESTING.md).
+
+**Check:** Services → Phone dialer asks CallHub two things and writes
+nothing: the key works, and one of the account's webhooks sends call
+results (`cc.notes`) to this base.win. Then it says how many results have
+arrived, how many were for numbers base.win never sent and how many it
+could not read. On a line of its own, since it is yours to do in CallHub:
+how many numbers are still on CallHub's do-not-call list that nobody here
+blocks any more — with whose the first few are (a list's page names them
+all).
 
 ## Hosting — Render
 

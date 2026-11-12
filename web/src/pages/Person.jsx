@@ -31,7 +31,7 @@ import { useOutbox, applyOutboxToProfile, pendingAbout, logContact, holdNote } f
 import { useOnline } from '../components/NoSignal.jsx';
 import {
   TagEditor, Icon, useAction, fmtWhen, fmtShort, telHref, smsHref, textBody,
-  canDesk, invalidatePersonData, isDnc, tagWord, RatingTag, noSignal,
+  canDesk, invalidatePersonData, isDnc, noCalls, tagWord, RatingTag, noSignal,
 } from './People.jsx';
 import QuickDetails from '../components/QuickDetails.jsx';
 import './people.css';
@@ -192,6 +192,7 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit }) {
           </span>
         )}
         {isDnc(person) && <span className="chip chip-danger">Do not contact</span>}
+        {!isDnc(person) && noCalls(person) && <span className="chip chip-danger">Do not call</span>}
         {desk && shownLevel?.label && <EngagementChip level={shownLevel} />}
         {/* donor is null for volunteers (the server hides money from them) */}
         {tierShown && (
@@ -202,7 +203,7 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit }) {
       </div>
       {(tiles || person.address) && (
         <div className={`pf-acts${tiles ? '' : ' pf-acts--quiet'}`}>
-          {person.phone && (on.voice === false ? (
+          {person.phone && !noCalls(person) && (on.voice === false ? (
             <a className="btn pf-act" href={telHref(person.phone)} onClick={() => onLog('phone')}>
               <Icon name="phone" /> Call
             </a>
@@ -581,7 +582,7 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
         <li>
           <span className="k">Phone</span>
           <span className="v">{person.phone
-            ? (ownDialler ? <a className="mono" href={telHref(person.phone)}>{person.phone}</a> : <span className="mono">{person.phone}</span>)
+            ? (ownDialler && !noCalls(person) ? <a className="mono" href={telHref(person.phone)}>{person.phone}</a> : <span className="mono">{person.phone}</span>)
             : none}</span>
         </li>
         {desk && (

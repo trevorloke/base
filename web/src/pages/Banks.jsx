@@ -11,6 +11,7 @@ import { codesInBand } from '@starbase/shared/scale';
 import { ApiError, action, apiGet } from '../api.js';
 import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { useWebDid, webChoices } from '../components/FieldCuts.jsx';
+import SendToCallHub from '../components/SendToCallHub.jsx';
 import './dashboard.css';
 import './banks.css';
 import '../editor.css';
@@ -157,7 +158,7 @@ function NewBank() {
     return p.toString();
   }, [f, scale]);
   const people = useQuery({ queryKey: ['persons', 'list', qs], queryFn: () => apiGet(`/persons?${qs}`), staleTime: 15_000 });
-  const callable = useMemo(() => (people.data?.persons || []).filter((p) => p.phone && !(p.tags || []).includes('do-not-contact')), [people.data]);
+  const callable = useMemo(() => (people.data?.persons || []).filter((p) => p.phone && !(p.tags || []).some((t) => t === 'do-not-contact' || t === 'do-not-call')), [people.data]);
   const submit = async (e) => {
     e.preventDefault();
     const r = await run('bank.create', { name, script: script || null, person_ids: callable.map((p) => p.id), ...retry });
@@ -188,7 +189,7 @@ function NewBank() {
               <input id={`${id}-q`} className="input" value={f.q} placeholder="104 Ave" onChange={(e) => setF({ ...f, q: e.target.value })} /></div>
           </div>
           <p className="bk-count" role="status">
-            {people.isFetching && !people.data ? 'Counting…' : <><strong className="mono">{num(callable.length)}</strong> {plural(callable.length, 'person', 'people')} with a phone{callable.length >= 2000 ? ' (the first 2,000)' : ''}{people.data && people.data.persons.length > callable.length ? ` — ${people.data.persons.length - callable.length} do-not-contact left out` : ''}</>}
+            {people.isFetching && !people.data ? 'Counting…' : <><strong className="mono">{num(callable.length)}</strong> {plural(callable.length, 'person', 'people')} with a phone{callable.length >= 2000 ? ' (the first 2,000)' : ''}{people.data && people.data.persons.length > callable.length ? ` — ${people.data.persons.length - callable.length} do-not-contact or do-not-call left out` : ''}</>}
           </p>
           {callable.length > 0 && (
             <ul className="bk-sample">
@@ -260,6 +261,7 @@ function Bank({ id }) {
         ))}
       </div>
 
+      <SendToCallHub kind="bank" id={id} />
       <section className="bk-sec" aria-labelledby={`${fid}-h`}>
         <h2 className="dash-sec__h" id={`${fid}-h`}>Hand out numbers</h2>
         {bank.closed ? <p className="muted">The bank is closed — reopen it to hand out numbers.</p> : open === 0 ? <p className="muted">Every number is handed out or done.</p> : (

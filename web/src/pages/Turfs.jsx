@@ -40,6 +40,7 @@ import RatingButtons, {
 } from '../components/RatingButtons.jsx';
 import SurveyQuestions, { answersSaid, answersTail, answersWord, useSurvey } from '../components/SurveyQuestions.jsx';
 import { doorState, inPass } from '@starbase/shared/passes';
+import { noCalls } from '@starbase/shared/canvass';
 import { PassChip, TryAgainChip, WalkShow, overlayPass, waitingTries } from '../components/PassBits.jsx';
 import { VotedChip, VotedRow, pendingVoted } from '../components/Voted.jsx';
 import RequestAsk from '../components/RequestAsk.jsx';
@@ -1107,7 +1108,7 @@ function Door({
                   No answer · {firstName(sel.name)} only
                 </button>
               )}
-              {sel.phone && <a className="btn walk-act" href={`tel:${dialable(sel.phone)}`}>Call</a>}
+              {sel.phone && !noCalls(sel) && <a className="btn walk-act" href={`tel:${dialable(sel.phone)}`}>Call</a>}
               {!sel.pending && <Link className="btn btn-quiet walk-act" to={`/people/${sel.id}`} state={fromHere} onClick={markDoor}>Profile</Link>}
               {!sel.pending && <RequestAsk person={sel} toast={(t, o) => toast(t, o)} />}
             </div>

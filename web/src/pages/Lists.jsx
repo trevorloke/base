@@ -17,6 +17,7 @@ import SendToMailchimp from '../components/SendToMailchimp.jsx';
 import { useScale } from '../components/RatingButtons.jsx';
 import { useAction, ratingBands } from './People.jsx';
 import { CUT_KEYS, CutFields, useTurfs } from '../components/FieldCuts.jsx';
+import SendToCallHub from '../components/SendToCallHub.jsx';
 import './shifts.css';
 import './lists.css';
 import { at } from '../base.js';
@@ -196,6 +197,7 @@ function OneList({ id }) {
         ) : <button type="button" className="btn btn-quiet ops-tap" onClick={() => setAsking(true)}>Delete</button>}
       </div>
       {act.error && <p className="error" role="alert">{act.error}</p>}
+      <SendToCallHub kind="list" id={id} />
       {editing && l.kind === 'filter' && filter && (
         <div className="card ls-edit">
           <FilterFields value={filter} onChange={setFilter} />

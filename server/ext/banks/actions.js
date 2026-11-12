@@ -1,4 +1,4 @@
-// bank.create   { name, script?, person_ids[] }       desk: a bank from a list of people (those with a phone, not do-not-contact)
+// bank.create   { name, script?, person_ids[] }       desk: a bank from a list of people (those with a phone, not do-not-contact, not do-not-call)
 // bank.update   { id, name?, script?, closed? }       desk
 // bank.remove   { id }                                desk: void (nothing else moves)
 // bank.add      { id, person_ids[] }                  desk: more numbers
@@ -17,6 +17,7 @@ const ALL = ['manager', 'treasurer', 'staff', 'volunteer'];
 const uuid = () => z.uuid();
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 const NO_CONTACT = 'do-not-contact';
+const NO_CALL = 'do-not-call';
 const MAX_NUMBERS = 5000;
 // How a No answer comes back: after this many hours (0: never), up to this many calls.
 const RETRY = { retry_hours: z.number().int().min(0).max(72).optional(), max_tries: z.number().int().min(1).max(5).optional() };
@@ -26,11 +27,12 @@ const bankOf = async (tx, ws, id) => {
   if (!b) throw httpError(404, 'phone bank not found');
   return b;
 };
-// The people who can be called: on the list, with a phone, not do-not-contact.
+// The people who can be called: on the list, with a phone, not do-not-contact
+// and not do-not-call.
 const callable = async (tx, ws, ids) => (await tx.query(
   `select id from persons where workspace_id = $1 and id = any($2::uuid[]) and deleted_at is null
-     and coalesce(phone, '') <> '' and not (tags @> $3::jsonb)`,
-  [ws, ids, JSON.stringify([NO_CONTACT])],
+     and coalesce(phone, '') <> '' and not (tags @> $3::jsonb) and not (tags @> $4::jsonb)`,
+  [ws, ids, JSON.stringify([NO_CONTACT]), JSON.stringify([NO_CALL])],
 )).rows.map((r) => r.id);
 const addNumbers = async (tx, ws, bankId, personIds) => {
   const ok = await callable(tx, ws, [...new Set(personIds)]);
@@ -191,14 +193,18 @@ export const actions = {
 // in every open phone bank it is in (contactLogged hook).
 // A No answer comes back instead, after the bank's retry_hours, until its
 // max_tries calls are spent (reply.bank says when: the Calls card's toast).
-export const crossOff = async (tx, ctx, { contact, reply }) => {
+// anyCaller: the call was made outside base.win (the dialer, ext/callhub) —
+// whoever the number was handed to, it has been called; ctx.user may be
+// nobody then.
+export const crossOff = async (tx, ctx, { contact, reply, anyCaller = false }) => {
   if (!contact?.person_id || contact.channel !== 'phone') return;
   const outcome = String(contact.outcome || 'contacted');
+  const by = ctx.user?.id || null;
   const rows = (await tx.query(
     `select n.bank_id, n.tries, b.retry_hours, b.max_tries from call_bank_numbers n
        join call_banks b on b.id = n.bank_id and b.workspace_id = $1 and b.deleted_at is null
-      where n.person_id = $3 and n.done_at is null and (n.assigned_to = $2 or n.assigned_to is null)`,
-    [ctx.workspaceId, ctx.user.id, contact.person_id],
+      where n.person_id = $3 and n.done_at is null and ($4::boolean or n.assigned_to = $2 or n.assigned_to is null)`,
+    [ctx.workspaceId, by, contact.person_id, anyCaller],
   )).rows;
   for (const r of rows) {
     const tries = Number(r.tries) + 1;
@@ -212,7 +218,38 @@ export const crossOff = async (tx, ctx, { contact, reply }) => {
     } else {
       await tx.query(
         'update call_bank_numbers set tries = $3, done_at = now(), done_by = $4, outcome = $5 where bank_id = $1 and person_id = $2',
-        [r.bank_id, contact.person_id, tries, ctx.user.id, outcome],
+        [r.bank_id, contact.person_id, tries, by, outcome],
+      );
+    }
+  }
+};
+
+// A call made outside base.win was read differently after the fact (the
+// desk corrected what one of the dialer's results counts as, ext/callhub):
+// the numbers that very call settled follow, by the same rule. `at` is when
+// the call was filed — a number is touched only if that call crossed it off
+// (done at that moment) or sent it back (due the bank's hours after it).
+export const recross = async (tx, ws, { personIds, at, was, now, by = null }) => {
+  if (!personIds?.length || was === now) return;
+  const rows = (await tx.query(
+    `select n.bank_id, n.person_id, n.tries, n.done_at, b.retry_hours, b.max_tries from call_bank_numbers n
+       join call_banks b on b.id = n.bank_id and b.workspace_id = $1 and b.deleted_at is null
+      where n.person_id = any($2::uuid[])
+        and ((n.done_at = $3::timestamptz and n.outcome = $4)
+          or (n.done_at is null and $4 = 'no_answer' and n.next_at = $3::timestamptz + make_interval(hours => b.retry_hours)))`,
+    [ws, personIds, at, was],
+  )).rows;
+  for (const r of rows) {
+    const comesBack = now === 'no_answer' && Number(r.retry_hours) > 0 && Number(r.tries) < Number(r.max_tries);
+    if (comesBack) {
+      await tx.query(
+        `update call_bank_numbers set done_at = null, done_by = null, outcome = null, next_at = $3::timestamptz + make_interval(hours => $4::int)
+          where bank_id = $1 and person_id = $2`, [r.bank_id, r.person_id, at, Number(r.retry_hours)],
+      );
+    } else {
+      await tx.query(
+        'update call_bank_numbers set done_at = $3::timestamptz, done_by = coalesce(done_by, $4), outcome = $5 where bank_id = $1 and person_id = $2',
+        [r.bank_id, r.person_id, at, by, now],
       );
     }
   }

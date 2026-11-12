@@ -4,6 +4,9 @@
 
 export const NO_TEXT_TAG = 'do-not-text';
 export const NO_CONTACT_TAG = 'do-not-contact';
+// Asked not to be phoned: no phone bank, no call through the campaign's
+// number, never sent to the dialer (ext/callhub). Texts are another matter.
+export const NO_CALL_TAG = 'do-not-call';
 export const FOOTER = 'Reply STOP to opt out';
 export const DEFAULT_TEMPLATE = "Hi {{first_name}}, it's {{my_name}} with {{campaign}}. Can we count on your support?";
 export const DEFAULT_FROM = 9;   // texts may go from 9 am …

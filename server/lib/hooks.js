@@ -61,6 +61,15 @@ const registry = { events: [], contactLogged: [], brief: [], textOut: [], underL
 //                                   what every campaign starts with.
 Object.assign(registry, { personsWhere: [], importRows: [], sampleLoaded: [], sampleCleared: [], workspaceCreated: [] });
 
+// Two records made one (ext/duplicates person.merge):
+//   personMerging(tx, ctx, { keep, drop })   before anything of drop's
+//                                   moves to keep: both records' rows as
+//                                   they are (locked). A feature settles
+//                                   here what it can no longer tell apart
+//                                   afterwards — whose was whose (ext/
+//                                   callhub: a call's hold on a tag).
+Object.assign(registry, { personMerging: [] });
+
 export const onHook = (name, fn) => {
   if (!registry[name]) throw new Error(`unknown hook ${name}`);
   registry[name].push(fn);

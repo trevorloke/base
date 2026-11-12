@@ -608,8 +608,9 @@ const atRootFor = (workspaceId) => {
 };
 // Shared: pictures, and what services and emails already sent call back
 // (Stripe's and Twilio's webhooks, the email sender's delivery events,
-// Mailchimp's unsubscribes, the unsubscribe links /u, /bu and /lu), so no
-// domain setting ever drops a payment, a STOP, a bounce or an unsubscribe.
+// Mailchimp's unsubscribes, the dialer's call results, the unsubscribe links
+// /u, /bu and /lu), so no domain setting ever drops a payment, a STOP, a
+// bounce, a call's result or an unsubscribe.
 // Each only in the shape, the case and with the method it comes in, as its
 // route takes it (an unsubscribe link's id in either case): nothing else of
 // the app answers there. (/r/… there is the site's referral link, never a
@@ -622,6 +623,7 @@ const SHARED = [
   [['POST'], /^\/hooks\/mail\/[a-z]+$/], // the email sender's delivery events (ext/mail)
   [['GET', 'HEAD', 'POST'], /^\/hooks\/mailchimp\/[0-9a-f]{32}$/], // Mailchimp's unsubscribes (ext/mailchimp); it asks the address before saving it
   [['POST'], TWILIO],
+  [['POST'], /^\/hooks\/callhub\/[0-9a-f]{32}$/], // the dialer's call results (ext/callhub)
   [['GET', 'HEAD', 'POST'], UNSUBSCRIBE],
 ];
 const shared = (c) => SHARED.some(([methods, path]) => methods.includes(c.req.method) && path.test(c.req.path));

@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useNavigate, useSearchParams, useLocation, Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES, SUGGESTED_TAGS } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES, SUGGESTED_TAGS, noCalls } from '@starbase/shared/canvass';
 import { bandOf, codesInBand, offTail, ratingByCode } from '@starbase/shared/scale';
 import RatingButtons, { RatingChip, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
 import { queueAction } from '../offline.js';
@@ -125,6 +125,8 @@ export { noSignal };
 
 export const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
 export const isDnc = (p) => Array.isArray(p?.tags) && p.tags.includes('do-not-contact');
+// Asked not to be phoned: off the Calls list for a call; a text is another matter.
+export { noCalls };
 export const streetLine = (p) => [p.unit ? `${p.unit} –` : null, p.address].filter(Boolean).join(' ');
 // The opening line of a text: "Hi Aisha, it's Trevor with Imagine Surrey."
 export const textBody = (p, me) =>
@@ -869,7 +871,7 @@ function PeopleList() {
                   <td>{p.rating && <RatingTag code={p.rating} />}</td>
                   <td>
                     {!p.phone ? <span className="muted">—</span>
-                      : ownDialler ? <a className="tel" href={telHref(p.phone)} onClick={(e) => e.stopPropagation()}>{p.phone}</a>
+                      : ownDialler && !noCalls(p) ? <a className="tel" href={telHref(p.phone)} onClick={(e) => e.stopPropagation()}>{p.phone}</a>
                         : <span className="tel">{p.phone}</span>}
                   </td>
                   <td>{streetLine(p) || <span className="muted">—</span>}</td>
@@ -1011,7 +1013,7 @@ function CallsScreen() {
   const list = persons.data?.persons;
   // Text mode also skips anyone who opted out of texts (replied STOP).
   const reachable = useMemo(
-    () => (list ?? []).filter((p) => p.phone && !isDnc(p) && !(channel === 'text' && noTexts(p))),
+    () => (list ?? []).filter((p) => p.phone && !isDnc(p) && !(channel === 'text' ? noTexts(p) : noCalls(p))),
     [list, channel],
   );
   const rows = useMemo(() => {
@@ -1064,7 +1066,7 @@ function CallsScreen() {
     const p = list.find((x) => x.id === wantId);
     if (!p) return;
     wanted.current = wantId;
-    if (!p.phone || isDnc(p) || (channel === 'text' && noTexts(p))) return;
+    if (!p.phone || isDnc(p) || (channel === 'text' ? noTexts(p) : noCalls(p))) return;
     setHeld(p);
     setCurrentId(p.id);
   }, [wantId, list, channel]);

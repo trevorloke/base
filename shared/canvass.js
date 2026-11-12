@@ -65,11 +65,19 @@ export const VOLUNTEER_ROLE_CODES = VOLUNTEER_ROLES.map((r) => r.code);
 export const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'x', 'tiktok', 'reddit', 'youtube', 'linkedin', 'bluesky', 'other'];
 
 // Tags are free-form; these seed the picker so the vocabulary stays consistent.
+// do-not-call: no phone bank, no call through the campaign's number, never
+// sent to the dialer — texts, email and the door are untouched.
 export const SUGGESTED_TAGS = [
   'media', 'VIP', 'endorser', 'host', 'donor-prospect', 'lapsed',
   'newsletter', 'petition', 'youth', 'senior', 'business', 'faith',
-  'union', 'do-not-contact',
+  'union', 'do-not-call', 'do-not-contact',
 ];
+// Asked not to be phoned — do-not-call, or do-not-contact (no calls, no
+// texts, no email): every Call a screen offers checks this first (a number
+// that is only shown can still be read; it is never one tap to dial).
+export const noCalls = (p) => Array.isArray(p?.tags) && (p.tags.includes('do-not-call') || p.tags.includes('do-not-contact'));
+// What a screen shows where the Call would be: do-not-contact is more than calls.
+export const noCallsWord = (p) => (Array.isArray(p?.tags) && p.tags.includes('do-not-contact') ? 'Do not contact' : 'Do not call');
 
 // Donor tiers, derived from real gifts — never self-declared.
 //   star:      $1,000+ in the calendar year, or $100+/mo recurring

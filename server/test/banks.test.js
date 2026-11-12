@@ -171,3 +171,15 @@ test('Left message: a call that left word — kept as itself, and a bank number 
   const prof = ok(await mgr.get(`/api/persons/${p}`));
   assert.equal(prof.contacts[0].outcome, 'left_message');
 });
+
+test('someone tagged do-not-call is never put in a phone bank — at the start or added later', async () => {
+  const quiet = (await mgr.createPerson('No Calls Example', { phone: '604-555-0197', tags: ['do-not-call'] })).id;
+  const fine = (await mgr.createPerson('Fine Example', { phone: '604-555-0196' })).id;
+  const r = ok(await mgr.action('bank.create', { name: 'Do not call', person_ids: [quiet, fine] }));
+  assert.equal(r.added, 1, 'only the one who may be called');
+  assert.equal(r.skipped, 1, 'do-not-call is left out');
+  const numbers = ok(await mgr.get(`/api/banks/${r.bank.id}`)).numbers.map((n) => n.person_id);
+  assert.deepEqual(numbers, [fine]);
+  const again = ok(await mgr.action('bank.add', { id: r.bank.id, person_ids: [quiet] }));
+  assert.deepEqual([again.added, again.skipped], [0, 1], 'nor added afterwards');
+});

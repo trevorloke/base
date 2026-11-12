@@ -100,6 +100,7 @@ Then, as each one is ready:
 | `SITE_HOSTS` | the campaign's own domains, once the website moves onto base.win (`imaginesurrey.ca,www.imaginesurrey.ca`; §2) | the website at `/` there, nothing of the app (SITE.md) |
 | `APP_HOSTS` | the app's other addresses on this server, comma-separated: once `STARBASE_PUBLIC_URL` is base.win, the one people used before (`starbase.imaginesurrey.ca`); never the website's own domain | the app keeps answering there: none of them can be made the website's domain |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | from Stripe: **test** keys on staging first; **live** keys on production only once a test gift has gone all the way through | gifts and membership dues paid online on the website (INTEGRATIONS.md, *Online payments — Stripe*) |
+| `CALLHUB_API_KEY`, `CALLHUB_API_BASE` | from CallHub: the account's API key; the second only when the account's API is on another host than `https://api.callhub.io` | only if the campaign calls through CallHub's dialer: *Send to CallHub* on a list or a phone bank, each call's result back on the person (INTEGRATIONS.md, *Phone dialer — CallHub*) |
 
 Twilio: set the number's incoming-message webhook to
 `https://starbase.imaginesurrey.ca/api/public/twilio/sms` (HTTP POST). The
@@ -134,6 +135,14 @@ secret in `STRIPE_WEBHOOK_SECRET`. The keys go in the host's environment
 only — never in the repo, a chat or an email. Test mode first: on staging,
 test keys and Stripe's test card; the desk says *Test mode* until live keys
 are in.
+
+CallHub: nothing to paste into CallHub by hand. With the key set, **Settings
+→ Services → Phone dialer (CallHub)** → **Check**, then **Connect** (it
+gives CallHub the address results come back to, built from
+`STARBASE_PUBLIC_URL`). It was built from CallHub's published
+documentation and has not been run against a real account: before the
+first calling night, make one test call and see its result arrive on the
+person (INTEGRATIONS.md has the steps and what is not confirmed).
 
 **Check them.** After the first sign-in (below): **Settings → Services** in
 the admin lists every service, says which settings are missing, and
