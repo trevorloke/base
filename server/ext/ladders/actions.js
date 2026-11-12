@@ -39,7 +39,6 @@
 // makes one, or changes or turns on a ladder that has one: it hands on
 // emails a volunteer may never see. The address is kept with the ladder; the
 // event log keeps only the site it goes to (forLog).
-import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
@@ -141,21 +140,20 @@ const lookUpHooks = async (db, ctx, input) => {
 // shows the step as a Stop, "Save step" on that card sends a Stop in its
 // place and "Remove step" sends the steps without it — an address lost, and
 // a ladder that ends there for everyone after. A release can't change a
-// page already open, so the server knows those two saves when it sees them
-// (one such step turned into a Stop, or gone, and every other step as it
-// was) and says to reload. A page says which kinds it has words for with
-// each save (`knows`); every page has had these seven. Whatever else the
-// older page saves — a step moved, another one changed — hands the step
-// back as it came.
+// page already open, so the server checks what such a page cannot have
+// meant: of each kind the saving page has no words for, as many steps must
+// come back as are stored (that page hands a step it can't read back as it
+// came — moved, or beside another step it changed — and can't make one).
+// Fewer — made a Stop, taken away, also under a stale tab's older copy of
+// the other steps — is refused, and the page is told to reload. A page
+// says which kinds it has words for with each save (`knows`); every page
+// has had these seven.
 const FIRST_KINDS = ['wait', 'email', 'text', 'tag', 'untag', 'followup', 'stop'];
 const RELOAD = 'Reload this page — it’s out of date and shows this step wrongly';
 const misread = (cur, next, knows) => {
   const known = new Set([...FIRST_KINDS, ...(knows || [])]);
-  const restAsItWas = (i, at) => cur.every((s, j) => j === i || isDeepStrictEqual(s, next[at(j)]));
-  return cur.some((s, i) => !known.has(s.kind) && (
-    (next.length === cur.length && next[i].kind === 'stop' && restAsItWas(i, (j) => j))
-    || (next.length === cur.length - 1 && restAsItWas(i, (j) => (j < i ? j : j - 1)))
-  ));
+  const count = (steps, kind) => steps.filter((s) => s?.kind === kind).length;
+  return [...new Set(cur.map((s) => s.kind))].some((kind) => !known.has(kind) && count(next, kind) < count(cur, kind));
 };
 
 const out = (l) => ({

@@ -1050,7 +1050,9 @@ sent there, once, as one small JSON message:
   same on every try for one person at one step.
 - **Tries.** The address has 5 seconds to answer 2xx, and is handed one
   message at a time; while it takes its time, everything else base.win
-  sends (other addresses, emails, receipts) goes on. Any other answer
+  sends (other addresses, emails, receipts) goes on — when 25 are already
+  waiting for it, the next waits its turn back in the queue a few seconds
+  later, with no try counted. Any other answer
   but a redirect, or none, is tried again after a minute, then after five
   more — three in all — and then the person's log on the ladder says
   *Zapier: Failed · 500 after 3 tries* and the ladder carries on: a

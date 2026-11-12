@@ -940,9 +940,11 @@ const runStep = async (db, job) => {
 // is never handed two messages at once, three in a row with no answer still
 // means three people, and each step is claimed just before its own call —
 // while another address isn't made to wait for it. Should a line grow long
-// (a burst of people at a slow address), the runner waits for it after
-// all, so no more pile up behind.
+// (a burst of people at a slow address), a step that would join it goes
+// back to the queue a few seconds on instead (lib/jobs.js `again`, no try
+// counted): no more pile up in memory, and the runner never waits for it.
 const LINE_MAX = 25;
+const LINE_FULL_MS = 5000;
 let lineMax = LINE_MAX;
 export const _setLineMaxForTest = (n) => { lineMax = n || LINE_MAX; };
 const lines = new Map(); // address → the end of the last step in its line
@@ -974,7 +976,6 @@ const hookAddress = async (db, job) => {
 export const runStepJob = async (db, job) => {
   const url = await hookAddress(db, job);
   if (!url) return runStep(db, job);
-  const turn = inLine(url, () => runStep(db, job));
-  if (inLines > lineMax) return turn;
-  return { later: turn };
+  if (inLines >= lineMax) return { again: LINE_FULL_MS };
+  return { later: inLine(url, () => runStep(db, job)) };
 };

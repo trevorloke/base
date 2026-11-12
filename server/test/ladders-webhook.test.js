@@ -692,8 +692,9 @@ test('an address that is slow to answer holds nothing queued behind it: the next
   assert.ok((await tagsOf(three[2].id)).includes('after-held') && (await tagsOf(dee.id)).includes('after-nearby'));
 
   // The runner's own passes don't wait for the address at all (lib/jobs.js
-  // settle: false) — until the line for it is long: then it waits after
-  // all, so no more pile up behind (two here; twenty-five on a server).
+  // settle: false) — and when the line for it is long, a step that would
+  // join it goes back to the queue a few seconds on, with no try counted
+  // (two here; twenty-five on a server): the pass is still not held.
   const pass = () => { const p = { over: false }; p.end = runDueJobs(db, { workspaceId: ws, settle: false }).then(() => { p.over = true; }); return p; };
   const calls = () => got('held').length;
   hooks.hold(1);
@@ -702,15 +703,20 @@ test('an address that is slow to answer holds nothing queued behind it: the next
   await waitFor(() => calls() === 4);
   await waitFor(() => p.over, 2000).catch(() => {});
   assert.deepEqual([p.over, (await runOf(lad.id, later[0].id)).wait], [true, 'sending'], 'one in the line: the pass is over while the address has yet to answer');
+  const backLater = async () => (await db.query(
+    `select attempts from jobs where workspace_id = $1 and kind = 'ladder.step' and status = 'pending' and run_at > now()`, [ws],
+  )).rows;
   _setLineMaxForTest(2);
   try {
     later.push(await mgr.createPerson('Ivy Example', { tags: ['held'] }), await mgr.createPerson('Jan Example', { tags: ['held'] }));
     p = pass();
-    await new Promise((r) => { setTimeout(r, 200); });
-    assert.equal(p.over, false, 'three in the line, more than two: this pass waits');
+    await waitFor(() => p.over, 2000).catch(() => {});
+    assert.equal(p.over, true, 'a full line: this pass doesn’t wait for it either');
+    assert.deepEqual((await backLater()).map((j) => j.attempts), [0], 'the one that would make three is back in the queue, a few seconds on, no try counted');
     hooks.release(200);
-    await p.end;
   } finally { _setLineMaxForTest(null); hooks.release(200); hooks.asUsual(); }
+  await db.query(`update jobs set run_at = now() where workspace_id = $1 and kind = 'ladder.step' and status = 'pending'`, [ws]);
+  await runJobs();
   await waitFor(async () => (await Promise.all(later.map((x) => runOf(lad.id, x.id)))).every((r) => hookLog(r).some((e) => e.result === 'sent')));
   await runJobs();
   assert.ok((await Promise.all(later.map((x) => runOf(lad.id, x.id)))).every((r) => r.status === 'done'));
@@ -937,6 +943,16 @@ test('a page from before the step existed shows it as a Stop: its Save step and 
   // A page that has words for the step says so with each save (`knows`): it may take the step away.
   const gone = ok(await mgr.action('ladder.update', { id: lad.id, steps: [{ kind: 'tag', tag: 'a2' }, { kind: 'stop' }], knows: ['wait', 'stop', 'webhook'] })).ladder;
   assert.deepEqual(gone.steps.map((s) => s.kind), ['tag', 'stop']);
+  // A stale tab: another tab changed another step since it read the ladder.
+  // Its "Save step" on the card it calls Stop still never writes over the address.
+  const stale = await create({ name: 'Stale tab', trigger: { kind: 'tag', ref: 'stale' }, steps: [{ kind: 'tag', tag: 'a' }, hook, { kind: 'tag', tag: 'b' }] });
+  const [sa, sh, sb] = ok(await mgr.get(`/api/ladders/${stale.id}`)).ladder.steps;
+  ok(await mgr.action('ladder.update', { id: stale.id, steps: [{ kind: 'tag', tag: 'a2' }, sh, sb], knows: ['wait', 'stop', 'webhook'] }));
+  r = await mgr.action('ladder.update', { id: stale.id, steps: [sa, { kind: 'stop' }, sb] });
+  assert.deepEqual([r.status, r.json.error], [409, RELOAD], 'the stale tab’s Stop is refused too');
+  r = await mgr.action('ladder.update', { id: stale.id, steps: [sa, sb] });
+  assert.deepEqual([r.status, r.json.error], [409, RELOAD], 'and its Remove step');
+  assert.deepEqual(ok(await mgr.get(`/api/ladders/${stale.id}`)).ladder.steps, [{ kind: 'tag', tag: 'a2' }, sh, sb]);
   // On a ladder with no such step the older page saves as it always did — a Stop in a step's place too.
   ok(await old([{ kind: 'stop' }, { kind: 'stop' }]));
   ok(await old([{ kind: 'stop' }]));

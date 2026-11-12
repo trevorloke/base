@@ -153,3 +153,21 @@ test('the events hook sees each write and can add to the same chain', async () =
   assert.deepEqual(last, ['hook_echo', 'thing']);
   assert.equal((await verifyChain(db, ws)).ok, true);
 });
+
+test('a handler that can’t start now hands the job back ({ again }): pending that much later, no try counted', async () => {
+  let asked = 0;
+  registerJob(`test.again.${tag}`, async () => { asked += 1; return asked === 1 ? { again: 60_000 } : undefined; });
+  const { result: id } = await runAction(db, { workspaceId: ws, actorId: null, action: 'test.schedule' }, async (tx) => (
+    enqueueJob(tx, { workspaceId: ws, kind: `test.again.${tag}` })));
+  await runDueJobs(db, { workspaceId: ws });
+  let row = await jobRow(id);
+  assert.equal(row.status, 'pending');
+  assert.equal(row.attempts, 0, 'no try counted');
+  assert.ok(new Date(row.run_at) > new Date(Date.now() + 50_000), 'a minute on');
+  await runDueJobs(db, { workspaceId: ws });
+  assert.equal(asked, 1, 'not before its time');
+  await db.query('update jobs set run_at = now() where id = $1', [id]);
+  await runDueJobs(db, { workspaceId: ws });
+  row = await jobRow(id);
+  assert.deepEqual([asked, row.status, row.attempts], [2, 'done', 1]);
+});

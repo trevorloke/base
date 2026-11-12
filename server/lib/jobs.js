@@ -10,6 +10,9 @@
 //       another tool) may hand it back instead of waiting for it: return
 //       { later: <promise> }. The next job starts at once; this one is
 //       done — or failed, and tried again — when the promise settles.
+//       Or, when it can't start the work now (a line that is full), hand
+//       the job back to the queue: return { again: <ms> } — it runs again
+//       that much later, and no try is counted.
 //   enqueueJob(tx, { workspaceId, kind, runAt?, payload?, key? })
 //       inside an action's transaction, so scheduling commits with the
 //       event that caused it; `key` makes it idempotent per workspace.
@@ -92,7 +95,12 @@ export const runDueJobs = async (db, { limit = 25, workspaceId = null, settle = 
       if (!fn) throw new Error(`no handler for job kind ${job.kind}`);
       const out = await fn(db, job);
       if (out?.later) later.push(Promise.resolve(out.later).then(() => done(job)).catch((e) => fail(job, e)));
-      else await done(job);
+      else if (out?.again) {
+        await db.query(
+          `update jobs set status = 'pending', attempts = greatest(attempts - 1, 0), run_at = now() + ($2 || ' milliseconds')::interval
+           where id = $1`, [job.id, String(Math.max(0, Math.round(Number(out.again) || 0)))],
+        );
+      } else await done(job);
     } catch (e) {
       await fail(job, e);
     }
