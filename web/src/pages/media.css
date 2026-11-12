@@ -2,7 +2,7 @@
    shared classes; variables only, no colours of its own. */
 
 .md-page { max-width: 720px; }
-@media (min-width: 900px) { .md-page:has(.md-table) { max-width: 1100px; } }
+@media (min-width: 1000px) { .md-page:has(.md-table) { max-width: 1100px; } }
 
 .md-big .lbl { overflow-wrap: anywhere; }
 .md-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: var(--s-2); }
@@ -32,6 +32,26 @@
 .md-wrap { overflow-wrap: anywhere; }
 .md-table td { vertical-align: middle; font-size: 14px; }
 .md-table .md-wont { margin: 0 0 0 var(--s-2); }
+/* Columns sized to what they hold: a long outlet wraps at word breaks
+   instead of widening the table, short things stay on one line, and an
+   address or handle too long for its column ends in "…" (the whole of it
+   in the title) rather than breaking mid-word. */
+.md-table th, .md-table .md-one { white-space: nowrap; }
+.md-table .md-outlet { min-width: 120px; max-width: 220px; }
+.md-table .md-who { min-width: 160px; max-width: 260px; }
+.md-table .md-who .md-wont { display: table; margin: 4px 0 0; }
+.md-table .md-cut.md-beat { max-width: 160px; }
+.md-table .md-cut { max-width: 240px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.md-table .md-handles { display: flex; flex-direction: column; gap: 2px; }
+.md-table .md-handles a { display: block; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+@media (max-width: 1199px) {
+  .md-table th, .md-table td { padding-left: 8px; padding-right: 8px; }
+  .md-table .md-who { min-width: 120px; max-width: 200px; }
+  .md-table .md-outlet { min-width: 90px; max-width: 160px; }
+  .md-table .md-cut { max-width: 150px; }
+  .md-table .md-cut.md-beat { max-width: 100px; }
+  .md-table .md-handles a { max-width: 110px; }
+}
 .md-name {
   font: inherit; font-weight: 600; color: var(--text-1); background: none; border: 0; padding: 0; text-align: left;
   min-height: var(--ctl); cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule-2); text-underline-offset: 3px;
@@ -50,7 +70,9 @@
 .md-tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .md-form { display: flex; flex-direction: column; gap: var(--s-3); }
 .md-form .field { margin: 0; }
+.md-social { display: flex; flex-direction: column; gap: var(--s-2); }
 .md-social__row { display: flex; gap: var(--s-2); }
+.md-social__more { align-self: flex-start; }
 .md-social__row select { flex: 0 0 auto; width: auto; }
 .md-social__row input { flex: 1 1 auto; min-width: 0; }
 .md-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-2) 0; }

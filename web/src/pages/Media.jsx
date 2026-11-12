@@ -43,8 +43,9 @@ const WHY = {
 };
 const PLATFORM_LABEL = { x: 'X', tiktok: 'TikTok', youtube: 'YouTube', linkedin: 'LinkedIn' };
 const platformLabel = (p) => PLATFORM_LABEL[p] || p.charAt(0).toUpperCase() + p.slice(1);
-// A handle → its profile page, to open and message them. (Social links' own
-// helper, shared/socials.js, takes this over once it is in the tree.)
+// A handle → its profile page, to open and message them: the canonical
+// addresses social links' own helper (shared/socials.js profileUrl and
+// shownHandle) gives; that helper takes this over once it is in the tree.
 const PROFILE = {
   facebook: 'https://www.facebook.com/', instagram: 'https://www.instagram.com/', x: 'https://x.com/', tiktok: 'https://www.tiktok.com/@',
   reddit: 'https://www.reddit.com/user/', youtube: 'https://www.youtube.com/@', linkedin: 'https://www.linkedin.com/in/', bluesky: 'https://bsky.app/profile/',
@@ -70,9 +71,10 @@ const fmtShort = (ts) => {
   return `${d.toLocaleDateString('en-CA', { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })}`;
 };
 
-// Wide enough for the desk table (900 px and up).
+// Wide enough for the desk table: 1000 px and up, since the side menu takes
+// about 230 of them (narrower, the table could only fit by breaking words).
 function useWide() {
-  const q = '(min-width: 900px)';
+  const q = '(min-width: 1000px)';
   const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia?.(q).matches);
   useEffect(() => {
     const m = window.matchMedia?.(q);
@@ -313,7 +315,13 @@ function KindChips({ value, onChange }) {
 function AddContact({ onClose, onAdded }) {
   const qc = useQueryClient();
   const online = useOnline();
-  const [f, setF] = useState({ name: '', kind: 'media', email: '', outlet: '', phone: '', beat: '', note: '', platform: 'instagram', handle: '' });
+  const [f, setF] = useState({ name: '', kind: 'media', email: '', outlet: '', phone: '', beat: '', note: '' });
+  // Socials, one row per network, as on a person's page: an influencer is
+  // often on two or three.
+  const [socials, setSocials] = useState([{ platform: 'instagram', handle: '' }]);
+  const setSocial = (i, k) => (e) => setSocials(socials.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)));
+  const unused = SOCIAL_PLATFORMS.filter((p) => !socials.some((x) => x.platform === p));
+  const filled = Object.fromEntries(socials.filter((x) => x.handle.trim()).map((x) => [x.platform, x.handle.trim()]));
   const act = useAction(() => qc.invalidateQueries({ queryKey: ['media'] }));
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const submit = async (e) => {
@@ -325,7 +333,7 @@ function AddContact({ onClose, onAdded }) {
       ...(f.outlet.trim() ? { outlet: f.outlet.trim() } : {}),
       ...(f.beat.trim() ? { beat: f.beat.trim() } : {}),
       ...(f.note.trim() ? { note: f.note.trim() } : {}),
-      ...(f.handle.trim() ? { socials: { [f.platform]: f.handle.trim() } } : {}),
+      ...(Object.keys(filled).length ? { socials: filled } : {}),
     });
     if (r) onAdded(r.existing ? 'Already in People — added to the media list' : `Added ${f.name.trim()}`);
   };
@@ -345,13 +353,19 @@ function AddContact({ onClose, onAdded }) {
         <div className="field"><label htmlFor="md-a-beat">Beat</label>
           <input id="md-a-beat" className="input" maxLength={160} value={f.beat} onChange={set('beat')} placeholder="City hall" /></div>
         <div className="field md-social">
-          <label htmlFor="md-a-handle">Social</label>
-          <div className="md-social__row">
-            <select className="input" aria-label="Network" value={f.platform} onChange={set('platform')}>
-              {SOCIAL_PLATFORMS.map((p) => <option key={p} value={p}>{platformLabel(p)}</option>)}
-            </select>
-            <input id="md-a-handle" className="input" maxLength={300} value={f.handle} onChange={set('handle')} placeholder="@handle or link" />
-          </div>
+          <label htmlFor="md-a-handle-0">Socials</label>
+          {socials.map((x, i) => (
+            <div key={i} className="md-social__row">
+              <select className="input" aria-label={`Network ${i + 1}`} value={x.platform} onChange={setSocial(i, 'platform')}>
+                {SOCIAL_PLATFORMS.filter((p) => p === x.platform || !socials.some((y) => y.platform === p)).map((p) => <option key={p} value={p}>{platformLabel(p)}</option>)}
+              </select>
+              <input id={`md-a-handle-${i}`} className="input" maxLength={300} aria-label={`${platformLabel(x.platform)} handle or link`} value={x.handle} onChange={setSocial(i, 'handle')}
+                placeholder={x.platform === 'other' ? 'https://…' : '@handle or link'} />
+            </div>
+          ))}
+          {unused.length > 0 && (
+            <button type="button" className="btn btn-quiet ot-btn-tap md-social__more" onClick={() => setSocials([...socials, { platform: unused[0], handle: '' }])}>Add another</button>
+          )}
         </div>
         <div className="field"><label htmlFor="md-a-note">Note</label>
           <textarea id="md-a-note" className="input" rows={3} maxLength={500} value={f.note} onChange={set('note')} /></div>
