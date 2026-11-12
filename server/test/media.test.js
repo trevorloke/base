@@ -143,6 +143,8 @@ test('staff denied Outreach but holding Media does the whole job; the queued rel
   assert.equal((await staff.get('/api/blasts')).status, 403);
   const pic = ok(await staff.action('media.picture', { data: PNG, name: 'p.png' }));
   assert.match(pic.media.url, /^\/media\//);
+  const extra = ok(await staff.action('media.attach', { data: Buffer.from('later').toString('base64'), name: 'later.txt' }));
+  ok(await staff.action('media.unattach', { id: extra.attachment.id }), 'and takes one back');
   const file = ok(await staff.action('media.attach', { data: Buffer.from('hello').toString('base64'), name: 'notes.txt' }));
   resend.sent.length = 0;
   const t = ok(await staff.action('media.test', { subject: 'Draft', body: `See ![p](${pic.media.url})`, attachment_ids: [file.attachment.id] }));

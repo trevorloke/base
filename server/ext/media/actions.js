@@ -14,7 +14,7 @@
 // area's own names, so someone with Media but not Outreach can work:
 //   media.send     blast.send's press release, To: media, influencers or both
 //   media.test     blast.test, kind press
-//   media.attach · media.picture   blast.attach · blast.picture
+//   media.attach · media.unattach · media.picture   blast.attach · blast.unattach · blast.picture
 //   media.resend   blast.resend, for a press release only
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
@@ -171,5 +171,7 @@ export const actions = {
 
   'media.attach': { ...FILES['blast.attach'], roles: DESK_ROLES },
   'media.picture': { ...FILES['blast.picture'], roles: DESK_ROLES },
+  // Taking back a file not yet sent (the compose's ×), as blast.unattach.
+  'media.unattach': { ...FILES['blast.unattach'], roles: DESK_ROLES },
 };
 
