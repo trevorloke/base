@@ -444,8 +444,11 @@ one tap away under **More**.
   phone bank → *Who calls* → a candidate (only the desk with Donations);
   their Today leads with *Start call time →*; on `/call-time` a pledge over
   the room is refused in words, a pledge, *No answer* and an answer made
-  offline all land; the treasurer sees *Pledges from call time* under Needs
-  you and *Gift in ✓* once the gift is logged; another candidate gets 404.
+  offline all land, and an offline answer refused as already called drops
+  off the *All done* count; the treasurer sees *Pledges from call time*
+  under Needs you and *Gift in ✓* once the gift is logged; another
+  candidate gets 404; a removed candidate's call time stays closed, with no
+  *Reopen*.
   Server tests: `server/test/candidates.test.js` (also `banks.test.js`,
   `admin.test.js` and `twostep-grants.test.js`); in a browser:
   `e2e-candidates.mjs` (PORT, SHOTS; ports 5170–5179 in its header).

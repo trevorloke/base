@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, action, dollarsToCents } from '../api.js';
-import { queueAction, onOutboxSent } from '../offline.js';
+import { queueAction, onOutboxSent, useOutbox } from '../offline.js';
 import { queuedText } from '../components/queued.js';
 import { phoneCopy, useKeepCopy } from '../components/OfflineCache.js';
 import { useOnline } from '../components/NoSignal.jsx';
@@ -68,9 +68,10 @@ export default function CallTime() {
   });
   useKeepCopy(me, copyName, page);
 
-  // Answered on this phone: { [person_id]: { result, amount, queued } } —
-  // off the card at once; one still in the outbox is counted at the end.
+  // Answered on this phone: { [person_id]: { result, amount } } — off the
+  // card at once. One still in the outbox is counted at the end (below).
   const [answered, setAnswered] = useState({});
+  const outbox = useOutbox();
   const [open, setOpen] = useState(null); // 'pledge' | 'callback' | null
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -88,7 +89,6 @@ export default function CallTime() {
   // An answer that waited in the outbox has gone: count it from the server now.
   useEffect(() => onOutboxSent(({ name, input }) => {
     if (name !== 'calltime.log') return;
-    setAnswered((a) => (a[input.person_id] ? { ...a, [input.person_id]: { ...a[input.person_id], queued: false } } : a));
     queryClient.invalidateQueries({ queryKey: ['calltime', input.bank_id] });
     queryClient.invalidateQueries({ queryKey: ['candidate-home'] });
   }), [queryClient]);
@@ -121,7 +121,7 @@ export default function CallTime() {
         bank_id: bankId, person_id: current.person_id, result,
         ...(cents ? { amount_cents: cents } : {}), ...(note.trim() ? { note: note.trim() } : {}),
       }, { who: current.name });
-      setAnswered((a) => ({ ...a, [current.person_id]: { result, amount: cents || 0, queued: Boolean(r.queued) } }));
+      setAnswered((a) => ({ ...a, [current.person_id]: { result, amount: cents || 0 } }));
       setLastPledge(result === 'pledged' && current.phone ? { name: current.name, phone: current.phone } : null);
       say(r.queued ? queuedText(r) : 'Saved');
       if (!r.queued) {
@@ -135,7 +135,7 @@ export default function CallTime() {
       // answered from another phone): the card reads it afresh.
       if (e.status === 400 || e.status === 409) queryClient.invalidateQueries({ queryKey: ['calltime', bankId] });
       if (e.status === 409) {
-        setAnswered((a) => ({ ...a, [current.person_id]: { result: 'elsewhere', amount: 0, queued: false } }));
+        setAnswered((a) => ({ ...a, [current.person_id]: { result: 'elsewhere', amount: 0 } }));
         say(`${firstName(current.name)} · already called`);
       }
     } finally {
@@ -148,7 +148,7 @@ export default function CallTime() {
     setBusy(true); setError(null);
     try {
       await action('bank.callback', { id: bankId, person_id: current.person_id, at: when().toISOString() });
-      setAnswered((a) => ({ ...a, [current.person_id]: { result: 'later', amount: 0, queued: false } }));
+      setAnswered((a) => ({ ...a, [current.person_id]: { result: 'later', amount: 0 } }));
       say(`${firstName(current.name)} · back on your list later`);
     } catch (e) {
       setError(e.message);
@@ -172,9 +172,11 @@ export default function CallTime() {
   }
 
   const bank = page.data.bank;
-  const waiting = Object.values(answered).filter((x) => x.queued && x.result !== 'later');
+  // Answers still waiting in the outbox, read from the outbox itself: one
+  // the server refused (already called from another phone) isn't counted.
+  const waiting = outbox.items.filter((i) => i.name === 'calltime.log' && i.state === 'pending' && i.input?.bank_id === bankId);
   const calls = page.data.done.calls + waiting.length;
-  const pledged = page.data.done.pledged_cents + waiting.reduce((s, x) => s + (x.result === 'pledged' ? x.amount : 0), 0);
+  const pledged = page.data.done.pledged_cents + waiting.reduce((s, i) => s + (i.input.result === 'pledged' ? i.input.amount_cents || 0 : 0), 0);
   // Still to call: the server's count, less what this phone has answered
   // that the server hasn't counted yet (still in its list). The card holds
   // the first 200; the rest come with the next read.

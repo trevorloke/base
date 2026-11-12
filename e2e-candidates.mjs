@@ -14,7 +14,10 @@
 // the room is refused in words, $250 is pledged, No answer, and the last
 // answer is made offline and sent on reconnect; the treasurer sees
 // "Pledges from call time · 1 · $250", logs the gift, and it reads "Gift in
-// ✓"; Mo gets 404 for Cleo's call time. Screens at 1440x900 and 390.
+// ✓"; an offline pledge to a donor her other phone already answered is
+// refused on reconnect and drops off "All done"; Mo gets 404 for Cleo's
+// call time; Mo is removed and his call time stays closed (no Reopen).
+// Screens at 1440x900 and 390.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5170 node server/index.js &
 //   BASE=http://127.0.0.1:5170 SHOTS=/tmp/candidates node e2e-candidates.mjs
@@ -344,6 +347,43 @@ const m8 = await measure(tpp, 'main');
 check('Donations at 390 with pledges: no sideways scroll', m8.overflow <= 0, JSON.stringify(m8));
 await tpp.screenshot({ path: `${SHOTS}/21-pledges-390.png`, fullPage: true });
 
+// ── 8b. An offline answer the server refuses is not counted ──
+// Two more donors on a bank of Cleo's. With no signal she pledges $250 to
+// the first; meanwhile her other phone answers the same donor (Not now).
+// She answers the second (Not now) and comes back online: the pledge is
+// refused as already called, and the end counts only what the server has.
+const smalls = [];
+for (const [i, n] of ['Small0', 'Small1'].entries()) {
+  smalls.push((await api('/actions/person.create', { name: `${n} Donor${tag}`, phone: `604-555-01${70 + i}`, tags: [`sm${tag}`] })).json.person);
+}
+const smallBank = (await api('/actions/bank.create', { name: 'Cleo’s small donors', person_ids: smalls.map((s) => s.id), candidate_id: (await api('/candidates')).json.candidates.find((c) => c.name === 'Cleo Example').id })).json.bank.id;
+const other = await browser.newContext(PHONE);
+await other.addCookies(await cleo.ctx.cookies());
+await cleo.p.goto(`${BASE}/call-time?bank=${smallBank}`, { waitUntil: 'domcontentloaded' });
+await cleo.p.waitForSelector('.ct-card .ct-name', { timeout: 10000 });
+await sleep(600);
+const firstSmall = await cleo.p.innerText('.ct-name');
+const firstSmallId = smalls.find((s) => s.name === firstSmall.trim())?.id;
+await cleo.ctx.setOffline(true);
+await sleep(300);
+await cleo.p.click('button.ct-answer:has-text("Pledged")');
+await cleo.p.fill('#ct-amount', '250');
+await cleo.p.click('button:has-text("Save pledge")');
+await cleo.p.waitForFunction((n) => document.querySelector('.ct-name')?.textContent !== n, firstSmall, { timeout: 8000 });
+const elsewhere = await apiOf(other)('/actions/calltime.log', { client_id: crypto.randomUUID(), bank_id: smallBank, person_id: firstSmallId, result: 'no' });
+await cleo.p.click('button.ct-answer:has-text("Not now")');
+await cleo.p.waitForSelector('.ct-done', { timeout: 8000 });
+await cleo.ctx.setOffline(false);
+await cleo.p.waitForFunction(() => /refused/.test(document.body.innerText), null, { timeout: 20000 }).catch(() => {});
+await cleo.p.waitForFunction(() => /All done — 2 calls/.test(document.querySelector('.ct-done')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
+const doneSmall = await cleo.p.innerText('.ct-done');
+const serverSmall = (await cleo.api(`/calltime/${smallBank}`)).json?.done;
+check('a refused offline pledge drops off the end: "All done — 2 calls, $0 pledged", as the server has it',
+  elsewhere.status === 200 && /All done — 2 calls, \$0 pledged/.test(doneSmall) && serverSmall?.calls === 2 && serverSmall?.pledged_cents === 0,
+  `${elsewhere.status} ${doneSmall.replace(/\s+/g, ' ')} ${JSON.stringify(serverSmall)}`);
+await cleo.p.screenshot({ path: `${SHOTS}/21b-calltime-refused-390.png`, fullPage: true });
+await other.close();
+
 // ── 9. Mo sees none of Cleo's call time ──
 const moCt = await moB.api(`/calltime/${bankId}`);
 const moHome = (await moB.api('/candidate/home')).json;
@@ -351,6 +391,24 @@ check('Mo: Cleo’s call time answers 404, and none is his', moCt.status === 404
 await moB.p.goto(`${BASE}/call-time`, { waitUntil: 'domcontentloaded' });
 await moB.p.waitForSelector('text=No call time yet', { timeout: 10000 });
 check('Mo’s /call-time: "No call time yet"', true);
+
+// ── 10. Mo is removed: his call time closes and stays closed ──
+const moSeat = (await api('/candidates')).json.candidates.find((c) => c.name === 'Mo Example').id;
+const moBank = (await api('/actions/bank.create', { name: 'Mo’s call time', person_ids: [smalls[1].id], candidate_id: moSeat })).json.bank.id;
+await api('/actions/candidate.remove', { id: moSeat });
+const reopen = await api('/actions/bank.update', { id: moBank, closed: false });
+await page.goto(`${BASE}/admin/banks/${moBank}`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.bk-calltime', { timeout: 10000 });
+const moBankText = await page.innerText('main');
+check('a removed candidate’s bank: no Reopen, "Mo Example is no longer a candidate — the bank stays closed."',
+  reopen.status === 409 && !/Reopen/.test(await page.innerText('.head-actions')) && /Mo Example is no longer a candidate — the bank stays closed\./.test(moBankText),
+  `${reopen.status} ${moBankText.replace(/\s+/g, ' ').slice(0, 200)}`);
+await page.screenshot({ path: `${SHOTS}/22-removed-candidate-bank-1440.png`, fullPage: true });
+await mp.goto(`${BASE}/admin/banks/${moBank}`, { waitUntil: 'domcontentloaded' });
+await mp.waitForSelector('.bk-calltime', { timeout: 10000 });
+const m10 = await measure(mp, 'main');
+check('the same at 390: no sideways scroll', m10.overflow <= 0, JSON.stringify(m10));
+await mp.screenshot({ path: `${SHOTS}/23-removed-candidate-bank-390.png`, fullPage: true });
 
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
