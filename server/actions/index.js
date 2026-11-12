@@ -17,7 +17,7 @@ import { logGift, voidGift, restoreGift } from '../lib/gifts.js';
 import { FIELD_ACTIONS, personFieldExtensions } from './field.js';
 import { ORGANIZE_ACTIONS } from './organize.js';
 import { httpError } from './util.js';
-import { forViewer } from '../lib/viewer.js';
+import { forViewer, isMoneyTag } from '../lib/viewer.js';
 import { extActions } from '../ext.js';
 export { httpError };
 
@@ -99,6 +99,18 @@ export const ACTIONS = {
         [id, ctx.workspaceId],
       )).rows[0];
       if (!cur) throw httpError(404, 'person not found');
+      // A volunteer (given People) saves what they were shown, which isn't
+      // everything (lib/viewer.js): an email on file they never see is kept
+      // whatever they send (they may add one only where there is none), and
+      // a money tag kept from them stays on.
+      if (ctx.role === 'volunteer') {
+        const shown = forViewer(ctx)(rowToPerson(cur));
+        if ('email' in patch && cur.email && !shown.email) delete patch.email;
+        if (Array.isArray(patch.tags)) {
+          const hidden = rowToPerson(cur).tags.filter(isMoneyTag);
+          patch.tags = [...patch.tags.filter((t) => !isMoneyTag(t)), ...hidden];
+        }
+      }
       const next = { ...rowToPerson(cur), ...patch };
       // A new street or house number: the two parts settle together (a new
       // street keeps the house number only if the patch says so).

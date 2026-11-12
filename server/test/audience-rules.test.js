@@ -57,6 +57,20 @@ test('gave: this year, before but not this year, never, at least $X in one year'
   assert.deepEqual(all, ['Ana', 'Ben', 'Cy', 'Dee', 'Eve', 'Fay']);
 });
 
+test('gave is the Donations area’s: staff the manager denied it sort nobody by it, nor save a list by it — a list the desk saved is still read whole', async () => {
+  const inv = ok(await mgr.action('member.invite', { email: `staff.nomoney.${tag}@example.org`, role: 'staff' }));
+  const staff = new Client();
+  const j = ok(await staff.post('/api/auth/join', { token: inv.joinUrl.split('/join/')[1], name: 'Sam Example', password: 'rules-pass-2026' }));
+  assert.deepEqual(await who('gave=year', staff), ['Ana', 'Eve'], 'staff with Donations: as the manager');
+  ok(await mgr.action('permission.member.set', { user_id: j.user.id, grant: [], deny: ['money'] }));
+  assert.deepEqual(await who('gave=year', staff), [], 'denied Donations: the rule matches nobody');
+  assert.deepEqual(await who('gave=never', staff), [], 'never gave too: nobody');
+  const r = await staff.action('list.create', { name: 'Donors', kind: 'filter', filter: { tag: 'rules', gave: 'year' } });
+  assert.equal(r.status, 403, 'nor saved as a list');
+  const list = ok(await mgr.action('list.create', { name: `Donors ${tag}`, kind: 'filter', filter: { tag: 'rules', gave: 'year' } })).list;
+  assert.equal(ok(await staff.get(`/api/lists/${list.id}`)).counts.total, 2, 'the desk’s list is the desk’s: read whole');
+});
+
 test('member: a membership running today, or one that ended with none running', async () => {
   const term = (key, starts, ends, voided = false) => db.query(
     `insert into member_terms (id, workspace_id, person_id, term_years, starts_on, ends_on, source, voided_at)

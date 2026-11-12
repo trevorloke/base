@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { newId } from '../../lib/events.js';
 import { httpError } from '../../actions/util.js';
 import { DESK_RULES, cleanFilter, joinWhere } from '../../lib/audience.js';
+import { decide } from '../../lib/perms.js';
 import { loadList, whereFor } from './audience.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -35,6 +36,9 @@ const ownPeople = async (tx, ws, list) => (await tx.query(
 const deskRulesOnly = (ctx, filter) => {
   if (ctx.role === 'volunteer' && DESK_RULES.some((k) => filter?.[k])) {
     throw httpError(403, 'only the desk can make a list by gifts, memberships, answers, shifts or another list');
+  }
+  if (filter?.gave && ctx.perms && decide(ctx.perms, 'money') === false) {
+    throw httpError(403, 'only someone with Donations can make a list by gifts');
   }
 };
 // Who is on a hand-picked list changed: its numbers are counted again (audience.js listCounts).

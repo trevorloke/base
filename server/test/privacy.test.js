@@ -8,6 +8,7 @@ import { getDb } from '../db/client.js';
 import { shiftMessage } from '../lib/notify.js';
 
 let desk, vol, donor;
+const ok200 = (r) => { assert.equal(r.status, 200, JSON.stringify(r.json)); return r.json; };
 
 before(async () => {
   await freshDb();
@@ -185,9 +186,18 @@ test('a volunteer given People: the answer to a profile save carries no one else
     const again = await vol.action('person.create', { id: kept.id, name: 'Kept Quiet Example' });
     assert.deepEqual([again.json.duplicate, again.json.person.email, again.json.person.tags], [true, null, ['youth']]);
     for (const r of [saved, again]) assert.ok(!/kept\.quiet@|donor/.test(JSON.stringify(r.json)), JSON.stringify(r.json));
+    // Saving the whole of what they were shown (no email, no donor tag)
+    // takes nothing away; a new email over one they can't see is not
+    // theirs to make, and a money tag is not theirs to add.
+    ok200(await vol.action('person.update', { id: kept.id, email: null, tags: ['youth', 'walker'] }));
+    ok200(await vol.action('person.update', { id: kept.id, email: 'other@example.org', tags: ['youth', 'walker', 'major-donor'] }));
     // Nothing was lost by it, and the desk's answer is the whole row.
     const row = (await desk.action('person.update', { id: kept.id, city: 'Surrey' })).json.person;
-    assert.deepEqual([row.email, row.tags, row.phone], ['kept.quiet@example.org', ['donor', 'youth'], '604-555-0146']);
+    assert.deepEqual([row.email, row.tags, row.phone], ['kept.quiet@example.org', ['youth', 'walker', 'donor'], '604-555-0146']);
+    // Where there is no email, they may add one.
+    const bare = await desk.createPerson('Bare Example', { phone: '604-555-0147' });
+    ok200(await vol.action('person.update', { id: bare.id, email: 'bare@example.org' }));
+    assert.equal((await desk.get(`/api/persons/${bare.id}`)).json.person.email, 'bare@example.org');
   } finally {
     await desk.action('permission.member.set', { user_id: me.user.id, grant: [] });
   }

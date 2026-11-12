@@ -31,6 +31,7 @@
 //       screens can't know — { year, questions: [{ id, text, kind, options,
 //       survey }] } (questions still on a survey that isn't archived)
 import { Hono } from 'hono';
+import { decide } from '../../lib/perms.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { fromLocal } from '../../lib/tzsql.js';
 
@@ -128,9 +129,13 @@ const personsWhere = async (db, ctx, query, w) => {
   const next = (v) => { w.params.push(v); return `$${w.params.length}`; };
   const add = (sql) => { w.where += sql ?? ' and false'; };
   const desk = ctx.role !== 'volunteer';
+  // Who gave is the Donations area's: a desk role the manager denied it
+  // can't sort People by it (it matches nobody) — but a saved list read on
+  // their behalf (a send, a count) is read whole, as the desk saved it.
+  const money = desk && (Boolean(ctx.listTrail?.length) || (!ctx.perms || decide(ctx.perms, 'money') !== false));
 
   const gave = str(query?.gave, 20).toLowerCase();
-  if (gave) add(desk ? gaveWhere(gave, ctx, next) : null);
+  if (gave) add(money ? gaveWhere(gave, ctx, next) : null);
   const member = str(query?.member, 10).toLowerCase();
   if (member) add(desk ? memberWhere(member, ctx, next) : null);
   const answer = str(query?.answer);
