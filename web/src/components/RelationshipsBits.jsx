@@ -324,6 +324,16 @@ export function KeyTies({ ties = [], n = null, max = 3, housemates = [], state =
     window.addEventListener('resize', again);
     return () => window.removeEventListener('resize', again);
   }, [max]);
+  // The line grew without a new width (the web font arrived late): look again.
+  const [, look] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    let frame = 0;
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => look((x) => x + 1)); });
+    ro.observe(el);
+    return () => { cancelAnimationFrame(frame); ro.disconnect(); };
+  }, [state, ties.length > 0 || homes.length > 0]);
   const head = <span className="rk-word">Knows</span>;
   if (state === 'loading') return <p className="rk-line" aria-live="polite">{head} <span className="rk-dim">· Loading…</span></p>;
   if (state === 'offline') return <p className="rk-line">{head} <span className="rk-dim">· needs signal</span></p>;
