@@ -31,7 +31,8 @@
 //                   sent), 'sending' (claimed, with the provider now —
 //                   never sent again by itself), 'done'. email / text: how
 //                   each went, in shift.notify's words (sent, queued,
-//                   failed, skipped, opted_out, quiet).
+//                   failed, skipped, opted_out, quiet), and 'suppressed':
+//                   the address bounced for good or reported spam.
 export const sql = `
 create table if not exists places (
   id uuid primary key,

@@ -35,7 +35,9 @@
 //   2. send    each one's email (with its own idempotency key) and text,
 //              outside any write. The texting rules hold for the text —
 //              opt-outs, do-not-text, do-not-contact, quiet hours — and
-//              do-not-email / do-not-contact for the email.
+//              do-not-email / do-not-contact for the email, which also
+//              never goes to an address that bounced for good or reported
+//              spam (the suppression list, ext/mail): 'suppressed'.
 //   3. record  how each went on the row, and on each booking as shift.notify
 //              keeps it (notified_at, notify_email, notify_text).
 // A crash leaves the claimed few 'sending' — never sent again by itself (a
@@ -50,6 +52,7 @@ import { newId, runAction } from '../../lib/events.js';
 import { runHooks } from '../../lib/hooks.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, sendText, textConfigured } from '../../lib/notify.js';
+import { notSuppressed } from '../../lib/mail/index.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { mayRun } from '../../lib/perms.js';
 // One clock for "when is it" in a send: the texting rules' own (their quiet
@@ -210,7 +213,8 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
       const out = [];
       for (const n of asked) {
         const person = (await tx.query(
-          'select id, name, email, phone, tags from persons where id = $1 and workspace_id = $2 and deleted_at is null', [n.person_id, ws],
+          `select p.id, p.name, p.email, p.phone, p.tags, ${notSuppressed('p.workspace_id', 'p.email')} as can_email
+             from persons p where p.id = $1 and p.workspace_id = $2 and p.deleted_at is null`, [n.person_id, ws],
         )).rows[0];
         // What to say, as things stand now: their shifts of these that are
         // not over (as the count before the tap counted them). A reminder
@@ -247,8 +251,9 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
       const tags = parseJ(n.person.tags, []) || [];
       let email = { status: 'skipped' };
       if (n.person.email) {
-        email = NO_EMAIL_TAGS.some((x) => tags.includes(x))
-          ? { status: 'opted_out' }
+        email = NO_EMAIL_TAGS.some((x) => tags.includes(x)) ? { status: 'opted_out' }
+          // Read at the claim, a moment ago: an address on the suppression list.
+          : !n.person.can_email ? { status: 'suppressed' }
           : await sendEmail({ to: n.person.email, subject: words.subject, text: words.email, idempotencyKey: `shift-notice-${n.id}` });
       }
       // The texting rules (ext/texting) decide, as for shift.notify: never an

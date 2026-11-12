@@ -4,14 +4,15 @@
 // server's (lib/notify.js, ext/texting, ext/schedule):
 //   sent · queued (that channel isn't connected: nothing was sent and
 //   nothing sends later) · failed · skipped (nothing on file) · opted_out ·
-//   quiet (a text held back by the campaign's hours)
+//   quiet (a text held back by the campaign's hours) · suppressed (an email
+//   left off: the address bounced for good or reported spam)
 //
 //   outcomeOf(email, text)   one person across both channels
 //   notifySummary(results)   one line for a whole notice: { text, ok }
 //   <NotifyChip channel status />
 //   NOTIFIED_WORD            "Notified" · "Tried" · "Saved" beside a time
 //   people(n)                "1 person" · "3 people"
-const NOTIFY_CHIP = { sent: 'chip-ok', queued: 'chip-warn', failed: 'chip-danger', skipped: '', opted_out: '', quiet: 'chip-warn' };
+const NOTIFY_CHIP = { sent: 'chip-ok', queued: 'chip-warn', failed: 'chip-danger', skipped: '', opted_out: '', quiet: 'chip-warn', suppressed: 'chip-warn' };
 // What happened to one message, in plain words ("Email not sent"). 'queued'
 // means the server sent nothing because that channel isn't connected, and
 // nothing sends it later: connect it, then Notify again.
@@ -20,6 +21,8 @@ const NOTIFY_WORDS = {
     sent: 'Email sent', queued: 'Email not sent', failed: 'Email didn’t send', skipped: 'No email on file',
     // A week's notice and the evening reminders leave out do-not-email (ext/schedule).
     opted_out: 'Opted out of email',
+    // …and an address on the email service's suppression list (ext/mail).
+    suppressed: 'Email left off — the address bounced',
   },
   text: {
     sent: 'Text sent', queued: 'Text not sent', failed: 'Text didn’t send', skipped: 'No phone on file',
@@ -31,6 +34,7 @@ const NOTIFY_TITLE = {
   email: {
     queued: 'Not sent — email isn’t connected', failed: 'Try again, or reach them another way',
     opted_out: 'They are marked do not email or do not contact',
+    suppressed: 'An earlier email to this address bounced for good or was reported as spam',
   },
   text: {
     queued: 'Not sent — texting isn’t connected', failed: 'Try again, or reach them another way',

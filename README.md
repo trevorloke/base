@@ -766,9 +766,10 @@ are off until a manager turns them on (`shift.reminders`). Then everyone
 booked for tomorrow gets one reminder at 6 pm on the campaign's clock (an
 hour before texts stop when they stop by 6, as on weekends), once per
 booking, never someone who can't make it. Both keep the texting rules, and
-leave the email out for *do-not-email* and *do-not-contact*. With neither
-email nor texting connected an evening reminds nobody and marks nobody as
-reminded; with `STARBASE_JOBS=off` notices and reminders wait.
+leave the email out for *do-not-email* and *do-not-contact*, and for an
+address that bounced for good or reported spam (the row says so). With
+neither email nor texting connected an evening reminds nobody and marks
+nobody as reminded; with `STARBASE_JOBS=off` notices and reminders wait.
 
 ## Map tiles and offline field mode
 

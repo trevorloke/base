@@ -327,6 +327,35 @@ test('the texting rules hold for a week’s notice: quiet hours, opt-outs, do-no
   ok(await mgr.action('person.update', { id: P.eli.id, tags: [] }));
 });
 
+// The email service's list of addresses nothing may email (ext/mail): one
+// that bounced for good, or whose owner reported an email as spam.
+test('an address that bounced for good or reported spam gets no notice by email (a week’s or a reminder: one sender); the text still goes', async () => {
+  connect();
+  at('2030-05-06T19:00:00Z'); // Monday noon
+  emails.length = 0; texts.length = 0;
+  const { newId } = await import('../lib/events.js');
+  await db.query(
+    `insert into email_suppressions (id, workspace_id, email, reason, source) values ($1, $2, lower($3), 'bounce', 'resend')
+     on conflict (workspace_id, email) do update set lifted_at = null`, [newId(), ws, P.eli.email]);
+  const r = ok(await mgr.action('shift.tellWeek', { week: MON }));
+  await runJobs();
+  const got = Object.fromEntries((await noticesOf(r.batch_id)).map((n) => [n.name, n]));
+  assert.deepEqual([got['Eli Example'].email, got['Eli Example'].text], ['suppressed', 'sent'], 'no email to the dead address; the text goes');
+  assert.equal(got['Asha Example'].email, 'sent', 'everyone else as before');
+  assert.ok(!emails.some((m) => m.to[0] === P.eli.email), 'nothing was sent to it');
+  const kept = await rows(
+    `select a.notify_email from shift_assignments a where a.workspace_id = $1 and a.person_id = $2 and a.notified_at is not null`, [ws, P.eli.id]);
+  assert.ok(kept.length > 0 && kept.every((a) => a.notify_email === 'suppressed'), 'and the booking says why');
+  // Lifted (the desk's to do): the next notice emails it again.
+  await db.query('update email_suppressions set lifted_at = now() where workspace_id = $1 and email = lower($2)', [ws, P.eli.email]);
+  emails.length = 0;
+  const again = ok(await mgr.action('shift.tellWeek', { week: MON }));
+  await runJobs();
+  assert.equal((await noticesOf(again.batch_id)).find((n) => n.name === 'Eli Example').email, 'sent');
+  assert.ok(emails.some((m) => m.to[0] === P.eli.email));
+  await db.query('delete from email_suppressions where workspace_id = $1', [ws]);
+});
+
 test('who may: the desk tells a week; a volunteer only when granted Shifts, and never gets an address or a number', async () => {
   at('2030-05-06T19:00:00Z');
   assert.equal((await vol.action('shift.tellWeek', { week: MON })).status, 403);
