@@ -14,6 +14,9 @@
 // is no draft, so the sample is the preview; the page is read again so this
 // screen wears it too). "Use the website's colours and logo" fills the form
 // from Website → Theme; "Back to …" takes the saved brand off (brand.reset).
+// What is changed and not yet saved is kept for this tab of the browser:
+// leaving by a link (another Settings tab, the menu, Back) and coming back
+// finds it, said once, with "Discard them".
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CORNERS, HEADINGS, SIDEBARS, deriveLook, lookTokens } from '@starbase/shared/brand-look';
 import { FONT_BY_VALUE } from '@starbase/shared/site/theme';
@@ -28,6 +31,7 @@ import { BRAND_ACCEPT, fileFrom, fitLogo, fitMark, iconsFrom, seenOn, uploadBran
 import './brand-settings.css';
 
 const SAVED_FLAG = `${NS}brand-saved`;
+const DRAFT = `${NS}brand-draft`;
 const SIDEBAR_WORD = { light: 'Light', brand: 'Brand colour', dark: 'Dark' };
 const CORNER_WORD = { square: 'Square', soft: 'Soft', round: 'Round' };
 const startWord = BRAND.key === 'imagine-surrey' ? 'Imagine Surrey’s look' : 'base.win’s look';
@@ -48,6 +52,14 @@ const formOf = (saved) => (saved?.v === 1 ? {
   logo: BRAND.logo ? { url: BRAND.logo } : null, logoDark: BRAND.logoDark ? { url: BRAND.logoDark } : null, mark: null, icons: null,
 });
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// Changes left unsaved on this screen earlier, if they were made to the
+// brand as it still is (a draft of another is dropped).
+const draftOf = (start) => {
+  try {
+    const d = JSON.parse(sessionStorage.getItem(DRAFT));
+    return d?.f && d.from === JSON.stringify(start) && !same(d.f, start) ? { ...start, ...d.f } : null;
+  } catch { return null; }
+};
 // What the shades are worked out from.
 const lookOf = (f) => ({ color: f.color, second: f.second || null, sidebar: f.sidebar, corners: f.corners, heading: f.heading, logo: f.logo, logoDark: f.logoDark });
 
@@ -190,12 +202,13 @@ export default function BrandSettings({ me }) {
   const name = me?.workspace?.name || '';
   const saved = me?.workspace?.settings?.brand;
   const [start] = useState(() => formOf(saved));
-  const [f, setF] = useState(start);
+  const [draft] = useState(() => draftOf(start));
+  const [f, setF] = useState(draft || start);
   const [busy, setBusy] = useState(null); // 'save' | 'reset' | 'site' | a picture's kind
   const [error, setError] = useState(null);
   const [picErr, setPicErr] = useState({});
   // After a save the page is read again; what was done is said once.
-  const [said, setSaid] = useState(() => { try { return sessionStorage.getItem(SAVED_FLAG); } catch { return null; } });
+  const [said, setSaid] = useState(() => { try { return sessionStorage.getItem(SAVED_FLAG) || (draft ? 'draft' : null); } catch { return null; } });
   useEffect(() => { try { sessionStorage.removeItem(SAVED_FLAG); } catch { /* nothing kept */ } }, []);
   const [confirming, setConfirming] = useState(false);
   const [more, setMore] = useState(false);
@@ -211,6 +224,14 @@ export default function BrandSettings({ me }) {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
+
+  // Kept as it changes, for coming back to; gone once it's as saved again.
+  useEffect(() => {
+    try {
+      if (dirty) sessionStorage.setItem(DRAFT, JSON.stringify({ from: JSON.stringify(start), f }));
+      else sessionStorage.removeItem(DRAFT);
+    } catch { /* private mode: nothing kept */ }
+  }, [f]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // How much of each logo can be seen where it will sit.
   const look = lookOf(f);
@@ -261,7 +282,7 @@ export default function BrandSettings({ me }) {
   };
   const reload = (flag) => {
     leaving.current = true;
-    try { sessionStorage.setItem(SAVED_FLAG, flag); } catch { /* private mode: no line after the reload */ }
+    try { sessionStorage.setItem(SAVED_FLAG, flag); sessionStorage.removeItem(DRAFT); } catch { /* private mode: no line after the reload */ }
     window.location.reload();
   };
   const save = async (e) => {
@@ -299,6 +320,12 @@ export default function BrandSettings({ me }) {
         <p className="muted bs-lede">Your logo and colour on every screen: the app, sign-in, emails, receipts and a website that follows them. Ratings and statuses keep their own colours.</p>
         {said === 'saved' && <p className="bs-said" role="status">✓ Saved — every screen wears it now.</p>}
         {said === 'reset' && <p className="bs-said" role="status">✓ Back to {startWord}.</p>}
+        {said === 'draft' && (
+          <p className="bs-said bs-said--draft" role="status">
+            <span>Your changes from before are still here. They aren’t saved yet.</span>
+            <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => { setSaid(null); setF(start); }}>Discard them</button>
+          </p>
+        )}
 
         <h2 className="ot-sec-h">Logo</h2>
         <PictureField id="bs-logo" label="Logo" value={f.logo} busy={busy === 'logo'} disabled={off} error={picErr.logo}

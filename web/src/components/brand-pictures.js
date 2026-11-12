@@ -51,7 +51,12 @@ const loadPicture = async (file) => {
   }
 };
 const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
-const blobOf = (canvas, type = 'image/png', q) => new Promise((resolve) => canvas.toBlob(resolve, type, q));
+// The canvas as a file. A browser won't give back a canvas an SVG drew a
+// web page's text on (a foreignObject, as some drawing tools export text):
+// said in words a manager can act on.
+const blobOf = (canvas, type = 'image/png', q) => new Promise((resolve, reject) => {
+  try { canvas.toBlob(resolve, type, q); } catch { reject(new Error('This SVG can’t be turned into a picture here. Save it as a PNG and upload that.')); }
+});
 
 // A logo within the limits: drawn smaller until it fits (a photo as a JPG,
 // anything else as a PNG, which keeps its see-through parts). An SVG has no

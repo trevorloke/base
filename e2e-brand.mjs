@@ -69,6 +69,8 @@ const svg = (ink) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 8
 const LOGO = `${SHOTS}/riverside-logo.svg`;
 const LOGO_LIGHT = `${SHOTS}/riverside-logo-light.svg`;
 const MARK = `${SHOTS}/riverside-mark.svg`;
+const LOGO_FOREIGN = `${SHOTS}/riverside-logo-foreign.svg`;
+writeFileSync(LOGO_FOREIGN, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80"><foreignObject width="320" height="80"><div xmlns="http://www.w3.org/1999/xhtml">Riverside</div></foreignObject></svg>');
 writeFileSync(LOGO, svg('#0f766e'));
 writeFileSync(LOGO_LIGHT, svg('#ffffff'));
 writeFileSync(MARK, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#0f766e"/><circle cx="50" cy="50" r="24" fill="#ffffff"/></svg>');
@@ -233,6 +235,31 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   }));
   check('Settings → Brand sits beside Campaign: the look it started in, no pictures yet, a sample of desk and phone in light and dark, and Save the one primary',
     opens.tabs === 'Campaign · Brand' && opens.primaries.join() === 'Save' && opens.colour === '#4f46e5' && opens.wells === 'None,None,None' && opens.frames === 4 && !opens.back, JSON.stringify(opens));
+
+  // Leaving by a link inside the app keeps what was changed: it is there on coming back, said once.
+  await page.fill('#bs-color', '#123456');
+  await page.getByRole('group', { name: 'Corners' }).getByRole('button', { name: 'Square' }).click();
+  await page.locator('.ws-tabs a', { hasText: 'Campaign' }).click();
+  await page.waitForSelector('.bs', { state: 'detached', timeout: 8000 });
+  await page.locator('.ws-tabs a', { hasText: 'Brand' }).click();
+  await page.waitForSelector('.bs', { timeout: 8000 });
+  const again = await page.evaluate(() => ({ colour: document.querySelector('#bs-color').value, corners: document.querySelector('[aria-labelledby="bs-corners"] [aria-pressed="true"]')?.innerText.trim(),
+    said: document.querySelector('.bs-said')?.innerText.replace(/\s+/g, ' ').trim() || '' }));
+  check('leaving Settings → Brand by a link and coming back: what was changed is still there, said in a line with “Discard them”',
+    again.colour === '#123456' && again.corners === 'Square' && /^Your changes from before are still here\. They aren’t saved yet\. Discard them$/.test(again.said), JSON.stringify(again));
+  await page.getByRole('button', { name: 'Discard them' }).click();
+  await page.locator('.ws-tabs a', { hasText: 'Campaign' }).click();
+  await page.waitForSelector('.bs', { state: 'detached', timeout: 8000 });
+  await page.goBack();
+  await page.waitForSelector('.bs', { timeout: 8000 });
+  const clean = await page.evaluate(() => ({ colour: document.querySelector('#bs-color').value, corners: document.querySelector('[aria-labelledby="bs-corners"] [aria-pressed="true"]')?.innerText.trim(), said: document.querySelector('.bs-said')?.innerText || '' }));
+  check('“Discard them”: the brand as it is saved again, and nothing kept', clean.colour === '#4f46e5' && clean.corners === 'Soft' && clean.said === '', JSON.stringify(clean));
+
+  // An SVG the browser can draw but not hand back (a web page's text inside it): refused in words a manager can act on.
+  await page.setInputFiles('#bs-logo', LOGO_FOREIGN);
+  await page.locator('[aria-labelledby="bs-logo-label"] .error').waitFor({ timeout: 20000 });
+  const foreign = await page.evaluate(() => ({ err: document.querySelector('[aria-labelledby="bs-logo-label"] .error').innerText.trim(), well: document.querySelector('.bs-pic__well').innerText.trim() }));
+  check('an SVG that can’t be made a picture is refused in plain words, not the browser’s', foreign.err === 'This SVG can’t be turned into a picture here. Save it as a PNG and upload that.' && foreign.well === 'None', JSON.stringify(foreign));
 
   // A white logo given as the standard one: said, not refused.
   await upload(page, 'bs-logo', LOGO_LIGHT);

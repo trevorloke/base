@@ -8,6 +8,11 @@
 .bs-form, .bs-side, .bs-acts { min-width: 0; }
 .bs-lede { margin: 0 0 var(--s-3); max-width: 60ch; }
 .bs-said { margin: 0 0 var(--s-3); color: var(--ok); font-weight: 500; }
+/* Changes found again after leaving the screen: a note, not a success. */
+.bs-said--draft {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3);
+  color: var(--text); background: var(--panel); border-radius: var(--r-ctrl);
+}
 .bs-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--quiet); }
 .bs-err { margin: var(--s-1) 0 0; }
 .bs-opt { font-weight: 400; color: var(--quiet); }
