@@ -52,7 +52,6 @@ export const mapType = () => {
 // plain, said, step, status }. Cleared by the first good tile.
 let trouble = null;
 let lastOkAt = null;
-const HARD = new Set(['key-invalid', 'referrer', 'ip', 'api-blocked', 'api-off', 'billing']);
 const pauseMs = (code) => (code === 'quota' ? 30_000 : 60_000);
 const refused = (status, said) => {
   const t = googleTrouble(status, said);
@@ -116,7 +115,7 @@ export const fetchTile = async (z, x, y, look = mapType()) => {
       if (t.code === 'session' || t.code === 'other') {
         res = await getTile(z, x, y, await getSession(kind, true));
       } else {
-        if (HARD.has(t.code) || t.code === 'quota') refused(res.status, said);
+        refused(res.status, said); // key, billing, API or quota: pause
         return wait();
       }
     }
