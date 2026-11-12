@@ -231,6 +231,11 @@ test('someone who joins the list later comes in on a top-up; only numbers still 
   assert.deepEqual(ok(await vic.get(`/api/banks/${ids.gotvBank}/mine`)).persons.map((p) => p.name.split(' ')[0]), ['Ana', 'Eve', 'Fay']);
   assert.equal((await mgr.action('bank.topup', { id: ids.gotvBank })).status, 409);
   assert.equal(ok(await mgr.get(`/api/banks/${ids.gotvBank}`)).bank.list_name, null);
+  // Reopened, nobody could be told from who had left the list (Ben, Cy): it stays closed.
+  const reopened = await mgr.action('bank.update', { id: ids.gotvBank, closed: false });
+  assert.equal(reopened.status, 409);
+  assert.match(reopened.json.error, /The list this bank called is gone — make a new bank/);
+  assert.equal(ok(await mgr.action('bank.update', { id: ids.gotvBank, name: 'Get out the vote calls, done' })).bank.closed, true, 'its name can still change');
   assert.equal(ok(await mgr.get('/api/audit/verify')).ok, true);
 });
 

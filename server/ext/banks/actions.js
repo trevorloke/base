@@ -110,6 +110,11 @@ export const actions = {
       if (!name) throw httpError(400, 'a phone bank needs a name');
       const script = input.script === undefined ? b.script : (input.script || null);
       const closed = input.closed === undefined ? !!b.closed_at : input.closed;
+      // A closed bank outlives its list (list.delete). Reopened without it,
+      // everyone who had left the list would be back on the calls.
+      if (b.closed_at && !closed && b.list_id && !(await loadList(tx, ctx.workspaceId, b.list_id))) {
+        throw httpError(409, 'The list this bank called is gone — make a new bank');
+      }
       const retry = input.retry_hours ?? b.retry_hours;
       const tries = input.max_tries ?? b.max_tries;
       await tx.query('update call_banks set name = $2, script = $3, closed_at = case when $4 then coalesce(closed_at, now()) else null end, retry_hours = $5, max_tries = $6, updated_at = now() where id = $1',
