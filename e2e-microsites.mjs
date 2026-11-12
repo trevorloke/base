@@ -19,7 +19,7 @@
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5130 node server/index.js &
 //   BASE=http://127.0.0.1:5130 SHOTS=/tmp/microsites node e2e-microsites.mjs
-import { chromium } from 'playwright';
+import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 
 const BASE = (process.env.BASE || 'http://127.0.0.1:5130').replace(/\/$/, '');
@@ -37,7 +37,9 @@ const check = (name, ok, extra = '') => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const tag = Date.now().toString(36);
 
-const browser = await chromium.launch({ args: ['--no-sandbox', '--disable-dev-shm-usage', `--host-resolver-rules=MAP ${DOUG} 127.0.0.1`] });
+const browser = await chromium.launch({
+  executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  args: ['--no-sandbox', '--disable-dev-shm-usage', `--host-resolver-rules=MAP ${DOUG} 127.0.0.1`] });
 const errors = [];
 const desk = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1, timezoneId: 'America/Vancouver' });
 const page = await desk.newPage();

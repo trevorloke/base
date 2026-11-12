@@ -475,6 +475,18 @@ one tap away under **More**.
   `server/test/site-builder.test.js`, `server/test/site-website.test.js`;
   in a browser: `e2e-site-admin.mjs`.
 
+- **Other websites** (Website → Other websites, a manager): **New website**
+  "Doug Didn’t Example" at a domain; its overview is a draft with the
+  checklist — Go live says what's missing; publish its home from the
+  checklist's link and fill Settings → Organization → Authorized by; Go
+  live. On its domain: its name, "Authorized by …", "A website by …" and
+  the privacy line under the form; sign there with `?utm_source=flyer` and
+  the overview counts 1 from "flyer"; People with `web=site:` finds them.
+  Take it offline ("Coming soon"), delete it ("This website has closed",
+  410, even at /login). Staff with Website see no Go live and no ⋯. Tests:
+  `server/test/site-microsites.test.js`; in a browser, with Chromium
+  sending dougdidnt.test here: `e2e-microsites.mjs`.
+
 ### Volunteer (on a phone)
 - Open the invite link → set a password → lands on the **Map**. Tabs:
   **Today · Map · Calls · Shifts**.

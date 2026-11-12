@@ -737,6 +737,15 @@ off), `SITE_FORMS_PER_MINUTE` (20 per address).
   it was (live if it was live). If its address went to another meanwhile, it
   comes back at a free one like it (`-2`, `-3`…; the event's payload says
   `was`). The 'restore' op on the event log.
+- Other websites (`microsite-reads.js`; counts, never people — the money
+  forms counted only for someone who can open Donations):
+  `GET /api/site/microsites` → `{ microsites: [{ …, signups_7, signups_30,
+  home }], closed, limit }`; `GET /api/site/microsites/:id` → `{ microsite,
+  deleted, pages, home, checklist, signups_7, signups_30, sources: [{ source,
+  n }] (top 8, 30 days, none → "direct"), render_host, urls, brand_theme }`;
+  `GET /api/site/microsites/host?host=&id=` → `{ host, why }`, the domain
+  save's own refusal. `GET /api/site` adds `counts.microsites` and
+  `counts.microsites_live`; a page carries `site_id`.
 
 ## The Website screens (`web/src/pages/Website*.jsx`)
 
@@ -753,6 +762,10 @@ theirs, and the server refuses its data anyway).
 | `/website/settings` | Menu and title bar, announcement bar, footer, organization, social accounts, search and sharing, your own domain |
 | `/website/news` · `/:id` | Posts: list, editor (picture, excerpt, Markdown), publish/unpublish, delete (Undo) |
 | `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
+| `/website/sites` | Other websites: each one's name, Live / Draft, domain and sign-ups this week; New website (a manager: a name and, optionally, the address — checked as it's typed in the save's words); deleted ones whose address still says it has closed |
+| `/website/sites/:siteId` | One of them: Go live (a draft; a manager) or View site; while a draft, the checklist (home published, Authorized by, privacy link, address), each a tick or a link to fix it; sign-ups for 7 or 30 days and where they came from (30 days), "See everyone from this site" (`/people?web=site:<id>`); Pages · Look · Domain; ⋯ (a manager) Rename, Take offline, Delete (Undo), Release old address |
+| `/website/sites/:siteId/pages` · `/look` | Today's Pages and Theme with the site passed in (its own pages; its own look, saved with `site.microsite.save`, "Start from the campaign's brand" copies the brand's once); the builder says "On <site>" and previews and views it at the site's address |
+| `/website/sites/:siteId/domain` | The address (the `www.` is added), then — only once it's saved — the three steps in the safe order (buy it; add it in Render; the registrar's DNS records, pointing `www` at `RENDER_EXTERNAL_HOSTNAME`), each with Copy, and "Open https://…" |
 
 Careful with "your own domain": on a host in `domains` only the site answers
 (no sign-in, no app). So `site.settings.save` refuses (400, in plain words)
