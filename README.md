@@ -558,7 +558,14 @@ than a week after they came off is refused. Contacts are door, phone, text or
   shift's times change, shown only to the person and the desk (`GET
   /api/shifts` as `my_arrive_at`/`my_leave_at`, a shift's page, the crew
   board), and every notice says each person's own hours
-  (`shared/shifthours.js`). These writes, every
+  (`shared/shifthours.js`). On screen: *Another time* steps the start and
+  the end a quarter hour at a time (up to 16 hours, past midnight sent as
+  a length); *Change my hours* under *You're on this shift* (through the
+  outbox: a second save replaces the waiting one, a *Count me in* taken
+  back takes its hours along, and "not on this shift" on replay is
+  dropped); *Hours → Save hours* in the desk's person sheet; the roster and
+  check-in board show each person's hours; and a drop-in shift reads
+  *Drop in* on the list and the website. These writes, every
 
   screen that shows or takes a shift's time and every shift notice work on
   the campaign's clock — B.C. on UTC−7 all year from March 2026, by rule
