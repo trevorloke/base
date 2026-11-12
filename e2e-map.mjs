@@ -473,8 +473,9 @@ try {
     };
     const brief = (b) => JSON.stringify({ nav: b.nav && [b.nav.l, b.nav.r], map: b.map && [b.map.l, b.map.t, b.map.w, b.map.h], pill: b.pill, zoom: b.zoom, scrolls: b.scrolls, at: b.at });
 
+    // The look's page gutter is 32px each side (it was 24): the map fills the column between them.
     const desk = await openAt(1440, 900, '/admin/map');
-    check('a desktop: the map beside the sidebar, the whole height, and no stray strip of page to scroll', desk.at.map.l >= desk.at.nav.r && desk.at.map.w >= 1440 - 232 - 60 && desk.at.map.h >= 800 && desk.at.scrolls <= 0, brief(desk.at));
+    check('a desktop: the map beside the sidebar, the whole height, and no stray strip of page to scroll', desk.at.map.l >= desk.at.nav.r && desk.at.map.w >= 1440 - 232 - 76 && desk.at.map.h >= 800 && desk.at.scrolls <= 0, brief(desk.at));
 
     // The Show sheet is taller than the map on a laptop: it scrolls inside it.
     const sheetIn = async (pg) => {
