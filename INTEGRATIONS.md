@@ -56,6 +56,16 @@ it, links use whatever address the page was opened at, background sends
 **Check:** Services → Public address fetches `<address>/api/health` and
 makes sure it's this base.win.
 
+## Calendars
+
+No keys and no accounts: calendar files and links are plain `.ics` that
+Google, Outlook and Apple read themselves. Google refreshes a calendar link
+every 8–24 hours (it can't be hurried, and it ignores the file's refresh
+hint) and adds such links only on a computer — on a phone the app offers to
+email the link. Google fetches from its own servers, so the link must be
+reachable from the internet (staging and production are). Links are built
+from `STARBASE_PUBLIC_URL`.
+
 ## Email — Resend or SendGrid
 
 One email sender per deployment, behind one small layer (`server/lib/mail`:

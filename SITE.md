@@ -47,7 +47,15 @@ Site routes (relative to the site root):
 `/preferences?t=…` and `/unsubscribe?t=…` (email/text consent, signed token) ·
 `/__preview/:pageId?t=…` (a draft, signed short-lived token, `noindex`) ·
 `/sitemap.xml` · `/robots.txt` · `/site-assets/*` (css, fonts, island script) ·
-`POST /api/forms/:kind`.
+`POST /api/forms/:kind` · `/events.ics` (the Events list's upcoming public
+shifts, as a calendar) · `/events/<id>.ics` (one public upcoming shift from
+either list). The two calendar routes answer only where a published page of
+that site has an Events or Volunteer openings section that isn't hidden
+(a microsite without one answers its 404); each entry has the title, times
+(UTC), place words, its pin and the page — never instructions, links, counts
+or people — and ends with the campaign's name, the site's address and the
+authorization line when one is set (`server/ext/site/calendar.js`). The
+app's own calendar links (`/cal/…`) never answer on a site's domain.
 
 ## Tables (`server/ext/site/sql.js`)
 

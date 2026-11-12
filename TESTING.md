@@ -218,6 +218,16 @@ one tap away under **More**.
 - **Email & texting** (the *Connect* links on Shifts, Receipts and Ladders,
   or Today → More) — whether email and texting are connected, and the
   Imagine Surrey website address the public pages link back to.
+- **Calendars** (no screens yet; the server's part) — a shift email (Notify,
+  the week's notice, the evening-before reminder) arrives with a calendar
+  file of that person's own shifts and the line *Add to your calendar: open
+  the attached file.*; the text is unchanged. Open `<site>/events.ics` (the
+  website's Events list) in a calendar app. Server tests:
+  `server/test/ics.test.js` (the file format, UTC times, the B.C. clock —
+  run it under any Node and TZ, the digest it prints is the same),
+  `server/test/calendar.test.js` (a person's calendar link, Make a new link,
+  Email me the link, the one-item files, the website's events) and
+  `server/test/schedule-tell.test.js` (the emails' files).
 - **ImagineU** (the tab) → *Edit* → *+ Add a course* (*Canvassing 101*),
   then *+ Add a module*: words to open with, then under *More materials*
   *+ Video* (paste a YouTube link), *+ Document* (upload a PDF), *+ Audio*;
