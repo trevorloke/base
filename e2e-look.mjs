@@ -16,17 +16,19 @@
 //   - the desk's density: with a mouse a button and a field are 40px; on a
 //     phone they are 48 — and so is every choice in a pick-one control,
 //     and the control itself (it lines up with the button beside it).
-// Then the same screens under four hard brand colours — a yellow, a red, a
-// pale pink, near-black — each with the light, the brand-coloured and the
-// dark sidebar, written into the page the way the server writes a brand's
-// shades (lookCss): any colour a campaign could pick is safe on the screens
-// themselves, not only in the sums (server/test/brand-look.test.js).
+// Then a manager saves a brand (brand.save, as Settings → Brand does) —
+// four hard colours: a yellow, a red, a pale pink, near-black, and Imagine
+// Surrey's navy with its marigold — each with the light, the brand-coloured
+// and the dark sidebar, with an uploaded logo. The server writes each one
+// into the page, and the same screens (and Settings → Brand itself) are
+// read again: any colour a campaign could pick is safe on the screens
+// themselves, not only in the sums (server/test/brand-look.test.js). Last,
+// signed out, the sign-in page shows the uploaded logo and the colour.
 //
 //   PORT=4190 SHOTS=/tmp/look node e2e-look.mjs      (uses PORT and PORT+1)
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
-import { lookCss } from './shared/brand-look.js';
 
 const PORT = Number(process.env.PORT) || 4190;
 const SHOTS = process.env.SHOTS || '/tmp/starbase-look';
@@ -146,13 +148,11 @@ const read = (page) => page.evaluate(() => {
   return { overflow, primaries, low: [...low.entries()].map(([k, v]) => `${k} = ${v}`), edges: [...faint.entries()].map(([k, v]) => `${k} = ${v}`) };
 });
 
-// Opens each screen and reads it; `css` is a brand's shades written into
-// the page (as the server writes them), for the colours no preset has.
-const walk = async (page, base, paths, { css = null, phone = false } = {}) => {
+// Opens each screen and reads it.
+const walk = async (page, base, paths, { phone = false } = {}) => {
   const bad = { low: [], overflow: [], primaries: [], edges: [] };
   for (const path of paths) {
     await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded' });
-    if (css) await page.addStyleTag({ content: css });
     await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
     await sleep(350);
     const m = await read(page);
@@ -200,14 +200,14 @@ const setUp = async (base, campaign) => {
 };
 
 const DESK = (s) => ['/', '/people', `/people/${s.person}`, '/map', '/shifts', `/shifts/${s.shift}`, '/shifts/volunteers', '/money', '/money?new=1', '/money/stewardship', '/outreach', '/outreach/texting',
-  '/lists', '/signs', '/turfs', '/website', '/website/pages', '/website/theme', '/settings', '/settings/teams', '/settings/permissions', '/settings/services', '/settings/campaign',
+  '/lists', '/signs', '/turfs', '/website', '/website/pages', '/website/theme', '/settings', '/settings/teams', '/settings/permissions', '/settings/services', '/settings/campaign', '/settings/brand',
   '/rating-scale', '/path-to-win', '/profile', '/data', '/people/import', '/people/fields', '/imagineu', '/requests', '/reports'].map((p) => `/admin${p === '/' ? '' : p}`);
 // On a phone, the desk's screens a manager opens most.
 const DESK_PHONE = (s) => ['/', '/people', `/people/${s.person}`, '/shifts', `/shifts/${s.shift}`, '/money', '/money?new=1', '/outreach', '/lists', '/signs', '/website', '/website/theme',
-  '/settings', '/settings/permissions', '/settings/services', '/path-to-win', '/profile'].map((p) => `/admin${p === '/' ? '' : p}`);
+  '/settings', '/settings/permissions', '/settings/services', '/settings/brand', '/path-to-win', '/profile'].map((p) => `/admin${p === '/' ? '' : p}`);
 const FIELD = (s) => ['/', '/map', '/shifts', `/shifts/${s.shift}`, '/calls', '/turfs', `/turfs/${s.turf}`, '/imagineu', '/profile', '/mainstreet', '/my-people'];
 // The screens that carry the most of the brand: enough to judge a colour by.
-const CORE = (s) => ['/admin', '/admin/people', `/admin/people/${s.person}`, '/admin/shifts', '/admin/money', '/admin/signs', '/admin/website', '/admin/settings'];
+const CORE = (s) => ['/admin', '/admin/people', `/admin/people/${s.person}`, '/admin/shifts', '/admin/money', '/admin/signs', '/admin/website', '/admin/settings', '/admin/settings/brand'];
 // Every pick-one control on these screens (app.css §13): how tall it is, how
 // many rows its choices take, and its shortest choice.
 const pickOnes = async (page, base, paths) => {
@@ -298,28 +298,86 @@ for (const [key, env, campaign] of [['base', { STARBASE_BRAND: 'base' }, 'Rivers
     await o.close();
   }
 
-  // Any colour a campaign could pick, on the screens themselves (on
-  // base.win's own campaign: no logo, so the initials wear the colour too).
+  // Any colour a campaign could pick, saved the way a manager saves it, on
+  // the screens themselves (base.win's own campaign).
   if (key === 'base') {
-    for (const [name, color] of [['yellow', '#fff100'], ['red', '#d81b1e'], ['pale pink', '#f9a8d4'], ['near-black', '#111111']]) {
+    const mgr = await context(base, { cookies: s.desk });
+    const tool = await mgr.newPage();
+    await tool.goto(`${base}/admin/settings/brand`, { waitUntil: 'domcontentloaded' });
+    const post = async (path, body) => { const r = await mgr.request.post(`${base}/api${path}`, { data: body }); return { status: r.status(), json: await r.json().catch(() => null) }; };
+    // A logo and its version for dark backgrounds, drawn here and uploaded.
+    const drawn = (ink) => tool.evaluate((c) => {
+      const el = document.createElement('canvas'); el.width = 480; el.height = 120;
+      const g = el.getContext('2d'); g.fillStyle = c;
+      g.beginPath(); g.arc(60, 60, 44, 0, 7); g.fill(); g.fillRect(130, 34, 320, 22); g.fillRect(130, 68, 210, 18);
+      return el.toDataURL('image/png');
+    }, ink);
+    const logo = (await post('/actions/brand.picture', { kind: 'logo', data: await drawn('#1f2937'), name: 'logo.png' })).json?.picture;
+    const logoDark = (await post('/actions/brand.picture', { kind: 'logoDark', data: await drawn('#ffffff'), name: 'logo-light.png' })).json?.picture;
+    check('a logo and its version for dark backgrounds upload as the brand’s pictures', Boolean(logo?.id && logoDark?.id) && logo.width === 480 && logo.height === 120, JSON.stringify({ logo, logoDark }).slice(0, 200));
+
+    const BRANDS = [['yellow', '#fff100', null], ['red', '#d81b1e', null], ['pale pink', '#f9a8d4', null], ['near-black', '#111111', null], ['Imagine Surrey’s', '#003979', '#ffc72c']];
+    for (const [name, color, second] of BRANDS) {
       for (const sidebar of ['light', 'brand', 'dark']) {
-        const css = lookCss({ color, sidebar });
-        const found = [];
+        // Imagine Surrey's has both logos; the others only the standard one
+        // (it sits on a white chip wherever the ground is dark).
+        const saved = await post('/actions/brand.save', { color, second, sidebar, logo: { id: logo.id }, logo_dark: second ? { id: logoDark.id } : null });
+        const found = saved.status === 200 ? [] : [`brand.save answered ${saved.status}: ${JSON.stringify(saved.json).slice(0, 120)}`];
         for (const scheme of ['light', 'dark']) {
           const d = await context(base, { scheme, cookies: s.desk });
           const dp = await d.newPage();
-          const bad = await walk(dp, base, CORE(s), { css });
-          found.push(...[...bad.low, ...bad.edges].map((x) => `${scheme} desk ${x}`));
-          if (scheme === 'light' && sidebar !== 'light') await dp.screenshot({ path: `${SHOTS}/brand-${name.replace(/\W+/g, '-')}-${sidebar}-desk.png` });
+          dp.on('pageerror', (e) => errors.push(`[${name} ${sidebar} ${scheme} desk] ${e.message}`));
+          const bad = await walk(dp, base, CORE(s));
+          found.push(...[...bad.low, ...bad.edges, ...bad.primaries.map((x) => `primaries ${x}`)].map((x) => `${scheme} desk ${x}`));
+          if (scheme === 'light') {
+            await dp.goto(`${base}/admin`, { waitUntil: 'networkidle' });
+            const worn = await dp.evaluate(() => {
+              const i = document.querySelector('.nav img.brand-mark'); const cs = getComputedStyle(document.documentElement);
+              return { accent: cs.getPropertyValue('--accent').trim(), side: getComputedStyle(document.querySelector('header.nav')).backgroundColor, logo: Boolean(i?.complete && i.naturalWidth > 0) };
+            });
+            if (worn.accent !== color || !worn.logo) found.push(`the page does not wear it: ${JSON.stringify(worn)}`);
+            if (sidebar !== 'light') await dp.screenshot({ path: `${SHOTS}/brand-${name.replace(/\W+/g, '-')}-${sidebar}-desk.png` });
+          }
           await d.close();
           const m = await context(base, { phone: true, scheme, cookies: s.vol });
           const mp = await m.newPage();
-          const badPhone = await walk(mp, base, ['/', '/calls', `/turfs/${s.turf}`], { css, phone: true });
-          found.push(...[...badPhone.low, ...badPhone.edges].map((x) => `${scheme} phone ${x}`), ...badPhone.overflow.map((x) => `${scheme} phone ${x}`));
+          mp.on('pageerror', (e) => errors.push(`[${name} ${sidebar} ${scheme} phone] ${e.message}`));
+          const badPhone = await walk(mp, base, ['/', '/calls', `/turfs/${s.turf}`], { phone: true });
+          found.push(...[...badPhone.low, ...badPhone.edges, ...badPhone.overflow, ...badPhone.primaries.map((x) => `primaries ${x}`)].map((x) => `${scheme} phone ${x}`));
+          if (scheme === 'light' && sidebar === 'brand') await mp.screenshot({ path: `${SHOTS}/brand-${name.replace(/\W+/g, '-')}-${sidebar}-phone.png` });
           await m.close();
         }
-        check(`a ${name} brand (${color}), ${sidebar} sidebar: text and edges read on real screens, light and dark`, found.length === 0, say(found));
+        check(`a ${name} brand (${color}), saved with the ${sidebar} sidebar: text and edges read on real screens, one primary at most, no sideways scroll on a phone — light and dark`, found.length === 0, say(found));
       }
+    }
+    // The manager's own Brand screen on a phone, under the last brand saved.
+    const mb = await context(base, { phone: true, cookies: s.desk });
+    const mbp = await mb.newPage();
+    const badBrand = await walk(mbp, base, ['/admin/settings/brand'], { phone: true });
+    check('Settings → Brand on a phone under a saved brand: reads, one primary, no sideways scroll', none(badBrand) && badBrand.overflow.length === 0 && badBrand.primaries.length === 0, say([...badBrand.low, ...badBrand.edges, ...badBrand.overflow, ...badBrand.primaries]));
+    await mbp.screenshot({ path: `${SHOTS}/brand-settings-phone.png`, fullPage: true });
+    await mb.close();
+    await mgr.close();
+
+    // Signed out, after a reload: the sign-in page shows the uploaded logo
+    // and the colour (Imagine Surrey's navy, saved last).
+    for (const scheme of ['light', 'dark']) {
+      const o = await context(base, { scheme });
+      const op = await o.newPage();
+      const bad = await walk(op, base, ['/login']);
+      await op.reload({ waitUntil: 'networkidle' });
+      const seen = await op.evaluate(() => {
+        const i = document.querySelector('.auth-head img.brand-mark');
+        return { src: i?.currentSrc || null, drawn: Boolean(i?.complete && i.naturalWidth > 0), button: getComputedStyle(document.querySelector('.auth-page .btn-primary')).backgroundColor,
+          accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() };
+      });
+      const want = scheme === 'dark' ? logoDark.id : logo.id;
+      // (Its alt text, the campaign's name, is e2e-brand's: these servers keep
+      // sign-up open, so their sign-in page names no campaign.)
+      check(`signed out, ${scheme}: the sign-in page shows the uploaded logo${scheme === 'dark' ? ' for dark backgrounds' : ''} and the brand colour, and reads`,
+        none(bad) && String(seen.src).includes(`/brand/${want}`) && seen.drawn && seen.button === 'rgb(0, 57, 121)' && seen.accent === '#003979', JSON.stringify({ seen, bad: say([...bad.low, ...bad.edges]) }));
+      await op.screenshot({ path: `${SHOTS}/brand-signin-${scheme}.png` });
+      await o.close();
     }
   }
 }
