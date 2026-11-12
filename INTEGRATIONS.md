@@ -67,6 +67,17 @@ uses whichever has its key, Resend first — so a deployment with only
 `RESEND_API_KEY` sends exactly as it always has. A sender that is named but
 not set up is never quietly swapped for the other one.
 
+**From addresses.** A newsletter, an email to a list or a press release may
+go from another address than MAIL_FROM — any address at MAIL_FROM's own
+domain (Settings → Services → Email → *From addresses*; managers add them,
+the desk picks one on a send). Resend and SendGrid verify the domain, not
+each address, so nothing more is set up at the sender; an address at any
+other domain is refused before it is saved (a secondary site's domain is a
+later step). The tracked links, the open pixel and every unsubscribe link
+stay on the main site's address (`STARBASE_PUBLIC_URL`). System mail —
+invites, shift notices, receipts, two-step, ladders — always goes from
+MAIL_FROM.
+
 **Resend**
 
 1. Resend → **API Keys** → create a key. *Full access* lets base.win show

@@ -436,6 +436,21 @@ one tap away under **More**.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
 
+- **Media and From addresses** — Settings → Services → Email → *From
+  addresses*: add an address at MAIL_FROM's domain (another domain is
+  refused) and make it the press default; a release then goes from it.
+  Tag two people `media` and one `influencer` (or add them through
+  `media.contact.add`): a release to Media reaches the two, to Both all
+  three, never anyone tagged do-not-email or do-not-contact. Its footer
+  says "Don’t want press releases? Unsubscribe"; that link takes the
+  reporter off the media list only (no do-not-email, still on the
+  newsletter) and their History says *Left the media list*. A volunteer
+  granted Media sends releases but sees no email or phone. Server tests:
+  `server/test/media.test.js` (contacts, sends to each kind, Media without
+  Outreach, the press opt-out, the A/B winner, a merge) and
+  `server/test/senders.test.js` (the From list, who picks, Try again and the
+  winner keep the From, invites and ladders stay on MAIL_FROM).
+
 - **The campaign's brand** (Settings → Brand) — a manager's
   saved brand is what every page wears: the app's page signed in or out,
   the installed app's name and icons, the unsubscribe, receipt and lesson

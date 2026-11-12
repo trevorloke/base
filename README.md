@@ -699,6 +699,29 @@ and STOP land where the desk reads them. Managers, staff and treasurers
 counsel before the first send: the texting module was built for
 one-to-one texts, and election texting rules are the campaign's to meet.
 
+**Media.** Reporters and influencers are people tagged `media` or
+`influencer` (any capitals), so People, lists, exports and History keep
+working; `server/ext/media` adds their outlet, beat and a note. A release
+goes to Media, Influencers or Both (`media.send`), skips anyone tagged
+do-not-email or do-not-contact, and ends with "Don’t want press releases?
+Unsubscribe" (`/bu/<recipient>`, and the `List-Unsubscribe` headers): that
+link takes the address off the media list only — not the newsletter, no
+do-not-email tag, nothing to Mailchimp — and the desk can't add them back.
+Media is its own area (Settings → Permissions): staff and treasurers have
+it, and anyone denied Outreach keeps it until a manager denies it too. A
+volunteer granted Media writes, tests and sends releases and sees names,
+outlets, beats, notes and socials — never an email or a phone — and can't
+add or edit contacts. Video is a link (YouTube, Vimeo, Drive), never a file.
+
+**From addresses.** Settings → Services → Email → *From addresses*: a
+manager adds up to ten addresses at MAIL_FROM's own domain (a name and an
+address; anything else is refused) and picks the default for email and
+for press releases. With none, everything goes from MAIL_FROM, as before.
+Managers, staff and treasurers may pick another From on a send; anyone else
+always gets the default. A send keeps its From (Try again, the A/B winner).
+Invites, shift notices, receipts, two-step and ladder emails stay on
+MAIL_FROM.
+
 Set `STARBASE_PUBLIC_URL` (e.g. `https://starbase.imaginesurrey.ca`) so links
 in outbound mail — newsletter unsubscribe footers, invite links, the
 pictures in a message — point at the public host. Every newsletter and ladder email ends with "Sent by <campaign>"
@@ -806,7 +829,7 @@ may be called or texted (`GET /persons?reach=call|text`).
 
 | Channel | Never, whoever sends | And for some senders |
 |---|---|---|
-| **Email** | no address; an address that bounced for good or reported spam (the suppression list, until the desk lifts it) | **To a list**: never an address that left the newsletter (its own unsubscribe link, or the desk's *Remove*), do-not-email or do-not-contact — everyone else on it. **A ladder**: the same, and only an address on the newsletter list as subscribed. **The newsletter**: only an address on its list as subscribed (a list of addresses: it reads no tags). **A press release**: anyone tagged media with an address (it reads nothing else) |
+| **Email** | no address; an address that bounced for good or reported spam (the suppression list, until the desk lifts it) | **To a list**: never an address that left the newsletter (its own unsubscribe link, or the desk's *Remove*), do-not-email or do-not-contact — everyone else on it. **A ladder**: the same, and only an address on the newsletter list as subscribed. **The newsletter**: only an address on its list as subscribed (a list of addresses: it reads no tags). **A press release**: anyone on the media list (tagged media or influencer, any capitals) with an address, not do-not-email or do-not-contact — someone who left the newsletter still gets releases (they leave the media list by a release's own link) |
 | **Text** | do-not-contact; do-not-text; no number, or one that can't be dialled; a number that replied STOP | As it goes out (a list's text, a ladder's, a shift's notice or reminder): a number that asked to stop in words ("please stop texting me"), until it texts START. **A ladder**: also someone whose last word on a website form was no to texts, and a number a teammate is texting now |
 | **Call** (a phone bank, Calls, and every Call link on a screen) | no number; do-not-contact; do-not-call | — |
 
