@@ -13,6 +13,14 @@ import { html, cx } from './h.js';
 import { Check, Choices, FieldError, Hidden, Honeypot, SelectField, TextField } from './fields.js';
 import { ShareSheet } from './share.js';
 import { EMAIL_RE, money, parseDollars, str, trackFrom } from './util.js';
+import { PRIVACY_LINE } from '../wording.js';
+
+// The small print under every form: its own words (small), then who keeps
+// what was sent and why, then the main site's privacy policy (when it has
+// one) — one paragraph, one privacy link.
+export function FormSmall({ small, privacy, keeper }) {
+  return html`<p className="form-small">${small ? `${small} ` : null}${PRIVACY_LINE(keeper)}${privacy ? ' ' : null}${privacy ? html`<a href=${privacy}>Privacy policy</a>` : null}</p>`;
+}
 
 const POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -312,6 +320,6 @@ export function SiteForm(props) {
     <button type="submit" className=${cx('btn btn--submit', props.submitClass || 'btn--action', layout !== 'inline' && 'btn--lg btn--block')} aria-disabled=${pending ? 'true' : undefined}>
       <span>${pending ? 'Sending…' : submit}${amount && !pending ? html`<span className="js-only">${total}</span>` : null}</span>
     </button>
-    ${small || props.privacy ? html`<p className="form-small">${small || null}${small && props.privacy ? ' ' : null}${props.privacy ? html`<a href=${props.privacy}>Privacy policy</a>` : null}</p>` : null}
+    <${FormSmall} small=${small} privacy=${props.privacy} keeper=${props.keeper} />
   </form>`;
 }

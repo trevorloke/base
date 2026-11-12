@@ -2703,7 +2703,8 @@ html[data-heading="inter"] .rail-title {
   display: block;
   margin-top: 4px;
 }
-.footer-legal a {
+.footer-legal a,
+.footer-parent a {
   display: inline-flex;
   align-items: center;
   min-height: 48px;

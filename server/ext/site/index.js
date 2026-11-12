@@ -25,7 +25,9 @@
 //                                  page's draft for 30 minutes (frameable by the app)
 // Writes are actions (POST /api/actions/:name, actions.js has the inputs):
 //   site.settings.save · site.page.create | save | publish | unpublish |
-//   duplicate | delete | restore | reorder · site.post.save | publish |
+//   duplicate | delete | restore | reorder · site.microsite.create | save |
+//   domains | live | delete | restore | release (the campaign's other
+//   websites: microsites.js) · site.post.save | publish |
 //   delete | restore · site.campaign.save | close | delete | restore
 //   (restore: the Website screens' Undo) · site.picture (a picture for the
 //   site, served at /media/:id like Outreach's) · shift.public (the desk:
@@ -82,4 +84,4 @@ export const hooks = {
 
 // In GET /api/export (rows of this campaign). site_keys holds the server's
 // signing secret and is never exported.
-export const exportTables = ['site_settings', 'site_pages', 'site_posts', 'site_campaigns', 'site_actions', 'consent_events'];
+export const exportTables = ['site_settings', 'site_pages', 'site_posts', 'site_campaigns', 'site_actions', 'consent_events', 'microsites'];

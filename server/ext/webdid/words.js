@@ -27,6 +27,12 @@ export const campaignOf = (v) => {
   const m = /^campaign:(.+)$/.exec(String(v || ''));
   return m && UUID.test(m[1]) ? m[1].toLowerCase() : null;
 };
+// "site:<uuid>": did something (not the money forms) on one of the
+// campaign's other websites (server/ext/site microsites.js).
+export const siteOfValue = (v) => {
+  const m = /^site:(.+)$/.exec(String(v || ''));
+  return m && UUID.test(m[1]) ? m[1].toLowerCase() : null;
+};
 export const isWebValue = (v, { any = false } = {}) => (any && v === 'any') || WEB_KINDS.includes(v) || Boolean(campaignOf(v));
 
 // "Signed: SkyTrain to Langley" for one campaign, given its title.

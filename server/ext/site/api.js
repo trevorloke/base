@@ -35,7 +35,8 @@ api.get('/site', async (c) => {
   const db = c.get('db');
   const settings = await readSettings(db, ws);
   const pages = (await db.query(
-    'select * from site_pages where workspace_id = $1 and deleted_at is null order by nav_order, created_at', [ws],
+    // The main site's (another website's pages are its own: microsites).
+    'select * from site_pages where workspace_id = $1 and deleted_at is null and site_id is null order by nav_order, created_at', [ws],
   )).rows.map((r) => pageOut(r, { full: false }));
   const count = async (sql) => (await db.query(sql, [ws])).rows[0];
   const posts = await count(`select count(*)::int as n, count(*) filter (where status = 'published')::int as live from site_posts where workspace_id = $1 and deleted_at is null`);
@@ -143,8 +144,13 @@ api.post('/site/preview-token', async (c) => {
   const pageId = String(body?.pageId || body?.page_id || '');
   if (!UUID.test(pageId)) return c.json({ error: 'pageId: which page' }, 400);
   const ws = await opened(c);
-  const r = (await c.get('db').query('select id from site_pages where id = $1 and workspace_id = $2 and deleted_at is null', [pageId, ws])).rows[0];
+  const r = (await c.get('db').query(
+    `select p.id, m.key from site_pages p left join microsites m on m.id = p.site_id and m.deleted_at is null
+      where p.id = $1 and p.workspace_id = $2 and p.deleted_at is null and (p.site_id is null or m.id is not null)`, [pageId, ws],
+  )).rows[0];
   if (!r) return c.json({ error: 'not found' }, 404);
   const t = await sign('preview', { w: ws, p: pageId }, PREVIEW_TTL);
-  return c.json({ url: here(c, `/site/__preview/${pageId}?t=${encodeURIComponent(t)}`), expires_at: new Date(Date.now() + PREVIEW_TTL * 1000).toISOString() });
+  // A page of another website is previewed at that website's address.
+  const root = r.key ? `/site/sites/${r.key}` : '/site';
+  return c.json({ url: here(c, `${root}/__preview/${pageId}?t=${encodeURIComponent(t)}`), expires_at: new Date(Date.now() + PREVIEW_TTL * 1000).toISOString() });
 });

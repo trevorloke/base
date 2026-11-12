@@ -91,11 +91,14 @@ const REF_RE = /^[a-z0-9]{6,16}$/i;
 const SOURCE_RE = /^[a-z0-9][a-z0-9:_.-]{0,59}$/i;
 export const cleanRef = (v) => { const s = str(v).trim(); return REF_RE.test(s) ? s : ''; };
 export const cleanSource = (v) => { const s = str(v).trim().slice(0, 60); return SOURCE_RE.test(s) ? s : ''; };
-// What a page's address adds: ?ref= and ?source=, cleaned.
+// What a page's address adds: ?ref= and ?source= (else ?utm_source=, as
+// a flyer's or an ad's link has it), cleaned. The server takes a plain
+// post's the same way (server/ext/site/forms.js).
+export const sourceOf = (q) => cleanSource(q.get('source')) || cleanSource(q.get('utm_source'));
 export function trackFrom(search) {
   let q;
   try { q = new URLSearchParams(str(search)); } catch { return { ref: '', source: '' }; }
-  return { ref: cleanRef(q.get('ref')), source: cleanSource(q.get('source')) };
+  return { ref: cleanRef(q.get('ref')), source: sourceOf(q) };
 }
 
 // ── Sharing ──

@@ -216,17 +216,21 @@ const webDetail = (r, p) => {
   if (r.kind === 'join') return line(p.term && years(p.term), p.amount_cents && money(p.amount_cents));
   return null;
 };
+// On another website of the campaign: which one.
+const onSite = (r) => (!r.site_id ? '' : r.site_deleted || !(r.site_domain || r.site_name) ? ' on a site since deleted' : ` on ${r.site_domain || r.site_name}`);
 const web = async (db, q) => (await rowsOf(db, `
   select ${ms('a.created_at')} as at, 'web:' || a.id::text as key, a.kind, a.payload,
-         sc.kind as campaign_kind, sc.title as campaign_title, s.id as shift_id, s.title as shift_title
+         sc.kind as campaign_kind, sc.title as campaign_title, s.id as shift_id, s.title as shift_title,
+         a.site_id, m.name as site_name, m.domains->>0 as site_domain, m.deleted_at as site_deleted
     from site_actions a
     left join site_campaigns sc on sc.id = a.campaign_id and sc.workspace_id = a.workspace_id
+    left join microsites m on m.id = a.site_id and m.workspace_id = a.workspace_id
     left join shifts s on s.workspace_id = a.workspace_id
          and s.id = case when a.kind = 'rsvp' and a.payload->>'shift_id' ~ '${UUID_SQL}' then (a.payload->>'shift_id')::uuid end
    where a.workspace_id = $1 and a.person_id = $2 and a.kind <> all($6::text[])`,
   q, q.viewer.money ? [] : [...MONEY_KINDS],
 )).map((r) => entry(r, 'website', 'web', 'Website',
-  r.campaign_title ? campaignWords({ kind: r.campaign_kind, title: r.campaign_title }) : WEB_WORDS[r.kind] || 'Did something on the website', {
+  `${r.campaign_title ? campaignWords({ kind: r.campaign_kind, title: r.campaign_title }) : WEB_WORDS[r.kind] || 'Did something on the website'}${onSite(r)}`, {
     detail: webDetail(r, parseJ(r.payload, {}) || {}), link: r.shift_id ? `/shifts/${r.shift_id}` : null,
   }));
 

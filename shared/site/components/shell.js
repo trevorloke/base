@@ -1,6 +1,7 @@
 // Around every page: the skip link, the preview banner, the announcement
 // bar, the header (logo, the donate button, the Menu) and the footer (the
-// land acknowledgement, links, social, the authorization line). As on
+// land acknowledgement, links, social, the authorization line — on another
+// website of the campaign, only the bottom lines and "A website by …"). As on
 // imaginesurrey.ca (apps/web Header.tsx, Footer.tsx, AnnouncementBar.tsx).
 import { html } from './h.js';
 import { Island } from './islands.js';
@@ -40,12 +41,14 @@ export function Header({ rc }) {
   const bar = nav.bar.map((l) => ({ label: l.label, href: rc.link(l.href), current: here(l.href), bar: true })).filter((l) => l.href);
   const items = nav.items.map((l) => ({ label: l.label, href: rc.link(l.href), current: here(l.href) })).filter((l) => l.href);
   const cta = nav.cta && rc.link(nav.cta.href) ? { label: nav.cta.label, href: rc.link(nav.cta.href), current: here(nav.cta.href) } : null;
+  // Another website of the campaign shows its own name; the main one, the organization's.
+  const name = rc.site.site?.name || org.name;
   return html`<header className="site-header">
     <nav className="site-nav" aria-label="Main">
       <a className="logo-link" href=${rc.loc.root} aria-current=${rc.kind === 'page' && rc.loc.path === '/' ? 'page' : undefined}>
         ${logo
-          ? html`<img className="logo" src=${logo} alt=${theme.logo.alt || org.name || 'Home'} height="56" decoding="async" />`
-          : html`<span className="wordmark">${org.name || 'Home'}</span>`}
+          ? html`<img className="logo" src=${logo} alt=${theme.logo.alt || name || 'Home'} height="56" decoding="async" />`
+          : html`<span className="wordmark">${name || 'Home'}</span>`}
       </a>
       <div className="nav-bar">
         ${bar.map((l, i) => html`<a key=${i} className="nav-link nav-bar-link" href=${l.href} aria-current=${l.current ? 'page' : undefined}>${l.label}</a>`)}
@@ -57,11 +60,12 @@ export function Header({ rc }) {
 }
 
 export function Footer({ rc }) {
-  const { org, footer, social } = rc.site;
-  // The footer's links, then the platform (Settings → Organization).
-  const platform = org.platformUrl ? rc.link(org.platformUrl) : null;
+  const { org, footer, social, parent } = rc.site;
+  // The footer's links, then the platform (Settings → Organization) — on
+  // the main site; another website of the campaign has none of its own.
+  const platform = org.platformUrl && !parent ? rc.link(org.platformUrl) : null;
   const links = [
-    ...footer.links.map((l) => ({ label: l.label, href: rc.link(l.href) })),
+    ...(parent ? [] : footer.links.map((l) => ({ label: l.label, href: rc.link(l.href) }))),
     ...(platform ? [{ label: org.platformLabel || 'Read the platform', href: platform }] : []),
   ].filter((l) => l.href);
   const privacy = org.privacy ? rc.link(org.privacy) : null;
@@ -90,11 +94,12 @@ export function Footer({ rc }) {
           <ul>${links.map((l, i) => html`<li key=${i}><a href=${l.href}>${l.label}</a></li>`)}</ul>
         </div>` : null}
       </div>
-      ${footer.acknowledgement ? html`<${Md} rc=${rc} text=${footer.acknowledgement} className="footer-acknowledgement" />` : null}
-      ${footer.text ? html`<${Md} rc=${rc} text=${footer.text} className="footer-text" />` : null}
+      ${footer.acknowledgement && !parent ? html`<${Md} rc=${rc} text=${footer.acknowledgement} className="footer-acknowledgement" />` : null}
+      ${footer.text && !parent ? html`<${Md} rc=${rc} text=${footer.text} className="footer-text" />` : null}
       <div className="footer-bottom">
         <p>© ${year} ${org.name}${org.authorization ? html`<span className="footer-authorization">${org.authorization}</span>` : null}</p>
         ${privacy ? html`<p className="footer-legal"><a href=${privacy}>Privacy</a></p>` : null}
+        ${parent ? html`<p className="footer-parent">A website by <a href=${parent.url}>${parent.name}</a></p>` : null}
       </div>
     </div>
   </footer>`;
