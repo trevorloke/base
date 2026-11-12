@@ -447,12 +447,13 @@ one tap away under **More**.
   newsletter) and their History says *Left the media list*. A volunteer
   granted Media sends releases but sees no email or phone. Server tests:
   `server/test/media.test.js` (contacts, sends to each kind, Media without
-  Outreach, the press opt-out, the A/B winner, a merge) and
+  Outreach, the press opt-out, the A/B winner and its wait, a merge) and
   `server/test/senders.test.js` (the From list, who picks, Try again and the
   winner keep the From, invites and ladders stay on MAIL_FROM). In a
   browser: `node e2e-media.mjs` (PORT, SHOTS; the stand-in sender on
   PORT+1) — contacts, Write a release, a release's page with an open, Try
-  again and Copy links, and a volunteer granted Media; `e2e-mail.mjs` runs
+  again and Copy links, a volunteer granted Media, and an A/B release in
+  its wait ("Waits for the winner", no Try again); `e2e-mail.mjs` runs
   *From addresses* and Outreach → Email's From line.
 
 - **The campaign's brand** (Settings → Brand) — a manager's

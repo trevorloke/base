@@ -723,8 +723,9 @@ folder) to paste into a message to an influencer.
 manager adds up to ten addresses at MAIL_FROM's own domain (a name and an
 address; anything else is refused) and picks the default for email and
 for press releases. With none, everything goes from MAIL_FROM, as before.
-Managers, staff and treasurers may pick another From on a send; anyone else
-always gets the default. A send keeps its From (Try again, the A/B winner).
+Managers, staff and treasurers may pick another From on a send, the
+campaign's own MAIL_FROM included (always a choice); anyone else always
+gets the default. A send keeps its From (Try again, the A/B winner).
 Invites, shift notices, receipts, two-step and ladder emails stay on
 MAIL_FROM.
 
