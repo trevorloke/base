@@ -28,6 +28,15 @@ function DateBadge({ day, mon, small }) {
   </div>`;
 }
 
+// After a sign-up: three plain links (no script needed to follow them).
+function CalLine({ cal }) {
+  if (!cal || !cal.ics) return null;
+  return html`<p className="rsvp-cal">Add it to your calendar:
+    ${cal.google ? html` <a href=${cal.google} target="_blank" rel="noopener noreferrer">Google</a> ·` : null}
+    ${cal.outlook ? html` <a href=${cal.outlook} target="_blank" rel="noopener noreferrer">Outlook</a> ·` : null}
+    ${' '}<a href=${cal.ics}>Apple & others</a></p>`;
+}
+
 function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }) {
   const st = state || { status: 'idle', errors: {} };
   const set = (patch) => setState(item.id, { ...st, ...patch });
@@ -63,7 +72,8 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
     return html`<div className="rsvp-done" role="status">
       <${Icon} name="check" size=${18} stroke=${3} />
       <span>You’re signed up${me?.first_name ? `, ${me.first_name}` : ''}. See you there!</span>
-    </div>`;
+    </div>
+    <${CalLine} cal=${item.cal} />`;
   }
   if (item.full) return html`<p className="rsvp-full">This one is full.</p>`;
 

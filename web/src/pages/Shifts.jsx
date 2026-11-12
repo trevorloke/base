@@ -85,6 +85,8 @@ import { NOTIFIED_WORD, NotifyChip, notifySummary, outcomeOf, people } from '../
 import './shifts.css';
 import './schedule.css';
 import { NS } from '../base.js';
+import { shiftEvent } from '@starbase/shared/ics';
+import AddToCalendar from '../components/AddToCalendar.jsx';
 
 // The desk's last choice of List or Week, on this device only.
 const VIEW_KEY = `${NS}shifts-view`;
@@ -847,6 +849,8 @@ function ShiftList({ canDesk, me }) {
         </button>
       )}
       {shifts.data && <PastShifts earlier={earlier} tz={tz} now={now} isMine={isMineShift} byShift={byShift} />}
+      {/* A person's own shifts, kept in their calendar (Your profile). */}
+      <p className="cal-way"><Link to="/profile#calendar">Put my shifts in my calendar</Link></p>
       </>
       )}
     </div>
@@ -1092,6 +1096,13 @@ function ShiftDetail({ id, canDesk, me }) {
   // the place opens the phone's own maps app — the link Signs uses too.
   const pin = shift.place_lat != null && shift.place_lng != null ? { lat: shift.place_lat, lng: shift.place_lng } : pinPoint(shift.location);
   const unnamed = isPinName(shift.location);
+  // "Add to calendar" (while it isn't over): the Google and Outlook links
+  // from the shift as kept, with this person's own hours when they have
+  // them; the file comes from the server when the choices open.
+  const calEvent = over ? null : shiftEvent(shift, {
+    tz, booking: active.find(isMine) || null, appUrl: window.location.href.split('#')[0],
+  });
+  const addToCal = (disabled = false) => calEvent && <AddToCalendar kind="shift" id={shift.id} event={calEvent} disabled={disabled} />;
   // Another shift of theirs at the same time (booked, or waiting on this phone).
   const clash = canDesk ? null : (mineQ.data?.shifts ?? []).find((x) => x.id !== shift.id
     && (x.mine || waitingSelf(outbox.items, x.id)?.name === 'shift.join') && !isOver(x, new Date()) && overlaps(x, shift)) || null;
@@ -1394,6 +1405,7 @@ function ShiftDetail({ id, canDesk, me }) {
           ? <a href={href} target="_blank" rel="noopener noreferrer">{shift.link.replace(/^https?:\/\//i, '')}</a>
           : <span>{shift.link}</span>)}
       </div>
+      {(canDesk || (!onIt && waiting?.name !== 'shift.join')) && addToCal()}
 
       {(turfs.length > 0 || canDesk) && (
         <section className="st-walk" aria-label="Walk lists">
@@ -1445,13 +1457,17 @@ function ShiftDetail({ id, canDesk, me }) {
           {waiting?.name === 'shift.join' && waiting.undo ? (
             <p className="ops-pending" role="status">Taken back <span className="chip obx-chip">Not sent yet</span></p>
           ) : waiting?.name === 'shift.join' && !onIt ? (
-            <div className="ops-confirm">
-              <p className="ops-pending" role="status">Count me in <span className="chip obx-chip">Not sent yet</span></p>
-              <button type="button" className="btn btn-quiet ops-tap" disabled={joining} onClick={takeBack}>Take back</button>
-            </div>
+            <>
+              <div className="ops-confirm">
+                <p className="ops-pending" role="status">Count me in <span className="chip obx-chip">Not sent yet</span></p>
+                <button type="button" className="btn btn-quiet ops-tap" disabled={joining} onClick={takeBack}>Take back</button>
+              </div>
+              {addToCal(true)}
+            </>
           ) : onIt ? (
             <>
               <span className="ops-onit" role="status"><span aria-hidden="true">✓</span> You’re on this shift</span>
+              {addToCal()}
               {waiting?.name === 'shift.leave' ? (
                 <p className="ops-pending" role="status">Can’t make it <span className="chip obx-chip">Not sent yet</span></p>
               ) : canLeave && !over && !checkedIn && (!leaving ? (

@@ -1,0 +1,27 @@
+/* "Add to calendar" (components/AddToCalendar.jsx) and "Your shifts in your
+   calendar" on Your profile (components/CalendarFeed.jsx). */
+.cal-add { margin: var(--s-2) 0; }
+.cal-tap { min-height: var(--ctl); }
+.cal-choices { margin-top: var(--s-2); }
+.cal-row { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.cal-choice { min-height: 48px; text-decoration: none; }
+.cal-help { margin: var(--s-2) 0 0; color: var(--text-3); font-size: 13px; }
+.cal-choices .ds-needs { margin: var(--s-2) 0 0; }
+.cal-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 480px) {
+  .cal-row { flex-direction: column; }
+  .cal-choice { width: 100%; }
+}
+
+/* Your shifts in your calendar */
+.cal-card .ts-row { margin-bottom: 0; }
+.cal-card .cal-help { margin-top: var(--s-2); }
+.cal-said { color: var(--ok); font-weight: 600; margin: var(--s-2) 0 0; }
+.cal-said:empty { display: none; }
+.cal-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-2) 0; }
+.cal-confirm .btn { min-height: var(--ctl); }
+.cal-way { margin: var(--s-4) 0 var(--s-2); }
+.cal-way a { display: inline-flex; align-items: center; min-height: var(--ctl); }
+@media (max-width: 480px) {
+  .cal-card .ts-row .btn { width: 100%; }
+}

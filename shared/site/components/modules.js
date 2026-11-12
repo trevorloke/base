@@ -13,6 +13,7 @@ import { Island } from './islands.js';
 import { arr, dateOnly, initials, money, obj, paragraphs, str, thousands, when } from './util.js';
 import { pagePath } from './links.js';
 import { DONATE_DECLARATION, JOIN_DECLARATION } from '../wording.js';
+import { googleLink, outlookLink, shiftEvent } from '../../ics.js';
 
 const TONES = new Set(['paper', 'surface', 'brand', 'accent', 'ink']);
 const DARK = new Set(['brand', 'ink', 'action']);
@@ -503,8 +504,20 @@ function openingItems(rc, list, limit) {
     const map = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng)
       ? `https://www.openstreetmap.org/?mlat=${lat.toFixed(5)}&mlon=${lng.toFixed(5)}#map=16/${lat.toFixed(5)}/${lng.toFixed(5)}`
       : null;
+    // "Add it to your calendar" after a sign-up: the Google and Outlook
+    // links, and the site's own file for this one (server/ext/site/calendar.js).
+    // Never the desk's instructions or links.
+    let cal = null;
+    try {
+      const ev = shiftEvent({ id: e.id, title: str(e.title), kind: e.kind, starts_at: e.starts_at, ends_at: e.ends_at, location: str(e.location) },
+        { tz: rc.timeZone, private: false });
+      cal = { google: googleLink(ev), outlook: outlookLink(ev), ics: rc.link(`/events/${String(e.id)}.ics`) };
+    } catch { cal = null; }
     return {
       id: str(String(e.id)),
+      starts_at: str(e.starts_at),
+      ends_at: e.ends_at ? str(e.ends_at) : null,
+      cal,
       title: str(e.title),
       day: w?.day || '',
       mon: w?.mon || '',
@@ -633,7 +646,8 @@ function Events({ m, p, rc, level }) {
         </div>
       </div>
       ${items.length
-        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-events`, variant: 'events', action: rc.action('rsvp'), hidden: rc.hidden(m.id), items, sent: rc.sentFor('rsvp', m.id), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />`
+        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-events`, variant: 'events', action: rc.action('rsvp'), hidden: rc.hidden(m.id), items, sent: rc.sentFor('rsvp', m.id), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />
+          <p className="small events-ics"><a href=${rc.link('/events.ics')}>Get our events in your calendar</a></p>`
         : html`<div className="event-feature">
           <div className="info">
             <h3>New events are on the way</h3>
