@@ -125,7 +125,7 @@ const moveRelationships = async (tx, ws, keep, drop) => {
   const exists = (await tx.query(`select to_regclass('relationships') is not null as ok`)).rows[0].ok;
   if (!exists) return;
   const rows = (await tx.query(
-    `select id, person_a, person_b, removed_at from relationships where workspace_id = $1 and (person_a = $2 or person_b = $2)`,
+    `select id, person_a, person_b, removed_at, close from relationships where workspace_id = $1 and (person_a = $2 or person_b = $2)`,
     [ws, drop],
   )).rows;
   for (const r of rows) {
@@ -136,10 +136,14 @@ const moveRelationships = async (tx, ws, keep, drop) => {
     }
     const [a, b] = keep < other ? [keep, other] : [other, keep];
     const clash = !r.removed_at && (await tx.query(
-      'select 1 from relationships where workspace_id = $1 and person_a = $2 and person_b = $3 and removed_at is null and id <> $4',
+      'select id from relationships where workspace_id = $1 and person_a = $2 and person_b = $3 and removed_at is null and id <> $4',
       [ws, a, b, r.id],
     )).rows[0];
-    if (clash) await tx.query('delete from relationships where id = $1', [r.id]);
+    if (clash) {
+      // The link kept is close if either was (on the merge's own event).
+      if (r.close) await tx.query('update relationships set close = true where id = $1', [clash.id]);
+      await tx.query('delete from relationships where id = $1', [r.id]);
+    }
     else await tx.query('update relationships set person_a = $2, person_b = $3 where id = $1', [r.id, a, b]);
   }
   // Whose circle a link came from, and who it brought in: keep, now.

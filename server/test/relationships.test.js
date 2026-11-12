@@ -5,11 +5,20 @@
 // "brought in" by them); the desk reads a profile's Knows (with a nudge) and
 // Most connected. A talk in person is a contact like any other. The sample
 // campaign has links, and Clear sample data takes them (yours stay).
+// A tie can be close (relationship.update changes it, its kind or its note);
+// the desk reads the key ties of up to 20 people at once; People, lists and
+// sends can pick "knows a supporter / a donor / a volunteer / anyone /
+// this person" — never for a volunteer, never past the People area.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { Hono } from 'hono';
 import { freshDb, Client } from './helpers.js';
 import { getDb } from '../db/client.js';
+import { personsWhere } from '../lib/audience.js';
+import { permsOf } from '../lib/perms.js';
+import { whereFor, loadList } from '../ext/lists/audience.js';
+import { api as relApi } from '../ext/relationships/api.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 let desk, vol, vol2, other, ws;
@@ -436,4 +445,269 @@ test('the sample again after a clear: Priya Nair stays one person and knows her 
   assert.equal((await named('Daniel Kim')).length, 1);
   assert.deepEqual((await db.query('select role from volunteer_roles where workspace_id = $1 and person_id = $2', [W, first.me.id])).rows, []);
   assert.equal(ok(await m.get('/api/audit/verify')).ok, true);
+});
+
+// ── Close ties, relationship.update, the key read and the knows= rule ──
+
+const events = async (id) => (await (await getDb()).query(
+  `select op, payload from events where workspace_id = $1 and entity_type = 'relationship' and entity_id = $2 order by seq`, [ws, id],
+)).rows;
+const update = (client, input) => client.action('relationship.update', input);
+const invite = async (role, deny = [], grant = []) => {
+  const inv = ok(await desk.action('member.invite', { email: `rel-${role}-${deny.join('')}${grant.join('')}-${randomUUID().slice(0, 6)}@example.org`, role }));
+  const c = new Client();
+  const j = ok(await c.post('/api/auth/join', { token: inv.joinUrl.split('/join/')[1], name: 'Sam Example', password: 'ties-pass-2026' }));
+  if (deny.length || grant.length) ok(await desk.action('permission.member.set', { user_id: j.user.id, grant, deny }));
+  return c;
+};
+
+test('a tie can be close: on add, on update, and adding again never clears it; the create event carries it', async () => {
+  const p1 = await desk.createPerson('Close One Example', { phone: '604-555-0161' });
+  const p2 = await desk.createPerson('Close Two Example', { phone: '604-555-0162' });
+  const made = ok(await add(desk, { from_id: p1.id, person_id: p2.id, kind: 'friend', close: true }));
+  assert.equal(made.relationship.close, true);
+  const id = made.relationship.id;
+  assert.equal((await events(id))[0].payload.close, true, 'the create event says close');
+  assert.equal((await knowsOf(p1.id)).knows[0].close, true, 'Knows says close');
+  const again = ok(await add(desk, { from_id: p2.id, person_id: p1.id, kind: 'friend', close: false }));
+  assert.equal(again.duplicate, true);
+  assert.equal(again.relationship.close, true, 'adding again never un-marks a tie');
+  const off = ok(await update(desk, { id, close: false }));
+  assert.equal(off.relationship.close, false, 'close: false un-marks');
+  assert.equal((await knowsOf(p1.id)).knows[0].close, false);
+  const on = ok(await update(desk, { id, close: true }));
+  assert.equal(on.relationship.close, true);
+  const plain = ok(await add(desk, { from_id: p1.id, person_id: (await desk.createPerson('Close Three Example', { phone: '604-555-0163' })).id }));
+  assert.equal(plain.relationship.close, false, 'a new link is not close unless said');
+  assert.equal((await events(plain.relationship.id))[0].payload.close, false);
+});
+
+test('relationship.update: kind, note (blank clears it) and close — only what changes, on the hash chain', async () => {
+  const p1 = await desk.createPerson('Upd One Example', { phone: '604-555-0164' });
+  const p2 = await desk.createPerson('Upd Two Example', { phone: '604-555-0165' });
+  const id = ok(await add(desk, { from_id: p1.id, person_id: p2.id, kind: 'work', note: 'Same office' })).relationship.id;
+  const n0 = (await events(id)).length;
+  assert.deepEqual(Object.keys(ok(await update(desk, { id }))).filter((k) => k !== 'seq'), ['duplicate'], 'nothing to change');
+  assert.equal(ok(await update(desk, { id, kind: 'work', note: 'Same office', close: false })).duplicate, true, 'the same values again');
+  assert.equal((await events(id)).length, n0, 'and no event');
+  const k = ok(await update(desk, { id, kind: 'family' }));
+  assert.deepEqual([k.relationship.kind, k.relationship.note], ['family', 'Same office'], 'what is not given stays');
+  assert.deepEqual((await events(id)).at(-1), { op: 'update', payload: { kind: 'family' } }, 'the patch, only what changed');
+  ok(await update(desk, { id, note: '' }));
+  assert.equal((await knowsOf(p1.id)).knows[0].note, null, '"" clears the note');
+  assert.deepEqual((await events(id)).at(-1).payload, { note: null });
+  ok(await update(desk, { id, note: '  Choir  ' }));
+  assert.equal((await knowsOf(p1.id)).knows[0].note, 'Choir');
+  ok(await update(desk, { id, note: '   ' }));
+  assert.equal((await (await getDb()).query('select note from relationships where id = $1', [id])).rows[0].note, null, 'only spaces clears it too');
+  assert.equal((await update(desk, { id, kind: 'pen-pal' })).status, 400);
+  assert.equal((await update(desk, { id, note: 'x'.repeat(201) })).status, 400);
+  assert.equal((await update(desk, { id: randomUUID(), close: true })).status, 404);
+  assert.equal((await update(other, { id, close: true })).status, 404, 'another campaign’s link is not there');
+
+  // A volunteer changes only a link with their own record at one end.
+  assert.equal((await update(vol, { id, close: true })).status, 404, 'someone else’s link is not there for them');
+  const theirs = ok(await vol.get('/api/relationships/mine')).people[0];
+  const mine = ok(await update(vol, { id: theirs.id, close: true, note: 'From choir' }));
+  assert.deepEqual([mine.relationship.close, mine.relationship.note], [true, 'From choir']);
+  const now = ok(await vol.get('/api/relationships/mine')).people.find((x) => x.id === theirs.id);
+  assert.deepEqual([now.close, now.note], [true, 'From choir'], 'My people says close');
+  // Removed: not found.
+  ok(await desk.action('relationship.remove', { id }));
+  assert.equal((await update(desk, { id, close: true })).status, 404, 'a removed link is not there');
+  const evs = (await events(id)).map((e) => e.op);
+  assert.deepEqual(evs, ['create', 'update', 'update', 'update', 'update', 'void']);
+  assert.equal(ok(await desk.get('/api/audit/verify')).ok, true, 'every change on the hash chain');
+});
+
+test('"I know them" from a volunteer: a person on the list by id, replayed with the same id, is one link', async () => {
+  const x = await desk.createPerson('Door Example', { phone: '604-555-0166' });
+  const id = randomUUID();
+  const r = ok(await add(vol, { id, person_id: x.id, kind: 'friend' }));
+  assert.equal(r.relationship.id, id);
+  const again = ok(await add(vol, { id, person_id: x.id, kind: 'friend' }));
+  assert.equal(again.duplicate, true);
+  assert.equal(await linkCount(P.priya.id, x.id), 1);
+  assert.ok(ok(await vol.get('/api/relationships/mine')).people.some((p) => p.person.id === x.id && p.kind === 'friend'));
+});
+
+// The key read: the ties that matter for up to 20 people.
+const K = {};
+test('GET /relationships/key: the two ties that matter, how many in all, for up to 20 people', async () => {
+  const mk = (n, ph) => desk.createPerson(`${n} Key`, { phone: `604-555-01${ph}` });
+  K.hub = await mk('Hub', '70');
+  K.close = await mk('Zed', '71');           // close, kind other, not rated
+  K.yes = await mk('Yan', '72');             // a supporter, kind work
+  K.fam = await mk('Fay', '73');             // family
+  K.dnc = await mk('Dot', '74');             // close but do-not-contact
+  K.lone = await mk('Lone', '75');
+  K.gone = await mk('Gone', '76');
+  ok(await desk.action('contact.log', { person_id: K.yes.id, channel: 'phone', outcome: 'contacted', rating: '1' }));
+  ok(await desk.action('person.update', { id: K.dnc.id, tags: ['Do-Not-Contact'] }));
+  ok(await add(desk, { from_id: K.hub.id, person_id: K.close.id, kind: 'other', close: true }));
+  ok(await add(desk, { from_id: K.hub.id, person_id: K.yes.id, kind: 'work' }));
+  ok(await add(desk, { from_id: K.hub.id, person_id: K.fam.id, kind: 'family' }));
+  ok(await add(desk, { from_id: K.hub.id, person_id: K.dnc.id, kind: 'family', close: true }));
+  ok(await add(desk, { from_id: K.gone.id, person_id: K.hub.id, kind: 'friend' }));
+  await (await getDb()).query('update persons set deleted_at = now() where id = $1', [K.gone.id]);
+  const theirs = await other.createPerson('Other Key');
+
+  const ids = [K.hub.id, K.lone.id, K.gone.id, theirs.id, randomUUID(), K.yes.id];
+  const r = ok(await desk.get(`/api/relationships/key?ids=${ids.join(',')}`));
+  assert.deepEqual(Object.keys(r.ties).sort(), [K.hub.id, K.lone.id, K.yes.id].sort(), 'unknown, deleted and other campaigns’ people are absent');
+  const hub = r.ties[K.hub.id];
+  assert.equal(hub.n, 4, 'four live links to people on the list — do-not-contact counted, the deleted one not');
+  assert.deepEqual(hub.top.map((t) => t.person.name), ['Zed Key', 'Yan Key'], 'close first, then a supporter; do-not-contact never named');
+  assert.deepEqual(Object.keys(hub.top[0]).sort(), ['close', 'id', 'kind', 'person']);
+  assert.deepEqual(hub.top[0].person, { id: K.close.id, name: 'Zed Key', rating: null });
+  assert.equal(hub.top[0].close, true);
+  assert.deepEqual(r.ties[K.lone.id], { n: 0, top: [] });
+  assert.deepEqual(r.ties[K.yes.id].top.map((t) => t.person.id), [K.hub.id]);
+
+  const many = Array.from({ length: 21 }, () => randomUUID()).join(',');
+  assert.equal((await desk.get(`/api/relationships/key?ids=${many}`)).status, 400, '21 ids');
+  assert.equal((await desk.get(`/api/relationships/key?ids=${many.split(',').slice(1).join(',')}`)).status, 200, '20 ids');
+  assert.equal((await desk.get(`/api/relationships/key?ids=${K.hub.id},nope`)).status, 400, 'a bad id');
+  assert.equal((await vol.get(`/api/relationships/key?ids=${K.hub.id}`)).status, 403, 'volunteers never read another person’s ties');
+});
+
+test('the desk reads are TIE_READERS’ and the People area’s; My people stays everyone’s', async () => {
+  // A role outside TIE_READERS (as a candidate would be, until CAN says otherwise).
+  const db = await getDb();
+  const app = new Hono();
+  app.use('*', async (c, next) => { c.set('ctx', { workspaceId: ws, role: 'candidate', user: { id: randomUUID(), email: '' } }); c.set('db', db); await next(); });
+  app.route('/', relApi);
+  for (const path of [`/relationships/key?ids=${K.hub.id}`, '/relationships/connected', `/persons/${K.hub.id}/knows`]) {
+    assert.equal((await app.request(path)).status, 403, `a candidate: ${path}`);
+  }
+  assert.equal((await app.request('/relationships/mine')).status, 200);
+
+  const noPeople = await invite('staff', ['people']);
+  assert.equal((await noPeople.get(`/api/relationships/key?ids=${K.hub.id}`)).status, 403);
+  assert.equal((await noPeople.get('/api/relationships/connected')).status, 403);
+  assert.equal((await noPeople.get(`/api/persons/${K.hub.id}/knows`)).status, 403);
+  assert.equal((await noPeople.get('/api/relationships/mine')).status, 200, 'My people is in no area');
+  const treasurer = await invite('treasurer');
+  assert.equal((await treasurer.get(`/api/relationships/key?ids=${K.hub.id}`)).status, 200);
+});
+
+test('Most connected credits who someone brought in, removed links too; the order is unchanged', async () => {
+  const r = ok(await add(desk, { from_id: K.fam.id, person: { name: 'Brought Example', phone: '604-555-0177' }, kind: 'friend' }));
+  ok(await desk.action('relationship.remove', { id: r.relationship.id }));
+  const list = ok(await desk.get('/api/relationships/connected')).people;
+  assert.equal(list.find((x) => x.id === K.fam.id).brought_in, 1, 'brought in stays true when the link goes');
+  assert.equal(list.find((x) => x.id === K.hub.id).brought_in, 0);
+  const priya = list.find((x) => x.id === P.priya.id);
+  assert.ok(priya.brought_in >= 1, 'Priya brought Rowan in');
+  for (let i = 1; i < list.length; i += 1) assert.ok(list[i - 1].knows >= list[i].knows, 'still most links first');
+});
+
+test('knows=: supporter, donor, volunteer, any, person — never everybody, never for a volunteer, never past People', async () => {
+  const mk = (n, extra = {}) => desk.createPerson(`${n} Knows`, { tags: ['kn'], ...extra });
+  const T = { a: await mk('Ava'), b: await mk('Bo'), c: await mk('Cal'), d: await mk('Dev'), e: await mk('Eli'), f: await mk('Flo'), g: await mk('Gus') };
+  const S = await desk.createPerson('Sup Knows');
+  const Sgone = await desk.createPerson('Sup Gone Knows');
+  const G = await desk.createPerson('Giver Knows');
+  const V = await desk.createPerson('Vol Knows', { tags: ['volunteer'] });
+  const R = await desk.createPerson('Role Knows');
+  const X = await desk.createPerson('Plain Knows');
+  const db = await getDb();
+  for (const p of [S, Sgone]) ok(await desk.action('contact.log', { person_id: p.id, channel: 'phone', outcome: 'contacted', rating: '2' }));
+  ok(await desk.action('gift.log', { person_id: G.id, amount_cents: 5000, date: new Date().toISOString().slice(0, 10), method: 'cheque' }));
+  await db.query('insert into volunteer_roles (id, workspace_id, person_id, role) values ($1, $2, $3, $4)', [randomUUID(), ws, R.id, 'canvasser']);
+  ok(await add(desk, { from_id: T.a.id, person_id: S.id }));
+  ok(await add(desk, { from_id: G.id, person_id: T.b.id }));
+  ok(await add(desk, { from_id: T.c.id, person_id: V.id }));
+  ok(await add(desk, { from_id: T.d.id, person_id: X.id }));
+  ok(await add(desk, { from_id: T.g.id, person_id: R.id }));
+  const gone = ok(await add(desk, { from_id: T.e.id, person_id: S.id })).relationship.id;
+  ok(await desk.action('relationship.remove', { id: gone }));
+  ok(await add(desk, { from_id: T.f.id, person_id: Sgone.id }));
+  await db.query('update persons set deleted_at = now() where id = $1', [Sgone.id]);
+  const theirs = await other.createPerson('Other Knows');
+
+  const names = async (cl, knows) => ok(await cl.get(`/api/persons?limit=50&tag=kn&knows=${encodeURIComponent(knows)}`)).persons.map((p) => p.name.split(' ')[0]).sort();
+  const count = async (cl, knows) => ok(await cl.get(`/api/persons/count?tag=kn&knows=${encodeURIComponent(knows)}`)).total;
+  assert.deepEqual(await names(desk, 'supporter'), ['Ava'], 'a removed link and a deleted supporter do not count');
+  assert.deepEqual(await names(desk, 'donor'), ['Bo']);
+  assert.deepEqual(await names(desk, 'volunteer'), ['Cal', 'Gus'], 'tagged volunteer, or holding a volunteer role');
+  assert.deepEqual(await names(desk, 'any'), ['Ava', 'Bo', 'Cal', 'Dev', 'Gus']);
+  assert.deepEqual(await names(desk, `person:${S.id}`), ['Ava']);
+  assert.deepEqual(await names(desk, `person:${X.id}`), ['Dev']);
+  for (const bad of ['bogus', 'person:', 'person:nope', `person:${theirs.id}`, 'Supporter ', 'anyone']) {
+    assert.deepEqual(await names(desk, bad), [], `${bad}: nobody, never everybody`);
+  }
+  assert.equal(await count(desk, 'any'), 5);
+
+  // A volunteer: nobody, whatever the value — even granted People.
+  for (const v of ['supporter', 'donor', 'volunteer', 'any', `person:${S.id}`]) assert.equal(await count(vol, v), 0, `volunteer: ${v}`);
+  const granted = await invite('volunteer', [], ['people']);
+  assert.equal(await count(granted, 'any'), 0, 'a volunteer granted People: still nobody');
+  const refused = await granted.action('list.create', { name: 'Circle', kind: 'filter', filter: { knows: 'any' } });
+  assert.equal(refused.status, 403);
+  assert.match(refused.json.error, /people they know/);
+
+  // Donations denied: knows a donor is nobody; the rest as before.
+  const noMoney = await invite('staff', ['money']);
+  assert.equal(await count(noMoney, 'donor'), 0);
+  assert.equal(await count(noMoney, 'supporter'), 1);
+
+  // A desk member denied People filtering directly: nobody (their reads are
+  // refused anyway — this is the rule itself).
+  const ctx = { workspaceId: ws, role: 'staff', user: { email: '' }, workspace: { settings: {} }, perms: permsOf('staff', {}, { deny: ['people'] }) };
+  const countWhere = async (c, q) => {
+    const { where, params } = await personsWhere(db, c, q);
+    params[3] = 1;
+    return (await db.query(`select count(*)::int as n from persons p where ${where}`, params)).rows[0].n;
+  };
+  assert.equal(await countWhere(ctx, { tag: 'kn', knows: 'any' }), 0);
+  // …but the desk's list, read in a send on their behalf, is read whole.
+  const list = ok(await desk.action('list.create', { name: 'Know anyone', kind: 'filter', filter: { tag: 'kn', knows: 'any' } })).list;
+  assert.deepEqual(list.filter, { tag: 'kn', knows: 'any' }, 'knows is kept in a saved filter');
+  const asList = async (c) => {
+    const { where, params } = await whereFor(db, c, { list: await loadList(db, ws, list.id) });
+    params[3] = 1;
+    return (await db.query(`select count(*)::int as n from persons p where ${where}`, params)).rows[0].n;
+  };
+  assert.equal(await asList(ctx), 5, 'a list the desk saved counts whole');
+  assert.equal(ok(await desk.get(`/api/lists/${list.id}`)).counts.total, 5);
+  // A list a volunteer made is read with a volunteer's eyes: nobody.
+  await db.query('update lists set by_volunteer = true where id = $1', [list.id]);
+  assert.equal(await asList({ ...ctx, perms: undefined, role: 'manager' }), 0, 'a by_volunteer list matches nobody by who they know');
+});
+
+test('a merge keeps a close tie close', async () => {
+  const keep = await desk.createPerson('Merge Keep Example', { phone: '604-555-0181' });
+  const drop = await desk.createPerson('Merge Drop Example', { phone: '604-555-0182' });
+  const friend = await desk.createPerson('Merge Friend Example', { phone: '604-555-0183' });
+  ok(await add(desk, { from_id: keep.id, person_id: friend.id, kind: 'friend' }));
+  ok(await add(desk, { from_id: drop.id, person_id: friend.id, kind: 'friend', close: true }));
+  ok(await desk.action('person.merge', { keep: keep.id, drop: drop.id }));
+  const k = (await knowsOf(keep.id)).knows;
+  assert.deepEqual(k.map((x) => [x.person.id, x.close]), [[friend.id, true]], 'one link, close because either was');
+  assert.equal(ok(await desk.get('/api/audit/verify')).ok, true);
+});
+
+test('housemates: the desk is told who asked not to be contacted; a volunteer’s rows are as before', async () => {
+  const at = { address: '12 Example Street', phone: '604-555-0184' };
+  const h1 = await desk.createPerson('House One Example', at);
+  const h2 = await desk.createPerson('House Two Example', { ...at, tags: ['do-not-contact'] });
+  const h3 = await desk.createPerson('House Three Example', at);
+  const home = ok(await desk.get(`/api/persons/${h1.id}`)).household;
+  assert.deepEqual(home.map((x) => [x.id, x.dnc]).sort(), [[h2.id, true], [h3.id, false]].sort());
+  const theirs = ok(await vol.get(`/api/persons/${h1.id}`)).household;
+  assert.equal(theirs.length, 2);
+  for (const row of theirs) assert.deepEqual(Object.keys(row).sort(), ['id', 'name', 'rating'], 'no dnc for a volunteer');
+});
+
+test('the sample marks two ties close', async () => {
+  const m = new Client();
+  await m.signup({ name: 'Close Sample', workspaceName: `Rel Close ${tag}`, email: `rel-close+${tag}@example.org`, jurisdiction: 'bc-municipal' });
+  ok(await m.post('/api/data/sample', {}));
+  const named = async (n) => ok(await m.get(`/api/persons?q=${encodeURIComponent(n)}`)).persons.find((p) => p.name === n);
+  const closeOf = async (n) => ok(await m.get(`/api/persons/${(await named(n)).id}/knows`)).knows.filter((k) => k.close).map((k) => k.person.name);
+  assert.deepEqual(await closeOf('Priya Nair'), ['Sofia Petrova']);
+  assert.deepEqual(await closeOf('Gurpreet Sandhu'), ['Navdeep Sandhu']);
+  const key = ok(await m.get(`/api/relationships/key?ids=${(await named('Priya Nair')).id}`)).ties;
+  assert.equal(Object.values(key)[0].top[0].person.name, 'Sofia Petrova', 'her close tie first');
 });

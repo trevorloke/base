@@ -28,7 +28,7 @@ import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
 import { personsWhere, joinWhere } from '../lib/audience.js';
-import { mayReach, address, person, noCallSql } from '../lib/reach.js';
+import { mayReach, address, person, noCallSql, NO_CONTACT } from '../lib/reach.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
 import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { notSuppressed } from '../lib/mail/index.js';
@@ -531,15 +531,17 @@ app.get('/persons/:id', async (c) => {
     [ctx.workspaceId, person.id],
   )).rows;
   const donor = await tierFor(db, ctx.workspaceId, person.id);
+  // dnc: asked not to be contacted (any capitals) — the desk's key line leaves them out.
   const household = (await db.query(
-    `select id, name, rating from persons
+    `select id, name, rating, lower(tags::text) like $5 as dnc from persons
      where workspace_id = $1 and deleted_at is null and id <> $2 and address is not null
        and lower(address) = lower($3) and coalesce(unit, '') = coalesce($4, '')`,
-    [ctx.workspaceId, person.id, person.address || '', person.unit || null],
+    [ctx.workspaceId, person.id, person.address || '', person.unit || null, `%"${NO_CONTACT}"%`],
   )).rows;
   if (ctx.role === 'volunteer') {
     return c.json({
-      person: forViewer(ctx)(personRow(person)), gifts: [], totals: [], contacts, roles, signs, shifts, donor: null, household,
+      person: forViewer(ctx)(personRow(person)), gifts: [], totals: [], contacts, roles, signs, shifts, donor: null,
+      household: household.map(({ id, name, rating }) => ({ id, name, rating })),
     });
   }
   return c.json({ person: personRow(person), gifts, totals, contacts, roles, signs, shifts, donor, household });

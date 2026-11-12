@@ -35,7 +35,7 @@ const ownPeople = async (tx, ws, list) => (await tx.query(
 // are read with a volunteer's eyes (by_volunteer — audience.js whereFor).
 const deskRulesOnly = (ctx, filter) => {
   if (ctx.role === 'volunteer' && DESK_RULES.some((k) => filter?.[k])) {
-    throw httpError(403, 'only the desk can make a list by gifts, memberships, answers, shifts or another list');
+    throw httpError(403, 'only the desk can make a list by gifts, memberships, answers, shifts, another list or people they know');
   }
   if (filter?.gave && ctx.perms && decide(ctx.perms, 'money') === false) {
     throw httpError(403, 'only someone with Donations can make a list by gifts');
