@@ -41,6 +41,7 @@ import { loadAttachments } from './attach.js';
 import { deliverTexts } from '../texting/blast.js';
 import { brandFor } from '../../lib/brand.js';
 import { whyNot } from '../../lib/reach.js';
+import { onMediaTags } from '../media/rules.js';
 
 export const AB_MIN = 50;
 export const AB_PCTS = [10, 20, 30];
@@ -174,16 +175,18 @@ export const deliveredRow = (alias = '') => {
   return `(${a}status = 'sent' and ${a}bounced_at is null)`;
 };
 
-// Every newsletter and email blast identifies the sender and carries the
-// recipient's own one-click unsubscribe link (/u/:subscriptionId on the
-// newsletter list; /bu/:recipientId on an email blast); press carries the
-// name. A test copy (no link) says where the link will be.
-const hasUnsub = (kind) => kind === 'newsletter' || kind === 'eblast';
+// Every newsletter, email blast and press release identifies the sender
+// and carries the recipient's own one-click unsubscribe link (/u/:subscriptionId
+// on the newsletter list; /bu/:recipientId on an email blast, and on a press
+// release, where it takes them off the media list only). A test copy (no
+// link) says where the link will be.
+const hasUnsub = (kind) => kind === 'newsletter' || kind === 'eblast' || kind === 'press';
+const UNSUB_WORDS = { press: 'Don’t want press releases? Unsubscribe' };
 export const blastText = (ctx, kind, body, unsubscribeUrl) => {
   const base = ctx.publicUrl || '';
   const words = markdownPlain(body).replace(/(^|[\s(])\/media\/([A-Za-z0-9-]+)/g, `$1${base}/media/$2`);
   return words + (hasUnsub(kind)
-    ? `\n\n—\nSent by ${ctx.workspace.name}.\nUnsubscribe: ${unsubscribeUrl || '(each recipient gets their own link)'}`
+    ? `\n\n—\nSent by ${ctx.workspace.name}.\n${UNSUB_WORDS[kind] || 'Unsubscribe'}: ${unsubscribeUrl || '(each recipient gets their own link)'}`
     : `\n\n—\n${ctx.workspace.name}`);
 };
 
@@ -328,9 +331,10 @@ export const blastHtml = (ctx, kind, body, unsubscribeUrl, token, links) => {
   const base = ctx.publicUrl || '';
   const brand = brandFor(ctx.workspace?.settings);
   const counted = token ? ' We count opens and clicks.' : '';
+  const ask = kind === 'press' ? 'Don’t want press releases? ' : '';
   const unsub = unsubscribeUrl
-    ? `<a href="${esc(unsubscribeUrl)}" style="color:#5d6481">Unsubscribe</a>`
-    : '<span style="color:#5d6481">Unsubscribe (each recipient gets their own link)</span>';
+    ? `${ask}<a href="${esc(unsubscribeUrl)}" style="color:#5d6481">Unsubscribe</a>`
+    : `<span style="color:#5d6481">${ask}Unsubscribe (each recipient gets their own link)</span>`;
   const foot = hasUnsub(kind)
     ? `Sent by ${esc(ctx.workspace.name)}.${counted}<br>${unsub}`
     : `${esc(ctx.workspace.name)}.${counted}`;
@@ -459,13 +463,24 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
           stopped += 1;
           continue;
         }
-        let unsubscribeUrl = blast.kind === 'eblast' ? `${ctx.publicUrl || ''}/bu/${r.id}` : null;
+        let unsubscribeUrl = blast.kind === 'eblast' || blast.kind === 'press' ? `${ctx.publicUrl || ''}/bu/${r.id}` : null;
         // An email to a list: still someone it may go to (lib/reach.js), with
         // their tags as they are now? Said no since the tap (their link, the
         // desk's do-not tag, off the newsletter list): off the send.
         if (blast.kind === 'eblast') {
           const tags = typeof r.tags === 'string' ? JSON.parse(r.tags) : r.tags;
           if (await whyNot(tx, 'email', 'list', { workspaceId, email: r.email, tags, personId: r.person_id })) {
+            await tx.query('delete from blast_recipients where id = $1 and workspace_id = $2', [r.id, workspaceId]);
+            gone += 1;
+            continue;
+          }
+        }
+        // A press release: still on the media list (their own link takes
+        // them off it), and still someone a release may go to (a do-not tag
+        // since the tap)? Otherwise off the send.
+        if (blast.kind === 'press') {
+          const tags = typeof r.tags === 'string' ? JSON.parse(r.tags) : r.tags;
+          if (!r.person_id || !onMediaTags(tags) || await whyNot(tx, 'email', 'press', { workspaceId, email: r.email, tags, personId: r.person_id })) {
             await tx.query('delete from blast_recipients where id = $1 and workspace_id = $2', [r.id, workspaceId]);
             gone += 1;
             continue;
@@ -502,6 +517,8 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
     for (const r of go.rows) {
       run.claimed += 1;
       const res = await sendEmail({
+        // The From the send recorded (ext/senders): a send keeps it for life.
+        from: blast.from_addr || undefined,
         to: r.email,
         subject: subjectFor(blast, r.ab_group),
         ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: r.unsubscribeUrl, token: r.token, links, attachments }),
@@ -620,7 +637,7 @@ export const runSendJob = async (db, job) => {
   const { blast_id: blastId, base = '', actor_id: actorId = null, action = 'blast.send' } = job.payload || {};
   const workspaceId = job.workspace_id;
   const blast = (await db.query(
-    'select id, kind, subject, body, ab_subject_b, ab_winner from blasts where id = $1 and workspace_id = $2',
+    'select id, kind, subject, body, ab_subject_b, ab_winner, from_addr from blasts where id = $1 and workspace_id = $2',
     [blastId, workspaceId],
   )).rows[0];
   if (!blast) return;

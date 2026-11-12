@@ -390,6 +390,13 @@ shared, and the code names no client.
 
 - `https://starbase.imaginesurrey.ca/` loads over https and signs in.
 - A test newsletter reaches a real inbox with a working unsubscribe link.
+- Press releases from media@: once MAIL_FROM is on imaginesurrey.ca and
+  **Settings → Services → Email → Sending domain** says Verified, tap *Add
+  media@imaginesurrey.ca for press* under **From addresses** (Resend and
+  SendGrid verify the domain, not each address). Give media@ a real
+  mailbox or forwarding where the campaign's email is hosted first:
+  reporters reply to it, and base.win receives no mail. Then **Media →
+  Write a release → Send me a test**.
 - A test gift logged under **Donations** gets its receipt emailed.
 - Online giving, on staging in test mode: a gift once, a monthly gift and a
   membership go through Stripe's page and show under **Donations** marked

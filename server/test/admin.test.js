@@ -28,9 +28,10 @@ before(async () => {
 });
 
 test('each role starts with its usual areas; a manager has them all', async () => {
-  assert.deepEqual(await areasOf(mgr), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'admin', 'learn', 'site']);
-  assert.deepEqual(await areasOf(staff), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'learn']);
-  assert.deepEqual(await areasOf(treas), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'learn']);
+  // Media (ext/media): staff and treasurers have it, as they have Outreach.
+  assert.deepEqual(await areasOf(mgr), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'media', 'data', 'admin', 'learn', 'site']);
+  assert.deepEqual(await areasOf(staff), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'media', 'data', 'learn']);
+  assert.deepEqual(await areasOf(treas), ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'media', 'data', 'learn']);
   assert.deepEqual(await areasOf(vol), []);
   assert.equal((await staff.get('/api/admin/permissions')).status, 403, 'admin is the manager’s');
   assert.equal((await staff.action('team.create', { name: 'x' })).status, 403);

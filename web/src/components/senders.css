@@ -1,0 +1,36 @@
+/* The From line on a send (SenderPick.jsx) and Settings → Services → Email →
+   From addresses (SenderAddresses.jsx). Variables and shared classes only. */
+
+.sp { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.sp-line { margin: 0; font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; }
+.sp-label { color: var(--text-3); }
+.sp-addr { color: var(--text-1); font-weight: 500; }
+.sp-change {
+  font: inherit; font-size: 14px; color: var(--mark-deep); background: none; border: 0; padding: 0 4px;
+  min-height: var(--ctl); text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.sp-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.chip.sp-chip, .chip.sa-chip-btn {
+  min-height: var(--ctl); padding: 0 14px; font-size: 13px; cursor: pointer; border-color: var(--rule);
+  background: var(--paper-0); color: var(--text-1); white-space: normal; text-align: left; overflow-wrap: anywhere;
+}
+.chip.sp-chip.is-on { background: var(--mark-soft); border-color: var(--mark); color: var(--text-1); }
+
+/* Settings → From addresses */
+.sa { margin-top: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--rule); display: flex; flex-direction: column; gap: var(--s-3); }
+.sa-h { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-1); }
+.sa-help { margin: 0; font-size: 13px; color: var(--text-3); }
+.sa-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.sa-row { border: 1px solid var(--rule); border-radius: var(--r-card); padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); background: var(--paper-0); }
+.sa-row__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.sa-name { font-weight: 600; color: var(--text-1); }
+.sa-addr { color: var(--text-2); overflow-wrap: anywhere; }
+.sa-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.sa-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.sa-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--s-3); }
+.sa-form .field { flex: 1 1 200px; min-width: 0; margin: 0; }
+.sa-said { margin: 0; font-size: 13px; }
+.sa-said.is-bad { color: var(--danger); }
+.sa-said.is-ok { color: var(--ok); }
+.sa .btn { min-height: var(--ctl); }
+.sa-full { flex-basis: 100%; }

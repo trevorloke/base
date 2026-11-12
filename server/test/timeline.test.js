@@ -315,7 +315,7 @@ test('one person’s rows come through an index, never a walk over everyone’s'
 const STRAIGHT_TO = {
   persons: /\bid = /, contacts: /person_id = /, survey_responses: /person_id = /, signs: /person_id = /, events: /entity_id = /,
   voted_marks: /person_id = /, texting_conversations: /person_id = /, texting_messages: /conversation_id = /,
-  blast_recipients: /person_id = |lower\(/, ladder_runs: /person_id = /, consent_events: /person_id = /, site_actions: /person_id = /,
+  blast_recipients: /person_id = |lower\(/, media_contacts: /person_id = /, ladder_runs: /person_id = /, consent_events: /person_id = /, site_actions: /person_id = /,
   gifts: /person_id = |\bid = /, stripe_payments: /person_id = |gift_id = /, member_terms: /person_id = /, shift_assignments: /person_id = /,
 };
 // The plan's scans: [{ table, index, cond }] (a seq scan has no index).
@@ -421,6 +421,9 @@ test('a person with thousands of contacts, among 20,000 people with histories of
      insert into ladder_runs (id, workspace_id, ladder_id, person_id, status, log)
        select gen_random_uuid(), $1, l.id, v.id, 'done', '[{"step":0,"kind":"email","result":"sent","at":"2026-10-01T17:00:00.000Z"}]'
          from l cross join (select id from (${voters}) v where v.n % 20 = 10 union all select $2::uuid) v`,
+    `insert into media_contacts (workspace_id, person_id, outlet, left_at, left_how)
+       select $1, v.id, 'Example Daily', now() - interval '5 days', 'desk' from (${voters}) v where v.n % 50 = 11
+       union all select $1, $2, 'Example Radio', now() - interval '2 days', 'link'`,
   ]) await db.query(sql, [ws, busy.id]);
   await db.query('analyze');
   const t0 = performance.now();

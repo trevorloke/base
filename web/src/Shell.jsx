@@ -57,6 +57,7 @@ const ICONS = {
   money: <><circle cx="12" cy="12" r="8.5" /><path d="M14.8 9.2c-.5-.9-1.5-1.4-2.8-1.4-1.6 0-2.8.8-2.8 2s1.2 1.6 2.8 1.9 2.8.8 2.8 2.1-1.2 2.1-2.8 2.1c-1.3 0-2.4-.5-2.9-1.5M12 6v12" /></>,
   signs: <><rect x="4" y="4" width="16" height="10" rx="1" /><path d="M12 14v7M9 21h6" /></>,
   outreach: <><path d="M4 10v4h3l7 4.5v-13L7 10H4z" /><path d="M17 9.5a3.5 3.5 0 0 1 0 5M19.2 7a7 7 0 0 1 0 10" /></>,
+  media: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" /></>,
   learn: <><path d="M3 9.5 12 5l9 4.5-9 4.5-9-4.5z" /><path d="M6.5 11.5v4.2c0 1.3 2.5 2.8 5.5 2.8s5.5-1.5 5.5-2.8v-4.2" /><path d="M21 9.5v5" /></>,
   website: <><rect x="3" y="4.5" width="18" height="15" rx="1.5" /><path d="M3 8.5h18" /><path d="M6 6.5h.01M8.5 6.5h.01" /><path d="M7 12.5h6M7 15.5h10" /></>,
   more: <><circle cx="5.5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="18.5" cy="12" r="1.4" /></>,
@@ -78,11 +79,12 @@ const NAV_DESK = [
   { to: '/money',    label: 'Donations', icon: 'money', area: 'money' },
   { to: '/signs',    label: 'Signs',    icon: 'signs', area: 'signs' },
   { to: '/outreach', label: 'Outreach', icon: 'outreach', area: 'outreach' },
+  { to: '/media',    label: 'Media',    icon: 'media', area: 'media' },
   { to: '/imagineu', label: BRAND.learn, icon: 'learn', area: 'learn' },
   { to: '/website',  label: 'Website',  icon: 'website', area: 'site' },
 ];
 // The areas a person has: what the server said, else their role's usual ones.
-export const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data'] : []));
+export const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'media'] : []));
 export const hasArea = (me, area) => !area || areasOf(me).includes(area) || (me?.role === 'manager');
 // Volunteers request signs at the door card, so Signs isn't a tab for them.
 const NAV_VOLUNTEER = [

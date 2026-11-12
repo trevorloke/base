@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, apiPost } from '../api.js';
 import SendingDomain from './SendingDomain.jsx';
+import SenderAddresses from './SenderAddresses.jsx';
 import MailchimpPanel from './MailchimpPanel.jsx';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import ServiceConnect from './ServiceConnect.jsx';
@@ -46,6 +47,7 @@ function Row({ s, online }) {
           <p className="sv2-missing">Set in the hosting’s environment: {s.missing.map((k) => <code key={k}>{k}</code>).reduce((a, b) => [a, ' · ', b])}</p>
         )}
         {s.domainPanel && <SendingDomain online={online} />}
+        {s.domainPanel && <SenderAddresses online={online} />}
         {s.panel === 'mailchimp' && <MailchimpPanel online={online} onChanged={() => setRes(null)} />}
         {/* The email sender's block comes as `hook`: a page cached from before it existed prints Stripe's sentence over any `webhook`. */}
         {s.hook && <Webhook w={s.hook} />}

@@ -659,6 +659,14 @@ app.post('/sample', async (c) => {
         emit('contact', cid, 'create', { person_id: pid, rating: p.rating, sample: true });
       }
     }
+    // The sample reporters' outlet and beat (ext/media), for the ones made now.
+    for (const m of S.media) {
+      if (reused.has(id[m.name]) || (!m.outlet && !m.beat)) continue;
+      await tx.query(
+        'insert into media_contacts (workspace_id, person_id, outlet, beat) values ($1, $2, $3, $4) on conflict do nothing',
+        [W, id[m.name], m.outlet || null, m.beat || null],
+      );
+    }
     for (const [who, role, detail] of S.roles) {
       // Someone used again may hold that role already (yours).
       if (reused.has(id[who]) && (await tx.query(
@@ -920,7 +928,10 @@ const clearSample = async (tx, W, emit) => {
   if (hide.length) {
     await tx.query('update persons set deleted_at = now(), updated_at = now() where workspace_id = $1 and id = any($2::uuid[]) and deleted_at is null', [W, hide]);
   }
-  if (del.length) await tx.query('delete from persons where workspace_id = $1 and id = any($2::uuid[])', [W, del]);
+  if (del.length) {
+    await tx.query('delete from media_contacts where workspace_id = $1 and person_id = any($2::uuid[])', [W, del]);
+    await tx.query('delete from persons where workspace_id = $1 and id = any($2::uuid[])', [W, del]);
+  }
   for (const pid of leave) emit('person', pid, 'void', { sample: true });
   removed.people = leave.length;
 

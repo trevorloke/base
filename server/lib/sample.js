@@ -100,10 +100,12 @@ export const buildSample = () => {
     ['Ben Thompson', 'lawn', 'requested'], ['Emma Fraser', 'lawn', 'installed'],
     [null, 'billboard', 'installed', 'King George Blvd & 88 Ave', latOfAve(88), lngOfStreet(137.2)],
   ];
+  // The Media tab's contacts (ext/media): two reporters and an influencer,
+  // made up, with their outlet and beat.
   const media = [
-    { name: 'Surrey Now-Leader desk (sample)', email: 'newsdesk@surreynow.example', tags: ['media'] },
-    { name: 'Rita Sandhu — radio (sample)', email: 'rita@radio.example', tags: ['media'], socials: { x: '@ritasandhu_sample' } },
-    { name: 'Daniel Ruiz — TV (sample)', email: 'druiz@tv.example', tags: ['media'] },
+    { name: 'Dana Example', email: 'dana.media@example.org', phone: '604-555-0161', tags: ['media'], outlet: 'Example Daily', beat: 'City hall' },
+    { name: 'Lee Example', email: 'lee.media@example.org', phone: '604-555-0162', tags: ['media'], outlet: 'Example Radio' },
+    { name: 'Sam Example', email: 'sam.influencer@example.org', phone: '604-555-0163', tags: ['influencer'], socials: { instagram: '@samexample' } },
   ];
   // Who knows whom (ext/relationships): Priya Nair, a sample volunteer, and
   // her people; Gurpreet's and Sam's; a few more. [a, b, kind, note, b was

@@ -7,7 +7,7 @@
 //   texting  (like CallHub) Write a text to a list; the Inbox of replies;
 //            phone banks and Calls; texting settings (quiet hours).
 // The header holds the module's one yellow action. Older addresses still
-// work: /outreach/newsletter, /eblast and /press open Email; /texts opens
+// work: /outreach/newsletter and /eblast open Email; /press opens Media; /texts opens
 // Texting; /outreach/connect is where email and texting stand (and the
 // campaign's website address), linked from the screens that need them.
 // An open compose form is ?new=1. Every write invalidates and confirms.
@@ -26,6 +26,8 @@ import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { LOADING, Unavailable, fmt, useListCounts, useListNames } from '../components/AudienceBits.jsx';
 import { MarkdownField, toDataUrl, uploadImage } from '../components/MarkdownField.jsx';
 import SharingTab from './SharingTab.jsx';
+import SenderPick, { fromChoices, useSenders } from '../components/SenderPick.jsx';
+import { useSendScope } from '../components/SendScope.js';
 import './outreach.css';
 import { BRAND } from '../brand.js';
 
@@ -41,7 +43,7 @@ const PRIMARY = {
   sharing: 'New post to share',
 };
 // Older addresses → the module that has them now.
-const MOVED = { newsletter: 'email', eblast: 'email', press: 'email', texts: 'texting' };
+const MOVED = { newsletter: 'email', eblast: 'email', press: '/media', texts: 'texting' };
 // The email kinds a send can be (press releases sent before stay in the record).
 const EMAIL_KINDS = ['newsletter', 'eblast', 'press'];
 const kindIs = (k, want) => (Array.isArray(want) ? want.includes(k) : k === want);
@@ -74,7 +76,7 @@ const TabIcon = ({ name }) => (
 const origin = () => (typeof window !== 'undefined' ? window.location.origin : '');
 const plural = (n, one, many) => (n === 1 ? one : many);
 
-const fmtWhen = (ts) => {
+export const fmtWhen = (ts) => {
   if (!ts) return '—';
   const d = new Date(ts);
   if (Number.isNaN(d.getTime())) return String(ts);
@@ -116,11 +118,11 @@ const ATTACH_MAX = 5 * 1024 * 1024;
 const ATTACH_COUNT = 5;
 const ATTACH_ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.gif,.docx,.pptx,.xlsx,.txt,.csv,.ics';
 const fmtBytes = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
-// A picture in a message (blast.picture), so
-// every mail app can fetch it from /media/<id>.
-const uploadMessagePicture = (file) => uploadImage(file, 'blast.picture');
+// A picture in a message (blast.picture, or media.picture on the Media tab),
+// so every mail app can fetch it from /media/<id>.
+const uploadMessagePicture = (file, name = 'blast.picture') => uploadImage(file, name);
 // Run an action with busy/error state; `onDone` gets the result.
-function useAction(onDone) {
+export function useAction(onDone) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const run = async (name, input) => {
@@ -141,7 +143,7 @@ function useAction(onDone) {
 }
 
 // One toast at a time, auto-dismisses.
-function useToast() {
+export function useToast() {
   const [msg, setMsg] = useState(null);
   const timer = useRef(null);
   const show = (text, ms = 3500) => {
@@ -153,7 +155,7 @@ function useToast() {
   return { msg, show, clear: () => { clearTimeout(timer.current); setMsg(null); } };
 }
 
-async function copyText(text) {
+export async function copyText(text) {
   try {
     if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; }
   } catch { /* fall through */ }
@@ -200,7 +202,7 @@ function CopyButton({ text, label = 'Copy', what, onCopied, className = '' }) {
 }
 
 // "More" — a quiet toggle; what it reveals is only rendered when open.
-function More({ label = 'More', defaultOpen = false, children }) {
+export function More({ label = 'More', defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
   return (
@@ -216,7 +218,7 @@ function More({ label = 'More', defaultOpen = false, children }) {
 // A big number with a short label: "5 subscribers" — or, while its read is
 // on its way or failed (q), "Loading…" or "Unavailable — Try again": never a
 // 0 that isn't one.
-function Big({ n, one, many, q = null }) {
+export function Big({ n, one, many, q = null }) {
   if (n == null) {
     return <p className="ot-big"><span className="lbl" role="status">{q?.isError ? <Unavailable onRetry={() => q.refetch()} /> : LOADING}</span></p>;
   }
@@ -230,7 +232,7 @@ function Big({ n, one, many, q = null }) {
 
 // A public page as a row: its name (opens it) and a Copy button.
 
-function StatusChip({ status, label }) {
+export function StatusChip({ status, label }) {
   const cls = status === 'sent' || status === 'subscribed' || status === 'active' ? 'chip chip-ok'
     : status === 'queued' ? 'chip ot-chip-queued'
     : status === 'failed' ? 'chip chip-danger'
@@ -289,15 +291,17 @@ const isWaiting = (b) => {
 };
 // The send list, read again every 2 s while a send is on its way (and the
 // open/click stats once it has gone, so they match).
-const anyGoing = (d) => (d?.blasts || []).some((b) => Number(b.going_count) > 0);
-const useBlastList = () => {
+// The Media tab reads its own list (components/SendScope.js).
+export const useBlastList = () => {
   const qc = useQueryClient();
+  const scope = useSendScope();
+  const anyGoing = (d) => (scope.rows(d) || []).some((b) => Number(b.going_count) > 0);
   return useQuery({
-    queryKey: ['blasts'],
+    queryKey: scope.listKey,
     queryFn: async () => {
-      const prev = qc.getQueryData(['blasts']);
-      const next = await apiGet('/blasts');
-      if (anyGoing(prev) && !anyGoing(next)) qc.invalidateQueries({ queryKey: ['blasts', 'stats'] });
+      const prev = qc.getQueryData(scope.listKey);
+      const next = await apiGet(scope.listPath);
+      if (anyGoing(prev) && !anyGoing(next)) qc.invalidateQueries({ queryKey: scope.statsKey });
       return next;
     },
     refetchInterval: (q) => (anyGoing(q.state.data) ? 2000 : false),
@@ -345,15 +349,16 @@ const resultOf = (res) => (res?.blast ? { ...res.blast, counts: res.counts, rese
 // "Send to 3 subscribers now? Yes, send · No" — the quiet way to send a saved
 // one (Send now) or the ones that failed (Try again). blast.resend sends only
 // those, never anyone already sent.
-function ResendButton({ b, n, label, ask, onDone, plainLabel = false }) {
+export function ResendButton({ b, n, label, ask, onDone, plainLabel = false }) {
   const queryClient = useQueryClient();
+  const scope = useSendScope();
   const [confirming, setConfirming] = useState(false);
   const act = useAction(() => {
-    queryClient.invalidateQueries({ queryKey: ['blasts'] });
+    queryClient.invalidateQueries({ queryKey: scope.listKey });
   });
   const online = useOnline();
   const go = async () => {
-    const res = await act.run('blast.resend', { id: b.id });
+    const res = await act.run(scope.resend, { id: b.id });
     setConfirming(false);
     if (res) onDone?.(resultOf(res));
   };
@@ -381,11 +386,12 @@ function ResendButton({ b, n, label, ask, onDone, plainLabel = false }) {
 // The one place a send's outcome is said, counted per recipient:
 // "Sent to 2 subscribers." · "Sent to 1 of 2 subscribers — 1 failed." ·
 // "Failed — 2 subscribers not reached." · "Saved for 2 subscribers — not sent."
-function BlastResult({ blast: answered, emailConfigured, canWrite, onDismiss, onRetried }) {
+export function BlastResult({ blast: answered, emailConfigured, canWrite, onDismiss, onRetried }) {
   const stat = useBlastStat(answered?.id);
+  const scope = useSendScope();
   // Still going when the tap answered: the send as the list has it now.
   const list = useBlastList();
-  const row = answered && list.data?.blasts?.find((b) => b.id === answered.id);
+  const row = answered && scope.rows(list.data)?.find((b) => b.id === answered.id);
   const blast = row && (num(answered.counts?.going) > 0 || num(row.going_count) > 0)
     ? { ...answered, ...row, counts: null } : answered;
   if (!blast) return null;
@@ -461,9 +467,26 @@ function BlastResult({ blast: answered, emailConfigured, canWrite, onDismiss, on
 // Whatever happens the send is kept (sent, failed or saved), so the form
 // closes and the result is said once under the tabs — a failed one is tried
 // again from there, never sent a second time as a new copy.
-function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyReason, emailConfigured, onSent, onCancel, campaign }) {
+// On the Media tab (pages/Media.jsx) it sends under Media's own names:
+//   actions   { send, test, attach, unattach, picture } (default blast.*)
+//   listKey   the list it reads for a lost answer and refreshes after a send
+//   extra     merged into the send (Media's To: { to: { kinds } })
+//   senderUse 'email' | 'press': the From line (components/SenderPick.jsx)
+//   sendLabel the button's word; filesHint the line under Attach a file;
+//   confirmFrom the confirm names the address ("… from media@…?")
+const BLAST_ACTIONS = { send: 'blast.send', test: 'blast.test', attach: 'blast.attach', unattach: 'blast.unattach', picture: 'blast.picture' };
+export function ComposeCard({
+  kind, slug, audience, audienceCount, audienceNoun, emptyReason, emailConfigured, onSent, onCancel, campaign,
+  actions: names, listKey, extra, senderUse, sendLabel, filesHint, confirmFrom = false,
+}) {
   const queryClient = useQueryClient();
+  const scope = useSendScope();
+  const acts = { ...BLAST_ACTIONS, ...names };
+  const key = listKey || scope.listKey;
   const isText = kind === 'text';
+  // The From the desk picked (undefined: the kind's default, said by the
+  // server; null: the campaign's own address).
+  const [senderId, setSenderId] = useState(undefined);
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -477,8 +500,13 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
   // Two subject lines (components/AbTests.jsx): null = one; a list under 50 sends normally.
   const [ab, setAb] = useState(null);
   const act = useAction(() => {
-    queryClient.invalidateQueries({ queryKey: ['blasts'] });
+    queryClient.invalidateQueries({ queryKey: key });
   });
+  const from = senderId !== undefined ? { sender_id: senderId } : {};
+  const senders = useSenders(!!(confirmFrom && senderUse));
+  const { current: fromNow, choices: fromAll } = fromChoices(senders.data, senderUse);
+  const fromAddr = (senderId !== undefined && fromAll.find((c) => c.id === senderId)) || fromNow;
+  const confirmWho = confirmFrom && fromAddr?.email ? ` from ${fromAddr.email}` : '';
 
   const testing = ab != null && audienceCount != null && audienceCount >= AB_MIN;
   // Winner by clicks needs a link in the message; without one it's by opens.
@@ -504,17 +532,18 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
   const unanswered = useRef(false);
   const onRecord = async () => {
     if (!before.current) return null;
-    const list = await apiGet('/blasts').catch(() => null);
-    return list?.blasts?.find((b) => b.kind === kind && b.subject === subject.trim() && !before.current.has(b.id)) || null;
+    const list = await apiGet(scope.listPath).catch(() => null);
+    return scope.rows(list)?.find((b) => b.kind === kind && b.subject === subject.trim() && !before.current.has(b.id)) || null;
   };
   const send = async () => {
-    const known = queryClient.getQueryData(['blasts'])?.blasts;
+    const known = scope.rows(queryClient.getQueryData(key));
     if (!before.current && known) before.current = new Set(known.map((b) => b.id));
     const kept = unanswered.current ? await onRecord() : null;
     if (kept) { setConfirming(false); onSent?.(kept); return; }
-    const res = await act.run('blast.send', {
+    const res = await act.run(acts.send, {
       kind, subject: isText ? '' : subject.trim(), body: body.trim(),
       ...(audience ? { audience } : {}),
+      ...(extra || {}), ...(isText ? {} : from),
       ...(testing && !isText ? { ab: { ...ab, subject_b: ab.subject_b.trim(), metric: links ? ab.metric : 'opens' } } : {}),
       ...(files.length && !isText ? { attachment_ids: files.map((f) => f.id) } : {}),
     });
@@ -544,7 +573,7 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
       for (const f of picked) {
         if (files.length + added.length >= ATTACH_COUNT) throw new Error(`${ATTACH_COUNT} files at most on one send`);
         if (f.size > ATTACH_MAX) throw new Error(`${f.name} is too big — ${fmtBytes(ATTACH_MAX)} at most; link to it instead`);
-        const r = await action('blast.attach', { data: await toDataUrl(f), name: f.name });
+        const r = await action(acts.attach, { data: await toDataUrl(f), name: f.name });
         added.push(r.attachment);
       }
     } catch (err) {
@@ -556,13 +585,13 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
   };
   const dropFile = (a) => {
     setFiles((cur) => cur.filter((x) => x.id !== a.id));
-    action('blast.unattach', { id: a.id }).catch(() => {});
+    action(acts.unattach, { id: a.id }).catch(() => {});
   };
   const sendTest = async () => {
     setTest({ busy: true });
     try {
-      const r = await action('blast.test', {
-        kind, subject: subject.trim(), body: body.trim(), ...(files.length ? { attachment_ids: files.map((f) => f.id) } : {}),
+      const r = await action(acts.test, {
+        kind, subject: subject.trim(), body: body.trim(), ...(files.length ? { attachment_ids: files.map((f) => f.id) } : {}), ...from,
       });
       setTest(r.sent ? { ok: true, line: `Test sent to ${r.to}` } : { line: r.detail || 'The test didn’t go' });
     } catch (err) {
@@ -572,6 +601,7 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
 
   return (
     <form className="card ot-compose" onSubmit={(e) => { e.preventDefault(); if (ready && !empty && !confirming) setConfirming(true); }}>
+      {!isText && senderUse && <SenderPick use={senderUse} value={senderId} onChange={(v) => { setSenderId(v); setConfirming(false); }} />}
       {isText ? (
         <div className="field">
           <label htmlFor="text-body">Message</label>
@@ -595,7 +625,7 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
         onChange={(v) => { setAb(v); setConfirming(false); }} />}
       {!isText && <MarkdownField id={`${kind}-body`} label="Message" value={body} rows={10}
         onChange={(v) => { setBody(v.slice(0, 50000)); setConfirming(false); }}
-        upload={uploadMessagePicture}
+        upload={(file) => uploadMessagePicture(file, acts.picture)}
         placeholder={kind === 'press' ? 'FOR IMMEDIATE RELEASE …' : 'Hello friends,'} />}
       {!isText && <div className="ot-attach">
         <input ref={fileRef} type="file" multiple hidden accept={ATTACH_ACCEPT} onChange={pickFiles} />
@@ -615,7 +645,7 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
             onClick={() => fileRef.current?.click()}>
             {uploading ? 'Uploading…' : 'Attach a file'}
           </button>
-          <span className="ot-attach__hint">PDF, pictures, Word, Excel, PowerPoint, .ics, .txt or .csv — {fmtBytes(ATTACH_MAX)} each, {ATTACH_COUNT} files</span>
+          <span className="ot-attach__hint">{filesHint || <>PDF, pictures, Word, Excel, PowerPoint, .ics, .txt or .csv — {fmtBytes(ATTACH_MAX)} each, {ATTACH_COUNT} files</>}</span>
         </div>
         {fileNote && <p className="error" role="alert">{fileNote}</p>}
       </div>}
@@ -625,7 +655,7 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
         {confirming ? (
           <div className="ot-confirm" role="group" aria-label="Confirm send">
             <span>{testing && !offline ? abAsk(plan, ab.wait_hours)
-              : <>{offline ? 'Save for' : 'Send to'} <strong>{audienceCount}</strong> {noun(audienceCount)}?</>}</span>
+              : <>{offline ? 'Save for' : 'Send to'} <strong>{audienceCount}</strong> {noun(audienceCount)}{confirmWho || ''}?</>}</span>
             <button type="button" className="btn btn-primary ot-btn-tap" disabled={act.busy || !online} onClick={send}>
               {act.busy ? (offline ? 'Saving…' : 'Sending…') : offline ? 'Yes, save' : 'Yes, send'}
             </button>
@@ -637,7 +667,7 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
         ) : (
           <>
             <button type="submit" className="btn btn-primary ot-btn-tap" disabled={!ready || empty || act.busy}>
-              {offline ? 'Save — not sent yet' : 'Send'}
+              {offline ? 'Save — not sent yet' : sendLabel || 'Send'}
             </button>
             <span className="ot-audience">
               {audienceCount == null ? '…' : `${audienceCount} ${noun(audienceCount)}`}
@@ -661,7 +691,7 @@ function ComposeCard({ kind, slug, audience, audienceCount, audienceNoun, emptyR
 // The row says how many it reached; one that didn't reach everyone offers a
 // quiet "Try again · N" once email is connected, and says the outcome right
 // there (this list lives under More, far from the top).
-function PastRow({ b, showKind, emailConfigured, canWrite }) {
+function PastRow({ b, showKind, emailConfigured, canWrite, linkTo }) {
   const [result, setResult] = useState(null);
   const stat = useBlastStat(b.id);
   const c = countsOf(b);
@@ -693,7 +723,7 @@ function PastRow({ b, showKind, emailConfigured, canWrite }) {
     <li className="ot-item">
       <div className="ot-row ot-row--static ot-row--wrap">
         <span className="ot-row__main">
-          <span className="ot-row__name">{b.subject}</span>
+          <span className="ot-row__name">{linkTo ? <Link to={linkTo(b)}>{b.subject}</Link> : b.subject}</span>
           <span className="ot-row__sub">
             {showKind && <span>{KIND_LABEL[b.kind] || b.kind}</span>}
             <span>{reach}</span>
@@ -730,14 +760,14 @@ function PastRow({ b, showKind, emailConfigured, canWrite }) {
 
 // Past newsletters and press releases, newest first. Saves that never went
 // out are not here: they sit on the first look under "Not sent".
-function PastList({ blasts, loading, kindFilter, emailConfigured, canWrite }) {
+export function PastList({ blasts, loading, kindFilter, emailConfigured, canWrite, linkTo }) {
   const rows = (blasts || []).filter((b) => (!kindFilter || kindIs(b.kind, kindFilter)) && !isWaiting(b));
   if (loading) return <p className="ot-note">Loading…</p>;
   if (rows.length === 0) return <p className="ot-empty">Nothing sent yet.</p>;
   return (
     <ul className="ot-list">
       {rows.map((b) => (
-        <PastRow key={b.id} b={b} showKind={!kindFilter || Array.isArray(kindFilter)} emailConfigured={emailConfigured} canWrite={canWrite} />
+        <PastRow key={b.id} b={b} showKind={!kindFilter || Array.isArray(kindFilter)} emailConfigured={emailConfigured} canWrite={canWrite} linkTo={linkTo} />
       ))}
     </ul>
   );
@@ -746,7 +776,7 @@ function PastList({ blasts, loading, kindFilter, emailConfigured, canWrite }) {
 // The latest send that went out, on the tab's first look: one row with how
 // it did ("Opened 18% · Clicked 8%"). A test still running has its own
 // section; a send whose result is on screen isn't said twice.
-function LastSent({ blasts, kind, skip, emailConfigured, canWrite }) {
+export function LastSent({ blasts, kind, skip, emailConfigured, canWrite }) {
   const stats = useBlastStats();
   if (!stats.data) return null;
   const testing = (id) => stats.data.stats?.find((s) => s.id === id)?.ab?.status === 'testing';
@@ -818,7 +848,7 @@ function UnsentRow({ b, emailConfigured, canWrite, onResent }) {
   );
 }
 
-function UnsentList({ blasts, kind, emailConfigured, canWrite, onResent }) {
+export function UnsentList({ blasts, kind, emailConfigured, canWrite, onResent }) {
   const rows = (blasts || []).filter((b) => kindIs(b.kind, kind) && isWaiting(b));
   if (rows.length === 0) return null;
   return (
@@ -1001,6 +1031,7 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
           audienceNoun={isNews ? { one: 'subscriber', many: 'subscribers' } : { one: 'person', many: 'people' }}
           emptyReason={isNews ? 'No subscribers yet — share the signup page first.' : 'No one on this list can be emailed.'}
           emailConfigured={emailConfigured}
+          senderUse="email"
           onCancel={onClose}
           onSent={(b) => { setResult(b); onClose(); }}
         />
@@ -1144,65 +1175,6 @@ function TextingTab(props) {
   );
 }
 
-// Press releases sent before stay in the record (Email → past sends).
-// eslint-disable-next-line no-unused-vars
-function PressTab({ me, canWrite, creating, onClose }) {
-  const blasts = useBlastList();
-  const media = blasts.data?.mediaContacts ?? null;
-  const emailConfigured = blasts.data?.emailConfigured;
-  const [result, setResult] = useState(null);
-  const composing = canWrite && creating;
-
-  return (
-    <>
-      {composing && (
-        <ComposeCard
-          kind="press"
-          slug={me.workspace.slug}
-          audienceCount={media}
-          audienceNoun={{ one: 'media contact', many: 'media contacts' }}
-          emptyReason="Tag reporters “media” in People first."
-          emailConfigured={emailConfigured}
-          onCancel={onClose}
-          onSent={(b) => { setResult(b); onClose(); }}
-        />
-      )}
-      <BlastResult blast={result} emailConfigured={emailConfigured} canWrite={canWrite}
-        onDismiss={() => setResult(null)} onRetried={setResult} />
-
-      {!composing && (
-        <>
-          <Big n={media} one="media contact" many="media contacts" />
-          <div className="ot-actions">
-            <Link className="btn ot-btn-tap" to="/people?tag=media">Media list</Link>
-          </div>
-          <UnsentList blasts={blasts.data?.blasts} kind="press" emailConfigured={emailConfigured}
-            canWrite={canWrite} onResent={setResult} />
-          <TestingList blasts={blasts.data?.blasts} kind="press" skip={result?.id} />
-          <LastSent blasts={blasts.data?.blasts} kind="press" skip={result?.id}
-            emailConfigured={emailConfigured} canWrite={canWrite} />
-        </>
-      )}
-
-      {!composing && <More>
-        <EmailStatus configured={emailConfigured} />
-        {canWrite && (
-          <div className="ot-actions">
-            <Link className="btn ot-btn-tap" to="/people?new=1">Add a contact</Link>
-          </div>
-        )}
-        <section className="ot-sec" aria-label="Past press releases">
-          <h2 className="ot-sec-h">Past sends</h2>
-          {blasts.isError && <p className="error">{blasts.error.message}</p>}
-          <PastList blasts={blasts.data?.blasts} loading={blasts.isPending} kindFilter="press"
-            emailConfigured={emailConfigured} canWrite={canWrite} />
-          <OpensNote />
-        </section>
-      </More>}
-    </>
-  );
-}
-
 // Email & texting: on or off, said once. They're switched on where Starbase
 // is hosted, not here — so the line says who to ask.
 function Connections({ focus, isManager }) {
@@ -1303,7 +1275,10 @@ export default function Outreach() {
   const closeNew = () => setParams({}, { replace: true });
 
   if (!tab) return <Navigate to={home} replace />;
-  if (MOVED[tab]) return <Navigate to={`/outreach/${MOVED[tab]}${params.toString() ? `?${params}` : ''}`} replace />;
+  if (MOVED[tab]) {
+    const to = MOVED[tab].startsWith('/') ? MOVED[tab] : `/outreach/${MOVED[tab]}`;
+    return <Navigate to={`${to}${params.toString() ? `?${params}` : ''}`} replace />;
+  }
   // Where email and texting stand (and the website address): not a tab,
   // but where "Connect" links land.
   if (tab === 'connect') {

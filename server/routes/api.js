@@ -33,6 +33,7 @@ import { mayReach, address, person, noCallSql, NO_CONTACT } from '../lib/reach.j
 import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { notSuppressed } from '../lib/mail/index.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
+import { onMedia } from '../ext/media/rules.js';
 // The open pass (ext/passes) and the door rule it shares with the phone.
 import { openPass, listedWhere } from '../ext/passes/rule.js';
 import { doorState, inPass } from '@starbase/shared/passes';
@@ -964,7 +965,7 @@ app.get('/subscriptions', async (c) => {
 app.get('/blasts', async (c) => {
   const ctx = c.get('ctx');
   const { rows } = await c.get('db').query(
-    `select b.id, b.kind, b.subject, b.status, b.provider_note, b.audience_count, b.sent_at, b.created_at, b.audience, b.list_id,
+    `select b.id, b.kind, b.subject, b.status, b.provider_note, b.audience_count, b.sent_at, b.created_at, b.audience, b.list_id, b.from_addr,
             k.sent_count, k.failed_count, k.queued_count, k.retry_count, k.repeat_count, k.sending_count, k.going_count
      from blasts b
      cross join lateral (select ${sendJobOn('b.id', 'b.workspace_id')} as job_on) j
@@ -990,7 +991,7 @@ app.get('/blasts', async (c) => {
   );
   // Who a press release goes to (field.js blast.send; lib/reach.js decides).
   const media = (await c.get('db').query(
-    `select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null and p.tags @> '"media"'::jsonb
+    `select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p', ['media'])}
        and ${mayReach('email', 'press', person('p', '$1'))}`,
     [ctx.workspaceId],
   )).rows[0].n;

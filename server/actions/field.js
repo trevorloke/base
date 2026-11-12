@@ -23,6 +23,10 @@ import {
 } from '../ext/abtests/send.js';
 import { ATTACH_COUNT, bindAttachments, loadAttachments } from '../ext/abtests/attach.js';
 import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
+// The From a send goes from (the campaign's From addresses, ext/senders).
+import { resolveFrom } from '../ext/senders/rules.js';
+// Who is on the media list (ext/media): tagged media or influencer, any capitals.
+import { onMedia } from '../ext/media/rules.js';
 import { mayReach, person, address } from '../lib/reach.js';
 import { notSuppressed } from '../lib/mail/index.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
@@ -834,12 +838,17 @@ export const FIELD_ACTIONS = {
       audience: z.object({
         list_id: z.uuid().optional(),
         filter: z.record(z.string().max(40), z.string().max(400)).optional(),
+        // press: who on the media list (media.send's To). Absent: media.
+        media: z.array(z.enum(['media', 'influencer'])).min(1).max(2).optional(),
       }).optional(),
       // Two subject lines: A and B go to two small groups now; the winner
       // goes to everyone else when the wait ends (ext/abtests).
       ab: abInput.nullish(),
       // Files uploaded with blast.attach (ext/abtests/attach.js), to go with every copy.
       attachment_ids: z.array(z.uuid()).max(ATTACH_COUNT).optional(),
+      // One of the campaign's From addresses (ext/senders) — the desk's
+      // pick; anyone else's is ignored. Absent: the kind's default.
+      sender_id: z.uuid().nullish(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const isText = input.kind === 'text';
@@ -877,14 +886,14 @@ export const FIELD_ACTIONS = {
       } else {
         audience = (await tx.query(
           `select p.id as person_id, p.email, p.name from persons p
-           where p.workspace_id = $1 and p.deleted_at is null and p.tags @> '"media"'::jsonb
+           where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p', input.audience?.media || ['media'])}
              and ${mayReach('email', 'press', person('p', '$1'))}`,
           [ctx.workspaceId],
         )).rows;
       }
       if (audience.length === 0) {
         throw httpError(400, input.kind === 'newsletter' ? 'no subscribed addresses on the newsletter list yet'
-          : input.kind === 'press' ? "no people tagged 'media' with an email address yet"
+          : input.kind === 'press' ? 'no one on the media list can be emailed yet'
           : isText ? 'no one on this list has a number that can be texted'
           : 'no one on this list has an email address that can be emailed');
       }
@@ -895,13 +904,15 @@ export const FIELD_ACTIONS = {
       const live = isText ? textConfigured() : emailConfigured();
       const note = live ? null : (isText ? NO_TEXT_PROVIDER : NO_PROVIDER);
       const subject = isText ? (input.subject || input.body.replace(/\s+/g, ' ').slice(0, 80)) : input.subject;
+      const fromAddr = isText ? null : await resolveFrom(tx, ctx, input.kind, input.sender_id);
 
       const id = newId();
       await tx.query(
-        `insert into blasts (id, workspace_id, kind, subject, body, status, provider_note, audience_count, created_by, audience, list_id)
-         values ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10)`,
+        `insert into blasts (id, workspace_id, kind, subject, body, status, provider_note, audience_count, created_by, audience, list_id, from_addr)
+         values ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11)`,
         [id, ctx.workspaceId, input.kind, subject, input.body, note, audience.length, ctx.user.id,
-          picked ? JSON.stringify({ list_id: picked.list?.id || null, list_name: picked.name, kind: picked.list?.kind || 'filter', filter: picked.list ? picked.list.filter : picked.filter }) : null, picked?.list?.id || null],
+          picked ? JSON.stringify({ list_id: picked.list?.id || null, list_name: picked.name, kind: picked.list?.kind || 'filter', filter: picked.list ? picked.list.filter : picked.filter }) : null, picked?.list?.id || null,
+          fromAddr],
       );
       const attachments = await bindAttachments(tx, ctx, id, input.attachment_ids);
       // The rows to go now are asked for. The rest of an A/B send waits for
@@ -923,7 +934,7 @@ export const FIELD_ACTIONS = {
       // Not connected: the whole test is saved and starts on Send now.
       const test = ab ? await openTest(tx, ctx, id, ab, live) : null;
       emit('blast', id, 'create', {
-        kind: input.kind, subject, audience: audience.length, status: 'queued',
+        kind: input.kind, subject, audience: audience.length, status: 'queued', ...(fromAddr ? { from: fromAddr } : {}),
         ...(picked ? { list_id: picked.list?.id || null, list_name: picked.name, filter: picked.filter } : {}),
         ...(test ? { ab: { subject_b: ab.subject_b, pct: ab.pct, wait_hours: ab.wait_hours, metric: ab.metric, status: test.status } } : {}),
         ...(attachments.length ? { attachments: attachments.map((a) => a.filename) } : {}),
@@ -931,14 +942,14 @@ export const FIELD_ACTIONS = {
       return {
         blast: {
           id, kind: input.kind, subject, status: 'queued', audience_count: audience.length, provider_note: note,
-          attachments, list_name: picked?.name || null,
+          from_addr: fromAddr, attachments, list_name: picked?.name || null,
           ...(test ? { ab: test } : {}),
         },
         counts: { total: audience.length, sent: 0, failed: 0, queued: audience.length },
         ...(input.ab && !ab ? { ab_skipped: `A/B needs at least ${AB_MIN}` } : {}),
         [SEND]: now ? {
           jobId,
-          blast: { id, kind: input.kind, subject, body: input.body, ab_subject_b: ab?.subject_b ?? null, ab_winner: null },
+          blast: { id, kind: input.kind, subject, body: input.body, ab_subject_b: ab?.subject_b ?? null, ab_winner: null, from_addr: fromAddr },
         } : null,
       };
     },
@@ -971,17 +982,21 @@ export const FIELD_ACTIONS = {
       subject: z.string().trim().min(1).max(300),
       body: z.string().trim().min(1).max(50000),
       attachment_ids: z.array(z.uuid()).max(ATTACH_COUNT).optional(),
+      sender_id: z.uuid().nullish(),
     }),
     handler: async (tx, ctx, input) => {
       if (!emailConfigured()) throw httpError(409, 'Email isn’t connected — nothing can be sent yet');
       if (!ctx.user?.email) throw httpError(409, 'your sign-in has no email address');
-      return { to: ctx.user.email, [SEND]: { ...input } };
+      // From the address the real send would go from.
+      const from = await resolveFrom(tx, ctx, input.kind, input.sender_id);
+      return { to: ctx.user.email, [SEND]: { ...input, from } };
     },
     // Committed (nothing was written): now the one email, outside the lock.
     after: async (db, ctx, result) => {
       const plan = result[SEND];
       const attachments = await loadAttachments(db, ctx.workspaceId, { ids: plan.attachment_ids || [], userId: ctx.user.id });
       const res = await sendEmail({
+        from: plan.from || undefined,
         to: ctx.user.email,
         subject: `[Test] ${plan.subject}`,
         ...composeBlast(ctx, { kind: plan.kind, body: plan.body, unsubscribeUrl: null, token: null, links: [], attachments }),
@@ -1011,7 +1026,7 @@ export const FIELD_ACTIONS = {
     input: z.object({ id: uuid() }),
     handler: async (tx, ctx, input, emit) => {
       const blast = (await tx.query(
-        `select id, kind, subject, body, status, provider_note, audience_count, sent_at,
+        `select id, kind, subject, body, status, provider_note, audience_count, sent_at, from_addr,
                 ab_status, ab_subject_b, ab_pct, ab_wait_hours, ab_metric, ab_decide_at, ab_winner, ab_decided_at
          from blasts where id = $1 and workspace_id = $2`,
         [input.id, ctx.workspaceId],

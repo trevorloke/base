@@ -351,6 +351,14 @@ const merges = async (db, q) => (await rowsOf(db, `
 }));
 
 // Who may read each, exactly as its own read already says (index.js).
+// ── Off the media list (ext/media): their own link in a release, or the desk ──
+const LEFT_MEDIA = { link: 'Used the link in a release', desk: 'Taken off by the campaign' };
+const leftMedia = async (db, q) => (await rowsOf(db, `
+  select ${ms('m.left_at')} as at, 'media:' || m.person_id::text as key, m.left_how
+    from media_contacts m
+   where m.workspace_id = $1 and m.person_id = $2 and m.left_at is not null`, q,
+)).map((r) => entry(r, 'other', 'media', 'Media', 'Left the media list', { detail: LEFT_MEDIA[r.left_how] || null }));
+
 const anyone = () => true;
 const desk = (v) => v.desk;
 const outreach = (v) => v.desk && v.outreach;
@@ -370,6 +378,8 @@ export const SOURCES = [
   { key: 'members', group: 'money', can: moneyRoles, read: members },
   { key: 'shifts', group: 'shifts', can: anyone, read: shifts },
   { key: 'merges', group: 'other', can: desk, read: merges },
+  // Media isn't Outreach: under All only, like a merge.
+  { key: 'media', group: 'other', can: desk, read: leftMedia },
 ];
 // The chips, in the order the profile shows them ('other' has none: All only).
 export const GROUPS = ['field', 'messages', 'website', 'money', 'shifts'];

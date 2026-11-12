@@ -2,17 +2,20 @@
 // volunteer signup, RSVP, donate) are not here: the campaign's website
 // will feed those in. What stays is what every email needs:
 //   GET/POST /u/:subscriptionId   unsubscribe from the newsletter (GET asks, POST does it)
-//   GET/POST /bu/:recipientId     unsubscribe from an email blast to a list
+//   GET/POST /bu/:recipientId     unsubscribe from an email blast to a list, or
+//                                 from press releases (off the media list only)
 //
 // Every public write goes through runAction as the system (actor null), so
 // the hash-chained event log — "Verify the records" — covers it like any desk
 // action:
 //   public.unsubscribe  one-click unsubscribe (/u, /bu)  subscription update, person update
+//                       (a press release's: person update, media_contact update)
 import { Hono } from 'hono';
 import { getDb } from '../db/client.js';
 import { runAction } from '../lib/events.js';
 import { page, esc, settingsOf } from '../lib/publicpage.js';
 import { campaignBrand } from '../lib/brand.js';
+import { leaveByLink } from '../ext/media/leave.js';
 
 const app = new Hono();
 
@@ -70,12 +73,15 @@ app.post('/u/:id', async (c) => {
 // one that never was gets the do-not-email tag on everyone with it, so
 // no blast or ladder emails them again. Opening only asks; the button, or
 // a mail app's one-click unsubscribe, does it.
+// A press release's link is about releases only: it takes the address off
+// the media list (ext/media/leave.js) and leaves the newsletter, the
+// do-not tags and Mailchimp alone.
 const loadBlastRecipient = async (db, id) => {
   if (!UUID.test(id)) return null;
   const row = (await db.query(
-    `select r.id, r.workspace_id, r.email, w.name, w.slug, w.settings from blast_recipients r
+    `select r.id, r.workspace_id, r.email, b.kind, w.name, w.slug, w.settings from blast_recipients r
      join blasts b on b.id = r.blast_id join workspaces w on w.id = r.workspace_id
-     where r.id = $1 and b.kind = 'eblast'`, [id],
+     where r.id = $1 and b.kind in ('eblast', 'press')`, [id],
   )).rows[0];
   const email = String(row?.email || '').trim().toLowerCase();
   return row && email ? { ...row, email, ws: { id: row.workspace_id, name: row.name, slug: row.slug, settings: settingsOf(row) } } : null;
@@ -83,7 +89,8 @@ const loadBlastRecipient = async (db, id) => {
 app.get('/bu/:id', async (c) => {
   const row = await loadBlastRecipient(await getDb(), c.req.param('id'));
   if (!row) return badUnsubscribe(c);
-  return c.html(page(row.ws, 'Unsubscribe', `<h1>Unsubscribe from ${esc(row.name)}?</h1>
+  const what = row.kind === 'press' ? `press releases from ${esc(row.name)}` : esc(row.name);
+  return c.html(page(row.ws, 'Unsubscribe', `<h1>Unsubscribe from ${what}?</h1>
 <form method="post" action="/bu/${esc(row.id)}"><button type="submit">Unsubscribe</button></form>`));
 });
 app.post('/bu/:id', async (c) => {
@@ -91,6 +98,10 @@ app.post('/bu/:id', async (c) => {
   const row = await loadBlastRecipient(db, c.req.param('id'));
   if (!row) return badUnsubscribe(c);
   const ws = row.ws;
+  if (row.kind === 'press') {
+    await publicAction(db, ws, 'public.unsubscribe', (tx, emit) => leaveByLink(tx, ws.id, row.email, emit));
+    return c.html(page(ws, 'Unsubscribed', `<h1>Unsubscribed.</h1><div class="done">You won’t get press releases from ${esc(ws.name)} again.</div>`));
+  }
   await publicAction(db, ws, 'public.unsubscribe', async (tx, emit) => {
     const sub = (await tx.query('select id, status from subscriptions where workspace_id = $1 and email = $2', [ws.id, row.email])).rows[0];
     if (sub && sub.status !== 'unsubscribed') {

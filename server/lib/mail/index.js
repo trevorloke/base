@@ -28,9 +28,9 @@
 //   hook               { events, where, secret }: what to set at the sender
 import resend from './resend.js';
 import sendgrid from './sendgrid.js';
-import { env, has, mailFrom, noAnswer } from './common.js';
+import { env, has, mailFrom, noAnswer, parseFrom } from './common.js';
 
-export { mailFrom } from './common.js';
+export { mailFrom, parseFrom } from './common.js';
 
 const ORDER = [resend, sendgrid];
 export const providerByKey = (key) => ORDER.find((p) => p.key === key) || null;
@@ -62,16 +62,18 @@ export const NO_PROVIDER = 'no email provider configured (set RESEND_API_KEY)';
 // `headers` is optional: extra mail headers (List-Unsubscribe and
 // List-Unsubscribe-Post on newsletters and ladder emails). `attachments`:
 // [{ filename, content (base64), content_type? }].
+// `from` is optional: a From as typed ('"Name" <addr>'), one of the
+// campaign's From addresses (ext/senders) a send recorded; absent, MAIL_FROM.
 // → { sent, status: 'sent' | 'failed' | 'queued', provider?, id?, detail?, unknown? }
 //   'queued': no sender is set up — nothing was sent and nothing sends by
 //   itself. unknown: the sender never answered — it may or may not have
 //   sent it. id: the sender's own id for the email.
-export const sendEmail = async ({ to, subject, text, html, idempotencyKey, headers, attachments, ref }) => {
+export const sendEmail = async ({ from, to, subject, text, html, idempotencyKey, headers, attachments, ref }) => {
   const p = activeProvider();
   if (!p) return { sent: false, status: 'queued', detail: NO_PROVIDER };
   let res;
   try {
-    res = await p.send({ from: mailFrom(), to, subject, text, html, idempotencyKey, headers, attachments, ref });
+    res = await p.send({ from: from ? parseFrom(from) : mailFrom(), to, subject, text, html, idempotencyKey, headers, attachments, ref });
   } catch (e) {
     res = noAnswer(e);
   }

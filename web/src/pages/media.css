@@ -1,0 +1,117 @@
+/* Media (pages/Media.jsx). Builds on Outreach's pieces (outreach.css) and the
+   shared classes; variables only, no colours of its own. */
+
+.md-page { max-width: 720px; }
+@media (min-width: 1000px) { .md-page:has(.md-table) { max-width: 1100px; } }
+
+.md-big .lbl { overflow-wrap: anywhere; }
+.md-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: var(--s-2); }
+
+/* Choice chips: To, kind, the Contacts filter. 48 px on touch (var(--ctl)). */
+.md-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.chip.md-chip {
+  min-height: var(--ctl); padding: 0 14px; font-size: 13px; cursor: pointer;
+  border-color: var(--rule); background: var(--paper-0); color: var(--text-1);
+}
+.chip.md-chip.is-on { background: var(--mark-soft); border-color: var(--mark); }
+.md-filter { margin: var(--s-2) 0 var(--s-3); }
+
+/* The last release: one card, a bar of who opened it. */
+.card.md-last { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-4); text-decoration: none; color: inherit; }
+.md-last__subject { font-size: 16px; font-weight: 600; color: var(--text-1); overflow-wrap: anywhere; }
+.md-last__when, .md-last__open { font-size: 13px; color: var(--text-3); }
+.md-bar { display: block; height: 8px; border-radius: 999px; background: var(--paper-2); overflow: hidden; margin-top: var(--s-2); }
+.md-bar__fill { display: block; height: 100%; background: var(--mark); border-radius: 999px; }
+
+/* Contacts */
+.md-wont { display: inline-block; white-space: normal; margin-top: 4px; }
+.md-kind { margin-left: var(--s-2); }
+.md-row { text-align: left; width: 100%; }
+.md-handles { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.md-handles a { color: var(--mark-deep); overflow-wrap: anywhere; }
+.md-wrap { overflow-wrap: anywhere; }
+.md-table td { vertical-align: middle; font-size: 14px; }
+.md-table .md-wont { margin: 0 0 0 var(--s-2); }
+/* Fixed columns that share the card's width: the table never grows past
+   its card (an auto table holds every "…" cell at its max-width, which
+   scrolled the page sideways on a laptop). A long outlet or name wraps at
+   word breaks; an address, beat or handle too long for its column ends in
+   "…" (the whole of it in the title) rather than breaking mid-word. */
+.md-table { table-layout: fixed; }
+/* A header wraps at its space ("Last / release") rather than ending in "…". */
+.md-table th { white-space: normal; overflow-wrap: normal; }
+/* A word too long for its column hyphenates ("Inde-pendent") rather than
+   breaking bare or running into the next column. */
+.md-table td { overflow-wrap: break-word; hyphens: auto; }
+/* A phone number or "Not opened" wraps where it has a break (a hyphen, a
+   space) and, only if a single run of digits is wider than the column,
+   between digits: the whole number stays on screen, inside its column. */
+.md-table .md-one { overflow-wrap: anywhere; hyphens: none; }
+.md-table .md-c-name { width: 16%; }
+.md-table .md-c-outlet { width: 14%; }
+.md-table .md-c-beat { width: 13%; }
+.md-table .md-c-email { width: 19%; }
+.md-table .md-c-phone { width: 15%; }
+.md-table .md-c-socials { width: 12%; }
+.md-table .md-c-last { width: 11%; }
+.md-table:not(.is-desk) .md-c-name { width: 26%; }
+.md-table:not(.is-desk) .md-c-outlet { width: 24%; }
+.md-table:not(.is-desk) .md-c-beat { width: 18%; }
+.md-table:not(.is-desk) .md-c-socials { width: 18%; }
+.md-table:not(.is-desk) .md-c-last { width: 14%; }
+.md-table .md-who .md-wont { display: table; margin: 4px 0 0; }
+.md-table .md-cut { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.md-table .md-handles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.md-table .md-handles > * { display: block; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+@media (max-width: 1199px) {
+  .md-table th, .md-table td { padding-left: 8px; padding-right: 8px; }
+  /* An outlet is one or two words people read whole ("Independent"); an
+     address already ends in "…" with the whole of it in the title. */
+  .md-table.is-desk .md-c-outlet { width: 17%; }
+  .md-table.is-desk .md-c-email { width: 16%; }
+}
+.md-name {
+  font: inherit; font-weight: 600; color: var(--text-1); background: none; border: 0; padding: 0; text-align: left;
+  min-height: var(--ctl); cursor: pointer; text-decoration: underline; text-decoration-color: var(--rule-2); text-underline-offset: 3px;
+}
+/* In the table the name stays inside its column: a button sizes to its
+   longest word, so a long surname breaks (at its hyphen first) instead. */
+.md-table .md-name { max-width: 100%; overflow-wrap: anywhere; }
+
+/* A contact's sheet, and Add a contact */
+.card.md-sheet { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); margin-bottom: var(--s-4); }
+.md-sheet__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.md-sheet__name { margin: 0; font-size: 20px; font-weight: 600; color: var(--text-1); overflow-wrap: anywhere; }
+.md-sheet__name:focus { outline: none; }
+.md-dl { margin: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.md-dl > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: var(--s-3); font-size: 14px; }
+.md-dl dt { color: var(--text-3); }
+.md-dl dd { margin: 0; color: var(--text-1); min-width: 0; }
+.md-note { white-space: pre-wrap; }
+.md-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.md-form { display: flex; flex-direction: column; gap: var(--s-3); }
+.md-form .field { margin: 0; }
+.md-social { display: flex; flex-direction: column; gap: var(--s-2); }
+.md-social__row { display: flex; gap: var(--s-2); }
+.md-social__more { align-self: flex-start; }
+.md-social__row select { flex: 0 0 auto; width: auto; }
+.md-social__row input { flex: 1 1 auto; min-width: 0; }
+.md-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin: var(--s-2) 0; }
+
+/* A release's page */
+.md-back { font: inherit; color: var(--mark-deep); background: none; border: 0; padding: 0; min-height: var(--ctl); cursor: pointer; }
+.md-subject { margin: var(--s-2) 0 var(--s-1); font-size: 22px; font-weight: 600; color: var(--text-1); overflow-wrap: anywhere; }
+.md-meta { margin: 0 0 var(--s-4); font-size: 14px; color: var(--text-3); overflow-wrap: anywhere; }
+.md-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-2); margin: 0 0 var(--s-3); }
+.md-fig { border: 1px solid var(--rule); border-radius: var(--r-card); padding: var(--s-3); background: var(--paper-0); }
+.md-fig dt { font-size: 13px; color: var(--text-3); }
+.md-fig dd { margin: 0; font-size: 24px; font-weight: 600; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.md-retry { display: flex; flex-direction: column; gap: var(--s-2); }
+.md-copy { display: inline-flex; align-items: center; gap: var(--s-2); }
+.md-copy__said { font-size: 13px; color: var(--ok); }
+.md-body { white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-sans); font-size: 14px; color: var(--text-2); margin: 0; }
+.md-links { margin: 0; padding-left: 1.2em; font-size: 14px; overflow-wrap: anywhere; }
+@media (max-width: 480px) {
+  .md-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .md-dl > div { grid-template-columns: 90px minmax(0, 1fr); }
+}
