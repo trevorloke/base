@@ -53,12 +53,14 @@ const ACTION_AREA = {
   mainstreet: 'people',
   learn: 'learn',
   site: 'site',
+  share: 'outreach', // share kits (ext/socials/share.js)
 };
 // field.values.set is a person's record; field.ping ("I'm here", from the
-// map) is nobody's area — anyone who canvasses may say where they are.
+// map) is nobody's area — anyone who canvasses may say where they are; nor
+// is share.me, everyone's own link to share.
 export const areaOfAction = (name) => {
   if (name === 'field.values.set') return 'people';
-  if (name === 'field.ping' || name === 'learn.done' || name === 'person.details') return null;
+  if (name === 'field.ping' || name === 'learn.done' || name === 'person.details' || name === 'share.me') return null;
   return ACTION_AREA[String(name).split('.')[0]] || null;
 };
 
@@ -69,6 +71,7 @@ const PATH_AREA = [
   [/^\/api\/payments(\/|$)/, 'money'],
   [/^\/api\/persons\/[^/]+\/membership$/, 'money'],
   [/^\/api\/(blasts|surveys|ladders|subscriptions|texting|inbox)(\/|$)/, 'outreach'],
+  [/^\/api\/share\/(kits|top)(\/|$)/, 'outreach'], // GET /api/share (your own link) is no area
   [/^\/api\/shifts(\/|$)/, 'shifts'],
   [/^\/api\/signs(\/|$)/, 'signs'],
   [/^\/api\/turfs(\/|$)/, 'map'],

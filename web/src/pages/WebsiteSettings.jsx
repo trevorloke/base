@@ -19,6 +19,7 @@ import { isSiteLink } from '../components/site/builder.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
+import { PLATFORM_WORD, parseSocial } from '@starbase/shared/socials';
 
 const SECTIONS = ['nav', 'announcement', 'footer', 'org', 'social', 'seo', 'domains'];
 const LINK = [{ key: 'label', type: 'text', label: 'Words', max: 60 }, { key: 'href', type: 'url', label: 'Goes to' }];
@@ -37,6 +38,25 @@ const F = {
   },
 };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// A typed account link fills an empty Network and Handle (shared/socials.js):
+// "instagram.com/name" → Instagram, @name. What it filled follows the link
+// as it is typed; anything typed into them by hand stays.
+const filledFrom = (url) => {
+  const r = parseSocial(url);
+  if (!r.handle || r.platform === 'other') return { name: '', handle: '' };
+  return { name: PLATFORM_WORD[r.platform], handle: /^https:\/\//.test(r.handle) ? '' : `@${r.handle}` };
+};
+const fillAccounts = (before = [], after = []) => after.map((a, i) => {
+  const was = before[i];
+  if (!was || was.url === a.url) return a;
+  const old = filledFrom(was.url);
+  const next = filledFrom(a.url);
+  return {
+    ...a,
+    name: a.name === '' || a.name === old.name ? next.name : a.name,
+    handle: a.handle === '' || a.handle === old.handle ? next.handle : a.handle,
+  };
+});
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const HOST = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 const hostOf = (raw) => String(raw ?? '').trim().toLowerCase().replace(/^[a-z]+:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/\.$/, '');
@@ -214,7 +234,7 @@ export default function WebsiteSettings() {
 
           <section className="card" id="social" aria-labelledby="wb-s-soc">
             <h2 id="wb-s-soc" className="wb-card-h">Social accounts</h2>
-            <ListField id="wb-s-acc" f={F.accounts} path="accounts" value={s.social.accounts} ctx={ctx} onChange={(v) => set('social', 'accounts', v)} />
+            <ListField id="wb-s-acc" f={F.accounts} path="accounts" value={s.social.accounts} ctx={ctx} onChange={(v) => set('social', 'accounts', (cur) => fillAccounts(cur, typeof v === 'function' ? v(cur) : v))} />
           </section>
 
           <section className="card" id="seo" aria-labelledby="wb-s-seo">

@@ -14,7 +14,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useParams, useOutletContext, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  VOLUNTEER_ROLES, SOCIAL_PLATFORMS, SUGGESTED_TAGS,
+  VOLUNTEER_ROLES, SUGGESTED_TAGS,
   SIGN_KINDS, SIGN_STATUSES, DONOR_TIERS,
 } from '@starbase/shared/canvass';
 import { ratingByCode } from '@starbase/shared/scale';
@@ -41,6 +41,7 @@ import {
 import { IKnowThem, KnowMeChip, KnowsNudge, PersonKnows, ProfileKeyTies, usePersonKnows } from '../components/RelationshipsBits.jsx';
 import NameFields from '../components/NameFields.jsx';
 import VoterNumber from '../components/VoterNumber.jsx';
+import SocialsBlock, { SocialsTyped } from '../components/SocialsBlock.jsx';
 import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
 
 const TIER_LABEL = {
@@ -93,25 +94,6 @@ const SIGN_CANCEL = 'cancel';
 const SIGN_ORDER = ['lawn', 'window', 'large', 'billboard'];
 const SIGN_SHORT = { lawn: 'Lawn', window: 'Window', large: 'Large', billboard: 'Billboard' };
 const SIGN_BUTTONS = [...SIGN_KINDS].sort((a, b) => SIGN_ORDER.indexOf(a.code) - SIGN_ORDER.indexOf(b.code));
-
-const stripHandle = (h) => String(h || '').trim().replace(/^@/, '');
-// Reddit names are often written u/name (or /u/name).
-const stripReddit = (h) => stripHandle(h).replace(/^\/?u\//i, '');
-const isUrl = (h) => /^https?:\/\//i.test(String(h || '').trim());
-const SOCIAL_URL = {
-  facebook: (h) => `https://facebook.com/${stripHandle(h)}`,
-  instagram: (h) => `https://instagram.com/${stripHandle(h)}`,
-  x: (h) => `https://x.com/${stripHandle(h)}`,
-  tiktok: (h) => `https://tiktok.com/@${stripHandle(h)}`,
-  reddit: (h) => `https://reddit.com/user/${stripReddit(h)}`,
-  youtube: (h) => `https://youtube.com/@${stripHandle(h)}`,
-  linkedin: (h) => `https://linkedin.com/in/${stripHandle(h)}`,
-  bluesky: (h) => `https://bsky.app/profile/${stripHandle(h)}`,
-  other: (h) => (isUrl(h) ? h.trim() : null),
-};
-const socialHref = (platform, handle) => (isUrl(handle) ? handle.trim() : SOCIAL_URL[platform]?.(handle) ?? null);
-const PLATFORM_LABEL = { x: 'X', tiktok: 'TikTok', reddit: 'Reddit', youtube: 'YouTube', linkedin: 'LinkedIn', bluesky: 'Bluesky' };
-const platformLabel = (p) => PLATFORM_LABEL[p] || p.charAt(0).toUpperCase() + p.slice(1);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A section that opens on a tap. Closed sections aren't rendered at all.
@@ -484,90 +466,6 @@ function EditDetailsForm({ person, refresh, onClose, focus = 'name' }) {
   );
 }
 
-// The server's socials schema is a partial record keyed ONLY by
-// SOCIAL_PLATFORMS (zod rejects any other key with "Unrecognized key"), values
-// strings ≤300. Send only known, non-empty keys so one stray legacy key on
-// file can't make every save fail.
-const cleanSocials = (s) => Object.fromEntries(
-  SOCIAL_PLATFORMS
-    .filter((p) => typeof s?.[p] === 'string' && s[p].trim())
-    .map((p) => [p, s[p].trim().slice(0, 300)]),
-);
-
-function Socials({ person, refresh, desk }) {
-  const [platform, setPlatform] = useState('instagram');
-  const [handle, setHandle] = useState('');
-  const [adding, setAdding] = useState(false);
-  const act = useAction(refresh, { needsSignal: true });
-  const socials = cleanSocials(person.socials);
-  const entries = Object.entries(socials);
-
-  const save = async (next) => act.run('person.update', { id: person.id, socials: cleanSocials(next) });
-  const add = async (e) => {
-    e.preventDefault();
-    const h = handle.trim();
-    if (!h) return;
-    const res = await save({ ...socials, [platform]: h });
-    if (res) { setHandle(''); setAdding(false); }
-  };
-  const remove = (p) => {
-    const next = { ...socials };
-    delete next[p];
-    save(next);
-  };
-
-  if (!entries.length && !desk) return null;
-  return (
-    <>
-      <div className="card-head pf-sub">
-        <span className="eyebrow">Socials</span>
-        {desk && (
-          <button type="button" className="btn btn-quiet pp-btn" onClick={() => setAdding((v) => !v)}>
-            {adding ? 'Close' : '+ Add'}
-          </button>
-        )}
-      </div>
-      {entries.length > 0 && (
-        <ul className="contact-lines">
-          {entries.map(([p, h]) => {
-            const href = socialHref(p, h);
-            return (
-              <li key={p}>
-                <span className="k">{platformLabel(p)}</span>
-                <span className="v">
-                  {href ? <a href={href} target="_blank" rel="noopener noreferrer">{h}</a> : h}
-                </span>
-                {desk && (
-                  <span className="act">
-                    <button type="button" className="chip-x" aria-label={`Remove ${platformLabel(p)}`} disabled={act.busy} onClick={() => remove(p)}>×</button>
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {desk && adding && (
-        <form className="socials-add" onSubmit={add}>
-          <div className="field">
-            <label htmlFor="soc-platform">Platform</label>
-            <select id="soc-platform" className="input" value={platform} onChange={(e) => setPlatform(e.target.value)}>
-              {SOCIAL_PLATFORMS.map((p) => <option key={p} value={p}>{platformLabel(p)}</option>)}
-            </select>
-          </div>
-          <div className="field wide">
-            <label htmlFor="soc-handle">Handle or link</label>
-            <input id="soc-handle" className="input" autoFocus maxLength={300} value={handle} onChange={(e) => setHandle(e.target.value)}
-              placeholder={platform === 'other' ? 'https://…' : '@handle'} />
-          </div>
-          <button type="submit" className="btn pp-btn" disabled={act.busy || !handle.trim()}>Save</button>
-        </form>
-      )}
-      {act.error && <p className="error">{act.error}</p>}
-    </>
-  );
-}
-
 // editing: null, or the field the form opens on (the header's Edit, a tap on
 // a line, or "Edit details" — the page holds it so the header can open it).
 function Details({ person, household, refresh, desk, me, editing, setEditing }) {
@@ -627,7 +525,7 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
         </div>
       )}
 
-      {desk && <Socials person={person} refresh={refresh} desk={desk} />}
+      {desk && <SocialsBlock person={person} refresh={refresh} />}
 
       {person.address && (desk || household.length > 0) && (
         <>
@@ -1018,6 +916,7 @@ export default function Person() {
         {(desk || fields.data?.fields?.length > 0 || noSignal(fields)) && (
           <Section title="More details" count={filledCount(fields) || ''} open={!!open.more} onToggle={toggle('more')}>
             {desk && <VoterNumber key={`voter-${person.id}`} personId={person.id} />}
+            {desk && <SocialsTyped person={person} />}
             {(!desk || fields.data?.fields?.length !== 0) && <PersonFields key={person.id} query={fields} personId={person.id} />}
           </Section>
         )}

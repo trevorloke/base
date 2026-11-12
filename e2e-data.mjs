@@ -327,6 +327,24 @@ await page.keyboard.press('Enter');
 await page.waitForFunction(() => /Saved/.test(document.querySelector('form[aria-label="Voter number"] [role="status"]')?.textContent || ''), null, { timeout: 8000 }).catch(() => {});
 check('…and on Enter', await vnOnFile() === 'A123456', await vnOnFile());
 
+// ── Social handles: every network's column; a cell that isn't a handle is left out, and said ──
+await page.goto(`${ADMIN}/people/import`, { waitUntil: 'domcontentloaded' });
+await page.click('button:has-text("Paste text")');
+await page.fill('#imp-paste', ['Name\tPhone\tBluesky\tInstagram', 'Sol Handles\t604-555-0144\tsol\thttps://www.instagram.com/p/C1abc/'].join('\n'));
+await page.click('button:has-text("Use this text")');
+await page.waitForSelector('.imp-map__row', { timeout: 8000 });
+const smap = await page.$$eval('.imp-map__select', (els) => els.map((e) => e.options[e.selectedIndex].text));
+check('a Bluesky column matches itself', smap.join('|') === 'Full name|Phone|Bluesky|Instagram', smap.join('|'));
+await page.click('button:has-text("Check 1 row")');
+await sleep(1500);
+const scheck = (await page.innerText('.imp-result').catch(() => '')).replace(/\s+/g, ' ');
+check('the check says the Instagram cell (a post) is left out, and shows it', /1 handle didn’t look right and was left out/.test(scheck) && /Row 2 Instagram: “https:\/\/www\.instagram\.com\/p\/C1abc\/”/.test(scheck), scheck.slice(0, 240));
+await page.screenshot({ path: `${SHOTS}/data-handles-left-out.png` });
+await page.getByRole('button', { name: /^Import \d+ (person|people)$/ }).click();
+await sleep(1800);
+const sol = (await api('/persons?q=Sol%20Handles')).json.persons[0];
+check('Sol: Bluesky sol.bsky.social, no Instagram', sol && sol.socials.bluesky === 'sol.bsky.social' && !sol.socials.instagram, JSON.stringify(sol?.socials));
+
 // ── Gifts made in another tool, from its file ──
 const act = (name, body) => page.evaluate(async ([n, b]) => {
   const r = await fetch(`/api/actions/${n}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) });

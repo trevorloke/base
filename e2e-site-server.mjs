@@ -113,7 +113,7 @@ const form = (kind, body) => v.evaluate(async ([k, b]) => {
 
 // ── a petition, as an island sends it ──
 const signed = await form('petition', { first_name: 'Ana', last_name: 'Example', email: `ana.${tag}@example.org`, postal_code: 'V3T 1V8', campaign: sky.id, consent_email: true, client_key: `k-${tag}-1`, page_id: site.pages[0].id, module_id: 'skytrain' });
-check('petition: { ok: true } and nothing else', JSON.stringify(signed.json) === '{"ok":true}', JSON.stringify(signed));
+check('petition: ok and a code of their own (for the share sheet), nothing else', JSON.stringify(Object.keys(signed.json || {}).sort()) === '["ok","ref_code"]' && /^[a-z0-9]{8}$/.test(signed.json.ref_code), JSON.stringify(signed));
 const again = await form('petition', { first_name: 'Ana', last_name: 'Example', email: `ana.${tag}@example.org`, campaign: sky.id, client_key: `k-${tag}-1` });
 check('a retry with the same key: the same answer', again.status === 200);
 const people = (await api('/persons?limit=200')).json.persons;

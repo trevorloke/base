@@ -78,6 +78,20 @@ export const personsWhere = async (db, ctx, query = {}) => {
     params.push(has);
     where += ` and coalesce(trim(p.socials ->> $${params.length}), '') <> ''`;
   }
+  // Any network at all (ext/socials).
+  if (has === 'social') where += ` and p.socials is not null and p.socials <> '{}'::jsonb`;
+  // followers=1000: a following of at least that many, typed in by the desk
+  // (ext/socials). The desk's only: a volunteer's matches nobody. Not a
+  // whole number from 1 to 100,000,000: no filter at all.
+  const fol = str(query.followers, 12);
+  const followers = /^\d{1,9}$/.test(fol) ? Number(fol) : 0;
+  if (followers >= 1 && followers <= 100_000_000) {
+    if (vol) where += ' and false';
+    else {
+      params.push(followers);
+      where += ` and p.followers >= $${params.length}`;
+    }
+  }
   // Features' own filters (?field= — ext/fields), on the same params.
   const more = { params, where: '' };
   await runHooks('personsWhere', db, ctx, query, more);
@@ -101,16 +115,17 @@ export const joinWhere = (params, { where, params: more }) => {
 // knocked, outcome, turf, postal, notag: the field cuts (ext/cuts); web:
 // did on the website (ext/webdid); gave, member, answer, shift, since: what
 // they gave, joined, answered and came to (ext/audience); list, notlist: on
-// another list or not (ext/lists); knows: who they know (ext/relationships).
+// another list or not (ext/lists); knows: who they know (ext/relationships);
+// followers: a following typed in (ext/socials).
 export const FILTER_KEYS = [
   'q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web',
-  'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist', 'knows',
+  'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist', 'knows', 'followers',
 ];
 // The rules only the desk sorts people by (ext/audience, ext/lists). For a
 // volunteer they match nobody; a volunteer given the People area may not
 // save one in a list either (ext/lists/actions.js). (knows= enforces the
 // role in its own rule; it is here so a volunteer can't save it.)
-export const DESK_RULES = ['gave', 'member', 'answer', 'shift', 'list', 'notlist', 'knows'];
+export const DESK_RULES = ['gave', 'member', 'answer', 'shift', 'list', 'notlist', 'knows', 'followers'];
 export const cleanFilter = (f) => {
   const out = {};
   for (const k of FILTER_KEYS) if (f && typeof f[k] === 'string' && f[k].trim()) out[k] = f[k].trim().slice(0, 400);

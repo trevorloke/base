@@ -25,17 +25,20 @@ import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
 import { LOADING, Unavailable, fmt, useListCounts, useListNames } from '../components/AudienceBits.jsx';
 import { MarkdownField, toDataUrl, uploadImage } from '../components/MarkdownField.jsx';
+import SharingTab from './SharingTab.jsx';
 import './outreach.css';
 import { BRAND } from '../brand.js';
 
 const TABS = [
   { key: 'email',   label: 'Email' },
   { key: 'texting', label: 'Texting' },
+  { key: 'sharing', label: 'Sharing' },
 ];
 // The one yellow button in the header, per module.
 const PRIMARY = {
   email: 'Write an email',
   texting: 'Write a text',
+  sharing: 'New post to share',
 };
 // Older addresses → the module that has them now.
 const MOVED = { newsletter: 'email', eblast: 'email', press: 'email', texts: 'texting' };
@@ -51,6 +54,7 @@ const VOLUNTEER_TABS = new Set([]);
 const TAB_ICONS = {
   email: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /></>,
   texting: <><path d="M4 5.5h16v10H9l-4 3.5z" /><path d="M8 9h8M8 12h5" /></>,
+  sharing: <><circle cx="17" cy="6" r="2.5" /><circle cx="7" cy="12" r="2.5" /><circle cx="17" cy="18" r="2.5" /><path d="m9.2 10.8 5.6-3.4M9.2 13.2l5.6 3.4" /></>,
   newsletter: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /></>,
   eblast: <><rect x="3.5" y="5.5" width="17" height="13" rx="1.5" /><path d="m4 7 8 6 8-6" /><path d="M7 15.5h4" /></>,
   texts: <><path d="M4 5.5h16v10H9l-4 3.5z" /><path d="M8 9h8M8 12h5" /></>,
@@ -1288,9 +1292,13 @@ export default function Outreach() {
   const [params, setParams] = useSearchParams();
   const toast = useToast();
   const canWrite = DESK_ROLES.includes(me.role);
-  const tabs = canWrite ? TABS : TABS.filter((t) => VOLUNTEER_TABS.has(t.key));
-  const home = canWrite ? '/outreach/email' : '/outreach/connect';
-  const creating = canWrite && params.get('new') === '1';
+  // A volunteer or candidate granted Outreach writes posts to share (the
+  // server lets them: share.kit.*); email and texting stay the desk's here.
+  const sharer = canWrite || (Array.isArray(me.areas) && me.areas.includes('outreach'));
+  const tabs = canWrite ? TABS : TABS.filter((t) => VOLUNTEER_TABS.has(t.key) || (sharer && t.key === 'sharing'));
+  const home = canWrite ? '/outreach/email' : sharer ? '/outreach/sharing' : '/outreach/connect';
+  const mayMake = canWrite || (sharer && tab === 'sharing');
+  const creating = mayMake && params.get('new') === '1';
   const openNew = () => setParams({ new: '1' });
   const closeNew = () => setParams({}, { replace: true });
 
@@ -1309,7 +1317,7 @@ export default function Outreach() {
   }
   if (!tabs.some((t) => t.key === tab)) return <Navigate to={home} replace />;
 
-  const primary = canWrite && !creating ? PRIMARY[tab] : null;
+  const primary = mayMake && !creating ? PRIMARY[tab] : null;
   const tabProps = { me, canWrite, creating, onClose: closeNew, toast: toast.show };
 
   return (
@@ -1333,6 +1341,7 @@ export default function Outreach() {
 
       {tab === 'email' && <EmailTab {...tabProps} />}
       {tab === 'texting' && <TextingTab {...tabProps} />}
+      {tab === 'sharing' && <SharingTab {...tabProps} />}
       {canWrite && !creating && tab === 'email' && <LaddersLink />}
 
       {toast.msg && (

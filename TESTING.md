@@ -615,6 +615,27 @@ one tap away under **More**.
   role (incl. *Hi-rise building captain*); open a profile; add tags, roles,
   social handles. **More → Call list / Text list** opens Calls with the same
   filter; **More → Inbox** has every text conversation.
+- **A profile → Details → Socials** — **+ Add**, paste
+  `https://www.instagram.com/lin.example/?hl=en`: the line reads
+  *@lin.example* and opens the profile. Paste `@lin`: *Which network is
+  @lin on?* with a row of networks — tap **X**. Paste a post
+  (`instagram.com/p/…`): *That’s a link to a post, not a profile*. Tap
+  *Followers?*, type `12k`, **Save**: *12,000 followers*, and the head says
+  *12k followers*. **More details** says when it was typed. × asks *Remove
+  @lin? Yes · No*; removing the handle takes its count. **People → Filter**:
+  *Has* · *Any social*; *Following* · *1,000+ followers* finds them, with a
+  Followers column; each network is under *More filters* → *Social*.
+- **Outreach → Sharing** — **New post to share**: a title, the words (the
+  counter counts the *Authorized by* line and says *Under 280 fits X*), the
+  page (Home, a published page or an open petition), a picture under *More
+  details*; **Save post**. As a volunteer, Today shows *Share · 1 post*;
+  **Share** shows *Your link* and the post: **Copy words** copies the words
+  and the post's link (`/r/…?k=…`); **Share** opens the phone's share sheet.
+  Open that link in a private window, go to the home page, back to the
+  petition, sign: the desk's row reads *1 sign-up · 1 sharer*, Top sharers
+  names the volunteer, and their *Share* reads *1 person brought in*. Close
+  the petition: the row says *Page not live* and the post leaves *Share*.
+  (`e2e-sharing.mjs`.)
 - **A profile → History** — everything with them on one list, newest first:
   knocks and calls (*CallHub* beside a call a dialer logged), texts, emails
   (*Sent · Opened · Clicked a link*, and *Bounced* or *Marked as spam* once

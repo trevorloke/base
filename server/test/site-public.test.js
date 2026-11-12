@@ -63,7 +63,7 @@ test('on the campaign’s own domain nothing of the app answers, and no sign-in 
   assert.equal((await hit('/site-assets/imagine-surrey/..%2F..%2Fcatalogue.js', { host: SITE })).status, 404, 'never outside the site’s files');
   assert.equal((await hit('/site-assets/catalogue.js', { host: SITE })).status, 404, 'only the kinds of file a site serves');
   const form = await send('newsletter', { email: 'domain@example.org', consent_email: true }, { root: '', host: SITE });
-  assert.deepEqual(form.json, { ok: true });
+  assert.equal(form.json.ok, true);
   // The Stripe webhook is passed on to whoever answers it (ext/payments), not the site.
   const hook = await hit('/stripe/webhook', { host: SITE, method: 'POST', body: '{}' });
   assert.doesNotMatch(hook.text, /data-module=/);

@@ -13,6 +13,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExtern
 import { useNavigate, useSearchParams, useLocation, Link, Navigate, useOutletContext } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES, SUGGESTED_TAGS, noCalls } from '@starbase/shared/canvass';
+import { PLATFORMS as SOCIAL_NETWORKS, countWord, platformWord } from '@starbase/shared/socials';
 import { bandOf, codesInBand, offTail, ratingByCode } from '@starbase/shared/scale';
 import RatingButtons, { RatingChip, ratingSay, ratingText, useScale } from '../components/RatingButtons.jsx';
 import { queueAction, useOutbox } from '../offline.js';
@@ -346,12 +347,19 @@ export function MoreMenu({ items, label = 'More' }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Filters: read from / write to the URL
 // ─────────────────────────────────────────────────────────────────────────────
-const HAS_LABEL = { phone: 'Has phone', email: 'Has email', location: 'On map', instagram: 'Has Instagram', x: 'Has X', tiktok: 'Has TikTok', reddit: 'Has Reddit' };
+const HAS_LABEL = {
+  phone: 'Has phone', email: 'Has email', location: 'On map', social: 'Any social',
+  ...Object.fromEntries(SOCIAL_NETWORKS.map((p) => [p, `Has ${platformWord(p)}`])),
+};
+// followers=1000: a following typed in on their profile (ext/socials) — the
+// desk's: for a volunteer it matches nobody.
+const FOLLOWING = [['1000', '1,000+ followers'], ['10000', '10,000+ followers']];
+const followersWord = (v) => `${Number(v).toLocaleString('en-CA')}+ followers`;
 // field: <field id>:<value> (profile fields); the field cuts (FieldCuts.jsx);
 // what they gave, joined, answered and came to, another list, added since
 // (AudienceBits.jsx RULE_KEYS — the desk's: for a volunteer they match nobody).
-const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'field', ...CUT_KEYS, ...RULE_KEYS];
-const MORE_KEYS = [...CUT_KEYS, ...RULE_KEYS];
+const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'field', ...CUT_KEYS, ...RULE_KEYS, 'followers'];
+const MORE_KEYS = [...CUT_KEYS, ...RULE_KEYS, 'followers'];
 const addRules = (qs, f) => { for (const k of RULE_KEYS) if (f[k]) qs.set(k, f[k]); return qs; };
 // The server didn't answer (no signal, or it's down behind its proxy) —
 // not the same as an answer that says something went wrong.
@@ -446,6 +454,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
     keys.includes('tag') && f.tag && { key: 'tag', label: tagWord(f.tag), name: `tag ${tagWord(f.tag)}` },
     keys.includes('role') && f.role && { key: 'role', label: roleLabel, name: roleLabel },
     keys.includes('has') && f.has && HAS_LABEL[f.has] && { key: 'has', label: HAS_LABEL[f.has], name: HAS_LABEL[f.has] },
+    keys.includes('has') && /^\d+$/.test(f.followers || '') && { key: 'followers', label: followersWord(f.followers), name: followersWord(f.followers) },
     keys.includes('q') && f.q && { key: 'q', label: `“${f.q}”`, name: `search ${f.q}` },
     ...cutChips(f, turfs, web).map((c) => ({ ...c, name: c.label })),
     ...ruleChips(f, lists, choices, knowsName).map((c) => ({ ...c, name: c.label })),
@@ -464,7 +473,7 @@ function FilterChips({ f, update, keys = ['rating', 'tag', 'role', 'has'], extra
   );
 }
 
-function FilterSheet({ f, update, tagOptions, onClose, phone }) {
+function FilterSheet({ f, update, tagOptions, onClose, phone, desk = true }) {
   const scale = useScale();
   const turfs = useTurfs();
   // "Voting for…": the list's candidates, then anyone taken off it.
@@ -493,8 +502,9 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
   // open if one is picked. Tags in use sit on the first level.
   const whoPicked = who.some((c) => c.code === f.rating);
   const cutsPicked = CUT_KEYS.filter((k) => f[k]).length + rulesPicked(f);
-  const [moreOpen, setMoreOpen] = useState(Boolean(f.role || whoPicked || f.field || cutsPicked));
-  const morePicked = [whoPicked, f.role, f.field].filter(Boolean).length + cutsPicked;
+  const networkPicked = SOCIAL_NETWORKS.includes(f.has);
+  const [moreOpen, setMoreOpen] = useState(Boolean(f.role || whoPicked || f.field || cutsPicked || networkPicked));
+  const morePicked = [whoPicked, f.role, f.field, networkPicked].filter(Boolean).length + cutsPicked;
   const moreId = useId();
   // on: a band's chip is on for an older link of that band too.
   const chip = (key, value, label, band, on = f[key] === value) => (
@@ -532,12 +542,15 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
               {chip('has', 'phone', 'Phone')}
               {chip('has', 'email', 'Email')}
               {chip('has', 'location', 'Map pin')}
-              {chip('has', 'instagram', 'Instagram')}
-              {chip('has', 'x', 'X')}
-              {chip('has', 'tiktok', 'TikTok')}
-              {chip('has', 'reddit', 'Reddit')}
+              {chip('has', 'social', 'Any social')}
             </div>
           </fieldset>
+          {desk && (
+            <fieldset className="pp-group">
+              <legend className="eyebrow">Following</legend>
+              <div className="pp-group__opts">{FOLLOWING.map(([v, label]) => chip('followers', v, label))}</div>
+            </fieldset>
+          )}
           {tagOptions.length > 0 && (
             <fieldset className="pp-group">
               <legend className="eyebrow">Tag</legend>
@@ -558,6 +571,10 @@ function FilterSheet({ f, update, tagOptions, onClose, phone }) {
               <fieldset className="pp-group">
                 <legend className="eyebrow">Volunteer role</legend>
                 <div className="pp-group__opts">{VOLUNTEER_ROLES.map((r) => chip('role', r.code, r.label))}</div>
+              </fieldset>
+              <fieldset className="pp-group">
+                <legend className="eyebrow">Social</legend>
+                <div className="pp-group__opts">{SOCIAL_NETWORKS.map((p) => chip('has', p, platformWord(p)))}</div>
               </fieldset>
               <FieldFilterGroups chip={chip} />
               <CutGroups chip={chip} f={f} update={update} turfs={turfs} />
@@ -729,6 +746,7 @@ function PeopleList() {
   if (f.role) qs.set('role', f.role);
   if (f.has) qs.set('has', f.has);
   if (f.field) qs.set('field', f.field);
+  if (f.followers) qs.set('followers', f.followers);
   addCuts(qs, f);
   addRules(qs, f);
   const qsKey = qs.toString();
@@ -750,6 +768,8 @@ function PeopleList() {
   const stale = persons.isPlaceholderData;
   const n = page.key === qsKey ? page.n : PAGE;
   const shown = rows.slice(0, n);
+  // Sorted by a following: the desk's table says how big (ext/socials).
+  const withFollowers = desk && Boolean(f.followers);
 
   // Tags in use: every tag seen in a result on this visit (so picking one
   // doesn't hide the others), suggested ones first. Unused tags match no one.
@@ -853,7 +873,7 @@ function PeopleList() {
         </button>
       </div>
 
-      {filterOpen && <FilterSheet f={f} update={update} tagOptions={tagOptions} onClose={closeFilter} phone={phone} />}
+      {filterOpen && <FilterSheet f={f} update={update} tagOptions={tagOptions} onClose={closeFilter} phone={phone} desk={desk} />}
 
       <FilterChips f={f} update={update}
         extra={f.field ? <FieldFilterChip value={f.field} onRemove={() => update({ field: null })} /> : null} />
@@ -917,6 +937,7 @@ function PeopleList() {
               <th>Rating</th>
               <th>Phone</th>
               <th>Address</th>
+              {withFollowers && <th>Followers</th>}
             </tr>
           </thead>
           <tbody>
@@ -936,6 +957,7 @@ function PeopleList() {
                         : <span className="tel">{p.phone}</span>}
                   </td>
                   <td>{streetLine(p) || <span className="muted">—</span>}</td>
+                  {withFollowers && <td>{Number.isInteger(p.followers) ? countWord(p.followers) : <span className="muted">—</span>}</td>}
                 </tr>
               );
             })}

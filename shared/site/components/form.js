@@ -16,6 +16,17 @@ import { EMAIL_RE, money, parseDollars, str, trackFrom } from './util.js';
 
 const POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const REF = /^[a-z0-9]{6,16}$/;
+// The share link with ?ref=<code> (in place of any ref it had), the rest of
+// its address and its #part kept; withSource adds each channel's tag after.
+const withRef = (url, code) => {
+  if (!code || !str(url)) return url;
+  const [front, hash] = str(url).split('#');
+  const [path, query = ''] = front.split('?');
+  const kept = query.split('&').filter((p) => p && !/^ref=/.test(p));
+  kept.push(`ref=${code}`);
+  return `${path}?${kept.join('&')}${hash !== undefined ? `#${hash}` : ''}`;
+};
 
 const newKey = () => {
   try { if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID(); } catch { /* fall through */ }
@@ -100,6 +111,9 @@ export function SiteForm(props) {
   const [pending, setPending] = useState(false);
   const [live, setLive] = useState(false);
   const [track, setTrack] = useState({ ref: str(hidden.ref), source: str(hidden.source) });
+  // Their own referral code, when the answer gave one: the thank-you's share
+  // link carries it, so a friend who signs through it counts as theirs.
+  const [mine, setMine] = useState('');
   const [cadence, setCadence] = useState('once');
   const [pick, setPick] = useState(amount ? amount.defaultCents : null);
   const [other, setOther] = useState('');
@@ -155,7 +169,7 @@ export function SiteForm(props) {
     return html`<div className="success-card" role="status" tabIndex="-1" ref=${thanksRef}>
       <h3 className="success-card__title">${t.title || 'Thank you'}</h3>
       ${t.body ? html`<p>${t.body}</p>` : null}
-      ${t.share ? html`<${ShareSheet} uid=${`${uid}-share`} ...${t.share} />` : null}
+      ${t.share ? html`<${ShareSheet} uid=${`${uid}-share`} ...${t.share} url=${withRef(t.share.url, mine)} />` : null}
     </div>`;
   }
 
@@ -255,6 +269,7 @@ export function SiteForm(props) {
           } catch { /* not a link */ }
           if (target) { window.location.assign(target); return; }
         }
+        if (REF.test(str(json.ref_code))) setMine(json.ref_code);
         justSent.current = true;
         setDone(true);
         return;

@@ -62,7 +62,7 @@ export const VOLUNTEER_ROLES = [
 ];
 export const VOLUNTEER_ROLE_CODES = VOLUNTEER_ROLES.map((r) => r.code);
 
-export const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'x', 'tiktok', 'reddit', 'youtube', 'linkedin', 'bluesky', 'other'];
+export const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'x', 'tiktok', 'reddit', 'youtube', 'linkedin', 'bluesky', 'threads', 'other'];
 
 // Tags are free-form; these seed the picker so the vocabulary stays consistent.
 // do-not-call: no phone bank, no call through the campaign's number, never

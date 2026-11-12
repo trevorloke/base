@@ -196,8 +196,24 @@ than a week after they came off is refused. Contacts are door, phone, text or
   policy, administration, candidate aide, social media team,
   photography / videography.
 - **Tags**: free-form, seeded with media, VIP, endorser, host, …
-- **Socials**: per-person handles for Facebook, Instagram, X, TikTok, YouTube,
-  LinkedIn, Bluesky.
+- **Socials**: per-person handles for Instagram, X, TikTok, Facebook, LinkedIn,
+  YouTube, Bluesky, Threads and Reddit (or any other profile link). One box
+  takes a pasted link or @handle and puts it right (`shared/socials.js`: a
+  post or a short link is refused in plain words; a bare @name asks which
+  network); each handle opens the real profile. The desk types in a
+  follower count from it (*12.4k followers*), kept only while that handle is
+  on file (`ext/socials`); People filters by *Any social*, each network, and
+  *Following* (1,000+ · 10,000+, the desk's only).
+- **Share kits** (Outreach → *Sharing*; *Share* for everyone, from Today's
+  *Share · 2 posts*): the desk writes a post once — the words, a picture, a
+  page of the website, and the *Authorized by* line added to the words —
+  and everyone signed in shares it with their own link
+  (`/r/<code>?k=<post>`), through the phone's own share sheet (Instagram,
+  TikTok, WhatsApp…) or WhatsApp · Text · Facebook · X · Email · Copy. A
+  friend's sign-up on any page within 30 days credits the sharer and the
+  post; the desk sees sign-ups and sharers per post and the top sharers,
+  and each person sees how many people they brought in (`ext/socials`:
+  share.js, share-api.js). Sign-ups are counted, never clicks.
 - **Stewardship** (Donations → *Stewardship*, the desk that handles money):
   *To thank* — every gift no one has thanked, oldest first, with how long it
   has waited; *Called · Emailed · Note · Letter* marks it.

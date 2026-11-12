@@ -229,10 +229,16 @@ const FIELDS = [
   { key: 'x', label: 'X (Twitter)' },
   { key: 'tiktok', label: 'TikTok' },
   { key: 'reddit', label: 'Reddit' },
+  { key: 'facebook', label: 'Facebook' },
+  { key: 'linkedin', label: 'LinkedIn' },
+  { key: 'youtube', label: 'YouTube' },
+  { key: 'bluesky', label: 'Bluesky' },
+  { key: 'threads', label: 'Threads' },
+  { key: 'social', label: 'Social media links (any network)' },
 ];
 const SKIP = '';
 const fieldLabel = (key) => FIELDS.find((f) => f.key === key)?.label || key;
-const FIELD_WORD = { socials: 'social handles', email: 'email', phone: 'phone', address: 'address', house_number: 'house number', unit: 'unit', city: 'city', postal: 'postal code', voter_number: 'voter number', tags: 'tags', rating: 'rating', lat: 'latitude', lng: 'longitude', volunteer: 'volunteer tag', donor: 'donor tag', voted: 'voted', instagram: 'Instagram', x: 'X', tiktok: 'TikTok', reddit: 'Reddit' };
+const FIELD_WORD = { socials: 'social handles', email: 'email', phone: 'phone', address: 'address', house_number: 'house number', unit: 'unit', city: 'city', postal: 'postal code', voter_number: 'voter number', tags: 'tags', rating: 'rating', lat: 'latitude', lng: 'longitude', volunteer: 'volunteer tag', donor: 'donor tag', voted: 'voted', instagram: 'Instagram', x: 'X', tiktok: 'TikTok', reddit: 'Reddit', facebook: 'Facebook', linkedin: 'LinkedIn', youtube: 'YouTube', bluesky: 'Bluesky', threads: 'Threads', social: 'social media links' };
 const MULTI = new Set(['tags']); // several columns can feed tags; every other field takes one column
 
 const normHeader = (h) =>
@@ -269,6 +275,12 @@ const EXACT = [
   ['x', /^(twitter|xhandle|twitterhandle|twitterusername|xtwitter|twitterx)$/],
   ['tiktok', /^(tiktok|tiktokhandle|tiktokusername)$/],
   ['reddit', /^(reddit|reddithandle|redditusername|redditname)$/],
+  ['facebook', /^(facebook|fb|facebookurl)$/],
+  ['linkedin', /^(linkedin|linkedinurl)$/],
+  ['youtube', /^(youtube|youtubechannel)$/],
+  ['bluesky', /^(bluesky|bsky)$/],
+  ['threads', /^threads$/],
+  ['social', /^(social|socials|socialmedia)$/],
 ];
 const CONTAINS = [
   ['email', /e?mail/],
@@ -290,6 +302,10 @@ const CONTAINS = [
   ['x', /twitter/],
   ['tiktok', /tiktok/],
   ['reddit', /reddit/],
+  ['facebook', /facebook/],
+  ['linkedin', /linkedin/],
+  ['youtube', /youtube/],
+  ['bluesky', /bluesky/],
   ['voted', /^voted/],
   ['name', /^(?!.*(user|file|middle|nick)).*name/],
 ];
@@ -691,7 +707,26 @@ export default function ImportPeople() {
   return <ImportFlow />;
 }
 
-const ZERO = { created: 0, merged: 0, unchanged: 0 };
+const ZERO = { created: 0, merged: 0, unchanged: 0, handles: 0 };
+// The cells under the social columns that weren't a handle or a profile link
+// (shared/socials.js): left out of the person, said with the first few.
+function HandlesLeftOut({ count, rows = [] }) {
+  if (!count) return null;
+  return (
+    <div className="imp-invalid">
+      <p className="imp-invalid__intro">
+        {count === 1 ? '1 handle didn’t look right and was left out.' : `${fmtN(count)} handles didn’t look right and were left out.`}
+      </p>
+      {rows.length > 0 && (
+        <ul className="imp-invalid__list">
+          {rows.map((x, i) => (
+            <li key={i}><span className="imp-invalid__row mono">Row {fmtN(x.row)}</span> {FIELD_WORD[x.column] || x.column}: “{x.value}”</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function ImportFlow() {
   const queryClient = useQueryClient();
@@ -1032,7 +1067,7 @@ function ImportFlow() {
   // (again): the last check stays on screen, its counts giving way to
   // "Checking…", so the question — and the keyboard's place in it — stays put.
   const runCheck = async (numbers = otherNumber, { again = false } = {}) => {
-    const acc = { ...ZERO, invalid: [], matches: [], otherNumbers: 0, others: [] };
+    const acc = { ...ZERO, invalid: [], matches: [], otherNumbers: 0, others: [], handleRows: [] };
     const parts = Math.ceil(total / CHECK_CHUNK);
     const run = (checkRun.current += 1);
     const show = (next) => { if (run === checkRun.current) setCheck(next); };
@@ -1053,6 +1088,10 @@ function ImportFlow() {
           }
         }
         acc.otherNumbers += r.other_numbers || 0;
+        acc.handles += r.handles_left_out || 0;
+        for (const x of r.handles_left_out_rows || []) {
+          if (acc.handleRows.length < 5) acc.handleRows.push({ ...x, row: part[x.row - 1]?.row ?? x.row });
+        }
         for (const x of r.other_number_rows || []) {
           if (acc.others.length < 50) acc.others.push({ ...x, row: part[x.row - 1]?.row ?? x.row });
         }
@@ -1079,6 +1118,7 @@ function ImportFlow() {
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
         for (const msg of r.invalid || []) acc.invalid.push(remapInvalid(msg, part, scale));
+        acc.handles += r.handles_left_out || 0;
         setImp({ phase: 'running', sent: start + part.length, total, ...acc });
       }
       setImp({ phase: 'done', sent: total, total, ...acc });
@@ -1554,6 +1594,7 @@ function ImportFlow() {
                     </ul>
                   </Reveal>
                 )}
+                {!check.again && <HandlesLeftOut count={check.handles} rows={check.handleRows} />}
                 {!check.again && (
                   <InvalidList
                     invalid={check.invalid}
@@ -1602,6 +1643,7 @@ function ImportFlow() {
                         ['Same', imp.unchanged],
                       ]}
                     />
+                    <HandlesLeftOut count={imp.handles} />
                     <InvalidList
                       invalid={imp.invalid}
                       intro={`${plural(imp.invalid.length, 'row', 'rows')} skipped. Fix ${imp.invalid.length === 1 ? 'it' : 'them'} and import the file again — no one is added twice.`}

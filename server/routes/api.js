@@ -153,7 +153,7 @@ app.post('/actions/:name', async (c) => {
     const done = await action.after(c.get('db'), ctx, result);
     return c.json({ ...done.result, seq: done.lastSeq ?? lastSeq });
   } catch (e) {
-    if (e.status) return c.json({ error: e.message }, e.status);
+    if (e.status) return c.json({ error: e.message, ...(e.field ? { field: e.field } : {}) }, e.status);
     throw e;
   }
 });
@@ -204,9 +204,11 @@ app.get('/persons', async (c) => {
   }
   // note: their own words from the volunteer form (attrs.note), so the call
   // card needs no per-person fetch. Nothing else from attrs is exposed.
+  // followers (ext/socials): only on the desk's rows sorted by a following.
+  const withFollowers = ctx.role !== 'volunteer' && Boolean(c.req.query('followers'));
   const { rows } = await c.get('db').query(
     `select p.id, p.kind, p.name, p.first_name, p.middle_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
-            p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note
+            p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note${withFollowers ? ', p.followers' : ''}
      from persons p where ${where}${reachSql(c.req.query('reach'))}${from}
      order by lower(p.name), p.id limit $4`,
     params,
@@ -489,7 +491,7 @@ app.get('/persons/:id', async (c) => {
   const db = c.get('db');
   const person = (await db.query(
     `select id, kind, name, first_name, middle_name, last_name, email, phone, address, house_number, unit, city, postal, lat, lng, tags, socials, rating, rated_at, voted_at, created_at,
-            attrs->>'note' as note
+            attrs->>'note' as note, social_reach, followers
      from persons where id = $1 and workspace_id = $2 and deleted_at is null`,
     [c.req.param('id'), ctx.workspaceId],
   )).rows[0];
@@ -541,6 +543,8 @@ app.get('/persons/:id', async (c) => {
     [ctx.workspaceId, person.id, person.address || '', person.unit || null, `%"${NO_CONTACT}"%`],
   )).rows;
   if (ctx.role === 'volunteer') {
+    // Followers (ext/socials) are the desk's.
+    delete person.social_reach; delete person.followers;
     return c.json({
       person: forViewer(ctx)(personRow(person)), gifts: [], totals: [], contacts, roles, signs, shifts, donor: null,
       household: household.map(({ id, name, rating }) => ({ id, name, rating })),

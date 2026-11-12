@@ -6,6 +6,11 @@
 //
 //   200 { ok: true }                     done (also for a retry with the same
 //                                        client_key, and for the honeypot)
+//   200 { ok: true, ref_code }           done (not join, donate): for someone
+//                                        this form added, their own code for
+//                                        the share sheet; for anyone else, a
+//                                        code that is nobody's (the answer
+//                                        never tells who is on file)
 //   200 { ok: true, checkout_url }       join, donate: off to pay
 //   400 { error, field }                 what to fix, in plain words (every
 //                                        refusal, the payments' too)
@@ -55,7 +60,7 @@ import { EMAIL_RE } from '../../../shared/site/components/util.js';
 import { actions as fieldActions } from '../fields/actions.js';
 import { KINDS, consentWording, tagOf } from './shape.js';
 import { ensureSite, readSettings, parseJ } from './store.js';
-import { takePerson, refCodeFor, personOfCode, broughtInBy, CODE_RE } from './people.js';
+import { takePerson, refCodeFor, personOfCode, broughtInBy, CODE_RE, makeCode } from './people.js';
 import { consentFromForm } from './consent.js';
 import { paymentsReady, prepareCheckout, retryCheckout, openCheckout } from './payments.js';
 import { limitsFor } from './loaders.js';
@@ -302,7 +307,9 @@ export const formRoute = async (c, site) => {
 
   // The honeypot: a person never sees the field; a bot fills it. It hears
   // what a person would, and nothing is kept.
-  if (String(one(body.website) ?? '').trim()) return plain ? go(moduleOf(), {}, `sent=${kind}`) : c.json({ ok: true });
+  if (String(one(body.website) ?? '').trim()) {
+    return plain ? go(moduleOf(), {}, `sent=${kind}`) : c.json(kind === 'join' || kind === 'donate' ? { ok: true } : { ok: true, ref_code: makeCode() });
+  }
   if (limited(clientIp(c))) {
     return plain ? go(moduleOf(), {}, 'error=busy') : c.json({ error: 'Too many tries from here — wait a minute and try again' }, 429);
   }
@@ -317,6 +324,12 @@ export const formRoute = async (c, site) => {
     if (!f.ref) {
       const remembered = String(getCookie(c, 'site_ref') || '').toLowerCase();
       if (CODE_RE.test(remembered)) f.ref = remembered;
+    }
+    // The post they came through (/r/:code?k=, a share kit), when the form
+    // says no source of its own: one in the page's address always wins.
+    if (!f.source) {
+      const came = String(getCookie(c, 'site_src') || '').toLowerCase();
+      if (/^kit-[a-z0-9]{6}$/.test(came)) f.source = came;
     }
   } catch (e) {
     if (!(e instanceof FormError)) throw e;
@@ -566,7 +579,12 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
     await tx.query('update site_actions set checkout_id = $3 where id = $1 and workspace_id = $2', [id, ws.id, checkoutId]);
     return { checkout: { actionId: id, checkoutId } };
   }
-  const answer = { ok: true };
+  // Someone this form just added gets their own code back, so the thank-you
+  // share sheet credits them (form.js). Never a matched person's: anyone
+  // could type their email and take it. They get a code of the same shape
+  // that is nobody's, so the answer still never tells whether an email or
+  // a phone is on file.
+  const answer = { ok: true, ref_code: person.created ? await refCodeFor(tx, ws.id, person.id, emit) : makeCode() };
   await tx.query('update site_actions set answer = $3 where id = $1 and workspace_id = $2', [id, ws.id, JSON.stringify(answer)]);
   return { answer };
 };

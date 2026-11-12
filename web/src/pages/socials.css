@@ -1,0 +1,28 @@
+/* A profile's Socials (components/SocialsBlock.jsx). */
+.so .card-head { justify-content: flex-start; }
+.so .card-head .btn { margin-left: auto; }
+.so-top { font-size: 12px; }
+.so-lines .so-k { font-family: var(--font-sans); text-transform: none; letter-spacing: 0; font-size: 13px; }
+.so-lines .so-v { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); }
+.so-count {
+  background: none; border: 0; padding: 0 var(--s-1); min-height: var(--ctl); cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--text-3); text-decoration: underline dotted; text-underline-offset: 3px;
+}
+.so-count:hover { color: var(--ink); }
+.so-count-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); width: 100%; }
+.so-count-form label { font-size: 13px; color: var(--text-2); }
+.so-count-form .input { width: 8em; min-height: var(--ctl); }
+.contact-lines .act .so-x { min-width: var(--ctl); min-height: var(--ctl); }
+.so-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); font-size: 13px; flex-basis: 100%; }
+.so-add { margin-top: var(--s-2); }
+.so-add label { display: block; font-size: 13px; color: var(--text-2); margin-bottom: var(--s-1); }
+.so-add-row { display: flex; gap: var(--s-2); }
+.so-add-row .input { flex: 1; min-width: 0; min-height: var(--ctl); }
+.so-ask { margin-top: var(--s-2); }
+.so-ask-q { margin: 0 0 var(--s-2); font-size: 14px; }
+.so-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.so-chips .so-chip { min-height: var(--ctl); cursor: pointer; }
+.so-status { margin: var(--s-1) 0 0; min-height: 1.4em; }
+.so-also { margin: 0; font-size: 14px; }
+.so-typed { margin: var(--s-3) 0; font-size: 13px; color: var(--text-3); }
+.so-note { margin: var(--s-1) 0 0; font-size: 13px; color: var(--text-3); }

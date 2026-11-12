@@ -61,8 +61,8 @@ after(() => _setPaymentsForTest(null));
 
 test('newsletter: a new person on the list, tagged, with the consent they gave — the answer is only ok', async () => {
   const r = await send('newsletter', { first_name: 'Asha', last_name: 'Example', email: 'Asha@Example.org', consent_email: true, source: 'home', module_id: 'newsletter' });
-  assert.deepEqual(r.json, { ok: true });
   const [p] = await personBy(db, ws, "lower(email) = 'asha@example.org'");
+  assert.deepEqual(r.json, { ok: true, ref_code: p.attrs.ref_code }, 'ok, and their own code for the share sheet');
   assert.deepEqual([p.name, p.first_name, p.last_name], ['Asha Example', 'Asha', 'Example']);
   assert.deepEqual(tags(p), ['Website: newsletter']);
   assert.match(p.attrs.ref_code, /^[a-z0-9]{8}$/, 'a referral code of their own');
@@ -150,8 +150,8 @@ test('an email Stripe would refuse is refused on the form, and the browser check
 
 test('petition and pledge: the signature, the tags, a person signing twice counts once', async () => {
   const r = await send('petition', { first_name: 'Ravi', last_name: 'Example', email: 'ravi@example.org', postal_code: 'v3t1v8', campaign: petition.id, comment: 'All the way!' });
-  assert.deepEqual(r.json, { ok: true });
   const [p] = await personBy(db, ws, "lower(email) = 'ravi@example.org'");
+  assert.deepEqual(r.json, { ok: true, ref_code: p.attrs.ref_code });
   assert.deepEqual(tags(p).sort(), ['Signed: Get SkyTrain to South Surrey', 'Website: petition'].sort());
   assert.equal(p.postal, 'V3T 1V8');
   const [a] = await actionsOf(p.id, 'petition');
@@ -196,7 +196,7 @@ test('someone on file is matched, not doubled: by email (blanks filled, nothing 
 test('the honeypot hears what a person would, and nothing is kept', async () => {
   const before = (await db.query('select count(*)::int as n from persons where workspace_id = $1', [ws])).rows[0].n;
   const r = await send('newsletter', { email: 'bot@example.org', consent_email: true, website: 'https://spam.example' });
-  assert.deepEqual([r.status, r.json], [200, { ok: true }]);
+  assert.deepEqual([r.status, Object.keys(r.json).sort()], [200, ['ok', 'ref_code']]);
   const plain = await hit('/site/api/forms/newsletter', { form: { email: 'bot2@example.org', consent_email: 'on', website: 'x', module_id: 'newsletter' } });
   assert.deepEqual([plain.status, plain.location], [303, '/site/?sent=newsletter#m-newsletter']);
   assert.equal((await db.query('select count(*)::int as n from persons where workspace_id = $1', [ws])).rows[0].n, before);
@@ -298,8 +298,12 @@ test('a referral link: remembered 30 days, the forms credit the referrer, someon
   assert.match(cookie, /Max-Age=2592000/);
   assert.match(cookie, /Path=\/site/);
   assert.match(cookie, /HttpOnly/);
+  // An unknown code is remembered too (a decoy must look real) but credits nobody.
   const unknown = await hit('/site/r/zzzzzzzz');
-  assert.equal(unknown.headers.get('set-cookie'), null, 'an unknown code is not remembered');
+  assert.match(unknown.headers.get('set-cookie'), /^site_ref=zzzzzzzz;/);
+  ok(await send('newsletter', { email: 'nobody.sent@example.org', consent_email: true }, { headers: { cookie: 'site_ref=zzzzzzzz' } }));
+  const [ns] = await personBy(db, ws, "lower(email) = 'nobody.sent@example.org'");
+  assert.equal((await actionsOf(ns.id, 'newsletter'))[0].referrer_id, null, 'and credits nobody');
 
   // The cookie credits a form…
   ok(await send('newsletter', { first_name: 'Nia', last_name: 'Example', email: 'nia@example.org', consent_email: true }, { headers: { cookie: `site_ref=${code}` } }));
@@ -386,10 +390,20 @@ test('a form from another site is refused; the answer never carries a person id'
   const r = await send('newsletter', { email: 'x@example.org', consent_email: true }, { headers: { 'sec-fetch-site': 'cross-site' } });
   assert.equal(r.status, 403);
   const same = await send('newsletter', { email: 'mina@example.org', consent_email: true }, { headers: { 'sec-fetch-site': 'same-origin' } });
-  assert.deepEqual(same.json, { ok: true }, 'someone on file hears exactly what someone new would');
+  const fresh = await send('newsletter', { email: 'never.before@example.org', consent_email: true });
+  const shape = (j) => Object.keys(j).sort().map((k) => `${k}:${typeof j[k]}:${String(j[k]).length}`);
+  assert.deepEqual(shape(same.json), shape(fresh.json), 'someone on file hears exactly what someone new would');
+  const [mina] = await personBy(db, ws, "lower(email) = 'mina@example.org'");
+  assert.notEqual(same.json.ref_code, mina.attrs.ref_code, 'and never their code');
+  // Nor does following that code tell them apart: /r/ answers a decoy as it answers a real code.
+  const cookiesOf = async (code) => {
+    const r = await hit(`/site/r/${code}`);
+    return [r.status, r.location, (r.headers.getSetCookie?.() || []).map((x) => x.replace(/=[^;]*/, '=*'))];
+  };
+  assert.deepEqual(await cookiesOf(same.json.ref_code), await cookiesOf(fresh.json.ref_code), 'a decoy code follows like a real one');
   // Nothing the app keeps answers a form, and a volunteer's session does nothing here.
   const withCookie = await send('newsletter', { email: 'cookie@example.org', consent_email: true }, { headers: { cookie: vol.client.cookie } });
-  assert.deepEqual(withCookie.json, { ok: true });
+  assert.equal(withCookie.json.ok, true);
   assert.equal(withCookie.headers.get('set-cookie'), null);
 });
 
@@ -405,7 +419,8 @@ test('every kind: the honeypot keeps nothing, and a retry with the same key is o
   for (const [kind, more] of Object.entries(extra)) {
     const email = `every.${kind}@example.org`;
     const trap = await send(kind, { email, website: 'http://bot.example', ...more });
-    assert.deepEqual([trap.status, trap.json], [200, { ok: true }], `${kind}: the honeypot hears ok`);
+    const heard = ['join', 'donate'].includes(kind) ? ['ok'] : ['ok', 'ref_code'];
+    assert.deepEqual([trap.status, Object.keys(trap.json).sort()], [200, heard], `${kind}: the honeypot hears ok`);
     assert.equal((await personBy(db, ws, 'lower(email) = $2', [email])).length, 0, `${kind}: and nothing is kept`);
     const body = { first_name: 'Every', last_name: 'Example', email, client_key: `every-${kind}`, ...more };
     const first = ok(await send(kind, body), kind);
