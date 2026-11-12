@@ -4,7 +4,10 @@
 // have an `after` step — async (db, ctx, result) => ({ result, lastSeq? }) —
 // run once the handler has committed, for work that must not hold the
 // campaign lock (sending email); each of its writes is a runAction of its
-// own. The palette, buttons, and the public API all call the same registry
+// own. One may have an `answer` — (ctx, result) => what this person may
+// read of it — applied as the result leaves the server, never inside the
+// handler (other server code calls handlers and needs the whole result).
+// The palette, buttons, and the public API all call the same registry
 // via POST /api/actions/:name; there is no other way to mutate campaign data.
 import { civic, streetOf } from '../lib/address.js';
 import { z } from 'zod';
