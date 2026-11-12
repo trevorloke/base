@@ -7,7 +7,7 @@
 //
 //   site.microsite.create   { name, domain? } → { microsite }   a draft, with a
 //                           home page (a hero, then the newest open petition,
-//                           else the newsletter)
+//                           else the newsletter); domain: it and its www.
 //   site.microsite.save     { id, name?, theme? }  name: managers only
 //   site.microsite.domains  { id, domains: [≤ 2] }  the bare domain and its www.
 //   site.microsite.live     { id, live }  live: refused with the first thing
@@ -200,7 +200,12 @@ export const micrositeActions = (siteAction) => ({
       [pageId, ws, id, input.name, JSON.stringify({ title: input.name, description: '', modules })],
     );
     emit('site_page', pageId, 'create', { slug: 'home', title: input.name, site_id: id, modules: modules.map((m) => ({ id: m.id, kind: m.kind, hidden: false })) });
-    if (input.domain && String(input.domain).trim()) row = await setDomains(tx, ctx, row, [input.domain], emit);
+    // The domain and its www. together (Render answers on both), so a site
+    // is never left half-addressed by a second save that didn't land.
+    if (input.domain && String(input.domain).trim()) {
+      const bare = (hostOf(input.domain) || '').replace(/^www\./, '');
+      row = await setDomains(tx, ctx, row, bare ? [bare, `www.${bare}`] : [input.domain], emit);
+    }
     return { microsite: micrositeOut(row), home_page_id: pageId };
   }),
 

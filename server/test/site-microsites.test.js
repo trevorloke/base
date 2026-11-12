@@ -47,7 +47,8 @@ test('a manager makes a website: a draft with its own key, a copy of the look, a
   site = r.microsite;
   assert.equal(site.key, 'doug-didnt-example');
   assert.equal(site.status, 'draft');
-  assert.deepEqual(site.domains, [DOUG]);
+  // The domain and its www. in the one action (Render answers on both).
+  assert.deepEqual(site.domains, [DOUG, `www.${DOUG}`]);
   assert.equal(site.theme.follow, false);
   home = (await db.query('select * from site_pages where site_id = $1', [site.id])).rows;
   assert.equal(home.length, 1);
@@ -331,11 +332,11 @@ test('a closed address never reaches the app: a deleted site’s, and one a live
   assert.equal((await hit('/', { host: DOUG })).status, 410);
   assert.equal((await hit('/', { host: 'dougdidnt2.example' })).status, 200);
   let row = (await db.query('select held_domains from microsites where id = $1', [site.id])).rows[0];
-  assert.deepEqual(row.held_domains, [DOUG]);
+  assert.deepEqual(row.held_domains, [DOUG, `www.${DOUG}`]);
   // Taken back onto the same site: no longer held.
-  ok(await act(mgr, 'site.microsite.domains', { id: site.id, domains: [DOUG] }));
+  ok(await act(mgr, 'site.microsite.domains', { id: site.id, domains: [DOUG, `www.${DOUG}`] }));
   row = (await db.query('select domains, held_domains from microsites where id = $1', [site.id])).rows[0];
-  assert.deepEqual([row.domains, row.held_domains], [[DOUG], ['dougdidnt2.example']]);
+  assert.deepEqual([row.domains, row.held_domains], [[DOUG, `www.${DOUG}`], ['dougdidnt2.example']]);
   // Released: unknown to base.win, so the app answers there.
   const rel = ok(await act(mgr, 'site.microsite.release', { id: site.id }));
   assert.deepEqual(rel.released, ['dougdidnt2.example']);

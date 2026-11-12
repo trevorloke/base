@@ -16,7 +16,7 @@ import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
 import { MoreMenu, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
 import { useMicrosite, useSite, useSiteRefresh } from '../components/site/useSite.js';
-import { SiteBack } from './WebsiteSite.jsx';
+import { SiteBack, SiteGone } from './WebsiteSite.jsx';
 import { moveModule, slugInput, slugify } from '../components/site/builder.js';
 import './shifts.css';
 import '../editor.css';
@@ -96,7 +96,9 @@ export default function WebsitePages() {
   const { toast, say, clear } = useToast();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const pages = useMemo(() => q.data?.pages || [], [q.data]);
+  // Another website's pages are edited only while it is there (not deleted).
+  const editable = !siteId || (q.data && !q.data.deleted);
+  const pages = useMemo(() => (editable ? q.data?.pages || [] : []), [q.data, editable]);
   const siteRoot = (q.data?.urls?.site || '/site/').replace(/\/$/, '');
 
   const run = async (name, input) => {
@@ -171,14 +173,14 @@ export default function WebsitePages() {
       {siteId && <SiteBack d={q.data} id={siteId} />}
       <div className="ops-head">
         <h1>Pages{siteId && q.data ? <span className="ws-sr"> of {q.data.microsite.name}</span> : null}</h1>
-        {!showNew && online && <button type="button" className="btn btn-primary ops-tap" onClick={() => setParams({ new: '1' })}>New page</button>}
+        {!showNew && online && editable && <button type="button" className="btn btn-primary ops-tap" onClick={() => setParams({ new: '1' })}>New page</button>}
       </div>
       {siteId ? null : <WebsiteTabs />}
-      {showNew && <NewPageForm onClose={() => setParams({})} siteId={siteId} siteKey={key} />}
+      {showNew && editable && <NewPageForm onClose={() => setParams({})} siteId={siteId} siteKey={key} />}
 
       {noSignal(q) && <NoSignal />}
       {q.isPending && !noSignal(q) && <p className="muted">Loading…</p>}
-      {q.isError && !noSignal(q) && <p className="error" role="alert">{q.error.message}</p>}
+      {siteId ? <SiteGone q={q} id={siteId} /> : q.isError && !noSignal(q) && <p className="error" role="alert">{q.error.message}</p>}
       {error && <p className="error" role="alert">{error}</p>}
 
       {pages.length > 0 && (

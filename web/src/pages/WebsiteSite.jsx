@@ -14,7 +14,7 @@
 //   shown only once the address is saved, each with Copy.
 // Managers decide everything but pages and looks; the server refuses
 // anyone else, so for them those buttons aren't drawn.
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useOutletContext, useParams } from 'react-router-dom';
 import { action } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
@@ -36,12 +36,35 @@ export function SiteBack({ d, id, to }) {
     : <Link className="ops-back" to={`/website/sites/${id}`}>← {d?.microsite?.name || 'The website'}</Link>;
 }
 
-function Ask({ words, yes, onYes, onNo, busy }) {
+// A website's Pages, Look or Domain when its read failed or it is deleted:
+// "Unavailable — Try again" (or the server's "not found"), or that it is
+// deleted with the way to its overview, in place of the editing controls.
+// → null while there's a site to edit (or still loading).
+export function SiteGone({ q, id }) {
+  if (q.isError && !noSignal(q)) return q.error?.status === 404 ? <p className="error" role="alert">{q.error.message}</p> : <Unavailable q={q} />;
+  if (!q.data?.deleted) return null;
   return (
-    <div className="ms-ask" role="group" aria-label={words}>
+    <section className="card ms-card">
+      <p>This website is deleted. <Link to={`/website/sites/${id}`}>Back to its overview</Link></p>
+    </section>
+  );
+}
+
+// Yes · No in place. On a phone it would open below the fold (under the
+// tabs), so it scrolls into view and No takes the focus.
+function Ask({ words, yes, onYes, onNo, busy }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollIntoView?.({ block: 'nearest' });
+    el.querySelector('.ms-ask__no')?.focus({ preventScroll: true });
+  }, []);
+  return (
+    <div className="ms-ask" role="group" aria-label={words} ref={ref}>
       <span>{words}</span>
       <button type="button" className="btn ops-tap" disabled={busy} onClick={onYes}>{yes || 'Yes'}</button>
-      <button type="button" className="btn btn-quiet ops-tap" disabled={busy} onClick={onNo}>No</button>
+      <button type="button" className="btn btn-quiet ops-tap ms-ask__no" disabled={busy} onClick={onNo}>No</button>
     </div>
   );
 }
@@ -259,6 +282,8 @@ export function WebsiteSiteDomain() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState(null);
   const [asking, setAsking] = useState(false);
+  // With an address saved, changing it is a quiet "Change it" away.
+  const [changing, setChanging] = useState(false);
   const check = useHostCheck(typed, id);
   const d = q.data;
   const m = d?.microsite;
@@ -272,6 +297,7 @@ export function WebsiteSiteDomain() {
       say(words);
       setTyped('');
       setAsking(false);
+      setChanging(false);
       await refresh(['microsite', id], ['microsites']);
     } catch (e) {
       setProblem(e.message);
@@ -291,18 +317,30 @@ export function WebsiteSiteDomain() {
       <div className="ops-head"><h1>Domain</h1></div>
       {noSignal(q) && <NoSignal />}
       {q.isPending && !noSignal(q) && <p className="muted">Loading…</p>}
-      {q.isError && !noSignal(q) && <Unavailable q={q} />}
-      {d && (
+      <SiteGone q={q} id={id} />
+      {d && !d.deleted && (
         <>
           <p className="wb-help">Your Render plan must allow another custom domain.</p>
           <section className="card ms-card" aria-labelledby="ms-dom-h">
             <h2 id="ms-dom-h" className="wb-card-h">{host ? `Its address: ${host}` : 'No domain yet'}</h2>
-            {host && <p className="wb-field__hint">Also www.{host}. Until it points here, the site is at <a href={d.urls.site} target="_blank" rel="noopener">base.win’s own address for it<span className="ws-sr"> (opens a new tab)</span></a>.</p>}
-            {manager ? (
+            {host && <p className="wb-field__hint ms-dom-also">Also www.{host}. Until it points here, the site is at <a href={d.urls.site} target="_blank" rel="noopener">base.win’s own address for it<span className="ws-sr"> (opens a new tab)</span></a>.</p>}
+            {manager && host && !changing && (
+              <div className="ops-actions">
+                <button type="button" className="btn btn-quiet ops-tap" disabled={!online} onClick={() => setChanging(true)}>Change it</button>
+                {!asking && <button type="button" className="btn btn-quiet ops-tap" disabled={!online} onClick={() => setAsking(true)}>Remove the address</button>}
+              </div>
+            )}
+            {manager && host && !changing && asking && (
+              <>
+                <p className="wb-field__hint">The old address will show ‘This website has closed’ until you release it.</p>
+                <Ask words={`Remove ${host}?`} busy={busy} onNo={() => setAsking(false)} onYes={() => save([], `${host} removed`)} />
+              </>
+            )}
+            {manager && (!host || changing) ? (
               <form onSubmit={submit} className="ms-dom-form">
                 <div className="field">
-                  <label htmlFor="ms-dom">{host ? 'Change it to' : 'Web address'}</label>
-                  <input id="ms-dom" className="input" maxLength={300} autoComplete="off" spellCheck={false} inputMode="url"
+                  <label htmlFor="ms-dom">{host ? 'The new address' : 'Web address'}</label>
+                  <input id="ms-dom" className="input" autoFocus={changing} maxLength={300} autoComplete="off" spellCheck={false} inputMode="url"
                     placeholder="yourcampaign.ca" value={typed} aria-invalid={check.why ? 'true' : undefined}
                     aria-describedby="ms-dom-say" onChange={(e) => setTyped(e.target.value)} />
                   <p className={check.why ? 'wb-field__err' : 'wb-field__hint'} id="ms-dom-say" aria-live="polite">
@@ -310,19 +348,14 @@ export function WebsiteSiteDomain() {
                   </p>
                 </div>
                 <div className="ops-actions">
-                  <button type="submit" className="btn btn-primary ops-tap" disabled={!online || busy || !check.host || Boolean(check.why) || check.checking}>
+                  {/* A change is a quiet button: the steps below stay the screen's point. */}
+                  <button type="submit" className={`btn ${host ? '' : 'btn-primary '}ops-tap`} disabled={!online || busy || !check.host || Boolean(check.why) || check.checking}>
                     {busy ? 'Saving…' : 'Save the address'}
                   </button>
-                  {host && !asking && <button type="button" className="btn btn-quiet ops-tap" onClick={() => setAsking(true)}>Remove the address</button>}
+                  {changing && <button type="button" className="btn btn-quiet ops-tap" onClick={() => { setChanging(false); setTyped(''); }}>Cancel</button>}
                 </div>
-                {asking && (
-                  <>
-                    <p className="wb-field__hint">The old address will show ‘This website has closed’ until you release it.</p>
-                    <Ask words={`Remove ${host}?`} busy={busy} onNo={() => setAsking(false)} onYes={() => save([], `${host} removed`)} />
-                  </>
-                )}
               </form>
-            ) : <p className="wb-field__hint">A manager sets the address.</p>}
+            ) : !manager && <p className="wb-field__hint">A manager sets the address.</p>}
             <p className="ms-problem" role="alert">{problem || ''}</p>
           </section>
 

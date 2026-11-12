@@ -53,7 +53,9 @@ const go = async (path, p = page) => {
   await sleep(600);
 };
 // Both sizes: the screen as it is, then on a phone (no sideways scroll; its
-// buttons and links at least 44px tall — 48 with the touch control size).
+// buttons and links at least 48px tall). A list row's name opens it from the
+// whole row (a stretched link), so its tap area is the row's — checked by
+// what a tap near the row's bottom edge lands on.
 const phoneIssues = [];
 const both = async (name, p = page, ready = null) => {
   const vp = p.viewportSize();
@@ -62,10 +64,21 @@ const both = async (name, p = page, ready = null) => {
   await sleep(400);
   if (ready) await ready();
   const o = await overflow(p);
-  const small = await p.evaluate(() => [...document.querySelectorAll('main .btn, main button, main input:not([type=checkbox]):not([type=radio]), .ms-check a, .ms-link')]
+  const small = await p.evaluate(() => [...document.querySelectorAll('main .btn, main button, main input:not([type=checkbox]):not([type=radio]), .ms-check a, .ms-link, main .wb-row__name')]
     .filter((el) => el.offsetParent && !el.closest('.ws-sr, [aria-hidden=true]') && el.name !== 'website' && el.tabIndex !== -1)
-    .map((el) => [el.textContent.trim().slice(0, 30) || el.getAttribute('aria-label') || el.id, Math.round(el.getBoundingClientRect().height)])
-    .filter(([, h]) => h < 44));
+    .map((el) => {
+      const row = el.closest('.ms-row');
+      let r = el.getBoundingClientRect();
+      if (row) {
+        const box = row.getBoundingClientRect();
+        el.scrollIntoView({ block: 'center' });
+        const b2 = row.getBoundingClientRect();
+        const hit = document.elementFromPoint(b2.right - 12, b2.bottom - 6);
+        if (hit && hit.closest('a') === el) r = box;
+      }
+      return [el.textContent.trim().slice(0, 30) || el.getAttribute('aria-label') || el.id, Math.round(r.height)];
+    })
+    .filter(([, h]) => h < 48));
   if (o > 0 || small.length) phoneIssues.push([name, o, small]);
   await p.screenshot({ path: `${SHOTS}/${name}-phone.png`, fullPage: true });
   await p.setViewportSize(vp);
@@ -124,6 +137,17 @@ await page.waitForURL(new RegExp(`/website/sites/${siteId}/pages$`));
 await page.locator('.wb-row').first().waitFor();
 check('← Pages: its own pages (only its home)', (await page.locator('.wb-row').count()) === 1 && /Home|Doug/.test(await page.locator('.wb-row__name').first().innerText()));
 
+// A failed read on its Pages and Look: “Unavailable — Try again”, and nothing to edit.
+await page.route(`**/api/site/microsites/${siteId}`, (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"boom"}' }));
+for (const part of ['pages', 'look']) {
+  await page.goto(`${BASE}/admin/website/sites/${siteId}/${part}`, { waitUntil: 'domcontentloaded' });
+  await page.locator('.ms-unavail').waitFor({ timeout: 15000 }).catch(() => {});
+  const t = await text();
+  check(`${part}: a failed read says “Unavailable — Try again”, never the server’s words, and offers nothing to edit`,
+    /Unavailable — Try again/.test(t) && !/boom/.test(t) && (await primaries()).length === 0, t.slice(0, 160));
+}
+await page.unroute(`**/api/site/microsites/${siteId}`);
+
 // ── 3. Settings → Organization: Authorized by ──
 await go('/website/settings#org');
 await page.locator('#wb-s-agent').waitFor();
@@ -145,6 +169,9 @@ const steps = await page.locator('.ms-steps > li').allInnerTexts();
 check('Domain: the Render line, then the three steps in order, each with Copy, then Open https://dougdidnt.test',
   /Your Render plan must allow another custom domain/.test(await text()) && steps.length === 3 && /Buy the domain/.test(steps[0]) && /Custom Domains → Add dougdidnt\.test/.test(steps[1]) && /CNAME for www pointing to your Render address/.test(steps[2])
   && (await page.locator('.ms-steps .ms-copy button').count()) === 2 && /Open https:\/\/dougdidnt\.test/.test(await text()), steps.join(' | ').slice(0, 240));
+check('Domain with an address saved: no primary button; “Change it” is quiet; the www. saved with it',
+  (await primaries()).length === 0 && await page.getByRole('button', { name: 'Change it' }).count() === 1
+  && JSON.stringify((await api(`/site/microsites/${siteId}`)).json.microsite.domains) === JSON.stringify([DOUG, `www.${DOUG}`]));
 await both('4-domain');
 
 // ── 5. the website on its own domain ──
@@ -230,8 +257,20 @@ await sctx.close();
 
 // ── 8. offline → Coming soon; deleted → closed, never the sign-in page ──
 await go(`/website/sites/${siteId}`);
+await page.setViewportSize({ width: 390, height: 844 });
+await sleep(300);
 await page.getByRole('button', { name: 'More for Doug Didn’t Example' }).click();
 await page.getByRole('button', { name: 'Take offline' }).click();
+await sleep(400);
+const askAt = await page.evaluate(() => {
+  const r = document.querySelector('.ms-ask').getBoundingClientRect();
+  const tabs = document.querySelector('.tabbar');
+  const floor = tabs && tabs.offsetParent ? tabs.getBoundingClientRect().top : window.innerHeight;
+  return { top: Math.round(r.top), bottom: Math.round(r.bottom), floor: Math.round(floor), focus: document.activeElement?.textContent.trim() };
+});
+check('on a phone, the question opens in view, above the tabs, with No in focus', askAt.top >= 0 && askAt.bottom <= askAt.floor && askAt.focus === 'No', JSON.stringify(askAt));
+await page.setViewportSize({ width: 1440, height: 900 });
+await sleep(200);
 check('Take offline asks first, naming the domain', /Take dougdidnt\.test offline\?/.test(await page.locator('.ms-ask').innerText()));
 await page.locator('.ms-ask').getByRole('button', { name: 'Yes' }).click();
 await page.getByRole('button', { name: 'Go live' }).waitFor({ timeout: 10000 });
@@ -252,11 +291,19 @@ for (const path of ['/', '/login']) {
   check(`deleted: ${path} on its domain is “This website has closed” (410), never the sign-in page`, r.status() === 410 && /This website has closed/.test(body) && !/Sign in|Password/i.test(body) && body.includes('Authorized by Ada Example'), `${r.status()} ${body.slice(0, 120)}`);
 }
 await both('8-closed', v);
+// Its Pages, Look and Domain say it is deleted, with nothing to edit.
+for (const part of ['pages', 'look', 'domain']) {
+  await go(`/website/sites/${siteId}/${part}`);
+  const t = await text();
+  check(`deleted: its ${part} screen says “This website is deleted”, with nothing to edit`,
+    /This website is deleted\./.test(t) && (await primaries()).length === 0 && !(await page.locator('.wb-row, #ms-dom, .wb-handle').count()), t.slice(0, 160));
+}
+await both('8-deleted-domain');
 // Its row on the list: under Closed websites.
 await go('/website/sites');
 check('Other websites lists it under Closed websites', /Closed websites\s*Doug Didn’t Example\s*Deleted\s*dougdidnt\.test says “This website has closed”/.test(await text()));
 
-check('on a phone: no sideways scroll and every control at least 44px tall, on every screen', phoneIssues.length === 0, JSON.stringify(phoneIssues));
+check('on a phone: no sideways scroll and every control at least 48px tall, on every screen', phoneIssues.length === 0, JSON.stringify(phoneIssues));
 check('no page errors', errors.length === 0, errors.join(' | '));
 await visitor.close();
 await browser.close();

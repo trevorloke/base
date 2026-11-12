@@ -27,7 +27,7 @@ import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { SaveState, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
 import { ImageField } from '../components/site/Fields.jsx';
 import { useMicrosite, useSite, useSiteRefresh } from '../components/site/useSite.js';
-import { SiteBack } from './WebsiteSite.jsx';
+import { SiteBack, SiteGone } from './WebsiteSite.jsx';
 import { colorWords, hexOf, pairsOf, ratioWords, readableInk } from '../components/site/colors.js';
 import './shifts.css';
 import '../editor.css';
@@ -111,7 +111,8 @@ export default function WebsiteTheme() {
   const msQ = useMicrosite(siteId);
   const q = siteId ? msQ : mainQ;
   // What it wears as saved: the main site's settings, or the other website's own.
-  const savedTheme = siteId ? q.data?.microsite?.theme : q.data?.settings?.theme;
+  // A deleted website's look isn't edited (its overview brings it back).
+  const savedTheme = siteId ? (q.data?.deleted ? null : q.data?.microsite?.theme) : q.data?.settings?.theme;
   const refresh = useSiteRefresh();
   const online = useOnline();
   const { toast, say, clear } = useToast();
@@ -184,13 +185,14 @@ export default function WebsiteTheme() {
     }
   };
 
+  const shown = t && !(siteId && q.data?.deleted);
   const org = siteId ? q.data?.microsite?.name || '' : q.data?.settings?.org?.shortName || q.data?.settings?.org?.name || '';
   return (
     <div className="wb-page wb-page--wide">
       {siteId && <SiteBack d={q.data} id={siteId} />}
       <div className="ops-head">
         <h1>{siteId ? 'Look' : 'Theme'}</h1>
-        {t && !following && (
+        {shown && !following && (
           <div className="ops-head__actions">
             <SaveState state={state} />
             <button type="button" className="btn btn-primary ops-tap" onClick={save}
@@ -203,8 +205,8 @@ export default function WebsiteTheme() {
       {!siteId && <WebsiteTabs />}
       {noSignal(q) && <NoSignal />}
       {q.isPending && !noSignal(q) && <p className="muted">Loading…</p>}
-      {q.isError && !noSignal(q) && <p className="error" role="alert">{q.error.message}</p>}
-      {t && following && (
+      {siteId ? <SiteGone q={q} id={siteId} /> : q.isError && !noSignal(q) && <p className="error" role="alert">{q.error.message}</p>}
+      {shown && following && (
         <>
           <section className="card wb-follow" aria-labelledby="wb-th-follow">
             <h2 id="wb-th-follow" className="wb-card-h">Following the campaign’s brand</h2>
@@ -236,7 +238,7 @@ export default function WebsiteTheme() {
           </div>
         </>
       )}
-      {t && !following && (
+      {shown && !following && (
         <>
           {failing.length > 0 && (
             <div className="wb-alert" role="alert">

@@ -5,7 +5,12 @@
 .ms-page .ops-head { flex-wrap: wrap; }
 .ms-title { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; overflow-wrap: anywhere; }
 .ms-title .chip { font-size: 13px; }
-.ms-row { padding-left: var(--s-3); }
+.ms-row { padding-left: var(--s-3); position: relative; min-height: 48px; }
+/* The whole row opens the website, not only its 32px name (48px on a phone). */
+.ms-row .wb-row__name::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.ms-row .wb-row__name:focus-visible { outline: none; }
+.ms-row .wb-row__name:focus-visible::after { outline: 2px solid var(--mark); outline-offset: 2px; }
+@media (hover: hover) { .ms-row:hover { border-color: var(--rule-2); } }
 .ms-row__top { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .ms-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); }
 .ms-empty p { margin: 0; font-size: 16px; }
@@ -41,9 +46,12 @@
   padding: var(--s-3); background: var(--paper-1); border: 1px solid var(--rule); border-radius: var(--r-card);
 }
 .ms-ask > span { flex: 1 1 200px; font-size: 15px; font-weight: 600; }
+/* Scrolled into view clear of the phone's bottom tabs. */
+.ms-ask { scroll-margin: var(--s-4) 0 96px; }
 .ms-rename { margin-bottom: var(--s-4); }
 
-.ms-dom-form .ops-actions { flex-wrap: wrap; }
+.ms-dom-form .ops-actions, .ms-card > .ops-actions { flex-wrap: wrap; }
+.ms-dom-also { margin: 0 0 var(--s-3); }
 .ms-steps { margin: 0 0 var(--s-3); padding-left: 1.4em; display: flex; flex-direction: column; gap: var(--s-3); }
 .ms-steps p { margin: 0 0 6px; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
 .ms-copy { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
@@ -64,6 +72,8 @@
 @media (hover: hover) { .ms-home-row:hover { border-color: var(--rule-2); } }
 
 @media (max-width: 640px) {
+  /* The toast's Undo and ✕: phone-sized taps (website.css draws them 44px). */
+  .toast.wb-toast .btn { min-height: 48px; }
   .ms-links > .btn { flex: 1 1 auto; }
   .ms-ask > .btn { flex: 1 1 auto; }
 }

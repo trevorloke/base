@@ -59,7 +59,8 @@ policy, the social accounts and "Authorized by …" are always the main
 site's — the same elector organization sponsors every site and keeps what
 every form collects.
 
-- **Where**: its domain (at most two: the bare domain and its `www.`) at `/`,
+- **Where**: its domain (at most two: the bare domain and its `www.`, which
+  making it with an address saves together) at `/`,
   and `/site/sites/<key>/…` on the app's address (`noindex` there once it has
   a domain). A draft or offline site answers every route with "Coming soon"
   (`noindex`, `no-store`), but `/site-assets/*` and a page's preview.

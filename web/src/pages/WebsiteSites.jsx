@@ -76,9 +76,8 @@ function NewWebsite({ onClose }) {
     setError(null);
     try {
       const h = domain.trim() ? check.host : '';
+      // The server saves the domain and its www. together.
       const res = await action('site.microsite.create', { name: name.trim(), domain: h || undefined });
-      // And its www., which Render answers on too.
-      if (h) await action('site.microsite.domains', { id: res.microsite.id, domains: bothHosts(h) }).catch(() => {});
       await refresh(['microsites'], ['site']);
       navigate(`/website/sites/${res.microsite.id}`);
     } catch (err) {
