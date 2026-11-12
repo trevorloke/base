@@ -407,13 +407,14 @@ test('import: social handle columns — set on new people, fill blanks on matche
   const first = await imp([{ name: 'Social Importee', email: 'social.importee@example.org', instagram: '@importee', reddit: 'u/Importee' }]);
   assert.equal(first.json.created, 1);
   const found = (await mgr.get('/api/persons?q=social.importee')).json.persons[0];
-  assert.deepEqual(found.socials, { instagram: '@importee', reddit: 'u/Importee' });
+  // Read as the profile reads a paste (shared/socials.js): no "@", no "u/".
+  assert.deepEqual(found.socials, { instagram: 'importee', reddit: 'Importee' });
   // Same person again: a new platform fills in, an existing handle is never overwritten.
   const again = await imp([{ name: 'Social Importee', email: 'social.importee@example.org', instagram: '@someone_else', x: 'importee_x', tiktok: '@importee.tt' }]);
   assert.equal(again.json.merged, 1);
   assert.deepEqual(again.json.decisions[0].fields, ['socials']);
   const after = (await mgr.get(`/api/persons/${found.id}`)).json.person;
-  assert.deepEqual(after.socials, { instagram: '@importee', reddit: 'u/Importee', x: 'importee_x', tiktok: '@importee.tt' });
+  assert.deepEqual(after.socials, { instagram: 'importee', reddit: 'Importee', x: 'importee_x', tiktok: 'importee.tt' });
   // Nothing new: unchanged.
   const third = await imp([{ name: 'Social Importee', email: 'social.importee@example.org', x: 'importee_x' }]);
   assert.equal(third.json.unchanged, 1);
