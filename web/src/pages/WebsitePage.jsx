@@ -25,7 +25,7 @@ import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
 import { Dialog, MoreMenu, SaveState, Toast, useToast } from '../components/site/Bits.jsx';
 import { ImageField, ModuleForm, TextField, ToggleField } from '../components/site/Fields.jsx';
-import { useSite, useSiteCampaigns, useSitePage, useSiteRefresh } from '../components/site/useSite.js';
+import { useMicrosite, useSite, useSiteCampaigns, useSitePage, useSiteRefresh } from '../components/site/useSite.js';
 import {
   addModule, duplicateModule, groups, moveModule, problemWords, problemsOf, putBack, removeModule,
   sectionFromServer, setHidden, setProps, slugInput, summaryOf,
@@ -81,6 +81,9 @@ function Builder({ id }) {
   const online = useOnline();
   const q = useSitePage(id);
   const siteQ = useSite();
+  // A page of another website: its pages, its address, its name.
+  const msId = q.data?.page?.site_id || null;
+  const msQ = useMicrosite(msId);
   const campsQ = useSiteCampaigns({ fresh: true });
   const { toast, say, clear } = useToast();
 
@@ -111,7 +114,10 @@ function Builder({ id }) {
 
   // null while they load: a publish's check then leaves them to the server.
   const campaigns = useMemo(() => campsQ.data?.campaigns || null, [campsQ.data]);
-  const pages = useMemo(() => siteQ.data?.pages || null, [siteQ.data]);
+  const pages = useMemo(() => (msId ? msQ.data?.pages : siteQ.data?.pages) || null, [msId, msQ.data, siteQ.data]);
+  const pagesPath = msId ? `/website/sites/${msId}/pages` : '/website/pages';
+  const viewRoot = (msId ? msQ.data?.urls?.domains?.[0] || msQ.data?.urls?.site : siteQ.data?.urls?.site) || '/site/';
+  const refreshSite = () => refresh(['site'], ...(msId ? [['microsite', msId]] : []));
   const paymentsReady = Boolean(siteQ.data?.payments?.ready);
 
   // The page as opened: once, from a fresh read (later reads must never
@@ -347,7 +353,7 @@ function Builder({ id }) {
       await inTurn(() => action('site.page.publish', { id }));
       setStrict(false);
       say('Published — it’s on the site now');
-      refresh(['site']);
+      refreshSite();
     } catch (e) {
       const s = sectionFromServer(e.message);
       const m = s ? draftRef.current.modules[s.index] : null;
@@ -367,15 +373,15 @@ function Builder({ id }) {
     try {
       await inTurn(() => action('site.page.unpublish', { id }));
       say('Taken off the site — it’s a draft now');
-      refresh(['site']);
+      refreshSite();
     } catch (e) { say(e.message); }
   };
   const deletePage = async () => {
     await flush();
     try {
       await action('site.page.delete', { id });
-      await refresh(['site']);
-      navigate('/website/pages', { replace: true, state: { deleted: { id, title: draftRef.current?.title || base.title, slug: base.slug } } });
+      await refreshSite();
+      navigate(pagesPath, { replace: true, state: { deleted: { id, title: draftRef.current?.title || base.title, slug: base.slug } } });
     } catch (e) { say(e.message); }
   };
   const changeSlug = async (e) => {
@@ -388,7 +394,7 @@ function Builder({ id }) {
       const res = await inTurn(() => action('site.page.save', { id, slug, updated_at: baseRef.current?.updated_at }));
       setSlug(res.page.slug);
       say(`The address is now ${addressOf(res.page)}`);
-      refresh(['site']);
+      refreshSite();
     } catch (err) { setSlugErr(err.message); }
   };
 
@@ -397,7 +403,7 @@ function Builder({ id }) {
   if (q.isError) {
     return (
       <div className="wb-page">
-        <Link className="ops-back" to="/website/pages">← Pages</Link>
+        <Link className="ops-back" to={pagesPath}>← Pages</Link>
         <p className="error" role="alert">{q.error.status === 404 ? 'That page is gone — it may have been deleted.' : q.error.message}</p>
       </div>
     );
@@ -413,10 +419,11 @@ function Builder({ id }) {
   return (
     <div className={`wb-build${frame ? ' wb-build--frame' : ''}`}>
       <div className="wb-build__main">
-        <Link className="ops-back" to="/website/pages">← Pages</Link>
+        <Link className="ops-back" to={pagesPath}>← Pages</Link>
         <div className="wb-build__head">
           <div className="wb-build__title">
             <h1>{draft.title || 'Untitled page'}</h1>
+            {msId && <p className="wb-build__on">On {msQ.data?.microsite?.name || 'another website'}</p>}
             <span className="wb-build__meta">
               <span className="wb-row__addr">{addressOf(base)}</span>
               <PageStatus p={{ ...base, changed: base.changed || dirty.current }} />
@@ -436,7 +443,7 @@ function Builder({ id }) {
               {publishing ? 'Publishing…' : nothingNew ? 'Published' : live ? 'Publish changes' : 'Publish'}
             </button>
             <MoreMenu label="More for this page" items={[
-              live && { label: 'View on the site', href: `${(siteQ.data?.urls?.site || '/site/').replace(/\/$/, '')}${addressOf(base)}`, external: true },
+              live && { label: 'View on the site', href: `${viewRoot.replace(/\/$/, '')}${addressOf(base)}`, external: true },
               { label: showFrame ? 'Hide the preview beside' : 'Show the preview beside', onClick: () => setShowFrame((v) => !v) },
               live && base.slug !== 'home' && { label: 'Take it off the site', onClick: unpublish },
               base.slug !== 'home' && { label: 'Delete this page', onClick: deletePage, danger: true },

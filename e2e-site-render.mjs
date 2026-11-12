@@ -16,7 +16,8 @@
 // amounts (never above the limit; monthly), field errors tied to their
 // fields, a newsletter and a petition sent as JSON with SITE.md's field
 // names, the share sheet (WhatsApp first, ?source=share-<channel>, copy),
-// the donate checkout, a one-tap volunteer sign-up, the same forms without
+// the donate checkout, the privacy line under every form and the
+// authorization line in the footer, a one-tap volunteer sign-up, the same forms without
 // JavaScript, the post, campaign, preview and not-found pages, everything
 // under a client's path (/imaginesurrey, through server/lib/mount.js), and
 // the Imagine Surrey home page against imaginesurrey.ca's design (navy hero,
@@ -551,6 +552,15 @@ for (const key of ['is', 'base']) {
   await page.goto(`${ORIGIN}/base/`, { waitUntil: 'networkidle' });
   await hydrated(page);
   await live(page);
+  // Who keeps what a form sends, and who authorized the site (SITE.md "Other websites": every site, the main one too).
+  const legal = await page.evaluate(() => ({
+    forms: document.querySelectorAll('form[action*="/api/forms/"]').length,
+    smalls: [...document.querySelectorAll('form[action*="/api/forms/"]')].map((f) => [...f.querySelectorAll('.form-small')].map((p) => [p.textContent, p.querySelectorAll('a').length])),
+    auth: document.querySelector('.site-footer')?.innerText || '',
+  }));
+  check('every form: one small print saying who keeps what it sends, with one privacy link; the footer says who authorized it',
+    legal.forms > 0 && legal.smalls.every((ps) => ps.length === 1 && ps[0][0].includes('Harbour City Together keeps what you send to stay in touch about our work and elections.') && ps[0][1] === 1)
+    && legal.auth.includes('Authorized by Ada Example, financial agent, 604-555-0100'), JSON.stringify(legal).slice(0, 300));
   const nl = page.locator('[data-module="newsletter"] form');
   await nl.getByRole('button', { name: 'Sign up' }).click();
   check('newsletter: no email → said next to the field', /Enter your email address/.test(await nl.locator('#newsletter-form-email-error').innerText()) && (await nl.getByLabel('Email', { exact: true }).getAttribute('aria-invalid')) === 'true');

@@ -14,15 +14,20 @@
 //   "Use the campaign's brand" — and its own look is kept underneath
 //   (theme.kept), so while it follows there is "Go back to the look it had"
 //   beside "Start from the campaign's brand".
+// Another website's look (/website/sites/:siteId/look) is this same screen
+// with its site: always its own (no following the brand — "Start from the
+// campaign's brand" copies the brand's look once), saved with
+// site.microsite.save { theme }.
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useParams } from 'react-router-dom';
 import { COLOR_KEYS, FONTS, FONT_BY_VALUE, RADII, SKINS } from '@starbase/shared/site/theme';
 import { action } from '../api.js';
 import { at } from '../base.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import { SaveState, Toast, WebsiteTabs, useToast } from '../components/site/Bits.jsx';
 import { ImageField } from '../components/site/Fields.jsx';
-import { useSite, useSiteRefresh } from '../components/site/useSite.js';
+import { useMicrosite, useSite, useSiteRefresh } from '../components/site/useSite.js';
+import { SiteBack } from './WebsiteSite.jsx';
 import { colorWords, hexOf, pairsOf, ratioWords, readableInk } from '../components/site/colors.js';
 import './shifts.css';
 import '../editor.css';
@@ -101,7 +106,12 @@ function Sample({ t, org }) {
 
 export default function WebsiteTheme() {
   const { me } = useOutletContext() || {};
-  const q = useSite();
+  const { siteId } = useParams();
+  const mainQ = useSite(!siteId);
+  const msQ = useMicrosite(siteId);
+  const q = siteId ? msQ : mainQ;
+  // What it wears as saved: the main site's settings, or the other website's own.
+  const savedTheme = siteId ? q.data?.microsite?.theme : q.data?.settings?.theme;
   const refresh = useSiteRefresh();
   const online = useOnline();
   const { toast, say, clear } = useToast();
@@ -112,13 +122,13 @@ export default function WebsiteTheme() {
   const [follow, setFollow] = useState(null);
   const [asking, setAsking] = useState(false);
   const [switching, setSwitching] = useState(false);
-  const following = follow ?? (q.data?.settings?.theme?.follow === true);
+  const following = !siteId && (follow ?? (savedTheme?.follow === true));
   // Its own look from before it followed is still there (set to follow here,
   // or the server says so).
-  const keptLook = follow === true || (follow == null && q.data?.settings?.theme?.kept === true);
+  const keptLook = follow === true || (follow == null && savedTheme?.kept === true);
   useEffect(() => {
-    if (q.data?.settings && !t) {
-      const f = full(q.data.settings.theme);
+    if (savedTheme && !t) {
+      const f = full(savedTheme);
       setT(f);
       setSaved(f);
     }
@@ -142,11 +152,11 @@ export default function WebsiteTheme() {
     if (failing.length) return;
     setState({ state: 'saving' });
     try {
-      await action('site.settings.save', { theme: t });
+      await action(...(siteId ? ['site.microsite.save', { id: siteId, theme: t }] : ['site.settings.save', { theme: t }]));
       setSaved(t);
       setState({ state: 'saved', at: Date.now() });
       say('Saved — the site has its new look');
-      refresh(['site']);
+      refresh(siteId ? ['microsite', siteId] : ['site']);
     } catch (e) {
       setState({ state: 'error', text: e.message });
     }
@@ -174,11 +184,12 @@ export default function WebsiteTheme() {
     }
   };
 
-  const org = q.data?.settings?.org?.shortName || q.data?.settings?.org?.name || '';
+  const org = siteId ? q.data?.microsite?.name || '' : q.data?.settings?.org?.shortName || q.data?.settings?.org?.name || '';
   return (
     <div className="wb-page wb-page--wide">
+      {siteId && <SiteBack d={q.data} id={siteId} />}
       <div className="ops-head">
-        <h1>Theme</h1>
+        <h1>{siteId ? 'Look' : 'Theme'}</h1>
         {t && !following && (
           <div className="ops-head__actions">
             <SaveState state={state} />
@@ -189,7 +200,7 @@ export default function WebsiteTheme() {
           </div>
         )}
       </div>
-      <WebsiteTabs />
+      {!siteId && <WebsiteTabs />}
       {noSignal(q) && <NoSignal />}
       {q.isPending && !noSignal(q) && <p className="muted">Loading…</p>}
       {q.isError && !noSignal(q) && <p className="error" role="alert">{q.error.message}</p>}
@@ -255,7 +266,10 @@ export default function WebsiteTheme() {
                   ))}
                 </div>
                 <p className="wb-field__hint">Picking one sets its colours, type and corners; your logo stays.</p>
-                {!asking && (
+                {siteId && q.data?.brand_theme && (
+                  <button type="button" className="btn wb-tap wb-follow__use" onClick={() => setT((x) => full({ ...q.data.brand_theme, logo: x.logo }))}>Start from the campaign’s brand</button>
+                )}
+                {!siteId && !asking && (
                   <button type="button" className="btn wb-tap wb-follow__use" disabled={!online || Boolean(switching)} onClick={() => setAsking(true)}>Use the campaign’s brand</button>
                 )}
                 {asking && (
