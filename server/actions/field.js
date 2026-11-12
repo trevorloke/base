@@ -411,11 +411,11 @@ export const FIELD_ACTIONS = {
   //   day, start, end   when, said as a day and clock times ('HH:MM') on the
   //                     campaign's clock — the server works out the moments.
   //                     Another day keeps its hours; end: null is no end.
-  //   minutes           in place of end: how long from the start (15 minutes
-  //                     to 31 days: a tap makes at most a day, and a longer
-  //                     shift the long form made keeps its length when its
-  //                     start moves) — the only way past midnight. Never
-  //                     with end.
+  //   minutes           in place of end: how long from the start (from 15
+  //                     minutes: a tap makes at most a day, and a longer
+  //                     shift the long form made keeps its length, however
+  //                     long, when its start moves) — the only way past
+  //                     midnight. Never with end.
   //   drop_in           "Drop in any time" (words only).
   // People's own hours on it (./ext/schedule/hours.js) are fitted to new
   // times in the same write (fitHours).

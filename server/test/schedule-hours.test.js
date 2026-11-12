@@ -127,6 +127,14 @@ test('a shift the long form made longer than a day keeps its length when its sta
   ok(await mgr.action('shift.update', { id: long.id, start: '09:15', minutes: 1920 }));
   const row = await shiftRow(long.id);
   assert.deepEqual([iso(row.starts_at), iso(row.ends_at)], [at('09:15'), at('17:15', '2030-11-17')]);
+  // Longer than a month too: the office open all fall, Sep 1 9 am to Oct 19
+  // 6 pm (69,660 minutes), moves a quarter hour and keeps its length.
+  const fall = ok(await mgr.action('shift.create', {
+    title: 'Office open all fall', starts_at: at('09:00', '2030-09-01'), ends_at: at('18:00', '2030-10-19'),
+  })).shift;
+  ok(await mgr.action('shift.update', { id: fall.id, start: '09:15', minutes: 69660 }));
+  const fallRow = await shiftRow(fall.id);
+  assert.deepEqual([iso(fallRow.starts_at), iso(fallRow.ends_at)], [at('09:15', '2030-09-01'), at('18:15', '2030-10-19')]);
   // Made by tap it is still at most a day.
   no(await mgr.action('shift.createMany', { kind: 'event', location: 'Long hall', days: ['2030-05-06'], start: '10:00', minutes: 1920 }), 400);
 });
