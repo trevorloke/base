@@ -63,7 +63,9 @@ import { BASE, NS } from './base.js';
 // are made on the phone, so a replay is the same link).
 // person.tag: tags put on or taken off on a profile at the desk (desk roles;
 // the server dedupes it on client_id, server/ext/deskoffline).
-export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet'];
+// shift.hours: “only part of it” — the volunteer's own hours on a shift they
+// are on (not undoable: saving again is the undo).
+export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet'];
 // Keyed by a client_id the server dedupes on.
 const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet'];
 // The writes that add a person, on an id made here.

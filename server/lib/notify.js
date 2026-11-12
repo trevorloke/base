@@ -13,6 +13,7 @@
 import { DEFAULT_TZ } from './org.js';
 import { fmtIn } from '@starbase/shared/dayparts';
 import { whereWords } from '@starbase/shared/shiftkinds';
+import { hoursOf } from '@starbase/shared/shifthours';
 // One email through the sender in use, and whether there is one (lib/mail
 // says what sendEmail takes and answers).
 export { emailConfigured, sendEmail } from './mail/index.js';
@@ -54,11 +55,55 @@ export const sendText = async ({ to, body }) => {
 // (shared/dayparts.js), so a server with old time-zone rules says the same
 // hour the screens do. A place nobody has named is a map link, never its
 // coordinates as words (shared/shiftkinds.js).
-export const shiftMessage = (shift, workspaceName, timeZone = DEFAULT_TZ) => {
-  const when = fmtIn(shift.starts_at, timeZone, { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+// When someone is on a shift, in words — in their own hours when they said
+// they can do only part of it (booking: { arrive_at, leave_at }; the shift's
+// own span follows in brackets, unless `aside` is false), and "Drop in any
+// time" on a drop-in shift:
+//   Saturday, November 14 at 4:30 p.m. – 6:00 p.m. (your time; the shift runs 2:00 p.m. – 8:00 p.m.)
+//   Drop in any time, Saturday, November 14, 4:00 p.m. – 8:00 p.m.
+const LONG = { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+const TIME = { hour: 'numeric', minute: '2-digit' };
+export const shiftWhen = (shift, booking, tz = DEFAULT_TZ, { aside = true } = {}) => {
+  const h = hoursOf(shift, booking);
+  const span = (a, b) => fmtIn(a, tz, TIME) + (b ? ` – ${fmtIn(b, tz, TIME)}` : '');
+  if (h.part) {
+    return `${fmtIn(h.starts_at, tz, LONG)} – ${fmtIn(h.ends_at, tz, TIME)}`
+      + (aside ? ` (your time; the shift runs ${span(shift.starts_at, shift.ends_at)})` : '');
+  }
+  if (shift.drop_in) {
+    return `Drop in any time, ${fmtIn(shift.starts_at, tz, { weekday: 'long', month: 'long', day: 'numeric' })}, ${span(shift.starts_at, shift.ends_at)}`;
+  }
+  return fmtIn(shift.starts_at, tz, LONG) + (shift.ends_at ? ` – ${fmtIn(shift.ends_at, tz, TIME)}` : '');
+};
+
+// The same for a text's one short line: their own start ("Sat, Nov 14,
+// 4:30 p.m."), or a drop-in shift's hours ("Sat, Nov 14, drop in 4–8 p.m.").
+const SHORT = { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+const clockBits = (at, tz) => {
+  const [, h, m, half] = fmtIn(at, tz, TIME).match(/^(\d+)(?::(\d\d))?\s*(.*)$/) || [];
+  return { clock: m && m !== '00' ? `${h}:${m}` : h, half };
+};
+export const shortRange = (from, to, tz = DEFAULT_TZ) => {
+  const a = clockBits(from, tz);
+  if (!to) return `${a.clock} ${a.half}`;
+  const b = clockBits(to, tz);
+  return a.half === b.half ? `${a.clock}–${b.clock} ${b.half}` : `${a.clock} ${a.half}–${b.clock} ${b.half}`;
+};
+export const shiftWhenShort = (shift, booking, tz = DEFAULT_TZ) => {
+  const h = hoursOf(shift, booking);
+  if (!h.part && shift.drop_in) {
+    return `${fmtIn(shift.starts_at, tz, { weekday: 'short', month: 'short', day: 'numeric' })}, drop in ${shortRange(shift.starts_at, shift.ends_at, tz)}`;
+  }
+  return fmtIn(h.starts_at, tz, SHORT);
+};
+
+// A shift.notify message to one person: `booking` their own hours, if any.
+// The text (forText) leaves out the shift's span in brackets.
+export const shiftMessage = (shift, workspaceName, timeZone = DEFAULT_TZ, booking = null, { forText = false } = {}) => {
   const lines = [
     `You're scheduled: ${shift.title}`,
-    when + (shift.ends_at ? ` – ${fmtIn(shift.ends_at, timeZone, { hour: 'numeric', minute: '2-digit' })}` : ''),
+    shiftWhen(shift, booking, timeZone, { aside: !forText }),
+
     shift.location ? `Where: ${whereWords(shift.location)}` : null,
     shift.instructions ? `Instructions: ${shift.instructions}` : null,
     shift.link ? `Details: ${shift.link}` : null,

@@ -20,6 +20,13 @@
 //                   "this and the following" leaves it as the desk set it.
 // shifts.need       how many people it wants — a target on cards and on
 //                   Today. Never a limit: nobody is refused for it.
+// shifts.drop_in   "Drop in any time": people come and go between its hours.
+//                   Words only — booking and counting are as for any shift.
+//                   null and false mean the same.
+// shift_assignments.arrive_at, leave_at  a booking's own hours inside its
+//                   shift (shift.hours, shift.setHours — ./hours.js): the
+//                   plan, not who came. Both or neither; neither is the
+//                   whole shift.
 // shift_assignments.reminded_at  when the evening-before reminder for this
 //                   booking was claimed: set once, so it goes once.
 // schedule_settings whether the campaign sends that reminder (off until a
@@ -56,7 +63,11 @@ alter table shifts add column if not exists series_edited_at timestamptz;
 alter table shifts add column if not exists need int;
 create index if not exists shifts_series_idx on shifts (workspace_id, series_id, starts_at) where series_id is not null and deleted_at is null;
 
+alter table shifts add column if not exists drop_in boolean;
+
 alter table shift_assignments add column if not exists reminded_at timestamptz;
+alter table shift_assignments add column if not exists arrive_at timestamptz;
+alter table shift_assignments add column if not exists leave_at timestamptz;
 
 create table if not exists schedule_settings (
   workspace_id uuid primary key references workspaces(id) on delete cascade,

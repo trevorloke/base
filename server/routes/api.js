@@ -40,6 +40,8 @@ import { doorState, inPass } from '@starbase/shared/passes';
 import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
 // The records a maybe one donor names, by name (ext/payments).
 import { maybesNamed } from '../ext/payments/limits.js';
+// The caller's own booking on a shift, one rule everywhere (ext/schedule).
+import { myBookingSql } from '../ext/schedule/hours.js';
 
 // Gift rows flagged as maybe one donor (idsOf: the ids a row names, as
 // stored) get maybe_same_as: those records by name, as things stand.
@@ -784,10 +786,14 @@ const MINE_ON_SHIFT = `exists (
 // shift" is never one the list left out.
 const SHIFTS_PAGE = 500;
 const PAST_PAGE = 100;
+// my_arrive_at, my_leave_at: the caller's own hours on it (ext/schedule/
+// hours.js) — null for the whole shift or when not on it.
 const SHIFT_ROW = `s.*, pl.lat as place_lat, pl.lng as place_lng,
             (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as filled,
-            ${MINE_ON_SHIFT} as mine`;
-const SHIFT_FROM = 'from shifts s left join places pl on pl.id = s.place_id where s.workspace_id = $1 and s.deleted_at is null';
+            ${MINE_ON_SHIFT} as mine, mb.arrive_at as my_arrive_at, mb.leave_at as my_leave_at`;
+const SHIFT_FROM = `from shifts s left join places pl on pl.id = s.place_id
+  left join lateral (${myBookingSql('s.workspace_id', 's.id', '$2::text')}) mb on true
+  where s.workspace_id = $1 and s.deleted_at is null`;
 // The start of the campaign's today ($3: its zone).
 const TODAY_START = startOfDay('$3::text');
 const NOT_OVER = `coalesce(s.ends_at, s.starts_at) >= ${TODAY_START}`;
@@ -896,17 +902,21 @@ app.get('/shifts/:id', async (c) => {
   if (!shift) return c.json({ error: 'not found' }, 404);
   const myEmail = String(ctx.user.email || '').toLowerCase();
   const assignees = (await db.query(
-    `select a.id as assignment_id, a.status, a.notified_at, a.notify_email, a.notify_text,
+    `select a.id as assignment_id, a.status, a.notified_at, a.notify_email, a.notify_text, a.arrive_at, a.leave_at,
             p.id, p.name, p.email, p.phone, ${noCallSql('p')} as no_call, (lower(p.email) = $3) as is_me
      from shift_assignments a join persons p on p.id = a.person_id
      where a.shift_id = $1 and a.workspace_id = $2 order by p.name`,
     [shift.id, ctx.workspaceId, myEmail],
   )).rows.map((a) => ({ ...a, is_me: !!a.is_me }));
-  // Volunteers see who else is on the shift, not how to reach them.
+  // Volunteers see who else is on the shift, not how to reach them, nor the
+  // hours someone else said they can do (arrive_at, leave_at).
   if (ctx.role === 'volunteer') {
     return c.json({
       shift,
-      assignees: assignees.map((a) => (a.is_me ? a : { ...a, email: null, phone: null, no_call: null, notify_email: null, notify_text: null })),
+      assignees: assignees.map((a) => (a.is_me ? a : {
+        ...a, email: null, phone: null, no_call: null, notify_email: null, notify_text: null, arrive_at: null, leave_at: null,
+      })),
+
     });
   }
   return c.json({ shift, assignees });

@@ -51,7 +51,7 @@ import { httpError } from '../../actions/util.js';
 import { newId, runAction } from '../../lib/events.js';
 import { runHooks } from '../../lib/hooks.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
-import { emailConfigured, sendEmail, sendText, textConfigured } from '../../lib/notify.js';
+import { emailConfigured, sendEmail, sendText, shiftWhen, shiftWhenShort, textConfigured } from '../../lib/notify.js';
 import { notSuppressed } from '../../lib/mail/index.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { mayRun } from '../../lib/perms.js';
@@ -80,9 +80,8 @@ const pad = (n) => String(n).padStart(2, '0');
 // ── The words ──
 // One person's shifts as one message, soonest first. The email says
 // everything; the text keeps to a line a shift (a text is paid by length).
-const LONG = { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' };
-const SHORT = { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
-const TIME = { hour: 'numeric', minute: '2-digit' };
+// Each shift in the person's own hours when they said they can do only part
+// of it (its row's arrive_at, leave_at), and a drop-in shift as one.
 const TEXT_LINES = 8;
 export const noticeWords = ({ kind, shifts, workspaceName, tz = DEFAULT_TZ, thisWeek = true, week = null }) => {
   const n = shifts.length;
@@ -93,7 +92,7 @@ export const noticeWords = ({ kind, shifts, workspaceName, tz = DEFAULT_TZ, this
   // A place nobody has named is its map, never its coordinates as words.
   const block = (s) => [
     s.title,
-    fmtIn(s.starts_at, tz, LONG) + (s.ends_at ? ` – ${fmtIn(s.ends_at, tz, TIME)}` : ''),
+    shiftWhen(s, s, tz),
     s.location ? `Where: ${whereWords(s.location)}` : null,
     s.instructions ? `Instructions: ${s.instructions}` : null,
     s.link ? `Details: ${s.link}` : null,
@@ -103,7 +102,7 @@ export const noticeWords = ({ kind, shifts, workspaceName, tz = DEFAULT_TZ, this
     const where = !s.location ? ''
       : pinPoint(s.location) ? `, ${whereWords(s.location)}`
         : !String(s.title).toLowerCase().includes(String(s.location).toLowerCase()) ? `, ${s.location}` : '';
-    return `${fmtIn(s.starts_at, tz, SHORT)}: ${s.title}${where}`;
+    return `${shiftWhenShort(s, s, tz)}: ${s.title}${where}`;
   };
   // The text is built to its length rather than cut: a shift's line goes in
   // whole (its map link with it) or not at all, what doesn't fit is counted
@@ -221,7 +220,8 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
         // not over (as the count before the tap counted them). A reminder
         // is for tomorrow: one whose day has come is too late to send.
         const shifts = person ? (await tx.query(
-          `select a.id as assignment_id, s.title, s.starts_at, s.ends_at, s.location, s.instructions, s.link
+          `select a.id as assignment_id, a.arrive_at, a.leave_at, s.title, s.starts_at, s.ends_at, s.drop_in, s.location, s.instructions, s.link
+
              from shift_assignments a join shifts s on s.id = a.shift_id and s.deleted_at is null
             where a.workspace_id = $1 and a.id = any($2::uuid[]) and a.status = any($3::text[])
               and coalesce(s.ends_at, s.starts_at) >= $4 and ($5::timestamptz is null or s.starts_at >= $5)

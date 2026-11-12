@@ -31,7 +31,8 @@ import { DEFAULT_TZ } from '../lib/org.js';
 // Kinds, saved places and the campaign's clock for shifts (ext/schedule).
 import { SHIFT_KIND_CODES, shiftKind } from '@starbase/shared/shiftkinds';
 import {
-  END_FIRST, clockInput, dayInput, endsAfterStart, livePlace, movedTimes, needInput, titleFor, turfWords, tzOf,
+  BOTH_ENDS, END_FIRST, clockInput, dayInput, endsAfterStart, fitHours, livePlace, minutesInput, movedTimes, needInput, titleFor,
+  turfWords, tzOf,
 } from '../ext/schedule/rules.js';
 
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
@@ -374,6 +375,8 @@ export const FIELD_ACTIONS = {
       kind: z.enum(SHIFT_KIND_CODES).nullish(),
       place_id: uuid().nullish(),
       need: needInput().nullish(),
+      // "Drop in any time": people come and go between its hours (words only).
+      drop_in: z.boolean().optional(),
     }),
     handler: async (tx, ctx, input, emit) => {
       if (!endsAfterStart(input.starts_at, input.ends_at)) throw httpError(400, END_FIRST);
@@ -385,14 +388,18 @@ export const FIELD_ACTIONS = {
       // title_custom: this name was typed, so it is kept whatever changes.
       await tx.query(
         `insert into shifts (id, workspace_id, title, role, location, starts_at, ends_at, instructions, link, capacity, created_by,
-                             kind, place_id, need, title_custom)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)`,
+                             kind, place_id, need, title_custom, drop_in)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, $15)`,
         [id, ctx.workspaceId, input.title, role, location,
          input.starts_at, input.ends_at || null, input.instructions || null,
          input.link || null, input.capacity ?? null, ctx.user.id,
-         input.kind || null, place?.id || null, input.need ?? null],
+         input.kind || null, place?.id || null, input.need ?? null, input.drop_in || null],
       );
-      const payload = { id, ...input, ...(location && !input.location ? { location } : {}), ...(role && !input.role ? { role } : {}) };
+      const { drop_in: dropIn, ...said } = input;
+      const payload = {
+        id, ...said, ...(dropIn ? { drop_in: true } : {}),
+        ...(location && !input.location ? { location } : {}), ...(role && !input.role ? { role } : {}),
+      };
       emit('shift', id, 'create', payload);
       return { shift: payload };
     },
@@ -404,6 +411,11 @@ export const FIELD_ACTIONS = {
   //   day, start, end   when, said as a day and clock times ('HH:MM') on the
   //                     campaign's clock — the server works out the moments.
   //                     Another day keeps its hours; end: null is no end.
+  //   minutes           in place of end: how long from the start (15 to
+  //                     1440) — the only way past midnight. Never with end.
+  //   drop_in           "Drop in any time" (words only).
+  // People's own hours on it (./ext/schedule/hours.js) are fitted to new
+  // times in the same write (fitHours).
   //   place_id          a saved place: its name becomes the words shown.
   //                     New words alone leave the saved place behind.
   //   turf_ids          its turfs, as shift.turfs.set sets them; with no
@@ -427,20 +439,25 @@ export const FIELD_ACTIONS = {
       day: dayInput().optional(),
       start: clockInput().optional(),
       end: clockInput().nullish(),
+      minutes: minutesInput().optional(),
       kind: z.enum(SHIFT_KIND_CODES).nullish(),
       place_id: uuid().nullish(),
       need: needInput().nullish(),
       turf_ids: z.array(uuid()).max(20).optional(),
+      drop_in: z.boolean().optional(),
     }),
     // opts.series: one of a series changed together (shift.series.update).
     handler: async (tx, ctx, input, emit, opts) => {
-      const { id, day, start, end, turf_ids: turfIds, ...patch } = input;
+      const { id, day, start, end, minutes, turf_ids: turfIds, ...patch } = input;
       const ws = ctx.workspaceId;
+      // Here, not in the schema: shift.series.update takes this schema's
+      // fields (omit) — a refined schema has none to take.
+      if (minutes !== undefined && 'end' in input) throw httpError(400, BOTH_ENDS);
       const cur = (await tx.query('select * from shifts where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
       if (!cur) throw httpError(404, 'shift not found');
-      if (day !== undefined || start !== undefined || end !== undefined) {
+      if (day !== undefined || start !== undefined || end !== undefined || minutes !== undefined) {
         if ('starts_at' in patch || 'ends_at' in patch) throw httpError(400, 'say when as a day and times, or as timestamps — not both');
-        Object.assign(patch, movedTimes(cur, { day, start, end }, tzOf(ctx)));
+        Object.assign(patch, movedTimes(cur, { day, start, end, minutes }, tzOf(ctx)));
       }
       if (turfIds) {
         const { ACTIONS } = await import('./index.js');
@@ -480,13 +497,14 @@ export const FIELD_ACTIONS = {
       await tx.query(
         `update shifts set title = $3, role = $4, location = $5, starts_at = $6, ends_at = $7, instructions = $8, link = $9, capacity = $10,
            kind = $11, place_id = $12, need = $13, title_custom = $14,
-           series_edited_at = case when $15::boolean then now() else series_edited_at end
+           series_edited_at = case when $15::boolean then now() else series_edited_at end, drop_in = $16
          where id = $1 and workspace_id = $2`,
         [id, ws, next.title, next.role || null, next.location || null, next.starts_at, next.ends_at || null,
          next.instructions || null, next.link || null, next.capacity ?? null,
-         next.kind || null, next.place_id || null, next.need ?? null, next.title_custom ?? null, own],
+         next.kind || null, next.place_id || null, next.need ?? null, next.title_custom ?? null, own, next.drop_in ?? null],
       );
       emit('shift', id, 'update', patch);
+      await fitHours(tx, ws, id, emit, { before: cur, tz: tzOf(ctx) });
       return { shift: { id, ...patch, ...(turfIds ? { turf_ids: turfIds } : {}) } };
     },
   },
@@ -575,8 +593,9 @@ export const FIELD_ACTIONS = {
         throw httpError(409, 'shift is full');
       }
       if (cur) {
-        await tx.query("update shift_assignments set status = 'confirmed' where id = $1", [cur.id]);
-        emit('shift_assignment', cur.id, 'update', { status: 'confirmed', self: true });
+        // Back on it: for the whole shift, whatever hours they had said before.
+        await tx.query("update shift_assignments set status = 'confirmed', arrive_at = null, leave_at = null where id = $1", [cur.id]);
+        emit('shift_assignment', cur.id, 'update', { status: 'confirmed', self: true, arrive_at: null, leave_at: null });
         return { assignment: { id: cur.id, shift_id: shift.id, person_id: me.id, status: 'confirmed' } };
       }
       const id = newId();
@@ -627,13 +646,21 @@ export const FIELD_ACTIONS = {
           && await activeOnShift(tx, ctx.workspaceId, cur.shift_id) >= cur.capacity) {
         throw httpError(409, 'shift is at capacity');
       }
+      // Back on it from declined or a no-show (shift.add and the website's
+      // sign-up come this way too): for the whole shift, as a fresh booking.
+      const back = HOLD.includes(input.status) && !HOLD.includes(cur.status);
       await tx.query(
-        'update shift_assignments set status = $3 where id = $1 and workspace_id = $2',
-        [input.id, ctx.workspaceId, input.status],
+        `update shift_assignments set status = $3,
+           arrive_at = case when $4::boolean then null else arrive_at end, leave_at = case when $4::boolean then null else leave_at end
+         where id = $1 and workspace_id = $2`,
+        [input.id, ctx.workspaceId, input.status, back],
       );
       // from: the status it had — a move between two active statuses
       // (assigned → confirmed) is not a fresh booking (ext/shiftturfs).
-      emit('shift_assignment', input.id, 'update', { status: input.status, from: cur.status });
+      emit('shift_assignment', input.id, 'update', {
+        status: input.status, from: cur.status, ...(back ? { arrive_at: null, leave_at: null } : {}),
+      });
+
       return { id: input.id, status: input.status };
     },
   },
@@ -663,7 +690,7 @@ export const FIELD_ACTIONS = {
       // Everyone holding a spot — checked in too: a shift moved after they
       // arrived still reaches them.
       const assignees = (await tx.query(
-        `select a.id as assignment_id, p.id, p.name, p.email, p.phone,
+        `select a.id as assignment_id, a.arrive_at, a.leave_at, p.id, p.name, p.email, p.phone,
                 ${notSuppressed('p.workspace_id', 'p.email')} as can_email
          from shift_assignments a join persons p on p.id = a.person_id
          where a.shift_id = $1 and a.workspace_id = $2 and a.status = any($3::text[])`,
@@ -677,9 +704,11 @@ export const FIELD_ACTIONS = {
         [ctx.workspaceId, shift.id],
       )).rows[0].n + 1;
 
-      const message = shiftMessage(shift, ctx.workspace.name, ctx.workspace.settings?.tz || DEFAULT_TZ);
+      const tz = ctx.workspace.settings?.tz || DEFAULT_TZ;
       const results = [];
       for (const a of assignees) {
+        // Each in their own hours, when they said they can do only part of it.
+        const message = shiftMessage(shift, ctx.workspace.name, tz, a);
         // Never an address that bounced for good or reported spam (the
         // suppression list, ext/mail), as a week's notice and a reminder.
         const emailRes = a.email && !a.can_email
@@ -696,10 +725,12 @@ export const FIELD_ACTIONS = {
         if (a.phone) {
           const guard = { to: a.phone, status: null, detail: null };
           await runHooks('textOut', tx, ctx, { phone: a.phone, personId: a.id, kind: 'shift' }, guard);
-          textRes = guard.status ? { status: guard.status, detail: guard.detail } : await sendText({ to: guard.to, body: message });
+          textRes = guard.status ? { status: guard.status, detail: guard.detail }
+            : await sendText({ to: guard.to, body: shiftMessage(shift, ctx.workspace.name, tz, a, { forText: true }) });
         }
         await tx.query(
           `update shift_assignments set notified_at = now(), notify_email = $3, notify_text = $4
+
            where id = $1 and workspace_id = $2`,
           [a.assignment_id, ctx.workspaceId, emailRes.status, textRes.status],
         );
