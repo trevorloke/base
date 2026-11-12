@@ -33,6 +33,10 @@ export const BASE = {
   treasurer: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'learn'],
   staff: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'learn'],
   volunteer: [],
+  // A candidate is a volunteer with a candidate seat (ext/candidates): their
+  // own row under Permissions, read through permsOf's 'candidate' key. Their
+  // role stays 'volunteer', so this line is only the row's defaults.
+  candidate: [],
 };
 
 const ACTION_AREA = {
@@ -73,6 +77,7 @@ const PATH_AREA = [
   [/^\/api\/signs(\/|$)/, 'signs'],
   [/^\/api\/turfs(\/|$)/, 'map'],
   [/^\/api\/(team|admin|invites)(\/|$)/, 'admin'],
+  [/^\/api\/candidates(\/|$)/, 'admin'],
   [/^\/api\/fields(\/|$)/, 'admin'],
   [/^\/api\/learn\/progress$/, 'learn'],
   [/^\/api\/(banks|lists)(\/|$)/, 'people'],

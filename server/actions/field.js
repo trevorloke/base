@@ -1092,6 +1092,13 @@ export const FIELD_ACTIONS = {
       if (input.user_id === ctx.user.id && input.role !== 'manager') {
         throw httpError(400, 'you cannot remove your own manager role');
       }
+      // A candidate's seat (ext/candidates) is only ever a volunteer's.
+      const seat = input.role === 'volunteer' ? null : (await tx.query(
+        `select u.name from candidates c join users u on u.id = c.user_id
+         where c.workspace_id = $1 and c.user_id = $2 and c.removed_at is null`,
+        [ctx.workspaceId, input.user_id],
+      )).rows[0];
+      if (seat) throw httpError(409, `${seat.name} is a candidate — unlink them under Candidates first`);
       const n = await tx.query(
         'update memberships set role = $3 where user_id = $1 and workspace_id = $2',
         [input.user_id, ctx.workspaceId, input.role],

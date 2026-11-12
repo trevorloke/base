@@ -129,3 +129,27 @@ test('a role’s grant counts too; with the area denied or taken away, a volunte
   ok(await mgr.action('permission.member.set', { user_id: people.ada.id, grant: [], deny: [] }));
   assert.equal(ok(await people.ada.b.get('/api/auth/me')).two_step.must_set_up, false);
 });
+
+test('a candidate (a volunteer with a seat) is asked for it like the desk: /me, GET /two-step and twostep.off all say so', async () => {
+  const seat = ok(await mgr.action('candidate.save', { name: 'Cara Example', office: 'Mayor', email: 'cara.grants@example.org' })).candidate;
+  const inv = ok(await mgr.action('candidate.invite', { id: seat.id }));
+  const b = new Browser();
+  const j = ok(await b.post('/api/auth/join', { token: inv.joinUrl.split('/join/')[1], name: 'Cara Example', password: 'two-step-2026' }));
+  assert.equal(j.role, 'volunteer');
+  assert.equal(j.candidate.name, 'Cara Example');
+  assert.deepEqual(j.areas, [], 'no area given: only the seat asks for it');
+  assert.deepEqual(j.two_step, { on: false, required: true, must_set_up: true });
+  setUpFirst(await b.get('/api/persons'), 'a candidate before set-up');
+  const status = ok(await b.get('/api/two-step'));
+  assert.deepEqual([status.required, status.must_set_up], [true, true]);
+  const key = await turnOn(b);
+  assert.equal((await b.get('/api/persons')).status, 200);
+  const db = await getDb();
+  const last = Number((await db.query('select last_step from two_step where user_id = $1', [j.user.id])).rows[0].last_step);
+  await db.query('update two_step set last_step = $2 where user_id = $1', [j.user.id, Math.min(last, totpStep(Date.now()) - 1)]);
+  const off = ok(await b.action('twostep.off', { code: hotp(base32Decode(key), totpStep(Date.now())) }));
+  assert.deepEqual([off.on, off.must_set_up], [false, true]);
+  // Out of the seat: a volunteer with no area, as before.
+  ok(await mgr.action('candidate.unlink', { id: seat.id }));
+  assert.deepEqual(ok(await b.get('/api/auth/me')).two_step, { on: false, required: false, must_set_up: false });
+});

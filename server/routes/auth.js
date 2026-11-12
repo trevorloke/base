@@ -22,6 +22,7 @@ import {
 } from '../lib/twostep.js';
 import { LOCKED_SIGN_IN, tellLocked } from '../ext/twostep/locked.js';
 import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
+import { candidateOut, linkOnJoin } from '../ext/candidates/invite.js';
 
 const app = new Hono();
 
@@ -88,6 +89,8 @@ const clientWorkspace = (ws) => {
 const meOut = (ctx) => ({
   user: ctx.user, workspace: clientWorkspace(ctx.workspace), role: ctx.role, areas: areasFor(ctx), org: orgOut(),
   two_step: twoStepOut(ctx),
+  // A volunteer with a candidate's seat (ext/candidates), else null.
+  candidate: candidateOut(ctx.candidate),
 });
 
 // Two-step sign-in: the code after the password. The ticket for it is a
@@ -273,7 +276,7 @@ app.post('/login/code', async (c) => {
 
 // ── Invites: look up, then join (new account, or an existing one by password) ──
 const findInvite = async (db, token) => (await db.query(
-  `select i.id, i.email, i.role, i.workspace_id, w.name as workspace_name
+  `select i.id, i.email, i.role, i.workspace_id, i.candidate_id, w.name as workspace_name
    from invites i join workspaces w on w.id = i.workspace_id
    where i.token_hash = $1 and i.accepted_at is null and i.expires_at > now()`,
   [createHash('sha256').update(String(token || '')).digest('hex')],
@@ -345,6 +348,8 @@ app.post('/join', async (c) => {
       if (n.affectedRows === 0) throw new Error('invite already used');
       emit('invite', inv.id, 'update', { accepted: true });
       if (m.affectedRows > 0) emit('membership', userId, 'create', { email: inv.email, role: inv.role, user_id: userId });
+      // A candidate's invite: their seat, if they joined as a volunteer.
+      if (inv.candidate_id) await linkOnJoin(tx, emit, { workspaceId: inv.workspace_id, candidateId: inv.candidate_id, userId });
     });
   } catch (e) {
     if (!(e instanceof WrongCode)) throw e;

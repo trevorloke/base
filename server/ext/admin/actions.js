@@ -3,6 +3,7 @@
 //   team.create { name, note?, lead_user_id? } · team.update { id, … } · team.delete { id }
 //   team.member.add { team_id, user_id } · team.member.remove { team_id, user_id }
 //   permission.role.set { role, grant[], deny[] }     a whole role's areas
+//                       (role 'candidate': the Candidates row — ext/candidates)
 //   permission.member.set { user_id, grant[], deny[] }  one person's areas
 import { z } from 'zod';
 import { newId } from '../../lib/events.js';
@@ -96,7 +97,7 @@ export const actions = {
 
   'permission.role.set': {
     roles: MANAGER,
-    input: z.object({ role: z.enum(['treasurer', 'staff', 'volunteer']), grant: areas(), deny: areas() }),
+    input: z.object({ role: z.enum(['treasurer', 'staff', 'volunteer', 'candidate']), grant: areas(), deny: areas() }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
       const settings = parseJ((await tx.query('select settings from workspaces where id = $1 for update', [ws])).rows[0].settings, {});

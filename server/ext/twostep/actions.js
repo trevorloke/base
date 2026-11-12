@@ -146,7 +146,7 @@ export const actions = {
       // A sign-in elsewhere waiting for a code: there's no code to wait for now.
       await tx.query('delete from two_step_pending where user_id = $1', [ctx.user.id]);
       emit('two_step', ctx.user.id, 'void', { turned_off: true, with: r.used === 'recovery' ? 'recovery code' : 'app' });
-      return { on: false, must_set_up: requiredFor(ctx.role, ctx.workspace?.settings, ctx.perms) };
+      return { on: false, must_set_up: requiredFor(ctx.role, ctx.workspace?.settings, ctx.perms, { candidate: Boolean(ctx.candidate) }) };
     },
     after: settle,
   },
