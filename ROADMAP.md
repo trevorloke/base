@@ -48,6 +48,12 @@ BC campaign will need in 2030.
 8. **Path to win.** The win number per race, supporters found against it,
    the weekly pace needed, and which turfs to work next — on the map.
 9. **⌘K.** One keystroke to any screen, any person, any action.
+10. **Money truth.** Gifts made in another tool come in from its file —
+    matched to the donor or set aside for a person to settle, checked
+    against the year's limit, with no second receipt — so the limit, the
+    donor tiers and next year's lapsed list are whole. The financial
+    agent's filing dates are typed in and counted down. A person carries
+    the list of electors' voter number.
 
 ## Next (in order)
 

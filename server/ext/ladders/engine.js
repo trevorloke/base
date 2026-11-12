@@ -79,6 +79,8 @@ import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, textConfigured, unsubscribeHeaders } from '../../lib/notify.js';
 import { notSuppressed } from '../../lib/mail/index.js';
+import { DEFAULT_TZ } from '../../lib/org.js';
+import { campaignDay } from '../../lib/gifts.js';
 import { e164, withFooter, localMinutes, now as textClock } from '../texting/rules.js';
 import {
   settingsFor, quietState, isOptedOut, askedToStop, applyOptOut, inTouch, isFirstOut, tzOf,
@@ -100,8 +102,9 @@ const HOOK_BACKOFF = [60_000, 5 * 60_000];
 // How long someone may wait for an address that has stopped answering.
 const HOOK_WAIT_MAX = 30 * 60_000;
 const LOG_KEEP = 50;
-// Writes that never start a ladder.
-const QUIET_ACTIONS = new Set(['sample.load', 'sample.clear', 'import.persons']);
+// Writes that never start a ladder (gifts brought in from another tool's
+// file, and settled from its pile, among them: ext/giftimport).
+const QUIET_ACTIONS = new Set(['sample.load', 'sample.clear', 'import.persons', 'gift.import', 'gift.importSettle']);
 const YES_RATINGS = new Set(['1', '2']);
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -297,7 +300,16 @@ export const goalMet = async (tx, ws, personId, goal, since = null) => {
   if (!since) return false;
   const one = async (sql) => Boolean((await tx.query(sql, [ws, personId, since])).rows[0]);
   if (goal === 'gift') {
-    return one('select 1 from gifts where workspace_id = $1 and person_id = $2 and deleted_at is null and created_at > $3 limit 1');
+    // A gift brought in from another tool's file (ext/giftimport) is on the
+    // books today whenever it was given: it counts by the day it was given
+    // (the campaign's calendar), so a gift from long before ends nothing.
+    const tz = (await tx.query(`select settings->>'tz' as tz from workspaces where id = $1`, [ws])).rows[0]?.tz;
+    return Boolean((await tx.query(
+      `select 1 from gifts where workspace_id = $1 and person_id = $2 and deleted_at is null
+          and case when coalesce(attrs->>'source', '') = 'import' then date >= $4::date else created_at > $3 end
+        limit 1`,
+      [ws, personId, since, campaignDay(since, tz || DEFAULT_TZ)],
+    )).rows[0]);
   }
   if (goal === 'member') {
     if (!(await hasTable(tx, 'member_terms'))) return false;
@@ -311,22 +323,26 @@ export const goalMet = async (tx, ws, personId, goal, since = null) => {
   return false;
 };
 
-// Who in this write did a goal: { goal → Set(person ids) }.
+// Who in this write did a goal: { goal → Set(person ids) } — and
+// broughtIn: whose gift came in from another tool's file (ext/giftimport),
+// which reaches "gave" only if it was given since they were put on.
 const goalFactsOf = async (tx, ws, events, goals) => {
   const who = Object.fromEntries([...goals].map((g) => [g, new Set()]));
+  const broughtIn = new Set();
   const add = (goal, personId) => { if (personId && who[goal]) who[goal].add(personId); };
   const attended = [];
   for (const e of events) {
     const p = e.payload || {};
     if (p.sample) continue;
-    if (e.entityType === 'gift' && e.op === 'create') add('gift', p.person_id);
+    if (e.entityType === 'gift' && e.op === 'create' && p.source === 'import') { if (p.person_id && who.gift) broughtIn.add(p.person_id); }
+    else if (e.entityType === 'gift' && e.op === 'create') add('gift', p.person_id);
     else if (e.entityType === 'membership' && e.op === 'create') add('member', p.person_id);
     else if (e.entityType === 'voted_mark' && e.op === 'create' && p.voted === true) add('voted', p.person_id);
     else if (e.entityType === 'person' && (e.op === 'create' || e.op === 'update') && p.voted_at) add('voted', e.entityId);
     else if (e.entityType === 'shift_assignment' && who.shift_attended && shiftMove(e) === 'attended') attended.push(e.entityId);
   }
   if (attended.length) for (const r of (await bookingsOf(tx, ws, attended)).values()) add('shift_attended', r.person_id);
-  return who;
+  return { who, broughtIn };
 };
 
 // Off every ladder whose goal they just did — paused runs too: they did the
@@ -334,17 +350,19 @@ const goalFactsOf = async (tx, ws, events, goals) => {
 const reachGoals = async (tx, meta, events, goals) => {
   const ws = meta.workspaceId;
   const emits = [];
-  const who = await goalFactsOf(tx, ws, events, goals);
+  const { who, broughtIn } = await goalFactsOf(tx, ws, events, goals);
   for (const [goal, people] of Object.entries(who)) {
-    if (!people.size) continue;
+    const maybe = goal === 'gift' ? [...broughtIn].filter((id) => !people.has(id)) : [];
+    if (!people.size && !maybe.length) continue;
     const runs = (await tx.query(
-      `select r.id, r.workspace_id, r.ladder_id, r.person_id, r.step, r.log from ladder_runs r
+      `select r.id, r.workspace_id, r.ladder_id, r.person_id, r.step, r.log, r.started_at from ladder_runs r
        join ladders l on l.id = r.ladder_id and l.workspace_id = r.workspace_id and l.deleted_at is null and l.goal = $2
        where r.workspace_id = $1 and r.status <> 'done' and r.person_id = any($3::uuid[])
        for update of r`,
-      [ws, goal, [...people]],
+      [ws, goal, [...people, ...maybe]],
     )).rows;
     for (const run of runs) {
+      if (!people.has(run.person_id) && !(await goalMet(tx, ws, run.person_id, goal, run.started_at))) continue;
       await endRun(tx, run);
       await appendLog(tx, run, { step: Number(run.step), kind: 'end', result: 'goal', goal });
       emits.push(['ladder_run', run.id, 'update', {

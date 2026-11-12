@@ -850,6 +850,20 @@ how many numbers are still on CallHub's do-not-call list that nobody here
 blocks any more — with whose the first few are (a list's page names them
 all).
 
+## Donations taken in another tool
+
+No connection and no key: GiverLever and tools like it were not found to
+offer a public API, so their history comes in by file. Export the gifts
+from the other tool as a CSV or Excel file — donor, email, amount, date,
+how it was paid, and its own gift and receipt numbers if it has them — and
+bring it in under **Donations → More → Import donations** (README, *Gifts made
+in another tool*). Its column names don't matter; the import shows how it
+read them before anything is saved. Imported gifts count toward the year's
+limit and the disclosure; base.win makes no receipt for them. New online
+gifts are a different matter: point the website's Donate button at
+base.win's own form (*Online payments — Stripe*, above) and nothing needs
+importing.
+
 ## Hosting — Render
 
 `render.yaml` is a Render Blueprint: `starbase-staging` (deploys every push to

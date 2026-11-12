@@ -191,7 +191,16 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    put on the map.
 3. Open the map on a phone as a volunteer: tap a house, rate the door, see
    it save; turn on airplane mode, do it again, turn it off, watch it send.
-4. Tell volunteers about **Show → Share my location while I'm out** on the
+4. Gifts taken in another tool this year: **Donations → More → Import
+   donations** (a manager or the treasurer), before the first gift is taken
+   here, so the year's contribution limit counts them. Take refunded
+   payments out of the file (with a payment status column they're left out
+   for you). Check first: a gift already typed in here by
+   hand is pointed out, to leave out; the gifts with no sure donor
+   wait under **Needs you** to be settled. Then the financial agent types
+   their filing dates under **Donations → More → Filing dates** — base.win
+   knows none.
+5. Tell volunteers about **Show → Share my location while I'm out** on the
    map: it's off until they turn it on, and while it's on the managers'
    dashboard (Today) shows where they are. Location needs the site on
    `https` (every host in section 2 is). A position is kept only while they

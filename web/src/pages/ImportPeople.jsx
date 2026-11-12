@@ -19,6 +19,7 @@ import { RatingChip, useScale } from '../components/RatingButtons.jsx';
 import { invalidatePersonData, tagWord } from './People.jsx';
 import { FIELD_KEY, fieldCell, useImportFields } from '../components/FieldsBits.jsx';
 import './import.css';
+import '../components/voter-number.css';
 
 const DESK = ['manager', 'treasurer', 'staff'];
 const CHECK_CHUNK = 2000; // server max per call
@@ -168,8 +169,11 @@ export function looksLikeData(cells) {
 // Text → { delimiter, all: [{ cells, row }], header } or { error }.
 // header: whether the first non-blank row is column names (a guess).
 // A big file is parsed a slice at a time; progress(share) hears how far (0–1).
-async function readTable(text, progress) {
-  if (!text || !/\S/.test(text)) return { error: 'That file is empty. Choose a CSV with at least one person in it.' };
+// what: what a row of the file is, for the words (the gift import's: gifts).
+const PEOPLE = { one: 'person', many: 'people' };
+async function readTable(text, progress, what = PEOPLE) {
+  const empty = { error: `That file is empty. Choose a CSV with at least one ${what.one} in it.` };
+  if (!text || !/\S/.test(text)) return empty;
   const parser = csvParser(text);
   while (!parser.step(PARSE_SLICE)) {
     progress?.(parser.at());
@@ -178,16 +182,16 @@ async function readTable(text, progress) {
   const { delimiter, rows } = parser;
   const all = [];
   rows.forEach((cells, i) => { if (!isBlankRow(cells)) all.push({ cells, row: i + 1 }); }); // spreadsheet row numbers
-  if (!all.length) return { error: 'That file is empty. Choose a CSV with at least one person in it.' };
+  if (!all.length) return empty;
   return { delimiter, all, header: !looksLikeData(all[0].cells) };
 }
 
 // The rows, with or without the first as column names → { headers, records } or { error }.
-function shapeTable(all, header) {
+function shapeTable(all, header, what = PEOPLE) {
   const head = header ? all[0].cells : [];
   const records = header ? all.slice(1) : all;
   if (records.length === 0) {
-    return { error: 'There’s a header row but no people under it. Check you saved the whole sheet.' };
+    return { error: `There’s a header row but no ${what.many} under it. Check you saved the whole sheet.` };
   }
   let width = Math.min(500, Math.max(head.length, ...records.slice(0, 500).map((r) => r.cells.length)));
   // Drop trailing columns with no header and nothing in them ("a,b," on every line).
@@ -213,6 +217,7 @@ const FIELDS = [
   { key: 'unit', label: 'Unit / apt' },
   { key: 'city', label: 'City' },
   { key: 'postal', label: 'Postal code' },
+  { key: 'voter_number', label: 'Voter number' },
   { key: 'tags', label: 'Tags' },
   { key: 'rating', label: 'Rating (the scale)' },
   { key: 'lat', label: 'Latitude' },
@@ -227,7 +232,7 @@ const FIELDS = [
 ];
 const SKIP = '';
 const fieldLabel = (key) => FIELDS.find((f) => f.key === key)?.label || key;
-const FIELD_WORD = { socials: 'social handles', email: 'email', phone: 'phone', address: 'address', house_number: 'house number', unit: 'unit', city: 'city', postal: 'postal code', tags: 'tags', rating: 'rating', lat: 'latitude', lng: 'longitude', volunteer: 'volunteer tag', donor: 'donor tag', voted: 'voted', instagram: 'Instagram', x: 'X', tiktok: 'TikTok', reddit: 'Reddit' };
+const FIELD_WORD = { socials: 'social handles', email: 'email', phone: 'phone', address: 'address', house_number: 'house number', unit: 'unit', city: 'city', postal: 'postal code', voter_number: 'voter number', tags: 'tags', rating: 'rating', lat: 'latitude', lng: 'longitude', volunteer: 'volunteer tag', donor: 'donor tag', voted: 'voted', instagram: 'Instagram', x: 'X', tiktok: 'TikTok', reddit: 'Reddit' };
 const MULTI = new Set(['tags']); // several columns can feed tags; every other field takes one column
 
 const normHeader = (h) =>
@@ -256,6 +261,8 @@ const EXACT = [
   ['address', /^(address|streetaddress|streetaddress1|address1|addressline1|street|street1|streetname|civicaddress|homeaddress|residentialaddress|mailingaddress|addr)$/],
   ['city', /^(city|town|municipality|locality|cityname)$/],
   ['postal', /^(postal|postalcode|postcode|zip|zipcode|pc)$/],
+  // The list of electors' own number for each voter (never a bare "ID": that is the rating's).
+  ['voter_number', /^(voternumber|voterno|voternum|voterid|votersid|voteridnumber|electorid|electornumber|electorno)$/],
   ['tags', /^(tags?|groups?|labels?|lists?|segments?|categories|category)$/],
   ['rating', /^(rating|supportlevel|supportid|id|idlevel|supportscore|canvassid|canvassrating|doorrating)$/],
   ['instagram', /^(instagram|insta|ig|instagramhandle|instagramusername)$/],
@@ -273,6 +280,7 @@ const CONTAINS = [
   ['lat', /latitude/],
   ['lng', /longitude/],
   ['postal', /postal|postcode|zip/],
+  ['voter_number', /voterid|voternumber|electorid|electornumber/],
   ['unit', /^(unit|apt|suite)|(house|home|suite|apt)unit$/],
   ['address', /address|street/],
   ['city', /(^|home|mailing|mail|res|residential|billing|primary|registered)city|^town|municipal/],
@@ -323,6 +331,10 @@ function guessMapping(scale, headers, records, noHeader = false, custom = []) {
     if (key === 'rating' && !looksLikeRatings(scale, values[i], /^(id|idlevel)$/.test(normHeader(headers[i])) ? 1 : 0.9)) return; // "ID" only if it holds 1/2/3/4/4D…
     if (loose && VALUE_CHECK[key] && values[i].length && !mostly(values[i], VALUE_CHECK[key], 0.6)) return;
     if (key === 'name' && mostly(values[i], EMAIL_RE)) return; // a "Contact" column of emails isn't a name
+    // A voter's own number: different on every row, with digits. A "Voter ID
+    // verified" column of yes/no (or any number that repeats) is not it —
+    // read as one, everyone who shares a value would be made one person.
+    if (key === 'voter_number' && values[i].length && (new Set(values[i].map((v) => v.toUpperCase())).size < values[i].length || !mostly(values[i], /\d/))) return;
     out[i] = key;
     taken.add(key);
   };
@@ -474,7 +486,7 @@ function toRow(scale, cells, mapping, ratingMap, homeCol = -1, roleMap = null, v
     if (key.startsWith(FIELD_KEY)) { fieldCell(row, key, SCI_RE.test(v) && i === homeCol ? '' : v); return; }
     if (key === 'tags') row.tags = row.tags ? `${row.tags};${v}` : v;
     else if (key === 'rating') { const code = resolveRating(scale, ratingMap, v); if (code) row.rating = code; }
-    else if (key === 'phone' && SCI_RE.test(v)) { /* digits lost in Excel */ }
+    else if ((key === 'phone' || key === 'voter_number') && SCI_RE.test(v)) { /* digits lost in Excel */ }
     else row[key] = v;
   });
   if (!row.phone && homeCol >= 0 && mapping[homeCol]) {
@@ -629,6 +641,46 @@ function InvalidList({ invalid, intro }) {
   );
 }
 
+// Rows the check found (by email, or by name with phone or street) on someone
+// with another voter number: a list numbered afresh, or a number typed wrong.
+// The person says what they are; a new answer checks again — with the
+// question left where it is, so an answer picked by keyboard keeps its place
+// and the next arrow key goes on from it. A row with the same email is that
+// person whatever the answer (routes/data.js).
+const OTHER_ANSWERS = [
+  ['keep', 'Yes — keep the numbers on file'],
+  ['take', 'Yes — use this file’s numbers'],
+  ['new', 'No — add them as new people'],
+];
+function OtherNumbers({ count, rows, answer, onAnswer }) {
+  return (
+    <fieldset className="vn-other">
+      <legend className="vn-other__head">
+        {plural(count, 'row matches', 'rows match')} someone on file with another voter number. {count === 1 ? 'The same person?' : 'The same people?'}
+      </legend>
+      {OTHER_ANSWERS.map(([v, words]) => (
+        <label key={v} className={`vn-other__pick${answer === v ? ' is-on' : ''}`}>
+          <input type="radio" name="vn-other" value={v} checked={answer === v} onChange={() => onAnswer(v)} />
+          <span>{words}</span>
+        </label>
+      ))}
+      {answer === 'new' && <p className="imp-hint imp-hint--sm">A row with the same email stays the same person.</p>}
+      <Reveal label="See them">
+        <ul className="imp-matches__list">
+          {rows.map((x) => (
+            <li key={x.row}>
+              <span className="mono muted">Row {fmtN(x.row)}</span> {x.name}
+              {x.person && x.person !== x.name ? <span className="muted"> · on file as {x.person}</span> : null}
+              <span className="muted"> — <span className="mono vn-num">{x.on_file}</span> on file · <span className="mono vn-num">{x.in_file}</span> here</span>
+            </li>
+          ))}
+        </ul>
+        {count > rows.length && <p className="imp-hint imp-hint--sm">First {fmtN(rows.length)} of {fmtN(count)}.</p>}
+      </Reveal>
+    </fieldset>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The screen: 1 Choose a file · 2 Match columns (then check) · 3 Import
 // ─────────────────────────────────────────────────────────────────────────────
@@ -682,11 +734,15 @@ function ImportFlow() {
   const pastBody = past && pastOk ? { past: { year: pastY, field_tags: pastFieldCols.filter(tagsField).map((c) => c.id) } } : {};
   const [bumped, setBumped] = useState(null); // { col, key } — a column switched off by a pick
   const [tag, setTag] = useState('');
-  const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, parts, error }
+  const [check, setCheck] = useState(null); // { phase, done, total, created, merged, unchanged, invalid, matches, otherNumbers, others, parts, error, again }
+  const checkRun = useRef(0); // the check under way: an older one, overtaken by a new answer, says nothing more
+  // Rows found on someone with another voter number: 'keep' theirs, 'take'
+  // the file's, or 'new' people (found by name only). Asked after the check.
+  const [otherNumber, setOtherNumber] = useState('keep');
   // Step 3 — import (then place on the map)
   const [imp, setImp] = useState(null); // { phase, sent, total, created, merged, unchanged, invalid, error, resumeAt }
 
-  const busy = Boolean(reading) || check?.phase === 'running' || imp?.phase === 'running';
+  const busy = Boolean(reading) || check?.phase === 'running' || Boolean(check?.again) || imp?.phase === 'running';
   const locked = busy || imp?.phase === 'done' || imp?.phase === 'error';
 
   // Don't lose a half-sent import to a stray tab close.
@@ -697,7 +753,7 @@ function ImportFlow() {
     return () => window.removeEventListener('beforeunload', warn);
   }, [imp?.phase]);
 
-  const resetAfterSource = () => { setCheck(null); setImp(null); setBumped(null); };
+  const resetAfterSource = () => { setCheck(null); setImp(null); setBumped(null); setOtherNumber('keep'); };
 
   const loadText = async (text, name, size = text.length) => {
     const what = `Reading ${fmtMB(size)}…`;
@@ -844,12 +900,27 @@ function ImportFlow() {
     const out = {};
     if (!source) return out;
     source.headers.forEach((_, i) => {
-      if (mapping[i] !== 'phone' && i !== homeCol) return;
+      if (mapping[i] !== 'phone' && mapping[i] !== 'voter_number' && i !== homeCol) return;
       const n = source.records.reduce((m, r) => m + (SCI_RE.test(String(r.cells[i] ?? '').trim()) ? 1 : 0), 0);
       if (n) out[i] = n;
     });
     return out;
   }, [source, mapping, homeCol]);
+  // Rows whose voter number another row of the file has: the same number
+  // is the same person, so a column that isn't each voter's own would fold
+  // people together — said under the column before anything is checked.
+  const voterCol = mapping.indexOf('voter_number');
+  const sharedVoters = useMemo(() => {
+    if (!source || voterCol < 0) return 0;
+    const seen = new Set();
+    let n = 0;
+    for (const r of source.records) {
+      const v = String(r.cells[voterCol] ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+      if (v.length < 3 || !/\d/.test(v)) continue;
+      if (seen.has(v)) n += 1; else seen.add(v);
+    }
+    return n;
+  }, [source, voterCol]);
   const ratingCol = mapping.indexOf('rating');
   const hasName = mapping.some((k) => k === 'name' || k === 'first' || k === 'middle' || k === 'last');
   const usedCount = mapping.filter(Boolean).length;
@@ -957,14 +1028,21 @@ function ImportFlow() {
   ].filter(Boolean);
 
   // ── Check (dry run: nothing is saved) ──
-  const runCheck = async () => {
-    const acc = { ...ZERO, invalid: [], matches: [] };
+  // numbers: the answer about other voter numbers. A new answer checks again
+  // (again): the last check stays on screen, its counts giving way to
+  // "Checking…", so the question — and the keyboard's place in it — stays put.
+  const runCheck = async (numbers = otherNumber, { again = false } = {}) => {
+    const acc = { ...ZERO, invalid: [], matches: [], otherNumbers: 0, others: [] };
     const parts = Math.ceil(total / CHECK_CHUNK);
-    setCheck({ phase: 'running', done: 0, total, parts, ...acc });
+    const run = (checkRun.current += 1);
+    const show = (next) => { if (run === checkRun.current) setCheck(next); };
+    const going = (done) => show(again ? (c) => c && { ...c, again: { done, total } } : { phase: 'running', done, total, parts, ...acc });
+    going(0);
     try {
       for (let start = 0; start < total; start += CHECK_CHUNK) {
+        if (run !== checkRun.current) return; // a newer answer is being checked
         const part = partAt(start, CHECK_CHUNK);
-        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true, ...pastBody });
+        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, dryRun: true, otherNumber: numbers, ...pastBody });
         acc.created += r.created || 0;
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
@@ -974,11 +1052,15 @@ function ImportFlow() {
             acc.matches.push({ ...d, row: part[d.row - 1]?.row ?? d.row });
           }
         }
-        setCheck({ phase: 'running', done: start + part.length, total, parts, ...acc });
+        acc.otherNumbers += r.other_numbers || 0;
+        for (const x of r.other_number_rows || []) {
+          if (acc.others.length < 50) acc.others.push({ ...x, row: part[x.row - 1]?.row ?? x.row });
+        }
+        going(start + part.length);
       }
-      setCheck({ phase: 'done', done: total, total, parts, ...acc });
+      show({ phase: 'done', done: total, total, parts, ...acc });
     } catch (e) {
-      setCheck({ phase: 'error', done: 0, total, parts, ...acc, error: errText(e) });
+      show({ phase: 'error', done: 0, total, parts, ...acc, error: errText(e) });
     }
   };
 
@@ -992,7 +1074,7 @@ function ImportFlow() {
     try {
       for (; start < total; start += IMPORT_CHUNK) {
         const part = partAt(start, IMPORT_CHUNK);
-        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, ...pastBody });
+        const r = await apiPost('/data/import', { rows: part.map((x) => x.data), tag: tagClean || undefined, otherNumber, ...pastBody });
         acc.created += r.created || 0;
         acc.merged += r.merged || 0;
         acc.unchanged += r.unchanged || 0;
@@ -1106,7 +1188,7 @@ function ImportFlow() {
               {tagClean ? <> · <span className="chip imp-chip">{tagWord(tagClean)}</span></> : null}
             </p>
             {!imp && (
-              <button type="button" className="btn btn-quiet imp-tap" onClick={() => setCheck(null)}>Change</button>
+              <button type="button" className="btn btn-quiet imp-tap" onClick={() => { checkRun.current += 1; setCheck(null); }}>Change</button>
             )}
           </div>
         ) : (
@@ -1154,6 +1236,11 @@ function ImportFlow() {
                     {sciByCol[i] > 0 && (
                       <p className="imp-map__note is-warn">
                         {plural(sciByCol[i], 'number has', 'numbers have')} lost {sciByCol[i] === 1 ? 'its' : 'their'} last digits in Excel (like 1.6047E+10), so {sciByCol[i] === 1 ? 'it' : 'they'} won’t be imported. In the spreadsheet, format this column as Text (or Number with no decimals), save again, and choose the file again.
+                      </p>
+                    )}
+                    {mapping[i] === 'voter_number' && sharedVoters > 0 && (
+                      <p className="imp-map__note is-warn">
+                        {plural(sharedVoters, 'row has', 'rows have')} a number another row has, and the same number is read as the same person. Not each voter’s own number? Set this column to Don’t import.
                       </p>
                     )}
                     {i === homeCol && mapping[i] !== 'phone' && mapping[i] && !sciByCol[i] && (
@@ -1413,7 +1500,7 @@ function ImportFlow() {
               </div>
             ) : (
               <div className="imp-actions">
-                <button type="button" className="btn btn-primary imp-tap" onClick={runCheck} disabled={!hasName || !pastOk || busy || locked}>
+                <button type="button" className="btn btn-primary imp-tap" onClick={() => runCheck()} disabled={!hasName || !pastOk || busy || locked}>
                   Check {plural(total, 'row', 'rows')}
                 </button>
                 <span className="imp-line imp-line--inline">{fmtN(usedCount)} of {fmtN(source.headers.length)} columns</span>
@@ -1430,18 +1517,30 @@ function ImportFlow() {
           <>
             {!imp && (
               <div className="imp-result" role="status">
-                <Counts
-                  items={[
-                    ['New', check.created, 'ok'],
-                    ['Update', check.merged],
-                    ['Same', check.unchanged],
-                    ['Can’t import', check.invalid.length, check.invalid.length ? 'danger' : null],
-                  ]}
-                />
+                {check.again ? (
+                  <p className="imp-line mono">Checking {fmtN(check.again.done)} of {fmtN(check.again.total)}…</p>
+                ) : (
+                  <Counts
+                    items={[
+                      ['New', check.created, 'ok'],
+                      ['Update', check.merged],
+                      ['Same', check.unchanged],
+                      ['Can’t import', check.invalid.length, check.invalid.length ? 'danger' : null],
+                    ]}
+                  />
+                )}
                 {check.parts > 1 && <p className="imp-hint imp-hint--sm">Checked in parts — a few far-apart repeats may count as new.</p>}
-                {check.matches.length > 0 && (
+                {check.otherNumbers > 0 && (
+                  <OtherNumbers count={check.otherNumbers} rows={check.others} answer={otherNumber}
+                    onAnswer={(v) => { setOtherNumber(v); runCheck(v, { again: true }); }} />
+                )}
+                {!check.again && check.matches.length > 0 && (
                   <Reveal label="See matches">
-                    <p className="imp-hint imp-hint--sm">Blanks get filled. Nothing is overwritten.</p>
+                    <p className="imp-hint imp-hint--sm">
+                      {otherNumber === 'take' && check.otherNumbers > 0
+                        ? 'Blanks get filled and voter numbers replaced. Nothing else is overwritten.'
+                        : 'Blanks get filled. Nothing is overwritten.'}
+                    </p>
                     {check.merged > check.matches.length && (
                       <p className="imp-hint imp-hint--sm">First {fmtN(check.matches.length)} of {fmtN(check.merged)}.</p>
                     )}
@@ -1455,13 +1554,15 @@ function ImportFlow() {
                     </ul>
                   </Reveal>
                 )}
-                <InvalidList
-                  invalid={check.invalid}
-                  intro={`${plural(check.invalid.length, 'row', 'rows')} can’t be imported. Fix ${check.invalid.length === 1 ? 'it' : 'them'} in the spreadsheet.`}
-                />
-                {nothingToDo && <p className="imp-line">Everyone is already up to date.</p>}
-                {nothingValid && <p className="imp-line">Nothing to import yet. Fix the rows above, or change a column.</p>}
-                {!nothingNew && (
+                {!check.again && (
+                  <InvalidList
+                    invalid={check.invalid}
+                    intro={`${plural(check.invalid.length, 'row', 'rows')} can’t be imported. Fix ${check.invalid.length === 1 ? 'it' : 'them'} in the spreadsheet.`}
+                  />
+                )}
+                {!check.again && nothingToDo && <p className="imp-line">Everyone is already up to date.</p>}
+                {!check.again && nothingValid && <p className="imp-line">Nothing to import yet. Fix the rows above, or change a column.</p>}
+                {!check.again && !nothingNew && (
                   <div className="imp-actions">
                     <button type="button" className="btn btn-primary imp-tap" onClick={() => runImport(0)}>
                       Import {plural(willWrite, 'person', 'people')}
@@ -1531,3 +1632,12 @@ function ImportFlow() {
     </div>
   );
 }
+
+// The pieces Donations → Import donations shares (pages/ImportGifts.jsx): how a
+// file is read, and the steps’ small parts. (Which column is what is its
+// own: components/GiftColumns.js.)
+export {
+  readTable, shapeTable, decodeBytes, isSpreadsheetBinary,
+  fmtN, fmtMB, plural, breathe, DELIM_NAMES, MAX_FILE_BYTES,
+  Step, Bar, Reveal, InvalidList,
+};

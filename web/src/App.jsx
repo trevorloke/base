@@ -51,6 +51,8 @@ const Duplicates = lazy(() => import('./pages/Duplicates.jsx'));
 const MembershipForm = lazy(() => import('./pages/MembershipForm.jsx'));
 const DataPage = lazy(() => import('./pages/Data.jsx'));
 const Stewardship = lazy(() => import('./pages/Stewardship.jsx'));
+const ImportGifts = lazy(() => import('./pages/ImportGifts.jsx'));
+const GiftsWaiting = lazy(() => import('./pages/GiftsWaiting.jsx'));
 const RatingScale = lazy(() => import('./pages/RatingScale.jsx'));
 const Fields = lazy(() => import('./pages/Fields.jsx'));
 const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
@@ -242,6 +244,9 @@ export default function App({ mode = 'field' }) {
           <Route path="/people/membership-form" element={<MembershipForm />} />
           <Route path="/data" element={<DataPage />} />
           <Route path="/money/stewardship" element={<Stewardship />} />
+          {/* Gifts made in another tool, from its file — and those that need a donor. */}
+          <Route path="/money/import" element={<ImportGifts />} />
+          <Route path="/money/import/waiting" element={<GiftsWaiting />} />
           <Route path="/surveys/:id" element={<SurveysEdit />} />
           <Route path="/surveys/:id/results" element={<SurveysResults />} />
           <Route path="/rating-scale" element={<RatingScale />} />

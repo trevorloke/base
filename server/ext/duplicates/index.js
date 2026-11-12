@@ -158,7 +158,8 @@ const isLoginEmail = async (tx, ws, email) => {
   )).rows[0];
 };
 
-const FILL = ['email', 'phone', 'address', 'house_number', 'unit', 'city', 'postal', 'rating', 'rated_at', 'voted_at'];
+// voter_number: the list of electors' number (ext/voternumber), as any other blank.
+const FILL = ['email', 'phone', 'address', 'house_number', 'unit', 'city', 'postal', 'rating', 'rated_at', 'voted_at', 'voter_number'];
 
 // Drop's "Not the same" rulings become keep's: whoever the desk said isn't
 // drop isn't keep either (never keep and keep). Then drop's go.

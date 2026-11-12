@@ -15,6 +15,7 @@ import { buildSample } from '../lib/sample.js';
 import { logGift } from '../lib/gifts.js';
 import { runHooks } from '../lib/hooks.js';
 import { readVoted } from '../ext/voted/import.js';
+import { voterNumber } from '../ext/voternumber/index.js';
 
 const app = new Hono();
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -39,6 +40,13 @@ const nameOnly = (p) => !p.email && !p.phone && !p.address;
 // person on file by email, then name + phone, then name + address; a row with
 // none of the three matches a person of the same name who has none either.
 // Anything else is new — so importing the same file again doubles no one.
+// A voter number (ext/voternumber) comes before all of them when the row and
+// a person on file both have one: the same number is that person. A row found
+// the old way on someone with another number (a list numbered afresh, a
+// number typed wrong) is counted for the check, and otherNumber says what it
+// is: that person, keeping their number (as before there were numbers) or
+// taking the file's — or, found by name, someone new. Never by email: an
+// email is one person's.
 const rowSchema = z.object({
   name: z.string().max(300).nullish(),
   first: z.string().max(150).nullish(),
@@ -50,6 +58,8 @@ const rowSchema = z.object({
   unit: z.string().max(40).nullish(),
   city: z.string().max(120).nullish(),
   postal: z.string().max(20).nullish(),
+  // The list of electors' own number for this voter (ext/voternumber).
+  voter_number: z.union([z.string().max(60), z.number()]).nullish(),
   tags: z.union([z.string().max(2000), z.array(z.string().max(40)).max(50)]).nullish(),
   rating: z.string().max(80).nullish(), // a code or the scale's words: "4B", "Locke", "Strong yes"
   // A list with the number and the street in two columns: "13450" + "104 Ave".
@@ -93,6 +103,9 @@ const importInput = z.object({
     year: z.number().int().min(1950).max(2100),
     field_tags: z.array(z.uuid()).max(40).default([]),
   }).nullish(),
+  // A row found on someone with another voter number: keep theirs, take the
+  // file's, or (found by name) a new person. See the rules above.
+  otherNumber: z.enum(['keep', 'take', 'new']).default('keep'),
 });
 
 // A 1/0 column: 1, yes, y, true, x (any case) say yes.
@@ -173,6 +186,7 @@ const cleanRow = (raw, i, scale, past = null) => {
       unit: norm(v.unit) || null,
       city: norm(v.city) || null,
       postal: norm(v.postal).toUpperCase() || null,
+      voter_number: voterNumber(v.voter_number),
       tags: [...new Set(tags.map((t) => norm(t)).filter((t) => t && t.length <= 40))].slice(0, 50),
       roles: [...new Set(v.roles || [])],
       // No day (or one in the future): the status stays a profile field only.
@@ -213,8 +227,10 @@ const candidates = async (tx, workspaceId, clean) => {
      clean.filter(nameOnly).map((r) => r.name)],
   )).rows) keys[r.kind].push(r.k);
   const emails = [...new Set(clean.map((r) => r.email).filter(Boolean))];
+  const voters = [...new Set(clean.map((r) => r.voter_number).filter(Boolean))];
   const live = 'select id from persons where workspace_id = $1 and deleted_at is null';
   const lookups = [
+    [voters, eachValue(`${live} and voter_number = k.v`)],
     [emails, eachValue(`${live} and lower(email) = k.v`)],
     [keys.p, eachValue(`${live} and ${NAME_PHONE('name', 'phone')} = k.v`)],
     [keys.a, eachValue(`${live} and ${NAME_ADDR('name', 'address')} = k.v`)],
@@ -228,7 +244,7 @@ const candidates = async (tx, workspaceId, clean) => {
   if (!ids.size) return [];
   return (await tx.query(
     `select p.* from unnest($2::uuid[]) as k(id) cross join lateral (
-       select id, name, email, phone, address, house_number, unit, city, postal, tags, socials, rating, lat, lng, created_at from persons
+       select id, name, email, phone, address, house_number, unit, city, postal, tags, socials, rating, lat, lng, voter_number, created_at from persons
        where id = k.id and workspace_id = $1 offset 0) as p
      order by p.created_at, p.id`, [workspaceId, [...ids]],
   )).rows.map(({ created_at: _, ...p }) => ({ ...p, tags: parseJson(p.tags, []), socials: parseJson(p.socials, {}) }));
@@ -250,7 +266,7 @@ app.post('/import', async (c) => {
   const ctx = c.get('ctx');
   const parsed = importInput.safeParse(await c.req.json().catch(() => ({})));
   if (!parsed.success) return c.json({ error: parsed.error.issues[0].message }, 400);
-  const { rows, tag, dryRun, past } = parsed.data;
+  const { rows, tag, dryRun, past, otherNumber } = parsed.data;
 
   // Features' own columns (ext/fields: a person's profile fields), checked
   // with the row — a cell that doesn't fit refuses it — and filled after it.
@@ -361,7 +377,9 @@ app.post('/import', async (c) => {
     const existing = await candidates(tx, ctx.workspaceId, clean);
     const byEmail = new Map(); const byNamePhone = new Map(); const byNameAddr = new Map();
     const byName = new Map(); // name-only people (the oldest of a name wins)
+    const byVoter = new Map(); // by voter number (the oldest with a number wins)
     const index = (p) => {
+      if (p.voter_number && !byVoter.has(p.voter_number)) byVoter.set(p.voter_number, p);
       if (p.email) byEmail.set(lower(p.email), p);
       if (p.phone) byNamePhone.set(`${nameKey(p.name)}|${digits(p.phone)}`, p);
       if (p.address) byNameAddr.set(`${nameKey(p.name)}|${lower(p.address)}|${lower(p.unit)}`, p);
@@ -371,18 +389,36 @@ app.post('/import', async (c) => {
     existing.forEach(index);
 
     let created = 0; let merged = 0; let unchanged = 0;
+    let otherNumbers = 0; const otherRows = [];
     const decisions = [];
     for (const r of clean) {
-      const match = (r.email && byEmail.get(r.email))
-        || (r.phone && byNamePhone.get(`${nameKey(r.name)}|${digits(r.phone)}`))
-        || (r.address && byNameAddr.get(`${nameKey(r.name)}|${lower(r.address)}|${lower(r.unit)}`))
-        || (nameOnly(r) && byName.get(nameKey(r.name)));
+      // The same voter number is the same person. Without one in common the
+      // row is found as before there were numbers; found on someone with
+      // another number, it is counted, and otherNumber decides.
+      const byNumber = r.voter_number && byVoter.get(r.voter_number);
+      const email = !byNumber && r.email && byEmail.get(r.email);
+      const named = byNumber || email ? [] : [
+        r.phone && byNamePhone.get(`${nameKey(r.name)}|${digits(r.phone)}`),
+        r.address && byNameAddr.get(`${nameKey(r.name)}|${lower(r.address)}|${lower(r.unit)}`),
+        nameOnly(r) && byName.get(nameKey(r.name)),
+      ].filter(Boolean);
+      const differs = (p) => !!(p && r.voter_number && p.voter_number && p.voter_number !== r.voter_number);
+      const found = byNumber || email || named[0];
+      if (differs(found)) {
+        otherNumbers += 1;
+        if (otherRows.length < 50) {
+          otherRows.push({ row: r.index + 1, name: r.name, person: found.name, on_file: found.voter_number, in_file: r.voter_number, email: !!email });
+        }
+      }
+      const match = byNumber || email || (otherNumber === 'new' ? named.find((p) => !differs(p)) : named[0]);
       if (match) {
-        // Merge: fill blanks, union tags — never overwrite what's on file.
+        // Merge: fill blanks, union tags — never overwrite what's on file
+        // (but a voter number, when the person said to take the file's).
         const patch = {};
-        for (const k of ['email', 'phone', 'address', 'unit', 'city', 'postal', 'house_number']) {
+        for (const k of ['email', 'phone', 'address', 'unit', 'city', 'postal', 'house_number', 'voter_number']) {
           if (!match[k] && r[k]) patch[k] = r[k];
         }
+        if (otherNumber === 'take' && differs(match)) patch.voter_number = r.voter_number;
         const tags = [...new Set([...(match.tags || []), ...r.tags])].slice(0, 50);
         if (tags.length !== (match.tags || []).length) patch.tags = tags;
         if (!match.rating && r.rating) patch.rating = r.rating;
@@ -402,12 +438,14 @@ app.post('/import', async (c) => {
           const next = { ...match, ...patch };
           await tx.query(
             `update persons set email = $3, phone = $4, address = $5, unit = $6, city = $7, postal = $8, tags = $9,
-               rating = $10, socials = $11, lat = $12, lng = $13, house_number = $14, updated_at = now() where id = $1 and workspace_id = $2`,
+               rating = $10, socials = $11, lat = $12, lng = $13, house_number = $14, voter_number = $15, updated_at = now() where id = $1 and workspace_id = $2`,
             [match.id, ctx.workspaceId, next.email, next.phone, next.address, next.unit, next.city, next.postal,
              JSON.stringify(next.tags || []), next.rating || null, JSON.stringify(next.socials || {}),
-             next.lat ?? null, next.lng ?? null, next.house_number || null],
+             next.lat ?? null, next.lng ?? null, next.house_number || null, next.voter_number || null],
           );
           emit('person', match.id, 'update', { ...patch, source: 'import' });
+          // A number given up finds them no more.
+          if (patch.voter_number && match.voter_number && byVoter.get(match.voter_number) === match) byVoter.delete(match.voter_number);
           Object.assign(match, patch);
           // The lookups key on name, email, phone and address: only a change
           // to those moves this person in them (a house number read off an
@@ -421,14 +459,15 @@ app.post('/import', async (c) => {
         const p = { id, name: r.name, email: r.email, phone: r.phone, address: r.address, unit: r.unit,
           city: r.city, postal: r.postal, tags: r.tags, socials: r.socials, rating: r.rating,
           lat: r.pin?.lat ?? null, lng: r.pin?.lng ?? null, house_number: r.house_number,
+          ...(r.voter_number ? { voter_number: r.voter_number } : {}),
           ...(r.first || r.middle || r.last ? { first_name: r.first, middle_name: r.middle, last_name: r.last } : {}) };
         if (write) {
           await tx.query(
-            `insert into persons (id, workspace_id, name, email, phone, address, unit, city, postal, tags, socials, rating, lat, lng, house_number, first_name, last_name, middle_name)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+            `insert into persons (id, workspace_id, name, email, phone, address, unit, city, postal, tags, socials, rating, lat, lng, house_number, first_name, last_name, middle_name, voter_number)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
             [id, ctx.workspaceId, p.name, p.email, p.phone, p.address, p.unit, p.city, p.postal,
              JSON.stringify(p.tags), JSON.stringify(p.socials), p.rating, p.lat, p.lng, p.house_number,
-             r.first || null, r.last || null, r.middle || null],
+             r.first || null, r.last || null, r.middle || null, r.voter_number],
           );
           emit('person', id, 'create', { ...p, source: 'import' });
         }
@@ -441,7 +480,7 @@ app.post('/import', async (c) => {
     }
     // What the features held back for a batch (a new person's profile fields).
     if (write) for (const x of extras) if (x.finish) await x.finish(tx);
-    return { created, merged, unchanged, decisions };
+    return { created, merged, unchanged, decisions, other_numbers: otherNumbers, other_number_rows: otherRows };
   };
 
   if (dryRun) {

@@ -124,7 +124,7 @@ const DATASETS = {
   people: { sql: `select p.first_name, p.middle_name, p.last_name, p.name, p.email, p.phone, p.unit, p.house_number,
       case when p.house_number is not null and p.address like p.house_number || ' %' then substr(p.address, length(p.house_number) + 2) else p.address end as street,
       p.address, p.city, p.postal, p.rating, p.rated_at, p.tags, p.lat, p.lng,
-      to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.kind, p.created_at, p.id as _id
+      to_char(p.voted_at, 'YYYY-MM-DD') as voted, p.voter_number, p.kind, p.created_at, p.id as _id
     from persons p where p.workspace_id = $1 and p.deleted_at is null order by lower(p.name)`, tags: true, fields: true },
   // Everyone who has been a member: each term, paper or website.
   members: { sql: `select p.first_name, p.last_name, p.email, p.phone, p.address, p.city, p.postal,
@@ -140,7 +140,9 @@ const DATASETS = {
   shifts: { sql: `select s.title, s.starts_at, s.ends_at, s.location, s.role, s.capacity,
       (select count(*)::int from shift_assignments a where a.shift_id = s.id and a.status in ('assigned', 'confirmed', 'completed')) as booked
     from shifts s where s.workspace_id = $1 and s.deleted_at is null order by s.starts_at` },
-  gifts: { sql: `select p.name as donor, p.email, g.amount_cents / 100.0 as amount, g.date, g.method, g.cadence, coalesce(g.slate, 'council') as slate, g.note, g.flagged, g.flag_reason, g.created_at
+  // imported: brought in from another tool's file (ext/giftimport) — no receipt was made here; their_receipt: that tool's number for it.
+  gifts: { sql: `select p.name as donor, p.email, g.amount_cents / 100.0 as amount, g.date, g.method, g.cadence, coalesce(g.slate, 'council') as slate, g.note, g.flagged, g.flag_reason, g.created_at,
+      case when g.attrs->>'source' = 'import' then 'yes' end as imported, g.attrs->>'import_receipt' as their_receipt
     from gifts g join persons p on p.id = g.person_id where g.workspace_id = $1 and g.deleted_at is null order by g.date desc` },
   subscribers: { sql: `select email, name, status, source, created_at, unsubscribed_at from subscriptions where workspace_id = $1 order by created_at desc` },
   contacts: { sql: `select p.name, c.channel, c.outcome, c.rating, c.note, c.place, u.name as by_name, c.created_at

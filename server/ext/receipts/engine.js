@@ -38,6 +38,9 @@ export const onEvents = async (tx, meta, events) => {
   for (const ev of events) {
     if (ev.entityType === 'gift') {
       if (ev.op === 'create') {
+        // A gift brought in from another tool's file (ext/giftimport) was
+        // receipted there: no number is used for it here, nothing is emailed.
+        if (ev.payload?.source === 'import') continue;
         settings ??= await loadSettings(tx, meta.workspaceId);
         await issueReceipt(tx, { ...ctx, settings }, { id: ev.entityId, ...ev.payload });
       } else if (ev.op === 'void') {

@@ -31,6 +31,11 @@ test('staff without Donations: no gift, no form, no money screens; no settings',
   assert.ok(labels(screens).includes('Your profile'));
 });
 
+test('Import donations is offered to managers and the treasurer only, as Donations → More offers it', () => {
+  const offered = (role) => labels(commandsFor({ role, areas: ['people', 'money', 'data'] }, NAV).screens).includes('Import donations');
+  assert.deepEqual(['manager', 'treasurer', 'staff', 'volunteer'].map(offered), [true, true, false, false], 'staff would find a page that only says who may');
+});
+
 test('a volunteer given Outreach: its jobs are the desk’s — no jobs, and only what the area opens', () => {
   const vol = { role: 'volunteer', areas: ['outreach'] };
   const { actions, screens } = commandsFor(vol, [{ to: '/outreach', label: 'Outreach' }]);
@@ -44,6 +49,10 @@ test('what’s typed: the label’s start first, then a word in it, then its oth
   const all = [...screens, ...actions];
   assert.equal(rank(all, 'don')[0].label, 'Donations');
   assert.equal(rank(all, 'gift')[0].label, 'Log a gift');
+  // Once something is typed the bar lists the screens that fit before the jobs (CommandBar.jsx): were a
+  // screen to answer to "gift", Enter would open it instead of the gift form.
+  assert.deepEqual(labels(rank(screens, 'gift')), [], 'no screen answers to “gift”');
+  assert.ok(labels(rank(screens, 'import')).includes('Import donations') && labels(rank(screens, 'donations file')).includes('Import donations'));
   assert.equal(rank(all, 'turf')[0].label, 'Turfs and walk lists');
   assert.ok(labels(rank(all, 'turf')).includes('Draw a turf'));
   assert.equal(rank(all, 'membership')[0].label, 'Enter a membership form');

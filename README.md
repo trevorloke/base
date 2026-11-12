@@ -50,7 +50,7 @@ button, no paragraphs, everything else one tap away.
 | **Scripts** | What to say at the door and on the phone (`/scripts`, desk): shown as *Script* above the rating buttons on the walk list, the door card and Calls, the voter's and the canvasser's first names filled in, kept on the phone |
 | **People** | Everyone, filterable by rating / tag / role / the campaign's own fields, and by the field's cuts (never knocked or not in 7–30 days, the last outcome, a turf, a postal code, without a tag, what they did on the website — saved lists, blasts and Calls keep them); profiles with socials, roles, gifts, history, *More details* and who they know; **Calls** works a list one person at a time; **My people** is each volunteer's own circle |
 | **Shifts** | Schedule a week by tap: **Shifts → Week** lists each day's shifts from 6 am, *+* adds them — what, where, which days, when — with nothing typed and no number asked, a card moves by a drag or a tap, and a week copies to the next; tap a name and it stays in hand while you tap its shifts; notify by email + text with instructions and a link; volunteers see the list a day at a time and tap *Count me in* on the row; a shift can carry turfs; *Count me in* puts the walk list on your phone; the desk can *Edit* a shift (moved in time or place → *Let them know*) or *Call off* one, which takes back the walk lists it gave. Each shift has a **crew board**: drag volunteers on from a tray (free or busy then, asked to volunteer, new), onto its turfs — each person gets only their turf's walk list — or *No walk list*; team lead and driver; *Here* / *No-show* on the day; *Split the rest evenly*. **Shifts → Volunteers** is the roster: asked to volunteer, new, active, lapsed, by role; call, text and *Put on a shift* in a tap |
-| **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers — the only money base.win tracks |
+| **Donations** | Gifts (one-time / monthly), each to one slate — city council or school board — with the entity-keyed cap engine (the annual limit is per contributor per slate); receipts; donor tiers; gifts made in another tool, brought in from its file; the financial agent's filing dates, counted down — the only money base.win tracks |
 | **Signs** | Billboards (4×8), large (4×4), lawn — requested → installed → removed |
 | **Lists** | Saved filters (a tag, a rating band, a role, has an email…) and hand-picked lists of people: an audience for an email or text blast, a CSV, a report; People's *Save as a list* starts one |
 | **Reports** | The campaign in numbers (people by rating, tags, cities, people added by week, contacts by week, donations by month, the newsletter list, sends), each downloadable as CSV; any table as a spreadsheet; the full JSON export; Field, by turf (coverage, talks, support found, not-homes; by canvasser; CSV) |
@@ -204,6 +204,63 @@ than a week after they came off is refused. Contacts are door, phone, text or
   *Next steps* — one per donor with a date (*Coffee after the debate*), the
   due ones first. *Lapsed* — gave in an earlier year, not yet this one.
   *Top donors this year* — and when each was last thanked.
+- **Gifts made in another tool** (Donations → More → *Import donations*, or
+  Import & export; managers and the treasurer): a CSV or Excel file of
+  donations taken elsewhere. No tool's column names are assumed — a column
+  is matched by what its heading means, then by its values, and you correct
+  it; a way of paying or a slate it can't read is asked about (the limit is
+  per slate), and with no slate column it says every gift goes to the first
+  slate. The check saves nothing and says the gifts and their total, the donors
+  found, the gifts to settle, what is already here, what can't come in, and
+  anyone the file would take over the year's limit. Each gift then goes
+  through the same path as one typed at the desk, oldest first, so the limit
+  counts it and the gift that crosses it is flagged — but it is quiet: no
+  receipt number is used and nothing is emailed (the other tool's receipt
+  number is kept as text), no ladder starts (one whose goal is *Gave* counts
+  it by the day it was given), and it is not in *To thank*. It counts in the
+  totals, donor tiers, *Lapsed* and the disclosure, and wears *Imported*.
+  The donor is found by the same email, else the same first and last name
+  with the same phone, postal code or street; no sure record, or more than
+  one, and the gift waits under **Needs you** (*12 imported gifts need a
+  donor*) for a person to pick the record, find someone else, add a new
+  person or leave it out (listed at the pile's foot, *Left out · 3*, to
+  bring back whenever; Donations → More leads there — *3 imported gifts
+  left out* — once nothing else waits). The gift's number in the other tool — or, without
+  one, donor, amount, date and how it was paid, as the file writes it — is
+  kept on it, so the same file twice adds nothing. A row with the same
+  donor, amount and day as a gift already on the books another way (typed
+  at the desk, given online) is pointed out in the check (*1 row looks like
+  a gift already typed in here*), with *Leave it out*; one gift on the
+  books answers for one row, however many calls the file comes in by. A
+  *Payment status* column brings in only the payments that went through:
+  refunded, failed or pending ones are left out, and a word it doesn't
+  know (the other tool's *Posted*, say) is asked about and left out until
+  you say it comes in. Without one, take
+  refunded payments out of the file first; a gift refunded after it came
+  in stays on the books until it is voided. An import can be taken back
+  whole for a day.
+- **Filing dates** (Donations → More → *Filing dates*, managers and the
+  treasurer): two dates the financial agent types in, each a name and a day
+  (*Disclosure statement due*). Donations counts down to each under the big
+  number; Today lists the ones within 30 days for the desk that handles
+  money. base.win knows no law's dates: what is due and when is the
+  financial agent's to confirm and enter.
+- **Donations says how it stands**: the big number is *Raised this year*,
+  added up by the server; it, *Needs you* and the gift list say *Loading…*
+  while a read is out and *Unavailable — Try again* when one failed — never
+  a dash or a block that isn't there.
+- **Voter number** (a profile's *More details*, the desk): the number a list
+  of electors gives each voter. People → Import fills it from a *Voter ID*
+  column and matches on it first — the same number is the same person
+  however the name and address are written (three or more letters and
+  digits with a digit among them: a yes/no or 1/0 column is never read as
+  one, and rows that share a number are pointed out before the check). A
+  row found by email, or by name with phone or street, on someone with
+  another number — a list numbered afresh, a number typed wrong — is
+  counted in the check, which asks: the same people, keeping the numbers on
+  file (as it does unless told) or taking the file's, or new people (never
+  for a row with the same email). It is in the People spreadsheet and the
+  full export, a merge keeps it, and a volunteer never receives it.
 - **Membership form** (People → More → *Enter a membership form*, the desk
   that handles money): the paper membership form, box for box and in its
   order. Name, gender, birth date, email, mobile, address; citizen or
@@ -394,10 +451,13 @@ than a week after they came off is refused. Contacts are door, phone, text or
   voter file, or another tool's export (Mailchimp, NationBuilder, VAN and
   the like): the columns match themselves, nothing is saved until the
   check, and the same file twice adds no one twice; a voted file the same
-  way; the website's sign-ups through its key. **Out:** each table as a
-  spreadsheet — people (with *voted*, and it reads straight back in),
-  contacts, gifts, volunteers and their roles, signs, shifts, subscribers,
-  lists — and everything in one JSON file for a backup or a move.
+  way; gifts made in another tool, from its file (*Import donations*); the
+  website's sign-ups through its key. **Out:** each table as a
+  spreadsheet — people (with *voted* and the voter number, and it reads
+  straight back in), contacts, gifts (which came from a file, and the other
+  tool's receipt number), volunteers and their roles, signs, shifts,
+  subscribers, lists — and everything in one JSON file for a backup or a
+  move.
 - **GOTV mode** (Today → More → *GOTV & voting days*, managers): list the
   advance-voting days and election day, and GOTV mode turns itself on for
   each of them in the campaign's day (or on by hand, any day). While it's
