@@ -85,7 +85,7 @@ api.get('/banks/:id', async (c) => {
   if (!UUID.test(id)) return c.json({ error: 'not found' }, 404);
   if (!isDesk(ctx)) return c.json({ error: 'desk only' }, 403);
   const b = (await db.query(
-    `select b.*, l.name as list_name, cd.name as candidate_name from call_banks b
+    `select b.*, l.name as list_name, cd.name as candidate_name, cd.removed_at is not null as candidate_removed from call_banks b
        left join lists l on l.id = b.list_id and l.deleted_at is null left join candidates cd on cd.id = b.candidate_id
       where b.id = $1 and b.workspace_id = $2 and b.deleted_at is null`, [id, ws],
   )).rows[0];

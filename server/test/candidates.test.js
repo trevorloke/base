@@ -568,6 +568,15 @@ test('removing a candidate closes their call time', async () => {
   const ev = (await db.query("select payload from events where entity_type = 'call_bank' and entity_id = $1 order by seq desc limit 1", [ct.quinnBank])).rows[0];
   assert.equal(ev.payload.closed, true);
   assert.ok((await db.query('select closed_at from call_banks where id = $1', [ct.patBank])).rows[0].closed_at === null, 'Pat’s stays open');
+  // Reopened, it would be nobody's to call and nobody's to hand out: it stays
+  // closed, and the desk is told so (no Reopen to tap).
+  const again = await mgr.action('bank.update', { id: ct.quinnBank, closed: false });
+  assert.deepEqual([again.status, again.json.error], [409, 'Quinn Example is no longer a candidate — make a new bank']);
+  assert.ok((await db.query('select closed_at from call_banks where id = $1', [ct.quinnBank])).rows[0].closed_at);
+  assert.equal(ok(await mgr.get(`/api/banks/${ct.quinnBank}`)).bank.candidate_removed, true);
+  assert.equal(ok(await mgr.get(`/api/banks/${ct.patBank}`)).bank.candidate_removed, false);
+  // A rename on the closed bank is still the desk's.
+  ok(await mgr.action('bank.update', { id: ct.quinnBank, name: 'Quinn’s old call time' }));
 });
 
 test('calltime.log: a number already answered is not answered twice', async () => {

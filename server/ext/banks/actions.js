@@ -162,6 +162,13 @@ export const actions = {
       if (b.closed_at && !closed && b.list_id && !(await loadList(tx, ctx.workspaceId, b.list_id))) {
         throw httpError(409, 'The list this bank called is gone — make a new bank');
       }
+      // Removing a candidate closes their call time. Reopened still theirs,
+      // it would be nobody's to call and nobody's to hand out.
+      const keeps = input.candidate_id === undefined ? b.candidate_id : (call?.candidate?.id || null);
+      if (b.closed_at && !closed && keeps) {
+        const gone = (await tx.query('select name from candidates where id = $1 and removed_at is not null', [keeps])).rows[0];
+        if (gone) throw httpError(409, `${gone.name} is no longer a candidate — make a new bank`);
+      }
       const retry = input.retry_hours ?? b.retry_hours;
       const tries = input.max_tries ?? b.max_tries;
       await tx.query('update call_banks set name = $2, script = $3, closed_at = case when $4 then coalesce(closed_at, now()) else null end, retry_hours = $5, max_tries = $6, updated_at = now() where id = $1',

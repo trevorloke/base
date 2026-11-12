@@ -332,7 +332,9 @@ function Bank({ id }) {
   };
   const shown = showAll ? numbers : numbers.slice(0, 40);
   // Closed, and the list it was made from deleted: there is nothing to tell who left by, so it can't reopen.
-  const shut = Boolean(bank.closed && bank.list_id && !bank.list_name);
+  // Nor can call time whose candidate was removed: nobody would be left to call it.
+  const gone = Boolean(bank.closed && bank.candidate_removed);
+  const shut = Boolean(bank.closed && bank.list_id && !bank.list_name) || gone;
   return (
     <div className="bk">
       <p className="lu-back"><Link to="/banks">← Phone banks</Link></p>
@@ -369,7 +371,9 @@ function Bank({ id }) {
 
       {/* Call time is the candidate's own: no hand-out, no CallHub. */}
       {bank.candidate_id ? (
-        <p className="ops-meta bk-calltime">Every number is {bank.candidate_name || 'the candidate'}’s to call{bank.ask_cents ? ` · ask ${fmtBig(bank.ask_cents)}` : ''}.</p>
+        <p className="ops-meta bk-calltime">{gone
+          ? `${bank.candidate_name || 'The candidate'} is no longer a candidate — the bank stays closed.`
+          : `Every number is ${bank.candidate_name || 'the candidate'}’s to call${bank.ask_cents ? ` · ask ${fmtBig(bank.ask_cents)}` : ''}.`}</p>
       ) : (<>
       <SendToCallHub kind="bank" id={id} />
       <section className="bk-sec" aria-labelledby={`${fid}-h`}>
