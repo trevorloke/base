@@ -82,6 +82,16 @@ Managers reach **Admin** from the account menu (their initials):
   left (they are signed out everywhere at once; what they did stays on the
   record; a new invite lets them back in). Invitees open `/join/:token`, set
   a password, and land on the map (volunteers) or Today.
+- **Candidates**: the slate's seats — name, office (*Mayor*, *Council*),
+  race (one of the slates) and email. *Invite to the app* sends a join link
+  (or puts someone already on the team in the seat at once). A **Candidate**
+  is a volunteer with a seat: they see what volunteers see, never money or
+  gifts, and their phone opens on **Your day** — *Met someone*, their booked
+  shifts, My people, and their race from Path to win. Only a volunteer can
+  hold a seat: a seated candidate's role can't be changed until they're
+  unlinked here, and someone who joins as staff isn't put in it (the row
+  says why). Permissions has a **Candidates** column of its own, apart from
+  Volunteers'; who-knows-who stays with the desk even with People granted.
 - **Teams**: groups of members (a neighbourhood crew, the phone bank) with
   a lead; a whole team goes onto a turf in one go (Map → turf → Add a
   canvasser → Teams). Someone removed from the campaign leaves every team.
@@ -135,7 +145,7 @@ Turning it on signs that person out on their other devices.
 A manager can **require it for desk roles** (Settings → Members — their own
 must be on first): every manager, treasurer and staffer — and every
 volunteer given an area under Admin → Permissions (their own or their
-role's), since the area opens the desk to them — then sets it up at
+role's), since the area opens the desk to them, and every candidate — then sets it up at
 their next sign-in — or on their next tap, if already signed in — before
 anything else (the server answers nothing else meanwhile). Other volunteers
 sign in as before unless they turn it on. Someone who lost their phone: the

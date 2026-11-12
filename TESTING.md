@@ -436,6 +436,15 @@ one tap away under **More**.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
 
+- **Candidates** (Settings → Candidates) — a manager adds and invites
+  candidates; each joins as a volunteer with a seat; their phone opens on
+  Your day (Met someone, their booked shift, their week, Your race); the
+  admin, `/api/candidates`, Path to win and the desk's ties stay closed to
+  them, with People granted to the Candidates column too. Server tests:
+  `server/test/candidates.test.js` (also `admin.test.js` and
+  `twostep-grants.test.js`); in a browser: `e2e-candidates.mjs` (PORT,
+  SHOTS; ports 5170–5179 in its header).
+
 - **The campaign's brand** (Settings → Brand) — a manager's
   saved brand is what every page wears: the app's page signed in or out,
   the installed app's name and icons, the unsubscribe, receipt and lesson

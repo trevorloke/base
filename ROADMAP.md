@@ -57,6 +57,14 @@ BC campaign will need in 2030.
 
 ## Next (in order)
 
+- **Candidates, next.** Call time (a phone bank for one candidate, pledges
+  for the treasurer) is designed and next. Held for the owner to choose:
+  thank-yous handed from the treasurer to a candidate, and "Needs your OK"
+  (the desk asks a candidate to OK a quote or a post). A "Knows: …" line on
+  the call-time card is Relationships' to add. Team's `member.invite` still
+  sends its email inside its write; the candidate invite already sends
+  after it — Team's should move the same way.
+
 - **Governed AI.** "Ask base.win" (plain words → a filter you can see and
   edit), reply triage in the texting inbox, drafting and translation that a
   person approves. Runs under the asker's permissions; every write in the
