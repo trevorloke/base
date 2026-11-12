@@ -39,6 +39,7 @@ import { envName } from '../../lib/org.js';
 import { renderSite } from './render/index.js';
 import { siteHost, siteWorkspace, ensureSite, readSettings, menuPages, siteOf, parseJ } from './store.js';
 import { loadData } from './loaders.js';
+import { calendarHeaders, eventsCalendar } from './calendar.js';
 import { cacheKey, cacheGet, cachePut } from './cache.js';
 import { verify, sign, PERSON_TTL } from './tokens.js';
 import { personOfCode, refCodeFor, CODE_RE } from './people.js';
@@ -576,6 +577,25 @@ export const makeSiteApp = (at) => {
     };
     return draw(c, site, { kind: 'campaign', campaign, key: ['campaign', r.id, new Date(r.updated_at).getTime()] });
   });
+
+  // Calendars (calendar.js): the Events list as one calendar, and one event
+  // from either list — only where this site lists them, else its 404.
+  // Registered before /:slug. The description's last line is the site's
+  // authorization line, when one is set.
+  const icsRoute = (idOf) => async (c) => {
+    const site = c.get('site');
+    const id = idOf(c);
+    if (id === false) return notFound(c, site);
+    const org = siteOf(await readSettings(site.db, site.ws.id), [], site.ws).org;
+    const out = await eventsCalendar(site, { name: org.name || site.ws.name, authorization: org.authorization }, { id });
+    if (!out) return notFound(c, site);
+    return c.body(out.body, 200, calendarHeaders(out.filename, staging() || site.mirror));
+  };
+  app.get(route('/events.ics'), icsRoute(() => null));
+  app.get(route('/events/:file{[0-9a-f-]{36}\\.ics}'), icsRoute((c) => {
+    const id = c.req.param('file').slice(0, -4);
+    return UUID.test(id) ? id : false;
+  }));
 
   app.get(route('/:slug'), async (c) => {
     const site = c.get('site');

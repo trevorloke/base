@@ -334,3 +334,38 @@ test('the export leaves the link’s token out', async () => {
   const { exportTables } = await import('../ext/calendar/index.js');
   assert.deepEqual(exportTables, [{ table: 'calendar_feeds', omit: ['token'] }]);
 });
+
+test('the website: events.ics lists the public upcoming events and nothing private; one event by id; only where the site lists them', async () => {
+  ok(await mgr.get('/api/site')); // the campaign's website, as first opened
+  const picnic = ok(await mgr.action('shift.createMany', {
+    kind: 'event', location: 'Bear Creek Park', days: ['2030-06-01'], start: '11:00', end: '14:00', name: 'Family picnic', public: true, instructions: 'Gate code 2299',
+  })).shifts[0];
+  const wave = await shiftOn('2030-06-02', '06:30', '08:30', { public: true });
+  const quiet = ok(await mgr.action('shift.createMany', { kind: 'event', location: 'Back room', days: ['2030-06-03'], start: '19:00', end: '21:00', name: 'Board meeting' })).shifts[0];
+  const all = await fetchPath('/site/events.ics');
+  assert.equal(all.status, 200);
+  assert.equal(all.headers.get('content-type'), 'text/calendar; charset=utf-8');
+  assert.equal(all.headers.get('cache-control'), 'public, max-age=600');
+  assert.deepEqual(uids(all.body), [`shift-${picnic.id}@base.win`], 'the Events list only: not an opening, not a private shift');
+  const body = unfold(all.body);
+  assert.match(body, /X-WR-CALNAME:.+ events\r\n/);
+  assert.match(body, /DTSTART:20300601T180000Z\r\nDTEND:20300601T210000Z/);
+  assert.match(body, /LOCATION:Bear Creek Park/);
+  assert.ok(!/Gate code|Instructions|Details/.test(body), 'never the instructions');
+  assert.match(body, /\\n[^\r\n]+ — http:\/\/localhost\/site\r\nURL:http:\/\/localhost\/site\/\r\n/, 'it ends with the campaign and its site; it links the page');
+  const one = await fetchPath(`/site/events/${wave.id}.ics`);
+  assert.equal(one.status, 200, 'one from the openings too');
+  assert.deepEqual(uids(one.body), [`shift-${wave.id}@base.win`]);
+  assert.equal(one.headers.get('content-disposition'), 'inline; filename="burma-shave-king-george-blvd-88-ave.ics"');
+  assert.equal((await fetchPath(`/site/events/${quiet.id}.ics`)).status, 404, 'a private shift');
+  assert.equal((await fetchPath(`/site/events/${'0'.repeat(36)}.ics`)).status, 404);
+  const page = await fetchPath(`/site/events/${picnic.id}`);
+  assert.ok(!/^text\/calendar/.test(page.headers.get('content-type') || ''), 'no .ics: not a calendar');
+  // A site whose published pages list no events or openings: both are its 404.
+  await db.query(
+    `update site_pages set published = jsonb_set(published, '{modules}', coalesce((select jsonb_agg(m) from jsonb_array_elements(published->'modules') m
+        where m->>'kind' not in ('events', 'shifts')), '[]'::jsonb))
+      where workspace_id = $1 and jsonb_typeof(published->'modules') = 'array'`, [ws]);
+  assert.equal((await fetchPath('/site/events.ics')).status, 404);
+  assert.equal((await fetchPath(`/site/events/${picnic.id}.ics`)).status, 404);
+});

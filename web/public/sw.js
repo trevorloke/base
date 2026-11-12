@@ -68,8 +68,9 @@ const OLD_FILES_KEY = '/__starbase/old-files';
 const OLD_KEEP_MS = 24 * 3600 * 1000;
 
 // The server's own pages (unsubscribe, receipts, public lessons, tracking,
-// pictures): straight to the network, never the app shell.
-const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files)(?:\/|$)/;
+// pictures, calendar files and links): straight to the network, never the
+// app shell.
+const NEVER = /^\/(?:api|u|bu|r|lu|o|c|join|media|learn|learn-files|cal)(?:\/|$)/;
 // OpenStreetMap's tiles and CARTO's (the map's Clean look, the one it opens
 // on): kept from the first tile, without waiting for the map to say which it
 // draws — a worker just installed hears that a moment after its first tiles.

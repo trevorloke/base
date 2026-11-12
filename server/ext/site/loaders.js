@@ -48,7 +48,7 @@ export const loadPosts = async (q, ws, limit = 24) => (await q.query(
 // 'opening' — soonest first. The kind decides the list (ext/schedule); a
 // shift with no kind (or one this build doesn't know) is in both.
 export const loadEvents = async (q, ws, limit = 24, list = 'event') => (await q.query(
-  `select s.id, s.title, s.starts_at, s.ends_at, s.location, s.capacity, pl.lat, pl.lng,
+  `select s.id, s.title, s.kind, s.starts_at, s.ends_at, s.location, s.capacity, pl.lat, pl.lng,
           (select count(*)::int from shift_assignments a
             where a.shift_id = s.id and a.workspace_id = s.workspace_id and a.status in ('assigned', 'confirmed')) as booked
      from shifts s left join places pl on pl.id = s.place_id
@@ -60,7 +60,7 @@ export const loadEvents = async (q, ws, limit = 24, list = 'event') => (await q.
   // else the words' own) gives the card its map.
   const pin = pinPoint(s.location);
   return {
-    id: s.id, title: s.title, starts_at: iso(s.starts_at), ends_at: iso(s.ends_at), location: pin ? '' : s.location || '',
+    id: s.id, title: s.title, kind: s.kind || null, starts_at: iso(s.starts_at), ends_at: iso(s.ends_at), location: pin ? '' : s.location || '',
     spots_left: s.capacity ? Math.max(0, s.capacity - s.booked) : null,
     lat: s.lat == null ? pin?.lat ?? null : Number(s.lat), lng: s.lng == null ? pin?.lng ?? null : Number(s.lng),
   };
