@@ -187,6 +187,13 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    follower counts people share with it or that are public on their
    profiles, and why. Removing a handle removes its count; the full export
    carries both.
+   Share kits (Outreach → Sharing): save the authorization line under
+   Website → Settings first — every post offers it in its words, and the
+   editor reminds that pictures should carry it (base.win never draws it on
+   a picture). Ask the official agent whether supporters' shares of a
+   campaign-made post need the line, and whether to stop a post on general
+   voting day. Save the website's own domain so the links read well; until
+   then they use the app's /site address.
 2. Placing starts by itself: an import that leaves addresses without a pin
    starts a background run (**Place on map** is there where it didn't
    start). The import page shows its progress and the time left, the map
