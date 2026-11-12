@@ -119,6 +119,18 @@ test('an end before the start is still refused; a length is 15 minutes to a day;
   no(await mgr.action('shift.update', { id: s.id, end: '01:00' }), 400, 'the end has to be after the start');
 });
 
+test('a shift the long form made longer than a day keeps its length when its start moves', async () => {
+  // Sat 9 am to Sun 5 pm: 32 hours. The edit sheet sends the length it shows.
+  const long = ok(await mgr.action('shift.create', {
+    title: 'Sign blitz weekend', starts_at: at('09:00'), ends_at: at('17:00', '2030-11-17'),
+  })).shift;
+  ok(await mgr.action('shift.update', { id: long.id, start: '09:15', minutes: 1920 }));
+  const row = await shiftRow(long.id);
+  assert.deepEqual([iso(row.starts_at), iso(row.ends_at)], [at('09:15'), at('17:15', '2030-11-17')]);
+  // Made by tap it is still at most a day.
+  no(await mgr.action('shift.createMany', { kind: 'event', location: 'Long hall', days: ['2030-05-06'], start: '10:00', minutes: 1920 }), 400);
+});
+
 test('a Toronto shift from 10 pm on the night the clocks go back runs 300 elapsed minutes (2:00, not 3:00)', async () => {
   const savedTz = process.env.STARBASE_TZ;
   process.env.STARBASE_TZ = 'America/Toronto';

@@ -31,7 +31,7 @@ import { DEFAULT_TZ } from '../lib/org.js';
 // Kinds, saved places and the campaign's clock for shifts (ext/schedule).
 import { SHIFT_KIND_CODES, shiftKind } from '@starbase/shared/shiftkinds';
 import {
-  BOTH_ENDS, END_FIRST, clockInput, dayInput, endsAfterStart, fitHours, livePlace, minutesInput, movedTimes, needInput, titleFor,
+  BOTH_ENDS, END_FIRST, LONGEST_KEPT, clockInput, dayInput, endsAfterStart, fitHours, livePlace, minutesInput, movedTimes, needInput, titleFor,
   turfWords, tzOf,
 } from '../ext/schedule/rules.js';
 
@@ -411,8 +411,11 @@ export const FIELD_ACTIONS = {
   //   day, start, end   when, said as a day and clock times ('HH:MM') on the
   //                     campaign's clock — the server works out the moments.
   //                     Another day keeps its hours; end: null is no end.
-  //   minutes           in place of end: how long from the start (15 to
-  //                     1440) — the only way past midnight. Never with end.
+  //   minutes           in place of end: how long from the start (15 minutes
+  //                     to 31 days: a tap makes at most a day, and a longer
+  //                     shift the long form made keeps its length when its
+  //                     start moves) — the only way past midnight. Never
+  //                     with end.
   //   drop_in           "Drop in any time" (words only).
   // People's own hours on it (./ext/schedule/hours.js) are fitted to new
   // times in the same write (fitHours).
@@ -439,7 +442,7 @@ export const FIELD_ACTIONS = {
       day: dayInput().optional(),
       start: clockInput().optional(),
       end: clockInput().nullish(),
-      minutes: minutesInput().optional(),
+      minutes: minutesInput(LONGEST_KEPT).optional(),
       kind: z.enum(SHIFT_KIND_CODES).nullish(),
       place_id: uuid().nullish(),
       need: needInput().nullish(),

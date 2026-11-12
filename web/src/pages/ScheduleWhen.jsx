@@ -205,7 +205,7 @@ export default function When({ kind, value, onChange, many = false, own = null }
             <div className="shh-steps" role="group" aria-label="Ends">
               <span className="shh-steps__label">Ends</span>
               <button type="button" className="btn btn-quiet shh-step" aria-label="15 minutes earlier" disabled={shown <= STEP} onClick={() => nudgeEnd(-STEP)}>− 15 min</button>
-              <output className="shh-steps__value" aria-live="polite">{exactWords(t.end)}{t.nextDay ? ' next day' : ''} · {lengthLong(shown)}</output>
+              <output className="shh-steps__value" aria-live="polite"><span>{exactWords(t.end)}{t.nextDay ? ' next day' : ''}</span> · <span>{lengthLong(shown)}</span></output>
               <button type="button" className="btn btn-quiet shh-step" aria-label="15 minutes later" disabled={shown >= LONGEST} onClick={() => nudgeEnd(STEP)}>+ 15 min</button>
             </div>
           )}

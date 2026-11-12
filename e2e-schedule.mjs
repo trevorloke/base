@@ -890,6 +890,9 @@ try {
     starts_at: at(lateDay, '23:00'), ends_at: at(addDays(lateDay, 1), '00:30') })).json.shift;
   const odd = (await D.api('/actions/shift.create', { title: 'Canvass — Newton Rec Centre', kind: 'canvass', location: 'Newton Rec Centre',
     starts_at: at(addDays(lateDay, -1), '10:15'), ends_at: at(addDays(lateDay, -1), '14:30') })).json.shift;
+  // …and a 32-hour weekend the long form made: its start moves, its length stays.
+  const blitz = (await D.api('/actions/shift.create', { title: 'Sign blitz weekend',
+    starts_at: at(addDays(lateDay, -3), '09:00'), ends_at: at(addDays(lateDay, -2), '17:00') })).json.shift;
   await D.go(`/shifts?week=${lateWeek}`);
   await page.waitForSelector(`.sch-card[data-shift="${late.id}"]`, { timeout: 10000 });
   const startChip = (words) => page.locator(`.sch-sheet [aria-label="Starts at"] .sch-chip:text-is("${words}")`);
@@ -1002,6 +1005,15 @@ try {
   check('its card, under its start day: 8 pm–1 am', (await cards(lateDay)).find((c) => c.id === made[0]?.id)?.time === '8 pm–1 am', JSON.stringify(await cards(lateDay)));
   k = await D.keys();
   check('…no key, no text field focused', k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
+
+  await openCard(blitz.id);
+  check('a 32-hour weekend: its sheet reads "5:00 pm next day · 32 h"', (await stepValue('Ends')) === '5:00 pm next day · 32 h', await stepValue('Ends'));
+  await stepper('Starts', 'later').click();
+  check('…"Starts +15 min" keeps its length: "5:15 pm next day · 32 h"', (await stepValue('Ends')) === '5:15 pm next day · 32 h', await stepValue('Ends'));
+  await go.click();
+  await sheetGone();
+  const blitzNow = (await D.api(`/shifts/${blitz.id}`)).json.shift;
+  check('server: 9:15 am to 5:15 pm the next day, saved', iso(blitzNow.starts_at) === at(addDays(lateDay, -3), '09:15') && iso(blitzNow.ends_at) === at(addDays(lateDay, -2), '17:15'), JSON.stringify(blitzNow));
 
   // The same on a phone (390×844): the steppers fit, 48px, no sideways scroll; an overnight shift's sheet.
   {

@@ -16,7 +16,10 @@ export const clockInput = () => z.string().refine(isClock, 'a time, as HH:MM');
 export const needInput = () => z.number().int().positive().max(999);
 // How long, in minutes: a quarter hour to a day. The only way to say a
 // shift runs past midnight — an end clock time before the start is a typo.
-export const minutesInput = () => z.number().int().min(15).max(1440);
+// Made by tap, a shift is at most a day long. A shift being changed may keep
+// a longer length the long form gave it (a 32-hour sign blitz weekend).
+export const minutesInput = (max = 1440) => z.number().int().min(15).max(max);
+export const LONGEST_KEPT = 31 * 1440;
 export const BOTH_ENDS = 'say how long, or when it ends — not both';
 
 // `minutes` of elapsed time after a moment: the end of a shift said by its
