@@ -112,18 +112,19 @@ export default function SocialsBlock({ person, refresh }) {
                   {href ? <a href={href} target="_blank" rel="noopener noreferrer">{shown}</a> : shown}
                   <Followers key={`${p}:${reach[p]?.n ?? ''}`} person={person} platform={p} entry={reach[p]} act={act} onSaved={say} />
                 </span>
-                <span className="act">
-                  {removing === p ? (
-                    <span className="so-confirm">
-                      <span>Remove {shown}?</span>
-                      <button type="button" className="btn pp-btn" disabled={act.busy} onClick={() => remove(p)}>Yes</button>
-                      <button type="button" className="btn btn-quiet pp-btn" onClick={() => setRemoving(null)}>No</button>
-                    </span>
-                  ) : (
+                {removing !== p && (
+                  <span className="act">
                     <button type="button" className="chip-x so-x" aria-label={`Remove ${platformWord(p)}`} disabled={act.busy}
                       onClick={() => setRemoving(p)}>×</button>
-                  )}
-                </span>
+                  </span>
+                )}
+                {removing === p && (
+                  <span className="so-confirm">
+                    <span>Remove {shown.startsWith('@') ? shown : `the ${platformWord(p)} link`}?</span>
+                    <button type="button" className="btn pp-btn" disabled={act.busy} onClick={() => remove(p)}>Yes</button>
+                    <button type="button" className="btn btn-quiet pp-btn" autoFocus onClick={() => setRemoving(null)}>No</button>
+                  </span>
+                )}
               </li>
             );
           })}

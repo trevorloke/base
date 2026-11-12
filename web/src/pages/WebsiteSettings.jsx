@@ -234,7 +234,7 @@ export default function WebsiteSettings() {
 
           <section className="card" id="social" aria-labelledby="wb-s-soc">
             <h2 id="wb-s-soc" className="wb-card-h">Social accounts</h2>
-            <ListField id="wb-s-acc" f={F.accounts} path="accounts" value={s.social.accounts} ctx={ctx} onChange={(v) => set('social', 'accounts', fillAccounts(s.social.accounts, v))} />
+            <ListField id="wb-s-acc" f={F.accounts} path="accounts" value={s.social.accounts} ctx={ctx} onChange={(v) => set('social', 'accounts', (cur) => fillAccounts(cur, typeof v === 'function' ? v(cur) : v))} />
           </section>
 
           <section className="card" id="seo" aria-labelledby="wb-s-seo">

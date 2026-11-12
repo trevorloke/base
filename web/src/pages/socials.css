@@ -12,8 +12,8 @@
 .so-count-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); width: 100%; }
 .so-count-form label { font-size: 13px; color: var(--text-2); }
 .so-count-form .input { width: 8em; min-height: var(--ctl); }
-.so-x { min-width: var(--ctl); min-height: var(--ctl); }
-.so-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: 13px; }
+.contact-lines .act .so-x { min-width: var(--ctl); min-height: var(--ctl); }
+.so-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--s-2); font-size: 13px; flex-basis: 100%; }
 .so-add { margin-top: var(--s-2); }
 .so-add label { display: block; font-size: 13px; color: var(--text-2); margin-bottom: var(--s-1); }
 .so-add-row { display: flex; gap: var(--s-2); }
@@ -21,8 +21,8 @@
 .so-ask { margin-top: var(--s-2); }
 .so-ask-q { margin: 0 0 var(--s-2); font-size: 14px; }
 .so-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.so-chip { min-height: var(--ctl); cursor: pointer; }
+.so-chips .so-chip { min-height: var(--ctl); cursor: pointer; }
 .so-status { margin: var(--s-1) 0 0; min-height: 1.4em; }
 .so-also { margin: 0; font-size: 14px; }
-.so-typed { margin-top: var(--s-3); font-size: 13px; color: var(--text-3); }
+.so-typed { margin: var(--s-3) 0; font-size: 13px; color: var(--text-3); }
 .so-note { margin: var(--s-1) 0 0; font-size: 13px; color: var(--text-3); }

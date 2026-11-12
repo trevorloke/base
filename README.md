@@ -196,8 +196,14 @@ than a week after they came off is refused. Contacts are door, phone, text or
   policy, administration, candidate aide, social media team,
   photography / videography.
 - **Tags**: free-form, seeded with media, VIP, endorser, host, …
-- **Socials**: per-person handles for Facebook, Instagram, X, TikTok, YouTube,
-  LinkedIn, Bluesky.
+- **Socials**: per-person handles for Instagram, X, TikTok, Facebook, LinkedIn,
+  YouTube, Bluesky, Threads and Reddit (or any other profile link). One box
+  takes a pasted link or @handle and puts it right (`shared/socials.js`: a
+  post or a short link is refused in plain words; a bare @name asks which
+  network); each handle opens the real profile. The desk types in a
+  follower count from it (*12.4k followers*), kept only while that handle is
+  on file (`ext/socials`); People filters by *Any social*, each network, and
+  *Following* (1,000+ · 10,000+, the desk's only).
 - **Stewardship** (Donations → *Stewardship*, the desk that handles money):
   *To thank* — every gift no one has thanked, oldest first, with how long it
   has waited; *Called · Emailed · Note · Letter* marks it.

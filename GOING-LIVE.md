@@ -179,7 +179,14 @@ what volunteers get, and what you see under *Field app ↗* in your account menu
    anything it couldn't read), then import. The list's own columns map by
    themselves (house number and street, latitude and longitude, the 1/0
    flags, and the standard fields named after them); social handles
-   (Instagram, X, TikTok, Reddit) fill blank ones only.
+   (Instagram, X, TikTok, Reddit, Facebook, LinkedIn, YouTube, Bluesky,
+   Threads, or one column of profile links) fill blank ones only, and a
+   cell that isn't a handle or a profile link is left out and counted.
+   Before you record social media handles and follower counts, say so on
+   the website's /privacy page: that the campaign records the handles and
+   follower counts people share with it or that are public on their
+   profiles, and why. Removing a handle removes its count; the full export
+   carries both.
 2. Placing starts by itself: an import that leaves addresses without a pin
    starts a background run (**Place on map** is there where it didn't
    start). The import page shows its progress and the time left, the map
