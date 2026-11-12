@@ -24,8 +24,9 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { getDb } from '../../db/client.js';
 import { loadContext, SESSION_COOKIE } from '../../lib/auth.js';
-import { googleTilesOn, fetchTile, attribution as googleCredit, TILE_PATH as GOOGLE_PATH, MAX_ZOOM as GOOGLE_MAX, MAP_TYPES, mapType } from '../../lib/gtiles.js';
+import { googleTilesOn, googleTilesSetting, fetchTile, attribution as googleCredit, TILE_PATH as GOOGLE_PATH, MAX_ZOOM as GOOGLE_MAX, MAP_TYPES, mapType } from '../../lib/gtiles.js';
 import { here } from '../../lib/mount.js';
+import { scrub } from '../../lib/googleerr.js';
 
 export const sql = `
 alter table signs add column if not exists client_id uuid;
@@ -59,9 +60,15 @@ export const tileConfig = (env = process.env) => {
   if (googleTilesOn(env)) {
     return { url: GOOGLE_PATH, attribution: googleCredit(), maxZoom: GOOGLE_MAX, ignored: [] };
   }
-  if (env.GOOGLE_MAPS_TILES === '1') {
+  // A deliberate 0/off is quietly off; on without a key, or a value that
+  // isn't a yes or a no, is said on the map's sheet.
+  const google = googleTilesSetting(env);
+  if (google === 'on') {
     out.ignored.push('google');
     warnOnce('GOOGLE_MAPS_TILES=1 needs GOOGLE_MAPS_SERVER_KEY — using OpenStreetMap');
+  } else if (google === 'unknown') {
+    out.ignored.push('google');
+    warnOnce(`GOOGLE_MAPS_TILES=${String(env.GOOGLE_MAPS_TILES).trim().slice(0, 40)} isn’t understood — use 1`);
   }
   if (env.STARBASE_TILE_URL) {
     const url = validUrl(env.STARBASE_TILE_URL);
@@ -154,9 +161,11 @@ publicRoutes.get('/tiles/:z/:x/:y', async (c) => {
   try {
     t = await fetchTile(z, x, y, c.req.query('t') || undefined);
   } catch (e) {
-    console.warn(`map tiles: ${e.message}`);
+    console.warn(`map tiles: ${scrub(e.message)}`);
     return c.text('Map tiles unavailable', 502);
   }
+  // Google is refusing: no call to it until the pause ends (lib/gtiles.js).
+  if (t.retryAfter) return c.text('Map tiles unavailable', 503, { 'Retry-After': String(t.retryAfter) });
   if (!t.body) return c.text('Map tiles unavailable', t.status === 404 ? 404 : 502);
   c.header('Content-Type', t.type);
   c.header('Cache-Control', 'private, max-age=86400');
