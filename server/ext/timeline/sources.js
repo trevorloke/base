@@ -357,7 +357,7 @@ const leftMedia = async (db, q) => (await rowsOf(db, `
   select ${ms('m.left_at')} as at, 'media:' || m.person_id::text as key, m.left_how
     from media_contacts m
    where m.workspace_id = $1 and m.person_id = $2 and m.left_at is not null`, q,
-)).map((r) => entry(r, 'messages', 'media', 'Media', 'Left the media list', { detail: LEFT_MEDIA[r.left_how] || null }));
+)).map((r) => entry(r, 'other', 'media', 'Media', 'Left the media list', { detail: LEFT_MEDIA[r.left_how] || null }));
 
 const anyone = () => true;
 const desk = (v) => v.desk;
@@ -378,7 +378,8 @@ export const SOURCES = [
   { key: 'members', group: 'money', can: moneyRoles, read: members },
   { key: 'shifts', group: 'shifts', can: anyone, read: shifts },
   { key: 'merges', group: 'other', can: desk, read: merges },
-  { key: 'media', group: 'messages', can: desk, read: leftMedia },
+  // Media isn't Outreach: under All only, like a merge.
+  { key: 'media', group: 'other', can: desk, read: leftMedia },
 ];
 // The chips, in the order the profile shows them ('other' has none: All only).
 export const GROUPS = ['field', 'messages', 'website', 'money', 'shifts'];
