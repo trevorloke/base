@@ -132,8 +132,12 @@ await pp.unroute(/\/api\/persons\/count/, badGateway);
 await pp.tap('.pp-count .au-retry');
 await pp.waitForFunction(() => /\b4 people/.test(document.querySelector('.pp-count')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
 check('…Try again: "4 people"', /\b4 people/.test(await pp.innerText('.pp-count').catch(() => '')), await pp.innerText('.pp-count').catch(() => ''));
-// "Save these people as they are now" on a phone: its name box, Save and Cancel are 48px taps.
-await pp.tap('.pp-count .au-snap__link');
+// "Save these people as they are now" (a filter is on) on a phone: its name box, Save and Cancel are 48px taps.
+await pp.goto(`${ADMIN}/people?knocked=never`, { waitUntil: 'domcontentloaded' });
+await pp.waitForSelector('.pp-count .au-snap__link', { timeout: 10000 }).catch(() => {});
+const links = await pp.evaluate(() => [...document.querySelectorAll('.pp-count .pp-savelist, .pp-count .au-snap__link')].map((el) => Math.round(el.getBoundingClientRect().height)));
+check('at 390: "Save as a list" and "Save these people as they are now" are ≥ 48px', links.length === 2 && Math.min(...links) >= 48, JSON.stringify(links));
+await pp.tap('.pp-count .au-snap__link').catch(() => {});
 await pp.waitForSelector('.au-snap', { timeout: 5000 }).catch(() => {});
 const snap = await pp.evaluate(() => [...document.querySelectorAll('.au-snap input, .au-snap button')].map((el) => Math.round(el.getBoundingClientRect().height)));
 check('at 390: the snapshot form’s name box, Save and Cancel are ≥ 48px', snap.length === 3 && Math.min(...snap) >= 48, JSON.stringify(snap));
