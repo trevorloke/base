@@ -174,12 +174,15 @@ A `contact` message is a request for the desk (`door_requests`, kind
 `other`: "From the website (<topic>): <message>"), beside the action that
 keeps it in its payload — never written into the person's note.
 
-Answers: `200 { ok: true }` · `200 { ok: true, checkout_url }` (join, donate) ·
+Answers: `200 { ok: true, ref_code }` · `200 { ok: true, checkout_url }` (join, donate) ·
 `400 { error, field }` (every refusal, the payments' own too — Stripe
 refusing the email typed is a 400 on `email`) · `429 { error }` ·
 `503 { error }` when online payments aren't set up or Stripe didn't answer
 (the same form sent again with its `client_key` finishes it). Never a
-person id or anything about who was on file.
+person id or anything about who was on file: `ref_code` is the person's
+own referral code only when this form added them (the thank-you's share
+links carry it as `ref=`, so a friend who signs counts as theirs); for
+anyone matched it is a code of the same shape that is nobody's.
 A plain form post (no JavaScript) gets a `303` back to the page with
 `?sent=<kind>#m-<module_id>` (or `?error=<field>&module=<module_id>#m-<module_id>`,
 so the page says it on the form that was sent), or to the checkout.
