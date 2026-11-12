@@ -92,6 +92,20 @@ Managers reach **Admin** from the account menu (their initials):
   unlinked here, and someone who joins as staff isn't put in it (the row
   says why). Permissions has a **Candidates** column of its own, apart from
   Volunteers'; who-knows-who stays with the desk even with People granted.
+- **Call time**: a phone bank for one candidate (New phone bank → *Who
+  calls* → *Call time: <name>*, with an optional ask), made only by the
+  desk holding Donations. Every number is the candidate's; their Today
+  leads with *Start call time →*, and `/call-time` shows one donor at a time
+  — what they gave (last gift, this year), their **room** (the year's limit
+  less gifts, monthly gifts still to come and every open call-time pledge on
+  the slate), the ask — and four answers: *Pledged*, *Not now*, *No answer*,
+  *Left message*. Answers save offline and send later. A pledge is never a
+  gift: the treasurer sees **Pledges from call time** under Donations →
+  Needs you until the gift is logged (*Gift in ✓*), it's dropped, or 60 days
+  pass. The call shows on the person as a call with no words; the
+  candidate's note goes to Donations and the full export only. Only the
+  candidate's own answer crosses a call-time number off (never a volunteer's
+  call or CallHub), and call time is never sent to CallHub.
 - **Teams**: groups of members (a neighbourhood crew, the phone bank) with
   a lead; a whole team goes onto a turf in one go (Map → turf → Add a
   canvasser → Teams). Someone removed from the campaign leaves every team.

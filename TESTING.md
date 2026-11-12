@@ -440,10 +440,15 @@ one tap away under **More**.
   candidates; each joins as a volunteer with a seat; their phone opens on
   Your day (Met someone, their booked shift, their week, Your race); the
   admin, `/api/candidates`, Path to win and the desk's ties stay closed to
-  them, with People granted to the Candidates column too. Server tests:
-  `server/test/candidates.test.js` (also `admin.test.js` and
-  `twostep-grants.test.js`); in a browser: `e2e-candidates.mjs` (PORT,
-  SHOTS; ports 5170–5179 in its header).
+  them, with People granted to the Candidates column too. Call time: New
+  phone bank → *Who calls* → a candidate (only the desk with Donations);
+  their Today leads with *Start call time →*; on `/call-time` a pledge over
+  the room is refused in words, a pledge, *No answer* and an answer made
+  offline all land; the treasurer sees *Pledges from call time* under Needs
+  you and *Gift in ✓* once the gift is logged; another candidate gets 404.
+  Server tests: `server/test/candidates.test.js` (also `banks.test.js`,
+  `admin.test.js` and `twostep-grants.test.js`); in a browser:
+  `e2e-candidates.mjs` (PORT, SHOTS; ports 5170–5179 in its header).
 
 - **The campaign's brand** (Settings → Brand) — a manager's
   saved brand is what every page wears: the app's page signed in or out,

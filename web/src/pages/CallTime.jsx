@@ -208,7 +208,7 @@ export default function CallTime() {
               <div className="field">
                 <label htmlFor="ct-amount">Amount pledged ($)</label>
                 <input id="ct-amount" className="input mono" inputMode="decimal" autoComplete="off" autoFocus value={amount}
-                  onChange={(e) => setAmount(e.target.value)} />
+                  onChange={(e) => { setAmount(e.target.value); setError(null); }} />
                 <span className="ops-meta">A pledge isn’t a gift — the financial agent takes the money.</span>
               </div>
               <div className="ct-row">

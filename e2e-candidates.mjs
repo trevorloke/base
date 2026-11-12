@@ -8,7 +8,13 @@
 // Admin link; /admin tells them it's not theirs; /api/candidates and
 // /api/pathtowin refuse them. The manager gives People to the Candidates
 // column under Permissions; Cleo's areas say so, and the desk's ties
-// (/api/relationships/key) still refuse her. Screens at 1440x900 and 390.
+// (/api/relationships/key) still refuse her. Then call time: the manager
+// makes a bank of three made-up donors for Cleo ("Who calls", an ask of
+// $250); her Today leads with "Start call time →"; on the card a pledge over
+// the room is refused in words, $250 is pledged, No answer, and the last
+// answer is made offline and sent on reconnect; the treasurer sees
+// "Pledges from call time · 1 · $250", logs the gift, and it reads "Gift in
+// ✓"; Mo gets 404 for Cleo's call time. Screens at 1440x900 and 390.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5170 node server/index.js &
 //   BASE=http://127.0.0.1:5170 SHOTS=/tmp/candidates node e2e-candidates.mjs
@@ -213,6 +219,137 @@ await mp.goto(`${BASE}/admin/settings`, { waitUntil: 'domcontentloaded' });
 await mp.waitForSelector('.tm-candidate', { timeout: 10000 }).catch(() => {});
 check('Members: "Candidate · Council" in place of the role picker', /Candidate · Council/.test(await mp.innerText('main')));
 await mp.screenshot({ path: `${SHOTS}/12-members-390.png`, fullPage: true });
+
+// ── 5. Call time: the manager makes a bank of three donors for Cleo ──
+const donors = [];
+for (const [i, n] of ['Ada', 'Ben', 'Cy'].entries()) {
+  donors.push((await api('/actions/person.create', { name: `${n} Donor${tag}`, phone: `604-555-01${60 + i}`, tags: [`ct${tag}`] })).json.person);
+}
+const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+await api('/actions/gift.log', { person_id: donors[0].id, amount_cents: 50000, date: today, slate: 'council', method: 'cheque' });
+await page.goto(`${BASE}/admin/banks/new`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('label:has-text("Who calls")', { timeout: 10000 });
+await page.fill('input[placeholder^="Undecided in Newton"]', 'Cleo’s call time');
+await page.locator('label:has-text("Who calls") + select').selectOption({ label: 'Call time: Cleo Example' });
+await page.waitForSelector('label:has-text("Ask")', { timeout: 5000 });
+await page.fill('input.bk-ask', '250');
+await page.click('button:has-text("Pick people")');
+await page.fill('input[placeholder="volunteer, newton…"]', `ct${tag}`);
+await page.waitForSelector('button:has-text("Make the bank with 3 numbers")', { timeout: 10000 });
+await page.screenshot({ path: `${SHOTS}/13-new-bank-who-calls-1440.png`, fullPage: true });
+const m5 = await measure(page, 'main');
+check('New phone bank: "Who calls" with Cleo’s call time and an Ask; one primary', m5.primaries <= 1, JSON.stringify(m5));
+await page.click('button:has-text("Make the bank with 3 numbers")');
+await page.waitForSelector('.eyebrow:has-text("Call time · Cleo Example")', { timeout: 10000 });
+const bankId = page.url().split('/banks/')[1];
+const bankText = await page.innerText('main');
+check('the bank: "Call time · Cleo Example", every number hers, no hand-out', /Every number is Cleo Example’s to call · ask \$250/.test(bankText) && !/Hand out numbers/.test(bankText), bankText.replace(/\s+/g, ' ').slice(0, 200));
+await page.screenshot({ path: `${SHOTS}/14-calltime-bank-1440.png`, fullPage: true });
+
+// ── 6. Cleo's Today: Start call time ──
+await cleo.p.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+await cleo.p.waitForSelector('.today-go a.btn-primary:has-text("Start call time")', { timeout: 10000 });
+const go = await cleo.p.innerText('.today-go');
+const m6 = await measure(cleo.p, 'main');
+check('Today: "Start call time →" with "3 to call"; Met someone a row; one primary', /3 to call/.test(go) && /Met someone/.test(await cleo.p.innerText('.today-next')) && m6.primaries === 1, `${go} ${JSON.stringify(m6)}`);
+await cleo.p.screenshot({ path: `${SHOTS}/15-candidate-today-calltime-390.png`, fullPage: true });
+
+// ── 7. Call time on her phone ──
+await cleo.p.click('.today-go a.btn-primary');
+await cleo.p.waitForSelector('.ct-card .ct-name', { timeout: 10000 });
+const facts = await cleo.p.innerText('.ct-card');
+check('the card: name, Call, the facts line with Room, and the Ask', /Room \$/.test(facts) && /Ask \$250/.test(facts) && await cleo.p.locator('.ct-call[href^="tel:"]').count() === 1, facts.replace(/\s+/g, ' ').slice(0, 220));
+const m7 = await measure(cleo.p, 'main');
+check('call time at 390: no sideways scroll, no primary until Pledged, taps ≥ 48px', m7.overflow <= 0 && m7.primaries === 0 && m7.minTap >= 48, JSON.stringify(m7));
+await cleo.p.screenshot({ path: `${SHOTS}/16-calltime-card-390.png`, fullPage: true });
+// Ada (a gift this year) — find her card: the room is $929.70.
+const first = await cleo.p.innerText('.ct-name');
+await cleo.p.click('button.ct-answer:has-text("Pledged")');
+await cleo.p.waitForSelector('#ct-amount');
+check('Pledged: the amount filled with the ask, and the one line about the agent',
+  (await cleo.p.inputValue('#ct-amount')) === '250' && /A pledge isn’t a gift — the financial agent takes the money/.test(await cleo.p.innerText('.ct-card')));
+await cleo.p.fill('#ct-amount', '5000');
+await cleo.p.click('button:has-text("Save pledge")');
+await cleo.p.waitForSelector('.ct-card .error', { timeout: 5000 });
+check('a pledge over the room is refused in words', /That’s over what they can give this year — up to \$/.test(await cleo.p.innerText('.ct-card .error')));
+await cleo.p.fill('#ct-amount', '250');
+await cleo.p.screenshot({ path: `${SHOTS}/17-calltime-pledge-open-390.png`, fullPage: true });
+const m7b = await measure(cleo.p, 'main');
+check('pledge open: Save pledge is the one primary', m7b.primaries === 1, JSON.stringify(m7b));
+await cleo.p.click('button:has-text("Save pledge")');
+await cleo.p.waitForFunction((n) => document.querySelector('.ct-name')?.textContent !== n, first, { timeout: 8000 });
+check('$250 pledged: "Saved", and the next card', /Saved/.test(await cleo.p.innerText('.toast')).valueOf());
+await cleo.p.click('button.ct-answer:has-text("No answer")');
+await cleo.p.waitForFunction(() => document.querySelectorAll('.ct-card').length === 1, null, { timeout: 5000 });
+await sleep(600);
+// The last one with no signal.
+await cleo.ctx.setOffline(true);
+await sleep(300);
+await cleo.p.click('button.ct-answer:has-text("Left message")');
+await cleo.p.waitForSelector('.ct-done', { timeout: 8000 });
+const done = await cleo.p.innerText('.ct-done');
+check('offline: the answer waits on the phone, and the end reads "All done — 3 calls, $250 pledged"', /All done — 3 calls, \$250 pledged/.test(done), done.replace(/\s+/g, ' '));
+await cleo.p.screenshot({ path: `${SHOTS}/18-calltime-done-offline-390.png`, fullPage: true });
+await cleo.ctx.setOffline(false);
+let sent = 0;
+for (let i = 0; i < 30 && sent < 3; i++) {
+  await sleep(500);
+  sent = (await api(`/banks/${bankId}`)).json?.bank?.done ?? 0;
+  const later = (await api(`/banks/${bankId}`)).json?.numbers?.filter((n) => n.outcome === 'left_message').length ?? 0;
+  if (later) break;
+}
+const nums = (await api(`/banks/${bankId}`)).json.numbers;
+check('back online: the waiting answer is sent (Left message on the bank)', nums.some((n) => n.outcome === 'left_message'), JSON.stringify(nums.map((n) => n.outcome)));
+// The card wide.
+await wp.goto(`${BASE}/call-time`, { waitUntil: 'domcontentloaded' });
+await wp.waitForSelector('.ct-done, .ct-card', { timeout: 10000 });
+await wp.screenshot({ path: `${SHOTS}/19-calltime-1440.png`, fullPage: true });
+
+// ── 8. The treasurer: Pledges from call time ──
+const tinv = (await api('/actions/member.invite', { email: `tess+${tag}@example.org`, role: 'treasurer' })).json.joinUrl;
+const tctx = await browser.newContext(WIDE);
+const tp = await tctx.newPage();
+tp.on('pageerror', (e) => errors.push(`treasurer: ${e.message}`));
+await tp.goto(`${BASE}/join/${tinv.split('/join/')[1]}`);
+await tp.fill('#join-name', 'Tess Example');
+await tp.fill('#join-password', 'treasurer-pass-2026');
+await tp.click('button[type="submit"]');
+await tp.waitForURL((u) => !/\/join\//.test(String(u)), { timeout: 15000 }).catch(() => {});
+await tp.goto(`${BASE}/admin/money`, { waitUntil: 'domcontentloaded' });
+await tp.waitForSelector('.ops-row:has-text("Pledges from call time")', { timeout: 10000 });
+const prow = await tp.innerText('.ops-row:has-text("Pledges from call time")');
+check('Donations → Needs you: "Pledges from call time · 1 · $250"', /Pledges from call time · 1/.test(prow) && /\$250/.test(prow), prow.replace(/\s+/g, ' '));
+await tp.click('.ops-row:has-text("Pledges from call time")');
+await tp.waitForSelector('#ct-pledges .ops-row', { timeout: 8000 });
+await tp.screenshot({ path: `${SHOTS}/20-needs-you-pledges-1440.png`, fullPage: true });
+const pledgeText = await tp.innerText('#ct-pledges');
+const pledged = donors.find((d) => pledgeText.includes(d.name));
+check('the pledge: donor, Cleo · the date, and a quiet Drop', Boolean(pledged) && /Cleo Example · \d+ \w+ \d{4}/.test(pledgeText) && /Drop/.test(pledgeText), pledgeText.replace(/\s+/g, ' '));
+const tapi = apiOf(tctx);
+await tapi('/actions/gift.log', { person_id: pledged.id, amount_cents: 25000, date: today, slate: 'council', method: 'cheque' });
+await tp.reload({ waitUntil: 'domcontentloaded' });
+await tp.waitForSelector('.ops-row:has-text("Pledges from call time")', { timeout: 10000 });
+await tp.click('.ops-row:has-text("Pledges from call time")');
+await tp.waitForSelector('#ct-pledges .chip', { timeout: 8000 });
+check('the gift logged: the pledge shows "Gift in ✓ $250"', /Gift in ✓ \$250/.test(await tp.innerText('#ct-pledges')));
+const tph = await browser.newContext(PHONE);
+await tph.addCookies(await tctx.cookies());
+const tpp = await tph.newPage();
+await tpp.goto(`${BASE}/admin/money`, { waitUntil: 'domcontentloaded' });
+await tpp.waitForSelector('.ops-row:has-text("Pledges from call time")', { timeout: 10000 });
+await tpp.click('.ops-row:has-text("Pledges from call time")');
+await tpp.waitForSelector('#ct-pledges .chip', { timeout: 8000 });
+const m8 = await measure(tpp, 'main');
+check('Donations at 390 with pledges: no sideways scroll', m8.overflow <= 0, JSON.stringify(m8));
+await tpp.screenshot({ path: `${SHOTS}/21-pledges-390.png`, fullPage: true });
+
+// ── 9. Mo sees none of Cleo's call time ──
+const moCt = await moB.api(`/calltime/${bankId}`);
+const moHome = (await moB.api('/candidate/home')).json;
+check('Mo: Cleo’s call time answers 404, and none is his', moCt.status === 404 && moHome.calltime.banks.length === 0, `${moCt.status} ${JSON.stringify(moHome.calltime)}`);
+await moB.p.goto(`${BASE}/call-time`, { waitUntil: 'domcontentloaded' });
+await moB.p.waitForSelector('text=No call time yet', { timeout: 10000 });
+check('Mo’s /call-time: "No call time yet"', true);
 
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();

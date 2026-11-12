@@ -65,7 +65,7 @@ export function PledgesRow({ open: summary, onDone }) {
     onDone(text);
   };
   return (
-    <li className="ops-item" data-open={open ? '' : undefined}>
+    <li className="ops-item">
       <button type="button" className="ops-row" aria-expanded={open} aria-controls="ct-pledges" onClick={() => setOpen((v) => !v)}>
         <span className="ops-row__main">
           <span className="ops-row__name">Pledges from call time · {n ? n.toLocaleString('en-CA') : 'all in'}</span>
