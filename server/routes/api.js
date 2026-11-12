@@ -27,13 +27,14 @@ import { runHooks } from '../lib/hooks.js';
 import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
-import { personsWhere } from '../lib/audience.js';
+import { personsWhere, joinWhere } from '../lib/audience.js';
+import { mayReach, address, person } from '../lib/reach.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
 import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { notSuppressed } from '../lib/mail/index.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
 // The open pass (ext/passes) and the door rule it shares with the phone.
-import { openPass } from '../ext/passes/rule.js';
+import { openPass, listedWhere } from '../ext/passes/rule.js';
 import { doorState, inPass } from '@starbase/shared/passes';
 // Where people use the app: never a website domain (ext/site).
 import { hostOfRequest, noteAppHost } from '../ext/site/store.js';
@@ -143,7 +144,8 @@ app.post('/actions/:name', async (c) => {
       { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: name },
       (tx, emit) => action.handler(tx, ctx, parsed.data, emit, ready),
     );
-    if (!action.after) return c.json({ ...result, seq: lastSeq });
+    // What this person may read of what was saved (person.update: lib/viewer.js).
+    if (!action.after) return c.json({ ...(action.answer ? action.answer(ctx, result) : result), seq: lastSeq });
     // Committed: now the work that must never hold the campaign lock (an
     // email send). Its writes are runActions of their own.
     const done = await action.after(c.get('db'), ctx, result);
@@ -170,22 +172,55 @@ const personRow = (r) => ({
   socials: parseJson(r.socials, {}),
 });
 
+// ?reach=call|text: only the people the one place (lib/reach.js) says may
+// be called (a phone bank's rule) or texted (a list's text's) — so a call
+// list, its count and every send agree. Anything else names nobody.
+const REACH_SQL = { call: () => mayReach('call', 'bank', person('p', '$1')), text: () => mayReach('text', 'list', person('p', '$1')) };
+const reachSql = (want) => (!want ? '' : REACH_SQL[want] ? ` and ${REACH_SQL[want]()}` : ' and false');
+// A person's place in the name order, for ?after= and ?until= ($n: their id).
+const byName = (n) => `(select lower(a.name), a.id from persons a where a.id = $${n} and a.workspace_id = $1)`;
+
 app.get('/persons', async (c) => {
   const ctx = c.get('ctx');
   const limit = Math.min(Number(c.req.query('limit')) || 25, 2000);
   // The one WHERE behind People, saved lists and a send's audience (lib/audience.js).
   const { where, params } = await personsWhere(c.get('db'), ctx, c.req.query());
-  params[3] = limit;
+  // One more than asked for says whether anyone comes after these (more).
+  params[3] = limit + 1;
+  // ?after=<a person's id>: the people after them, by name — the next part
+  // of a call list longer than one load (found through the name index, so
+  // the last part of a city's list is as quick as the first). ?until=<id>:
+  // up to them and no further — a part already loaded, asked for again,
+  // keeps its place even when someone new joins the list before it.
+  let from = '';
+  for (const [key, op] of [['after', '>'], ['until', '<=']]) {
+    const id = c.req.query(key);
+    if (!id) continue;
+    if (!UUID_RE.test(id)) { from += ' and false'; continue; }
+    params.push(id);
+    from += ` and (lower(p.name), p.id) ${op} ${byName(params.length)}`;
+  }
   // note: their own words from the volunteer form (attrs.note), so the call
   // card needs no per-person fetch. Nothing else from attrs is exposed.
   const { rows } = await c.get('db').query(
     `select p.id, p.kind, p.name, p.first_name, p.middle_name, p.last_name, p.email, p.phone, p.address, p.house_number, p.unit, p.city, p.postal,
             p.lat, p.lng, p.tags, p.socials, p.rating, p.rated_at, p.voted_at, p.attrs->>'note' as note
-     from persons p where ${where}
-     order by lower(p.name) limit $4`,
+     from persons p where ${where}${reachSql(c.req.query('reach'))}${from}
+     order by lower(p.name), p.id limit $4`,
     params,
   );
-  return c.json({ persons: rows.map(personRow).map(forViewer(ctx)) });
+  return c.json({ persons: rows.slice(0, limit).map(personRow).map(forViewer(ctx)), more: rows.length > limit });
+});
+
+// How many people a People query names — the real number, however long the
+// list (the rows above stop at their limit). Asked for apart from the rows,
+// so a slow count never holds up the names. Takes ?reach= as the rows do.
+app.get('/persons/count', async (c) => {
+  const ctx = c.get('ctx');
+  const { where, params } = await personsWhere(c.get('db'), ctx, c.req.query());
+  params[3] = 1;
+  const { rows } = await c.get('db').query(`select count(*)::int as total from persons p where ${where}${reachSql(c.req.query('reach'))}`, params);
+  return c.json({ total: rows[0].total });
 });
 
 // Everything a door card needs, keyed by address: persons at that address,
@@ -519,17 +554,26 @@ const parseJ = (v, d) => (typeof v === 'string' ? JSON.parse(v) : (v ?? d));
 // pass_tries / pass_last_outcome: this person's door contacts in the open
 // pass (passId; ext/passes) — how many tries (every door contact; a lit drop is a not-home too)
 // and the latest outcome. 0 / null with no pass open.
-const loadLocated = async (db, ws, passId = null, box = null) => (await db.query(
-  `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags, p.voted_at,
-          (select max(c.created_at) from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id) as last_contact_at,
-          (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id order by c.created_at desc limit 1) as last_outcome,
-          exists (select 1 from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door') as door_knocked,
-          (select count(*)::int from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid) as pass_tries,
-          (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid order by c.created_at desc limit 1) as pass_last_outcome
-   from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.lng is not null
-     ${box ? 'and p.lat between $3 and $5 and p.lng between $4 and $6' : ''}`,
-  box ? [ws, passId, ...box] : [ws, passId],
-)).rows.map((p) => ({ ...p, tags: parseJ(p.tags, []), door_knocked: !!p.door_knocked }));
+// pass_listed: with a pass that walks a List (ext/lists), whether the person
+// is on it as it stands now — the pass's universe (shared/passes.js
+// inUniverse). onList: the list's WHERE, read once per request (ext/passes
+// listedWhere); null for a pass that walks no list.
+const loadLocated = async (db, ctx, pass = null, box = null, onList = null) => {
+  const params = box ? [ctx.workspaceId, pass?.id || null, ...box] : [ctx.workspaceId, pass?.id || null];
+  const listed = onList ? `coalesce((${joinWhere(params, onList)}), false)` : null;
+  return (await db.query(
+    `select p.id, p.name, p.email, p.phone, p.address, p.house_number, p.unit, p.lat, p.lng, p.rating, p.tags, p.voted_at,
+            (select max(c.created_at) from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id) as last_contact_at,
+            (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id order by c.created_at desc limit 1) as last_outcome,
+            exists (select 1 from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door') as door_knocked,
+            (select count(*)::int from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid) as pass_tries,
+            (select c.outcome from contacts c where c.person_id = p.id and c.workspace_id = p.workspace_id and c.channel = 'door' and c.pass_id = $2::uuid order by c.created_at desc limit 1) as pass_last_outcome
+            ${listed ? `, ${listed} as pass_listed` : ''}
+     from persons p where p.workspace_id = $1 and p.deleted_at is null and p.lat is not null and p.lng is not null
+       ${box ? 'and p.lat between $3 and $5 and p.lng between $4 and $6' : ''}`,
+    params,
+  )).rows.map((p) => ({ ...p, tags: parseJ(p.tags, []), door_knocked: !!p.door_knocked, ...(listed ? { pass_listed: !!p.pass_listed } : {}) }));
+};
 // A polygon's corners, [south, west, north, east] (null for no polygon).
 const boxOf = (polygon) => {
   const pts = (polygon || []).map(([lat, lng]) => [Number(lat), Number(lng)]).filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b));
@@ -579,13 +623,14 @@ app.get('/turfs', async (c) => {
   // turf's counts come when its sheet opens (GET /turfs/:id). A volunteer's
   // own few always come whole (and stay on the phone for no signal).
   const outline = desk && c.req.query('outline') === '1';
+  const onList = outline ? null : await listedWhere(db, ctx, pass);
   // Each turf reads only the people inside its own corners (an index finds
   // them), never the whole list: a city-wide voter file stays quick.
   const out = [];
   for (const t of turfs) {
     const polygon = parseJ(t.polygon, []);
     const box = outline ? null : boxOf(polygon);
-    const located = box ? await loadLocated(db, ctx.workspaceId, pass?.id, box) : [];
+    const located = box ? await loadLocated(db, ctx, pass, box, onList) : [];
     out.push({
       id: t.id, name: t.name, color: t.color, notes: t.notes, polygon, created_at: t.created_at,
       members: members.filter((m) => m.turf_id === t.id).map(({ id, name }) => ({ id, name })),
@@ -613,7 +658,7 @@ app.get('/turfs/:id', async (c) => {
   const polygon = parseJ(t.polygon, []);
   const pass = await openPass(db, ctx.workspaceId);
   const box = boxOf(polygon);
-  const located = box ? await loadLocated(db, ctx.workspaceId, pass?.id, box) : [];
+  const located = box ? await loadLocated(db, ctx, pass, box, await listedWhere(db, ctx, pass)) : [];
   return c.json({
     turf: {
       id: t.id, name: t.name, color: t.color, notes: t.notes, polygon, created_at: t.created_at, members,
@@ -637,7 +682,7 @@ app.get('/turfs/:id/walk', async (c) => {
   const polygon = parseJ(t.polygon, []);
   const pass = await openPass(db, ctx.workspaceId);
   const box = boxOf(polygon);
-  const located = box ? await loadLocated(db, ctx.workspaceId, pass?.id, box) : [];
+  const located = box ? await loadLocated(db, ctx, pass, box, await listedWhere(db, ctx, pass)) : [];
   const doors = walkOrder(groupDoors(located.filter((p) => pointInPolygon(p.lat, p.lng, polygon))).filter((d) => inPass(d, pass)));
   const view = forViewer(ctx);
   // Each door's signs (requested or up), matched the way the map matches
@@ -665,7 +710,7 @@ app.get('/turfs/:id/walk', async (c) => {
       const state = doorState(d, pass);
       return { ...d, persons: d.persons.map(view), signs: signsAt(d), state, tries: Math.max(0, ...d.persons.map((p) => p.pass_tries || 0)), done: state === 'done' };
     }),
-    pass: pass ? { id: pass.id, name: pass.name, kind: pass.kind, who: pass.who, tries: pass.tries, started_at: pass.started_at } : null,
+    pass: pass ? { id: pass.id, name: pass.name, kind: pass.kind, who: pass.who, list_id: pass.list_id || null, tries: pass.tries, started_at: pass.started_at } : null,
     stats: turfStats(polygon, located, pass),
   });
 });
@@ -917,9 +962,7 @@ app.get('/blasts', async (c) => {
               (count(*) filter (where j.job_on and ${goingRow('r')} and l.live))::int as going_count
        from blast_recipients r
        cross join lateral (
-         select ((b.kind <> 'newsletter' or exists (
-           select 1 from subscriptions s
-           where s.workspace_id = b.workspace_id and lower(s.email) = lower(r.email) and s.status = 'subscribed'))
+         select ((b.kind <> 'newsletter' or ${mayReach('email', 'newsletter', address('r.email'))})
            and ${notSuppressed('b.workspace_id', 'r.email')}) as live
        ) l
        where r.workspace_id = b.workspace_id and r.blast_id = b.id
@@ -927,9 +970,10 @@ app.get('/blasts', async (c) => {
      where b.workspace_id = $1 order by b.created_at desc limit 200`,
     [ctx.workspaceId],
   );
+  // Who a press release goes to (field.js blast.send; lib/reach.js decides).
   const media = (await c.get('db').query(
-    `select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null and p.email is not null and p.tags @> '"media"'::jsonb
-       and ${notSuppressed('p.workspace_id', 'p.email')}`,
+    `select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null and p.tags @> '"media"'::jsonb
+       and ${mayReach('email', 'press', person('p', '$1'))}`,
     [ctx.workspaceId],
   )).rows[0].n;
   const files = await attachmentsOf(c.get('db'), ctx.workspaceId);

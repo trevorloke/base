@@ -190,8 +190,12 @@ test('money stays in the tab whatever role the tab thinks it has; a desk’s Peo
   // …and a search over it with the proxy down is answered from it too.
   const found = await qc.fetchQuery({ queryKey: ['persons', 'list', 'q=kwame&limit=300'], queryFn: async () => { throw new api.ApiError(503, 'request failed (503)'); } });
   assert.equal(found.persons.length, 1);
-  // A field cut (ext/cuts) a row can't answer: no signal, never everyone under its chip.
-  for (const cut of ['knocked=14', 'outcome=no_answer', 'turf=0b6c3d8e-1f2a-4c5b-8d9e-0a1b2c3d4e5f', 'postal=V3W', 'notag=VIP']) {
+  // A field cut (ext/cuts), or a rule of what they gave, joined, answered,
+  // came to, another list or when they were added (ext/audience, ext/lists),
+  // that a row can't answer: no signal, never everyone under its chip.
+  const someList = '0b6c3d8e-1f2a-4c5b-8d9e-0a1b2c3d4e5f';
+  for (const cut of ['knocked=14', 'outcome=no_answer', `turf=${someList}`, 'postal=V3W', 'notag=VIP',
+    'gave=year', 'member=now', `answer=${someList}%3Aany`, 'shift=came%3A30', 'since=2026-01-01', `list=${someList}`, `notlist=${someList}`]) {
     await assert.rejects(qc.fetchQuery({ queryKey: ['persons', 'list', `q=&limit=300&${cut}`], queryFn: async () => { throw new api.ApiError(503, 'request failed (503)'); } }),
       /503/, `${cut}: not the whole list`);
   }

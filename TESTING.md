@@ -109,9 +109,15 @@ one tap away under **More**.
   gifts over the limit, shifts short of people,
   signs to put up.
 - **Lists** (Today → More → Lists, or People → *Save as a list* once a
-  filter is on) — a saved filter counts who matches as you pick (and how
-  many can be emailed or texted); a hand-picked list takes people by name.
-  A list has *Download CSV*, *Email this list* and *Text this list*.
+  filter is on) — every list by name at once, then each one's numbers as
+  they're counted (*19 people · 17 can be reached*) and **Email · Text ·
+  Call · Walk**, each with how many it reaches. A saved filter counts who
+  matches as you pick (how many can be emailed, texted, called), with more
+  under *More rules*: gave, membership, shifts, a survey answer, another
+  list, added since; a hand-picked list takes people by name. A list's
+  page has its five numbers, *Email · Text · Call · Walk this list*,
+  *Download CSV* and *Save these people as they are now* (a hand-picked
+  copy of who is on it this moment).
 - **Outreach** is two modules, **Email** and **Texting** (old links —
   /outreach/newsletter, /eblast, /press, /texts — land in them).
 - **Outreach → Email → Write an email** — *To*: the newsletter's
@@ -222,10 +228,17 @@ one tap away under **More**.
   done*; *Progress* shows each member's count and, tapped, which modules. A
   volunteer sees the courses, not *Edit*.
 - **Phone banks** (People → More → Phone banks, or Today → More — in the admin) → *New
-  phone bank*: a name, *Undecided* under *Who to call* (the count updates as
-  you filter), a script, *Make the bank*. On the bank: *Hand out* three
+  phone bank*: a name; *Who to call* **From a list** (a list's *Call* opens
+  it picked: *14 of 19 on it can be called*) or **Pick people** (*Undecided*;
+  the count updates as you filter); a script, *Make the bank*. A bank from
+  a list says so: take someone off the list and the bank says *1 left the
+  list or can't be called now*; **Add who joined since** brings newcomers
+  in. Calls on the list itself (*call them yourself*) goes on past its
+  first 300. On the bank: *Hand out* three
   numbers to a volunteer (or a team — split evenly), watch *Callers* fill;
-  *Take back* unfinished ones; *Close*. On the volunteer's phone, Calls
+  *Take back* unfinished ones; *Close*. While the bank is open, deleting
+  its list is refused (*The phone bank “…” calls this list — close it
+  first*). On the volunteer's phone, Calls
   says *Your call lists 1*; tapping through opens the bank on the Calls
   card with the script; each call they log crosses a number off, *Skip*
   (on the bank page) crosses one off without a call.
@@ -234,7 +247,9 @@ one tap away under **More**.
 - **Passes** (Turfs → *Pass: none ›*) — **Start a pass**: a name, *What
   for* (Persuasion · Get out the vote · Lit drop · Find out who's who), *Who*
   (All doors · Not rated yet · Undecided or not rated · Yes (1–2) · Everyone
-  but opposed) and *Tries* (2). Every turf's *doors left* changes the moment
+  but opposed), *List to walk* (a list's *Walk* opens the form with it
+  picked: only doors with someone on it are walked) and *Tries* (2). Every
+  turf's *doors left* changes the moment
   it starts: doors knocked before are back on the lists, doors outside the
   universe leave them. The pass's card counts *doors knocked · talked · yes*
   as the team works; **End this pass** (asks in place) puts every knocked
@@ -385,7 +400,12 @@ one tap away under **More**.
   saved list (and a blast or Calls from it) keeps them. Once the website
   has people, *Did on the website* is there too (*Signed a petition*, one
   petition by name, *Offered to volunteer*, *Anything*…) — a volunteer's
-  Calls never offers the money forms.
+  Calls never offers the money forms. Below them, the desk's own: *Gave*
+  (this year · before, not this year · never · at least $X in one year),
+  *Membership*, *Shifts* (came to or missed one), *Survey answer*, *Lists*
+  (on another list or not) and *Added since*. The count is the real
+  number, however many; **Save these people as they are now**, beside
+  *Save as a list*, keeps exactly who matches this moment.
 
 - **Scripts** — Today → More → **Scripts**: write what to say at the door
   and on the phone; **+ First name**, **+ Your name**, **+ Campaign** fill in

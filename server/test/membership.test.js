@@ -140,6 +140,27 @@ test('a website membership (Base Web’s tag) is a membership; the members expor
   assert.match(csv.split(/\r?\n/)[0], /term_years,starts_on,ends_on,status,youth,citizenship,source,declaration_on/);
 });
 
+// A volunteer given Donations enters paper forms. They never see an email
+// on file (lib/viewer.js), and the form they enter still puts the member on
+// the newsletter at that email — the same as the same form from the desk.
+test('a volunteer given Donations enters a form for someone on file: the email on file joins the newsletter', async () => {
+  const me = ok(await vol.get('/api/auth/me'));
+  const fay = ok(await mgr.action('person.create', { name: 'Fay Example', email: 'fay.member@example.org', phone: '604-555-0161' })).person;
+  const gil = ok(await mgr.action('person.create', { name: 'Gil Example', email: 'gil.member@example.org', phone: '604-555-0162' })).person;
+  const form = { city: 'Surrey', citizenship: 'citizen', term: 1, once: { kind: 'amount', amount_cents: 1000 }, method: 'cash', signed: true };
+  ok(await mgr.action('permission.member.set', { user_id: me.user.id, grant: ['money'] }));
+  try {
+    const r = ok(await vol.action('membership.enter', { person_id: fay.id, ...form }));
+    assert.ok(!/fay\.member@/.test(JSON.stringify(r)), 'the answer names no email');
+    ok(await enter({ person_id: gil.id, ...form }));
+    const subs = (await db.query("select email, status from subscriptions where email in ('fay.member@example.org', 'gil.member@example.org') order by email")).rows;
+    assert.deepEqual(subs.map((x) => [x.email, x.status]), [['fay.member@example.org', 'subscribed'], ['gil.member@example.org', 'subscribed']]);
+    assert.deepEqual([(await fieldsOf(fay.id))['Email opt-in'], (await fieldsOf(gil.id))['Email opt-in']], [true, true]);
+  } finally {
+    ok(await mgr.action('permission.member.set', { user_id: me.user.id, grant: [] }));
+  }
+});
+
 test('the desk’s: a volunteer can’t enter a form or read the club amounts; the books verify', async () => {
   assert.equal((await vol.action('membership.enter', { first_name: 'X', last_name: 'Y' })).status, 403);
   assert.equal((await vol.get('/api/membership/form')).status, 403);

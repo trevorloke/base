@@ -1,8 +1,9 @@
 // Phone banks — a list of numbers to call, handed out to callers, crossed
 // off as calls are logged.
 //
-//   sql.js      call_banks, call_bank_numbers
-//   actions.js  bank.create/update/remove/add/assign/release (desk), bank.done (anyone)
+//   sql.js      call_banks, call_bank_numbers (call_banks.list_id: a bank made from a List)
+//   numbers.js  which numbers are still to call, as things stand (can be called; still on the list)
+//   actions.js  bank.create/update/remove/add/topup/assign/release (desk), bank.done (anyone)
 //   api.js      GET /banks, /banks/:id (desk); /banks/mine, /banks/:id/mine (anyone)
 // A phone call logged by the caller a number was handed to crosses it off
 // (contactLogged hook); the Calls screen works a bank like any list.

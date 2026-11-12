@@ -14,7 +14,6 @@ import { createHash, randomBytes } from 'node:crypto';
 import { newId } from '../lib/events.js';
 import { emailConfigured, sendEmail, sendText, shiftMessage } from '../lib/notify.js';
 // Addresses the campaign must not email (they bounced for good or reported spam).
-import { notSuppressed } from '../lib/mail/index.js';
 import { httpError } from './util.js';
 import { runHooks, hasHook } from '../lib/hooks.js';
 // The tracked newsletter/press send path and A/B subject lines.
@@ -24,6 +23,7 @@ import {
 } from '../ext/abtests/send.js';
 import { ATTACH_COUNT, bindAttachments, loadAttachments } from '../ext/abtests/attach.js';
 import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
+import { mayReach, person, address } from '../lib/reach.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
 import { DEFAULT_TZ } from '../lib/org.js';
@@ -827,16 +827,18 @@ export const FIELD_ACTIONS = {
           ? rows.map((r) => ({ ...r, phone: e164(r.phone) })).filter((r) => r.phone)
           : rows;
       } else if (input.kind === 'newsletter') {
+        // Who may get it is decided in one place (lib/reach.js): here, the
+        // addresses on the newsletter list as subscribed.
         audience = (await tx.query(
-          `select s.id, s.email, s.name from subscriptions s where s.workspace_id = $1 and s.status = 'subscribed'
-             and ${notSuppressed('s.workspace_id', 's.email')}`,
+          `select n.id, n.email, n.name from subscriptions n
+           where n.workspace_id = $1 and ${mayReach('email', 'newsletter', address('n.email'))}`,
           [ctx.workspaceId],
         )).rows;
       } else {
         audience = (await tx.query(
           `select p.id as person_id, p.email, p.name from persons p
-           where p.workspace_id = $1 and p.deleted_at is null and p.email is not null
-             and p.tags @> '"media"'::jsonb and ${notSuppressed('p.workspace_id', 'p.email')}`,
+           where p.workspace_id = $1 and p.deleted_at is null and p.tags @> '"media"'::jsonb
+             and ${mayReach('email', 'press', person('p', '$1'))}`,
           [ctx.workspaceId],
         )).rows;
       }

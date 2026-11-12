@@ -1,7 +1,8 @@
 // GET /passes (any role): { open, past }.
-//   open   the open pass — { id, name, kind, who, tries, started_at, stats }
-//          — or null. Every role reads it: the field app says which pass
-//          is on and what it's for.
+//   open   the open pass — { id, name, kind, who, list_id, tries,
+//          started_at, stats } — or null. Every role reads it: the field app
+//          says which pass is on and what it's for. list_name (the List it
+//          walks) is the desk's: a volunteer gets the doors, not the list.
 //   past   ended passes, newest first (at most 50), each with stats — the
 //          desk's; a volunteer gets [].
 //   stats  over the pass's door knocks (contacts.pass_id):
@@ -13,7 +14,7 @@ import { Hono } from 'hono';
 import { openPass } from './rule.js';
 
 export const api = new Hono();
-const COLS = 'id, name, kind, who, tries, started_at, ended_at';
+const COLS = 'id, name, kind, who, list_id, tries, started_at, ended_at';
 const ZERO = { doors_knocked: 0, talked: 0, support_found: 0 };
 
 // pass id → stats, for the ids given (one query for all of them).
@@ -47,6 +48,14 @@ api.get('/passes', async (c) => {
     )).rows
     : [];
   const stats = await statsFor(db, ws, [...(open ? [open.id] : []), ...past.map((p) => p.id)]);
-  const withStats = (p) => ({ ...p, stats: stats.get(p.id) || ZERO });
+  // The lists' names, for the desk (a deleted list keeps its name here).
+  const listIds = desk ? [...new Set([open, ...past].map((p) => p?.list_id).filter(Boolean))] : [];
+  const names = new Map(listIds.length ? (await db.query(
+    'select id, name, deleted_at from lists where workspace_id = $1 and id = any($2::uuid[])', [ws, listIds],
+  )).rows.map((l) => [l.id, l]) : []);
+  const withStats = (p) => ({
+    ...p, stats: stats.get(p.id) || ZERO,
+    ...(desk && p.list_id ? { list_name: names.get(p.list_id)?.name || null, list_gone: !names.get(p.list_id) || !!names.get(p.list_id).deleted_at } : {}),
+  });
   return c.json({ open: open ? withStats(open) : null, past: past.map(withStats) });
 });

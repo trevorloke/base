@@ -25,4 +25,8 @@ create table if not exists list_members (
   primary key (list_id, person_id)
 );
 create index if not exists list_members_person_idx on list_members (workspace_id, person_id);
+
+-- A list a volunteer made (one given the People area): its rule is read
+-- with a volunteer's eyes until the desk saves a rule of its own.
+alter table lists add column if not exists by_volunteer boolean not null default false;
 `;

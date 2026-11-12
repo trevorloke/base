@@ -4,7 +4,10 @@
 //
 //   canvass_passes   name; kind (what for: persuasion · gotv · lit · id);
 //                    who (the universe: all · unrated · undecided · support ·
-//                    not_opposed); tries (1–5 not-homes before a door is
+//                    not_opposed); list_id (a sweep of one List, ext/lists:
+//                    only the people on it, as it stands — null for none;
+//                    no foreign key, lists are a later feature's table);
+//                    tries (1–5 not-homes before a door is
 //                    given up); started_at / ended_at. One open pass per
 //                    campaign (the partial unique index); pass.start ends
 //                    the open one first, in the same transaction.
@@ -29,4 +32,5 @@ create table if not exists canvass_passes (
 create unique index if not exists canvass_passes_open_idx on canvass_passes (workspace_id) where ended_at is null;
 alter table contacts add column if not exists pass_id uuid;
 create index if not exists contacts_pass_idx on contacts (workspace_id, pass_id) where pass_id is not null;
+alter table canvass_passes add column if not exists list_id uuid;
 `;

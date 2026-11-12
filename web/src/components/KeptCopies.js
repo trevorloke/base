@@ -52,6 +52,8 @@ const isDeskRole = (role) => Boolean(role) && role !== 'volunteer';
 const keptAt = new WeakMap();
 const partial = new WeakSet();
 export const keptPartial = (data) => Boolean(data) && partial.has(data);
+// The data on screen is a copy (the server gave no answer for it).
+export const keptCopy = (data) => Boolean(data) && keptAt.has(data);
 
 // What a query's copy is called and where it lives, or null (not kept).
 // Shifts keep the names the field already uses (pages/Shifts.jsx), so Today
@@ -141,10 +143,13 @@ function derivePersons(me, plan, qs) {
     tries.push({ s: same.toString(), rest: false });
   }
   // The whole list (no filters) — unless it's by volunteer role, a profile
-  // field (?field=) or a field cut (?knocked= ?outcome= ?turf= ?postal=
-  // ?notag=), which a row doesn't carry: those say No signal rather than
+  // field (?field=), a field cut (?knocked= ?outcome= ?turf= ?postal=
+  // ?notag=) or what they gave, joined, answered or came to, another list,
+  // when they were added (?gave= ?member= ?answer= ?shift= ?list= ?notlist=
+  // ?since=), which a row doesn't carry: those say No signal rather than
   // show everyone under the filter's chip.
-  const notOnARow = ['role', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'web'];
+  const notOnARow = ['role', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'web',
+    'gave', 'member', 'answer', 'shift', 'list', 'notlist', 'since'];
   if (!notOnARow.some((k) => p.get(k))) tries.push({ s: new URLSearchParams({ q: '', limit: String(limit) }).toString(), rest: true });
   for (const t of tries) {
     if (t.s === qs) continue;

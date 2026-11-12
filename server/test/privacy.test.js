@@ -169,6 +169,30 @@ test('volunteer JSON carries no one else\'s email and no donor tags; their own r
   assert.ok((await desk.get('/api/map/doors')).json.persons.find((p) => p.id === neighbour.id).tags.includes('lapsed'));
 });
 
+// Given the People area a volunteer may save a profile; the answer to the
+// save is a person row like any other they read (lib/perms.js: a grant
+// changes what they may do, never what they receive).
+test('a volunteer given People: the answer to a profile save carries no one else’s email and no donor tags', async () => {
+  const me = (await vol.get('/api/auth/me')).json;
+  const kept = await desk.createPerson('Kept Quiet Example', { email: 'kept.quiet@example.org', phone: '604-555-0145', tags: ['donor', 'youth'] });
+  assert.equal((await vol.action('person.update', { id: kept.id, phone: '604-555-0146' })).status, 403, 'no grant: not theirs to save');
+  assert.equal((await desk.action('permission.member.set', { user_id: me.user.id, grant: ['people'] })).status, 200);
+  try {
+    const saved = await vol.action('person.update', { id: kept.id, phone: '604-555-0146' });
+    assert.equal(saved.status, 200);
+    assert.deepEqual([saved.json.person.phone, saved.json.person.email, saved.json.person.tags], ['604-555-0146', null, ['youth']]);
+    // The same person sent again from a phone that lost the first answer.
+    const again = await vol.action('person.create', { id: kept.id, name: 'Kept Quiet Example' });
+    assert.deepEqual([again.json.duplicate, again.json.person.email, again.json.person.tags], [true, null, ['youth']]);
+    for (const r of [saved, again]) assert.ok(!/kept\.quiet@|donor/.test(JSON.stringify(r.json)), JSON.stringify(r.json));
+    // Nothing was lost by it, and the desk's answer is the whole row.
+    const row = (await desk.action('person.update', { id: kept.id, city: 'Surrey' })).json.person;
+    assert.deepEqual([row.email, row.tags, row.phone], ['kept.quiet@example.org', ['donor', 'youth'], '604-555-0146']);
+  } finally {
+    await desk.action('permission.member.set', { user_id: me.user.id, grant: [] });
+  }
+});
+
 test('volunteer filters never match on what they cannot see: no email search, no donor-tag filter, has=email is only them', async () => {
   const me = (await vol.get('/api/auth/me')).json;
   const ids = async (cl, qs) => (await cl.get(`/api/persons?${qs}`)).json.persons.map((p) => p.id);
@@ -185,6 +209,12 @@ test('volunteer filters never match on what they cannot see: no email search, no
     assert.ok((await ids(desk, `tag=${encodeURIComponent(tag)}`)).includes(neighbour.id), `desk tag=${tag}`);
   }
   assert.ok((await ids(vol, 'tag=media')).includes(neighbour.id), 'other tags still filter');
+  // Several tags with commas: a money tag among them still matches no one.
+  for (const tag of ['zzz,lapsed', 'media, Major Donor', 'lapsed,media']) {
+    assert.deepEqual(await ids(vol, `tag=${encodeURIComponent(tag)}`), [], `tag=${tag}`);
+    assert.equal((await vol.get(`/api/persons/count?tag=${encodeURIComponent(tag)}`)).json.total, 0, `count tag=${tag}`);
+    assert.ok((await ids(desk, `tag=${encodeURIComponent(tag)}`)).includes(neighbour.id), `desk tag=${tag}`);
+  }
 
   assert.deepEqual(await ids(vol, 'has=email&limit=2000'), [self.id], 'has=email: only the one email they may see');
   assert.ok((await ids(desk, 'has=email&limit=2000')).includes(neighbour.id));

@@ -4,7 +4,17 @@
 // it on Calls: a No answer says "back on your list <time>" and the number
 // leaves the list for now; the bank line counts it ("1 to call back");
 // "Call back…" → This evening does the same at 6; the desk's bank page shows
-// both as "call back …". Measured at 390.
+// both as "call back …". Measured at 390. Call this list: a list's Call
+// opens New phone bank from it ("3 of 4 on it can be called"), the bank
+// says who left the list and takes in who joined since; Lists ask for their
+// numbers three at a time, also coming back once they've gone stale; Calls
+// on a list of 305 says "305 to call" and goes on past its first 300; a
+// bank of 540 handed to one caller comes 500 at a time ("540 to call",
+// "40 more to call · Load them"), the count carries on over the refill and
+// the last call ends on "540 of 540 done · All done" — a last call made
+// with no signal waits ("1 call saved on this phone"), then ends the same
+// way once it has sent; a list an open bank
+// calls can't be deleted, and a closed bank whose list was deleted stays closed.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4132 node server/index.js &
 //   BASE=http://127.0.0.1:4132 SHOTS=/tmp/banks node e2e-banks.mjs
@@ -104,6 +114,12 @@ const t3 = await toast();
 check(`Left message on ${third.split(' ')[0]}: "Left message", no call back`, /Left message/.test(t3) && !/back on your list/.test(t3), t3);
 mine = (await vp.evaluate(async (b) => (await fetch(`/api/banks/${b}/mine`)).json(), bankId));
 check('the server: done, nobody left to call now', mine.bank.done === 1 && mine.persons.length === 0, JSON.stringify(mine.bank));
+// The last number on the list: the screen reads the bank again and says so in the server's words.
+await vp.waitForFunction(() => /All done/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
+const endText = (await vp.innerText('main')).replace(/\s+/g, ' ');
+check('the list runs out: "1 of 3 done · 2 to call back", "All done — every number on your list is called", no "Start over"',
+  /1 of 3 done/.test(await line()) && /2 to call back/.test(await line()) && /All done — every number on your list is called/.test(endText) && !/Start over/.test(endText),
+  `${await line()} · ${endText.slice(-140)}`);
 
 // ── The desk's bank page ──
 await page.reload({ waitUntil: 'domcontentloaded' });
@@ -111,6 +127,228 @@ await page.waitForSelector('.bk-table', { timeout: 8000 });
 const statuses = await page.$$eval('.bk-table tbody tr td:nth-of-type(4)', (els) => els.map((e) => e.innerText.trim()));
 check('the desk sees "call back …" on both, with the try counted on the No answer', statuses.filter((x) => /^call back /.test(x)).length === 2 && statuses.some((x) => /1 try/.test(x)), statuses.join(' | '));
 check('the No answer setting reads back', (await page.inputValue('section[aria-label="No answer"] select >> nth=0')) === '2');
+
+// ── Call this list: a List feeds a phone bank ──
+// Four on the list; Gus asked not to be called, so three can be.
+for (const [n, ph, tags] of [['Dee', '44', ['call-list']], ['Eve', '45', ['call-list']], ['Fay', '46', ['call-list']], ['Gus', '47', ['call-list', 'do-not-contact']]]) {
+  await api('/actions/person.create', { name: `${n} Example`, phone: `604-555-01${ph}`, tags });
+}
+const callList = (await api('/actions/list.create', { name: 'Call these people', kind: 'filter', filter: { tag: 'call-list' } })).json.list;
+await page.goto(`${ADMIN}/lists`, { waitUntil: 'domcontentloaded' });
+const row = page.locator('.ops-item', { has: page.locator('.au-row__name', { hasText: 'Call these people' }) });
+await row.locator('.au-go a:has-text("Call")').waitFor({ timeout: 8000 });
+await page.waitForFunction(() => /4 people · 3 can be reached/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
+const rowText = (await row.innerText()).replace(/\s+/g, ' ');
+check('Lists: the row says "4 people · 3 can be reached" and Call says 3', /4 people · 3 can be reached/.test(rowText) && /Call\s*3\b/.test(rowText), rowText);
+await row.locator('.au-go a:has-text("Call")').click();
+await page.waitForURL(/\/banks\/new\?list=/, { timeout: 8000 });
+await page.waitForFunction(() => /3 of 4 on it can be called/.test(document.body.innerText), null, { timeout: 8000 }).catch(() => {});
+let t = (await page.innerText('main')).replace(/\s+/g, ' ');
+check('Call → New phone bank, from the list: "3 of 4 on it can be called", named after it',
+  /3 of 4 on it can be called/.test(t) && (await page.inputValue('.bk-form select')) === callList.id
+  && (await page.inputValue('.bk-form input[placeholder^="Undecided"]')) === 'Call these people'
+  && (await page.getAttribute('.au-from button:has-text("From a list")', 'aria-pressed')) === 'true', t.slice(0, 240));
+const mNew = await page.evaluate(() => ({ yellow: [...document.querySelectorAll('.btn-primary')].filter((el) => el.getBoundingClientRect().width > 0).length, overflow: document.documentElement.scrollWidth - window.innerWidth }));
+check('…one yellow, no sideways scroll', mNew.yellow === 1 && mNew.overflow <= 0, JSON.stringify(mNew));
+await page.screenshot({ path: `${SHOTS}/02-call-this-list.png` });
+await page.click('.bk-form button[type="submit"]:has-text("Make the bank with 3 numbers")');
+await page.waitForURL(/\/banks\/[0-9a-f-]{36}$/, { timeout: 8000 }).catch(() => {});
+const listBankId = page.url().split('/').pop();
+let lb = (await api(`/banks/${listBankId}`)).json?.bank;
+check('the bank: three numbers, made from the list', lb?.total === 3 && lb.list_id === callList.id && lb.list_name === 'Call these people', JSON.stringify(lb && { total: lb.total, list: lb.list_name }));
+// Dee leaves the list (her tag is taken off): she leaves the calls not made yet.
+const dee = (await api('/persons?q=Dee%20Example&limit=1')).json.persons[0];
+await api('/actions/person.update', { id: dee.id, tags: [] });
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.au-banklist', { timeout: 8000 });
+t = (await page.innerText('main')).replace(/\s+/g, ' ');
+const deeRow = (await page.innerText(`.bk-table tbody tr:has-text("Dee Example")`).catch(() => '')).replace(/\s+/g, ' ');
+lb = (await api(`/banks/${listBankId}`)).json?.bank;
+check('Dee leaves the list: "From the list Call these people · 1 left the list…", her row says so, two still to hand out',
+  /From the list Call these people · 1 left the list or can’t be called now/.test(t) && /left the list or can’t be called now/.test(deeRow) && lb.gone === 1 && lb.open === 2, `${t.slice(0, 200)} · ${deeRow}`);
+// Hal joins it: Add who joined since brings him in.
+await api('/actions/person.create', { name: 'Hal Example', phone: '604-555-0148', tags: ['call-list'] });
+await page.click('.au-banklist button:has-text("Add who joined since")');
+await page.waitForSelector('.au-banklist .ops-done', { timeout: 8000 }).catch(() => {});
+const topped = await page.innerText('.au-banklist .ops-done').catch(() => '');
+lb = (await api(`/banks/${listBankId}`)).json?.bank;
+check('Hal joins: "Add who joined since" → "✓ 1 more to call — on the list since"; four numbers', /1 more to call/.test(topped) && lb.total === 4 && lb.open === 3, `${topped} · ${lb.total}/${lb.open}`);
+await page.screenshot({ path: `${SHOTS}/03-bank-from-list.png`, fullPage: true });
+
+// ── Lists ask the server for their numbers three at a time: on a first look,
+// and coming back once they've gone stale (a minute on, by the page's clock) ──
+for (let i = 1; i <= 8; i += 1) await api('/actions/list.create', { name: `Count me ${i}`, kind: 'filter', filter: { tag: 'call-list' } });
+const lpage = await dctx.newPage();
+lpage.on('pageerror', (e) => errors.push(`lists: ${e.message}`));
+await lpage.clock.install();
+let inFlight = 0;
+let most = 0;
+let asked = 0;
+await lpage.route(/\/api\/lists\/[0-9a-f-]+\/counts/, async (route) => {
+  inFlight += 1; asked += 1; most = Math.max(most, inFlight);
+  try {
+    const response = await route.fetch();
+    await sleep(300);
+    await route.fulfill({ response });
+  } catch { await route.abort().catch(() => {}); } finally { inFlight -= 1; }
+});
+const allCounted = () => lpage.waitForFunction(() => {
+  const rows = [...document.querySelectorAll('.au-row')];
+  return rows.length >= 9 && rows.every((r) => /can be reached/.test(r.innerText));
+}, null, { timeout: 15000 }).then(() => true, () => false);
+await lpage.goto(`${ADMIN}/lists`, { waitUntil: 'domcontentloaded' });
+const firstLook = await allCounted();
+check('Lists: every row counted, never more than 3 counts asked at once', firstLook && most >= 1 && most <= 3, `counted ${firstLook} · at once ${most} · asked ${asked}`);
+most = 0; asked = 0;
+await lpage.clock.setSystemTime(new Date(Date.now() + 65_000));
+await lpage.click('.au-row__name >> nth=0');
+await lpage.waitForSelector('.au-figs', { timeout: 8000 }).catch(() => {});
+await lpage.click('.ops-back');
+await lpage.waitForSelector('.au-row', { timeout: 8000 }).catch(() => {});
+const again = await allCounted();
+// Every list's numbers are asked for again, a few at a time, until none is on its way.
+const settled = async (ms = 12000) => {
+  for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (asked >= 9 && inFlight === 0) return true;
+  return false;
+};
+check('…back on Lists a minute on: all 9 stale ones asked for again, still 3 at a time', again && (await settled()) && most <= 3, `counted ${again} · at once ${most} · asked ${asked}`);
+await lpage.close();
+
+// ── Calls with ?list=: past the first 300 ──
+const many = Array.from({ length: 305 }, (_, i) => ({ name: `Many ${String(i + 1).padStart(3, '0')} Example`, phone: `604-555-01${String(i % 100).padStart(2, '0')}` }));
+check('305 people on one list come in', (await api('/data/import', { rows: many, tag: 'many' })).json?.created === 305);
+const manyList = (await api('/actions/list.create', { name: 'Many to call', kind: 'filter', filter: { tag: 'many' } })).json.list;
+await page.goto(`${ADMIN}/calls?list=${manyList.id}&channel=phone`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.cl-progress', { timeout: 10000 });
+await page.waitForFunction(() => /305 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
+check('Calls with the list: "305 to call" — the true number, not the first 300', /305 to call/.test(await page.innerText('.cl-progress')), await page.innerText('.cl-progress'));
+// The first 290 by name called already in this sitting: the next part comes in by itself.
+const first300 = (await api(`/persons?list=${manyList.id}&has=phone&reach=call&limit=300`)).json.persons;
+await page.evaluate((ids) => sessionStorage.setItem('starbase.calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'no_answer' }])))), first300.slice(0, 290).map((p) => p.id));
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.cl-progress', { timeout: 10000 });
+await page.waitForFunction(() => /\b15 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 8000 }).catch(() => {});
+await page.click('.cl-next__btn').catch(() => {});
+const upNext = [(await page.innerText('.cl-card .cl-name').catch(() => '')).trim(),
+  ...await page.$$eval('.cl-next__list li span:first-child', (els) => els.map((e) => e.innerText.trim())).catch(() => [])];
+check('290 done: "15 to call", and the list goes on past 300 (Many 301–305 are on it)',
+  /\b15 to call/.test(await page.innerText('.cl-progress')) && [301, 302, 303, 304, 305].every((n) => upNext.includes(`Many ${n} Example`)) && !/Start over/.test(await page.innerText('main')),
+  `${await page.innerText('.cl-progress')} · ${upNext.join(', ')}`);
+await page.screenshot({ path: `${SHOTS}/04-calls-past-300.png` });
+await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
+
+// ── The last call made with no signal: the list waits for it to send, then ends on the server's word ──
+const six = Array.from({ length: 6 }, (_, i) => ({ name: `Six ${i + 1} Example`, phone: `604-555-017${i}` }));
+check('six more people come in', (await api('/data/import', { rows: six, tag: 'six' })).json?.created === 6);
+const sixList = (await api('/actions/list.create', { name: 'Six to call', kind: 'filter', filter: { tag: 'six' } })).json.list;
+const sixBank = (await api('/actions/bank.create', { name: 'Six bank', list_id: sixList.id })).json.bank;
+await api('/actions/bank.assign', { id: sixBank.id, user_id: joined.user.id });
+await vp.goto(`${BASE}/calls?bank=${sixBank.id}`, { waitUntil: 'domcontentloaded' });
+await vp.waitForSelector('section.cl-card', { timeout: 10000 });
+const leftMessage = async () => {
+  const who = await cardName();
+  await vp.tap('section.cl-card .cl-out:has-text("Left message")');
+  await vp.waitForFunction((w) => (document.querySelector('.cl-card .cl-name')?.innerText || '').trim() !== w, who, { timeout: 8000 }).catch(() => {});
+};
+for (let i = 0; i < 5; i += 1) await leftMessage();
+await vctx.setOffline(true);
+await leftMessage();
+await sleep(1500);
+const heldEnd = (await vp.innerText('main')).replace(/\s+/g, ' ');
+check('the last call with no signal: "6 done", "1 call saved on this phone — your list finishes when you’re back online", no "Start over"',
+  /6 done/.test(heldEnd) && /1 call saved on this (phone|device) — your list finishes when you’re back online/.test(heldEnd) && !/Start over|Loading…/.test(heldEnd),
+  heldEnd.slice(-160));
+await vp.screenshot({ path: `${SHOTS}/04-last-call-no-signal.png` });
+let sixAsked = 0;
+vp.on('request', (r) => { if (r.url().includes(`/api/banks/${sixBank.id}/mine`)) sixAsked += 1; });
+await vctx.setOffline(false);
+await vp.waitForFunction(() => /All done/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 20000 }).catch(() => {});
+await sleep(1000);
+const backEnd = (await vp.innerText('main')).replace(/\s+/g, ' ');
+const sixAskedByScreen = sixAsked;
+const sixMine = (await vp.evaluate(async (b) => (await fetch(`/api/banks/${b}/mine`)).json(), sixBank.id)).bank;
+check('…signal back: the call is sent, the bank is read again, and it ends "6 of 6 done · All done" — no "Loading…" that stays, no "Start over"',
+  sixMine.done === 6 && sixAskedByScreen >= 1 && /6 of 6 done/.test(await line()) && /All done — every number on your list is called/.test(backEnd) && !/Loading…|Start over/.test(backEnd),
+  `server ${sixMine.done} of ${sixMine.total} · asked ${sixAskedByScreen} · ${await line()} · ${backEnd.slice(-120)}`);
+await vp.screenshot({ path: `${SHOTS}/04-last-call-signal-back.png` });
+
+// ── A big bank handed to one caller: their list comes 500 at a time ──
+const big = Array.from({ length: 540 }, (_, i) => ({ name: `Big ${String(i + 1).padStart(3, '0')} Example`, phone: `604-555-01${String(i % 100).padStart(2, '0')}` }));
+check('540 more people come in', (await api('/data/import', { rows: big, tag: 'big' })).json?.created === 540);
+const bigList = (await api('/actions/list.create', { name: 'Big to call', kind: 'filter', filter: { tag: 'big' } })).json.list;
+const bigBank = (await api('/actions/bank.create', { name: 'Big bank', list_id: bigList.id })).json.bank;
+const meId = (await api('/auth/me')).json.user.id;
+const handed = (await api('/actions/bank.assign', { id: bigBank.id, user_id: meId, count: 5400 })).json;
+check('Hand out, with more typed than there are: all 540 handed over, no "Too big"', handed?.handed === 540, JSON.stringify(handed).slice(0, 160));
+let mineAsked = 0;
+page.on('request', (r) => { if (r.url().includes(`/api/banks/${bigBank.id}/mine`)) mineAsked += 1; });
+await page.goto(`${ADMIN}/calls?bank=${bigBank.id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForFunction(() => /540 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+check('Calls on the bank: "540 to call" and "0 of 540 done" — the whole bank, though 500 are loaded',
+  /540 to call/.test(await page.innerText('.cl-progress').catch(() => '')) && /0 of 540 done/.test(await page.innerText('.cl-bank__line')),
+  `${await page.innerText('.cl-progress').catch(() => '')} · ${await page.innerText('.cl-bank__line')}`);
+// Every number loaded is called on this phone, and none has reached the
+// server yet: the screen says how many are still waiting, and asks once.
+const loaded = (await api(`/banks/${bigBank.id}/mine`)).json.persons;
+await page.evaluate(({ ids, bank }) => sessionStorage.setItem('starbase.calls.done', JSON.stringify(Object.fromEntries(ids.map((id) => [id, { outcome: 'contacted', bank }])))), { ids: loaded.map((p) => p.id), bank: bigBank.id });
+mineAsked = 0;
+await page.reload({ waitUntil: 'domcontentloaded' });
+await page.waitForFunction(() => /40 more to call/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+await sleep(1500);
+const waitingText = await page.innerText('main');
+check('all 500 loaded are done here: "40 more to call · Load them", never "All done" — asked again once, not in a loop',
+  loaded.length === 500 && /40 more to call/.test(waitingText) && /Load them/.test(waitingText) && !/All done|Start over/.test(waitingText) && mineAsked >= 2 && mineAsked <= 3,
+  `${waitingText.replace(/\s+/g, ' ').slice(-120)} · asked ${mineAsked}`);
+await page.screenshot({ path: `${SHOTS}/05-bank-more-waiting.png` });
+// The calls reach the server (crossed off there): Load them brings the next numbers.
+for (let i = 0; i < loaded.length; i += 20) {
+  await Promise.all(loaded.slice(i, i + 20).map((p) => api('/actions/bank.done', { id: bigBank.id, person_id: p.id, outcome: 'contacted' })));
+}
+await page.click('main button:has-text("Load them")').catch(() => {});
+await page.waitForFunction(() => /\b40 to call/.test(document.querySelector('.cl-progress')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+check('…Load them: the next 40 come in — "40 to call", "500 of 540 done", Big 501 is up',
+  /\b40 to call/.test(await page.innerText('.cl-progress').catch(() => '')) && /500 of 540 done/.test(await page.innerText('.cl-bank__line'))
+    && (await page.innerText('.cl-card .cl-name').catch(() => '')).trim() === 'Big 501 Example',
+  `${await page.innerText('.cl-progress').catch(() => '')} · ${await page.innerText('.cl-bank__line')} · ${await page.innerText('.cl-card .cl-name').catch(() => '')}`);
+// The sitting's count carries on over the refill (it used to start again from zero)…
+const barAt = () => page.getAttribute('.cl-bar', 'aria-label').catch(() => '');
+check('…and the bar carries on: "500 of 540 done", not "0 of 40"', (await barAt()) === '500 of 540 done', await barAt());
+// …and the last 40, tapped through, end on the server's word.
+for (let i = 0; i < 40; i += 1) {
+  const who = (await page.innerText('.cl-card .cl-name').catch(() => '')).trim();
+  if (!who) break;
+  await page.click('section.cl-card .cl-out:has-text("Left message")');
+  await page.waitForFunction((w) => (document.querySelector('.cl-card .cl-name')?.innerText || '').trim() !== w, who, { timeout: 8000 }).catch(() => {});
+  if (i === 9) check('ten more calls: "30 to call", the bar "510 of 540 done"', /\b30 to call/.test(await page.innerText('.cl-progress').catch(() => '')) && (await barAt()) === '510 of 540 done', `${await page.innerText('.cl-progress').catch(() => '')} · ${await barAt()}`);
+}
+await page.waitForFunction(() => /All done/.test(document.querySelector('main')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+const bigEnd = (await page.innerText('main')).replace(/\s+/g, ' ');
+check('the last number called: "540 of 540 done" and "All done — every number on your list is called", never "Start over"',
+  /540 of 540 done/.test(await page.innerText('.cl-bank__line')) && /All done — every number on your list is called/.test(bigEnd) && !/Start over/.test(bigEnd),
+  `${await page.innerText('.cl-bank__line')} · ${bigEnd.slice(-120)}`);
+await page.screenshot({ path: `${SHOTS}/06-bank-all-done.png` });
+await page.evaluate(() => sessionStorage.removeItem('starbase.calls.done'));
+// The list can't be deleted from under an open bank: the screen says which bank.
+await page.goto(`${ADMIN}/lists/${bigList.id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.ls-tools', { timeout: 10000 });
+await page.click('.ls-tools button:has-text("Delete")');
+await page.click('.ls-tools .ops-confirm button:has-text("Yes")');
+await page.waitForSelector('.ls-page p.error', { timeout: 8000 }).catch(() => {});
+const refusedText = await page.innerText('.ls-page p.error').catch(() => '');
+check('Delete a list an open bank calls: refused, in words ("…“Big bank” calls this list — close it first")', /“Big bank” calls this list — close it first/.test(refusedText) && /\/lists\/[0-9a-f-]{36}$/.test(page.url()), refusedText);
+// Closed, the list can go — and then the bank can't reopen (who left the list could no longer be told).
+await api('/actions/bank.update', { id: bigBank.id, closed: true });
+check('the bank closed: the list is deleted', (await api('/actions/list.delete', { id: bigList.id })).status === 200);
+const reopen = await api('/actions/bank.update', { id: bigBank.id, closed: false });
+await page.goto(`${ADMIN}/banks/${bigBank.id}`, { waitUntil: 'domcontentloaded' });
+await page.waitForSelector('.au-banklist', { timeout: 10000 }).catch(() => {});
+const shutText = (await page.innerText('.bk').catch(() => '')).replace(/\s+/g, ' ');
+const shutButtons = await page.$$eval('.bk-head .head-actions button', (els) => els.map((b) => b.innerText.trim()));
+check('…reopening is refused in words, and the bank’s page says it stays closed and offers no Reopen',
+  reopen.status === 409 && /list this bank called is gone/.test(reopen.json?.error || '') && /the numbers stay, and the bank stays closed/.test(shutText)
+    && !shutButtons.includes('Reopen') && shutButtons.includes('Remove') && !/reopen it to hand out/.test(shutText),
+  `${reopen.status} ${reopen.json?.error} · ${shutButtons.join(',')} · ${shutText.slice(0, 160)}`);
+await page.screenshot({ path: `${SHOTS}/07-bank-closed-list-gone.png` });
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();

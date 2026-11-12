@@ -9,7 +9,9 @@
 // at once; the desk's card counts doors knocked · talked · yes and ends the
 // pass (asks in place), after which every knocked door is done the old way;
 // a get-out-the-vote pass for supporters turns Today's button to "Get out
-// the vote →" and lists only the supporters' doors. Every claim on a screen
+// the vote →" and lists only the supporters' doors; Walk this list: a list's
+// Walk opens the pass form with it picked, and the walk is only its doors
+// (a volunteer never learns its name). Every claim on a screen
 // is checked against the API; each new screen is measured (yellow buttons,
 // sideways scroll, 48px targets).
 //
@@ -431,6 +433,54 @@ check('back online: the server agrees (2 tries, done), and the phone still reads
   wc?.doors[cyI].state === 'done' && wc.doors[cyI].tries === 2 && !!(await vpage.$(`#walk-door-${cyI}.is-done`)) && (await againChip(cyI)) === '',
   `${wc?.doors[cyI].state} · ${wc?.doors[cyI].tries} · ${await againChip(cyI)}`);
 await D.api('/actions/pass.end', { id: again.id });
+
+// ── 9. Walk this list: a list's Walk opens the pass form with it picked ──
+// Ben's and Dee's doors have someone on the list; Eve (at Dee's door) and the others don't.
+for (const p of [P.ben, P.dee]) await D.api('/actions/person.update', { id: p.id, tags: ['walk-list'] });
+const walkList = (await D.api('/actions/list.create', { name: 'Walk these doors', kind: 'filter', filter: { tag: 'walk-list' } })).json.list;
+check('a list of the people to walk: Ben and Dee', !!walkList?.id && (await D.api(`/lists/${walkList.id}`)).json.total === 2);
+await D.go('/lists');
+const walkRow = page.locator('.ops-item', { has: page.locator('.au-row__name', { hasText: 'Walk these doors' }) });
+await walkRow.locator('.au-go a:has-text("Walk")').waitFor({ timeout: 8000 });
+await walkRow.locator('.au-go a:has-text("Walk")').click();
+await page.waitForSelector(form, { timeout: 8000 });
+const picked = await page.inputValue(`${form} select`).catch(() => '');
+t = await D.text();
+check('Lists → Walk: the pass form opens with the list picked, and says only its doors are walked',
+  new URL(page.url()).pathname === '/admin/passes' && picked === walkList.id && /Only doors with someone on the list are walked\./.test(t), `${page.url()} · ${picked}`);
+m = await measure(page, `${form} .sv-kind, ${form} .input, ${form} .btn`);
+check('…the form with the list: one yellow, targets ≥ 48px', m.yellow === 1 && m.minTap >= 48, JSON.stringify(m));
+await D.shot('13-walk-this-list-form');
+await page.fill(`${form} input`, 'Walk · test');
+await page.click(`${form} button[type="submit"]`);
+await page.waitForSelector('.pass-open', { timeout: 8000 });
+await sleep(500);
+const walkCard = (await page.innerText('.pass-open')).replace(/\s+/g, ' ');
+const walkPass = (await D.api('/passes')).json.open;
+check('the open pass walks the list: "Persuasion · List: Walk these doors · 2 tries"; the server has it',
+  /Persuasion · List: Walk these doors · 2 tries/.test(walkCard) && walkPass?.list_id === walkList.id && walkPass.list_name === 'Walk these doors', walkCard);
+await D.shot('14-walk-this-list-open');
+const walked = async () => (await walkApi(V)).doors.map((d) => d.address);
+check('the volunteer’s walk list: only Ben’s and Dee’s doors', (await walked()).join('|') === '13225 72 Ave|13212 72 Ave', (await walked()).join('|'));
+const vOpen = (await V.api('/passes')).json.open;
+check('…the volunteer reads the pass and its list’s id, never its name', vOpen?.list_id === walkList.id && vOpen.list_name === undefined, JSON.stringify(vOpen));
+await V.go(`/turfs/${turf.id}`);
+await vpage.waitForSelector('.walk-door', { timeout: 8000 });
+await sleep(700);
+check('the walk list on the phone: two doors, "2 doors left"', (await vpage.$$('.walk-door')).length === 2 && (await progress()) === '2 doors left', `${(await vpage.$$('.walk-door')).length} · ${await progress()}`);
+m = await measure(vpage);
+check('…at 390: one yellow, no sideways scroll', m.yellow <= 1 && m.overflow <= 0, JSON.stringify(m));
+await V.shot('15-walk-this-list-phone');
+await D.api('/actions/person.update', { id: P.ben.id, tags: [] });
+check('Ben leaves the list: his door leaves the walk at the next load', (await walked()).join('|') === '13212 72 Ave', (await walked()).join('|'));
+// The open pass walks it: deleting the list is refused, in place, in words.
+await D.go(`/lists/${walkList.id}`);
+await page.click('.ls-tools button:has-text("Delete")');
+await page.click('.ls-tools .ops-confirm button:has-text("Yes")');
+await sleep(800);
+check('the list can’t be deleted while the pass walks it — said on its page', /The pass “Walk · test” walks this list — end the pass first/.test(await D.text())
+  && (await D.api(`/lists/${walkList.id}`)).status === 200, (await D.text()).slice(0, 200));
+await D.api('/actions/pass.end', { id: walkPass.id });
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();

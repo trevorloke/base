@@ -1,5 +1,5 @@
-// The cuts organizers live on, as People filters — so a saved list, an email
-// or text blast and a phone bank built from a list get them too
+// The cuts organizers live on, as People filters — so a saved list gets them
+// too, and the email, text, phone bank and pass made from one
 // (lib/audience.js personsWhere; the keys are in its FILTER_KEYS):
 //   knocked=never|7|14|30|60   nobody has knocked on their door (a door
 //                              contact) ever / in the last N days

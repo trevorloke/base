@@ -32,7 +32,8 @@ before(async () => {
 test('a saved filter: counts by reach, people, CSV; a volunteer is refused', async () => {
   const pv = await mgr.get('/api/lists/preview?tag=member');
   assert.equal(pv.status, 200, JSON.stringify(pv.json));
-  assert.deepEqual(pv.json.counts, { total: 4, with_email: 1, with_phone: 2 }, 'Bob (do-not-email) and Dev (do-not-contact) can’t be emailed; Dev can’t be texted; Anne and Eve share one address and number');
+  assert.deepEqual(pv.json.counts, { total: 4, with_email: 1, with_phone: 2, with_call: 3, reachable: 3 },
+    'Bob (do-not-email) and Dev (do-not-contact) can’t be emailed; Dev can’t be texted or called; Anne and Eve share one address and number, and are two people to call');
   const made = await mgr.action('list.create', { name: 'Members', kind: 'filter', filter: { tag: 'member', nonsense: 'x' } });
   assert.equal(made.status, 200, JSON.stringify(made.json));
   assert.deepEqual(made.json.list.filter, { tag: 'member' }, 'only the query keys are kept');

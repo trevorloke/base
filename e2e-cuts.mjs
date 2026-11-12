@@ -3,7 +3,9 @@
 // "Never knocked", "Last outcome: No answer", a turf and a postal code each
 // narrow the list to what the server says; their chips say them in words and
 // take them off; "Save as a list" carries them to the new list, which keeps
-// them; at 390 the sheet doesn't scroll sideways and its chips are 48px.
+// them; at 390 the sheet doesn't scroll sideways and its chips are 48px; a
+// count that gets a 502 says Unavailable, never the rows on screen; the
+// snapshot form's taps are 48px.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=4130 node server/index.js &
 //   BASE=http://127.0.0.1:4130 SHOTS=/tmp/cuts node e2e-cuts.mjs
@@ -117,6 +119,29 @@ const m = await pp.evaluate(() => {
 });
 check('at 390: a cut in the link opens More filters; no sideways scroll; chips ≥ 48px', m.open && m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
 await pp.screenshot({ path: `${SHOTS}/02-phone-sheet.png`, fullPage: true });
+
+// The count behind a proxy that gave up (502) while the names came: Unavailable, never the rows on screen.
+const badGateway = (route) => route.fulfill({ status: 502, contentType: 'text/html', body: '<html>Bad gateway</html>' });
+await pp.route(/\/api\/persons\/count/, badGateway);
+await pp.goto(`${ADMIN}/people`, { waitUntil: 'domcontentloaded' });
+await pp.waitForFunction(() => /Unavailable/.test(document.querySelector('.pp-count')?.innerText || ''), null, { timeout: 15000 }).catch(() => {});
+const countLine = (await pp.innerText('.pp-count').catch(() => '')).replace(/\s+/g, ' ');
+check('People’s count gets a 502 while the names come: "Unavailable — Try again", no number off the screen',
+  /Unavailable — Try again/.test(countLine) && !/\d\+? (people|person)/.test(countLine) && (await pp.$$('.pp-list li, .pp-table tbody tr')).length >= 4, countLine);
+await pp.unroute(/\/api\/persons\/count/, badGateway);
+await pp.tap('.pp-count .au-retry');
+await pp.waitForFunction(() => /\b4 people/.test(document.querySelector('.pp-count')?.innerText || ''), null, { timeout: 10000 }).catch(() => {});
+check('…Try again: "4 people"', /\b4 people/.test(await pp.innerText('.pp-count').catch(() => '')), await pp.innerText('.pp-count').catch(() => ''));
+// "Save these people as they are now" (a filter is on) on a phone: its name box, Save and Cancel are 48px taps.
+await pp.goto(`${ADMIN}/people?knocked=never`, { waitUntil: 'domcontentloaded' });
+await pp.waitForSelector('.pp-count .au-snap__link', { timeout: 10000 }).catch(() => {});
+const links = await pp.evaluate(() => [...document.querySelectorAll('.pp-count .pp-savelist, .pp-count .au-snap__link')].map((el) => Math.round(el.getBoundingClientRect().height)));
+check('at 390: "Save as a list" and "Save these people as they are now" are ≥ 48px', links.length === 2 && Math.min(...links) >= 48, JSON.stringify(links));
+await pp.tap('.pp-count .au-snap__link').catch(() => {});
+await pp.waitForSelector('.au-snap', { timeout: 5000 }).catch(() => {});
+const snap = await pp.evaluate(() => [...document.querySelectorAll('.au-snap input, .au-snap button')].map((el) => Math.round(el.getBoundingClientRect().height)));
+check('at 390: the snapshot form’s name box, Save and Cancel are ≥ 48px', snap.length === 3 && Math.min(...snap) >= 48, JSON.stringify(snap));
+await pp.screenshot({ path: `${SHOTS}/03-phone-snapshot.png` });
 check('no page errors', errors.length === 0, errors.join(' | '));
 
 await browser.close();

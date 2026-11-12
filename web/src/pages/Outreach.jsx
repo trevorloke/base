@@ -23,6 +23,7 @@ import { DeliveryStats } from '../components/MailDelivery.jsx';
 import LaddersLink from '../components/LaddersLink.jsx';
 import { useTextingStatus } from '../components/TextingStatus.js';
 import { NeedsSignal, useOnline } from '../components/NoSignal.jsx';
+import { LOADING, Unavailable, fmt, useListCounts, useListNames } from '../components/AudienceBits.jsx';
 import { MarkdownField, toDataUrl, uploadImage } from '../components/MarkdownField.jsx';
 import './outreach.css';
 import { BRAND } from '../brand.js';
@@ -208,11 +209,16 @@ function More({ label = 'More', defaultOpen = false, children }) {
   );
 }
 
-// A big number with a short label: "5 subscribers".
-function Big({ n, one, many }) {
+// A big number with a short label: "5 subscribers" — or, while its read is
+// on its way or failed (q), "Loading…" or "Unavailable — Try again": never a
+// 0 that isn't one.
+function Big({ n, one, many, q = null }) {
+  if (n == null) {
+    return <p className="ot-big"><span className="lbl" role="status">{q?.isError ? <Unavailable onRetry={() => q.refetch()} /> : LOADING}</span></p>;
+  }
   return (
     <p className="ot-big">
-      <span className="n">{n == null ? '…' : n}</span>
+      <span className="n">{fmt(n)}</span>
       <span className="lbl">{plural(n, one, many)}</span>
     </p>
   );
@@ -851,18 +857,24 @@ function ListBlastTab({ kind, me, canWrite, creating, onClose }) {
   const blastKind = kind === 'texts' ? 'text' : 'eblast';
   const reach = blastKind === 'text' ? 'with_phone' : 'with_email';
   const [params] = useSearchParams();
-  const lists = useQuery({ queryKey: ['lists', 'all'], queryFn: () => apiGet('/lists') });
+  // Every list's name at once; its numbers as they're counted (the chosen one first).
+  const lists = useListNames();
   const blasts = useBlastList();
   const texting = useQuery({ queryKey: ['texting', 'settings'], queryFn: () => apiGet('/texting/settings'), enabled: blastKind === 'text' });
   const [listId, setListId] = useState(params.get('list') || '');
   const [result, setResult] = useState(null);
   const composing = canWrite && creating;
   const all = lists.data?.lists ?? [];
+  const counts = useListCounts(composing ? all : [], listId);
   const chosen = all.find((l) => l.id === listId) || null;
   const configured = blastKind === 'text' ? blasts.data?.textConfigured : blasts.data?.emailConfigured;
-  const count = chosen ? chosen.counts[reach] : (lists.isSuccess && !listId ? 0 : null);
+  const count = chosen ? (counts.get(chosen.id)?.counts?.[reach] ?? null) : (lists.isSuccess && !listId ? 0 : null);
   const noun = blastKind === 'text' ? { one: 'number', many: 'numbers' } : { one: 'person', many: 'people' };
   const quiet = texting.data?.quiet;
+  const howMany = (l) => {
+    const c = counts.get(l.id);
+    return c?.counts ? `${fmt(c.counts[reach])} ${plural(c.counts[reach], noun.one, noun.many)}` : c?.isError ? 'Unavailable' : LOADING;
+  };
 
   return (
     <>
@@ -871,9 +883,11 @@ function ListBlastTab({ kind, me, canWrite, creating, onClose }) {
           <div className="field">
             <label htmlFor={`${kind}-list`}>To</label>
             <select id={`${kind}-list`} className="input" value={listId} onChange={(e) => setListId(e.target.value)}>
-              <option value="">Choose a list…</option>
-              {all.map((l) => <option key={l.id} value={l.id}>{l.name} — {l.counts[reach]} {plural(l.counts[reach], noun.one, noun.many)}</option>)}
+              <option value="">{lists.isPending ? LOADING : 'Choose a list…'}</option>
+              {all.map((l) => <option key={l.id} value={l.id}>{l.name} — {howMany(l)}</option>)}
             </select>
+            {lists.isError && <span className="error" role="alert"><Unavailable onRetry={() => lists.refetch()} /></span>}
+            {chosen && counts.get(chosen.id)?.isError && <span className="error" role="alert"><Unavailable onRetry={counts.get(chosen.id).refetch} /></span>}
             <span className="ops-meta">
               {lists.isSuccess && !all.length ? <>No lists yet. </> : null}
               <Link to="/lists">Lists</Link> — a saved filter (a tag, a rating, a role) or a hand-picked list.
@@ -901,7 +915,7 @@ function ListBlastTab({ kind, me, canWrite, creating, onClose }) {
         onDismiss={() => setResult(null)} onRetried={setResult} />
       {!composing && (
         <>
-          <Big n={all.length} one="list" many="lists" />
+          <Big n={lists.data ? all.length : null} q={lists} one="list" many="lists" />
           <ul className="ot-list">
             <li className="ot-item"><Link className="ot-row" to="/lists"><span className="ot-row__main"><span className="ot-row__name">Lists</span><span className="ot-row__sub"><span>who a send goes to</span></span></span></Link></li>
           </ul>
@@ -930,7 +944,8 @@ function ListBlastTab({ kind, me, canWrite, creating, onClose }) {
 function EmailTab({ me, canWrite, creating, onClose, toast }) {
   const [params] = useSearchParams();
   const subs = useQuery({ queryKey: ['subscriptions'], queryFn: () => apiGet('/subscriptions') });
-  const lists = useQuery({ queryKey: ['lists', 'all'], queryFn: () => apiGet('/lists') });
+  // Every list's name at once; its numbers as they're counted (the chosen one first).
+  const lists = useListNames();
   const blasts = useBlastList();
   // Who it goes to: 'newsletter' (the subscribers) or a list's id.
   const [to, setTo] = useState(params.get('list') || 'newsletter');
@@ -938,13 +953,18 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
   const composing = canWrite && creating;
   const all = lists.data?.lists ?? [];
   const isNews = to === 'newsletter';
+  const counts = useListCounts(composing ? all : [], isNews ? null : to);
   const chosen = isNews ? null : all.find((l) => l.id === to) || null;
   const subscribed = subs.data?.subscribed ?? null;
   // Who a newsletter reaches: the subscribed, less any address that bounced
   // for good or reported spam (an older server has only the first number).
   const emailable = subs.data?.emailable ?? subscribed;
   const emailConfigured = blasts.data?.emailConfigured;
-  const count = isNews ? emailable : chosen ? chosen.counts.with_email : null;
+  const count = isNews ? emailable : chosen ? (counts.get(chosen.id)?.counts?.with_email ?? null) : null;
+  const howMany = (l) => {
+    const c = counts.get(l.id);
+    return c?.counts ? `${fmt(c.counts.with_email)} ${plural(c.counts.with_email, 'person', 'people')}` : c?.isError ? 'Unavailable' : LOADING;
+  };
 
   return (
     <>
@@ -953,9 +973,13 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
           <div className="field">
             <label htmlFor="em-to">To</label>
             <select id="em-to" className="input" value={to} onChange={(e) => setTo(e.target.value)}>
-              <option value="newsletter">Newsletter subscribers — {emailable ?? '…'}</option>
-              {all.map((l) => <option key={l.id} value={l.id}>{l.name} — {l.counts.with_email} {plural(l.counts.with_email, 'person', 'people')}</option>)}
+              <option value="newsletter">Newsletter subscribers — {emailable != null ? fmt(emailable) : subs.isError ? 'Unavailable' : LOADING}</option>
+              {all.map((l) => <option key={l.id} value={l.id}>{l.name} — {howMany(l)}</option>)}
             </select>
+            {/* Where the senders' rules differ (server lib/reach.js), said where the choice is made. */}
+            {!isNews && <span className="au-rule">This goes to everyone on the list who hasn’t said no; the newsletter goes only to subscribers.</span>}
+            {!isNews && chosen && counts.get(chosen.id)?.isError && <span className="error" role="alert"><Unavailable onRetry={counts.get(chosen.id).refetch} /></span>}
+            {isNews && subs.isError && subscribed == null && <span className="error" role="alert"><Unavailable onRetry={() => subs.refetch()} /></span>}
             <span className="ops-meta">
               The newsletter: everyone who signed up. A list: a saved filter or hand-picked people (<Link to="/lists">Lists</Link>).
               Do-not-email, do-not-contact, unsubscribed and bounced addresses are left out.
@@ -981,9 +1005,9 @@ function EmailTab({ me, canWrite, creating, onClose, toast }) {
         onDismiss={() => setResult(null)} onRetried={setResult} />
       {!composing && (
         <>
-          <Big n={subscribed} one="subscriber" many="subscribers" />
+          <Big n={subscribed} q={subs} one="subscriber" many="subscribers" />
           <ul className="ot-list">
-            <li className="ot-item"><Link className="ot-row" to="/lists"><span className="ot-row__main"><span className="ot-row__name">Lists</span><span className="ot-row__sub"><span>{all.length} {plural(all.length, 'list', 'lists')} — who else an email can go to</span></span></span></Link></li>
+            <li className="ot-item"><Link className="ot-row" to="/lists"><span className="ot-row__main"><span className="ot-row__name">Lists</span><span className="ot-row__sub"><span>{lists.data ? `${fmt(all.length)} ${plural(all.length, 'list', 'lists')}` : lists.isError ? 'Unavailable' : LOADING} — who else an email can go to</span></span></span></Link></li>
           </ul>
           <UnsentList blasts={blasts.data?.blasts} kind={EMAIL_KINDS} emailConfigured={emailConfigured} canWrite={canWrite} onResent={setResult} />
           <TestingList blasts={blasts.data?.blasts} kind={EMAIL_KINDS} skip={result?.id} />
@@ -1041,9 +1065,9 @@ function Subscribers({ subs, canWrite, toast }) {
 
   return (
         <section className="ot-sec" aria-label="Subscribers">
-          <h2 className="ot-sec-h">Subscribers <span className="ot-count">{subs.isPending ? '…' : subscribed}{stopped > 0 && ` · ${stopped} can’t be emailed`}{unsubscribed > 0 && ` · ${unsubscribed} unsubscribed`}</span></h2>
-          {subs.isError && <p className="error">{subs.error.message}</p>}
-          {list.length === 0 && !subs.isPending && <p className="ot-empty">No subscribers yet.</p>}
+          <h2 className="ot-sec-h">Subscribers <span className="ot-count">{subs.isPending ? LOADING : subscribed == null ? '' : fmt(subscribed)}{unsubscribed > 0 && ` · ${fmt(unsubscribed)} unsubscribed`}</span></h2>
+          {subs.isError && <p className="error" role="alert"><Unavailable onRetry={() => subs.refetch()} /></p>}
+          {list.length === 0 && subs.isSuccess && <p className="ot-empty">No subscribers yet.</p>}
           {list.length > 0 && (
             <ul className="ot-list">
               {visible.map((s) => (

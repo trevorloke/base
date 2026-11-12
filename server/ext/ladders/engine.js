@@ -78,17 +78,17 @@
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, textConfigured, unsubscribeHeaders } from '../../lib/notify.js';
-import { notSuppressed } from '../../lib/mail/index.js';
 import { DEFAULT_TZ } from '../../lib/org.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { e164, withFooter, localMinutes, now as textClock } from '../texting/rules.js';
 import {
-  settingsFor, quietState, isOptedOut, askedToStop, applyOptOut, inTouch, isFirstOut, tzOf,
+  settingsFor, quietState, applyOptOut, inTouch, isFirstOut, tzOf,
 } from '../texting/store.js';
 import { sendSms, publicBase } from '../texting/twilio.js';
 import { hasTable } from '../webdid/words.js';
+import { whyNot } from '../../lib/reach.js';
 import {
-  parseJson, tagsOf, sameTag, isDnc, noEmail, noText, fillIn, waitMs,
+  parseJson, tagsOf, sameTag, isDnc, fillIn, waitMs,
 } from './shape.js';
 import { answerEntry, hookBody, postHook, secretNo, signingSecret, silentUntil } from './webhook.js';
 
@@ -506,22 +506,14 @@ const next = async (c) => {
   return { next: n };
 };
 
-// Why an email step won't email this person, or null: it goes only to an
-// address on the list as subscribed, and never to one that bounced for good
-// or reported spam (the suppression list, ext/mail).
-const skipReason = async (tx, ws, person) => {
-  if (!person.email) return 'no_email';
-  const sub = (await tx.query(
-    `select s.status, ${notSuppressed('s.workspace_id', 's.email')} as can_email
-     from subscriptions s where s.workspace_id = $1 and s.email = $2`, [ws, lower(person.email)],
-  )).rows[0];
-  if (sub?.status === 'unsubscribed') return 'unsubscribed';
-  if (noEmail(person)) return 'do_not_email';
-  if (isDnc(person)) return 'do_not_contact';
-  if (sub?.status !== 'subscribed') return 'no_consent';
-  if (!sub.can_email) return 'suppressed';
-  return null;
-};
+// Why an email step won't email this person, or null. Who may be emailed is
+// decided in one place (lib/reach.js): a ladder's email goes only to an
+// address on the newsletter list as subscribed — never one that left it,
+// do-not-email or do-not-contact, or one that bounced for good or reported
+// spam (the suppression list, ext/mail).
+const skipReason = (tx, ws, person) => whyNot(tx, 'email', 'ladder', {
+  workspaceId: ws, personId: person.id, email: person.email, tags: tagsOf(person),
+});
 
 // The same step again in `ms` (email not connected, a provider refusal).
 const again = (c, ms, extra = {}) => enqueueJob(c.tx, {
@@ -529,35 +521,16 @@ const again = (c, ms, extra = {}) => enqueueJob(c.tx, {
   payload: { run_id: c.run.id, ladder_id: c.run.ladder_id, step: c.step, token: c.run.token, ...extra },
 });
 
-// Said no to texts on a website form: their latest text consent (SITE.md
-// consent_events, the site server's) is a no. No table, no answer.
-const saidNoToTexts = async (tx, ws, personId) => {
-  if (!(await hasTable(tx, 'consent_events'))) return false;
-  const last = (await tx.query(
-    `select granted from consent_events where workspace_id = $1 and person_id = $2 and channel = 'sms'
-     order by created_at desc limit 1`,
-    [ws, personId],
-  )).rows[0];
-  return last ? last.granted === false : false;
-};
-
-// Why this person may not be texted at all, or null: do-not-contact,
-// do-not-text, no number that can be texted, a number that replied STOP —
-// or asked to stop in words (a reply only flagged for the desk — nobody
-// reads the thread before a ladder sends) — or someone who said no to texts
-// on the website. Also what decides whether a "Send to a web address" step
-// may pass their mobile on.
-const noTextReason = async (tx, ws, person) => {
-  if (isDnc(person)) return 'do_not_contact';
-  if (noText(person)) return 'do_not_text';
-  if (!String(person.phone || '').trim()) return 'no_phone';
-  const to = e164(person.phone);
-  if (!to) return 'bad_number';
-  if (await isOptedOut(tx, ws, to)) return 'opted_out';
-  if (await askedToStop(tx, ws, to)) return 'asked_to_stop';
-  if (await saidNoToTexts(tx, ws, person.id)) return 'no_text_consent';
-  return null;
-};
+// Why this person may not be texted at all, or null. Who may be texted is
+// decided in one place (lib/reach.js): never do-not-contact or do-not-text,
+// a number that can't be texted or replied STOP, one that asked to stop in
+// words (a reply only flagged for the desk — nobody reads the thread before
+// a ladder sends), or someone whose last word on the website was no to
+// texts. Also what decides whether a "Send to a web address" step may pass
+// their mobile on.
+const noTextReason = (tx, ws, person) => whyNot(tx, 'text', 'ladder', {
+  workspaceId: ws, personId: person.id, phone: person.phone, tags: tagsOf(person),
+});
 
 // Why a text step won't text this person, or null — the texting module's
 // rules (ext/texting): the above, and one campaign conversation per number

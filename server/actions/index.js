@@ -4,7 +4,10 @@
 // have an `after` step — async (db, ctx, result) => ({ result, lastSeq? }) —
 // run once the handler has committed, for work that must not hold the
 // campaign lock (sending email); each of its writes is a runAction of its
-// own. The palette, buttons, and the public API all call the same registry
+// own. One may have an `answer` — (ctx, result) => what this person may
+// read of it — applied as the result leaves the server, never inside the
+// handler (other server code calls handlers and needs the whole result).
+// The palette, buttons, and the public API all call the same registry
 // via POST /api/actions/:name; there is no other way to mutate campaign data.
 import { civic, streetOf } from '../lib/address.js';
 import { z } from 'zod';
@@ -14,6 +17,7 @@ import { logGift, voidGift, restoreGift } from '../lib/gifts.js';
 import { FIELD_ACTIONS, personFieldExtensions } from './field.js';
 import { ORGANIZE_ACTIONS } from './organize.js';
 import { httpError } from './util.js';
+import { forViewer } from '../lib/viewer.js';
 import { extActions } from '../ext.js';
 export { httpError };
 
@@ -37,6 +41,13 @@ const rowToPerson = (r) => ({
   tags: typeof r.tags === 'string' ? JSON.parse(r.tags) : (r.tags || []),
   socials: typeof r.socials === 'string' ? JSON.parse(r.socials) : (r.socials || {}),
 });
+
+// What the browser gets back from a save (routes/api.js applies an action's
+// `answer` as the result leaves the server): a person row like any other,
+// so a volunteer given People never gets someone else's email or a money
+// tag in it (lib/viewer.js). Server code that calls the handler itself (the
+// membership form) still gets the whole row.
+const seenByViewer = (ctx, r) => ({ ...r, person: forViewer(ctx)(r.person) });
 
 export const ACTIONS = {
   'person.create': {
@@ -74,6 +85,8 @@ export const ACTIONS = {
       emit('person', id, 'create', payload);
       return { person: payload };
     },
+    // A row already on file is read, not written: a volunteer gets it as any other read.
+    answer: (ctx, r) => (r.duplicate ? seenByViewer(ctx, r) : r),
   },
 
   'person.update': {
@@ -120,6 +133,7 @@ export const ACTIONS = {
       emit('person', id, 'update', { ...patch, ...(('address' in patch || 'house_number' in patch) ? { address: next.address, house_number: next.house_number } : {}) });
       return { person: next };
     },
+    answer: seenByViewer,
   },
 
   'gift.log': {

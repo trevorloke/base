@@ -2,7 +2,9 @@
 // saved list (ext/lists) and a send's audience (an email or text blast).
 //   personsWhere(db, ctx, query) → { where, params }  (alias p)
 //     query: { q, tag, rating, role, has, …a feature's own (?field=;
-//              ?knocked= ?outcome= ?turf= ?postal= ?notag= — ext/cuts) }
+//              ?knocked= ?outcome= ?turf= ?postal= ?notag= — ext/cuts;
+//              ?gave= ?member= ?answer= ?shift= ?since= — ext/audience;
+//              ?list= ?notlist= — ext/lists) }
 // A volunteer's search, tag and has=email never match on what they may not
 // see (viewer.js); the desk's does. Features add their own filters by the
 // personsWhere hook, on the same params.
@@ -44,10 +46,11 @@ export const personsWhere = async (db, ctx, query = {}) => {
             or (p.email ilike $3${vol ? ` and ${ownEmail}` : ''})
             or exists (select 1 from jsonb_each_text(p.socials) s
                        where regexp_replace(s.value, '^@|^/?u/', '', 'i') ilike ${handleLike}))`;
-  if (tag && vol && isMoneyTag(tag)) where += ' and false';
-  else if (tag) {
-    // One tag, or several with commas: any of them.
-    const tags = [...new Set(tag.split(',').map((t) => t.trim()).filter(Boolean))].slice(0, 20);
+  // One tag, or several with commas: any of them. A volunteer can't sort
+  // by the money tags they can't see — alone or among others (as ?notag=).
+  const tags = [...new Set(tag.split(',').map((t) => t.trim()).filter(Boolean))].slice(0, 20);
+  if (vol && tags.some(isMoneyTag)) where += ' and false';
+  else if (tags.length) {
     const ors = tags.map((t) => { params.push(JSON.stringify(t)); return `p.tags @> $${params.length}::jsonb`; });
     where += ` and (${ors.join(' or ')})`;
   }
@@ -82,10 +85,31 @@ export const personsWhere = async (db, ctx, query = {}) => {
   return { where, params };
 };
 
+// One WHERE inside another query: its $n moved up by `by`, so its params
+// can follow the ones already there. A $ inside a quoted string (a regular
+// expression's end-of-line) is left alone.
+export const shiftParams = (sql, by) => String(sql).split(/('(?:[^']|'')*')/)
+  .map((part, i) => (i % 2 ? part : part.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + by}`))).join('');
+// Appends a WHERE's params to `params` and answers it renumbered to match.
+export const joinWhere = (params, { where, params: more }) => {
+  const by = params.length;
+  params.push(...more);
+  return shiftParams(where, by);
+};
+
 // The filter a saved list or a send keeps: only the keys the query knows.
 // knocked, outcome, turf, postal, notag: the field cuts (ext/cuts); web:
-// did on the website (ext/webdid).
-export const FILTER_KEYS = ['q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web'];
+// did on the website (ext/webdid); gave, member, answer, shift, since: what
+// they gave, joined, answered and came to (ext/audience); list, notlist: on
+// another list or not (ext/lists).
+export const FILTER_KEYS = [
+  'q', 'tag', 'rating', 'role', 'has', 'field', 'knocked', 'outcome', 'turf', 'postal', 'notag', 'voted', 'web',
+  'gave', 'member', 'answer', 'shift', 'since', 'list', 'notlist',
+];
+// The rules only the desk sorts people by (ext/audience, ext/lists). For a
+// volunteer they match nobody; a volunteer given the People area may not
+// save one in a list either (ext/lists/actions.js).
+export const DESK_RULES = ['gave', 'member', 'answer', 'shift', 'list', 'notlist'];
 export const cleanFilter = (f) => {
   const out = {};
   for (const k of FILTER_KEYS) if (f && typeof f[k] === 'string' && f[k].trim()) out[k] = f[k].trim().slice(0, 400);
