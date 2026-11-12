@@ -31,7 +31,8 @@ import { BRAND_ACCEPT, fileFrom, fitLogo, fitMark, iconsFrom, seenOn, uploadBran
 import './brand-settings.css';
 
 const SAVED_FLAG = `${NS}brand-saved`;
-const DRAFT = `${NS}brand-draft`;
+// One per campaign: someone on two campaigns never finds one's in the other.
+const draftKey = (ws) => `${NS}brand-draft:${ws || ''}`;
 const SIDEBAR_WORD = { light: 'Light', brand: 'Brand colour', dark: 'Dark' };
 const CORNER_WORD = { square: 'Square', soft: 'Soft', round: 'Round' };
 const startWord = BRAND.key === 'imagine-surrey' ? 'Imagine Surrey’s look' : 'base.win’s look';
@@ -54,9 +55,9 @@ const formOf = (saved) => (saved?.v === 1 ? {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // Changes left unsaved on this screen earlier, if they were made to the
 // brand as it still is (a draft of another is dropped).
-const draftOf = (start) => {
+const draftOf = (key, start) => {
   try {
-    const d = JSON.parse(sessionStorage.getItem(DRAFT));
+    const d = JSON.parse(sessionStorage.getItem(key));
     return d?.f && d.from === JSON.stringify(start) && !same(d.f, start) ? { ...start, ...d.f } : null;
   } catch { return null; }
 };
@@ -202,7 +203,8 @@ export default function BrandSettings({ me }) {
   const name = me?.workspace?.name || '';
   const saved = me?.workspace?.settings?.brand;
   const [start] = useState(() => formOf(saved));
-  const [draft] = useState(() => draftOf(start));
+  const DRAFT = draftKey(me?.workspace?.id);
+  const [draft] = useState(() => draftOf(DRAFT, start));
   const [f, setF] = useState(draft || start);
   const [busy, setBusy] = useState(null); // 'save' | 'reset' | 'site' | a picture's kind
   const [error, setError] = useState(null);
@@ -323,7 +325,7 @@ export default function BrandSettings({ me }) {
         {said === 'draft' && (
           <p className="bs-said bs-said--draft" role="status">
             <span>Your changes from before are still here. They aren’t saved yet.</span>
-            <button type="button" className="btn btn-quiet ot-btn-tap" onClick={() => { setSaid(null); setF(start); }}>Discard them</button>
+            <button type="button" className="btn ot-btn-tap" onClick={() => { setSaid(null); setF(start); }}>Discard them</button>
           </p>
         )}
 

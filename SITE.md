@@ -207,10 +207,13 @@ footer — worked out by the app's rule, so every `PAIRS` pair reads. The
 stored colours stay for when it stops following. `GET /api/site` answers
 `brand_theme` (what the brand makes, where "Give the website its own look"
 starts); `site.settings.save` changes `follow` only when its theme says so.
-A brand save clears the kept pages. On Website → Theme a following site
-says so and shows the sample, with **Give the website its own look**; one
-with its own look has **Use the campaign's brand** (asked once: it is live
-at once).
+A brand save clears the kept pages. A website that had its own look when it
+began to follow says so (`theme.kept`, set by the server, never by the
+save's own word). On Website → Theme a following site says so and shows
+the sample, with **Give the website its own look** — or, when its own look
+is kept, **Go back to the look it had** beside **Start from the campaign's
+brand** (which replaces it); one with its own look has **Use the
+campaign's brand** (asked once: it is live at once, and the look is kept).
 
 ## Rendering
 
@@ -616,7 +619,7 @@ seed):
 | `GET /api/site/pages/:id` | `{ page: { id, slug, title, description, status, version, show_in_nav, nav_order, published_at, created_at, updated_at, changed, modules (count), draft, published } }` |
 | `GET /api/site/posts` · `/:id` | `{ posts: [{ id, slug, title, excerpt, image, status, published_at, … }] }` · `{ post: { …, body } }` |
 | `GET /api/site/campaigns` · `/:id` | `{ campaigns: [{ id, slug, kind, title, excerpt, statement, goal, status, signatures, … }] }` · `{ campaign: { …, body } }` |
-| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at }] }` (Outreach's store too) |
+| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at }] }` (Outreach's store too; not the brand's pictures) |
 | `POST /api/site/preview-token` | `{ pageId }` → `{ url, expires_at }`: the draft for 30 minutes, `noindex`, frameable by the app only |
 
 Writes are actions (`POST /api/actions/:name`):
