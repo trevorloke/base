@@ -37,6 +37,8 @@ import {
   recordOutcome, saveLinks, sendKey, settleBlast, stoppedRow, subjectFor,
 } from './send.js';
 import { loadAttachments } from './attach.js';
+import { whyNot } from '../../lib/reach.js';
+import { onMediaTags } from '../media/rules.js';
 
 const BATCH = 10;
 const perRun = () => Number(process.env.STARBASE_AB_SEND_PER_RUN) || 200;
@@ -73,7 +75,8 @@ export const pickWinner = async (db, job) => {
   const ctx = { workspaceId, workspace: { name: ws?.name || '', settings: typeof ws?.settings === 'string' ? JSON.parse(ws.settings) : (ws?.settings || {}) }, publicUrl: base };
   const links = findLinks(blast.body);
   const attachments = await loadAttachments(db, workspaceId, { blastId });
-  const unsubFor = (r) => (r.subscriptionId ? `${base}/u/${r.subscriptionId}` : blast.kind === 'eblast' ? `${base}/bu/${r.id}` : null);
+  const unsubFor = (r) => (r.subscriptionId ? `${base}/u/${r.subscriptionId}`
+    : blast.kind === 'eblast' || blast.kind === 'press' ? `${base}/bu/${r.id}` : null);
   const subject = subjectFor(blast, 'rest');
   const run = { claimed: 0, sent: 0, failed: 0, unsure: 0, skipped: 0, suppressed: 0, note: null };
   let more = false;
@@ -83,7 +86,9 @@ export const pickWinner = async (db, job) => {
     if (run.claimed >= perRun()) { more = true; break; }
     const { result: claim } = await act('blast.ab_rest', async (tx, emit) => {
       const rows = (await tx.query(
-        `select r.id, r.email, r.token, r.send_tries, ${stoppedRow('r')} as stopped from blast_recipients r
+        `select r.id, r.email, r.token, r.send_tries, r.person_id, ${stoppedRow('r')} as stopped,
+                coalesce(p.tags, '[]'::jsonb) as tags
+         from blast_recipients r left join persons p on p.id = r.person_id and p.workspace_id = r.workspace_id and p.deleted_at is null
          where r.blast_id = $1 and r.workspace_id = $2 and r.ab_group = 'rest' and r.status = 'queued'
          order by r.created_at, r.id limit $3 for update of r skip locked`,
         [blastId, workspaceId, Math.min(BATCH, perRun() - run.claimed)],
@@ -104,6 +109,16 @@ export const pickWinner = async (db, job) => {
             continue;
           }
           subscriptionId = sub.id;
+        }
+        // A press release: off the media list during the wait (their own
+        // link), or a do-not tag since: off the send, never emailed.
+        if (blast.kind === 'press') {
+          const tags = typeof r.tags === 'string' ? JSON.parse(r.tags) : r.tags;
+          if (!r.person_id || !onMediaTags(tags) || await whyNot(tx, 'email', 'press', { workspaceId, email: r.email, tags, personId: r.person_id })) {
+            await tx.query('delete from blast_recipients where id = $1 and workspace_id = $2', [r.id, workspaceId]);
+            gone += 1;
+            continue;
+          }
         }
         if (r.stopped) {
           await tx.query('delete from blast_recipients where id = $1 and workspace_id = $2', [r.id, workspaceId]);

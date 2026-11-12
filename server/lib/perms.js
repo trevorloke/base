@@ -21,6 +21,7 @@ export const AREAS = [
   { key: 'money', label: 'Donations', what: 'gifts, receipts' },
   { key: 'signs', label: 'Signs', what: 'requests, crews, the map of signs' },
   { key: 'outreach', label: 'Outreach', what: 'newsletters, blasts, texts, press, surveys, ladders' },
+  { key: 'media', label: 'Media', what: 'press releases, media and influencer contacts' },
   { key: 'data', label: 'Data', what: 'the full export, the event log, records' },
   { key: 'admin', label: 'Admin', what: 'members, teams, permissions, the rating scale' },
   { key: 'learn', label: 'ImagineU', what: 'training: the lessons, their files, who has done what' },
@@ -30,8 +31,8 @@ export const AREA_KEYS = AREAS.map((a) => a.key);
 // What each role has with nothing granted or denied — the app's tabs.
 export const BASE = {
   manager: AREA_KEYS,
-  treasurer: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'learn'],
-  staff: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'learn'],
+  treasurer: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'learn', 'media'],
+  staff: ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'learn', 'media'],
   volunteer: [],
 };
 
@@ -53,6 +54,7 @@ const ACTION_AREA = {
   mainstreet: 'people',
   learn: 'learn',
   site: 'site',
+  media: 'media', // press releases and their contacts (ext/media)
 };
 // field.values.set is a person's record; field.ping ("I'm here", from the
 // map) is nobody's area — anyone who canvasses may say where they are.
@@ -90,6 +92,7 @@ const PATH_AREA = [
   [/^\/api\/connections(\/|$)/, 'admin'],
   [/^\/api\/intake(\/|$)/, 'admin'],
   [/^\/api\/site(\/|$)/, 'site'],
+  [/^\/api\/media(\/|$)/, 'media'],
 ];
 export const areaOfPath = (path) => PATH_AREA.find(([re]) => re.test(path))?.[1] || null;
 

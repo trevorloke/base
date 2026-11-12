@@ -139,7 +139,11 @@ test('sample data: loads a full Surrey campaign, safe contacts only, then clears
   assert.ok(brief.shifts.length >= 1);
   assert.equal(brief.myTurfs.length, 1);
   const media = (await fresh.get('/api/persons?tag=media')).json.persons;
-  assert.equal(media.length, 3);
+  assert.equal(media.length, 2);
+  const press = (await fresh.get('/api/media/contacts')).json;
+  assert.deepEqual(press.contacts.map((m) => [m.person.name, m.kind, m.outlet, m.beat]), [
+    ['Dana Example', 'media', 'Example Daily', 'City hall'], ['Lee Example', 'media', 'Example Radio', null], ['Sam Example', 'influencer', null, null],
+  ], 'two reporters with their outlets, and an influencer');
   const tiers = await Promise.all(['Maya Chen', 'Hannah Lee'].map(async (n) => {
     const p = (await fresh.get(`/api/persons?q=${encodeURIComponent(n)}`)).json.persons[0];
     return (await fresh.get(`/api/persons/${p.id}`)).json.donor.tier;

@@ -68,8 +68,10 @@ export const RULES = {
     { code: 'suppressed', sql: (c) => `not ${notSuppressed(c.ws, c.email)}` },
     // They left the newsletter list (their own link, or the desk's Remove).
     { code: 'unsubscribed', skip: ['press'], sql: (c) => onNewsletter(c, 'unsubscribed') },
-    { code: 'do_not_email', skip: ['newsletter', 'press'], sql: (c) => tagged(c, NO_EMAIL) },
-    { code: 'do_not_contact', skip: ['newsletter', 'press'], sql: (c) => tagged(c, NO_CONTACT) },
+    // A press release honours both (a reporter who left the newsletter
+    // still gets releases: they leave the media list by its own link).
+    { code: 'do_not_email', skip: ['newsletter'], sql: (c) => tagged(c, NO_EMAIL) },
+    { code: 'do_not_contact', skip: ['newsletter'], sql: (c) => tagged(c, NO_CONTACT) },
     // Only to people who said yes: an address on the newsletter list.
     { code: 'no_consent', only: ['newsletter', 'ladder'], sql: (c) => `not (${onNewsletter(c, 'subscribed')})` },
   ],
@@ -116,6 +118,9 @@ export const person = (alias = 'p', ws = '$1') => ({
 export const address = (email, ws = '$1') => ({ ws, id: 'null::uuid', email, phone: 'null::text', tags: "'[]'::jsonb" });
 
 export const mayReach = (channel, sender, cols = person()) => `(${rulesFor(channel, sender).map((r) => `not (${r.sql(cols)})`).join(' and ')})`;
+// The first reason as a column (null: may reach), for a screen that says
+// why someone won't get a send (Media → Contacts).
+export const whyNotSql = (channel, sender, cols = person()) => `(case ${rulesFor(channel, sender).map((r) => `when (${r.sql(cols)}) then '${r.code}'`).join(' ')} end)`;
 
 // One person, as the send is about to go. who: { workspaceId, email, phone,
 // tags, personId } — the address or number on the send itself (it may have

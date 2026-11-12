@@ -33,6 +33,7 @@ import { mayReach, address, person, noCallSql } from '../lib/reach.js';
 import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { notSuppressed } from '../lib/mail/index.js';
 import { attachmentsOf } from '../ext/abtests/attach.js';
+import { onMedia } from '../ext/media/rules.js';
 // The open pass (ext/passes) and the door rule it shares with the phone.
 import { openPass, listedWhere } from '../ext/passes/rule.js';
 import { doorState, inPass } from '@starbase/shared/passes';
@@ -974,7 +975,7 @@ app.get('/blasts', async (c) => {
   );
   // Who a press release goes to (field.js blast.send; lib/reach.js decides).
   const media = (await c.get('db').query(
-    `select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null and p.tags @> '"media"'::jsonb
+    `select count(*)::int as n from persons p where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p', ['media'])}
        and ${mayReach('email', 'press', person('p', '$1'))}`,
     [ctx.workspaceId],
   )).rows[0].n;

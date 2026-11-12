@@ -25,6 +25,8 @@ import { ATTACH_COUNT, bindAttachments, loadAttachments } from '../ext/abtests/a
 import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 // The From a send goes from (the campaign's From addresses, ext/senders).
 import { resolveFrom } from '../ext/senders/rules.js';
+// Who is on the media list (ext/media): tagged media or influencer, any capitals.
+import { onMedia } from '../ext/media/rules.js';
 import { mayReach, person, address } from '../lib/reach.js';
 import { notSuppressed } from '../lib/mail/index.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
@@ -802,6 +804,8 @@ export const FIELD_ACTIONS = {
       audience: z.object({
         list_id: z.uuid().optional(),
         filter: z.record(z.string().max(40), z.string().max(400)).optional(),
+        // press: who on the media list (media.send's To). Absent: media.
+        media: z.array(z.enum(['media', 'influencer'])).min(1).max(2).optional(),
       }).optional(),
       // Two subject lines: A and B go to two small groups now; the winner
       // goes to everyone else when the wait ends (ext/abtests).
@@ -848,14 +852,14 @@ export const FIELD_ACTIONS = {
       } else {
         audience = (await tx.query(
           `select p.id as person_id, p.email, p.name from persons p
-           where p.workspace_id = $1 and p.deleted_at is null and p.tags @> '"media"'::jsonb
+           where p.workspace_id = $1 and p.deleted_at is null and ${onMedia('p', input.audience?.media || ['media'])}
              and ${mayReach('email', 'press', person('p', '$1'))}`,
           [ctx.workspaceId],
         )).rows;
       }
       if (audience.length === 0) {
         throw httpError(400, input.kind === 'newsletter' ? 'no subscribed addresses on the newsletter list yet'
-          : input.kind === 'press' ? "no people tagged 'media' with an email address yet"
+          : input.kind === 'press' ? 'no one on the media list can be emailed yet'
           : isText ? 'no one on this list has a number that can be texted'
           : 'no one on this list has an email address that can be emailed');
       }

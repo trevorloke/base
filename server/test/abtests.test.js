@@ -533,7 +533,9 @@ test('small lists send normally: A/B needs at least 50', async () => {
     for (const m of sent) {
       assert.ok(tokenOf(m), 'press is tracked too');
       assert.ok(linkOf(m, 1));
-      assert.doesNotMatch(m.html, /\/u\//, 'press carries no unsubscribe link');
+      assert.doesNotMatch(m.html, /\/u\//, 'press carries no newsletter unsubscribe link');
+      // Flipped on purpose (ext/media): a release has its own, off the media list only.
+      assert.match(m.html, /Don’t want press releases\? <a href="[^"]*\/bu\/[0-9a-f-]{36}"/, 'press carries its own unsubscribe link');
       assert.match(m.text, /FOR IMMEDIATE RELEASE/);
     }
   });

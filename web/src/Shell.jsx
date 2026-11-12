@@ -82,7 +82,7 @@ const NAV_DESK = [
   { to: '/website',  label: 'Website',  icon: 'website', area: 'site' },
 ];
 // The areas a person has: what the server said, else their role's usual ones.
-export const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data'] : []));
+export const areasOf = (me) => (Array.isArray(me?.areas) ? me.areas : (isDesk(me) ? ['people', 'map', 'shifts', 'money', 'signs', 'outreach', 'data', 'media'] : []));
 export const hasArea = (me, area) => !area || areasOf(me).includes(area) || (me?.role === 'manager');
 // Volunteers request signs at the door card, so Signs isn't a tab for them.
 const NAV_VOLUNTEER = [

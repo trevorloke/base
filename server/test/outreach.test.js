@@ -79,7 +79,7 @@ test('empty audiences are refused with a plain reason', async () => {
   await fresh.signup({ workspaceName: 'Empty Lists' });
   const r = await fresh.action('blast.send', { kind: 'press', subject: 's', body: 'b' });
   assert.equal(r.status, 400);
-  assert.match(r.json.error, /tagged 'media'/);
+  assert.match(r.json.error, /no one on the media list/);
 });
 
 test('public writes append to the event log under a system actor', async () => {
@@ -121,6 +121,9 @@ test('with a provider: every newsletter carries the recipient’s own unsubscrib
     const press = await c.action('blast.send', { kind: 'press', subject: 'Release', body: 'News' });
     assert.equal(press.json.blast.status, 'sent');
     assert.ok(sent.every((m) => !m.text.includes('/u/')), 'press has no newsletter unsubscribe link');
+    // Flipped on purpose (ext/media): a release carries its own link, off the media list only.
+    assert.ok(sent.length && sent.every((m) => /Don’t want press releases\? Unsubscribe: \S+\/bu\/[0-9a-f-]{36}$/.test(m.text)), 'press has its own unsubscribe link');
+    assert.ok(sent.every((m) => /\/bu\/[0-9a-f-]{36}>$/.test(m.headers['List-Unsubscribe'])), 'and the mail app’s button');
   } finally {
     globalThis.fetch = realFetch;
     delete process.env.RESEND_API_KEY;
@@ -263,8 +266,9 @@ test('blast.resend records each result, and Send now retries the failed ones —
     assert.match(r.json.blast.provider_note, /email provider 500/);
     assert.equal(r.json.blast.sent_at, null);
     assert.deepEqual(sent.map((m) => m.to[0]), ['desk1.resend@news.example']);
-    assert.ok(sent.every((m) => !m.text.includes('/u/')), 'press carries no unsubscribe link');
-    assert.match(sent[0].text, /Resend Press$/);
+    assert.ok(sent.every((m) => !m.text.includes('/u/')), 'press carries no newsletter unsubscribe link');
+    // Flipped on purpose (ext/media): its own link, which leaves the newsletter alone.
+    assert.match(sent[0].text, /Sent by Resend Press\.\nDon’t want press releases\? Unsubscribe: \S+\/bu\/[0-9a-f-]{36}$/);
 
     // The provider still turns desk2 down: tried again, still failed, desk1 untouched.
     const still = await w.action('blast.resend', { id });

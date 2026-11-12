@@ -70,7 +70,7 @@ export const SOCIAL_PLATFORMS = ['facebook', 'instagram', 'x', 'tiktok', 'reddit
 export const SUGGESTED_TAGS = [
   'media', 'VIP', 'endorser', 'host', 'donor-prospect', 'lapsed',
   'newsletter', 'petition', 'youth', 'senior', 'business', 'faith',
-  'union', 'do-not-call', 'do-not-contact',
+  'union', 'do-not-call', 'do-not-contact', 'influencer',
 ];
 // Asked not to be phoned — do-not-call, or do-not-contact (no calls, no
 // texts, no email): every Call a screen offers checks this first (a number

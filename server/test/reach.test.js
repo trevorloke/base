@@ -53,8 +53,11 @@ test('each sender, as it was: a list send goes to everyone who hasn’t said no;
   assert.deepEqual(await names(mayReach('email', 'list', pp)), ['Ana', 'Ben', 'Fay', 'Hal', 'Ivy'],
     'an address, not unsubscribed (Cy), not do-not-email (Dee), not do-not-contact (Eli, typed with capitals)');
   assert.deepEqual(await names(mayReach('email', 'ladder', pp)), ['Ana', 'Fay', 'Ivy'], 'only the subscribed — Ben and Hal never asked for email');
-  assert.deepEqual(await names(mayReach('email', 'press', pp)), ['Ana', 'Ben', 'Cy', 'Dee', 'Eli', 'Fay', 'Hal', 'Ivy'],
-    'a press release reads only the address (the media tag is the sender’s own test)');
+  // Flipped on purpose (ext/media): a release now honours do-not-email (Dee)
+  // and do-not-contact (Eli) — and still reaches one who left the newsletter
+  // (Cy): they leave the media list by a release's own link.
+  assert.deepEqual(await names(mayReach('email', 'press', pp)), ['Ana', 'Ben', 'Cy', 'Fay', 'Hal', 'Ivy'],
+    'a press release: an address, not do-not-email (Dee), not do-not-contact (Eli); the newsletter isn’t asked');
   assert.deepEqual(await names(mayReach('text', 'list', pp)), ['Ana', 'Ben', 'Cy', 'Dee'],
     'a number that can be texted: not do-not-contact (Eli), do-not-text (Fay), seven digits (Gus), STOP (Hal), none (Ivy)');
   assert.deepEqual(await names(mayReach('call', 'bank', pp)), ['Ana', 'Ben', 'Cy', 'Dee', 'Fay', 'Gus', 'Hal'], 'a phone, not do-not-contact');
