@@ -119,3 +119,10 @@
 
 /* People while a new filter loads: the last answer, dimmed, never as if it were this one's */
 .au-stale { opacity: 0.5; transition: opacity 0.15s; }
+
+/* On a phone the taps beside the new ones are 48px too: "Save as a list" on
+   People's count line, and each person on a list's page */
+@media (pointer: coarse), (max-width: 720px) {
+  .pp-count .pp-savelist { display: inline-flex; align-items: center; min-height: 48px; vertical-align: middle; }
+  .ls-page .ls-link { min-height: 48px; justify-content: center; }
+}
