@@ -18,15 +18,28 @@
 //                                other), and Remove? Yes · No in place — both
 //                                need signal, and say so
 //   linkWords(link)              "Neighbour · Same block": the kind, and the note
+//   <KeyTies ties n max housemates state />  the key line: "Knows Sofia
+//                                Petrova Friend · Close · 3 more · Same address:
+//                                Ann Example" (desk: the profile, the Calls card)
+//   useKeyTies(ids, enabled)     GET /relationships/key for up to 20 people
+//   useKnowMe(person, me)        is this person in your own circle? From the
+//                                phone's My people and the outbox (no new read)
+//   <KnowMeChip />, <IKnowThem /> "You know them · Friend", and the one-tap
+//                                "I know them" (every role; saved offline)
 // No pronouns are guessed from names: the words never need one.
 import { Fragment, useId, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { rankTies } from '@starbase/shared/ties';
 import { apiGet, action } from '../api.js';
+import { newClientId, queueAction, useOutbox } from '../offline.js';
+import { queuedText } from './queued.js';
+import { Unavailable } from './AudienceBits.jsx';
 import { RatingChip } from './RatingButtons.jsx';
 import { phoneCopy, useKeepCopy } from './OfflineCache.js';
 import { NeedsSignal, NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import '../pages/relationships.css';
+import '../pages/relationships-key.css';
 
 export const KINDS = [
   { code: 'family', label: 'Family' },
@@ -129,10 +142,15 @@ export function KnowsNudge({ query, person }) {
 // Adding a link needs signal (it's a desk write, never saved on the device).
 const NEEDS = 'Adding someone they know needs signal';
 
+// Said under every note about who knows whom (profile and My people).
+export const NOTE_HELP = 'Only what helps the campaign — no health, family or money details.';
+
 function AddKnown({ person, known, onClose }) {
   const [q, setQ] = useState('');
   const [pick, setPick] = useState(null);
+  const [note, setNote] = useState('');
   const inputId = useId();
+  const noteId = useId();
   const act = useRun();
   const online = useOnline();
   const term = q.trim();
@@ -146,7 +164,7 @@ function AddKnown({ person, known, onClose }) {
   // No signal: the search can't answer and the link can't go — said once, in place.
   const off = !online || (term.length >= 2 && noSignal(found));
   const add = async (kind) => {
-    const res = await act.run('relationship.add', { from_id: person.id, person_id: pick.id, kind });
+    const res = await act.run('relationship.add', { from_id: person.id, person_id: pick.id, kind, note: note.trim() || undefined });
     if (res) onClose();
   };
   if (pick) {
@@ -157,6 +175,12 @@ function AddKnown({ person, known, onClose }) {
           {KINDS.map((k) => (
             <button key={k.code} type="button" className="rel-kind" disabled={act.busy || !online} onClick={() => add(k.code)}>{k.label}</button>
           ))}
+        </div>
+        <div className="field rel-add__note">
+          <label htmlFor={noteId}>Note (optional)</label>
+          <input id={noteId} className="input" maxLength={200} autoComplete="off" value={note} onChange={(e) => setNote(e.target.value)}
+            aria-describedby={`${noteId}-help`} />
+          <p className="rk-help" id={`${noteId}-help`}>{NOTE_HELP}</p>
         </div>
         {!online ? <NeedsSignal className="pf-empty">{NEEDS}</NeedsSignal> : act.error && <p className="error" role="alert">{act.error}</p>}
         <button type="button" className="btn btn-quiet pp-btn" onClick={() => setPick(null)}>Back</button>
@@ -186,7 +210,26 @@ function AddKnown({ person, known, onClose }) {
   );
 }
 
-export function PersonKnows({ person, query }) {
+// "<Name>’s circle": a filter list of everyone they know (knows=person:<id>),
+// opened so the desk can rename it, call, walk or email it.
+function MakeList({ person }) {
+  const navigate = useNavigate();
+  const act = useRun();
+  const online = useOnline();
+  const make = async () => {
+    const res = await act.run('list.create', { name: `${person.name}’s circle`, kind: 'filter', filter: { knows: `person:${person.id}` } });
+    if (res?.list?.id) navigate(`/lists/${res.list.id}`);
+  };
+  return (
+    <div className="rk-make">
+      <button type="button" className="btn btn-quiet pp-btn" disabled={act.busy || !online} onClick={make}>Make a list</button>
+      <p className="rk-help">Anyone you give this list to sees who is on it.</p>
+      {online && act.error && <p className="error" role="alert">{act.error}</p>}
+    </div>
+  );
+}
+
+export function PersonKnows({ person, query, me = null }) {
   const [adding, setAdding] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const act = useRun();
@@ -215,6 +258,11 @@ export function PersonKnows({ person, query }) {
               </span>
               <span className="rel-knows__end">
                 <RatingChip code={k.person.rating} who />
+                <button type="button" className={`btn btn-quiet pp-btn rk-close${k.close ? ' is-on' : ''}`} aria-pressed={Boolean(k.close)}
+                  aria-label={`Close: ${k.person.name}`} disabled={act.busy || !online}
+                  onClick={() => act.run('relationship.update', { id: k.id, close: !k.close })}>
+                  Close
+                </button>
                 {confirm === k.id ? (
                   <span className="ops-confirm rel-confirm">
                     <span>Remove?</span>
@@ -233,11 +281,154 @@ export function PersonKnows({ person, query }) {
       {adding ? (
         <AddKnown person={person} known={known} onClose={() => setAdding(false)} />
       ) : (
-        <div className="pf-row-acts">
-          <button type="button" className="btn pp-btn" disabled={!online} onClick={() => setAdding(true)}>+ Someone they know</button>
-          {!online && <NeedsSignal className="ops-meta rel-needs">Adding and removing need signal</NeedsSignal>}
-        </div>
+        <>
+          <div className="pf-row-acts">
+            <button type="button" className="btn pp-btn" disabled={!online} onClick={() => setAdding(true)}>+ Someone they know</button>
+            <IKnowThem person={person} me={me} />
+            {!online && <NeedsSignal className="ops-meta rel-needs">Adding, removing and Close need signal</NeedsSignal>}
+          </div>
+          {knows.length > 0 && <MakeList person={person} />}
+        </>
       )}
     </>
   );
+}
+
+// ── The key line ──
+// ties: ranked (rankTies) — [{ id, kind, close, person: { id, name, rating } }];
+// n: all their live links (do-not-contact ends too); state: 'ok' | 'loading'
+// | 'error' | 'offline'. housemates: [{ id, name, dnc }] (the profile only):
+// not ties, so never counted in "N more"; someone already linked isn't
+// repeated, and someone who asked not to be contacted is left out.
+export function KeyTies({ ties = [], n = null, max = 3, housemates = [], state = 'ok', onRetry, onMore, moreTo }) {
+  const head = <span className="rk-word">Knows</span>;
+  if (state === 'loading') return <p className="rk-line" aria-live="polite">{head}<span className="rk-dim">· Loading…</span></p>;
+  if (state === 'offline') return <p className="rk-line">{head}<span className="rk-dim">· needs signal</span></p>;
+  if (state === 'error') return <p className="rk-line">{head}<span className="rk-dim">·</span> <Unavailable onRetry={onRetry} /></p>;
+  const shown = ties.slice(0, max);
+  const total = n == null ? ties.length : n;
+  const more = Math.max(0, total - shown.length);
+  const linked = new Set(ties.map((t) => t.person?.id));
+  const homes = housemates.filter((h) => !h.dnc && !linked.has(h.id));
+  if (!shown.length && !more && !homes.length) return null;
+  const moreWords = `${more.toLocaleString('en-CA')} more`;
+  return (
+    <p className="rk-line">
+      {head}
+      {shown.map((t) => (
+        <span key={t.id || t.person.id} className="rk-tie">
+          <Link to={`/people/${t.person.id}`}>{t.person.name}</Link>
+          <span className="rk-dim">{kindWord(t.kind)}{t.close ? ' · Close' : ''}</span>
+          {t.person.rating && <RatingChip code={t.person.rating} who />}
+        </span>
+      ))}
+      {more > 0 && (
+        <span className="rk-dim">
+          ·{' '}
+          {onMore ? <a className="rk-more" href="#pf-knows" onClick={(e) => { e.preventDefault(); onMore(); }}>{moreWords}</a>
+            : <Link className="rk-more" to={moreTo}>{moreWords}</Link>}
+        </span>
+      )}
+      {homes.length > 0 && (
+        <span className="rk-dim rk-home">
+          Same address: <Link to={`/people/${homes[0].id}`}>{homes[0].name}</Link>{homes.length > 1 ? ` +${homes.length - 1}` : ''}
+        </span>
+      )}
+    </p>
+  );
+}
+
+// The key ties of up to 20 people in one read (the Calls card: this one and
+// the next four, so the next card's ties are already here).
+export const useKeyTies = (ids, enabled) => useQuery({
+  queryKey: ['ties', ...ids],
+  queryFn: () => apiGet(`/relationships/key?${new URLSearchParams({ ids: ids.join(',') })}`),
+  enabled: Boolean(enabled) && ids.length > 0,
+  staleTime: 60_000,
+});
+
+// ── "You know them" ──
+// Your own circle, from what this phone has (My people, kept for a day) and
+// what waits in its outbox. Nothing kept: unknown, so nothing is claimed.
+export function useKnowMe(person, meIn) {
+  const ctx = useOutletContext();
+  const me = meIn || ctx?.me || null;
+  const mine = useQuery({
+    queryKey: MINE_KEY,
+    queryFn: () => apiGet('/relationships/mine'),
+    ...phoneCopy(me, MINE_COPY),
+    staleTime: 5 * 60_000,
+    enabled: Boolean(me),
+  });
+  useKeepCopy(me, MINE_COPY, mine);
+  const outbox = useOutbox();
+  const id = person?.id;
+  if (!id || !mine.data) return { ready: false, link: null, self: false, me };
+  const myEmail = String(me?.user?.email || '').toLowerCase();
+  const self = mine.data.me?.id === id || Boolean(myEmail && String(person.email || '').toLowerCase() === myEmail);
+  const link = (mine.data.people || []).find((x) => x.person?.id === id)
+    || outbox.items.filter((i) => i.name === 'relationship.add' && i.state !== 'refused')
+      .map((i) => i.input || {})
+      .filter((i) => i.person_id === id || i.person?.id === id)
+      .map((i) => ({ id: i.id, kind: i.kind || 'other', pending: true }))[0]
+    || null;
+  return { ready: true, link, self, me };
+}
+
+export function KnowMeChip({ person, me = null, className = '' }) {
+  const { link } = useKnowMe(person, me);
+  if (!link) return null;
+  return <span className={`chip rk-chip ${className}`}>You know them · {kindWord(link.kind)}</span>;
+}
+
+// "I know them": one tap on how, queued through the outbox (relationship.add
+// is a field action: saved on the phone with no signal, sent once).
+export function IKnowThem({ person, me = null }) {
+  const know = useKnowMe(person, me);
+  const queryClient = useQueryClient();
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState(null);
+  const labelId = useId();
+  if (!person?.id || person.pending) return null;
+  if (said) return <p className="rk-said" role="status">{said}</p>;
+  if (!know.ready || know.link || know.self) return null;
+  const add = async (kind) => {
+    setBusy(true);
+    try {
+      const r = await queueAction('relationship.add', { id: newClientId(), person_id: person.id, kind }, { who: person.name });
+      setSaid(r.queued ? queuedText(r) : 'Added to My people');
+      if (!r.queued) {
+        await Promise.all([MINE_KEY, ['person', person.id], ['brief']].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+      }
+    } catch (err) {
+      setSaid(err.message || 'Not saved — try again');
+    } finally {
+      setBusy(false);
+      setAsking(false);
+    }
+  };
+  if (!asking) {
+    return <button type="button" className="btn btn-quiet pp-btn rk-know" onClick={() => setAsking(true)}>I know them</button>;
+  }
+  return (
+    <div className="rk-ask">
+      <span className="rel-add__q" id={labelId}>How do you know them?</span>
+      <div className="rel-kinds" role="group" aria-labelledby={labelId}>
+        {KINDS.map((k) => (
+          <button key={k.code} type="button" className="rel-kind" disabled={busy} onClick={() => add(k.code)}>{k.label}</button>
+        ))}
+      </div>
+      <button type="button" className="btn btn-quiet pp-btn" onClick={() => setAsking(false)}>Cancel</button>
+    </div>
+  );
+}
+
+// The profile's line, from its own Knows read and housemates (no new read).
+export function ProfileKeyTies({ query, household = [], onMore }) {
+  if (noSignal(query)) return <KeyTies state="offline" />;
+  if (query.isPending) return <KeyTies state="loading" />;
+  if (query.isError) return <KeyTies state="error" onRetry={() => query.refetch()} />;
+  const knows = query.data?.knows || [];
+  return <KeyTies ties={rankTies(knows)} n={knows.length} max={3} housemates={household} onMore={onMore} />;
 }

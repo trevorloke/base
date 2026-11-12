@@ -1,6 +1,7 @@
 // Most connected (People → More → Most connected, desk only): the people who
 // know the most people on the list — the connectors to ask first. Each row:
-// the name, "knows 12 · 8 supporters" (supporters: rated 1 or 2) and their
+// the name, "knows 12 · 8 supporters · brought in 3" (supporters: rated 1
+// or 2; brought in: people they added who were new, removed links too) and their
 // own rating chip; a tap opens the profile, whose Knows section lists them.
 // App.jsx guards it; the server refuses volunteers the read too.
 import { Link } from 'react-router-dom';
@@ -34,7 +35,7 @@ export default function PeopleConnected() {
               <Link className="ops-row" to={`/people/${p.id}`} state={BACK}>
                 <span className="ops-row__main">
                   <span className="ops-row__name">{p.name}</span>
-                  <span className="ops-row__sub">knows {p.knows} · {plural(p.supporters, 'supporter')}</span>
+                  <span className="ops-row__sub">knows {p.knows} · {plural(p.supporters, 'supporter')}{p.brought_in ? ` · brought in ${p.brought_in}` : ''}</span>
                 </span>
                 <span className="ops-row__end"><RatingChip code={p.rating} who /></span>
               </Link>

@@ -38,7 +38,7 @@ import './people.css';
 import {
   TextingPersonLink, callsCard, noTexts, textingOn, useTextingPerson, useTextingStatus,
 } from '../components/TextingCard.jsx';
-import { KnowsNudge, PersonKnows, usePersonKnows } from '../components/RelationshipsBits.jsx';
+import { IKnowThem, KnowMeChip, KnowsNudge, PersonKnows, ProfileKeyTies, usePersonKnows } from '../components/RelationshipsBits.jsx';
 import NameFields from '../components/NameFields.jsx';
 import VoterNumber from '../components/VoterNumber.jsx';
 import { PersonTimeline, timelineCount, usePersonTimeline } from '../components/PersonTimeline.jsx';
@@ -156,7 +156,7 @@ function BackLink({ desk, className = 'eyebrow pf-back' }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Header: name, rating, donor tier, Call · Text · Email · Map
 // ─────────────────────────────────────────────────────────────────────────────
-function Header({ person, donor, me, desk, onLog, contacted, level, onEdit }) {
+function Header({ person, donor, me, desk, onLog, contacted, level, onEdit, keyLine = null }) {
   const texting = useTextingStatus(me);
   // true / false, or null while nobody knows (no signal, nothing kept): then
   // the Calls card, which says so — never a guess at the phone's own apps.
@@ -197,6 +197,8 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit }) {
         {isDnc(person) && <span className="chip chip-danger">Do not contact</span>}
         {!isDnc(person) && noCalls(person) && <span className="chip chip-danger">Do not call</span>}
         {desk && shownLevel?.label && <EngagementChip level={shownLevel} />}
+        {/* In your own circle (My people on this phone): every role. */}
+        <KnowMeChip person={person} me={me} />
         {/* donor is null for volunteers (the server hides money from them) */}
         {tierShown && (
           <span className={TIER_CLASS[donor.tier]} title={`${fmtMoney(donor.yearCents)} this year${Number(donor.monthlyCents) ? ` · ${fmtMoney(donor.monthlyCents)}/mo` : ''}`}>
@@ -204,6 +206,8 @@ function Header({ person, donor, me, desk, onLog, contacted, level, onEdit }) {
           </span>
         )}
       </div>
+      {/* The ties that matter, at once (desk): "Knows Sofia Petrova Friend · Close · 2 more". */}
+      {keyLine}
       {(tiles || person.address) && (
         <div className={`pf-acts${tiles ? '' : ' pf-acts--quiet'}`}>
           {person.phone && !noCalls(person) && (on.voice === false ? (
@@ -597,7 +601,10 @@ function Details({ person, household, refresh, desk, me, editing, setEditing }) 
         {!desk && (
           <li className="contact-lines__fix">
             <span className="k" />
-            <span className="v"><QuickDetails person={person} me={me} onSaved={() => refresh()} /></span>
+            <span className="v">
+              <QuickDetails person={person} me={me} onSaved={() => refresh()} />
+              <IKnowThem person={person} me={me} />
+            </span>
           </li>
         )}
         <li>
@@ -890,7 +897,9 @@ export default function Person() {
   const queryClient = useQueryClient();
   const [savedChannel, setChannel] = useChannel(id);
   // Desks open on the history; volunteers on phone + address.
-  const [open, setOpen] = useState(() => (desk ? { history: true } : { details: true }));
+  const location = useLocation();
+  // "3 more" on the Calls card's key line opens their Knows (#knows).
+  const [open, setOpen] = useState(() => (desk ? { history: true, ...(location.hash === '#knows' ? { knows: true } : {}) } : { details: true }));
   const [editing, setEditing] = useState(null); // the details form, open on this field (desk)
   const ratingRef = useRef(null);
   const toggle = (key) => () => setOpen((o) => ({ ...o, [key]: !o[key] }));
@@ -930,6 +939,11 @@ export default function Person() {
     sec?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     sec?.querySelector('.pf-sec__btn')?.focus({ preventScroll: true });
   };
+
+  const loaded = Boolean(profile.data?.person);
+  useEffect(() => {
+    if (loaded && desk && location.hash === '#knows') document.getElementById('pf-knows')?.scrollIntoView({ block: 'start' });
+  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (profile.isLoading) return <p className="muted">Loading…</p>;
   // No signal and never opened here: they're there, it just can't load yet.
@@ -978,7 +992,8 @@ export default function Person() {
   return (
     <div className="pf-page">
       <Header person={person} donor={donor} me={me} desk={desk} onLog={onLog} contacted={contacts.length > 0} level={ladders.data?.level}
-        onEdit={() => { setOpen((o) => ({ ...o, details: true })); setEditing('name'); }} />
+        onEdit={() => { setOpen((o) => ({ ...o, details: true })); setEditing('name'); }}
+        keyLine={desk ? <ProfileKeyTies query={knows} household={household} onMore={() => openSection('knows')} /> : null} />
       {waiting > 0 && (
         <p className="ds-waiting" role="status">Saved on {device} — {online ? 'sends soon' : 'sends when you’re back online'}</p>
       )}
@@ -1008,7 +1023,7 @@ export default function Person() {
         )}
         {desk && (
           <Section title="Knows" count={knows.data?.knows?.length || ''} open={!!open.knows} onToggle={toggle('knows')}>
-            <PersonKnows person={person} query={knows} />
+            <PersonKnows person={person} query={knows} me={me} />
           </Section>
         )}
         {/* Tags and roles are desk work: volunteers can't change them (person.update / volunteer.* are desk-only). */}

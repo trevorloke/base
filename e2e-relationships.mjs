@@ -147,7 +147,7 @@ const shown = await page.$$eval('.ops-row', (els) => els.map((e) => ({
 const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`;
 check('Most connected: Priya Nair first, knows 6', apiConnected[0]?.name === 'Priya Nair' && apiConnected[0].knows === 6, JSON.stringify(apiConnected[0]));
 check('each row says "knows N · M supporters" as the server counts them',
-  shown.length === apiConnected.length && shown.every((s, i) => s.name === apiConnected[i].name && s.fact === `knows ${apiConnected[i].knows} · ${plural(apiConnected[i].supporters, 'supporter')}`),
+  shown.length === apiConnected.length && shown.every((s, i) => s.name === apiConnected[i].name && s.fact === `knows ${apiConnected[i].knows} · ${plural(apiConnected[i].supporters, 'supporter')}${apiConnected[i].brought_in ? ` · brought in ${apiConnected[i].brought_in}` : ''}`),
   `${shown.slice(0, 3).map((s) => `${s.name}: ${s.fact}`).join(' | ')}`);
 let m = await simple(page, 'Most connected (desk 1360)');
 check('Most connected: no yellow button (nothing to do but look)', m.yellow === 0);

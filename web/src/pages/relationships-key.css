@@ -1,0 +1,53 @@
+/* Key ties: the one line "Knows Sofia Petrova Friend · Close · 3 more" on a
+   desk profile and the Calls card, the "You know them" chip, "I know them",
+   Close and Make a list (RelationshipsBits.jsx). Wraps; never scrolls sideways. */
+
+.rk-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--s-2);
+  margin: var(--s-2) 0 0;
+  font-size: 15px;
+  line-height: 1.4;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.rk-word { color: var(--text-3); }
+.rk-dim { color: var(--text-3); font-size: 14px; }
+.rk-tie { display: inline-flex; align-items: center; gap: var(--s-1) 6px; flex-wrap: wrap; min-width: 0; }
+.rk-tie a, .rk-home a { font-weight: 600; overflow-wrap: anywhere; }
+.rk-tie .rb-chip { height: 22px; min-width: 28px; font-size: 12px; }
+.rk-tie + .rk-tie::before { content: '·'; color: var(--text-3); margin-right: 2px; }
+.rk-more {
+  font: inherit;
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.rk-more:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+/* The Calls card: the line sits in the name block, a little tighter */
+.cl-who__main .rk-line { margin-top: var(--s-1); font-size: 14px; }
+
+/* "You know them · Friend": a quiet chip */
+.rk-chip { color: var(--text-2); background: var(--mark-soft); border-color: transparent; }
+.cl-who__main .rk-chip, .door-rate .rk-chip, .walk-panel .rk-chip { align-self: flex-start; margin-top: var(--s-1); }
+
+/* "I know them", then "How do you know them?" */
+.rk-ask { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-2); width: 100%; }
+.rk-ask .btn-quiet { align-self: flex-start; }
+.rk-ask .rel-kind { min-height: 48px; }
+.rk-said { margin: var(--s-2) 0 0; color: var(--text-2); font-size: 14px; }
+
+/* The Knows section: Close beside Remove, Make a list and its line */
+.rk-close[aria-pressed='true'] { color: var(--text-1); background: var(--mark-soft); font-weight: 600; }
+.rk-make { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: var(--s-2); }
+.rk-help { margin: 2px 0 0; color: var(--text-3); font-size: 13px; }
+.rel-add__note label { font-size: 14px; color: var(--text-2); }
+
+@media (pointer: coarse) {
+  .rk-close, .rk-know, .rk-make .btn { min-height: 48px; }
+}
