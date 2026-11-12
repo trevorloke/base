@@ -61,6 +61,56 @@ or people — and ends with the campaign's name, the site's address and the
 authorization line when one is set (`server/ext/site/calendar.js`). The
 app's own calendar links (`/cal/…`) never answer on a site's domain.
 
+## Other websites (`server/ext/site/microsites.js`)
+
+A campaign may have up to five other websites (`microsites`): a petition or
+a contrast site on a domain of its own (dougdidnt.ca), with its own name,
+look (`theme`) and pages (`site_pages.site_id`, at most 50), built in the
+same page builder. It stores nothing else: the organization, the privacy
+policy, the social accounts and "Authorized by …" are always the main
+site's — the same elector organization sponsors every site and keeps what
+every form collects.
+
+- **Where**: its domain (at most two: the bare domain and its `www.`, which
+  making it with an address saves together) at `/`,
+  and `/site/sites/<key>/…` on the app's address (`noindex` there once it has
+  a domain). A draft or offline site answers every route with "Coming soon"
+  (`noindex`, `no-store`), but `/site-assets/*` and a page's preview.
+- **Routes there**: `/`, `/:slug` (its own pages), `/act/:slug` (any open
+  petition or pledge; canonical on the main site's address), `/r/:code`,
+  `POST /api/forms/:kind`, `/sitemap.xml` (its pages), `/robots.txt`,
+  `/site-assets/*`. `/news…`, `/act`, `/preferences` and `/unsubscribe` are its
+  404: emails link to the main site's.
+- **What the renderer gets** (`store.js siteOf`): its theme; a menu of its
+  pages marked "In the menu" (no title-bar button); search and sharing from
+  its home page; the main site's `org` (privacy link absolute on the main
+  site's address), social accounts and consent words; `site: { name, key }`
+  (the header and `<title>`); `parent: { name, url }` — the footer's "A
+  website by …" link. Its footer is the main site's bottom lines and logo.
+- **Addresses** (`hostProblem`): never the app's own, one people used the
+  app at, `SITE_HOSTS`, any campaign's main domains or another website's.
+  An address a website stops using (dropped, or the site deleted) is
+  **closed**: every route there, any method, answers `410` "This website has
+  closed" with who it was by, the main site's link and "Authorized by …" —
+  never the app — until a manager releases it (remove it from Render first;
+  after release it would reach the app). A closed address of this campaign
+  may be given to another of its websites; another campaign's may not.
+- **Who**: anyone with the Website area edits its pages and look; only a
+  manager creates, renames, sets addresses, takes it live or offline,
+  deletes, restores or releases. Going live needs its home page published,
+  Settings → Organization → Authorized by (the agent and how to reach them)
+  and the privacy policy link — refused with the first one missing.
+- **Forms**: `site_actions.site_id` (and the `site_action` event) say which
+  website; the source is `?source=`, else `?utm_source=` (the island's, and a
+  plain post's own address or the page it came from). One people database:
+  the same email is the same person on every site. People: `web=site:<id>`
+  (never the money forms); History adds "on <its domain>".
+- **"Authorized by …"** (`shared/site/wording.js authorizedBy`): "Authorized
+  by <agentName>, <agentContact>", else the old `authorizationLine` — in the
+  footer of every page of every site and on the plain pages. Every form's
+  small print ends "<org> keeps what you send to stay in touch about our
+  work and elections." and the "Privacy policy" link (`PRIVACY_LINE`).
+
 ## Tables (`server/ext/site/sql.js`)
 
 ```
@@ -277,8 +327,8 @@ site.footer       { acknowledgement (Markdown), links: [{ label, href }], text? 
                   logo?: { url, alt } (drawn in place of the name) }
 site.announcement { enabled, text, link: { label, href } }   (or linkLabel / linkHref)
 site.seo          { title, description, image: { url, alt }, noindex? }   (or shareImage)
-site.org          { name, short_name?, email, phone, address, authorization (the
-                  "Authorized by …" line), privacy_url, time_zone?, platformUrl?,
+site.org          { name, short_name?, email, phone, address, agentName?, agentContact?,
+                  authorization (the old "Authorized by …" line), privacy_url, time_zone?, platformUrl?,
                   platformLabel? (a link after the footer's links) }
 site.social       [{ name, handle, url, cta? }]   (or { accounts: [...] })
 page              { id, slug, title, description, modules }  — the published (or draft)
@@ -483,7 +533,8 @@ nav           { menu: [{ label, href }],      // the Menu, in order; the rendere
 footer        { acknowledgement, links: [{ label, href }], logo: { url, alt } }
 announcement  { enabled, text, linkLabel, linkHref }
 seo           { title, description, shareImage: { url, alt } }
-org           { name, shortName, email, phone, address, platformUrl, platformLabel, privacyUrl, authorizationLine }
+org           { name, shortName, email, phone, address, platformUrl, platformLabel, privacyUrl,
+                agentName, agentContact, authorizationLine (drawn only while no agent is named) }
 social        { accounts: [{ name, short, handle, url }] }
 theme         shared/site/theme.js (checkTheme: a pair under 4.5:1 is refused)
 domains       ['imaginesurrey.ca', …]       // the site answers at / on these too
@@ -706,6 +757,15 @@ off), `SITE_FORMS_PER_MINUTE` (20 per address).
   it was (live if it was live). If its address went to another meanwhile, it
   comes back at a free one like it (`-2`, `-3`…; the event's payload says
   `was`). The 'restore' op on the event log.
+- Other websites (`microsite-reads.js`; counts, never people — the money
+  forms counted only for someone who can open Donations):
+  `GET /api/site/microsites` → `{ microsites: [{ …, signups_7, signups_30,
+  home }], closed, limit }`; `GET /api/site/microsites/:id` → `{ microsite,
+  deleted, pages, home, checklist, signups_7, signups_30, sources: [{ source,
+  n }] (top 8, 30 days, none → "direct"), render_host, urls, brand_theme }`;
+  `GET /api/site/microsites/host?host=&id=` → `{ host, why }`, the domain
+  save's own refusal. `GET /api/site` adds `counts.microsites` and
+  `counts.microsites_live`; a page carries `site_id`.
 
 ## The Website screens (`web/src/pages/Website*.jsx`)
 
@@ -722,6 +782,10 @@ theirs, and the server refuses its data anyway).
 | `/website/settings` | Menu and title bar, announcement bar, footer, organization, social accounts, search and sharing, your own domain |
 | `/website/news` · `/:id` | Posts: list, editor (picture, excerpt, Markdown), publish/unpublish, delete (Undo) |
 | `/website/petitions` · `/:id` | Petitions and pledges: signatures and a bar to the goal, "See who signed" (People by `signers_tag`), editor, close/open again, delete (Undo) |
+| `/website/sites` | Other websites: each one's name, Live / Draft, domain and sign-ups this week; New website (a manager: a name and, optionally, the address — checked as it's typed in the save's words); deleted ones whose address still says it has closed |
+| `/website/sites/:siteId` | One of them: Go live (a draft; a manager) or View site; while a draft, the checklist (home published, Authorized by, privacy link, address), each a tick or a link to fix it; sign-ups for 7 or 30 days and where they came from (30 days), "See everyone from this site" (`/people?web=site:<id>`); Pages · Look · Domain; ⋯ (a manager) Rename, Take offline, Delete (Undo), Release old address |
+| `/website/sites/:siteId/pages` · `/look` | Today's Pages and Theme with the site passed in (its own pages; its own look, saved with `site.microsite.save`, "Start from the campaign's brand" copies the brand's once); the builder says "On <site>" and previews and views it at the site's address |
+| `/website/sites/:siteId/domain` | The address (the `www.` is added), then — only once it's saved — the three steps in the safe order (buy it; add it in Render; the registrar's DNS records, pointing `www` at `RENDER_EXTERNAL_HOSTNAME`), each with Copy, and "Open https://…" |
 
 Careful with "your own domain": on a host in `domains` only the site answers
 (no sign-in, no app). So `site.settings.save` refuses (400, in plain words)

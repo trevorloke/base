@@ -17,7 +17,7 @@
 // petition gets a signature from the site and "See who signed" lists them
 // in People. A volunteer can't open Website (the admin says it's not for
 // their role; the server refuses its data). On a phone (390px) every
-// Website screen fits with no sideways scroll, the tab bar shows all nine
+// Website screen (Other websites too) fits with no sideways scroll, the tab bar shows all nine
 // labels whole, and tap targets are 48px.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5210 node server/index.js &
@@ -94,6 +94,8 @@ check('Overview: the site is live, at the app’s own /site/ address', /Your sit
 check('Overview: online giving is not set up yet', /Online giving Not set up yet/i.test(t0));
 const tiles = (await page.locator('.wb-tile').allTextContents()).map((x) => x.replace(/\s+/g, ' '));
 check('Overview: pages, news, petitions and this week’s sign-ups are counted', tiles.some((x) => /^Sign-ups this week ?0/.test(x)) && tiles.some((x) => /^Pages ?8/.test(x)) && tiles.some((x) => /^Petitions and pledges ?2/.test(x)), JSON.stringify(tiles).slice(0, 300));
+const otherRow = page.locator('a.ms-home-row');
+check('Overview: one row for the other websites, “None yet”, opening Other websites', /Other websites\s*None yet/.test(await otherRow.innerText().catch(() => '')) && /\/website\/sites$/.test(await otherRow.getAttribute('href').catch(() => '')));
 const viewHref = await page.getByRole('link', { name: /^View site/ }).getAttribute('href');
 check('"View site" opens the site', /\/site\/$/.test(viewHref), viewHref);
 await shot('1-overview');
@@ -499,7 +501,7 @@ await vctx.close();
 // ── a phone ──
 await page.setViewportSize({ width: 390, height: 844 });
 const phone = [];
-for (const [path, name] of [['/website', 'overview'], ['/website/pages', 'pages'], [`/website/pages/${pageId}`, 'builder'], ['/website/theme', 'theme'], ['/website/settings', 'settings'], ['/website/news', 'news'], ['/website/petitions', 'petitions']]) {
+for (const [path, name] of [['/website', 'overview'], ['/website/pages', 'pages'], [`/website/pages/${pageId}`, 'builder'], ['/website/theme', 'theme'], ['/website/settings', 'settings'], ['/website/news', 'news'], ['/website/petitions', 'petitions'], ['/website/sites', 'other websites']]) {
   await page.goto(`${BASE}/admin${path}`, { waitUntil: 'domcontentloaded' });
   await page.locator('h1').first().waitFor();
   await sleep(700);

@@ -4,7 +4,8 @@
 //   under Settings, or SITE_HOSTS on the server), the one yellow "View site".
 //   Then: sign-ups from the site this week (by kind), pages (live, with
 //   changes not on the site yet), news, petitions and pledges, and whether
-//   online giving is set up (donate and join need it).
+//   online giving is set up (donate and join need it). One row for the
+//   campaign's other websites ("Other websites · 2 live").
 // The 'site' area (managers by default; App.jsx guards the route, the
 // server refuses everyone else).
 import { Link, useOutletContext } from 'react-router-dom';
@@ -14,6 +15,7 @@ import { useSite, plural } from '../components/site/useSite.js';
 import './shifts.css';
 import '../editor.css';
 import './website.css';
+import './website-sites.css';
 
 const KIND_WORDS = {
   petition: ['petition signature', 'petition signatures'],
@@ -88,6 +90,12 @@ export default function WebsiteHome() {
               </p>
             )}
           </section>
+
+          <Link className="card ms-home-row" to="/website/sites">
+            <span className="ms-home-row__name">Other websites</span>
+            <span className="ms-home-row__n">{c.microsites ? `${c.microsites_live ?? 0} live${c.microsites > (c.microsites_live ?? 0) ? ` · ${plural(c.microsites - (c.microsites_live ?? 0), 'draft')}` : ''}` : 'None yet'}</span>
+            <span aria-hidden="true">›</span>
+          </Link>
 
           <div className="wb-tiles">
             <section className="wb-tile" aria-labelledby="wb-t-week">

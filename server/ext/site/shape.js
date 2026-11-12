@@ -12,7 +12,8 @@
 //   announcement  { enabled, text, linkLabel, linkHref }
 //   seo           { title, description, shareImage: { url, alt } }
 //   org           { name, shortName, email, phone, address, platformUrl,
-//                 platformLabel, privacyUrl, authorizationLine }
+//                 platformLabel, privacyUrl, agentName, agentContact,
+//                 authorizationLine (the old free line) }
 //   social        { accounts: [{ name, short, handle, url }] }
 //   theme         shared/site/theme.js checkTheme (a pair under 4.5:1 is refused)
 //   domains       ['imaginesurrey.ca', …] — the site answers at / on these
@@ -24,7 +25,7 @@ import { consentName, consentWords } from '../../../shared/site/wording.js';
 export const KINDS = ['newsletter', 'petition', 'pledge', 'volunteer', 'rsvp', 'contact', 'join', 'donate'];
 
 // Addresses the site itself answers (routes) or the app keeps: never a page's.
-export const RESERVED_SLUGS = ['news', 'act', 'r', 'preferences', 'unsubscribe', 'api', 'site-assets', '__preview', 'sitemap.xml', 'robots.txt', 'media', 'stripe', 'site'];
+export const RESERVED_SLUGS = ['news', 'act', 'r', 'preferences', 'unsubscribe', 'api', 'site-assets', '__preview', 'sitemap.xml', 'robots.txt', 'media', 'stripe', 'site', 'sites'];
 // Pages the site has whatever an admin does: home is /, news is /news.
 export const SYSTEM_SLUGS = ['home', 'news'];
 export const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -80,6 +81,12 @@ export const SECTIONS = {
     platformUrl: href.default(''),
     platformLabel: text(80).default(''),
     privacyUrl: href.default(''),
+    // Who authorized the advertising (shared/site/wording.js authorizedBy):
+    // the financial agent and a way to reach them. authorizationLine is the
+    // line as it was typed before them — kept, and drawn only while no
+    // agent is named.
+    agentName: text(80).default(''),
+    agentContact: text(120).default(''),
     authorizationLine: text(200).default(''),
   }),
   social: z.object({

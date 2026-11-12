@@ -71,3 +71,14 @@ test('the real round trip: the 21st plain post from one address comes back to it
   assert.match(sectionOf(fix.text, 'newsletter'), /aria-invalid="true"/);
   assert.doesNotMatch(sectionOf(fix.text, 'skytrain'), /aria-invalid="true"/);
 });
+
+test('a plain post from a page opened with ?utm_source= keeps it as the source (the island’s rule)', async () => {
+  const { db } = await campaign();
+  const r = await hit('/site/api/forms/newsletter', {
+    form: { email: 'utm.example@example.org', consent_email: 'true' },
+    headers: { referer: 'http://localhost/site/?utm_source=bus-shelter' },
+  });
+  assert.equal(r.status, 303);
+  const row = (await db.query("select a.source, a.site_id from site_actions a join persons p on p.id = a.person_id where p.email = 'utm.example@example.org'")).rows[0];
+  assert.deepEqual([row.source, row.site_id], ['bus-shelter', null]);
+});

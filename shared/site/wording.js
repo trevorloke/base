@@ -24,3 +24,20 @@ export const consentWords = (name) => ({
 // count as a contribution, so joining declares it too.
 export const DONATE_DECLARATION = 'I’m a Canadian citizen or permanent resident. I live in British Columbia. This contribution is my own money, and no one will pay me back for it.';
 export const JOIN_DECLARATION = 'I declare that what I’ve written here is true and that I’m eligible to be a member: I’m a Canadian citizen or permanent resident, I live in British Columbia, and my dues are my own money — no one will pay me back for them.';
+
+// "Authorized by …": the line B.C. election rules ask for on advertising,
+// on every page of every website (the footer, and the plain pages: coming
+// soon, closed). The financial agent and a way to reach them; before they
+// were asked for, the line as typed (authorizationLine). One place, so new
+// wording from Elections BC is one edit.
+const clean = (v) => String(v ?? '').replace(/\s+/g, ' ').trim();
+export const authorizedBy = (org) => {
+  const name = clean(org?.agentName ?? org?.agent_name);
+  const contact = clean(org?.agentContact ?? org?.agent_contact);
+  if (name) return `Authorized by ${name}${contact ? `, ${contact}` : ''}`;
+  return clean(org?.authorizationLine ?? org?.authorization ?? org?.authorized_by);
+};
+
+// Under every form, before its "Privacy policy" link: who keeps what a
+// visitor sends, and why.
+export const PRIVACY_LINE = (name) => `${clean(name) || 'The campaign'} keeps what you send to stay in touch about our work and elections.`;

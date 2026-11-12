@@ -46,6 +46,10 @@ test('what the island takes from the address: the same rule, so a long link neve
   assert.deepEqual(trackFrom('?ref=Abc12345&source=share-whatsapp'), { ref: 'Abc12345', source: 'share-whatsapp' });
   assert.deepEqual(trackFrom('?ref=abc&source=%3Cscript%3E'), { ref: '', source: '' });
   assert.deepEqual(trackFrom(''), { ref: '', source: '' });
+  // A flyer's or an ad's link: utm_source when there is no source.
+  assert.deepEqual(trackFrom('?utm_source=flyer'), { ref: '', source: 'flyer' });
+  assert.deepEqual(trackFrom('?utm_source=flyer&source=share-x'), { ref: '', source: 'share-x' });
+  assert.deepEqual(trackFrom('?utm_source=%3Cb%3E'), { ref: '', source: '' });
   // What the server says about the raw ones (why they must never be sent).
   const raw = await send('newsletter', { email: 'tracking3@example.org', consent_email: true, source: LONG });
   assert.equal(raw.status, 400);

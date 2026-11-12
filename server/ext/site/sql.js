@@ -9,7 +9,9 @@
 //                   draft being edited and what is live (published), each
 //                   { title, description, modules: [{ id, kind, hidden,
 //                   props }] }; version counts publishes (the page cache's
-//                   key); show_in_nav / nav_order put it in the menu
+//                   key); show_in_nav / nav_order put it in the menu;
+//                   site_id: the other website it is on (null: the main
+//                   one) — an address is unique within its own website
 //   site_posts      news posts (published_at orders them, newest first)
 //   site_campaigns  petitions and pledges; their signatures are site_actions
 //   site_actions    every form a visitor sent: who (person_id), what (kind,
@@ -20,6 +22,12 @@
 //                   donate: checkout_id, their checkout (ext/payments) —
 //                   answer stays empty until Stripe has made its page, so a
 //                   retry after a failure asks again for the same checkout
+//                   site_id: the other website it was sent on (null: the main)
+//   microsites      the campaign's other websites (at most 5): a name, a
+//                   look, a status (draft, live), up to two addresses
+//                   (domains) and the ones it once had (held_domains): a
+//                   closed address answers "This website has closed" until
+//                   a manager releases it (SITE.md "Other websites")
 //   consent_events  every yes or no to email or texts, with the words they
 //                   saw and the address it was about — from the site's forms
 //                   and pages, and from base.win's own (an unsubscribe link,
@@ -64,7 +72,9 @@ create table if not exists site_pages (
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
 );
-create unique index if not exists site_pages_slug_idx on site_pages (workspace_id, slug) where deleted_at is null;
+alter table site_pages add column if not exists site_id uuid;
+drop index if exists site_pages_slug_idx;
+create unique index if not exists site_pages_site_slug_idx on site_pages (workspace_id, coalesce(site_id, '00000000-0000-0000-0000-000000000000'::uuid), slug) where deleted_at is null;
 create index if not exists site_pages_nav_idx on site_pages (workspace_id, nav_order) where deleted_at is null and status = 'published' and show_in_nav;
 
 create table if not exists site_posts (
@@ -122,6 +132,23 @@ create index if not exists site_actions_campaign_idx on site_actions (workspace_
 create index if not exists site_actions_person_idx on site_actions (workspace_id, person_id);
 create index if not exists site_actions_time_idx on site_actions (workspace_id, created_at);
 create index if not exists site_actions_referrer_idx on site_actions (workspace_id, referrer_id) where referrer_id is not null;
+alter table site_actions add column if not exists site_id uuid;
+create index if not exists site_actions_site_idx on site_actions (workspace_id, site_id, created_at) where site_id is not null;
+
+create table if not exists microsites (
+  id uuid primary key,
+  workspace_id uuid not null references workspaces(id) on delete cascade,
+  key text not null,
+  name text not null,
+  status text not null default 'draft' check (status in ('draft', 'live')),
+  domains jsonb not null default '[]',
+  held_domains jsonb not null default '[]',
+  theme jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  deleted_at timestamptz
+);
+create unique index if not exists microsites_key_idx on microsites (workspace_id, key) where deleted_at is null;
 
 create table if not exists consent_events (
   id uuid primary key,

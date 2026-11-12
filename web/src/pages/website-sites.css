@@ -1,0 +1,90 @@
+/* Website → Other websites (WebsiteSites.jsx, WebsiteSite.jsx) and the
+   Overview's row for them (WebsiteHome.jsx). Built on website.css's rows,
+   cards and fields; only what those don't have. */
+
+.ms-page .ops-head { flex-wrap: wrap; }
+.ms-title { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; overflow-wrap: anywhere; }
+.ms-title .chip { font-size: 13px; }
+.ms-row { padding-left: var(--s-3); position: relative; min-height: 48px; }
+/* The whole row opens the website, not only its 32px name (48px on a phone). */
+.ms-row .wb-row__name::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.ms-row .wb-row__name:focus-visible { outline: none; }
+.ms-row .wb-row__name:focus-visible::after { outline: 2px solid var(--mark); outline-offset: 2px; }
+@media (hover: hover) { .ms-row:hover { border-color: var(--rule-2); } }
+.ms-row__top { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.ms-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-3); }
+.ms-empty p { margin: 0; font-size: 16px; }
+.ms-closed { margin-top: var(--s-5); }
+.ms-unavail { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.ms-problem { margin: 0; color: var(--danger); font-size: 14px; }
+.ms-problem:empty { display: none; }
+
+.ms-card { margin-bottom: var(--s-4); }
+.ms-card > p { margin: 0; }
+.ms-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ms-check { display: flex; align-items: center; gap: var(--s-2); min-height: var(--ctl); font-size: 15px; }
+.ms-check a { display: inline-flex; align-items: center; min-height: var(--ctl); }
+.ms-check__mark { flex: none; width: 24px; text-align: center; color: var(--text-3); font-weight: 600; }
+.ms-check[data-done] .ms-check__mark { color: var(--ok); }
+
+.ms-su__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
+.ms-su__head .wb-card-h { margin: 0; }
+.ms-seg { width: auto; flex: 0 1 auto; }
+.ms-seg > button { min-height: var(--ctl); padding: 0 var(--s-3); }
+.ms-su__n { margin: var(--s-2) 0; font-size: 26px; font-weight: 700; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.ms-su__h3 { margin: var(--s-3) 0 var(--s-2); font-size: 14px; font-weight: 600; color: var(--text-2); }
+.ms-sources { list-style: none; margin: 0 0 var(--s-3); padding: 0; max-width: 420px; }
+.ms-sources li { display: flex; justify-content: space-between; gap: var(--s-3); padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+.ms-sources__name { overflow-wrap: anywhere; min-width: 0; }
+.ms-sources__n { font-variant-numeric: tabular-nums; font-weight: 600; }
+.ms-link { display: inline-flex; align-items: center; min-height: var(--ctl); font-size: 15px; overflow-wrap: anywhere; }
+
+.ms-links { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
+.ms-more { margin-left: auto; }
+.ms-ask {
+  display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3);
+  padding: var(--s-3); background: var(--paper-1); border: 1px solid var(--rule); border-radius: var(--r-card);
+}
+.ms-ask > span { flex: 1 1 200px; font-size: 15px; font-weight: 600; }
+/* Scrolled into view clear of the phone's bottom tabs. */
+.ms-ask { scroll-margin: var(--s-4) 0 96px; }
+.ms-rename { margin-bottom: var(--s-4); }
+
+.ms-dom-form .ops-actions, .ms-card > .ops-actions { flex-wrap: wrap; }
+/* .ms-card > p would otherwise win and take the gap away. */
+.ms-card > p.ms-dom-also { margin: 0 0 var(--s-3); }
+.ms-steps { margin: 0 0 var(--s-3); padding-left: 1.4em; display: flex; flex-direction: column; gap: var(--s-3); }
+.ms-steps p { margin: 0 0 6px; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.ms-copy { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.ms-copy code {
+  padding: 4px 8px; background: var(--paper-1); border: 1px solid var(--rule); border-radius: var(--r-ctrl);
+  font-size: 14px; overflow-wrap: anywhere; min-width: 0;
+}
+.ms-copy__said { font-size: 13px; color: var(--text-3); }
+
+.wb-build__on { margin: 0 0 6px; font-size: 14px; color: var(--text-2); }
+
+.ms-home-row {
+  display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-4); min-height: 56px;
+  text-decoration: none; color: var(--text-1);
+}
+.ms-home-row__name { font-size: 16px; font-weight: 600; }
+.ms-home-row__n { flex: 1 1 auto; font-size: 14px; color: var(--text-2); }
+@media (hover: hover) { .ms-home-row:hover { border-color: var(--rule-2); } }
+
+@media (max-width: 640px) {
+  /* The toast's Undo and ✕: phone-sized taps (website.css draws them 44px). */
+  .toast.wb-toast .btn { min-height: 48px; }
+  .ms-links > .btn { flex: 1 1 auto; }
+  .ms-ask > .btn { flex: 1 1 auto; }
+  /* A page's title on its Pages screen is the way to open it. */
+  .wb-row__name { min-height: 48px; }
+}
+@media (max-width: 720px) {
+  /* The overview's ⋯ is on the last row, just above the fixed tabs: its
+     menu opens upward, where there is always room. */
+  .ms-more .wb-more__panel { top: auto; bottom: calc(100% + 4px); }
+  /* scrollIntoView knows nothing of the tabs; this keeps the question
+     clear of them (app.css: the tab bar is about 65–71px tall). */
+  .ms-ask { scroll-margin-bottom: calc(84px + env(safe-area-inset-bottom)); }
+}

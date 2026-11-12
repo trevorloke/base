@@ -6,7 +6,10 @@
 //   site.settings.save   { theme?, nav?, footer?, announcement?, seo?, org?, social?, domains? }
 //                        each section given replaces that section (shape.js);
 //                        a theme with a colour pair under 4.5:1 is refused
-//   site.page.create     { title, slug?, description?, modules?, show_in_nav? } → { page }   a draft
+//   site.page.create     { title, slug?, description?, modules?, show_in_nav?, site_id? } → { page }   a draft
+//                        (site_id: on another website of the campaign — a
+//                        page's address, order, copy and restore stay within
+//                        its own website; microsites.js has those websites' own)
 //   site.page.save       { id, title?, slug?, description?, image?, modules?, show_in_nav?, nav_order?, updated_at? }
 //                        the draft (modules checked loosely: a draft may be
 //                        unfinished); image: the page's share picture
@@ -45,6 +48,7 @@ import { brandKey } from '../../lib/brand.js';
 import { SECTIONS, slugify, slugProblem, SYSTEM_SLUGS, RESERVED_SLUGS, hostOf } from './shape.js';
 import { ensureSiteTx, parseJ, pageOut, postOut, campaignOut, forgetDomains, isAppHost, envHosts, appHostSeen, usedWhy } from './store.js';
 import { cacheClear } from './cache.js';
+import { micrositeActions, hostProblem, takeHeld, roomForPage } from './microsites.js';
 
 const MANAGER = ['manager'];
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -105,9 +109,12 @@ const loadPage = async (tx, ws, id) => {
 
 // A free address: the one asked for (refused if taken), or one made from
 // the title (with -2, -3… when taken).
-const freeSlug = async (tx, ws, table, wanted, fallback, exceptId = null, { pages = true } = {}) => {
+// siteId: a page's own website (null: the main site's).
+const freeSlug = async (tx, ws, table, wanted, fallback, exceptId = null, { pages = true, siteId = null } = {}) => {
+  const ofSite = table === 'site_pages' ? ' and site_id is not distinct from $4::uuid' : '';
   const taken = async (s) => Boolean((await tx.query(
-    `select 1 from ${table} where workspace_id = $1 and slug = $2 and deleted_at is null and ($3::uuid is null or id <> $3::uuid)`, [ws, s, exceptId],
+    `select 1 from ${table} where workspace_id = $1 and slug = $2 and deleted_at is null and ($3::uuid is null or id <> $3::uuid)${ofSite}`,
+    table === 'site_pages' ? [ws, s, exceptId, siteId] : [ws, s, exceptId],
   )).rows[0]);
   if (wanted) {
     const s = String(wanted).trim().toLowerCase();
@@ -127,7 +134,7 @@ const freeSlug = async (tx, ws, table, wanted, fallback, exceptId = null, { page
 };
 
 // The petitions and pages a published page points at must be there.
-const refsProblem = async (tx, ws, modules) => {
+const refsProblem = async (tx, ws, modules, siteId = null) => {
   for (const [i, m] of modules.entries()) {
     if (m.hidden) continue;
     for (const f of MODULE_BY_KIND[m.kind]?.fields || []) {
@@ -139,7 +146,9 @@ const refsProblem = async (tx, ws, modules) => {
         if (f.kinds && !f.kinds.includes(c.kind)) return `The ${ordinal(i + 1)} module: pick a ${f.kinds.join(' or ')}`;
       }
       if (f.type === 'page') {
-        const p = (await tx.query("select 1 from site_pages where slug = $1 and workspace_id = $2 and deleted_at is null and status = 'published'", [v, ws])).rows[0];
+        const p = (await tx.query(
+          "select 1 from site_pages where slug = $1 and workspace_id = $2 and deleted_at is null and status = 'published' and site_id is not distinct from $3::uuid", [v, ws, siteId],
+        )).rows[0];
         if (!p) return `The ${ordinal(i + 1)} module (${MODULE_BY_KIND[m.kind].label}): the page it links to isn't on the site`;
       }
     }
@@ -163,8 +172,19 @@ const withImage = (content, image) => {
 const restoreRow = async (tx, ws, table, id, gone) => {
   const cur = (await tx.query(`select * from ${table} where id = $1 and workspace_id = $2 and deleted_at is not null for update`, [id, ws])).rows[0];
   if (!cur) throw httpError(404, gone);
-  const taken = (await tx.query(`select 1 from ${table} where workspace_id = $1 and slug = $2 and deleted_at is null`, [ws, cur.slug])).rows[0];
-  const slug = taken ? await freeSlug(tx, ws, table, null, cur.slug, null, { pages: table === 'site_pages' }) : cur.slug;
+  const pages = table === 'site_pages';
+  const siteId = pages ? cur.site_id || null : null;
+  if (siteId) {
+    // A page of another website comes back only while that website is there.
+    const there = (await tx.query('select 1 from microsites where id = $1 and workspace_id = $2 and deleted_at is null', [siteId, ws])).rows[0];
+    if (!there) throw httpError(404, 'That website is gone — reload');
+    await roomForPage(tx, ws, siteId);
+  }
+  const taken = (await tx.query(
+    `select 1 from ${table} where workspace_id = $1 and slug = $2 and deleted_at is null${pages ? ' and site_id is not distinct from $3::uuid' : ''}`,
+    pages ? [ws, cur.slug, siteId] : [ws, cur.slug],
+  )).rows[0];
+  const slug = taken ? await freeSlug(tx, ws, table, null, cur.slug, null, { pages, siteId }) : cur.slug;
   return { cur, slug };
 };
 
@@ -179,6 +199,15 @@ export const actions = {
     const sets = [];
     const params = [ws];
     const changed = {};
+    // Who authorized the site, when a save leaves it out (a desk build from
+    // before it was asked for): as it was, never wiped.
+    if (input.org && typeof input.org === 'object') {
+      const keep = ['agentName', 'agentContact', 'authorizationLine'].filter((k) => input.org[k] === undefined);
+      if (keep.length) {
+        const was = parseJ((await tx.query('select org from site_settings where workspace_id = $1', [ws])).rows[0]?.org, {}) || {};
+        input.org = { ...input.org, ...Object.fromEntries(keep.filter((k) => was[k] !== undefined).map((k) => [k, was[k]])) };
+      }
+    }
     for (const key of Object.keys(SECTIONS)) {
       if (input[key] === undefined) continue;
       const r = SECTIONS[key].safeParse(input[key]);
@@ -236,6 +265,11 @@ export const actions = {
           'select 1 from site_settings where workspace_id <> $1 and domains @> $2::jsonb', [ws, JSON.stringify([h])],
         )).rows[0];
         if (other) throw httpError(409, `${h} is another campaign's address`);
+        // Nor another website's (microsites.js); an address a closed website
+        // of this campaign still holds is taken from it.
+        const p = await hostProblem(tx, ctx, h, { main: true, already: [...already, ...envHosts()] });
+        if (p.why) throw httpError(400, p.why);
+        await takeHeld(tx, ws, h, p.take, emit);
       }
       params.push(JSON.stringify(hosts));
       sets.push(`domains = $${params.length}`);
@@ -254,19 +288,28 @@ export const actions = {
     description: text(300).nullish(),
     modules: z.array(z.any()).max(60).nullish(),
     show_in_nav: z.boolean().optional(),
+    site_id: uuid().nullish(),
   }), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
-    const slug = await freeSlug(tx, ws, 'site_pages', input.slug, input.title);
+    const siteId = input.site_id || null;
+    if (siteId) {
+      const there = (await tx.query('select 1 from microsites where id = $1 and workspace_id = $2 and deleted_at is null', [siteId, ws])).rows[0];
+      if (!there) throw httpError(404, 'That website is gone — reload');
+      await roomForPage(tx, ws, siteId);
+    }
+    const slug = await freeSlug(tx, ws, 'site_pages', input.slug, input.title, null, { siteId });
     const modules = checked(input.modules || []);
     const draft = { title: input.title, description: input.description || '', modules };
-    const order = (await tx.query('select coalesce(max(nav_order), -1) + 1 as n from site_pages where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
+    const order = (await tx.query(
+      'select coalesce(max(nav_order), -1) + 1 as n from site_pages where workspace_id = $1 and deleted_at is null and site_id is not distinct from $2::uuid', [ws, siteId],
+    )).rows[0].n;
     const id = newId();
     const row = (await tx.query(
-      `insert into site_pages (id, workspace_id, slug, title, description, draft, show_in_nav, nav_order)
-       values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
-      [id, ws, slug, input.title, input.description || '', JSON.stringify(draft), Boolean(input.show_in_nav), order],
+      `insert into site_pages (id, workspace_id, slug, title, description, draft, show_in_nav, nav_order, site_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+      [id, ws, slug, input.title, input.description || '', JSON.stringify(draft), Boolean(input.show_in_nav), order, siteId],
     )).rows[0];
-    emit('site_page', id, 'create', { slug, title: input.title, show_in_nav: Boolean(input.show_in_nav), modules: shapeOf(modules), content_hash: hash(draft) });
+    emit('site_page', id, 'create', { slug, title: input.title, show_in_nav: Boolean(input.show_in_nav), modules: shapeOf(modules), content_hash: hash(draft), ...(siteId ? { site_id: siteId } : {}) });
     return { page: pageOut(row) };
   }),
 
@@ -291,7 +334,7 @@ export const actions = {
     let slug = cur.slug;
     if (input.slug !== undefined && input.slug.trim().toLowerCase() !== cur.slug) {
       if (SYSTEM_SLUGS.includes(cur.slug)) throw httpError(400, `The ${cur.slug === 'home' ? 'home page' : 'news page'} keeps its address`);
-      slug = await freeSlug(tx, ws, 'site_pages', input.slug, null, cur.id);
+      slug = await freeSlug(tx, ws, 'site_pages', input.slug, null, cur.id, { siteId: cur.site_id || null });
     }
     const title = input.title ?? cur.title;
     const description = input.description === undefined ? (cur.description || '') : (input.description || '');
@@ -320,7 +363,7 @@ export const actions = {
     const cur = await loadPage(tx, ws, input.id);
     const draft = parseJ(cur.draft, {});
     const modules = checked(draft.modules || [], { strict: true });
-    const problem = await refsProblem(tx, ws, modules);
+    const problem = await refsProblem(tx, ws, modules, cur.site_id || null);
     if (problem) throw httpError(400, problem);
     const live = withImage({ title: cur.title, description: cur.description || '', modules }, draft.image);
     const row = (await tx.query(
@@ -350,14 +393,18 @@ export const actions = {
     const cur = await loadPage(tx, ws, input.id);
     const draft = parseJ(cur.draft, {});
     const title = `${cur.title} (copy)`.slice(0, 120);
-    const slug = await freeSlug(tx, ws, 'site_pages', null, `${cur.slug}-copy`);
+    const siteId = cur.site_id || null;
+    await roomForPage(tx, ws, siteId);
+    const slug = await freeSlug(tx, ws, 'site_pages', null, `${cur.slug}-copy`, null, { siteId });
     const copy = { ...draft, title };
-    const order = (await tx.query('select coalesce(max(nav_order), -1) + 1 as n from site_pages where workspace_id = $1 and deleted_at is null', [ws])).rows[0].n;
+    const order = (await tx.query(
+      'select coalesce(max(nav_order), -1) + 1 as n from site_pages where workspace_id = $1 and deleted_at is null and site_id is not distinct from $2::uuid', [ws, siteId],
+    )).rows[0].n;
     const id = newId();
     const row = (await tx.query(
-      `insert into site_pages (id, workspace_id, slug, title, description, draft, show_in_nav, nav_order)
-       values ($1, $2, $3, $4, $5, $6, false, $7) returning *`,
-      [id, ws, slug, title, cur.description || '', JSON.stringify(copy), order],
+      `insert into site_pages (id, workspace_id, slug, title, description, draft, show_in_nav, nav_order, site_id)
+       values ($1, $2, $3, $4, $5, $6, false, $7, $8) returning *`,
+      [id, ws, slug, title, cur.description || '', JSON.stringify(copy), order, siteId],
     )).rows[0];
     emit('site_page', id, 'create', { slug, title, copied_from: cur.id, modules: shapeOf(copy.modules), content_hash: hash(copy) });
     return { page: pageOut(row) };
@@ -385,8 +432,9 @@ export const actions = {
   'site.page.reorder': siteAction(z.object({ ids: z.array(uuid()).min(1).max(200) }), async (tx, ctx, input, emit) => {
     const ws = ctx.workspaceId;
     const rows = (await tx.query(
-      'select id, nav_order from site_pages where workspace_id = $1 and deleted_at is null and id = any($2::uuid[])', [ws, input.ids],
+      'select id, nav_order, site_id from site_pages where workspace_id = $1 and deleted_at is null and id = any($2::uuid[])', [ws, input.ids],
     )).rows;
+    if (new Set(rows.map((r) => r.site_id || '')).size > 1) throw httpError(400, 'Those pages are on two different websites — order each one’s on its own');
     const have = new Map(rows.map((r) => [r.id, r.nav_order]));
     let moved = 0;
     for (const [i, id] of [...new Set(input.ids)].entries()) {
@@ -570,5 +618,7 @@ export const actions = {
     },
   },
 };
+
+Object.assign(actions, micrositeActions(siteAction));
 
 const SIG = `(select count(distinct a.person_id)::int from site_actions a where a.workspace_id = c.workspace_id and a.campaign_id = c.id and a.kind in ('petition', 'pledge'))`;

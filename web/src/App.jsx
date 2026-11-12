@@ -71,6 +71,9 @@ const WebsiteTheme = lazy(() => import('./pages/WebsiteTheme.jsx'));
 const WebsiteSettings = lazy(() => import('./pages/WebsiteSettings.jsx'));
 const WebsitePosts = lazy(() => import('./pages/WebsitePosts.jsx'));
 const WebsiteCampaigns = lazy(() => import('./pages/WebsiteCampaigns.jsx'));
+const WebsiteSites = lazy(() => import('./pages/WebsiteSites.jsx'));
+const WebsiteSite = lazy(() => import('./pages/WebsiteSite.jsx'));
+const WebsiteSiteDomain = lazy(() => import('./pages/WebsiteSite.jsx').then((m) => ({ default: m.WebsiteSiteDomain })));
 const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
 import Join from './pages/Join.jsx';
 import { TwoStepRequired } from './components/TwoStep.jsx';
@@ -271,6 +274,12 @@ export default function App({ mode = 'field' }) {
           <Route path="/website/news/:id" element={<WebsitePosts />} />
           <Route path="/website/petitions" element={<WebsiteCampaigns />} />
           <Route path="/website/petitions/:id" element={<WebsiteCampaigns />} />
+          {/* The campaign's other websites: their pages and look are the screens above, with the site. */}
+          <Route path="/website/sites" element={<WebsiteSites />} />
+          <Route path="/website/sites/:siteId" element={<WebsiteSite />} />
+          <Route path="/website/sites/:siteId/pages" element={<WebsitePages />} />
+          <Route path="/website/sites/:siteId/look" element={<WebsiteTheme />} />
+          <Route path="/website/sites/:siteId/domain" element={<WebsiteSiteDomain />} />
           <Route path="/path-to-win" element={<PathToWin />} />
         </Route>
       </Route>

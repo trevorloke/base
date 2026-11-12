@@ -8,7 +8,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { html, cx } from './h.js';
 import { Icon } from './icons.js';
 import { Hidden, Honeypot, TextField } from './fields.js';
-import { ME_KEY, rememberMe } from './form.js';
+import { FormSmall, ME_KEY, rememberMe } from './form.js';
 import { EMAIL_RE, str } from './util.js';
 
 const newKey = () => {
@@ -41,7 +41,7 @@ function CalLine({ cal }) {
     ${i ? html`<span aria-hidden="true">·</span>` : ' '}<a href=${l.href} target=${l.away ? '_blank' : undefined} rel=${l.away ? 'noopener noreferrer' : undefined}>${l.label}</a><//>`)}</p>`;
 }
 
-function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }) {
+function Rsvp({ uid, item, action, hidden, privacy, me, setMe, state, setState, primary }) {
   const st = state || { status: 'idle', errors: {} };
   const set = (patch) => setState(item.id, { ...st, ...patch });
   // The form's own action, as the page has it (with any path the server put
@@ -123,6 +123,7 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
       <${TextField} id=${`${id}-phone`} name="phone" type="tel" label="Mobile number" optional autoComplete="tel" inputMode="tel" error=${st.errors?.phone} />
       ${st.alert ? html`<div className="form-alert" role="alert">${st.alert}</div>` : null}
       <button type="submit" className="btn btn--primary btn--block">I’ll be there</button>
+      <${FormSmall} privacy=${privacy?.href} keeper=${privacy?.keeper} />
     </form>
   </details>`;
 }
@@ -130,7 +131,8 @@ function Rsvp({ uid, item, action, hidden, me, setMe, state, setState, primary }
 // error: after a plain post (no JavaScript) that was refused, what to say
 // ({ field, message }, context.js errorFor) — above the openings.
 // sentItem: after a plain sign-up, the opening it was for (when named).
-export function Openings({ uid, variant = 'shifts', action, hidden = {}, items = [], sent = false, sentItem = '', error = null }) {
+// privacy: { href, keeper } for the small print under each form (form.js FormSmall).
+export function Openings({ uid, variant = 'shifts', action, hidden = {}, privacy = null, items = [], sent = false, sentItem = '', error = null }) {
   const [me, setMe] = useState(undefined);
   const [states, setStates] = useState({});
   // Who signed up before in this visit, read once the page is live
@@ -145,7 +147,7 @@ export function Openings({ uid, variant = 'shifts', action, hidden = {}, items =
     try { sessionStorage.removeItem(ME_KEY); } catch { /* nothing kept */ }
     setMe(null);
   };
-  const rsvp = (item, primary) => html`<${Rsvp} uid=${uid} item=${item} action=${action} hidden=${hidden} me=${me} setMe=${setMe}
+  const rsvp = (item, primary) => html`<${Rsvp} uid=${uid} item=${item} action=${action} hidden=${hidden} privacy=${privacy} me=${me} setMe=${setMe}
     state=${states[item.id]} setState=${setState} primary=${primary} />`;
 
   // A place with no words of its own (a pin nobody has named) is its map.

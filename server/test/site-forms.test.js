@@ -72,7 +72,7 @@ test('newsletter: a new person on the list, tagged, with the consent they gave â
   assert.deepEqual([a.module_id, a.source, a.payload.consent_email], ['newsletter', 'home', true]);
   const ev = (await lastEvent('site.form.newsletter'))[0];
   const siteEv = (await db.query("select payload from events where workspace_id = $1 and action = 'site.form.newsletter' and entity_type = 'site_action'", [ws])).rows[0];
-  assert.deepEqual(Object.keys(siteEv.payload).sort(), ['campaign_id', 'kind', 'module_id', 'page_id', 'person_id', 'referrer_id', 'source']);
+  assert.deepEqual(Object.keys(siteEv.payload).sort(), ['campaign_id', 'kind', 'module_id', 'page_id', 'person_id', 'referrer_id', 'site_id', 'source']);
   assert.equal(ev.actor_id, null, 'a system write on the chain');
   // The box is a must for a newsletter, and so is an email.
   const noBox = await send('newsletter', { email: 'ben@example.org' });

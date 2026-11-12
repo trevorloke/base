@@ -19,10 +19,13 @@ export const MONEY_KINDS = ['join', 'donate'];
 
 // A filter value in words: a kind, one campaign (by the picker's labels:
 // [{ id, label }]), or "Anything".
-export const webLabel = (v, { campaigns = [] } = {}) => {
+export const webLabel = (v, { campaigns = [], sites = [] } = {}) => {
   if (!v) return '';
   if (v === 'any') return 'Anything';
   const m = /^campaign:(.+)$/.exec(v);
   if (m) return campaigns.find((c) => String(c.id) === m[1])?.label || 'A petition or pledge';
+  // One of the campaign's other websites, by its name — never its id.
+  const s = /^site:(.+)$/.exec(v);
+  if (s) return sites.find((x) => String(x.id) === s[1])?.label || 'Another of the campaign’s websites';
   return WEB_WORDS[v] || v;
 };

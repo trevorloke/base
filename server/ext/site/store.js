@@ -98,20 +98,34 @@ export const usedHosts = async (q, ctx, saved = []) => {
 };
 
 const DOMAINS_MS = 30_000;
-let domainMap = null; // host → workspace id (from site_settings.domains)
+let domainMap = null; // host → { workspaceId, siteId, gone }
 let domainsAt = 0;
 let refreshing = null;
 
+// Every website address on this server, in this order — an address already
+// set is never taken by a later one: the campaigns' main sites (SITE_HOSTS
+// are read in siteHost), their other websites' addresses, then the
+// addresses those once had and still close (held_domains, and a deleted
+// website's): those answer "This website has closed" (gone), never the
+// app. The app's own addresses are never in it.
 const loadDomains = async () => {
   const db = await getDb();
+  const map = new Map();
+  const put = (h0, v) => {
+    const h = hostOf(h0);
+    if (h && !isAppHost(h) && !map.has(h)) map.set(h, v);
+  };
   const rows = (await db.query(
     "select workspace_id, domains from site_settings where jsonb_typeof(domains) = 'array' and jsonb_array_length(domains) > 0",
   )).rows;
-  const map = new Map();
-  for (const r of rows) {
-    for (const d of parseJ(r.domains, [])) {
-      const h = hostOf(d);
-      if (h && !isAppHost(h) && !map.has(h)) map.set(h, r.workspace_id);
+  for (const r of rows) for (const d of parseJ(r.domains, [])) put(d, { workspaceId: r.workspace_id, siteId: null, gone: false });
+  const micro = await db.query('select id, workspace_id, domains, held_domains, deleted_at from microsites order by created_at, id').then((r) => r.rows, () => []);
+  for (const m of micro) {
+    if (!m.deleted_at) for (const d of parseJ(m.domains, [])) put(d, { workspaceId: m.workspace_id, siteId: m.id, gone: false });
+  }
+  for (const m of micro) {
+    for (const d of [...parseJ(m.held_domains, []), ...(m.deleted_at ? parseJ(m.domains, []) : [])]) {
+      put(d, { workspaceId: m.workspace_id, siteId: m.id, gone: true });
     }
   }
   domainMap = map;
@@ -144,17 +158,36 @@ export const hostOfRequest = (c) => {
   try { return new URL(c.req.url).hostname.toLowerCase().replace(/\.+$/, ''); } catch { return ''; }
 };
 
-// → { host, workspaceId } when this request is to the campaign's own domain
-// (workspaceId null: SITE_HOSTS, the default campaign), else null.
+// → { host, workspaceId, siteId, gone } when this request is to a website's
+// own domain (workspaceId null: SITE_HOSTS, the default campaign; siteId:
+// another website of the campaign, null for the main one; gone: an address
+// a closed or moved website still holds), else null.
 export const siteHost = async (c) => {
   const host = hostOfRequest(c);
   if (!host) return null;
   if (envHosts().includes(host)) {
     const map = domainMap && Date.now() - domainsAt < DOMAINS_MS ? domainMap : null;
-    return { host, workspaceId: map?.get(host) || null };
+    const at = map?.get(host);
+    return { host, workspaceId: at && !at.siteId ? at.workspaceId : null, siteId: null, gone: false };
   }
   const map = await domains();
-  return map.has(host) ? { host, workspaceId: map.get(host) } : null;
+  return map.has(host) ? { host, ...map.get(host) } : null;
+};
+
+// The main site's public address, for another website's link back, its
+// privacy link and a petition's canonical address: its first saved domain,
+// else the first SITE_HOSTS, else the app's own /site (fallback: the
+// request's origin and the client's path, when STARBASE_PUBLIC_URL isn't set).
+export const mainAddress = (settings, fallback = '') => {
+  const saved = (Array.isArray(settings?.domains) ? settings.domains : []).map(hostOf).find(Boolean);
+  if (saved) return `https://${saved}`;
+  const env = envHosts().find((h) => hostOf(h));
+  if (env) return `https://${env}`;
+  try {
+    const u = new URL(String(process.env.STARBASE_PUBLIC_URL || '').trim());
+    if (/^https?:$/.test(u.protocol)) return `${u.origin}${u.pathname.replace(/\/+$/, '')}/site`;
+  } catch { /* not set */ }
+  return fallback;
 };
 
 // ── The campaign ──
@@ -195,10 +228,12 @@ export const readSettings = async (q, workspaceId) => {
 
 // The published pages marked "show in menu", in their order — by their
 // published title (a draft's new title isn't on the site yet).
-export const menuPages = async (q, workspaceId) => (await q.query(
+// siteId: another website's (null: the main site's).
+export const menuPages = async (q, workspaceId, siteId = null) => (await q.query(
   `select slug, coalesce(nullif(published->>'title', ''), title) as title from site_pages
     where workspace_id = $1 and deleted_at is null and status = 'published' and show_in_nav
-    order by nav_order, created_at`, [workspaceId],
+      and site_id is not distinct from $2::uuid
+    order by nav_order, created_at`, [workspaceId, siteId],
 )).rows;
 
 // The website's theme as the campaign's brand makes it (lib/brand.js, the
@@ -233,7 +268,13 @@ export const themeFromBrand = (brand, own, name = '') => {
 // campaign: the workspace ({ name, settings }) — a website that follows the
 // campaign's brand wears it (and the logo for dark backgrounds in its dark
 // footer), and every website gets the campaign's mark as its icon.
-export const siteOf = (settings, pages = [], campaign = null) => {
+// micro: another website of the campaign ({ microsite, home, parentUrl },
+// public.js) — its own look, name and menu (its pages marked "In the
+// menu"); search and sharing from its home page; the organization, its
+// social accounts, the consent words and the footer's bottom lines are the
+// main site's, so every website names the same sponsor.
+export const siteOf = (settings, pages = [], campaign = null, micro = null) => {
+  if (micro) return microSiteOf(settings, pages, campaign, micro);
   const own = checkTheme(settings.theme, brandKey()).theme;
   const brand = campaign ? brandFor(parseJ(campaign.settings, {})) : null;
   const following = Boolean(own.follow && brand);
@@ -256,6 +297,33 @@ export const siteOf = (settings, pages = [], campaign = null) => {
   };
 };
 
+const absolutely = (href, base) => (typeof href === 'string' && /^\/(?!\/)/.test(href) && base ? `${base}${href}` : href);
+const microSiteOf = (settings, pages, campaign, { microsite, home, parentUrl }) => {
+  const main = siteOf(settings, [], campaign);
+  const theme = checkTheme({ ...parseJ(microsite.theme, {}), follow: false }, brandKey()).theme;
+  const hero = (home?.modules || []).find((m) => m?.kind === 'hero' && !m.hidden);
+  const heroImage = hero?.props?.image?.url ? hero.props.image : null;
+  const orgName = settings.org.name || campaign?.name || '';
+  return {
+    theme,
+    nav: { items: pages.map((p) => ({ label: p.title, href: p.slug === 'home' ? '/' : `/${p.slug}` })), bar: [], cta: null },
+    footer: { acknowledgement: '', links: [], logo: main.footer.logo },
+    icon: main.icon,
+    announcement: { enabled: false },
+    seo: {
+      title: home?.title || microsite.name,
+      description: home?.description || '',
+      shareImage: home?.image?.url ? home.image : heroImage || settings.seo.shareImage,
+    },
+    // The main site's, with its own links made absolute on the main site.
+    org: { ...settings.org, privacyUrl: absolutely(settings.org.privacyUrl, parentUrl), platformUrl: '' },
+    social: settings.social,
+    consent: consentWording(settings.org, settings.seo),
+    site: { name: microsite.name, key: microsite.key },
+    parent: { name: orgName, url: parentUrl },
+  };
+};
+
 // ── Pages, posts, campaigns as the admin sees them ──
 const sameJson = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 export const pageOut = (r, { full = true } = {}) => {
@@ -263,6 +331,7 @@ export const pageOut = (r, { full = true } = {}) => {
   const published = parseJ(r.published, null);
   const out = {
     id: r.id, slug: r.slug, title: r.title, description: r.description || '', status: r.status, version: Number(r.version) || 0,
+    site_id: r.site_id || null, // another website's page (microsites), else the main site's
     show_in_nav: Boolean(r.show_in_nav), nav_order: Number(r.nav_order) || 0,
     published_at: iso(r.published_at), created_at: iso(r.created_at), updated_at: iso(r.updated_at),
     // Saved since the last publish (or never published).

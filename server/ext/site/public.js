@@ -37,7 +37,8 @@ import { getDb } from '../../db/client.js';
 import { runAction } from '../../lib/events.js';
 import { envName } from '../../lib/org.js';
 import { renderSite } from './render/index.js';
-import { siteHost, siteWorkspace, ensureSite, readSettings, menuPages, siteOf, parseJ } from './store.js';
+import { siteHost, siteWorkspace, ensureSite, readSettings, menuPages, siteOf, parseJ, mainAddress } from './store.js';
+import { authorizedBy } from '../../../shared/site/wording.js';
 import { loadData } from './loaders.js';
 import { calendarHeaders, eventsCalendar } from './calendar.js';
 import { cacheKey, cacheGet, cachePut } from './cache.js';
@@ -214,15 +215,29 @@ const ctxOf = (c, site, extra = {}) => {
 // Draw (or reuse) a page. key: null for a page never kept (a thank-you, a preview).
 // A kept page is kept per address: its canonical and share links name the
 // host it was asked for (www or not), so it is only ever that host's.
+// The main site's address, as another website links back to it.
+const parentUrlOf = (site, settings) => mainAddress(settings, `${site.origin}${site.base}/site`);
+// What the renderer gets as `site` (store.js siteOf): the main site's, or
+// another website's (site.micro) with its home page and the link back.
+const rendererSite = async (site, settings) => {
+  if (!site.micro) return siteOf(settings, await menuPages(site.db, site.ws.id), site.ws);
+  const home = await livePage(site, 'home');
+  return siteOf(settings, await menuPages(site.db, site.ws.id, site.micro.id), site.ws, {
+    microsite: site.micro, home: home ? pageFor(home) : null, parentUrl: parentUrlOf(site, settings),
+  });
+};
+
 const draw = async (c, site, { kind, page = null, post = null, campaign = null, key, status, ctx: extra = {} }) => {
   const settings = await readSettings(site.db, site.ws.id);
   const ctx = ctxOf(c, site, extra);
   const keep = key && !ctx.sent && !ctx.error && !ctx.cancelled && !ctx.preview;
-  const fullKey = keep ? cacheKey(site.ws.id, [site.address, site.root, kind, ...key, settings.updated_at, ctx.referral || '']) : null;
+  // Per website too: '/' on two hosts is never the same page.
+  const micro = site.micro ? [site.micro.id, new Date(site.micro.updated_at).getTime()] : ['', ''];
+  const fullKey = keep ? cacheKey(site.ws.id, [site.address, site.root, ...micro, kind, ...key, settings.updated_at, ctx.referral || '']) : null;
   let hit = fullKey ? cacheGet(fullKey) : null;
   if (!hit) {
     const data = await loadData(site.db, site.ws, { posts: kind === 'page' && page?.slug === 'news' ? 200 : 24 });
-    const out = renderSite({ kind, site: siteOf(settings, await menuPages(site.db, site.ws.id), site.ws), page, post, campaign, data, ctx });
+    const out = renderSite({ kind, site: await rendererSite(site, settings), page, post, campaign, data, ctx });
     hit = { status: status || out.status || 200, html: out.html, csp: cspFor(out.html, { preview: ctx.preview }) };
     if (fullKey && hit.status === 200) cachePut(fullKey, hit);
   }
@@ -232,9 +247,11 @@ const draw = async (c, site, { kind, page = null, post = null, campaign = null, 
 
 const notFound = (c, site) => draw(c, site, { kind: 'notFound', key: ['404'], status: 404 });
 
+// A published page of this website (another website's pages are its own).
 const livePage = async (site, slug) => (await site.db.query(
-  "select id, slug, version, published from site_pages where workspace_id = $1 and slug = $2 and deleted_at is null and status = 'published'",
-  [site.ws.id, slug],
+  `select id, slug, version, published from site_pages where workspace_id = $1 and slug = $2 and deleted_at is null and status = 'published'
+     and site_id is not distinct from $3::uuid`,
+  [site.ws.id, slug, site.micro?.id || null],
 )).rows[0] || null;
 // A page's share picture ({ url, alt }), or null: the renderer's og:image
 // for the page, before the site's own (seo.shareImage) and the hero's.
@@ -252,9 +269,16 @@ const NEWS_PAGE = { id: null, slug: 'news', title: 'News', description: '', modu
 
 // ── Plain pages of the site's own (preferences, unsubscribe, a link that
 // expired): the campaign's name and colours, one column, one button. ──
-const plainPage = (site, settings, { title, body, status = 200 }) => {
-  const s = siteOf(settings, [], site.ws);
-  const org = s.org.name || site.ws.name;
+// Every one carries "Authorized by …"; another website's (coming soon) its
+// own name and look and the link back; closed: the main site's, home is
+// the main site.
+const plainPage = (site, settings, { title, body, status = 200, closed = false, back = true }) => {
+  const parentUrl = site.micro || closed ? parentUrlOf(site, settings) : null;
+  const s = siteOf(settings, [], site.ws, site.micro && !closed ? { microsite: site.micro, home: null, parentUrl } : null);
+  const mainName = settings.org.name || site.ws.name;
+  const org = closed ? mainName : s.site?.name || s.org.name || site.ws.name;
+  const home = closed ? parentUrl : `${site.root}/`;
+  const auth = authorizedBy(settings.org);
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex"><title>${esc(title)} · ${esc(org)}</title>
 <style>${themeCss(s.theme)}
@@ -282,10 +306,11 @@ a{color:var(--link)}
 .more{margin-top:16px}
 .more a,footer a{display:inline-flex;align-items:center;min-height:48px}
 footer{margin-top:28px;font-size:15px}
+footer p{margin:8px 0 0}
 </style></head><body>
-<header class="top"><a href="${esc(site.root)}/">${esc(org)}</a></header>
+<header class="top"><a href="${esc(home)}">${esc(org)}</a></header>
 <main id="main">${body}
-<footer><a href="${esc(site.root)}/">Back to ${esc(org)}</a></footer></main></body></html>`;
+<footer>${closed || !back ? '' : `<a href="${esc(home)}">Back to ${esc(org)}</a>`}${parentUrl ? `<p class="by">A website by <a href="${esc(parentUrl)}">${esc(mainName)}</a></p>` : ''}${auth ? `<p class="auth">${esc(auth)}</p>` : ''}</footer></main></body></html>`;
   return { html, status };
 };
 const sendPlain = (c, site, settings, page, { preview = false } = {}) => {
@@ -335,6 +360,21 @@ ${box('sms', choices.sms, 'Texts', person.phone ? wording.sms : 'We don’t have
 ${code ? `<div class="card"><p><b>Your link to share</b></p><p>When someone signs up through it, we know you brought them in:</p><p class="share">${esc(site.address)}${esc(site.root)}/r/${esc(code)}</p></div>` : ''}`;
 };
 
+const sitemapXml = (rows) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.map(([u, d]) => `<url><loc>${esc(u)}</loc>${d ? `<lastmod>${d}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`;
+
+// A closed website's address (a deleted one's, or one it no longer uses):
+// it says so, with who it was by and the main site — never the app, so a
+// sign-in page never answers on a domain that once was a website.
+const closedPage = async (c, site) => {
+  const settings = await readSettings(site.db, site.ws.id);
+  return sendPlain(c, site, settings, {
+    title: 'This website has closed',
+    body: '<h1>This website has closed</h1><p>It isn’t taking sign-ups any more.</p>',
+    status: 410,
+    closed: true,
+  });
+};
+
 // ── The site's routes, at a root ('' on its own domain, '/site' elsewhere) ──
 export const makeSiteApp = (at) => {
   const app = new Hono();
@@ -357,8 +397,44 @@ export const makeSiteApp = (at) => {
       const url = new URL(c.req.url);
       return c.redirect(`${site.base}/${url.pathname.replace(/^\/+/, '').replace(/\/+$/, '')}${url.search}`, 301);
     }
+    // Another website of the campaign: at its own domain (at.siteId), or
+    // at /site/sites/<key>/ on the app's address (at.siteKey).
+    if (at.siteId || at.siteKey) {
+      const m = (await site.db.query(
+        at.siteId ? 'select * from microsites where workspace_id = $1 and id = $2'
+          : 'select * from microsites where workspace_id = $1 and key = $2 and deleted_at is null',
+        [site.ws.id, at.siteId || at.siteKey],
+      )).rows[0];
+      if (!m || m.deleted_at) {
+        // Gone: its domain is closed (the gate says so first); on the
+        // app's address, the main site's page not found.
+        if (at.siteId) return closedPage(c, site);
+        Object.assign(site, { inner: '/site', root: `${site.base}/site` });
+        c.set('site', site);
+        return notFound(c, site);
+      }
+      site.micro = { ...m, domains: parseJ(m.domains, []) };
+      const rel = p.slice(R.length) || '/';
+      // Not live yet (or taken offline): "Coming soon" on every route but
+      // its files and the admin's preview of a draft.
+      if (m.status !== 'live' && !/^\/(site-assets|__preview)\//.test(rel)) {
+        const settings = await readSettings(site.db, site.ws.id);
+        return sendPlain(c, site, settings, {
+          title: 'Coming soon',
+          body: `<h1>Coming soon</h1><p>${esc(m.name)} isn’t open yet. Please come back soon.</p>`,
+          back: false,
+        });
+      }
+      // The main site's own: news, the list of petitions, a supporter's
+      // email choices (emails always link to the main site's).
+      if (/^\/(news|act|preferences|unsubscribe)$|^\/news\//.test(rel)) {
+        c.set('site', site);
+        return notFound(c, site);
+      }
+    }
     // The app's own copy of a site that has a domain of its own isn't indexed.
-    if (R) {
+    if (R && site.micro) site.mirror = site.micro.domains.length > 0;
+    else if (R) {
       const domains = parseJ((await site.db.query('select domains from site_settings where workspace_id = $1', [site.ws.id])).rows[0]?.domains, []);
       site.mirror = Boolean(String(process.env.SITE_HOSTS || '').trim()) || (Array.isArray(domains) && domains.length > 0);
     }
@@ -382,9 +458,12 @@ export const makeSiteApp = (at) => {
     const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
     const rows = [];
     for (const p of (await site.db.query(
-      "select slug, coalesce(published_at, updated_at) as at from site_pages where workspace_id = $1 and deleted_at is null and status = 'published' order by nav_order, created_at",
-      [site.ws.id],
+      `select slug, coalesce(published_at, updated_at) as at from site_pages where workspace_id = $1 and deleted_at is null and status = 'published'
+         and site_id is not distinct from $2::uuid order by nav_order, created_at`,
+      [site.ws.id, site.micro?.id || null],
     )).rows) rows.push([p.slug === 'home' ? `${at2}/` : `${at2}/${p.slug}`, day(p.at)]);
+    // Another website: its own pages only.
+    if (site.micro) return c.body(sitemapXml(rows), 200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' });
     if (!rows.some(([u]) => u === `${at2}/news`)) rows.push([`${at2}/news`, null]);
     for (const p of (await site.db.query(
       "select slug, coalesce(updated_at, published_at) as at from site_posts where workspace_id = $1 and deleted_at is null and status = 'published' and published_at <= now() order by published_at desc limit 5000",
@@ -394,8 +473,7 @@ export const makeSiteApp = (at) => {
       "select slug, updated_at as at from site_campaigns where workspace_id = $1 and deleted_at is null and status = 'open' order by created_at",
       [site.ws.id],
     )).rows) rows.push([`${at2}/act/${p.slug}`, day(p.at)]);
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${rows.map(([u, d]) => `<url><loc>${esc(u)}</loc>${d ? `<lastmod>${d}</lastmod>` : ''}</url>`).join('\n')}\n</urlset>\n`;
-    return c.body(xml, 200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' });
+    return c.body(sitemapXml(rows), 200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=600' });
   });
 
   // A referral link: remembered 30 days (the forms credit them), then home.
@@ -521,7 +599,10 @@ export const makeSiteApp = (at) => {
     const id = c.req.param('pageId');
     const claims = UUID.test(id) ? await verify('preview', c.req.query('t')) : null;
     const row = claims && claims.w === site.ws.id && claims.p === id
-      ? (await site.db.query('select id, slug, title, description, draft from site_pages where id = $1 and workspace_id = $2 and deleted_at is null', [id, site.ws.id])).rows[0]
+      ? (await site.db.query(
+        'select id, slug, title, description, draft from site_pages where id = $1 and workspace_id = $2 and deleted_at is null and site_id is not distinct from $3::uuid',
+        [id, site.ws.id, site.micro?.id || null],
+      )).rows[0]
       : null;
     if (!row) {
       const settings = await readSettings(site.db, site.ws.id);
@@ -631,16 +712,32 @@ export const makeSiteApp = (at) => {
 
 // The site at /site/… on the app's own address (and its files at /site-assets/).
 const atSite = makeSiteApp({ root: '/site', workspaceId: null });
+// Another website of the campaign at /site/sites/<key>/… on the app's address.
+const KEY = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
+const atKeys = new Map(); // key → app
+const atKey = (key) => {
+  if (!atKeys.has(key)) {
+    if (atKeys.size >= 200) atKeys.clear();
+    atKeys.set(key, makeSiteApp({ root: `/site/sites/${key}`, workspaceId: null, siteKey: key }));
+  }
+  return atKeys.get(key);
+};
+const microAtApp = (c, next) => {
+  const key = c.req.param('key');
+  return KEY.test(key) ? atKey(key).fetch(c.req.raw, c.env) : next();
+};
 export const publicRoutes = new Hono();
 publicRoutes.get('/site-assets/*', serveAsset);
+publicRoutes.all('/site/sites/:key', microAtApp);
+publicRoutes.all('/site/sites/:key/*', microAtApp);
 publicRoutes.all('/site', (c) => atSite.fetch(c.req.raw, c.env));
 publicRoutes.all('/site/*', (c) => atSite.fetch(c.req.raw, c.env));
 
 // The campaign's own domain: only the site (and what it shares) answers.
-const sites = new Map(); // workspace id ('' for the default) → app at /
-const atRootFor = (workspaceId) => {
-  const k = workspaceId || '';
-  if (!sites.has(k)) sites.set(k, makeSiteApp({ root: '', workspaceId }));
+const sites = new Map(); // "<workspace id ('' for the default)>|<website id ('' the main)>" → app at /
+const atRootFor = (workspaceId, siteId = null) => {
+  const k = `${workspaceId || ''}|${siteId || ''}`;
+  if (!sites.has(k)) sites.set(k, makeSiteApp({ root: '', workspaceId, siteId }));
   return sites.get(k);
 };
 // Shared: pictures, and what services and emails already sent call back
@@ -668,5 +765,11 @@ export const siteGate = async (c, next) => {
   const at = await siteHost(c);
   if (!at) return next();
   if (shared(c)) return next();
-  return atRootFor(at.workspaceId).fetch(c.req.raw, c.env);
+  // A closed website's address: every route, any method, says so.
+  if (at.gone) {
+    const site = await siteFor(c, { root: '', workspaceId: at.workspaceId });
+    if (!site) return c.text('This website has closed.', 410);
+    return closedPage(c, site);
+  }
+  return atRootFor(at.workspaceId, at.siteId).fetch(c.req.raw, c.env);
 };

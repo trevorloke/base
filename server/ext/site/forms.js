@@ -56,7 +56,7 @@ import { clientIp, makeLimiter } from '../../lib/guard.js';
 import { campaignDay } from '../../lib/gifts.js';
 import { SLATE_CODES } from '@starbase/shared/canvass';
 import { DONATE_DECLARATION, JOIN_DECLARATION } from '../../../shared/site/wording.js';
-import { EMAIL_RE } from '../../../shared/site/components/util.js';
+import { EMAIL_RE, sourceOf } from '../../../shared/site/components/util.js';
 import { actions as fieldActions } from '../fields/actions.js';
 import { KINDS, consentWording, tagOf } from './shape.js';
 import { ensureSite, readSettings, parseJ } from './store.js';
@@ -283,6 +283,15 @@ const pagePath = async (db, ws, root, f, k, c) => {
   return `${root}/`;
 };
 
+const sourceFrom = (c) => {
+  try {
+    const own = sourceOf(new URL(c.req.url).searchParams);
+    if (own) return own.toLowerCase();
+    const ref = new URL(c.req.header('referer') || '');
+    return ref.host === new URL(c.req.url).host ? sourceOf(ref.searchParams).toLowerCase() || null : null;
+  } catch { return null; }
+};
+
 const sysCtx = (ws) => ({ workspaceId: ws.id, workspace: ws, user: null, role: null, perms: null });
 const FIELD = /^[a-z_]{1,40}$/;
 
@@ -320,6 +329,10 @@ export const formRoute = async (c, site) => {
     f = common(body);
     // Ages on the campaign's own day, as the payments count them.
     k = ofKind(kind, body, f, campaignDay(new Date(), ws.settings?.tz));
+    // The source, when the form carried none (a plain post from a page drawn
+    // without it): ?source=, else ?utm_source=, of the post's own address or
+    // of the page it was sent from — the island's rule (util.js trackFrom).
+    if (!f.source) f.source = sourceFrom(c);
     // The referral: the code sent with the form, else the one /r/:code remembered.
     if (!f.ref) {
       const remembered = String(getCookie(c, 'site_ref') || '').toLowerCase();
@@ -347,7 +360,7 @@ export const formRoute = async (c, site) => {
   let answer;
   try {
     const { result } = await runAction(db, { workspaceId: ws.id, actorId: null, action: `site.form.${kind}` }, (tx, emit) => record(tx, emit, {
-      kind, ws, f, k, back, origin: site.origin,
+      kind, ws, f, k, back, origin: site.origin, siteId: site.micro?.id || null,
     }));
     // Join and donate: Stripe is asked now, the form's write done.
     answer = result.checkout ? await payPage(db, ws, kind, result.checkout) : result.answer;
@@ -404,7 +417,8 @@ const whoFor = (f, k) => createHash('sha256').update(JSON.stringify([
 // Inside the one write. Throws FormError for what the database says no to
 // (a closed petition, a full event, an amount over the limit).
 // → { answer } done; { checkout: { actionId, checkoutId } } Stripe to be asked.
-const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
+// siteId: the other website it was sent on (null: the main site).
+const record = async (tx, emit, { kind, ws, f, k, back, origin, siteId = null }) => {
   const pays = kind === 'join' || kind === 'donate';
   const key = f.client_key ? `${kind}:${f.client_key}${pays ? `:${paidFor(kind, k)}:${whoFor(f, k)}` : ''}` : null;
   if (key) {
@@ -543,13 +557,13 @@ const record = async (tx, emit, { kind, ws, f, k, back, origin }) => {
     consent_email: f.consent_email, consent_sms: f.consent_sms, matched: person.created ? null : person.by,
   };
   await tx.query(
-    `insert into site_actions (id, workspace_id, person_id, kind, campaign_id, page_id, module_id, payload, source, referrer_id, client_key)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [id, ws.id, person.id, kind, campaign?.id || null, page?.id || null, f.module_id, JSON.stringify(payload), f.source, referrer, key],
+    `insert into site_actions (id, workspace_id, person_id, kind, campaign_id, page_id, module_id, payload, source, referrer_id, client_key, site_id)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    [id, ws.id, person.id, kind, campaign?.id || null, page?.id || null, f.module_id, JSON.stringify(payload), f.source, referrer, key, siteId],
   );
   emit('site_action', id, 'create', {
     kind, person_id: person.id, campaign_id: campaign?.id || null, page_id: page?.id || null,
-    module_id: f.module_id, source: f.source, referrer_id: referrer,
+    module_id: f.module_id, source: f.source, referrer_id: referrer, site_id: siteId,
   });
 
   if (pays) {

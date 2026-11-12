@@ -34,7 +34,7 @@ before(async () => {
 test('before the website: the filter matches nobody and offers nothing', async () => {
   await mgr.createPerson('Hana Example', { phone: '604-555-0120' });
   assert.deepEqual(await names(mgr, 'web=petition'), []);
-  assert.deepEqual(ok(await mgr.get('/api/webdid')), { kinds: [], campaigns: [] });
+  assert.deepEqual(ok(await mgr.get('/api/webdid')), { kinds: [], campaigns: [], sites: [] });
 });
 
 test('by kind, by one petition, or anything; nothing for a value it doesn’t know', async () => {

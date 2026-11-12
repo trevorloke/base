@@ -3,7 +3,7 @@
 // site lives, and the helpers that turn a typed link into a safe one. See
 // SITE.md "Rendering" for the shapes accepted.
 import { checkTheme } from '../theme.js';
-import { consentName, consentWords } from '../wording.js';
+import { authorizedBy, consentName, consentWords } from '../wording.js';
 import { renderMarkdown } from '../../markdown.js';
 import { arr, obj, str, cleanRef, cleanSource, DEFAULT_TIME_ZONE } from './util.js';
 import { absolute, imageFor, linkFor, locFrom, safeUrl } from './links.js';
@@ -40,9 +40,17 @@ export function normalizeSite(site) {
   const given = obj(s.consent);
   const made = consentWords(consentName(org0, seo0));
   const consent = Object.fromEntries(Object.keys(made).map((k) => [k, str(given[k]).trim() || made[k]]));
+  // Another website of the campaign (server/ext/site store.js siteOf): its
+  // own name for the header and the title, and the main site it links back
+  // to — the organization (org) stays the main site's.
+  const own = obj(s.site);
+  const par = obj(s.parent);
+  const parentUrl = str(par.url).trim();
   return {
     theme,
     consent,
+    site: str(own.name).trim() ? { name: str(own.name).trim(), key: str(own.key).trim() } : null,
+    parent: /^https?:\/\/[^\s"'<>\\]+$/i.test(parentUrl) ? { name: str(par.name).trim() || name, url: parentUrl } : null,
     // The site's icon: the campaign's mark as its app icons (server/lib/brand.js
     // siteIcon) — only the campaign's own uploaded PNGs.
     icon: siteIcon(s.icon),
@@ -52,7 +60,12 @@ export function normalizeSite(site) {
       email: str(org0.email).trim(),
       phone: str(org0.phone).trim(),
       address: str(org0.address).trim(),
-      authorization: str(org0.authorization || org0.authorized_by || org0.authorizationLine).trim(),
+      // "Authorized by …" (wording.js): the financial agent, else the line as typed.
+      authorization: authorizedBy({
+        agentName: str(org0.agentName || org0.agent_name),
+        agentContact: str(org0.agentContact || org0.agent_contact),
+        authorizationLine: str(org0.authorizationLine || org0.authorization || org0.authorized_by),
+      }),
       privacy: str(org0.privacy_url || org0.privacyUrl || org0.privacy).trim(),
       platformUrl: str(org0.platform_url || org0.platformUrl).trim(),
       platformLabel: str(org0.platform_label || org0.platformLabel).trim(),

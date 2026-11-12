@@ -105,6 +105,9 @@ const F = {
 };
 const orgName = (rc) => rc.site.org.shortName || rc.site.org.name || 'the campaign';
 const privacyHref = (rc) => (rc.site.org.privacy ? rc.link(rc.site.org.privacy) : null);
+// Whose the data is, for the line under every form (form.js FormSmall).
+const keeper = (rc) => rc.site.org.name || orgName(rc);
+const privacyOf = (rc) => ({ href: privacyHref(rc), keeper: keeper(rc) });
 
 // The island's props for a module's form: the fields, where it posts, the
 // hidden ids, and — after a plain post — its thank-you or its error.
@@ -113,6 +116,9 @@ function formProps(rc, m, kind, o) {
   return {
     uid: `${m.id}-form`,
     ...o,
+    // Every form: the privacy line and the main site's privacy policy.
+    privacy: privacyHref(rc),
+    keeper: keeper(rc),
     kind,
     action: rc.action(kind),
     hidden: rc.hidden(m.id, o.hidden),
@@ -542,7 +548,7 @@ function Shifts({ m, p, rc, level }) {
         <${Paras} text=${p.intro} className="lede" />
       </div>
       ${items.length
-        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-openings`, variant: 'shifts', action: rc.action('rsvp'), hidden: rc.hidden(m.id), items, sent: rc.sentFor('rsvp', m.id), sentItem: rc.sentItem(), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />`
+        ? html`<${Island} name="openings" props=${{ uid: `${m.id}-openings`, variant: 'shifts', action: rc.action('rsvp'), hidden: rc.hidden(m.id), privacy: privacyOf(rc), items, sent: rc.sentFor('rsvp', m.id), sentItem: rc.sentItem(), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />`
         : html`<p className="empty-state">No openings right now. ${volunteer ? html`<a href=${volunteer}>Tell us how you’d like to help</a>` : 'New ones are added every week.'}</p>`}
       ${p.showMap && items.some((it) => it.map) ? html`<p className="small">Tap a place to see it on a map.</p>` : null}
     </div>
@@ -646,7 +652,7 @@ function Events({ m, p, rc, level }) {
         </div>
       </div>
       ${items.length
-        ? html`<${Fragment}><${Island} name="openings" props=${{ uid: `${m.id}-events`, variant: 'events', action: rc.action('rsvp'), hidden: rc.hidden(m.id), items, sent: rc.sentFor('rsvp', m.id), sentItem: rc.sentItem(), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />
+        ? html`<${Fragment}><${Island} name="openings" props=${{ uid: `${m.id}-events`, variant: 'events', action: rc.action('rsvp'), hidden: rc.hidden(m.id), privacy: privacyOf(rc), items, sent: rc.sentFor('rsvp', m.id), sentItem: rc.sentItem(), error: rc.errorFor('rsvp', m.id, RSVP_FIELDS) }} />
           <p className="small events-ics"><a href=${rc.link('/events.ics')}>Get our events in your calendar</a></p><//>`
         : html`<div className="event-feature">
           <div className="info">

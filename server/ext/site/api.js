@@ -7,6 +7,7 @@ import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL
 import { brandFor } from '../../lib/brand.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
+import { mountMicrositeReads } from './microsite-reads.js';
 
 export const api = new Hono();
 
@@ -30,17 +31,23 @@ const opened = async (c) => {
   return ctx.workspaceId;
 };
 
+// The campaign's other websites (microsite-reads.js).
+mountMicrositeReads(api, opened);
+
 api.get('/site', async (c) => {
   const ws = await opened(c);
   const db = c.get('db');
   const settings = await readSettings(db, ws);
   const pages = (await db.query(
-    'select * from site_pages where workspace_id = $1 and deleted_at is null order by nav_order, created_at', [ws],
+    // The main site's (another website's pages are its own: microsites).
+    'select * from site_pages where workspace_id = $1 and deleted_at is null and site_id is null order by nav_order, created_at', [ws],
   )).rows.map((r) => pageOut(r, { full: false }));
   const count = async (sql) => (await db.query(sql, [ws])).rows[0];
   const posts = await count(`select count(*)::int as n, count(*) filter (where status = 'published')::int as live from site_posts where workspace_id = $1 and deleted_at is null`);
   const campaigns = await count(`select count(*)::int as n, count(*) filter (where status = 'open')::int as open from site_campaigns where workspace_id = $1 and deleted_at is null`);
   const actions = await count(`select count(*)::int as n, count(*) filter (where created_at > now() - interval '7 days')::int as week from site_actions where workspace_id = $1`);
+  // Its other websites (Overview's "Other websites · 2 live").
+  const sites = await count(`select count(*)::int as n, count(*) filter (where status = 'live')::int as live from microsites where workspace_id = $1 and deleted_at is null`);
   // The week's website actions by kind ({ petition: 12, newsletter: 3 }).
   const byKind = Object.fromEntries((await db.query(
     `select kind, count(*)::int as n from site_actions where workspace_id = $1 and created_at > now() - interval '7 days' group by kind order by kind`, [ws],
@@ -59,6 +66,7 @@ api.get('/site', async (c) => {
       pages: pages.length, published: pages.filter((p) => p.status === 'published').length,
       posts: posts.n, posts_published: posts.live, campaigns: campaigns.n, campaigns_open: campaigns.open,
       actions: actions.n, actions_week: actions.week, actions_week_by_kind: byKind,
+      microsites: sites.n, microsites_live: sites.live,
     },
     // Where it can be seen: the app's own address (/site/) until the
     // campaign's domain points here, then that domain too (saved under
@@ -143,8 +151,13 @@ api.post('/site/preview-token', async (c) => {
   const pageId = String(body?.pageId || body?.page_id || '');
   if (!UUID.test(pageId)) return c.json({ error: 'pageId: which page' }, 400);
   const ws = await opened(c);
-  const r = (await c.get('db').query('select id from site_pages where id = $1 and workspace_id = $2 and deleted_at is null', [pageId, ws])).rows[0];
+  const r = (await c.get('db').query(
+    `select p.id, m.key from site_pages p left join microsites m on m.id = p.site_id and m.deleted_at is null
+      where p.id = $1 and p.workspace_id = $2 and p.deleted_at is null and (p.site_id is null or m.id is not null)`, [pageId, ws],
+  )).rows[0];
   if (!r) return c.json({ error: 'not found' }, 404);
   const t = await sign('preview', { w: ws, p: pageId }, PREVIEW_TTL);
-  return c.json({ url: here(c, `/site/__preview/${pageId}?t=${encodeURIComponent(t)}`), expires_at: new Date(Date.now() + PREVIEW_TTL * 1000).toISOString() });
+  // A page of another website is previewed at that website's address.
+  const root = r.key ? `/site/sites/${r.key}` : '/site';
+  return c.json({ url: here(c, `${root}/__preview/${pageId}?t=${encodeURIComponent(t)}`), expires_at: new Date(Date.now() + PREVIEW_TTL * 1000).toISOString() });
 });

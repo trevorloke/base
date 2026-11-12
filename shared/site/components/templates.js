@@ -17,7 +17,8 @@ function PageView({ rc, page }) {
   const p = obj(page);
   const modules = visibleModules(p);
   const heroFirst = modules[0]?.kind === 'hero';
-  const title = str(p.slug) === 'home' ? rc.site.org.name || str(p.title) : str(p.title) || rc.site.org.name;
+  const name = rc.site.site?.name || rc.site.org.name;
+  const title = str(p.slug) === 'home' ? name || str(p.title) : str(p.title) || name;
   return html`<${Fragment}>
     ${heroFirst ? null : html`<${PageHead} title=${title} lede=${p.description} />`}
     ${modules.map((m, i) => html`<${Module} key=${`${m.id}-${i}`} m=${m} rc=${rc} level=${heroFirst && i === 0 ? 1 : 2} />`)}
@@ -112,7 +113,8 @@ const FONT_FILES = {
 // What goes in <head>, as data (the server writes it out, escaped).
 export function headFor(rc, { kind, page, post, campaign }) {
   const { site, loc } = rc;
-  const siteTitle = site.seo.title || site.org.name;
+  // Another website of the campaign is titled by its own name.
+  const siteTitle = site.site?.name || site.seo.title || site.org.name;
   let title = siteTitle;
   let description = site.seo.description;
   let image = site.seo.image;
@@ -145,11 +147,14 @@ export function headFor(rc, { kind, page, post, campaign }) {
   return {
     title: title || 'Website',
     description: description.slice(0, 300),
-    canonical: kind === 'notFound' || rc.preview || !loc.origin ? '' : loc.origin + pagePath(loc),
+    // A petition shown on another website counts at the main site's address.
+    canonical: kind === 'notFound' || rc.preview ? ''
+      : kind === 'campaign' && site.parent ? `${site.parent.url}/act/${str(obj(campaign).slug)}`
+        : !loc.origin ? '' : loc.origin + pagePath(loc),
     type,
     // Open Graph wants an absolute address: a picture only when there is one.
     image: imageUrl && /^https?:\/\//.test(rc.abs(imageUrl)) ? { url: rc.abs(imageUrl), alt: str(obj(image).alt) } : null,
-    siteName: site.org.name || siteTitle,
+    siteName: site.site?.name || site.org.name || siteTitle,
     noindex: kind === 'notFound' || rc.preview || site.seo.noindex,
     themeColor: site.theme.colors.brand,
     published: kind === 'post' ? str(obj(post).published_at) : '',

@@ -5,13 +5,15 @@
 //   ['site-posts'] · ['site-post', id]
 //   ['site-campaigns'] · ['site-campaign', id]
 //   ['site-pictures']        GET /api/site/pictures — what's been uploaded
+//   ['microsites'] · ['microsite', id]   the campaign's other websites: rows,
+//                            sign-up counts and sources (never people)
 // Writes are actions (api.js action()); useSiteRefresh() invalidates what
 // a write changed.
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '../../api.js';
 
-export const useSite = () => useQuery({ queryKey: ['site'], queryFn: () => apiGet('/site') });
+export const useSite = (enabled = true) => useQuery({ queryKey: ['site'], queryFn: () => apiGet('/site'), enabled });
 export const useSitePage = (id) => useQuery({ queryKey: ['site-page', id], queryFn: () => apiGet(`/site/pages/${id}`), enabled: Boolean(id) });
 export const useSitePosts = () => useQuery({ queryKey: ['site-posts'], queryFn: () => apiGet('/site/posts') });
 export const useSitePost = (id) => useQuery({ queryKey: ['site-post', id], queryFn: () => apiGet(`/site/posts/${id}`), enabled: Boolean(id) });
@@ -21,6 +23,8 @@ export const useSiteCampaigns = ({ fresh = false } = {}) => useQuery({
   queryKey: ['site-campaigns'], queryFn: () => apiGet('/site/campaigns'), refetchOnWindowFocus: fresh,
 });
 export const useSiteCampaign = (id) => useQuery({ queryKey: ['site-campaign', id], queryFn: () => apiGet(`/site/campaigns/${id}`), enabled: Boolean(id) });
+export const useMicrosites = () => useQuery({ queryKey: ['microsites'], queryFn: () => apiGet('/site/microsites') });
+export const useMicrosite = (id) => useQuery({ queryKey: ['microsite', id], queryFn: () => apiGet(`/site/microsites/${id}`), enabled: Boolean(id) });
 export const useSitePictures = (enabled = true) => useQuery({ queryKey: ['site-pictures'], queryFn: () => apiGet('/site/pictures'), enabled });
 
 export function useSiteRefresh() {

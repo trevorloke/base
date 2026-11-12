@@ -387,7 +387,7 @@ test('the consent words kept are the words shown — beside a box and beside the
     const shownEmail = boxWords(home.text, 'consent_email');
     assert.ok(shownEmail, 'a consent box on the page');
     const nlAt = home.text.indexOf('data-module="newsletter"');
-    const small = /<p class="form-small">([^<]*)/.exec(home.text.slice(nlAt))?.[1];
+    const small = /<p class="form-small">([^<]*)/.exec(home.text.slice(nlAt))?.[1]?.trim(); // before the privacy line
     assert.ok(small, 'the newsletter’s words beside its button');
     const pet = ok(await mgr.get('/api/site/campaigns')).campaigns.find((c) => c.kind === 'petition');
     ok(await send('petition', { first_name: 'Cora', email: `cora.${tag}@example.org`, campaign: pet.id, consent_email: true }));
