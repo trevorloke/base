@@ -11,7 +11,9 @@
 // "1 sign-up · 1 sharer" and the volunteer in Top sharers; the volunteer's
 // "1 person brought in". With no signal the kept copy still shows the post and
 // copying works. Closing the petition: "Page not live" on the desk and the
-// post leaves /share and Today. Both screens are measured at 390 and 1440.
+// post leaves /share and Today. Granted Outreach, the volunteer gets
+// Outreach → Sharing and "New post to share". Both screens are measured at
+// 390 and 1440.
 //
 //   STARBASE_OPEN_SIGNUP=1 STARBASE_DATA=memory PORT=5110 node server/index.js &
 //   BASE=http://127.0.0.1:5110 SHOTS=/tmp/sharing node e2e-sharing.mjs
@@ -284,6 +286,19 @@ await simple(vpage, '/share empty (390)');
 await V.shot('12-share-empty-390');
 await V.go('/');
 check('Today: no Share row', await vpage.locator('a[href="/share"]').count() === 0);
+
+// ── 7. A volunteer granted Outreach writes posts too, from the app ──
+const vicId = joined.json.user?.id;
+check('Vic granted Outreach', (await D.api('/actions/permission.member.set', { user_id: vicId, grant: ['outreach'], deny: [] })).status === 200);
+await vpage.goto(`${ADMIN}/outreach`, { waitUntil: 'domcontentloaded' });
+await vpage.waitForSelector('.ot-tab-label', { timeout: 8000 }).catch(() => {});
+await sleep(600);
+const vtabs = await vpage.$$eval('.ot-tab-label', (els) => els.map((e) => e.textContent.trim()));
+check('granted: Outreach opens on Sharing (email and texting stay the desk’s)', vtabs.join(' · ') === 'Sharing' && /\/outreach\/sharing$/.test(new URL(vpage.url()).pathname), `${vtabs.join(' · ')} ${vpage.url()}`);
+check('granted: "New post to share"', await vpage.locator('button.btn-primary:has-text("New post to share")').count() === 1);
+await simple(vpage, 'Sharing, a volunteer granted Outreach (390)');
+await vpage.screenshot({ path: `${SHOTS}/13-sharing-granted-volunteer-390.png` });
+check('Outreach taken back', (await D.api('/actions/permission.member.set', { user_id: vicId, grant: [], deny: [] })).status === 200);
 
 check('hash chain still verifies', (await D.api('/audit/verify')).json.ok === true);
 check('no page errors', errors.length === 0, errors.join(' | '));

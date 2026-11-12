@@ -187,6 +187,33 @@ test('who may read: a volunteer gets 403 on the desk reads; staff denied Outreac
   okA(await mgr.action('permission.member.set', { user_id: staff.id, grant: [], deny: [] }));
 });
 
+test('the form answer carries ref_code for a new person, never a matched one’s', async () => {
+  const fresh = ok(await send('petition', { first_name: 'Ida', last_name: 'Example', email: 'ida@example.org', campaign: petition.id }));
+  const [ida] = await personBy(db, ws, "lower(email) = 'ida@example.org'");
+  assert.equal(fresh.ref_code, ida.attrs.ref_code);
+  assert.match(fresh.ref_code, /^[a-z0-9]{6,16}$/);
+  // The same email again (anyone could type it): never her code — one of the
+  // same shape that is nobody's, so the answer doesn't say she's on file.
+  const again = ok(await send('newsletter', { email: 'ida@example.org', consent_email: true }));
+  assert.deepEqual(Object.keys(again).sort(), ['ok', 'ref_code']);
+  assert.notEqual(again.ref_code, ida.attrs.ref_code);
+  assert.match(again.ref_code, /^[a-z0-9]{8}$/);
+  assert.equal((await personBy(db, ws, "attrs->>'ref_code' = $2", [again.ref_code])).length, 0, 'nobody’s');
+  // Sent through it, a friend's sign-up credits nobody.
+  ok(await send('newsletter', { email: 'jo@example.org', consent_email: true, ref: again.ref_code }));
+  const [jo] = await personBy(db, ws, "lower(email) = 'jo@example.org'");
+  assert.equal((await actionsOf(jo.id))[0].referrer_id, null);
+});
+
+test('a kit pointing at /home is not live: the website has no page there', async () => {
+  const k = okA(await mgr.action('share.kit.save', { title: 'Home by name', body: 'Look', path: '/home' })).kit;
+  const row = okA(await mgr.get('/api/share/kits')).kits.find((x) => x.id === k.id);
+  assert.equal(row.live, false);
+  assert.equal((await hit('/site/home')).status, 404);
+  assert.equal(okA(await vol.client.get('/api/share')).kits.some((x) => x.id === k.id), false);
+  okA(await mgr.action('share.kit.open', { id: k.id, open: false }));
+});
+
 test('kitTitleOf: the title for kit-<code>, else null', async () => {
   assert.equal(await kitTitleOf(db, ws, `kit-${kit.code}`), 'Sign for SkyTrain');
   assert.equal(await kitTitleOf(db, ws, 'kit-zzzzzz'), null);

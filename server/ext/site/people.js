@@ -149,7 +149,7 @@ export const takePerson = async (tx, ws, who, { tags = [], source = 'website', s
 // so every lookup here does — without it each one reads the whole voter file.
 const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 export const CODE_RE = /^[a-z0-9]{6,16}$/;
-const makeCode = () => Array.from({ length: 8 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
+export const makeCode = () => Array.from({ length: 8 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
 const freshCode = async (tx, ws) => {
   for (let i = 0; i < 8; i += 1) {
     const code = makeCode();

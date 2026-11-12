@@ -15,7 +15,7 @@
 // none under reduced motion), the Menu (Escape; on a phone), the donate
 // amounts (never above the limit; monthly), field errors tied to their
 // fields, a newsletter and a petition sent as JSON with SITE.md's field
-// names, the share sheet (WhatsApp first, ?source=share-<channel>, copy),
+// names, the share sheet (WhatsApp first, ?source=share-<channel>, a new signer's own ?ref=, copy),
 // the donate checkout, a one-tap volunteer sign-up, the same forms without
 // JavaScript, the post, campaign, preview and not-found pages, everything
 // under a client's path (/imaginesurrey, through server/lib/mount.js), and
@@ -61,6 +61,7 @@ const readBody = (req) => new Promise((resolve) => {
 });
 
 // What the site server answers (SITE.md "Public forms"), in miniature.
+const NEW_REF = 'fr1end23';
 function answerForm(kind, body) {
   if (String(body.website || '')) return { ok: true };
   const email = String(body.email || '').trim();
@@ -78,7 +79,8 @@ function answerForm(kind, body) {
   // it was left, as a browser's back/forward cache shows it after Back.
   if (kind === 'donate' && /^stay@/.test(email)) return { ok: true, checkout_url: `${ORIGIN}/is/#paying` };
   if (kind === 'donate' || kind === 'join') return { ok: true, checkout_url: `${ORIGIN}/checkout-stub?kind=${kind}&amount=${Number(body.amount_cents) || 0}` };
-  return { ok: true };
+  // Someone the form just added: their own code, for the share sheet.
+  return { ok: true, ref_code: NEW_REF };
 }
 
 // ── The theme sweep: every colour pair the site draws text in ──
@@ -438,11 +440,11 @@ for (const key of ['is', 'base']) {
   check('petition: consent as booleans, campaign and ids carried, one key per form', last.consent_email === true && last.consent_sms === false && last.campaign === 'c-skytrain' && last.module_id === 'skytrain' && last.page_id === 'page-home' && /^[\w-]{8,64}$/.test(last.client_key) && sent[0].body.client_key === last.client_key, JSON.stringify(last).slice(0, 200));
   const shareLinks = await thanks.locator('.share-sheet__link').evaluateAll((els) => els.map((e) => ({ label: e.querySelector('span:not(.visually-hidden)')?.textContent.trim(), href: e.getAttribute('href') || '' })));
   check('share: WhatsApp first, then text, Facebook, X, email, copy', shareLinks.map((s) => s.label).join(',') === 'WhatsApp,Text,Facebook,X,Email,Copy link', shareLinks.map((s) => s.label).join(','));
-  check('share: each link tagged ?source=share-<channel>, the petition’s own page', ['whatsapp', 'sms', 'facebook', 'x', 'email'].every((c, i) => decodeURIComponent(shareLinks[i].href).includes(`/is/act/skytrain-south-surrey?source=share-${c}`)) && shareLinks[0].href.startsWith('https://wa.me/') && shareLinks[1].href.startsWith('sms:'), shareLinks[0].href);
+  check('share: each link tagged ?source=share-<channel>, the petition’s own page, with the new signer’s own ref', ['whatsapp', 'sms', 'facebook', 'x', 'email'].every((c, i) => decodeURIComponent(shareLinks[i].href).includes(`/is/act/skytrain-south-surrey?ref=${NEW_REF}&source=share-${c}`)) && shareLinks[0].href.includes(`ref%3D${NEW_REF}`) && shareLinks[0].href.startsWith('https://wa.me/') && shareLinks[1].href.startsWith('sms:'), shareLinks[0].href);
   await thanks.getByRole('button', { name: 'Copy link' }).click();
   await sleep(200);
   const clip = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-  check('share: Copy link copies the link (tagged share-copy) and says so', clip === `${ORIGIN}/is/act/skytrain-south-surrey?source=share-copy` && /Link copied/.test(await thanks.locator('.share-sheet__status').innerText()), clip);
+  check('share: Copy link copies the link (tagged share-copy) and says so', clip === `${ORIGIN}/is/act/skytrain-south-surrey?ref=${NEW_REF}&source=share-copy` && /Link copied/.test(await thanks.locator('.share-sheet__status').innerText()), clip);
 
   // Donate: amounts within the limit, monthly within a twelfth of it, then checkout.
   const don = page.locator('[data-module="donate"] form');

@@ -68,7 +68,8 @@ export const kitPage = async (q, ws, path) => {
     return { live: Boolean(r && !r.deleted_at && r.status === 'open'), title: r?.title || p };
   }
   const page = slug(/^\/([^/]+)$/);
-  if (!page) return { live: false, title: p };
+  // The home page's own row ("home") is drawn at "/", never at /home.
+  if (!page || page === 'home') return { live: false, title: p };
   const r = (await q.query(
     `select coalesce(nullif(published->>'title', ''), title) as title, status, deleted_at from site_pages
       where workspace_id = $1 and slug = $2 order by deleted_at nulls first limit 1`,

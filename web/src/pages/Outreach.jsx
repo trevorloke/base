@@ -1292,9 +1292,13 @@ export default function Outreach() {
   const [params, setParams] = useSearchParams();
   const toast = useToast();
   const canWrite = DESK_ROLES.includes(me.role);
-  const tabs = canWrite ? TABS : TABS.filter((t) => VOLUNTEER_TABS.has(t.key));
-  const home = canWrite ? '/outreach/email' : '/outreach/connect';
-  const creating = canWrite && params.get('new') === '1';
+  // A volunteer or candidate granted Outreach writes posts to share (the
+  // server lets them: share.kit.*); email and texting stay the desk's here.
+  const sharer = canWrite || (Array.isArray(me.areas) && me.areas.includes('outreach'));
+  const tabs = canWrite ? TABS : TABS.filter((t) => VOLUNTEER_TABS.has(t.key) || (sharer && t.key === 'sharing'));
+  const home = canWrite ? '/outreach/email' : sharer ? '/outreach/sharing' : '/outreach/connect';
+  const mayMake = canWrite || (sharer && tab === 'sharing');
+  const creating = mayMake && params.get('new') === '1';
   const openNew = () => setParams({ new: '1' });
   const closeNew = () => setParams({}, { replace: true });
 
@@ -1313,7 +1317,7 @@ export default function Outreach() {
   }
   if (!tabs.some((t) => t.key === tab)) return <Navigate to={home} replace />;
 
-  const primary = canWrite && !creating ? PRIMARY[tab] : null;
+  const primary = mayMake && !creating ? PRIMARY[tab] : null;
   const tabProps = { me, canWrite, creating, onClose: closeNew, toast: toast.show };
 
   return (
