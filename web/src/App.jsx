@@ -104,7 +104,7 @@ function NotForYou({ me }) {
   return (
     <AuthPage org={me?.workspace?.name}>
       <h1>Not for your role</h1>
-      <p className="muted">The admin is the campaign office’s. You are signed in as {me?.user?.name} (volunteer) — your app is the field app.</p>
+      <p className="muted">The admin is the campaign office’s. You are signed in as {me?.user?.name} ({me?.candidate ? 'candidate' : 'volunteer'}) — your app is the field app.</p>
       <p><a className="btn btn-primary" href="/">Open the field app</a></p>
     </AuthPage>
   );

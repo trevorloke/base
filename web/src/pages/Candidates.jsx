@@ -62,7 +62,9 @@ function CandidateRow({ c, open, onToggle, run, busy, online }) {
   const [confirming, setConfirming] = useState(false);
   const [status, cls] = statusOf(c);
   const invite = async () => {
-    const r = await run('candidate.invite', { id: c.id }, () => `${c.name} is signed in now`);
+    // Already on the team: in the seat now. Otherwise the link (and the email).
+    const r = await run('candidate.invite', { id: c.id }, (x) => (x.linked ? `${c.name} is in the seat now`
+      : x.email === 'sent' ? `Emailed ${c.name} their link` : `${c.name}’s link is ready to send`));
     if (r && !r.linked) setSent({ email: c.email, joinUrl: r.joinUrl, emailStatus: r.email, replaced: Boolean(c.invited_until) });
   };
   return (

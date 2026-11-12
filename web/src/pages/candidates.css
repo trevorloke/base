@@ -17,3 +17,10 @@
   .can > .btn-primary { justify-self: stretch; }
   .can-body .btn, .can-more__body .btn { min-height: 48px; }
 }
+/* Four role columns on a phone: narrower ticks, so Candidates fits without
+   scrolling the grid sideways. */
+@media (max-width: 600px) {
+  .adm-scroll .adm-grid td { width: 64px; padding: 10px 4px; }
+  .adm-scroll .adm-grid thead th { padding: 10px 4px; font-size: 11px; }
+  .adm-scroll .adm-grid tbody th { padding: 10px 8px; }
+}
