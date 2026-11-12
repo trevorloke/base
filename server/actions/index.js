@@ -39,6 +39,13 @@ const rowToPerson = (r) => ({
   socials: typeof r.socials === 'string' ? JSON.parse(r.socials) : (r.socials || {}),
 });
 
+// What the browser gets back from a save (routes/api.js applies an action's
+// `answer` as the result leaves the server): a person row like any other,
+// so a volunteer given People never gets someone else's email or a money
+// tag in it (lib/viewer.js). Server code that calls the handler itself (the
+// membership form) still gets the whole row.
+const seenByViewer = (ctx, r) => ({ ...r, person: forViewer(ctx)(r.person) });
+
 export const ACTIONS = {
   'person.create': {
     roles: PEOPLE_ROLES,
@@ -54,8 +61,7 @@ export const ACTIONS = {
       if (clientId) {
         const cur = (await tx.query('select * from persons where id = $1', [clientId])).rows[0];
         if (cur && cur.workspace_id !== ctx.workspaceId) throw httpError(409, 'that id is already taken');
-        // A row already on file is read, not written: a volunteer gets it as any other read (lib/viewer.js).
-        if (cur) return { person: forViewer(ctx)(rowToPerson(cur)), duplicate: true };
+        if (cur) return { person: rowToPerson(cur), duplicate: true };
       }
       const id = clientId || newId();
       // The house number and the street, however they came (lib/address.js).
@@ -76,6 +82,8 @@ export const ACTIONS = {
       emit('person', id, 'create', payload);
       return { person: payload };
     },
+    // A row already on file is read, not written: a volunteer gets it as any other read.
+    answer: (ctx, r) => (r.duplicate ? seenByViewer(ctx, r) : r),
   },
 
   'person.update': {
@@ -120,10 +128,9 @@ export const ACTIONS = {
       Object.assign(next, named);
       if (namesSent || 'name' in patch) Object.assign(patch, named);
       emit('person', id, 'update', { ...patch, ...(('address' in patch || 'house_number' in patch) ? { address: next.address, house_number: next.house_number } : {}) });
-      // The answer is a person row like any other: a volunteer given
-      // People never gets someone else's email or a money tag in it.
-      return { person: forViewer(ctx)(next) };
+      return { person: next };
     },
+    answer: seenByViewer,
   },
 
   'gift.log': {
