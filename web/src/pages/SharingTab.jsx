@@ -63,7 +63,7 @@ function KitEditor({ kit, line, pages, onClose, onSaved }) {
     setError(null);
     try {
       const r = await action('share.kit.save', {
-        ...(kit ? { id: kit.id } : {}), title, body, path, media_id: media?.id || null, authorized: Boolean(line) && authorized,
+        ...(kit ? { id: kit.id } : {}), title, body, path, media_id: media?.id || null, authorized,
       });
       await qc.invalidateQueries({ queryKey: ['share'] });
       onSaved(r.kit, kit ? 'Saved' : 'Ready to share');

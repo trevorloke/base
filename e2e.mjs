@@ -358,10 +358,10 @@ t = await text();
 check('newsletter blast saved, not sent, without a provider', /Saved for \d+ subscribers? — not sent/.test(t) && /Connect email, then Send now/.test(t) && !/Sent to/.test(t) && !/send later/i.test(t));
 await shot('8-newsletter');
 
-// Outreach is two modules: Email (newsletter + lists) and Texting; old addresses land in them.
+// Outreach is three modules: Email (newsletter + lists), Texting and Sharing; old addresses land in them.
 await go('/outreach/press');
 const tabsNow = await page.$$eval('.ot-tabs .ot-tab-label', (els) => els.map((e) => e.innerText.trim()));
-check('Outreach: two modules, Email and Texting; /outreach/press lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
+check('Outreach: Email, Texting and Sharing; /outreach/press lands on Email', tabsNow.join('|').toLowerCase() === 'email|texting|sharing' && /\/outreach\/email/.test(page.url()), `${tabsNow.join('|')} ${page.url()}`);
 await go('/outreach/texts');
 check('/outreach/texts lands on Texting, with the Inbox and phone banks', /\/outreach\/texting/.test(page.url()) && /Inbox/.test(await text()) && /Phone banks/.test(await text()), page.url());
 
