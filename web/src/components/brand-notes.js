@@ -72,7 +72,8 @@ export const brandNotes = (brand, seen = {}) => {
   const g = logoGrounds(brand);
   const out = [{ kind: 'ok', text: 'Every shade on screen is worked out from your colour and checked: text reads at 4.5:1 and edges at 3:1, in light and in dark.' }];
   if (l.accentInk !== '#ffffff') out.push({ kind: 'note', text: 'Your colour is light, so your buttons have dark text.' });
-  if (l.accentWords !== l.accent) out.push({ kind: 'note', text: `As words, your colour becomes ${l.accentWords} so it can be read on white.`, swatch: l.accentWords });
+  // Said when it shows: a shade or two darker is not news.
+  if (apart(l.accent, l.accentWords) > 40) out.push({ kind: 'note', text: `As words, your colour becomes ${l.accentWords} so it can be read on every background.` });
   for (const [word, colours] of RATINGS) {
     if (colours.some((c) => apart(l.accent, c) < 70)) out.push({ kind: 'note', text: `Your colour is close to the one that means ${word}. Ratings keep their own colours.` });
   }

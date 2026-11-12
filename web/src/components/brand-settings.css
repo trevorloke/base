@@ -40,6 +40,8 @@
   background: var(--card); border: 1px solid var(--field-edge); border-radius: var(--r-ctrl); cursor: pointer;
 }
 .bs-colour__pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* No second colour chosen: the swatch is only where one would go. */
+.bs-colour__pick--none { opacity: 0.35; }
 .bs-colour__words { flex: 1; min-width: 0; margin-bottom: var(--s-3); }
 .bs-colour__hex { font-variant-numeric: tabular-nums; }
 
@@ -95,7 +97,7 @@
 .bs-s__rate { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .bs-s__rate span {
   padding: 3px 0; text-align: center; font-weight: 700; color: var(--text);
-  background: color-mix(in srgb, var(--band) 16%, var(--card)); border-top: 3px solid var(--band); border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--band) 16%, var(--card)); border-top: 3px solid var(--band); border-radius: 3px;
 }
 .bs-s__tabs { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); height: 38px; background: var(--card); border-top: 1px solid var(--line); }
 .bs-s__tabs span { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 500; color: var(--quiet); }

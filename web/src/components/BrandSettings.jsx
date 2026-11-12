@@ -56,7 +56,7 @@ function ColourField({ id, label, value, fallback, onChange, hint, optional }) {
   const bad = typed != null && typed !== '' && !hexOf(typed);
   return (
     <div className="bs-colour">
-      <input type="color" className="bs-colour__pick" value={value || fallback} aria-label={`${label}: pick a colour`}
+      <input type="color" className={`bs-colour__pick${value ? '' : ' bs-colour__pick--none'}`} value={value || fallback} aria-label={`${label}: pick a colour`}
         onChange={(e) => { setTyped(null); onChange(e.target.value); }} />
       <div className="field bs-colour__words">
         <label htmlFor={id}>{label}{optional && <span className="bs-opt"> (optional)</span>}</label>
