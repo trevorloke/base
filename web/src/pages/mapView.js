@@ -168,10 +168,15 @@ export const cellFill = (c, dark) => {
 // check shows them).
 // One tile that never answers keeps Leaflet's go open, though, and the views
 // moved to meanwhile are not asked about at all: so six seconds after each
-// move Map.jsx looks at the screen itself (screen), and with tiles still out
+// move Map.jsx looks at the screen itself (screen: the share of the screen's
+// tiles, at the zoom the map is at, that are drawn), and with tiles still out
 // and not one street drawn on it, it isn't loading — until a later look
 // finds streets there again (the ones the phone kept: back over them the
-// note goes by itself, as it does when the hosts refuse).
+// note goes by itself, as it does when the hosts refuse). A slow signal the
+// other way: six seconds and not one tile, then they come, all but one — a
+// look after that (Map.jsx: a second after a tile comes while it says "not
+// loading") finds most of the screen drawn, and takes it back too, unless
+// most of what settled failed.
 export const TILE_WAIT_MS = 6000;
 export const tileHealth = () => {
   let ok = 0; let bad = 0;         // this view's tiles
@@ -184,9 +189,9 @@ export const tileHealth = () => {
     tile(good) { if (good) { ok += 1; loaded += 1; } else { bad += 1; failed += 1; } },
     done() { if (ok + bad) { down = bad > ok; blank = false; } since = null; },
     late(now) { if (since != null && now - since >= TILE_WAIT_MS) { down = ok === 0 || bad > ok; blank = false; } },
-    screen(streets) {
+    screen(share) {
       if (since == null) return;
-      if (!streets) { down = true; blank = true; } else if (blank) { down = false; blank = false; }
+      if (!share) { down = true; blank = true; } else if (blank || (ok > 0 && bad <= ok && share > 0.5)) { down = false; blank = false; }
     },
     get: () => ({ loaded, failed, down }),
   };

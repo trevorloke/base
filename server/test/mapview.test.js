@@ -247,20 +247,20 @@ test('the street map isn’t loading: most of a view’s tiles failed, or not on
   // The map is moved on, into streets where nothing answers: six seconds
   // there with tiles still out and not one street on screen (Map.jsx looks)
   // is the street map not loading, whatever came for the view before.
-  hung.screen(false);
+  hung.screen(0);
   assert.deepEqual(hung.get(), { loaded: 3, failed: 0, down: true });
   // Back over streets the phone kept, drawn: the next look takes it back
   // (the note goes by itself, as it does when the hosts refuse)…
-  hung.screen(true);
+  hung.screen(0.5);
   assert.equal(hung.get().down, false);
   // …and away again, it is said again; when they all answer after all, it is loading.
-  hung.screen(false);
+  hung.screen(0);
   assert.equal(hung.get().down, true);
   for (let i = 0; i < 9; i += 1) hung.tile(true);
   hung.done();
   assert.equal(hung.get().down, false);
   // With no tiles out (the view done), a blank screen says nothing about the provider.
-  hung.screen(false);
+  hung.screen(0);
   assert.equal(hung.get().down, false);
   // Streets on screen take back only what a look at the screen said: a view
   // most of whose tiles failed so far stays "not loading" over kept streets
@@ -272,8 +272,35 @@ test('the street map isn’t loading: most of a view’s tiles failed, or not on
   most.tile(false);
   most.late(TILE_WAIT_MS + 5);
   assert.equal(most.get().down, true);
-  most.screen(true);
+  most.screen(1);
   assert.equal(most.get().down, true);
+
+  // A slow signal: six seconds and not one tile, so it isn't loading — then
+  // they come, all but one that never answers (the view is never "done").
+  // A look that finds most of the screen's streets drawn takes it back (the
+  // note stood over streets drawn until the map's next whole view).
+  const late = tileHealth();
+  late.batch(0);
+  late.late(TILE_WAIT_MS + 5);
+  assert.equal(late.get().down, true);
+  // (Streets on screen with none come since — the ones there before, beside
+  // the new ones still out — take nothing back: the new ones aren't loading.)
+  late.screen(0.6);
+  assert.equal(late.get().down, true, 'nothing has come: still not loading');
+  for (let i = 0; i < 11; i += 1) late.tile(true);
+  late.screen(0.4);
+  assert.equal(late.get().down, true, 'most of the screen is still bare');
+  late.screen(11 / 12);
+  assert.equal(late.get().down, false, 'most of the screen’s streets are drawn: loading');
+  // …but not when most of what settled failed, whatever is on screen.
+  const worse = tileHealth();
+  worse.batch(0);
+  worse.late(TILE_WAIT_MS + 5);
+  worse.tile(true);
+  worse.tile(false);
+  worse.tile(false);
+  worse.screen(1);
+  assert.equal(worse.get().down, true);
 });
 
 // Before the map goes to its other provider by itself, it asks that one for

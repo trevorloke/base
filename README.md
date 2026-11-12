@@ -572,9 +572,10 @@ address ignored*).
 
 **When the street map isn't loading** the map says so. It listens to its
 tiles: a view where most of them failed, or six seconds with not one (or,
-six seconds after the map last moved, tiles still out and not one street on
-screen — a host that never answers keeps the earlier view open; back over
-streets the phone kept, that is taken back), and —
+six seconds after the map last moved, tiles still out and not one street of
+that zoom on screen — a host that never answers keeps the earlier view
+open; back over streets the phone kept, or once slow tiles have come after
+all, that is taken back), and —
 once in a page's life — it switches to its other provider by itself (the
 *Clean* look's CARTO ↔ the standard tiles) with a line under the count
 saying it did (*The street map wasn’t loading — switched to Muted*), but
@@ -631,7 +632,8 @@ The map opens on the campaign's own list: where its people are inside the
 campaign's area (`STARBASE_GEO_BOUNDS`) when most of them are, else the
 middle of the list — a few addresses in another city don't zoom it out to
 the province. **Whole list** goes back there from anywhere, and a view
-with nobody on screen says *Nobody on file here · Back to your list*. A
+with nobody on screen says *Nobody on file here · Back to your list* (one
+rating picked and none of it there is *0 doors*, not that). A
 link to one person (`/map?person=…`) always shows that door and its card,
 however busy the place. Turfs and walk lists read only the people inside
 each turf. The map asks for turfs as names and outlines

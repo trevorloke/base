@@ -13,7 +13,8 @@
 //   · a link to one person in the busiest block shows their door and card,
 //     the doors around it as dots (the count in doors, on screen), and a tap
 //     on a dot opens that door; the filter sheet counts what the dots can
-//     say;
+//     say, and a rating nobody there has is "0 doors", not "Nobody on file
+//     here";
 //   · where the people fit they come whole: a door with room around it has
 //     its pin at zoom 17, every door at 18;
 //   · "Whole list" goes back; an empty part of the map says "Nobody on file
@@ -34,7 +35,8 @@
 //     person's pick by itself — drawn too with no signal), and their pick
 //     is theirs again once it answers (asked every minute); tiles that never
 //     answer (the signal gone while a view was loading) are said too, view
-//     by view;
+//     by view and zoom by zoom, and a note said of slow tiles goes by itself
+//     once they come;
 //   · turfs come as outlines at once; a turf's counts load when its sheet
 //     opens ("Loading…", never "No doors" on the way);
 //   · an import that leaves addresses without a pin starts the placing run
@@ -45,7 +47,7 @@
 //     that says so lies clear of the zoom and corner buttons; on "My turf"
 //     no "Unavailable" for the list's answers, which aren't drawn there; a
 //     manager's big list, which keeps no doors, says "Unavailable — Try
-//     again" alone.
+//     again" alone — and once it answers again, nothing about kept doors.
 //
 //   (cd web && npm run build) && node e2e-map.mjs        (its own server on :4948, the stand-in lookup on :4949)
 //   ONLY=tiles,check node e2e-map.mjs                    just those parts: list · layout · tiles · turfs · placing · check · kept
@@ -309,6 +311,17 @@ try {
     await page.click('.map-fsheet .map-fopt:has-text("Strong yes (1)")');
     st = await settled((s) => /Strong yes/.test(s.pill || '') && s.doors === 2);
     check('“Strong yes (1)”: the server keeps the dots to those doors', st.doors === 2 && numberIn(st.pill) === 2, JSON.stringify({ doors: st.doors, pill: st.pill }));
+    // A rating nobody on screen has: the answer holds that rating's doors
+    // only, so none in it is not nobody on file here (it said "Nobody on file
+    // here · Back to your list" over a row full of doors).
+    await page.click('.map-filter-btn');
+    await page.click('.map-fsheet .map-fopt:has-text("McCallum")');
+    st = await settled((s) => /McCallum/.test(s.pill || '') && s.doors === 0);
+    await sleep(700);
+    st = await mapState();
+    await page.screenshot({ path: `${SHOTS}/3-a-rating-nobody-here-has.png` });
+    check('a rating nobody on screen has (“Voting McCallum”): “0 doors” — and no “Nobody on file here” over a row full of doors',
+      /McCallum/.test(st.pill || '') && st.view === 'dots' && st.doors === 0 && numberIn(st.pill) === 0 && !st.nobody, JSON.stringify({ pill: st.pill, view: st.view, doors: st.doors, nobody: st.nobody }));
     // What dots can’t say is said in a sentence, with no empty count beside the filter’s name.
     await page.click('.map-filter-btn');
     await page.click('.map-fsheet .map-fopt:has-text("Has a sign")');
@@ -551,12 +564,14 @@ try {
     // through, and `through` of the map's own tiles (images), no more (no
     // service worker only: under one, every tile is a fetch). up 'hang':
     // never answered, not refused (weak signal as it usually is) — after
-    // `some` more tiles, which come.
+    // `some` more tiles, which come. drop: its next tiles never answer;
+    // hold: the rest answer after that long.
     const tiled = async (opts = {}) => {
       const tctx = await context(opts, { tiles: false });
-      const net = { up: { clean: true, base: true, own: true }, hold: { clean: 0, base: 0, own: 0 }, asked: { clean: 0, base: 0, own: 0 }, through: { clean: 0, base: 0, own: 0 }, some: { clean: 0, base: 0, own: 0 } };
+      const net = { up: { clean: true, base: true, own: true }, hold: { clean: 0, base: 0, own: 0 }, asked: { clean: 0, base: 0, own: 0 }, through: { clean: 0, base: 0, own: 0 }, some: { clean: 0, base: 0, own: 0 }, drop: { clean: 0, base: 0, own: 0 } };
       const answer = (who) => async (route) => {
         net.asked[who] += 1;
+        if (net.drop[who] > 0) { net.drop[who] -= 1; return; }
         if (net.up[who] === 'hang') {
           if (net.some[who] > 0) { net.some[who] -= 1; await route.fulfill(standIn).catch(() => {}); }
           return;
@@ -860,6 +875,44 @@ try {
     check('…after a switch by itself, the same there (a few tiles come, then nothing answers): back over the streets this browser kept, their pick again by itself, every tile drawn and no note',
       went.look === 'muted' && ts.look === 'clean' && allKept(keptH, backH) && !ts.note && ts.pick === null,
       JSON.stringify({ went: went.look, look: ts.look, note: ts.note, kept: keptH, back: backH }));
+    await t.tctx.close();
+
+    // A slow signal: new streets, six seconds and not one tile — said —
+    // then they come, all but one that never answers (so the view is never
+    // "done"). The note goes by itself (it stood over streets drawn until
+    // the map was next moved to a whole new view).
+    t = await keptStreets();
+    t.net.up.base = 'hang';
+    t.net.hold.clean = 14000;
+    t.net.drop.clean = 1;
+    await t.pan('ArrowRight', 6);
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 14000);
+    const slowSaid = ts.note;
+    ts = await tilesUntil(t.pg, (s) => !s.note && s.tiles === 'ok', 16000);
+    const slowOn = await t.onScreen();
+    await t.pg.screenshot({ path: `${SHOTS}/8-slow-signal-came.png` });
+    check('a slow signal (six seconds and not one tile of the new streets, then they come, all but one that never answers): said — and the note goes by itself over the streets drawn',
+      /^The street map isn’t loading/.test(slowSaid || '') && !ts.note && ts.tiles === 'ok' && ts.look === 'clean' && slowOn.n >= 4 && slowOn.drawn >= slowOn.n - 1 && ts.pick === null,
+      JSON.stringify({ said: slowSaid, note: ts.note, tiles: ts.tiles, look: ts.look, on: slowOn }));
+    await t.tctx.close();
+
+    // An earlier tile still out, then nothing answers and the map is zoomed
+    // in: the zoom before's streets, stretched under the ones on their way,
+    // are not this view's (they counted as streets drawn, and blurred
+    // streets stood there with nothing said).
+    t = await keptStreets();
+    t.net.up.base = 'hang';
+    t.net.drop.clean = 1;
+    await t.pan('ArrowRight', 6);
+    await sleep(2500);
+    const partZ = await tileState(t.pg);
+    t.net.up.clean = 'hang';
+    for (let i = 0; i < 2; i += 1) { await t.pg.click('.leaflet-control-zoom-in'); await sleep(900); }
+    ts = await tilesUntil(t.pg, (s) => /isn’t loading/.test(s.note || ''), 20000);
+    await t.pg.screenshot({ path: `${SHOTS}/8-never-answers-zoomed-in.png` });
+    check('an earlier tile still out, then nothing answers and the map is zoomed in: the stretched streets of the zoom before are not this view’s — the map says its street map isn’t loading, one tap to try again',
+      partZ.tiles === 'ok' && !partZ.note && ts.look === 'clean' && ts.tiles === 'down' && /^The street map isn’t loading/.test(ts.note || '') && /Try again/.test(ts.note || '') && ts.pick === null,
+      JSON.stringify({ part: { tiles: partZ.tiles, note: partZ.note }, ...ts }));
     await t.tctx.close();
 
     // A switch made by itself lasts while the signal does: when signal comes
@@ -1231,6 +1284,20 @@ try {
       check(`${w}×${h}, a manager’s big list (no doors kept) and no answer: “Unavailable — Try again” says it alone — no line about doors over a map with none`,
         k.retry === 'Unavailable — Try again' && k.note === null && k.doors === 0 && /^Show: All/.test(k.pill || ''),
         JSON.stringify({ retry: k.retry, note: k.note, doors: k.doors, pill: k.pill }));
+      // The reads answer again (the phone never said it was offline) and
+      // "Try again" is tapped: the view comes, and closer in the doors drawn
+      // were just loaded — no line says they are ones the phone kept (it
+      // stood there, in red, until the page was loaded again).
+      await mc.unroute(/\/api\/map\/(doors|density)/);
+      await mp.click('.map-retry');
+      await mp.waitForFunction(() => document.querySelector('.map-canvas')?.dataset.view === 'density' && !document.querySelector('.map-retry'), null, { timeout: 15000 }).catch(() => {});
+      await mp.focus('.map-canvas');
+      for (let i = 0; i < 8 && !((await corners(mp)).doors > 0); i += 1) { await mp.keyboard.press('+'); await sleep(900); }
+      await sleep(1500);
+      k = await corners(mp);
+      await mp.screenshot({ path: `${SHOTS}/12-answer-back-${w}x${h}.png` });
+      check(`${w}×${h}, the reads answer again and “Try again” is tapped: closer in, the doors drawn were just loaded — no line says they are kept ones`,
+        k.doors > 0 && k.note === null && k.retry === null && /doors?\b/.test(k.pill || ''), JSON.stringify({ doors: k.doors, note: k.note, retry: k.retry, pill: k.pill }));
       k = await keptThenNone(mc, mp, path, { none: refused });
       await mp.screenshot({ path: `${SHOTS}/12-refused-${w}x${h}.png` });
       check(`${w}×${h}, refused by the server: the line says so in its words, clear of the zoom buttons and ${corner.join(', ')}`,

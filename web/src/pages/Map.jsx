@@ -1243,6 +1243,15 @@ export default function MapPage() {
   if (!big) drawnRef.current = null;
   else if (fresh) drawnRef.current = fresh;
   const drawn = big ? fresh || drawnRef.current : null;
+  // The first read failed and a view's answer has come since: the signal is
+  // back, though the phone never said it had gone — the first read is asked
+  // again (nothing else would ask: "No signal — showing the doors already
+  // loaded" stood until the page was loaded again).
+  const answeredAt = Math.max(viewQ.dataUpdatedAt, densQ.dataUpdatedAt);
+  useEffect(() => {
+    if (doorsQ.isError && !doorsQ.isFetching && answeredAt > doorsQ.errorUpdatedAt) doorsQ.refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answeredAt]);
   // Asked and not answered (the server's refusal, or no answer at all).
   const viewFailed = Boolean(big && !fresh && ((wantsDoors && !viewNow && viewQ.isError) || (wantsPatches && densQ.isError)));
   const outbox = useOutbox();
@@ -2054,9 +2063,8 @@ export default function MapPage() {
       clearTimeout(timer);
       timer = setTimeout(() => { health.late(Date.now()); tell(); }, TILE_WAIT_MS + 20);
     });
-    layer.on('tileload', () => { health.tile(true); tell(); });
     layer.on('tileerror', () => { health.tile(false); });
-    layer.on('load', () => { clearTimeout(timer); clearTimeout(moved); health.done(); settled = true; tell(); });
+    layer.on('load', () => { clearTimeout(timer); clearTimeout(moved); clearTimeout(soon); soon = null; health.done(); settled = true; tell(); });
     // The six-second look is each view's own, not only Leaflet's go of
     // asking: one tile that never answers keeps a go open ('loading' comes
     // again only once every tile asked for has loaded or failed), and the
@@ -2066,20 +2074,44 @@ export default function MapPage() {
     // drawn on screen: it isn't loading. Streets this phone kept, drawn,
     // with their neighbours still out, are not that — back over them, the
     // look takes it back.
+    // What it looks at: the screen's tiles at the zoom the map is at, and
+    // the share of them drawn (0 to 1). The zoom before's tiles stay,
+    // stretched, under the ones on their way (Leaflet's own level for this
+    // zoom is the one to read): they are not this view's streets — counted,
+    // a zoom into streets where nothing answers left them there, blurred,
+    // and nothing said.
     let moved = null;
     const streetsOnScreen = () => {
       const box = map.getContainer().getBoundingClientRect();
-      return [...(layer.getContainer()?.querySelectorAll('img.leaflet-tile-loaded') || [])].some((img) => {
+      const here = [...((layer._level?.el || layer.getContainer())?.querySelectorAll('img.leaflet-tile') || [])].filter((img) => {
         const r = img.getBoundingClientRect();
-        return img.naturalWidth > 0 && r.right > box.left + 1 && r.left < box.right - 1 && r.bottom > box.top + 1 && r.top < box.bottom - 1;
+        return r.right > box.left + 1 && r.left < box.right - 1 && r.bottom > box.top + 1 && r.top < box.bottom - 1;
       });
+      return here.length ? here.filter((img) => img.classList.contains('leaflet-tile-loaded') && img.naturalWidth > 0).length / here.length : 0;
     };
     const look = () => { if (layer.isLoading()) { health.screen(streetsOnScreen()); tell(); } };
     const onMoved = () => { clearTimeout(moved); if (layer.isLoading()) moved = setTimeout(look, TILE_WAIT_MS + 20); };
     map.on('moveend zoomend', onMoved);
+    // A slow signal: "not loading" is said at six seconds, then the tiles
+    // come — all but one, so the view is never done and nothing looked
+    // again (the note stood over streets drawn). A second after a tile
+    // comes while it says so, a look that finds most of the screen's streets
+    // drawn may take it back (one tile through is not that; and it never
+    // says "not loading" itself: a tile has just come).
+    let soon = null;
+    const lookAgain = () => {
+      soon = null;
+      const share = layer.isLoading() ? streetsOnScreen() : 0;
+      if (share > 0.5) { health.screen(share); tell(); }
+    };
+    layer.on('tileload', () => {
+      health.tile(true);
+      tell();
+      if (health.get().down && !soon) soon = setTimeout(lookAgain, 1000);
+    });
     layer.addTo(map);
     map.setMaxZoom(tileMax || 19);
-    return () => { clearTimeout(timer); clearTimeout(moved); map.off('moveend zoomend', onMoved); layer.remove(); };
+    return () => { clearTimeout(timer); clearTimeout(moved); clearTimeout(soon); map.off('moveend zoomend', onMoved); layer.remove(); };
   }, [tileUrl, tileMax, tileCredit, tilesTry]);
 
   // Turf polygons. Hidden by the Turfs chip, except a selected turf always shows.
@@ -2313,14 +2345,20 @@ export default function MapPage() {
   // on its way: say so, with the way back. (By the screen, as the count is:
   // the part asked for is the screen and some, and just past the list's
   // edge it still held the list's last squares — "0 people", and no note.)
+  // With one rating picked the dots are that rating's doors only: none on
+  // screen is "0 doors", not nobody on file — there the answer's own count
+  // says (everyone in the part asked for, whatever their rating).
   const nobodyHere = Boolean(byView && fresh && seen && !viewQ.isFetching && !densQ.isFetching
     && (fresh.kind === 'density' ? counts.all === 0
-      : !doors.some((d) => inBox(seen.box, d)) && !leanFree.some((d) => inBox(seen.box, d))));
-  // "No signal — showing the doors already loaded" is said over doors in
-  // fact drawn (a list loaded whole, a volunteer's own turf). A big list's
-  // doors come by the view and a manager's phone keeps none: there
-  // "Unavailable — Try again" says it alone, not this over an empty map.
-  const keptDrawn = visible.length > 0 || leanShown.length > 0;
+      : fresh.rating ? fresh.view.count === 0
+        : !doors.some((d) => inBox(seen.box, d)) && !leanFree.some((d) => inBox(seen.box, d))));
+  // "No signal — showing the doors already loaded" is said over doors the
+  // first read brought, in fact drawn (a list loaded whole, a volunteer's
+  // own turf). A big list's doors come by the view — those are never kept
+  // ones — and a manager's phone keeps none: there "Unavailable — Try
+  // again" says it alone, not this over an empty map, nor over doors a
+  // view has just brought.
+  const keptDrawn = visible.length > 0 && (!big || Boolean(doorsQ.data?.persons?.length));
   // The key under the count, once there are marks to explain.
   const showKey = Boolean(doorsQ.data) && !noSignal && (big ? Boolean(drawn) : doors.length > 0);
   // (On "My turf" a volunteer sees their own doors, not the list's patches.)
@@ -2538,7 +2576,7 @@ export default function MapPage() {
             {((viewFailed && byView) || doorFailed) && !noSignal && (
               <button
                 type="button" className="map-chip map-retry"
-                onClick={() => { if (doorFailed) doorQ.refetch(); if (viewFailed && byView) (wantsPatches ? densQ : viewQ).refetch(); }}
+                onClick={() => { if (doorFailed) doorQ.refetch(); if (viewFailed && byView) (wantsPatches ? densQ : viewQ).refetch(); if (doorsQ.isError) doorsQ.refetch(); }}
               >
                 Unavailable — Try again
               </button>
