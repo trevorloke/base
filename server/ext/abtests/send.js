@@ -442,7 +442,9 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
     }
     const { result: go } = await act(async (tx, emit) => {
       const rows = (await tx.query(
-        `select r.id, r.email, r.token, r.ab_group, r.send_tries, ${stoppedRow('r')} as stopped from blast_recipients r
+        `select r.id, r.email, r.person_id, r.token, r.ab_group, r.send_tries, ${stoppedRow('r')} as stopped,
+                coalesce(p.tags, '[]'::jsonb) as tags
+         from blast_recipients r left join persons p on p.id = r.person_id and p.workspace_id = r.workspace_id
          where r.blast_id = $1 and r.workspace_id = $2 and ${askedRow('r')}
          order by r.created_at, r.id limit $3 for update of r skip locked`,
         [blast.id, workspaceId, Math.min(BATCH, max - run.claimed)],
@@ -458,6 +460,17 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
           continue;
         }
         let unsubscribeUrl = blast.kind === 'eblast' ? `${ctx.publicUrl || ''}/bu/${r.id}` : null;
+        // An email to a list: still someone it may go to (lib/reach.js), with
+        // their tags as they are now? Said no since the tap (their link, the
+        // desk's do-not tag, off the newsletter list): off the send.
+        if (blast.kind === 'eblast') {
+          const tags = typeof r.tags === 'string' ? JSON.parse(r.tags) : r.tags;
+          if (await whyNot(tx, 'email', 'list', { workspaceId, email: r.email, tags, personId: r.person_id })) {
+            await tx.query('delete from blast_recipients where id = $1 and workspace_id = $2', [r.id, workspaceId]);
+            gone += 1;
+            continue;
+          }
+        }
         if (blast.kind === 'newsletter') {
           // Still someone the newsletter may go to (lib/reach.js)? Off the
           // list since the tap: taken off the send, never emailed.

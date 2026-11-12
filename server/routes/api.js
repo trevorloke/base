@@ -961,8 +961,10 @@ app.get('/blasts', async (c) => {
               (count(*) filter (where r.status = 'sending'))::int as sending_count,
               (count(*) filter (where j.job_on and ${goingRow('r')} and l.live))::int as going_count
        from blast_recipients r
+       left join persons rp on rp.id = r.person_id and rp.workspace_id = r.workspace_id
        cross join lateral (
          select ((b.kind <> 'newsletter' or ${mayReach('email', 'newsletter', address('r.email'))})
+           and (b.kind <> 'eblast' or ${mayReach('email', 'list', { ...address('r.email'), tags: "coalesce(rp.tags, '[]'::jsonb)" })})
            and ${notSuppressed('b.workspace_id', 'r.email')}) as live
        ) l
        where r.workspace_id = b.workspace_id and r.blast_id = b.id

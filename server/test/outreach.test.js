@@ -212,6 +212,37 @@ test('send later is real: a saved newsletter goes out with blast.resend once ema
   assert.equal((await w.get('/api/audit/verify')).json.ok, true);
 });
 
+test('an email to a list never reaches someone who said no after the tap: a do-not tag in any capitals, or off the newsletter', async () => {
+  const w = new Client();
+  await w.signup({ workspaceName: 'Said No Since' });
+  const ann = await w.createPerson('Ann Example', { email: 'ann.since@example.org', tags: ['member'] });
+  await w.createPerson('Bea Example', { email: 'bea.since@example.org', tags: ['member'] });
+  await w.createPerson('Cal Example', { email: 'cal.since@example.org', tags: ['member'] });
+  delete process.env.RESEND_API_KEY;
+  const saved = await w.action('blast.send', { kind: 'eblast', subject: 'Members', body: 'Hello', audience: { filter: { tag: 'member' } } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.json));
+  assert.deepEqual(saved.json.counts, { total: 3, sent: 0, failed: 0, queued: 3 });
+  const id = saved.json.blast.id;
+
+  // After the tap: Ann is tagged at the desk in capitals; Cal leaves the newsletter list.
+  assert.equal((await w.action('person.update', { id: ann.id, tags: ['member', 'Do-Not-Contact'] })).status, 200);
+  assert.equal((await w.action('subscription.add', { email: 'cal.since@example.org' })).status, 200);
+  const cal = (await w.get('/api/subscriptions')).json.subscriptions.find((s) => s.email === 'cal.since@example.org');
+  assert.equal((await w.action('subscription.remove', { id: cal.id })).status, 200);
+
+  const listed = (await w.get('/api/blasts')).json.blasts.find((b) => b.id === id);
+  assert.equal(listed.queued_count, 1, 'only Bea is still waiting to go');
+  assert.equal(listed.retry_count, 1);
+
+  await withEmailProvider(async (sent) => {
+    const r = await w.action('blast.resend', { id });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.deepEqual(sent.map((m) => m.to[0]), ['bea.since@example.org']);
+    assert.deepEqual(r.json.resent, { sent: 1, failed: 0, skipped: 2 });
+    assert.equal(r.json.blast.status, 'sent');
+  });
+});
+
 test('blast.resend records each result, and Send now retries the failed ones — never a sent one', async () => {
   const w = new Client();
   await w.signup({ workspaceName: 'Resend Press' });
