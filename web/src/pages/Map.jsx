@@ -118,7 +118,10 @@ const writeViewPref = (v) => { try { localStorage.setItem(VIEW_PREF, v); } catch
 let fellBack = null;
 // Does a street map's provider answer now? One of its tiles, asked of the
 // network itself — no-store, which the service worker passes through, so a
-// tile it kept is no answer — within a few seconds.
+// tile it kept is no answer — within a few seconds. A probe the browser
+// refuses (a provider without CORS headers, a blocker) is a no as well:
+// the map then never goes there by itself, and its one tap is Try again
+// (mapView.js streetMove).
 const PROBE_MS = 4000;
 // On a look the map went to by itself, how often it asks again whether the
 // person's own pick answers (a provider's hiccup is often over in a minute).
