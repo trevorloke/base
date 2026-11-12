@@ -43,7 +43,9 @@ The contract the website work is built against. Read with ROADMAP.md.
 Site routes (relative to the site root):
 `/` (the page with slug `home`) · `/:slug` (any published page) ·
 `/news`, `/news/:slug` · `/act/:slug` (a petition or pledge) · `/r/:code`
-(referral link: remembers the referrer for 30 days, then home) ·
+(referral link: remembers the referrer for 30 days, then home; with `?k=<kit>`,
+a share kit's link, it also remembers the post as `site_src` = `kit-<kit>`
+and opens the post's page, `?source=kit-<kit>`) ·
 `/preferences?t=…` and `/unsubscribe?t=…` (email/text consent, signed token) ·
 `/__preview/:pageId?t=…` (a draft, signed short-lived token, `noindex`) ·
 `/sitemap.xml` · `/robots.txt` · `/site-assets/*` (css, fonts, island script) ·
@@ -142,7 +144,8 @@ so nothing breaks before they are in.
 Every kind: `first_name`, `last_name`, `email`, `phone`, `postal_code`,
 `consent_email` (bool), `consent_sms` (bool), `website` (honeypot, must be
 empty), `client_key` (idempotency, ≤64), `ref` (referral code, else the
-cookie), `page_id`, `module_id`, `source` (e.g. `share-whatsapp`). An email
+cookie), `page_id`, `module_id`, `source` (e.g. `share-whatsapp`; when the
+form sends none, the share kit the visitor came through, from `site_src`). An email
 or a phone is required for every kind; the newsletter, `join` and `donate`
 need an email (money is only ever the same email's record, or someone
 new's). An email is checked as Stripe's page checks it — no `..`, no dot

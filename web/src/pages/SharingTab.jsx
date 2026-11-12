@@ -139,7 +139,7 @@ function KitEditor({ kit, line, pages, onClose, onSaved }) {
         )}
       </div>
 
-      <button type="button" className="btn-link sk-more" aria-expanded={more} onClick={() => setMore((v) => !v)}>
+      <button type="button" className="btn btn-quiet ops-tap sk-more" aria-expanded={more} onClick={() => setMore((v) => !v)}>
         {more ? 'Fewer details' : 'More details'}
       </button>
       {more && (
