@@ -1,6 +1,8 @@
 // Settings → Services (managers): every outside service Starbase uses, what
 // it's for, whether it's set up, and "Check" — one real call to the service
 // (GET /api/connections, POST /api/connections/check — ext/connections).
+// The Email row carries the sender's "Sending domain" (SendingDomain.jsx);
+// the Mailchimp row its own Connect and Pull now (MailchimpPanel.jsx).
 // Keys live in the hosting's settings (Render → the service → Environment),
 // never here: a missing one is named, with where it goes. The long version
 // is INTEGRATIONS.md.
@@ -10,6 +12,8 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { action, apiGet, apiPost } from '../api.js';
+import SendingDomain from './SendingDomain.jsx';
+import MailchimpPanel from './MailchimpPanel.jsx';
 import { NoSignal, noSignal, useOnline } from './NoSignal.jsx';
 import './services.css';
 
@@ -36,6 +40,10 @@ function Row({ s, online }) {
         {s.missing.length > 0 && (
           <p className="sv2-missing">Set in the hosting’s environment: {s.missing.map((k) => <code key={k}>{k}</code>).reduce((a, b) => [a, ' · ', b])}</p>
         )}
+        {s.domainPanel && <SendingDomain online={online} />}
+        {s.panel === 'mailchimp' && <MailchimpPanel online={online} onChanged={() => setRes(null)} />}
+        {/* The email sender's block comes as `hook`: a page cached from before it existed prints Stripe's sentence over any `webhook`. */}
+        {s.hook && <Webhook w={s.hook} />}
         {s.webhook && <Webhook w={s.webhook} />}
         {res && <p className={`sv2-said ${res.ok ? 'is-ok' : 'is-bad'}`} role="status">{res.ok ? '✓ ' : '✕ '}{res.said}</p>}
       </div>
@@ -46,8 +54,9 @@ function Row({ s, online }) {
   );
 }
 
-// A service that calls back (Stripe): the address to paste into it and the
-// events to tick there.
+// A service that calls back (Stripe: s.webhook; the email sender: s.hook):
+// the address to paste into it, where there (w.where), the events to tick,
+// and what to set here afterwards (w.note), when there is something.
 function Webhook({ w }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -55,13 +64,14 @@ function Webhook({ w }) {
   };
   return (
     <div className="sv2-hook">
-      <p className="sv2-detail">Webhook address — in Stripe: Developers → Webhooks → Add endpoint:</p>
+      <p className="sv2-detail">Webhook address{w.where ? ` — in ${w.where}` : ''}:</p>
       <div className="sv2-hook__url">
         <code className="sv2-url sv2-key">{w.url}</code>
         <button type="button" className="btn ops-tap sv2-copy" onClick={copy}>{copied ? '✓ Copied' : 'Copy'}<span className="sv2-sr"> the webhook address</span></button>
       </div>
       <p className="sv2-detail">Events to send ({w.events.length}):</p>
       <ul className="sv2-events">{w.events.map((e) => <li key={e}><code className="sv2-url">{e}</code></li>)}</ul>
+      {w.note && <p className="sv2-detail">{w.note}</p>}
     </div>
   );
 }

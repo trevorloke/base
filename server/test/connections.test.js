@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { freshDb, Client } from './helpers.js';
 import { app } from '../index.js';
 import { mountAt } from '../lib/mount.js';
+import { _setResolverForTest } from '../lib/mail/dns.js';
 
 const tag = Math.random().toString(36).slice(2, 8);
 const realFetch = globalThis.fetch;
@@ -15,19 +16,24 @@ const KEYS = ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_
   'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'BASE_PATH'];
 let mgr, staff;
 let resendDomains = [];
+let resendHooks = [];
+let dmarc = null; // the sender's domain's DMARC record (TXT), when it has one
 let twilioNumbers = [];
 let refuse = false;
 const seen = [];
+KEYS.push('MAIL_PROVIDER', 'RESEND_WEBHOOK_SECRET', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY', 'MAILCHIMP_API_BASE', 'MAILCHIMP_AUDIENCE_ID');
 
 before(async () => {
   for (const k of KEYS) delete process.env[k];
   await freshDb();
+  // The DMARC lookup is base.win's own (lib/mail/dns.js): a stand-in here too.
+  _setResolverForTest(async () => { if (!dmarc) throw Object.assign(new Error('queryTxt ENOTFOUND'), { code: 'ENOTFOUND' }); return dmarc; });
   globalThis.fetch = async (url, opts = {}) => {
     const u = new URL(String(url));
     seen.push({ host: u.hostname, path: u.pathname, auth: opts.headers?.Authorization || null });
     if (u.hostname === 'api.resend.com') {
       if (refuse) return new Response(JSON.stringify({ name: 'validation_error', message: 'API key is invalid' }), { status: 401 });
-      return new Response(JSON.stringify({ data: resendDomains }));
+      return new Response(JSON.stringify({ data: u.pathname === '/webhooks' ? resendHooks : resendDomains }));
     }
     if (u.hostname === 'api.twilio.com') {
       if (refuse) return new Response('{}', { status: 401 });
@@ -49,6 +55,7 @@ before(async () => {
 });
 after(() => {
   globalThis.fetch = realFetch;
+  _setResolverForTest(null);
   for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
 });
 
@@ -59,7 +66,7 @@ const check = async (key) => ok(await mgr.post('/api/connections/check', { key }
 
 test('nothing set: what each service is for and which settings are missing — managers only', async () => {
   const s = byKey(await list());
-  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'stripe', 'twostep']);
+  assert.deepEqual(Object.keys(s), ['database', 'public', 'email', 'texting', 'geocoder', 'tiles', 'jobs', 'mailchimp', 'stripe', 'twostep']);
   assert.deepEqual(s.email.missing, ['RESEND_API_KEY', 'MAIL_FROM']);
   assert.equal(s.email.state, 'missing');
   assert.deepEqual(s.texting.missing, ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM']);
@@ -83,9 +90,17 @@ test('email: the key works and the sender’s domain is verified — or says exa
   resendDomains = [{ name: 'imaginesurrey.ca', status: 'pending' }];
   assert.match((await check('email')).said, /“pending” in Resend/);
   resendDomains = [{ name: 'imaginesurrey.ca', status: 'verified' }];
-  const e = await check('email');
-  assert.deepEqual([e.ok, e.said], [true, 'The key works and imaginesurrey.ca is verified']);
+  // The key and the domain are right; what email still needs to hear back is said, a sentence each (ext/mail).
+  let e = await check('email');
+  assert.deepEqual([e.ok, e.said], [false, 'The key works and imaginesurrey.ca is verified. There’s no DMARC record yet: add the one under Sending domain. '
+    + 'Resend isn’t sending bounces and complaints here yet: add a webhook to http://localhost/hooks/mail/resend.']);
+  dmarc = [['v=DMARC1; p=none']];
+  resendHooks = [{ endpoint: 'http://localhost/hooks/mail/resend', status: 'enabled', events: ['email.delivered', 'email.bounced', 'email.complained'] }];
+  process.env.RESEND_WEBHOOK_SECRET = 'whsec_c2VjcmV0LWtleQ==';
+  e = await check('email');
+  assert.deepEqual([e.ok, e.said], [true, 'The key works and imaginesurrey.ca is verified · DMARC is in · bounces and complaints come back here']);
   assert.equal(seen.at(-1).auth, 'Bearer re_secret_key_123');
+  assert.ok(!JSON.stringify(await list()).includes('c2VjcmV0LWtleQ'), 'never the webhook’s secret');
   refuse = true;
   assert.deepEqual(Object.values(await check('email')).slice(1), [false, 'Resend refused the key']);
   refuse = false;
@@ -105,6 +120,16 @@ test('texting: the number is on the account and its replies come here', async ()
   const l = await list();
   assert.equal(l.inbound[0].url, 'https://starbase.example.org/api/public/twilio/sms');
   assert.ok(!JSON.stringify(l).includes('tok'), 'never the token');
+  // The row says which kind of number it is: in Canada a text to a list wants a verified toll-free number or a short code.
+  const kind = async (from) => { process.env.TWILIO_FROM = from; return byKey(await list()).texting.detail; };
+  assert.equal(await kind('+16045550100'), 'Number +16045550100 · a local number — for a text to a list in Canada, Twilio asks for a verified toll-free number or a short code');
+  assert.equal(await kind('+18335550100'), 'Number +18335550100 · toll-free — Twilio must verify it before it can text');
+  assert.equal(await kind('(888) 555-0100'), 'Number (888) 555-0100 · toll-free — Twilio must verify it before it can text');
+  assert.equal(await kind('55501'), 'Number 55501 · a short code');
+  assert.match(await kind('+18005550100'), /toll-free/);
+  assert.match(await kind('+18015550100'), /a local number/, '801 is Utah, not toll-free');
+  assert.equal(await kind('+442079460000'), 'Number +442079460000', 'not a North American number: its kind isn’t guessed');
+  process.env.TWILIO_FROM = '+16045550100';
 });
 
 test('the public address, the address service, the database and Google tiles answer their checks', async () => {

@@ -21,10 +21,19 @@
 // unknown outcome (a crash, a timeout) is dropped by the service, and a try
 // after a plain refusal is a new send. A row the service never answered for
 // is 'sending' ("not sure it went"): never sent again by itself; Try again
-// reaches it once it is 10 minutes old, with the same key.
+// reaches it once it is 10 minutes old, with the same key — or, with a
+// sender that can't drop a repeat, only when its delivery events would have
+// said it went (retryable, below).
+//
+// Every email also carries base.win's own ref (the recipient's row), which
+// comes back on the sender's delivery events (ext/mail), and the row keeps
+// the sender's id. An address on the campaign's suppression list — it
+// bounced for good or reported spam — is taken off the send at the moment
+// its email would go, as a subscriber who left the list is.
 import { z } from 'zod';
 import { randomBytes, randomInt } from 'node:crypto';
 import { emailConfigured, sendEmail, unsubscribeHeaders } from '../../lib/notify.js';
+import { chosenProvider, hookOn, notSuppressed } from '../../lib/mail/index.js';
 import { enqueueJob, jobRunnerOn, runJobsSoon } from '../../lib/jobs.js';
 import { runAction } from '../../lib/events.js';
 import { markdownPlain, renderMarkdown } from '@starbase/shared/markdown';
@@ -64,9 +73,34 @@ export const blastStatus = ({ total, sent, failed }) =>
 
 // A 'sending' row this old never heard back: Try again may reach it (same key).
 export const STALE_SENDING = "interval '10 minutes'";
+// …when its sender drops a repeat that carries the same key (Resend; a text
+// is as it always was). With any other sender — or a row another sender
+// took — a repeat can be a second copy, so the row is offered only once 30
+// minutes have passed and that sender's delivery events have come in for
+// this campaign since the email was handed over, none of them for it (one
+// would have settled the row: ext/mail). The screen says a second copy is
+// possible (GET /api/blasts repeat_count).
+const STALE_REPEAT = "interval '30 minutes'";
+const sameKey = (a) => {
+  const p = chosenProvider();
+  return `(${a}email is null or ${p?.idempotent ? `${a}provider is null or ${a}provider = '${p.key}'` : 'false'})`;
+};
+// (The row's columns always carry its table's name in here: inside the
+// subquery a bare workspace_id would be the event's own.)
+const eventsSince = (alias) => {
+  const p = chosenProvider();
+  const row = alias || 'blast_recipients';
+  return p && hookOn(p)
+    ? `exists (select 1 from mail_events me where me.workspace_id = ${row}.workspace_id and me.provider = '${p.key}' and me.received_at > ${row}.sending_at)`
+    : 'false';
+};
+export const repeatRow = (alias = '') => {
+  const a = alias ? `${alias}.` : '';
+  return `(${a}status = 'sending' and not ${sameKey(a)} and ${a}sending_at < now() - ${STALE_REPEAT} and ${eventsSince(alias)})`;
+};
 export const retryable = (alias = '') => {
   const a = alias ? `${alias}.` : '';
-  return `(${a}status in ('queued', 'failed') or (${a}status = 'sending' and ${a}sending_at < now() - ${STALE_SENDING}))`;
+  return `(${a}status in ('queued', 'failed') or (${a}status = 'sending' and ${sameKey(a)} and ${a}sending_at < now() - ${STALE_SENDING}) or ${repeatRow(alias)})`;
 };
 // Asked to go now and not claimed yet: the send job's (and the request's) to send.
 export const askedRow = (alias = '') => `(${alias ? `${alias}.` : ''}send_asked_at is not null and ${retryable(alias)})`;
@@ -102,6 +136,10 @@ export const blastCounts = async (tx, workspaceId, blastId) => {
 // The idempotency key of one email: send, recipient row, refusals so far.
 export const sendKey = (blastId, row) => `blast-${blastId}-${row.id}-${Number(row.send_tries) || 0}`;
 
+// "This recipient's address is on the suppression list now" (SQL, a boolean
+// column for the claim): it comes off the send instead of being emailed.
+export const stoppedRow = (alias) => `(not ${notSuppressed(`${alias}.workspace_id`, `${alias}.email`)})`;
+
 // What a sendEmail answer means for the row: 'sent'; 'queued' (email isn't
 // connected — nothing went); 'failed' (the service said no: the next try is
 // a new send); 'sending' (the service never answered — not sure it went).
@@ -112,17 +150,27 @@ export const outcomeOf = (res) => {
   return { status: 'queued', refused: false };
 };
 
-// Store one row's answer. A row someone else already settled is left alone.
+// Store one row's answer — and, for an email, which sender had it and that
+// sender's own id for it (its delivery events name it). A row someone else
+// already settled is left alone.
 export const recordOutcome = (tx, workspaceId, rowId, res, { token = null, from = null } = {}) => {
   const o = outcomeOf(res);
   return tx.query(
     `update blast_recipients set status = $3, token = coalesce($4, token),
        sent_at = case when $3 = 'sent' then now() else sent_at end,
        sending_at = case when $3 = 'sending' then now() else sending_at end,
-       send_tries = send_tries + case when $5 then 1 else 0 end
+       send_tries = send_tries + case when $5 then 1 else 0 end,
+       provider = coalesce($7, provider), provider_id = coalesce($8, provider_id)
      where id = $1 and workspace_id = $2 and ($6::text is null or status = $6)`,
-    [rowId, workspaceId, o.status, token, o.refused, from],
+    [rowId, workspaceId, o.status, token, o.refused, from, res.provider || null, res.id || null],
   );
+};
+
+// A recipient the sender took and didn't send back: what "delivered" counts
+// (SQL; ext/mail marks a bounce on the row).
+export const deliveredRow = (alias = '') => {
+  const a = alias ? `${alias}.` : '';
+  return `(${a}status = 'sent' and ${a}bounced_at is null)`;
 };
 
 // Every newsletter and email blast identifies the sender and carries the
@@ -341,7 +389,8 @@ export const decide = (groups, metric) => {
 // (SEND_JOB, below) sends the rest, a few hundred per run. Ten at a time:
 //   1. claim   each asked row → 'sending', no longer asked, committed before
 //              the call. A newsletter subscriber who left the list since is
-//              taken off the send, never emailed. A row someone else claimed
+//              taken off the send, never emailed — and so is an address that
+//              went on the suppression list since. A row someone else claimed
 //              or settled meanwhile is left to them.
 //   2. send    each claimed row, outside any transaction, with its key.
 //   3. record  each answer in its own write; a row someone else settled
@@ -352,7 +401,8 @@ export const decide = (groups, metric) => {
 // copy by itself. Each write is on the event log as blast.deliver by the
 // person who sent.
 // Stops after `max` rows or `budgetMs`; `more` says whether asked rows are
-// left. Answers { sent, failed, skipped, unsure, claimed, note, more }.
+// left. Answers { sent, failed, skipped, suppressed, unsure, claimed, note,
+// more } (skipped: unsubscribed since; suppressed: can't be emailed since).
 export const DELIVER_ACTION = 'blast.deliver';
 const BATCH = 10;
 const anyAsked = async (db, workspaceId, blastId) => (await db.query(
@@ -364,7 +414,7 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
   const workspaceId = ctx.workspaceId;
   const act = (fn) => runAction(db, { workspaceId, actorId, action: DELIVER_ACTION }, fn);
   const links = findLinks(blast.body);
-  const run = { sent: 0, failed: 0, skipped: 0, unsure: 0, claimed: 0, note: null, more: false };
+  const run = { sent: 0, failed: 0, skipped: 0, suppressed: 0, unsure: 0, claimed: 0, note: null, more: false };
   const t0 = Date.now();
   let attachments = null; // the send's files, read once, before the first email
   for (;;) {
@@ -377,13 +427,14 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
     }
     const { result: go } = await act(async (tx, emit) => {
       const rows = (await tx.query(
-        `select id, email, token, ab_group, send_tries from blast_recipients
-         where blast_id = $1 and workspace_id = $2 and ${askedRow()}
-         order by created_at, id limit $3 for update skip locked`,
+        `select r.id, r.email, r.token, r.ab_group, r.send_tries, ${stoppedRow('r')} as stopped from blast_recipients r
+         where r.blast_id = $1 and r.workspace_id = $2 and ${askedRow('r')}
+         order by r.created_at, r.id limit $3 for update of r skip locked`,
         [blast.id, workspaceId, Math.min(BATCH, max - run.claimed)],
       )).rows;
       const out = [];
       let gone = 0;
+      let stopped = 0;
       for (const r of rows) {
         let unsubscribeUrl = blast.kind === 'eblast' ? `${ctx.publicUrl || ''}/bu/${r.id}` : null;
         if (blast.kind === 'newsletter') {
@@ -398,6 +449,11 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
           }
           unsubscribeUrl = `${ctx.publicUrl || ''}/u/${sub.id}`;
         }
+        if (r.stopped) {
+          await tx.query('delete from blast_recipients where id = $1 and workspace_id = $2', [r.id, workspaceId]);
+          stopped += 1;
+          continue;
+        }
         const token = r.token || newToken();
         await tx.query(
           `update blast_recipients set status = 'sending', sending_at = now(), token = $3, send_asked_at = null
@@ -406,10 +462,11 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
         );
         out.push({ ...r, token, unsubscribeUrl });
       }
-      if (out.length || gone) emit('blast', blast.id, 'update', { sending: out.length, unsubscribed: gone });
-      return { rows: out, gone, empty: rows.length === 0 };
+      if (out.length || gone || stopped) emit('blast', blast.id, 'update', { sending: out.length, unsubscribed: gone, ...(stopped ? { suppressed: stopped } : {}) });
+      return { rows: out, gone, stopped, empty: rows.length === 0 };
     });
     run.skipped += go.gone;
+    run.suppressed += go.stopped;
     if (go.empty) break;
     for (const r of go.rows) {
       run.claimed += 1;
@@ -418,6 +475,7 @@ export const deliver = async (db, ctx, blast, { actorId = null, budgetMs = Infin
         subject: subjectFor(blast, r.ab_group),
         ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: r.unsubscribeUrl, token: r.token, links, attachments }),
         idempotencyKey: sendKey(blast.id, r),
+        ref: r.id,
       });
       const { status } = outcomeOf(res);
       if (status === 'sent') run.sent += 1;
@@ -456,7 +514,7 @@ export const settleBlast = async (tx, workspaceId, blastId, { note = null, quiet
      where id = $1 and workspace_id = $2
      returning *`,
     [blastId, workspaceId, status,
-      counts.total === 0 ? 'everyone on this send has unsubscribed'
+      counts.total === 0 ? 'no one left on this send can be emailed (they unsubscribed, or the address stopped working)'
         : quiet ? cur.provider_note : typeof note === 'function' ? note(counts) : note,
       counts.total],
   )).rows[0];
@@ -516,6 +574,7 @@ export const queueSend = (tx, ctx, blastId, action) => enqueueJob(tx, {
 export const runPayload = (action, run, extra = {}) => ({
   ...(action === 'blast.resend' ? { resent: run.claimed } : {}),
   sent: run.sent, failed: run.failed, unsubscribed: run.skipped,
+  ...(run.suppressed ? { suppressed: run.suppressed } : {}),
   ...(run.unsure ? { unsure: run.unsure } : {}), ...extra,
 });
 
@@ -539,7 +598,7 @@ export const runSendJob = async (db, job) => {
   const run = await deliver(db, ctx, blast, { actorId, max: sendPerRun() });
   await finishRun(db, ctx, {
     actorId, action, blastId, note: run.note, payload: runPayload(action, run),
-    quiet: run.claimed === 0 && run.skipped === 0 && !run.heldUntil, done: !run.more, next: run.more ? job.payload : null,
+    quiet: run.claimed === 0 && run.skipped === 0 && !run.suppressed && !run.heldUntil, done: !run.more, next: run.more ? job.payload : null,
     nextAt: run.heldUntil || null,
   });
 };
@@ -575,15 +634,16 @@ export const startTest = async (tx, ctx, blastId) => {
 };
 
 // Delivered / opened / clicked per test group. A click counts as an open
-// (no one clicks a link in an email they haven't opened).
+// (no one clicks a link in an email they haven't opened); an email that
+// bounced was not delivered.
 export const groupStats = async (tx, workspaceId, blastId) => {
   const zero = () => ({ delivered: 0, opened: 0, clicked: 0 });
   const out = { a: zero(), b: zero() };
   const { rows } = await tx.query(
     `select ab_group,
-            (count(*) filter (where status = 'sent'))::int as delivered,
-            (count(*) filter (where status = 'sent' and (first_open_at is not null or first_click_at is not null)))::int as opened,
-            (count(*) filter (where status = 'sent' and first_click_at is not null))::int as clicked
+            (count(*) filter (where ${deliveredRow()}))::int as delivered,
+            (count(*) filter (where ${deliveredRow()} and (first_open_at is not null or first_click_at is not null)))::int as opened,
+            (count(*) filter (where ${deliveredRow()} and first_click_at is not null))::int as clicked
      from blast_recipients where blast_id = $1 and workspace_id = $2 and ab_group in ('a', 'b')
      group by ab_group`,
     [blastId, workspaceId],

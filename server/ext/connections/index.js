@@ -17,6 +17,11 @@ import { suggestAddresses } from '../../lib/geocode.js';
 import { jobRunnerOn } from '../../lib/jobs.js';
 import { KEY_ENV, KEY_MIN, keyStatus } from '../../lib/twostep.js';
 import { basePath } from '../../lib/mount.js';
+// Email (ext/mail): its row follows the sender in use (Resend, SendGrid) and
+// carries where that sender's delivery events go.
+import { emailService, emailInbound, checkEmail } from '../mail/service.js';
+// Mailchimp (ext/mailchimp): its row carries a panel — Connect and Pull now.
+import { mailchimpService, mailchimpInbound, checkMailchimp } from '../mailchimp/service.js';
 // Online payments (ext/payments): its row carries the webhook address and
 // the events to tick in Stripe, and state 'test' in test mode.
 import { stripeService, checkStripe, webhookUrl } from '../payments/service.js';
@@ -28,6 +33,19 @@ const has = (k) => Boolean(env(k));
 const publicUrl = () => env('STARBASE_PUBLIC_URL').replace(/\/$/, '');
 const twilioBase = () => (env('TWILIO_API_BASE') || 'https://api.twilio.com').replace(/\/$/, '');
 const provider = () => (env('GEOCODER') || 'bc').toLowerCase();
+// Which kind of number the campaign texts from. Twilio's guidance for Canada:
+// the carriers don't take application texts from an ordinary local number,
+// so a text to a list wants a verified toll-free number or a short code
+// (10DLC registration is a US scheme). One-to-one texts are another case.
+const TOLL_FREE = /^1?8(?:00|33|44|55|66|77|88)\d{7}$/;
+const numberKind = (number) => {
+  const digits = String(number).replace(/\D/g, '');
+  if (digits.length >= 5 && digits.length <= 6) return ' · a short code';
+  if (TOLL_FREE.test(digits)) return ' · toll-free — Twilio must verify it before it can text';
+  // A North American number that isn't toll-free. Anything else: not said.
+  if (/^1?[2-9]\d{9}$/.test(digits)) return ' · a local number — for a text to a list in Canada, Twilio asks for a verified toll-free number or a short code';
+  return '';
+};
 const googleTiles = () => env('GOOGLE_MAPS_TILES') === '1';
 
 const row = (key, name, purpose, launch, needs, extra = {}) => {
@@ -48,12 +66,10 @@ export const services = (base = publicUrl()) => {
       detail: pub ? `${pub}${/^https:\/\//.test(pub) ? '' : ' — must start with https://'}` : 'Not set: links use whatever address the page was opened at',
       state: pub && /^https:\/\//.test(pub) ? 'ready' : 'missing',
     }),
-    row('email', 'Email (Resend)', 'Invites, newsletters, press releases, ladder emails, shift alerts, donation receipts', true, ['RESEND_API_KEY', 'MAIL_FROM'], {
-      detail: has('MAIL_FROM') ? `From ${env('MAIL_FROM')}` : 'MAIL_FROM not set: Resend’s test sender only reaches the account’s owner',
-    }),
+    emailService(base),
     row('texting', 'Texting and calls (Twilio)', 'One-to-one texts, text blasts, STOP/START, calls through the campaign’s number, SMS shift alerts', false,
       ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM'], {
-        detail: has('TWILIO_FROM') ? `Number ${env('TWILIO_FROM')}${env('TWILIO_VOICE') === 'off' ? ' · calls off (TWILIO_VOICE=off)' : pub ? '' : ' · calls need the public address'}` : 'Without it, Call and Text use the phone’s own apps',
+        detail: has('TWILIO_FROM') ? `Number ${env('TWILIO_FROM')}${numberKind(env('TWILIO_FROM'))}${env('TWILIO_VOICE') === 'off' ? ' · calls off (TWILIO_VOICE=off)' : pub ? '' : ' · calls need the public address'}` : 'Without it, Call and Text use the phone’s own apps',
       }),
     row('geocoder', `Address lookup (${{ bc: 'BC Address Geocoder', google: 'Google Geocoding', nominatim: 'OpenStreetMap Nominatim', off: 'off' }[geo] || geo})`,
       'Address suggestions as you type, placing people on the map', true,
@@ -76,6 +92,7 @@ export const services = (base = publicUrl()) => {
       state: jobRunnerOn() ? 'ready' : 'missing',
       checkable: false,
     }),
+    mailchimpService(),
     stripeService(base),
     // Two-step sign-in's key (lib/twostep.js): without it base.win keeps
     // one in the database — it works, but a copy of the database would
@@ -97,6 +114,8 @@ export const services = (base = publicUrl()) => {
 const inbound = (base, desk) => [
   { name: 'Twilio — a message comes in', url: `${base}/api/public/twilio/sms`, how: 'Set by hand: Twilio → the number → Messaging → “A message comes in”, HTTP POST' },
   { name: 'Twilio — delivery reports, calls', url: `${base}/api/public/twilio/…`, how: 'Sent by base.win with each text and call (from the public address); nothing to set' },
+  emailInbound(base),
+  mailchimpInbound(base),
   { name: 'The website — people in', url: `${base}/in/v1/people`, how: 'From the website’s server with a website key (below): sign-ups, petitions, volunteers, the newsletter' },
   { name: 'Lists and voted files', url: `${desk}/people/import`, how: 'People → Import: a CSV or spreadsheet (a “voted” column marks who voted)' },
   { name: 'Stripe — payments, refunds, disputes', url: webhookUrl(base), how: 'Set by hand: Stripe → Developers → Webhooks → Add endpoint, with the events under Online payments (above)' },
@@ -132,25 +151,8 @@ const CHECKS = {
     if (!res.ok || body?.service !== 'starbase') return { ok: false, said: `${pub} answered ${res.status}, not this base.win` };
     return { ok: true, said: `${pub} reaches this base.win (${body.env})` };
   },
-  email: async () => {
-    if (!has('RESEND_API_KEY')) return { ok: false, said: 'RESEND_API_KEY isn’t set' };
-    const res = await fetch('https://api.resend.com/domains', {
-      headers: { Authorization: `Bearer ${env('RESEND_API_KEY')}` }, signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (res.status === 401 && /restricted/i.test(`${body?.name || ''} ${body?.message || ''}`)) {
-      return { ok: true, said: 'The key works (a sending-only key: the domain can’t be checked from here)' };
-    }
-    if (res.status === 401 || res.status === 403) return { ok: false, said: 'Resend refused the key' };
-    if (!res.ok) return { ok: false, said: `Resend answered ${res.status}` };
-    const from = env('MAIL_FROM');
-    const domain = (from.match(/@([^>\s]+)/) || [])[1]?.toLowerCase();
-    if (!domain) return { ok: false, said: 'The key works; MAIL_FROM isn’t set, so mail comes from Resend’s test sender' };
-    const d = (body.data || []).find((x) => String(x.name).toLowerCase() === domain);
-    if (!d) return { ok: false, said: `The key works, but ${domain} isn’t a domain on this Resend account` };
-    if (d.status !== 'verified') return { ok: false, said: `The key works; ${domain} is “${d.status}” in Resend — finish its DNS records` };
-    return { ok: true, said: `The key works and ${domain} is verified` };
-  },
+  email: (db, ws, base) => checkEmail(db, base),
+  mailchimp: checkMailchimp,
   texting: async () => {
     const need = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM'].filter((k) => !has(k));
     if (need.length) return { ok: false, said: `${need.join(', ')} not set` };

@@ -5,62 +5,19 @@
 // the provider is configured a person sends it — blast.resend ("Send now")
 // for newsletters and press, shift.notify again ("Notify again") for shifts.
 //
-//   Email: set RESEND_API_KEY (+ optional MAIL_FROM, default onboarding@resend.dev)
+//   Email: a sender from lib/mail — Resend (RESEND_API_KEY, + optional
+//          MAIL_FROM) or SendGrid (SENDGRID_API_KEY, MAIL_FROM); MAIL_PROVIDER
+//          names one, otherwise whichever has its key
 //   SMS:   set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM
 
 import { DEFAULT_TZ } from './org.js';
 import { fmtIn } from '@starbase/shared/dayparts';
 import { whereWords } from '@starbase/shared/shiftkinds';
-export const emailConfigured = () => !!process.env.RESEND_API_KEY;
+// One email through the sender in use, and whether there is one (lib/mail
+// says what sendEmail takes and answers).
+export { emailConfigured, sendEmail } from './mail/index.js';
 export const textConfigured = () =>
   !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
-
-// `html` is optional: sent alongside the plain-text part when given.
-// `idempotencyKey` is optional: the provider sends a key it has seen in the
-// last day only once, so a retry after an unknown outcome never doubles up.
-// A provider that hasn't answered in 15 s (STARBASE_EMAIL_TIMEOUT_MS) is given
-// up on: 'failed' with unknown: true — it may or may not have sent it — so a
-// hung connection never holds a send (or anything waiting on it) for long.
-// unknown is set only when the provider never answered.
-// `headers` is optional: extra mail headers (List-Unsubscribe and
-// List-Unsubscribe-Post on newsletters and ladder emails). `attachments`:
-// [{ filename, content (base64), content_type? }], as the service takes them.
-const emailTimeoutMs = () => Number(process.env.STARBASE_EMAIL_TIMEOUT_MS) || 15_000;
-export const sendEmail = async ({ to, subject, text, html, idempotencyKey, headers, attachments }) => {
-  if (!emailConfigured()) {
-    return { sent: false, status: 'queued', detail: 'no email provider configured (set RESEND_API_KEY)' };
-  }
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-        ...(idempotencyKey ? { 'Idempotency-Key': String(idempotencyKey).slice(0, 256) } : {}),
-      },
-      body: JSON.stringify({
-        from: process.env.MAIL_FROM || 'onboarding@resend.dev',
-        to: [to],
-        subject,
-        text,
-        ...(html ? { html } : {}),
-        ...(headers && Object.keys(headers).length ? { headers } : {}),
-        ...(attachments?.length ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, ...(a.content_type ? { content_type: a.content_type } : {}) })) } : {}),
-      }),
-      signal: AbortSignal.timeout(emailTimeoutMs()),
-    });
-    if (!res.ok) {
-      return { sent: false, status: 'failed', detail: `email provider ${res.status}: ${(await res.text().catch(() => '')).slice(0, 200)}` };
-    }
-    return { sent: true, status: 'sent' };
-  } catch (e) {
-    const timedOut = e?.name === 'TimeoutError' || e?.name === 'AbortError';
-    return {
-      sent: false, status: 'failed', unknown: true,
-      detail: timedOut ? `email provider didn't answer in ${Math.round(emailTimeoutMs() / 1000)} s` : String(e?.message || e).slice(0, 200),
-    };
-  }
-};
 
 export const sendText = async ({ to, body }) => {
   if (!textConfigured()) {

@@ -59,7 +59,7 @@ await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 await page.goto(`${ADMIN}/settings/services`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('.sv2-row', { timeout: 10000 }).catch(() => {});
 const names = await page.$$eval('.sv2-list:not(.sv2-in) .sv2-name', (els) => els.map((e) => e.innerText.trim()));
-check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Address lookup (BC Address Geocoder) | Map background (OpenStreetMap) | Background work | Online payments (Stripe) | Two-step sign-in key', names.join(' | '));
+check('every service listed', names.join(' | ') === 'Database | Public address | Email (Resend) | Texting and calls (Twilio) | Address lookup (BC Address Geocoder) | Map background (OpenStreetMap) | Background work | Mailchimp | Online payments (Stripe) | Two-step sign-in key', names.join(' | '));
 // Online payments (ext/payments): not set up, its two keys, and the webhook to give Stripe.
 const stripeRow = (await text(page, '.sv2-row:has(.sv2-name:text-is("Online payments (Stripe)"))')) || '';
 check('Stripe: not set up, both keys named, the webhook address and its events', /Not set up/.test(stripeRow) && /STRIPE_SECRET_KEY · STRIPE_WEBHOOK_SECRET/.test(stripeRow)
@@ -77,6 +77,10 @@ await page.tap(`${dbRow} .sv2-check`);
 await page.waitForSelector(`${dbRow} .sv2-said`, { timeout: 8000 }).catch(() => {});
 check('Check on the database: "✓ Answering · N people on file"', /^✓ Answering · \d+ people on file$/.test((await text(page, `${dbRow} .sv2-said`)).trim()), await text(page, `${dbRow} .sv2-said`));
 check('Coming in: the address to give Twilio', (await text(page, '.sv2-in')).includes(`${BASE}/api/public/twilio/sms`), await text(page, '.sv2-in'));
+// A service that calls back says where its address goes (Stripe here; the email sender's row does the same once it can send).
+check('Stripe’s webhook block says where to paste the address', /Webhook address — in Stripe: Developers → Webhooks → Add endpoint:/.test(stripeRow), stripeRow.slice(0, 200));
+check('Coming in: where the email sender posts delivered, bounced and spam complaints', (await text(page, '.sv2-in')).includes(`${BASE}/hooks/mail/resend`), await text(page, '.sv2-in'));
+check('Email not set up: no Sending domain panel yet', !(await page.$(`${emailRow} .sd`)));
 const m = await page.evaluate(() => {
   const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
   const taps = [...document.querySelectorAll('.sv2-check')].filter(vis).map((el) => el.getBoundingClientRect().height);

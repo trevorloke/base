@@ -56,6 +56,7 @@
 import { newId, runAction } from '../../lib/events.js';
 import { enqueueJob, cancelJobs } from '../../lib/jobs.js';
 import { emailConfigured, sendEmail, textConfigured, unsubscribeHeaders } from '../../lib/notify.js';
+import { notSuppressed } from '../../lib/mail/index.js';
 import { e164, withFooter, localMinutes, now as textClock } from '../texting/rules.js';
 import {
   settingsFor, quietState, isOptedOut, askedToStop, applyOptOut, inTouch, isFirstOut, tzOf,
@@ -459,16 +460,19 @@ const next = async (c) => {
 };
 
 // Why an email step won't email this person, or null: it goes only to an
-// address on the list as subscribed.
+// address on the list as subscribed, and never to one that bounced for good
+// or reported spam (the suppression list, ext/mail).
 const skipReason = async (tx, ws, person) => {
   if (!person.email) return 'no_email';
   const sub = (await tx.query(
-    'select status from subscriptions where workspace_id = $1 and email = $2', [ws, lower(person.email)],
+    `select s.status, ${notSuppressed('s.workspace_id', 's.email')} as can_email
+     from subscriptions s where s.workspace_id = $1 and s.email = $2`, [ws, lower(person.email)],
   )).rows[0];
   if (sub?.status === 'unsubscribed') return 'unsubscribed';
   if (noEmail(person)) return 'do_not_email';
   if (isDnc(person)) return 'do_not_contact';
   if (sub?.status !== 'subscribed') return 'no_consent';
+  if (!sub.can_email) return 'suppressed';
   return null;
 };
 

@@ -492,13 +492,19 @@ no login:
 - `/r/:token` — a donation receipt
 - `POST /stripe/webhook` — Stripe's payment events, signed (INTEGRATIONS.md,
   *Online payments — Stripe*)
+- `POST /hooks/mail/<sender>` — the email sender's delivery events
+  (delivered, bounced, spam complaints), signed (INTEGRATIONS.md, *Email*)
+- `POST /hooks/mailchimp/<key>` — Mailchimp's unsubscribes and dead
+  addresses; only a hint, base.win reads the member itself (INTEGRATIONS.md,
+  *Mailchimp*)
 - `/learn/:slug` (and `/learn-files/:id`) — ImagineU's public lessons
 - `/media/:id`, `/o/…`, `/c/…` — pictures in emails, and the open and click
   counts
 - `/api/public/twilio/…` — Twilio's webhooks, signed (INTEGRATIONS.md)
 
-The pictures, the three unsubscribe links and the Stripe and Twilio webhooks
-also answer on the campaign's website domain (SITE.md); the others don't.
+The pictures, the three unsubscribe links and the Stripe, Twilio, email
+sender's and Mailchimp's webhooks also answer on the campaign's website
+domain (SITE.md); the others don't.
 
 A gift is logged at the desk (Donations → Log a gift) to one slate — city
 council or school board (`shared/canvass.js` SLATES) — and the annual limit
@@ -602,6 +608,51 @@ button. Someone who unsubscribed can only rejoin by signing up again — the
 desk can't add them back. Ladder emails go only to addresses on the list as
 subscribed. Shift messages render in campaign time
 (`America/Vancouver` unless `settings.tz` says otherwise).
+
+Email hears back. The email sender (Resend, or SendGrid with
+`MAIL_PROVIDER=sendgrid`) posts what happened to each email to
+`/hooks/mail/<sender>`, signed: a send's row then says *Delivered 1,180 of
+1,200 · 12 bounced · 1 spam complaint*, an address that bounced for good or
+reported spam goes on the campaign's suppression list — no list, newsletter
+or ladder emails it again — and a complaint ends that person's consent too.
+**Settings → Services → Email** carries the sender's *Sending domain*: its
+DNS records with Copy and *In / Not found yet*, the DMARC record base.win
+looks up itself, *Add domain* and *Check again*. INTEGRATIONS.md has the
+setup and what is not confirmed against a real account.
+
+| Setting | For |
+|---|---|
+| `MAIL_PROVIDER` | `resend` or `sendgrid`; unset, whichever has its key (Resend first) |
+| `RESEND_WEBHOOK_SECRET` | Resend's delivery events (the webhook's signing secret) |
+| `RESEND_REGION` | where *Add domain* makes the domain at Resend (default `us-east-1`) |
+| `SENDGRID_API_KEY`, `SENDGRID_WEBHOOK_PUBLIC_KEY` | sending through SendGrid, and its delivery events |
+
+Mailchimp, for a campaign that builds its emails there (optional —
+`server/ext/mailchimp`): a list's page has **Send to Mailchimp**, which
+makes the list a tag of the campaign's Mailchimp audience. By default only
+the addresses subscribed to the newsletter here go, one tick widens it to
+everyone on the list who can be emailed, and only the email, first and last
+name leave — never a rating, a tag, a note, an address or money. Nobody
+already in the audience is changed, and a no in either place is a no in
+both: unsubscribed and cleaned come back (Mailchimp's webhook at `POST
+/hooks/mailchimp/<key>` — the address's last part is made from the API key,
+and it answers on the campaign's website domain too — plus a nightly pull
+and *Pull now*), and an unsubscribe, a do-not-email tag or a dead address
+here unsubscribes the member there. The first pull from an audience turns
+off here everyone on file who ever left it, so until someone taps *Turn
+their email off here* it only counts, and asks — the audience and how many
+people — whenever a count finds someone; the yes is for the numbers it
+showed. Someone who leaves there after the first count is turned off here
+all the same, by the webhook or the next pull. **Settings → Services →
+Mailchimp** has *Check*, *Connect* and *Pull
+now*. INTEGRATIONS.md has the setup and what is not confirmed against a real
+account.
+
+| Setting | For |
+|---|---|
+| `MAILCHIMP_API_KEY` | the Mailchimp account's key (its ending names the account's server) |
+| `MAILCHIMP_AUDIENCE_ID` | which audience, when the account has more than one |
+| `MAILCHIMP_WEBHOOK_SECRET` | optional: the signing secret *Connect* shows once |
 
 Provider-pluggable, no SDKs: `RESEND_API_KEY` (+ `MAIL_FROM`) for email,
 `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` for SMS. Without

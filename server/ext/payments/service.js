@@ -25,7 +25,7 @@ export const stripeService = (base) => {
         ? 'Test mode — no real money moves; pay with Stripe’s test cards. Live keys take real gifts.'
         : 'Live — gifts are real money',
     checkable: true,
-    webhook: { url: webhookUrl(base), events: STRIPE_EVENTS },
+    webhook: { url: webhookUrl(base), events: STRIPE_EVENTS, where: 'Stripe: Developers → Webhooks → Add endpoint' },
   };
 };
 

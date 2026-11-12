@@ -1,0 +1,22 @@
+/* "Send to Mailchimp" on a list's page (components/SendToMailchimp.jsx).
+   The button sits in the page's row of buttons; this block takes the row's
+   whole width underneath, whatever else is in the row. All mc-* so nothing
+   here meets another page's classes. */
+.mc {
+  flex: 1 1 100%;
+  order: 1;
+  min-width: 0;
+  padding: var(--s-3);
+  border: var(--border);
+  border-radius: var(--r-card);
+  background: var(--paper-0);
+}
+.mc-line { margin: 0; font-size: 15px; color: var(--text-1); overflow-wrap: anywhere; }
+.mc-line[data-status='stopped'] strong { color: var(--danger); }
+.mc-line[data-status='synced'] strong { color: var(--ok); }
+.mc p.ops-meta { margin: var(--s-1) 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.mc-tick { margin-top: var(--s-1); font-size: 15px; color: var(--text-1); }
+.mc-ask .ops-actions { margin-top: var(--s-2); }
+.mc-status > .btn { margin-top: var(--s-2); }
+.mc .error { margin: var(--s-2) 0 0; }
+.mc .btn-link.mc-retry { min-height: 48px; padding: 0 4px; }

@@ -11,7 +11,9 @@
 //                again.
 //   2. claim     up to 10 held rows 'queued' → 'sending', committed before the
 //                email service is called (blast.ab_rest). A subscriber who
-//                left the list since is taken off the send, never emailed.
+//                left the list since is taken off the send, never emailed;
+//                so is an address that bounced or reported spam during the
+//                wait (the suppression list, ext/mail).
 //   3. send      each claimed row, outside any transaction, with its
 //                idempotency key (send.js sendKey).
 //   4. record    each answer in its own write; a row someone else settled
@@ -32,7 +34,7 @@ import { emailConfigured, sendEmail } from '../../lib/notify.js';
 import { enqueueJob, runJobsSoon } from '../../lib/jobs.js';
 import {
   NO_PROVIDER, WINNER_JOB, composeBlast, decide, findLinks, groupStats, newToken, outcomeOf,
-  recordOutcome, saveLinks, sendKey, settleBlast, subjectFor,
+  recordOutcome, saveLinks, sendKey, settleBlast, stoppedRow, subjectFor,
 } from './send.js';
 import { loadAttachments } from './attach.js';
 
@@ -73,7 +75,7 @@ export const pickWinner = async (db, job) => {
   const attachments = await loadAttachments(db, workspaceId, { blastId });
   const unsubFor = (r) => (r.subscriptionId ? `${base}/u/${r.subscriptionId}` : blast.kind === 'eblast' ? `${base}/bu/${r.id}` : null);
   const subject = subjectFor(blast, 'rest');
-  const run = { claimed: 0, sent: 0, failed: 0, unsure: 0, skipped: 0, note: null };
+  const run = { claimed: 0, sent: 0, failed: 0, unsure: 0, skipped: 0, suppressed: 0, note: null };
   let more = false;
 
   // 2–4. Claim a few, send them, record each answer; again until none are left.
@@ -81,13 +83,14 @@ export const pickWinner = async (db, job) => {
     if (run.claimed >= perRun()) { more = true; break; }
     const { result: claim } = await act('blast.ab_rest', async (tx, emit) => {
       const rows = (await tx.query(
-        `select id, email, token, send_tries from blast_recipients
-         where blast_id = $1 and workspace_id = $2 and ab_group = 'rest' and status = 'queued'
-         order by created_at, id limit $3 for update skip locked`,
+        `select r.id, r.email, r.token, r.send_tries, ${stoppedRow('r')} as stopped from blast_recipients r
+         where r.blast_id = $1 and r.workspace_id = $2 and r.ab_group = 'rest' and r.status = 'queued'
+         order by r.created_at, r.id limit $3 for update of r skip locked`,
         [blastId, workspaceId, Math.min(BATCH, perRun() - run.claimed)],
       )).rows;
       const go = [];
       let gone = 0;
+      let stopped = 0;
       for (const r of rows) {
         let subscriptionId = null;
         if (blast.kind === 'newsletter') {
@@ -102,6 +105,11 @@ export const pickWinner = async (db, job) => {
           }
           subscriptionId = sub.id;
         }
+        if (r.stopped) {
+          await tx.query('delete from blast_recipients where id = $1 and workspace_id = $2', [r.id, workspaceId]);
+          stopped += 1;
+          continue;
+        }
         const token = r.token || newToken();
         await tx.query(
           `update blast_recipients set status = 'sending', sending_at = now(), token = $3, send_asked_at = null
@@ -110,10 +118,11 @@ export const pickWinner = async (db, job) => {
         );
         go.push({ ...r, token, subscriptionId });
       }
-      if (go.length || gone) emit('blast', blastId, 'update', { sending: go.length, unsubscribed: gone });
-      return { go, gone, empty: rows.length === 0 };
+      if (go.length || gone || stopped) emit('blast', blastId, 'update', { sending: go.length, unsubscribed: gone, ...(stopped ? { suppressed: stopped } : {}) });
+      return { go, gone, stopped, empty: rows.length === 0 };
     });
     run.skipped += claim.gone;
+    run.suppressed += claim.stopped;
     if (claim.empty) break;
     for (const r of claim.go) {
       run.claimed += 1;
@@ -122,6 +131,7 @@ export const pickWinner = async (db, job) => {
         subject,
         ...composeBlast(ctx, { kind: blast.kind, body: blast.body, unsubscribeUrl: unsubFor(r), token: r.token, links, attachments }),
         idempotencyKey: sendKey(blastId, r),
+        ref: r.id,
       });
       const { status } = outcomeOf(res);
       if (status === 'sent') run.sent += 1;
@@ -138,7 +148,7 @@ export const pickWinner = async (db, job) => {
   // 5. Finish: the whole send's status and counts. A retry that found
   // nothing to do writes nothing — unless the send still says otherwise
   // (the last run stopped after its last email, before this write).
-  const quiet = !blast.decidedNow && run.claimed === 0 && run.skipped === 0 && !more;
+  const quiet = !blast.decidedNow && run.claimed === 0 && run.skipped === 0 && run.suppressed === 0 && !more;
   await act('blast.ab_rest', async (tx, emit) => {
     // The rest of a big list: the next run, right away.
     if (more) await enqueueJob(tx, { workspaceId, kind: WINNER_JOB, payload: { blast_id: blastId, base } });
@@ -147,7 +157,7 @@ export const pickWinner = async (db, job) => {
     if (!s?.wrote) return;
     emit('blast', blastId, 'update', {
       ab_winner: blast.ab_winner, rest: run.claimed, sent: run.sent, failed: run.failed,
-      unsure: run.unsure, unsubscribed: run.skipped, status: s.status, ...(more ? { more: true } : {}),
+      unsure: run.unsure, unsubscribed: run.skipped, ...(run.suppressed ? { suppressed: run.suppressed } : {}), status: s.status, ...(more ? { more: true } : {}),
     });
   });
   if (more) runJobsSoon();

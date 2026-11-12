@@ -1,9 +1,11 @@
 // Texting — peer-to-peer texts and click-to-call through the campaign's
-// Twilio number, from the Calls card and the Inbox.
+// Twilio number, from the Calls card and the Inbox; a text to a whole list
+// (blast.js) and a ladder's text step (ext/ladders) send by the same rules.
 //
 // Built conservatively (the campaign should confirm the rules with counsel):
-//   · every text is one person tapping Send for one person — no bulk, no
-//     scheduled or automated sends, no auto-dialer;
+//   · a one-to-one text is one person tapping Send for one person; a text
+//     to a list is one person tapping Send for that list, and a ladder's
+//     text is a step a manager wrote — never an auto-dialer;
 //   · the first text in a conversation names the campaign and ends
 //     "Reply STOP to opt out";
 //   · STOP / STOPALL / UNSUBSCRIBE / CANCEL / END / QUIT opt the number out
