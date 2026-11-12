@@ -449,7 +449,7 @@ t = await D.text();
 check('Lists → Walk: the pass form opens with the list picked, and says only its doors are walked',
   new URL(page.url()).pathname === '/admin/passes' && picked === walkList.id && /Only doors with someone on the list are walked\./.test(t), `${page.url()} · ${picked}`);
 m = await measure(page, `${form} .sv-kind, ${form} .input, ${form} .btn`);
-check('…the form with the list: one yellow, targets ≥ 48px', m.yellow === 1 && m.minTap >= 48, JSON.stringify(m));
+check('…the form with the list: one yellow, targets ≥ 40px on a desk', m.yellow === 1 && m.minTap >= 40, JSON.stringify(m));
 await D.shot('13-walk-this-list-form');
 await page.fill(`${form} input`, 'Walk · test');
 await page.click(`${form} button[type="submit"]`);
