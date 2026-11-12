@@ -668,3 +668,57 @@ test('with neither email nor texting connected an evening marks nobody as remind
   assert.deepEqual(ok(await mgr.get('/api/schedule/week?week=2030-05-18')).providers, { email: false, text: false }, 'and the week says what is missing');
   ok(await mgr.action('shift.reminders', { on: false }));
 });
+
+// Calendars (ext/calendar): every shift email carries the person's own
+// shifts as one calendar file and says so just before its sign-off; the
+// text is exactly what it was, with nothing attached.
+test('shift emails carry one calendar file with that person’s shifts; the text is unchanged', async () => {
+  connect();
+  at('2031-03-02T19:00:00Z'); // Sunday noon, the day before the week of March 3, 2031
+  emails.length = 0; texts.length = 0;
+  const mon = await shiftOn('2031-03-03', '06:30', '08:30', { instructions: 'Bring the big sign.' });
+  const thu = await shiftOn('2031-03-06', '16:00', '18:00');
+  await book(mon, P.asha); await book(thu, P.asha);
+  await book(thu, P.ben);
+  const r = ok(await mgr.action('shift.tellWeek', { week: '2031-03-03' }));
+  await runJobs();
+  const decode = (m) => {
+    assert.equal(m.attachments?.length, 1, 'one file per email');
+    const [a] = m.attachments;
+    assert.equal(a.content_type, 'text/calendar; method=PUBLISH; charset=utf-8');
+    assert.equal(a.filename, 'shifts.ics');
+    return Buffer.from(a.content, 'base64').toString('utf8').replace(/\r\n /g, '');
+  };
+  const asha = emails.find((m) => m.to[0] === P.asha.email);
+  const ben = emails.find((m) => m.to[0] === P.ben.email);
+  const ashaIcs = decode(asha);
+  assert.deepEqual([...ashaIcs.matchAll(/^UID:(.*)$/gm)].map((x) => x[1]).sort(), [`shift-${mon.id}@base.win`, `shift-${thu.id}@base.win`].sort());
+  assert.match(ashaIcs, /DTSTART:20310303T133000Z/);
+  assert.match(ashaIcs, /Instructions: Bring the big sign\./, 'the person’s own file has the instructions');
+  assert.deepEqual([...decode(ben).matchAll(/^UID:(.*)$/gm)].map((x) => x[1]), [`shift-${thu.id}@base.win`], 'only their own');
+  // The line, directly before the sign-off; the text as it always was.
+  assert.match(asha.text, /\n\nAdd to your calendar: open the attached file\.\n\n— Tell [a-z0-9]+$/);
+  const shifts = await rows(`select s.title, s.starts_at, s.ends_at, s.location, s.instructions, s.link from shifts s where s.id = any($1::uuid[]) order by s.starts_at`, [[mon.id, thu.id]]);
+  const words = noticeWords({ kind: 'week', shifts, workspaceName: `Tell ${tag}`, tz: TZ, thisWeek: false, week: '2031-03-03' });
+  assert.equal(asha.text, words.email.replace(/\n\n(— Tell [a-z0-9]+)$/, '\n\nAdd to your calendar: open the attached file.\n\n$1'));
+  const ashaText = texts.find((m) => m.To === '+16045550151');
+  assert.equal(ashaText.Body, words.text, 'the text is byte for byte what it was');
+  assert.ok(!Object.keys(ashaText).some((k) => /media/i.test(k)), 'nothing attached to a text');
+  assert.ok(r.batch_id);
+
+  // The one-shift Notify: the same file and line; the text is the message as it was.
+  emails.length = 0; texts.length = 0;
+  ok(await mgr.action('shift.notify', { shift_id: mon.id }));
+  const one = emails.find((m) => m.to[0] === P.asha.email);
+  assert.equal(one.attachments.length, 1);
+  assert.equal(one.attachments[0].filename, 'shift.ics');
+  const oneIcs = Buffer.from(one.attachments[0].content, 'base64').toString('utf8').replace(/\r\n /g, '');
+  assert.deepEqual([...oneIcs.matchAll(/^UID:(.*)$/gm)].map((x) => x[1]), [`shift-${mon.id}@base.win`]);
+  const shift = (await rows('select * from shifts where id = $1', [mon.id]))[0];
+  const message = shiftMessage(shift, `Tell ${tag}`, TZ);
+  assert.equal(one.text, message.replace(/\n(— Tell [a-z0-9]+)$/, '\nAdd to your calendar: open the attached file.\n$1'));
+  assert.equal(texts.find((m) => m.To === '+16045550151').Body, message, 'the text is byte for byte what it was');
+  // Sent again in the same round (a retry) the bytes are the same, so the
+  // email service takes it as the same email.
+  assert.match(oneIcs, /^DTSTAMP:20310303T133000Z$/m);
+});
