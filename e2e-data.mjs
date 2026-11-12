@@ -336,11 +336,13 @@ const measure = (pg) => pg.evaluate(() => {
   const main = document.querySelector('main.page') || document.body;
   const visible = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
   const taps = [...main.querySelectorAll('input:not([type=checkbox]):not([type=file]), select, textarea, button, a.btn')].filter(visible).map((el) => el.getBoundingClientRect().height);
-  return { yellow: [...document.querySelectorAll('.btn-primary')].filter(visible).length, overflow: document.documentElement.scrollWidth - window.innerWidth, minTap: taps.length ? Math.min(...taps) : null };
+  // The look's controls are 40px at a desk with a mouse (app.css --ctl) and 48px on a phone or touch.
+  const floor = matchMedia('(min-width: 900px) and (pointer: fine)').matches ? 40 : 48;
+  return { yellow: [...document.querySelectorAll('.btn-primary')].filter(visible).length, overflow: document.documentElement.scrollWidth - window.innerWidth, minTap: taps.length ? Math.min(...taps) : null, floor };
 });
 const simple = async (pg, name) => {
   const m = await measure(pg);
-  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥48px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= 47.5), JSON.stringify(m));
+  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥${m.floor}px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= m.floor - 0.5), JSON.stringify(m));
 };
 const yr = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver', year: 'numeric' }).format(new Date()));
 const mk = async (b) => (await act('person.create', { kind: 'person', ...b })).json.person;

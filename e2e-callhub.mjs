@@ -338,7 +338,8 @@ for (let i = 0; i < 20 && fake.dnc.some((d) => d.phone_number === '+16045550105'
 check('…and the number comes off CallHub’s do-not-call list again', !fake.dnc.some((d) => d.phone_number === '+16045550105'), JSON.stringify(fake.dnc.map((d) => d.phone_number)));
 await page.screenshot({ path: `${SHOTS}/11-put-back-1440.png`, fullPage: true });
 m = await measure(page, ch);
-check('the list’s page at 1440: one yellow button at most, nothing to tap under 48px in the CallHub block', m.yellow <= 1 && m.minTap >= 48, JSON.stringify(m));
+// At a desk with a mouse the look's controls are 40px (--ctl); 48px is the phone's rule, checked at 390 below.
+check('the list’s page at 1440: one yellow button at most, nothing to tap under the desk’s 40px in the CallHub block', m.yellow <= 1 && m.minTap >= 40, JSON.stringify(m));
 
 await phone.goto(`${ADMIN}/lists/${listId}`, { waitUntil: 'domcontentloaded' });
 await phone.waitForFunction((s) => /results back/.test(document.querySelector(s)?.innerText || ''), ch, { timeout: 10000 }).catch(() => {});
