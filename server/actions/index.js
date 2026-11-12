@@ -14,6 +14,7 @@ import { logGift, voidGift, restoreGift } from '../lib/gifts.js';
 import { FIELD_ACTIONS, personFieldExtensions } from './field.js';
 import { ORGANIZE_ACTIONS } from './organize.js';
 import { httpError } from './util.js';
+import { forViewer } from '../lib/viewer.js';
 import { extActions } from '../ext.js';
 export { httpError };
 
@@ -53,7 +54,8 @@ export const ACTIONS = {
       if (clientId) {
         const cur = (await tx.query('select * from persons where id = $1', [clientId])).rows[0];
         if (cur && cur.workspace_id !== ctx.workspaceId) throw httpError(409, 'that id is already taken');
-        if (cur) return { person: rowToPerson(cur), duplicate: true };
+        // A row already on file is read, not written: a volunteer gets it as any other read (lib/viewer.js).
+        if (cur) return { person: forViewer(ctx)(rowToPerson(cur)), duplicate: true };
       }
       const id = clientId || newId();
       // The house number and the street, however they came (lib/address.js).
@@ -118,7 +120,9 @@ export const ACTIONS = {
       Object.assign(next, named);
       if (namesSent || 'name' in patch) Object.assign(patch, named);
       emit('person', id, 'update', { ...patch, ...(('address' in patch || 'house_number' in patch) ? { address: next.address, house_number: next.house_number } : {}) });
-      return { person: next };
+      // The answer is a person row like any other: a volunteer given
+      // People never gets someone else's email or a money tag in it.
+      return { person: forViewer(ctx)(next) };
     },
   },
 
