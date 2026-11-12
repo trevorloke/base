@@ -298,8 +298,12 @@ test('a referral link: remembered 30 days, the forms credit the referrer, someon
   assert.match(cookie, /Max-Age=2592000/);
   assert.match(cookie, /Path=\/site/);
   assert.match(cookie, /HttpOnly/);
+  // An unknown code is remembered too (a decoy must look real) but credits nobody.
   const unknown = await hit('/site/r/zzzzzzzz');
-  assert.equal(unknown.headers.get('set-cookie'), null, 'an unknown code is not remembered');
+  assert.match(unknown.headers.get('set-cookie'), /^site_ref=zzzzzzzz;/);
+  ok(await send('newsletter', { email: 'nobody.sent@example.org', consent_email: true }, { headers: { cookie: 'site_ref=zzzzzzzz' } }));
+  const [ns] = await personBy(db, ws, "lower(email) = 'nobody.sent@example.org'");
+  assert.equal((await actionsOf(ns.id, 'newsletter'))[0].referrer_id, null, 'and credits nobody');
 
   // The cookie credits a form…
   ok(await send('newsletter', { first_name: 'Nia', last_name: 'Example', email: 'nia@example.org', consent_email: true }, { headers: { cookie: `site_ref=${code}` } }));
@@ -391,6 +395,12 @@ test('a form from another site is refused; the answer never carries a person id'
   assert.deepEqual(shape(same.json), shape(fresh.json), 'someone on file hears exactly what someone new would');
   const [mina] = await personBy(db, ws, "lower(email) = 'mina@example.org'");
   assert.notEqual(same.json.ref_code, mina.attrs.ref_code, 'and never their code');
+  // Nor does following that code tell them apart: /r/ answers a decoy as it answers a real code.
+  const cookiesOf = async (code) => {
+    const r = await hit(`/site/r/${code}`);
+    return [r.status, r.location, (r.headers.getSetCookie?.() || []).map((x) => x.replace(/=[^;]*/, '=*'))];
+  };
+  assert.deepEqual(await cookiesOf(same.json.ref_code), await cookiesOf(fresh.json.ref_code), 'a decoy code follows like a real one');
   // Nothing the app keeps answers a form, and a volunteer's session does nothing here.
   const withCookie = await send('newsletter', { email: 'cookie@example.org', consent_email: true }, { headers: { cookie: vol.client.cookie } });
   assert.equal(withCookie.json.ok, true);

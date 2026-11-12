@@ -43,7 +43,9 @@ The contract the website work is built against. Read with ROADMAP.md.
 Site routes (relative to the site root):
 `/` (the page with slug `home`) · `/:slug` (any published page) ·
 `/news`, `/news/:slug` · `/act/:slug` (a petition or pledge) · `/r/:code`
-(referral link: remembers the referrer for 30 days, then home; with `?k=<kit>`,
+(referral link: remembers the code for 30 days, then home — any code of the
+right shape, known or not, so a code that is nobody's looks the same; a form
+credits only a code that is someone's; with `?k=<kit>`,
 a share kit's link, it also remembers the post as `site_src` = `kit-<kit>`
 and opens the post's page, `?source=kit-<kit>`) ·
 `/preferences?t=…` and `/unsubscribe?t=…` (email/text consent, signed token) ·
@@ -182,7 +184,8 @@ refusing the email typed is a 400 on `email`) · `429 { error }` ·
 person id or anything about who was on file: `ref_code` is the person's
 own referral code only when this form added them (the thank-you's share
 links carry it as `ref=`, so a friend who signs counts as theirs); for
-anyone matched it is a code of the same shape that is nobody's.
+anyone matched it is a code of the same shape that is nobody's, and
+`/r/` follows it exactly as it follows a real one.
 A plain form post (no JavaScript) gets a `303` back to the page with
 `?sent=<kind>#m-<module_id>` (or `?error=<field>&module=<module_id>#m-<module_id>`,
 so the page says it on the form that was sent), or to the checkout.

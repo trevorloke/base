@@ -103,17 +103,21 @@ test('/r/:code?k=: every row of the table — cookies and where it goes', async 
   assert.match(src, /Max-Age=2592000/);
   assert.match(src, /Path=\/site(;|$)/, 'the cookie is the site root’s');
   assert.match(src, /HttpOnly/);
-  // Unknown person, valid kit.
+  // Unknown person, valid kit: the code is remembered all the same (so a
+  // decoy code from a form's answer can't be told from a real one) and
+  // credits nobody.
   const b = await hit(`/site/r/zzzzzzzz?k=${kit.code}`);
-  assert.deepEqual([b.location, cookieOf(b, 'site_ref'), Boolean(cookieOf(b, 'site_src'))], [page, null, true]);
+  assert.deepEqual([b.location, Boolean(cookieOf(b, 'site_ref')), Boolean(cookieOf(b, 'site_src'))], [page, true, true]);
   // Known person, no kit or not a kit.
   for (const q of ['', '?k=nokit1', '?k=../../x']) {
     const c = await hit(`/site/r/${code}${q}`);
     assert.deepEqual([c.location, Boolean(cookieOf(c, 'site_ref')), cookieOf(c, 'site_src')], ['/site/', true, null], q);
   }
-  // Unknown person, no kit.
+  // Unknown person, no kit: site_ref only; not a code at all: nothing.
   const d = await hit('/site/r/zzzzzzzz?k=nokit1');
-  assert.deepEqual([d.location, d.headers.get('set-cookie')], ['/site/', null]);
+  assert.deepEqual([d.location, Boolean(cookieOf(d, 'site_ref')), cookieOf(d, 'site_src')], ['/site/', true, null]);
+  const bad = await hit('/site/r/no!?k=nokit1');
+  assert.deepEqual([bad.location, bad.headers.get('set-cookie')], ['/site/', null]);
   // A stopped kit's link still opens its page.
   const stopped = okA(await mgr.action('share.kit.save', { title: 'Stopped', body: 'Old post', path: `/act/${pledge.slug}` })).kit;
   okA(await mgr.action('share.kit.open', { id: stopped.id, open: false }));

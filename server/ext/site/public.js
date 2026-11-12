@@ -41,7 +41,7 @@ import { siteHost, siteWorkspace, ensureSite, readSettings, menuPages, siteOf, p
 import { loadData } from './loaders.js';
 import { cacheKey, cacheGet, cachePut } from './cache.js';
 import { verify, sign, PERSON_TTL } from './tokens.js';
-import { personOfCode, refCodeFor, CODE_RE } from './people.js';
+import { refCodeFor, CODE_RE } from './people.js';
 import { choicesOf, emailOff, emailOn, smsOff, smsOn } from './consent.js';
 import { formRoute } from './forms.js';
 import { KIT_CODE_RE, goodPath } from '../socials/share.js';
@@ -403,7 +403,11 @@ export const makeSiteApp = (at) => {
     const site = c.get('site');
     const code = String(c.req.param('code') || '').toLowerCase();
     const keep = { path: site.root || '/', maxAge: REF_DAYS * 24 * 3600, httpOnly: true, sameSite: 'Lax', secure: site.https };
-    if (CODE_RE.test(code) && await personOfCode(site.db, site.ws.id, code)) setCookie(c, REF_COOKIE, code, keep);
+    // Any well-formed code is remembered, known or not: a form's answer hands
+    // someone already on file a decoy code, and following it must look the
+    // same as following a real one. An unknown code credits nobody (forms.js
+    // finds no one for it at POST time).
+    if (CODE_RE.test(code)) setCookie(c, REF_COOKIE, code, keep);
     const k = String(c.req.query('k') || '').toLowerCase();
     const kit = KIT_CODE_RE.test(k)
       ? (await site.db.query('select code, path from share_kits where workspace_id = $1 and code = $2 and deleted_at is null', [site.ws.id, k])).rows[0]
