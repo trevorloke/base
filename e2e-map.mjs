@@ -627,7 +627,7 @@ try {
     await sleep(600);
     await t.pg.screenshot({ path: `${SHOTS}/8-street-map-switched-by-itself.png` });
     check('the street map’s provider refuses: the map switches to the other one by itself, and says so',
-      ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && ts.said === 'The street map wasn’t loading — switched to Muted', JSON.stringify(ts));
+      ts.look === 'muted' && ts.tiles === 'ok' && ts.loaded > 0 && ts.said === 'The street map wasn’t loading — switched to Muted Why?', JSON.stringify(ts)); // (Why?: a manager's way to the Map check)
     check('…the ground behind the tiles is the app’s paper, not Leaflet’s grey; the person’s own choice of look is untouched',
       ts.ground === 'rgb(232, 235, 243)' && ts.pick === null, JSON.stringify({ ground: ts.ground, pick: ts.pick }));
     // The other refuses too: that is the signal, not a provider — back to
