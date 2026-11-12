@@ -187,7 +187,9 @@ refusing the email typed is a 400 on `email`) · `429 { error }` ·
 person id or anything about who was on file.
 A plain form post (no JavaScript) gets a `303` back to the page with
 `?sent=<kind>#m-<module_id>` (or `?error=<field>&module=<module_id>#m-<module_id>`,
-so the page says it on the form that was sent), or to the checkout.
+so the page says it on the form that was sent), or to the checkout. A sign-up
+adds `&shift=<id>`, so the page offers that event for a calendar under its
+*You’re signed up*.
 
 ### What the loaders give the renderer (`data`)
 
@@ -298,8 +300,8 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
 - `preview` — the preview banner, `noindex`, no canonical.
 - `path` — this page's path under the root (`/`, `/about`, `/news/a-post`; the
   root in front is taken off): canonical, share links, the current nav item.
-- `sent` — the `?sent=<kind>` value (or `{ kind, module_id }`): that kind's
-  form shows its thank-you instead.
+- `sent` — the `?sent=<kind>` value (or `{ kind, module_id }`, and `shift` for
+  a sign-up): that kind's form shows its thank-you instead.
 - `error` — the `?error=<field>` value (or `{ field, module_id, kind, message }`):
   the message on that field (with `module_id`, only in that module's form,
   when it is on the page; a bare field marks every form on the page that has

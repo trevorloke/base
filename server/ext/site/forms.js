@@ -350,7 +350,8 @@ export const formRoute = async (c, site) => {
     }
     throw e;
   }
-  if (plain) return answer.checkout_url ? c.redirect(answer.checkout_url, 303) : go(f, k, `sent=${kind}`);
+  // A sign-up names its event, so the page can offer it for a calendar.
+  if (plain) return answer.checkout_url ? c.redirect(answer.checkout_url, 303) : go(f, k, `sent=${kind}${kind === 'rsvp' && k.shift_id ? `&shift=${k.shift_id}` : ''}`);
   return c.json(answer);
 };
 

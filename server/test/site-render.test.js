@@ -438,6 +438,16 @@ test('openings and events: dates in the campaign’s time zone, spots, full, map
   const none = render({ modules: [newModule('shifts', 'shift2'), newModule('events', 'event2')], dataOver: { ...data, events: [], shifts: [] } });
   assert.match(none.html, /No openings right now\./);
   assert.match(none.html, /New events are on the way/);
+  // Back from a plain sign-up (?sent=rsvp&shift=<id>): that one's calendar
+  // links under the page's "You’re signed up"; one opening needs no id.
+  const two = { ...data, shifts: [{ ...ev, spots_left: 5 }, { ...ev, id: 'e2', title: 'Phone bank', spots_left: 2 }] };
+  const named = render({ modules: [newModule('shifts', 'shift3')], dataOver: two, ctx: { sent: { kind: 'rsvp', shift: 'e2' } } });
+  assert.equal(Object.values(islands(named.html)).find((i) => i.name === 'openings').props.sentItem, 'e2');
+  assert.match(named.html, /rsvp-done--page[\s\S]*?<\/p><p class="rsvp-cal"><span class="rsvp-cal-say">Add it to your calendar:[\s\S]*?text=Phone(%20|\+)bank[\s\S]*?href="[^"]*\/events\/e2\.ics"/);
+  const unnamed = render({ modules: [newModule('shifts', 'shift4')], dataOver: two, ctx: { sent: 'rsvp' } });
+  assert.ok(!/class="rsvp-cal"/.test(unnamed.html), 'two openings and none named: no guess');
+  const single = render({ modules: [newModule('shifts', 'shift5')], dataOver: { ...data, shifts: [{ ...ev, spots_left: 5 }] }, ctx: { sent: 'rsvp' } });
+  assert.match(single.html, /rsvp-done--page[\s\S]*?<p class="rsvp-cal"><span class="rsvp-cal-say">Add it to your calendar:[\s\S]*?\/events\/e1\.ics/);
 });
 
 test('video: YouTube and Vimeo play from their privacy-friendly hosts; anything else is a link', () => {

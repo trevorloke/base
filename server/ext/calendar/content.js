@@ -20,19 +20,26 @@ const dateOnly = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : Stri
 // The shifts booked for the person whose email is this login's, from 30
 // days ago on, soonest first. Driven from persons by (workspace_id,
 // lower(email)), then the person's bookings by (workspace_id, person_id),
-// then each shift and place by key — never a scan of shifts. A booking's own
-// hours and drop_in are SH's columns, read through to_jsonb so this works
-// before and after them (null before).
+// then each shift and place by key — never a scan of shifts. The planner
+// guesses ~0.5% of everyone share an email (an expression index on a partial
+// index has no statistics), so with a plain join it hashes every booking on
+// a big list; the LATERAL with "offset 0" cannot be flattened, so each
+// matched person reads only their own bookings through the index. A
+// booking's own hours and drop_in are SH's columns, read through to_jsonb so
+// this works before and after them (null before).
 export const MY_SHIFTS_SQL = `
   select s.id, s.title, s.kind, s.starts_at, s.ends_at, s.location, s.instructions, s.link,
          to_jsonb(s)->>'drop_in' as drop_in, pl.lat as place_lat, pl.lng as place_lng,
          to_jsonb(a)->>'arrive_at' as arrive_at, to_jsonb(a)->>'leave_at' as leave_at
     from persons p
-    join shift_assignments a on a.workspace_id = p.workspace_id and a.person_id = p.id
+    cross join lateral (
+      select a.* from shift_assignments a
+       where a.workspace_id = $1 and a.person_id = p.id and a.status = any($3::text[])
+      offset 0
+    ) a
     join shifts s on s.id = a.shift_id
     left join places pl on pl.id = s.place_id
    where p.workspace_id = $1 and lower(p.email) = $2 and p.deleted_at is null
-     and a.status = any($3::text[])
      and s.workspace_id = $1 and s.deleted_at is null
      and coalesce(s.ends_at, s.starts_at) >= now() - interval '30 days'
    order by s.starts_at, s.id

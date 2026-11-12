@@ -849,10 +849,11 @@ function ShiftList({ canDesk, me }) {
         </button>
       )}
       {shifts.data && <PastShifts earlier={earlier} tz={tz} now={now} isMine={isMineShift} byShift={byShift} />}
-      {/* A person's own shifts, kept in their calendar (Your profile). */}
-      <p className="cal-way"><Link to="/profile#calendar">Put my shifts in my calendar</Link></p>
       </>
       )}
+      {/* A person's own shifts, kept in their calendar (Your profile): under
+          the list, and under the desk's week board (its first view). */}
+      {!showNew && <p className="cal-way"><Link to="/profile#calendar">Put my shifts in my calendar</Link></p>}
     </div>
   );
 }

@@ -230,8 +230,8 @@ one tap away under **More**.
   A shift email (Notify, the week's notice, the evening-before reminder)
   arrives with a calendar file of that person's own shifts and the line
   *Add to your calendar: open the attached file.*; the text is unchanged.
-  On the website, after a sign-up: *Add it to your calendar: Google ·
-  Outlook · Apple & others*; the Events list links *Get our events in your
+  On the website, after a sign-up (with or without JavaScript): *Add it to
+  your calendar: Google · Outlook · Apple & others*; the Events list links *Get our events in your
   calendar* (`<site>/events.ics`). Browser: `e2e-calendar.mjs` (it starts
   its own server and a stand-in email sender: `PORT=5160 node
   e2e-calendar.mjs` after the web build). Server tests:

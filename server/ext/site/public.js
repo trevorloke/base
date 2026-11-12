@@ -185,7 +185,9 @@ const siteFor = async (c, at) => {
 
 const ctxOf = (c, site, extra = {}) => {
   const q = (k) => c.req.query(k);
-  const sent = KINDS.includes(q('sent')) ? q('sent') : null;
+  // ?sent=rsvp&shift=<id>: the event someone just signed up for (forms.js).
+  const sentKind = KINDS.includes(q('sent')) ? q('sent') : null;
+  const sent = sentKind === 'rsvp' && UUID.test(q('shift') || '') ? { kind: sentKind, shift: q('shift').toLowerCase() } : sentKind;
   // ?error=<field>&module=<id>: the form a plain post came back to (forms.js).
   const field = /^[a-z_]{1,40}$/.test(q('error') || '') ? q('error') : null;
   const module = /^[A-Za-z0-9_-]{1,64}$/.test(q('module') || '') ? q('module') : '';

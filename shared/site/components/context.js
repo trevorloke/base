@@ -105,7 +105,7 @@ export function normalizeData(data) {
 
 // ctx.sent: 'newsletter' (?sent=<kind>) or { kind, module_id }.
 // ctx.error: 'email' (?error=<field>) or { field, kind, module_id, message }.
-const pickSent = (v) => (typeof v === 'string' ? { kind: v, module: '' } : v && typeof v === 'object' ? { kind: str(v.kind), module: str(v.module_id || v.module) } : null);
+const pickSent = (v) => (typeof v === 'string' ? { kind: v, module: '', shift: '' } : v && typeof v === 'object' ? { kind: str(v.kind), module: str(v.module_id || v.module), shift: str(v.shift) } : null);
 const pickError = (v) => (typeof v === 'string' ? { field: v, kind: '', module: '', message: '' } : v && typeof v === 'object' ? { field: str(v.field), kind: str(v.kind), module: str(v.module_id || v.module), message: str(v.message || v.error) } : null);
 
 // What a field's error says when the page comes back from a plain form post.
@@ -166,6 +166,8 @@ export function renderContext({ kind = 'page', site, page, post, campaign, data,
     action: (formKind) => `${loc.root}api/forms/${formKind}`,
     hidden: (moduleId, extra = {}) => ({ page_id: kind === 'page' ? str(obj(page).id) : '', module_id: moduleId, ref: cleanRef(c.referral), source: cleanSource(c.source), ...extra }),
     sentFor: (formKind, moduleId) => Boolean(sent && sent.kind === formKind && (!sent.module || sent.module === moduleId)),
+    // The opening a plain sign-up was for ('' when not named).
+    sentItem: () => (sent && sent.kind === 'rsvp' ? sent.shift : ''),
     // After a plain post: the error on the form that was sent (its module,
     // when it is on this page), else on every form it is about — a box of
     // that name, or the kinds FORM_ERRORS names.

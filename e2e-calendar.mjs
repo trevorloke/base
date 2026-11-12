@@ -162,6 +162,19 @@ try {
   await page.locator('.cal-add').scrollIntoViewIfNeeded();
   await shot(page, '02-desk-shift-choices-390');
   await page.setViewportSize({ width: 1440, height: 900 });
+  // Shifts opens on the week board for the desk: the way in is under it too.
+  await page.goto(`${ADMIN}/shifts`, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Week', exact: true }).waitFor({ timeout: 10000 });
+  const deskWay = page.getByRole('link', { name: 'Put my shifts in my calendar' });
+  await deskWay.waitFor({ timeout: 10000 });
+  check('desk Shifts, Week (its first view): “Put my shifts in my calendar” under the board',
+    await page.getByRole('button', { name: 'Week', exact: true }).getAttribute('aria-pressed') === 'true' && await deskWay.count() === 1
+    && /\/profile#calendar$/.test(await deskWay.getAttribute('href')));
+  await deskWay.scrollIntoViewIfNeeded();
+  await shot(page, '02b-desk-shifts-week-way-in-1440');
+  await page.getByRole('button', { name: 'List', exact: true }).click();
+  check('desk Shifts, List: the same link once', await page.getByRole('link', { name: 'Put my shifts in my calendar' }).count() === 1);
+  await page.getByRole('button', { name: 'Week', exact: true }).click();
 
   // ── 3. A volunteer on a phone: the shift page, Count me in, no signal ──
   const invite = (await api('/actions/member.invite', { email: `ana.${tag}@example.org`, role: 'volunteer' })).json;
@@ -371,8 +384,8 @@ try {
   check('its Apple & others is that event’s own file', one.status === 200 && vevents(one.body) === 1 && one.body.includes('Town hall in Newton') && !one.body.includes('9876'), siteApple);
   const siteGoogle = await wp.locator('.rsvp-cal a', { hasText: 'Google' }).first().getAttribute('href');
   check('its Google link has the event’s time', siteGoogle.includes(`dates=${stamp(evStart)}/`), siteGoogle);
-  m = await measure(wp, '.rsvp-cal a');
-  check('website 390: no sideways scroll', m.overflow <= 0, JSON.stringify(m));
+  m = await measure(wp, '.rsvp-cal a, .events-ics a');
+  check('website 390: no sideways scroll, 48px calendar links', m.overflow <= 0 && m.minTap >= 48, JSON.stringify(m));
   await wp.locator('.rsvp-cal').first().scrollIntoViewIfNeeded();
   await shot(wp, '15-website-signed-up-390');
   await wp.setViewportSize({ width: 1440, height: 900 });
@@ -380,6 +393,34 @@ try {
   await wp.locator('.rsvp-cal').first().scrollIntoViewIfNeeded();
   await shot(wp, '16-website-signed-up-1440');
   await visitor.close();
+
+  // With no JavaScript: the form posts, the page comes back saying so, and
+  // the same three links sit under it.
+  const plain = await browser.newContext({ ...PHONE, javaScriptEnabled: false });
+  const np = watch(await plain.newPage(), 'website, no JavaScript');
+  await np.goto(`${BASE}/site/events`, { waitUntil: 'domcontentloaded' });
+  await np.locator('.openings summary.rsvp-toggle').first().click();
+  const nform = np.locator('.openings form.rsvp-form').first();
+  await nform.locator('input[name="first_name"]').fill('Di');
+  await nform.locator('input[name="email"]').fill(`di.${tag}@example.org`);
+  await Promise.all([np.waitForURL(/sent=rsvp/, { timeout: 15000 }), nform.getByRole('button', { name: 'I’ll be there' }).click()]);
+  const pageDone = await words(np.locator('.rsvp-done--page'));
+  const pageLine = await words(np.locator('.rsvp-done--page + .rsvp-cal'));
+  check('no JavaScript: “You’re signed up” and then the three links', pageDone.includes('You’re signed up')
+    && pageLine === 'Add it to your calendar: Google · Outlook · Apple & others', `${pageDone} / ${pageLine}`);
+  const nApple = await np.locator('.rsvp-done--page + .rsvp-cal a', { hasText: 'Apple & others' }).getAttribute('href');
+  const nFile = await fetchIcs(new URL(nApple, BASE).href);
+  check('no JavaScript: Apple & others is the event signed up for', nFile.status === 200 && nFile.body.includes('Town hall in Newton'), nApple);
+  m = await measure(np, '.rsvp-cal a');
+  check('no JavaScript 390: 48px links, no sideways scroll', m.minTap >= 48 && m.overflow <= 0, JSON.stringify(m));
+  // No script runs on this page, so scroll as a person would.
+  const at = await np.locator('.rsvp-done--page').boundingBox();
+  await np.mouse.move(195, 400);
+  await np.mouse.wheel(0, Math.max(0, (at?.y || 0) - 300));
+  await sleep(400);
+  check('no JavaScript: the page-level line is on screen', await np.locator('.rsvp-done--page').first().isVisible(), String(await np.locator('.rsvp-done--page').count()));
+  await shot(np, '17-website-no-js-signed-up-390');
+  await plain.close();
 
   check('no page errors', errors.length === 0, errors.join(' | '));
 } catch (e) {

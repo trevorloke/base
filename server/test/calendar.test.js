@@ -325,6 +325,10 @@ test('the link’s shifts are read through the email index and the person index,
   assert.match(plan, /persons_ws_email_idx/);
   assert.match(plan, /sassign_ws_person_idx/);
   assert.ok(!/Seq Scan on shifts/.test(plan));
+  // Each matched person drives their own bookings (a Postgres 16 at 300,000
+  // people hashed every booking when the planner guessed 1,500 matches).
+  assert.ok(!/Seq Scan on shift_assignments|Hash Join/.test(plan), 'never every booking');
+  assert.match(plan, /Index Cond: \(\(workspace_id = .+\) AND \(person_id = p\.id\)\)/);
   await db.query(`delete from shift_assignments a using shifts s where s.id = a.shift_id and s.workspace_id = $1 and s.title like 'Bulk shift %'`, [ws]);
   await db.query(`delete from shifts where workspace_id = $1 and title like 'Bulk shift %'`, [ws]);
   await db.query(`delete from persons where workspace_id = $1 and name like 'Bulk Example %'`, [ws]);
@@ -361,6 +365,30 @@ test('the website: events.ics lists the public upcoming events and nothing priva
   assert.equal((await fetchPath(`/site/events/${'0'.repeat(36)}.ics`)).status, 404);
   const page = await fetchPath(`/site/events/${picnic.id}`);
   assert.ok(!/^text\/calendar/.test(page.headers.get('content-type') || ''), 'no .ics: not a calendar');
+  // Signed up with no JavaScript: the page comes back naming the event, and
+  // says how to put it in a calendar under "You’re signed up".
+  const home = (await rows(`select id, published from site_pages where workspace_id = $1 and published is not null`, [ws]))
+    .map((r) => ({ id: r.id, mods: (typeof r.published === 'string' ? JSON.parse(r.published) : r.published).modules || [] }))
+    .find((r) => r.mods.some((m) => m.kind === 'events'));
+  const evMod = home.mods.find((m) => m.kind === 'events').id;
+  const posted = await app.request('/site/api/forms/rsvp', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-real-ip': '198.51.100.77' },
+    body: new URLSearchParams({ first_name: 'Rae', email: `cal-rae+${tag}@example.org`, shift_id: picnic.id, page_id: home.id, module_id: evMod }).toString(),
+  });
+  assert.equal(posted.status, 303, await posted.text());
+  const back = posted.headers.get('location');
+  assert.match(back, new RegExp(`\\?sent=rsvp&shift=${picnic.id}#m-${evMod}$`));
+  const after = (await fetchPath(back.replace(/#.*$/, ''))).body;
+  const done = /<p class="rsvp-done rsvp-done--page"[\s\S]*?<\/p>\s*<p class="rsvp-cal">([\s\S]*?)<\/p>/.exec(after);
+  assert.ok(done, 'Add it to your calendar, under the page’s own “You’re signed up”');
+  assert.match(done[1], /Add it to your calendar:/);
+  assert.match(done[1], /href="https:\/\/calendar\.google\.com\/calendar\/render\?action=TEMPLATE&amp;text=Family(%20|\+)picnic/);
+  assert.match(done[1], new RegExp(`href="/site/events/${picnic.id}\\.ics"`));
+  // A shift that is not this module's: no line, rather than the wrong one.
+  const odd = (await fetchPath(back.replace(/#.*$/, '').replace(picnic.id, quiet.id))).body;
+  assert.match(odd, /rsvp-done--page/);
+  assert.ok(!/class="rsvp-cal"/.test(odd.slice(odd.indexOf('rsvp-done--page'), odd.indexOf('rsvp-done--page') + 800)));
   // A site whose published pages list no events or openings: both are its 404.
   await db.query(
     `update site_pages set published = jsonb_set(published, '{modules}', coalesce((select jsonb_agg(m) from jsonb_array_elements(published->'modules') m
