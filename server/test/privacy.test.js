@@ -209,6 +209,12 @@ test('volunteer filters never match on what they cannot see: no email search, no
     assert.ok((await ids(desk, `tag=${encodeURIComponent(tag)}`)).includes(neighbour.id), `desk tag=${tag}`);
   }
   assert.ok((await ids(vol, 'tag=media')).includes(neighbour.id), 'other tags still filter');
+  // Several tags with commas: a money tag among them still matches no one.
+  for (const tag of ['zzz,lapsed', 'media, Major Donor', 'lapsed,media']) {
+    assert.deepEqual(await ids(vol, `tag=${encodeURIComponent(tag)}`), [], `tag=${tag}`);
+    assert.equal((await vol.get(`/api/persons/count?tag=${encodeURIComponent(tag)}`)).json.total, 0, `count tag=${tag}`);
+    assert.ok((await ids(desk, `tag=${encodeURIComponent(tag)}`)).includes(neighbour.id), `desk tag=${tag}`);
+  }
 
   assert.deepEqual(await ids(vol, 'has=email&limit=2000'), [self.id], 'has=email: only the one email they may see');
   assert.ok((await ids(desk, 'has=email&limit=2000')).includes(neighbour.id));

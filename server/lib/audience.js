@@ -46,10 +46,11 @@ export const personsWhere = async (db, ctx, query = {}) => {
             or (p.email ilike $3${vol ? ` and ${ownEmail}` : ''})
             or exists (select 1 from jsonb_each_text(p.socials) s
                        where regexp_replace(s.value, '^@|^/?u/', '', 'i') ilike ${handleLike}))`;
-  if (tag && vol && isMoneyTag(tag)) where += ' and false';
-  else if (tag) {
-    // One tag, or several with commas: any of them.
-    const tags = [...new Set(tag.split(',').map((t) => t.trim()).filter(Boolean))].slice(0, 20);
+  // One tag, or several with commas: any of them. A volunteer can't sort
+  // by the money tags they can't see — alone or among others (as ?notag=).
+  const tags = [...new Set(tag.split(',').map((t) => t.trim()).filter(Boolean))].slice(0, 20);
+  if (vol && tags.some(isMoneyTag)) where += ' and false';
+  else if (tags.length) {
     const ors = tags.map((t) => { params.push(JSON.stringify(t)); return `p.tags @> $${params.length}::jsonb`; });
     where += ` and (${ors.join(' or ')})`;
   }
