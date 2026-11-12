@@ -262,11 +262,10 @@ check('the defaults are on the log', ((await api('/events?since=0&limit=1000')).
 await shot(page.locator(FROMS), '05b-from-addresses-1440');
 prow = await openServices(phone);
 await phone.locator(`${FROMS} [data-testid="sender-row"]`).first().waitFor({ timeout: 8000 });
-pm = await phone.evaluate((sel) => {
-  const el = document.querySelector(sel);
+pm = await phone.locator(FROMS).evaluate((el) => {
   const btns = [...el.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().height > 0);
   return { overflow: document.documentElement.scrollWidth - window.innerWidth, minTap: Math.min(...btns.map((b) => Math.round(b.getBoundingClientRect().height))) };
-}, FROMS);
+});
 check('From addresses at 390: no sideways scroll, every button ≥ 48px', pm.overflow <= 0 && pm.minTap >= 48, JSON.stringify(pm));
 await shot(phone.locator(FROMS), '05b-from-addresses-390');
 // Outreach → Email's compose: the From line, Pat by default, Change to media@.
