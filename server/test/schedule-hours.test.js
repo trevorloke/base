@@ -198,6 +198,7 @@ test('shift.hours: the volunteer’s own booking, inside the shift, half an hour
   no(await vik.action('shift.hours', { shift_id: s.id, from: at('16:00'), to: at('16:29') }), 400, INSIDE);
   no(await vik.action('shift.hours', { shift_id: s.id, from: at('17:00'), to: at('16:00') }), 400, INSIDE);
   no(await vik.action('shift.hours', { shift_id: s.id, from: at('17:00'), to: null }), 400, INSIDE);
+  no(await vik.action('shift.hours', { shift_id: s.id, from: '2030-11-16T16:30', to: '2030-11-16T18:00' }), 400); // no offset: never read on the server’s clock
   // Exactly the whole shift is stored as the whole shift; so is null/null.
   ok(await vik.action('shift.hours', { shift_id: s.id, from: at('14:00'), to: at('20:00') }));
   assert.deepEqual(await hoursAt(joined.id), [null, null]);

@@ -25,7 +25,8 @@ const DESK = ['manager', 'treasurer', 'staff'];
 // Holding a spot, as the core counts room (actions/field.js).
 const HOLD = ['assigned', 'confirmed', 'completed'];
 const ms = (v) => (v ? new Date(v).getTime() : null);
-const instant = () => z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, 'expected ISO timestamp').nullable();
+// With its offset (or Z): a moment, never a clock read on the server's own zone.
+const instant = () => z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/, 'expected a moment, with its offset').nullable();
 const hoursInput = { from: instant(), to: instant() };
 
 export const NOT_ON = 'you’re not on this shift';
