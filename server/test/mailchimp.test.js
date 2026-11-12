@@ -449,10 +449,11 @@ test('an unsubscribe in base.win reaches Mailchimp once — a do-not-email tag a
   // Once: nothing more goes however often the jobs run, and Mailchimp's own webhook for it is not sent back here.
   assert.deepEqual([(await run(ws)).ran, patches().length], [0, 1]);
 
-  // The desk takes Ben off the newsletter; Cal is tagged do-not-email; Dee's address bounces for good.
+  // The desk takes Ben off the newsletter; Cal is tagged do-not-email (typed in capitals: it counts);
+  // Dee's address bounces for good.
   fake.calls.length = 0;
   ok(await c.action('subscription.remove', { id: (await subOf(ws, 'ben')).id }));
-  ok(await c.action('person.update', { id: people.cal.id, tags: ['member', 'do-not-email'] }));
+  ok(await c.action('person.update', { id: people.cal.id, tags: ['member', 'Do-Not-Email'] }));
   await runAction(db, { workspaceId: ws, actorId: null, action: 'mail.event' }, (tx, emit) => suppress(tx, emit, ws, { email: mail('dee'), reason: 'bounce', source: 'resend' }));
   await run(ws);
   assert.deepEqual(patches().sort(), ['ben', 'cal', 'dee'].map((w) => [memberPath(w), { status: 'unsubscribed' }]).sort());

@@ -286,7 +286,9 @@ export const dncOnLog = (act, ws, t) => act(async (tx, emit) => {
 
 // ── Someone newly marked, or no longer ──
 const tagEdit = (e) => e.entityType === 'person' && (e.op === 'create' || e.op === 'update') && Array.isArray(e.payload?.tags);
-const marks = (e) => e.payload.tags.some((t) => t === NO_CALL_TAG || t === NO_CONTACT_TAG);
+// A do-not tag counts whatever its capitals, as everywhere else (lib/reach.js).
+const taggedAny = (tags, ...want) => tags.some((t) => want.includes(String(t).toLowerCase()));
+const marks = (e) => taggedAny(e.payload.tags, NO_CALL_TAG, NO_CONTACT_TAG);
 
 // Events hook (lib/hooks.js): a write that tags someone do-not-call or
 // do-not-contact — or changes the tags of someone whose number CallHub was
@@ -300,7 +302,7 @@ const marks = (e) => e.payload.tags.some((t) => t === NO_CALL_TAG || t === NO_CO
 // (a savepoint, skipped as a whole).
 export const onEvents = async (tx, meta, events) => {
   const edits = events.filter(tagEdit);
-  const off = edits.filter((e) => e.op === 'update' && !e.payload.tags.includes(NO_CALL_TAG)).map((e) => e.entityId);
+  const off = edits.filter((e) => e.op === 'update' && !taggedAny(e.payload.tags, NO_CALL_TAG)).map((e) => e.entityId);
   if (!edits.length || (!off.length && !callhubOn())) return;
   await tx.query('savepoint callhub_dnc_hook');
   try {

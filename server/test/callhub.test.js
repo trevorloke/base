@@ -283,7 +283,8 @@ test('people not to call go to a CallHub do-not-call list with the push: once ea
   const [p2] = await pushesOf(`list=${ids.list}`);
   assert.deepEqual([p2.id, p2.status, p2.sent], [r.push.id, 'sent', 4]);
   // Someone newly marked does not wait for the next push: a job tells CallHub, as the system.
-  ok(await mgr.action('person.update', { id: P.ben.id, tags: ['do-not-call'] }));
+  // (A do-not tag counts whatever its capitals, as typed at the desk.)
+  ok(await mgr.action('person.update', { id: P.ben.id, tags: ['Do-Not-Call'] }));
   await drain();
   assert.deepEqual([fake.dnc.at(-1).phone_number, fake.dnc.at(-1).category], ['+16045550102', 1]);
   assert.equal(fake.dnc.length, 5);

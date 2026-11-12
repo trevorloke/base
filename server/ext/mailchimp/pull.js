@@ -62,7 +62,7 @@ const stillOnAmong = async (db, ws, emails) => (emails.length ? (await db.query(
     where exists (select 1 from subscriptions s where s.workspace_id = $1 and s.email = e and s.status <> 'unsubscribed')
        or (not exists (select 1 from subscriptions s where s.workspace_id = $1 and s.email = e)
            and exists (select 1 from persons p where p.workspace_id = $1 and lower(p.email) = e and p.deleted_at is null
-                         and not (p.tags @> '"do-not-email"'::jsonb)))`, [ws, emails],
+                         and not (lower(p.tags::text) like '%"do-not-email"%')))`, [ws, emails],
 )).rows.map((r) => r.email) : []);
 // …and the ones held here that aren't on the suppression list.
 const HELD = `(exists (select 1 from persons p where p.workspace_id = $1 and lower(p.email) = e and p.deleted_at is null)
@@ -86,7 +86,7 @@ const after = (a, b) => new Date(a).getTime() > new Date(b).getTime();
 // everyone on file with it whose email is on — a household shares one — or,
 // with no such record, the one who subscribed.
 const PEOPLE = (e) => `greatest(1, (select count(*) from persons p where p.workspace_id = $1 and lower(p.email) = ${e}
-                                   and p.deleted_at is null and not (p.tags @> '"do-not-email"'::jsonb)))`;
+                                   and p.deleted_at is null and not (lower(p.tags::text) like '%"do-not-email"%')))`;
 
 // What Mailchimp says about one address, taken here (inside a write; every
 // check is made again under the campaign's lock). → [what, how many]:
@@ -215,7 +215,7 @@ const COUNT_OFF = {
   unsubscribed: `(exists (select 1 from subscriptions s where s.workspace_id = $1 and s.email = e and s.status <> 'unsubscribed')
        or (not exists (select 1 from subscriptions s where s.workspace_id = $1 and s.email = e)
            and exists (select 1 from persons p where p.workspace_id = $1 and lower(p.email) = e and p.deleted_at is null
-                         and not (p.tags @> '"do-not-email"'::jsonb))))
+                         and not (lower(p.tags::text) like '%"do-not-email"%'))))
      and not exists (select 1 from consent_events c where c.workspace_id = $1 and c.channel = 'email' and c.granted
                        and c.wording is not null and c.address = e and changed is not null and c.created_at >= changed)`,
   cleaned: `${HELD} and not exists (select 1 from email_suppressions x where x.workspace_id = $1 and x.email = e

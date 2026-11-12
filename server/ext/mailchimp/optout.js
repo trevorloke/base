@@ -28,7 +28,8 @@ const QUIET = new Set(['sample.load', 'sample.clear']);
 const PER_JOB = 50;
 
 const parseJ = (v) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } };
-const off = (tags) => Array.isArray(tags) && (tags.includes(NO_EMAIL) || tags.includes(NO_CONTACT));
+// A do-not tag counts whatever its capitals, as everywhere else (lib/reach.js).
+const off = (tags) => Array.isArray(tags) && tags.some((t) => [NO_EMAIL, NO_CONTACT].includes(String(t).toLowerCase()));
 
 // What was last written down about a person before this write: whether they
 // were tagged do-not-email or do-not-contact, and their address. Read from
