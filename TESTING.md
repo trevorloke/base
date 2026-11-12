@@ -357,7 +357,8 @@ one tap away under **More**.
   of a logo can be seen on a ground). In a browser: `e2e-brand.mjs` (the
   screen itself — SVG logos kept as PNGs, the warning, the sample, Save,
   the signed-out sign-in page, icons and manifest, and back; unsaved
-  changes found again after leaving by a link; an SVG that can't be made a
+  changes found again after leaving by a link, and not offered to the next
+  manager to sign in on the same tab; an SVG that can't be made a
   picture refused in plain words; Imagine
   Surrey's keeps its wordmark and its website's own look) and `e2e-look.mjs`
   (five saved brands × three sidebars read on real screens for contrast,

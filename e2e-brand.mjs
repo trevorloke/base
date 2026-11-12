@@ -255,6 +255,51 @@ const BASE = await start(PORT, { STARBASE_BRAND: 'base', STARBASE_ENV: 'staging'
   const clean = await page.evaluate(() => ({ colour: document.querySelector('#bs-color').value, corners: document.querySelector('[aria-labelledby="bs-corners"] [aria-pressed="true"]')?.innerText.trim(), said: document.querySelector('.bs-said')?.innerText || '' }));
   check('“Discard them”: the brand as it is saved again, and nothing kept', clean.colour === '#4f46e5' && clean.corners === 'Soft' && clean.said === '', JSON.stringify(clean));
 
+  // A shared computer: what one manager left unsaved is theirs. Sign out forgets it, and the next manager to sign in on this tab is not offered it.
+  const invite = (await api('/actions/member.invite', { email: `morgan.${tag}@example.org`, role: 'manager' })).json;
+  await page.fill('#bs-color', '#7c2d12');
+  await page.locator('.ws-tabs a', { hasText: 'Campaign' }).click();
+  await page.waitForSelector('.bs', { state: 'detached', timeout: 8000 });
+  const draftKeys = () => page.evaluate(() => Object.keys(sessionStorage).filter((k) => k.includes('brand-draft')).length);
+  const keptBefore = await draftKeys();
+  const signOut = async () => {
+    await page.click('.acct-btn');
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    await page.waitForURL(/\/login$/, { timeout: 10000 });
+  };
+  await signOut();
+  const keptAfter = await draftKeys();
+  await page.goto(String(invite?.joinUrl).replace(/^https?:\/\/[^/]+/, BASE), { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#join-name', { timeout: 8000 });
+  await page.fill('#join-name', 'Morgan Manager');
+  await page.fill('#join-password', 'brand-check-2026');
+  await page.click('button[type="submit"]');
+  await page.waitForURL((u) => !/\/join\//.test(String(u)), { timeout: 15000 });
+  const brandAsOpened = async () => {
+    await page.goto(`${BASE}/admin/settings/brand`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.bs', { timeout: 8000 });
+    return page.evaluate(() => ({ colour: document.querySelector('#bs-color').value, said: document.querySelector('.bs-said')?.innerText.replace(/\s+/g, ' ').trim() || '' }));
+  };
+  const next = await brandAsOpened();
+  check('one manager’s unsaved brand is not offered to the next manager to sign in on the same tab: sign out forgets it',
+    keptBefore === 1 && keptAfter === 0 && next.colour === '#4f46e5' && next.said === '', JSON.stringify({ keptBefore, keptAfter, next }));
+  // Signing out straight from the screen, changes still on it, leaves nothing behind either.
+  await page.fill('#bs-color', '#7c2d12');
+  const keptOnScreen = await draftKeys();
+  await signOut();
+  const keptGone = await draftKeys();
+  // The first manager again, for the rest: nothing of theirs was kept.
+  await page.fill('#login-email', `riley.${tag}.democampaign@example.org`);
+  await page.fill('#login-password', 'brand-check-2026');
+  await page.click('button[type="submit"]');
+  await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
+  const mine = await brandAsOpened();
+  check('signing out from Settings → Brand itself forgets what was on it; signed in again, the first manager finds the brand as it is saved',
+    keptOnScreen === 1 && keptGone === 0 && mine.colour === '#4f46e5' && mine.said === '', JSON.stringify({ keptOnScreen, keptGone, mine }));
+  // The phone's sign-in was a copy of the one that just ended: it gets the new one.
+  await phone.clearCookies();
+  await phone.addCookies(await ctx.cookies());
+
   // An SVG the browser can draw but not hand back (a web page's text inside it): refused in words a manager can act on.
   await page.setInputFiles('#bs-logo', LOGO_FOREIGN);
   await page.locator('[aria-labelledby="bs-logo-label"] .error').waitFor({ timeout: 20000 });

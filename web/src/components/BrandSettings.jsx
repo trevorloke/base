@@ -14,9 +14,10 @@
 // is no draft, so the sample is the preview; the page is read again so this
 // screen wears it too). "Use the website's colours and logo" fills the form
 // from Website → Theme; "Back to …" takes the saved brand off (brand.reset).
-// What is changed and not yet saved is kept for this tab of the browser:
-// leaving by a link (another Settings tab, the menu, Back) and coming back
-// finds it, said once, with "Discard them".
+// What is changed and not yet saved is kept for this tab of the browser,
+// as that person's: leaving by a link (another Settings tab, the menu, Back)
+// and coming back finds it, said once, with "Discard them". Sign out
+// forgets it, and the next person to sign in here never reads it.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CORNERS, HEADINGS, SIDEBARS, deriveLook, lookTokens } from '@starbase/shared/brand-look';
 import { FONT_BY_VALUE } from '@starbase/shared/site/theme';
@@ -24,6 +25,7 @@ import { action, initials } from '../api.js';
 import { at, NS } from '../base.js';
 import { BRAND } from '../brand.js';
 import { NeedsSignalLine, useOnline } from './NoSignal.jsx';
+import { copyKey, readCopy, removeCopy, writeCopyNow } from './OfflineCache.js';
 import { hexOf } from './site/colors.js';
 import { useSite } from './site/useSite.js';
 import { brandNotes, logoGrounds } from './brand-notes.js';
@@ -31,8 +33,10 @@ import { BRAND_ACCEPT, fileFrom, fitLogo, fitMark, iconsFrom, seenOn, uploadBran
 import './brand-settings.css';
 
 const SAVED_FLAG = `${NS}brand-saved`;
-// One per campaign: someone on two campaigns never finds one's in the other.
-const draftKey = (ws) => `${NS}brand-draft:${ws || ''}`;
+// One per campaign and person, with what the app keeps for this tab
+// (OfflineCache.js): someone on two campaigns never finds one's in the
+// other, and on a shared computer no one finds another manager's.
+const draftKey = (me) => copyKey(me, 'brand-draft');
 const SIDEBAR_WORD = { light: 'Light', brand: 'Brand colour', dark: 'Dark' };
 const CORNER_WORD = { square: 'Square', soft: 'Soft', round: 'Round' };
 const startWord = BRAND.key === 'imagine-surrey' ? 'Imagine Surrey’s look' : 'base.win’s look';
@@ -56,10 +60,8 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // Changes left unsaved on this screen earlier, if they were made to the
 // brand as it still is (a draft of another is dropped).
 const draftOf = (key, start) => {
-  try {
-    const d = JSON.parse(sessionStorage.getItem(key));
-    return d?.f && d.from === JSON.stringify(start) && !same(d.f, start) ? { ...start, ...d.f } : null;
-  } catch { return null; }
+  const d = readCopy(key, 'session')?.data;
+  return d?.f && d.from === JSON.stringify(start) && !same(d.f, start) ? { ...start, ...d.f } : null;
 };
 // What the shades are worked out from.
 const lookOf = (f) => ({ color: f.color, second: f.second || null, sidebar: f.sidebar, corners: f.corners, heading: f.heading, logo: f.logo, logoDark: f.logoDark });
@@ -203,7 +205,7 @@ export default function BrandSettings({ me }) {
   const name = me?.workspace?.name || '';
   const saved = me?.workspace?.settings?.brand;
   const [start] = useState(() => formOf(saved));
-  const DRAFT = draftKey(me?.workspace?.id);
+  const DRAFT = draftKey(me);
   const [draft] = useState(() => draftOf(DRAFT, start));
   const [f, setF] = useState(draft || start);
   const [busy, setBusy] = useState(null); // 'save' | 'reset' | 'site' | a picture's kind
@@ -229,10 +231,8 @@ export default function BrandSettings({ me }) {
 
   // Kept as it changes, for coming back to; gone once it's as saved again.
   useEffect(() => {
-    try {
-      if (dirty) sessionStorage.setItem(DRAFT, JSON.stringify({ from: JSON.stringify(start), f }));
-      else sessionStorage.removeItem(DRAFT);
-    } catch { /* private mode: nothing kept */ }
+    if (dirty) writeCopyNow(DRAFT, { from: JSON.stringify(start), f }, 'session');
+    else removeCopy(DRAFT, 'session');
   }, [f]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // How much of each logo can be seen where it will sit.
@@ -284,7 +284,8 @@ export default function BrandSettings({ me }) {
   };
   const reload = (flag) => {
     leaving.current = true;
-    try { sessionStorage.setItem(SAVED_FLAG, flag); sessionStorage.removeItem(DRAFT); } catch { /* private mode: no line after the reload */ }
+    removeCopy(DRAFT, 'session');
+    try { sessionStorage.setItem(SAVED_FLAG, flag); } catch { /* private mode: no line after the reload */ }
     window.location.reload();
   };
   const save = async (e) => {

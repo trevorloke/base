@@ -682,8 +682,10 @@ ready in the browser (`brand-pictures.js`): an SVG is drawn to a PNG, a
 logo is shrunk to 1,024 px and 512 KB, the mark is padded square and the
 four app icons are drawn from it. **Save** is live at once (there is no
 draft: the sample is the preview). Changes not yet saved are kept for the
-browser's tab, so leaving by a link and coming back finds them, with
-**Discard them**. A campaign still on a built-in brand
+browser's tab, as that person's, so leaving by a link and coming back
+finds them, with **Discard them**; signing out forgets them, and the next
+person to sign in on that tab never sees them. A campaign still on a
+built-in brand
 keeps that brand's logo — the first save uploads it as the campaign's own.
 **Use the website's colours and logo** fills the form from Website → Theme
 (a website with its own look); **Back to …'s look** is `brand.reset`.
