@@ -22,3 +22,8 @@
 .shh-pick__label { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-2); }
 .shh-pick__foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .shh-pick__foot .btn { min-height: var(--ctl); }
+
+/* A card's "8 pm–1 am next day": the words may break before "next day",
+   never inside the hours. */
+.sch-card__time.shh-span { white-space: normal; }
+.sch-card__time.shh-span > span { white-space: nowrap; }

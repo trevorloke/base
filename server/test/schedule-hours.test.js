@@ -478,3 +478,15 @@ test('sent: shift.notify and a week’s notice each say every person’s own hou
   _setClockForTest(null);
   for (const k of ENV) delete process.env[k];
 });
+
+test('a card’s hours say when a shift ends on another day: “next day”, or the day it ends', async () => {
+  const { shiftSpan } = await import('../../web/src/pages/ScheduleWords.js');
+  const span = (from, to, toDay = SAT) => shiftSpan({ starts_at: at(from), ends_at: to && at(to, toDay) }, TZ);
+  assert.equal(span('18:30', '20:30'), '6:30–8:30 pm');
+  assert.equal(span('20:00', '01:00', '2030-11-17'), '8 pm–1 am next day');
+  // Ending at midnight is still that evening's shift.
+  assert.equal(span('22:00', '00:00', '2030-11-17'), '10 pm–12 am');
+  assert.equal(span('09:00', '17:00', '2030-11-17'), '9 am–5 pm next day');
+  assert.equal(span('09:00', '18:00', '2030-11-19'), '9 am–6 pm, ends Tue, Nov 19');
+  assert.equal(span('11:00', null), '11 am');
+});

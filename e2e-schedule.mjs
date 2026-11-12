@@ -1002,7 +1002,8 @@ try {
   made = (await board(lateWeek)).shifts.filter((s) => s.kind === 'event' && iso(s.starts_at) === at(lateDay, '20:00'));
   check('server: 8 pm to 1 am the next day', made.length === 1 && iso(made[0].ends_at) === at(addDays(lateDay, 1), '01:00'), JSON.stringify(made));
   await until(async () => (await cards(lateDay)).some((c) => c.id === made[0]?.id));
-  check('its card, under its start day: 8 pm–1 am', (await cards(lateDay)).find((c) => c.id === made[0]?.id)?.time === '8 pm–1 am', JSON.stringify(await cards(lateDay)));
+  check('its card, under its start day: "8 pm–1 am next day"', (await cards(lateDay)).find((c) => c.id === made[0]?.id)?.time === '8 pm–1 am next day', JSON.stringify(await cards(lateDay)));
+  check('…a shift that ends at midnight says no next day: "10 pm–12 am"', (await cards(addDays(lateDay, 1))).find((c) => c.id === gala.id)?.time === '10 pm–12 am', JSON.stringify(await cards(addDays(lateDay, 1))));
   k = await D.keys();
   check('…no key, no text field focused', k.keys === 0 && k.fields.length === 0, JSON.stringify(k));
 
@@ -1014,6 +1015,9 @@ try {
   await sheetGone();
   const blitzNow = (await D.api(`/shifts/${blitz.id}`)).json.shift;
   check('server: 9:15 am to 5:15 pm the next day, saved', iso(blitzNow.starts_at) === at(addDays(lateDay, -3), '09:15') && iso(blitzNow.ends_at) === at(addDays(lateDay, -2), '17:15'), JSON.stringify(blitzNow));
+  await until(async () => (await cards(addDays(lateDay, -3))).find((c) => c.id === blitz.id)?.time === '9:15 am–5:15 pm next day');
+  check('…its card: "9:15 am–5:15 pm next day"', (await cards(addDays(lateDay, -3))).find((c) => c.id === blitz.id)?.time === '9:15 am–5:15 pm next day', JSON.stringify(await cards(addDays(lateDay, -3))));
+  await D.shot('16d-late-week-1440');
 
   // The same on a phone (390×844): the steppers fit, 48px, no sideways scroll; an overnight shift's sheet.
   {
@@ -1051,6 +1055,12 @@ try {
     mm = await measure(pp, SHEET_TARGETS);
     check('phone: an overnight shift’s sheet — "1:00 am next day · 2 h", no sideways scroll', (await stepValue('Ends', pp)) === '1:00 am next day · 2 h' && mm.overflow <= 0, `${await stepValue('Ends', pp)} ${JSON.stringify(mm)}`);
     await PP.shot('16c-overnight-sheet-390');
+    await pp.locator('.sch-sheet .sch-x').tap();
+    await until(async () => (await pp.locator('.sch-sheet').count()) === 0);
+    await pp.locator(`.sch-card[data-shift="${made[0].id}"]`).scrollIntoViewIfNeeded();
+    const fits = await pp.$eval(`.sch-card[data-shift="${made[0].id}"] .sch-card__time`, (el) => ({ words: el.innerText.replace(/\s+/g, ' ').trim(), right: el.getBoundingClientRect().right, card: el.closest('.sch-card').getBoundingClientRect().right }));
+    check('phone: the overnight card reads "8 pm–1 am next day" inside its card', fits.words === '8 pm–1 am next day' && fits.right <= fits.card + 0.5 && await pp.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), JSON.stringify(fits));
+    await PP.shot('16d-overnight-card-390');
     await ph.close();
   }
 

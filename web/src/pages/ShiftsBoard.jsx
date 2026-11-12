@@ -50,9 +50,10 @@ import People from './SchedulePeople.jsx';
 import ScheduleShift from './ScheduleShift.jsx';
 import { Unavailable } from './ScheduleSheet.jsx';
 import WeekMore, { CopyLastWeek, noticeGoing, weekKey, weekWords } from './ScheduleWeek.jsx';
-import { countLong, countWords, dayWords, peopleWords, plural, shiftSpan } from './ScheduleWords.js';
+import { clockSpan, countLong, countWords, dayWords, endsLater, peopleWords, plural, shiftSpan } from './ScheduleWords.js';
 import './shifts-board.css';
 import './schedule.css';
+import './schedule-hours.css';
 
 const firstName = (name) => String(name || '').split(' ')[0];
 // "Sam O." — chips are small; the full name is in the label. Where even that
@@ -610,6 +611,7 @@ export default function ShiftsBoard({ me, onSheet }) {
     // older shift has a limit); nothing at all while nobody is.
     const count = countWords(s);
     const label = [s.title, shiftSpan(s, tz), countLong(s)].filter(Boolean).join(', ');
+    const later = endsLater(s, tz);
     return (
       <li key={s.id} className="sb-shift sch-card" style={kindVars(words.kind)} data-drop="shift" data-shift={s.id} data-kind={words.kind.code}
         data-hot={hot(`shift:${s.id}`)} data-full={full ? '' : undefined} data-over={over ? '' : undefined}
@@ -621,7 +623,8 @@ export default function ShiftsBoard({ me, onSheet }) {
           <span className="sb-shift__title sch-card__title">{words.title}</span>
           {place && <span className="sch-card__place">{place}</span>}
           <span className="sb-shift__meta sch-card__meta">
-            <span className="sch-card__time">{shiftSpan(s, tz)}</span>
+            {/* "8 pm–1 am next day": a narrow card breaks before "next day", never inside the hours. */}
+            <span className="sch-card__time shh-span"><span>{clockSpan(s, tz)}{later && later !== 'next day' ? ',' : ''}</span>{later && <> <span>{later}</span></>}</span>
             {count && <span className="sb-cap" data-full={full ? '' : undefined} data-short={short ? '' : undefined}>{count}</span>}
           </span>
         </button>

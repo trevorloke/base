@@ -546,8 +546,9 @@ than a week after they came off is refused. Contacts are door, phone, text or
   answers what is coming up (`GET /api/shifts`; past ones a page at a time
   with `?past=1`), and the week's read (`GET /api/shifts/board`) brings the
   people to put on shifts, website sign-ups among them. A shift may be
-  said by its **length** (`minutes`, a quarter hour to a day) in place of
-  its end — elapsed time, and the only way past midnight (an end before
+  said by its **length** (`minutes`, a quarter hour to a day; a longer
+  shift the long form made keeps its length when its start moves) in place
+  of its end — elapsed time, and the only way past midnight (an end before
   the start is a typo, refused) — and marked **Drop in any time**
   (`drop_in`: words only; booking and counting are as for any shift). A
   booking may carry **its own hours** inside its shift (`arrive_at`,
@@ -560,7 +561,8 @@ than a week after they came off is refused. Contacts are door, phone, text or
   board), and every notice says each person's own hours
   (`shared/shifthours.js`). On screen: *Another time* steps the start and
   the end a quarter hour at a time (up to 16 hours, past midnight sent as
-  a length); *Change my hours* under *You're on this shift* (through the
+  a length), and a card says when a shift ends on a later day ("8 pm–1 am
+  next day"); *Change my hours* under *You're on this shift* (through the
   outbox: a second save replaces the waiting one, a *Count me in* taken
   back takes its hours along, and "not on this shift" on replay is
   dropped); *Hours → Save hours* in the desk's person sheet; the roster and
