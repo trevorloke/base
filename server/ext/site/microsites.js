@@ -62,7 +62,7 @@ const inUse = async (tx, ws) => Number((await tx.query(
 
 // A key (its path at /site/sites/<key>/) made from the name, free in the campaign.
 const freeKey = async (tx, ws, name) => {
-  const base = slugify(name).slice(0, 50) || 'site';
+  const base = slugify(String(name).replace(/['’]/g, '')).slice(0, 50) || 'site';
   for (let i = 1; i < 200; i += 1) {
     const k = i === 1 ? base : `${base}-${i}`;
     if (!(await tx.query('select 1 from microsites where workspace_id = $1 and key = $2 and deleted_at is null', [ws, k])).rows[0]) return k;
