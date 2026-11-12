@@ -86,6 +86,8 @@ function ColourField({ id, label, value, fallback, onChange, hint, optional }) {
           onBlur={() => setTyped(null)} />
         {hint && <p className="bs-hint" id={`${id}-hint`}>{hint}</p>}
         {bad && <p className="error bs-err" id={`${id}-err`}>A colour like #003979</p>}
+        {/* An optional colour goes back to none by a tap too, not only by the keyboard. */}
+        {optional && value && <button type="button" className="btn btn-quiet bs-colour__clear" onClick={() => { setTyped(null); onChange(''); }}>Remove {label.toLowerCase()}</button>}
       </div>
     </div>
   );
@@ -348,6 +350,9 @@ export default function BrandSettings({ me }) {
           <ColourField id="bs-second" label="Second colour" optional value={f.second} fallback={f.color} onChange={(v) => set({ second: v })}
             hint="Badges and highlights." />
         </div>
+        {/* On a phone the full sample is below the whole form: this one shows
+            the colours as they are picked (it is the same as the sample's first phone). */}
+        <div className="bs-peek" aria-hidden="true"><Frame f={f} name={name} scheme="light" phone /></div>
 
         <h2 className="ot-sec-h">Shape</h2>
         <PickOne id="bs-sidebar" label="Sidebar" value={f.sidebar} options={SIDEBARS} words={SIDEBAR_WORD} onChange={(v) => set({ sidebar: v })} />

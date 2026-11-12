@@ -89,6 +89,13 @@
   border-radius: var(--r-sm); box-shadow: inset 0 0 0 1px var(--side-mark);
 }
 .bs-s__org { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The desk frame's sidebar is narrow: with no logo the name wraps (as the
+   real sidebar shows it whole), never cut to one letter. */
+.bs-s__side .bs-s__org { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+.bs-colour__clear { margin-top: var(--s-1); padding: 0 var(--s-2); }
+/* A phone's own sample, right under the colours (the full one is far below). */
+.bs-peek { display: none; margin: var(--s-3) 0 var(--s-2); }
+@media (max-width: 999px) { .bs-peek { display: block; } }
 .bs-s__by { margin: 2px 0 6px; font-size: 9px; color: var(--side-quiet); }
 .bs-s__nav { padding: 5px 8px; border-radius: var(--r-ctrl); color: var(--side-quiet); font-weight: 500; }
 .bs-s__nav[data-on] { background: var(--side-active); color: var(--side-active-ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--side-edge); }

@@ -50,6 +50,10 @@ test('what the screen says about a brand: it reports, in words, what only a pers
   assert.match(yellow, /As words, your colour becomes #[0-9a-f]{6}/);
 
   assert.match(texts(brandNotes({ color: '#c8151b' })), /close to the one that means Opposed/);
+  // The website's bright yellow as the second colour: pale, not "nearly white".
+  const pale = texts(brandNotes({ color: '#003979', second: '#fff100' }));
+  assert.match(pale, /second colour is pale, so badges in it are faint on a white background/);
+  assert.doesNotMatch(pale, /nearly white/);
   // A colour that only darkens a shade as words: nothing to say about it.
   assert.doesNotMatch(texts(brandNotes({ color: '#0f766e' })), /As words/);
   assert.doesNotMatch(texts(brandNotes({ color: '#003979' })), /Opposed|Supporter|Undecided/);

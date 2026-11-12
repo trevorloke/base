@@ -377,7 +377,7 @@ h3 { font-size: 16px; line-height: 1.35; }
    its own: it sits on a white chip, in its own colours. */
 .brand-logo.on-chip .brand-mark { background: #fff; padding: 3px 6px; border-radius: var(--r-sm); }
 @media (prefers-color-scheme: dark) {
-  .brand-logo:not(.has-dark) .brand-mark { background: #fff; padding: 3px 6px; border-radius: var(--r-sm); }
+  .brand-logo:not(.has-dark):not(.on-pale) .brand-mark { background: #fff; padding: 3px 6px; border-radius: var(--r-sm); }
 }
 /* Staging, said on every screen so nobody mistakes it for production. */
 .env-badge { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--second); color: var(--second-ink); font-size: 12px; font-weight: 600; letter-spacing: var(--label-tracking); text-transform: var(--label-case); vertical-align: middle; }

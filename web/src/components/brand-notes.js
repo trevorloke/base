@@ -77,7 +77,7 @@ export const brandNotes = (brand, seen = {}) => {
   for (const [word, colours] of RATINGS) {
     if (colours.some((c) => apart(l.accent, c) < 70)) out.push({ kind: 'note', text: `Your colour is close to the one that means ${word}. Ratings keep their own colours.` });
   }
-  if (contrast(l.second, l.card) < 1.3 && brand.second) out.push({ kind: 'note', text: 'Your second colour is nearly white: it shows only on a brand-coloured or dark sidebar.' });
+  if (contrast(l.second, l.card) < 1.3 && brand.second) out.push({ kind: 'note', text: 'Your second colour is pale, so badges in it are faint on a white background.' });
   if (brand.logo) {
     const [onCard, onSide] = seen.logo || [];
     if (onCard?.boxed) out.push({ kind: 'note', text: 'Your logo has a solid background. A PNG with a see-through background sits better on every screen.' });

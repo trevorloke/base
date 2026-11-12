@@ -20,7 +20,9 @@ export default function BrandMark({ name, side = false }) {
   // the logo for dark backgrounds never goes there.
   const paleSide = side && BRAND.sidebar === 'brand' && BRAND.sideDark === false;
   const swaps = BRAND.logoDark && !darkGround && !paleSide;
-  const cls = `brand-logo${swaps || (darkGround && BRAND.logoDark) ? ' has-dark' : ''}${darkGround && !BRAND.logoDark ? ' on-chip' : ''}`;
+  // on-pale: no white chip in dark mode either — the ground is light (as the
+  // sample in Settings → Brand shows it).
+  const cls = `brand-logo${swaps || (darkGround && BRAND.logoDark) ? ' has-dark' : ''}${darkGround && !BRAND.logoDark ? ' on-chip' : ''}${paleSide ? ' on-pale' : ''}`;
   return (
     <picture className={cls}>
       {swaps && <source srcSet={at(BRAND.logoDark)} media="(prefers-color-scheme: dark)" />}
