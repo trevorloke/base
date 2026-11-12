@@ -13,6 +13,7 @@
     "./passes": "./passes.js",
     "./names": "./names.js",
     "./giftfile": "./giftfile.js",
+    "./ties": "./ties.js",
     "./brand": "./brand.js",
     "./brand-look": "./brand-look.js",
     "./site/*": "./site/*.js"
