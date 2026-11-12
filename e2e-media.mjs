@@ -11,7 +11,8 @@
 //   · a release's page: one open (the pixel fetched), figures, Copy links;
 //     a release that failed, then Try again;
 //   · the volunteer: contacts with no email or phone and no Add a contact,
-//     From with no Change, a picture in the message, a release sent.
+//     From with no Change, a picture in the message, a release sent;
+//   · an A/B release in its wait: the rest "Wait for the winner", no Try again.
 // Every screen: at most one yellow button; at 390 no sideways scroll and
 // every button at least 48 px.
 //
@@ -206,7 +207,7 @@ check('To: "Media (2) Influencers (1) Both (3)" — Dee left out; Media chosen',
 const fromLine = await words(page.locator('[data-testid="sender-pick"]'));
 check('From: the press address, with Change for the manager', fromLine === `From: Sample Campaign Media <media@${DOMAIN}> · Change`, fromLine);
 await page.locator('.sp-change').click();
-check('Change: the addresses as chips', (await words(page.locator('.sp-chips'))).includes(`Pat Example <pat@${DOMAIN}>`), await words(page.locator('.sp-chips')));
+check('Change: the addresses as chips, the campaign’s own first', (await words(page.locator('.sp-chips'))) === `Sample Campaign <team@${DOMAIN}> Sample Campaign Media <media@${DOMAIN}> Pat Example <pat@${DOMAIN}>`, await words(page.locator('.sp-chips')));
 await page.locator('.sp-chip:has-text("Sample Campaign Media")').click();
 await page.fill('#press-subject', 'Campaign unveils transit plan');
 await page.fill('#press-body', `FOR IMMEDIATE RELEASE\n\nThe plan, on video: ${VIDEO}`);
@@ -317,6 +318,21 @@ check('the volunteer sends it: "Sent to 2 media contacts."', /Sent to 2 media co
 const vOut = (await sentMail()).filter((x) => x.subject === 'Photo from the doors');
 check('…from the press default', vOut.length === 2 && vOut.every((x) => x.from.includes(`media@${DOMAIN}`)), JSON.stringify(vOut.map((x) => x.from)));
 await shot(volPhone, '11-volunteer-sent-390');
+
+// ── 7. An A/B release in its wait: the rest wait for the winner, nothing to try again ──
+for (let i = 0; i < 50; i += 1) await act('person.create', { name: `Rep ${i} Example`, email: `rep${i}@example.org`, tags: ['media'] });
+const ab = await act('media.send', { subject: 'Plain', body: 'News', ab: { subject_b: 'Better', pct: 10, wait_hours: 1, metric: 'opens' } });
+check('an A/B release goes out to its test groups', ab.status === 200, JSON.stringify(ab.json).slice(0, 200));
+await go(page, `/media/releases/${ab.json.blast.id}`);
+w = await words(page.locator('.md-page'));
+m = await measure(page);
+check('its page in the wait: "Testing two subject lines", rows "Waits for the winner", no "Didn’t go", no Try again',
+  /Testing two subject lines · first sent/.test(w) && /Waits for the winner/.test(w) && !/Didn’t go|not sent/.test(w) && m.primary.length === 0 && !(await page.locator('.md-retry').count()),
+  `${JSON.stringify(m.primary)} · ${w.slice(0, 300)}`);
+await shot(page, '12-ab-release-1440');
+await go(phone, `/media/releases/${ab.json.blast.id}`);
+await phoneOk('an A/B release’s page');
+await shot(phone, '12-ab-release-390');
 
 check('the books verify', (await api(page, '/audit/verify')).json?.ok === true);
 check('no page errors', errors.length === 0, errors.join(' | '));

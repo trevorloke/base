@@ -213,7 +213,7 @@ function Handles({ person, max = Infinity }) {
         const url = profileUrl(p, v);
         const label = `${platformLabel(p)} ${shownHandle(v)}`;
         return url
-          ? <a key={p} href={url} target="_blank" rel="noopener noreferrer" aria-label={`${label} (opens a new tab)`}>{shownHandle(v)}</a>
+          ? <a key={p} href={url} target="_blank" rel="noopener noreferrer" aria-label={`${label} (opens a new tab)`} title={shownHandle(v)}>{shownHandle(v)}</a>
           : <span key={p}>{shownHandle(v)}</span>;
       })}
     </span>
@@ -408,17 +408,17 @@ function ContactsTab({ desk, adding, onCloseAdd, toast }) {
               <tbody>
                 {shown.map((c) => (
                   <tr key={c.person.id} className="rowlink" data-open={open === c.person.id ? '' : undefined}>
-                    <td>
+                    <td className="md-who">
                       <button type="button" className="md-name" onClick={() => setOpen(c.person.id)}>{c.person.name}</button>
                       {c.kind === 'influencer' && <span className="chip md-kind">Influencer</span>}
                       <WontGet c={c} />
                     </td>
-                    <td>{c.outlet || ''}</td>
-                    <td>{c.beat || ''}</td>
-                    {desk && <td className="md-wrap">{c.person.email || '—'}</td>}
-                    {desk && <td>{c.person.phone || '—'}</td>}
+                    <td className="md-outlet">{c.outlet || ''}</td>
+                    <td className="md-cut md-beat" title={c.beat || undefined}>{c.beat || ''}</td>
+                    {desk && <td className="md-cut" title={c.person.email || undefined}>{c.person.email || '—'}</td>}
+                    {desk && <td className="md-one">{c.person.phone || '—'}</td>}
                     <td><Handles person={c.person} /></td>
-                    <td>{lastWords(c)}</td>
+                    <td className="md-one">{lastWords(c)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -450,6 +450,7 @@ function ContactsTab({ desk, adding, onCloseAdd, toast }) {
 // A release's page
 // ─────────────────────────────────────────────────────────────────────────────
 const chipFor = (r) => {
+  if (r.held) return ['chip', 'Waits for the winner'];
   if (r.status === 'sent' && r.bounced) return ['chip chip-danger', 'Bounced'];
   if (r.status === 'sent' && r.opened_at) return ['chip chip-ok', `Opened ${fmtTime(r.opened_at)}`];
   if (r.status === 'sent') return ['chip', 'Not opened'];
@@ -510,13 +511,18 @@ function ReleasePage({ id }) {
   const rows = q.data.recipients || [];
   const from = addrOf(b.from_addr) || senders.data?.system?.email || null;
   const links = linksIn(b.body);
-  const retry = Number(b.retry_count) || 0;
+  // The rest of an A/B send wait for the winner: not "didn't go", not to try again.
+  const retry = Math.max(0, (Number(b.retry_count) || 0) - (Number(b.held_count) || 0));
+  const testing = b.ab_status === 'testing';
   const figures = [['Sent', b.sent_count], ['Opened', b.opened], ['Clicked', b.clicked], ['Bounced', b.bounced]];
   return (
     <>
       <h2 className="md-subject">{b.subject}</h2>
       <p className="md-meta">
-        {b.sent_at ? `Sent ${fmtShort(b.sent_at)}` : `Saved ${fmtShort(b.created_at)} — not sent`}
+        {b.sent_at ? `Sent ${fmtShort(b.sent_at)}`
+          : testing ? `Testing two subject lines · first sent ${fmtShort(b.first_sent_at || b.created_at)}`
+            : b.first_sent_at ? `First sent ${fmtShort(b.first_sent_at)}`
+              : `Saved ${fmtShort(b.created_at)} — not sent`}
         {from && <> · from {from}</>}
       </p>
       <dl className="md-figs">

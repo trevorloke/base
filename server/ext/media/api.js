@@ -11,12 +11,15 @@
 //   GET /media/releases       the press releases, newest first (200), with
 //                             GET /blasts' counting fields and opened,
 //                             clicked, bounced, ab_status, from_addr
-//                             and emailConfigured (Send now / Try again wait for it)
+//                             and emailConfigured (Send now / Try again wait for it);
+//                             held_count: of retry_count, the rest of an A/B
+//                             send still waiting for its winner (not to try
+//                             again); first_sent_at: when the first copy went
 //   GET /media/stats          GET /blasts/stats for press releases only (A/B
 //                             state, opens and clicks per send)
 //   GET /media/releases/:id   one, with its body and who it went to: { name,
-//                             outlet, status, opened_at, clicked_at, bounced,
-//                             complained } — no tokens, no addresses
+//                             outlet, status, held, opened_at, clicked_at,
+//                             bounced, complained } — no tokens, no addresses
 import { Hono } from 'hono';
 import { areasFor } from '../../lib/perms.js';
 import { forViewer } from '../../lib/viewer.js';
@@ -37,6 +40,9 @@ const refuse = (c) => c.json({ error: 'not for you — ask a manager under Admin
 const mayRead = (ctx) => areasFor(ctx).includes('media');
 const P = person('p', '$1');
 const DELIVERED = deliveredRow('r');
+// The rest of an A/B send before its winner is picked: held, not failed
+// (blast.resend skips them the same way: send.js restReleased).
+const HELD = `(r.ab_group = 'rest' and b.ab_status is not null and b.ab_winner is null)`;
 
 // A person as this viewer may see them.
 const shown = (ctx) => {
@@ -101,7 +107,7 @@ api.get('/media/contacts', async (c) => {
 const RELEASE_COLS = `b.id, b.kind, b.subject, b.body, b.status, b.provider_note, b.audience_count, b.sent_at, b.created_at,
   b.audience, b.list_id, b.from_addr, b.ab_status,
   k.sent_count, k.failed_count, k.queued_count, k.retry_count, k.repeat_count, k.sending_count, k.going_count,
-  k.opened, k.clicked, k.bounced`;
+  k.held_count, k.first_sent_at, k.opened, k.clicked, k.bounced`;
 const releases = (where) => `select ${RELEASE_COLS}
   from blasts b
   cross join lateral (select ${sendJobOn('b.id', 'b.workspace_id')} as job_on) j
@@ -111,6 +117,8 @@ const releases = (where) => `select ${RELEASE_COLS}
            (count(*) filter (where r.status = 'queued' and l.live))::int as queued_count,
            (count(*) filter (where ${retryable('r')} and l.live and not (j.job_on and ${goingRow('r')})))::int as retry_count,
            (count(*) filter (where ${repeatRow('r')} and l.live and not (j.job_on and ${goingRow('r')})))::int as repeat_count,
+           (count(*) filter (where ${HELD} and ${retryable('r')} and l.live and not (j.job_on and ${goingRow('r')})))::int as held_count,
+           min(r.sent_at) as first_sent_at,
            (count(*) filter (where r.status = 'sending'))::int as sending_count,
            (count(*) filter (where j.job_on and ${goingRow('r')} and l.live))::int as going_count,
            (count(*) filter (where ${DELIVERED} and (r.first_open_at is not null or r.first_click_at is not null)))::int as opened,
@@ -157,10 +165,12 @@ api.get('/media/releases/:id', async (c) => {
   if (!b) return c.json({ error: 'release not found' }, 404);
   const recipients = (await db.query(
     `select r.person_id, coalesce(p.name, r.name) as name, m.outlet, r.status,
+            (${HELD} and r.status = 'queued') as held,
             case when ${DELIVERED} then coalesce(r.first_open_at, r.first_click_at) end as opened_at,
             case when ${DELIVERED} then r.first_click_at end as clicked_at,
             (r.bounced_at is not null) as bounced, (r.complained_at is not null) as complained
      from blast_recipients r
+     join blasts b on b.id = r.blast_id and b.workspace_id = r.workspace_id
      left join persons p on p.id = r.person_id and p.workspace_id = r.workspace_id
      left join media_contacts m on m.workspace_id = r.workspace_id and m.person_id = r.person_id
      where r.workspace_id = $1 and r.blast_id = $2

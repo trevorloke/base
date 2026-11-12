@@ -253,6 +253,14 @@ test('an A/B release: a contact who unsubscribes during the wait is skipped; the
   const leaver = (await rowsOf(other.blast.id)).find((x) => x.email === held[0].email);
   assert.equal((await pub(`/bu/${leaver.id}`, { method: 'POST' })).status, 200);
   assert.ok(unsubOf(first), 'A and B carry it too');
+  // During the wait the page says the rest wait for the winner: nothing to try again.
+  const wait = ok(await mgr.get(`/api/media/releases/${r.blast.id}`));
+  assert.equal(wait.release.ab_status, 'testing');
+  assert.equal(wait.release.retry_count - wait.release.held_count, 0, 'Try again has nothing to send');
+  assert.equal(wait.release.held_count, 39, 'the one who left is not waiting');
+  assert.ok(wait.release.first_sent_at, 'A and B went');
+  assert.equal(wait.recipients.filter((x) => x.held).length, 40);
+  assert.equal(wait.recipients.filter((x) => x.status === 'sent' && !x.held).length, 10);
   resend.sent.length = 0;
   await db.query(`update jobs set run_at = now() where workspace_id = $1 and kind = 'abtests.winner' and status = 'pending'`, [ws]);
   await runDueJobs(db, { workspaceId: ws });
