@@ -299,7 +299,7 @@ export default function SendToCallHub({ kind, id }) {
   const online = useOnline();
   const queryClient = useQueryClient();
   const on = useQuery({ queryKey: ['integrations'], queryFn: () => apiGet('/integrations'), staleTime: 5 * 60_000, retry: false });
-  const isOn = Boolean(on.data?.callhub ?? on.data?.integrations?.callhub);
+  const isOn = Boolean(on.data?.callhub);
   useEffect(() => { if (on.data) rememberOn(isOn); }, [on.data, isOn]);
   const key = ['callhub', kind, id];
   const pushes = useQuery({

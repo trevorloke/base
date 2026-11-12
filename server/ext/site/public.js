@@ -3,8 +3,9 @@
 //   the campaign's own domain(s)   SITE_HOSTS=imaginesurrey.ca,www.imaginesurrey.ca
 //                                  and site_settings.domains: the site at /.
 //                                  Only the site answers there — and
-//                                  /media/:id, /site-assets/*, Stripe's and
-//                                  Twilio's webhooks, the emails'
+//                                  /media/:id, /site-assets/*, the services'
+//                                  webhooks (Stripe, Twilio, the email
+//                                  sender, Mailchimp, CallHub), the emails'
 //                                  unsubscribe links (/u, /bu, /lu): no app
 //                                  route, no sign-in cookie is ever read or
 //                                  set (siteGate, first in server/index.js)

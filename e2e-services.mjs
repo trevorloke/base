@@ -25,7 +25,7 @@ let BASE = process.env.BASE;
 const ADMIN = { toString() { return `${BASE}/admin`; } };
 if (!BASE) {
   const env = { ...process.env, STARBASE_OPEN_SIGNUP: '1', STARBASE_DATA: 'memory', PORT: String(PORT), STARBASE_JOBS: 'off' };
-  for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GEOCODER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE']) delete env[k];
+  for (const k of ['RESEND_API_KEY', 'MAIL_FROM', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'STARBASE_PUBLIC_URL', 'GOOGLE_MAPS_TILES', 'GEOCODER', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'CALLHUB_API_KEY', 'CALLHUB_API_BASE', 'MAIL_PROVIDER', 'SENDGRID_API_KEY', 'MAILCHIMP_API_KEY']) delete env[k];
   server = spawn(process.execPath, ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'inherit'] });
   await new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('server did not start')), 30000);
