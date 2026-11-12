@@ -331,6 +331,7 @@ export const pageOut = (r, { full = true } = {}) => {
   const published = parseJ(r.published, null);
   const out = {
     id: r.id, slug: r.slug, title: r.title, description: r.description || '', status: r.status, version: Number(r.version) || 0,
+    site_id: r.site_id || null, // another website's page (microsites), else the main site's
     show_in_nav: Boolean(r.show_in_nav), nav_order: Number(r.nav_order) || 0,
     published_at: iso(r.published_at), created_at: iso(r.created_at), updated_at: iso(r.updated_at),
     // Saved since the last publish (or never published).

@@ -229,6 +229,39 @@ test('the People filter web=site:<id> and History know the site; a volunteer nev
   assert.ok(titles.includes('Signed up for the newsletter'), 'the main site’s says no site');
 });
 
+test('the desk reads: counts and sources, never people; money forms only for those with Donations; a volunteer gets 403', async () => {
+  const list = ok(await mgr.get('/api/site/microsites'));
+  const row = list.microsites.find((m) => m.id === site.id);
+  // pat (flyer), lee (door-hanger), kim (share-x), new (no source), gift (donate).
+  assert.deepEqual([row.signups_7, row.signups_30, row.status], [5, 5, 'live']);
+  assert.equal(row.home.status, 'published');
+  const one = ok(await mgr.get(`/api/site/microsites/${site.id}`));
+  assert.deepEqual([one.signups_7, one.signups_30], [5, 5]);
+  assert.deepEqual(one.sources.map((s) => [s.source, s.n]), [['direct', 2], ['door-hanger', 1], ['flyer', 1], ['share-x', 1]]);
+  assert.deepEqual(one.checklist.map((x) => [x.key, x.done]), [['home', true], ['authorized', true], ['privacy', true]]);
+  assert.equal(one.urls.site.endsWith(`/site/sites/${site.key}/`), true);
+  assert.equal(one.pages[0].site_id, site.id);
+  // Staff with Website but not Donations: the donation isn't counted.
+  const noMoney = await member(mgr, 'staff', 'Noa Example');
+  ok(await mgr.action('permission.member.set', { user_id: noMoney.id, grant: ['site'], deny: ['money'] }));
+  const theirs = ok(await noMoney.client.get(`/api/site/microsites/${site.id}`));
+  assert.deepEqual([theirs.signups_7, theirs.signups_30], [4, 4]);
+  assert.deepEqual(theirs.sources.find((s) => s.source === 'direct').n, 1);
+  assert.equal(ok(await noMoney.client.get('/api/site/microsites')).microsites.find((m) => m.id === site.id).signups_7, 4);
+  // Counts, never people: no email, name or person id anywhere in either answer.
+  const all = JSON.stringify([list, one]);
+  for (const bad of ['pat.example', 'person_id', 'email', 'first_name']) assert.ok(!all.includes(bad), bad);
+  // The address check speaks the save's own words.
+  assert.equal(ok(await mgr.get(`/api/site/microsites/host?host=${MAIN}`)).why, `${MAIN} is your main website’s address`);
+  assert.equal(ok(await mgr.get(`/api/site/microsites/host?host=${DOUG}&id=${site.id}`)).why, null);
+  assert.match(ok(await mgr.get(`/api/site/microsites/host?host=${DOUG}`)).why, /is the address of/);
+  // The Overview's row.
+  assert.deepEqual([ok(await mgr.get('/api/site')).counts.microsites_live >= 1], [true]);
+  const vol = await member(mgr, 'volunteer', 'Vic Example');
+  assert.equal((await vol.client.get('/api/site/microsites')).status, 403);
+  assert.equal((await vol.client.get(`/api/site/microsites/${site.id}`)).status, 403);
+});
+
 test('slugs live within their own website; reorder refuses two websites; restore frees within its own', async () => {
   const mainAbout = ok(await act(mgr, 'site.page.create', { title: 'Shared Name', slug: 'shared-name' })).page;
   const microAbout = ok(await act(mgr, 'site.page.create', { title: 'Shared Name', slug: 'shared-name', site_id: site.id })).page;

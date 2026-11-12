@@ -7,6 +7,7 @@ import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL
 import { brandFor } from '../../lib/brand.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
+import { mountMicrositeReads } from './microsite-reads.js';
 
 export const api = new Hono();
 
@@ -30,6 +31,9 @@ const opened = async (c) => {
   return ctx.workspaceId;
 };
 
+// The campaign's other websites (microsite-reads.js).
+mountMicrositeReads(api, opened);
+
 api.get('/site', async (c) => {
   const ws = await opened(c);
   const db = c.get('db');
@@ -42,6 +46,8 @@ api.get('/site', async (c) => {
   const posts = await count(`select count(*)::int as n, count(*) filter (where status = 'published')::int as live from site_posts where workspace_id = $1 and deleted_at is null`);
   const campaigns = await count(`select count(*)::int as n, count(*) filter (where status = 'open')::int as open from site_campaigns where workspace_id = $1 and deleted_at is null`);
   const actions = await count(`select count(*)::int as n, count(*) filter (where created_at > now() - interval '7 days')::int as week from site_actions where workspace_id = $1`);
+  // Its other websites (Overview's "Other websites · 2 live").
+  const sites = await count(`select count(*)::int as n, count(*) filter (where status = 'live')::int as live from microsites where workspace_id = $1 and deleted_at is null`);
   // The week's website actions by kind ({ petition: 12, newsletter: 3 }).
   const byKind = Object.fromEntries((await db.query(
     `select kind, count(*)::int as n from site_actions where workspace_id = $1 and created_at > now() - interval '7 days' group by kind order by kind`, [ws],
@@ -60,6 +66,7 @@ api.get('/site', async (c) => {
       pages: pages.length, published: pages.filter((p) => p.status === 'published').length,
       posts: posts.n, posts_published: posts.live, campaigns: campaigns.n, campaigns_open: campaigns.open,
       actions: actions.n, actions_week: actions.week, actions_week_by_kind: byKind,
+      microsites: sites.n, microsites_live: sites.live,
     },
     // Where it can be seen: the app's own address (/site/) until the
     // campaign's domain points here, then that domain too (saved under
