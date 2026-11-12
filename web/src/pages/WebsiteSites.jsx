@@ -161,7 +161,7 @@ export default function WebsiteSites() {
                   <SiteChip m={m} />
                 </span>
                 <span className="wb-row__sub">
-                  <span className="wb-row__addr">{m.domains[0] || 'No domain yet'}</span>
+                  {m.domains[0] ? <span className="wb-row__addr">{m.domains[0]}</span> : <span>No domain yet</span>}
                   <span>{plural(m.signups_7, 'sign-up')} this week</span>
                 </span>
               </div>

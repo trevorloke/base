@@ -15,6 +15,7 @@
 .ms-problem:empty { display: none; }
 
 .ms-card { margin-bottom: var(--s-4); }
+.ms-card > p { margin: 0; }
 .ms-checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .ms-check { display: flex; align-items: center; gap: var(--s-2); min-height: var(--ctl); font-size: 15px; }
 .ms-check a { display: inline-flex; align-items: center; min-height: var(--ctl); }
@@ -23,6 +24,7 @@
 
 .ms-su__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
 .ms-su__head .wb-card-h { margin: 0; }
+.ms-seg { width: auto; flex: 0 1 auto; }
 .ms-seg > button { min-height: var(--ctl); padding: 0 var(--s-3); }
 .ms-su__n { margin: var(--s-2) 0; font-size: 26px; font-weight: 700; color: var(--text-1); font-variant-numeric: tabular-nums; }
 .ms-su__h3 { margin: var(--s-3) 0 var(--s-2); font-size: 14px; font-weight: 600; color: var(--text-2); }
