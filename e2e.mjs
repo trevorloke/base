@@ -268,6 +268,44 @@ await go(`/people/${P.lin.id}`);
 await page.click('.pf-sec__btn:has-text("Details")');
 t = await text();
 check('profile: social handle linked', (await page.$('a[href*="x.com/linreports"]')) !== null, t.slice(0, 120));
+// Socials (ext/socials): a pasted link is read and put right; a bare @name
+// asks which network; followers are typed in; People finds a following.
+await shot('5-socials-before');
+const addSocial = async (value) => {
+  await page.click('.so .card-head button:has-text("+ Add")');
+  await page.fill('#so-value', value);
+  await page.click('.so-add button[type="submit"]');
+};
+await addSocial('https://www.instagram.com/lin.example/?hl=en');
+await page.waitForSelector('.so-lines a[href="https://www.instagram.com/lin.example"]', { timeout: 6000 }).catch(() => {});
+const ig = await page.$eval('.so-lines a[href="https://www.instagram.com/lin.example"]', (a) => [a.innerText.trim(), a.target, a.rel]).catch(() => null);
+check('socials: a pasted Instagram link shows @lin.example, opening the profile', ig && ig[0] === '@lin.example' && ig[1] === '_blank' && /noopener/.test(ig[2]), JSON.stringify(ig));
+await addSocial('@lin');
+await page.waitForSelector('.so-chips .so-chip', { timeout: 4000 }).catch(() => {});
+const chipWords = await page.$$eval('.so-chips .so-chip', (els) => els.map((e) => e.innerText.trim()));
+check('socials: a bare @lin asks which network, the networks as chips', /Which network is @lin on\?/.test(await text()) && chipWords.join('|') === 'Instagram|X|TikTok|Facebook|LinkedIn|YouTube|Bluesky|Threads|Reddit|Other', chipWords.join('|'));
+await shot('5-socials-chips');
+await page.click('.so-chips .so-chip:has-text("X")');
+await page.waitForSelector('.so-lines a[href="https://x.com/lin"]', { timeout: 6000 }).catch(() => {});
+await page.waitForFunction(() => /Saved/.test(document.querySelector('.so-status')?.textContent || ''), null, { timeout: 4000 }).catch(() => {});
+check('socials: one tap on X saves it', (await page.$('.so-lines a[href="https://x.com/lin"]')) !== null && /Saved/.test(await page.innerText('.so-status').catch(() => '')));
+await page.click('.so-lines li:has(a[href="https://x.com/lin"]) .so-count');
+await page.fill('.so-count-form input', '12k');
+await page.click('.so-count-form button[type="submit"]');
+await page.waitForSelector('.so-top', { timeout: 6000 }).catch(() => {});
+check('socials: 12k followers typed — the head reads “12k followers”', (await page.innerText('.so-top').catch(() => '')).trim() === '12k followers'
+  && /12,000 followers/.test(await page.innerText('.so-lines').catch(() => '')));
+await shot('5-socials-after');
+await go('/people');
+await page.click('.pp-filterbtn');
+await page.click('.pp-sheet button.pp-pick:has-text("1,000+ followers")');
+await sleep(900);
+t = await text();
+check('People: “1,000+ followers” finds Lin and only Lin', /Lin Reporter/.test(t) && !/Harjit Gill/.test(t) && /1,000\+ followers/.test(t), t.slice(0, 200));
+await shot('5-people-following');
+await page.keyboard.press('Escape');
+await sleep(300);
+check('People: the table says how big the following is', /12k/.test(await page.innerText('.pp-table').catch(() => '')));
 
 // ── 6. Shifts: create, assign, notify (nothing sent without providers) ──
 const shift = (await act('shift.create', {
