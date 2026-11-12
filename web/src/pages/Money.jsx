@@ -53,6 +53,8 @@ import { fmtBig, overOf, overLine, apartChoices, apartSaid, compareHref, bannerA
 // Gifts brought in from another tool's file (ext/giftimport), and the filing dates.
 import { PileRow, ImportedChip, ImportedLine, isImported, Unavailable } from '../components/GiftImportBits.jsx';
 import { FilingCountdown, FilingDatesForm } from '../components/FilingDates.jsx';
+// Pledges candidates heard on call time (ext/candidates): not gifts until the gift is logged.
+import { PledgesRow } from '../components/CallTimePledges.jsx';
 import './shifts.css';
 import './money.css';
 
@@ -516,6 +518,8 @@ export default function Money() {
   // Gifts from a file that wait for a donor (ext/giftimport), on the brief.
   const pile = brief.data?.giftsWaiting;
   const leftOut = Number(brief.data?.giftsLeftOut?.gifts) || 0;
+  const pledges = brief.data?.calltime_pledges;
+  const pledgesOpen = Number(pledges?.n) || 0;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['records', 'gift'] });
@@ -523,6 +527,7 @@ export default function Money() {
     queryClient.invalidateQueries({ queryKey: ['person'] });
     queryClient.invalidateQueries({ queryKey: ['receipts'] }); // a gift's receipt is made, voided and restored with it
     queryClient.invalidateQueries({ queryKey: ['payments'] });
+    queryClient.invalidateQueries({ queryKey: ['calltime', 'pledges'] }); // a gift logged shows as "Gift in"
   };
 
   // toast({ text, undo? }) — one at a time, 7s.
@@ -621,7 +626,7 @@ export default function Money() {
     );
   }
 
-  const needs = flagged.length + noAddress.length + payNeeds.length + (Number(pile?.gifts) > 0 ? 1 : 0);
+  const needs = flagged.length + noAddress.length + payNeeds.length + (Number(pile?.gifts) > 0 ? 1 : 0) + (pledgesOpen > 0 ? 1 : 0);
   // Needs you is three reads. While one is out it says Loading…; one that
   // failed says so with Try again — the block never just isn't there. With
   // no signal and nothing kept, the gift list's one line says it.
@@ -690,6 +695,7 @@ export default function Money() {
                 <PaymentNeedRow key={n.id} n={n} onDone={(text) => { invalidate(); showToast({ text }); }} />
               ))}
               <PileRow waiting={pile} />
+              {pledgesOpen > 0 && <PledgesRow open={pledges} onDone={(text) => { invalidate(); showToast({ text }); }} />}
             </ul>
           )}
           {needStates.includes('loading') && <p className="ops-meta mny-line" role="status">Loading…</p>}
@@ -701,6 +707,11 @@ export default function Money() {
             <p className="ops-meta mny-line" role="status">No signal — the rest loads when you’re back online.</p>
           )}
         </section>
+      )}
+
+      {/* Every pledge's gift is in: the list stays a while, out of Needs you. */}
+      {pledgesOpen === 0 && Number(pledges?.listed) > 0 && (
+        <ul className="ops-rows"><PledgesRow open={pledges} onDone={(text) => { invalidate(); showToast({ text }); }} /></ul>
       )}
 
       <span className="eyebrow ops-label">Gifts</span>

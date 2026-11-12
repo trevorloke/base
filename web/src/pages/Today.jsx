@@ -835,6 +835,10 @@ function CandidateToday({ b, me }) {
   const tz = zoneOf(me);
   const myTurfs = b.myTurfs ?? [];
   const first = firstName(me.user?.name);
+  // Call time (ext/candidates): while there are donors to call, it's the day's one button.
+  const ct = home.data?.calltime;
+  const calling = Number(ct?.left) > 0;
+  const money = (c) => fmtMoney(c).replace(/\.00$/, '');
   return (
     <div className="today today--field today--candidate">
       <span className="eyebrow">{greeting()}{first ? `, ${first}` : ''}</span>
@@ -843,14 +847,26 @@ function CandidateToday({ b, me }) {
       {b.voted?.on && <GotvCard v={b.voted} />}
       <FollowupsToday me={me} />
 
-      <section className="today-go" aria-label="Met someone">
-        <Link to="/mainstreet" className="btn btn-primary today-start">
-          Met someone <span aria-hidden="true">→</span>
-        </Link>
-      </section>
+      {calling ? (
+        <section className="today-go" aria-label="Call time">
+          <Link to="/call-time" className="btn btn-primary today-start">
+            Start call time <span aria-hidden="true">→</span>
+          </Link>
+          <p className="today-go__meta cand-go__meta">
+            {num(ct.left)} to call{Number(ct.pledged_week_cents) > 0 ? ` · ${money(ct.pledged_week_cents)} pledged this week` : ''}
+          </p>
+        </section>
+      ) : (
+        <section className="today-go" aria-label="Met someone">
+          <Link to="/mainstreet" className="btn btn-primary today-start">
+            Met someone <span aria-hidden="true">→</span>
+          </Link>
+        </section>
+      )}
 
       {/* No rows at all: no empty box either. */}
-      {(!ready || next || week > 0 || Number(b.myPeople) > 0) && <ul className="today-rows today-next">
+      {(calling || !ready || next || week > 0 || Number(b.myPeople) > 0) && <ul className="today-rows today-next">
+        {calling && <LinkRow to="/mainstreet" main="Met someone" />}
         {!ready && <li className="today-need today-row--wait" aria-hidden="true" />}
         {ready && next && (
           <WhenRow to={`/shifts/${next.id}`} kicker="Your next shift" title={next.title} when={next.starts_at} tz={tz}

@@ -497,7 +497,7 @@ test('pledges for the treasurer: a gift in, dropped, 60 days, the brief, the exp
   const p = list.pledges[0];
   assert.deepEqual([p.person.name, p.candidate, p.amount_cents, p.gift_in, p.note], ['Eli Example', 'Pat Example', 25000, null, 'Wants a lawn sign too']);
   assert.deepEqual(list.open, { n: 1, cents: 25000 });
-  assert.deepEqual(ok(await ct.tess.get('/api/brief')).calltime_pledges, { n: 1, cents: 25000 });
+  assert.deepEqual(ok(await ct.tess.get('/api/brief')).calltime_pledges, { n: 1, cents: 25000, listed: 1 });
   assert.equal(ok(await ct.patCl.get('/api/brief')).calltime_pledges, undefined, 'not a candidate’s');
   assert.equal((await vol.get('/api/calltime/pledges')).status, 403);
   // The gift comes in (the treasurer logs it): "Gift in", and no longer open.
@@ -505,7 +505,7 @@ test('pledges for the treasurer: a gift in, dropped, 60 days, the brief, the exp
   list = ok(await ct.tess.get('/api/calltime/pledges'));
   assert.deepEqual(list.pledges[0].gift_in, { amount_cents: 25000, date: today() });
   assert.deepEqual(list.open, { n: 0, cents: 0 });
-  assert.deepEqual(ok(await ct.tess.get('/api/brief')).calltime_pledges, { n: 0, cents: 0 });
+  assert.deepEqual(ok(await ct.tess.get('/api/brief')).calltime_pledges, { n: 0, cents: 0, listed: 1 }, 'still listed: Gift in');
   // Another pledge, dropped by the treasurer (a candidate may not).
   const fay = ct.donors[2];
   const p2 = ok(await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: fay, result: 'pledged', amount_cents: 10000 })).result.id;

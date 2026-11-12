@@ -56,6 +56,7 @@ const GiftsWaiting = lazy(() => import('./pages/GiftsWaiting.jsx'));
 const RatingScale = lazy(() => import('./pages/RatingScale.jsx'));
 const Fields = lazy(() => import('./pages/Fields.jsx'));
 const MyPeople = lazy(() => import('./pages/MyPeople.jsx'));
+const CallTime = lazy(() => import('./pages/CallTime.jsx'));
 const Mainstreet = lazy(() => import('./pages/Mainstreet.jsx'));
 const PeopleConnected = lazy(() => import('./pages/PeopleConnected.jsx'));
 const Passes = lazy(() => import('./pages/Passes.jsx'));
@@ -177,6 +178,7 @@ export default function App({ mode = 'field' }) {
           <Route path="/inbox" element={<TextingInbox />} />
           <Route path="/inbox/:id" element={<TextingThread />} />
           <Route path="/my-people" element={<MyPeople />} />
+          <Route path="/call-time" element={<CallTime />} />
           <Route path="/profile" element={<Profile />} />
         <Route path="/mainstreet" element={<Mainstreet />} />
           <Route path="/mainstreet" element={<Mainstreet />} />
@@ -209,6 +211,7 @@ export default function App({ mode = 'field' }) {
         <Route path="/inbox" element={<TextingInbox />} />
         <Route path="/inbox/:id" element={<TextingThread />} />
         <Route path="/my-people" element={<MyPeople />} />
+          <Route path="/call-time" element={<CallTime />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/imagineu" element={<ImagineU />} />
         <Route path="/imagineu/:id" element={<ImagineU />} />

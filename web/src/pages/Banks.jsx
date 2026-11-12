@@ -18,6 +18,7 @@ import { LOADING, Unavailable, useListCounts, useListNames } from '../components
 import './dashboard.css';
 import './shifts.css'; // the ops-* pieces: a full-height button, a row of actions, a quiet line
 import './banks.css';
+import './banks-calltime.css';
 import '../editor.css';
 
 const DESK = ['manager', 'staff', 'treasurer'];
@@ -100,7 +101,7 @@ function List() {
             <li key={b.id}>
               <Link className={`bk-row${b.closed ? ' is-closed' : ''}`} to={`/banks/${b.id}`}>
                 <span className="bk-row__main">
-                  <span className="bk-row__name">{b.name}{b.closed && <span className="chip">Closed</span>}</span>
+                  <span className="bk-row__name">{b.name}{b.candidate_name && <span className="chip">Call time · {b.candidate_name}</span>}{b.closed && <span className="chip">Closed</span>}</span>
                   <span className="bk-row__sub">
                     {num(b.total)} {plural(b.total, 'number')} · {num(b.done)} done · {num(b.open)} not handed out{b.list_name && <> · from {b.list_name}</>}
                     {b.callers.length > 0 && <> · {b.callers.map((c) => `${c.name} ${c.done}/${c.total}`).join(', ')}</>}
@@ -143,6 +144,14 @@ function RetryFields({ value, onChange, idPrefix, disabled = false }) {
 
 function NewBank() {
   const navigate = useNavigate();
+  const { me } = useOutletContext();
+  // Who calls: volunteers, or one candidate's call time (ext/candidates) —
+  // offered to the desk holding Donations, when there are candidates.
+  const money = (me?.areas || []).includes('money');
+  const seats = useQuery({ queryKey: ['calltime', 'seats'], queryFn: () => apiGet('/calltime/seats'), enabled: money, staleTime: 60_000 });
+  const candidates = seats.data?.candidates ?? [];
+  const [caller, setCaller] = useState('');
+  const [askDollars, setAskDollars] = useState('');
   const [params] = useSearchParams();
   const scale = useScale();
   const [typedName, setName] = useState(null);
@@ -179,7 +188,9 @@ function NewBank() {
   const submit = async (e) => {
     e.preventDefault();
     const who = from === 'list' ? { list_id: listId } : { person_ids: callable.map((p) => p.id) };
-    const r = await run('bank.create', { name, script: script || null, ...who, ...retry });
+    const ask = askDollars.trim() ? Math.round(Number.parseFloat(askDollars.replace(/[$,\s]/g, '')) * 100) : null;
+    const call = caller ? { candidate_id: caller, ask_cents: Number.isFinite(ask) && ask > 0 ? ask : null } : {};
+    const r = await run('bank.create', { name, script: script || null, ...who, ...retry, ...call });
     if (r) navigate(`/banks/${r.bank.id}`, { replace: true });
   };
   return (
@@ -189,6 +200,23 @@ function NewBank() {
       <form className="bk-form" onSubmit={submit}>
         <label htmlFor={`${id}-n`} className="ws-label">Name</label>
         <input id={`${id}-n`} className="input" value={name} maxLength={120} required autoFocus placeholder="Undecided in Newton — week of Nov 3" onChange={(e) => setName(e.target.value)} />
+        {candidates.length > 0 && (
+          <div className="bk-caller-pick">
+            <label htmlFor={`${id}-who`} className="ws-label">Who calls</label>
+            <select id={`${id}-who`} className="input" value={caller} onChange={(e) => setCaller(e.target.value)}>
+              <option value="">Volunteers</option>
+              {candidates.map((c) => <option key={c.id} value={c.id}>Call time: {c.name}</option>)}
+            </select>
+            {caller && (
+              <>
+                <label htmlFor={`${id}-ask`} className="ws-label">Ask ($, optional)</label>
+                <input id={`${id}-ask`} className="input bk-ask" inputMode="decimal" autoComplete="off" value={askDollars} placeholder="250"
+                  onChange={(e) => setAskDollars(e.target.value)} />
+                <p className="ops-meta">Every number goes to them. They see what each donor gave and may still give.</p>
+              </>
+            )}
+          </div>
+        )}
         <fieldset className="bk-who">
           <legend className="ws-label">Who to call</legend>
           <div className="au-from" role="group" aria-label="Who to call">
@@ -308,7 +336,7 @@ function Bank({ id }) {
     <div className="bk">
       <p className="lu-back"><Link to="/banks">← Phone banks</Link></p>
       <div className="page-head bk-head">
-        <div><span className="eyebrow">Phone bank{bank.closed ? ' · Closed' : ''}</span><h1>{bank.name}</h1></div>
+        <div><span className="eyebrow">{bank.candidate_id ? `Call time · ${bank.candidate_name || 'a candidate'}` : 'Phone bank'}{bank.closed ? ' · Closed' : ''}</span><h1>{bank.name}</h1></div>
         <div className="head-actions">
           {/* Closed and its list deleted: it stays closed (the server refuses) — the line below says why. */}
           {!shut && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.update', { id, closed: !bank.closed })}>{bank.closed ? 'Reopen' : 'Close'}</button>}
@@ -338,6 +366,10 @@ function Bank({ id }) {
         ))}
       </div>
 
+      {/* Call time is the candidate's own: no hand-out, no CallHub. */}
+      {bank.candidate_id ? (
+        <p className="ops-meta bk-calltime">Every number is {bank.candidate_name || 'the candidate'}’s to call{bank.ask_cents ? ` · ask $${(bank.ask_cents / 100).toLocaleString('en-CA')}` : ''}.</p>
+      ) : (<>
       <SendToCallHub kind="bank" id={id} />
       <section className="bk-sec" aria-labelledby={`${fid}-h`}>
         <h2 className="dash-sec__h" id={`${fid}-h`}>Hand out numbers</h2>
@@ -366,6 +398,7 @@ function Bank({ id }) {
         )}
         {error && <p className="error" role="alert">{error}</p>}
       </section>
+      </>)}
 
       {bank.callers.length > 0 && (
         <section className="bk-sec" aria-label="Callers">
@@ -376,7 +409,7 @@ function Bank({ id }) {
                 <span className="bk-caller__name">{c.name}</span>
                 <span className="bk-bar" aria-hidden="true"><span style={{ width: `${c.total ? Math.round((c.done / c.total) * 100) : 0}%` }} /></span>
                 <span className="mono bk-caller__n">{c.done} / {c.total}</span>
-                {c.done < c.total && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.release', { id, user_id: c.user_id })}>Take back {c.total - c.done}</button>}
+                {c.done < c.total && !bank.candidate_id && <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => run('bank.release', { id, user_id: c.user_id })}>Take back {c.total - c.done}</button>}
               </li>
             ))}
           </ul>

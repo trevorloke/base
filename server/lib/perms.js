@@ -80,7 +80,7 @@ const PATH_AREA = [
   [/^\/api\/candidates(\/|$)/, 'admin'],
   // Call time's pledges are the treasurer's; a candidate's own call time
   // (/calltime/:bankId) is no area's — it answers its candidate alone.
-  [/^\/api\/calltime\/pledges$/, 'money'],
+  [/^\/api\/calltime\/(pledges|seats)$/, 'money'],
   [/^\/api\/fields(\/|$)/, 'admin'],
   [/^\/api\/learn\/progress$/, 'learn'],
   [/^\/api\/(banks|lists)(\/|$)/, 'people'],

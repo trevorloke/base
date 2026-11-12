@@ -13,6 +13,7 @@
 //   calltime.drop  { id }   Donations: a pledge that won't come in leaves the list
 //
 //   GET /calltime/pledges   Donations: the open pledges, each with the gift that came in
+//   GET /calltime/seats     Donations (the desk): the candidates a call-time bank can be for
 //   GET /calltime/:bankId   the candidate whose bank it is (anyone else 404): the
 //                           numbers to call now with what each donor gave, their room,
 //                           and the ask — a fixed handful of queries, never one per donor
@@ -160,7 +161,7 @@ const donateUrl = async (db, ctx) => {
 
 export const api = new Hono();
 
-// Registered before /calltime/:bankId, so "pledges" is never read as a bank.
+// Registered before /calltime/:bankId, so "pledges" (and "seats") is never read as a bank.
 api.get('/calltime/pledges', async (c) => {
   const ctx = c.get('ctx');
   if (!MONEY_ROLES.includes(ctx.role) || !areasFor(ctx).includes('money')) return c.json({ error: 'not for you' }, 403);
@@ -182,6 +183,17 @@ api.get('/calltime/pledges', async (c) => {
   // Open: no gift in yet. A pledge with its gift in shows "Gift in ✓" a while (until 60 days).
   const open = pledges.filter((p) => !p.gift_in);
   return c.json({ pledges, open: { n: open.length, cents: open.reduce((s, p) => s + p.amount_cents, 0) } });
+});
+
+// The candidates a call-time bank can be made for (Phone banks → New:
+// "Who calls"): the desk holding Donations, as bank.create checks.
+api.get('/calltime/seats', async (c) => {
+  const ctx = c.get('ctx');
+  if (ctx.role === 'volunteer' || !areasFor(ctx).includes('money')) return c.json({ error: 'not for you' }, 403);
+  const seats = (await c.get('db').query(
+    'select id, name, office from candidates where workspace_id = $1 and removed_at is null order by position, created_at', [ctx.workspaceId],
+  )).rows;
+  return c.json({ candidates: seats });
 });
 
 api.get('/calltime/:bankId', async (c) => {
@@ -251,9 +263,13 @@ export const briefPledges = async (db, ctx, brief) => {
   if (!MONEY_ROLES.includes(ctx.role) || decide(ctx.perms, 'money') === false) return;
   const { day } = campaignNow(ctx.workspace);
   const r = (await db.query(
-    `select count(*)::int as n, coalesce(sum(r.amount_cents), 0)::bigint as cents from calltime_results r
-      where r.workspace_id = $1 and ${openPledge('r', '$2')}`,
+    `select count(*) filter (where ${openPledge('r', '$2')})::int as n,
+            coalesce(sum(r.amount_cents) filter (where ${openPledge('r', '$2')}), 0)::bigint as cents,
+            count(*)::int as listed
+       from calltime_results r
+      where r.workspace_id = $1 and r.result = 'pledged' and r.dropped_at is null and r.said_on > $2::date - 60`,
     [ctx.workspaceId, day],
   )).rows[0];
-  brief.calltime_pledges = { n: r.n, cents: Number(r.cents) };
+  // n, cents: still to come in; listed: on the list (a gift in shows there a while).
+  brief.calltime_pledges = { n: r.n, cents: Number(r.cents), listed: r.listed };
 };

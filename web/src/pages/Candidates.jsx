@@ -16,6 +16,8 @@ const KEY = ['candidates'];
 const statusOf = (c) => (c.signed_in ? ['Signed in', 'chip chip-ok']
   : c.invited_until ? ['Invited', 'chip'] : ['Not invited', 'chip chip-warn']);
 const subOf = (c) => [c.office, c.race_label].filter(Boolean).join(' · ');
+// Call time (ext/candidates): "18 to call · $1,250 pledged".
+const callTimeLine = (t) => `${t.left.toLocaleString('en-CA')} to call · $${(t.pledged_cents / 100).toLocaleString('en-CA', { maximumFractionDigits: 2 })} pledged`;
 
 function CandidateForm({ slates, onSave, onCancel, busy, online }) {
   const id = useId();
@@ -74,6 +76,7 @@ function CandidateRow({ c, open, onToggle, run, busy, online }) {
           <span className="ot-row__name">{c.name}</span>
           {subOf(c) && <span className="ot-row__sub">{subOf(c)}</span>}
           {c.not_linked_reason && <span className="ot-row__sub can-why">{c.not_linked_reason}</span>}
+          {c.calltime && <span className="ot-row__sub">{callTimeLine(c.calltime)}</span>}
         </span>
         <span className={cls}>{status}</span>
       </button>
