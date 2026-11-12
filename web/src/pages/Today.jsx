@@ -756,6 +756,11 @@ function VolunteerToday({ b, me }) {
         <LinkRow to="/mainstreet" main="Mainstreeting" />
         <LinkRow to="/my-people" state={FROM_TODAY}
           main={<>My people{b.myPeople ? <> · <strong className="mono">{b.myPeople}</strong></> : null}</>} />
+        {/* Posts to share with their own link (brief.share, ext/socials). */}
+        {Number(b.share?.kits) > 0 && (
+          <LinkRow to="/share" state={FROM_TODAY}
+            main={<>Share · <strong className="mono">{b.share.kits}</strong> {plural(b.share.kits, 'post')}</>} />
+        )}
       </ul>
 
       <MineLine you={mine.doors} team={f.doors} noun="door" />

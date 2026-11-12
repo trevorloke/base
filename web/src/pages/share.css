@@ -1,0 +1,47 @@
+/* Share (/share) and Outreach → Sharing. Built on the shared pieces
+   (.card, .btn, .chip, the .ops-* of shifts.css); only what they lack. */
+.sh-page .card { padding: var(--s-4); margin-top: var(--s-3); }
+.sh-mine h2 { font-size: 18px; margin: 0; }
+.sh-link { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-2); }
+.sh-url { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: var(--text-2); }
+.sh-big { margin: var(--s-3) 0 0; font-size: 15px; color: var(--text-2); }
+.sh-big strong { font-size: 24px; color: var(--text-1); margin-right: 4px; }
+.sh-empty { margin-top: var(--s-4); }
+.sh-pic { display: block; width: 100%; max-height: 360px; object-fit: cover; border-radius: var(--r-ctrl); margin-bottom: var(--s-3); background: var(--paper-2); }
+.sh-text { white-space: pre-line; margin: 0 0 var(--s-2); font-size: 16px; line-height: 1.45; overflow-wrap: anywhere; }
+.sh-go { margin-top: var(--s-3); }
+.sh-share { min-width: 120px; }
+.sh-targets { list-style: none; padding: 0; margin: var(--s-3) 0 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.sh-under { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--rule); }
+
+/* Outreach → Sharing */
+.sk-list { list-style: none; padding: 0; margin: var(--s-3) 0 0; }
+.sk-row { display: flex; align-items: center; gap: var(--s-2) var(--s-3); flex-wrap: wrap; width: 100%; min-height: var(--ctl, 40px); padding: var(--s-3); background: none; border: 0; border-bottom: 1px solid var(--rule); text-align: left; font: inherit; color: var(--text-1); cursor: pointer; }
+.sk-row:hover { background: var(--paper-1); }
+.sk-row:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.sk-title { flex: 1 1 180px; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.sk-nums { color: var(--text-2); font-size: 14px; }
+.sk-nums strong { color: var(--text-1); }
+.chip.sk-warn { background: transparent; color: var(--warn); border-color: var(--warn); }
+.sk-edit { margin: var(--s-3) 0; }
+.sk-edit .card { padding: var(--s-4); }
+.sk-field { display: grid; gap: 6px; margin-bottom: var(--s-3); }
+.sk-field label, .sk-label { font-weight: 600; font-size: 14px; }
+.sk-field textarea.input { min-height: 120px; resize: vertical; }
+.sk-count { font-size: 13px; color: var(--text-3); }
+.sk-count[data-over='true'] { color: var(--danger); }
+.sk-line { margin: 0; font-size: 14px; color: var(--text-2); }
+.sk-check { display: flex; align-items: center; gap: var(--s-2); min-height: var(--ctl, 40px); font-size: 14px; }
+.sk-check input { width: 20px; height: 20px; }
+.sk-pic { max-width: 220px; border-radius: var(--r-ctrl); display: block; margin-bottom: var(--s-2); }
+.sk-actions { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-3); }
+.sk-top { list-style: none; padding: 0; margin: var(--s-2) 0 0; }
+.sk-top li { display: flex; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); min-height: 40px; align-items: center; }
+.sk-section { margin-top: var(--s-6); }
+.sk-section h2 { font-size: 18px; margin: 0; }
+.sk-quiet { margin-top: var(--s-4); font-size: 14px; }
+@media (max-width: 640px) {
+  .sk-row { min-height: 48px; }
+  .sk-top li { min-height: 48px; }
+  .sk-check { min-height: 48px; }
+}
