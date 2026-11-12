@@ -36,24 +36,19 @@ import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
 import { apiGet, action } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
+import { clockText } from '../components/shiftTime.js';
 import './shift-crew.css';
 
 const roleLabel = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label ?? code;
 const JOBS = { lead: 'Team lead', driver: 'Driver' };
 const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || name;
 const TRAY_SHOWN = 60;
-const clock = (iso) => {
-  const d = new Date(iso);
-  const h = d.getHours();
-  const m = d.getMinutes();
-  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''}${h < 12 ? 'am' : 'pm'}`;
-};
 const colKey = (to) => (to === 'every' || to === 'none' ? to : `turf:${to}`);
 const toOf = (key) => (key === 'every' || key === 'none' ? key : key?.startsWith('turf:') ? key.slice(5) : null);
 const sameItem = (a, b) => a?.id === b?.id;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-export default function ShiftCrew({ shiftId, canMap = true, onChanged }) {
+export default function ShiftCrew({ shiftId, tz, canMap = true, onChanged }) {
   const queryClient = useQueryClient();
   const online = useOnline();
   const crewQ = useQuery({ queryKey: ['crew', shiftId], queryFn: () => apiGet(`/crew/${shiftId}`) });
@@ -298,7 +293,7 @@ export default function ShiftCrew({ shiftId, canMap = true, onChanged }) {
   };
 
   const trayCard = (v) => {
-    const line = v.busy ? `Busy then: ${v.busy.title}, ${clock(v.busy.starts_at)}`
+    const line = v.busy ? `Busy then: ${v.busy.title}, ${clockText(v.busy.starts_at, tz)}`
       : v.asked ? 'Asked to volunteer'
         : v.done ? `${plural(v.done, 'shift')} done${v.no_shows ? ` · ${plural(v.no_shows, 'no-show')}` : ''}`
           : 'New';

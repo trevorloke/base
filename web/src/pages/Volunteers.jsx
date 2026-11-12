@@ -20,34 +20,23 @@ import { useMemo, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { placeLabel } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
+import { clockText, monthDay, overlaps, shortDay, zoneOf } from '../components/shiftTime.js';
 import './shifts.css';
 import './volunteers.css';
 
 const roleLabel = (code) => VOLUNTEER_ROLES.find((r) => r.code === code)?.label ?? code;
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const shortDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' });
-const monthDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
-const clock = (iso) => {
-  const d = new Date(iso);
-  const h = d.getHours();
-  const m = d.getMinutes();
-  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''}${h < 12 ? 'am' : 'pm'}`;
-};
-const ago = (iso) => {
+// Days and hours are the campaign's (components/shiftTime.js), never the device's.
+const ago = (iso, tz) => {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 864e5);
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';
   if (days < 14) return `${days} days ago`;
-  return monthDay(iso);
+  return monthDay(iso, tz);
 };
-const span = (s) => {
-  const a = new Date(s.starts_at).getTime();
-  const b = s.ends_at ? new Date(s.ends_at).getTime() : a + 3600e3;
-  return [a, Math.max(b, a + 1)];
-};
-const overlaps = (x, y) => { const [a1, b1] = span(x); const [a2, b2] = span(y); return a1 < b2 && a2 < b1; };
 const STAGE = { active: ['Active', 'chip-ok'], new: ['New', 'chip-warn'], lapsed: ['Lapsed', ''] };
 const SHOWS = [
   ['asked', 'Asked to volunteer'], ['new', 'New'], ['active', 'Active'], ['lapsed', 'Lapsed'], ['all', 'All'],
@@ -55,14 +44,14 @@ const SHOWS = [
 const PAGE = 150;
 const AHEAD_DAYS = 30;
 
-function statusLine(v) {
-  if (v.asked) return `Asked to volunteer · ${ago(v.asked_at)}`;
-  if (v.next) return `Next: ${v.next.title} · ${shortDay(v.next.starts_at)}`;
-  if (v.last_active_at) return `Last active ${monthDay(v.last_active_at)}`;
+function statusLine(v, tz) {
+  if (v.asked) return `Asked to volunteer · ${ago(v.asked_at, tz)}`;
+  if (v.next) return `Next: ${v.next.title} · ${shortDay(v.next.starts_at, tz)}`;
+  if (v.last_active_at) return `Last active ${monthDay(v.last_active_at, tz)}`;
   return 'Nothing yet';
 }
 
-function PutOnShift({ v, shifts, onDone }) {
+function PutOnShift({ v, shifts, tz, onDone }) {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState(null);
   const mine = new Set(v.upcoming_shifts.map((s) => s.id));
@@ -79,7 +68,7 @@ function PutOnShift({ v, shifts, onDone }) {
     }
   };
   if (!shifts.length) {
-    return <p className="ops-empty">No shifts in the next {AHEAD_DAYS} days. <Link to="/shifts?new=1">New shift</Link></p>;
+    return <p className="ops-empty">No shifts in the next {AHEAD_DAYS} days. <Link to="/shifts?add=1">New shift</Link></p>;
   }
   return (
     <div className="vl-pick">
@@ -94,9 +83,9 @@ function PutOnShift({ v, shifts, onDone }) {
               <button type="button" className="vl-shift" disabled={on || full || busyId !== null}
                 data-clash={clash ? '' : undefined} onClick={() => book(s)}>
                 <span className="vl-shift__what">{s.title}</span>
-                <span className="vl-shift__when">{shortDay(s.starts_at)} · {clock(s.starts_at)}{s.location ? ` · ${s.location}` : ''}</span>
+                <span className="vl-shift__when">{shortDay(s.starts_at, tz)} · {clockText(s.starts_at, tz)}{s.location ? ` · ${placeLabel(s.location)}` : ''}</span>
                 <span className="vl-shift__note">
-                  {on ? 'On it' : full ? 'Full' : clash ? `Busy then: ${clash.title}` : left != null ? `${plural(left, 'spot')} left` : `${Number(s.filled) || 0} going`}
+                  {on ? 'On it' : full ? 'Full' : clash ? `Busy then: ${clash.title}` : left != null ? `${plural(left, 'spot')} left` : Number(s.filled) ? `${Number(s.filled)} going` : 'Nobody yet'}
                   {busyId === s.id && ' — saving…'}
                 </span>
               </button>
@@ -109,7 +98,7 @@ function PutOnShift({ v, shifts, onDone }) {
   );
 }
 
-function Row({ v, open, onToggle, shifts, onBooked }) {
+function Row({ v, tz, open, onToggle, shifts, onBooked }) {
   const [picking, setPicking] = useState(false);
   const [booked, setBooked] = useState(null);
   const [label, tone] = STAGE[v.stage] || ['', ''];
@@ -121,7 +110,7 @@ function Row({ v, open, onToggle, shifts, onBooked }) {
         <span className="ops-row__main">
           <span className="ops-row__name">{v.name}</span>
           <span className="ops-row__sub vl-status" data-asked={v.asked ? '' : undefined}>
-            {statusLine(v)}{v.done ? ` · ${plural(v.done, 'shift')}` : ''}
+            {statusLine(v, tz)}{v.done ? ` · ${plural(v.done, 'shift')}` : ''}
           </span>
           {v.roles.length > 0 && <span className="vl-roles">{v.roles.map(roleLabel).join(' · ')}</span>}
         </span>
@@ -141,13 +130,13 @@ function Row({ v, open, onToggle, shifts, onBooked }) {
             {plural(v.done, 'shift')} done
             {v.no_shows ? ` · ${plural(v.no_shows, 'no-show')}` : ''}
             {v.upcoming ? ` · ${v.upcoming} coming up` : ''}
-            {v.last_active_at ? ` · last active ${monthDay(v.last_active_at)}` : ''}
+            {v.last_active_at ? ` · last active ${monthDay(v.last_active_at, tz)}` : ''}
             {!v.signed_in && ' · no app sign-in'}
           </p>
           {v.upcoming_shifts.length > 0 && (
             <ul className="vl-next">
               {v.upcoming_shifts.slice(0, 4).map((s) => (
-                <li key={s.id}><Link to={`/shifts/${s.id}`}>{s.title}</Link> · {shortDay(s.starts_at)} · {clock(s.starts_at)}</li>
+                <li key={s.id}><Link to={`/shifts/${s.id}`}>{s.title}</Link> · {shortDay(s.starts_at, tz)} · {clockText(s.starts_at, tz)}</li>
               ))}
             </ul>
           )}
@@ -160,7 +149,7 @@ function Row({ v, open, onToggle, shifts, onBooked }) {
           ) : (
             <>
               <span className="eyebrow ops-label">Put {v.name.split(' ')[0]} on</span>
-              <PutOnShift v={v} shifts={shifts}
+              <PutOnShift v={v} shifts={shifts} tz={tz}
                 onDone={(s, r) => { setPicking(false); setBooked({ title: s.title, requestDone: r.requests_done > 0 }); onBooked(); }} />
               <div className="ops-actions">
                 <button type="button" className="btn btn-quiet ops-tap" onClick={() => setPicking(false)}>Done</button>
@@ -175,6 +164,7 @@ function Row({ v, open, onToggle, shifts, onBooked }) {
 
 export default function Volunteers() {
   const { me } = useOutletContext() ?? {};
+  const tz = zoneOf(me);
   const queryClient = useQueryClient();
   const online = useOnline();
   const [params, setParams] = useSearchParams();
@@ -264,7 +254,7 @@ export default function Volunteers() {
           ) : (
             <ul className="ops-rows vl-rows">
               {rows.slice(0, limit).map((v) => (
-                <Row key={v.id} v={v} open={openId === v.id} shifts={ahead} onBooked={booked}
+                <Row key={v.id} v={v} tz={tz} open={openId === v.id} shifts={ahead} onBooked={booked}
                   onToggle={() => setOpenId((cur) => (cur === v.id ? null : v.id))} />
               ))}
             </ul>

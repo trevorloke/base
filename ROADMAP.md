@@ -58,8 +58,9 @@ BC campaign will need in 2030.
 - **Every language Surrey speaks.** Per-language versions of pages, scripts
   and messages with a named reviewer; walk and call lists matched to
   volunteers' languages.
-- **Events and attendance.** Supporter-hosted events, QR check-in, reminders
-  with calendar invites, attendance feeding ladders.
+- **Events and attendance.** Supporter-hosted events, QR check-in, calendar
+  invites with the reminders (the reminder the evening before a shift goes
+  out today), attendance feeding ladders.
 - **Between elections.** Write-to-council letters and batched petition
   deliveries; election cycles (2026 ratings carried into 2030 filters).
 - **Supporter portal.** My actions, my referrals, renew my membership.

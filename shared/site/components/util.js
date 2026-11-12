@@ -2,6 +2,7 @@
 // read, paragraphs, the share links. No React, no DOM, no Node — the server
 // renderer, the browser islands and the tests all import this. (Where a
 // link goes is links.js, server side.)
+import { dayOf, fmtIn, onClock } from '../../dayparts.js';
 
 export const str = (v) => (typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
 export const arr = (v) => (Array.isArray(v) ? v : []);
@@ -25,6 +26,9 @@ export function parseDollars(text) {
 }
 
 // ── Dates (worked out on the server; islands get the words, not the dates) ──
+// On the campaign's clock as the app and its emails keep it
+// (shared/dayparts.js): B.C. on UTC-7 by rule, so a server whose own
+// time-zone rules are old doesn't put a 6:30 shift at 5:30.
 export const DEFAULT_TIME_ZONE = 'America/Vancouver';
 const validZone = (tz) => {
   try { new Intl.DateTimeFormat('en-CA', { timeZone: tz }); return true; } catch { return false; }
@@ -33,11 +37,13 @@ export function when(startIso, endIso, timeZone = DEFAULT_TIME_ZONE) {
   const start = new Date(str(startIso));
   if (!str(startIso) || Number.isNaN(start.getTime())) return null;
   const tz = validZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE;
-  const f = (o, d = start) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, ...o }).format(d);
+  const f = (o, d = start) => fmtIn(d, tz, o);
   const end = endIso ? new Date(str(endIso)) : null;
-  const sameDay = end && !Number.isNaN(end.getTime()) && f({ year: 'numeric', month: 'numeric', day: 'numeric' }, end) === f({ year: 'numeric', month: 'numeric', day: 'numeric' });
-  const time = sameDay
-    ? new Intl.DateTimeFormat('en-CA', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).formatRange(start, end)
+  const sameDay = end && !Number.isNaN(end.getTime()) && dayOf(end, tz) === dayOf(start, tz);
+  const [a, zone] = onClock(start, tz);
+  const [b, endZone] = sameDay ? onClock(end, tz) : [];
+  const time = sameDay && zone === endZone
+    ? new Intl.DateTimeFormat('en-CA', { timeZone: zone, hour: 'numeric', minute: '2-digit' }).formatRange(a, b)
     : f({ hour: 'numeric', minute: '2-digit' });
   return {
     iso: start.toISOString(),
@@ -51,7 +57,7 @@ export function when(startIso, endIso, timeZone = DEFAULT_TIME_ZONE) {
 export function dateOnly(iso, timeZone = DEFAULT_TIME_ZONE) {
   const d = new Date(str(iso));
   if (!str(iso) || Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat('en-CA', { timeZone: validZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE, year: 'numeric', month: 'long', day: 'numeric' }).format(d);
+  return fmtIn(d, validZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE, { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 // ── An email address ──

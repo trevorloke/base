@@ -511,6 +511,12 @@ await V.shot('4-vol-offline-shift');
 await V.go(`/shifts/${tight.id}`);
 await vp.click('button:has-text("Count me in")');
 await sleep(300);
+// The phone bank overlaps the canvass whose "Count me in" is waiting on this
+// phone: it is asked about first — a warning, never a refusal.
+t = await V.text();
+check('a shift at the same time as one of theirs is asked about first: "Count me in anyway?"', /You’re on Saturday canvass then[\s\S]*Count me in anyway\?/.test(t), t.slice(0, 220));
+await vp.click('.ops-confirm[aria-label="Already on a shift then"] button:has-text("Yes")');
+await sleep(300);
 await V.go('/shifts');
 t = await V.text();
 check('shift list offline: both marked "Not sent yet"', (t.match(/Not sent yet/gi) || []).length === 2 && /Offline copy/i.test(t), t.slice(0, 200));

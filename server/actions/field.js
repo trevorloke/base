@@ -25,6 +25,11 @@ import { audienceOf, recipientsOf } from '../ext/lists/audience.js';
 import { e164, namesCampaign, MAX_BODY as TEXT_MAX } from '../ext/texting/rules.js';
 import { textConfigured } from '../lib/notify.js';
 import { DEFAULT_TZ } from '../lib/org.js';
+// Kinds, saved places and the campaign's clock for shifts (ext/schedule).
+import { SHIFT_KIND_CODES, shiftKind } from '@starbase/shared/shiftkinds';
+import {
+  END_FIRST, clockInput, dayInput, endsAfterStart, livePlace, movedTimes, needInput, titleFor, turfWords, tzOf,
+} from '../ext/schedule/rules.js';
 
 const ALL_ROLES = ['manager', 'treasurer', 'staff', 'volunteer'];
 const DESK_ROLES = ['manager', 'treasurer', 'staff'];
@@ -360,17 +365,31 @@ export const FIELD_ACTIONS = {
       instructions: z.string().max(4000).nullish(),
       link: z.string().max(1000).nullish(),
       capacity: z.number().int().positive().nullish(),
+      // What it is (shared/shiftkinds.js), a saved place (its name is the
+      // words shown unless other words come with it) and how many people it
+      // wants — a target, never a limit (ext/schedule).
+      kind: z.enum(SHIFT_KIND_CODES).nullish(),
+      place_id: uuid().nullish(),
+      need: needInput().nullish(),
     }),
     handler: async (tx, ctx, input, emit) => {
+      if (!endsAfterStart(input.starts_at, input.ends_at)) throw httpError(400, END_FIRST);
+      const place = input.place_id ? await livePlace(tx, ctx.workspaceId, input.place_id) : null;
+      const location = input.location || place?.name || null;
+      // A kind brings the role it prefers, unless one was picked.
+      const role = input.role || shiftKind(input.kind)?.role || null;
       const id = newId();
+      // title_custom: this name was typed, so it is kept whatever changes.
       await tx.query(
-        `insert into shifts (id, workspace_id, title, role, location, starts_at, ends_at, instructions, link, capacity, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-        [id, ctx.workspaceId, input.title, input.role || null, input.location || null,
+        `insert into shifts (id, workspace_id, title, role, location, starts_at, ends_at, instructions, link, capacity, created_by,
+                             kind, place_id, need, title_custom)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)`,
+        [id, ctx.workspaceId, input.title, role, location,
          input.starts_at, input.ends_at || null, input.instructions || null,
-         input.link || null, input.capacity ?? null, ctx.user.id],
+         input.link || null, input.capacity ?? null, ctx.user.id,
+         input.kind || null, place?.id || null, input.need ?? null],
       );
-      const payload = { id, ...input };
+      const payload = { id, ...input, ...(location && !input.location ? { location } : {}), ...(role && !input.role ? { role } : {}) };
       emit('shift', id, 'create', payload);
       return { shift: payload };
     },
@@ -379,11 +398,22 @@ export const FIELD_ACTIONS = {
   // A shift changed after it was made: any of its fields; only what's sent
   // changes. Room for fewer people than are booked is refused (take someone
   // off first). The desk tells those booked with shift.notify, as before.
+  //   day, start, end   when, said as a day and clock times ('HH:MM') on the
+  //                     campaign's clock — the server works out the moments.
+  //                     Another day keeps its hours; end: null is no end.
+  //   place_id          a saved place: its name becomes the words shown.
+  //                     New words alone leave the saved place behind.
+  //   turf_ids          its turfs, as shift.turfs.set sets them; with no
+  //                     other place said, the turfs are the place.
+  //   title             a typed name is kept; null goes back to the name
+  //                     made from kind and place, which follows them.
+  // In a repeating slot a shift changed here is changed on its own:
+  // "this and the following" (shift.series.update) leaves it alone after.
   'shift.update': {
     roles: DESK_ROLES,
     input: z.object({
       id: uuid(),
-      title: z.string().trim().min(1).max(300).optional(),
+      title: z.string().trim().min(1).max(300).nullish(),
       role: z.enum(VOLUNTEER_ROLE_CODES).nullish(),
       location: z.string().max(400).nullish(),
       starts_at: isoTs().optional(),
@@ -391,25 +421,70 @@ export const FIELD_ACTIONS = {
       instructions: z.string().max(4000).nullish(),
       link: z.string().max(1000).nullish(),
       capacity: z.number().int().positive().nullish(),
+      day: dayInput().optional(),
+      start: clockInput().optional(),
+      end: clockInput().nullish(),
+      kind: z.enum(SHIFT_KIND_CODES).nullish(),
+      place_id: uuid().nullish(),
+      need: needInput().nullish(),
+      turf_ids: z.array(uuid()).max(20).optional(),
     }),
-    handler: async (tx, ctx, input, emit) => {
-      const { id, ...patch } = input;
-      const cur = (await tx.query('select * from shifts where id = $1 and workspace_id = $2 and deleted_at is null', [id, ctx.workspaceId])).rows[0];
+    // opts.series: one of a series changed together (shift.series.update).
+    handler: async (tx, ctx, input, emit, opts) => {
+      const { id, day, start, end, turf_ids: turfIds, ...patch } = input;
+      const ws = ctx.workspaceId;
+      const cur = (await tx.query('select * from shifts where id = $1 and workspace_id = $2 and deleted_at is null', [id, ws])).rows[0];
       if (!cur) throw httpError(404, 'shift not found');
+      if (day !== undefined || start !== undefined || end !== undefined) {
+        if ('starts_at' in patch || 'ends_at' in patch) throw httpError(400, 'say when as a day and times, or as timestamps — not both');
+        Object.assign(patch, movedTimes(cur, { day, start, end }, tzOf(ctx)));
+      }
+      if (turfIds) {
+        const { ACTIONS } = await import('./index.js');
+        await ACTIONS['shift.turfs.set'].handler(tx, ctx, { shift_id: id, turf_ids: turfIds }, emit);
+      }
+      if (patch.place_id) {
+        const place = await livePlace(tx, ws, patch.place_id);
+        if (!('location' in patch)) patch.location = place.name;
+      } else if (turfIds?.length && !('location' in patch) && !('place_id' in patch)) {
+        patch.location = await turfWords(tx, ws, turfIds);
+        if (cur.place_id) patch.place_id = null;
+      } else if ('location' in patch && !('place_id' in patch) && cur.place_id) {
+        patch.place_id = null;
+      }
+      // A new kind brings its own role, unless the desk had picked another.
+      if (patch.kind && !('role' in patch) && (cur.role || null) === (shiftKind(cur.kind)?.role || null)) {
+        patch.role = shiftKind(patch.kind).role;
+      }
+      // A name is typed when it comes in different from the one it has: a
+      // form that sends back the made name it was shown hasn't typed one.
+      const typed = typeof patch.title === 'string' && patch.title !== cur.title;
+      let custom = cur.title_custom;
+      if (patch.title === null) custom = false;
+      else if (typed) custom = true;
+      if (custom !== cur.title_custom) patch.title_custom = custom;
       const next = { ...cur, ...patch };
-      if (next.ends_at && new Date(next.ends_at) <= new Date(next.starts_at)) throw httpError(400, 'the end has to be after the start');
+      if (custom === false && !typed) {
+        next.title = titleFor(next);
+        if (next.title === cur.title) delete patch.title; else patch.title = next.title;
+      }
+      if (!endsAfterStart(next.starts_at, next.ends_at)) throw httpError(400, END_FIRST);
       if ('capacity' in patch && patch.capacity != null) {
-        const booked = await activeOnShift(tx, ctx.workspaceId, id);
+        const booked = await activeOnShift(tx, ws, id);
         if (patch.capacity < booked) throw httpError(409, `${booked} are booked — take someone off first, or leave room for them`);
       }
+      const own = Boolean(cur.series_id) && !opts?.series;
       await tx.query(
-        `update shifts set title = $3, role = $4, location = $5, starts_at = $6, ends_at = $7, instructions = $8, link = $9, capacity = $10
+        `update shifts set title = $3, role = $4, location = $5, starts_at = $6, ends_at = $7, instructions = $8, link = $9, capacity = $10,
+           kind = $11, place_id = $12, need = $13, title_custom = $14,
+           series_edited_at = case when $15::boolean then now() else series_edited_at end
          where id = $1 and workspace_id = $2`,
-        [id, ctx.workspaceId, next.title, next.role || null, next.location || null, next.starts_at, next.ends_at || null,
-         next.instructions || null, next.link || null, next.capacity ?? null],
+        [id, ws, next.title, next.role || null, next.location || null, next.starts_at, next.ends_at || null,
+         next.instructions || null, next.link || null, next.capacity ?? null,
+         next.kind || null, next.place_id || null, next.need ?? null, next.title_custom ?? null, own],
       );
       emit('shift', id, 'update', patch);
-      return { shift: { id, ...patch } };
+      return { shift: { id, ...patch, ...(turfIds ? { turf_ids: turfIds } : {}) } };
     },
   },
 

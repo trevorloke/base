@@ -22,7 +22,7 @@ export const ACTIONS = [
   { label: 'Log a gift', to: '/money?new=1', area: 'money', words: 'donation donate money cheque' },
   { label: 'Enter a membership form', to: '/people/membership-form', area: 'money', desk: true, words: 'member paper join' },
   { label: 'Draw a turf', to: '/map?draw=1', area: 'map', desk: true, words: 'cut turf walk list map area polygon' },
-  { label: 'New shift', to: '/shifts?new=1', area: 'shifts', desk: true, words: 'schedule event canvass shift' },
+  { label: 'New shift', to: '/shifts?add=1', area: 'shifts', desk: true, words: 'schedule event canvass shift' },
   { label: 'Write an email', to: '/outreach/email?new=1', area: 'outreach', desk: true, words: 'email newsletter blast send' },
   { label: 'Write a text', to: '/outreach/texting?new=1', area: 'outreach', desk: true, words: 'text sms blast message' },
 ];

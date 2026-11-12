@@ -274,7 +274,8 @@ one tap away under **More**.
   a 0 never un-marks anyone, and the import's line says *adds voted*. Switch
   it off (and *Turn on by itself* off, on a voting day) and the buttons go;
   the marks stay.
-- **Shifts → New shift → More details → Turfs** — tap one or more turfs
+- **Shifts → New shift → More → More options → More details → Turfs** (the
+  long form) — tap one or more turfs
   (*Anyone who counts themselves in gets these walk lists*), then *Create
   shift*. The shift reads *Walk list: Newton block* (or *Walk lists: …*)
   with *Change turfs*; the list row reads *Saturday canvass · Newton block*
@@ -339,7 +340,9 @@ one tap away under **More**.
   already on file by email (or name and phone, or name and postal code),
   and a ticked box puts them on the newsletter list with the words they
   saw. A shift's **Edit** → **Show on the website** lists it on the site's
-  events, where anyone can sign up (room is checked). Their
+  events and volunteer openings, where anyone can sign up (room is checked
+  when the shift has a limit; a shift with a kind is listed once — an Event
+  with the events, any other kind with the openings). Their
   `/preferences` link turns email and texts off or on in base.win itself.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
@@ -453,7 +456,11 @@ one tap away under **More**.
   once): answer, press 1, and you're connected — they see the campaign's
   number. With no signal, Call is your phone's own dialler (*No signal —
   this calls from your own number*).
-- **Shifts** — *Count me in* on an open shift; *Can't make it* to drop out.
+- **Shifts** — the list, a day a heading; each row says what, the hours and
+  where. *Count me in* is on the row (a shift at the same time as one of
+  yours asks *Count me in anyway?* first); open the shift for *Can't make
+  it*. A place with a pin opens a map; a Mainstreet shift you are on has
+  *Start mainstreeting*, which opens Mainstreeting at its place.
 - **Voted ✓** (once your manager turns Election day on) — on an open door of
   your walk list, the map's door card or a Calls card, one tap says this
   person has voted: the toast reads *Voted · Harjit* with *Change* (a
@@ -490,9 +497,46 @@ one tap away under **More**.
   role (incl. *Hi-rise building captain*); open a profile; add tags, roles,
   social handles. **More → Call list / Text list** opens Calls with the same
   filter; **More → Inbox** has every text conversation.
-- **Shifts** — **New shift** (what, when, where, how many; role,
-  instructions and link under *More details*), **Add volunteer**, then
-  **Notify everyone** (email + text). Without email/text connected the
+- **Shifts → Week** — next week (**›**). **+** on Monday: tap *Burma
+  Shave*; *Pick on the map*, tap a corner, *Use this place*; *Weekdays*;
+  **Add 5 shifts** — five cards under *Early*, 6:30–8:30 am, named for the
+  corner, nothing typed, and no number on them (*More → We need* sets a
+  target by tap: then *0 of 4*). **+** on Saturday: *Canvass*, a turf,
+  *2–5 pm* as well: a morning and an afternoon canvass, each with its turf
+  chip (the turf is the place, said once). Tap a card: another day and
+  **Save** moves it (or drag the card to another day — *Undo*); with
+  someone on it the week says who has the old time, with **Tell them**
+  (close the sheet that opens — ✕, Escape or Back — and you are still on
+  the week). A shift the long form made at 11 pm opens its sheet on *11 pm*
+  and its own length, both chosen; tap another length by mistake and its
+  own can be tapped again. Tap a name in the strip of people: it stays in
+  hand (*Tap each shift to put … on it*, then under the name what each tap
+  did — no toast over the next card) while you tap card after card;
+  **Done** puts it down. A long name on a card keeps its initial
+  (*Kristo… E.*). Someone who filled in the website's volunteer form is there,
+  marked *Asked*. *Every week for 4 weeks* makes a repeating slot:
+  its card offers *This one · This and the following*. **More**: *Tell
+  everyone on this week's shifts* shows the count first, then *Details* a
+  person a row; *Remind people the evening before* is a switch (a
+  manager's); *Copy to next week* asks *With the same people?*. Go a week
+  further: an empty week offers **Copy last week**. On a phone it is one
+  day at a time, the sheets come up from the bottom, and **People** opens
+  the list as a sheet; **Back** closes a sheet, not the week. Lose the
+  signal with a sheet open: the sheet keeps every choice and waits (*No
+  signal — your choices stay*). A point nothing could name reads *Pinned
+  place* — on its card, its own page (with *Name it*) and the website (*See
+  the map*), never its coordinates; its Mainstreeting asks *Where are
+  you?*. With more than 500 shifts ahead the List ends in **Show later
+  shifts**.
+  `PORT=4900 SHOTS=/tmp/schedule node e2e-schedule.mjs` runs all of it in a
+  browser — a desk at 1440×900 and 1280×800, a laptop on Toronto time, a
+  phone, and a volunteer's phone (its own server, a stand-in address
+  service and texting provider) — checking that no key is pressed in the
+  add sheet or while people are placed.
+- **Shifts** — the long form (**New shift → More → More options**: what,
+  when, where; role, end, instructions, link, turfs and *Limit sign-ups to*
+  under *More details*),
+  **Add volunteer**, then **Notify everyone** (email + text). Without email/text connected the
   button says *Save — nothing sends*; once connected, *Notify again* reaches
   them. Nothing on any screen claims to be sent unless it was.
   **Edit** under the title opens the shift filled in; move its time or

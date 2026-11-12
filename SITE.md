@@ -183,7 +183,8 @@ so the page says it on the form that was sent), or to the checkout.
 ```
 {
   posts:     [{ slug, title, excerpt, image, published_at }],          // newest first, published only
-  events:    [{ id, title, starts_at, ends_at, location, spots_left, lat, lng }],  // upcoming public shifts/events
+  events:    [{ id, title, starts_at, ends_at, location, spots_left, lat, lng }],  // upcoming public shifts that are events (the Event kind)
+  shifts:    [{ …the same… }],                                         // upcoming public shifts of every other kind: the volunteer openings
   counts:    { members, signatures: { [campaignId]: n } },
   campaigns: { [id]: { id, slug, kind, title, excerpt, statement, goal, count, status } },
   payments:  { ready, limit_cents, monthly_max_cents },               // limit from server/lib/cap.js for this year
@@ -191,6 +192,15 @@ so the page says it on the form that was sent), or to the checkout.
 }
 ```
 `site` = `{ theme (checked), nav, footer, announcement, seo, org, social }`.
+
+A public shift is listed by its kind (`shared/shiftkinds.js`): an Event
+under `events` only, any other kind under `shifts` only — a 6:30 am Burma
+Shave is not the home page's "Next event". A shift made before kinds has
+none and is in both, as it always was. Each list is its own two dozen.
+`lat`/`lng` are the pin of the shift's saved place (a point picked on the
+map), null for words alone: a card with a pin links to a map. A point
+nobody has named has no words (`location` is `''`, never its
+coordinates): its card's link says "See the map".
 
 ## Rendering
 
@@ -233,7 +243,8 @@ post              { slug, title, excerpt, body (Markdown), image: { url, alt }, 
 campaign          { id, slug, kind, title, excerpt, body (Markdown), statement, goal,
                   count?, status }  — count, else data.campaigns[id].count, else
                   data.counts.signatures[id]
-data.shifts       optional: the Volunteer openings module lists these, else data.events
+data.shifts       the Volunteer openings module lists these (the loaders always give
+                  them); left out by another caller, it lists data.events
 data.payments.membership_min_cents   optional: the join form's amounts start there
 ```
 
@@ -275,7 +286,9 @@ data.payments.membership_min_cents   optional: the join form's amounts start the
   `/media/`; the server gives it the client's path under `BASE_PATH`, so an
   absolute `og:image` of an upload is right past `lib/mount.js` too.
 - `timeZone` *(added)* — for dates; default `site.org.time_zone`, else
-  `America/Vancouver`.
+  `America/Vancouver` — written on the clock the app keeps
+  (`shared/dayparts.js`: B.C. on UTC−7 by rule), so a server with old
+  time-zone data still says a 6:30 shift starts at 6:30.
 
 Forms as drawn: `<form method="post" action="{root}api/forms/<kind>">` with
 SITE.md's names and nothing else. Tick boxes send `true`. The newsletter
@@ -612,7 +625,7 @@ Writes are actions (`POST /api/actions/:name`):
 | `site.post.save` · `publish` · `delete` | `{ id?, title, slug?, excerpt?, body?, image? }` → `{ post }` · `{ id, published? = true }` · `{ id }` |
 | `site.campaign.save` · `close` · `delete` | `{ id?, kind, title, slug?, excerpt?, body?, statement?, goal? }` → `{ campaign }` · `{ id, open? }` · `{ id }` |
 | `site.picture` | `{ data (base64 or data: URL), name?, width?, height? }` → `{ media: { id, url: '/media/:id' } }` (JPG/PNG/WebP, 2 MB) |
-| `shift.public` | `{ id, public }` — the desk (Shifts area): the shift on the site's events |
+| `shift.public` | `{ id, public }` — the desk (Shifts area): the shift on the site — with the events or the volunteer openings, by its kind |
 
 Slugs: lowercase a–z, 0–9 and dashes; never `news`, `act`, `r`,
 `preferences`, `unsubscribe`, `api`, `site-assets`, `__preview`,

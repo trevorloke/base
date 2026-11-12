@@ -39,6 +39,7 @@ const ACTION_AREA = {
   person: 'people', relationship: 'people', call: 'people', volunteer: 'people', contact: 'people',
   turf: 'map',
   shift: 'shifts',
+  place: 'shifts', // places a shift happens at (ext/schedule)
   gift: 'money', receipt: 'money', donor: 'money', membership: 'money',
   payment: 'money', // online payments (ext/payments)
   sign: 'signs',
@@ -84,6 +85,7 @@ const PATH_AREA = [
   [/^\/api\/pathtowin(\/|$)/, 'data'],
   [/^\/api\/shiftturfs(\/|$)/, 'shifts'],
   [/^\/api\/(crew|volunteers)(\/|$)/, 'shifts'],
+  [/^\/api\/(places|schedule)(\/|$)/, 'shifts'],
   [/^\/api\/connections(\/|$)/, 'admin'],
   [/^\/api\/intake(\/|$)/, 'admin'],
   [/^\/api\/site(\/|$)/, 'site'],

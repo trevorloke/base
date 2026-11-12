@@ -1,5 +1,8 @@
 // Mainstreeting (/mainstreet) — meeting people where they are: an event, a
-// bus loop, a market. Say where you are once (kept on this phone); then, for
+// bus loop, a market. Say where you are once (kept on this phone) — or come
+// from a Mainstreet shift, which hands its place over in the address
+// (/mainstreet?place=…) so "Where are you?" is never asked (a shift at a
+// point nobody has named asks it: /mainstreet?ask=1); then, for
 // each person, first and last name, phone, email, postal code, how they
 // lean, a note, and whether they'd volunteer or want the newsletter. Save
 // clears the form for the next person and keeps the place; it goes through
@@ -7,7 +10,7 @@
 // (mainstreet.meet, ext/mainstreet). Who you've met here today is listed
 // under the form.
 import { useEffect, useRef, useState } from 'react';
-import { Link, useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { queueAction } from '../offline.js';
 import RatingButtons from '../components/RatingButtons.jsx';
@@ -26,8 +29,15 @@ const BLANK = { first: '', last: '', phone: '', email: '', postal: '', note: '',
 export default function Mainstreet() {
   const { me } = useOutletContext() ?? {};
   const queryClient = useQueryClient();
-  const [place, setPlace] = useState(() => read(PLACE_KEY, ''));
-  const [placing, setPlacing] = useState(() => !read(PLACE_KEY, ''));
+  // The place a shift handed over (Shifts.jsx "Start mainstreeting"), else
+  // the one kept on this phone — unless the shift asks (?ask=1: it is at a
+  // point nobody has named, so the place kept from another day is wrong).
+  const [params] = useSearchParams();
+  const handed = String(params.get('place') || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+  const kept = params.get('ask') === '1' ? '' : read(PLACE_KEY, '');
+  const [place, setPlace] = useState(() => handed || kept);
+  const [placing, setPlacing] = useState(() => !(handed || kept));
+  useEffect(() => { if (handed) write(PLACE_KEY, handed); }, [handed]);
   const [f, setF] = useState(BLANK);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);

@@ -1,9 +1,11 @@
 // A shift's turfs — the walk lists it is for (server/ext/shiftturfs).
 //
-//   useShiftTurfs(me, { side })  → { byShift: { [shift_id]: [{ id, name, color }] }, ready }
+//   useShiftTurfs(me, { side })  → { byShift: { [shift_id]: [{ id, name, color }] }, ready, failed }
 //                                GET /shiftturfs, any role; kept on the phone
 //                                (OfflineCache) so the Shifts list and a shift
 //                                opened with no signal still name their turfs.
+//                                ready: the answer is in; failed: it couldn't
+//                                be read (and nothing is kept).
 //                                side: the screen only reads a line of it (a
 //                                shift, the week board) — its time isn't the
 //                                screen's (KeptCopies.js useKeptTime)
@@ -18,6 +20,9 @@ import { phoneCopy, useKeepCopy } from './OfflineCache.js';
 import './shiftturfs.css';
 
 export const turfNames = (list) => (Array.isArray(list) ? list.map((t) => t.name).filter(Boolean).join(', ') : '');
+// A canvass whose place is its turf ("Canvass — Newton block" on Newton
+// block): the turf says where, once.
+export const turfIsPlace = (place, list) => Boolean(place) && String(place).trim().toLowerCase() === turfNames(list).trim().toLowerCase();
 
 const NO_TURFS = {};
 export function useShiftTurfs(me, { side = false } = {}) {
@@ -29,7 +34,7 @@ export function useShiftTurfs(me, { side = false } = {}) {
     ...(side ? { meta: { side: true } } : {}),
   });
   useKeepCopy(me, 'shiftturfs', q);
-  return { byShift: q.data?.shifts ?? NO_TURFS, ready: q.data !== undefined };
+  return { byShift: q.data?.shifts ?? NO_TURFS, ready: q.data !== undefined, failed: q.isError && q.data === undefined };
 }
 
 // Tap a turf to add it, tap again to take it off. Picked ones get an ink

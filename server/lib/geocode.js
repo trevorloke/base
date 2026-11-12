@@ -212,6 +212,58 @@ const nominatimSuggest = async (q, limit) => {
     }));
 };
 
+// ── A name for a point (ext/schedule: a place picked on the map) ──
+// nearestCorner({ lat, lng }) → { name: 'King George Blvd & 88 Ave' } | null
+//     the nearest intersection within 150 m (three roads or more meeting)
+// nearestCivic({ lat, lng })  → { name: '8850 King George Blvd', address } | null
+//     the nearest civic address within 100 m
+// The BC Address Geocoder's /intersections/nearest and /sites/nearest, so
+// only in B.C. and never with GEOCODER=off. null when there is none in
+// reach — and also when the service is slow (4 s), down, or answers anything
+// unexpected: the caller names the place by its next rule, so these never
+// throw and never hold a save.
+let nearestMs = 4000;
+export const _setNearestMsForTest = (ms) => { nearestMs = ms || 4000; };
+const bcNearest = async (path, { lat, lng }, params) => {
+  if ((process.env.GEOCODER || 'bc').toLowerCase() === 'off' || province() !== 'BC') return null;
+  try {
+    const base = (process.env.BC_GEOCODER_URL || 'https://geocoder.api.gov.bc.ca').replace(/\/$/, '');
+    const url = new URL(`${base}/${path}`);
+    url.searchParams.set('point', `${lng},${lat}`);
+    url.searchParams.set('outputSRS', '4326');
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+    const headers = process.env.BC_GEOCODER_KEY ? { apikey: process.env.BC_GEOCODER_KEY } : {};
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(nearestMs) });
+    if (!res.ok) return null;
+    const body = await res.json();
+    // One feature, or a list of them: the first.
+    const f = body?.type === 'Feature' ? body : body?.features?.[0];
+    return f?.properties && typeof f.properties === 'object' ? f.properties : null;
+  } catch {
+    return null;
+  }
+};
+const beforeComma = (v) => clean(v).split(',')[0].trim();
+
+export const nearestCorner = async (point) => {
+  const p = await bcNearest('intersections/nearest.json', point, { maxDistance: 150, minDegree: 3 });
+  // "King George Blvd and 88 Ave" → "King George Blvd & 88 Ave"; anything
+  // that isn't two roads is not a corner's name.
+  const roads = (clean(p?.intersectionName) || beforeComma(p?.fullAddress)).split(/\s+(?:and|&)\s+/i).map(clean).filter(Boolean);
+  const name = roads.join(' & ');
+  return roads.length >= 2 && name.length <= 200 ? { name } : null;
+};
+
+export const nearestCivic = async (point) => {
+  const p = await bcNearest('sites/nearest.json', point, { maxDistance: 100, excludeUnits: true, onlyCivic: true });
+  if (!p) return null;
+  const number = `${clean(p.civicNumber)}${clean(p.civicNumberSuffix)}`;
+  const street = [p.streetName, p.streetType, p.streetDirection].map(clean).filter(Boolean).join(' ');
+  const line = number && street ? `${number} ${street}` : beforeComma(p.fullAddress);
+  // A door has a number in front; "Surrey, BC" is not one.
+  return /^\d/.test(line) && line.length <= 200 ? { name: line, address: clean(p.fullAddress) || line } : null;
+};
+
 const SUGGESTERS = { bc: bcSuggest, google: googleSuggest, nominatim: nominatimSuggest };
 
 export const suggestAddresses = async (q, { limit = 5 } = {}) => {
