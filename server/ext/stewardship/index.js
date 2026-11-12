@@ -25,6 +25,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { httpError } from '../../actions/util.js';
 import { newId } from '../../lib/events.js';
+import { noCallSql } from '../../lib/reach.js';
 
 export const sql = `
 create table if not exists gift_thanks (
@@ -123,7 +124,7 @@ api.get('/stewardship', async (c) => {
   const db = c.get('db');
   const ws = ctx.workspaceId;
   const toThank = (await db.query(
-    `select g.id as gift_id, g.amount_cents, g.date, g.method, g.cadence, p.id as person_id, p.name, p.phone, p.email,
+    `select g.id as gift_id, g.amount_cents, g.date, g.method, g.cadence, p.id as person_id, p.name, p.phone, p.email, ${noCallSql('p')} as no_call,
             (p.address is not null and trim(p.address) <> '') as has_address,
             (current_date - g.date)::int as days
        from gifts g join persons p on p.id = g.person_id and p.deleted_at is null
@@ -135,18 +136,18 @@ api.get('/stewardship', async (c) => {
     [ws],
   )).rows.map((r) => ({ ...r, date: day(r.date), amount_cents: Number(r.amount_cents) }));
   const lapsed = (await db.query(
-    `select p.id as person_id, p.name, p.phone, p.email, max(g.date) as last_date,
+    `select p.id as person_id, p.name, p.phone, p.email, ${noCallSql('p')} as no_call, max(g.date) as last_date,
             coalesce(sum(g.amount_cents) filter (where extract(year from g.date) = extract(year from current_date) - 1), 0)::bigint as last_year_cents,
             sum(g.amount_cents)::bigint as ever_cents
        from gifts g join persons p on p.id = g.person_id and p.deleted_at is null
       where g.workspace_id = $1 and g.deleted_at is null
-      group by p.id, p.name, p.phone, p.email
+      group by p.id, p.name, p.phone, p.email, p.tags
      having max(g.date) < date_trunc('year', current_date)
       order by last_year_cents desc, ever_cents desc limit 200`,
     [ws],
   )).rows.map((r) => ({ ...r, last_date: day(r.last_date), last_year_cents: Number(r.last_year_cents), ever_cents: Number(r.ever_cents) }));
   const steps = (await db.query(
-    `select s.person_id, p.name, p.phone, p.email, s.step, s.due_on, (s.due_on is not null and s.due_on <= current_date) as due
+    `select s.person_id, p.name, p.phone, p.email, ${noCallSql('p')} as no_call, s.step, s.due_on, (s.due_on is not null and s.due_on <= current_date) as due
        from donor_steps s join persons p on p.id = s.person_id and p.deleted_at is null
       where s.workspace_id = $1 order by s.due_on nulls last, s.updated_at`,
     [ws],

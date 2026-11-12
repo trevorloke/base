@@ -66,7 +66,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES, SHIFT_STATUSES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES, SHIFT_STATUSES, noCalls, noCallsWord } from '@starbase/shared/canvass';
 import { dayOf, fromInput, toInput } from '@starbase/shared/dayparts';
 import { isPinName, kindOf, mapUrl, pinPoint, placeLabel, shortBy } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
@@ -875,7 +875,7 @@ function AssigneeRow({ a, tz, open, onToggle, canDesk, busy, onStatus, onRemove,
         <div className="ops-body" id={bodyId}>
           {(a.phone || a.email) && (
             <div className="ops-contact">
-              {a.phone && <a href={`tel:${a.phone}`}>{a.phone}</a>}
+              {a.phone && (noCalls(a) ? <span>{a.phone} · {noCallsWord(a)}</span> : <a href={`tel:${a.phone}`}>{a.phone}</a>)}
               {a.email && <a href={`mailto:${a.email}`}>{a.email}</a>}
             </div>
           )}

@@ -14,6 +14,7 @@ import { action, apiGet, fmtMoney } from '../api.js';
 import { NoSignal, noSignal, useOnline } from '../components/NoSignal.jsx';
 import './shifts.css';
 import './stewardship.css';
+import { noCalls, noCallsWord } from '@starbase/shared/canvass';
 
 const HOWS = [['call', 'Called'], ['email', 'Emailed'], ['note', 'Note'], ['letter', 'Letter']];
 const fmtDay = (d) => (d ? new Date(`${String(d).slice(0, 10)}T12:00:00`).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
@@ -103,7 +104,7 @@ export default function Stewardship() {
                   <span className="mono">{fmtMoney(g.amount_cents)}</span>
                   <span className="muted">{fmtDay(g.date)} · <span className={g.days > 2 ? 'sw-warn' : ''}>waiting {waited(g.days)}</span></span>
                   <span className="muted sw-reach">
-                    {g.phone && <a href={`tel:${g.phone}`}>{g.phone}</a>}
+                    {g.phone && (noCalls(g) ? <span>{g.phone} · {noCallsWord(g)}</span> : <a href={`tel:${g.phone}`}>{g.phone}</a>)}
                     {g.email && <a href={`mailto:${g.email}`}>{g.email}</a>}
                     {!g.has_address && <span>no mailing address</span>}
                   </span>
@@ -150,7 +151,7 @@ export default function Stewardship() {
                 <div className="sw-row__main">
                   <Donor id={p.person_id} name={p.name} />
                   <span className="muted">last gave {fmtDay(p.last_date)}{p.last_year_cents > 0 && <> · <span className="mono">{fmtMoney(p.last_year_cents)}</span> last year</>} · <span className="mono">{fmtMoney(p.ever_cents)}</span> in all</span>
-                  <span className="muted sw-reach">{p.phone && <a href={`tel:${p.phone}`}>{p.phone}</a>}{p.email && <a href={`mailto:${p.email}`}>{p.email}</a>}</span>
+                  <span className="muted sw-reach">{p.phone && (noCalls(p) ? <span>{p.phone} · {noCallsWord(p)}</span> : <a href={`tel:${p.phone}`}>{p.phone}</a>)}{p.email && <a href={`mailto:${p.email}`}>{p.email}</a>}</span>
                 </div>
                 <div className="sw-acts">{stepButton(p.person_id)}</div>
               </li>

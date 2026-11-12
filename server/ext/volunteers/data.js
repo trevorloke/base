@@ -17,6 +17,8 @@
 // whether they asked to volunteer and it's still open; an app sign-in.
 // stage: 'active' (a shift coming up, or busy in the last 30 days), 'new'
 // (nothing done yet), 'lapsed' (did something once, nothing for 30 days).
+import { noCallSql } from '../../lib/reach.js';
+
 const ACTIVE = ['assigned', 'confirmed'];
 const DAY = 864e5;
 export const ACTIVE_DAYS = 30;
@@ -40,9 +42,9 @@ export const loadVolunteers = async (db, ws, { now = new Date() } = {}) => {
   )).rows.map((r) => r.id);
   if (!ids.length) return [];
   const people = (await db.query(
-    `select id, name, phone, email, created_at from persons
-     where workspace_id = $1 and deleted_at is null and id = any($2::uuid[])
-     order by lower(name) limit ${MAX}`,
+    `select p.id, p.name, p.phone, p.email, p.created_at, ${noCallSql('p')} as no_call from persons p
+     where p.workspace_id = $1 and p.deleted_at is null and p.id = any($2::uuid[])
+     order by lower(p.name) limit ${MAX}`,
     [ws, ids],
   )).rows;
   if (!people.length) return [];
@@ -125,6 +127,7 @@ export const loadVolunteers = async (db, ws, { now = new Date() } = {}) => {
       id: p.id,
       name: p.name,
       phone: p.phone || null,
+      no_call: p.no_call,
       email: p.email || null,
       roles: roles.get(p.id) || [],
       signed_in: Boolean(userId),
@@ -145,4 +148,4 @@ export const loadVolunteers = async (db, ws, { now = new Date() } = {}) => {
 
 // Contact details are the desk's: a volunteer granted Shifts sees names,
 // roles and how each is doing, never a phone or an email.
-export const forRole = (ctx) => (v) => (ctx.role === 'volunteer' ? { ...v, phone: null, email: null } : v);
+export const forRole = (ctx) => (v) => (ctx.role === 'volunteer' ? { ...v, phone: null, email: null, no_call: null } : v);

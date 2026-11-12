@@ -28,7 +28,7 @@ import { forViewer, loginEmail } from '../lib/viewer.js';
 import { geoBox } from '../lib/org.js';
 import { RATING_CODE_RE } from '@starbase/shared/scale';
 import { personsWhere, joinWhere } from '../lib/audience.js';
-import { mayReach, address, person } from '../lib/reach.js';
+import { mayReach, address, person, noCallSql } from '../lib/reach.js';
 // Which saved newsletter / press rows Try again would reach (ext/abtests).
 import { goingRow, repeatRow, retryable, sendJobOn } from '../ext/abtests/send.js';
 import { notSuppressed } from '../lib/mail/index.js';
@@ -897,7 +897,7 @@ app.get('/shifts/:id', async (c) => {
   const myEmail = String(ctx.user.email || '').toLowerCase();
   const assignees = (await db.query(
     `select a.id as assignment_id, a.status, a.notified_at, a.notify_email, a.notify_text,
-            p.id, p.name, p.email, p.phone, (lower(p.email) = $3) as is_me
+            p.id, p.name, p.email, p.phone, ${noCallSql('p')} as no_call, (lower(p.email) = $3) as is_me
      from shift_assignments a join persons p on p.id = a.person_id
      where a.shift_id = $1 and a.workspace_id = $2 order by p.name`,
     [shift.id, ctx.workspaceId, myEmail],
@@ -906,7 +906,7 @@ app.get('/shifts/:id', async (c) => {
   if (ctx.role === 'volunteer') {
     return c.json({
       shift,
-      assignees: assignees.map((a) => (a.is_me ? a : { ...a, email: null, phone: null, notify_email: null, notify_text: null })),
+      assignees: assignees.map((a) => (a.is_me ? a : { ...a, email: null, phone: null, no_call: null, notify_email: null, notify_text: null })),
     });
   }
   return c.json({ shift, assignees });

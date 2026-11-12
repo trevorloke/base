@@ -19,7 +19,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES, noCalls } from '@starbase/shared/canvass';
 import { placeLabel } from '@starbase/shared/shiftkinds';
 import { apiGet, action } from '../api.js';
 import { NeedsSignalLine, useOnline } from '../components/NoSignal.jsx';
@@ -120,7 +120,7 @@ function Row({ v, tz, open, onToggle, shifts, onBooked }) {
         <div className="ops-body" id={bodyId}>
           {(v.phone || v.email) && (
             <div className="ops-contact vl-contact">
-              {v.phone && <a className="btn ops-tap" href={`tel:${v.phone}`}>Call</a>}
+              {v.phone && !noCalls(v) && <a className="btn ops-tap" href={`tel:${v.phone}`}>Call</a>}
               {v.phone && <a className="btn ops-tap" href={`sms:${v.phone}`}>Text</a>}
               {v.email && <a className="btn ops-tap" href={`mailto:${v.email}`}>Email</a>}
               <span className="vl-numbers">{[v.phone, v.email].filter(Boolean).join(' · ')}</span>

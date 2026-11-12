@@ -32,7 +32,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { VOLUNTEER_ROLES } from '@starbase/shared/canvass';
+import { VOLUNTEER_ROLES, noCalls } from '@starbase/shared/canvass';
 import { apiGet, action } from '../api.js';
 import { useOnline } from '../components/NoSignal.jsx';
 import { useDragDrop } from '../components/useDragDrop.js';
@@ -280,7 +280,7 @@ export default function ShiftCrew({ shiftId, tz, canMap = true, onChanged }) {
             {checkIn && (
               <button type="button" className="btn btn-quiet" disabled={busy} onClick={() => { setMenu(null); setStatus(c, 'no_show'); }}>No-show</button>
             )}
-            {c.phone && <a className="btn btn-quiet" href={`tel:${c.phone}`}>Call</a>}
+            {c.phone && !noCalls(c) && <a className="btn btn-quiet" href={`tel:${c.phone}`}>Call</a>}
             {c.phone && <a className="btn btn-quiet" href={`sms:${c.phone}`}>Text</a>}
             <Link className="btn btn-quiet" to={`/people/${c.person_id}`}>Profile</Link>
             <button type="button" className="btn btn-quiet cb-menu__off" disabled={busy} onClick={() => { setMenu(null); remove(c); }}>

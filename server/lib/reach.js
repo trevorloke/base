@@ -99,6 +99,11 @@ export const RULES = {
   ],
 };
 
+// "Asked not to be called" (do-not-call or do-not-contact, whatever the
+// capitals) — a column for a screen that offers a Call (shared/canvass.js
+// noCalls reads it as no_call), where a row carries no tags.
+export const noCallSql = (alias = 'p') => `(${tagged({ tags: `${alias}.tags` }, NO_CALL)} or ${tagged({ tags: `${alias}.tags` }, NO_CONTACT)})`;
+
 const rulesFor = (channel, sender, { atSend = false } = {}) => {
   const rules = RULES[channel];
   if (!rules) throw new Error(`no such channel: ${channel}`);

@@ -75,9 +75,13 @@ export const SUGGESTED_TAGS = [
 // Asked not to be phoned — do-not-call, or do-not-contact (no calls, no
 // texts, no email): every Call a screen offers checks this first (a number
 // that is only shown can still be read; it is never one tap to dial).
-export const noCalls = (p) => Array.isArray(p?.tags) && (p.tags.includes('do-not-call') || p.tags.includes('do-not-contact'));
+// A row with no tags (the crew board, the roster, a shift's page,
+// Stewardship) carries the server's no_call instead (lib/reach.js noCallSql).
+// A tag counts whatever its capitals, as every send reads it.
+const lowTags = (p) => (Array.isArray(p?.tags) ? p.tags.map((t) => String(t).toLowerCase()) : []);
+export const noCalls = (p) => p?.no_call === true || lowTags(p).includes('do-not-call') || lowTags(p).includes('do-not-contact');
 // What a screen shows where the Call would be: do-not-contact is more than calls.
-export const noCallsWord = (p) => (Array.isArray(p?.tags) && p.tags.includes('do-not-contact') ? 'Do not contact' : 'Do not call');
+export const noCallsWord = (p) => (lowTags(p).includes('do-not-contact') ? 'Do not contact' : 'Do not call');
 
 // Donor tiers, derived from real gifts — never self-declared.
 //   star:      $1,000+ in the calendar year, or $100+/mo recurring

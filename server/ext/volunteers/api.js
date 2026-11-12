@@ -11,6 +11,7 @@
 // sees no phone or email). Area: shifts (lib/perms.js).
 import { Hono } from 'hono';
 import { ACTIVE_DAYS, forRole, loadVolunteers } from './data.js';
+import { noCallSql } from '../../lib/reach.js';
 
 export const api = new Hono();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -47,7 +48,7 @@ api.get('/crew/:shiftId', async (c) => {
   )).rows;
   const turfIds = new Set(turfs.map((t) => t.id));
   const booked = (await db.query(
-    `select a.id as assignment_id, a.status, a.person_id, p.name, p.phone, p.email,
+    `select a.id as assignment_id, a.status, a.person_id, p.name, p.phone, p.email, ${noCallSql('p')} as no_call,
             c.placed, c.turf_id, c.job,
             exists (select 1 from users u join memberships m on m.user_id = u.id and m.workspace_id = $1
                     where p.email is not null and lower(u.email) = lower(p.email)) as signed_in
@@ -72,6 +73,7 @@ api.get('/crew/:shiftId', async (c) => {
     person_id: b.person_id,
     name: b.name,
     phone: view ? null : b.phone || null,
+    no_call: view ? null : b.no_call,
     email: view ? null : b.email || null,
     status: b.status,
     // Where the board put them: 'every' (not placed), 'none', or a turf id —
