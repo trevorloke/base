@@ -49,6 +49,55 @@ Site routes (relative to the site root):
 `/sitemap.xml` · `/robots.txt` · `/site-assets/*` (css, fonts, island script) ·
 `POST /api/forms/:kind`.
 
+## Other websites (`server/ext/site/microsites.js`)
+
+A campaign may have up to five other websites (`microsites`): a petition or
+a contrast site on a domain of its own (dougdidnt.ca), with its own name,
+look (`theme`) and pages (`site_pages.site_id`, at most 50), built in the
+same page builder. It stores nothing else: the organization, the privacy
+policy, the social accounts and "Authorized by …" are always the main
+site's — the same elector organization sponsors every site and keeps what
+every form collects.
+
+- **Where**: its domain (at most two: the bare domain and its `www.`) at `/`,
+  and `/site/sites/<key>/…` on the app's address (`noindex` there once it has
+  a domain). A draft or offline site answers every route with "Coming soon"
+  (`noindex`, `no-store`), but `/site-assets/*` and a page's preview.
+- **Routes there**: `/`, `/:slug` (its own pages), `/act/:slug` (any open
+  petition or pledge; canonical on the main site's address), `/r/:code`,
+  `POST /api/forms/:kind`, `/sitemap.xml` (its pages), `/robots.txt`,
+  `/site-assets/*`. `/news…`, `/act`, `/preferences` and `/unsubscribe` are its
+  404: emails link to the main site's.
+- **What the renderer gets** (`store.js siteOf`): its theme; a menu of its
+  pages marked "In the menu" (no title-bar button); search and sharing from
+  its home page; the main site's `org` (privacy link absolute on the main
+  site's address), social accounts and consent words; `site: { name, key }`
+  (the header and `<title>`); `parent: { name, url }` — the footer's "A
+  website by …" link. Its footer is the main site's bottom lines and logo.
+- **Addresses** (`hostProblem`): never the app's own, one people used the
+  app at, `SITE_HOSTS`, any campaign's main domains or another website's.
+  An address a website stops using (dropped, or the site deleted) is
+  **closed**: every route there, any method, answers `410` "This website has
+  closed" with who it was by, the main site's link and "Authorized by …" —
+  never the app — until a manager releases it (remove it from Render first;
+  after release it would reach the app). A closed address of this campaign
+  may be given to another of its websites; another campaign's may not.
+- **Who**: anyone with the Website area edits its pages and look; only a
+  manager creates, renames, sets addresses, takes it live or offline,
+  deletes, restores or releases. Going live needs its home page published,
+  Settings → Organization → Authorized by (the agent and how to reach them)
+  and the privacy policy link — refused with the first one missing.
+- **Forms**: `site_actions.site_id` (and the `site_action` event) say which
+  website; the source is `?source=`, else `?utm_source=` (the island's, and a
+  plain post's own address or the page it came from). One people database:
+  the same email is the same person on every site. People: `web=site:<id>`
+  (never the money forms); History adds "on <its domain>".
+- **"Authorized by …"** (`shared/site/wording.js authorizedBy`): "Authorized
+  by <agentName>, <agentContact>", else the old `authorizationLine` — in the
+  footer of every page of every site and on the plain pages. Every form's
+  small print ends "<org> keeps what you send to stay in touch about our
+  work and elections." and the "Privacy policy" link (`PRIVACY_LINE`).
+
 ## Tables (`server/ext/site/sql.js`)
 
 ```
@@ -258,8 +307,8 @@ site.footer       { acknowledgement (Markdown), links: [{ label, href }], text? 
                   logo?: { url, alt } (drawn in place of the name) }
 site.announcement { enabled, text, link: { label, href } }   (or linkLabel / linkHref)
 site.seo          { title, description, image: { url, alt }, noindex? }   (or shareImage)
-site.org          { name, short_name?, email, phone, address, authorization (the
-                  "Authorized by …" line), privacy_url, time_zone?, platformUrl?,
+site.org          { name, short_name?, email, phone, address, agentName?, agentContact?,
+                  authorization (the old "Authorized by …" line), privacy_url, time_zone?, platformUrl?,
                   platformLabel? (a link after the footer's links) }
 site.social       [{ name, handle, url, cta? }]   (or { accounts: [...] })
 page              { id, slug, title, description, modules }  — the published (or draft)
@@ -464,7 +513,8 @@ nav           { menu: [{ label, href }],      // the Menu, in order; the rendere
 footer        { acknowledgement, links: [{ label, href }], logo: { url, alt } }
 announcement  { enabled, text, linkLabel, linkHref }
 seo           { title, description, shareImage: { url, alt } }
-org           { name, shortName, email, phone, address, platformUrl, platformLabel, privacyUrl, authorizationLine }
+org           { name, shortName, email, phone, address, platformUrl, platformLabel, privacyUrl,
+                agentName, agentContact, authorizationLine (drawn only while no agent is named) }
 social        { accounts: [{ name, short, handle, url }] }
 theme         shared/site/theme.js (checkTheme: a pair under 4.5:1 is refused)
 domains       ['imaginesurrey.ca', …]       // the site answers at / on these too

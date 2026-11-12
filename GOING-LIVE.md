@@ -55,6 +55,18 @@ on the campaign's own domain, in this order:
    answers there until step 2, and an address someone signed in at can't
    be made the website's from the screen (SITE.md).
 
+**Another website** (a petition or contrast site such as dougdidnt.ca,
+SITE.md "Other websites") takes one more custom domain on the service —
+check the Render plan allows it. In this order: a manager saves the
+address on the site (Website → the site → Domain); then add it in Render
+(Settings → Custom Domains; Render adds its `www.`); then the DNS records
+Render shows. A site that closes keeps its address saying "This website
+has closed" until a manager releases it: remove the domain from Render
+**before** releasing it, or the app's sign-in page would answer there.
+Every page carries "Authorized by …" from Website → Settings →
+Organization (the financial agent and how to reach them); a site can't
+go live without it and the privacy policy link.
+
 Until then the campaign's present site keeps `imaginesurrey.ca`; its
 server can send sign-ups in with a website key from Settings → Services
 (INTEGRATIONS.md, *The campaign's website*: the fields, the answers, an
