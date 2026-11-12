@@ -16,6 +16,7 @@ import { logGift } from '../lib/gifts.js';
 import { runHooks } from '../lib/hooks.js';
 import { readVoted } from '../ext/voted/import.js';
 import { voterNumber } from '../ext/voternumber/index.js';
+import { parseSocial } from '@starbase/shared/socials';
 
 const app = new Hono();
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -82,13 +83,39 @@ const rowSchema = z.object({
   // 1/0 (yes/no) columns that become the volunteer and donor tags.
   volunteer: z.union([z.string().max(20), z.number(), z.boolean()]).nullish(),
   donor: z.union([z.string().max(20), z.number(), z.boolean()]).nullish(),
-  // Social handles, one column each (a handle or a profile link).
+  // Social handles, one column each (a handle or a profile link), and one
+  // column of links whose network each link says (social).
   instagram: z.string().max(300).nullish(),
   x: z.string().max(300).nullish(),
   tiktok: z.string().max(300).nullish(),
   reddit: z.string().max(300).nullish(),
+  facebook: z.string().max(300).nullish(),
+  linkedin: z.string().max(300).nullish(),
+  youtube: z.string().max(300).nullish(),
+  bluesky: z.string().max(300).nullish(),
+  threads: z.string().max(300).nullish(),
+  social: z.string().max(2000).nullish(),
 });
-const IMPORT_SOCIALS = ['instagram', 'x', 'tiktok', 'reddit'];
+const IMPORT_SOCIALS = ['instagram', 'x', 'tiktok', 'reddit', 'facebook', 'linkedin', 'youtube', 'bluesky', 'threads'];
+// Each cell read as the profile reads a paste (shared/socials.js): a cell
+// that isn't a handle or a profile link is left out of the person and
+// counted (the import says how many, and the first few). The social
+// column takes links only: a bare @name there could be any network.
+const readSocials = (v) => {
+  const socials = {}; const bad = [];
+  for (const k of IMPORT_SOCIALS) {
+    if (!norm(v[k])) continue;
+    const r = parseSocial(norm(v[k]), k);
+    if (r.error) bad.push({ column: k, value: norm(v[k]) });
+    else if (!socials[r.platform]) socials[r.platform] = r.handle;
+  }
+  for (const cell of norm(v.social).split(/[\s,;|]+/).filter(Boolean)) {
+    const r = parseSocial(cell);
+    if (r.error) bad.push({ column: 'social', value: cell });
+    else if (!socials[r.platform]) socials[r.platform] = r.handle;
+  }
+  return { socials, bad };
+};
 const importInput = z.object({
   rows: z.array(z.record(z.string(), z.unknown())).min(1).max(2000),
   tag: z.string().trim().max(40).nullish(),   // applied to every imported row
@@ -170,8 +197,7 @@ const cleanRow = (raw, i, scale, past = null) => {
   const tags = Array.isArray(v.tags) ? [...v.tags] : norm(v.tags).split(/[;,|]/);
   if (yes(v.volunteer)) tags.push('volunteer');
   if (yes(v.donor)) tags.push('donor');
-  const socials = {};
-  for (const k of IMPORT_SOCIALS) if (norm(v[k])) socials[k] = norm(v[k]);
+  const { socials, bad: badHandles } = readSocials(v);
   // "13450" + "104 Ave" → "13450 104 Ave" (Surrey's streets are numbers
   // themselves, so only a street that already begins with this very number
   // keeps it as it is).
@@ -180,7 +206,7 @@ const cleanRow = (raw, i, scale, past = null) => {
   const pin = lat != null && lng != null && !(lat === 0 && lng === 0) ? { lat, lng } : null;
   return {
     row: {
-      name, first: norm(v.name) ? null : first, middle: norm(v.name) ? null : middle, last: norm(v.name) ? null : last, email, rating, socials, pin, house_number,
+      name, first: norm(v.name) ? null : first, middle: norm(v.name) ? null : middle, last: norm(v.name) ? null : last, email, rating, socials, badHandles, pin, house_number,
       phone: norm(v.phone) || null,
       address,
       unit: norm(v.unit) || null,
@@ -483,13 +509,16 @@ app.post('/import', async (c) => {
     return { created, merged, unchanged, decisions, other_numbers: otherNumbers, other_number_rows: otherRows };
   };
 
+  // Handles that didn't read as a handle or a profile link: left out, said.
+  const leftOut = clean.flatMap((r) => r.badHandles.map((b) => ({ row: r.index + 1, ...b })));
+  const handles = { handles_left_out: leftOut.length, handles_left_out_rows: leftOut.slice(0, 5) };
   if (dryRun) {
     const db = c.get('db');
     const result = await run({ query: (...a) => db.query(...a) }, () => {}, false);
-    return c.json({ dryRun: true, ...result, invalid: errors, decisions: result.decisions.slice(0, 50) });
+    return c.json({ dryRun: true, ...result, ...handles, invalid: errors, decisions: result.decisions.slice(0, 50) });
   }
   const { result } = await runAction(c.get('db'), { workspaceId: ctx.workspaceId, actorId: ctx.user.id, action: 'import.persons' }, run);
-  return c.json({ ...result, invalid: errors, decisions: result.decisions.slice(0, 50) });
+  return c.json({ ...result, ...handles, invalid: errors, decisions: result.decisions.slice(0, 50) });
 });
 
 // ── Geocoding: place unlocated people on the map, a batch at a time ──
