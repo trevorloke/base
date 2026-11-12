@@ -18,6 +18,8 @@
 // is cut, so a page is never short by what a later page holds.
 import { toLocal, fromLocal } from '../../lib/tzsql.js';
 import { SIGN_KINDS, DEFAULT_SLATE, slateLabel } from '@starbase/shared/canvass';
+import { fmtIn } from '@starbase/shared/dayparts';
+import { placeLabel } from '@starbase/shared/shiftkinds';
 import { WEB_WORDS, MONEY_KINDS, campaignWords } from '../webdid/words.js';
 import { showValue } from '../surveys/answers.js';
 import { fillIn } from '../ladders/shape.js';
@@ -51,7 +53,7 @@ const parseJ = (v, d) => { try { return typeof v === 'string' ? JSON.parse(v) : 
 // "Oct 6, 2026" for a date column (both databases hand back UTC midnight).
 const dateWord = (d) => new Date(d).toLocaleDateString('en-CA', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
 // "Sat, Nov 1": the day a shift is on, in the campaign's time.
-const dayWord = (ts, tz) => new Date(ts).toLocaleDateString('en-CA', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' });
+const dayWord = (ts, tz) => fmtIn(ts, tz, { weekday: 'short', month: 'short', day: 'numeric' });
 const years = (n) => `${n} year${Number(n) === 1 ? '' : 's'}`;
 
 // ── Knocks, calls and talks: History as it always read ──
@@ -330,8 +332,8 @@ const shifts = async (db, q) => (await rowsOf(db, `
    where a.workspace_id = $1 and a.person_id = $2`, q,
 )).map((r) => entry(r, 'shifts', `shift_${r.what}`, 'Shift', `${SHIFT[r.what]} · ${r.title}`, {
   detail: r.what === 'booked'
-    ? line(dayWord(r.starts_at, q.tz), r.location, r.status === 'declined' && 'Can’t make it', r.status === 'confirmed' && 'Confirmed')
-    : r.location || null,
+    ? line(dayWord(r.starts_at, q.tz), placeLabel(r.location), r.status === 'declined' && 'Can’t make it', r.status === 'confirmed' && 'Confirmed')
+    : placeLabel(r.location) || null,
   link: `/shifts/${r.shift_id}`,
 }));
 

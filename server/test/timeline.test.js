@@ -97,6 +97,20 @@ test('a manager: every source once, newest first, in the screens’ words', asyn
   assert.deepEqual([of('merge').by, of('merge').detail, of('merge').group, of('merge').label], ['Avery Chen', 'With the record for Dev Exampel', 'other', 'Merged']);
 });
 
+// A shift's place is said as the schedule says it (shared/shiftkinds): a
+// point on the map nobody has named is "Pinned place", never its coordinates.
+test('a shift at a pinned place reads “Pinned place” here too, on the campaign’s day', async () => {
+  const { pinName } = await import('@starbase/shared/shiftkinds');
+  const pat = ok(await mgr.action('person.create', { name: 'Pat Example' })).person;
+  const s = ok(await mgr.action('shift.create', { title: 'Burma Shave', location: pinName(49.1451, -122.8599), starts_at: '2031-01-15T07:30:00Z' })).shift;
+  ok(await mgr.action('shift.assign', { shift_id: s.id, person_id: pat.id }));
+  const booked = ok(await all(mgr, pat.id)).entries.find((e) => e.kind === 'shift_booked');
+  // Half past midnight on Wednesday the 15th in Surrey (UTC-7 all year) —
+  // still Tuesday night by time-zone rules from before March 2026.
+  assert.equal(booked.detail, 'Wed, Jan 15 · Pinned place');
+  assert.doesNotMatch(JSON.stringify(booked), /49\.1451/);
+});
+
 test('an entry leads to Gifts only when Gifts lists its gift: never one voided, refunded or never booked', async () => {
   const links = async () => ok(await all(mgr, S.dev.id, '&group=money')).entries.map((e) => [e.title, e.link]);
   // The profile's Gifts lists the gifts on the books: the cheque. The cash
