@@ -47,7 +47,6 @@ export const authLine = async (q, ws) => {
 export const kitText = (kit, line) => (kit.authorized && line ? `${kit.body}\n${line}` : kit.body);
 
 // A page of the campaign's own website, never somewhere else.
-// eslint-disable-next-line no-control-regex
 export const goodPath = (p) => typeof p === 'string' && p.length <= 300 && p.startsWith('/') && !p.startsWith('//')
   // eslint-disable-next-line no-control-regex
   && !/[\u0000-\u001f\u007f\\\s]/.test(p) && !/^\/*[a-z][a-z0-9+.-]*:/i.test(p.slice(1));
