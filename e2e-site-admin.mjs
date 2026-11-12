@@ -531,6 +531,30 @@ await page.goto(`${BASE}/admin/website/theme`, { waitUntil: 'domcontentloaded' }
 await page.locator('.wb-sample').waitFor();
 await shot('12-theme-phone');
 
+// ── Theme: the website can follow the campaign's brand, and take its own look back ──
+// (This campaign's website has its own look, as Imagine Surrey's live one does.)
+{
+  const before = (await api('/site')).json;
+  await page.getByRole('button', { name: 'Use the campaign’s brand' }).click();
+  await page.getByRole('button', { name: 'Yes, use it' }).click();
+  await page.locator('.wb-follow').waitFor({ timeout: 8000 });
+  await sleep(400);
+  const following = (await api('/site')).json;
+  const shown = await page.evaluate(() => ({ controls: document.querySelectorAll('.wb-color').length, primaries: [...document.querySelectorAll('.btn-primary')].filter((b) => b.offsetParent).length,
+    sample: getComputedStyle(document.querySelector('.wb-sample')).getPropertyValue('--s-brand').trim(), words: document.querySelector('.wb-follow').innerText }));
+  const live = await (await fetch(`${BASE}/site/`)).text();
+  check('“Use the campaign’s brand”: the website follows it — the screen says so, shows the sample in the brand’s colour and no colour boxes; its own colours are kept for later',
+    before.settings.theme.follow !== true && following.settings.theme.follow === true && JSON.stringify(following.settings.theme.colors) === JSON.stringify(before.settings.theme.colors)
+    && shown.controls === 0 && shown.primaries === 0 && shown.sample === following.brand_theme.colors.brand && /Following the campaign’s brand/.test(shown.words) && live.includes(following.brand_theme.colors.brand), JSON.stringify(shown).slice(0, 300));
+  await shot('13-theme-following-phone');
+  await page.getByRole('button', { name: 'Give the website its own look' }).click();
+  await page.locator('.wb-color').first().waitFor({ timeout: 8000 });
+  await sleep(400);
+  const own = (await api('/site')).json.settings.theme;
+  check('“Give the website its own look”: it stops following and starts from what it wore — every colour is there to change again', own.follow === false && own.colors.brand === following.brand_theme.colors.brand
+    && await page.locator('.wb-color').count() > 5 && await page.getByRole('button', { name: 'Use the campaign’s brand' }).count() === 1, JSON.stringify(own).slice(0, 200));
+}
+
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();
 const passed = results.filter(Boolean).length;
