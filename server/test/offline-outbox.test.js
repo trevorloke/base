@@ -340,6 +340,64 @@ test('Take back on a "Count me in" still on the phone: never sent, or "Can’t m
   assert.equal((await c.get('/api/audit/verify')).json.ok, true);
 });
 
+test('"Change my hours" on the phone: saved again it replaces the waiting one; a "Count me in" taken back or refused takes them along; "not on this shift" on replay is dropped, a 400 kept', async () => {
+  net.cookie = vol.cookie;
+  const starts = Math.ceil((Date.now() + 2 * 86400_000) / 3600e3) * 3600e3;
+  const at = (h) => new Date(starts + h * 3600e3).toISOString();
+  const make = async (title, capacity) => (await c.action('shift.create', { title, starts_at: at(0), ends_at: at(6), ...(capacity ? { capacity } : {}) })).json.shift;
+  const items = () => JSON.parse(store.get('starbase:outbox:v2') || '[]');
+  const full = await make('Canvass', 1);
+
+  // Offline: Count me in, my hours, my hours again — one hours item, the newer.
+  nav.onLine = false;
+  const j = await ob.queueAction('shift.join', { shift_id: full.id }, { who: 'Canvass' });
+  await ob.queueAction('shift.hours', { shift_id: full.id, from: at(1), to: at(2) }, { who: 'Canvass' });
+  await ob.queueAction('shift.hours', { shift_id: full.id, from: at(2), to: at(4) }, { who: 'Canvass' });
+  assert.deepEqual(items().map((i) => i.name), ['shift.join', 'shift.hours'], 'replaced, not queued twice');
+  assert.deepEqual([items()[1].input.from, items()[1].input.to], [at(2), at(4)]);
+  assert.match(ob.itemText(items()[1]), /^My hours · Canvass · /);
+  // Take back the Count me in: its hours go with it.
+  assert.equal(ob.undoQueued(j.client_id), 'removed');
+  assert.equal(ob.unsentCount(), 0);
+
+  // Count me in refused on replay (someone took the spot): its hours go too.
+  await ob.queueAction('shift.join', { shift_id: full.id }, { who: 'Canvass' });
+  await ob.queueAction('shift.hours', { shift_id: full.id, from: at(1), to: at(2) }, { who: 'Canvass' });
+  const other = await c.createPerson('Took The Canvass');
+  assert.equal((await c.action('shift.assign', { shift_id: full.id, person_id: other.id })).status, 200);
+  nav.onLine = true;
+  await ob.flushOutbox();
+  assert.deepEqual(items().map((i) => [i.name, i.state]), [['shift.join', 'refused']], 'only the refused Count me in is kept');
+  ob.clearOutbox();
+
+  // Hours for a shift they're no longer on: dropped on replay (409), never "Not sent".
+  const open = await make('Office');
+  nav.onLine = false;
+  await ob.queueAction('shift.hours', { shift_id: open.id, from: at(1), to: at(2) });
+  nav.onLine = true;
+  await ob.flushOutbox();
+  assert.equal(ob.unsentCount(), 0, 'nothing to change: dropped');
+
+  // Hours outside the shift: refused with the server's sentence, and kept.
+  nav.onLine = false;
+  await ob.queueAction('shift.join', { shift_id: open.id }, { who: 'Office' });
+  await ob.queueAction('shift.hours', { shift_id: open.id, from: at(-1), to: at(2) }, { who: 'Office' });
+  nav.onLine = true;
+  await ob.flushOutbox();
+  const [kept] = items();
+  assert.deepEqual([items().length, kept.name, kept.state, kept.error.status], [1, 'shift.hours', 'refused', 400]);
+  assert.match(kept.error.message, /inside the shift/);
+  ob.clearOutbox();
+
+  // With signal: straight to the server.
+  const r = await ob.queueAction('shift.hours', { shift_id: open.id, from: at(1), to: at(3) }, { who: 'Office' });
+  assert.equal(r.queued, false);
+  const mine = (await vol.get(`/api/shifts/${open.id}`)).json.assignees.find((a) => a.is_me);
+  assert.deepEqual([new Date(mine.arrive_at).toISOString(), new Date(mine.leave_at).toISOString()], [at(1), at(3)]);
+  net.cookie = c.cookie;
+  assert.equal((await c.get('/api/audit/verify')).json.ok, true);
+});
+
 test('a knock kept on the phone says what was saved, then where — "this phone" only on a phone', async () => {
   const { queuedSaid, queuedText, thisDevice } = await import('../../web/src/components/queued.js');
   nav.onLine = false;
