@@ -6,7 +6,7 @@
 //   candidate.invite { id } — a join link (emailed after the write commits),
 //                    or, for someone already on the team, their seat now
 //   candidate.unlink { id } — the account leaves the seat; it stays a volunteer
-//   candidate.remove { id } — the seat goes (and its account leaves it)
+//   candidate.remove { id } — the seat goes (and its account leaves it); their call time closes
 import { z } from 'zod';
 import { SLATE_CODES } from '@starbase/shared/canvass';
 import { httpError } from '../../actions/util.js';
@@ -123,6 +123,13 @@ export const actions = {
       const cand = await loadCandidate(tx, ws, input.id, { lock: true });
       await tx.query('update candidates set removed_at = now(), user_id = null where id = $1', [cand.id]);
       await handCallTime(tx, ws, cand.id, null);
+      // Their call time closes: nobody else may call it (ext/banks notCallTime).
+      const closed = (await tx.query(
+        `update call_banks set closed_at = now(), updated_at = now()
+         where workspace_id = $1 and candidate_id = $2 and deleted_at is null and closed_at is null returning id`,
+        [ws, cand.id],
+      )).rows;
+      for (const b of closed) emit('call_bank', b.id, 'update', { closed: true });
       // A link still out for this seat stops working.
       const ended = (await tx.query(
         `update invites set expires_at = now()

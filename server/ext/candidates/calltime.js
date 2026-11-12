@@ -74,9 +74,11 @@ export const actions = {
       const bank = await ownBank(tx, ctx, input.bank_id);
       if (!bank) throw httpError(403, NOT_YOURS);
       const n = (await tx.query(
-        'select 1 from call_bank_numbers where bank_id = $1 and person_id = $2 and assigned_to = $3', [bank.id, input.person_id, ctx.user.id],
+        'select done_at from call_bank_numbers where bank_id = $1 and person_id = $2 and assigned_to = $3', [bank.id, input.person_id, ctx.user.id],
       )).rows[0];
       if (!n) throw httpError(403, NOT_YOURS);
+      // Answered already (another tab or phone with an old card): once is enough.
+      if (n.done_at) throw httpError(409, 'Already called');
       const slate = slateOf(ctx);
       const amount = input.result === 'pledged' ? input.amount_cents : null;
       if (amount) {

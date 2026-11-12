@@ -506,9 +506,11 @@ test('pledges for the treasurer: a gift in, dropped, 60 days, the brief, the exp
   assert.deepEqual(list.pledges[0].gift_in, { amount_cents: 25000, date: today() });
   assert.deepEqual(list.open, { n: 0, cents: 0 });
   assert.deepEqual(ok(await ct.tess.get('/api/brief')).calltime_pledges, { n: 0, cents: 0, listed: 1 }, 'still listed: Gift in');
-  // Another pledge, dropped by the treasurer (a candidate may not).
-  const fay = ct.donors[2];
-  const p2 = ok(await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: fay, result: 'pledged', amount_cents: 10000 })).result.id;
+  // Another pledge, dropped by the treasurer (a candidate may not). Fay
+  // took a message already, so it's someone new on Pat's list.
+  const kim = (await mgr.createPerson('Kim Example', { phone: '604-555-0149' })).id;
+  ok(await mgr.action('bank.add', { id: ct.patBank, person_ids: [kim] }));
+  const p2 = ok(await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: ct.patBank, person_id: kim, result: 'pledged', amount_cents: 10000 })).result.id;
   assert.equal((await ct.patCl.action('calltime.drop', { id: p2 })).status, 403);
   assert.equal((await ct.sid.action('calltime.drop', { id: p2 })).status, 403, 'staff denied Donations');
   ok(await ct.tess.action('calltime.drop', { id: p2 }));
@@ -556,4 +558,23 @@ test('measured: a call-time page of 200 numbers', async () => {
   console.log(`# call-time page: ${page.numbers.length} numbers in ${ms.toFixed(0)} ms, ${queries} queries (with sign-in)`);
   assert.equal(page.numbers.length, 200);
   assert.ok(queries < 30, `a fixed handful of queries, not one per donor: ${queries}`);
+});
+
+test('removing a candidate closes their call time', async () => {
+  const db = await getDb();
+  ok(await mgr.action('candidate.remove', { id: ct.quinn }));
+  const b = (await db.query('select closed_at from call_banks where id = $1', [ct.quinnBank])).rows[0];
+  assert.ok(b.closed_at, 'closed, not left open with nobody to call it');
+  const ev = (await db.query("select payload from events where entity_type = 'call_bank' and entity_id = $1 order by seq desc limit 1", [ct.quinnBank])).rows[0];
+  assert.equal(ev.payload.closed, true);
+  assert.ok((await db.query('select closed_at from call_banks where id = $1', [ct.patBank])).rows[0].closed_at === null, 'Pat’s stays open');
+});
+
+test('calltime.log: a number already answered is not answered twice', async () => {
+  const people = [];
+  for (const n of ['Ida', 'Jay']) people.push((await mgr.createPerson(`${n} Example`, { phone: '604-555-0150' })).id);
+  const bank = ok(await mgr.action('bank.create', { name: 'Twice', person_ids: people, candidate_id: ct.pat })).bank.id;
+  ok(await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: bank, person_id: people[0], result: 'no' }));
+  const again = await ct.patCl.action('calltime.log', { client_id: newId(), bank_id: bank, person_id: people[0], result: 'pledged', amount_cents: 5000 });
+  assert.deepEqual([again.status, again.json.error], [409, 'Already called']);
 });
