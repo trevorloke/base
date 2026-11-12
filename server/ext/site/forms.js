@@ -318,6 +318,12 @@ export const formRoute = async (c, site) => {
       const remembered = String(getCookie(c, 'site_ref') || '').toLowerCase();
       if (CODE_RE.test(remembered)) f.ref = remembered;
     }
+    // The post they came through (/r/:code?k=, a share kit), when the form
+    // says no source of its own: one in the page's address always wins.
+    if (!f.source) {
+      const came = String(getCookie(c, 'site_src') || '').toLowerCase();
+      if (/^kit-[a-z0-9]{6}$/.test(came)) f.source = came;
+    }
   } catch (e) {
     if (!(e instanceof FormError)) throw e;
     return plain ? go(f || moduleOf(), k || {}, `error=${encodeURIComponent(e.field)}`) : c.json({ error: e.message, field: e.field }, e.status);

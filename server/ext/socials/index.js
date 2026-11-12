@@ -21,7 +21,17 @@ import { DEFAULT_TZ } from '../../lib/org.js';
 import { forViewer } from '../../lib/viewer.js';
 import { PLATFORMS, parseSocial, sameHandle } from '@starbase/shared/socials';
 
-export { sql } from './sql.js';
+import { sql as socialSql, shareSql } from './sql.js';
+import { shareActions } from './share.js';
+import { shareApi, briefShare } from './share-api.js';
+
+export { kitTitleOf, kitPageLive } from './share.js';
+export const sql = `${socialSql}\n${shareSql}`;
+export const api = shareApi;
+// The desk's reads; a volunteer granted Outreach may read them too.
+export const deskOnlyReads = ['/share/kits', '/share/kits/:id', '/share/top'];
+export const exportTables = ['share_kits'];
+export const bodyMax = { '/api/actions/share.picture': 4 * 1024 * 1024 };
 
 const ROLES = ['manager', 'staff', 'treasurer'];
 const MAX_FOLLOWERS = 100_000_000;
@@ -76,6 +86,7 @@ const alsoOn = async (tx, ws, id, platform, handle) => {
 
 const platform = z.enum(PLATFORMS);
 export const actions = {
+  ...shareActions,
   'person.social.set': {
     roles: ROLES,
     input: z.object({ id: z.uuid(), platform: platform.optional(), value: z.string().max(300) }),
@@ -163,4 +174,4 @@ const personMerging = async (tx, ctx, { keep, drop }) => {
     [keep.id, ctx.workspaceId, reachJson(kept), mostOf(kept)]);
 };
 
-export const hooks = { events, personMerging };
+export const hooks = { events, personMerging, brief: briefShare };

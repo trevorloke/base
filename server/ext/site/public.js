@@ -44,11 +44,14 @@ import { verify, sign, PERSON_TTL } from './tokens.js';
 import { personOfCode, refCodeFor, CODE_RE } from './people.js';
 import { choicesOf, emailOff, emailOn, smsOff, smsOn } from './consent.js';
 import { formRoute } from './forms.js';
+import { KIT_CODE_RE, goodPath } from '../socials/share.js';
+import { withSource } from '../../../shared/site/components/util.js';
 import { KINDS, consentWording } from './shape.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const REF_COOKIE = 'site_ref';
+const SRC_COOKIE = 'site_src'; // the share kit a visitor came through (forms.js)
 const REF_DAYS = 30;
 
 // ── Files: /site-assets/* ──
@@ -393,16 +396,23 @@ export const makeSiteApp = (at) => {
   });
 
   // A referral link: remembered 30 days (the forms credit them), then home.
+  // With ?k=<kit code> (a share kit, ext/socials/share.js, open or stopped)
+  // the post is remembered too (site_src, which forms.js reads when a form
+  // sends no source of its own) and the link opens the kit's page.
   app.get(route('/r/:code'), async (c) => {
     const site = c.get('site');
     const code = String(c.req.param('code') || '').toLowerCase();
-    if (CODE_RE.test(code) && await personOfCode(site.db, site.ws.id, code)) {
-      setCookie(c, REF_COOKIE, code, {
-        path: site.root || '/', maxAge: REF_DAYS * 24 * 3600, httpOnly: true, sameSite: 'Lax', secure: site.https,
-      });
-    }
+    const keep = { path: site.root || '/', maxAge: REF_DAYS * 24 * 3600, httpOnly: true, sameSite: 'Lax', secure: site.https };
+    if (CODE_RE.test(code) && await personOfCode(site.db, site.ws.id, code)) setCookie(c, REF_COOKIE, code, keep);
+    const k = String(c.req.query('k') || '').toLowerCase();
+    const kit = KIT_CODE_RE.test(k)
+      ? (await site.db.query('select code, path from share_kits where workspace_id = $1 and code = $2 and deleted_at is null', [site.ws.id, k])).rows[0]
+      : null;
     c.header('Cache-Control', 'no-store');
-    return c.redirect(`${site.root}/`, 302);
+    if (!kit || !goodPath(kit.path)) return c.redirect(`${site.root}/`, 302);
+    const source = `kit-${kit.code}`;
+    setCookie(c, SRC_COOKIE, source, keep);
+    return c.redirect(withSource(`${site.root}${kit.path}`, source), 302);
   });
 
   app.post(route('/api/forms/:kind'), (c) => formRoute(c, c.get('site')));
