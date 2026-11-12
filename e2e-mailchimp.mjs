@@ -171,10 +171,16 @@ const measure = (loc) => loc.evaluate((el) => {
     overflow: document.documentElement.scrollWidth - window.innerWidth,
     primary: [...document.querySelectorAll('.btn-primary')].filter(vis).map((b) => b.innerText.trim()),
     minTap: taps.length ? Math.min(...taps) : null,
+    // The look's controls are 40px at a desk with a mouse (app.css --ctl), 48px on a phone or touch.
+    floor: matchMedia('(min-width: 900px) and (pointer: fine)').matches ? 40 : 48,
+    // A list's page has four equal ways out (Email · Text · Call · Walk this list), none of them yellow.
+    email: [...document.querySelectorAll('a.btn')].some((a) => vis(a) && a.innerText.trim() === 'Email this list'),
   };
 });
-// At 390: nothing sideways, nothing smaller than a thumb.
-const fits = (m) => m.overflow <= 0 && (m.minTap === null || m.minTap >= 48);
+// Nothing sideways, nothing smaller than the look's control (a thumb on a phone).
+const fits = (m) => m.overflow <= 0 && (m.minTap === null || m.minTap >= m.floor);
+// Mailchimp's buttons never take the page's colour: Email this list is still there, nothing yellow.
+const waysStay = (m) => m.primary.length === 0 && m.email;
 
 // ── People, the newsletter and a list ──
 const addr = (w) => `${w.toLowerCase()}@example.org`;
@@ -230,7 +236,7 @@ w = await words(row);
 let m = await measure(page.locator(ROW));
 check('set up: "Set up", the honest line, Connect and Pull now, "Not pulled yet"', /^Mailchimp Set up /.test(w) && /Press Check before relying on it: it tries your own Mailchimp account\./.test(w)
   && /Connect Pull now Connect tells Mailchimp to send unsubscribes here\. Pull now reads them at once\. Not pulled yet/.test(w), w);
-check('…no yellow button on the screen, every button ≥ 48px', m.primary.length === 0 && m.minTap >= 48, JSON.stringify(m));
+check('…no yellow button on the screen, every button full size (the desk’s 40px)', m.primary.length === 0 && m.minTap >= m.floor, JSON.stringify(m));
 const NOT_CONNECTED = '✕ The key works · audience “Sample Campaign” · 2 subscribed — but Mailchimp isn’t sending unsubscribes here yet: tap Connect';
 let said = await pressCheck(page);
 check('Check: the key, the audience, how many are subscribed — and the one thing missing', said === NOT_CONNECTED, said);
@@ -295,8 +301,8 @@ await page.screenshot({ path: `${SHOTS}/03-services-page-1440.png`, fullPage: tr
 // ── 4. The first pull asks first: Not now turns nobody off; the first Pull now asks again; the yes pulls ──
 row = await openServices(page);
 m = await measure(page.locator(ROW));
-check('the question stays on the row until someone answers it — no yellow button, every button ≥ 48px', FIRST_Q.test(await words(page.locator(`${ROW} .fp`)))
-  && m.primary.length === 0 && m.minTap >= 48, JSON.stringify(m));
+check('the question stays on the row until someone answers it — no yellow button, every button full size (the desk’s 40px)', FIRST_Q.test(await words(page.locator(`${ROW} .fp`)))
+  && m.primary.length === 0 && m.minTap >= m.floor, JSON.stringify(m));
 await shot(row, '04-first-ask-1440');
 // Not now, by keyboard.
 await page.locator(`${ROW} .fp button:has-text("Not now")`).focus();
@@ -379,12 +385,12 @@ check('…and once Mailchimp answers, the next try by itself: "Last pulled … �
 lp = await openList(page);
 let tools = await words(page.locator('.ls-tools'));
 m = await measure(page.locator('.ls-tools'));
-check('the list’s page: "Send to Mailchimp" beside Download CSV; the page’s one yellow button is still Email this list', /^Download CSV Send to Mailchimp Edit the filter Delete$/.test(tools)
-  && m.primary.join('|') === 'Email this list', `${tools} · ${JSON.stringify(m.primary)}`);
+check('the list’s page: "Send to Mailchimp" beside Download CSV; Email this list is still there, and nothing is yellow', /^Download CSV Send to Mailchimp Edit the filter Delete Save these people as they are now$/.test(tools)
+  && waysStay(m), `${tools} · ${JSON.stringify(m.primary)}`);
 await shot(lp, '05-list-before-1440');
 let plp = await openList(phone);
 pm = await measure(phone.locator('.ls-tools'));
-check('at 390: the button is there too — no sideways scroll, every button ≥ 48px, one yellow button', /Send to Mailchimp/.test(await words(phone.locator('.ls-tools'))) && fits(pm) && pm.primary.join('|') === 'Email this list', JSON.stringify(pm));
+check('at 390: the button is there too — no sideways scroll, every button ≥ 48px, Email this list still there, nothing yellow', /Send to Mailchimp/.test(await words(phone.locator('.ls-tools'))) && fits(pm) && waysStay(pm), JSON.stringify(pm));
 await shot(plp, '05-list-before-390');
 // By keyboard: Enter opens the question.
 await page.locator('.ls-tools button:has-text("Send to Mailchimp")').focus();
@@ -440,7 +446,7 @@ await shot(lp, '07-list-synced-1440');
 plp = await openList(phone);
 await phone.locator('.mc-status').waitFor({ timeout: 10000 }).catch(() => {});
 pm = await measure(phone.locator('.ls-tools'));
-check('at 390: the line is there — no sideways scroll, every button ≥ 48px, one yellow button', /^In Mailchimp · 4 addresses/.test(await words(phone.locator('.mc-status'))) && fits(pm) && pm.primary.join('|') === 'Email this list', JSON.stringify(pm));
+check('at 390: the line is there — no sideways scroll, every button ≥ 48px, Email this list still there, nothing yellow', /^In Mailchimp · 4 addresses/.test(await words(phone.locator('.mc-status'))) && fits(pm) && waysStay(pm), JSON.stringify(pm));
 await shot(plp, '07-list-synced-390');
 await phone.locator('.ls-tools button:has-text("Sync again")').tap();
 await phone.locator('.mc-ask .ops-check').waitFor({ timeout: 10000 }).catch(() => {});
@@ -514,8 +520,8 @@ await shot(plp, '11-list-stopped-390');
 lp = await openList(page);
 await page.locator('.mc-status button:has-text("Try again")').waitFor({ timeout: 10000 }).catch(() => {});
 m = await measure(page.locator('.ls-tools'));
-check('at 1440: the same — Sync again stays, Try again beside the words; the one yellow button is still Email this list', (await words(page.locator('.mc-status'))) === STOPPED
-  && /^Download CSV Sync again Stopped: /.test(await words(page.locator('.ls-tools'))) && m.primary.join('|') === 'Email this list', await words(page.locator('.ls-tools')));
+check('at 1440: the same — Sync again stays, Try again beside the words; Email this list is still there, and nothing is yellow', (await words(page.locator('.mc-status'))) === STOPPED
+  && /^Download CSV Sync again Stopped: /.test(await words(page.locator('.ls-tools'))) && waysStay(m), await words(page.locator('.ls-tools')));
 await shot(lp, '11-list-stopped-1440');
 await set({ env: { MAILCHIMP_API_KEY: KEY } });
 await phone.locator('.mc-status button:has-text("Try again")').tap();
@@ -529,7 +535,7 @@ await page.route(READ, broken);
 lp = await openList(page);
 const unavailable = await until(async () => (await words(page.locator('.mc'))) === 'Mailchimp: Unavailable — Try again', 10000);
 m = await measure(page.locator('.ls-tools'));
-check('the read fails: "Mailchimp: Unavailable — Try again" — said, and no button that could not work', unavailable && !/Sync again|Send to Mailchimp/.test(await words(page.locator('.ls-tools'))) && m.minTap >= 48, `${await words(page.locator('.ls-tools'))} · ${JSON.stringify(m)}`);
+check('the read fails: "Mailchimp: Unavailable — Try again" — said, and no button that could not work', unavailable && !/Sync again|Send to Mailchimp/.test(await words(page.locator('.ls-tools'))) && m.minTap >= m.floor, `${await words(page.locator('.ls-tools'))} · ${JSON.stringify(m)}`);
 await shot(lp, '12-list-unavailable-1440');
 await phone.route(READ, broken);
 plp = await openList(phone);
@@ -581,7 +587,7 @@ for (const [p, size] of [[page, '1440'], [phone, '390']]) {
   await p.locator('.mc-status').waitFor({ timeout: 10000 }).catch(() => {});
   const pmDoor = await measure(p.locator('.ls-tools'));
   check(`a sync the first pull's question stopped (${size}): "Stopped: ${DOOR_NOTE}", Try again beside it — no sideways scroll, every button ≥ 48px`, (await words(p.locator('.mc-status'))) === `Stopped: ${DOOR_NOTE} Try again`
-    && (await p.locator('.mc-line[data-status="stopped"]').count()) === 1 && fits(pmDoor) && pmDoor.minTap >= 48, `${await words(p.locator('.mc-status'))} · ${JSON.stringify(pmDoor)}`);
+    && (await p.locator('.mc-line[data-status="stopped"]').count()) === 1 && fits(pmDoor) && pmDoor.minTap >= pmDoor.floor, `${await words(p.locator('.mc-status'))} · ${JSON.stringify(pmDoor)}`);
   await shot(l, `13-door-stopped-${size}`);
   await p.unroute(READ);
 }
@@ -678,8 +684,8 @@ await page.locator('.mc-ask button:has-text("Send")').click();
 const SECOND_Q = new RegExp(`^Audience ‘Sample supporters’ · 2 people here unsubscribed there Only they can turn their email back on\\. ${COUNTED} Turn their email off here Not now$`);
 const askedOnSend = await until(async () => SECOND_Q.test(await words(page.locator('.mc-first'))), 20000);
 m = await measure(page.locator('.ls-tools'));
-check('the first count that finds someone asks: nothing goes — the audience, how many people here it would turn off (two on one address are two), when it counted; the one yellow button is still Email this list', askedOnSend
-  && m.primary.join('|') === 'Email this list' && m.minTap >= 48 && JSON.stringify((await mc(TAG, 'aud0002')).tag) === JSON.stringify(['Dee', 'Ida', 'Jon'].map(addr)), `${await words(page.locator('.mc'))} · ${JSON.stringify(m)}`);
+check('the first count that finds someone asks: nothing goes — the audience, how many people here it would turn off (two on one address are two), when it counted; Email this list is still there, and nothing is yellow', askedOnSend
+  && waysStay(m) && m.minTap >= m.floor && JSON.stringify((await mc(TAG, 'aud0002')).tag) === JSON.stringify(['Dee', 'Ida', 'Jon'].map(addr)), `${await words(page.locator('.mc'))} · ${JSON.stringify(m)}`);
 await shot(lp, '16-list-first-ask-1440');
 await page.locator('.mc-first button:has-text("Not now")').click();
 st = await mc(TAG, 'aud0002');
@@ -692,8 +698,8 @@ await until(async () => /to send$/.test(await words(phone.locator('.mc-ask .mc-l
 await phone.locator('.mc-ask button:has-text("Send")').tap();
 await until(async () => SECOND_Q.test(await words(phone.locator('.mc-first'))), 15000);
 pm = await measure(phone.locator('.ls-tools'));
-check('at 390: the same question — no sideways scroll, every button ≥ 48px, one yellow button', SECOND_Q.test(await words(phone.locator('.mc-first'))) && fits(pm)
-  && pm.primary.join('|') === 'Email this list', JSON.stringify(pm));
+check('at 390: the same question — no sideways scroll, every button ≥ 48px, Email this list still there, nothing yellow', SECOND_Q.test(await words(phone.locator('.mc-first'))) && fits(pm)
+  && waysStay(pm), JSON.stringify(pm));
 await shot(plp, '16-list-first-ask-390');
 await phone.locator('.mc-first button:has-text("Turn their email off here")').tap();
 const SECOND_OFF = 'Email turned off here too: 2 who unsubscribed in Mailchimp.';
@@ -704,8 +710,8 @@ const said2 = (await doorSaid()).map((e) => [e.payload.first_pull, e.payload.uns
 check('Turn their email off here: it sends — "In Mailchimp · 3 addresses", and the two it turned off here; the yes on the log is a person’s, to 2', /^In Mailchimp · 3 addresses · tag “base\.win: Members” Synced /.test(status)
   && status.endsWith(SECOND_OFF) && JSON.stringify(st.tag) === JSON.stringify(['Dee', 'Ida', 'Jon'].map(addr)) && (await householdOff()) === 2 && said2.join(',') === 'yes|2|true', `${status} · ${JSON.stringify(st.tag)} · ${said2}`);
 // …and the page's own numbers follow: the household's address can't be emailed here now.
-const recounted = await until(async () => / 3 by email · /.test(await words(phone.locator('.ls-page'))), 10000);
-check('…the list’s own line reads again: "3 by email"', recounted, (await words(phone.locator('.ls-page'))).slice(0, 120));
+const recounted = await until(async () => / 3 can be emailed /.test(await words(phone.locator('.ls-page'))), 10000);
+check('…the list’s own line reads again: "3 can be emailed"', recounted, (await words(phone.locator('.ls-page'))).slice(0, 120));
 await shot(plp, '16-list-first-sent-390');
 
 // ── 15. Settings → Services: a yes whose pull counted more brings the question back, and says why ──
