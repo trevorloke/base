@@ -63,7 +63,9 @@ import { BASE, NS } from './base.js';
 // are made on the phone, so a replay is the same link).
 // person.tag: tags put on or taken off on a profile at the desk (desk roles;
 // the server dedupes it on client_id, server/ext/deskoffline).
-export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet'];
+// shift.hours: “only part of it” — the volunteer's own hours on a shift they
+// are on (not undoable: saving again is the undo).
+export const FIELD_ACTIONS = ['contact.log', 'person.create', 'person.addAtDoor', 'person.locate', 'sign.place', 'sign.cancel', 'shift.join', 'shift.leave', 'shift.hours', 'relationship.add', 'person.tag', 'person.details', 'vote.mark', 'request.ask', 'mainstreet.meet'];
 // Keyed by a client_id the server dedupes on.
 const CLIENT_KEYED = ['contact.log', 'sign.place', 'person.tag', 'vote.mark', 'request.ask', 'mainstreet.meet'];
 // The writes that add a person, on an id made here.
@@ -266,6 +268,20 @@ const alreadyDone = (name, err) => err instanceof ApiError && (
 const bodyOf = (item) => ((item.name === 'contact.log' || item.name === 'vote.mark' || item.name === 'mainstreet.meet') && item.at && !item.input.client_at
   ? { ...item.input, client_at: item.at } : item.input);
 
+// ── "Change my hours" (shift.hours) and the "Count me in" it rides on ──
+// 1. A "Count me in" taken back, or refused, takes its waiting hours with it.
+const dropHoursFor = (shiftId) => {
+  for (const i of memory.filter((x) => x.name === 'shift.hours' && x.state === 'pending' && x.input?.shift_id === shiftId)) remove(i.cid);
+};
+// 2. Saving hours again while the last ones still wait changes those (never
+//    tried yet, so never on their way) instead of queuing another.
+const waitingHoursItem = (shiftId) => memory.find((x) => x.name === 'shift.hours' && x.state === 'pending' && !x.tries
+  && x.input?.shift_id === shiftId && mine(x)) || null;
+// 3. On replay, "you're not on this shift" (409) means the booking is gone:
+//    the hours have nothing to change, so they are dropped, not kept as
+//    refused. Other refusals ("that shift is over", 400) are kept.
+const hoursMoot = (name, err) => name === 'shift.hours' && err instanceof ApiError && err.status === 409;
+
 async function send(item, { replay }) {
   try {
     return await action(item.name, bodyOf(item));
@@ -293,15 +309,18 @@ export async function queueAction(name, input, meta = {}) {
   if (!FIELD_ACTIONS.includes(name)) throw new Error(`${name} can't be saved offline`);
   if (closed) throw new ApiError(401, 'Signed out');
   const body = withClientId(name, input);
-  const item = { cid: cidOf(name, body), name, input: body, meta, at: new Date().toISOString(), tries: 0, state: 'pending', owner };
+  const again = name === 'shift.hours' ? waitingHoursItem(body.shift_id) : null;
+  const item = again ? { ...again, input: body, meta, at: new Date().toISOString() }
+    : { cid: cidOf(name, body), name, input: body, meta, at: new Date().toISOString(), tries: 0, state: 'pending', owner };
+  const put = () => (again ? update(again.cid, item) : add(item));
   if (offlineNow()) {
-    add(item);
+    put();
     return { queued: true, client_id: item.cid };
   }
   // Something is still waiting: go behind it (order matters), then see
   // whether this flush got it through.
-  if (pendingCount() > 0) {
-    add(item);
+  if (pendingCount() > 0 || again) {
+    put();
     await flushOutbox();
     const left = find(item.cid);
     if (!left) {
@@ -312,6 +331,7 @@ export async function queueAction(name, input, meta = {}) {
     if (left.state === 'refused') {
       // Refused on its first try: the screen says so in place, as for a direct send.
       remove(item.cid);
+      if (name === 'shift.join') dropHoursFor(body.shift_id);
       throw new ApiError(left.error?.status || 400, left.error?.message || 'refused');
     }
     return { queued: true, signedOut: signedOutNow, client_id: item.cid };
@@ -371,6 +391,8 @@ async function runFlush() {
     } catch (err) {
       if (isNetworkFailure(err)) { lastError = 'Still offline — will retry'; break; }
       if (isSignedOut(err)) { lastError = 'Sign in again to send what’s saved'; signedOutNow = true; break; }
+      if (next.name === 'shift.join') dropHoursFor(next.input.shift_id);
+      if (hoursMoot(next.name, err)) { remove(next.cid); continue; }
       // Taken back, and the server said no to it anyway: nothing to keep.
       if (find(next.cid)?.undo && UNDOABLE.includes(find(next.cid).name)) { remove(next.cid); continue; }
       // Refused: kept, with the server's reason, until dismissed or retried.
@@ -421,6 +443,7 @@ export function retryItem(cid) {
 //   null      — nothing to take back.
 export function undoQueued(cid) {
   const it = find(cid);
+  if (it?.name === 'shift.join') dropHoursFor(it.input?.shift_id);
   if (!it) {
     const sentResult = results.get(cid);
     return sentResult ? { sent: sentResult } : null;
@@ -537,6 +560,7 @@ export function itemText(item, nameOf = () => '') {
     case 'sign.cancel': what = 'Sign undo'; break;
     case 'shift.join': what = item.undo ? 'Count me in · undo' : 'Count me in'; break;
     case 'shift.leave': what = 'Can’t make it'; break;
+    case 'shift.hours': what = 'My hours'; break;
     case 'relationship.add': what = 'Someone you know'; break;
     case 'person.tag': what = tagChangeText(i); break;
     case 'vote.mark': what = i.voted === false ? 'Not voted' : 'Voted'; break;

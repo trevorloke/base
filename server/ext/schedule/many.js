@@ -4,12 +4,16 @@
 // the browser would take the lock each time and could stop half-way):
 //
 // shift.createMany { kind, place_id? | turf_ids? | location?, days, start,
-//     end, repeat?, name?, instructions?, link?, need?, capacity?, public? }
+//     end | minutes, repeat?, name?, instructions?, link?, need?, capacity?,
+//     public?, drop_in? }
 //   Every chosen day ('YYYY-MM-DD'), at start–end ('HH:MM') on the
 //   campaign's clock — and each again weekly: repeat { weeks: n } (n weeks
 //   in all) or { until: day }. At most 200 shifts and 26 weeks a call.
+//   minutes in place of end: how long (15 to 1440) — elapsed time from the
+//   start, so it may run past midnight (an end before the start may not).
 //   Several times a day (a morning and an afternoon canvass): slots:
-//   [{ start, end }, …] in place of start and end — still one write.
+//   [{ start, end | minutes }, …] in place of start and end — still one write.
+//   drop_in: "Drop in any time" (words only).
 //   Where: a saved place, the turfs (for a canvass the turf IS the place:
 //   its walk list comes with the shift and its name is the name — needs
 //   Map & turfs, as shift.turfs.set does), or words. The name is made from
@@ -23,11 +27,12 @@
 //
 // shift.copyWeek { from, to, with_people? }
 //   The week holding `from` onto the week holding `to`: the same kind,
-//   place, local times (never "+168 hours"), name, turfs, target, limit and
-//   on-the-website. What is already there is not made twice, and nothing is
+//   place, local times (never "+168 hours"), name, turfs, target, limit,
+//   on-the-website and drop-in. What is already there is not made twice, and nothing is
 //   copied into the past. with_people: everyone holding a spot (booked,
 //   confirmed, checked in — not "can't make it", not a no-show) arrives on
-//   the matching shift as booked ('assigned'), never past its limit.
+//   the matching shift as booked ('assigned'), never past its limit, for the
+//   whole shift (their own hours are next week's question).
 //   → { shifts, already, past, booked, full, no_turfs? }
 //
 // shift.series.update { id, patch }
@@ -49,7 +54,8 @@ import { newId } from '../../lib/events.js';
 import { areasFor } from '../../lib/perms.js';
 import { cacheClear } from '../site/cache.js';
 import {
-  END_FIRST, clockInput, clockTimes, dayInput, inParts, livePlace, movedTimes, needInput, turfWords, tzOf,
+  BOTH_ENDS, END_FIRST, clockInput, clockTimes, dayInput, inParts, livePlace, minutesInput, movedTimes, needInput, plusMinutes,
+  turfWords, tzOf,
 } from './rules.js';
 
 const DESK = ['manager', 'treasurer', 'staff'];
@@ -80,11 +86,12 @@ const turfsFor = async (tx, ctx, ids) => {
 // (the campaign's lock is held meanwhile: a city's door-knocks wait on it).
 const insertShifts = (tx, ws, userId, list) => inParts(list, 25, (part) => tx.query(
   `insert into shifts (id, workspace_id, title, role, location, starts_at, ends_at, instructions, link, capacity, created_by,
-                       kind, place_id, need, title_custom, series_id, public)
+                       kind, place_id, need, title_custom, series_id, public, drop_in)
    select x.id, $1, x.title, x.role, x.location, x.starts_at, x.ends_at, x.instructions, x.link, x.capacity, $2,
-          x.kind, x.place_id, x.need, x.title_custom, x.series_id, coalesce(x.public, false)
+          x.kind, x.place_id, x.need, x.title_custom, x.series_id, coalesce(x.public, false), x.drop_in
      from jsonb_to_recordset($3::jsonb) as x(id uuid, title text, role text, location text, starts_at timestamptz, ends_at timestamptz,
-          instructions text, link text, capacity int, kind text, place_id uuid, need int, title_custom boolean, series_id uuid, public boolean)`,
+          instructions text, link text, capacity int, kind text, place_id uuid, need int, title_custom boolean, series_id uuid, public boolean,
+          drop_in boolean)`,
   [ws, userId, JSON.stringify(part)],
 ));
 // shift_turfs is ext/shiftturfs' table: a new shift has nobody on it yet,
@@ -95,16 +102,21 @@ const insertTurfs = (tx, ws, pairs) => inParts(pairs, 200, (part) => tx.query(
   [ws, JSON.stringify(part)],
 ));
 
-// The times a call asks for, soonest first: its start and end, or its
-// slots — one way or the other, each ending after it starts, no two
-// starting together (they would be the same shift twice).
+// The times a call asks for, soonest first: its start and end (or length),
+// or its slots — one way or the other, each ending after it starts, no two
+// starting together (they would be the same shift twice). Checked here, not
+// in the input's schema, as shift.update checks its own.
 const slotsOf = (input) => {
-  const one = input.start !== undefined || input.end !== undefined;
+  const one = input.start !== undefined || input.end !== undefined || input.minutes !== undefined;
   if (one === Boolean(input.slots)) throw httpError(400, 'say when: a start and an end, or slots — one or the other');
-  if (one && (input.start === undefined || input.end === undefined)) throw httpError(400, 'say when: a start and an end');
-  const slots = (input.slots || [{ start: input.start, end: input.end }])
-    .map(({ start, end }) => ({ start, end })).sort((a, b) => a.start.localeCompare(b.start));
-  if (slots.some((s) => s.end <= s.start)) throw httpError(400, END_FIRST);
+  const slots = (input.slots || [{ start: input.start, end: input.end, minutes: input.minutes }])
+    .map(({ start, end, minutes }) => ({ start, end, minutes }));
+  if (slots.some((s) => s.end !== undefined && s.minutes !== undefined)) throw httpError(400, BOTH_ENDS);
+  if (slots.some((s) => s.start === undefined || (s.end === undefined && s.minutes === undefined))) {
+    throw httpError(400, 'say when: a start and an end');
+  }
+  slots.sort((a, b) => a.start.localeCompare(b.start));
+  if (slots.some((s) => s.end !== undefined && s.end <= s.start)) throw httpError(400, END_FIRST);
   if (new Set(slots.map((s) => s.start)).size !== slots.length) throw httpError(400, 'two of those times start together');
   return slots;
 };
@@ -113,7 +125,7 @@ const slotsOf = (input) => {
 const createPayload = (s) => Object.fromEntries(Object.entries({
   id: s.id, title: s.title, kind: s.kind, role: s.role, place_id: s.place_id, location: s.location,
   starts_at: s.starts_at, ends_at: s.ends_at, instructions: s.instructions, link: s.link, capacity: s.capacity, need: s.need,
-  public: s.public || null, series_id: s.series_id,
+  public: s.public || null, drop_in: s.drop_in || null, series_id: s.series_id,
 }).filter(([, v]) => v !== null && v !== undefined));
 
 export const manyActions = {
@@ -127,7 +139,8 @@ export const manyActions = {
       days: z.array(dayInput()).min(1).max(31),
       start: clockInput().optional(),
       end: clockInput().optional(),
-      slots: z.array(z.object({ start: clockInput(), end: clockInput() })).min(1).max(8).optional(),
+      minutes: minutesInput().optional(),
+      slots: z.array(z.object({ start: clockInput(), end: clockInput().optional(), minutes: minutesInput().optional() })).min(1).max(8).optional(),
       repeat: z.union([
         z.object({ weeks: z.number().int().min(1).max(MAX_WEEKS) }),
         z.object({ until: dayInput() }),
@@ -138,6 +151,7 @@ export const manyActions = {
       need: needInput().nullish(),
       capacity: z.number().int().positive().nullish(),
       public: z.boolean().optional(),
+      drop_in: z.boolean().optional(),
     }),
     handler: async (tx, ctx, input, emit) => {
       const ws = ctx.workspaceId;
@@ -158,9 +172,11 @@ export const manyActions = {
       const where = { place_id: place?.id || null, location };
 
       // Each day's moments on the campaign's clock, and which are taken.
-      const want = days.flatMap((day) => slots.map((slot) => ({
-        day, slot, starts_at: instantOf(day, slot.start, tz), ends_at: instantOf(day, slot.end, tz),
-      })));
+      const want = days.flatMap((day) => slots.map((slot) => {
+        const startsAt = instantOf(day, slot.start, tz);
+        const endsAt = slot.minutes !== undefined ? plusMinutes(startsAt, slot.minutes) : instantOf(day, slot.end, tz);
+        return { day, slot, starts_at: startsAt, ends_at: endsAt };
+      }));
       const there = (await tx.query(
         `select place_id, location, starts_at, series_id from shifts
           where workspace_id = $1 and deleted_at is null and kind = $2
@@ -182,7 +198,7 @@ export const manyActions = {
         id: newId(), day: w.day, title: input.name || madeTitle(kind.code, location), title_custom: Boolean(input.name),
         kind: kind.code, role: kind.role, place_id: where.place_id, location, starts_at: w.starts_at, ends_at: w.ends_at,
         instructions: input.instructions || null, link: input.link || null, capacity: input.capacity ?? null, need: input.need ?? null,
-        public: Boolean(input.public), series_id: w.slot.seriesId,
+        public: Boolean(input.public), drop_in: input.drop_in || null, series_id: w.slot.seriesId,
       }));
       if (made.length) {
         await insertShifts(tx, ws, ctx.user.id, made);
@@ -243,8 +259,10 @@ export const manyActions = {
         }
         const copy = {
           id: newId(), title: s.title, title_custom: s.title_custom, kind: s.kind, role: s.role, place_id: s.place_id, location: s.location,
-          ...times, instructions: s.instructions, link: s.link, capacity: s.capacity, need: s.need, public: Boolean(s.public), series_id: null,
+          ...times, instructions: s.instructions, link: s.link, capacity: s.capacity, need: s.need, public: Boolean(s.public), drop_in: s.drop_in || null,
+          series_id: null,
         };
+
         made.push(copy);
         pairs.push([s, copy]);
       }

@@ -143,3 +143,16 @@ test('each list holds its own two dozen: many openings never push the events out
   assert.equal(data.shifts.length, 24, 'two dozen openings at most');
   assert.deepEqual(data.events.map((e) => e.title), ['Family picnic', 'Town hall'], 'the events are all still there');
 });
+
+test('a drop-in shift: the loader marks it and its card says "Drop in"; any other card is as it was', async () => {
+  made.drop = ok(await mgr.action('shift.createMany', {
+    // Soonest of all, so the two dozen above don't push it off the list.
+    kind: 'office', location: 'Campaign office', days: [ahead(1)], start: '05:00', end: '09:00', drop_in: true, public: true,
+  })).shifts[0];
+  const rows = (await loadData(db, await siteWorkspace(db, ws))).shifts;
+  assert.equal(rows.find((e) => e.id === made.drop.id).drop_in, true);
+  assert.ok(rows.filter((e) => e.id !== made.drop.id).every((e) => !('drop_in' in e)), 'only a drop-in row carries the mark');
+  const volunteer = (await hit('/site/volunteer')).text;
+  assert.match(volunteer, /Drop in 5:00[^<]*9:00/);
+  assert.doesNotMatch(volunteer, /Drop in (6:30|7:00|11:00)/, 'no other shift says it');
+});

@@ -1,6 +1,6 @@
 // Words the week screen and its sheets share. Every time here is read on
 // the campaign's clock (shared/dayparts.js), never the device's.
-import { clockOf, dayOf, spanWords, weekdayIndex } from '@starbase/shared/dayparts';
+import { addDays, clockOf, dayOf, spanWords, weekdayIndex } from '@starbase/shared/dayparts';
 
 // '2026-11-16' → { wd: 'Mon', md: 'Nov 16', num: '16', long: 'Monday, November 16' }
 // (a calendar day: no time zone in it).
@@ -19,8 +19,22 @@ export const daysWords = (days) => {
   return run ? `${dayWords(list[0]).wd}–${dayWords(list[list.length - 1]).wd}` : list.map((d) => dayWords(d).wd).join(', ');
 };
 
-// A shift's hours: "6:30–8:30 am"; just its start when it has no end.
-export const shiftSpan = (s, tz) => spanWords(clockOf(s.starts_at, tz), s.ends_at ? clockOf(s.ends_at, tz) : null);
+// A shift's hours: "6:30–8:30 am"; just its start when it has no end; and
+// when it ends on a later day, which: "8 pm–1 am next day".
+export const shiftSpan = (s, tz) => {
+  const later = endsLater(s, tz);
+  return later ? `${clockSpan(s, tz)}${later === 'next day' ? ' ' : ', '}${later}` : clockSpan(s, tz);
+};
+export const clockSpan = (s, tz) => spanWords(clockOf(s.starts_at, tz), s.ends_at ? clockOf(s.ends_at, tz) : null);
+// "next day", "ends Tue, Nov 19", or null on its own day. A shift that
+// ends at midnight is that evening's (its last minute is on its day).
+export const endsLater = (s, tz) => {
+  if (!s.ends_at) return null;
+  const from = dayOf(s.starts_at, tz);
+  const to = dayOf(new Date(Date.parse(s.ends_at) - 60e3).toISOString(), tz);
+  if (to <= from) return null;
+  return to === addDays(from, 1) ? 'next day' : `ends ${dayWords(to).wd}, ${dayWords(to).md}`;
+};
 // Its start and end as clock times on its day ('HH:MM'); end null when it
 // has none, or runs past midnight (then its length is left alone).
 export const shiftClock = (s, tz) => ({

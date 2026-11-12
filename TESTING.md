@@ -571,7 +571,14 @@ one tap away under **More**.
   where. *Count me in* is on the row (a shift at the same time as one of
   yours asks *Count me in anyway?* first); open the shift for *Can't make
   it*. A place with a pin opens a map; a Mainstreet shift you are on has
-  *Start mainstreeting*, which opens Mainstreeting at its place.
+  *Start mainstreeting*, which opens Mainstreeting at its place. Under
+  *You're on this shift*: *The whole time · Change my hours* — *From 4:30*,
+  *Until 6*, **Save my hours**: the line and your row read *4:30–6 pm*
+  (with no signal, *Not sent yet* until it's back). A drop-in shift reads
+  *Drop in · 4–8 pm*, and its page *Tell us when you'll come*.
+  `PORT=5153 SHOTS=/tmp/shifthours node e2e-shifthours.mjs` walks this, the
+  offline cases and the desk's side (the roster, *Hours → Save hours* on a
+  person, the check-in board, the website's *Drop in*).
 - **Voted ✓** (once your manager turns Election day on) — on an open door of
   your walk list, the map's door card or a Calls card, one tap says this
   person has voted: the toast reads *Voted · Harjit* with *Change* (a
@@ -629,9 +636,12 @@ one tap away under **More**.
   **Save** moves it (or drag the card to another day — *Undo*); with
   someone on it the week says who has the old time, with **Tell them**
   (close the sheet that opens — ✕, Escape or Back — and you are still on
-  the week). A shift the long form made at 11 pm opens its sheet on *11 pm*
-  and its own length, both chosen; tap another length by mistake and its
-  own can be tapped again. Tap a name in the strip of people: it stays in
+  the week). *Another time* opens on the usual hours (that chip goes off);
+  *Starts* and *Ends* step a quarter hour either way — *6:45–8:15 am*, or
+  an Event at 8 pm for *6 h*, *Ends − 15 min* four times: *1:00 am next
+  day · 5 h*, its card *8 pm–1 am*. A shift the long form made at 11 pm
+  opens its sheet on *11 pm* and its own length, both chosen; tap another
+  length by mistake and its own can be tapped again. Tap a name in the strip of people: it stays in
   hand (*Tap each shift to put … on it*, then under the name what each tap
   did — no toast over the next card) while you tap card after card;
   **Done** puts it down. A long name on a card keeps its initial

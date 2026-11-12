@@ -545,7 +545,30 @@ than a week after they came off is refused. Contacts are door, phone, text or
   lists the shifts short of it (the brief's `shortShifts`). The shifts list
   answers what is coming up (`GET /api/shifts`; past ones a page at a time
   with `?past=1`), and the week's read (`GET /api/shifts/board`) brings the
-  people to put on shifts, website sign-ups among them. These writes, every
+  people to put on shifts, website sign-ups among them. A shift may be
+  said by its **length** (`minutes`, a quarter hour to a day; a longer
+  shift the long form made keeps its length when its start moves) in place
+  of its end — elapsed time, and the only way past midnight (an end before
+  the start is a typo, refused) — and marked **Drop in any time**
+  (`drop_in`: words only; booking and counting are as for any shift). A
+  booking may carry **its own hours** inside its shift (`arrive_at`,
+  `leave_at`: the plan, not who came; both null is the whole shift):
+  `shift.hours` for the volunteer's own (also saved offline),
+  `shift.setHours` for the desk. They are cleared when a booking comes
+  back after *Can't make it* or a no-show, narrowed or cleared when the
+  shift's times change, shown only to the person and the desk (`GET
+  /api/shifts` as `my_arrive_at`/`my_leave_at`, a shift's page, the crew
+  board), and every notice says each person's own hours
+  (`shared/shifthours.js`). On screen: *Another time* steps the start and
+  the end a quarter hour at a time (up to 16 hours, past midnight sent as
+  a length), and a card says when a shift ends on a later day ("8 pm–1 am
+  next day"); *Change my hours* under *You're on this shift* (through the
+  outbox: a second save replaces the waiting one, a *Count me in* taken
+  back takes its hours along, and "not on this shift" on replay is
+  dropped); *Hours → Save hours* in the desk's person sheet; the roster and
+  check-in board show each person's hours; and a drop-in shift reads
+  *Drop in* on the list and the website. These writes, every
+
   screen that shows or takes a shift's time and every shift notice work on
   the campaign's clock — B.C. on UTC−7 all year from March 2026, by rule
   (`shared/dayparts.js`), whatever a phone's or a server's own time-zone
@@ -936,7 +959,8 @@ not a blank square that counts as loaded.
 
 With no signal, field work saves on the phone and sends once, in order, when
 the signal is back: knocks, new people and doors (staff), dropped pins, sign
-requests and their Undo, and *Count me in* / *Can't make it*. The map's doors,
+requests and their Undo, *Count me in* / *Can't make it* and a volunteer's
+own hours on a shift. The map's doors,
 the Calls list, shifts and walk lists keep their last loaded copy on the
 phone for a day ("Offline copy"). With signal a screen always asks the server
 first, so a copy never hides a knock. Sign-out forgets them, and so does a

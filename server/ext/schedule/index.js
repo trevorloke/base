@@ -17,6 +17,8 @@
 //               place.save · place.rename · place.remove
 //   many.js     shift.createMany · shift.copyWeek · shift.series.update ·
 //               shift.series.cancel — each one transaction
+//   hours.js    shift.hours · shift.setHours — a booking's own hours
+//               inside its shift ("only part of it")
 //   tell.js     shift.tellWeek · shift.reminders, and the two jobs that
 //               send: a notice's rows, and the evening before
 //   brief.js    Today's short shifts (brief hook)
@@ -25,13 +27,14 @@
 import { placeActions } from './places.js';
 import { manyActions } from './many.js';
 import { tellActions } from './tell.js';
+import { hoursActions } from './hours.js';
 import { briefShortShifts } from './brief.js';
 
 export { sql } from './sql.js';
 export { api } from './api.js';
 export { jobs } from './tell.js';
 
-export const actions = { ...placeActions, ...manyActions, ...tellActions };
+export const actions = { ...placeActions, ...manyActions, ...tellActions, ...hoursActions };
 
 export const hooks = { brief: briefShortShifts };
 

@@ -48,7 +48,7 @@ api.get('/crew/:shiftId', async (c) => {
   )).rows;
   const turfIds = new Set(turfs.map((t) => t.id));
   const booked = (await db.query(
-    `select a.id as assignment_id, a.status, a.person_id, p.name, p.phone, p.email, ${noCallSql('p')} as no_call,
+    `select a.id as assignment_id, a.status, a.person_id, a.arrive_at, a.leave_at, p.name, p.phone, p.email, ${noCallSql('p')} as no_call,
             c.placed, c.turf_id, c.job,
             exists (select 1 from users u join memberships m on m.user_id = u.id and m.workspace_id = $1
                     where p.email is not null and lower(u.email) = lower(p.email)) as signed_in
@@ -80,7 +80,12 @@ api.get('/crew/:shiftId', async (c) => {
     // a turf the shift no longer carries reads as not placed.
     to: b.placed === 'none' ? 'none' : b.placed === 'turf' && turfIds.has(b.turf_id) ? b.turf_id : 'every',
     job: b.job || null,
+    // Their own hours inside the shift (ext/schedule/hours.js), null for
+    // the whole shift: who comes late, who leaves early.
+    arrive_at: iso(b.arrive_at),
+    leave_at: iso(b.leave_at),
     signed_in: Boolean(b.signed_in),
+
     first_shift: !seasoned.has(b.person_id),
   });
   // On the board: booked, or checked in as done. Off it: couldn't make it,
