@@ -84,7 +84,8 @@ await vp.tap('section.cl-card .cl-out:has-text("No answer")');
 await sleep(1200);
 const toast = async () => ((await vp.innerText('.cl-toast, .walk-toast, [role="status"].toast').catch(() => '')) || (await vp.innerText('body')).match(/[A-Z][a-z]+ · No answer[^\n]*/)?.[0] || '').replace(/\s+/g, ' ').trim();
 const t1 = await toast();
-check(`No answer on ${first.split(' ')[0]}: "back on your list <time>"`, /No answer — back on your list \d{1,2}:\d{2}/.test(t1), t1);
+// In the two hours before midnight the time is tomorrow's, and the toast says so.
+check(`No answer on ${first.split(' ')[0]}: "back on your list <time>"`, /No answer — back on your list (tomorrow )?\d{1,2}:\d{2}/.test(t1), t1);
 const line = async () => (await vp.innerText('.cl-bank__line').catch(() => '')).replace(/\s+/g, ' ').trim();
 check('the bank line: "1 to call back (next …)"', /1 to call back \(next /.test(await line()), await line());
 check('the next card is someone else', (await cardName()) && (await cardName()) !== first, await cardName());
