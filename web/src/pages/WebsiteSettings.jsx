@@ -5,7 +5,8 @@
 //   Announcement bar — a line across the top of every page.
 //   Footer — the land acknowledgement, its links, its logo.
 //   Organization — the name, contact details, the platform and privacy
-//     links, and the authorization line election rules ask for.
+//     links, and who authorized the site (the financial agent and how to
+//     reach them): "Authorized by …", which election rules ask for.
 //   Social accounts · Search and sharing (the title, description and picture
 //     search engines and shares use) · Your own domain.
 // One yellow "Save settings": the sections that changed, live at once.
@@ -207,9 +208,15 @@ export default function WebsiteSettings() {
               <TextField id="wb-s-platl" label="Platform link words" max={80} value={s.org.platformLabel} onChange={(v) => set('org', 'platformLabel', v)} />
             </div>
             <UrlField id="wb-s-priv" label="Privacy policy link" value={s.org.privacyUrl} pages={ctx.pages} onChange={(v) => set('org', 'privacyUrl', v)} />
-            <TextField id="wb-s-auth" label="Authorization line" max={200} value={s.org.authorizationLine}
-              hint="The line election rules ask for on advertising — who authorized it. Ask your financial agent for the exact words."
-              onChange={(v) => set('org', 'authorizationLine', v)} />
+            {/* "Authorized by <name>, <contact>" on every page of every website
+                (shared/site/wording.js authorizedBy); the old free line stays
+                saved, drawn only while no agent is named. */}
+            <div className="form-row">
+              <TextField id="wb-s-agent" label="Authorized by (your financial agent’s name)" max={80} value={s.org.agentName || ''}
+                onChange={(v) => set('org', 'agentName', v)} />
+              <TextField id="wb-s-agentc" label="How to reach them (a B.C. phone number, mailing address or email)" max={120} value={s.org.agentContact || ''}
+                onChange={(v) => set('org', 'agentContact', v)} />
+            </div>
           </section>
 
           <section className="card" id="social" aria-labelledby="wb-s-soc">

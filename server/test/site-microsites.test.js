@@ -363,4 +363,9 @@ test('Authorized by: the agent and how to reach them; the old line only while no
   r = await hit('/', { host: MAIN });
   assert.ok(r.text.includes(AUTH));
   assert.ok(!r.text.includes('Old Example'));
+  // A save from a desk build that knows nothing of the agent keeps them.
+  const { agentName: _a, agentContact: _b, authorizationLine: _c, ...older } = ok(await mgr.get('/api/site')).settings.org;
+  ok(await act(mgr, 'site.settings.save', { org: { ...older, phone: '604-555-0199' } }));
+  const now = ok(await mgr.get('/api/site')).settings.org;
+  assert.deepEqual([now.agentName, now.agentContact, now.authorizationLine, now.phone], ['Ada Example', '604-555-0100', 'Authorized by Old Example, financial agent', '604-555-0199']);
 });

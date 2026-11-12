@@ -364,6 +364,46 @@ test('forms carry the referral and share source the server hands over', () => {
   assert.match(html, /<input type="hidden" name="source" value="share-whatsapp"\/>/);
 });
 
+test('every form, of every kind: one small print with its own words first, the privacy line, one privacy link', () => {
+  const kinds = ['newsletter', 'petition', 'volunteer', 'contact', 'join', 'donate', 'shifts', 'events'];
+  const modules = kinds.map((k, i) => (k === 'petition' ? mod('petition', `pf-${i}`, { campaign: 'c-skytrain', eyebrow: '', tone: 'paper' }) : newModule(k, `pf-${k}`)));
+  const { html: raw } = renderSite({ kind: 'page', site: baseSample.site, page: { ...baseSample.page, modules }, data: { ...data, payments: { ...data.payments, ready: true } }, ctx: { root: '/', path: '/' } });
+  const html = raw.replace(/<!-- -->/g, '');
+  const forms = (html.match(/<form /g) || []).length;
+  assert.ok(forms >= 6, `${forms} forms`);
+  assert.equal((html.match(/class="form-small"/g) || []).length, forms);
+  assert.equal((html.match(/>Privacy policy</g) || []).length, forms);
+  assert.equal((html.match(/Harbour City Together keeps what you send to stay in touch about our work and elections\. <a href="\/privacy">Privacy policy<\/a>/g) || []).length, forms);
+  assert.match(html, /<p class="form-small">You’ll pay on the next page by card, Apple Pay or Google Pay\. Harbour City Together keeps what you send/, 'its own words first');
+  // No privacy link set: the sentence alone.
+  const bare = renderSite({ kind: 'page', site: { ...baseSample.site, org: { ...baseSample.site.org, privacy_url: '' } }, page: { ...baseSample.page, modules: [newModule('newsletter', 'nl-bare')] }, data, ctx: {} }).html.replace(/<!-- -->/g, '');
+  assert.match(bare, /keeps what you send to stay in touch about our work and elections\.<\/p>/);
+  assert.ok(!bare.includes('>Privacy policy<'));
+});
+
+test('another website of the campaign: its name in the header and title; the main organization, the link back and "Authorized by" in the footer', () => {
+  const s = {
+    ...baseSample.site,
+    org: { ...baseSample.site.org, authorization: '', agentName: 'Ada Example', agentContact: '604-555-0100', privacy_url: 'https://main.example.org/privacy' },
+    nav: { items: [], bar: [], cta: null },
+    site: { name: 'Doug Didn’t Example', key: 'doug' },
+    parent: { name: 'Harbour City Together', url: 'https://main.example.org' },
+  };
+  const { html: raw } = renderSite({ kind: 'page', site: s, page: { ...baseSample.page, slug: 'home', modules: [newModule('newsletter', 'nl-doug')] }, data, ctx: { root: '/', path: '/', origin: 'https://doug.example' } });
+  const html = raw.replace(/<!-- -->/g, '');
+  assert.match(html, /<span class="wordmark">Doug Didn’t Example<\/span>/);
+  assert.match(html, /<title>Doug Didn’t Example<\/title>/);
+  assert.match(html, /© \d{4} Harbour City Together<span class="footer-authorization">Authorized by Ada Example, 604-555-0100<\/span>/);
+  assert.match(html, /<p class="footer-parent">A website by <a href="https:\/\/main\.example\.org">Harbour City Together<\/a><\/p>/);
+  assert.ok(!html.includes('footer-links') && !html.includes('footer-acknowledgement'), 'none of the main footer’s columns');
+  assert.ok(html.includes('<a href="https://main.example.org/privacy">Privacy policy</a>'));
+  // A petition there counts at the main site's address.
+  const c = renderSite({ kind: 'campaign', site: s, campaign: { id: 'c1', slug: 'fix-it', kind: 'petition', title: 'Fix it', status: 'open' }, data, ctx: { root: '/', path: '/act/fix-it', origin: 'https://doug.example' } });
+  assert.match(c.html, /<link rel="canonical" href="https:\/\/main\.example\.org\/act\/fix-it">/);
+  // The main site: no link back.
+  assert.ok(!renderSite({ kind: 'page', site: baseSample.site, page: baseSample.page, data, ctx: {} }).html.includes('footer-parent'));
+});
+
 test('donate: suggested amounts never above the limit; monthly; payments not set up', () => {
   const dataLow = { ...data, payments: { ready: true, limit_cents: 12000, monthly_max_cents: 1000 } };
   const donate = mod('donate', 'give01', { title: 'Give', intro: '', text: '', amounts: ['25', '50', '100', '250', '$1,000'], allowMonthly: true, monthlyNote: 'Monthly helps.', clubNote: '' });

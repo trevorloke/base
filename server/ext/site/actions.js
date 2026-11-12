@@ -199,6 +199,15 @@ export const actions = {
     const sets = [];
     const params = [ws];
     const changed = {};
+    // Who authorized the site, when a save leaves it out (a desk build from
+    // before it was asked for): as it was, never wiped.
+    if (input.org && typeof input.org === 'object') {
+      const keep = ['agentName', 'agentContact', 'authorizationLine'].filter((k) => input.org[k] === undefined);
+      if (keep.length) {
+        const was = parseJ((await tx.query('select org from site_settings where workspace_id = $1', [ws])).rows[0]?.org, {}) || {};
+        input.org = { ...input.org, ...Object.fromEntries(keep.filter((k) => was[k] !== undefined).map((k) => [k, was[k]])) };
+      }
+    }
     for (const key of Object.keys(SECTIONS)) {
       if (input[key] === undefined) continue;
       const r = SECTIONS[key].safeParse(input[key]);
