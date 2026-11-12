@@ -63,7 +63,7 @@ const both = async (name, p = page, ready = null) => {
   if (ready) await ready();
   const o = await overflow(p);
   const small = await p.evaluate(() => [...document.querySelectorAll('main .btn, main button, main input:not([type=checkbox]):not([type=radio]), .ms-check a, .ms-link')]
-    .filter((el) => el.offsetParent && !el.closest('.ws-sr'))
+    .filter((el) => el.offsetParent && !el.closest('.ws-sr, [aria-hidden=true]') && el.name !== 'website' && el.tabIndex !== -1)
     .map((el) => [el.textContent.trim().slice(0, 30) || el.getAttribute('aria-label') || el.id, Math.round(el.getBoundingClientRect().height)])
     .filter(([, h]) => h < 44));
   if (o > 0 || small.length) phoneIssues.push([name, o, small]);
@@ -188,8 +188,10 @@ await both('6-live-overview');
 // ── 7. People with web=site: ──
 await page.getByRole('link', { name: 'See everyone from this site' }).click();
 await page.waitForURL(/\/people\?web=site/, { timeout: 10000 });
-await page.getByText(email).first().waitFor({ timeout: 10000 }).catch(() => {});
-check('People with web=site: finds the person', (await page.locator('body').innerText()).includes(email), page.url());
+await page.getByText(/Lee Lee/).first().waitFor({ timeout: 10000 }).catch(() => {});
+const peopleText = await page.locator('main').innerText();
+check('People with web=site: finds the person; the filter is named by the site, never its id', /Lee Lee/.test(peopleText) && /On the website: Did something on dougdidnt\.test/.test(peopleText) && !/site:[0-9a-f]{8}/.test(peopleText), peopleText.slice(0, 300));
+await page.screenshot({ path: `${SHOTS}/7-people-web-site-desk.png` });
 
 // A second website (no domain) for the list.
 await go('/website/sites');

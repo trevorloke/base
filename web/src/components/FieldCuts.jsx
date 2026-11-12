@@ -39,14 +39,17 @@ export const useTurfs = () => {
 // campaigns }); empty until the website has people.
 export const useWebDid = () => {
   const q = useQuery({ queryKey: ['webdid'], queryFn: () => apiGet('/webdid'), staleTime: 60_000, meta: { side: true } });
-  return { kinds: q.data?.kinds ?? [], campaigns: q.data?.campaigns ?? [] };
+  return { kinds: q.data?.kinds ?? [], campaigns: q.data?.campaigns ?? [], sites: q.data?.sites ?? [] };
 };
-// The website filter's choices: Anything, each kind, each petition or pledge
+// The website filter's choices: Anything, each kind, each petition or pledge,
+// each of the campaign's other websites
 // ([value, words]); none until the website has people.
 export const webChoices = (web) => [
   ...(web.kinds.length ? [['any', 'Anything']] : []),
   ...web.kinds.map((k) => [k.kind, k.label]),
   ...web.campaigns.map((c) => [`campaign:${c.id}`, c.label]),
+  // The campaign's other websites: "Did something on dougdidnt.ca".
+  ...(web.sites || []).map((s) => [`site:${s.id}`, s.label]),
 ];
 
 export const cutChips = (f, turfs = [], web = { campaigns: [] }) => [
