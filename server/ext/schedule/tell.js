@@ -248,7 +248,8 @@ const deliver = async (db, ctx, batchId, { actorId = null, action = TELL_ACTION,
       const words = noticeWords({
         kind: n.kind, shifts: n.shifts, workspaceName: ctx.workspace.name, tz, week: n.week, thisWeek: n.week === weekStart(today),
       });
-      const tags = parseJ(n.person.tags, []) || [];
+      // A do-not tag whatever its capitals, as every send reads it (lib/reach.js).
+      const tags = (parseJ(n.person.tags, []) || []).map((t) => String(t).toLowerCase());
       let email = { status: 'skipped' };
       if (n.person.email) {
         email = NO_EMAIL_TAGS.some((x) => tags.includes(x)) ? { status: 'opted_out' }
