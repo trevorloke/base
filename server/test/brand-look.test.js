@@ -110,6 +110,30 @@ test('status words read on every ground (the brand never recolours them, so they
   }
 });
 
+// Kinds of shift (shared/shiftkinds.js) are told apart by colour on the
+// schedule: their hues are fixed, so no campaign's brand can make two look
+// alike — none is the brand's, none a status colour, and each reads as an
+// icon or an edge (3:1) on every ground.
+test('the kinds of shift keep their own colours, apart from the brand and the status colours', async () => {
+  const { SHIFT_KINDS } = await import('@starbase/shared/shiftkinds');
+  for (const scheme of SCHEMES) {
+    const kinds = pairs(marked(`kind:${scheme}`));
+    const status = pairs(marked(`status:${scheme}`));
+    const look = deriveLook(BRANDS.base, scheme);
+    const coloured = SHIFT_KINDS.filter((k) => /^--kind-/.test(k.color));
+    assert.deepEqual(SHIFT_KINDS.filter((k) => /^--(mark|accent|second|tint|link)/.test(k.color)).map((k) => k.code), [], 'no kind takes the brand’s colour');
+    assert.deepEqual(coloured.map((k) => k.code), ['canvass', 'phone_bank', 'event']);
+    const used = [...coloured.map((k) => kinds[k.color]), status['--ok'], status['--warn']];
+    assert.equal(new Set(used).size, used.length, `${scheme}: every coloured kind its own (Mainstreet --ok, Burma Shave --warn)`);
+    for (const k of coloured) {
+      assert.match(kinds[k.color] || '', /^#[0-9a-f]{6}$/, `${scheme} ${k.color} is in app.css`);
+      for (const ground of [look.page, look.card, look.panel]) {
+        assert.ok(contrast(kinds[k.color], ground) >= 3, `${scheme} ${k.color} on ${ground}: ${contrast(kinds[k.color], ground).toFixed(2)}`);
+      }
+    }
+  }
+});
+
 test('app.css’s own values are the base preset’s, through the same rule', () => {
   const want = lookTokens(BRANDS.base);
   assert.ok(marked('look:light') && marked('look:dark'), 'app.css marks the two blocks the rule writes');

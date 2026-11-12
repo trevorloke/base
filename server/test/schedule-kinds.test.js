@@ -35,7 +35,8 @@ test('the catalogue: nine kinds, their words, usual hours, and colours from the 
   assert.deepEqual(hours('office'), ['09:00-12:00', '13:00-16:00']);
   assert.deepEqual([hours('event'), hours('other')], [[], []]);
   // The app's own colour variables (web/src/app.css): a campaign's brand and a new look re-value these.
-  const APP_COLOURS = ['--mark', '--mark-ink', '--mark-soft', '--mark-deep', '--text-1', '--text-2', '--text-3', '--text-4', '--ink', '--ok', '--warn', '--danger'];
+  // The kinds' own three (--kind-*) are fixed hues, apart from any brand (brand-look.test.js).
+  const APP_COLOURS = ['--kind-canvass', '--kind-phone', '--kind-event', '--text-1', '--text-2', '--text-3', '--text-4', '--ink', '--ok', '--warn', '--danger'];
   for (const k of SHIFT_KINDS) {
     assert.match(k.color, /^--[a-z0-9-]+$/, `${k.code}: a CSS variable, never a hex`);
     assert.ok(APP_COLOURS.includes(k.color), `${k.code}: ${k.color} is one the app already has`);

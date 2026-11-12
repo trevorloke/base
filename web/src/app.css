@@ -63,6 +63,12 @@
   /* status:light */
   --ok: #1f7a4d; --warn: #9a5b00; --danger: #c8151b;
   /* end */
+  /* Kinds of shift (shared/shiftkinds.js) told apart by colour: fixed hues,
+     apart from the brand and the status colours, so no campaign's colour
+     makes two kinds look alike. */
+  /* kind:light */
+  --kind-canvass: #2b5fb4; --kind-phone: #6a46b8; --kind-event: #a8327a;
+  /* end */
   /* Undecided — the map pins' amber. */
   --amber: #f5a524;
   --amber-deep: #b87400;
@@ -107,6 +113,9 @@
   :root {
     /* status:dark */
     --ok: #5fd39a; --warn: #f0b955; --danger: #ff8a8a;
+    /* end */
+    /* kind:dark */
+    --kind-canvass: #86aef5; --kind-phone: #b8a2f5; --kind-event: #f08cc8;
     /* end */
     --shadow-2: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 12px 32px rgba(0, 0, 0, 0.5);
     --shadow-3: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 24px 64px rgba(0, 0, 0, 0.6);

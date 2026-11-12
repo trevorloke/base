@@ -3,8 +3,10 @@
 // manager would otherwise type or pick each time:
 //   label   the words on screen and at the front of a made name
 //   icon    the mark on a card (the screens draw it by this name)
-//   color   a CSS variable the app already has — never a hex, so a
-//           campaign's own colours and a new look carry through
+//   color   a CSS variable the app already has (web/src/app.css), never
+//           a hex. The coloured kinds have their own fixed hues (--kind-*),
+//           apart from the brand and the status colours: a campaign's
+//           colour never makes two kinds look alike
 //   slots   its usual hours, the first one offered already chosen
 //   minutes how long one usually runs, for a start picked by hand
 //   role    the volunteer role it prefers (shared/canvass.js), which floats
@@ -22,13 +24,13 @@ import { addDays } from './dayparts.js';
 const slot = (start, end) => ({ start, end });
 
 export const SHIFT_KINDS = [
-  { code: 'canvass', label: 'Canvass', icon: 'door', color: '--mark', slots: [slot('10:00', '13:00'), slot('14:00', '17:00'), slot('18:00', '20:00')], minutes: 180, role: 'doorknocking', turfs: true, site: 'opening' },
-  { code: 'phone_bank', label: 'Phone bank', icon: 'phone', color: '--mark-deep', slots: [slot('18:00', '20:00')], minutes: 120, role: 'phoning', turfs: false, site: 'opening' },
+  { code: 'canvass', label: 'Canvass', icon: 'door', color: '--kind-canvass', slots: [slot('10:00', '13:00'), slot('14:00', '17:00'), slot('18:00', '20:00')], minutes: 180, role: 'doorknocking', turfs: true, site: 'opening' },
+  { code: 'phone_bank', label: 'Phone bank', icon: 'phone', color: '--kind-phone', slots: [slot('18:00', '20:00')], minutes: 120, role: 'phoning', turfs: false, site: 'opening' },
   { code: 'mainstreet', label: 'Mainstreet', icon: 'storefront', color: '--ok', slots: [slot('07:00', '09:00'), slot('16:30', '18:30')], minutes: 120, role: 'mainstreeting', turfs: false, site: 'opening', need: 2 },
   { code: 'burma_shave', label: 'Burma Shave', icon: 'wave', color: '--warn', slots: [slot('06:30', '08:30'), slot('16:00', '18:00')], minutes: 120, role: 'burmashave', turfs: false, site: 'opening', need: 4 },
   { code: 'lit_drop', label: 'Lit drop', icon: 'leaflet', color: '--text-2', slots: [slot('10:00', '12:00')], minutes: 120, role: 'doorknocking', turfs: true, site: 'opening' },
   { code: 'signs', label: 'Signs', icon: 'sign', color: '--text-3', slots: [slot('09:00', '12:00')], minutes: 180, role: null, turfs: false, site: 'opening' },
-  { code: 'event', label: 'Event', icon: 'calendar', color: '--mark-deep', slots: [], minutes: 120, role: 'event_hosting', turfs: false, site: 'event' },
+  { code: 'event', label: 'Event', icon: 'calendar', color: '--kind-event', slots: [], minutes: 120, role: 'event_hosting', turfs: false, site: 'event' },
   { code: 'office', label: 'Office', icon: 'desk', color: '--text-3', slots: [slot('09:00', '12:00'), slot('13:00', '16:00')], minutes: 180, role: 'administration', turfs: false, site: 'opening' },
   // "Other" names nothing, so a made name starts "Shift".
   { code: 'other', label: 'Other', name: 'Shift', icon: 'dot', color: '--text-4', slots: [], minutes: 120, role: null, turfs: false, site: 'opening' },
