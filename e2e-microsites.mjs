@@ -136,6 +136,7 @@ await page.getByRole('link', { name: '← Pages' }).click();
 await page.waitForURL(new RegExp(`/website/sites/${siteId}/pages$`));
 await page.locator('.wb-row').first().waitFor();
 check('← Pages: its own pages (only its home)', (await page.locator('.wb-row').count()) === 1 && /Home|Doug/.test(await page.locator('.wb-row__name').first().innerText()));
+await both('2-site-pages');
 
 // A failed read on its Pages and Look: “Unavailable — Try again”, and nothing to edit.
 await page.route(`**/api/site/microsites/${siteId}`, (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"boom"}' }));
@@ -173,6 +174,11 @@ check('Domain with an address saved: no primary button; “Change it” is quiet
   (await primaries()).length === 0 && await page.getByRole('button', { name: 'Change it' }).count() === 1
   && JSON.stringify((await api(`/site/microsites/${siteId}`)).json.microsite.domains) === JSON.stringify([DOUG, `www.${DOUG}`]));
 await both('4-domain');
+await page.getByRole('button', { name: 'Change it' }).click();
+await page.screenshot({ path: `${SHOTS}/4-domain-change-desk.png` });
+const gap = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.ms-dom-also')).marginBottom));
+check('Domain → Change it: a gap between the “Also www.” line and “The new address”', gap >= 8, String(gap));
+await page.getByRole('button', { name: 'Cancel' }).click();
 
 // ── 5. the website on its own domain ──
 const visitor = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
@@ -234,6 +240,43 @@ await both('7-sites-two');
 await go('/website');
 check('Overview: “Other websites · 1 live · 1 draft”', /Other websites\s*1 live · 1 draft/.test(await page.locator('a.ms-home-row').innerText()));
 
+// On a phone, a draft's ⋯ sits on the last row of a short page, just above
+// the tabs: its menu must open where Delete can be tapped, and the question
+// must open above the tabs even when the page is already scrolled to its end.
+{
+  const draft = (await api('/site/microsites')).json.microsites.find((m) => m.name === 'Second Example');
+  await go(`/website/sites/${draft.id}`);
+  await page.locator('#ms-check-h').waitFor({ timeout: 10000 }).catch(() => {});
+  await page.setViewportSize({ width: 390, height: 844 });
+  await sleep(300);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await sleep(200);
+  await page.getByRole('button', { name: 'More for Second Example' }).click();
+  const del = page.getByRole('button', { name: 'Delete' });
+  const reach = await del.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), hit: hit === el || el.contains(hit) };
+  });
+  check('on a phone, Delete in a draft’s ⋯ can be tapped (never under the tabs)', reach.hit, JSON.stringify(reach));
+  await page.screenshot({ path: `${SHOTS}/7-draft-more-phone.png` });
+  await del.click({ timeout: 5000 }).catch(() => {});
+  await sleep(500);
+  await page.screenshot({ path: `${SHOTS}/7-draft-delete-ask-phone.png` });
+  const at = await page.evaluate(() => {
+    const ask = document.querySelector('.ms-ask');
+    if (!ask) return null;
+    const r = ask.getBoundingClientRect();
+    const tabs = document.querySelector('.tabbar');
+    const floor = tabs && getComputedStyle(tabs).display !== 'none' ? tabs.getBoundingClientRect().top : window.innerHeight;
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), floor: Math.round(floor), focus: document.activeElement?.textContent.trim() };
+  });
+  check('on a phone, scrolled to the end, “Delete this website?” opens above the tabs with No in focus', at && at.top >= 0 && at.bottom <= at.floor && at.focus === 'No', JSON.stringify(at));
+  if (at) await page.locator('.ms-ask').getByRole('button', { name: 'No' }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await sleep(200);
+}
+
 // ── 9. staff with the Website area: no Go live, no ⋯ ──
 const inv = (await page.evaluate(async (e) => (await fetch('/api/actions/member.invite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: e, role: 'staff' }) })).json(), `sam.${tag}@example.org`));
 const sctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
@@ -265,7 +308,7 @@ await sleep(400);
 const askAt = await page.evaluate(() => {
   const r = document.querySelector('.ms-ask').getBoundingClientRect();
   const tabs = document.querySelector('.tabbar');
-  const floor = tabs && tabs.offsetParent ? tabs.getBoundingClientRect().top : window.innerHeight;
+  const floor = tabs && getComputedStyle(tabs).display !== 'none' ? tabs.getBoundingClientRect().top : window.innerHeight;
   return { top: Math.round(r.top), bottom: Math.round(r.bottom), floor: Math.round(floor), focus: document.activeElement?.textContent.trim() };
 });
 check('on a phone, the question opens in view, above the tabs, with No in focus', askAt.top >= 0 && askAt.bottom <= askAt.floor && askAt.focus === 'No', JSON.stringify(askAt));

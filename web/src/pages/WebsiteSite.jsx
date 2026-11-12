@@ -50,14 +50,18 @@ export function SiteGone({ q, id }) {
   );
 }
 
-// Yes · No in place. On a phone it would open below the fold (under the
-// tabs), so it scrolls into view and No takes the focus.
+// Yes · No in place. On a phone it would open below the fold or under the
+// fixed tabs, so it scrolls into view and No takes the focus. The tabs are
+// the box's scroll-margin (website-sites.css); 'nearest' ignores that margin
+// when the box is already inside the window, so a box that would sit under
+// them is lined up by its end instead.
 function Ask({ words, yes, onYes, onNo, busy }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.scrollIntoView?.({ block: 'nearest' });
+    const under = el.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(el).scrollMarginBottom) || 0) > window.innerHeight;
+    el.scrollIntoView?.({ block: under ? 'end' : 'nearest' });
     el.querySelector('.ms-ask__no')?.focus({ preventScroll: true });
   }, []);
   return (

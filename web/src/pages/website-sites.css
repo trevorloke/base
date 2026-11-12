@@ -51,7 +51,8 @@
 .ms-rename { margin-bottom: var(--s-4); }
 
 .ms-dom-form .ops-actions, .ms-card > .ops-actions { flex-wrap: wrap; }
-.ms-dom-also { margin: 0 0 var(--s-3); }
+/* .ms-card > p would otherwise win and take the gap away. */
+.ms-card > p.ms-dom-also { margin: 0 0 var(--s-3); }
 .ms-steps { margin: 0 0 var(--s-3); padding-left: 1.4em; display: flex; flex-direction: column; gap: var(--s-3); }
 .ms-steps p { margin: 0 0 6px; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
 .ms-copy { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
@@ -76,4 +77,14 @@
   .toast.wb-toast .btn { min-height: 48px; }
   .ms-links > .btn { flex: 1 1 auto; }
   .ms-ask > .btn { flex: 1 1 auto; }
+  /* A page's title on its Pages screen is the way to open it. */
+  .wb-row__name { min-height: 48px; }
+}
+@media (max-width: 720px) {
+  /* The overview's ⋯ is on the last row, just above the fixed tabs: its
+     menu opens upward, where there is always room. */
+  .ms-more .wb-more__panel { top: auto; bottom: calc(100% + 4px); }
+  /* scrollIntoView knows nothing of the tabs; this keeps the question
+     clear of them (app.css: the tab bar is about 65–71px tall). */
+  .ms-ask { scroll-margin-bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
