@@ -212,7 +212,8 @@ await page.click('aside.door-card .sv-opt:has-text("Housing")');
 await page.click('aside.door-card .sv-q:has-text("Will you vote early?") .sv-opt:has-text("Yes")');
 await page.click('aside.door-card .sv-q__opts--scale .sv-opt:has-text("4")');
 m = await measure(page, 'aside.door-card .sv-opt, aside.door-card .sv-field__btn, aside.door-card .sv-field__save, aside.door-card .rb-btn');
-check('door card: choice buttons ≥ 48px', m.minTap >= 48, JSON.stringify(m));
+// On a desk with a mouse the choices are 40px (app.css --ctl); a phone's door card keeps 48 (checked below).
+check('door card on a desk: choice buttons ≥ 40px', m.minTap >= 40, JSON.stringify(m));
 check('door card: "3 answered" (not "saved") before the tap', /3 answered/i.test(await page.innerText('aside.door-card .sv-field__btn')));
 await D.shot('03-door-card-questions');
 await page.click('aside.door-card button[aria-label="1: Strong support"]');
@@ -359,7 +360,7 @@ const texts = await page.innerText('.sv-res[aria-label="Anything else?"]');
 check('short answers listed', /More buses on 72 Ave/.test(texts) && /Maya Example/.test(texts));
 check('results: the 1–5 question says "1 low · 5 high"', /1 low · 5 high/.test(await page.innerText('.sv-res[aria-label="How likely are you to vote?"]')));
 m = await measure(page, '.sv-bar__see, .sv-people a');
-check('results: "See people" and names ≥ 48px', m.minTap >= 48, JSON.stringify(m));
+check('results on a desk: "See people" and names ≥ 40px', m.minTap >= 40, JSON.stringify(m));
 m = await measure(page);
 check('results: no yellow button (nothing to start here)', m.yellow === 0, JSON.stringify(m));
 await D.full('09-results-desktop');

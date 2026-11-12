@@ -416,6 +416,28 @@ one tap away under **More**.
   Server tests: `server/test/site-*.test.js`; in a browser:
   `e2e-site-server.mjs`.
 
+- **The campaign's brand** (Settings → Brand) — a manager's
+  saved brand is what every page wears: the app's page signed in or out,
+  the installed app's name and icons, the unsubscribe, receipt and lesson
+  pages, a newsletter's links and the logo over it, and a new website
+  until it has its own look. Server tests: `server/test/brand-save.test.js`
+  (saving, the pictures and their limits, who may),
+  `server/test/brand.test.js` (the page, the manifest, the public pages,
+  emails), `server/test/brand-look.test.js` (any colour reads) and
+  `server/test/site-follow.test.js` (the website and the brand),
+  `server/test/brand-notes.test.js` (what the screen warns about: how much
+  of a logo can be seen on a ground). In a browser: `e2e-brand.mjs` (the
+  screen itself — SVG logos kept as PNGs, the warning, the sample, Save,
+  the signed-out sign-in page, icons and manifest, and back; unsaved
+  changes found again after leaving by a link, and not offered to the next
+  manager to sign in on the same tab; an SVG that can't be made a
+  picture refused in plain words; Imagine
+  Surrey's keeps its wordmark and its website's own look) and `e2e-look.mjs`
+  (five saved brands × three sidebars read on real screens for contrast,
+  one primary and no sideways scroll). `e2e-site-admin.mjs` ends with the
+  website following the brand, going back to the look it had, and starting
+  its own look from the brand's.
+
 - **Website (the admin)** — **Website** in the desk's menu (managers, or
   whoever a manager grants the Website area). **Overview**: live or not,
   where it is (**View site**), this week's sign-ups. **Pages → New page**:

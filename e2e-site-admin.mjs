@@ -84,6 +84,7 @@ await page.fill('#su-password', 'surrey-forward-2026');
 await page.click('button[type="submit"]');
 await page.waitForURL(/\/admin\/?$/, { timeout: 15000 });
 const navLink = page.locator('nav.links a', { hasText: 'Website' });
+await navLink.waitFor({ timeout: 10000 }).catch(() => {}); // the menu draws a moment after the address changes
 check('the desk’s menu has Website (a manager)', await navLink.isVisible().catch(() => false));
 await navLink.click();
 await page.waitForURL(/\/admin\/website$/);
@@ -517,9 +518,11 @@ check('on a phone: the builder’s buttons are big enough to tap', small.length 
 const tabs = await page.evaluate(() => {
   const bar = document.querySelector('nav.tabbar');
   const labels = [...bar.querySelectorAll('.tab-label')];
-  return { n: labels.length, fits: bar.scrollWidth <= bar.clientWidth + 1, whole: labels.every((l) => l.scrollWidth <= l.clientWidth + 1), words: labels.map((l) => l.textContent) };
+  return { n: labels.length, fits: bar.scrollWidth <= bar.clientWidth + 1, whole: labels.every((l) => l.scrollWidth <= l.clientWidth + 1), words: labels.map((l) => l.textContent),
+    more: [...bar.querySelectorAll('.tab-more__panel a')].map((a) => a.textContent.trim()), onMore: Boolean(bar.querySelector('.tab-more__btn.active')) };
 });
-check('on a phone: the tab bar shows all nine labels, whole (Website among them)', tabs.n === 9 && tabs.fits && tabs.whole && tabs.words.includes('Website'), JSON.stringify(tabs));
+// A manager's nine places on a phone: four tabs and "More" (Shell.jsx); Website is one of More's.
+check('on a phone: four tabs and More, every label whole; Website is under More, the tab you are on', tabs.n === 5 && tabs.fits && tabs.whole && tabs.words[4] === 'More' && tabs.more.includes('Website') && tabs.onMore, JSON.stringify(tabs));
 await shot('10-builder-phone');
 await page.goto(`${BASE}/admin/website`, { waitUntil: 'domcontentloaded' });
 await page.locator('.wb-live').waitFor();
@@ -527,6 +530,45 @@ await shot('11-overview-phone');
 await page.goto(`${BASE}/admin/website/theme`, { waitUntil: 'domcontentloaded' });
 await page.locator('.wb-sample').waitFor();
 await shot('12-theme-phone');
+
+// ── Theme: the website can follow the campaign's brand, and take its own look back ──
+// (This campaign's website has its own look, as Imagine Surrey's live one does.)
+{
+  const before = (await api('/site')).json;
+  await page.getByRole('button', { name: 'Use the campaign’s brand' }).click();
+  await page.getByRole('button', { name: 'Yes, use it' }).click();
+  await page.locator('.wb-follow').waitFor({ timeout: 8000 });
+  await sleep(400);
+  const following = (await api('/site')).json;
+  const shown = await page.evaluate(() => ({ controls: document.querySelectorAll('.wb-color').length, primaries: [...document.querySelectorAll('.btn-primary')].filter((b) => b.offsetParent).length,
+    sample: getComputedStyle(document.querySelector('.wb-sample')).getPropertyValue('--s-brand').trim(), words: document.querySelector('.wb-follow').innerText }));
+  const live = await (await fetch(`${BASE}/site/`)).text();
+  check('“Use the campaign’s brand”: the website follows it — the screen says so, shows the sample in the brand’s colour and no colour boxes; its own colours are kept for later',
+    before.settings.theme.follow !== true && following.settings.theme.follow === true && JSON.stringify(following.settings.theme.colors) === JSON.stringify(before.settings.theme.colors)
+    && shown.controls === 0 && shown.primaries === 0 && shown.sample === following.brand_theme.colors.brand && /Following the campaign’s brand/.test(shown.words) && live.includes(following.brand_theme.colors.brand), JSON.stringify(shown).slice(0, 300));
+  await shot('13-theme-following-phone');
+  // Back to the look it had: nothing of its own is lost by trying the brand.
+  const ways = await page.locator('.wb-follow button').allInnerTexts();
+  await page.getByRole('button', { name: 'Go back to the look it had' }).click();
+  await page.locator('.wb-color').first().waitFor({ timeout: 8000 });
+  await sleep(400);
+  const back = (await api('/site')).json.settings.theme;
+  const liveBack = await (await fetch(`${BASE}/site/`)).text();
+  const pick = (t) => JSON.stringify([t.colors, t.fonts, t.radius, t.logo, t.skin]);
+  check('“Go back to the look it had”: the website’s own colours, type, corners and logo are back as they were, live', following.settings.theme.kept === true
+    && ways.join(' | ') === 'Go back to the look it had | Start from the campaign’s brand' && back.follow === false && back.kept === undefined && pick(back) === pick(before.settings.theme)
+    && liveBack.includes(`--brand:${before.settings.theme.colors.brand}`) && await page.locator('#wb-c-brand').inputValue() === before.settings.theme.colors.brand, `${ways.join(' | ')} ${JSON.stringify(back).slice(0, 200)}`);
+  // And the other way: its own look started from the brand's.
+  await page.getByRole('button', { name: 'Use the campaign’s brand' }).click();
+  await page.getByRole('button', { name: 'Yes, use it' }).click();
+  await page.locator('.wb-follow').waitFor({ timeout: 8000 });
+  await page.getByRole('button', { name: 'Start from the campaign’s brand' }).click();
+  await page.locator('.wb-color').first().waitFor({ timeout: 8000 });
+  await sleep(400);
+  const own = (await api('/site')).json.settings.theme;
+  check('“Start from the campaign’s brand”: it stops following and starts from what it wore — every colour is there to change again', own.follow === false && own.colors.brand === following.brand_theme.colors.brand
+    && await page.locator('.wb-color').count() > 5 && await page.getByRole('button', { name: 'Use the campaign’s brand' }).count() === 1, JSON.stringify(own).slice(0, 200));
+}
 
 check('no page errors', errors.length === 0, errors.join(' | '));
 await browser.close();

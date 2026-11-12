@@ -11,9 +11,9 @@
 }
 .vn-form:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
 .vn-field { flex: 0 1 260px; min-width: 0; margin-bottom: 0; }
-.input.vn-input { min-height: 48px; }
-.btn.vn-btn { min-height: 48px; padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; }
-.vn-said { align-self: flex-end; min-height: 48px; display: inline-flex; align-items: center; font-size: 14px; color: var(--text-2); }
+.input.vn-input { min-height: var(--ctl); }
+.btn.vn-btn { min-height: var(--ctl); padding: 0 16px; display: inline-flex; align-items: center; justify-content: center; }
+.vn-said { align-self: flex-end; min-height: var(--ctl); display: inline-flex; align-items: center; font-size: 14px; color: var(--text-2); }
 .vn-said.is-ok { color: var(--ok); }
 .vn-error { flex-basis: 100%; margin: 0; }
 .vn-line { margin: 0 0 var(--s-3); }
@@ -23,7 +23,7 @@
 .vn-other { border: var(--border); border-radius: var(--r-card); background: var(--paper-0); margin: var(--s-3) 0; padding: var(--s-3); min-width: 0; }
 /* Floated, the legend sits inside the box like any line, not on its border. */
 .vn-other__head { float: left; width: 100%; padding: 0; margin: 0 0 var(--s-2); font-size: 15px; font-weight: 600; color: var(--text-1); }
-.vn-other__pick { clear: both; display: flex; align-items: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-2); border-radius: var(--r-card); font-size: 15px; cursor: pointer; }
+.vn-other__pick { clear: both; display: flex; align-items: center; gap: var(--s-2); min-height: var(--ctl); padding: 0 var(--s-2); border-radius: var(--r-card); font-size: 15px; cursor: pointer; }
 .vn-other__pick.is-on { background: var(--mark-soft); }
 .vn-other__pick input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--mark); }
 .vn-other .imp-hint { margin: 0; }

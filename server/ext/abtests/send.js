@@ -39,7 +39,7 @@ import { runAction } from '../../lib/events.js';
 import { markdownPlain, renderMarkdown } from '@starbase/shared/markdown';
 import { loadAttachments } from './attach.js';
 import { deliverTexts } from '../texting/blast.js';
-import { brand } from '../../lib/brand.js';
+import { brandFor } from '../../lib/brand.js';
 
 export const AB_MIN = 50;
 export const AB_PCTS = [10, 20, 30];
@@ -251,23 +251,21 @@ const STYLE = {
   code: 'font:15px ui-monospace,Menlo,Consolas,monospace;background:#eef0f7;padding:1px 4px;border-radius:3px',
   img: 'max-width:100%;height:auto;display:block;margin:0 0 16px;border:0',
 };
-// Links in this deployment's colour (lib/brand.js): Surrey Navy for Imagine
-// Surrey, base.win's indigo otherwise.
-const linkStyle = () => `color:${brand().link}`;
 
 // The message laid out for a mail app: the website's own renderer (every
 // character escaped first; only its tags come out), then each tag given
 // its style, every picture its full address, and every link to the
 // outside — typed as a link or as a bare address — sent through
 // /c/<token>/<n> when it is link n of the send. A test copy (no token)
-// keeps its links as typed.
-export const emailBody = (body, { base = '', token = null, links = [] } = {}) => {
+// keeps its links as typed. Links are in the campaign's colour as words
+// (lib/brand.js: 4.5:1 on white by rule) — link, from its settings.
+export const emailBody = (body, { base = '', token = null, links = [], link = brandFor(null).link } = {}) => {
   const tracked = (u) => {
     const n = links.indexOf(u) + 1;
     return token && n > 0 ? `${base}/c/${token}/${n}` : u;
   };
   const html = renderMarkdown(body);
-  const A = linkStyle();
+  const A = `color:${link}`;
   let inA = false;
   let inCode = false;
   return html.split(/(<[^>]+>)/).map((part) => {
@@ -309,10 +307,25 @@ export const emailBody = (body, { base = '', token = null, links = [] } = {}) =>
   }).join('');
 };
 
+// The campaign's logo over a rule in its colour, when a manager asked for it
+// (Settings → Brand, lib/brand.js) and the logo is one mail apps draw (a PNG
+// or JPG): 40 px tall, its size in the tag for mail apps that read no
+// style, and the campaign's name as its words for a reader whose mail app
+// hides pictures. Otherwise none: a plain letter.
+const emailHeader = (brand, base, name) => {
+  if (!brand.emailHeader || !brand.emailLogo) return '';
+  let h = 40;
+  let w = brand.logoSize ? Math.round((h * brand.logoSize.w) / brand.logoSize.h) : null;
+  if (w && w > 560) { h = Math.max(1, Math.round((560 * h) / w)); w = 560; }
+  return `<div style="margin:0 0 24px;padding:0 0 12px;border-bottom:3px solid ${brand.edge}">`
+    + `<img src="${esc(`${base}${brand.emailLogo}`)}" alt="${esc(name || '')}"${w ? ` width="${w}"` : ''} height="${h}" style="display:block;height:${h}px;width:${w ? `${w}px` : 'auto'};max-width:100%;border:0"></div>`;
+};
+
 // The HTML part: the message laid out, its links tracked, the footer
 // (unsubscribe untracked), and the open pixel last — none on a test copy.
 export const blastHtml = (ctx, kind, body, unsubscribeUrl, token, links) => {
   const base = ctx.publicUrl || '';
+  const brand = brandFor(ctx.workspace?.settings);
   const counted = token ? ' We count opens and clicks.' : '';
   const unsub = unsubscribeUrl
     ? `<a href="${esc(unsubscribeUrl)}" style="color:#5d6481">Unsubscribe</a>`
@@ -323,7 +336,8 @@ export const blastHtml = (ctx, kind, body, unsubscribeUrl, token, links) => {
   return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
     + '<body style="margin:0;padding:0;background:#f4f5fa">'
     + '<div style="max-width:600px;margin:0 auto;padding:24px 16px;font:17px/1.55 system-ui,-apple-system,\'Segoe UI\',Roboto,Arial,sans-serif;color:#161a2e">'
-    + emailBody(body, { base, token, links })
+    + emailHeader(brand, base, ctx.workspace?.name)
+    + emailBody(body, { base, token, links, link: brand.link })
     + `<p style="margin:24px 0 0;padding-top:12px;border-top:1px solid #dde0ec;font-size:14px;color:#5d6481">${foot}</p>`
     + (token ? `<img src="${esc(`${base}/o/${token}.gif`)}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0">` : '')
     + '</div></body></html>';

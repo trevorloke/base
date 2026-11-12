@@ -1,8 +1,9 @@
 /* Field map — page-specific styles. Imported by Map.jsx, DoorCard.jsx and
    RatingButtons.jsx (so the rating buttons and the field kit — fk-* tabs,
    outcomes, "More" — are styled wherever they're reused, e.g. the walk list).
-   Field rule: every tap target here is at least 48px.
-   Everything leans on the ink-on-paper tokens in app.css. */
+   Field rule: every tap target here is at least 48px for a thumb (--ctl).
+   Everything leans on the role tokens in app.css; the pins, bands and
+   tiles keep their own literal colours — they are data, not the brand. */
 
 /* ── Page frame: full-bleed on phones, tall within the column on desktop ──
    Every dvh height has the same in vh before it: a browser that doesn't know
@@ -178,65 +179,44 @@
 .fk-link {
   display: inline-flex;
   align-items: center;
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-1);
   background: transparent;
   border: 0;
   color: var(--text-2);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  text-transform: none; font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
 }
 @media (hover: hover) { .fk-link:hover { color: var(--text-1); } }
 
-/* Person tabs (several people at one door) */
-.fk-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 0 var(--s-3); padding: 2px; }
-.fk-tabs::-webkit-scrollbar { display: none; }
-.fk-tab {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s-2);
-  min-height: 48px;
-  max-width: 220px;
-  padding: 0 var(--s-3);
-  font-family: var(--font-serif);
-  font-size: 15px;
-  color: var(--text-2);
-  background: var(--paper-0);
-  border: 1px solid var(--rule-2);
-  border-radius: 999px;
-  cursor: pointer;
-  touch-action: manipulation;
-}
+/* Person tabs (several people at one door): the one pick-one shape
+   (app.css §13); a long household scrolls inside its edge. */
+.fk-tabs { margin: 0 0 var(--s-3); }
+.fk-tabs > .fk-tab { gap: var(--s-2); max-width: 220px; padding: 4px var(--s-3); font-size: 15px; }
 .fk-tab__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-@media (hover: hover) { .fk-tab:hover { border-color: var(--ink); } }
-/* Selected: dark fill, like the Logging toggle — yellow is only for a screen's one primary button. */
-.fk-tab.is-on { color: var(--paper-0); font-weight: 600; background: var(--ink); border: 2px solid var(--ink); padding: 0 calc(var(--s-3) - 1px); }
-.fk-tab.is-on .rb-chip { box-shadow: 0 0 0 1.5px var(--paper-0); }
-.fk-tab:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 
 /* No-conversation outcomes: one row of smaller, quiet buttons */
 /* One row however many outcomes the screen offers (the door adds Left lit). */
 .fk-outcomes { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 6px; margin-top: var(--s-3); }
 .fk-out {
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 2px 4px;
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 14px;
+  font-weight: 500;
   line-height: 1.15;
   color: var(--text-2);
-  background: transparent;
-  border: 1px solid var(--rule);
+  background: var(--paper-0);
+  border: 1px solid var(--rule-2);
   border-radius: var(--r-ctrl);
   cursor: pointer;
   touch-action: manipulation;
 }
-@media (hover: hover) { .fk-out:hover { color: var(--text-1); border-color: var(--rule-2); background: var(--paper-1); } }
+@media (hover: hover) { .fk-out:hover { color: var(--text-1); background: var(--paper-1); } }
 .fk-out:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .fk-out:disabled { opacity: 0.55; cursor: default; }
 
@@ -270,12 +250,11 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-2);
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-3) 0 14px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.03em;
-  text-transform: none; font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-1);
   background: var(--paper-0);
   border: 1px solid var(--rule-2);
@@ -303,9 +282,12 @@
   letter-spacing: 0;
   text-transform: none;
 }
-.map-filter-btn.is-filtered .map-filter-btn__n { background: var(--dot, var(--ink)); color: #ffffff; }
+/* The count on a filtered map: the band's own colour where the filter is a
+   rating band; any other filter (my turf, signs, a candidate) in ink, which
+   turns with the scheme. */
+.map-filter-btn.is-filtered .map-filter-btn__n { background: var(--ink); color: var(--paper-0); }
+.map-filter-btn:is([data-band='support'], [data-band='undecided'], [data-band='opposed'], [data-band='unrated']).is-filtered .map-filter-btn__n { background: var(--dot); color: #ffffff; }
 .map-filter-btn[data-band='undecided'].is-filtered .map-filter-btn__n { color: #161a2e; }
-.map-filter-btn[data-band='signs'].is-filtered .map-filter-btn__n { background: var(--ink); color: var(--paper-0); }
 
 .map-filter-btn[data-band='support'], .map-fopt[data-band='support']     { --dot: #138a52; }
 .map-filter-btn[data-band='undecided'], .map-fopt[data-band='undecided'] { --dot: #f5a524; }
@@ -319,9 +301,9 @@
 .map-unloc__n { min-width: 28px; height: 28px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: var(--paper-2); letter-spacing: 0; }
 .map-unloc.is-open .map-unloc__chip { background: var(--paper-1); border-width: 2px; padding-left: 13px; padding-right: 7px; }
 .map-unloc__btns { display: inline-flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; padding: 4px; background: var(--paper-0); border: 1px solid var(--rule-2); border-radius: 999px; box-shadow: var(--shadow-2); }
-.btn.map-unloc__btn, .map-unloc .btn.geo-btn { min-height: 48px; padding: 0 16px; border-radius: 999px; display: inline-flex; align-items: center; }
+.btn.map-unloc__btn, .map-unloc .btn.geo-btn { min-height: var(--ctl); padding: 0 16px; border-radius: 999px; display: inline-flex; align-items: center; }
 .map-unloc .geo-live:empty { display: none; }
-.map-unloc .geo-live { font-family: var(--font-mono); font-size: 11px; padding: 0 var(--s-2); }
+.map-unloc .geo-live { font-family: var(--font-sans); font-size: 13px; padding: 0 var(--s-2); }
 
 /* A volunteer's first visit: one slim line under the pill (the same ink as
    the "Tap the new door" bar), gone once a door opens or ✕ is tapped. It
@@ -344,8 +326,8 @@
 }
 .btn.map-hint__x {
   flex: 0 0 auto;
-  min-width: 48px;
-  min-height: 48px;
+  min-width: var(--ctl);
+  min-height: var(--ctl);
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -388,7 +370,7 @@
   gap: 2px 10px;
   min-height: 52px;
   padding: 6px var(--s-3);
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 16px;
   text-align: left;
   color: var(--text-1);
@@ -398,7 +380,7 @@
   cursor: pointer;
   touch-action: manipulation;
 }
-@media (hover: hover) { .map-fopt:hover { border-color: var(--ink); } }
+@media (hover: hover) { .map-fopt:hover { background: var(--paper-1); } }
 .map-fopt:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .map-fopt__dot { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; background: var(--dot, transparent); border: 1px solid var(--dot-ring, transparent); }
 .map-fopt[data-band='all'] .map-fopt__dot { background: conic-gradient(#138a52 0 33%, #f5a524 0 66%, #d43c3c 0); }
@@ -414,18 +396,19 @@
 .map-fopt__label { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; line-height: 1.2; }
 .map-fsheet__grid + .map-fsheet__sub { margin-top: var(--s-3); }
 .map-fopt__n { margin-left: auto; font-size: 13px; color: var(--text-3); }
-.map-fopt.is-on { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
-.map-fopt.is-on .map-fopt__n { color: var(--paper-0); }
+/* Chosen: the brand's tint, its words, an edge. */
+.map-fopt.is-on, .map-fopt.is-on:hover { background: var(--tint-2); color: var(--accent-words); border-color: var(--mark); font-weight: 600; }
+.map-fopt.is-on .map-fopt__n { color: inherit; }
 /* "On the map" (desk): layer switches, plainly not one of the Show choices */
 .map-fsheet__layers { margin-top: var(--s-3); padding-top: var(--s-2); border-top: 1px solid var(--rule); }
-.map-fsheet__sub { margin: 0 0 var(--s-1); font-family: var(--font-mono); font-size: 11.5px; font-weight: 400; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.map-fsheet__sub { margin: 0 0 var(--s-1); font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: var(--label-tracking); text-transform: var(--label-case); color: var(--text-3); }
 .map-fswitch {
   display: flex;
   width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0;
   font-family: var(--font-serif);
   font-size: 16px;
@@ -438,13 +421,13 @@
 .map-fswitch:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .map-fswitch__n { font-size: 13px; color: var(--text-3); margin-left: 6px; }
 .map-fsheet__note { margin: 0 0 var(--s-1); font-size: 13px; color: var(--text-3); }
-.map-fswitch__track { position: relative; flex: 0 0 auto; width: 44px; height: 26px; border-radius: 999px; background: var(--paper-2); border: 1px solid var(--rule-2); transition: background 120ms ease; }
-.map-fswitch__knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--paper-0); border: 1px solid var(--rule-2); transition: transform 120ms ease; }
-.map-fswitch.is-on .map-fswitch__track { background: var(--ink); border-color: var(--ink); }
-.map-fswitch.is-on .map-fswitch__knob { transform: translateX(18px); border-color: var(--ink); }
+.map-fswitch__track { position: relative; flex: 0 0 auto; width: 44px; height: 26px; border-radius: 999px; background: var(--paper-2); border: 1px solid var(--field-edge); transition: background 120ms ease; }
+.map-fswitch__knob { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--paper-0); border: 1px solid var(--field-edge); transition: transform 120ms ease; }
+.map-fswitch.is-on .map-fswitch__track { background: var(--mark); border-color: var(--mark); }
+.map-fswitch.is-on .map-fswitch__knob { transform: translateX(18px); border-color: var(--mark); }
 @media (prefers-reduced-motion: reduce) { .map-fswitch__track, .map-fswitch__knob { transition: none; } }
 .map-fsheet__acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); margin-top: var(--s-3); padding-top: var(--s-3); border-top: 1px solid var(--rule); }
-.btn.map-fsheet__act { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: 48px; padding: 0 var(--s-2); }
+.btn.map-fsheet__act { display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2); min-height: var(--ctl); padding: 0 var(--s-2); }
 .map-fsheet__acts > :only-child { grid-column: 1 / -1; }
 /* Desk: "Map tiles: OpenStreetMap — custom address ignored" — one quiet line. */
 .map-fsheet__tiles { margin: var(--s-3) 0 0; font-size: 13px; color: var(--text-3); overflow-wrap: anywhere; }
@@ -459,20 +442,20 @@
   background: var(--ink);
   color: var(--paper-0);
   border-radius: var(--r-card);
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   box-shadow: var(--shadow-2);
 }
 .map-mode strong { color: inherit; font-weight: 700; }
-.map-mode__sub { display: block; font-size: 11px; opacity: 0.8; margin-top: 2px; }
+.map-mode__sub { display: block; font-size: 12px; opacity: 0.85; margin-top: 2px; }
 .map-mode .map-mode__btns { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-/* Quiet light outlines on the dark bar; the yellow is Finish only, once it can finish. */
-.map-mode .btn { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 45%, transparent); min-height: 48px; min-width: 48px; display: inline-flex; align-items: center; justify-content: center; }
-.map-mode .btn.map-mode__go { background: var(--mark); color: var(--mark-ink); border-color: var(--mark); }
+/* Quiet light outlines on the dark bar; Finish alone is filled (in the bar's own light ink), once it can finish. */
+.map-mode .btn { background: transparent; color: inherit; border-color: color-mix(in srgb, currentColor 45%, transparent); min-height: var(--ctl); min-width: var(--ctl); display: inline-flex; align-items: center; justify-content: center; }
+.map-mode .btn.map-mode__go { background: var(--paper-0); color: var(--ink); border-color: var(--paper-0); }
 .map-mode .btn:disabled { background: transparent; opacity: 0.45; }
 @media (hover: hover) {
   .map-mode .btn:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
-  .map-mode .btn.map-mode__go:hover { background: var(--mark-deep); border-color: var(--mark-deep); }
+  .map-mode .btn.map-mode__go:hover { background: var(--paper-2); border-color: var(--paper-2); }
   .map-mode .btn:disabled:hover { background: transparent; }
 }
 /* Drawing: one slim line, only as wide as it needs (taps beside it reach the map) */
@@ -502,8 +485,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 28px;
+  font-family: var(--font-sans);
+  font-size: 26px;
   line-height: 1;
   cursor: pointer;
   box-shadow: var(--shadow-2);
@@ -519,14 +502,12 @@
   padding: 0 18px 0 14px;
   gap: 6px;
   border-radius: 999px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: none; font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
 }
 .map-fab__plus { font-size: 22px; line-height: 1; font-weight: 400; }
-.map-fab--add.is-on { background: var(--paper-1); border: 2px solid var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.map-fab--add.is-on { background: var(--tint-2); color: var(--accent-words); border-color: var(--mark); }
 /* "Whole list" beside Locate me: back to the campaign's own list. */
 .map-fabs__row { display: flex; align-items: center; gap: var(--s-2); }
 .map-fab--list { padding: 0 16px; }
@@ -552,8 +533,8 @@
   margin: 0;
   box-shadow: var(--shadow-2);
 }
-.map-empty p { margin: 0; font-size: 17px; }
-.btn.map-empty__btn { margin-top: var(--s-3); min-height: 48px; padding: 0 var(--s-5); display: inline-flex; align-items: center; }
+.map-empty p { margin: 0; font-size: 16px; }
+.btn.map-empty__btn { margin-top: var(--s-3); min-height: var(--ctl); padding: 0 var(--s-5); display: inline-flex; align-items: center; }
 
 /* ── The sheet: right panel on desktop, bottom sheet on phones ── */
 .map-sheet {
@@ -594,7 +575,7 @@
     border-left: 0;
     border-right: 0;
     border-bottom: 0;
-    border-radius: 12px 12px 0 0;
+    border-radius: var(--r-sheet) var(--r-sheet) 0 0;
     box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.2);
     z-index: 950;
     animation: sheet-in 180ms ease-out;
@@ -624,24 +605,24 @@
 .mapsheet-head .eyebrow { display: block; margin-bottom: 2px; }
 .mapsheet-title { font-size: 18px; margin: 0; line-height: 1.25; padding-top: 12px; }
 .map-fsheet__head .mapsheet-title { padding-top: 0; }
-.btn.mapsheet-close { flex: 0 0 auto; min-width: 48px; min-height: 48px; font-size: 16px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.btn.mapsheet-close { flex: 0 0 auto; min-width: var(--ctl); min-height: var(--ctl); font-size: 16px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 
 /* ── Door card ── */
 .door-card { padding-bottom: var(--s-2); }
 .door-head { min-width: 0; display: flex; flex-direction: column; }
-.door-head__name { font-size: 21px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px var(--s-2); overflow-wrap: anywhere; }
+.door-head__name { font-size: 22px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px var(--s-2); overflow-wrap: anywhere; }
 .door-head__addr { font-size: 14px; color: var(--text-3); padding-bottom: 2px; overflow-wrap: anywhere; }
-.chip.door-dnc { font-size: 11.5px; }
+.chip.door-dnc { font-size: 12px; }
 .door-rate { padding: var(--s-3) var(--s-4) 0; }
 .door-dnc-line { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-2); font-size: 14px; }
 .door-via { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin: 0 0 var(--s-2); }
-.btn.door-act { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 16px; }
+.btn.door-act { display: inline-flex; align-items: center; justify-content: center; min-height: var(--ctl); padding: 0 16px; }
 .door-more__row { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 .door-more__phone { font-size: 13px; margin-left: auto; color: var(--text-3); }
 .door-more__sec { display: flex; flex-direction: column; gap: 6px; }
-.door-more__label { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.door-more__label { font-family: var(--font-sans); font-size: 12px; letter-spacing: var(--label-tracking); text-transform: var(--label-case); font-weight: 500; color: var(--text-3); }
 .door-more__foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-left: -16px; }
-.door-more__when { font-size: 11px; }
+.door-more__when { font-size: 12px; }
 .door-loglink {
   display: flex;
   gap: var(--s-2);
@@ -652,7 +633,7 @@
   border: 1px dashed var(--rule-2);
   border-radius: var(--r-ctrl);
 }
-.door-loglink__label { flex-basis: 100%; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-1); }
+.door-loglink__label { flex-basis: 100%; font-family: var(--font-sans); font-size: 12px; letter-spacing: var(--label-tracking); text-transform: var(--label-case); font-weight: 500; color: var(--text-2); }
 
 /* Rating chip (RatingChip in RatingButtons.jsx) */
 .rb-chip {
@@ -662,10 +643,9 @@
   min-width: 28px;
   height: 22px;
   padding: 0 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  letter-spacing: var(--label-tracking);
   text-transform: none; font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -675,8 +655,8 @@
 .rb-chip[data-band='support']   { background: var(--ok);     color: var(--paper-0);  border-color: var(--ok); }
 .rb-chip[data-band='undecided'] { background: #f5a524;       color: #161a2e;         border-color: #b87400; }
 .rb-chip[data-band='opposed']   { background: var(--danger); color: var(--paper-0);  border-color: var(--danger); }
-.rb-chip--who { letter-spacing: 0.02em; text-transform: none; }
-.rb-chip[data-band='none']      { background: transparent;   color: var(--text-3);   border: 1px dashed var(--rule-2); font-weight: 500; font-size: 11.5px; }
+.rb-chip--who { letter-spacing: var(--label-tracking); text-transform: none; }
+.rb-chip[data-band='none']      { background: transparent;   color: var(--text-3);   border: 1px dashed var(--field-edge); font-weight: 500; font-size: 12px; }
 
 /* Rating buttons — the hero: big, band-tinted, the number large with its
    meaning small underneath. Undecided is ochre (--warn), never the brand
@@ -701,7 +681,7 @@
   cursor: pointer;
   touch-action: manipulation;
 }
-.rb-btn__code { font-family: var(--font-mono); font-size: 24px; font-weight: 700; line-height: 1; letter-spacing: 0; }
+.rb-btn__code { font-family: var(--font-sans); font-size: 26px; font-weight: 700; line-height: 1; letter-spacing: 0; }
 .rb-btn__sub {
   max-width: 100%;
   overflow: hidden;
@@ -736,7 +716,7 @@
   text-align: center;
 }
 .rb-btn.is-asking { border-style: dashed; }
-.rb-btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.rb-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .rb-btn:disabled { opacity: 0.6; cursor: default; }
 .rb--compact .rb-btn { min-height: 52px; }
 .rb--compact .rb-btn__code { font-size: 18px; }
@@ -786,33 +766,16 @@
 .rb-who__btn--unsure { border-style: dashed; }
 @media (hover: hover) { .rb-who__btn:hover { background: color-mix(in srgb, var(--danger) 10%, var(--paper-0)); } }
 .rb-who__btn.is-active { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); background: color-mix(in srgb, var(--danger) 14%, var(--paper-0)); }
-.rb-who__btn:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.rb-who__btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .rb-who__btn:disabled { opacity: 0.6; cursor: default; }
 
-/* How you reached them (bottom of More): At the door (default) · Phone call · Text */
-.door-channel { display: inline-flex; align-self: flex-start; border: 1px solid var(--rule-2); border-radius: 999px; overflow: hidden; }
-.door-channel__btn {
-  min-height: 48px;
-  min-width: 64px;
-  padding: 0 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  text-transform: none; font-weight: 600;
-  color: var(--text-2);
-  background: var(--paper-0);
-  border: 0;
-  border-left: 1px solid var(--rule-2);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.door-channel__btn:first-child { border-left: 0; }
-@media (hover: hover) { .door-channel__btn:hover { background: var(--paper-1); color: var(--text-1); } }
-.door-channel__btn.is-on { background: var(--ink); color: var(--paper-0); }
-.door-channel__btn:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+/* How you reached them (bottom of More): At the door (default) · Phone call
+   · Text — the one pick-one shape (app.css §13). */
+.door-channel { align-self: flex-start; }
+.door-channel > .door-channel__btn { min-width: 64px; padding: 4px 12px; }
 
 .door-note { margin: 0; }
-.door-note textarea { resize: vertical; min-height: 48px; }
+.door-note textarea { resize: vertical; min-height: var(--ctl); }
 .door-note__only { align-self: flex-start; margin-top: var(--s-2); }
 
 .door-signs-have { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -825,11 +788,11 @@
 .door-form__actions { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .door-form--inline { border: 1px solid var(--rule); border-radius: var(--r-ctrl); padding: var(--s-3); }
 .door-form__more { margin: calc(-1 * var(--s-2)) 0 var(--s-2); }
-.door-form input.input { min-height: 48px; }
+.door-form input.input { min-height: var(--ctl); }
 
 /* Place picker (unlocated people) */
 .map-place-picker .field { padding: var(--s-3) var(--s-4) 0; margin-bottom: var(--s-2); }
-.map-place-picker input.input { min-height: 48px; }
+.map-place-picker input.input { min-height: var(--ctl); }
 .map-place-list { list-style: none; margin: 0; padding: 0 var(--s-2) var(--s-3); }
 .map-place-row {
   display: flex;
@@ -854,9 +817,9 @@
 
 /* Toast: above Leaflet and the phone tabbar, with an optional action. Its
    button (Change / Undo) is app.css's light outline, not yellow. */
-.toast.map-toast { z-index: 1000; max-width: calc(100vw - 32px); width: max-content; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); min-height: 48px; font-size: 13px; }
+.toast.map-toast { z-index: 1000; max-width: calc(100vw - 32px); width: max-content; padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4); min-height: var(--ctl); font-size: 13px; }
 .toast.map-toast:not(:has(button)) { padding-right: var(--s-4); }
-.btn.map-toast__btn { min-height: 48px; white-space: nowrap; display: inline-flex; align-items: center; }
+.btn.map-toast__btn { min-height: var(--ctl); white-space: nowrap; display: inline-flex; align-items: center; }
 @media (max-width: 720px) {
   .toast.map-toast { bottom: calc(var(--tabbar-h, 0px) + var(--s-3)); }
   /* A card is open along the bottom: the toast goes over the map above it,
@@ -903,27 +866,27 @@
 .turf-sheet__body .fk-more { margin-top: 0; }
 .turf-progress { display: flex; flex-direction: column; gap: 6px; }
 .turf-progress__text { font-size: 14px; }
-.turf-progress__text strong { font-size: 20px; }
+.turf-progress__text strong { font-size: 18px; }
 .turf-progress__text.is-done { color: var(--ok); font-weight: 700; }
 .turf-bar { display: block; height: 10px; background: var(--paper-2); border-radius: 999px; overflow: hidden; }
 .turf-bar__fill { display: block; height: 100%; background: var(--ok); border-radius: 999px; }
 .turf-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin: 0; }
 .turf-stats > div { border-top: 1px solid var(--rule); padding-top: 6px; }
-.turf-stats dt { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
-.turf-stats dd { margin: 2px 0 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 20px; }
-.btn.turf-act { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 16px; }
+.turf-stats dt { font-family: var(--font-mono); font-size: 12px; letter-spacing: var(--label-tracking); text-transform: var(--label-case); font-weight: 500; color: var(--text-3); }
+.turf-stats dd { margin: 2px 0 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 18px; }
+.btn.turf-act { display: inline-flex; align-items: center; justify-content: center; min-height: var(--ctl); padding: 0 16px; }
 .turf-sheet .fk-more__body > .btn.turf-act { align-self: flex-start; }
 .turf-sheet .fk-more__body > .btn-quiet.turf-act { margin-left: -16px; }
 .turf-none { margin: 0; font-size: 14px; }
 .turf-members { list-style: none; margin: 0; padding: 0; }
-.turf-member { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: 48px; border-bottom: 1px solid var(--rule); }
+.turf-member { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); min-height: var(--ctl); border-bottom: 1px solid var(--rule); }
 .turf-member__name { min-width: 0; overflow-wrap: anywhere; }
-.btn.turf-member__remove { min-width: 48px; min-height: 48px; padding: 0; font-size: 14px; }
+.btn.turf-member__remove { min-width: var(--ctl); min-height: var(--ctl); padding: 0; font-size: 14px; }
 .turf-assign { display: flex; gap: var(--s-2); align-items: flex-end; }
 .turf-assign .field { flex: 1 1 auto; min-width: 0; margin: 0; }
-.turf-assign select.input { min-height: 48px; }
-.turf-everyone { margin: 0; font-size: 14px; color: var(--text-2); display: flex; align-items: center; flex-wrap: wrap; gap: 0 6px; min-height: 48px; }
-.turf-invite { color: var(--text-1); text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: 48px; }
+.turf-assign select.input { min-height: var(--ctl); }
+.turf-everyone { margin: 0; font-size: 14px; color: var(--text-2); display: flex; align-items: center; flex-wrap: wrap; gap: 0 6px; min-height: var(--ctl); }
+.turf-invite { color: var(--text-1); text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: var(--ctl); }
 .fk-link.turf-invite-link { align-self: flex-start; margin-left: calc(-1 * var(--s-1)); }
 .btn.turf-delete { color: var(--danger); }
 @media (hover: hover) { .btn.turf-delete:hover { color: var(--danger); border-color: var(--danger); } }
@@ -938,17 +901,18 @@
 /* An orphan sign's sheet */
 .chip.sign-sheet__chip, .btn.sign-sheet__act { align-self: flex-start; }
 
-/* The new door's pin while its form is open: a navy drop with a gold dot. */
+/* The new door's pin while its form is open: a drop in the brand's ink with
+   a dot in its second colour (the same in light and dark: tiles are light). */
 .map-new-wrap { background: transparent; border: 0; }
 .map-new-pin {
   width: 26px; height: 26px; margin: 0 auto;
-  background: var(--navy); border: 3px solid #fff; border-radius: 50% 50% 50% 0;
-  transform: rotate(-45deg); box-shadow: 0 2px 6px rgba(0, 34, 77, 0.35);
+  background: var(--brand-ink); border: 3px solid #fff; border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   position: relative;
 }
 .map-new-pin::after {
   content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
-  background: var(--gold); border-radius: 50%;
+  background: var(--brand-spark); border-radius: 50%; box-shadow: 0 0 0 1.5px #fff;
 }
 
 /* Signs in the Show sheet: on/off chips by status (with their flag) and by kind. */
@@ -958,10 +922,10 @@
   border: 1px solid var(--rule-2); border-radius: 999px; background: var(--paper-0); color: var(--text-2);
   font: inherit; font-size: 14px; cursor: pointer; touch-action: manipulation;
 }
-.map-schip.is-on { border-color: var(--ink); color: var(--text-1); background: var(--paper-1); font-weight: 600; }
+.map-schip.is-on { border-color: var(--mark); color: var(--accent-words); background: var(--tint-2); font-weight: 600; }
 .map-schip:not(.is-on) { text-decoration: line-through; text-decoration-color: var(--text-4); }
 .map-schip .map-flag { position: static; display: inline-block; }
-.map-schip__n { color: var(--text-3); font-size: 12.5px; }
+.map-schip__n { color: var(--text-3); font-size: 13px; }
 .map-schip:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 /* A bigger sign flies a bigger flag: billboard > large > lawn. */
 .map-flag--k-billboard .map-flag__face { width: 22px; height: 14px; }

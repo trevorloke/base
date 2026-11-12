@@ -19,4 +19,4 @@
 .mc-ask .ops-actions { margin-top: var(--s-2); }
 .mc-status > .btn { margin-top: var(--s-2); }
 .mc .error { margin: var(--s-2) 0 0; }
-.mc .btn-link.mc-retry { min-height: 48px; padding: 0 4px; }
+.mc .btn-link.mc-retry { min-height: var(--ctl); padding: 0 4px; }

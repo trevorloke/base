@@ -122,11 +122,12 @@ const helpers = (page, ctx, desk = false) => ({
   }, sel),
 });
 const measured = [];
-const simple = async (H, name, sel = null) => {
+// `floor`: 48px wherever a thumb reaches; 40 on a desk with a mouse (app.css --ctl).
+const simple = async (H, name, sel = null, floor = 48) => {
   const m = await H.measure(sel);
   measured.push({ name, ...m });
-  check(`${name}: ≤1 yellow, no sideways scroll${sel ? ', targets ≥48px' : ''}`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= 47.5),
-    `words=${m.words} yellow=${m.yellow} overflow=${m.overflow} minTap=${m.minTap == null ? '-' : Math.round(m.minTap)} ${m.minTap != null && m.minTap < 47.5 ? m.minWho : ''}`);
+  check(`${name}: ≤1 yellow, no sideways scroll${sel ? `, targets ≥${floor}px` : ''}`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= floor - 0.5),
+    `words=${m.words} yellow=${m.yellow} overflow=${m.overflow} minTap=${m.minTap == null ? '-' : Math.round(m.minTap)} ${m.minTap != null && m.minTap < floor - 0.5 ? m.minWho : ''}`);
   return m;
 };
 const signupAs = async (page, D, name, email) => {
@@ -350,7 +351,7 @@ await sleep(500);
 check('a tag put on with no signal shows at once', (await page.innerText('.tag-editor').catch(() => '')).toLowerCase().includes(newTag.replace(/-/g, ' ')), await page.innerText('.tag-editor').catch(() => ''));
 check('strip: "2 saved on this device"', /^2 saved on this device$/i.test(await D.chip()), await D.chip());
 await D.shot('04-profile-queued');
-await simple(D, 'Profile with changes waiting (1360)', '.pf-rate button[aria-label]');
+await simple(D, 'Profile with changes waiting (1360)', '.pf-rate button[aria-label]', 40);
 // Everything else that writes is off, and says so.
 await page.click('.pf-sec__btn:has-text("Details")');
 await page.click('.pf-sec button:has-text("Edit details")');
@@ -434,7 +435,7 @@ await page.waitForSelector('.pf-page h1', { timeout: 8000 });
 t = await D.text();
 check('the profile, online: no "Not sent yet", no waiting line, no chip', !/Not sent yet/i.test(t) && !/Saved on this device/.test(t) && !(await D.kept()) && t.includes(note));
 check('…writes are on again', !(await page.locator('.pf-rate button[aria-label="2: Lean support"]').isDisabled()));
-await simple(D, 'Profile, online (1360)', '.pf-rate button[aria-label]');
+await simple(D, 'Profile, online (1360)', '.pf-rate button[aria-label]', 40);
 // Signal, but the server can't be reached (wifi with no internet): the copy, said as "No answer".
 await page.route('**/api/persons?*', (route) => route.abort('internetdisconnected'));
 await D.go('/people');

@@ -193,7 +193,30 @@ so the page says it on the form that was sent), or to the checkout.
   roles:     [string],                                                  // the volunteer roles base.win offers
 }
 ```
-`site` = `{ theme (checked), nav, footer, announcement, seo, org, social }`.
+`site` = `{ theme (checked), nav, footer, announcement, seo, org, social, icon }`.
+`icon`: the campaign's mark as app icons (`{ icon, touch }`, its own
+`/media/<id>.png` files; Settings → Brand) — the page's `<link rel="icon">`
+and touch icon, on the app's address and the campaign's domain alike.
+
+**Following the campaign's brand.** `theme.follow` (true for a new generic
+website; a website made before it existed, Imagine Surrey's among them, has
+no such key and keeps its own look): the site wears the campaign's brand
+(`server/lib/brand.js`, Settings → Brand) in place of the stored colours —
+`store.js themeFromBrand`: the brand colour and the text on it, the second
+colour as the accent, the brand as words for links, the brand on the
+action buttons, the app's neutral page and panels, the heading face and
+corners, the logo in the title bar and the logo for dark backgrounds in the
+footer — worked out by the app's rule, so every `PAIRS` pair reads. The
+stored colours stay for when it stops following. `GET /api/site` answers
+`brand_theme` (what the brand makes, where "Give the website its own look"
+starts); `site.settings.save` changes `follow` only when its theme says so.
+A brand save clears the kept pages. A website that had its own look when it
+began to follow says so (`theme.kept`, set by the server, never by the
+save's own word). On Website → Theme a following site says so and shows
+the sample, with **Give the website its own look** — or, when its own look
+is kept, **Go back to the look it had** beside **Start from the campaign's
+brand** (which replaces it); one with its own look has **Use the
+campaign's brand** (asked once: it is live at once, and the look is kept).
 
 A public shift is listed by its kind (`shared/shiftkinds.js`): an Event
 under `events` only, any other kind under `shifts` only — a 6:30 am Burma
@@ -611,14 +634,14 @@ seed):
 | `GET /api/site/pages/:id` | `{ page: { id, slug, title, description, status, version, show_in_nav, nav_order, published_at, created_at, updated_at, changed, modules (count), draft, published } }` |
 | `GET /api/site/posts` · `/:id` | `{ posts: [{ id, slug, title, excerpt, image, status, published_at, … }] }` · `{ post: { …, body } }` |
 | `GET /api/site/campaigns` · `/:id` | `{ campaigns: [{ id, slug, kind, title, excerpt, statement, goal, status, signatures, … }] }` · `{ campaign: { …, body } }` |
-| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at }] }` (Outreach's store too) |
+| `GET /api/site/pictures` | `{ pictures: [{ id, url, name, width, height, bytes, created_at }] }` (Outreach's store too; not the brand's pictures) |
 | `POST /api/site/preview-token` | `{ pageId }` → `{ url, expires_at }`: the draft for 30 minutes, `noindex`, frameable by the app only |
 
 Writes are actions (`POST /api/actions/:name`):
 
 | action | input → answer |
 |---|---|
-| `site.settings.save` | `{ theme?, nav?, footer?, announcement?, seo?, org?, social?, domains? }` — each section sent replaces it → `{ saved, updated_at }` |
+| `site.settings.save` | `{ theme?, nav?, footer?, announcement?, seo?, org?, social?, domains? }` — each section sent replaces it (a theme without `follow` keeps following as it was) → `{ saved, updated_at }` |
 | `site.page.create` | `{ title, slug?, description?, modules?, show_in_nav? }` → `{ page }` (a draft; slug from the title when not given) |
 | `site.page.save` | `{ id, title?, slug?, description?, image?, modules?, show_in_nav?, nav_order?, updated_at? }` → `{ page }` (the draft, `checkModules` loose; `image`: the share picture, below; `updated_at` as opened: someone else's save since → 409) |
 | `site.page.publish` | `{ id }` → `{ page }` (`checkModules` strict, and the petitions it shows must exist; the error names the module) |

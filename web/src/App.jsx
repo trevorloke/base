@@ -72,6 +72,7 @@ const WebsiteCampaigns = lazy(() => import('./pages/WebsiteCampaigns.jsx'));
 const PathToWin = lazy(() => import('./pages/PathToWin.jsx'));
 import Join from './pages/Join.jsx';
 import { TwoStepRequired } from './components/TwoStep.jsx';
+import AuthPage from './components/AuthPage.jsx';
 const Profile = lazy(() => import('./pages/Profile.jsx'));
 
 // No answer from the server (wifi with no internet, a restart) is not a
@@ -101,13 +102,11 @@ function RequireAuth({ mode }) {
 // The admin, opened by a volunteer: not theirs — the field app is.
 function NotForYou({ me }) {
   return (
-    <div className="auth-page">
-      <span className="brand">base.win</span>
-      <span className="brand-org">{me?.workspace?.name}</span>
+    <AuthPage org={me?.workspace?.name}>
       <h1>Not for your role</h1>
       <p className="muted">The admin is the campaign office’s. You are signed in as {me?.user?.name} (volunteer) — your app is the field app.</p>
       <p><a className="btn btn-primary" href="/">Open the field app</a></p>
-    </div>
+    </AuthPage>
   );
 }
 

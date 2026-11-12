@@ -62,6 +62,7 @@ export const SCREENS = [
   { label: 'Permissions', to: '/settings/permissions', hint: 'Settings', area: 'admin', manager: true, words: 'settings areas access' },
   { label: 'Services', to: '/settings/services', hint: 'Settings', area: 'admin', manager: true, words: 'settings email texting keys integrations' },
   { label: 'Campaign name', to: '/settings/campaign', hint: 'Settings', area: 'admin', manager: true, words: 'settings rename' },
+  { label: 'Brand', to: '/settings/brand', hint: 'Settings', area: 'admin', manager: true, words: 'settings logo colour color look theme icon' },
   { label: 'Profile fields', to: '/people/fields', area: 'admin', manager: true, words: 'custom fields profile' },
   { label: 'Rating scale', to: '/rating-scale', area: 'admin', manager: true, words: 'support scale voting for candidates' },
   { label: 'Your profile', to: '/profile', words: 'account two-step sign-in authenticator me' },

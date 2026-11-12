@@ -113,7 +113,15 @@ export function checkTheme(input, skin = 'base') {
   };
   // pop: the layered shadow under big headings, in the action colour.
   const pop = typeof input?.pop === 'boolean' ? input.pop : Boolean(base.pop);
-  const theme = { skin: base.key, colors, fonts, radius, logo, pop };
+  // follow: the site wears the campaign's brand (Settings → Brand) instead
+  // of these colours, until it is given its own look (server/ext/site
+  // store.js siteOf). A website made before this existed has no such key:
+  // it keeps its own look.
+  const follow = input?.follow === true;
+  const theme = { skin: base.key, colors, fonts, radius, logo, pop, follow };
+  // kept: a website that had its own look when it began to follow keeps it
+  // here underneath, to go back to (the server says so: site.settings.save).
+  if (follow && input?.kept === true) theme.kept = true;
   const problems = PAIRS.map((p) => ({ pair: p, ratio: contrast(colors[p.fg], colors[p.bg]) })).filter((x) => x.ratio < 4.5);
   return { theme, problems };
 }

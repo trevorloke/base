@@ -1,104 +1,121 @@
-/* Starbase — one stylesheet.
-   Imagine Surrey's field app, in the party's own colours (brand guidelines
-   2.1): Surrey Navy leads (the sidebar, the one primary button), Marigold is
-   the spark (the active tab's bar, badges, focus on navy), red is for action
-   and danger only, Sky and Paper give everything room. Barlow Condensed for
-   headlines and labels, Inter for everything people read (self-hosted,
-   /fonts/fonts.css). Dark mode is Deep Navy with marigold accents, as the
-   guidelines say. The brand lives in these tokens only. */
+/* base.win — the app's shared stylesheet.
+   The look is "Paper": a light, neutral workspace where the campaign's logo
+   and one colour do the branding. Hairlines instead of slabs, flat cards,
+   Inter throughout, sentence-case labels, one focus ring; dark mode is
+   neutral too. Colour has roles — page, card, text, accent, tint, side-… —
+   and every screen draws from them. The brand's shades are worked out from
+   one colour by shared/brand-look.js; the values here are the base preset's
+   (the server writes a campaign's own into the page before it paints,
+   server/lib/brand.js). The old token names stay, as aliases of the roles.
+   The rating colours, the status colours and the map's pins are data: no
+   brand recolours them. */
+
+/* ── The roles, as the one rule writes them for the base preset ──
+   :where() gives them no weight, so the block the server writes into the
+   page wins wherever it sits. Not edited by hand: `node scripts/look-tokens.mjs`
+   prints both blocks, and server/test/brand-look.test.js fails if they drift. */
+:where(:root) {
+  /* look:light */
+  --page: #fafafb; --card: #ffffff; --panel: #f3f4f6; --panel-2: #e9eaee;
+  --line: #e7e8ec; --line-strong: #d2d5db; --field-edge: #888b90;
+  --text: #14161a; --text-2: #30343b; --quiet: #656669; --faint: #656568;
+  --accent: #4f46e5; --accent-ink: #ffffff; --accent-hover: #443cc5; --accent-words: #4f46e5;
+  --accent-words-ink: #ffffff; --accent-edge: #4f46e5; --focus: #4f46e5;
+  --tint: #f1f0fd; --tint-2: #e5e3fb; --second: #4f46e5; --second-ink: #ffffff;
+  --side: #f3f4f6; --side-top: #ffffff; --side-ink: #14161a; --side-quiet: #57595c; --side-hover: #e9eaee;
+  --side-active: #ffffff; --side-active-ink: #4f46e5; --side-mark: #4f46e5; --side-edge: #e7e8ec;
+  --inverse: #1b1d22; --inverse-2: #36383d; --inverse-ink: #ffffff; --inverse-quiet: #c6c7c8;
+  --brand-ink: #4f46e5; --brand-ink-2: #ffffff; --brand-spark: #4f46e5;
+  --r-sm: 6px; --r-ctrl: 8px; --r-card: 12px; --r-sheet: 16px;
+  --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  /* end */
+}
+@media (prefers-color-scheme: dark) {
+  :where(:root) {
+    /* look:dark */
+    --page: #0f1012; --card: #17181c; --panel: #1e2025; --panel-2: #282b32;
+    --line: #26282e; --line-strong: #3a3d46; --field-edge: #6c6f76;
+    --text: #f4f5f6; --text-2: #d6d8dd; --quiet: #97989a; --faint: #929396;
+    --accent: #4f46e5; --accent-ink: #ffffff; --accent-hover: #443cc5; --accent-words: #8983ee;
+    --accent-words-ink: #14161a; --accent-edge: #6962e9; --focus: #6962e9;
+    --tint: #201f3c; --tint-2: #262450; --second: #4f46e5; --second-ink: #ffffff;
+    --side: #1e2025; --side-top: #17181c; --side-ink: #f4f5f6; --side-quiet: #b4b5b7; --side-hover: #282b32;
+    --side-active: #17181c; --side-active-ink: #8983ee; --side-mark: #6962e9; --side-edge: #26282e;
+    --inverse: #f4f5f6; --inverse-2: #d9dadc; --inverse-ink: #14161a; --inverse-quiet: #4c4e51;
+    /* end */
+  }
+}
 
 :root {
-  /* Type — Inter for reading, Barlow Condensed for headlines and labels. */
+  /* Native controls (a date field's calendar, scrollbars) follow the scheme. */
+  color-scheme: light dark;
+
+  /* Type: Inter for everything people read. --font-display is the heading
+     face (a role, above); the older names keep every screen on the same face. */
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-display: 'Barlow Condensed', 'Arial Narrow', 'Inter', system-ui, Arial, sans-serif;
-  /* Older names, kept so every screen picks up the same face. */
   --font-serif: var(--font-sans);
   --font-mono: var(--font-sans);
+  /* Small labels: sentence case, no tracking — one pair for all of them. */
+  --label-case: none;
+  --label-tracking: 0;
 
-  /* Brand */
-  --navy: #003979;        /* Surrey Navy: grounds, headlines */
-  --navy-2: #00224d;      /* Deep Navy: depth, overlays */
-  --navy-text: #c9d6ea;   /* quiet text on navy */
-  --gold: #ffc72c;        /* Marigold: the spark — never as text on white or cream */
-  --red: #ef2023;         /* Signal Red: buttons and large type only (19px bold up) */
-  --red-text: #c8151b;    /* red that reads as text on white */
-  --cream: #f3ebda;
-  /* The brand's own ink, the same in light and dark (map markers, a popup's
-     link): brand-base.css swaps them for base.win's own. */
-  --brand-ink: #003979;
-  --brand-ink-2: #00224d;
-  --brand-spark: #ffc72c;
-
-  /* Surfaces: --paper is the page, --paper-0 a card, --paper-1 Sky panels */
-  --ink: #141a26;
-  --paper-0: #ffffff;
-  --paper: #f6f7f9;
-  --paper-1: #e9f0f9;
-  --paper-2: #dbe5f2;
-  --rule: #d6dce5;
-  --rule-2: #bfc8d6;
-
-  --text-1: var(--ink);
-  --text-2: #2a3444;
-  --text-3: #5b6472;
-  --text-4: #8a94a6;
-
-  /* The mark — the one accent (primary button, active item, focus): navy. */
-  --mark: var(--navy);
-  --mark-ink: #ffffff;
-  --mark-soft: var(--paper-1);
-  --mark-deep: var(--navy-2);
-
-  /* Status */
-  --ok: #1f7a4d;
-  --warn: #9a5b00;
-  --danger: var(--red-text);
+  /* Status: said once, the same under every brand. */
+  /* status:light */
+  --ok: #1f7a4d; --warn: #9a5b00; --danger: #c8151b;
+  /* end */
   /* Undecided — the map pins' amber. */
   --amber: #f5a524;
   --amber-deep: #b87400;
 
   /* Geometry */
-  --r-ctrl: 10px;
-  --r-card: 14px;
   --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px; --s-5: 24px; --s-6: 32px; --s-7: 48px;
-  --shadow-1: 0 1px 2px rgba(0, 34, 77, 0.06), 0 1px 1px rgba(0, 34, 77, 0.03);
-  --shadow-2: 0 8px 28px rgba(0, 34, 77, 0.14);
+  /* A control's height: 48 for a thumb; 40 on a desk with a mouse (below).
+     A table row's: 48 and 44. */
+  --ctl: 48px;
+  --row: 48px;
+  /* Shadows are for things that float: menus and popovers, then dialogs.
+     Cards sit flat on a hairline (--shadow-1 is kept, as none). */
+  --shadow-1: none;
+  --shadow-2: 0 1px 2px rgba(16, 18, 24, 0.06), 0 8px 24px rgba(16, 18, 24, 0.12);
+  --shadow-3: 0 24px 64px rgba(16, 18, 24, 0.24);
   --side-w: 232px;
+  /* One column edge for every screen: the page's side gutter. And how wide
+     a screen with no width of its own may grow on a big monitor. */
+  --gutter: var(--s-6);
+  --page-max: 1200px;
 
-  --border: 1px solid var(--rule);
-  --border-2: 1px solid var(--rule-2);
-  --border-ink: 1px solid var(--rule-2);
-  /* One column for every screen (Map is the only full-width one). --max-w is
-     the column plus its side gutters, for the nav and page boxes. */
+  --border: 1px solid var(--line);
+  --border-2: 1px solid var(--line-strong);
+  --border-ink: 1px solid var(--line-strong);
   --page-w: 960px;
   --max-w: calc(var(--page-w) + 2 * var(--s-4));
-}
 
-/* Dark mode: Deep Navy ground, white text, marigold links and accents. */
+  /* The old names, kept: anything written against them follows the roles.
+     --mark and --mark-deep are the brand as words — readable as text (4.5:1
+     on every ground), so as an edge, a ring or a bar too — and --mark-ink
+     reads on a --mark fill. The one primary button's fill is --accent,
+     exactly the colour the campaign chose. */
+  --paper: var(--page); --paper-0: var(--card); --paper-1: var(--panel); --paper-2: var(--panel-2);
+  --rule: var(--line); --rule-2: var(--line-strong);
+  --ink: var(--text); --text-1: var(--text); --text-3: var(--quiet); --text-4: var(--faint);
+  --mark: var(--accent-words); --mark-ink: var(--accent-words-ink); --mark-soft: var(--tint); --mark-deep: var(--accent-words);
+  --link: var(--accent-words);
+  --navy: var(--inverse); --navy-2: var(--inverse-2); --navy-text: var(--inverse-quiet); --gold: var(--second);
+  --red: var(--danger); --red-text: var(--danger); --cream: var(--panel);
+}
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #f6f7f9;
-    --paper-0: #0b3068;
-    --paper: #00224d;
-    --paper-1: #164082;
-    --paper-2: #1e4a8f;
-    --rule: #2a4f8a;
-    --rule-2: #3b63a3;
-    --text-2: #d6deeb;
-    --text-3: #a9b6cc;
-    --text-4: #7f8ea8;
-    --navy: #001a3d;
-    --navy-2: #0b3068;
-    --mark: #ffc72c;
-    --mark-ink: #00224d;
-    --mark-soft: #2b3f66;
-    --mark-deep: #f2bb1f;
-    --danger: #ff8a8a;
-    --ok: #5fd39a;
-    --warn: #f0b955;
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.5);
+    /* status:dark */
+    --ok: #5fd39a; --warn: #f0b955; --danger: #ff8a8a;
+    /* end */
+    --shadow-2: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 12px 32px rgba(0, 0, 0, 0.5);
+    --shadow-3: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 24px 64px rgba(0, 0, 0, 0.6);
   }
+}
+/* A desk with a mouse: denser controls. A phone, a tablet and any touch
+   screen keep 48px — the field rule. */
+@media (min-width: 900px) and (pointer: fine) {
+  :root { --ctl: 40px; --row: 44px; }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -106,36 +123,47 @@
 html, body {
   margin: 0; padding: 0;
   font-family: var(--font-sans);
-  color: var(--text-1);
-  background: var(--paper);
+  color: var(--text);
+  background: var(--page);
   font-size: 15px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+/* A phone reads at 16px. */
+@media (max-width: 720px) { html, body { font-size: 16px; } }
 
 a { color: inherit; }
-::selection { background: var(--mark-soft); color: var(--text-1); }
+::selection { background: var(--tint-2); color: var(--text); }
 
-/* Headlines in Barlow Condensed (700), sentence case, tight. */
-h1, h2, h3 { font-family: var(--font-display); font-weight: 700; margin: 0 0 var(--s-3); line-height: 1.1; letter-spacing: 0; }
-h1 { font-size: 30px; }
-h2 { font-size: 21px; }
+/* One focus ring, everywhere: 2px of the brand's edge colour, 2px out. No
+   weight, so a row that wants it inside its edge only says the offset. */
+:where(a, button, input, select, textarea, summary, [tabindex], [role='option'], [role='tab']):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 
-/* ── 1. Micro-label (eyebrow) — small, uppercase, quiet ── */
+/* Headlines: the heading face at 600, sentence case, a touch tight. */
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0 0 var(--s-3); line-height: 1.2; letter-spacing: -0.01em; }
+h1 { font-size: 26px; letter-spacing: -0.02em; }
+h2 { font-size: 18px; line-height: 1.3; }
+h3 { font-size: 16px; line-height: 1.35; }
+
+/* ── 1. Small label (eyebrow) — 12px, quiet, sentence case ── */
 .eyebrow {
-  font-family: var(--font-display);
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.4;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  color: var(--quiet);
+  font-weight: 500;
 }
 .mono { font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
 
 /* ── 2. Hairline rule ── */
-.hairline { height: 1px; background: var(--rule); border: 0; margin: var(--s-4) 0; }
+.hairline { height: 1px; background: var(--line); border: 0; margin: var(--s-4) 0; }
 
 /* ── 3. Button ── */
 .btn {
@@ -144,94 +172,95 @@ h2 { font-size: 21px; }
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--text-1);
-  background: var(--paper-0);
-  border: var(--border-2);
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-ctrl);
-  padding: 8px 14px;
+  min-height: var(--ctl);
+  padding: 6px 14px;
   cursor: pointer;
   text-decoration: none;
-  display: inline-block;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
   line-height: 1.3;
-  transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
+  transition: background-color 0.12s, border-color 0.12s;
 }
-.btn-primary {
-  background: var(--mark); color: var(--mark-ink); border: 1px solid var(--mark);
-  box-shadow: 0 1px 2px rgba(0, 34, 77, 0.25);
-}
-.btn-quiet { border-color: transparent; background: transparent; color: var(--text-3); }
+/* The one primary button: the brand exactly as chosen, edged so a pale
+   brand still reads as a button on white. */
+.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent-edge); }
+.btn-quiet { border-color: transparent; background: transparent; color: var(--quiet); }
 /* Hover only where a pointer hovers. On a phone a tapped button keeps
    :hover until the next tap, so it would still look pressed on the next
    screen. Every :hover that changes a fill or edge sits in (hover: hover). */
 @media (hover: hover) {
-  .btn:hover { border-color: var(--mark); background: var(--paper-0); }
-  .btn-primary:hover { background: var(--mark-deep); border-color: var(--mark-deep); }
-  .btn-quiet:hover { color: var(--text-1); border-color: var(--rule-2); background: transparent; }
-}
-.btn:focus-visible, .input:focus-visible, a:focus-visible, [role='option']:focus-visible {
-  outline: 2px solid var(--mark);
-  outline-offset: 2px;
+  .btn:hover { background: var(--panel); }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-edge); }
+  .btn-quiet:hover { color: var(--text); background: var(--panel); }
 }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
 /* ── 4. Input + field ── */
 .input {
   font-family: var(--font-sans);
-  font-size: 15px;
-  color: var(--text-1);
-  background: var(--paper-0);
-  border: var(--border-2);
+  font-size: 16px; /* every field: readable, and iOS won't zoom on focus */
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--field-edge);
   border-radius: var(--r-ctrl);
-  padding: 9px 12px;
+  min-height: var(--ctl);
+  padding: 7px 12px;
   width: 100%;
 }
-.input:focus { outline: 3px solid var(--mark-soft); outline-offset: 0; border-color: var(--mark); }
+.input::placeholder { color: var(--faint); opacity: 1; }
+.input:focus { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
 .field { display: flex; flex-direction: column; gap: var(--s-1); margin-bottom: var(--s-3); }
 .field > label {
   font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
-  color: var(--text-3);
+  color: var(--text-2);
 }
 .form-row { display: flex; gap: var(--s-3); flex-wrap: wrap; }
 .form-row > .field { flex: 1 1 140px; }
 
-/* ── 5. Card ── */
+/* ── 5. Card: flat, on a hairline ── */
 .card {
-  background: var(--paper-0);
-  border: var(--border);
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: var(--r-card);
-  box-shadow: var(--shadow-1);
   padding: var(--s-4) var(--s-4);
   margin-bottom: var(--s-4);
 }
 .card > .eyebrow { display: block; margin-bottom: var(--s-2); }
 
 /* ── 6. Table ── */
-.table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--paper-0); border: var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-1); overflow: hidden; }
+.table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
 .table th {
   font-family: var(--font-sans);
-  font-size: 11.5px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: var(--text-3);
+  font-size: 12px;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
+  font-weight: 500;
+  color: var(--quiet);
   text-align: left;
-  background: var(--paper-1);
+  background: var(--card);
   padding: 10px var(--s-3);
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 .table td {
-  padding: 11px var(--s-3);
-  border-bottom: 1px solid var(--rule);
+  padding: calc((var(--row) - 1.5em - 1px) / 2) var(--s-3);
+  border-bottom: 1px solid var(--line);
   vertical-align: baseline;
 }
 .table tr:last-child td { border-bottom: 0; }
 .table tr.rowlink { cursor: pointer; }
-@media (hover: hover) { .table tr.rowlink:hover td { background: color-mix(in srgb, var(--mark-soft) 45%, var(--paper-0)); } }
+@media (hover: hover) { .table tr.rowlink:hover td { background: var(--panel); } }
 .table .num { text-align: right; font-family: var(--font-sans); font-variant-numeric: tabular-nums; }
 .table th.num { text-align: right; }
 
@@ -247,16 +276,16 @@ h2 { font-size: 21px; }
   padding: 2px 9px;
   white-space: nowrap;
   color: var(--text-2);
-  background: var(--paper-1);
+  background: var(--panel);
 }
-.chip-warn { background: #fff3d6; border-color: transparent; color: #8a5a00; }
-.chip-danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--paper-0)); border-color: transparent; }
-.chip-ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, var(--paper-0)); border-color: transparent; }
+.chip-warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, var(--card)); border-color: transparent; }
+.chip-danger { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--card)); border-color: transparent; }
+.chip-ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, var(--card)); border-color: transparent; }
 
 /* ── 8. Banner ── */
 .banner {
-  border: 1px solid color-mix(in srgb, var(--mark) 30%, transparent);
-  background: var(--mark-soft);
+  border: 1px solid color-mix(in srgb, var(--accent-edge) 30%, transparent);
+  background: var(--tint);
   border-radius: var(--r-card);
   padding: var(--s-3) var(--s-4);
   margin-bottom: var(--s-4);
@@ -266,15 +295,15 @@ h2 { font-size: 21px; }
   justify-content: space-between;
 }
 
-/* ── 9. Toast ── */
+/* ── 9. Toast: the other scheme's ground, so it reads over anything ── */
 .toast {
   position: fixed;
   bottom: var(--s-5);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--navy);
-  color: #fff;
-  border-radius: 12px;
+  background: var(--inverse);
+  color: var(--inverse-ink);
+  border-radius: var(--r-card);
   box-shadow: var(--shadow-2);
   padding: var(--s-3) var(--s-4);
   display: flex;
@@ -296,14 +325,19 @@ h2 { font-size: 21px; }
 @media (hover: hover) {
   .toast .btn:hover { color: inherit; background: color-mix(in srgb, currentColor 14%, transparent); border-color: currentColor; }
 }
+.toast :focus-visible { outline-color: currentColor; }
 
 /* ── 10. Nav / shell ──
-   Desktop: a navy sidebar down the left. Phones (≤ 720px): a navy top bar
-   with the brand and avatar, and the tab bar along the bottom (§11). */
+   Desktop: a sidebar down the left, on a hairline. Phones (≤ 720px): a top
+   bar with the campaign and the avatar, and the tab bar along the bottom
+   (§11). Light by default; a campaign can choose its brand colour or a dark
+   one — every colour here is a side-* role, so all three are this one rule. */
 .nav {
-  background: var(--navy);
-  color: var(--navy-text);
+  background: var(--side-top);
+  color: var(--side-quiet);
+  border-bottom: 1px solid var(--side-edge);
 }
+.nav :focus-visible { outline-color: var(--side-mark); }
 .nav-inner {
   max-width: var(--max-w);
   margin: 0 auto;
@@ -314,56 +348,84 @@ h2 { font-size: 21px; }
   min-height: 56px;
   flex-wrap: wrap;
 }
+/* The campaign leads: its logo in its own colours (or its initials on the
+   brand colour, and its name); base.win is the small line under it. */
 .nav .brand {
-  display: inline-flex; align-items: center; gap: 10px;
-  text-decoration: none; color: #fff;
+  display: inline-flex; align-items: center; gap: 10px; min-width: 0;
+  text-decoration: none; color: var(--side-ink);
 }
-/* The star device at its natural width: 32px tall, the guidelines' minimum. */
-.brand-mark { width: auto; height: 32px; flex: none; display: block; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-name { font-family: var(--font-display); font-size: 19px; font-weight: 700; letter-spacing: 0.01em; }
-.brand-org { font-size: 12px; font-weight: 600; color: var(--gold); }
+.brand-logo { display: block; flex: none; line-height: 0; }
+.brand-mark { display: block; width: auto; height: 34px; max-width: 160px; object-fit: contain; object-position: left center; font: 600 15px/34px var(--font-sans); color: inherit; }
+.brand-mono {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: var(--r-ctrl);
+  background: var(--accent); color: var(--accent-ink); box-shadow: inset 0 0 0 1px var(--accent-edge);
+  font: 700 14px/1 var(--font-sans); letter-spacing: 0;
+}
+/* On the sidebar its edge is the sidebar's own mark, so the tile still
+   stands out when the campaign has made the sidebar its brand colour. */
+.nav .brand-mono { box-shadow: inset 0 0 0 1px var(--side-mark); }
+.brand-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.brand-org { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brand-sub { display: flex; align-items: center; gap: 6px; }
+.brand-name { font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--side-quiet); }
+/* With a logo, base.win sits under it, and the campaign's name is in the
+   picture: said for screen readers, not drawn twice. */
+.nav .brand.has-logo { flex-direction: column; align-items: flex-start; gap: 3px; }
+.brand.has-logo .brand-org { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* A logo made for light paper, on a dark ground with no light version of
+   its own: it sits on a white chip, in its own colours. */
+.brand-logo.on-chip .brand-mark { background: #fff; padding: 3px 6px; border-radius: var(--r-sm); }
+@media (prefers-color-scheme: dark) {
+  .brand-logo:not(.has-dark) .brand-mark { background: #fff; padding: 3px 6px; border-radius: var(--r-sm); }
+}
 /* Staging, said on every screen so nobody mistakes it for production. */
-.env-badge { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--gold); color: var(--navy); font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; vertical-align: middle; }
+.env-badge { display: inline-block; padding: 1px 7px; border-radius: 999px; background: var(--second); color: var(--second-ink); font-size: 12px; font-weight: 600; letter-spacing: var(--label-tracking); text-transform: var(--label-case); vertical-align: middle; }
 .nav .links { display: flex; gap: var(--s-1); }
 .nav .links a {
   display: flex; align-items: center; gap: 10px;
   font-family: var(--font-sans);
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 500;
   text-decoration: none;
-  color: var(--navy-text);
-  padding: 9px 12px;
-  border-radius: 10px;
+  color: var(--side-quiet);
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--r-ctrl);
 }
-.nav .links .tab-icon { width: 20px; height: 20px; flex: none; opacity: 0.9; }
-@media (hover: hover) { .nav .links a:hover { color: #fff; background: var(--navy-2); } }
-.nav .links a.active { color: #fff; background: var(--navy-2); box-shadow: inset 3px 0 0 var(--gold); }
-.nav .links a:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
-/* A small count on a tab (new replies on Calls). */
+.nav .links .tab-icon { width: 20px; height: 20px; flex: none; }
+@media (hover: hover) { .nav .links a:hover { color: var(--side-ink); background: var(--side-hover); } }
+/* You are here: the item lifts onto its own ground, its label in the brand's
+   words and its icon in the brand's mark. */
+.nav .links a.active { color: var(--side-active-ink); background: var(--side-active); font-weight: 600; box-shadow: inset 0 0 0 1px var(--side-edge); }
+.nav .links a.active .tab-icon { color: var(--side-mark); stroke-width: 2; }
+.nav .links a:focus-visible { outline-offset: 1px; }
+/* A small count on a tab (new replies on Calls): the second colour. */
 .tab-badge {
   display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
-  margin-left: 6px; border-radius: 9px; background: var(--gold); color: var(--navy);
-  font-size: 11px; font-weight: 700; line-height: 1; letter-spacing: 0;
+  margin-left: 6px; border-radius: 9px; background: var(--second); color: var(--second-ink);
+  font-size: 12px; font-weight: 700; line-height: 1; letter-spacing: 0;
 }
 .tab-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .spacer { flex: 1; }
-.nav .ws { font-size: 13px; color: var(--navy-text); }
+.nav .ws { font-size: 13px; color: var(--side-quiet); }
 
 @media (min-width: 721px) {
-  #root:has(> .nav) { padding-left: var(--side-w); }
   .nav {
     position: fixed; top: 0; bottom: 0; left: 0; z-index: 950;
     width: var(--side-w);
     display: flex; flex-direction: column;
     overflow-y: auto;
+    background: var(--side);
+    border-bottom: 0;
+    border-right: 1px solid var(--side-edge);
   }
   .nav-inner {
     flex: 1; width: 100%; max-width: none; margin: 0;
     flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: var(--s-1);
     padding: 20px 12px 14px;
   }
-  .nav .brand { padding: 0 8px 18px; }
+  .nav .brand { padding: 0 8px 16px; }
   .nav .links { flex-direction: column; gap: 2px; }
   .nav .acct { margin-top: var(--s-3); }
 }
@@ -377,72 +439,79 @@ h2 { font-size: 21px; }
   font: inherit;
 }
 .acct-btn__who { display: none; }
-.acct-btn[aria-expanded='true'] .avatar { background: var(--mark); color: var(--mark-ink); }
-@media (hover: hover) { .acct-btn:hover .avatar { background: var(--mark); color: var(--mark-ink); } }
-.acct-btn:focus-visible { outline: 2px solid var(--gold); outline-offset: 0; }
+.acct-btn[aria-expanded='true'] .avatar { box-shadow: 0 0 0 2px var(--side-mark); }
+@media (hover: hover) { .acct-btn:hover .avatar { box-shadow: 0 0 0 2px var(--side-mark); } }
+.acct-btn:focus-visible { outline-offset: 0; }
 @media (min-width: 721px) {
   .acct-btn {
     width: 100%; height: auto; margin: 0; padding: 8px; justify-content: flex-start;
-    border-radius: 10px; text-align: left;
+    border-radius: var(--r-ctrl); text-align: left;
   }
-  @media (hover: hover) { .acct-btn:hover { background: var(--navy-2); } }
+  .acct-btn[aria-expanded='true'] { background: var(--side-hover); }
+  .acct-btn[aria-expanded='true'] .avatar { box-shadow: none; }
+  @media (hover: hover) {
+    .acct-btn:hover { background: var(--side-hover); }
+    .acct-btn:hover .avatar { box-shadow: none; }
+  }
   .acct-btn__who { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
-  .acct-btn__name { color: #fff; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .acct-btn__role { color: var(--navy-text); font-size: 12px; text-transform: capitalize; opacity: 0.8; }
+  .acct-btn__name { color: var(--side-ink); font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .acct-btn__role { color: var(--side-quiet); font-size: 12px; text-transform: capitalize; }
 }
 .acct-panel {
   position: absolute; right: calc(-1 * var(--s-2)); top: calc(100% + 6px); z-index: 960;
   min-width: 220px; max-width: calc(100vw - 2 * var(--s-4));
-  background: var(--paper-0); color: var(--text-1);
-  border: var(--border); border-radius: 12px;
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--r-card);
   box-shadow: var(--shadow-2);
   padding: var(--s-1) 0;
   overflow: hidden;
 }
 @media (min-width: 721px) {
-  .acct-panel { top: auto; bottom: calc(100% + 6px); left: 0; right: auto; }
+  .acct-panel { top: auto; bottom: calc(100% + 6px); left: 0; right: 0; min-width: 0; }
 }
 .acct-panel[hidden] { display: none; }
-.acct-who { display: flex; flex-direction: column; padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--rule); }
-.acct-name { font-weight: 700; overflow-wrap: anywhere; }
-.acct-ws { font-size: 13px; color: var(--text-3); overflow-wrap: anywhere; }
+.acct-panel :focus-visible { outline-color: var(--focus); }
+.acct-who { display: flex; flex-direction: column; padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--line); }
+.acct-name { font-weight: 600; overflow-wrap: anywhere; }
+.acct-ws { font-size: 13px; color: var(--quiet); overflow-wrap: anywhere; }
 .acct-item {
-  display: flex; align-items: center; width: 100%; min-height: 46px; padding: 0 var(--s-4);
-  font-family: var(--font-sans); font-size: 14.5px; font-weight: 500; letter-spacing: 0; text-transform: none;
-  color: var(--text-1); text-decoration: none; text-align: left;
+  display: flex; align-items: center; width: 100%; min-height: var(--ctl); padding: 0 var(--s-4);
+  font-family: var(--font-sans); font-size: 15px; font-weight: 500; letter-spacing: 0; text-transform: none;
+  color: var(--text); text-decoration: none; text-align: left;
   background: none; border: 0; cursor: pointer;
 }
-.acct-item + .acct-item { border-top: 1px solid var(--rule); }
-@media (hover: hover) { .acct-item:hover { background: var(--paper-1); } }
-.acct-item.active { box-shadow: inset 3px 0 0 var(--mark); }
+.acct-item + .acct-item { border-top: 1px solid var(--line); }
+@media (hover: hover) { .acct-item:hover { background: var(--panel); } }
+.acct-item.active { color: var(--accent-words); font-weight: 600; background: var(--tint); }
 .acct-item:disabled { opacity: 0.5; cursor: default; }
-.acct-item:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
-.acct-confirm { padding: var(--s-3) var(--s-4); border-top: 1px solid var(--rule); }
+.acct-item:focus-visible { outline-offset: -2px; }
+.acct-confirm { padding: var(--s-3) var(--s-4); border-top: 1px solid var(--line); }
 .acct-confirm p { margin: 0 0 var(--s-3); font-size: 14px; }
 .acct-confirm__row { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .btn.acct-danger { color: var(--danger); border-color: var(--danger); }
-@media (hover: hover) { .btn.acct-danger:hover { background: var(--danger); color: #fff; } }
+@media (hover: hover) { .btn.acct-danger:hover { background: var(--danger); color: var(--card); } }
 
 .avatar {
   font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
   width: 34px; height: 34px; flex: none;
   border-radius: 50%;
   border: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--navy);
-  background: var(--gold);
+  color: var(--accent-words);
+  background: var(--tint-2);
 }
 
-.page { max-width: var(--max-w); margin: 0 auto; padding: var(--s-6) var(--s-5) var(--s-7); }
-/* A screen narrower than the column (e.g. the call card) sits centred in it. */
-.page > * { margin-inline: auto; }
-/* The map is the one full-width screen. */
-.page:has(> .map-page) { max-width: none; }
+/* One column edge: every screen starts at the same place beside the nav,
+   and is as wide as it needs (its own max-width) — up to --page-max, past
+   which a table or a row of figures only gets harder to read. Only the map
+   fills the whole room. */
+.page { margin: 0; padding: var(--s-6) var(--gutter) var(--s-7); max-width: calc(var(--page-max) + 2 * var(--gutter)); }
+.page > * { margin-inline: 0; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-4); margin-bottom: var(--s-5); flex-wrap: wrap; }
 .page-head h1 { margin: 0; }
 
@@ -450,12 +519,12 @@ h2 { font-size: 21px; }
 .stat-hero { margin: var(--s-4) 0 var(--s-5); }
 .stat-hero .amount {
   font-size: 52px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.05;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
-.stat-hero .sub { color: var(--text-3); margin-top: var(--s-1); }
+.stat-hero .sub { color: var(--quiet); margin-top: var(--s-1); }
 
 /* ── 12. Picker (type-ahead dropdown) ── */
 .picker { position: relative; }
@@ -463,8 +532,8 @@ h2 { font-size: 21px; }
   position: absolute;
   top: calc(100% + 4px);
   left: 0; right: 0;
-  background: var(--paper-0);
-  border: var(--border);
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: var(--r-ctrl);
   z-index: 20;
   max-height: 260px;
@@ -473,23 +542,86 @@ h2 { font-size: 21px; }
   list-style: none;
   box-shadow: var(--shadow-2);
 }
-.picker-list li { padding: var(--s-2) var(--s-3); cursor: pointer; border-bottom: 1px solid var(--rule); }
+.picker-list li { padding: var(--s-2) var(--s-3); cursor: pointer; border-bottom: 1px solid var(--line); }
 .picker-list li:last-child { border-bottom: 0; }
-.picker-list li.active { background: var(--mark-soft); }
-.picker-list li .meta { color: var(--text-3); font-size: 12px; margin-left: var(--s-2); }
+.picker-list li.active { background: var(--tint); }
+.picker-list li .meta { color: var(--quiet); font-size: 12px; margin-left: var(--s-2); }
 .picker-list li.create { font-style: italic; color: var(--text-2); }
+
+/* ── 13. Pick one — the one segmented control ──
+   Every "one of these" on every screen is this shape: a bordered group,
+   hairlines between the choices, and the chosen one a rounded tile on the
+   brand's tint, in the brand's words, with an edge all the way round.
+   Screens keep their own class (and only their layout: a full-width grid,
+   rows that wrap); the look is here.
+   The chosen one is said in the markup — aria-pressed, aria-checked,
+   aria-selected, a NavLink's .active, or .is-on.
+   Every choice is a whole control tall (48px under a thumb, 40 with a
+   mouse), and so is the group, so it lines up with the button beside it.
+   That is why the edges are drawn the way they are: each choice draws its
+   own hairline inside itself and laps its neighbour's by that 1px, so there
+   is one line between two choices, a group that wraps onto a second row (a
+   door's people, Settings' tabs on a phone) still has every edge, and a
+   short last row ends closed. The group's own edge is drawn over them
+   (::after), so its corners are round whichever choice sits in them. */
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  padding: 1px 0 0 1px;
+  gap: 0;
+  background: var(--card);
+  border: 0;
+  border-radius: var(--r-ctrl);
+  overflow: hidden;
+}
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs)::after {
+  content: '';
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: inherit;
+  pointer-events: none;
+}
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a) {
+  flex: 1 1 auto;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-width: 0; min-height: var(--ctl);
+  margin: -1px 0 0 -1px; padding: 4px 14px;
+  font-family: var(--font-sans); font-size: 14px; font-weight: 500; line-height: 1.25; letter-spacing: 0; text-transform: none;
+  text-align: center; text-decoration: none; white-space: nowrap;
+  color: var(--text-2); background: transparent;
+  border: 0; border-radius: 0; box-shadow: inset 0 0 0 1px var(--line-strong);
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  :is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):hover { background: var(--panel); color: var(--text); }
+}
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is([aria-pressed='true'], [aria-checked='true'], [aria-selected='true'], .active, .is-on),
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is([aria-pressed='true'], [aria-checked='true'], [aria-selected='true'], .active, .is-on):hover {
+  background: var(--tint-2);
+  color: var(--accent-words);
+  font-weight: 600;
+  border-radius: var(--r-ctrl);
+  box-shadow: inset 0 0 0 1px var(--line-strong), inset 0 0 0 2px var(--accent-edge);
+}
+/* The focus ring sits inside the hairline, whole on every side. */
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):focus-visible { outline-offset: -3px; }
+:is(.ops-seg, .ot-seg, .dash-seg, .dash-periods, .channel-toggle, .cl-toggle, .door-channel, .rq-pills, .fk-tabs, .ot-tabs, .ws-tabs) > :is(button, a):disabled { opacity: 0.45; cursor: default; }
+/* More choices than fit across (a door's people, Settings' tabs on a
+   phone): they wrap, so every one shows. */
+:is(.fk-tabs, .ws-tabs) { flex-wrap: wrap; }
 
 /* Small helpers (shared, not per-screen) */
 .ok-text { color: var(--ok); }
 .danger-text { color: var(--danger); }
-.muted { color: var(--text-3); }
+.muted { color: var(--quiet); }
 /* No signal, nothing loaded yet: one quiet line (components/NoSignal.jsx). */
 .no-signal {
   margin: var(--s-3) 0;
   padding: var(--s-3) var(--s-4);
-  border-left: 3px solid var(--rule-2);
+  border-left: 3px solid var(--line-strong);
   border-radius: 0 var(--r-ctrl) var(--r-ctrl) 0;
-  background: var(--paper-0);
+  background: var(--card);
   color: var(--text-2);
   font-size: 16px;
 }
@@ -501,112 +633,104 @@ h2 { font-size: 21px; }
   margin: var(--s-2) 0;
 }
 .list-plain { list-style: none; margin: 0; padding: 0; }
-.list-plain li { padding: var(--s-2) 0; border-bottom: 1px solid var(--rule); display: flex; gap: var(--s-3); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
+.list-plain li { padding: var(--s-2) 0; border-bottom: 1px solid var(--line); display: flex; gap: var(--s-3); align-items: baseline; justify-content: space-between; flex-wrap: wrap; }
 .list-plain li:last-child { border-bottom: 0; }
-.footer-row { display: flex; align-items: center; gap: var(--s-4); margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--rule); flex-wrap: wrap; }
+.footer-row { display: flex; align-items: center; gap: var(--s-4); margin-top: var(--s-5); padding-top: var(--s-4); border-top: 1px solid var(--line); flex-wrap: wrap; }
 
-/* Sign in / set up: a white card on Surrey Navy, with the rise — a Deep
-   Navy block whose edge climbs at 24 degrees, the brand's one device. */
-html:has(.auth-page) { min-height: 100%; background: linear-gradient(156deg, var(--navy) 0 64%, var(--navy-2) 64%) fixed; }
+/* Sign in / set up: a white card on the page colour, under a soft wash of
+   the brand's tint. The campaign leads (its logo, or its initials and name);
+   base.win is the quiet line at the foot. */
+html:has(.auth-page) { min-height: 100%; background: radial-gradient(1200px 480px at 50% -80px, var(--tint-2), transparent 70%) no-repeat, var(--page); }
 html:has(.auth-page) body { background: transparent; }
 .auth-page {
-  max-width: 420px; margin: 9vh auto var(--s-6); padding: 28px;
-  background: var(--paper-0); color: var(--text-1);
-  border-radius: 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  max-width: 420px; margin: 9vh auto var(--s-6); padding: var(--s-6);
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--r-sheet); box-shadow: var(--shadow-2);
 }
-@media (max-width: 460px) { .auth-page { margin: 6vh var(--s-3) var(--s-5); padding: 22px; } }
-.auth-page .brand {
-  display: flex; align-items: center; gap: 10px;
-  font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: 0.01em; text-transform: none;
-  color: var(--text-1); background: none; padding: 0;
-  margin-bottom: var(--s-5);
-}
-.auth-page .brand::before {
-  content: ''; width: 72px; height: 36px; flex: none;
-  background: url('/star.png') center / contain no-repeat;
-}
-.auth-page .brand-org { color: var(--mark); }
-.auth-page h1 { font-size: 28px; }
-/* The marigold bar: a short bar under a headline, one per page. */
-.auth-page h1::after { content: ''; display: block; width: 44px; height: 5px; margin-top: 10px; background: var(--gold); }
+@media (max-width: 460px) { .auth-page { margin: 5vh var(--s-3) var(--s-5); padding: var(--s-5) 20px; } }
+.auth-head { display: flex; align-items: center; gap: var(--s-3); min-height: 40px; margin-bottom: var(--s-5); }
+.auth-head .brand-mark { height: 56px; max-width: 220px; font-size: 18px; line-height: 56px; }
+.auth-head .brand-mono { width: 40px; height: 40px; font-size: 15px; }
+.auth-page .brand-org { font-size: 16px; font-weight: 600; color: var(--text); white-space: normal; overflow-wrap: anywhere; }
+.auth-head.has-logo .brand-org { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.auth-page h1 { font-size: 22px; }
+.auth-foot { margin: var(--s-5) 0 0; padding-top: var(--s-4); border-top: 1px solid var(--line); display: flex; align-items: center; gap: var(--s-2); font-size: 12px; color: var(--quiet); }
+.auth-page .brand { font-weight: 600; color: var(--quiet); }
 .check { font-family: var(--font-sans); }
-.done { text-decoration: line-through; color: var(--text-4); }
+.done { text-decoration: line-through; color: var(--faint); }
 
-/* ── 11. Mobile tab bar (field mode) ── */
+/* ── 11. Mobile tab bar (field mode) ──
+   Light, on a hairline; the tab you are on is the brand's colour with a
+   heavier label. Never more than five: a desk role with more places gets
+   four and "More" (Shell.jsx). */
 .tabbar { display: none; }
+.tab-more { display: contents; }
 @media (max-width: 720px) {
   .nav .links { display: none; }
   .nav .ws { display: none; }
   .nav-inner { min-height: 56px; }
-  .brand-mark { height: 30px; }
+  .brand-mark { height: 30px; max-width: 150px; line-height: 30px; }
   /* Clear the tab bar; the full-bleed map cancels exactly 64px itself. */
   .page { padding: var(--s-5) var(--s-4) calc(92px + env(safe-area-inset-bottom)); }
-  .page:has(> .map-page) { padding-bottom: 64px; }
-  /* A tab is at least as wide as its label (minmax(min-content, 1fr) —
-     "Outreach" takes a little from the shorter ones), so all seven desk
-     tabs fit a 360px phone whole, with an 8px gutter at each end. */
   .tabbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
     display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
     gap: 2px;
-    background: var(--navy);
-    padding: 6px var(--s-2) calc(6px + env(safe-area-inset-bottom));
+    background: var(--card);
+    border-top: 1px solid var(--line);
+    padding: 5px var(--s-2) calc(5px + env(safe-area-inset-bottom));
   }
-  .tabbar a {
+  .tabbar a, .tabbar .tab-more__btn {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-    min-width: 0; min-height: 54px; padding: 5px 3px 4px;
-    font-family: var(--font-sans); font-size: 11.5px; font-weight: 500; line-height: 1.2; letter-spacing: 0; text-transform: none;
-    text-decoration: none; color: var(--navy-text); text-align: center;
-    border-radius: 10px;
+    min-width: 0; min-height: 54px; padding: 5px 3px 4px; margin: 0;
+    font-family: var(--font-sans); font-size: 12px; font-weight: 500; line-height: 1.2; letter-spacing: 0; text-transform: none;
+    text-decoration: none; color: var(--quiet); text-align: center;
+    background: none; border: 0; border-radius: var(--r-ctrl); cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   .tabbar .tab-icon { width: 22px; height: 22px; flex: none; }
   .tabbar .tab-iconwrap { position: relative; display: inline-flex; }
   .tabbar .tab-badge { position: absolute; top: -6px; right: -12px; margin: 0; }
-  .tabbar .tab-label { display: block; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
-  .tabbar a.active { color: #fff; background: var(--navy-2); font-weight: 700; }
-  .tabbar a.active .tab-icon { stroke-width: 2.2; color: var(--gold); }
-  .tabbar a:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .tabbar .tab-label { display: block; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .tabbar a.active, .tabbar .tab-more__btn.active, .tabbar .tab-more__btn[aria-expanded='true'] { color: var(--accent-words); font-weight: 700; }
+  .tabbar a.active .tab-icon, .tabbar .tab-more__btn.active .tab-icon, .tabbar .tab-more__btn[aria-expanded='true'] .tab-icon { stroke-width: 2.2; }
+  .tabbar :focus-visible { outline-offset: -2px; }
   /* Volunteers: four tabs, so everything is bigger. */
-  .tabbar[data-count='4'] a { min-height: 60px; font-size: 13.5px; gap: 4px; }
+  .tabbar[data-count='4'] a { min-height: 60px; font-size: 13px; gap: 4px; }
   .tabbar[data-count='4'] .tab-icon { width: 26px; height: 26px; }
-}
-/* Seven desk tabs: a little tighter on small phones, labels whole. */
-@media (max-width: 400px) {
-  .tabbar[data-count='8'] { gap: 0; padding-left: var(--s-1); padding-right: var(--s-1); }
-  .tabbar[data-count='8'] a { font-size: 10.5px; padding-left: 2px; padding-right: 2px; }
-}
-/* Nine desk tabs (a manager's, with Website): 10px labels, whole at 360px. */
-@media (max-width: 720px) {
-  .tabbar[data-count='9'] { gap: 0; padding-left: var(--s-1); padding-right: var(--s-1); }
-  .tabbar[data-count='9'] a { padding-left: 1px; padding-right: 1px; }
-  .tabbar[data-count='9'] .tab-label { font-size: 10px; }
-}
-/* Very narrow phones (≤ 359px): seven 10.5px labels still fit whole. */
-@media (max-width: 359px) {
-  .tabbar { padding-left: var(--s-1); padding-right: var(--s-1); }
-  .tabbar a { font-size: 10.5px; }
-  .tabbar[data-count='4'] a { font-size: 12.5px; }
-}
-
-/* ── 13. Touch: fingers, not cursors ──
-   Touch screens and phone-width windows get ≥44px tap targets on the shared
-   controls; desktop (fine pointer, wide window) keeps its density. Padding is
-   computed from the font size so the label stays centred whatever a page sets. */
-@media (pointer: coarse), (max-width: 720px) {
-  .btn {
-    min-height: 44px;
-    padding-top: max(7px, calc((44px - 1.3em) / 2 - 1px));
-    padding-bottom: max(7px, calc((44px - 1.3em) / 2 - 1px));
+  /* "More": the rest of a desk role's places, in a sheet above the bar. */
+  .tab-more__panel {
+    position: fixed; left: var(--s-2); right: var(--s-2); bottom: calc(70px + env(safe-area-inset-bottom)); z-index: 905;
+    max-height: calc(100dvh - 160px); overflow-y: auto;
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--line); border-radius: var(--r-sheet);
+    box-shadow: var(--shadow-2);
+    padding: var(--s-1) 0;
   }
+  .tab-more__panel[hidden] { display: none; }
+  .tab-more__panel a {
+    flex-direction: row; justify-content: flex-start; gap: var(--s-3);
+    min-height: 52px; padding: 0 var(--s-4); border-radius: 0;
+    font-size: 16px; font-weight: 500; color: var(--text); text-align: left;
+  }
+  .tab-more__panel a + a { border-top: 1px solid var(--line); }
+  .tab-more__panel a.active { background: var(--tint); }
+  .tab-more__panel .tab-icon { color: var(--quiet); }
+  .tab-more__panel a.active .tab-icon { color: var(--accent-edge); }
+}
+@media (min-width: 721px) { .tab-more__panel { display: none; } }
+
+/* ── 14. Touch: fingers, not cursors ──
+   .btn and .input are --ctl tall (48px here); a chip that is a button gets
+   the same reach. */
+@media (pointer: coarse), (max-width: 720px) {
   button.chip, a.chip, label.chip { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--s-3); }
-  .input { min-height: 44px; font-size: 16px; } /* 16px: iOS won't zoom on focus */
 }
 
-/* ── 14. Disclosure — the one "show more" shape ──
+/* ── 15. Disclosure — the one "show more" shape ──
    Every More, More details, Up next, Roles and profile section: a
    full-width row, the label on the left in the body font, a + on the right
-   that turns into − when open, a hairline above. Quiet ink, never yellow.
+   that turns into − when open, a hairline above. Quiet ink, never the accent.
    Put it on a <button aria-expanded>; the glyph follows aria-expanded, so
    there is no caret markup. --disclose-x lines the label up with a card's
    padding when the row runs edge to edge.
@@ -622,7 +746,7 @@ html:has(.auth-page) body { background: transparent; }
   margin: 0;
   padding: var(--s-2) var(--disclose-x, 0);
   font-family: var(--font-sans);
-  font-size: 15.5px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: normal;
@@ -631,7 +755,7 @@ html:has(.auth-page) body { background: transparent; }
   color: var(--text-2);
   background: transparent;
   border: 0;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--line);
   border-radius: 0;
   cursor: pointer;
   touch-action: manipulation;
@@ -647,10 +771,10 @@ html:has(.auth-page) body { background: transparent; }
     linear-gradient(currentColor, currentColor) center / 14px 2px no-repeat,
     linear-gradient(currentColor, currentColor) center / 2px 14px no-repeat;
 }
-.disclose[aria-expanded='true'] { color: var(--text-1); }
+.disclose[aria-expanded='true'] { color: var(--text); }
 .disclose[aria-expanded='true']::after { background: linear-gradient(currentColor, currentColor) center / 14px 2px no-repeat; }
-@media (hover: hover) { .disclose:hover { color: var(--text-1); } }
-.disclose:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+@media (hover: hover) { .disclose:hover { color: var(--text); } }
+.disclose:focus-visible { outline-offset: -2px; }
 .disclose:disabled { opacity: 0.5; cursor: default; }
 .disclose--inline {
   display: inline-flex;
@@ -667,6 +791,5 @@ html:has(.auth-page) body { background: transparent; }
 }
 
 /* A quiet text button inside a line of words (NameFields' Undo, Move it). */
-.btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--link, var(--text-1)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.btn-link:focus-visible { outline: 2px solid var(--focus, currentColor); outline-offset: 2px; }
+.btn-link { background: none; border: 0; padding: 0; font: inherit; color: var(--link, var(--text)); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .name-note { margin: calc(-1 * var(--s-2, 8px)) 0 var(--s-3, 12px); font-size: 14px; }

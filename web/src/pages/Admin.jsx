@@ -1,4 +1,4 @@
-// Settings (managers, in the admin): Members · Teams · Permissions · Services · Campaign.
+// Settings (managers, in the admin): Members · Teams · Permissions · Services · Campaign · Brand.
 //   Members      invite, roles, remove — the Team screen (Team.jsx), as it was
 //   Teams        groups of members (a neighbourhood crew, the phone bank):
 //                make one, put people on it, name a lead; a team can be put
@@ -9,6 +9,8 @@
 //                map tiles…): set up or not, and a live check of each
 //                (components/Services.jsx)
 //   Campaign     the campaign's name (components/CampaignName.jsx)
+//   Brand        its logo, colours and shape, on every screen
+//                (components/BrandSettings.jsx)
 import { useMemo, useState } from 'react';
 import { NavLink, Navigate, useOutletContext, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,11 +19,14 @@ import { NoSignal, noSignal, useOnline, NeedsSignalLine } from '../components/No
 import Team from './Team.jsx';
 import Services from '../components/Services.jsx';
 import CampaignName from '../components/CampaignName.jsx';
+import BrandSettings from '../components/BrandSettings.jsx';
+// The ops-* pieces these screens are built from (the head, the buttons).
+import './shifts.css';
 import './outreach.css';
 import '../editor.css';
 import './admin.css';
 
-const TABS = [['members', 'Members'], ['teams', 'Teams'], ['permissions', 'Permissions'], ['services', 'Services'], ['campaign', 'Campaign']];
+const TABS = [['members', 'Members'], ['teams', 'Teams'], ['permissions', 'Permissions'], ['services', 'Services'], ['campaign', 'Campaign'], ['brand', 'Brand']];
 const ROLE_WORD = { manager: 'Manager', treasurer: 'Treasurer', staff: 'Staff', volunteer: 'Volunteer' };
 
 export default function Admin() {
@@ -42,6 +47,7 @@ export default function Admin() {
       {tab === 'permissions' && <Permissions me={me} />}
       {tab === 'services' && <Services />}
       {tab === 'campaign' && <CampaignName me={me} />}
+      {tab === 'brand' && <BrandSettings me={me} />}
     </div>
   );
 }

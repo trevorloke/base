@@ -6,7 +6,7 @@
 .vl-n { margin-left: 4px; font-weight: 400; color: var(--text-3); }
 .vl-shows button[aria-pressed='true'] .vl-n { color: inherit; }
 .vl-find { display: flex; flex-wrap: wrap; gap: var(--s-2); margin: var(--s-3) 0; }
-.vl-find .input { min-height: 48px; }
+.vl-find .input { min-height: var(--ctl); }
 .vl-find input { flex: 2 1 220px; }
 .vl-find select { flex: 1 1 160px; }
 .vl-status[data-asked] { color: var(--amber-deep); font-weight: 600; }
@@ -33,7 +33,7 @@
   border-radius: var(--r-ctrl);
   cursor: pointer;
 }
-.vl-shift:hover:not(:disabled) { border-color: var(--mark); background: var(--mark-soft); }
+@media (hover: hover) { .vl-shift:hover:not(:disabled) { border-color: var(--mark); background: var(--mark-soft); } }
 .vl-shift:focus-visible { outline: 2px solid var(--focus, var(--mark)); outline-offset: 2px; }
 .vl-shift:disabled { cursor: default; opacity: 0.55; }
 .vl-shift[data-clash] { border-style: dashed; }

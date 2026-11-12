@@ -2,9 +2,9 @@
    segmented rows from shifts.css; only what's new lives here. */
 .sv-label {
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case); font-weight: 500;
   color: var(--text-3);
 }
 .sv-form .field:last-of-type { margin-bottom: var(--s-3); }
@@ -16,7 +16,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--s-3);
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-2) 0 0;
   font: inherit;
   font-size: 16px;
@@ -75,7 +75,7 @@
 .sv-qform .ops-actions { margin-top: var(--s-1); }
 .sv-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
 .sv-kind {
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 4px 10px;
   font-family: var(--font-serif);
   font-size: 15px;
@@ -85,14 +85,14 @@
   border-radius: var(--r-ctrl);
   cursor: pointer;
 }
-.sv-kind[aria-pressed='true'] { background: var(--ink); color: var(--paper-0); border-color: var(--ink); font-weight: 600; }
+.sv-kind[aria-pressed='true'] { background: var(--tint-2); color: var(--accent-words); border-color: var(--mark); font-weight: 600; }
 .sv-kind:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .sv-locked { margin: 0; font-size: 15px; }
 .sv-locked__why { margin: 2px 0 0; font-size: 13px; }
 .sv-choices { gap: 6px; }
 .sv-choice { display: flex; gap: 6px; align-items: center; }
 .sv-choice .input { flex: 1 1 auto; min-width: 0; }
-.btn.sv-choice__x { flex: none; min-width: 48px; min-height: 48px; padding: 0; font-size: 14px; }
+.btn.sv-choice__x { flex: none; min-width: var(--ctl); min-height: var(--ctl); padding: 0; font-size: 14px; }
 .btn.sv-choice__add { align-self: flex-start; margin-left: calc(-1 * var(--s-3)); }
 .sv-qmove { padding-top: var(--s-3); border-top: 1px solid var(--rule); }
 .btn.sv-danger { color: var(--danger); border-color: var(--danger); background: var(--paper-0); }
@@ -106,18 +106,18 @@
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  min-height: 48px;
+  min-height: var(--ctl);
   border-bottom: 1px solid var(--rule);
   cursor: pointer;
 }
-.sv-turf input { width: 22px; height: 22px; flex: none; accent-color: var(--ink); }
+.sv-turf input { width: 22px; height: 22px; flex: none; accent-color: var(--mark); }
 .sv-turfs__now { margin: var(--s-2) 0 0; font-size: 13px; }
 .sv-rename { display: flex; gap: var(--s-2); align-items: flex-end; flex-wrap: wrap; }
 .sv-rename .field { flex: 1 1 200px; margin: 0; }
 
 /* Results */
-.sv-big { margin: 0 0 var(--s-4); font-size: 17px; color: var(--text-2); }
-.sv-big strong { font-size: 40px; color: var(--text-1); margin-right: 6px; }
+.sv-big { margin: 0 0 var(--s-4); font-size: 16px; color: var(--text-2); }
+.sv-big strong { font-size: 36px; color: var(--text-1); margin-right: 6px; }
 .sv-res { padding: var(--s-4); }
 .sv-res__q { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
 .sv-res__ends { margin: 2px 0 0; font-size: 13px; color: var(--text-2); }
@@ -129,12 +129,12 @@
 .sv-bar__n { flex: none; font-size: 13px; color: var(--text-2); }
 .sv-bar__n strong { color: var(--text-1); font-size: 15px; }
 .sv-bar__track { display: block; height: 10px; background: var(--paper-2); border-radius: 999px; overflow: hidden; }
-.sv-bar__fill { display: block; height: 100%; background: var(--ink); border-radius: 999px; }
-.disclose.sv-bar__see { min-height: 48px; font-size: 14px; font-weight: 500; padding: 0; }
+.sv-bar__fill { display: block; height: 100%; background: var(--mark); border-radius: 999px; }
+.disclose.sv-bar__see { min-height: var(--ctl); font-size: 14px; font-weight: 500; padding: 0; }
 .sv-people { list-style: none; margin: 0 0 var(--s-1); padding: 0; }
 .sv-people li { border-bottom: 1px solid var(--rule); }
 .sv-people li:last-child { border-bottom: 0; }
-.sv-people a { display: flex; align-items: center; min-height: 48px; text-decoration: none; overflow-wrap: anywhere; }
+.sv-people a { display: flex; align-items: center; min-height: var(--ctl); text-decoration: none; overflow-wrap: anywhere; }
 @media (hover: hover) { .sv-people a:hover { text-decoration: underline; } }
 .sv-people__more { padding: var(--s-2) 0; font-size: 13px; }
 .sv-texts { list-style: none; margin: 0; padding: 0; }

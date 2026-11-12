@@ -24,6 +24,7 @@ import { noSignal, useOnline, NeedsSignalLine } from '../components/NoSignal.jsx
 import { keptPartial } from '../components/KeptCopies.js';
 import { FieldFilterChip, FieldFilterGroups } from '../components/FieldsBits.jsx';
 import QuickDetails from '../components/QuickDetails.jsx';
+import './shifts.css'; // the ops-* pieces (a full-height button)
 import './people.css';
 import {
   TextingCallButton, TextingRepliesLink, noTexts, textingOn, useTextingStatus, useTextQueue, useTextingPerson,

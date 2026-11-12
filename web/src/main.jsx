@@ -4,9 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // app.css first: page stylesheets (imported by App's pages) must load after
 // the shared primitives so single-class page rules can override them.
 import './app.css';
-// base.win's own look over the tokens, only where the page is marked
-// data-brand="base" (server/lib/brand.js); Imagine Surrey's is app.css as is.
-import './brand-base.css';
 import App from './App.jsx';
 import { ADMIN_BASE, FIELD_BASE, fieldHref, appMode } from './mode.js';
 import { ME_KEY, NoSignalError, TWO_STEP_EVENT, noAnswer, savedSignIn } from './api.js';

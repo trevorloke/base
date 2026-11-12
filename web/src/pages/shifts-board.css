@@ -73,7 +73,7 @@
   -webkit-touch-callout: none;
 }
 .sb-person[data-extra] { background: var(--paper-0); border-color: var(--rule); border-style: dashed; }
-.sb-person:hover { border-color: var(--rule-2); }
+@media (hover: hover) { .sb-person:hover { border-color: var(--rule-2); } }
 .sb-person[aria-pressed='true'] { background: var(--mark-soft); border-color: var(--mark); }
 .sb-person:focus-visible, .sb-chip__name:focus-visible, .sb-shift__head:focus-visible, .sb-day:focus-visible {
   outline: 2px solid var(--mark); outline-offset: 1px;
@@ -85,7 +85,7 @@
 .sb-person__n {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--text-3);
   background: var(--paper-0);
@@ -137,9 +137,9 @@
   border: 0;
   cursor: pointer;
 }
-.sb-shift__head:hover { background: var(--paper-1); }
+@media (hover: hover) { .sb-shift__head:hover { background: var(--paper-1); } }
 .sb-shift__title { font-size: 13px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; color: var(--text-1); }
-.sb-shift__meta { display: flex; justify-content: space-between; gap: var(--s-1); flex-wrap: wrap; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.sb-shift__meta { display: flex; justify-content: space-between; gap: var(--s-1); flex-wrap: wrap; font-family: var(--font-mono); font-size: 12px; color: var(--text-3); }
 .sb-cap { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-2); }
 .sb-cap[data-full] { color: var(--ok); }
 
@@ -217,7 +217,7 @@
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: var(--s-1) 0;
   font: inherit;
   color: var(--text-2);
@@ -226,9 +226,9 @@
   border-radius: var(--r-ctrl);
   cursor: pointer;
 }
-.sb-day__wd { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.sb-day__wd { font-size: 12px; text-transform: var(--label-case); font-weight: 500; letter-spacing: var(--label-tracking); }
 .sb-day__n { font-family: var(--font-mono); font-size: 15px; font-weight: 600; }
-.sb-day[data-today] .sb-day__wd { color: var(--mark-deep); font-weight: 700; }
+.sb-day[data-today] .sb-day__wd { color: var(--accent-words); font-weight: 700; }
 .sb-day[aria-pressed='true'] { background: var(--mark); border-color: var(--mark); color: var(--mark-ink); }
 .sb-day[aria-pressed='true'] .sb-day__wd { color: var(--mark-ink); }
 .sb-day__dot { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.6; }

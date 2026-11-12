@@ -62,6 +62,17 @@ const sw = await page.evaluate(async () => {
 });
 check('the service worker’s scope is /imaginesurrey/', sw.scopes.length === 1 && sw.scopes[0] === `${P}/`, JSON.stringify(sw));
 check('its caches carry the client’s name', sw.caches.length > 0 && sw.caches.every((n) => n.startsWith('starbase-imaginesurrey-')), JSON.stringify(sw.caches));
+// The app's face, kept for no signal: the fonts and the campaign's logo, at
+// the client's own addresses, and its shades in the page with no address in them.
+await page.waitForFunction(async () => { const n = (await caches.keys()).find((k) => /-assets-/.test(k)); return n ? (await (await caches.open(n)).keys()).some((r) => /\/fonts\//.test(r.url)) : false; }, null, { timeout: 10000 }).catch(() => {});
+const face = await page.evaluate(async () => {
+  const cache = await caches.open((await caches.keys()).find((k) => /-assets-/.test(k)));
+  const logo = document.querySelector('.nav img.brand-mark');
+  return { kept: (await cache.keys()).map((r) => new URL(r.url).pathname).filter((x) => !/\/assets\//.test(x)).sort(), logo: logo?.getAttribute('src') || null, block: document.getElementById('brand')?.textContent || '' };
+});
+check('the worker keeps the fonts and the logo at the client’s addresses', face.kept.includes(`${P}/fonts/fonts.css`) && face.kept.includes(`${P}/fonts/inter-latin.woff2`)
+  && (!face.logo || (face.logo.startsWith(`${P}/`) && face.kept.includes(face.logo))) && face.kept.every((x) => x.startsWith(`${P}/`)), JSON.stringify(face.kept));
+check('the brand’s shades in the page carry no address', !/url\(|\/\//.test(face.block), face.block.slice(0, 80));
 const keys = await page.evaluate(() => Object.keys(localStorage));
 check('every key kept on the phone is the client’s', keys.length > 0 && keys.every((k) => k.startsWith('starbase:imaginesurrey:')), JSON.stringify(keys));
 const manifest = await (await ctx.request.get(`${ORIGIN}${P}/manifest.webmanifest`)).json();

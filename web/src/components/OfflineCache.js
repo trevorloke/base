@@ -26,7 +26,8 @@
 // — no per-page code): copyKey / readCopy / writeCopy / removeCopy below,
 // in this browser ('local', a day) or, for anything with money in it on a
 // desk sign-in, in this tab only ('session' — gone when the tab closes).
-// Sign-out forgets both.
+// Sign-out forgets both. Settings → Brand keeps a manager's unsaved changes
+// here too (this tab only), so they go the same way.
 import { useEffect } from 'react';
 import { NS } from '../base.js';
 
@@ -235,7 +236,10 @@ export const copyKey = keyFor;
 export const copyScope = scope;
 export const copyGeneration = () => generation;
 export const readCopy = (key, tier = 'local') => readEntry(key, storeOf(tier));
-export const removeCopy = (key, tier = 'local') => { try { storeOf(tier)?.removeItem(key); } catch { /* blocked */ } };
+export const removeCopy = (key, tier = 'local') => { if (!key) return; try { storeOf(tier)?.removeItem(key); } catch { /* blocked */ } };
+// Written at once: what a person typed and has not saved must be there the
+// moment they follow a link (Settings → Brand's unsaved changes).
+export const writeCopyNow = (key, data, tier = 'local') => writeEntry(key, data, Date.now(), storeOf(tier));
 // Written a moment after it loaded (a list refetches after every tap), and
 // only while the same sign-in is here (gen: copyGeneration() when it loaded).
 export function writeCopy(key, data, at, { tier = 'local', group = null, gen } = {}) {

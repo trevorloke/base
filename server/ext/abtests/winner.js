@@ -69,8 +69,8 @@ export const pickWinner = async (db, job) => {
   });
   if (!blast) return;
 
-  const ws = (await db.query('select name from workspaces where id = $1', [workspaceId])).rows[0];
-  const ctx = { workspaceId, workspace: { name: ws?.name || '' }, publicUrl: base };
+  const ws = (await db.query('select name, settings from workspaces where id = $1', [workspaceId])).rows[0];
+  const ctx = { workspaceId, workspace: { name: ws?.name || '', settings: typeof ws?.settings === 'string' ? JSON.parse(ws.settings) : (ws?.settings || {}) }, publicUrl: base };
   const links = findLinks(blast.body);
   const attachments = await loadAttachments(db, workspaceId, { blastId });
   const unsubFor = (r) => (r.subscriptionId ? `${base}/u/${r.subscriptionId}` : blast.kind === 'eblast' ? `${base}/bu/${r.id}` : null);

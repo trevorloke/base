@@ -9,7 +9,7 @@
 .chip.ptl-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-4);
   font-size: 14px;
   color: var(--text-2);

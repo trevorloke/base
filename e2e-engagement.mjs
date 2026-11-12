@@ -65,7 +65,9 @@ const helpers = (page, who) => {
     }, [path, body]),
   };
 };
-// One yellow, no sideways scroll, every target in `sel` at least 48px.
+// One yellow, no sideways scroll, every target in `sel` at least 48px — 40 on
+// a desk with a mouse (app.css --ctl): the page itself says which it is.
+const tapFloor = (page) => page.evaluate(() => (matchMedia('(min-width: 900px) and (pointer: fine)').matches ? 40 : 48));
 const FIELDS = 'main.page input:not([type=checkbox]), main.page select, main.page textarea, main.page button, main.page a.btn';
 const simple = async (page, name, sel = FIELDS) => {
   const m = await page.evaluate((targets) => {
@@ -81,8 +83,9 @@ const simple = async (page, name, sel = FIELDS) => {
     }
     return { yellow, overflow, minTap, minWho };
   }, sel);
-  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥48px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= 47.5),
-    `yellow=${m.yellow} overflow=${m.overflow} minTap=${m.minTap} ${m.minTap < 47.5 ? m.minWho : ''}`);
+  const floor = await tapFloor(page);
+  check(`${name}: ≤1 yellow, no sideways scroll, targets ≥${floor}px`, m.yellow <= 1 && m.overflow <= 0 && (m.minTap == null || m.minTap >= floor - 0.5),
+    `yellow=${m.yellow} overflow=${m.overflow} minTap=${m.minTap} ${m.minTap < floor - 0.5 ? m.minWho : ''}`);
 };
 
 // ── 1. The desk signs up; Rae joins on her phone ──

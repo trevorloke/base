@@ -138,7 +138,7 @@
 .sch-sheet__foot .error { margin: 0; }
 .btn.ops-tap.sch-go { width: 100%; min-height: 52px; font-size: 15px; }
 .sch-summary { margin: 0; font-size: 14px; line-height: 1.35; color: var(--text-2); overflow-wrap: anywhere; }
-.sch-sheet .input { min-height: 48px; }
+.sch-sheet .input { min-height: var(--ctl); }
 
 .sch-sec { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-4); min-width: 0; }
 .sch-label { margin: 0; font-family: var(--font-sans); font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--text-3); }
@@ -161,7 +161,7 @@
 .sch-what { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); min-width: 0; }
 .sch-what__kind { display: inline-flex; align-items: center; gap: var(--s-2); min-width: 0; font-size: 18px; font-weight: 700; }
 .sch-what__kind .sk-icon { width: 24px; height: 24px; color: var(--kind); }
-.btn.sch-what__change { min-height: 48px; }
+.btn.sch-what__change { min-height: var(--ctl); }
 
 /* Chips to tap: pressed is the accent's edge, a soft fill and a check. */
 .sch-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); min-width: 0; }
@@ -197,7 +197,7 @@
 .sch-map { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
 .sch-map__box { position: relative; z-index: 0; height: 240px; border-radius: var(--r-ctrl); overflow: hidden; background: var(--paper-2); }
 .sch-map__box.leaflet-container { cursor: crosshair; font-family: var(--font-sans); }
-.btn.sch-map__mid { align-self: flex-start; min-height: 48px; }
+.btn.sch-map__mid { align-self: flex-start; min-height: var(--ctl); }
 .sch-pin { stroke: var(--mark); fill: var(--mark); }
 .sch-named { min-height: 24px; font-size: 15px; }
 .sch-named__name { font-size: 16px; overflow-wrap: anywhere; }
@@ -223,7 +223,7 @@
 /* More: what is typed or rare. */
 .disclose.sch-more { margin-top: var(--s-2); }
 .sch-more__body { padding-top: var(--s-2); }
-.sch-options { display: inline-flex; align-items: center; min-height: 48px; font-size: 15px; color: var(--text-2); }
+.sch-options { display: inline-flex; align-items: center; min-height: var(--ctl); font-size: 15px; color: var(--text-2); }
 
 /* ── The Shifts list (Shifts.jsx): a day a heading; a row wears its kind's
    mark and colour, and a volunteer's "Count me in" sits on the row. ── */
@@ -244,7 +244,7 @@
 /* A shift's page: its kind, a place that opens a map, the day's tool. */
 .chip.sch-kindchip { display: inline-flex; align-items: center; gap: 4px; }
 .sch-kindchip .sk-icon { width: 14px; height: 14px; color: var(--kind, var(--text-3)); }
-.ops-lines > a.sch-maplink { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: 48px; }
+.ops-lines > a.sch-maplink { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; min-height: var(--ctl); }
 .ops-actions.sch-daytool { margin: 0 0 var(--s-3); }
 
 /* A shift nobody is on yet: said plainly, not as a big figure. */

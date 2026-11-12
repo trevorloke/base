@@ -1,6 +1,6 @@
-/* The shell's layout by class (layout.js sets them), for browsers that drop
-   app.css's :has() rules: room for the sidebar, the map's full width, and on
-   a phone the map's own bottom padding. Same declarations as there. */
+/* The shell's layout by class (layout.js sets them), so a browser without
+   :has() lays it out too: room for the sidebar, the map's full width, and on
+   a phone the map's own bottom padding. */
 @media (min-width: 721px) {
   #root.has-nav { padding-left: var(--side-w); }
 }

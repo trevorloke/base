@@ -9,7 +9,7 @@
 .fd-q input[type='date'].sv-q__input { max-width: 260px; }
 .fd-foot { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .btn.fd-save {
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-5);
   background: var(--ink);
   color: var(--paper-0);

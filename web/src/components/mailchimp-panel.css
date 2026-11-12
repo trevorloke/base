@@ -1,9 +1,9 @@
 /* Settings → Services, the Mailchimp row: Connect · Pull now (components/MailchimpPanel.jsx) */
 .mcp { margin-top: var(--s-2); }
 .mcp-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.mcp .btn { min-height: 48px; }
+.mcp .btn { min-height: var(--ctl); }
 .mcp .sv2-fresh { margin: var(--s-2) 0 0; }
-.mcp .btn-link.mcp-retry { min-height: 48px; padding: 0 4px; }
+.mcp .btn-link.mcp-retry { min-height: var(--ctl); padding: 0 4px; }
 /* The last pull stopped: said as a problem, like a Check that failed. */
 .mcp .mcp-pull.is-stopped { color: var(--danger); }
 /* On a phone the row's own panel (its buttons, the question, the line) and the

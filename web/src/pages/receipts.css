@@ -24,7 +24,7 @@
 .rc-more { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }
 /* More: "Disclosure (over $100) · Period · Download for a spreadsheet" */
 .rc-dl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-3); max-width: 100%; }
-.rc-dl .rc-period { width: auto; max-width: 100%; min-height: 48px; }
+.rc-dl .rc-period { width: auto; max-width: 100%; min-height: var(--ctl); }
 
 /* Money: "Receipt already emailed — send a void notice? Yes · No" */
 .rc-voidask { flex-wrap: wrap; align-items: center; }
@@ -34,7 +34,7 @@
 .rc-giftline {
   display: inline-flex;
   align-items: center;
-  min-height: 48px;
+  min-height: var(--ctl);
   align-self: flex-start;
   font-size: 15px;
   color: var(--text-1);
@@ -47,7 +47,7 @@
 .btn.rc-moneylink { margin-bottom: var(--s-3); }
 
 /* ── One receipt, as the donor reads it ── */
-.rc-one-status { font-size: 17px; font-weight: 600; margin: 0 0 var(--s-4); }
+.rc-one-status { font-size: 16px; font-weight: 600; margin: 0 0 var(--s-4); }
 .rc-one-status[data-code='sent'] { color: var(--ok); }
 .rc-one-status[data-code='void'] { color: var(--danger); }
 .rc-doc {
@@ -68,12 +68,12 @@
   border-bottom: 4px solid var(--mark);
   overflow-wrap: anywhere;
 }
-.rc-doc__title { font-size: 20px; margin: 0 0 var(--s-3); }
+.rc-doc__title { font-size: 18px; margin: 0 0 var(--s-3); }
 .rc-doc__stamp {
   border: 3px solid var(--danger);
   color: var(--danger);
   font: 700 20px/1.2 var(--font-mono);
-  letter-spacing: 0.03em;
+  letter-spacing: var(--label-tracking);
   text-align: center;
   padding: var(--s-2);
   margin: 0 0 var(--s-3);
@@ -86,9 +86,9 @@
 }
 .rc-doc__facts dt {
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case); font-weight: 500;
   color: var(--text-3);
   padding-top: 3px;
 }

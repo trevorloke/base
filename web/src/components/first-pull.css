@@ -4,4 +4,4 @@
 .fp-said { margin: 0; font-size: 15px; color: var(--text-1); overflow-wrap: anywhere; }
 .fp-note { margin: 4px 0 0; font-size: 14px; color: var(--text-2); }
 .fp-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-2); }
-.fp-acts .btn { min-height: 48px; }
+.fp-acts .btn { min-height: var(--ctl); }

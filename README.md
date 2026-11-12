@@ -582,6 +582,8 @@ no login:
 - `/learn/:slug` (and `/learn-files/:id`) — ImagineU's public lessons
 - `/media/:id`, `/o/…`, `/c/…` — pictures in emails, and the open and click
   counts
+- `/brand/:id` — the campaign's brand pictures (the same bytes as
+  `/media/:id`, at an address the service worker keeps for no signal)
 - `/api/public/twilio/…` — Twilio's webhooks, signed (INTEGRATIONS.md)
 
 The pictures, the three unsubscribe links and the Stripe, Twilio, CallHub,
@@ -916,31 +918,98 @@ note still typed on an open card first; after sign-out nothing is saved on the
 computer. A screen never loaded on this device says *No signal — this loads
 when you're back online.*
 
-## The brand
+## The look and the brand
 
-Each deployment wears one of two looks, set by `STARBASE_BRAND`
-(`server/lib/brand.js`): **`imagine-surrey`** — Imagine Surrey's own,
-below — or **`base`**, base.win's generic one (slate and indigo, Inter
-throughout, the base.win mark; training is called *Training*, not *ImagineU*;
-nothing names Imagine Surrey), for staging and any other campaign. The
-server marks the app's page `<html data-brand="…">` before it paints, with
-the brand's icons and browser colours, and the install manifest too;
-`web/src/brand-base.css` re-colours the tokens. Unset, it's worked out so
-nothing changes by accident: `base` on staging (`STARBASE_ENV=staging`) or
-for a campaign named anything but Imagine Surrey, Imagine Surrey's
-otherwise.
+The app has one look, for every campaign: a light, neutral workspace — a
+sidebar on a hairline, flat cards, Inter throughout, sentence-case labels,
+one focus ring, and a dark mode that is dark, not a darker brand — in which
+the campaign's logo and one colour do the branding. The campaign leads (its
+logo in its own colours, or its initials on the brand colour and its name);
+base.win is the small line under it, and at the foot of sign-in. On a phone
+the top bar and the tab bar are light and the tab you are on is the brand
+colour; a desk role with more than five places gets four tabs and *More*.
+Phones keep 48px controls everywhere; a desk with a mouse gets 40px
+controls and 44px table rows.
 
-Imagine Surrey's brand guidelines (2.1) are applied in one place and nowhere
-else: `web/src/app.css` (the staff app's tokens: Surrey Navy `#003979`,
-Deep Navy `#00224d`, Marigold `#ffc72c`, the text-safe red `#c8151b`, Sky,
-Paper, Rule, Ink and Slate). Barlow Condensed carries headlines and labels,
-Inter everything people read; both are self-hosted under `web/public/fonts/`
-(Latin and Latin Extended, SIL Open Font License). The rules the code keeps: marigold is never text on white or
-cream; white on Signal Red only at 19px bold and up, so buttons use the
-text-safe red; grounds are flat, and depth is the rise — a Deep Navy block
-with an edge climbing at 24 degrees — never a gradient. The logo is the
-supplied artwork only; the staff app's own tile (`web/public/icon.svg`)
-is the rise and the marigold bar, no star.
+Colour has roles (`web/src/app.css`: page, card, panel, line, text, quiet,
+accent, tint, side-…, inverse), and every shade is worked out from one brand
+colour by one rule (`shared/brand-look.js`): the fill is the colour exactly
+as chosen; the text on it, the brand as words (4.5:1) and as an edge or
+focus ring (3:1), its tints and the sidebar are derived, and each pair is
+checked — over 5,000 colours in `server/test/brand-look.test.js`, and on the
+real screens (`e2e-look.mjs`: both built-in brands, then a manager's saved
+brand — a yellow, a red, a pale pink, near-black and Imagine Surrey's navy,
+each with every sidebar and an uploaded logo, light and dark). The older
+variable names (`--mark`, `--paper`, `--ink`, `--navy`, `--gold`…) stay, as
+aliases of the roles. Rating colours, status colours and the map's pins are
+data: no brand recolours them.
+
+A campaign starts from one of two built-in brands, set by `STARBASE_BRAND`
+(`shared/brand.js`, `server/lib/brand.js`): **`imagine-surrey`** — Surrey
+Navy `#003979` with marigold `#ffc72c` as the second colour, Imagine
+Surrey's wordmark as the logo, training called *ImagineU* — or **`base`**,
+base.win's own (indigo, no logo, training called *Training*; nothing names
+Imagine Surrey), for staging and any other campaign. Both are data through
+the same rule. Unset, it's worked out so nothing changes by accident:
+`base` on staging (`STARBASE_ENV=staging`) or for a campaign named anything
+but Imagine Surrey, Imagine Surrey's otherwise.
+
+Once a manager saves the campaign's own brand (**Settings → Brand**;
+`server/ext/brand`), that is the look, whatever `STARBASE_BRAND` says: one
+colour and maybe a second, the sidebar (light, the brand colour or dark),
+corners, the heading face, a logo, a logo for dark backgrounds, a square
+mark and the app icons made from it (without one, the icons of the brand it
+started from), what training is called and the name under the home-screen
+icon (base.win until it's changed). It is kept in
+the campaign's settings (`workspaces.settings.brand`); `brand.save` is the
+manager's and its event carries picture ids, never bytes; `brand.picture`
+takes a JPG, PNG or WebP within each picture's limits, its type and size
+read from the file itself (the browser turns an SVG into a PNG first: an
+SVG is never stored); `brand.reset` goes back to the brand the campaign
+started from. Any colour is saved: its shades are worked out readable.
+
+The screen (`web/src/components/BrandSettings.jsx`, a tab beside Campaign)
+shows a live sample beside the form — the desk and the phone, in light and
+in dark, drawn from the same shades — and says what only a person can
+decide (`brand-notes.js`): a pale colour gets dark text on its buttons, the
+colour darkens where it is words, it sits close to a rating's colour, or
+most of a logo can't be seen where it will sit (counted from its pixels on
+each ground: a warning with the remedy, never a refusal). Pictures are made
+ready in the browser (`brand-pictures.js`): an SVG is drawn to a PNG, a
+logo is shrunk to 1,024 px and 512 KB, the mark is padded square and the
+four app icons are drawn from it. **Save** is live at once (there is no
+draft: the sample is the preview). Changes not yet saved are kept for the
+browser's tab, as that person's, so leaving by a link and coming back
+finds them, with **Discard them**; signing out forgets them, and the next
+person to sign in on that tab never sees them. A campaign still on a
+built-in brand
+keeps that brand's logo — the first save uploads it as the campaign's own.
+**Use the website's colours and logo** fills the form from Website → Theme
+(a website with its own look); **Back to …'s look** is `brand.reset`.
+
+The server writes the brand into the app's page ahead of the stylesheets,
+so it never paints in another look — signed out too, so sign-in wears it:
+its shades (a block with no addresses in it), `window.__BRAND__` (the
+logos, the sidebar, what training is called), the logo asked for early,
+its icons, the browser's bar colours, the tab's title and the name under
+the home-screen icon; the install manifest says the same. It is read once a
+minute and at once after a save, and checked on the way out: colours are
+six-digit hex, choices come from fixed lists, pictures are ids and words
+are escaped, so nothing saved can put markup, script or CSS into a page.
+The app's public pages (unsubscribe, the receipt page, a ladder's
+unsubscribe, public lessons) wear it too — its logo over its name, a rule
+and the button in its colour — and so do a newsletter's links (the brand
+as words, 4.5:1 on white), with the logo over the letter when a manager
+turns that on (a PNG or JPG, the campaign's name as its words). A new
+website follows the brand until it's given its own look (SITE.md).
+
+Inter is self-hosted under `web/public/fonts/` as one variable file per
+script (Latin and Latin Extended, SIL Open Font License); Barlow Condensed
+is there too, as a heading face (`--font-display`; both built-in brands use
+Inter), and Montserrat is declared from the website's own file. The
+service worker keeps the fonts and the campaign's logo with the build, so
+the field app opens with no signal looking like itself; the logo's alt text
+is the campaign's name.
 
 ## Architecture
 
@@ -1003,7 +1072,7 @@ environment (`server/lib/org.js`); the code names no client.
 | `STARBASE_SLATES` | `code:Label,code:Label` — the slates a gift can go to, each its own annual limit | `council:City council,school_board:School board` |
 | `STARBASE_CANDIDATES` | `4D:Name:Label;4B:Name` — the opposed candidates a new rating scale starts with (the desk edits them after) | Imagine Surrey's |
 | `STARBASE_ENV` | `production` or `staging` — said on screen and at `/api/health` | from `NODE_ENV` |
-| `STARBASE_BRAND` | `imagine-surrey` or `base` — the look (*The brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
+| `STARBASE_BRAND` | `imagine-surrey` or `base` — the brand a campaign starts from, until a manager saves its own in Settings → Brand (*The look and the brand*, above) | `base` on staging or for another campaign; else Imagine Surrey's |
 | `SITE_HOSTS` | the campaign's own domains (`imaginesurrey.ca,www.imaginesurrey.ca`): the website at `/` there, nothing of the app — written with a final dot too (`imaginesurrey.ca.`), it's the same domain (SITE.md) | blank: the website is at `/site/` only |
 | `APP_HOSTS` | the app's other addresses on this server (`starbase.imaginesurrey.ca` once base.win is the public one): never made a website domain, so the app keeps answering there (SITE.md) | blank |
 | `SITE_SECRET` | signs the website's preview and email-preference links (16+ characters); each campaign's signing secret for a ladder's *Send to a web address* step is made from it, so changing it changes that secret and breaks those links in every email already sent — to change only the signing secret, the step's *Make a new secret* (INTEGRATIONS.md) | blank: one is made and kept in the database |

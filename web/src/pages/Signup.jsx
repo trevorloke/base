@@ -7,10 +7,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost } from '../api.js';
 import { landing } from '../mode.js';
+import AuthPage from '../components/AuthPage.jsx';
 
 // Big, thumb-sized controls (auth pages load before any page stylesheet).
 const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
-const AUTH_BUTTON = { width: '100%', minHeight: 52, fontSize: 13, marginTop: 'var(--s-2)' };
+const AUTH_BUTTON = { width: '100%', minHeight: 48, fontSize: 15, marginTop: 'var(--s-2)' };
 
 // A box the browser won't accept yet, said in one line under the form.
 const MISSING = {
@@ -66,32 +67,24 @@ export default function Signup({ mode = 'field' }) {
   };
 
   const org = setup.data?.organization || null;
-  const brand = (
-    <>
-      <span className="brand">base.win</span>
-      {org && <span className="brand-org">{org}</span>}
-      {setup.data?.org?.env === 'staging' && <span className="env-badge">Staging</span>}
-    </>
-  );
+  const whose = { org, staging: setup.data?.org?.env === 'staging' };
 
-  if (setup.isPending) return <div className="auth-page">{brand}</div>;
+  if (setup.isPending) return <AuthPage {...whose} />;
 
   // Already set up: no form, just where to go.
   if (setup.data && !setup.data.open) {
     return (
-      <div className="auth-page">
-        {brand}
+      <AuthPage {...whose}>
         <h1>Already set up</h1>
         <p className="muted">base.win is set up{org ? ` for ${org}` : ''}. Ask a manager for an invite.</p>
         <hr className="hairline" />
         <p className="muted"><Link to="/login">Sign in</Link></p>
-      </div>
+      </AuthPage>
     );
   }
 
   return (
-    <div className="auth-page">
-      {brand}
+    <AuthPage {...whose}>
       <h1>Set up base.win{org ? ` for ${org}` : ''}</h1>
       <form onSubmit={submit} onInvalidCapture={onInvalid}>
         {!org && (
@@ -125,6 +118,6 @@ export default function Signup({ mode = 'field' }) {
       </form>
       <hr className="hairline" />
       <p className="muted"><Link to="/login">Sign in</Link></p>
-    </div>
+    </AuthPage>
   );
 }

@@ -4,6 +4,8 @@
 //   · a desk's copies make room among themselves only: the map's doors stay;
 //   · each app start drops copies over a day old (the rating scale stays), and
 //     any kept under another role — all of them when the role changed;
+//   · a manager's unsaved brand is kept at once, in the tab, as theirs: gone
+//     at sign-out and never read by the next sign-in;
 //   · a phone copy is never taken as fresh (asked again on mount);
 //   · an answer with money in it stays in the tab whatever role the tab
 //     thinks it has; a desk's People lists stay in the tab;
@@ -112,6 +114,31 @@ test('a role change forgets every copy kept under the old role (a staff member m
   // Sign-out forgets all of it, the marker too.
   OC.forgetPhoneCopies();
   assert.equal([...local.m.keys()].filter((k) => k.startsWith('starbase:copy')).length, 0);
+});
+
+test('what a manager typed and has not saved (Settings → Brand) is theirs, for this tab: there at once, gone at sign-out, never the next sign-in’s', () => {
+  local.clear(); session.clear();
+  OC.forgetPhoneCopies();
+  const riley = me('manager', 'u5');
+  const morgan = me('manager', 'u6');
+  const key = OC.copyKey(riley, 'brand-draft');
+  OC.writeCopyNow(key, { from: '{}', f: { color: '#7c2d12' } }, 'session');
+  assert.equal(OC.readCopy(key, 'session')?.data.f.color, '#7c2d12', 'written at once: following a link a moment later finds it');
+  assert.equal(local.length, 0, 'in the tab only');
+  assert.equal(OC.readCopy(OC.copyKey(morgan, 'brand-draft'), 'session'), null, 'another manager on the same campaign reads none of it');
+  OC.keepOnlyMine(riley); // their own next app start, the same day: still there
+  assert.ok(has(session, riley, 'brand-draft'));
+  OC.forgetPhoneCopies(); // Sign out
+  assert.equal(session.length, 0, 'sign-out forgets it');
+  // A session that ended without Sign out: the next person's start drops it.
+  OC.writeCopyNow(key, { from: '{}', f: { color: '#7c2d12' } }, 'session');
+  OC.keepOnlyMine(morgan);
+  assert.ok(!has(session, riley, 'brand-draft'));
+  // No one signed in: nothing is kept, and nothing throws.
+  OC.writeCopyNow(OC.copyKey(null, 'brand-draft'), { f: {} }, 'session');
+  OC.removeCopy(OC.copyKey(null, 'brand-draft'), 'session');
+  assert.equal(session.length, 0);
+  OC.forgetPhoneCopies();
 });
 
 test('a phone copy is never taken as fresh: a query holding only the copy asks the server on mount', () => {

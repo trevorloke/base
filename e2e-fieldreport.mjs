@@ -192,7 +192,8 @@ check('the line about pins and ratings is there', /People are counted where thei
 const inner = await page.$$eval('.fr-wide', (els) => els.map((e) => e.scrollWidth - e.clientWidth));
 check('desk 1360: every table fits its column (no scrolling inside one)', inner.length === 2 && inner.every((x) => x <= 0), inner.join(','));
 let m = await measure(page, TAPS);
-check('desk 1360: no yellow button, no sideways scroll, taps ≥ 48px', m.yellow === 0 && m.overflow <= 0 && m.minTap >= 47.5, JSON.stringify(m));
+// A desk with a mouse: 40px controls (app.css --ctl); the phone's 48 is checked at 390 below.
+check('desk 1360: no yellow button, no sideways scroll, taps ≥ 40px', m.yellow === 0 && m.overflow <= 0 && m.minTap >= 39.5, JSON.stringify(m));
 check('"30 days" is the pill that is on', (await page.getAttribute('.fr-range[aria-checked="true"]', 'class').catch(() => '')) != null
   && (await page.innerText('.fr-range[aria-checked="true"]').catch(() => '')) === '30 days');
 await D.full('01-field-report-desk');

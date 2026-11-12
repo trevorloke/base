@@ -9,6 +9,13 @@
  *               (a tab opened before a deploy can still open its screens),
  *               then go. A kept page is only ever a stand-in for the
  *               network's: the newest one kept, never an older one.
+ *   Its face    The fonts (/fonts/*) and the campaign's own pictures — the
+ *               logo the page asks for early (<link … data-brand>, written
+ *               by server/lib/brand.js; so is a heading face from the
+ *               website's folder) — are kept with the build, so the
+ *               app opens with no signal looking like itself. They are not
+ *               named by their content, so they are fetched again whenever
+ *               the page changes (a new build, a new brand).
  *   Map tiles   Tiles you've already looked at, in their own capped cache
  *               (~1500 tiles, oldest out first), so a turf seen with signal
  *               still draws offline. OpenStreetMap's and CARTO's (the Clean
@@ -47,7 +54,7 @@ const KEEP = [SHELL, ASSETS, TILES, META];
 const MINE = BASE ? new RegExp(`^${NAME}-(?:shell|assets|tiles|meta)-`) : /^starbase-(?:shell|assets|tiles|meta)-/;
 
 const INDEX = `${BASE}/index.html`;
-const SHELL_EXTRAS = [`${BASE}/manifest.webmanifest`, `${BASE}/icon.svg`];
+const SHELL_EXTRAS = [`${BASE}/manifest.webmanifest`];
 // A path inside base.win: the address with the client's path taken off.
 const inside = (pathname) => (BASE && (pathname === BASE || pathname.startsWith(`${BASE}/`)) ? pathname.slice(BASE.length) || '/' : pathname);
 const NAV_TIMEOUT_MS = 4000;  // then show the cached app, let the network finish in the background
@@ -172,13 +179,20 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(navigate(event));
     return;
   }
-  if (inside(url.pathname).startsWith('/assets/')) {
+  const path = inside(url.pathname);
+  // The fonts include a heading face the app takes from the website's own
+  // folder (Montserrat, when the campaign's brand asks for it).
+  if (path.startsWith('/assets/') || path.startsWith('/fonts/') || path.startsWith('/site-assets/fonts/')) {
     event.respondWith(asset(req));
     return;
   }
   if (SHELL_EXTRAS.includes(url.pathname)) {
     event.respondWith(staleWhileRevalidate(event, SHELL, url.pathname));
+    return;
   }
+  // The campaign's logo: from the cache when the page named it (syncAssets),
+  // so the header keeps it with no signal. Any other picture: the network.
+  if (req.destination === 'image') event.respondWith(kept(req));
 });
 
 // ── App shell ──
@@ -220,6 +234,11 @@ async function asset(req) {
   }
 }
 
+async function kept(req) {
+  const cache = await caches.open(ASSETS);
+  return (await cache.match(req.url, { ignoreVary: true })) || fetch(req);
+}
+
 async function staleWhileRevalidate(event, cacheName, key) {
   const cache = await caches.open(cacheName);
   const hit = await cache.match(key);
@@ -244,13 +263,26 @@ async function adoptIndex(res, previous) {
 
 // Two ways a build file names another: "assets/Map-x1.js" (index.html, CSS,
 // Vite's preload map) and "./Map-x1.js" (a chunk importing its neighbour).
+// The page also names the fonts' stylesheet, which names the font files
+// ("/fonts/…", the client's path in front when there is one), and the
+// campaign's own pictures: the links the server marks data-brand.
 const ASSET_REF = /\/?assets\/[A-Za-z0-9._-]+\.(?:js|css|svg|png|jpe?g|webp|gif|woff2?|ttf)\b/g;
 const SIBLING_REF = /["'`]\.\/([A-Za-z0-9._-]+\.(?:js|css))["'`]/g;
+const FONT_REF = new RegExp(`["'(](${BASE}/fonts/[A-Za-z0-9._-]+\\.(?:css|woff2?))["')]`, 'g');
+const BRAND_LINK = /<link\b[^>]*\sdata-brand\b[^>]*>/gi;
 const refsIn = (text, inAssets = false) => {
   const out = new Set((text.match(ASSET_REF) || []).map((p) => `${BASE}${p.startsWith('/') ? p : `/${p}`}`));
   if (inAssets) for (const m of text.matchAll(SIBLING_REF)) out.add(`${BASE}/assets/${m[1]}`);
+  for (const m of text.matchAll(FONT_REF)) out.add(m[1]);
+  for (const link of text.match(BRAND_LINK) || []) {
+    const href = /\shref="([^"]+)"/i.exec(link)?.[1].replace(/&amp;/g, '&');
+    // Only this server's own (and, under a client's path, only that client's).
+    if (href && href.startsWith(`${BASE}/`) && !href.startsWith('//')) out.add(href);
+  }
   return [...out];
 };
+// A build's own files carry their content in their name and never change.
+const named = (path) => path.startsWith(`${BASE}/assets/`);
 
 async function syncAssets(html) {
   const cache = await caches.open(ASSETS);
@@ -261,16 +293,22 @@ async function syncAssets(html) {
     const path = queue.shift();
     if (want.has(path)) continue;
     want.add(path);
-    let res = await cache.match(path);
+    // Fonts and the campaign's pictures keep their names when they change:
+    // asked for again (the page changed, or this would not be running) — and
+    // the copy already here stands when there is no answer.
+    const had = await cache.match(path);
+    let res = named(path) ? had : null;
     if (!res) {
       try {
-        res = await fetch(path);
-        if (!res.ok || isHtml(res)) { complete = false; continue; }
-        await cache.put(path, res.clone());
+        res = await fetch(path, named(path) ? undefined : { cache: 'no-cache' });
+        if (!res.ok || isHtml(res)) res = null;
+        else await cache.put(path, res.clone());
       } catch {
-        complete = false;
-        continue;
+        res = null;
       }
+      if (!res && !had) complete = false;
+      res = res || had;
+      if (!res) continue;
     }
     if (/\.(?:js|css)$/.test(path)) {
       const text = await res.text().catch(() => '');
@@ -285,7 +323,8 @@ async function syncAssets(html) {
 // A file that is no longer part of the build stays one more day — a tab
 // opened before a deploy still finds the screens it has not opened yet —
 // and then goes. want: the build's own files (a new build has just come
-// in), or null to only let go of the ones whose day is up.
+// in), or null to only let go of the ones whose day is up. A campaign
+// picture is kept under its path and its ?v= stamp, so both are its name.
 async function retireOld(want) {
   try {
     const meta = await caches.open(META);
@@ -295,8 +334,9 @@ async function retireOld(want) {
     const now = Date.now();
     const still = {};
     for (const k of await cache.keys()) {
-      const path = new URL(k.url).pathname;
-      if (want ? want.has(path) : !(path in since)) continue;
+      const u = new URL(k.url);
+      const path = u.pathname + u.search;
+      if (want ? (want.has(path) || want.has(u.pathname)) : !(path in since)) continue;
       const at = Number(since[path]) || now;
       if (now - at > OLD_KEEP_MS) await cache.delete(k);
       else still[path] = at;
@@ -305,15 +345,18 @@ async function retireOld(want) {
   } catch { /* a closed cache or no room: tried again with the next page */ }
 }
 
+// Shown only when nothing of the app is kept yet (its first open had no
+// signal), so it can't know the campaign's colours: the app's own neutral
+// grounds (shared/brand-look.js), sentence case, one button.
 function offlinePage() {
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>base.win — offline</title>
-<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5fa;color:#161a2e;
-font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding:24px;box-sizing:border-box}main{max-width:340px}
-p.e{font:600 12px system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#5d6481}
-button{font:600 15px system-ui,sans-serif;background:#6d4aff;
-color:#fff;border:0;border-radius:10px;padding:12px 18px;min-height:44px;cursor:pointer}
-@media (prefers-color-scheme:dark){body{background:#0d1226;color:#e8eaf6}p.e{color:#9aa1c2}}</style></head>
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light dark"><title>base.win — offline</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fafafb;color:#14161a;
+font:16px/1.5 'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;padding:24px 16px;box-sizing:border-box}main{max-width:340px}
+p{color:#656669;margin:0 0 16px}p.e{font-size:13px;font-weight:500}h1{font-size:22px;font-weight:600;letter-spacing:-0.02em;margin:0 0 8px}
+button{font:600 16px/1.2 'Inter',system-ui,sans-serif;background:#1b1d22;color:#fff;border:0;border-radius:8px;padding:12px 18px;min-height:48px;cursor:pointer}
+button:focus-visible{outline:2px solid #14161a;outline-offset:2px}
+@media (prefers-color-scheme:dark){body{background:#0f1012;color:#f4f5f6}p{color:#97989a}button{background:#f4f5f6;color:#14161a}button:focus-visible{outline-color:#f4f5f6}}</style></head>
 <body><main><p class="e">base.win · offline</p><h1>No signal yet</h1>
 <p>Open base.win once with signal and it will work offline after that.</p>
 <button type="button" onclick="location.reload()">Try again</button></main></body></html>`;

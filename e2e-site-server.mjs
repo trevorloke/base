@@ -73,7 +73,8 @@ const toggle = page.locator('label.ops-check');
 await toggle.waitFor();
 check('Edit shift: "Show on the website", off', (await toggle.innerText()).includes('Show on the website') && !(await toggle.locator('input').isChecked()));
 const box = await toggle.boundingBox();
-check('the switch is a 48px tap target', box && box.height >= 48, box && box.height);
+// At a desk with a mouse a control is 40px (app.css --ctl); phones keep 48.
+check('the switch is a whole 40px row on a desk', box && box.height >= 40, box && box.height);
 await toggle.locator('input').check();
 await shot(page, '1-desk-edit-shift');
 await page.getByRole('button', { name: 'Save' }).click();

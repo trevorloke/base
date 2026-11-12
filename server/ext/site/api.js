@@ -3,7 +3,8 @@
 import { Hono } from 'hono';
 import { areasFor } from '../../lib/perms.js';
 import { here } from '../../lib/mount.js';
-import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace, appHosts, usedHosts } from './store.js';
+import { ensureSite, readSettings, pageOut, postOut, campaignOut, SIGNATURES_SQL, envHosts, siteWorkspace, appHosts, usedHosts, themeFromBrand } from './store.js';
+import { brandFor } from '../../lib/brand.js';
 import { sign, PREVIEW_TTL } from './tokens.js';
 import { paymentsReady } from './payments.js';
 
@@ -46,8 +47,13 @@ api.get('/site', async (c) => {
   )).rows.map((r) => [r.kind, r.n]));
   // SITE_HOSTS answer for the campaign the site is by default (store.js).
   const hosts = envHosts().length && (await siteWorkspace(db))?.id === ws ? envHosts() : [];
+  const campaign = c.get('ctx').workspace;
   return c.json({
     settings,
+    // The theme the campaign's brand makes (Settings → Brand): what the site
+    // wears while settings.theme.follow is on, and where "Give the website
+    // its own look" starts.
+    brand_theme: themeFromBrand(brandFor(campaign.settings), settings.theme, campaign.name),
     pages,
     counts: {
       pages: pages.length, published: pages.filter((p) => p.status === 'published').length,
@@ -119,11 +125,13 @@ api.get('/site/campaigns/:id', async (c) => {
   return c.json({ campaign: campaignOut(r) });
 });
 
-// The pictures on file (the site's and Outreach's — one store), newest first.
+// The pictures on file (the site's and Outreach's — one store), newest
+// first. Not the brand's (Settings → Brand: its logos, mark and the four app
+// icons made from it, tries never saved among them): they'd crowd the list.
 api.get('/site/pictures', async (c) => {
   const ws = await opened(c);
   const rows = (await c.get('db').query(
-    'select id, content_type, bytes, width, height, name, created_at from media where workspace_id = $1 order by created_at desc limit 200', [ws],
+    'select id, content_type, bytes, width, height, name, created_at from media where workspace_id = $1 and brand_kind is null order by created_at desc limit 200', [ws],
   )).rows;
   return c.json({ pictures: rows.map((r) => ({ ...r, created_at: iso(r.created_at), url: `/media/${r.id}` })) });
 });

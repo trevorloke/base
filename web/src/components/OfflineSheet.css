@@ -13,10 +13,10 @@
   border-radius: 999px;
   background: var(--paper-0);
   color: var(--text-1);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  
+  font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   /* z-index: its padded hit area stays above the map canvas just under the strip. */
@@ -26,7 +26,7 @@
 /* 36px chip (34px inside its border) + 7px above and below = 48px to the finger. */
 .offline-strip__chip::after { content: ''; position: absolute; inset: -7px -2px; }
 .offline-strip__btn { z-index: 1; } /* the same for Send now */
-.offline-strip__chip[aria-expanded='true'] { border-color: var(--ink); }
+.offline-strip__chip[aria-expanded='true'] { border-color: var(--mark); }
 .offline-strip__chip:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 1px; }
 .offline-strip__chip .is-refused { color: var(--danger); }
 
@@ -58,7 +58,7 @@
   background: var(--paper-0);
   border: 1px solid var(--rule-2);
   border-radius: var(--r-card);
-  box-shadow: 0 10px 30px rgba(15, 23, 51, 0.18);
+  box-shadow: var(--shadow-2);
   color: var(--text-1);
 }
 
@@ -67,22 +67,22 @@
   padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
   border-bottom: 1px solid var(--rule);
 }
-.obx-title { margin: 0; font-size: 17px; }
-.btn.obx-x { min-width: 48px; min-height: 48px; font-size: 16px; padding: 0; }
+.obx-title { margin: 0; font-size: 16px; }
+.btn.obx-x { min-width: var(--ctl); min-height: var(--ctl); font-size: 16px; padding: 0; }
 
 .obx-list { list-style: none; margin: 0; padding: 0; }
 .obx-row {
   display: flex; flex-direction: column; gap: 2px;
   padding: var(--s-3) var(--s-4);
   border-bottom: 1px solid var(--rule);
-  min-height: 48px;
+  min-height: var(--ctl);
   justify-content: center;
 }
 .obx-what { font-size: 15px; overflow-wrap: anywhere; }
 .obx-row.is-refused { border-left: 3px solid var(--danger); }
 .obx-why { font-size: 14px; color: var(--danger); overflow-wrap: anywhere; }
 .obx-btns { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-2); }
-.btn.obx-btn { min-height: 48px; padding-left: var(--s-4); padding-right: var(--s-4); }
+.btn.obx-btn { min-height: var(--ctl); padding-left: var(--s-4); padding-right: var(--s-4); }
 
 .obx-sub { display: block; padding: var(--s-3) var(--s-4) var(--s-1); margin: 0; color: var(--danger); }
 
@@ -90,9 +90,10 @@
 .obx-hint { margin: 0; font-size: 14px; font-style: italic; color: var(--text-3); }
 
 /* Desks: the strip sits at the foot of the sidebar, so the sheet opens
-   upward from it, to the right — on the screen, never below it. */
+   beside it, at the foot of the window. Pinned to the window, not to the
+   strip: the sidebar scrolls, and so cuts off anything wider than itself. */
 @media (min-width: 721px) {
-  .nav .obx-sheet { top: auto; bottom: calc(100% + 4px); left: var(--s-3); right: auto; }
+  .nav .obx-sheet { position: fixed; top: auto; right: auto; bottom: var(--s-3); left: calc(var(--side-w) + var(--s-2)); }
 }
 
 /* Phones: a bottom sheet over the tab bar, in thumb reach. */
@@ -105,6 +106,7 @@
     border-width: 1px 0 0;
     border-radius: var(--r-card) var(--r-card) 0 0;
     padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: var(--shadow-2);
   }
   .obx-foot .obx-send { width: 100%; }
 }
@@ -116,4 +118,4 @@
 .cl-copy, .ops-copy { margin: 0 0 var(--s-3); }
 
 /* Shifts: "Count me in · Not sent yet" in place of the button. */
-.ops-pending { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin: 0; min-height: 48px; font-size: 16px; }
+.ops-pending { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin: 0; min-height: var(--ctl); font-size: 16px; }

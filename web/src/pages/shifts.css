@@ -1,61 +1,66 @@
 /* Ops — Shifts, Signs, Money and Filings. One shape for all four:
-   title left, the one yellow action right, filters under it, then a stack of
-   rows (name first, at most two facts). A row opens in place to show the
-   rest. Every tap target is at least 48px. All classes are ops-* so they
+   title left, the one primary action right, filters under it, then one
+   grouped list of rows (name first, at most two facts). A row opens in place
+   to show the rest. Every tap target is a full control tall (--ctl: 48px for
+   a thumb, 40px on a desk with a mouse). All classes are ops-* so they
    never collide with other pages; everything leans on the tokens in app.css.
 
    app.css loads after this file in the bundle, so anything that refines a
    primitive (.btn, .input, .chip) doubles the class to win on specificity. */
 
 /* ── Page frame ── */
-.ops-page { max-width: 720px; margin: 0 auto; }
+.ops-page { max-width: 720px; }
+/* As tall as the button a head usually carries, so a title with none
+   (Settings, Reports) sits where every other screen's does. */
 .ops-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-2) var(--s-3);
   flex-wrap: wrap;
+  min-height: var(--ctl);
   margin-bottom: var(--s-4);
 }
 .ops-head h1 { margin: 0; overflow-wrap: anywhere; }
 .ops-head__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 
 .ops-back {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-3);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  min-height: 48px;
+  min-height: var(--ctl);
   margin-top: calc(-1 * var(--s-3));
 }
-.ops-back:hover { color: var(--text-1); }
+@media (hover: hover) { .ops-back:hover { color: var(--text-1); } }
 
-/* Buttons: 48px everywhere on these screens */
+/* Buttons: a full control tall everywhere on these screens */
 .btn.ops-tap {
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
-  font-size: 12px;
 }
-.btn.ops-wide { width: 100%; min-height: 56px; font-size: 13px; }
+.btn.ops-wide { width: 100%; min-height: 56px; font-size: 15px; }
+@media (min-width: 721px) { .btn.ops-wide { max-width: 360px; } .ops-spots { max-width: 720px; } }
 .btn.ops-solid { background: var(--ink); color: var(--paper-0); border-color: var(--ink); }
-.btn.ops-solid:hover { background: var(--ink); border-color: var(--ink); opacity: 0.88; }
 .btn.ops-danger { color: var(--danger); border-color: var(--danger); background: var(--paper-0); }
-.btn.ops-danger:hover { background: var(--danger); color: var(--paper-0); }
+@media (hover: hover) {
+  .btn.ops-solid:hover { background: var(--ink); border-color: var(--ink); opacity: 0.88; }
+  .btn.ops-danger:hover { background: var(--danger); color: var(--paper-0); }
+}
 .btn.ops-link { color: var(--text-2); }
 .ops-actions { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 
 /* One-line bits */
 .ops-label { display: block; margin: var(--s-5) 0 var(--s-2); }
 .ops-label:first-child { margin-top: 0; }
-.ops-empty { font-size: 17px; color: var(--text-2); margin: var(--s-4) 0; }
+.ops-empty { font-size: 16px; color: var(--text-2); margin: var(--s-4) 0; }
 .ops-meta { color: var(--text-3); font-size: 13px; }
 .ops-done { color: var(--ok); font-family: var(--font-mono); font-size: 13px; margin: 0 0 var(--s-3); }
 .ops-done--wait { color: var(--text-2); }
@@ -78,16 +83,20 @@
   background: var(--paper-1); font-size: 15px;
 }
 
-/* ── Rows ── */
-.ops-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
-.ops-item {
+/* ── Rows: one grouped list on a hairline, a rule between rows ── */
+.ops-rows {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
   background: var(--paper-0);
   border: 1px solid var(--rule);
   border-radius: var(--r-card);
   overflow: hidden;
 }
-.ops-item[data-open] { border-color: var(--ink); }
-.ops-item[data-tone='past'] { opacity: 0.7; }
+.ops-rows:empty { display: none; }
+.ops-item { border-top: 1px solid var(--rule); }
+.ops-item:first-child { border-top: 0; }
+/* The open row: marked down its left edge in the brand's colour. */
+.ops-item[data-open] { box-shadow: inset 3px 0 0 var(--mark); }
+.ops-item[data-tone='past'] > * { opacity: 0.7; }
 .ops-row {
   display: flex;
   align-items: center;
@@ -105,12 +114,14 @@
   text-decoration: none;
   cursor: pointer;
 }
-.ops-row:hover { background: var(--paper-1); }
+@media (hover: hover) {
+  .ops-row:hover { background: var(--paper-1); }
+  .ops-row--static:hover { background: none; }
+}
 .ops-row:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
 .ops-row--static { cursor: default; }
-.ops-row--static:hover { background: none; }
 .ops-row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 auto; }
-.ops-row__name { font-size: 17px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.ops-row__name { font-size: 16px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
 .ops-row__sub {
   display: flex;
   align-items: center;
@@ -121,7 +132,7 @@
   color: var(--text-3);
 }
 .ops-row__end { display: flex; align-items: center; gap: var(--s-2); flex: none; }
-.ops-row__amt { font-family: var(--font-mono); font-size: 17px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ops-row__amt { font-family: var(--font-mono); font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Rows that open in place carry a small chevron */
 .ops-row[aria-expanded]::after {
   content: '';
@@ -134,8 +145,8 @@
   margin: -4px 2px 0 0;
 }
 .ops-row[aria-expanded='true']::after { transform: rotate(-135deg); margin-top: 4px; }
-.ops-row__bar { display: block; height: 4px; background: var(--paper-2); }
-.ops-row__bar > span { display: block; height: 100%; background: var(--ink); }
+.ops-row__bar { display: block; height: 3px; background: var(--paper-2); }
+.ops-row__bar > span { display: block; height: 100%; background: var(--mark); }
 .ops-row__bar[data-full] > span { background: var(--ok); }
 
 /* What a row reveals */
@@ -152,7 +163,7 @@
 .ops-contact a {
   display: inline-flex;
   align-items: center;
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 var(--s-3);
   border: var(--border-2);
   border-radius: var(--r-ctrl);
@@ -162,7 +173,7 @@
   overflow-wrap: anywhere;
   max-width: 100%;
 }
-.ops-contact a:hover { border-color: var(--ink); }
+@media (hover: hover) { .ops-contact a:hover { background: var(--paper-1); } }
 
 /* Chips with meaning. Yellow belongs to the one primary button, so on these
    screens "waiting" chips (requested, pledged, due soon) are amber outline. */
@@ -170,62 +181,37 @@
 .chip.ops-chip-amber,
 .ops-page .chip.chip-warn { background: transparent; color: var(--warn); border-color: var(--warn); }
 .chip.ops-chip-mark { background: var(--mark-soft); border-color: var(--mark-deep); color: var(--text-1); }
-.chip.ops-chip-lg { font-size: 11px; padding: 4px 10px; }
+.chip.ops-chip-lg { font-size: 12px; padding: 4px 10px; }
 
-/* Segmented control (sign kind, place mode, status) — pressed = accent */
+/* Segmented control (sign kind, place mode, status): the one pick-one shape
+   (app.css §13); here it fills its row, the choices as wide as each other. */
 .ops-seg {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  border: var(--border-2);
-  border-radius: var(--r-ctrl);
-  overflow: hidden;
   width: 100%;
-  max-width: 100%;
 }
-.ops-seg button {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--text-2);
-  background: var(--paper-0);
-  border: 0;
-  border-right: var(--border);
-  padding: 4px 8px;
-  min-height: 48px;
-  min-width: 0;
-  line-height: 1.25;
-  text-align: center;
-  cursor: pointer;
-}
-.ops-seg button:last-child { border-right: 0; }
-.ops-seg button:hover { background: var(--paper-1); color: var(--text-1); }
-.ops-seg button[aria-pressed='true'] { background: var(--mark); color: var(--mark-ink); }
-.ops-seg button:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: -2px; }
+.ops-seg > button { padding: 4px 8px; white-space: normal; }
 .ops-filter { margin: 0 0 var(--s-4); }
 
-/* Status select that reads like a chip */
+/* Status select: a field, like any other */
 .ops-status {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 16px;
   color: var(--text-1);
   background: var(--paper-0);
-  border: var(--border-2);
+  border: 1px solid var(--field-edge);
   border-radius: var(--r-ctrl);
   padding: 0 12px;
-  min-height: 48px;
+  min-height: var(--ctl);
   width: 100%;
   cursor: pointer;
 }
 .ops-status:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 1px; }
 .ops-status:disabled { opacity: 0.6; cursor: default; }
 
-/* ── Big counters (Signs) — they are the status filter, so they look like
-   buttons (raised edge) and the chosen one wears a thick ink outline ── */
+/* ── Big counters (Signs) — they are the status filter: flat tiles with
+   their tone along the top; the chosen one sits on the brand's tint, edged ── */
 .ops-counters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-2); margin: 0 0 var(--s-1); }
 .ops-counter {
   --tone: var(--rule-2);
@@ -238,9 +224,8 @@
   padding: var(--s-3);
   background: var(--paper-0);
   border: var(--border-2);
-  border-top: 5px solid var(--tone);
+  border-top: 3px solid var(--tone);
   border-radius: var(--r-card);
-  box-shadow: 0 2px 0 var(--rule-2);
   font: inherit;
   color: inherit;
   text-align: left;
@@ -248,53 +233,50 @@
 }
 .ops-counter[data-status='requested'] { --tone: var(--warn); }
 .ops-counter[data-status='installed'] { --tone: var(--ok); }
-.ops-counter:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--rule-2); }
 .ops-counter .n { font-size: 36px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 .ops-counter .l {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-3);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ops-counter:hover { border-color: var(--ink); border-top-color: var(--tone); }
+@media (hover: hover) { .ops-counter:hover { background: var(--paper-1); } }
 .ops-counter[aria-pressed='true'] {
-  border-color: var(--ink);
+  border-color: var(--mark);
   border-top-color: var(--tone);
-  box-shadow: 0 0 0 2px var(--ink);
-  background: var(--paper-1);
+  box-shadow: 0 0 0 1px var(--mark);
+  background: var(--mark-soft);
 }
 .ops-counter[aria-pressed='true'] .l { color: var(--text-1); font-weight: 600; }
 .ops-counter[aria-pressed='false'] .n { color: var(--text-2); }
 .ops-counter:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 @media (max-width: 400px) {
   .ops-counter { padding: var(--s-2) var(--s-3); }
-  .ops-counter .n { font-size: 30px; }
-  .ops-counter .l { font-size: 11.5px; letter-spacing: 0.04em; }
+  .ops-counter .n { font-size: 26px; }
+  .ops-counter .l { font-size: 12px; }
 }
 
 /* ── Hero number (Money, shift spots) ── */
 .ops-hero { margin: 0 0 var(--s-5); display: flex; flex-direction: column; gap: 2px; }
-.ops-hero .n { font-size: 52px; font-weight: 600; line-height: 1.05; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ops-hero .n { font-size: 52px; font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .ops-hero .sub { font-family: var(--font-mono); font-size: 13px; color: var(--text-3); }
-@media (max-width: 400px) { .ops-hero .n { font-size: 44px; } }
+@media (max-width: 400px) { .ops-hero .n { font-size: 36px; } }
 
-/* "Needs you" — the yellow-edged box at the top of Money */
+/* "Needs you" — the box at the top of Money, edged in the brand's colour */
 .ops-needs {
-  border: 1px solid var(--mark-deep);
-  border-left-width: 5px;
+  border: 1px solid var(--mark);
+  border-left-width: 3px;
   background: var(--paper-0);
   border-radius: var(--r-card);
   padding: var(--s-3) var(--s-4) var(--s-4);
   margin-bottom: var(--s-5);
 }
 .ops-needs > .eyebrow { display: block; margin-bottom: var(--s-2); color: var(--text-1); }
-.ops-needs .ops-rows { gap: 0; }
-.ops-needs .ops-item { border: 0; border-top: 1px solid var(--rule); border-radius: 0; background: none; }
-.ops-needs .ops-item:first-child { border-top: 0; }
+.ops-needs .ops-rows { border: 0; border-radius: 0; background: none; }
+.ops-needs .ops-item[data-open] { box-shadow: none; }
 .ops-needs .ops-row { padding-left: 0; padding-right: 0; }
 .ops-needs .ops-body { border-top: 0; padding: 0 0 var(--s-3); }
 .ops-pledge-acts { display: flex; gap: var(--s-2); flex-wrap: wrap; padding: 0 0 var(--s-3); }
@@ -305,7 +287,7 @@
 .ops-lines .when { font-family: var(--font-mono); font-size: 14px; }
 .ops-lines .note { white-space: pre-wrap; color: var(--text-2); }
 .ops-spots { display: flex; flex-direction: column; gap: var(--s-2); margin: 0 0 var(--s-4); }
-.ops-spots .n { font-size: 34px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.ops-spots .n { font-size: 36px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .ops-spots .n small { font-size: 15px; font-weight: 400; color: var(--text-3); margin-left: 6px; }
 .ops-spots .ops-row__bar { height: 8px; border-radius: 999px; overflow: hidden; }
 .ops-notify { margin: 0 0 var(--s-5); display: flex; flex-direction: column; gap: var(--s-2); }
@@ -320,16 +302,16 @@
 .ops-after > .ops-add, .ops-after > .ops-notify { margin: 0; }
 
 /* Picker — taller rows so a thumb can hit them */
-.ops-picker .picker-list li { min-height: 48px; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.ops-picker .picker-list li { min-height: var(--ctl); display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .ops-picker .picker-list li[aria-disabled='true'] { color: var(--text-4); cursor: default; }
-.ops-picker .picker-list li .chip { font-size: 9px; padding: 1px 6px; }
+.ops-picker .picker-list li .chip { font-size: 12px; padding: 1px 6px; }
 .ops-picker-hint { font-size: 13px; color: var(--text-3); margin-top: var(--s-1); }
 .ops-picked { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 
 /* Fill bar — filled / capacity (exported as <FillBar>) */
 .ops-fill { display: inline-flex; align-items: center; gap: var(--s-2); white-space: nowrap; }
 .ops-fill-track { width: 72px; height: 6px; background: var(--paper-2); border-radius: 999px; overflow: hidden; display: inline-block; }
-.ops-fill-bar { display: block; height: 100%; background: var(--ink); border-radius: 999px; }
+.ops-fill-bar { display: block; height: 100%; background: var(--mark); border-radius: 999px; }
 .ops-fill[data-full] .ops-fill-bar { background: var(--ok); }
 .ops-fill-num { font-size: 12px; color: var(--text-2); }
 .ops-fill[data-full] .ops-fill-num { color: var(--ok); }
@@ -337,14 +319,14 @@
 /* Forms on these screens */
 .card.ops-form { margin-bottom: var(--s-5); }
 .ops-form .ops-actions { margin-top: var(--s-2); }
-.ops-page .input { min-height: 48px; }
+.ops-page .input { min-height: var(--ctl); }
 .ops-form textarea.input { min-height: 96px; }
 /* "Show on the website" (ext/site) */
-.ops-check { display: flex; align-items: flex-start; gap: var(--s-3); min-height: 48px; padding: var(--s-2) 0; cursor: pointer; }
-.ops-check input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--ink); }
+.ops-check { display: flex; align-items: flex-start; gap: var(--s-3); min-height: var(--ctl); padding: var(--s-2) 0; cursor: pointer; }
+.ops-check input { width: 22px; height: 22px; margin: 2px 0 0; flex: none; accent-color: var(--mark); }
 .ops-check b { display: block; }
 .ops-check .ops-meta { display: block; }
-.input.ops-note-input { min-height: 48px; }
+.input.ops-note-input { min-height: var(--ctl); }
 
 /* Volunteer: "✓ You're on this shift" — plain green words, no box, so it
    never reads as a button */
@@ -366,11 +348,11 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: var(--s-2) 0;
   border-bottom: 1px solid var(--rule);
 }
-.ops-plain__name { font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; min-width: 0; }
+.ops-plain__name { font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; min-width: 0; }
 
 /* Sign crew: the address opens directions; a taller hit area for a thumb */
 .ops-addr {
@@ -387,7 +369,7 @@
 .ops-empty-block .ops-empty { margin: 0; }
 
 /* Money: "$150 over the $1,250 limit" — one line, big enough to read */
-.ops-over { font-size: 17px; font-weight: 600; color: var(--text-1); }
+.ops-over { font-size: 16px; font-weight: 600; color: var(--text-1); }
 .ops-body .disclose--inline { align-self: flex-start; }
 /* Money → More: "Donate page · Copy link · Open · Set up" */
 .ops-donate { display: flex; flex-direction: column; gap: var(--s-2); margin-bottom: var(--s-3); }
@@ -400,9 +382,8 @@
 @media (max-width: 400px) { .ops-item .ops-row:has(.ops-putup) { padding-right: var(--s-3); } }
 
 /* Toasts on these screens clear the phone tab bar */
-.toast.ops-toast { z-index: 1000; max-width: calc(100vw - 32px); width: max-content; min-height: 48px; padding: var(--s-1) var(--s-1) var(--s-1) var(--s-4); font-size: 13px; }
-.toast.ops-toast .btn { min-height: 48px; white-space: nowrap; display: inline-flex; align-items: center; }
+.toast.ops-toast { z-index: 1000; max-width: calc(100vw - 32px); width: max-content; min-height: var(--ctl); padding: var(--s-1) var(--s-1) var(--s-1) var(--s-4); font-size: 14px; }
+.toast.ops-toast .btn { min-height: var(--ctl); white-space: nowrap; display: inline-flex; align-items: center; }
 @media (max-width: 720px) { .toast.ops-toast { bottom: calc(76px + env(safe-area-inset-bottom)); } }
-.ops-seg button:disabled { opacity: 0.45; cursor: default; }
 /* Scripts: the GOTV pair under their own heading. */
-.sc-group { margin: var(--s-5) 0 var(--s-1); font-size: 20px; }
+.sc-group { margin: var(--s-5) 0 var(--s-1); font-size: 18px; }

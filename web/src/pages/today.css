@@ -4,11 +4,15 @@
 
 .today { min-width: 0; }
 .today > h1 { margin-bottom: var(--s-4); }
+/* The volunteer's Today is one column, as on a phone: at a desk it keeps
+   the width its sister screens have (Shifts, the walk list), so its one
+   big button is a button and not a band across the window. */
+.today--field { max-width: 720px; }
 
 /* ── Shared bits ── */
 .today-actions { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 .btn.today-tap {
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 0 18px;
   white-space: nowrap;
   display: inline-flex;
@@ -24,30 +28,30 @@
 }
 .today-section { margin: var(--s-5) 0; }
 h2.today-h {
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  line-height: 1.4;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case);
   color: var(--text-2);
   margin: 0 0 var(--s-2);
 }
 .today-subh { font-size: 15px; margin: var(--s-4) 0 var(--s-1); }
 .today-fieldline { font-size: 12px; color: var(--text-3); margin: var(--s-3) 0; }
 .today-more-link {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
   text-decoration: none;
   color: var(--text-1);
   display: inline-flex;
   align-items: center;
   gap: var(--s-1);
-  min-height: 48px;
+  min-height: var(--ctl);
   border-bottom: 2px solid transparent;
 }
-.today-more-link:hover { border-bottom-color: var(--mark); }
+@media (hover: hover) { .today-more-link:hover { border-bottom-color: var(--mark); } }
 
 /* ── No signal yet (brief paused offline) ── */
 .today-offline {
@@ -81,7 +85,6 @@ h2.today-h {
   background: var(--paper-0);
   border: var(--border);
   border-radius: var(--r-card);
-  box-shadow: var(--shadow-1);
   cursor: pointer;
 }
 /* Hover tints only where there is a real pointer: on a phone a tapped row
@@ -90,11 +93,11 @@ h2.today-h {
   .today-num:hover { border-color: var(--mark); }
 }
 .today-num:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
-.today-num[aria-expanded='true'] { border-color: var(--mark); box-shadow: 0 0 0 3px var(--mark-soft); }
+.today-num[aria-expanded='true'] { border-color: var(--mark); background: var(--mark-soft); }
 .today-num__n {
   font-family: var(--font-serif);
-  font-size: clamp(28px, 8vw, 56px);
-  font-weight: 800;
+  font-size: clamp(26px, 8vw, 52px);
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums lining-nums;
@@ -108,9 +111,9 @@ h2.today-h {
   gap: 4px;
   width: 100%;
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case); font-weight: 500;
   color: var(--text-3);
   line-height: 1.3;
 }
@@ -119,7 +122,7 @@ h2.today-h {
 .today-num__go {
   flex: none;
   font-family: var(--font-serif);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 0.7;
   letter-spacing: 0;
   color: var(--text-3);
@@ -212,9 +215,9 @@ h2.today-h {
 .today-row__kicker {
   display: block;
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case); font-weight: 500;
   color: var(--text-3);
 }
 .today-row__title { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
@@ -233,7 +236,7 @@ h2.today-h {
 .today-row--wait { min-height: 70px; }
 
 /* Getting started */
-.card.today-steps { border-top: 3px solid var(--mark); }
+.card.today-steps { border-top: 2px solid var(--mark); }
 .today-steps .today-rows { border: 0; background: none; }
 .today-step { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); padding: var(--s-1) 0; flex-wrap: wrap; }
 .today-step-who { font-size: 13px; }
@@ -242,18 +245,17 @@ h2.today-h {
 .today-event { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-1) var(--s-3); padding: var(--s-2) var(--s-4); }
 .today-event .today-row__main { white-space: normal; flex: 1 1 200px; }
 .today-rsvp {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-family: var(--font-sans);
+  font-size: 14px;
   color: var(--text-2);
   text-decoration: underline;
   text-decoration-color: var(--mark-deep);
   text-underline-offset: 3px;
   display: inline-flex;
   align-items: center;
-  min-height: 48px;
+  min-height: var(--ctl);
 }
-.today-rsvp:hover { color: var(--text-1); }
+@media (hover: hover) { .today-rsvp:hover { color: var(--text-1); } }
 
 /* ── Volunteer: Start canvassing ── */
 .today-go { margin: var(--s-4) 0 var(--s-4); }
@@ -263,19 +265,15 @@ h2.today-h {
   justify-content: center;
   gap: var(--s-2);
   width: 100%;
-  min-height: 80px;
+  min-height: 64px;
   padding: var(--s-4);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  border-width: 2px;
+  font-size: 16px;
+  font-weight: 600;
   border-radius: var(--r-card);
-  box-shadow: 0 3px 0 var(--mark-deep);
 }
-.btn.btn-primary.today-start:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--mark-deep); }
 /* "Newton — 72 Ave — All done ✓ ›": still the way into the walk list. */
 .today-go__meta.today-go__link {
-  min-height: 48px;
+  min-height: var(--ctl);
   margin-top: var(--s-2);
   color: var(--text-1);
   text-decoration: none;
@@ -309,17 +307,17 @@ h2.today-h {
 
 /* ── Sample data ── */
 .card.today-sample {
-  border-top: 3px solid var(--mark);
+  border-top: 2px solid var(--mark);
   padding: var(--s-4);
 }
-.today-sample-lede { margin: 0 0 var(--s-3); font-size: 17px; }
+.today-sample-lede { margin: 0 0 var(--s-3); font-size: 16px; }
 .today-sample .error { margin: var(--s-3) 0 0; }
 
 /* Quiet line under the title; "Clear sample data" is under More. */
 .today-sample-line {
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  letter-spacing: var(--label-tracking);
   color: var(--text-3);
   margin: calc(-1 * var(--s-2)) 0 var(--s-3);
 }
@@ -336,7 +334,7 @@ h2.today-h {
 }
 .today-confirm p { margin: 0 0 var(--s-3); color: var(--text-2); }
 .btn.today-danger { color: var(--danger); border-color: var(--danger); }
-.btn.today-danger:hover { background: var(--danger); color: var(--paper-0); border-color: var(--danger); }
+@media (hover: hover) { .btn.today-danger:hover { background: var(--danger); color: var(--paper-0); border-color: var(--danger); } }
 
 /* ── Toast: above the phone tab bar ── */
 /* A long server message (Clear sample data) wraps to a readable width. */
@@ -369,7 +367,7 @@ h2.today-h {
 .today-mine__pair { white-space: nowrap; }
 .today-mine__n {
   font-family: var(--font-serif);
-  font-size: clamp(28px, 8vw, 40px);
+  font-size: clamp(26px, 8vw, 36px);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -389,7 +387,7 @@ h2.today-h {
   margin: var(--s-4) 0; padding: var(--s-4); border-radius: var(--r-card);
   background: var(--paper-1); border: 1px solid var(--rule);
 }
-.today-gotv__n { margin: var(--s-1) 0 var(--s-2); font-size: 17px; }
+.today-gotv__n { margin: var(--s-1) 0 var(--s-2); font-size: 16px; }
 .today-gotv__bar { margin-bottom: var(--s-3); }
 .today-gotv__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.today-gotv__btn { min-height: 48px; display: inline-flex; align-items: center; gap: 6px; background: var(--paper-0); }
+.today-gotv__btn { min-height: var(--ctl); display: inline-flex; align-items: center; gap: 6px; background: var(--paper-0); }

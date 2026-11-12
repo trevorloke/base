@@ -22,12 +22,12 @@
 }
 
 .btn.imp-tap {
-  min-height: 48px;
+  min-height: var(--ctl);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0 16px;
-  font-size: 12px;
+  
 }
 
 .imp-hint { color: var(--text-3); margin: 0 0 var(--s-3); }
@@ -55,7 +55,7 @@
   color: var(--text-4);
   background: var(--paper-0);
 }
-.imp-step.is-now .imp-step__num { background: var(--ink); border-color: var(--ink); color: var(--paper-0); }
+.imp-step.is-now .imp-step__num { background: var(--accent); border-color: var(--mark); color: var(--accent-ink); }
 .imp-step.is-done .imp-step__num { color: var(--ok); border-color: var(--ok); }
 .imp-step__body h2 { margin: 3px 0 var(--s-2); }
 .imp-step.is-todo .imp-step__body h2 { color: var(--text-2); }
@@ -76,8 +76,9 @@
   cursor: pointer;
   margin-bottom: var(--s-2);
 }
-.imp-drop:hover { border-color: var(--ink); }
-.imp-drop.is-over { border-style: solid; border-color: var(--ink); background: var(--paper-1); }
+/* Only for a mouse: a touch screen keeps :hover after a tap. */
+@media (hover: hover) { .imp-drop:hover { border-color: var(--mark); } }
+.imp-drop.is-over { border-style: solid; border-color: var(--mark); background: var(--tint); }
 .imp-drop.is-busy { cursor: progress; opacity: 0.8; }
 .imp-drop:focus-within { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .imp-file-input {
@@ -88,7 +89,7 @@
   clip: rect(0 0 0 0);
 }
 .imp-drop__btn { pointer-events: none; }
-.imp-drop__or { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.imp-drop__or { font-family: var(--font-mono); font-size: 12px; letter-spacing: var(--label-tracking); text-transform: var(--label-case); font-weight: 500; color: var(--text-3); }
 /* Phones and tablets can't drag a file in: just the button. (Phone width
    too, for browsers that don't report a coarse pointer.) */
 @media (pointer: coarse), (max-width: 560px) { .imp-drop__or { display: none; } }
@@ -108,7 +109,7 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(180px, 300px) auto;
   gap: var(--s-1) var(--s-3);
   align-items: center;
-  min-height: 48px;
+  min-height: var(--ctl);
   padding: 4px 0;
   border-top: 1px solid var(--rule);
 }
@@ -117,7 +118,7 @@
 .imp-rmap__word { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .imp-rmap__select { min-height: 44px; }
 .imp-rmap__row:not(.is-used) .imp-rmap__select { color: var(--text-3); }
-.imp-rmap__own { font-size: 11px; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
+.imp-rmap__own { font-size: 12px; letter-spacing: var(--label-tracking); text-transform: var(--label-case); font-weight: 500; color: var(--text-3); }
 .imp-rmap__reset { margin-top: var(--s-2); }
 @media (max-width: 560px) {
   .imp-rmap__row { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
@@ -137,7 +138,7 @@
 .imp-map__head {
   font-family: var(--font-mono);
   font-size: 12px;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--label-tracking);
   font-weight: 600;
   color: var(--text-3);
   overflow-wrap: anywhere;
@@ -152,7 +153,7 @@
 }
 .imp-map__arrow { color: var(--text-4); font-family: var(--font-mono); }
 .imp-map__row.is-used .imp-map__arrow { color: var(--text-1); }
-.imp-map__select { min-height: 48px; }
+.imp-map__select { min-height: var(--ctl); }
 .imp-map__row:not(.is-used) .imp-map__select { color: var(--text-3); }
 .imp-map__note { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--text-2); }
 .imp-map__note.is-warn { color: var(--text-1); border-left: 3px solid var(--warn); padding-left: var(--s-2); }
@@ -166,7 +167,7 @@
 
 .imp-tagfield { max-width: 520px; margin-bottom: var(--s-4); }
 .imp-tagrow { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; }
-.imp-tagrow .input { flex: 1 1 220px; min-height: 48px; }
+.imp-tagrow .input { flex: 1 1 220px; min-height: var(--ctl); }
 
 .imp-preview > .eyebrow { display: block; margin-bottom: var(--s-2); }
 .imp-preview__scroll {
@@ -182,7 +183,7 @@
 .imp-preview__table td { font-size: 14px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .imp-preview__table tr:last-child td { border-bottom: 0; }
 .imp-tags { display: inline-flex; gap: 4px; flex-wrap: nowrap; }
-.imp-tags .chip { text-transform: none; letter-spacing: 0.04em; }
+.imp-tags .chip { text-transform: none; letter-spacing: var(--label-tracking); }
 
 /* ── Progress bar (import + geocode) ── */
 .imp-bar {
@@ -217,7 +218,7 @@
 .imp-count.is-ok { border-top-color: var(--ok); }
 .imp-count.is-danger { border-top-color: var(--danger); }
 .imp-count dd { margin: 0; }
-.imp-count__n { display: block; font-size: 28px; font-weight: 600; line-height: 1.2; }
+.imp-count__n { display: block; font-size: 26px; font-weight: 600; line-height: 1.2; }
 .imp-count.is-danger .imp-count__n { color: var(--danger); }
 .imp-count__note { display: block; font-size: 12px; color: var(--text-3); line-height: 1.35; }
 
@@ -228,15 +229,15 @@
   display: flex;
   align-items: center;
   font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: var(--label-tracking);
+  text-transform: var(--label-case); font-weight: 500;
   color: var(--text-2);
 }
 .imp-matches summary:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 1px; }
 .imp-matches ul { list-style: none; margin: 0; padding: 0; }
 .imp-matches li { padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 14px; overflow-wrap: anywhere; }
-.imp-matches li .mono { font-size: 11px; margin-right: var(--s-2); }
+.imp-matches li .mono { font-size: 12px; margin-right: var(--s-2); }
 
 .imp-invalid { margin-top: var(--s-3); }
 .imp-invalid__intro { margin: 0 0 var(--s-2); color: var(--text-2); }
@@ -250,21 +251,21 @@
   font-size: 14px;
   overflow-wrap: anywhere;
 }
-.imp-invalid__row { flex: 0 0 auto; font-size: 11px; color: var(--danger); white-space: nowrap; }
+.imp-invalid__row { flex: 0 0 auto; font-size: 12px; color: var(--danger); white-space: nowrap; }
 
 /* ── 4. Import ── */
-.imp-done { font-size: 17px; font-weight: 600; margin: 0 0 var(--s-2); }
+.imp-done { font-size: 16px; font-weight: 600; margin: 0 0 var(--s-2); }
 .imp-running > .btn { margin-top: var(--s-2); }
 .imp-next { margin-top: var(--s-4); }
 
 /* ── GeocodeButton ── */
 .geo--compact { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.geo--compact .geo-live { font-family: var(--font-mono); font-size: 11px; color: var(--text-2); }
+.geo--compact .geo-live { font-family: var(--font-mono); font-size: 12px; color: var(--text-2); }
 .btn.geo-btn--compact { min-height: 28px; padding: 4px 12px; border-radius: 999px; }
 
 .geo--full { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-2) 0; }
 .geo-run { max-width: 520px; }
-.geo-live--full { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; color: var(--text-2); }
+.geo-live--full { margin: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: var(--label-tracking); color: var(--text-2); }
 .geo-live--full:empty { display: none; }
 .geo-summary {
   border-left: 3px solid var(--ok);
@@ -284,19 +285,19 @@
 
 @media (max-width: 560px) {
   .imp-step { grid-template-columns: 26px minmax(0, 1fr); gap: var(--s-3); padding: var(--s-4) 0; }
-  .imp-step__num { width: 26px; height: 26px; font-size: 11px; }
+  .imp-step__num { width: 26px; height: 26px; font-size: 12px; }
   .imp-step__body h2 { margin-top: 1px; }
   .imp-map__row { grid-template-columns: minmax(0, 1fr); }
   .imp-map__arrow { display: none; }
   .imp-drop { padding: var(--s-5) var(--s-3); }
   .imp-source .btn { width: 100%; }
   .imp-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .imp-count__n { font-size: 24px; }
+  .imp-count__n { font-size: 22px; }
 }
 
 /* Folded steps once the import has started */
 .imp-summary { margin: 0; color: var(--text-2); }
-.imp-chip { text-transform: none; letter-spacing: 0.04em; vertical-align: 1px; }
+.imp-chip { text-transform: none; letter-spacing: var(--label-tracking); vertical-align: 1px; }
 .imp-matches summary { list-style: none; gap: var(--s-2); }
 .imp-matches summary::-webkit-details-marker { display: none; }
 .imp-matches summary::before { content: '+'; display: inline-block; width: 1em; text-align: center; font-size: 14px; color: var(--text-3); }
@@ -313,25 +314,23 @@
 .imp-reveal__body .imp-tagfield { margin-bottom: 0; }
 .imp-matches__list { list-style: none; margin: var(--s-2) 0 0; padding: 0; }
 .imp-matches__list li { padding: 6px 0; border-bottom: 1px solid var(--rule); font-size: 14px; overflow-wrap: anywhere; }
-.imp-matches__list li .mono { font-size: 11px; margin-right: var(--s-2); }
+.imp-matches__list li .mono { font-size: 12px; margin-right: var(--s-2); }
 .imp-place { margin-top: var(--s-4); padding-top: var(--s-4); border-top: 1px solid var(--rule); }
 .imp-place__title { font-size: 16px; margin: 0 0 var(--s-2); }
 .imp-result .imp-actions { margin-top: var(--s-4); }
 
 /* ── Fix round 3 ── */
 /* One input height (48px), as on People and the profile. */
-.imp-page .input:not(textarea) { min-height: 48px; }
+.imp-page .input:not(textarea) { min-height: var(--ctl); }
 /* "First row is column names": one quiet switch above the columns. */
 .imp-headrow {
   display: inline-flex; align-items: center; gap: var(--s-2);
-  min-height: 48px; margin: 0 0 var(--s-2);
+  min-height: var(--ctl); margin: 0 0 var(--s-2);
   font-size: 15px; color: var(--text-2); cursor: pointer;
 }
-.imp-headrow input { width: 20px; height: 20px; margin: 0; accent-color: var(--ink); cursor: pointer; }
+.imp-headrow input { width: 20px; height: 20px; margin: 0; accent-color: var(--mark); cursor: pointer; }
 .imp-headrow input:disabled { cursor: default; }
 .imp-headrow input:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
-/* Touch screens keep :hover after a tap: the drop box only darkens for a mouse. */
-@media (hover: none) { .imp-drop:hover { border-color: var(--rule-2); } }
 .imp-split { display: flex; gap: var(--s-2); align-items: flex-start; margin: 0 0 var(--s-4); padding: var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); font-size: 14px; color: var(--text-2); }
 .imp-split input { margin-top: 3px; }
 .imp-past { margin: 0 0 var(--s-4); padding: var(--s-3); background: var(--paper-0); border: var(--border); border-radius: var(--r-card); }

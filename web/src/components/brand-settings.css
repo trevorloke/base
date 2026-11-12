@@ -1,0 +1,121 @@
+/* Settings → Brand (BrandSettings.jsx): the form, and beside it a live
+   sample of the desk and the phone in light and in dark. The sample's
+   frames carry the brand's own shades as CSS variables on themselves
+   (shared/brand-look.js lookTokens), so the pieces inside are drawn from the
+   same roles the real screens use — only the roles: the old names are set
+   once on the page and would not follow a frame. */
+.bs { display: grid; gap: var(--s-5); grid-template-columns: minmax(0, 1fr); }
+.bs-form, .bs-side, .bs-acts { min-width: 0; }
+.bs-lede { margin: 0 0 var(--s-3); max-width: 60ch; }
+.bs-said { margin: 0 0 var(--s-3); color: var(--ok); font-weight: 500; }
+/* Changes found again after leaving the screen: a note, not a success. */
+.bs-said--draft {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3);
+  color: var(--text); background: var(--panel); border-radius: var(--r-ctrl); font-size: 14px; font-weight: 400;
+}
+.bs-said--draft > span { flex: 1 1 220px; }
+.bs-hint { margin: 0; font-size: 13px; line-height: 1.4; color: var(--quiet); }
+.bs-err { margin: var(--s-1) 0 0; }
+.bs-opt { font-weight: 400; color: var(--quiet); }
+.bs-field { margin-bottom: var(--s-4); max-width: 420px; }
+.bs-label { display: block; margin-bottom: var(--s-1); font-size: 13px; font-weight: 500; color: var(--text-2); }
+.bs-seg { display: flex; }
+.bs-more { margin-bottom: var(--s-3); }
+.bs-check { max-width: 420px; }
+
+/* A picture: what is there now, on the ground it will sit on — white for
+   the logo and the mark (in dark mode the logo sits on a white chip), dark
+   for the logo for dark backgrounds, whatever the device's scheme. */
+.bs-pic { display: flex; gap: var(--s-4); align-items: flex-start; margin-bottom: var(--s-4); }
+.bs-pic__well {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 132px; height: 72px; padding: var(--s-2);
+  background: white; border: 1px solid var(--line-strong); border-radius: var(--r-ctrl);
+}
+.bs-pic__well--dark { background: color-mix(in srgb, black 86%, white); border-color: transparent; }
+.bs-pic__well img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+.bs-pic__none { font-size: 13px; color: color-mix(in srgb, black 62%, white); }
+.bs-pic__well--dark .bs-pic__none { color: color-mix(in srgb, white 72%, black); }
+.bs-pic__words { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.bs-pic__label { font-size: 15px; font-weight: 600; color: var(--text); }
+.bs-pic__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-1); }
+
+.bs-colours { display: grid; gap: var(--s-2) var(--s-5); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); max-width: 560px; }
+.bs-colour { display: flex; gap: var(--s-3); align-items: flex-start; }
+.bs-colour__pick {
+  flex: none; width: var(--ctl); height: var(--ctl); margin-top: 22px; padding: 2px;
+  background: var(--card); border: 1px solid var(--field-edge); border-radius: var(--r-ctrl); cursor: pointer;
+}
+.bs-colour__pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* No second colour chosen: the swatch is only where one would go. */
+.bs-colour__pick--none { opacity: 0.35; }
+.bs-colour__words { flex: 1; min-width: 0; margin-bottom: var(--s-3); }
+.bs-colour__hex { font-variant-numeric: tabular-nums; }
+
+/* What only a person can decide. */
+.bs-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.bs-note { display: flex; gap: var(--s-2); font-size: 14px; line-height: 1.45; color: var(--text-2); }
+.bs-note__mark { flex: none; width: 18px; text-align: center; font-weight: 700; color: var(--quiet); }
+.bs-note--ok .bs-note__mark { color: var(--ok); }
+.bs-note--warn { padding: var(--s-2) var(--s-3); background: color-mix(in srgb, var(--warn) 12%, var(--card)); border-radius: var(--r-ctrl); color: var(--text); }
+.bs-note--warn .bs-note__mark { color: var(--warn); }
+.bs-note__words { min-width: 0; }
+.bs-note__fix { display: flex; margin-top: var(--s-2); }
+
+.bs-acts__row { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+
+/* ── The sample ── */
+.bs-sample { display: grid; gap: var(--s-3); grid-template-columns: 1fr 1fr; margin: 0 0 var(--s-5); }
+.bs-fig { margin: 0; min-width: 0; grid-column: span 2; }
+.bs-fig--phone { grid-column: span 1; }
+.bs-fig figcaption { margin-top: var(--s-1); font-size: 12px; color: var(--quiet); text-align: center; }
+.bs-s {
+  display: flex; overflow: hidden; height: 252px;
+  font: 400 11px/1.35 var(--font-sans); color: var(--text);
+  background: var(--page); border: 1px solid var(--line-strong); border-radius: var(--r-card);
+}
+.bs-s--phone { flex-direction: column; width: 100%; max-width: 190px; height: 300px; margin: 0 auto; }
+.bs-s__side {
+  flex: none; display: flex; flex-direction: column; gap: 2px; width: 34%; max-width: 150px; padding: 10px 8px;
+  background: var(--side); color: var(--side-ink); border-right: 1px solid var(--side-edge);
+}
+.bs-s__brand, .bs-s__top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bs-s__top { flex: none; height: 40px; padding: 0 10px; background: var(--side-top); color: var(--side-ink); border-bottom: 1px solid var(--side-edge); }
+.bs-s__logo { display: block; height: 22px; max-width: 100%; object-fit: contain; object-position: left center; min-width: 0; }
+.bs-s__logo--chip { background: white; padding: 2px 4px; border-radius: var(--r-sm); }
+.bs-s__mono {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  font-size: 9px; font-weight: 700; background: var(--accent); color: var(--accent-ink);
+  border-radius: var(--r-sm); box-shadow: inset 0 0 0 1px var(--side-mark);
+}
+.bs-s__org { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bs-s__by { margin: 2px 0 6px; font-size: 9px; color: var(--side-quiet); }
+.bs-s__nav { padding: 5px 8px; border-radius: var(--r-ctrl); color: var(--side-quiet); font-weight: 500; }
+.bs-s__nav[data-on] { background: var(--side-active); color: var(--side-active-ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--side-edge); }
+.bs-s__main { flex: 1; min-width: 0; padding: 12px; overflow: hidden; }
+.bs-s__h { margin: 0 0 8px; font: 600 17px/1.2 var(--font-display); color: var(--text); }
+.bs-s__card { padding: 10px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); }
+.bs-s__p { margin: 0 0 2px; }
+.bs-s__a { color: var(--accent-words); font-weight: 500; text-decoration: underline; }
+.bs-s__q { margin: 0 0 8px; color: var(--quiet); }
+.bs-s__row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.bs-s__btn { padding: 5px 12px; font-weight: 600; background: var(--accent); color: var(--accent-ink); border-radius: var(--r-ctrl); box-shadow: inset 0 0 0 1px var(--accent-edge); }
+.bs-s__chip { padding: 3px 9px; font-weight: 500; background: var(--tint-2); color: var(--accent-words); border-radius: var(--r-ctrl); box-shadow: inset 0 0 0 1px var(--accent-edge); }
+.bs-s__rate { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.bs-s__rate span {
+  padding: 3px 0; text-align: center; font-weight: 700; color: var(--text);
+  background: color-mix(in srgb, var(--band) 16%, var(--card)); border-top: 3px solid var(--band); border-radius: 3px;
+}
+.bs-s__tabs { flex: none; display: grid; grid-template-columns: repeat(4, 1fr); height: 38px; background: var(--card); border-top: 1px solid var(--line); }
+.bs-s__tabs span { display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 500; color: var(--quiet); }
+.bs-s__tabs span[data-on] { color: var(--accent-words); font-weight: 700; }
+
+/* A desk: the form on the left, the sample beside it and in view as the
+   form scrolls; the two desks side by side. */
+@media (min-width: 1000px) {
+  .bs { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); column-gap: var(--s-6); align-items: start; }
+  .bs-form { grid-column: 1; grid-row: 1; }
+  .bs-acts { grid-column: 1; grid-row: 2; }
+  .bs-side { grid-column: 2; grid-row: 1 / span 2; position: sticky; top: var(--s-4); }
+  .bs-fig { grid-column: span 1; }
+}

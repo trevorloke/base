@@ -8,12 +8,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet, apiPost } from '../api.js';
 import { landing } from '../mode.js';
 import { CodeField } from '../components/TwoStep.jsx';
+import AuthPage from '../components/AuthPage.jsx';
 
 const ROLE_LABEL = { manager: 'a manager', treasurer: 'the treasurer', staff: 'staff', volunteer: 'a volunteer' };
 
 // Big, thumb-sized controls (auth pages load before any page stylesheet).
 const AUTH_INPUT = { minHeight: 48, fontSize: 16 };
-const AUTH_BUTTON = { width: '100%', minHeight: 52, fontSize: 13, marginTop: 'var(--s-2)' };
+const AUTH_BUTTON = { width: '100%', minHeight: 48, fontSize: 15, marginTop: 'var(--s-2)' };
 
 export default function Join({ mode = 'field' }) {
   const { token } = useParams();
@@ -54,21 +55,19 @@ export default function Join({ mode = 'field' }) {
     }
   };
 
-  if (inv.isPending) return <div className="auth-page"><span className="brand">base.win</span></div>;
+  if (inv.isPending) return <AuthPage />;
   if (inv.isError) {
     return (
-      <div className="auth-page">
-        <span className="brand">base.win</span>
+      <AuthPage>
         <h1>{inv.error.status === 404 ? 'Invite not found' : 'Can’t open this invite'}</h1>
         <p className="muted">{inv.error.status === 404 ? 'Ask a manager for a new link.' : inv.error.message}</p>
-      </div>
+      </AuthPage>
     );
   }
 
   const { email, role, workspaceName, hasAccount } = inv.data;
   return (
-    <div className="auth-page">
-      <span className="brand">base.win</span>
+    <AuthPage org={workspaceName}>
       <h1>Join {workspaceName}</h1>
       <p className="muted">As {ROLE_LABEL[role] || role} · <strong>{email}</strong></p>
       <form onSubmit={submit}>
@@ -94,6 +93,6 @@ export default function Join({ mode = 'field' }) {
           {busy ? 'Joining…' : 'Join'}
         </button>
       </form>
-    </div>
+    </AuthPage>
   );
 }

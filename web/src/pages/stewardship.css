@@ -1,16 +1,19 @@
-/* Stewardship: one card per gift or donor, the actions beside it. */
+/* Stewardship: a row per gift or donor in one grouped list, the actions
+   beside it. */
 .sw-page { max-width: 880px; }
 .sw-sum { margin: 0 0 var(--s-4); font-size: 15px; }
 .sw-warn { color: var(--warn); font-weight: 600; }
 .sw-sec { margin: 0 0 var(--s-6); }
-.sw-sec h2 { font-size: 20px; margin: 0 0 var(--s-3); }
+.sw-sec h2 { font-size: 18px; margin: 0 0 var(--s-3); }
 .sw-sec__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-3); }
 .sw-sec__head h2 { margin: 0; }
-.sw-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
+.sw-list { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
 .sw-row { padding: var(--s-3) var(--s-4); display: flex; align-items: center; gap: var(--s-2) var(--s-4); flex-wrap: wrap; }
+.sw-list > .sw-row { margin: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.sw-list > .sw-row:first-child { border-top: 0; }
 .sw-row__main { flex: 1 1 280px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--s-3); min-width: 0; font-size: 15px; }
 .sw-name { font-weight: 600; color: var(--text-1); }
-.sw-reach { display: flex; flex-wrap: wrap; gap: var(--s-3); font-size: 13.5px; }
+.sw-reach { display: flex; flex-wrap: wrap; gap: var(--s-3); font-size: 14px; }
 .sw-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .sw-step-form { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
 .sw-step-form .input { min-height: 44px; }
