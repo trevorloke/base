@@ -218,11 +218,23 @@ one tap away under **More**.
 - **Email & texting** (the *Connect* links on Shifts, Receipts and Ladders,
   or Today → More) — whether email and texting are connected, and the
   Imagine Surrey website address the public pages link back to.
-- **Calendars** (no screens yet; the server's part) — a shift email (Notify,
-  the week's notice, the evening-before reminder) arrives with a calendar
-  file of that person's own shifts and the line *Add to your calendar: open
-  the attached file.*; the text is unchanged. Open `<site>/events.ics` (the
-  website's Events list) in a calendar app. Server tests:
+- **Calendars** — a shift's page, GOTV's voting days and Donations' filing
+  dates have a quiet *Add to calendar*: Google, Outlook, or *Apple & others*
+  (a file link that needs no sign-in; with no signal the choices say *Needs
+  signal*). After *Count me in* it sits under *You’re on this shift*. Your
+  profile → *Your shifts in your calendar* → *Get my calendar link*: an
+  iPhone shows *Add to iPhone or Mac · Email me the link · Copy link*, an
+  Android phone *Email me the link · Copy link*, a computer *Add to Google ·
+  Copy link* (a Mac also *Add to iPhone or Mac*); *More* → *Make a new
+  link* ends the old one. Shifts → *Put my shifts in my calendar* opens it.
+  A shift email (Notify, the week's notice, the evening-before reminder)
+  arrives with a calendar file of that person's own shifts and the line
+  *Add to your calendar: open the attached file.*; the text is unchanged.
+  On the website, after a sign-up: *Add it to your calendar: Google ·
+  Outlook · Apple & others*; the Events list links *Get our events in your
+  calendar* (`<site>/events.ics`). Browser: `e2e-calendar.mjs` (it starts
+  its own server and a stand-in email sender: `PORT=5160 node
+  e2e-calendar.mjs` after the web build). Server tests:
   `server/test/ics.test.js` (the file format, UTC times, the B.C. clock —
   run it under any Node and TZ, the digest it prints is the same),
   `server/test/calendar.test.js` (a person's calendar link, Make a new link,
