@@ -82,6 +82,20 @@ test('brand.picture: a manager’s upload is kept and served at /brand/<id>; its
   assert.deepEqual(Object.keys(ev.payload).sort(), ['bytes', 'content_type', 'for', 'height', 'id', 'kind', 'name', 'width']);
 });
 
+test('the brand’s pictures stay out of the website’s “Choose one uploaded”; the website’s own are there', async () => {
+  const mark = (await upload(mgr, 'mark', png(512, 512))).json.picture;
+  const icon = (await upload(mgr, 'icon192', png(192, 192))).json.picture;
+  const logo = (await upload(mgr, 'logoDark', png(600, 120))).json.picture;
+  const dot = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const own = (await mgr.action('site.picture', { data: `data:image/png;base64,${dot}`, name: 'dot.png', width: 1, height: 1 })).json.media;
+  const r = await mgr.get('/api/site/pictures');
+  assert.equal(r.status, 200);
+  const ids = r.json.pictures.map((p) => p.id);
+  assert.deepEqual(ids, [own.id], 'only the picture uploaded for the website');
+  for (const p of [mark, icon, logo]) assert.equal((await app.request(`/media/${p.id}.png`)).status, 200, 'still served');
+  assert.deepEqual((await db.query('select brand_kind from media where id = any($1) order by brand_kind', [[mark.id, icon.id, logo.id, own.id]])).rows.map((x) => x.brand_kind), ['icon192', 'logoDark', 'mark', null]);
+});
+
 test('brand.picture refuses an SVG, a GIF, a picture past its limits, and anyone but a manager', async () => {
   const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100"><script>alert(1)</script></svg>');
   const refused = async (c, kind, buf, re, status = 400) => {

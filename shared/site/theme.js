@@ -119,6 +119,9 @@ export function checkTheme(input, skin = 'base') {
   // it keeps its own look.
   const follow = input?.follow === true;
   const theme = { skin: base.key, colors, fonts, radius, logo, pop, follow };
+  // kept: a website that had its own look when it began to follow keeps it
+  // here underneath, to go back to (the server says so: site.settings.save).
+  if (follow && input?.kept === true) theme.kept = true;
   const problems = PAIRS.map((p) => ({ pair: p, ratio: contrast(colors[p.fg], colors[p.bg]) })).filter((x) => x.ratio < 4.5);
   return { theme, problems };
 }

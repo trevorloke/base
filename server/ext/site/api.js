@@ -125,11 +125,13 @@ api.get('/site/campaigns/:id', async (c) => {
   return c.json({ campaign: campaignOut(r) });
 });
 
-// The pictures on file (the site's and Outreach's — one store), newest first.
+// The pictures on file (the site's and Outreach's — one store), newest
+// first. Not the brand's (Settings → Brand: its logos, mark and the four app
+// icons made from it, tries never saved among them): they'd crowd the list.
 api.get('/site/pictures', async (c) => {
   const ws = await opened(c);
   const rows = (await c.get('db').query(
-    'select id, content_type, bytes, width, height, name, created_at from media where workspace_id = $1 order by created_at desc limit 200', [ws],
+    'select id, content_type, bytes, width, height, name, created_at from media where workspace_id = $1 and brand_kind is null order by created_at desc limit 200', [ws],
   )).rows;
   return c.json({ pictures: rows.map((r) => ({ ...r, created_at: iso(r.created_at), url: `/media/${r.id}` })) });
 });

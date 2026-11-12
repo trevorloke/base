@@ -11,7 +11,9 @@
 //   theme.follow — a new website does until it is given its own look): then
 //   this screen says so and shows the sample, with "Give the website its own
 //   look" (starts from what it wears now). A website with its own look has
-//   "Use the campaign's brand".
+//   "Use the campaign's brand" — and its own look is kept underneath
+//   (theme.kept), so while it follows there is "Go back to the look it had"
+//   beside "Start from the campaign's brand".
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import { COLOR_KEYS, FONTS, FONT_BY_VALUE, RADII, SKINS } from '@starbase/shared/site/theme';
@@ -111,6 +113,9 @@ export default function WebsiteTheme() {
   const [asking, setAsking] = useState(false);
   const [switching, setSwitching] = useState(false);
   const following = follow ?? (q.data?.settings?.theme?.follow === true);
+  // Its own look from before it followed is still there (set to follow here,
+  // or the server says so).
+  const keptLook = follow === true || (follow == null && q.data?.settings?.theme?.kept === true);
   useEffect(() => {
     if (q.data?.settings && !t) {
       const f = full(q.data.settings.theme);
@@ -148,18 +153,19 @@ export default function WebsiteTheme() {
   };
 
   // To the campaign's brand and back. Both are live on the site at once.
-  const switchTo = async (on) => {
-    setSwitching(true);
+  // back: 'kept' — to the look it had before it followed; else its own look
+  // starts from what the site wears now, the brand's.
+  const switchTo = async (on, back) => {
+    setSwitching(back || true);
     setState(null);
     try {
-      // Its own look starts from what the site wears now: the brand's.
-      const own = on ? saved : full(q.data.brand_theme);
+      const own = on || back === 'kept' ? saved : full(q.data.brand_theme);
       await action('site.settings.save', { theme: { ...own, follow: on } });
       setT(own);
       setSaved(own);
       setFollow(on);
       setAsking(false);
-      say(on ? 'The website now wears the campaign’s brand' : 'The website has its own look — change it here');
+      say(on ? 'The website now wears the campaign’s brand' : back === 'kept' ? 'The website has the look it had — change it here' : 'The website has its own look — change it here');
       refresh(['site']);
     } catch (e) {
       setState({ state: 'error', text: e.message });
@@ -193,10 +199,26 @@ export default function WebsiteTheme() {
             <h2 id="wb-th-follow" className="wb-card-h">Following the campaign’s brand</h2>
             <p className="wb-help">The website wears the logo, colours, type and corners set under {me?.role === 'manager' ? <Link to="/settings/brand">Settings → Brand</Link> : 'Settings → Brand (a manager’s)'}. Change them there and the website follows.</p>
             <SaveState state={state} />
-            <button type="button" className="btn wb-tap" disabled={!online || switching} onClick={() => switchTo(false)}>
-              {switching ? 'Working…' : 'Give the website its own look'}
-            </button>
-            <p className="wb-field__hint">It starts from what the website wears now; then every colour is yours to change here.</p>
+            {keptLook ? (
+              <>
+                <div className="wb-follow__acts">
+                  <button type="button" className="btn wb-tap" disabled={!online || Boolean(switching)} onClick={() => switchTo(false, 'kept')}>
+                    {switching === 'kept' ? 'Working…' : 'Go back to the look it had'}
+                  </button>
+                  <button type="button" className="btn wb-tap" disabled={!online || Boolean(switching)} onClick={() => switchTo(false, 'brand')}>
+                    {switching === 'brand' ? 'Working…' : 'Start from the campaign’s brand'}
+                  </button>
+                </div>
+                <p className="wb-field__hint">The website’s own colours, type and logo were kept. Starting from the brand replaces them.</p>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn wb-tap" disabled={!online || Boolean(switching)} onClick={() => switchTo(false, 'brand')}>
+                  {switching ? 'Working…' : 'Give the website its own look'}
+                </button>
+                <p className="wb-field__hint">It starts from what the website wears now; then every colour is yours to change here.</p>
+              </>
+            )}
           </section>
           <div className="wb-theme__sample wb-theme__sample--alone">
             <Sample t={full(q.data.brand_theme)} org={org} />
@@ -234,13 +256,13 @@ export default function WebsiteTheme() {
                 </div>
                 <p className="wb-field__hint">Picking one sets its colours, type and corners; your logo stays.</p>
                 {!asking && (
-                  <button type="button" className="btn wb-tap wb-follow__use" disabled={!online || switching} onClick={() => setAsking(true)}>Use the campaign’s brand</button>
+                  <button type="button" className="btn wb-tap wb-follow__use" disabled={!online || Boolean(switching)} onClick={() => setAsking(true)}>Use the campaign’s brand</button>
                 )}
                 {asking && (
                   <div className="wb-follow__ask" role="group" aria-label="Use the campaign’s brand">
-                    <span>The website takes the logo, colours, type and corners from Settings → Brand at once{dirty ? ', and what you changed here is not saved' : ''}.</span>
-                    <button type="button" className="btn wb-tap" disabled={!online || switching} onClick={() => switchTo(true)}>{switching ? 'Working…' : 'Yes, use it'}</button>
-                    <button type="button" className="btn btn-quiet wb-tap" disabled={switching} onClick={() => setAsking(false)}>No</button>
+                    <span>The website takes the logo, colours, type and corners from Settings → Brand at once. {dirty ? 'The look you last saved is kept to go back to; what you changed here since is not.' : 'Its own look is kept to go back to.'}</span>
+                    <button type="button" className="btn wb-tap" disabled={!online || Boolean(switching)} onClick={() => switchTo(true)}>{switching ? 'Working…' : 'Yes, use it'}</button>
+                    <button type="button" className="btn btn-quiet wb-tap" disabled={Boolean(switching)} onClick={() => setAsking(false)}>No</button>
                   </div>
                 )}
               </section>

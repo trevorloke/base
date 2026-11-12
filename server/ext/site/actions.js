@@ -194,8 +194,13 @@ export const actions = {
       // Following the campaign's brand, or not, changes only when a save says
       // so (Website → Theme: "Use the campaign's brand" / "Give the website
       // its own look"); any other theme save keeps it as it was.
-      const was = parseJ((await tx.query('select theme from site_settings where workspace_id = $1', [ws])).rows[0]?.theme, {});
-      const given = typeof input.theme.follow === 'boolean' ? input.theme : { ...input.theme, follow: was?.follow === true };
+      const was = parseJ((await tx.query('select theme from site_settings where workspace_id = $1', [ws])).rows[0]?.theme, null);
+      const follow = typeof input.theme.follow === 'boolean' ? input.theme.follow : was?.follow === true;
+      // A website that had its own look when it began to follow keeps it
+      // underneath ("Go back to the look it had"); one that has followed
+      // since it was made has none. Never the save's own word for it.
+      const kept = follow && Boolean(was) && (was.follow === true ? was.kept === true : true);
+      const given = { ...input.theme, follow, kept };
       const { theme, problems } = checkTheme(given, brandKey());
       if (problems.length) {
         const p = problems[0];

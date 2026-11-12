@@ -2,6 +2,7 @@
    (WebsiteTheme.jsx), and the way to and from it. */
 .wb-follow { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); max-width: 640px; margin-bottom: var(--s-5); }
 .wb-follow .wb-help, .wb-follow .wb-field__hint { margin: 0; }
+.wb-follow__acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .wb-follow__use { margin-top: var(--s-3); }
 .wb-follow__ask {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); margin-top: var(--s-3); padding: var(--s-3);

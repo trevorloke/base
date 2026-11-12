@@ -33,6 +33,7 @@ let logo, dark, icons;
 test('a new website follows the campaign’s brand: base.win’s look until one is saved, then the campaign’s at once', async () => {
   const site = ok(await mgr.get('/api/site'));
   assert.equal(site.settings.theme.follow, true, 'seeded following');
+  assert.equal(site.settings.theme.kept, undefined, 'it never had a look of its own to keep');
   let t = themeOf((await hit('/site/')).text);
   const base = deriveLook({ color: '#4f46e5' }, 'light');
   assert.deepEqual([t.brand, t.link, t['brand-ink']], [base.accent, base.accentWords, base.accentInk], 'base.win’s own brand, unsaved');
@@ -72,9 +73,10 @@ test('given its own look, the website stops following; a save that doesn’t say
   const own = ok(await mgr.get('/api/site')).settings.theme;
   // The theme screen saving something else: still following.
   ok(await hit('/site/'));
-  let r = await mgr.action('site.settings.save', { theme: { ...own, follow: undefined, radius: 'square' } });
+  let r = await mgr.action('site.settings.save', { theme: { ...own, follow: undefined, kept: true, radius: 'square' } });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(ok(await mgr.get('/api/site')).settings.theme.follow, true);
+  assert.equal(ok(await mgr.get('/api/site')).settings.theme.kept, undefined, 'a save can’t claim a look the website never had');
   assert.equal(themeOf((await hit('/site/')).text).brand, '#0f766e', 'still the brand');
   // "Give the website its own look": the brand's theme, kept, not following.
   const followed = ok(await mgr.get('/api/site')).brand_theme;
@@ -88,6 +90,27 @@ test('given its own look, the website stops following; a save that doesn’t say
   r = await mgr.action('site.settings.save', { theme: { ...ok(await mgr.get('/api/site')).settings.theme, follow: true } });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(themeOf((await hit('/site/')).text).brand, '#d81b1e');
+});
+
+test('a website that had its own look keeps it under the brand, to go back to', async () => {
+  // As the last test left it: its own look (navy), then following the brand (red).
+  let t = ok(await mgr.get('/api/site')).settings.theme;
+  assert.deepEqual([t.follow, t.kept, t.colors.brand], [true, true, '#003979'], 'following, its own look kept');
+  // Another save while it follows: still kept.
+  assert.equal((await mgr.action('site.settings.save', { theme: { ...t, follow: undefined, kept: undefined } })).status, 200);
+  assert.equal(ok(await mgr.get('/api/site')).settings.theme.kept, true);
+  assert.equal(themeOf((await hit('/site/')).text).brand, '#d81b1e', 'wearing the brand');
+  // "Go back to the look it had": what was stored, not following.
+  const r = await mgr.action('site.settings.save', { theme: { ...t, follow: false } });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  t = ok(await mgr.get('/api/site')).settings.theme;
+  assert.deepEqual([t.follow, t.kept, t.colors.brand], [false, undefined, '#003979'], 'its own look again; nothing more to keep');
+  assert.equal(themeOf((await hit('/site/')).text).brand, '#003979');
+  // A website made before following existed (no such key) keeps its look the same way.
+  await db.query("update site_settings set theme = theme - 'follow' where workspace_id = $1", [ws]);
+  assert.equal((await mgr.action('site.settings.save', { theme: { ...t, follow: true } })).status, 200);
+  assert.equal(ok(await mgr.get('/api/site')).settings.theme.kept, true);
+  assert.equal((await mgr.action('site.settings.save', { theme: { ...t, follow: false } })).status, 200);
 });
 
 test('a website made before following existed (Imagine Surrey’s) keeps its own look whatever the brand', async () => {

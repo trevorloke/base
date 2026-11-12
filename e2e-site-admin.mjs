@@ -547,11 +547,26 @@ await shot('12-theme-phone');
     before.settings.theme.follow !== true && following.settings.theme.follow === true && JSON.stringify(following.settings.theme.colors) === JSON.stringify(before.settings.theme.colors)
     && shown.controls === 0 && shown.primaries === 0 && shown.sample === following.brand_theme.colors.brand && /Following the campaign’s brand/.test(shown.words) && live.includes(following.brand_theme.colors.brand), JSON.stringify(shown).slice(0, 300));
   await shot('13-theme-following-phone');
-  await page.getByRole('button', { name: 'Give the website its own look' }).click();
+  // Back to the look it had: nothing of its own is lost by trying the brand.
+  const ways = await page.locator('.wb-follow button').allInnerTexts();
+  await page.getByRole('button', { name: 'Go back to the look it had' }).click();
+  await page.locator('.wb-color').first().waitFor({ timeout: 8000 });
+  await sleep(400);
+  const back = (await api('/site')).json.settings.theme;
+  const liveBack = await (await fetch(`${BASE}/site/`)).text();
+  const pick = (t) => JSON.stringify([t.colors, t.fonts, t.radius, t.logo, t.skin]);
+  check('“Go back to the look it had”: the website’s own colours, type, corners and logo are back as they were, live', following.settings.theme.kept === true
+    && ways.join(' | ') === 'Go back to the look it had | Start from the campaign’s brand' && back.follow === false && back.kept === undefined && pick(back) === pick(before.settings.theme)
+    && liveBack.includes(`--brand:${before.settings.theme.colors.brand}`) && await page.locator('#wb-c-brand').inputValue() === before.settings.theme.colors.brand, `${ways.join(' | ')} ${JSON.stringify(back).slice(0, 200)}`);
+  // And the other way: its own look started from the brand's.
+  await page.getByRole('button', { name: 'Use the campaign’s brand' }).click();
+  await page.getByRole('button', { name: 'Yes, use it' }).click();
+  await page.locator('.wb-follow').waitFor({ timeout: 8000 });
+  await page.getByRole('button', { name: 'Start from the campaign’s brand' }).click();
   await page.locator('.wb-color').first().waitFor({ timeout: 8000 });
   await sleep(400);
   const own = (await api('/site')).json.settings.theme;
-  check('“Give the website its own look”: it stops following and starts from what it wore — every colour is there to change again', own.follow === false && own.colors.brand === following.brand_theme.colors.brand
+  check('“Start from the campaign’s brand”: it stops following and starts from what it wore — every colour is there to change again', own.follow === false && own.colors.brand === following.brand_theme.colors.brand
     && await page.locator('.wb-color').count() > 5 && await page.getByRole('button', { name: 'Use the campaign’s brand' }).count() === 1, JSON.stringify(own).slice(0, 200));
 }
 

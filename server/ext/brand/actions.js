@@ -76,9 +76,9 @@ export const actions = {
       const { w, h } = imageSize(up.buf);
       const id = newId();
       await tx.query(
-        `insert into media (id, workspace_id, content_type, bytes, width, height, name, data, created_by)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, ctx.workspaceId, up.type, up.buf.length, w, h, input.name || null, up.buf, ctx.user?.id || null],
+        `insert into media (id, workspace_id, content_type, bytes, width, height, name, data, created_by, brand_kind)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [id, ctx.workspaceId, up.type, up.buf.length, w, h, input.name || null, up.buf, ctx.user?.id || null, input.kind],
       );
       const picture = { id, kind: input.kind, content_type: up.type, bytes: up.buf.length, width: w, height: h, name: input.name || null };
       emit('media', id, 'create', { ...picture, for: 'brand' });
