@@ -17,6 +17,7 @@
 import { useId } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiGet } from '../api.js';
+import { useSendScope } from './SendScope.js';
 import './abtests.css';
 
 export const AB_MIN = 50;
@@ -29,21 +30,22 @@ const hours = (h) => `${h} ${plural(h, 'hour', 'hours')}`;
 const pctOf = (n, of) => (of > 0 ? Math.round((100 * n) / of) : 0);
 
 // Shares GET /api/blasts/stats under the 'blasts' key, so every send
-// (which invalidates ['blasts']) refreshes it too. While a test runs, or its
+// (which invalidates ['blasts']) refreshes it too (on the Media tab, its
+// press-only read under ['media','releases']: components/SendScope.js). While a test runs, or its
 // winner is still going out, it is read again every 30 s (opens arrive, the
 // winner goes out); when that ends, the send list is read again so its
 // counts match the winner line.
-const STATS_KEY = ['blasts', 'stats'];
 const testingIds = (d) => (d?.stats || []).filter((s) => s.ab?.status === 'testing' || s.ab?.rest?.going > 0)
   .map((s) => s.id).join(',');
 export const useBlastStats = () => {
   const qc = useQueryClient();
+  const scope = useSendScope();
   return useQuery({
-    queryKey: STATS_KEY,
+    queryKey: scope.statsKey,
     queryFn: async () => {
-      const prev = qc.getQueryData(STATS_KEY);
-      const next = await apiGet('/blasts/stats');
-      if (prev && testingIds(prev) !== testingIds(next)) qc.invalidateQueries({ queryKey: ['blasts'], exact: true });
+      const prev = qc.getQueryData(scope.statsKey);
+      const next = await apiGet(scope.statsPath);
+      if (prev && testingIds(prev) !== testingIds(next)) qc.invalidateQueries({ queryKey: scope.listKey, exact: true });
       return next;
     },
     refetchInterval: (q) => (testingIds(q.state.data) ? 30_000 : false),

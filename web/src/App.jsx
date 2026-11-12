@@ -35,6 +35,7 @@ const Volunteers = lazy(() => import('./pages/Volunteers.jsx'));
 const Money = lazy(() => import('./pages/Money.jsx'));
 const Signs = lazy(() => import('./pages/Signs.jsx'));
 const Outreach = lazy(() => import('./pages/Outreach.jsx'));
+const Media = lazy(() => import('./pages/Media.jsx'));
 const Admin = lazy(() => import('./pages/Admin.jsx'));
 const ImportPeople = lazy(() => import('./pages/ImportPeople.jsx'));
 const Turfs = lazy(() => import('./pages/Turfs.jsx'));
@@ -112,7 +113,7 @@ function NotForYou({ me }) {
 
 // A desk address typed into the field app (an old bookmark, a link in an
 // email): the admin has it. Volunteers go home, as before.
-const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates|membership-form))?|shifts\/volunteers|money|lists|reports|data|outreach|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new|website)(\/|$)/;
+const DESK_PATHS = /^\/(people(\/(import|fields|connected|duplicates|membership-form))?|shifts\/volunteers|money|lists|reports|data|outreach|media|ladders|follow-ups|surveys|scripts|rating-scale|settings|team|admin|inbox\/settings|passes|voted|requests|field-report|banks\/new|website)(\/|$)/;
 function FieldFallback() {
   const ctx = useOutletContext();
   const { pathname, search } = useLocation();
@@ -136,6 +137,7 @@ const ROUTE_AREA = [
   [/^\/requests/, 'people'],
   [/^\/field-report/, 'data'],
   [/^\/website/, 'site'],
+  [/^\/media/, 'media'],
   [/^\/path-to-win/, 'data'],
 ];
 function DeskOnly() {
@@ -228,6 +230,9 @@ export default function App({ mode = 'field' }) {
           <Route path="/money/receipts/:id" element={<ReceiptsOne />} />
           <Route path="/outreach" element={<Outreach />} />
           <Route path="/outreach/:tab" element={<Outreach />} />
+          <Route path="/media" element={<Media />} />
+          <Route path="/media/contacts" element={<Media />} />
+          <Route path="/media/releases/:id" element={<Media />} />
           {/* Settings: members, teams, permissions (the old /admin and /team). */}
           <Route path="/team" element={<Navigate to="/settings" replace />} />
           <Route path="/admin" element={<Navigate to="/settings" replace />} />
